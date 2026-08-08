@@ -70,6 +70,30 @@ library with no processes/IPC/tables).
   single 2-tuple as one argument and silently does the wrong thing).
 - `]/comment` (no space before `/`) is parsed as an operator, not a
   comment start - always put a space before an inline `/` comment.
+- A top-level global variable name that shadows a q builtin (e.g. `ss`,
+  q's string-search keyword) can break unrelated code with a confusing
+  `assign`/`type` error - avoid short variable names without checking they
+  aren't builtins.
+- An unnamed lambda only auto-binds `x`, `y`, `z` as implicit parameters.
+  A 4+ arg each-both (`f'[a;b;c;d]`) needs an explicitly named parameter
+  list (`{[w;x;y;z] ...}`), not implicit `x,y,z,u,v,w` - `u`/`v`/`w` are
+  not auto-bound and calling with more than 3 implicit args fails with a
+  `rank` error.
+- `distinct` over a large (~1mm+), high-cardinality vector (e.g. near-
+  unique floats/timestamps) is pathologically slow under the PeachQ
+  interpreter used for local dev here - plausibly O(n^2) rather than
+  hash-based. Low-cardinality columns are fine. For a large-scale test
+  that needs to assert "many distinct values" over a big, high-cardinality
+  column, check `(max x)-(min x)` spread instead of `count distinct x`.
+- Don't pass a huge (e.g. 1mm-element) vector as the `actual`/`expected` of
+  a single qUnit assertion. qUnit embeds whatever you pass into its
+  results table, and razing that row together with every other suite's
+  (scalar-valued) result rows made `.qunit.runTests` throw a bare `type`
+  error under PeachQ once results from all namespaces were combined - with
+  no indication of which assertion caused it. For a large-scale test,
+  reduce a vector comparison to a scalar first (e.g. `max abs a-b` against
+  a tolerance) rather than asserting on the two vectors directly - smaller
+  results table, and a far more readable failure message too.
 
 ## Layout
 

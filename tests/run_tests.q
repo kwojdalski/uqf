@@ -13,8 +13,9 @@
 \l tests/test_options.q
 \l tests/test_risk.q
 \l tests/test_execution.q
+\l tests/test_execution_scale.q
 
-nsList:`.statstest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.executiontest;
+nsList:`.statstest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.executiontest`.executionscaletest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;
