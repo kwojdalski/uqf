@@ -98,10 +98,15 @@ which dispatches to one of them by convention symbol (`` `act360``,
 `crossRate`/`invertRate` (A/B * B/C = A/C chain), `crossRateSharedBase`
 (divide - two rates sharing a currency on the *same* side, e.g. EURPLN &
 EURUSD -> USDPLN; a 3+-leg cross like AUDPLN from AUDUSD/EURUSD/EURPLN is
-just composing this with `crossRate`), and `crossBook`/`invertBook`/
-`combineOrientedBooks`/`bookCrossed` for building a synthetic top-of-book
-cross rate from two live order books (auto-detects the shared currency and
-orients/inverts each leg as needed).
+just composing this with `crossRate`), `crossBook`/`invertBook`/
+`combineOrientedBooks`/`bookCrossed`/`ccyOrientCross` for building a
+synthetic top-of-book cross rate from two live order books (auto-detects
+the shared currency and orients/inverts each leg as needed), and
+`crossBookAtSizes`/`invertBookDepth` for the depth-aware version: given
+each leg's *multi-level* order book, prices the cross at a list of sizes
+(e.g. `1000000 3000000 5000000`), walking each leg's depth and converting
+the notional hop-by-hop between legs, returning whichever of
+`` `bid`ask`mid `` you ask for as a table (one row per size).
 
 **options.q** - `gkCall`/`gkPut`, `d1`/`d2`, `gkDeltaCall`/`gkDeltaPut`,
 `gkGamma`, `gkVega`, `gkThetaCall`/`gkThetaPut`, `gkRhoCall`/`gkRhoPut`,
@@ -131,7 +136,7 @@ q tests/run_tests.q
 
 This loads every module, loads every `test_*.q` file, runs the full qUnit
 suite, prints a pass/fail summary, and exits non-zero if anything failed -
-safe to wire into CI as-is. As of this writing: **174 tests, all passing**.
+safe to wire into CI as-is. As of this writing: **195 tests, all passing**.
 
 Every function is tested against at least one of: a published textbook
 reference value (e.g. Hull's Black-Scholes worked example for
