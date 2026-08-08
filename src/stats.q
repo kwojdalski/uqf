@@ -1,7 +1,7 @@
 / stats.q - normal distribution helpers used throughout uqf.
 / ncdf/npdf use the Abramowitz & Stegun 7.1.26 rational approximation to
 / the error function (max absolute error ~1.5e-7).
-/ invNcdf uses Peter Acklam's rational approximation to the inverse
+/ inv_ncdf uses Peter Acklam's rational approximation to the inverse
 / standard normal CDF (max relative error ~1.15e-9), released by its
 / author into the public domain. See:
 / https://web.archive.org/web/20151030215612/http://home.online.no/~pjacklam/notes/invnorm/
@@ -21,8 +21,8 @@ PI:acos -1;
 /   term last (as in numpy.polyval)
 / @param x the point to evaluate the polynomial at
 / @return coeffs[0]*x^n + coeffs[1]*x^(n-1) + ... + coeffs[n]
-/ @eg .uqf.hornerEval[2 3 4;5]  -> 69 (i.e. 2*5*5+3*5+4)
-hornerEval:{[coeffs;x]
+/ @eg .uqf.horner_eval[2 3 4;5]  -> 69 (i.e. 2*5*5+3*5+4)
+horner_eval:{[coeffs;x]
     {[x;acc;c] (acc*x)+c}[x;]/[first coeffs;1 _ coeffs]};
 
 / Standard normal probability density function n(x).
@@ -40,7 +40,7 @@ ncdf:{[x]
     s:signum x;
     z:(abs x)%sqrt 2f;
     t:1%1+0.3275911*z;
-    poly:hornerEval[coeffs;t];
+    poly:horner_eval[coeffs;t];
     y:1-(poly*exp neg z*z);
     0.5*1+s*y};
 
@@ -48,9 +48,9 @@ ncdf:{[x]
 / @param p probability, strictly within (0,1); an atom or a list of atoms
 / @return x such that ncdf[x]~p
 / @throws error if any element of p is not strictly between 0 and 1
-/ @eg .uqf.invNcdf 0.95  -> 1.644854 (the one-tailed 95% z-score)
-invNcdf:{[p]
-    if[not all(p>0)&(p<1); '"invNcdf: p must be strictly between 0 and 1"];
+/ @eg .uqf.inv_ncdf 0.95  -> 1.644854 (the one-tailed 95% z-score)
+inv_ncdf:{[p]
+    if[not all(p>0)&(p<1); '"inv_ncdf: p must be strictly between 0 and 1"];
     a:-39.69683028665376 220.9460984245205 -275.9285104469687 138.3577518672690 -30.66479806614716 2.506628277459239;
     b:-54.47609879822406 161.5858368580409 -155.6989798598866 66.80131188771972 -13.28068155288572,1f;
     c:-0.007784894002430293 -0.3223964580411365 -2.400758277161838 -2.549732539343734 4.374664141464968 2.938163982698783;
@@ -59,12 +59,12 @@ invNcdf:{[p]
     one:{[a;b;c;d;plow;phigh;p]
         $[p<plow;
             [q:sqrt neg 2*log p;
-             hornerEval[c;q] % hornerEval[d;q]];
+             horner_eval[c;q] % horner_eval[d;q]];
           p>phigh;
             [q:sqrt neg 2*log 1-p;
-             neg hornerEval[c;q] % hornerEval[d;q]];
+             neg horner_eval[c;q] % horner_eval[d;q]];
             [q:p-0.5; r:q*q;
-             (hornerEval[a;r]*q) % hornerEval[b;r]]]};
+             (horner_eval[a;r]*q) % horner_eval[b;r]]]};
     $[0>type p; one[a;b;c;d;plow;phigh;p]; one[a;b;c;d;plow;phigh] each p]};
 
 \d .

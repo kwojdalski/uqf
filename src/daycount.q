@@ -13,16 +13,16 @@
 / @param d1 start date
 / @param d2 end date
 / @return (d2-d1) actual days, divided by 360
-/ @eg .uqf.dcfAct360[2024.01.01;2025.01.01]  -> 1.016667 (2024 is a leap year)
-dcfAct360:{[d1;d2] (d2-d1)%360.0};
+/ @eg .uqf.dcf_act_360[2024.01.01;2025.01.01]  -> 1.016667 (2024 is a leap year)
+dcf_act_360:{[d1;d2] (d2-d1)%360.0};
 
 / Actual/365 (Fixed): (d2-d1) actual calendar days, annualised on a
 / 365-day year. Common for GBP money markets.
 / @param d1 start date
 / @param d2 end date
 / @return (d2-d1) actual days, divided by 365
-/ @eg .uqf.dcfAct365[2023.01.01;2024.01.01]  -> 1f
-dcfAct365:{[d1;d2] (d2-d1)%365.0};
+/ @eg .uqf.dcf_act_365[2023.01.01;2024.01.01]  -> 1f
+dcf_act_365:{[d1;d2] (d2-d1)%365.0};
 
 / 30E/360 (Eurobond basis): each month treated as having 30 days.
 / Day-of-month is capped at 30 for both dates (the simple European
@@ -30,8 +30,8 @@ dcfAct365:{[d1;d2] (d2-d1)%365.0};
 / @param d1 start date
 / @param d2 end date
 / @return the 30E/360 year fraction between d1 and d2
-/ @eg .uqf.dcf30E360[2024.01.15;2024.02.15]  -> 0.08333333 (30/360)
-dcf30E360:{[d1;d2]
+/ @eg .uqf.dcf_30e_360[2024.01.15;2024.02.15]  -> 0.08333333 (30/360)
+dcf_30e_360:{[d1;d2]
     y1:`year$d1; m1:`mm$d1; day1:30&`dd$d1;
     y2:`year$d2; m2:`mm$d2; day2:30&`dd$d2;
     yearsTerm:360*(y2-y1);
@@ -45,10 +45,10 @@ dcf30E360:{[d1;d2]
 / @param d2 end date
 / @return the year fraction between d1 and d2 under the chosen convention
 / @throws error if conv is not one of the supported symbols
-/ @eg .uqf.yearFrac[`act360;2024.01.01;2025.01.01]  -> 1.016667
-yearFrac:{[conv;d1;d2]
-    f:`act360`act365`30e360!(dcfAct360;dcfAct365;dcf30E360);
-    if[not conv in key f; '"yearFrac: unknown convention ",string conv];
+/ @eg .uqf.year_frac[`act360;2024.01.01;2025.01.01]  -> 1.016667
+year_frac:{[conv;d1;d2]
+    f:`act360`act365`30e360!(dcf_act_360;dcf_act_365;dcf_30e_360);
+    if[not conv in key f; '"year_frac: unknown convention ",string conv];
     f[conv][d1;d2]};
 
 \d .

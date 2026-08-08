@@ -2,7 +2,7 @@
 / spread, slippage and quoting/fill statistics.
 / .
 / Sign convention used throughout: side is 1 for a client/algo buy (long
-/ base currency) and -1 for a sell. Every *cost* style metric (effSpread,
+/ base currency) and -1 for a sell. Every *cost* style metric (eff_spread,
 / slippage) is positive when it went against the side taking the trade;
 / markout is positive when the market moved in that side's favour after
 / the trade (i.e. positive markout received by a client is "toxic flow"
@@ -23,6 +23,40 @@
 / @eg .uqf.markout[1;1.1000;1.1010;10000]  -> 10f
 markout:{[side;tradePrice;refPrice;pipFactor] side*pipFactor*(refPrice-tradePrice)};
 
+/ Markout at one or more time horizons after each trade, looking up the
+/ reference mid itself via an as-of join against a quote table - the
+/ table-native companion to markout, for when you have trades and quotes
+/ as tables rather than an already-aligned refPrice vector. For each
+/ trade and each horizon, finds the most recent quote at or before
+/ tradeTime+horizon (same semantics as kdb+'s aj) and computes markout
+/ against its mid. A trade/horizon pair with no quote at or before the
+/ target time gets a null refPrice and a null markoutPips - filter with
+/ `where not null markoutPips` if you want to drop those rather than see
+/ them.
+/ @param trades table with columns `sym`time`side`tradePrice`pipFactor
+/ @param quotes table with columns `sym`time`mid - need not be
+/   pre-sorted, this sorts its own copy before joining
+/ @param horizons a timespan, or list of timespans, to look ahead from
+/   each trade's time, e.g. 0D00:00:01 0D00:00:10 0D00:01:00 for 1s/10s/1m
+/ @return a table with one row per (trade, horizon): `sym`tradeTime`horizon`targetTime`tradePrice`refPrice`markoutPips
+/ @eg .uqf.markout_at_horizons[trades;quotes;0D00:00:01 0D00:00:10]
+markout_at_horizons:{[trades;quotes;horizons]
+    horizonList:$[0>type horizons; enlist horizons; horizons];
+    sortedQuotes:`sym`time xasc quotes;
+    numTrades:count trades;
+    numHorizons:count horizonList;
+    pairs:(til numTrades) cross til numHorizons;
+    tradeIdx:pairs[;0];
+    horizonIdx:pairs[;1];
+    expTrades:trades tradeIdx;
+    expHorizons:horizonList horizonIdx;
+    targetTime:expTrades[`time]+expHorizons;
+    lookupTbl:([] sym:expTrades`sym; time:targetTime);
+    joined:aj[`sym`time;lookupTbl;sortedQuotes];
+    refPrice:joined`mid;
+    markoutPips:markout[expTrades`side;expTrades`tradePrice;refPrice;expTrades`pipFactor];
+    ([] sym:expTrades`sym; tradeTime:expTrades`time; horizon:expHorizons; targetTime; tradePrice:expTrades`tradePrice; refPrice; markoutPips)};
+
 / Effective spread paid/received relative to the prevailing mid at the
 / moment of execution, in pips. Positive = cost to the side that traded.
 / @param side 1 for a buy, -1 for a sell
@@ -30,8 +64,8 @@ markout:{[side;tradePrice;refPrice;pipFactor] side*pipFactor*(refPrice-tradePric
 / @param midAtTrade the mid price at the moment of execution
 / @param pipFactor 10000 for most pairs, 100 for JPY crosses
 / @return the effective spread, in pips
-/ @eg .uqf.effSpread[1;1.1002;1.1000;10000]  -> 4f
-effSpread:{[side;tradePrice;midAtTrade;pipFactor] 2*side*pipFactor*(tradePrice-midAtTrade)};
+/ @eg .uqf.eff_spread[1;1.1002;1.1000;10000]  -> 4f
+eff_spread:{[side;tradePrice;midAtTrade;pipFactor] 2*side*pipFactor*(tradePrice-midAtTrade)};
 
 / Slippage between a decision/arrival price and the actual execution
 / price, in pips. Positive = cost to the side that traded.
@@ -47,15 +81,15 @@ slippage:{[side;arrivalPrice;execPrice;pipFactor] side*pipFactor*(execPrice-arri
 / @param numFills number of filled orders
 / @param numQuotes number of quotes/orders sent
 / @return the fill ratio, in [0,1]
-/ @eg .uqf.fillRatio[73;100]  -> 0.73
-fillRatio:{[numFills;numQuotes] numFills%numQuotes};
+/ @eg .uqf.fill_ratio[73;100]  -> 0.73
+fill_ratio:{[numFills;numQuotes] numFills%numQuotes};
 
 / Fraction of trade requests rejected (e.g. under last look).
 / @param numRejects number of rejected requests
 / @param numRequests total number of requests
 / @return the reject ratio, in [0,1]
-/ @eg .uqf.rejectRatio[4;100]  -> 0.04
-rejectRatio:{[numRejects;numRequests] numRejects%numRequests};
+/ @eg .uqf.reject_ratio[4;100]  -> 0.04
+reject_ratio:{[numRejects;numRequests] numRejects%numRequests};
 
 / Size-weighted average execution price across a set of fills.
 / @param prices list of fill prices
@@ -83,10 +117,10 @@ vwap:{[prices;sizes]
 /   be less than targetSize if the book doesn't have enough depth), and
 /   fullyFilled is 1b iff filledSize>=targetSize
 / @throws error if targetSize is not positive, or prices/sizes differ in length
-/ @eg .uqf.sweepPrice[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avgPrice`worstPrice`filledSize`fullyFilled!(1.100233;1.1005;3000000;1b)
-sweepPrice:{[prices;sizes;targetSize]
-    if[targetSize<=0; '"sweepPrice: size must be positive"];
-    if[(count prices)<>count sizes; '"sweepPrice: prices and sizes must be the same length"];
+/ @eg .uqf.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avgPrice`worstPrice`filledSize`fullyFilled!(1.100233;1.1005;3000000;1b)
+sweep_price:{[prices;sizes;targetSize]
+    if[targetSize<=0; '"sweep_price: size must be positive"];
+    if[(count prices)<>count sizes; '"sweep_price: prices and sizes must be the same length"];
     cumSize:sums sizes;
     priorCum:cumSize-sizes;
     cappedCum:targetSize&cumSize;

@@ -13,8 +13,8 @@
 / @param rf foreign (base currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the outright forward rate
-/ @eg .uqf.fwdSimple[1.10;0.05;0.02;1]  -> 1.132353
-fwdSimple:{[spot;rd;rf;t] spot*growthSimple[rd;t]%growthSimple[rf;t]};
+/ @eg .uqf.fwd_simple[1.10;0.05;0.02;1]  -> 1.132353
+fwd_simple:{[spot;rd;rf;t] spot*growth_simple[rd;t]%growth_simple[rf;t]};
 
 / Outright forward rate under continuous-compounding CIRP: F = S*exp((rd-rf)*t)
 / @param spot spot rate, BASE/QUOTE
@@ -22,24 +22,24 @@ fwdSimple:{[spot;rd;rf;t] spot*growthSimple[rd;t]%growthSimple[rf;t]};
 / @param rf foreign (base currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the outright forward rate
-/ @eg .uqf.fwdCont[1.10;0.05;0.02;1]  -> 1.1335
-fwdCont:{[spot;rd;rf;t] spot*growthCont[rd-rf;t]};
+/ @eg .uqf.fwd_cont[1.10;0.05;0.02;1]  -> 1.1335
+fwd_cont:{[spot;rd;rf;t] spot*growth_cont[rd-rf;t]};
 
 / Forward points = (F-S) scaled into pips.
 / @param fwd outright forward rate
 / @param spot spot rate
 / @param pipFactor 10000 for most pairs, 100 for JPY crosses
 / @return the forward points, in pips
-/ @eg .uqf.fwdPoints[1.132353;1.10;10000]  -> 323.53
-fwdPoints:{[fwd;spot;pipFactor] pipFactor*(fwd-spot)};
+/ @eg .uqf.fwd_points[1.132353;1.10;10000]  -> 323.53
+fwd_points:{[fwd;spot;pipFactor] pipFactor*(fwd-spot)};
 
 / Recover the outright from spot plus forward points.
 / @param spot spot rate
 / @param points forward points, in pips
 / @param pipFactor 10000 for most pairs, 100 for JPY crosses
 / @return the outright forward rate
-/ @eg .uqf.pointsToOutright[1.10;323.53;10000]  -> 1.132353
-pointsToOutright:{[spot;points;pipFactor] spot+(points%pipFactor)};
+/ @eg .uqf.points_to_outright[1.10;323.53;10000]  -> 1.132353
+points_to_outright:{[spot;points;pipFactor] spot+(points%pipFactor)};
 
 / Back out the implied foreign (base currency) rate from an observed
 / outright, given the domestic (quote currency) rate - simple CIRP inverse.
@@ -48,9 +48,9 @@ pointsToOutright:{[spot;points;pipFactor] spot+(points%pipFactor)};
 / @param rd domestic (quote currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the implied foreign (base currency) decimal annual rate
-/ @eg .uqf.impliedForeignRate[1.10;1.132353;0.05;1]  -> 0.02
-impliedForeignRate:{[spot;fwd;rd;t]
-    scaledSpot:spot*growthSimple[rd;t];
+/ @eg .uqf.implied_foreign_rate[1.10;1.132353;0.05;1]  -> 0.02
+implied_foreign_rate:{[spot;fwd;rd;t]
+    scaledSpot:spot*growth_simple[rd;t];
     ratio:scaledSpot%fwd;
     (ratio-1)%t};
 
@@ -61,107 +61,107 @@ impliedForeignRate:{[spot;fwd;rd;t]
 / @param rf foreign (base currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the implied domestic (quote currency) decimal annual rate
-/ @eg .uqf.impliedDomesticRate[1.10;1.132353;0.02;1]  -> 0.05
-impliedDomesticRate:{[spot;fwd;rf;t]
-    ratio:(fwd%spot)*growthSimple[rf;t];
+/ @eg .uqf.implied_domestic_rate[1.10;1.132353;0.02;1]  -> 0.05
+implied_domestic_rate:{[spot;fwd;rf;t]
+    ratio:(fwd%spot)*growth_simple[rf;t];
     (ratio-1)%t};
 
 / Triangulate a cross rate: A/B * B/C = A/C.
 / @param abRate rate for A/B
 / @param bcRate rate for B/C
 / @return the implied rate for A/C
-/ @eg .uqf.crossRate[1.10;150]  -> 165f (EURUSD * USDJPY -> EURJPY)
-crossRate:{[abRate;bcRate] abRate*bcRate};
+/ @eg .uqf.cross_rate[1.10;150]  -> 165f (EURUSD * USDJPY -> EURJPY)
+cross_rate:{[abRate;bcRate] abRate*bcRate};
 
 / Invert a quote convention: BASE/QUOTE -> QUOTE/BASE.
 / @param rate a rate quoted BASE/QUOTE
 / @return the same rate quoted QUOTE/BASE
-/ @eg .uqf.invertRate 2f  -> 0.5
-invertRate:{[rate] 1%rate};
+/ @eg .uqf.invert_rate 2f  -> 0.5
+invert_rate:{[rate] 1%rate};
 
 / Cross rate via a shared base currency: given two pairs both quoted
 / A/X and A/Y (e.g. EURPLN and EURUSD both quoted against EUR), returns
 / the Y/X cross rate - the common eFX pattern of computing e.g. USDPLN
-/ from EURPLN and EURUSD as EURPLN * (1/EURUSD). Simply crossRate composed
-/ with invertRate; kept as its own named function because "invert the
+/ from EURPLN and EURUSD as EURPLN * (1/EURUSD). Simply cross_rate composed
+/ with invert_rate; kept as its own named function because "invert the
 / second one, not the first" is exactly the kind of thing that's easy to
 / get backwards at the desk.
 / @param rateAX rate for A/X (the shared base A over the first quote currency X)
 / @param rateAY rate for A/Y (the shared base A over the second quote currency Y)
 / @return the implied rate for Y/X
-/ @eg .uqf.crossRateSharedBase[4.30;1.075]  -> 4f (EURPLN, EURUSD -> USDPLN)
-crossRateSharedBase:{[rateAX;rateAY] crossRate[rateAX;invertRate rateAY]};
+/ @eg .uqf.cross_rate_shared_base[4.30;1.075]  -> 4f (EURPLN, EURUSD -> USDPLN)
+cross_rate_shared_base:{[rateAX;rateAY] cross_rate[rateAX;invert_rate rateAY]};
 
 / Invert an order book: BASE/QUOTE -> QUOTE/BASE. Inverting flips which
 / side is more favourable, so the new bid comes from the old ask and vice
 / versa.
 / @param book a dict `bid`ask!(bidPx;askPx) quoted BASE/QUOTE
 / @return the same book quoted QUOTE/BASE
-/ @eg .uqf.invertBook[`bid`ask!(1.1000;1.1002)]  -> `bid`ask!(0.9089256;0.9090909)
-invertBook:{[book] `bid`ask!(1%book`ask;1%book`bid)};
+/ @eg .uqf.invert_book[`bid`ask!(1.1000;1.1002)]  -> `bid`ask!(0.9089256;0.9090909)
+invert_book:{[book] `bid`ask!(1%book`ask;1%book`bid)};
 
 / Combine two order books that are already oriented A/B and B/C (i.e. the
 / quote currency of the first leg matches the base currency of the
 / second) into a top-of-book A/C book. Private building block for
-/ crossBook; call directly if you've already oriented the legs yourself.
+/ cross_book; call directly if you've already oriented the legs yourself.
 / @param bookAB dict `bid`ask!(bidPx;askPx) quoted A/B
 / @param bookBC dict `bid`ask!(bidPx;askPx) quoted B/C
 / @return dict `bid`ask!(bidPx;askPx) quoted A/C
-/ @eg .uqf.combineOrientedBooks[`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02)]  -> `bid`ask!(165;165.052)
-combineOrientedBooks:{[bookAB;bookBC]
+/ @eg .uqf.combine_oriented_books[`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02)]  -> `bid`ask!(165;165.052)
+combine_oriented_books:{[bookAB;bookBC]
     bid:(bookAB`bid)*(bookBC`bid);
     ask:(bookAB`ask)*(bookBC`ask);
     `bid`ask!(bid;ask)};
 
 / True if a book is crossed (bid > ask) - a sanity check for synthetic
-/ books built from crossBook/combineOrientedBooks.
+/ books built from cross_book/combine_oriented_books.
 / @param book a dict `bid`ask!(bidPx;askPx)
 / @return 1b if bid>ask, else 0b
-/ @eg .uqf.bookCrossed[`bid`ask!(1.1000;1.1002)]  -> 0b
-bookCrossed:{[book] book[`bid]>book[`ask]};
+/ @eg .uqf.book_crossed[`bid`ask!(1.1000;1.1002)]  -> 0b
+book_crossed:{[book] book[`bid]>book[`ask]};
 
 / Private: work out how two currency pairs relate - which currency they
 / share, what the resulting cross pair's symbol is, and whether either
 / leg needs inverting before combining - without touching any prices.
-/ Shared by crossBook and crossBookAtSizes so the two can never disagree
+/ Shared by cross_book and cross_book_at_sizes so the two can never disagree
 / about orientation.
-/ @param sym1 currency pair for leg 1, any format ccy.q's normalizeCcyPair accepts
-/ @param sym2 currency pair for leg 2, any format ccy.q's normalizeCcyPair accepts
+/ @param sym1 currency pair for leg 1, any format ccy.q's normalize_ccy_pair accepts
+/ @param sym2 currency pair for leg 2, any format ccy.q's normalize_ccy_pair accepts
 / @return dict `crossSym`invert1`invert2 - crossSym is the resulting pair
 /   symbol; invert1/invert2 say whether that leg's quote convention needs
 /   flipping (BASE/QUOTE -> QUOTE/BASE) before combining
 / @throws error if sym1 and sym2 share no common currency
-/ @eg .uqf.ccyOrientCross[`EURUSD;`USDJPY]  -> `crossSym`invert1`invert2!(`EURJPY;0b;0b)
-ccyOrientCross:{[sym1;sym2]
-    legs1:ccyPairLegs sym1; base1:string legs1`base; quote1:string legs1`quote;
-    legs2:ccyPairLegs sym2; base2:string legs2`base; quote2:string legs2`quote;
-    if[quote1~base2; :`crossSym`invert1`invert2!(ccyPairSymbol[base1;quote2];0b;0b)];
-    if[quote1~quote2; :`crossSym`invert1`invert2!(ccyPairSymbol[base1;base2];0b;1b)];
-    if[base1~base2; :`crossSym`invert1`invert2!(ccyPairSymbol[quote1;quote2];1b;0b)];
-    if[base1~quote2; :`crossSym`invert1`invert2!(ccyPairSymbol[quote1;base2];1b;1b)];
-    '"ccyOrientCross: no shared currency between ",base1,quote1," and ",base2,quote2};
+/ @eg .uqf.ccy_orient_cross[`EURUSD;`USDJPY]  -> `crossSym`invert1`invert2!(`EURJPY;0b;0b)
+ccy_orient_cross:{[sym1;sym2]
+    legs1:ccy_pair_legs sym1; base1:string legs1`base; quote1:string legs1`quote;
+    legs2:ccy_pair_legs sym2; base2:string legs2`base; quote2:string legs2`quote;
+    if[quote1~base2; :`crossSym`invert1`invert2!(ccy_pair_symbol[base1;quote2];0b;0b)];
+    if[quote1~quote2; :`crossSym`invert1`invert2!(ccy_pair_symbol[base1;base2];0b;1b)];
+    if[base1~base2; :`crossSym`invert1`invert2!(ccy_pair_symbol[quote1;quote2];1b;0b)];
+    if[base1~quote2; :`crossSym`invert1`invert2!(ccy_pair_symbol[quote1;base2];1b;1b)];
+    '"ccy_orient_cross: no shared currency between ",base1,quote1," and ",base2,quote2};
 
 / Build a synthetic top-of-book cross rate from two live order books on
-/ pairs that share a common currency, e.g. crossBook[`EURUSD;eurusdBook;
+/ pairs that share a common currency, e.g. cross_book[`EURUSD;eurusdBook;
 / `USDJPY;usdjpyBook] -> a synthetic EURJPY book. The shared currency is
 / detected automatically and either leg is inverted as needed - the
 / caller does not need to pre-orient anything. sym1/sym2 are normalized
-/ via ccy.q's ccyPairLegs, so `eurusd, "eur/usd" etc. work too, not just
+/ via ccy.q's ccy_pair_legs, so `eurusd, "eur/usd" etc. work too, not just
 / canonical `EURUSD. Combines top-of-book only; it does not walk/net
-/ multiple depth levels of the underlying books - see crossBookAtSizes
+/ multiple depth levels of the underlying books - see cross_book_at_sizes
 / for that.
-/ @param sym1 currency pair for book1, any format ccy.q's normalizeCcyPair accepts
+/ @param sym1 currency pair for book1, any format ccy.q's normalize_ccy_pair accepts
 / @param book1 dict `bid`ask!(bidPx;askPx) quoted in sym1's own convention
-/ @param sym2 currency pair for book2, any format ccy.q's normalizeCcyPair accepts
+/ @param sym2 currency pair for book2, any format ccy.q's normalize_ccy_pair accepts
 / @param book2 dict `bid`ask!(bidPx;askPx) quoted in sym2's own convention
 / @return dict `sym`bid`ask!(crossSym;bidPx;askPx) for the synthetic cross
 / @throws error if sym1 and sym2 share no common currency
-/ @eg .uqf.crossBook[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165;165.052)
-crossBook:{[sym1;book1;sym2;book2]
-    orient:ccyOrientCross[sym1;sym2];
-    oriented1:$[orient`invert1; invertBook book1; book1];
-    oriented2:$[orient`invert2; invertBook book2; book2];
-    combined:combineOrientedBooks[oriented1;oriented2];
+/ @eg .uqf.cross_book[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165;165.052)
+cross_book:{[sym1;book1;sym2;book2]
+    orient:ccy_orient_cross[sym1;sym2];
+    oriented1:$[orient`invert1; invert_book book1; book1];
+    oriented2:$[orient`invert2; invert_book book2; book2];
+    combined:combine_oriented_books[oriented1;oriented2];
     `sym`bid`ask!(orient`crossSym;combined`bid;combined`ask)};
 
 / Invert a multi-level depth ladder: BASE/QUOTE -> QUOTE/BASE. Prices
@@ -173,8 +173,8 @@ crossBook:{[sym1;book1;sym2;book2]
 / @param prices level prices, best-first
 / @param sizes level sizes in the ladder's own base currency, aligned to prices
 / @return (invertedPrices;rescaledSizes), still best-first
-/ @eg .uqf.invertBookDepth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200)
-invertBookDepth:{[prices;sizes] (1%prices;sizes*prices)};
+/ @eg .uqf.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200)
+invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 
 / Private: the (prices;sizes) to sweep for one leg, for one side of the
 / final cross. If this leg doesn't need inverting, that's just its own
@@ -183,11 +183,11 @@ invertBookDepth:{[prices;sizes] (1%prices;sizes*prices)};
 / @param side `bid or `ask - the side of the final cross being priced
 / @param book dict `bidPrices`bidSizes`askPrices`askSizes for this leg
 / @param invert 1b if this leg's convention needs flipping
-/ @return (prices;sizes) to pass to sweepPrice
-orientedLevels:{[side;book;invert]
+/ @return (prices;sizes) to pass to sweep_price
+oriented_levels:{[side;book;invert]
     $[side=`ask;
-        $[invert; invertBookDepth[book`bidPrices;book`bidSizes]; (book`askPrices;book`askSizes)];
-        $[invert; invertBookDepth[book`askPrices;book`askSizes]; (book`bidPrices;book`bidSizes)]]};
+        $[invert; invert_book_depth[book`bidPrices;book`bidSizes]; (book`askPrices;book`askSizes)];
+        $[invert; invert_book_depth[book`askPrices;book`askSizes]; (book`bidPrices;book`bidSizes)]]};
 
 / Private: sweep one side of a 2-leg cross at one size, converting the
 / notional hop-by-hop - leg 2 is swept at the amount of the shared/bridge
@@ -199,13 +199,13 @@ orientedLevels:{[side;book;invert]
 / @param invert1 1b if leg 1 needs its convention flipped
 / @param invert2 1b if leg 2 needs its convention flipped
 / @return dict `price`filledSize`fullyFilled for this side of the cross
-crossSweepSide:{[book1;book2;side;size;invert1;invert2]
-    lvl1:orientedLevels[side;book1;invert1];
-    sweep1:sweepPrice[lvl1 0;lvl1 1;size];
+cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
+    lvl1:oriented_levels[side;book1;invert1];
+    sweep1:sweep_price[lvl1 0;lvl1 1;size];
     bridgeNotional:sweep1[`filledSize]*sweep1[`avgPrice];
-    lvl2:orientedLevels[side;book2;invert2];
+    lvl2:oriented_levels[side;book2;invert2];
     emptySweep:`avgPrice`worstPrice`filledSize`fullyFilled!(0n;0n;0f;0b);
-    sweep2:$[bridgeNotional>0; sweepPrice[lvl2 0;lvl2 1;bridgeNotional]; emptySweep];
+    sweep2:$[bridgeNotional>0; sweep_price[lvl2 0;lvl2 1;bridgeNotional]; emptySweep];
     price:sweep1[`avgPrice]*sweep2[`avgPrice];
     fullyFilled:sweep1[`fullyFilled] and sweep2[`fullyFilled];
     `price`filledSize`fullyFilled!(price;sweep1[`filledSize];fullyFilled)};
@@ -219,30 +219,30 @@ crossSweepSide:{[book1;book2;side;size;invert1;invert2]
 / @param book2 dict `bidPrices`bidSizes`askPrices`askSizes for leg 2
 / @param size the size to sweep, in leg 1's relevant currency
 / @return one row: dict `size`sym`bid`bidFilledSize`bidFullyFilled`ask`askFilledSize`askFullyFilled`mid
-crossBookAtOneSize:{[sym1;book1;sym2;book2;size]
-    orient:ccyOrientCross[sym1;sym2];
-    bidR:crossSweepSide[book1;book2;`bid;size;orient`invert1;orient`invert2];
-    askR:crossSweepSide[book1;book2;`ask;size;orient`invert1;orient`invert2];
+cross_book_at_one_size:{[sym1;book1;sym2;book2;size]
+    orient:ccy_orient_cross[sym1;sym2];
+    bidR:cross_sweep_side[book1;book2;`bid;size;orient`invert1;orient`invert2];
+    askR:cross_sweep_side[book1;book2;`ask;size;orient`invert1;orient`invert2];
     midPrice:0.5*bidR[`price]+askR[`price];
     `size`sym`bid`bidFilledSize`bidFullyFilled`ask`askFilledSize`askFullyFilled`mid!
       (size;orient`crossSym;bidR`price;bidR`filledSize;bidR`fullyFilled;askR`price;askR`filledSize;askR`fullyFilled;midPrice)};
 
 / Private: the result columns contributed by one requested side.
-sideCols:{[s]
+side_cols:{[s]
     $[s=`bid; `bid`bidFilledSize`bidFullyFilled;
       s=`ask; `ask`askFilledSize`askFullyFilled;
       s=`mid; enlist `mid;
-      '"crossBookAtSizes: side must be one of `bid`ask`mid, got ",string s]};
+      '"cross_book_at_sizes: side must be one of `bid`ask`mid, got ",string s]};
 
-/ Depth-aware synthetic cross rate: like crossBook, but walks multi-level
+/ Depth-aware synthetic cross rate: like cross_book, but walks multi-level
 / order book depth on both legs for each requested size, converting the
 / notional hop-by-hop (leg 2 is swept at the bridge-currency amount leg
 / 1's sweep actually produced), and returns only the sides you ask for.
 / Each leg's book must supply real depth, not just top-of-book - see
-/ sweepPrice's book shape.
-/ @param sym1 currency pair for leg 1, any format ccy.q's normalizeCcyPair accepts
+/ sweep_price's book shape.
+/ @param sym1 currency pair for leg 1, any format ccy.q's normalize_ccy_pair accepts
 / @param book1 dict `bidPrices`bidSizes`askPrices`askSizes for leg 1, each level best-first
-/ @param sym2 currency pair for leg 2, any format ccy.q's normalizeCcyPair accepts
+/ @param sym2 currency pair for leg 2, any format ccy.q's normalize_ccy_pair accepts
 / @param book2 dict `bidPrices`bidSizes`askPrices`askSizes for leg 2, each level best-first
 / @param sizes list of sizes to price, e.g. 1000000 2000000 5000000
 / @param sides subset of `bid`ask`mid to include in the result
@@ -251,10 +251,10 @@ sideCols:{[s]
 /   mid were requested via sides
 / @throws error if sym1 and sym2 share no common currency, or sides has
 /   anything other than `bid`ask`mid
-/ @eg .uqf.crossBookAtSizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;1000000 3000000;`bid`ask`mid]
-crossBookAtSizes:{[sym1;book1;sym2;book2;sizes;sides]
-    rows:crossBookAtOneSize[sym1;book1;sym2;book2;] each sizes;
-    wantCols:`size`sym , raze sideCols each sides;
+/ @eg .uqf.cross_book_at_sizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;1000000 3000000;`bid`ask`mid]
+cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
+    rows:cross_book_at_one_size[sym1;book1;sym2;book2;] each sizes;
+    wantCols:`size`sym , raze side_cols each sides;
     wantCols#rows};
 
 \d .

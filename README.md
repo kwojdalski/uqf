@@ -35,8 +35,8 @@ paths relative to it (e.g. `src/stats.q`).
 
 ```
 q src/init.q
-q).uqf.gkCall[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
-q).uqf.fwdSimple[1.10;0.05;0.02;1]              / CIRP outright forward
+q).uqf.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
+q).uqf.fwd_simple[1.10;0.05;0.02;1]              / CIRP outright forward
 q).uqf.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 ```
 
@@ -46,7 +46,7 @@ Every function lives in the `.uqf` namespace after loading `src/init.q`.
 
 ```
 src/
-  stats.q       normal distribution helpers (ncdf, npdf, invNcdf) + hornerEval
+  stats.q       normal distribution helpers (ncdf, npdf, inv_ncdf) + horner_eval
   ccy.q         currency pair symbol convention: CURCUR validation/normalization
   daycount.q    day count fraction conventions (ACT/360, ACT/365, 30E/360)
   rates.q       discount/growth factors, simple<->continuous rate conversion
@@ -75,50 +75,50 @@ scripts/
 
 ## Module reference
 
-**stats.q** - `ncdf`, `npdf`, `invNcdf` (Peter Acklam's rational
-approximation to the inverse normal CDF), `hornerEval` (shared polynomial
+**stats.q** - `ncdf`, `npdf`, `inv_ncdf` (Peter Acklam's rational
+approximation to the inverse normal CDF), `horner_eval` (shared polynomial
 evaluator every other module's math routes through).
 
-**ccy.q** - `isCcyPair`/`normalizeCcyPair` (canonical CURCUR convention -
+**ccy.q** - `is_ccy_pair`/`normalize_ccy_pair` (canonical CURCUR convention -
 six uppercase letters, no separator - validated/normalized from looser
-input like `` `eurusd `` or `"EUR/USD"``), `ccyPairSymbol`/`ccyPairLegs`
+input like `` `eurusd `` or `"EUR/USD"``), `ccy_pair_symbol`/`ccy_pair_legs`
 (build/split a pair symbol from its 3-letter base and quote currency
-codes). `forwards.q`'s `crossBook` uses these internally.
+codes). `forwards.q`'s `cross_book` uses these internally.
 
-**daycount.q** - `dcfAct360`, `dcfAct365`, `dcf30E360`, and `yearFrac`
+**daycount.q** - `dcf_act_360`, `dcf_act_365`, `dcf_30e_360`, and `year_frac`
 which dispatches to one of them by convention symbol (`` `act360``,
 `` `act365``, `` `30e360``). Turns a pair of dates into the year fraction
 `t` every pricing function below takes as input.
 
-**rates.q** - `growthSimple`/`growthCont`, `dfSimple`/`dfCont`,
-`simpleToCont`/`contToSimple`.
+**rates.q** - `growth_simple`/`growth_cont`, `df_simple`/`df_cont`,
+`simple_to_cont`/`cont_to_simple`.
 
-**forwards.q** - `fwdSimple`/`fwdCont` (CIRP outright), `fwdPoints`,
-`pointsToOutright`, `impliedForeignRate`/`impliedDomesticRate`,
-`crossRate`/`invertRate` (A/B * B/C = A/C chain), `crossRateSharedBase`
+**forwards.q** - `fwd_simple`/`fwd_cont` (CIRP outright), `fwd_points`,
+`points_to_outright`, `implied_foreign_rate`/`implied_domestic_rate`,
+`cross_rate`/`invert_rate` (A/B * B/C = A/C chain), `cross_rate_shared_base`
 (divide - two rates sharing a currency on the *same* side, e.g. EURPLN &
 EURUSD -> USDPLN; a 3+-leg cross like AUDPLN from AUDUSD/EURUSD/EURPLN is
-just composing this with `crossRate`), `crossBook`/`invertBook`/
-`combineOrientedBooks`/`bookCrossed`/`ccyOrientCross` for building a
+just composing this with `cross_rate`), `cross_book`/`invert_book`/
+`combine_oriented_books`/`book_crossed`/`ccy_orient_cross` for building a
 synthetic top-of-book cross rate from two live order books (auto-detects
 the shared currency and orients/inverts each leg as needed), and
-`crossBookAtSizes`/`invertBookDepth` for the depth-aware version: given
+`cross_book_at_sizes`/`invert_book_depth` for the depth-aware version: given
 each leg's *multi-level* order book, prices the cross at a list of sizes
 (e.g. `1000000 3000000 5000000`), walking each leg's depth and converting
 the notional hop-by-hop between legs, returning whichever of
 `` `bid`ask`mid `` you ask for as a table (one row per size).
 
-**options.q** - `gkCall`/`gkPut`, `d1`/`d2`, `gkDeltaCall`/`gkDeltaPut`,
-`gkGamma`, `gkVega`, `gkThetaCall`/`gkThetaPut`, `gkRhoCall`/`gkRhoPut`,
-`impliedVol` (Newton-Raphson with a bisection fallback for near-zero vega).
+**options.q** - `gk_call`/`gk_put`, `d1`/`d2`, `gk_delta_call`/`gk_delta_put`,
+`gk_gamma`, `gk_vega`, `gk_theta_call`/`gk_theta_put`, `gk_rho_call`/`gk_rho_put`,
+`implied_vol` (Newton-Raphson with a bisection fallback for near-zero vega).
 Setting `rf=0` reduces Garman-Kohlhagen to plain Black-Scholes.
 
-**risk.q** - `pipValue`, `pnl`, `carryReturn`/`carryPnl`, `varParametric`,
-`varHistorical`.
+**risk.q** - `pip_value`, `pnl`, `carry_return`/`carry_pnl`, `var_parametric`,
+`var_historical`.
 
 **execution.q** - `markout` (vectorizes naturally across multiple
-post-trade horizons), `effSpread`, `slippage`, `fillRatio`, `rejectRatio`,
-`vwap`, `sweepPrice` (walks best-to-worst order book levels to price
+post-trade horizons), `eff_spread`, `slippage`, `fill_ratio`, `reject_ratio`,
+`vwap`, `sweep_price` (walks best-to-worst order book levels to price
 sweeping a given size - the blended fill price, the marginal/worst level
 touched, how much actually filled, and whether the book had enough depth).
 
@@ -140,11 +140,11 @@ safe to wire into CI as-is. As of this writing: **195 tests, all passing**.
 
 Every function is tested against at least one of: a published textbook
 reference value (e.g. Hull's Black-Scholes worked example for
-`gkCall`/`gkPut`), a provable identity (put-call parity, delta-call minus
+`gk_call`/`gk_put`), a provable identity (put-call parity, delta-call minus
 delta-put equals the foreign discount factor, day-count-neutral round
 trips), or an explicit round trip through an inverse function (e.g.
-building a forward with `fwdSimple` and recovering the input rate with
-`impliedForeignRate`). See `.claude/skills/kdb-q-conventions/SKILL.md` for
+building a forward with `fwd_simple` and recovering the input rate with
+`implied_foreign_rate`). See `.claude/skills/kdb-q-conventions/SKILL.md` for
 why this project leans on identities/round-trips rather than hand-computed
 expected values wherever possible.
 
