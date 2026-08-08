@@ -1,0 +1,143 @@
+# uqf
+
+A q/kdb+ library of quantitative-finance functions **strictly scoped to
+electronic FX (eFX)**: covered-interest-rate-parity forwards and swap
+points, synthetic cross-rate order books, Garman-Kohlhagen FX option
+pricing and Greeks, FX position risk (P&L, carry, VaR), and eFX execution
+analytics (markouts, slippage, effective spread, fill/reject ratios).
+
+Every function has a corresponding unit test written against the vendored
+[qUnit](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)
+framework - see [Testing](#testing).
+
+## Requirements
+
+You need a q/kdb+ interpreter. Two options:
+
+- **kdb+** - KX's own interpreter. The 64-bit personal edition is free for
+  non-commercial use but requires registering for a license at
+  [kx.com](https://kx.com/developers/download-licenses/) and an always-on
+  internet connection to validate it.
+- **[PeachQ](https://www.timestored.com/peachq/download)** - a free,
+  MIT-licensed, from-scratch q-language implementation with no license
+  server dependency. This repo was developed and its test suite validated
+  against PeachQ; a self-contained binary is enough:
+  ```
+  curl -LO https://peachq.org/file/peachq-v0.74.0-darwin-arm64.tar.gz   # pick your platform's asset
+  tar -xzf peachq-v0.74.0-darwin-arm64.tar.gz
+  ./q tests/run_tests.q
+  ```
+
+Either way, run everything from the repository root - the load scripts use
+paths relative to it (e.g. `src/stats.q`).
+
+## Quick start
+
+```
+q src/init.q
+q).uqf.gkCall[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
+q).uqf.fwdSimple[1.10;0.05;0.02;1]              / CIRP outright forward
+q).uqf.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
+```
+
+Every function lives in the `.uqf` namespace after loading `src/init.q`.
+
+## Layout
+
+```
+src/
+  stats.q       normal distribution helpers (ncdf, npdf, invNcdf) + hornerEval
+  daycount.q    day count fraction conventions (ACT/360, ACT/365, 30E/360)
+  rates.q       discount/growth factors, simple<->continuous rate conversion
+  forwards.q    CIRP forwards/swap points, cross rates, synthetic cross books
+  options.q     Garman-Kohlhagen pricing, Greeks, implied vol
+  risk.q        pip value, P&L, carry, parametric & historical VaR
+  execution.q   markouts, effective spread, slippage, fill/reject ratios, vwap
+  init.q        loads every module above, in dependency order
+
+tests/
+  lib/qunit.q     vendored qUnit test framework (see Licensing)
+  lib/testutil.q  tolerance-based float assertion helper used by every test
+  test_*.q        one test file per src/*.q module
+  run_tests.q     loads everything and runs the full suite
+
+.claude/skills/kdb-q-conventions/   q-language conventions for this repo,
+                                     including the operator-precedence gotcha
+                                     below (loaded automatically by Claude
+                                     Code when editing .q files here)
+```
+
+## Module reference
+
+**stats.q** - `ncdf`, `npdf`, `invNcdf` (Peter Acklam's rational
+approximation to the inverse normal CDF), `hornerEval` (shared polynomial
+evaluator every other module's math routes through).
+
+**daycount.q** - `dcfAct360`, `dcfAct365`, `dcf30E360`, and `yearFrac`
+which dispatches to one of them by convention symbol (`` `act360``,
+`` `act365``, `` `30e360``). Turns a pair of dates into the year fraction
+`t` every pricing function below takes as input.
+
+**rates.q** - `growthSimple`/`growthCont`, `dfSimple`/`dfCont`,
+`simpleToCont`/`contToSimple`.
+
+**forwards.q** - `fwdSimple`/`fwdCont` (CIRP outright), `fwdPoints`,
+`pointsToOutright`, `impliedForeignRate`/`impliedDomesticRate`,
+`crossRate`/`invertRate`, and `crossBook`/`invertBook`/
+`combineOrientedBooks`/`bookCrossed` for building a synthetic top-of-book
+cross rate from two live order books (auto-detects the shared currency and
+orients/inverts each leg as needed).
+
+**options.q** - `gkCall`/`gkPut`, `d1`/`d2`, `gkDeltaCall`/`gkDeltaPut`,
+`gkGamma`, `gkVega`, `gkThetaCall`/`gkThetaPut`, `gkRhoCall`/`gkRhoPut`,
+`impliedVol` (Newton-Raphson with a bisection fallback for near-zero vega).
+Setting `rf=0` reduces Garman-Kohlhagen to plain Black-Scholes.
+
+**risk.q** - `pipValue`, `pnl`, `carryReturn`/`carryPnl`, `varParametric`,
+`varHistorical`.
+
+**execution.q** - `markout` (vectorizes naturally across multiple
+post-trade horizons), `effSpread`, `slippage`, `fillRatio`, `rejectRatio`,
+`vwap`.
+
+Currency pairs follow BASE/QUOTE quoting throughout (`rate` = 1 BASE in
+QUOTE units); `side` is `1` for long/buy, `-1` for short/sell;
+`pipFactor` is `10000` for most pairs and `100` for JPY crosses. See the
+`kdb-q-conventions` skill for the full set of conventions and the q
+arithmetic gotcha that shaped how this code is written.
+
+## Testing
+
+```
+q tests/run_tests.q
+```
+
+This loads every module, loads every `test_*.q` file, runs the full qUnit
+suite, prints a pass/fail summary, and exits non-zero if anything failed -
+safe to wire into CI as-is. As of this writing: **132 tests, all passing**.
+
+Every function is tested against at least one of: a published textbook
+reference value (e.g. Hull's Black-Scholes worked example for
+`gkCall`/`gkPut`), a provable identity (put-call parity, delta-call minus
+delta-put equals the foreign discount factor, day-count-neutral round
+trips), or an explicit round trip through an inverse function (e.g.
+building a forward with `fwdSimple` and recovering the input rate with
+`impliedForeignRate`). See `.claude/skills/kdb-q-conventions/SKILL.md` for
+why this project leans on identities/round-trips rather than hand-computed
+expected values wherever possible.
+
+## Licensing
+
+Everything in this repository is MIT licensed (see `LICENSE`), **except**
+`tests/lib/qunit.q`, which is vendored from
+[TimeStored's qUnit](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)
+and distributed under its own license (CC BY-NC-SA 2.0 UK -
+Attribution-NonCommercial-ShareAlike). That file's non-commercial term
+applies only to the test framework itself, not to `src/`; if you need to
+use this library commercially and want to keep a fully-commercial-license
+test setup, swap `tests/lib/qunit.q` for a permissively-licensed
+alternative (e.g. [q-unit](https://github.com/jasraj/q-unit) or
+[qtb2](https://github.com/ktsr42/qtb2)) - the `tests/lib/testutil.q` helper
+and all `test_*.q` files use only qUnit's documented
+`assertThat`/`assertEquals`/`assertTrue`/`assertFalse`/`assertError` API,
+so swapping frameworks should be a small, mechanical change.

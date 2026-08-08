@@ -1,0 +1,15 @@
+# kdb+/q
+*.log
+expected/
+actual/
+*.qlog
+
+# OS
+.DS_Store
+
+# local Claude Code session permissions, not project config
+.claude/settings.local.json
+
+# local q/PeachQ binaries some contributors may keep alongside the repo
+/q
+/peachq/
