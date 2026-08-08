@@ -101,6 +101,32 @@ library with no processes/IPC/tables).
   as one string. `ccy.q`'s `ccyToStr` exists specifically to paper over
   this: `$[10h=type x; x; string x]` - check `type` before coercing
   anything that might already be a string.
+- **`,` on two symbol atoms does not concatenate their text** - it makes a
+  2-element symbol *list*. `` `ask,`Prices `` gives `` `ask`Prices `` (a
+  vector), not `` `askPrices``. Trying to dynamically build a lookup key
+  this way (e.g. `` book[side,`Prices] `` to pick `askPrices`/`bidPrices`
+  by a `side` variable) silently returns a null instead of erroring -
+  broke `crossBookAtSizes`'s first draft. Build dynamic symbols from
+  *strings* instead (`` `$(string x),"suffix" ``), or better, avoid
+  dynamic key construction entirely and branch explicitly per case (what
+  `forwards.q`'s `orientedLevels` does).
+- Nested lambdas do **not** close over an enclosing function's *local*
+  variables - only globals. `outer:{[] localVar:42; inner:{[d] localVar+d};
+  inner[8]}` throws `localVar` (undefined), even though `inner` is
+  textually nested inside `outer`. This matters most for qUnit's
+  `assertError`/`assertThrows` pattern: a `wrapper` lambda meant to defer
+  a call for `assertError` to invoke must take everything it needs as an
+  **explicit parameter** (e.g. `{[books] ...books 0...books 1...}` called
+  as `assertError[wrapper;(book1;book2);msg]`), never by referencing a
+  same-function local from inside the nested lambda body. Getting this
+  wrong doesn't silently pass - the whole test function throws and shows
+  up as `error` rather than `pass` in the qUnit summary, which is at
+  least how it gets caught.
+- A local variable named `cols` shadows q's `cols` keyword (table column
+  names) - same failure mode as the earlier `ss`-shadowing gotcha
+  (`assign`/`type` errors with no clear cause). Avoid naming a variable
+  after any q keyword; when in doubt, check `` key `. `` or just pick a
+  more specific name (`wantCols`, not `cols`).
 
 ## Layout
 

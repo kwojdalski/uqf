@@ -126,4 +126,110 @@ testCrossBookRejectsNoSharedCurrency:{[t]
     wrapper:{[dummy] .uqf.crossBook[`EURUSD;`bid`ask!(1.10;1.1002);`GBPCHF;`bid`ask!(1.20;1.2003)]};
     .qunit.assertError[wrapper;::;"EURUSD and GBPCHF share no currency"]};
 
+testCcyOrientCrossChain:{[t]
+    r:.uqf.ccyOrientCross[`EURUSD;`USDJPY];
+    .qunit.assertEquals[r`crossSym;`EURJPY;"A/B, B/C -> A/C"];
+    .qunit.assertFalse[r`invert1;"leg1 not inverted"];
+    .qunit.assertFalse[r`invert2;"leg2 not inverted"]};
+
+testCcyOrientCrossSharedQuote:{[t]
+    r:.uqf.ccyOrientCross[`EURUSD;`GBPUSD];
+    .qunit.assertEquals[r`crossSym;`EURGBP;"A/B, C/B -> A/C"];
+    .qunit.assertFalse[r`invert1;"leg1 not inverted"];
+    .qunit.assertTrue[r`invert2;"leg2 inverted (shared quote)"]};
+
+testCcyOrientCrossSharedBase:{[t]
+    r:.uqf.ccyOrientCross[`USDJPY;`USDCHF];
+    .qunit.assertEquals[r`crossSym;`JPYCHF;"B/A, B/C -> A/C"];
+    .qunit.assertTrue[r`invert1;"leg1 inverted (shared base)"];
+    .qunit.assertFalse[r`invert2;"leg2 not inverted"]};
+
+testCcyOrientCrossRejectsNoSharedCurrency:{[t]
+    wrapper:{[dummy] .uqf.ccyOrientCross[`EURUSD;`GBPCHF]};
+    .qunit.assertError[wrapper;::;"no shared currency is rejected"]};
+
+testInvertBookDepthKnown:{[t]
+    r:.uqf.invertBookDepth[1.1000 1.1002;1000000 1000000];
+    .testutil.assertApprox[first r;0.9090909 0.9089256;1e-6;"prices invert elementwise, staying best-first"];
+    .testutil.assertApprox[last r;1100000 1100200;1e-6;"sizes rescale into the new base currency"]};
+
+testInvertBookDepthRoundTrip:{[t]
+    prices:1.2500 1.2503 1.2505;
+    sizes:2000000 1500000 3000000;
+    once:.uqf.invertBookDepth[prices;sizes];
+    twice:.uqf.invertBookDepth[once 0;once 1];
+    .testutil.assertApprox[twice 0;prices;1e-6;"inverting twice restores prices"];
+    .testutil.assertApprox[twice 1;sizes;1e-3;"inverting twice restores sizes"]};
+
+testCrossBookAtSizesMatchesCrossBookAtNegligibleSize:{[t]
+    / a size far smaller than any level's depth should reduce to exactly
+    / crossBook's top-of-book result - a self-consistency check that
+    / needs no hand-computed magic numbers.
+    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.crossBookAtSizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;enlist 100;`bid`ask];
+    tob:.uqf.crossBook[`EURUSD;`bid`ask!(1.0998;1.1000);`USDJPY;`bid`ask!(149.98;150.00)];
+    .qunit.assertEquals[first r`sym;tob`sym;"cross symbol matches crossBook"];
+    .testutil.assertApprox[first r`bid;tob`bid;1e-6;"negligible-size bid matches crossBook's top-of-book bid"];
+    .testutil.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches crossBook's top-of-book ask"]};
+
+testCrossBookAtSizesSharedCornerMatchesCrossBookAtNegligibleSize:{[t]
+    / same consistency check, but for the shared-quote (invert) branch
+    audusdBook:`bidPrices`bidSizes`askPrices`askSizes!(0.6498 0.6496;2000000 2000000;0.6500 0.6502;2000000 2000000);
+    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;2000000 2000000;1.1000 1.1002;2000000 2000000);
+    r:.uqf.crossBookAtSizes[`AUDUSD;audusdBook;`EURUSD;eurusdBook;enlist 100;`bid`ask];
+    tob:.uqf.crossBook[`AUDUSD;`bid`ask!(0.6498;0.6500);`EURUSD;`bid`ask!(1.0998;1.1000)];
+    .qunit.assertEquals[first r`sym;tob`sym;"cross symbol matches crossBook (AUDEUR)"];
+    .testutil.assertApprox[first r`bid;tob`bid;1e-6;"negligible-size bid matches crossBook's top-of-book bid"];
+    .testutil.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches crossBook's top-of-book ask"]};
+
+testCrossBookAtSizesWalksMultipleLevels:{[t]
+    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.crossBookAtSizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;enlist 1500000;`bid`ask`mid];
+    .testutil.assertApprox[first r`bid;164.9293;1e-3;"blended bid after walking depth on both legs"];
+    .testutil.assertApprox[first r`ask;165.0187;1e-3;"blended ask after walking depth on both legs"];
+    .testutil.assertApprox[first r`mid;164.974;1e-3;"mid is the average of the swept bid and ask"];
+    .qunit.assertTrue[first r`bidFullyFilled;"enough depth to fully fill 1.5mm"];
+    .qunit.assertTrue[first r`askFullyFilled;"enough depth to fully fill 1.5mm"]};
+
+testCrossBookAtSizesInsufficientDepth:{[t]
+    / total depth per side is 2mm; asking for 3mm can't be fully filled
+    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.crossBookAtSizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;enlist 3000000;`bid`ask];
+    .testutil.assertApprox[first r`bidFilledSize;2000000f;1e-6;"bid caps at leg1's total depth"];
+    .testutil.assertApprox[first r`askFilledSize;2000000f;1e-6;"ask caps at leg1's total depth"];
+    .qunit.assertFalse[first r`bidFullyFilled;"not fully filled"];
+    .qunit.assertFalse[first r`askFullyFilled;"not fully filled"]};
+
+testCrossBookAtSizesMidVariesWithAsymmetricDepth:{[t]
+    / an asymmetric book (thin ask, deep bid) should make mid genuinely
+    / size-dependent, not coincidentally constant
+    thinAskBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996 1.0994;3000000 3000000 3000000;1.1000 1.1010;200000 5000000);
+    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.crossBookAtSizes[`EURUSD;thinAskBook;`USDJPY;usdjpyBook;500000 3000000;enlist `mid];
+    .qunit.assertTrue[(r[`mid] 0)<(r[`mid] 1);"mid increases with size once the thin ask level is exhausted"]};
+
+testCrossBookAtSizesSidesFiltering:{[t]
+    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.crossBookAtSizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;enlist 1000000;enlist `mid];
+    .qunit.assertEquals[cols r;`size`sym`mid;"requesting just mid returns only size, sym and mid columns"]};
+
+testCrossBookAtSizesRejectsInvalidSide:{[t]
+    / note: wrapper takes the whole (book1;book2) tuple as a single
+    / argument rather than closing over local variables - nested q
+    / lambdas do NOT see an enclosing function's locals, only globals.
+    wrapper:{[books] .uqf.crossBookAtSizes[`EURUSD;books 0;`USDJPY;books 1;enlist 1000000;enlist `close]};
+    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    .qunit.assertError[wrapper;(eurusdBook;usdjpyBook);"an unrecognised side symbol is rejected"]};
+
+testCrossBookAtSizesRejectsNoSharedCurrency:{[t]
+    wrapper:{[books] .uqf.crossBookAtSizes[`EURUSD;books 0;`GBPCHF;books 1;enlist 1000000;`bid`ask]};
+    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    gbpchfBook:`bidPrices`bidSizes`askPrices`askSizes!(1.20 1.19;1000000 1000000;1.21 1.22;1000000 1000000);
+    .qunit.assertError[wrapper;(eurusdBook;gbpchfBook);"EURUSD and GBPCHF share no currency"]};
+
 \d .
