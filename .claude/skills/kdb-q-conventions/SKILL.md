@@ -141,3 +141,51 @@ tests/run_tests.q`). Every new function needs a qUnit test in the matching
 `tests/test_*.q` file - prefer known reference values or a provable
 identity (put-call parity, a round trip through an inverse function, a
 boundary case) over an assertion that just repeats the implementation.
+
+## Documentation (qDoc)
+
+Every function in `src/*.q` has a [qDoc](https://www.timestored.com/qstudio/help/qdoc)
+comment block, immediately above the function, with no blank line in
+between:
+
+```
+/ One-line (or multi-line) description of what the function does.
+/ @param name what this parameter is
+/ @param other ...
+/ @return what gets returned
+/ @throws when this errors, if it can
+/ @eg .uqf.someFunc[1;2]  -> 3
+someFunc:{[name;other] ...};
+```
+
+Verified empirically (not just from TimeStored's docs, which got the CLI
+arg order backwards - see below) by actually downloading `qstudio.jar` and
+running `com.timestored.qdoc.QDocMain` against a scratch file:
+
+- qDoc parses lines starting with a **single** `/` as doc content
+  (`@param`/`@return`/`@throws`/`@eg`/`@author`/etc, JavaDoc-style); `//`
+  lines are picked up only as a weak fallback one-line description when no
+  proper `/` block exists. Every doc block in this repo uses single `/`.
+- **Every doc block needs a plain description line before any `@` tag**,
+  even a short one - a block that starts directly with `@param` renders
+  with a blank "short description" in the generated index (this happened
+  to `d1`/`d2` in `options.q` originally; fixed by adding a one-line lead-in).
+- A file-level doc block (single-`/` lines, ending in a lone `/ .` line)
+  goes **before** `\d .uqf` at the top of the file and becomes that file's
+  description in the generated docs.
+- The CLI is `java -cp qstudio.jar com.timestored.qdoc.QDocMain <target> <source>`.
+  TimeStored's own help page states the reverse order
+  (`<source> <target>`) - that is wrong; passing it that way silently
+  writes qDoc's own output files into your source folder and finds
+  nothing to document. `scripts/gen-docs.sh` has the verified order baked in.
+- qDoc documents `.uqf` separately per source file in its nav
+  (`.uqf (options.q)`, `.uqf (risk.q)`, ...) rather than merging same-named
+  namespaces from different files into one page - expected, not a bug.
+- qstudio.jar also runs a bundled linter as a side effect
+  (`docs/lint.csv`), which throws a lot of `UNDECLARED_VAR` false
+  positives for this repo specifically, because it lints each file in
+  isolation and can't see that e.g. `dfCont` (from `rates.q`) is available
+  in `options.q` once both are loaded into the shared `.uqf` namespace via
+  `src/init.q`. Safe to ignore those; do look at anything else it flags.
+
+See the README's Documentation section for the actual `gen-docs.sh` usage.

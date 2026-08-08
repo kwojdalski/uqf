@@ -56,10 +56,14 @@ src/
   init.q        loads every module above, in dependency order
 
 tests/
-  lib/qunit.q     vendored qUnit test framework (see Licensing)
-  lib/testutil.q  tolerance-based float assertion helper used by every test
-  test_*.q        one test file per src/*.q module
-  run_tests.q     loads everything and runs the full suite
+  lib/qunit.q            vendored qUnit test framework (see Licensing)
+  lib/testutil.q         tolerance-based float assertion helper used by every test
+  test_*.q                one test file per src/*.q module
+  test_execution_scale.q  1mm-row synthetic markout scale/integration test
+  run_tests.q             loads everything and runs the full suite
+
+scripts/
+  gen-docs.sh   regenerates docs/ via qDoc (see Documentation)
 
 .claude/skills/kdb-q-conventions/   q-language conventions for this repo,
                                      including the operator-precedence gotcha
@@ -114,7 +118,7 @@ q tests/run_tests.q
 
 This loads every module, loads every `test_*.q` file, runs the full qUnit
 suite, prints a pass/fail summary, and exits non-zero if anything failed -
-safe to wire into CI as-is. As of this writing: **132 tests, all passing**.
+safe to wire into CI as-is. As of this writing: **135 tests, all passing**.
 
 Every function is tested against at least one of: a published textbook
 reference value (e.g. Hull's Black-Scholes worked example for
@@ -125,6 +129,34 @@ building a forward with `fwdSimple` and recovering the input rate with
 `impliedForeignRate`). See `.claude/skills/kdb-q-conventions/SKILL.md` for
 why this project leans on identities/round-trips rather than hand-computed
 expected values wherever possible.
+
+`tests/test_execution_scale.q` additionally generates a 1,000,000-row
+synthetic trade table (many currency pairs, times of day, bid/ask levels
+and liquidity sizes) and computes `markout` over it as a single vectorized
+call, as a scale/integration check beyond the per-function unit tests.
+
+## Documentation
+
+Every function in `src/*.q` has a [qDoc](https://www.timestored.com/qstudio/help/qdoc)
+comment block (JavaDoc-style: `@param`, `@return`, `@throws`, `@eg`).
+Generate browsable HTML API docs with:
+
+```
+brew install openjdk                        # or any JDK 8+
+curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place at repo root
+./scripts/gen-docs.sh                        # writes docs/index.html (gitignored)
+```
+
+`qstudio.jar` also bundles a small q linter that `gen-docs.sh` runs as a
+side effect (`docs/lint.csv`/`docs/lint.html`); this repo's multi-file
+`.uqf` namespace triggers a number of expected "undeclared variable"
+false positives there (the linter checks each file in isolation and can't
+see across `src/*.q`), so don't be alarmed by those specifically.
+
+**Note:** TimeStored's own qDoc docs state the CLI usage as
+`QDocMain <sourceFolder> <targetFolder>` - that argument order is
+backwards. The verified, working order (baked into `gen-docs.sh`) is
+`QDocMain <targetFolder> <sourceFolder>`.
 
 ## Licensing
 

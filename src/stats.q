@@ -1,32 +1,40 @@
-// stats.q - normal distribution helpers used throughout uqf
-//
-// ncdf/npdf use the Abramowitz & Stegun 7.1.26 rational approximation to
-// the error function (max absolute error ~1.5e-7).
-// invNcdf uses Peter Acklam's rational approximation to the inverse
-// standard normal CDF (max relative error ~1.15e-9), released by its
-// author into the public domain. See:
-//   https://web.archive.org/web/20151030215612/http://home.online.no/~pjacklam/notes/invnorm/
-//
-// NOTE ON q ARITHMETIC: q has no operator precedence - expressions are
-// evaluated strictly right to left, so `a*x+b` means `a*(x+b)`, NOT
-// `(a*x)+b`. Every polynomial below is therefore evaluated through
-// hornerEval rather than hand-written chains, to keep the one tricky bit
-// of arithmetic in a single, well-tested place.
+/ stats.q - normal distribution helpers used throughout uqf.
+/ ncdf/npdf use the Abramowitz & Stegun 7.1.26 rational approximation to
+/ the error function (max absolute error ~1.5e-7).
+/ invNcdf uses Peter Acklam's rational approximation to the inverse
+/ standard normal CDF (max relative error ~1.15e-9), released by its
+/ author into the public domain. See:
+/ https://web.archive.org/web/20151030215612/http://home.online.no/~pjacklam/notes/invnorm/
+/ .
 
 \d .uqf
 
+/ The constant pi, used by npdf.
 PI:acos -1;
 
-// Evaluate a polynomial at x via Horner's method. coeffs are ordered
-// highest degree first, constant term last (as in numpy.polyval), e.g.
-// hornerEval[2 3 4;x] evaluates 2*x*x + 3*x + 4.
+/ Evaluate a polynomial at x via Horner's method - the one place q's lack
+/ of operator precedence for hand-written Horner chains is worked out and
+/ tested, so no other formula in this repo has to re-derive it. See the
+/ kdb-q-conventions skill for why (`a*x+b` means `a*(x+b)` in q, not
+/ `(a*x)+b`, which silently broke early drafts of this function).
+/ @param coeffs polynomial coefficients, highest degree first, constant
+/   term last (as in numpy.polyval)
+/ @param x the point to evaluate the polynomial at
+/ @return coeffs[0]*x^n + coeffs[1]*x^(n-1) + ... + coeffs[n]
+/ @eg .uqf.hornerEval[2 3 4;5]  -> 69 (i.e. 2*5*5+3*5+4)
 hornerEval:{[coeffs;x]
     {[x;acc;c] (acc*x)+c}[x;]/[first coeffs;1 _ coeffs]};
 
-// Standard normal probability density function n(x)
+/ Standard normal probability density function n(x).
+/ @param x point(s) to evaluate at (atom or vector)
+/ @return the standard normal density at x
+/ @eg .uqf.npdf 0f  -> 0.3989423
 npdf:{[x] exp[-0.5*x*x] % sqrt 2*PI};
 
-// Standard normal cumulative distribution function N(x)
+/ Standard normal cumulative distribution function N(x).
+/ @param x point(s) to evaluate at (atom or vector)
+/ @return P(Z<=x) for a standard normal Z
+/ @eg .uqf.ncdf 1.96  -> 0.9750022
 ncdf:{[x]
     coeffs:1.061405429 -1.453152027 1.421413741 -0.284496736 0.254829592 0f; / a5 a4 a3 a2 a1 0, highest degree first
     s:signum x;
@@ -36,9 +44,11 @@ ncdf:{[x]
     y:1-(poly*exp neg z*z);
     0.5*1+s*y};
 
-// Inverse standard normal CDF (probit function): invNcdf[p] returns x such
-// that ncdf[x]~p. p must lie strictly within (0,1); works on an atom or a
-// list of atoms.
+/ Inverse standard normal CDF (probit function).
+/ @param p probability, strictly within (0,1); an atom or a list of atoms
+/ @return x such that ncdf[x]~p
+/ @throws error if any element of p is not strictly between 0 and 1
+/ @eg .uqf.invNcdf 0.95  -> 1.644854 (the one-tailed 95% z-score)
 invNcdf:{[p]
     if[not all(p>0)&(p<1); '"invNcdf: p must be strictly between 0 and 1"];
     a:-39.69683028665376 220.9460984245205 -275.9285104469687 138.3577518672690 -30.66479806614716 2.506628277459239;
