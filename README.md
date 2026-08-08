@@ -47,12 +47,14 @@ Every function lives in the `.uqf` namespace after loading `src/init.q`.
 ```
 src/
   stats.q       normal distribution helpers (ncdf, npdf, invNcdf) + hornerEval
+  ccy.q         currency pair symbol convention: CURCUR validation/normalization
   daycount.q    day count fraction conventions (ACT/360, ACT/365, 30E/360)
   rates.q       discount/growth factors, simple<->continuous rate conversion
   forwards.q    CIRP forwards/swap points, cross rates, synthetic cross books
   options.q     Garman-Kohlhagen pricing, Greeks, implied vol
   risk.q        pip value, P&L, carry, parametric & historical VaR
-  execution.q   markouts, effective spread, slippage, fill/reject ratios, vwap
+  execution.q   markouts, effective spread, slippage, fill/reject ratios,
+                vwap, order-book sweep pricing
   init.q        loads every module above, in dependency order
 
 tests/
@@ -77,6 +79,12 @@ scripts/
 approximation to the inverse normal CDF), `hornerEval` (shared polynomial
 evaluator every other module's math routes through).
 
+**ccy.q** - `isCcyPair`/`normalizeCcyPair` (canonical CURCUR convention -
+six uppercase letters, no separator - validated/normalized from looser
+input like `` `eurusd `` or `"EUR/USD"``), `ccyPairSymbol`/`ccyPairLegs`
+(build/split a pair symbol from its 3-letter base and quote currency
+codes). `forwards.q`'s `crossBook` uses these internally.
+
 **daycount.q** - `dcfAct360`, `dcfAct365`, `dcf30E360`, and `yearFrac`
 which dispatches to one of them by convention symbol (`` `act360``,
 `` `act365``, `` `30e360``). Turns a pair of dates into the year fraction
@@ -87,7 +95,10 @@ which dispatches to one of them by convention symbol (`` `act360``,
 
 **forwards.q** - `fwdSimple`/`fwdCont` (CIRP outright), `fwdPoints`,
 `pointsToOutright`, `impliedForeignRate`/`impliedDomesticRate`,
-`crossRate`/`invertRate`, and `crossBook`/`invertBook`/
+`crossRate`/`invertRate` (A/B * B/C = A/C chain), `crossRateSharedBase`
+(divide - two rates sharing a currency on the *same* side, e.g. EURPLN &
+EURUSD -> USDPLN; a 3+-leg cross like AUDPLN from AUDUSD/EURUSD/EURPLN is
+just composing this with `crossRate`), and `crossBook`/`invertBook`/
 `combineOrientedBooks`/`bookCrossed` for building a synthetic top-of-book
 cross rate from two live order books (auto-detects the shared currency and
 orients/inverts each leg as needed).
@@ -102,7 +113,9 @@ Setting `rf=0` reduces Garman-Kohlhagen to plain Black-Scholes.
 
 **execution.q** - `markout` (vectorizes naturally across multiple
 post-trade horizons), `effSpread`, `slippage`, `fillRatio`, `rejectRatio`,
-`vwap`.
+`vwap`, `sweepPrice` (walks best-to-worst order book levels to price
+sweeping a given size - the blended fill price, the marginal/worst level
+touched, how much actually filled, and whether the book had enough depth).
 
 Currency pairs follow BASE/QUOTE quoting throughout (`rate` = 1 BASE in
 QUOTE units); `side` is `1` for long/buy, `-1` for short/sell;
@@ -118,7 +131,7 @@ q tests/run_tests.q
 
 This loads every module, loads every `test_*.q` file, runs the full qUnit
 suite, prints a pass/fail summary, and exits non-zero if anything failed -
-safe to wire into CI as-is. As of this writing: **135 tests, all passing**.
+safe to wire into CI as-is. As of this writing: **174 tests, all passing**.
 
 Every function is tested against at least one of: a published textbook
 reference value (e.g. Hull's Black-Scholes worked example for

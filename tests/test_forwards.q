@@ -54,12 +54,33 @@ testInvertRateRoundTrip:{[t]
 
 testInvertRateKnown:{[t] .testutil.assertApprox[.uqf.invertRate 2f;0.5;1e-9;"1/2=0.5"]};
 
+testCrossRateSharedBaseKnown:{[t]
+    / EURPLN=4.30, EURUSD=1.075 -> USDPLN=4.30/1.075=4.0 exactly
+    .testutil.assertApprox[.uqf.crossRateSharedBase[4.30;1.075];4f;1e-9;"EURPLN, EURUSD -> USDPLN"]};
+
+testCrossRateSharedBaseMatchesManualComposition:{[t]
+    rateAX:1.3427; rateAY:0.7231;
+    lhs:.uqf.crossRateSharedBase[rateAX;rateAY];
+    rhs:.uqf.crossRate[rateAX;.uqf.invertRate rateAY];
+    .testutil.assertApprox[lhs;rhs;1e-9;"crossRateSharedBase = crossRate composed with invertRate on the second leg"]};
+
+testCrossRateSharedBaseIdentityWhenPairsEqual:{[t]
+    / A/X and A/Y with X=Y (same rate on both legs) -> Y/X = 1
+    .testutil.assertApprox[.uqf.crossRateSharedBase[1.2500;1.2500];1f;1e-9;"identical shared-base rates cross to exactly 1"]};
+
+testCrossRateSharedBaseAntiSymmetric:{[t]
+    / swapping which pair is "X" and which is "Y" inverts the result
+    rateAX:1.10; rateAY:150.0;
+    fwd:.uqf.crossRateSharedBase[rateAX;rateAY];
+    back:.uqf.crossRateSharedBase[rateAY;rateAX];
+    .testutil.assertApprox[fwd*back;1f;1e-9;"swapping the two legs gives the inverse cross rate"]};
+
 testInvertBookSwapsSides:{[t]
     book:`bid`ask!(1.1000;1.1002);
-    inv:.uqf.invertBook book;
+    inverted:.uqf.invertBook book;
     expected:`bid`ask!(1%1.1002;1%1.1000);
-    .testutil.assertApprox[inv`bid;expected`bid;1e-9;"inverted bid = 1/original ask"];
-    .testutil.assertApprox[inv`ask;expected`ask;1e-9;"inverted ask = 1/original bid"]};
+    .testutil.assertApprox[inverted`bid;expected`bid;1e-9;"inverted bid = 1/original ask"];
+    .testutil.assertApprox[inverted`ask;expected`ask;1e-9;"inverted ask = 1/original bid"]};
 
 testInvertBookRoundTrip:{[t]
     book:`bid`ask!(1.2500;1.2503);
