@@ -1,0 +1,154 @@
+# Pre-commit configuration for uqf (q/kdb+ quant library).
+# Structure inherited from ../masters_thesis; local hooks swapped for q/qUnit
+# since the library itself is pure q. python/uqf-client is a small Python/uv
+# subproject (a kola/Polars IPC client), so it gets its own ruff + pytest
+# hooks, scoped to that subtree only.
+repos:
+  # Basic file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.md$'  # Allow trailing spaces in markdown for line breaks
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=10240']  # 10MB limit for data files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # uqf-client (python/uqf-client) - Python linting/formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.2
+    hooks:
+      - id: ruff
+        name: ruff (uqf-client)
+        args: ['--fix']
+        files: '^python/uqf-client/'
+      - id: ruff-format
+        name: ruff-format (uqf-client)
+        files: '^python/uqf-client/'
+
+  - repo: local
+    hooks:
+      # uqf-client's own pytest suite - spins up a real q server via kola/IPC.
+      - id: uqf-client-tests
+        name: Run uqf-client pytest suite
+        entry: bash
+        language: system
+        args:
+          - -c
+          - |
+            set -euo pipefail
+            if [ -x "$HOME/.kx/bin/q" ]; then
+              export QHOME="${QHOME:-$HOME/.kx}"
+              export PATH="$HOME/.kx/bin:$PATH"
+            fi
+            cd python/uqf-client && uv run pytest
+        files: '^python/uqf-client/.*\.py$'
+        pass_filenames: false
+
+      # Run the qUnit test suite (tests/run_tests.q) against every module.
+      - id: q-tests
+        name: Run qUnit tests for uqf
+        entry: bash
+        language: system
+        args:
+          - -c
+          - |
+            set -euo pipefail
+            # Prefer a real, fully-compatible interpreter (KDB-X/kdb+) over
+            # PeachQ, which is an early-preview reimplementation with known
+            # gaps (e.g. no `2:`). See ~/.kx (KDB-X) vs ./q (PeachQ).
+            if command -v q >/dev/null 2>&1; then
+              QBIN=q
+            elif [ -x "$HOME/.kx/bin/q" ]; then
+              QBIN="$HOME/.kx/bin/q"
+              export QHOME="${QHOME:-$HOME/.kx}"
+            elif [ -x ./q ]; then
+              QBIN=./q
+            elif [ -x ./peachq/q ]; then
+              QBIN=./peachq/q
+            else
+              echo "No q/kdb+ interpreter found (checked PATH, ~/.kx/bin/q, ./q, ./peachq/q)." >&2
+              echo "Install KDB-X/kdb+ (https://kx.com/kdb-personal-edition-download/)," >&2
+              echo "or PeachQ (https://www.timestored.com/peachq/download) at ./q or ./peachq/q (both gitignored)." >&2
+              exit 1
+            fi
+            "$QBIN" tests/run_tests.q
+        files: '\.q$'
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.2.1
+    hooks:
+      - id: no-commit-to-branch
+        args: ['--branch', 'master', '--branch', 'main']
+
+  # Branch naming enforcement
+  - repo: local
+    hooks:
+      - id: branch-naming-with-git-username
+        name: Enforce git-username/branch-name convention with auto-rename
+        entry: bash
+        language: system
+        args:
+          - -c
+          - |
+            branch=$(git rev-parse --abbrev-ref HEAD)
+            if [[ "$branch" == "master" || "$branch" == "main" || "$branch" =~ ^release/ ]]; then
+              exit 0  # Skip check for protected branches
+            fi
+
+            # Try to get GitHub username from various sources
+            github_username=""
+
+            # Method 1: Check if gh CLI is available and authenticated
+            if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+              github_username=$(gh api user --jq '.login' 2>/dev/null)
+            fi
+
+            # Method 2: Extract from git remote URL if gh CLI not available
+            if [[ -z "$github_username" ]]; then
+              remote_url=$(git config --get remote.origin.url 2>/dev/null || echo "")
+              if [[ "$remote_url" =~ github\.com[:/]([^/]+)/ ]]; then
+                github_username="${BASH_REMATCH[1]}"
+              fi
+            fi
+
+            # Method 3: Fallback to git config user.name (normalized)
+            if [[ -z "$github_username" ]]; then
+              github_username=$(git config user.name | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]//g')
+            fi
+
+            if [[ -z "$github_username" ]]; then
+              echo "❌ Could not determine GitHub username"
+              echo "Try: gh auth login, or ensure remote origin points to GitHub"
+              exit 1
+            fi
+
+            if [[ "$branch" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
+              branch_username=$(echo "$branch" | cut -d'/' -f1)
+              if [[ "$branch_username" != "$github_username" ]]; then
+                echo "❌ Branch username '$branch_username' doesn't match GitHub username '$github_username'"
+                exit 1
+              fi
+              exit 0  # Branch already follows convention
+            fi
+
+            # Auto-rename branch to include GitHub username
+            new_branch="${github_username}/${branch}"
+            echo "🔄 Renaming branch from '$branch' to '$new_branch'"
+            git branch -m "$new_branch"
+            echo "✅ Branch renamed to follow convention with GitHub username"
+        stages: [pre-commit]
+        always_run: true
+        pass_filenames: false
+
+# Global settings
+default_stages: [pre-commit]
+minimum_pre_commit_version: '3.0.0'

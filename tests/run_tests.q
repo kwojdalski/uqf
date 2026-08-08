@@ -5,6 +5,7 @@
 \l tests/lib/qunit.q
 \l tests/lib/testutil.q
 \l src/init.q
+\l src/data.q
 
 \l tests/test_stats.q
 \l tests/test_ccy.q
@@ -15,8 +16,9 @@
 \l tests/test_risk.q
 \l tests/test_execution.q
 \l tests/test_execution_scale.q
+\l tests/test_data.q
 
-nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.executiontest`.executionscaletest;
+nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.executiontest`.executionscaletest`.datatest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;
