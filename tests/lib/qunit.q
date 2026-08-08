@@ -9,7 +9,7 @@
 / @author TimeStored.com
 / @website http://www.timestored.com/kdb-guides/kdb-regression-unit-tests
 / © TimeStored - Free for non-commercial use.
-/ License: Attribution-NonCommercial-ShareAlike 2.0 UK: England & Wales (CC BY-NC-SA 2.0 UK) 
+/ License: Attribution-NonCommercial-ShareAlike 2.0 UK: England & Wales (CC BY-NC-SA 2.0 UK)
 
 / @TODO mocking projections are broken, add test and fix.
 
@@ -52,20 +52,20 @@ assertThat:{ [actual; relation; expected; msg]
     doCheck[relationPassed;"assertThatFAIL"];
     actual};
 
-// Make the test fail with given message. Useful for placing in 
+// Make the test fail with given message. Useful for placing in
 // code areas that should never be ran or for marking incomplete test code.
-fail:{ [msg] 
-    failFlag::1b; 
+fail:{ [msg]
+    failFlag::1b;
     lg "FAILED -> ",msg;
-    ar::`actual`expected`msg!(`fail;`;msg); 
+    ar::`actual`expected`msg!(`fail;`;msg);
     'fail};
 
 / If checkPassed is false, set the failFlag and possibly throw an exception.
-doCheck:{ [checkPassed; failMsg] 
+doCheck:{ [checkPassed; failMsg]
     failFlag::failFlag or not checkPassed;
     if[failFlag and not .qunit.ignoreAllExceptions;
         'failMsg];};
-            
+
 // Assert that actual and expected value are equal
 // @param actual An object representing the actual result value
 // @param expected An object representing the expected value
@@ -91,7 +91,7 @@ assertKnown:{ [actual; expectedFilename; msg]
     .Q.dd[actualPath;currentNamespaceBeingTested,fn] set actual;
     .Q.dd[actualPath;currentNamespaceBeingTested,`$string[fn],".txt"] 0: enlist .Q.s actual;
     assertEquals[actual; getKnown expectedFilename; msg] };
-    
+
 assertKnownRun:{ [func; arg]
     cleanName:{
         / cope with very long queries as -3 truncates according to console
@@ -120,21 +120,21 @@ getKnown:{ [expectedFilename]
 // @param arg The argument for the function
 // @param msg Description of this test or related message
 // @return result of running function.
-assertError:{ [func; arg; msg]   
+assertError:{ [func; arg; msg]
     assertThrows[func; arg; "*"; msg] };
 
 // Assert that executing a given function causes specific exception to be thrown
 // @param exceptionLike A value that is used to check the likeness of an exception e.g. "type*"
-assertThrows:{ [func; arg; exceptionLike; msg] 
+assertThrows:{ [func; arg; exceptionLike; msg]
     ar::`actual`expected`msg!(`noException;`ERR;msg);
     doCheck[(type func) within 100 104h; "assertT first arg should be function type within 100 104h. ",msg];
     r:@[{(1b;x y)}[func;]; arg; {(0b; x)}];
-    if[not failFlag;  
+    if[not failFlag;
         doCheck[not r 0; "assertThrows Function never threw exception. ",msg];
         doCheck[r[1] like (),exceptionLike; "exception like format expected: ",exceptionLike]];
     ar::`actual`expected`msg!(r 1;`ERR;msg);
     r 1};
-    
+
 // assert that actual is true
 // @param msg Description of this test or related message
 // @return actual object
@@ -160,16 +160,16 @@ assertNotEmpty:{ [actual; msg]  assertThat[count actual;>;0; msg]};
 / @param nsList symbol list of namespaces that contains test e.g. `.mytests`yourtests
 / @return a table containing one row for each test, detailing if it passed/failed.
 / @throws nsNoExist If the namespace you selected does not exist.
-runTests:{ [nsList] 
+runTests:{ [nsList]
     l::("  ";"   ");
     lg "\r\n"; lg "########## .qunit.runTests `",("`" sv string (),nsList)," ##########";
     / no namespaces specified, find all ending with test
-    nsl:$[11h~abs type nsList; nsList; `$".",/:string a where (lower a:key `) like "*test"]; 
+    nsl:$[11h~abs type nsList; nsList; `$".",/:string a where (lower a:key `) like "*test"];
     a:raze runNsTests each (),nsl;
     if[0=count a; 'noTestsFound];
     // if no parameters actually used, remove the column
     lg $[all ()~/:a`parameter; delete parameter from a; a]};
-        
+
 / find functions with a certain name pattern within the selected namespace
 / @logEmpty If set to true write to log that no funcs found otherwise stay silent
 findFuncs:{ [ns; pattern; logEmpty]
@@ -178,8 +178,8 @@ findFuncs:{ [ns; pattern; logEmpty]
         $[ns~`.; fl; `${"." sv x} each string ns,/:fl]};
 
 / attempt to run 0-arg function or throw an error
-run:{@[value lg x;::;{'lg "setUpError",x}]};        
-        
+run:{@[value lg x;::;{'lg "setUpError",x}]};
+
 
 / Run all tests for a single namespace, return table of pass/fails/timings.
 / @return table of results, or empty list if no tests found
@@ -206,14 +206,14 @@ runNsTests:{ [ns]
         idx+:1];
     run each findFuncs[ns;"afterParameters*";0b];
     $[count c; `status`name`result`actual`expected`msg`time`mem xcols update namespace:ns,name:testList from c; ()] };
-    
+
 / for fully specified test function in namespace get its config dictionary.
-getConf:{ [fn]     
+getConf:{ [fn]
     d:`maxTime`maxMem!(0Wj;0Wj); / default
     conf: @[{{ .[`$".",string x 1;`qunitConfig,x 2] }` vs x}; fn; ``!``];
     $[99h~type conf; d,conf; d]};
-    
-/ protectively evaluate a single test. 
+
+/ protectively evaluate a single test.
 / @return dictionary of test success/failure, name, result etc.
 runTest:{ [fn]
     lg "#### .qunit.runTest `",string fn;
@@ -225,7 +225,7 @@ runTest:{ [fn]
     ar::EMPTYAR;
     // run setUp*
     ns:();
-    if[2<=sum "."=a:string fn; 
+    if[2<=sum "."=a:string fn;
         ns:`$(last ss[a;"."])#a;
         run each findFuncs[ns;"setUp*";0b]];
     // run actual test
@@ -238,15 +238,15 @@ runTest:{ [fn]
     r,:ar,`maxTime`maxMem#getConf fn; / show last assert on failure
     if[not[failFlag] and any r[`time`mem]>r`maxTime`maxMem;
         r[`status`msg]:(`fail;"exceeded max config time/mem")];
-    `ran _ r};    
+    `ran _ r};
 
 mock:{ [name; val]
     r:@[{(1b;value x)}; name;00b];
     / if variable has an existing value
     $[(not name in unsetMocks) and first r;
-        [if[not name in key mocks; mocks[name]:r 1]]; / store original value 
+        [if[not name in key mocks; mocks[name]:r 1]]; / store original value
         unsetMocks,:name];
-    / make sure func declared in same ns as any existing function        
+    / make sure func declared in same ns as any existing function
     if[100h~type fn:mocks name;
         lg "isFunc";
         ns:string first (value fn) 3;
@@ -256,19 +256,19 @@ mock:{ [name; val]
         runInNs[ns; v,":",string val];
         :name];
     / else
-    name set val}; 
+    name set val};
 
-/ Run a string of code in a given namespace. 
+/ Run a string of code in a given namespace.
 runInNs:{ [ns; code]
     cd:system "d";
     system "d .",ns;
     value code;
     system "d ",string cd;};
-    
+
 / delete a variable of format `.ns.name whether it's defnined in ns or not
 removeVar:{ [name]
     // two cases to cover if defined in ns or not
-    @[ {![`.;();0b;enlist x]}; name; `]; 
+    @[ {![`.;();0b;enlist x]}; name; `];
     @[ {n:` vs x; ![`$".",string n 1;();0b;enlist n 2]}; name; `]; };
 
 / Reset any variables that were mocked
@@ -323,4 +323,4 @@ formatTable:{  [tbl]
         flattr:{"\t " sv  {.h.htc[`td;] .h.hc $[10h=type a:string x; a; .Q.s1 x]} each x};
         .h.htac[`tr; enlist[`class]!enlist x`cssClass; flattr value `cssClass _ x] };
     content:"\r\n" sv toTabRow each t;
-    .h.htc[`table;] (.h.htc[`thead;] header),content}; 
+    .h.htc[`table;] (.h.htc[`thead;] header),content};

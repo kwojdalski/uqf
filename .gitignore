@@ -7,6 +7,9 @@ actual/
 # OS
 .DS_Store
 
+# local machine config (data paths etc.) - see .env for the expected keys
+.env
+
 # local Claude Code session permissions, not project config
 .claude/settings.local.json
 
