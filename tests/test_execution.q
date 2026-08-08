@@ -41,4 +41,63 @@ testVwapEqualSizesEqualsSimpleAverage:{[t]
     sizes:1000000 1000000 1000000 1000000;
     .testutil.assertApprox[.uqf.vwap[prices;sizes];avg prices;1e-9;"equal sizes -> vwap reduces to the plain average"]};
 
+testSweepPriceWalksMultipleLevels:{[t]
+    / 1M@1.1000, 1M@1.1002, 2M@1.1005 -- sweep 3M walks all of level 1,
+    / all of level 2, and 1M of the 2M available at level 3
+    prices:1.1000 1.1002 1.1005;
+    sizes:1000000 1000000 2000000;
+    r:.uqf.sweepPrice[prices;sizes;3000000];
+    .testutil.assertApprox[r`avgPrice;1.100233333;1e-6;"blended sweep price across three levels"];
+    .testutil.assertApprox[r`worstPrice;1.1005;1e-9;"worst (marginal) price is the last level touched"];
+    .testutil.assertApprox[r`filledSize;3000000f;1e-9;"filled size matches the requested size"];
+    .qunit.assertTrue[r`fullyFilled;"fully filled when the book has enough depth"]};
+
+testSweepPriceFitsInsideFirstLevel:{[t]
+    prices:1.1000 1.1002 1.1005;
+    sizes:1000000 1000000 2000000;
+    r:.uqf.sweepPrice[prices;sizes;500000];
+    .testutil.assertApprox[r`avgPrice;1.1000;1e-9;"size smaller than top level fills entirely at the top price"];
+    .testutil.assertApprox[r`worstPrice;1.1000;1e-9;"worst price equals the top price when only one level is touched"];
+    .qunit.assertTrue[r`fullyFilled;"fully filled"]};
+
+testSweepPriceExactLevelBoundary:{[t]
+    prices:1.1000 1.1002 1.1005;
+    sizes:1000000 1000000 2000000;
+    r:.uqf.sweepPrice[prices;sizes;1000000];
+    .testutil.assertApprox[r`avgPrice;1.1000;1e-9;"sweeping exactly one level's size stays entirely within that level"];
+    .testutil.assertApprox[r`worstPrice;1.1000;1e-9;"worst price is still the top level"]};
+
+testSweepPriceInsufficientLiquidity:{[t]
+    / total depth is 4M; asking for 5M can only get 4M filled
+    prices:1.1000 1.1002 1.1005;
+    sizes:1000000 1000000 2000000;
+    r:.uqf.sweepPrice[prices;sizes;5000000];
+    .testutil.assertApprox[r`filledSize;4000000f;1e-9;"filled size caps at total available depth"];
+    .testutil.assertApprox[r`worstPrice;1.1005;1e-9;"worst price is the last (deepest) level available"];
+    .qunit.assertFalse[r`fullyFilled;"not fully filled when requested size exceeds total depth"]};
+
+testSweepPriceOfFullDepthEqualsVwap:{[t]
+    / sweeping exactly the book's total size is the same as vwap over the whole book
+    prices:1.1000 1.1002 1.1005 1.1009;
+    sizes:1000000 1000000 2000000 1500000;
+    totalSize:sum sizes;
+    r:.uqf.sweepPrice[prices;sizes;totalSize];
+    .testutil.assertApprox[r`avgPrice;.uqf.vwap[prices;sizes];1e-9;"sweeping full depth = vwap of the whole book"]};
+
+testSweepPriceEmptyBookFillsNothing:{[t]
+    r:.uqf.sweepPrice[`float$();`float$();1000000];
+    .testutil.assertApprox[r`filledSize;0f;1e-9;"empty book fills nothing"];
+    .qunit.assertFalse[r`fullyFilled;"empty book cannot be fully filled"];
+    .qunit.assertTrue[null r`avgPrice;"avgPrice is null when nothing filled"];
+    .qunit.assertTrue[null r`worstPrice;"worstPrice is null when nothing filled"]};
+
+testSweepPriceRejectsNonPositiveSize:{[t]
+    wrapper:{[x] .uqf.sweepPrice[1.10 1.11;100 100;x]};
+    .qunit.assertError[wrapper;0;"zero size is rejected"];
+    .qunit.assertError[wrapper;-5;"negative size is rejected"]};
+
+testSweepPriceRejectsMismatchedLengths:{[t]
+    wrapper:{[x] .uqf.sweepPrice[1.10 1.11;enlist 100;500]};
+    .qunit.assertError[wrapper;::;"mismatched prices/sizes lengths are rejected"]};
+
 \d .

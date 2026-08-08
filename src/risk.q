@@ -23,7 +23,7 @@ pnl:{[notional;entryRate;exitRate;side] side*notional*(exitRate-entryRate)};
 
 / Forward premium/discount implied by spot vs. an outright, as a decimal
 / return: (F-S)/S. Positive means the base currency trades forward at a
-/ premium (i.e. rf<rd under CIRP).
+/ premium (i.e. rf is below rd under CIRP).
 / @param spot spot rate
 / @param fwd outright forward rate
 / @return the decimal forward premium/discount

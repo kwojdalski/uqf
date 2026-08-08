@@ -79,6 +79,19 @@ crossRate:{[abRate;bcRate] abRate*bcRate};
 / @eg .uqf.invertRate 2f  -> 0.5
 invertRate:{[rate] 1%rate};
 
+/ Cross rate via a shared base currency: given two pairs both quoted
+/ A/X and A/Y (e.g. EURPLN and EURUSD both quoted against EUR), returns
+/ the Y/X cross rate - the common eFX pattern of computing e.g. USDPLN
+/ from EURPLN and EURUSD as EURPLN * (1/EURUSD). Simply crossRate composed
+/ with invertRate; kept as its own named function because "invert the
+/ second one, not the first" is exactly the kind of thing that's easy to
+/ get backwards at the desk.
+/ @param rateAX rate for A/X (the shared base A over the first quote currency X)
+/ @param rateAY rate for A/Y (the shared base A over the second quote currency Y)
+/ @return the implied rate for Y/X
+/ @eg .uqf.crossRateSharedBase[4.30;1.075]  -> 4f (EURPLN, EURUSD -> USDPLN)
+crossRateSharedBase:{[rateAX;rateAY] crossRate[rateAX;invertRate rateAY]};
+
 / Invert an order book: BASE/QUOTE -> QUOTE/BASE. Inverting flips which
 / side is more favourable, so the new bid comes from the old ask and vice
 / versa.
@@ -111,35 +124,36 @@ bookCrossed:{[book] book[`bid]>book[`ask]};
 / pairs that share a common currency, e.g. crossBook[`EURUSD;eurusdBook;
 / `USDJPY;usdjpyBook] -> a synthetic EURJPY book. The shared currency is
 / detected automatically and either leg is inverted as needed - the
-/ caller does not need to pre-orient anything. Combines top-of-book only;
-/ it does not walk/net multiple depth levels of the underlying books.
-/ @param sym1 6-character currency pair symbol for book1, e.g. `EURUSD
+/ caller does not need to pre-orient anything. sym1/sym2 are normalized
+/ via ccy.q's ccyPairLegs, so `eurusd, "eur/usd" etc. work too, not just
+/ canonical `EURUSD. Combines top-of-book only; it does not walk/net
+/ multiple depth levels of the underlying books.
+/ @param sym1 currency pair for book1, any format ccy.q's normalizeCcyPair accepts
 / @param book1 dict `bid`ask!(bidPx;askPx) quoted in sym1's own convention
-/ @param sym2 6-character currency pair symbol for book2, e.g. `USDJPY
+/ @param sym2 currency pair for book2, any format ccy.q's normalizeCcyPair accepts
 / @param book2 dict `bid`ask!(bidPx;askPx) quoted in sym2's own convention
 / @return dict `sym`bid`ask!(crossSym;bidPx;askPx) for the synthetic cross
 / @throws error if sym1 and sym2 share no common currency
 / @eg .uqf.crossBook[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165;165.052)
 crossBook:{[sym1;book1;sym2;book2]
-    s1:string sym1; s2:string sym2;
-    base1:3#s1; quote1:-3#s1;
-    base2:3#s2; quote2:-3#s2;
+    legs1:ccyPairLegs sym1; base1:string legs1`base; quote1:string legs1`quote;
+    legs2:ccyPairLegs sym2; base2:string legs2`base; quote2:string legs2`quote;
     if[quote1~base2;
-        crossSym:`$base1,quote2;
+        crossSym:ccyPairSymbol[base1;quote2];
         combined:combineOrientedBooks[book1;book2];
         :`sym`bid`ask!(crossSym;combined`bid;combined`ask)];
     if[quote1~quote2;
-        crossSym:`$base1,base2;
+        crossSym:ccyPairSymbol[base1;base2];
         combined:combineOrientedBooks[book1;invertBook book2];
         :`sym`bid`ask!(crossSym;combined`bid;combined`ask)];
     if[base1~base2;
-        crossSym:`$quote1,quote2;
+        crossSym:ccyPairSymbol[quote1;quote2];
         combined:combineOrientedBooks[invertBook book1;book2];
         :`sym`bid`ask!(crossSym;combined`bid;combined`ask)];
     if[base1~quote2;
-        crossSym:`$quote1,base2;
+        crossSym:ccyPairSymbol[quote1;base2];
         combined:combineOrientedBooks[invertBook book1;invertBook book2];
         :`sym`bid`ask!(crossSym;combined`bid;combined`ask)];
-    '"crossBook: no shared currency between ",s1," and ",s2};
+    '"crossBook: no shared currency between ",base1,quote1," and ",base2,quote2};
 
 \d .

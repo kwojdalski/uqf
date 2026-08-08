@@ -67,4 +67,37 @@ vwap:{[prices;sizes]
     totalSize:sum sizes;
     weightedSum%totalSize};
 
+/ Walk a stack of order book levels to price a sweep of targetSize: the
+/ blended price you'd get consuming best-to-worst levels until targetSize
+/ is filled or the book runs out. Pass the ask side (best/lowest price
+/ first) to price a buy/sweep-the-offer, or the bid side (best/highest
+/ price first) to price a sell/sweep-the-bid - this function doesn't care
+/ which side it is, only that prices/sizes are already ordered best-first.
+/ @param prices level prices, best (most aggressive) first
+/ @param sizes level sizes, same length as prices, aligned to the same levels
+/ @param targetSize the size you want to sweep
+/ @return dict `avgPrice`worstPrice`filledSize`fullyFilled - avgPrice is
+/   the size-weighted blended execution price (null if nothing filled),
+/   worstPrice is the price of the last level touched (the marginal fill,
+/   null if nothing filled), filledSize is how much actually filled (may
+/   be less than targetSize if the book doesn't have enough depth), and
+/   fullyFilled is 1b iff filledSize>=targetSize
+/ @throws error if targetSize is not positive, or prices/sizes differ in length
+/ @eg .uqf.sweepPrice[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avgPrice`worstPrice`filledSize`fullyFilled!(1.100233;1.1005;3000000;1b)
+sweepPrice:{[prices;sizes;targetSize]
+    if[targetSize<=0; '"sweepPrice: size must be positive"];
+    if[(count prices)<>count sizes; '"sweepPrice: prices and sizes must be the same length"];
+    cumSize:sums sizes;
+    priorCum:cumSize-sizes;
+    cappedCum:targetSize&cumSize;
+    rawConsumed:cappedCum-priorCum;
+    consumed:0|rawConsumed;
+    filledSize:sum consumed;
+    notional:sum consumed*prices;
+    avgPrice:$[filledSize>0; notional%filledSize; 0n];
+    touchedIdx:where consumed>0;
+    worstPrice:$[count touchedIdx; prices last touchedIdx; 0n];
+    fullyFilled:filledSize>=targetSize;
+    `avgPrice`worstPrice`filledSize`fullyFilled!(avgPrice;worstPrice;filledSize;fullyFilled)};
+
 \d .

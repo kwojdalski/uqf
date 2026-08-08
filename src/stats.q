@@ -33,7 +33,7 @@ npdf:{[x] exp[-0.5*x*x] % sqrt 2*PI};
 
 / Standard normal cumulative distribution function N(x).
 / @param x point(s) to evaluate at (atom or vector)
-/ @return P(Z<=x) for a standard normal Z
+/ @return P(Z is at most x) for a standard normal Z
 / @eg .uqf.ncdf 1.96  -> 0.9750022
 ncdf:{[x]
     coeffs:1.061405429 -1.453152027 1.421413741 -0.284496736 0.254829592 0f; / a5 a4 a3 a2 a1 0, highest degree first

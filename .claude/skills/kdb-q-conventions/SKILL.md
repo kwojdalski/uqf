@@ -94,14 +94,22 @@ library with no processes/IPC/tables).
   reduce a vector comparison to a scalar first (e.g. `max abs a-b` against
   a tolerance) rather than asserting on the two vectors directly - smaller
   results table, and a far more readable failure message too.
+- `string` on a value that's **already a string** (type `10h`) does not
+  act as the identity - it maps over each character and returns a list of
+  1-char strings (`string "EURUSD"` gives `("E";"U";"R";...)`, not
+  `"EURUSD"`). Only `string` on a symbol correctly returns the whole thing
+  as one string. `ccy.q`'s `ccyToStr` exists specifically to paper over
+  this: `$[10h=type x; x; string x]` - check `type` before coercing
+  anything that might already be a string.
 
 ## Layout
 
 - `src/*.q` - one module per topic, each wrapped in `\d .uqf` ... `\d .` so
   everything lands in the `.uqf` namespace. Load order doesn't matter for
   function *definitions* (q resolves names at call time), but `src/init.q`
-  loads them in a sensible dependency order (stats -> daycount -> rates ->
-  forwards -> options -> risk -> execution).
+  loads them in a sensible dependency order (stats -> ccy -> daycount ->
+  rates -> forwards -> options -> risk -> execution). `forwards.q`'s
+  `crossBook` depends on `ccy.q`'s `ccyPairLegs`/`ccyPairSymbol`.
 - `tests/lib/qunit.q` - vendored TimeStored qUnit framework (CC BY-NC-SA,
   non-commercial - keep the attribution header intact; see README's
   Licensing section before using this repo commercially).
@@ -181,6 +189,15 @@ running `com.timestored.qdoc.QDocMain` against a scratch file:
 - qDoc documents `.uqf` separately per source file in its nav
   (`.uqf (options.q)`, `.uqf (risk.q)`, ...) rather than merging same-named
   namespaces from different files into one page - expected, not a bug.
+- **Never write a literal `<` in doc text** (descriptions, `@return`,
+  `@throws`, etc.) - qDoc drops it and everything after it into the HTML
+  unescaped, so a naive HTML parser treats `<=0` or `<rd` as the start of
+  a tag and the rest of that line silently vanishes from the rendered
+  page (this happened to `ncdf`'s `@return`, `carryReturn`'s description,
+  and `sweepPrice`'s `@throws` - all originally used `<` or `<=`). A bare
+  `>` is fine (confirmed via `bookCrossed`'s "bid>ask" rendering intact).
+  Rephrase in words ("x is at most y", "targetSize is not positive")
+  instead of using the character.
 - qstudio.jar also runs a bundled linter as a side effect
   (`docs/lint.csv`), which throws a lot of `UNDECLARED_VAR` false
   positives for this repo specifically, because it lints each file in
