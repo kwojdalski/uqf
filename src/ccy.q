@@ -22,9 +22,9 @@ ccy_to_str:{[x] $[10h=type x; x; string x]};
 / @eg .uqf.is_ccy_pair "eur/usd"  -> 0b
 is_ccy_pair:{[x]
     s:ccy_to_str x;
-    lengthOk:(count s)=6;
-    allLetters:all s in .Q.A;
-    lengthOk and allLetters};
+    length_ok:(count s)=6;
+    all_letters:all s in .Q.A;
+    length_ok and all_letters};
 
 / Normalize a currency pair into canonical CURCUR form: uppercases and
 / strips common separators (/, -, _, space).
@@ -34,11 +34,11 @@ is_ccy_pair:{[x]
 / @eg .uqf.normalize_ccy_pair "eur/usd"  -> `EURUSD
 normalize_ccy_pair:{[x]
     s:ccy_to_str x;
-    noSlash:ssr[s;"/";""];
-    noDash:ssr[noSlash;"-";""];
-    noUnderscore:ssr[noDash;"_";""];
-    noSpace:ssr[noUnderscore;" ";""];
-    canonical:upper noSpace;
+    no_slash:ssr[s;"/";""];
+    no_dash:ssr[no_slash;"-";""];
+    no_underscore:ssr[no_dash;"_";""];
+    no_space:ssr[no_underscore;" ";""];
+    canonical:upper no_space;
     if[not is_ccy_pair canonical; '"normalize_ccy_pair: cannot normalize '",s,"' to a 6-letter CURCUR pair"];
     `$canonical};
 

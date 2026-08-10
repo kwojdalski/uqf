@@ -124,7 +124,8 @@ touched, how much actually filled, and whether the book had enough depth).
 
 Currency pairs follow BASE/QUOTE quoting throughout (`rate` = 1 BASE in
 QUOTE units); `side` is `1` for long/buy, `-1` for short/sell;
-`pipFactor` is `10000` for most pairs and `100` for JPY crosses. See the
+`pip_factor` is `10000` for most pairs and `100` for JPY crosses. All
+function names, parameters and locals use `lower_snake_case`. See the
 `kdb-q-conventions` skill for the full set of conventions and the q
 arithmetic gotcha that shaped how this code is written.
 

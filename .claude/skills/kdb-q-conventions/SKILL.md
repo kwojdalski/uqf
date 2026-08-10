@@ -127,6 +127,21 @@ library with no processes/IPC/tables).
   (`assign`/`type` errors with no clear cause). Avoid naming a variable
   after any q keyword; when in doubt, check `` key `. `` or just pick a
   more specific name (`wantCols`, not `cols`).
+- **qUnit's hook discovery is a hardcoded, case-sensitive name prefix -
+  don't snake_case it.** `.qunit.runNsTests` finds setup/teardown hooks
+  via `findFuncs[ns;"beforeNamespace*";...]` (and `afterNamespace*`,
+  `beforeParameters*`, `afterParameters*`, `setUp*`, `tearDown*`) - exact
+  literal prefixes baked into the vendored framework. Renaming
+  `beforeNamespaceGenerateTrades` to `before_namespace_generate_trades`
+  during the snake_case pass silently broke discovery (0 matches instead
+  of 1): the hook never ran, the table it was supposed to populate stayed
+  unset, and every test in that namespace that depended on it threw. Fix
+  was `beforeNamespace_generate_trades` - keep the exact
+  `beforeNamespace`/`afterNamespace`/etc. prefix untouched, snake_case
+  only whatever comes after it. This is a case where "rename everything
+  to the house style" and "the third-party framework's naming contract"
+  are in direct conflict, and the framework wins - you won't get an error
+  when you get it wrong, the hook just quietly stops firing.
 
 ## Layout
 
@@ -147,16 +162,23 @@ library with no processes/IPC/tables).
 
 ## Conventions used across the library
 
-- **Function names are `lower_snake_case`** (e.g. `gk_call`, `cross_book_at_sizes`,
-  `markout_at_horizons`), not camelCase - every function in `src/*.q` (and
-  every private helper) was renamed to this convention; new functions
-  should follow it too. This applies to function *names* specifically -
-  parameters and local variables inside function bodies (e.g. `pipFactor`,
-  `tradePrice`, `targetSize`) are intentionally left as camelCase and
-  weren't part of this rename; ask if you want those converted too before
-  assuming it's already covered. `src/data.q` (not authored as part of
-  this library - see its own header) still uses camelCase throughout and
-  was deliberately left alone.
+- **Everything is `lower_snake_case`** - function names (e.g. `gk_call`,
+  `cross_book_at_sizes`, `markout_at_horizons`), parameters, and local
+  variables (e.g. `pip_factor`, `trade_price`, `target_size`) alike, not
+  camelCase. New code should follow it too. Two deliberate exceptions:
+  - `D1`/`D2` in `options.q` are `d1v`/`d2v`, not `d1`/`d2` - several
+    functions do `d1v:d1[...]` (call the public `d1` function to set a
+    local); if that local were also named `d1`, q's scoping rules make
+    any name assigned anywhere in a function local for the *whole*
+    function body, so the call on the right-hand side would try to
+    invoke the not-yet-set local instead of the global function.
+  - `beforeNamespace_generate_trades` in `tests/test_execution_scale.q`
+    keeps the literal `beforeNamespace` prefix - see the qUnit hook
+    gotcha below for why.
+
+  `src/data.q` (not authored as part of this library - see its own
+  header) still uses camelCase throughout and was deliberately left
+  alone.
 - Currency pair quoting: BASE/QUOTE, so `rate` means 1 BASE = `rate` QUOTE
   (e.g. EURUSD 1.10 -> 1 EUR = 1.10 USD). `rd` is the quote currency's
   rate, `rf` the base currency's - this matches the Garman-Kohlhagen and

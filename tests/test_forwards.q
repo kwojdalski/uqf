@@ -4,36 +4,36 @@
 
 \d .forwardstest
 
-testFwdSimpleNoDifferentialIsSpot:{[t]
+test_fwd_simple_no_differential_is_spot:{[t]
     rs:0.01 0.03 0.07;
     .testutil.assertApprox[.uqf.fwd_simple[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (simple)"]};
 
-testFwdContNoDifferentialIsSpot:{[t]
+test_fwd_cont_no_differential_is_spot:{[t]
     rs:0.01 0.03 0.07;
     .testutil.assertApprox[.uqf.fwd_cont[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (continuous)"]};
 
-testFwdSimpleKnownExample:{[t] .testutil.assertApprox[.uqf.fwd_simple[1.10;0.05;0.02;1];1.132353;1e-5;"EURUSD-style CIRP example, 1y"]};
-testFwdContKnownExample:{[t] .testutil.assertApprox[.uqf.fwd_cont[1.10;0.05;0.02;1];1.10*exp 0.03;1e-9;"continuous CIRP matches exp((rd-rf)*t) directly"]};
+test_fwd_simple_known_example:{[t] .testutil.assertApprox[.uqf.fwd_simple[1.10;0.05;0.02;1];1.132353;1e-5;"EURUSD-style CIRP example, 1y"]};
+test_fwd_cont_known_example:{[t] .testutil.assertApprox[.uqf.fwd_cont[1.10;0.05;0.02;1];1.10*exp 0.03;1e-9;"continuous CIRP matches exp((rd-rf)*t) directly"]};
 
-testFwdPointsKnown:{[t] .testutil.assertApprox[.uqf.fwd_points[1.132353;1.10;10000];323.53;1e-1;"forward points in pips for the CIRP example"]};
-testFwdPointsZeroWhenNoMove:{[t] .testutil.assertApprox[.uqf.fwd_points[1.10;1.10;10000];0f;1e-9;"forward equals spot -> zero points"]};
+test_fwd_points_known:{[t] .testutil.assertApprox[.uqf.fwd_points[1.132353;1.10;10000];323.53;1e-1;"forward points in pips for the CIRP example"]};
+test_fwd_points_zero_when_no_move:{[t] .testutil.assertApprox[.uqf.fwd_points[1.10;1.10;10000];0f;1e-9;"forward equals spot -> zero points"]};
 
-testPointsToOutrightRoundTrip:{[t]
+test_points_to_outright_round_trip:{[t]
     fwd:.uqf.fwd_simple[1.10;0.05;0.02;1];
     points:.uqf.fwd_points[fwd;1.10;10000];
     .testutil.assertApprox[.uqf.points_to_outright[1.10;points;10000];fwd;1e-8;"points -> outright round trip"]};
 
-testImpliedForeignRateRoundTrip:{[t]
+test_implied_foreign_rate_round_trip:{[t]
     spot:1.2500; rd:0.045; rf:0.015; tt:0.5;
     fwd:.uqf.fwd_simple[spot;rd;rf;tt];
     .testutil.assertApprox[.uqf.implied_foreign_rate[spot;fwd;rd;tt];rf;1e-8;"recovers rf from a forward built with fwd_simple"]};
 
-testImpliedDomesticRateRoundTrip:{[t]
+test_implied_domestic_rate_round_trip:{[t]
     spot:1.2500; rd:0.045; rf:0.015; tt:0.5;
     fwd:.uqf.fwd_simple[spot;rd;rf;tt];
     .testutil.assertApprox[.uqf.implied_domestic_rate[spot;fwd;rf;tt];rd;1e-8;"recovers rd from a forward built with fwd_simple"]};
 
-testImpliedRateRoundTripAcrossManyScenarios:{[t]
+test_implied_rate_round_trip_across_many_scenarios:{[t]
     spots:1.10 0.90 1.25 150.0;
     rds:0.05 0.02 0.045 0.001;
     rfs:0.02 0.05 0.015 0.05;
@@ -41,54 +41,54 @@ testImpliedRateRoundTripAcrossManyScenarios:{[t]
     fwds:.uqf.fwd_simple[spots;rds;rfs;tts];
     .testutil.assertApprox[.uqf.implied_foreign_rate[spots;fwds;rds;tts];rfs;1e-6;"implied rf recovered across several currency-pair scenarios"]};
 
-testCrossRateTriangulationKnown:{[t] .testutil.assertApprox[.uqf.cross_rate[1.10;150];165f;1e-9;"EURUSD * USDJPY = EURJPY"]};
+test_cross_rate_triangulation_known:{[t] .testutil.assertApprox[.uqf.cross_rate[1.10;150];165f;1e-9;"EURUSD * USDJPY = EURJPY"]};
 
-testCrossRateRoundTrip:{[t]
+test_cross_rate_round_trip:{[t]
     ab:1.3427; bc:0.7231;
     ac:.uqf.cross_rate[ab;bc];
     .testutil.assertApprox[.uqf.cross_rate[ac;.uqf.invert_rate bc];ab;1e-9;"(A/B*B/C)*C/B = A/B round trip via invert_rate"]};
 
-testInvertRateRoundTrip:{[t]
+test_invert_rate_round_trip:{[t]
     rates:0.5 1.10 150.25 0.7231;
     .testutil.assertApprox[.uqf.invert_rate .uqf.invert_rate rates;rates;1e-9;"invert twice returns the original rate"]};
 
-testInvertRateKnown:{[t] .testutil.assertApprox[.uqf.invert_rate 2f;0.5;1e-9;"1/2=0.5"]};
+test_invert_rate_known:{[t] .testutil.assertApprox[.uqf.invert_rate 2f;0.5;1e-9;"1/2=0.5"]};
 
-testCrossRateSharedBaseKnown:{[t]
+test_cross_rate_shared_base_known:{[t]
     / EURPLN=4.30, EURUSD=1.075 -> USDPLN=4.30/1.075=4.0 exactly
     .testutil.assertApprox[.uqf.cross_rate_shared_base[4.30;1.075];4f;1e-9;"EURPLN, EURUSD -> USDPLN"]};
 
-testCrossRateSharedBaseMatchesManualComposition:{[t]
-    rateAX:1.3427; rateAY:0.7231;
-    lhs:.uqf.cross_rate_shared_base[rateAX;rateAY];
-    rhs:.uqf.cross_rate[rateAX;.uqf.invert_rate rateAY];
+test_cross_rate_shared_base_matches_manual_composition:{[t]
+    rate_ax:1.3427; rate_ay:0.7231;
+    lhs:.uqf.cross_rate_shared_base[rate_ax;rate_ay];
+    rhs:.uqf.cross_rate[rate_ax;.uqf.invert_rate rate_ay];
     .testutil.assertApprox[lhs;rhs;1e-9;"cross_rate_shared_base = cross_rate composed with invert_rate on the second leg"]};
 
-testCrossRateSharedBaseIdentityWhenPairsEqual:{[t]
+test_cross_rate_shared_base_identity_when_pairs_equal:{[t]
     / A/X and A/Y with X=Y (same rate on both legs) -> Y/X = 1
     .testutil.assertApprox[.uqf.cross_rate_shared_base[1.2500;1.2500];1f;1e-9;"identical shared-base rates cross to exactly 1"]};
 
-testCrossRateSharedBaseAntiSymmetric:{[t]
+test_cross_rate_shared_base_anti_symmetric:{[t]
     / swapping which pair is "X" and which is "Y" inverts the result
-    rateAX:1.10; rateAY:150.0;
-    fwd:.uqf.cross_rate_shared_base[rateAX;rateAY];
-    back:.uqf.cross_rate_shared_base[rateAY;rateAX];
+    rate_ax:1.10; rate_ay:150.0;
+    fwd:.uqf.cross_rate_shared_base[rate_ax;rate_ay];
+    back:.uqf.cross_rate_shared_base[rate_ay;rate_ax];
     .testutil.assertApprox[fwd*back;1f;1e-9;"swapping the two legs gives the inverse cross rate"]};
 
-testInvertBookSwapsSides:{[t]
+test_invert_book_swaps_sides:{[t]
     book:`bid`ask!(1.1000;1.1002);
     inverted:.uqf.invert_book book;
     expected:`bid`ask!(1%1.1002;1%1.1000);
     .testutil.assertApprox[inverted`bid;expected`bid;1e-9;"inverted bid = 1/original ask"];
     .testutil.assertApprox[inverted`ask;expected`ask;1e-9;"inverted ask = 1/original bid"]};
 
-testInvertBookRoundTrip:{[t]
+test_invert_book_round_trip:{[t]
     book:`bid`ask!(1.2500;1.2503);
     back:.uqf.invert_book .uqf.invert_book book;
     .testutil.assertApprox[back`bid;book`bid;1e-9;"invert twice restores bid"];
     .testutil.assertApprox[back`ask;book`ask;1e-9;"invert twice restores ask"]};
 
-testCrossBookDirectForm:{[t]
+test_cross_book_direct_form:{[t]
     eurusd:`bid`ask!(1.1000;1.1002);
     usdjpy:`bid`ask!(150.00;150.02);
     r:.uqf.cross_book[`EURUSD;eurusd;`USDJPY;usdjpy];
@@ -96,7 +96,7 @@ testCrossBookDirectForm:{[t]
     .testutil.assertApprox[r`bid;1.10*150.00;1e-8;"synthetic bid = leg1.bid*leg2.bid"];
     .testutil.assertApprox[r`ask;1.1002*150.02;1e-8;"synthetic ask = leg1.ask*leg2.ask"]};
 
-testCrossBookInvertSecondLeg:{[t]
+test_cross_book_invert_second_leg:{[t]
     eurusd:`bid`ask!(1.1000;1.1002);
     gbpusd:`bid`ask!(1.2500;1.2503);
     r:.uqf.cross_book[`EURUSD;eurusd;`GBPUSD;gbpusd];
@@ -104,7 +104,7 @@ testCrossBookInvertSecondLeg:{[t]
     .testutil.assertApprox[r`bid;1.1000%1.2503;1e-8;"EUR/GBP bid = EURUSD.bid / GBPUSD.ask"];
     .testutil.assertApprox[r`ask;1.1002%1.2500;1e-8;"EUR/GBP ask = EURUSD.ask / GBPUSD.bid"]};
 
-testCrossBookInvertFirstLeg:{[t]
+test_cross_book_invert_first_leg:{[t]
     usdjpy:`bid`ask!(150.00;150.02);
     usdchf:`bid`ask!(0.9000;0.9003);
     r:.uqf.cross_book[`USDJPY;usdjpy;`USDCHF;usdchf];
@@ -112,7 +112,7 @@ testCrossBookInvertFirstLeg:{[t]
     .testutil.assertApprox[r`bid;0.9000%150.02;1e-8;"JPY/CHF bid = USDCHF.bid / USDJPY.ask"];
     .testutil.assertApprox[r`ask;0.9003%150.00;1e-8;"JPY/CHF ask = USDCHF.ask / USDJPY.bid"]};
 
-testCrossBookNeverCrossedFromValidInputs:{[t]
+test_cross_book_never_crossed_from_valid_inputs:{[t]
     books:(`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02);`bid`ask!(1.2500;1.2503);`bid`ask!(0.9000;0.9003));
     syms:`EURUSD`USDJPY`GBPUSD`USDCHF;
     r1:.uqf.cross_book[syms 0;books 0;syms 1;books 1];
@@ -122,38 +122,38 @@ testCrossBookNeverCrossedFromValidInputs:{[t]
     .qunit.assertFalse[.uqf.book_crossed r2;"EUR/USD x GBP/USD synthetic book is not crossed"];
     .qunit.assertFalse[.uqf.book_crossed r3;"USD/JPY x USD/CHF synthetic book is not crossed"]};
 
-testCrossBookRejectsNoSharedCurrency:{[t]
+test_cross_book_rejects_no_shared_currency:{[t]
     wrapper:{[dummy] .uqf.cross_book[`EURUSD;`bid`ask!(1.10;1.1002);`GBPCHF;`bid`ask!(1.20;1.2003)]};
     .qunit.assertError[wrapper;::;"EURUSD and GBPCHF share no currency"]};
 
-testCcyOrientCrossChain:{[t]
+test_ccy_orient_cross_chain:{[t]
     r:.uqf.ccy_orient_cross[`EURUSD;`USDJPY];
-    .qunit.assertEquals[r`crossSym;`EURJPY;"A/B, B/C -> A/C"];
+    .qunit.assertEquals[r`cross_sym;`EURJPY;"A/B, B/C -> A/C"];
     .qunit.assertFalse[r`invert1;"leg1 not inverted"];
     .qunit.assertFalse[r`invert2;"leg2 not inverted"]};
 
-testCcyOrientCrossSharedQuote:{[t]
+test_ccy_orient_cross_shared_quote:{[t]
     r:.uqf.ccy_orient_cross[`EURUSD;`GBPUSD];
-    .qunit.assertEquals[r`crossSym;`EURGBP;"A/B, C/B -> A/C"];
+    .qunit.assertEquals[r`cross_sym;`EURGBP;"A/B, C/B -> A/C"];
     .qunit.assertFalse[r`invert1;"leg1 not inverted"];
     .qunit.assertTrue[r`invert2;"leg2 inverted (shared quote)"]};
 
-testCcyOrientCrossSharedBase:{[t]
+test_ccy_orient_cross_shared_base:{[t]
     r:.uqf.ccy_orient_cross[`USDJPY;`USDCHF];
-    .qunit.assertEquals[r`crossSym;`JPYCHF;"B/A, B/C -> A/C"];
+    .qunit.assertEquals[r`cross_sym;`JPYCHF;"B/A, B/C -> A/C"];
     .qunit.assertTrue[r`invert1;"leg1 inverted (shared base)"];
     .qunit.assertFalse[r`invert2;"leg2 not inverted"]};
 
-testCcyOrientCrossRejectsNoSharedCurrency:{[t]
+test_ccy_orient_cross_rejects_no_shared_currency:{[t]
     wrapper:{[dummy] .uqf.ccy_orient_cross[`EURUSD;`GBPCHF]};
     .qunit.assertError[wrapper;::;"no shared currency is rejected"]};
 
-testInvertBookDepthKnown:{[t]
+test_invert_book_depth_known:{[t]
     r:.uqf.invert_book_depth[1.1000 1.1002;1000000 1000000];
     .testutil.assertApprox[first r;0.9090909 0.9089256;1e-6;"prices invert elementwise, staying best-first"];
     .testutil.assertApprox[last r;1100000 1100200;1e-6;"sizes rescale into the new base currency"]};
 
-testInvertBookDepthRoundTrip:{[t]
+test_invert_book_depth_round_trip:{[t]
     prices:1.2500 1.2503 1.2505;
     sizes:2000000 1500000 3000000;
     once:.uqf.invert_book_depth[prices;sizes];
@@ -161,75 +161,75 @@ testInvertBookDepthRoundTrip:{[t]
     .testutil.assertApprox[twice 0;prices;1e-6;"inverting twice restores prices"];
     .testutil.assertApprox[twice 1;sizes;1e-3;"inverting twice restores sizes"]};
 
-testCrossBookAtSizesMatchesCrossBookAtNegligibleSize:{[t]
+test_cross_book_at_sizes_matches_cross_book_at_negligible_size:{[t]
     / a size far smaller than any level's depth should reduce to exactly
     / cross_book's top-of-book result - a self-consistency check that
     / needs no hand-computed magic numbers.
-    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
-    r:.uqf.cross_book_at_sizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;enlist 100;`bid`ask];
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 100;`bid`ask];
     tob:.uqf.cross_book[`EURUSD;`bid`ask!(1.0998;1.1000);`USDJPY;`bid`ask!(149.98;150.00)];
     .qunit.assertEquals[first r`sym;tob`sym;"cross symbol matches cross_book"];
     .testutil.assertApprox[first r`bid;tob`bid;1e-6;"negligible-size bid matches cross_book's top-of-book bid"];
     .testutil.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches cross_book's top-of-book ask"]};
 
-testCrossBookAtSizesSharedCornerMatchesCrossBookAtNegligibleSize:{[t]
+test_cross_book_at_sizes_shared_corner_matches_cross_book_at_negligible_size:{[t]
     / same consistency check, but for the shared-quote (invert) branch
-    audusdBook:`bidPrices`bidSizes`askPrices`askSizes!(0.6498 0.6496;2000000 2000000;0.6500 0.6502;2000000 2000000);
-    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;2000000 2000000;1.1000 1.1002;2000000 2000000);
-    r:.uqf.cross_book_at_sizes[`AUDUSD;audusdBook;`EURUSD;eurusdBook;enlist 100;`bid`ask];
+    audusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(0.6498 0.6496;2000000 2000000;0.6500 0.6502;2000000 2000000);
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;2000000 2000000;1.1000 1.1002;2000000 2000000);
+    r:.uqf.cross_book_at_sizes[`AUDUSD;audusd_book;`EURUSD;eurusd_book;enlist 100;`bid`ask];
     tob:.uqf.cross_book[`AUDUSD;`bid`ask!(0.6498;0.6500);`EURUSD;`bid`ask!(1.0998;1.1000)];
     .qunit.assertEquals[first r`sym;tob`sym;"cross symbol matches cross_book (AUDEUR)"];
     .testutil.assertApprox[first r`bid;tob`bid;1e-6;"negligible-size bid matches cross_book's top-of-book bid"];
     .testutil.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches cross_book's top-of-book ask"]};
 
-testCrossBookAtSizesWalksMultipleLevels:{[t]
-    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
-    r:.uqf.cross_book_at_sizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;enlist 1500000;`bid`ask`mid];
+test_cross_book_at_sizes_walks_multiple_levels:{[t]
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 1500000;`bid`ask`mid];
     .testutil.assertApprox[first r`bid;164.9293;1e-3;"blended bid after walking depth on both legs"];
     .testutil.assertApprox[first r`ask;165.0187;1e-3;"blended ask after walking depth on both legs"];
     .testutil.assertApprox[first r`mid;164.974;1e-3;"mid is the average of the swept bid and ask"];
-    .qunit.assertTrue[first r`bidFullyFilled;"enough depth to fully fill 1.5mm"];
-    .qunit.assertTrue[first r`askFullyFilled;"enough depth to fully fill 1.5mm"]};
+    .qunit.assertTrue[first r`bid_fully_filled;"enough depth to fully fill 1.5mm"];
+    .qunit.assertTrue[first r`ask_fully_filled;"enough depth to fully fill 1.5mm"]};
 
-testCrossBookAtSizesInsufficientDepth:{[t]
+test_cross_book_at_sizes_insufficient_depth:{[t]
     / total depth per side is 2mm; asking for 3mm can't be fully filled
-    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
-    r:.uqf.cross_book_at_sizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;enlist 3000000;`bid`ask];
-    .testutil.assertApprox[first r`bidFilledSize;2000000f;1e-6;"bid caps at leg1's total depth"];
-    .testutil.assertApprox[first r`askFilledSize;2000000f;1e-6;"ask caps at leg1's total depth"];
-    .qunit.assertFalse[first r`bidFullyFilled;"not fully filled"];
-    .qunit.assertFalse[first r`askFullyFilled;"not fully filled"]};
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 3000000;`bid`ask];
+    .testutil.assertApprox[first r`bid_filled_size;2000000f;1e-6;"bid caps at leg1's total depth"];
+    .testutil.assertApprox[first r`ask_filled_size;2000000f;1e-6;"ask caps at leg1's total depth"];
+    .qunit.assertFalse[first r`bid_fully_filled;"not fully filled"];
+    .qunit.assertFalse[first r`ask_fully_filled;"not fully filled"]};
 
-testCrossBookAtSizesMidVariesWithAsymmetricDepth:{[t]
+test_cross_book_at_sizes_mid_varies_with_asymmetric_depth:{[t]
     / an asymmetric book (thin ask, deep bid) should make mid genuinely
     / size-dependent, not coincidentally constant
-    thinAskBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996 1.0994;3000000 3000000 3000000;1.1000 1.1010;200000 5000000);
-    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
-    r:.uqf.cross_book_at_sizes[`EURUSD;thinAskBook;`USDJPY;usdjpyBook;500000 3000000;enlist `mid];
+    thin_ask_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996 1.0994;3000000 3000000 3000000;1.1000 1.1010;200000 5000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.cross_book_at_sizes[`EURUSD;thin_ask_book;`USDJPY;usdjpy_book;500000 3000000;enlist `mid];
     .qunit.assertTrue[(r[`mid] 0)<(r[`mid] 1);"mid increases with size once the thin ask level is exhausted"]};
 
-testCrossBookAtSizesSidesFiltering:{[t]
-    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
-    r:.uqf.cross_book_at_sizes[`EURUSD;eurusdBook;`USDJPY;usdjpyBook;enlist 1000000;enlist `mid];
+test_cross_book_at_sizes_sides_filtering:{[t]
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r:.uqf.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 1000000;enlist `mid];
     .qunit.assertEquals[cols r;`size`sym`mid;"requesting just mid returns only size, sym and mid columns"]};
 
-testCrossBookAtSizesRejectsInvalidSide:{[t]
+test_cross_book_at_sizes_rejects_invalid_side:{[t]
     / note: wrapper takes the whole (book1;book2) tuple as a single
     / argument rather than closing over local variables - nested q
     / lambdas do NOT see an enclosing function's locals, only globals.
     wrapper:{[books] .uqf.cross_book_at_sizes[`EURUSD;books 0;`USDJPY;books 1;enlist 1000000;enlist `close]};
-    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpyBook:`bidPrices`bidSizes`askPrices`askSizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
-    .qunit.assertError[wrapper;(eurusdBook;usdjpyBook);"an unrecognised side symbol is rejected"]};
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    .qunit.assertError[wrapper;(eurusd_book;usdjpy_book);"an unrecognised side symbol is rejected"]};
 
-testCrossBookAtSizesRejectsNoSharedCurrency:{[t]
+test_cross_book_at_sizes_rejects_no_shared_currency:{[t]
     wrapper:{[books] .uqf.cross_book_at_sizes[`EURUSD;books 0;`GBPCHF;books 1;enlist 1000000;`bid`ask]};
-    eurusdBook:`bidPrices`bidSizes`askPrices`askSizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    gbpchfBook:`bidPrices`bidSizes`askPrices`askSizes!(1.20 1.19;1000000 1000000;1.21 1.22;1000000 1000000);
-    .qunit.assertError[wrapper;(eurusdBook;gbpchfBook);"EURUSD and GBPCHF share no currency"]};
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    gbpchf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.20 1.19;1000000 1000000;1.21 1.22;1000000 1000000);
+    .qunit.assertError[wrapper;(eurusd_book;gbpchf_book);"EURUSD and GBPCHF share no currency"]};
 
 \d .

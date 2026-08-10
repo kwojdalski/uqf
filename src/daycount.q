@@ -34,10 +34,10 @@ dcf_act_365:{[d1;d2] (d2-d1)%365.0};
 dcf_30e_360:{[d1;d2]
     y1:`year$d1; m1:`mm$d1; day1:30&`dd$d1;
     y2:`year$d2; m2:`mm$d2; day2:30&`dd$d2;
-    yearsTerm:360*(y2-y1);
-    monthsTerm:30*(m2-m1);
-    daysTerm:day2-day1;
-    (yearsTerm+monthsTerm+daysTerm)%360.0};
+    years_term:360*(y2-y1);
+    months_term:30*(m2-m1);
+    days_term:day2-day1;
+    (years_term+months_term+days_term)%360.0};
 
 / Dispatch to a day count convention by name.
 / @param conv one of `act360`act365`30e360
