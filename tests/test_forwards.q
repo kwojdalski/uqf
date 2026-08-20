@@ -337,14 +337,32 @@ test_ccy_shortest_path_empty_when_unreachable:{[t]
 test_ccy_shortest_path_empty_for_same_currency:{[t]
     .qunit.assertEquals[.uqf.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`USD;`USD];`symbol$();"start and goal the same currency needs no legs at all"]};
 
+test_cross_decomp_three_leg_chain:{[t]
+    .qunit.assertEquals[.uqf.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDPLN];`AUDUSD`EURUSD`EURPLN;"AUDPLN decomposes into the 3 legs bridging AUD->USD->EUR->PLN"]};
+
+test_cross_decomp_two_leg_chain:{[t]
+    .qunit.assertEquals[.uqf.cross_decomp[`EURUSD`USDRUB;`EURRUB];`EURUSD`USDRUB;"EURRUB decomposes into just the 2 legs bridging EUR->USD->RUB"]};
+
+test_cross_decomp_direct_quote_needs_one_leg:{[t]
+    .qunit.assertEquals[.uqf.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDUSD];enlist `AUDUSD;"a directly-quoted pair decomposes to just itself"]};
+
+test_cross_decomp_accepts_flexible_input_formats:{[t]
+    .qunit.assertEquals[.uqf.cross_decomp[`AUDUSD`EURUSD`EURPLN;"aud/pln"];`AUDUSD`EURUSD`EURPLN;"lowercase, slash-separated input normalizes the same as `AUDPLN"]};
+
+test_cross_decomp_empty_when_unreachable:{[t]
+    .qunit.assertEquals[.uqf.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDJPY];`symbol$();"no chain of available pairs connects AUD and JPY"]};
+
 / Shared 3-pair quotes table (AUDUSD, EURUSD, EURPLN, one row each, all at
 / the same synthetic timestamp) reused by the cross_book_at tests below.
+/ cross_book_at requires `sym`ts xasc sorted input (for its internal
+/ as-of join) - sorted here once so every test below gets a valid table.
 mk_quotes_table:{[dummy]
     mk_book:{[spot]
         `bid_prices`bid_sizes`ask_prices`ask_sizes!(
             spot-0 0.0001;1000000 2000000;spot+0.0001 0.0002;1000000 2000000)};
     ts:2026.01.01D00:00:00.000000000+0D 0D00:00:00.001 0D00:00:00.002;
-    ([] ts;sym:`AUDUSD`EURUSD`EURPLN),'(mk_book each 0.6550 1.0850 4.2500)};
+    unsorted:([] ts;sym:`AUDUSD`EURUSD`EURPLN),'(mk_book each 0.6550 1.0850 4.2500);
+    `sym`ts xasc unsorted};
 
 test_cross_book_at_chains_through_available_pairs:{[t]
     quotes:mk_quotes_table[::];
@@ -378,5 +396,15 @@ test_cross_book_at_rejects_quote_after_at_time:{[t]
     quotes:mk_quotes_table[::];
     wrapper:{[q] .uqf.cross_book_at[q;`AUDUSD;2025.12.31D00:00:00.000000000;enlist 500000;`mid]};
     .qunit.assertError[wrapper;quotes;"no quote exists yet at or before the requested time"]};
+
+test_cross_book_at_rejects_unsorted_quotes:{[t]
+    / mk_quotes_table already sorts `sym`ts xasc; deliberately reverse the
+    / row order here to prove cross_book_at catches this rather than
+    / silently running its internal as-of join (aj) against unsorted
+    / data, which wouldn't error - it would just quietly return the
+    / wrong row.
+    unsorted:reverse mk_quotes_table[::];
+    wrapper:{[q] .uqf.cross_book_at[q;`AUDPLN;2026.01.02D00:00:00.000000000;enlist 500000;`mid]};
+    .qunit.assertError[wrapper;unsorted;"quotes rows out of `sym`ts xasc order is rejected"]};
 
 \d .

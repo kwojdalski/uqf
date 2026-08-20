@@ -72,11 +72,15 @@ mk_timestamps:{[n;start_ts]
 / one row per pair - rather than a bare dict per leg: `mk_book each spots`
 / comes back as a table already (a list of dicts sharing the same keys
 / auto-collapses to one), so ,'-joining ts/sym onto it is exactly the
-/ meta_table,'level_table idiom the other example scripts use.
+/ meta_table,'level_table idiom the other example scripts use. Sorted
+/ `sym`ts xasc afterward - cross_book_at requires that (it does an as-of
+/ join per leg internally, which silently gives wrong answers on
+/ unsorted input, so cross_book_at checks and errors instead of guessing).
 pairs:`AUDUSD`EURUSD`EURPLN;
 approx_spot_rates:0.6550 1.0850 4.2500;
 ts:mk_timestamps[count pairs;.z.p];
-quotes:([] ts;sym:pairs),'(mk_book each approx_spot_rates);
+unsorted_quotes:([] ts;sym:pairs),'(mk_book each approx_spot_rates);
+quotes:`sym`ts xasc unsorted_quotes;
 INFO ("quotes - %1 rows, one 10-level book per pair, no wide-table reshape needed for this example";count quotes);
 show quotes;
 
@@ -104,13 +108,26 @@ show .uqf.cross_book_at[quotes;`AUDUSD;as_of;sizes;`mid];
 DEBUG "running: .uqf.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid]";
 show .uqf.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid];
 
-/ ==== what cross_book_at does internally, run by hand ====
-/ ccy_shortest_path is the piece that replaces having to name the chain
+/ ==== the "recipe" on its own: which legs does a pair need? ====
+/ cross_decomp is the piece that replaces having to name the chain
 / yourself - it BFS-searches quotes' own distinct `sym` column for the
-/ shortest route between two currencies.
-DEBUG "running: .uqf.ccy_shortest_path[distinct quotes`sym;`AUD;`PLN]";
-chain_syms:.uqf.ccy_shortest_path[distinct quotes`sym;`AUD;`PLN];
-INFO ("chain_syms - ccy_shortest_path found %1";enlist ", " sv string chain_syms);
+/ shortest route between a pair's two currencies. Useful on its own too,
+/ e.g. to inspect what a pricing call would do before running it, or to
+/ feed a different downstream step than cross_book_chain_at_sizes.
+DEBUG "running: .uqf.cross_decomp[distinct quotes`sym;`AUDPLN]";
+chain_syms:.uqf.cross_decomp[distinct quotes`sym;`AUDPLN];
+INFO ("chain_syms - cross_decomp found %1";enlist ", " sv string chain_syms);
+
+/ A different pool of available pairs decomposes differently - EURRUB
+/ (no direct EUR/RUB market) only needs a single USD bridge, not the
+/ 2-hop EUR->USD->PLN route AUDPLN needed above.
+eurusd_usdrub:`EURUSD`USDRUB;
+DEBUG "running: .uqf.cross_decomp[eurusd_usdrub;`EURRUB]";
+eurrub_chain:.uqf.cross_decomp[eurusd_usdrub;`EURRUB];
+INFO ("eurrub_chain - with only %1 available, EURRUB decomposes to %2";(", " sv string eurusd_usdrub;", " sv string eurrub_chain));
+if[not eurrub_chain~`EURUSD`USDRUB;
+    ERROR "expected EURRUB to decompose to exactly EURUSD, USDRUB";
+    exit 1];
 
 DEBUG "running: .uqf.ccy_orient_chain[chain_syms]";
 orient:.uqf.ccy_orient_chain[chain_syms];
@@ -126,6 +143,54 @@ show manual_audpln_book;
 
 if[not manual_audpln_book~audpln_book;
     ERROR "manual chain result disagrees with cross_book_at - the two paths should always match";
+    exit 1];
+
+/ ==== proof that at_time picks the price as of that specific moment ====
+/ Three AUDUSD ticks 10ms apart, price drifting 0.6550 -> 0.6555 -> 0.6560.
+/ Querying cross_book_at at various times should always return the most
+/ recent tick AT OR BEFORE the requested time, never a later one - i.e.
+/ querying 5ms after tick1 (before tick2 exists yet) must still return
+/ tick1's price, not tick2's.
+tick_ts:.z.p+0D 0D00:00:00.010 0D00:00:00.020;
+tick_spots:0.6550 0.6555 0.6560;
+unsorted_audusd_ticks:([] ts:tick_ts; sym:3#`AUDUSD),'(mk_book each tick_spots);
+audusd_ticks:`sym`ts xasc unsorted_audusd_ticks;
+INFO ("audusd_ticks - %1 successive AUDUSD quotes, 10ms apart, price drifting up:";count audusd_ticks);
+show audusd_ticks;
+
+query_times:`before_any_tick`at_tick1`between_tick1_and_tick2`at_tick3!(
+    tick_ts[0]-0D00:00:00.001;
+    tick_ts[0];
+    tick_ts[0]+0D00:00:00.005;
+    tick_ts[2]);
+
+DEBUG "running: .uqf.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick1;enlist 1000000;`mid]";
+mid_at_tick1:.uqf.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick1;enlist 1000000;`mid];
+INFO ("mid_at_tick1 - queried exactly at tick1's timestamp: %1";enlist first mid_at_tick1`mid);
+
+DEBUG "running: .uqf.cross_book_at[audusd_ticks;`AUDUSD;query_times`between_tick1_and_tick2;enlist 1000000;`mid]";
+mid_between:.uqf.cross_book_at[audusd_ticks;`AUDUSD;query_times`between_tick1_and_tick2;enlist 1000000;`mid];
+INFO ("mid_between - queried 5ms after tick1, before tick2 exists: %1";enlist first mid_between`mid);
+
+DEBUG "running: .uqf.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick3;enlist 1000000;`mid]";
+mid_at_tick3:.uqf.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick3;enlist 1000000;`mid];
+INFO ("mid_at_tick3 - queried at tick3's timestamp: %1";enlist first mid_at_tick3`mid);
+
+if[not mid_at_tick1[`mid]~mid_between`mid;
+    ERROR "querying between tick1 and tick2 should still return tick1's price - got a different value, at_time is peeking ahead";
+    exit 1];
+if[mid_at_tick1[`mid]~mid_at_tick3`mid;
+    ERROR "querying at tick3 should return a later, different price than tick1 - got the same value, at_time isn't picking up new ticks";
+    exit 1];
+INFO "confirmed: between-tick query matches the earlier tick exactly, and the tick3 query differs from it - at_time correctly reflects only information known as of that instant";
+
+/ querying before any tick exists should error, not silently return
+/ something (or, worse, the wrong tick).
+wrapper_no_data:{[q] .uqf.cross_book_at[q;`AUDUSD;query_times`before_any_tick;enlist 1000000;`mid]};
+caught:@[wrapper_no_data;audusd_ticks;{[e] e}];
+INFO ("querying before any tick exists correctly errors: %1";enlist caught);
+if[10h<>type caught;
+    ERROR "querying before any tick existed should have thrown an error, not returned a result";
     exit 1];
 
 // exit 0

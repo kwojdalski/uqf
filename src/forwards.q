@@ -432,15 +432,37 @@ ccy_shortest_path:{[avail_syms;start_ccy;goal_ccy]
         cur:step 0];
     path_syms};
 
+/ Work out which quoted pairs are needed to build a synthetic cross rate
+/ for sym, and in what order - the "recipe" cross_book_at follows
+/ automatically, exposed on its own for inspection (or for feeding into
+/ something other than a depth-aware book, e.g. ccy_orient_chain
+/ directly). A thin wrapper around ccy_shortest_path: parses sym into its
+/ two currencies and BFS-searches avail_syms for the shortest chain
+/ connecting them.
+/ @param avail_syms currency pair symbols known to be quotable
+/ @param sym the pair to decompose, any format ccy.q's normalize_ccy_pair accepts
+/ @return ordered list of pair symbols to chain (their own original,
+/   unoriented form - see ccy_shortest_path) - a single-element list if
+/   sym (or its inverse) is already directly quoted, or an empty symbol
+/   list if sym's two currencies aren't connected by avail_syms at all
+/ @eg .uqf.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDPLN]  -> `AUDUSD`EURUSD`EURPLN
+/ @eg .uqf.cross_decomp[`EURUSD`USDRUB;`EURRUB]  -> `EURUSD`USDRUB
+cross_decomp:{[avail_syms;sym]
+    legs:ccy_pair_legs normalize_ccy_pair sym;
+    ccy_shortest_path[avail_syms;legs`base;legs`quote]};
+
 / Private: one symbol's book, as of a given time, pulled out of a quotes
-/ table (see cross_book_at) - the most recent row at or before at_time.
+/ table via an as-of join (aj) - the most recent row at or before at_time.
+/ Requires quotes already sorted `sym`ts xasc - cross_book_at checks that
+/ once up front (aj on unsorted data doesn't error, it silently returns
+/ wrong rows), not repeated here on every leg lookup.
 / @throws error if quotes has no row for target_sym at or before at_time
 leg_book_as_of:{[quotes;at_time;target_sym]
-    matched:select ts,bid_prices,bid_sizes,ask_prices,ask_sizes from quotes where sym=target_sym, ts<=at_time;
-    if[0=count matched; '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string at_time];
-    latest_idx:matched[`ts]?max matched`ts;
-    latest:matched latest_idx;
-    `bid_prices`bid_sizes`ask_prices`ask_sizes!(latest`bid_prices;latest`bid_sizes;latest`ask_prices;latest`ask_sizes)};
+    lookup:([] sym:enlist target_sym; ts:enlist at_time);
+    joined:aj[`sym`ts;lookup;quotes];
+    if[0=count first joined`bid_prices;
+        '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string at_time];
+    `bid_prices`bid_sizes`ask_prices`ask_sizes!(first joined`bid_prices;first joined`bid_sizes;first joined`ask_prices;first joined`ask_sizes)};
 
 / Private: bid, ask and mid for a single already-available leg at one
 / size - the 1-leg-chain analogue of cross_book_at_one_size, used by
@@ -472,24 +494,26 @@ single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
 / inverse) is quoted directly and no chaining is needed at all, prices
 / that single leg directly.
 / @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
-/   any number of rows per sym (the most recent one at or before at_time
-/   is used for each leg) - see the shape reshape_wide_order_book_*.q's
-/   `out` and book_from_wide_levels produce
+/   sorted `sym`ts xasc (required for the as-of leg lookup - see
+/   leg_book_as_of), any number of rows per sym (the most recent one at
+/   or before at_time is used for each leg) - see the shape
+/   reshape_wide_order_book_*.q's `out` and book_from_wide_levels produce
 / @param sym the pair to price, any format ccy.q's normalize_ccy_pair accepts
 / @param at_time only consider quotes at or before this time
 / @param sizes list of sizes to price, e.g. 1000000 3000000
 / @param sides subset of `bid`ask`mid to include in the result
 / @return a table, one row per size - see cross_book_chain_at_sizes
-/ @throws error if no chain of pairs currently in quotes connects sym's
-/   two currencies, or if some required leg has no quote at or before
-/   at_time
-/ @eg .uqf.cross_book_at[quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
+/ @throws error if quotes isn't sorted `sym`ts xasc, if no chain of pairs
+/   currently in quotes connects sym's two currencies, or if some
+/   required leg has no quote at or before at_time
+/ @eg .uqf.cross_book_at[`sym`ts xasc quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
 cross_book_at:{[quotes;sym;at_time;sizes;sides]
+    if[not quotes~`sym`ts xasc quotes;
+        '"cross_book_at: quotes must be sorted `sym`ts xasc for an as-of lookup - try `sym`ts xasc quotes first"];
     cross_sym:normalize_ccy_pair sym;
-    legs:ccy_pair_legs cross_sym;
-    avail_syms:distinct quotes`sym;
-    path:ccy_shortest_path[avail_syms;legs`base;legs`quote];
+    path:cross_decomp[distinct quotes`sym;cross_sym];
     if[0=count path;
+        legs:ccy_pair_legs cross_sym;
         '"cross_book_at: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     $[1=count path;
         single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;at_time;path 0];not (path 0)~cross_sym;sizes;sides];
