@@ -490,9 +490,18 @@ test_cross_markout_at_horizons_negative_horizon_looks_backward:{[t]
     trade_time:t0+0D00:00:00.500;
     r:.uqf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;-500 0 500;1];
     .qunit.assertEquals[count r;3;"one row per horizon"];
-    .qunit.assertEquals[r[0]`target_time;t0;"a -500ms horizon from a t0+500ms trade lands exactly on t0"];
+    .qunit.assertEquals[r[0]`ts;t0;"a -500ms horizon from a t0+500ms trade lands exactly on t0"];
     .testutil.assertApprox[r[0]`ref_price;r[1]`ref_price;1e-9;"the -500ms and 0ms horizons both land before t1, so see the same (t0) quote"];
     .qunit.assertTrue[(r[2]`ref_price)>(r[0]`ref_price);"the +500ms horizon (at t1) sees the higher price after AUDUSD/EURPLN drifted up"]};
+
+test_cross_markout_at_horizons_ts_col_is_configurable:{[t]
+    quotes:mk_ts_quotes_table[::];
+    trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
+    original:.uqf.ts_col;
+    .uqf.ts_col:`timestamp;
+    r:.uqf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0;1];
+    .uqf.ts_col:original;
+    .qunit.assertEquals[cols r;`horizon_ms`timestamp`ref_price`markout_pips;"overriding .uqf.ts_col renames the timestamp column in the output"]};
 
 test_cross_markout_at_horizons_nulls_out_of_range_horizon_instead_of_erroring:{[t]
     quotes:mk_ts_quotes_table[::];

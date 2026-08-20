@@ -572,10 +572,18 @@ cross_size_at_price:{[quotes;sym;at_time;side;price_limit]
 / at a point in time" is needed for a synthetic pair with no quoted mid
 / of its own. Nulls out rather than throwing if no quote exists yet for
 / some required leg at or before t, so a caller sweeping many timestamps
-/ (cross_markout_at_horizons, get_markout_decomp) can null one bad
+/ (cross_markout_at_horizons, cross_markout_decomp) can null one bad
 / lookup instead of failing the whole batch.
 cross_ref_price_at:{[quotes;sym;ref_size;t]
     @[{[quotes;sym;ref_size;t] first cross_book_at[quotes;sym;t;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];t;{0n}]};
+
+/ Configurable output column name for the "point in time" a row in
+/ cross_markout_at_horizons/cross_impact_at_horizons refers to - defaults
+/ to `ts to match the quotes table's own timestamp column convention
+/ used throughout this file (cross_book_at, leg_book_as_of, ...).
+/ Override before calling if some downstream consumer expects a
+/ different name, e.g. .uqf.ts_col:`timestamp.
+ts_col:`ts;
 
 / Markout at one or more horizons around a single trade on a synthetic
 / cross pair - the cross_book_at-based analogue of execution.q's
@@ -598,7 +606,8 @@ cross_ref_price_at:{[quotes;sym;ref_size;t]
 /   reference price at each horizon - a synthetic pair has no single
 /   quoted mid, so this is priced the same way any other cross_book_at
 /   call is, not looked up directly
-/ @return a table, one row per horizon: `horizon_ms`target_time`ref_price`markout_pips -
+/ @return a table, one row per horizon: `horizon_ms`ts`ref_price`markout_pips
+/   (the timestamp column is named per ts_col, `ts by default) -
 /   ref_price/markout_pips are null for a horizon with no quote yet for
 /   some required leg, rather than throwing
 / @eg .uqf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;-500 -300 0 100 300;1]
@@ -607,7 +616,8 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
     target_time:trade_time+horizons_ms*1000000;
     ref_price:cross_ref_price_at[quotes;sym;ref_size;] each target_time;
     markout_pips:markout[side;trade_price;ref_price;pip_factor];
-    ([] horizon_ms:horizons_ms; target_time; ref_price; markout_pips)};
+    col_names:`horizon_ms,ts_col,`ref_price`markout_pips;
+    flip col_names!(horizons_ms;target_time;ref_price;markout_pips)};
 
 / Decompose a synthetic cross pair's price move between two times into
 / exact per-leg contributions, by revaluing one leg at a time - in the
@@ -677,7 +687,8 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 /   positive looks forward
 / @param ref_size the (typically negligible) size to sweep for
 /   impact_sym's reference price at trade_time and at each horizon
-/ @return a table, one row per horizon: `horizon_ms`target_time`ref_price`markout_pips -
+/ @return a table, one row per horizon: `horizon_ms`ts`ref_price`markout_pips
+/   (the timestamp column is named per ts_col, `ts by default) -
 /   impact_sym's own price drift, signed by traded_sym's side
 / @throws error if impact_sym normalizes to the same pair as traded_sym
 /   (nothing to compare against), or anything cross_ref_price_at/cross_book_at themselves throw
