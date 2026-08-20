@@ -654,4 +654,38 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
         i+:1];
     ([] leg:path; invert:inverts; price_t0; price_t1; contribution_pips:pip_factor*contributions)};
 
+/ Market-impact check: did a trade in traded_sym coincide with a price
+/ move in a DIFFERENT, related pair (impact_sym) around the same time?
+/ Unlike cross_markout_at_horizons (which measures the traded pair's own
+/ price drift after its own trade), this measures a sibling pair's price
+/ drift instead - signed using the traded pair's own side, so a positive
+/ markout_pips means impact_sym moved the way you'd expect if the traded
+/ pair's flow spilled over into it (e.g. buying EURPLN weakens PLN; a
+/ positive number here means CZKPLN moved the same way, i.e. PLN
+/ weakened against CZK too). There's no real trade in impact_sym, so
+/ its "trade_price" is its own reference price at trade_time
+/ (cross_ref_price_at), not a supplied execution price - this is a thin
+/ wrapper around cross_markout_at_horizons using that as the baseline.
+/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`ts xasc
+/ @param traded_sym the pair actually traded, any format ccy.q's normalize_ccy_pair accepts - context only, not priced
+/ @param impact_sym the different pair to check for impact, same format rules
+/ @param trade_time the traded pair's own trade timestamp
+/ @param side 1 for a buy, -1 for a sell of traded_sym - reused as impact_sym's markout sign convention
+/ @param pip_factor 10000 for most pairs, 100 for JPY crosses - applies to impact_sym
+/ @param horizons_ms one or more offsets from trade_time, in
+/   milliseconds - negative looks backward, 0 is at trade_time itself,
+/   positive looks forward
+/ @param ref_size the (typically negligible) size to sweep for
+/   impact_sym's reference price at trade_time and at each horizon
+/ @return a table, one row per horizon: `horizon_ms`target_time`ref_price`markout_pips -
+/   impact_sym's own price drift, signed by traded_sym's side
+/ @throws error if impact_sym normalizes to the same pair as traded_sym
+/   (nothing to compare against), or anything cross_ref_price_at/cross_book_at themselves throw
+/ @eg .uqf.cross_impact_at_horizons[quotes;`EURPLN;`CZKPLN;trade_time;1;10000;-500 -300 0 100 300;1]
+cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons_ms;ref_size]
+    if[(normalize_ccy_pair traded_sym)~normalize_ccy_pair impact_sym;
+        '"cross_impact_at_horizons: impact_sym must be different from traded_sym"];
+    baseline:cross_ref_price_at[quotes;impact_sym;ref_size;trade_time];
+    cross_markout_at_horizons[quotes;impact_sym;trade_time;side;baseline;pip_factor;horizons_ms;ref_size]};
+
 \d .

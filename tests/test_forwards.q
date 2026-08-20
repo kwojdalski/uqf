@@ -528,4 +528,33 @@ test_cross_markout_decomp_rejects_unreachable_pair:{[t]
     wrapper:{[q] .uqf.cross_markout_decomp[q;`AUDJPY;t0;t1;10000;1]};
     .qunit.assertError[wrapper;quotes;"no chain of available pairs connects AUD and JPY"]};
 
+test_cross_impact_at_horizons_reports_a_different_pairs_own_drift:{[t]
+    / EURPLN is the "traded" pair (context only, never priced); AUDUSD is
+    / the impact pair and genuinely drifts up 10 pips between t0 and t1
+    / in mk_ts_quotes_table - a buy (side=1) should show that drift as a
+    / positive markout, matching cross_markout_at_horizons' own sign
+    / convention.
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    trade_time:t0+0D00:00:00.500;
+    r:.uqf.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;-500 0 500;1];
+    .qunit.assertEquals[count r;3;"one row per horizon"];
+    .testutil.assertApprox[r[0]`markout_pips;0f;1e-6;"no drift yet at/before the trade's own baseline time"];
+    .testutil.assertApprox[r[2]`markout_pips;10f;1e-6;"AUDUSD's genuine 10-pip drift by t1 shows up as +10 for a buy"]};
+
+test_cross_impact_at_horizons_side_flips_the_sign:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    trade_time:t0+0D00:00:00.500;
+    buy_r:.uqf.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 500;1];
+    sell_r:.uqf.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;-1;10000;enlist 500;1];
+    .testutil.assertApprox[first buy_r`markout_pips;neg first sell_r`markout_pips;1e-6;"selling reports the same drift with the opposite sign"]};
+
+test_cross_impact_at_horizons_rejects_same_pair:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    trade_time:t0+0D00:00:00.500;
+    wrapper:{[q] .uqf.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0;1]};
+    .qunit.assertError[wrapper;quotes;"impact_sym the same as traded_sym is rejected"]};
+
 \d .
