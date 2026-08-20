@@ -17,7 +17,5 @@ actual/
 /q
 /peachq/
 
-# generated qDoc HTML output (regenerate with scripts/gen-docs.sh) and any
 # local qStudio jar kept alongside the repo to run it
-/docs/
 /qstudio.jar

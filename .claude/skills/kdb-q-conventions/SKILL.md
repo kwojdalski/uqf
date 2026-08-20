@@ -35,14 +35,14 @@ implicit grouping. Instead:
 
 1. Prefer **named intermediate variables**, one arithmetic op per line, e.g.:
    ```
-   scaledSpot:spot*growthSimple[rd;t];
+   scaledSpot:spot*growth_simple[rd;t];
    ratio:scaledSpot%fwd;
    (ratio-1)%t
    ```
 2. When a one-liner is unavoidable, **parenthesize explicitly** even where
    q's right-to-left rule would happen to give the right answer anyway -
    don't make the next reader re-derive the evaluation order.
-3. Any polynomial evaluation goes through `.uqf.hornerEval[coeffs;x]`
+3. Any polynomial evaluation goes through `.uqf.horner_eval[coeffs;x]`
    (defined in `src/stats.q`) rather than a hand-written Horner chain -
    that arithmetic is tricky exactly once, in one tested place.
 4. After writing any new formula, **verify it numerically against a known
@@ -98,7 +98,7 @@ library with no processes/IPC/tables).
   act as the identity - it maps over each character and returns a list of
   1-char strings (`string "EURUSD"` gives `("E";"U";"R";...)`, not
   `"EURUSD"`). Only `string` on a symbol correctly returns the whole thing
-  as one string. `ccy.q`'s `ccyToStr` exists specifically to paper over
+  as one string. `ccy.q`'s `ccy_to_str` exists specifically to paper over
   this: `$[10h=type x; x; string x]` - check `type` before coercing
   anything that might already be a string.
 - **`,` on two symbol atoms does not concatenate their text** - it makes a
@@ -106,10 +106,10 @@ library with no processes/IPC/tables).
   vector), not `` `askPrices``. Trying to dynamically build a lookup key
   this way (e.g. `` book[side,`Prices] `` to pick `askPrices`/`bidPrices`
   by a `side` variable) silently returns a null instead of erroring -
-  broke `crossBookAtSizes`'s first draft. Build dynamic symbols from
+  broke `cross_book_at_sizes`'s first draft. Build dynamic symbols from
   *strings* instead (`` `$(string x),"suffix" ``), or better, avoid
   dynamic key construction entirely and branch explicitly per case (what
-  `forwards.q`'s `orientedLevels` does).
+  `forwards.q`'s `oriented_levels` does).
 - Nested lambdas do **not** close over an enclosing function's *local*
   variables - only globals. `outer:{[] localVar:42; inner:{[d] localVar+d};
   inner[8]}` throws `localVar` (undefined), even though `inner` is
@@ -127,6 +127,21 @@ library with no processes/IPC/tables).
   (`assign`/`type` errors with no clear cause). Avoid naming a variable
   after any q keyword; when in doubt, check `` key `. `` or just pick a
   more specific name (`wantCols`, not `cols`).
+- **qUnit's hook discovery is a hardcoded, case-sensitive name prefix -
+  don't snake_case it.** `.qunit.runNsTests` finds setup/teardown hooks
+  via `findFuncs[ns;"beforeNamespace*";...]` (and `afterNamespace*`,
+  `beforeParameters*`, `afterParameters*`, `setUp*`, `tearDown*`) - exact
+  literal prefixes baked into the vendored framework. Renaming
+  `beforeNamespaceGenerateTrades` to `before_namespace_generate_trades`
+  during the snake_case pass silently broke discovery (0 matches instead
+  of 1): the hook never ran, the table it was supposed to populate stayed
+  unset, and every test in that namespace that depended on it threw. Fix
+  was `beforeNamespace_generate_trades` - keep the exact
+  `beforeNamespace`/`afterNamespace`/etc. prefix untouched, snake_case
+  only whatever comes after it. This is a case where "rename everything
+  to the house style" and "the third-party framework's naming contract"
+  are in direct conflict, and the framework wins - you won't get an error
+  when you get it wrong, the hook just quietly stops firing.
 
 ## Layout
 
@@ -135,7 +150,7 @@ library with no processes/IPC/tables).
   function *definitions* (q resolves names at call time), but `src/init.q`
   loads them in a sensible dependency order (stats -> ccy -> daycount ->
   rates -> forwards -> options -> risk -> execution). `forwards.q`'s
-  `crossBook` depends on `ccy.q`'s `ccyPairLegs`/`ccyPairSymbol`.
+  `cross_book` depends on `ccy.q`'s `ccy_pair_legs`/`ccy_pair_symbol`.
 - `tests/lib/qunit.q` - vendored TimeStored qUnit framework (CC BY-NC-SA,
   non-commercial - keep the attribution header intact; see README's
   Licensing section before using this repo commercially).
@@ -147,6 +162,23 @@ library with no processes/IPC/tables).
 
 ## Conventions used across the library
 
+- **Everything is `lower_snake_case`** - function names (e.g. `gk_call`,
+  `cross_book_at_sizes`, `markout_at_horizons`), parameters, and local
+  variables (e.g. `pip_factor`, `trade_price`, `target_size`) alike, not
+  camelCase. New code should follow it too. Two deliberate exceptions:
+  - `D1`/`D2` in `options.q` are `d1v`/`d2v`, not `d1`/`d2` - several
+    functions do `d1v:d1[...]` (call the public `d1` function to set a
+    local); if that local were also named `d1`, q's scoping rules make
+    any name assigned anywhere in a function local for the *whole*
+    function body, so the call on the right-hand side would try to
+    invoke the not-yet-set local instead of the global function.
+  - `beforeNamespace_generate_trades` in `tests/test_execution_scale.q`
+    keeps the literal `beforeNamespace` prefix - see the qUnit hook
+    gotcha below for why.
+
+  `src/data.q` (not authored as part of this library - see its own
+  header) still uses camelCase throughout and was deliberately left
+  alone.
 - Currency pair quoting: BASE/QUOTE, so `rate` means 1 BASE = `rate` QUOTE
   (e.g. EURUSD 1.10 -> 1 EUR = 1.10 USD). `rd` is the quote currency's
   rate, `rf` the base currency's - this matches the Garman-Kohlhagen and
@@ -157,7 +189,7 @@ library with no processes/IPC/tables).
   used consistently in `risk.q` and `execution.q`.
 - `pipFactor` is `10000` for most pairs, `100` for JPY crosses; nothing in
   the library hardcodes a pip size - it's always a caller-supplied argument.
-- Cost-style execution metrics (`effSpread`, `slippage`) are positive when
+- Cost-style execution metrics (`eff_spread`, `slippage`) are positive when
   they went against the side that traded; `markout` is positive when the
   market moved in that side's favour after the trade.
 
@@ -219,15 +251,15 @@ running `com.timestored.qdoc.QDocMain` against a scratch file:
   `@throws`, etc.) - qDoc drops it and everything after it into the HTML
   unescaped, so a naive HTML parser treats `<=0` or `<rd` as the start of
   a tag and the rest of that line silently vanishes from the rendered
-  page (this happened to `ncdf`'s `@return`, `carryReturn`'s description,
-  and `sweepPrice`'s `@throws` - all originally used `<` or `<=`). A bare
-  `>` is fine (confirmed via `bookCrossed`'s "bid>ask" rendering intact).
+  page (this happened to `ncdf`'s `@return`, `carry_return`'s description,
+  and `sweep_price`'s `@throws` - all originally used `<` or `<=`). A bare
+  `>` is fine (confirmed via `book_crossed`'s "bid>ask" rendering intact).
   Rephrase in words ("x is at most y", "targetSize is not positive")
   instead of using the character.
 - qstudio.jar also runs a bundled linter as a side effect
   (`docs/lint.csv`), which throws a lot of `UNDECLARED_VAR` false
   positives for this repo specifically, because it lints each file in
-  isolation and can't see that e.g. `dfCont` (from `rates.q`) is available
+  isolation and can't see that e.g. `df_cont` (from `rates.q`) is available
   in `options.q` once both are loaded into the shared `.uqf` namespace via
   `src/init.q`. Safe to ignore those; do look at anything else it flags.
 

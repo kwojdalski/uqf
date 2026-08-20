@@ -9,3 +9,4 @@
 \l src/options.q
 \l src/risk.q
 \l src/execution.q
+\l src/book.q

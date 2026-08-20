@@ -27,7 +27,7 @@ timers) has been dropped as not applicable here.
 
 **Atom vs vector**: `type 42` is `-7h` (negative = atom); `type 42 43` is
 `7h` (positive = vector). This matters in this repo because most `src/*.q`
-functions are written to work on either - see how `.uqf.invNcdf` branches
+functions are written to work on either - see how `.uqf.inv_ncdf` branches
 on `0>type p` to decide atom vs each-mapped vector handling.
 
 **Mixed-list promotion**: `1 2 3` is a long vector (`7h`); `1 2 3.0` is
@@ -54,7 +54,7 @@ f each 1 2 3          / same as f'[1 2 3]
 ```
 
 **Fold (over, `/`) with vs without a seed** - this is the exact mechanism
-`.uqf.hornerEval` uses:
+`.uqf.horner_eval` uses:
 ```
 (+/) 1 2 3     / 6   - no seed: first element used as seed
 0 +/ 1 2 3     / 6   - explicit seed 0
@@ -63,7 +63,7 @@ f each 1 2 3          / same as f'[1 2 3]
 To pass an explicit seed to a *derived* function (not a bare operator like
 `+`), you must use **bracket** application: `f[x;]/[seed;list]`. Writing
 `(f[x;]/) (seed;list)` instead passes a single 2-tuple as one argument and
-silently does the wrong thing - this bit `hornerEval` during development
+silently does the wrong thing - this bit `horner_eval` during development
 (see git history) and is worth remembering before writing any new fold.
 
 **Scan (`\`) includes the seed in its output**: `0 +\ 1 2 3` is `0 1 3 6`;
@@ -84,8 +84,8 @@ a rolling-return or day-over-day helper.
 
 This is exactly the pattern qUnit's `assertError`/`assertThrows` rely on
 (they call your function under `@[...]` internally), and it's how
-`invNcdf`, `yearFrac` and `crossBook` in this repo validate their inputs
-(`'"invNcdf: p must be strictly between 0 and 1"`, etc.) - always signal
+`inv_ncdf`, `year_frac` and `cross_book` in this repo validate their inputs
+(`'"inv_ncdf: p must be strictly between 0 and 1"`, etc.) - always signal
 with a *string* error that says which function and what was wrong, not a
 bare symbol, so a caller's error message is actually useful.
 
@@ -115,7 +115,7 @@ knowing:
   `k` as locals without clobbering anything in `.uqf`.
 
 **Max 8 parameters per function.** None of uqf's functions are close to
-this limit (the largest, `gkCall`/`gkPut`/the Greeks, take 6), but if a
+this limit (the largest, `gk_call`/`gk_put`/the Greeks, take 6), but if a
 future function would need more than 8, pass a dictionary instead:
 `{[args] args[`a]+args[`b]}[`a`b!1 2]`.
 
@@ -125,7 +125,7 @@ future function would need more than 8, pass a dictionary instead:
 2024.01.01 + 1            / 2024.01.02  (int+date=date)
 2024.01.01 + 1.0          / type error  (float+date not allowed)
 2024.01.02 - 2024.01.01   / 1           (date-date=int, NOT date - this is
-                                          exactly what dcfAct360/dcfAct365
+                                          exactly what dcf_act_360/dcf_act_365
                                           divide by 360/365)
 ```
 
@@ -142,6 +142,6 @@ date-minus-date gives a plain int day count, not another date.
 
 `^` (fill) is a handy alternative to `if[null x; x:default]` if uqf ever
 needs to default a missing/null input, though the current style in this
-repo (explicit `if[...; '"..."]` validation, e.g. in `invNcdf`) is
+repo (explicit `if[...; '"..."]` validation, e.g. in `inv_ncdf`) is
 preferred for anything that should be a hard error rather than a silent
 default - reserve `^` for genuinely optional parameters.
