@@ -232,4 +232,94 @@ test_cross_book_at_sizes_rejects_no_shared_currency:{[t]
     gbpchf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.20 1.19;1000000 1000000;1.21 1.22;1000000 1000000);
     .qunit.assertError[wrapper;(eurusd_book;gbpchf_book);"EURUSD and GBPCHF share no currency"]};
 
+test_ccy_orient_chain_two_legs_matches_ccy_orient_cross:{[t]
+    chain:.uqf.ccy_orient_chain[`EURUSD`USDJPY];
+    pair:.uqf.ccy_orient_cross[`EURUSD;`USDJPY];
+    .qunit.assertEquals[chain`cross_sym;pair`cross_sym;"2-leg chain symbol matches ccy_orient_cross"];
+    .qunit.assertEquals[chain`inverts;(pair`invert1;pair`invert2);"2-leg chain inverts match ccy_orient_cross"]};
+
+test_ccy_orient_chain_three_legs_forward:{[t]
+    r:.uqf.ccy_orient_chain[`EURUSD`USDJPY`JPYCHF];
+    .qunit.assertEquals[r`cross_sym;`EURCHF;"A/B, B/C, C/D -> A/D"];
+    .qunit.assertEquals[r`inverts;000b;"no leg needs inverting when the chain is already forward"]};
+
+test_ccy_orient_chain_three_legs_with_shared_quote_middle_leg:{[t]
+    / EURUSD, GBPUSD share USD as quote -> leg 2 (GBPUSD) must invert to
+    / bridge into GBPCHF's base currency.
+    r:.uqf.ccy_orient_chain[`EURUSD`GBPUSD`GBPCHF];
+    .qunit.assertEquals[r`cross_sym;`EURCHF;"A/B, C/B, C/D -> A/D"];
+    .qunit.assertEquals[r`inverts;010b;"only the shared-quote middle leg inverts"]};
+
+test_ccy_orient_chain_rejects_too_few_legs:{[t]
+    wrapper:{[dummy] .uqf.ccy_orient_chain enlist `EURUSD};
+    .qunit.assertError[wrapper;::;"a single leg is rejected"]};
+
+test_ccy_orient_chain_rejects_break_in_first_pair:{[t]
+    wrapper:{[dummy] .uqf.ccy_orient_chain[`EURUSD`GBPCHF`JPYCAD]};
+    .qunit.assertError[wrapper;::;"a break between leg 0 and leg 1 is rejected"]};
+
+test_ccy_orient_chain_rejects_break_mid_chain:{[t]
+    wrapper:{[dummy] .uqf.ccy_orient_chain[`EURUSD`USDJPY`GBPCHF]};
+    .qunit.assertError[wrapper;::;"a break at leg 2, after two valid legs, is rejected"]};
+
+test_cross_book_chain_at_sizes_matches_cross_book_at_sizes_for_two_legs:{[t]
+    / a 2-leg call through the chain function must exactly reproduce the
+    / existing 2-leg cross_book_at_sizes - the chain function should be a
+    / strict generalization, not a different implementation.
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    r_chain:.uqf.cross_book_chain_at_sizes[`EURUSD`USDJPY;(eurusd_book;usdjpy_book);enlist 1500000;`bid`ask`mid];
+    r_pair:.uqf.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 1500000;`bid`ask`mid];
+    .qunit.assertEquals[first r_chain`sym;first r_pair`sym;"2-leg chain symbol matches cross_book_at_sizes"];
+    .testutil.assertApprox[first r_chain`bid;first r_pair`bid;1e-9;"2-leg chain bid matches cross_book_at_sizes"];
+    .testutil.assertApprox[first r_chain`ask;first r_pair`ask;1e-9;"2-leg chain ask matches cross_book_at_sizes"];
+    .testutil.assertApprox[first r_chain`mid;first r_pair`mid;1e-9;"2-leg chain mid matches cross_book_at_sizes"]};
+
+test_cross_book_chain_at_sizes_matches_cross_book_at_negligible_size_three_legs:{[t]
+    / at a size far smaller than any level's depth, a 3-leg chain should
+    / reduce to exactly triangulating the top-of-book rates by hand via
+    / two chained cross_book calls - a self-consistency check that needs
+    / no hand-computed magic numbers.
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    jpychf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(0.0065 0.0064;5000000 5000000;0.0066 0.0067;5000000 5000000);
+    r:.uqf.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(eurusd_book;usdjpy_book;jpychf_book);enlist 100;`bid`ask];
+    eurjpy_tob:.uqf.cross_book[`EURUSD;`bid`ask!(1.0998;1.1000);`USDJPY;`bid`ask!(149.98;150.00)];
+    eurchf_tob:.uqf.cross_book[`EURJPY;eurjpy_tob;`JPYCHF;`bid`ask!(0.0065;0.0066)];
+    .qunit.assertEquals[first r`sym;eurchf_tob`sym;"3-leg chain symbol matches hand-triangulated top-of-book"];
+    .testutil.assertApprox[first r`bid;eurchf_tob`bid;1e-6;"negligible-size 3-leg bid matches hand-triangulated top-of-book"];
+    .testutil.assertApprox[first r`ask;eurchf_tob`ask;1e-6;"negligible-size 3-leg ask matches hand-triangulated top-of-book"]};
+
+test_cross_book_chain_at_sizes_shortfall_on_middle_leg_marks_not_fully_filled:{[t]
+    / leg 1 and leg 3 have plenty of depth; leg 2 (the bridge currency)
+    / is thin. filled_size stays leg 1's full fill, but fully_filled must
+    / still flag the shortfall that happened on the middle leg.
+    big_eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;50000000 50000000;1.1000 1.1002;50000000 50000000);
+    thin_usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 149.98;enlist 300000;enlist 150.00;enlist 300000);
+    big_jpychf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 0.0065;enlist 50000000;enlist 0.0066;enlist 50000000);
+    r:.uqf.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(big_eurusd_book;thin_usdjpy_book;big_jpychf_book);enlist 1000000;`bid`ask];
+    .testutil.assertApprox[first r`bid_filled_size;1000000f;1e-6;"reported filled_size stays leg 1's fill"];
+    .qunit.assertFalse[first r`bid_fully_filled;"middle-leg shortfall marks the cross as not fully filled"];
+    .qunit.assertFalse[first r`ask_fully_filled;"middle-leg shortfall marks the cross as not fully filled"]};
+
+test_cross_book_chain_at_sizes_sides_filtering:{[t]
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    jpychf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(0.0065 0.0064;5000000 5000000;0.0066 0.0067;5000000 5000000);
+    r:.uqf.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(eurusd_book;usdjpy_book;jpychf_book);enlist 1000000;enlist `mid];
+    .qunit.assertEquals[cols r;`size`sym`mid;"requesting just mid returns only size, sym and mid columns"]};
+
+test_cross_book_chain_at_sizes_rejects_mismatched_syms_and_books:{[t]
+    wrapper:{[books] .uqf.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;books;enlist 1000000;`bid`ask]};
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    .qunit.assertError[wrapper;enlist (eurusd_book;usdjpy_book) 0;"fewer books than syms is rejected"]};
+
+test_cross_book_chain_at_sizes_rejects_no_shared_currency:{[t]
+    wrapper:{[books] .uqf.cross_book_chain_at_sizes[`EURUSD`USDJPY`GBPCHF;books;enlist 1000000;`bid`ask]};
+    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    gbpchf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.20 1.19;1000000 1000000;1.21 1.22;1000000 1000000);
+    .qunit.assertError[wrapper;(eurusd_book;usdjpy_book;gbpchf_book);"a break at leg 2 is rejected"]};
+
 \d .

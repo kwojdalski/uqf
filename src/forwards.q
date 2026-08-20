@@ -257,4 +257,120 @@ cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
     want_cols:`size`sym , raze side_cols each sides;
     want_cols#rows};
 
+/ Private: like ccy_orient_cross, but resolves orientation across an
+/ arbitrary chain of N>=2 currency pairs instead of just two - walks the
+/ legs in order, threading the running cross symbol forward via repeated
+/ calls to ccy_orient_cross. A running cross symbol is always already
+/ correctly oriented forward (that's what ccy_orient_cross guarantees for
+/ its own cross_sym), so it never needs inverting against the next leg -
+/ only that next leg does.
+/ @param syms list of currency pair syms, one per leg, in traversal
+/   order, any format ccy.q's normalize_ccy_pair accepts
+/ @return dict `cross_sym`inverts - cross_sym is the resulting end-to-end
+/   pair symbol; inverts is a boolean list, one per leg, same semantics
+/   as invert1/invert2 in ccy_orient_cross
+/ @throws error if syms has fewer than 2 legs, or if two consecutive legs
+/   share no common currency (names the leg index and the two symbols)
+/ @eg .uqf.ccy_orient_chain[`EURUSD`USDJPY`JPYCHF]  -> `cross_sym`inverts!(`EURCHF;000b)
+ccy_orient_chain:{[syms]
+    syms:syms,();
+    if[(count syms)<2; '"ccy_orient_chain: need at least 2 legs"];
+    orient01:ccy_orient_cross[syms 0;syms 1];
+    running_sym:orient01`cross_sym;
+    inverts:(orient01`invert1;orient01`invert2);
+    i:2;
+    while[i<count syms;
+        orient_i:.[ccy_orient_cross;(running_sym;syms i);{[i;x] '"ccy_orient_chain: leg ",(string i),": ",x}[i]];
+        running_sym:orient_i`cross_sym;
+        inverts,:orient_i`invert2;
+        i+:1];
+    `cross_sym`inverts!(running_sym;inverts)};
+
+/ Private: sweep one side of an N-leg cross at one size, folding the
+/ notional hop-by-hop across every leg - leg i+1 is swept at the bridge
+/ notional leg i's sweep actually produced, exactly generalizing
+/ cross_sweep_side's 2-leg logic to an arbitrary chain length. The
+/ reported filled_size is always leg 1's filled_size (the constraint is
+/ expressed in leg 1's units, same as the 2-leg version); fully_filled is
+/ the AND of every leg's fully_filled, so a shortfall on any leg -
+/ including a middle leg - shows up even though leg 1 itself filled
+/ completely.
+/ @param books list of dicts `bid_prices`bid_sizes`ask_prices`ask_sizes,
+/   one per leg
+/ @param side `bid or `ask - the side of the final cross being priced
+/ @param size the size to sweep, in leg 1's relevant currency
+/ @param inverts boolean list, one per leg, from ccy_orient_chain
+/ @return dict `price`filled_size`fully_filled for this side of the cross
+cross_sweep_chain:{[books;side;size;inverts]
+    n:count books;
+    lvl0:oriented_levels[side;books 0;inverts 0];
+    sweep0:sweep_price[lvl0 0;lvl0 1;size];
+    empty_sweep:`avg_price`worst_price`filled_size`fully_filled!(0n;0n;0f;0b);
+    acc:sweep0;
+    price:sweep0[`avg_price];
+    fully_filled:sweep0[`fully_filled];
+    filled_size:sweep0[`filled_size];
+    i:1;
+    while[i<n;
+        bridge_notional:acc[`filled_size]*acc[`avg_price];
+        lvl:oriented_levels[side;books i;inverts i];
+        sweep_i:$[bridge_notional>0; sweep_price[lvl 0;lvl 1;bridge_notional]; empty_sweep];
+        price*:sweep_i[`avg_price];
+        fully_filled:fully_filled and sweep_i[`fully_filled];
+        acc:sweep_i;
+        i+:1];
+    `price`filled_size`fully_filled!(price;filled_size;fully_filled)};
+
+/ Private: bid, ask and mid for an N-leg cross at a single size. mid is
+/ the average of the swept cross bid and the swept cross ask at that
+/ size (not a separate sweep of its own) - same convention as
+/ cross_book_at_one_size.
+/ @param syms list of currency pair syms, one per leg, in traversal order
+/ @param books list of dicts `bid_prices`bid_sizes`ask_prices`ask_sizes,
+/   one per leg
+/ @param size the size to sweep, in leg 1's relevant currency
+/ @return one row: dict `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid
+cross_book_chain_at_one_size:{[syms;books;size]
+    orient:ccy_orient_chain[syms];
+    bid_r:cross_sweep_chain[books;`bid;size;orient`inverts];
+    ask_r:cross_sweep_chain[books;`ask;size;orient`inverts];
+    mid_price:0.5*bid_r[`price]+ask_r[`price];
+    `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
+      (size;orient`cross_sym;bid_r`price;bid_r`filled_size;bid_r`fully_filled;ask_r`price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
+
+/ Depth-aware synthetic cross rate across an arbitrary chain of N>=2
+/ legs: generalizes cross_book_at_sizes from exactly 2 legs to N, e.g.
+/ EURUSD -> USDJPY -> JPYCHF -> EURCHF. Walks multi-level order book
+/ depth on every leg for each requested size, converting the notional
+/ hop-by-hop (leg i+1 is swept at the bridge-currency amount leg i's
+/ sweep actually produced), and returns only the sides you ask for. Each
+/ leg's book must supply real depth, not just top-of-book - see
+/ sweep_price's book shape. Consecutive legs must share a currency (in
+/ either position); syms/books are matched by position, not re-sorted or
+/ re-oriented for you. Note: since every leg's book dict shares the same
+/ keys, passing books as (book1;book2;...) commonly auto-flips into a
+/ kdb+ table (type 98h) rather than staying a generic list - this is
+/ harmless here, since positional indexing (books i) returns the same
+/ dict either way.
+/ @param syms list of currency pair syms, one per leg, in traversal
+/   order, any format ccy.q's normalize_ccy_pair accepts
+/ @param books list of dicts `bid_prices`bid_sizes`ask_prices`ask_sizes,
+/   one per leg, each level best-first
+/ @param sizes list of sizes to price, e.g. 1000000 2000000 5000000
+/ @param sides subset of `bid`ask`mid to include in the result
+/ @return a table, one row per size, columns `size`sym plus whichever of
+/   bid/bid_filled_size/bid_fully_filled, ask/ask_filled_size/ask_fully_filled,
+/   mid were requested via sides
+/ @throws error if syms has fewer than 2 legs, if syms and books aren't
+/   the same length, if two consecutive legs share no common currency,
+/   or if sides has anything other than `bid`ask`mid
+/ @eg .uqf.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(eurusd_book;usdjpy_book;jpychf_book);1000000 3000000;`bid`ask`mid]
+cross_book_chain_at_sizes:{[syms;books;sizes;sides]
+    syms:syms,();
+    books:books,();
+    if[(count syms)<>count books; '"cross_book_chain_at_sizes: syms and books must be the same length"];
+    rows:cross_book_chain_at_one_size[syms;books;] each sizes;
+    want_cols:`size`sym , raze side_cols each sides;
+    want_cols#rows};
+
 \d .
