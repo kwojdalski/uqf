@@ -98,6 +98,54 @@ fill_ratio:{[num_fills;num_quotes] num_fills%num_quotes};
 / @eg .uqf.reject_ratio[4;100]  -> 0.04
 reject_ratio:{[num_rejects;num_requests] num_rejects%num_requests};
 
+/ Hit ratio (fraction of requests that resulted in a fill/hit), windowed
+/ by time, optionally time-bucketed (hourly, daily, ...), and grouped by
+/ arbitrary columns - the table-native, group-by-aware companion to the
+/ simple fill_ratio above. Named hit_ratio_by rather than get_hit_ratio
+/ to match this file's existing fill_ratio/reject_ratio naming (no
+/ function in this library uses a get_ prefix) while still reading
+/ clearly as "hit ratio, grouped by ...". Two modes: `count (unweighted -
+/ number of hits / number of requests) and `amount (size-weighted - sum
+/ of hit size / sum of total size, so one large hit counts more than
+/ many small misses, and one huge miss can swamp the ratio the way it
+/ wouldn't in `count mode).
+/ @param requests table with at least `ts`hit`size, plus whatever columns group_cols names
+/ @param start_ts only consider requests at or after this time
+/ @param end_ts only consider requests at or before this time
+/ @param bucket_size a timespan to floor ts into buckets by (xbar) and
+/   group by alongside group_cols, e.g. 0D01:00:00 for hourly, 1D for
+/   daily - a null timespan (0Nn) disables time-bucketing entirely (no
+/   ts column in the result, group_cols alone decide the grouping)
+/ @param group_cols column names to group by in addition to any time
+/   bucket, e.g. `sym or `sym`side - empty () for no additional grouping
+/ @param mode `count (hit ratio by number of requests) or `amount (hit ratio weighted by size)
+/ @return a table, ts (if bucket_size isn't null) then group_cols columns
+/   (if any) then hit_ratio - one row per distinct combination, or a
+/   single row if bucket_size is null and group_cols is empty
+/ @throws error if requests is missing a required column (ts, hit, size,
+/   or any column named in group_cols), or if mode isn't `count or `amount
+/ @eg .uqf.hit_ratio_by[requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
+hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
+    group_cols:group_cols,();
+    req_cols:distinct `ts`hit`size,group_cols;
+    missing:req_cols where not req_cols in cols requests;
+    if[count missing; '"hit_ratio_by: requests is missing required column(s) ",", " sv string missing];
+    if[not mode in `count`amount; '"hit_ratio_by: mode must be `count or `amount, got ",string mode];
+    windowed:select from requests where ts within (start_ts;end_ts);
+    windowed:$[null bucket_size; windowed; update ts:bucket_size xbar ts from windowed];
+    time_group:$[null bucket_size; `symbol$(); enlist `ts];
+    effective_group_cols:time_group,group_cols;
+    / an empty group-by dict isn't treated as "no grouping" the same way
+    / on every kdb+-family interpreter - PeachQ throws a type error on
+    / it, where real kdb+/KDB-X happily returns one overall row. 0b is
+    / the portable "no group by at all" functional-select argument on
+    / both.
+    by_arg:$[0=count effective_group_cols; 0b; effective_group_cols!effective_group_cols];
+    select_dict:$[mode=`count;
+        (enlist `hit_ratio)!enlist (avg;`hit);
+        (enlist `hit_ratio)!enlist (%;(sum;(*;`size;`hit));(sum;`size))];
+    0!?[windowed;();by_arg;select_dict]};
+
 / Size-weighted average execution price across a set of fills.
 / @param prices list of fill prices
 / @param sizes list of fill sizes, same length as prices

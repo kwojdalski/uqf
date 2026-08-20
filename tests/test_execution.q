@@ -84,6 +84,81 @@ test_fill_ratio_full:{[t] .testutil.assertApprox[.uqf.fill_ratio[100;100];1f;1e-
 
 test_reject_ratio_known:{[t] .testutil.assertApprox[.uqf.reject_ratio[4;100];0.04;1e-9;"4 rejects out of 100 requests"]};
 
+/ Shared 6-row requests table for the hit_ratio_by tests: EURUSD/USDJPY,
+/ 4 rows within the first hour of t0, 2 more a day later - so a time
+/ window and hourly/daily bucketing all have something real to bite on.
+mk_hit_ratio_requests:{[dummy]
+    t0:2026.01.01D08:00:00.000000000;
+    ([] ts:t0+0D00:00:00 0D00:15:00 0D01:00:00 0D01:20:00 1D00:00:00 1D00:30:00;
+        sym:`EURUSD`EURUSD`EURUSD`EURUSD`USDJPY`USDJPY;
+        size:100 200 300 400 500 600;
+        hit:110010b)};
+
+test_hit_ratio_by_count_mode_grouped_by_sym:{[t]
+    requests:mk_hit_ratio_requests[::];
+    t0:2026.01.01D08:00:00.000000000;
+    r:.uqf.hit_ratio_by[requests;t0;t0+2D;0Nn;enlist `sym;`count];
+    eurusd_row:first select from r where sym=`EURUSD;
+    usdjpy_row:first select from r where sym=`USDJPY;
+    .testutil.assertApprox[eurusd_row`hit_ratio;0.5;1e-9;"EURUSD: 2 hits out of 4 requests"];
+    .testutil.assertApprox[usdjpy_row`hit_ratio;0.5;1e-9;"USDJPY: 1 hit out of 2 requests"]};
+
+test_hit_ratio_by_amount_mode_weighted_by_size:{[t]
+    requests:mk_hit_ratio_requests[::];
+    t0:2026.01.01D08:00:00.000000000;
+    r:.uqf.hit_ratio_by[requests;t0;t0+2D;0Nn;enlist `sym;`amount];
+    eurusd_row:first select from r where sym=`EURUSD;
+    / (100*1+200*1+300*0+400*0)/(100+200+300+400) = 300/1000
+    .testutil.assertApprox[eurusd_row`hit_ratio;0.3;1e-9;"amount mode weights by size, not just count"]};
+
+test_hit_ratio_by_no_grouping_gives_one_overall_row:{[t]
+    requests:mk_hit_ratio_requests[::];
+    t0:2026.01.01D08:00:00.000000000;
+    r:.uqf.hit_ratio_by[requests;t0;t0+2D;0Nn;`symbol$();`count];
+    .qunit.assertEquals[count r;1;"empty group_cols and no bucketing gives a single overall row"];
+    / 3 hits out of 6 requests total
+    .testutil.assertApprox[first r`hit_ratio;0.5;1e-9;"overall hit ratio across every request"]};
+
+test_hit_ratio_by_respects_the_time_window:{[t]
+    / a window that only covers the first hour excludes the 2 EURUSD
+    / rows at t0+1h/1h20 and both USDJPY rows a day later entirely.
+    requests:mk_hit_ratio_requests[::];
+    t0:2026.01.01D08:00:00.000000000;
+    r:.uqf.hit_ratio_by[requests;t0;t0+0D00:30:00;0Nn;`symbol$();`count];
+    .testutil.assertApprox[first r`hit_ratio;1f;1e-9;"only the first two (both-hit) EURUSD rows fall inside the window"]};
+
+test_hit_ratio_by_hourly_bucket_grouped_by_sym:{[t]
+    requests:mk_hit_ratio_requests[::];
+    t0:2026.01.01D08:00:00.000000000;
+    r:.uqf.hit_ratio_by[requests;t0;t0+2D;0D01:00:00;enlist `sym;`count];
+    .qunit.assertEquals[cols r;`ts`sym`hit_ratio;"ts (the bucket) leads, then sym, then hit_ratio"];
+    hour1:first select from r where ts=t0,sym=`EURUSD;
+    hour2:first select from r where ts=t0+0D01:00:00,sym=`EURUSD;
+    .testutil.assertApprox[hour1`hit_ratio;1f;1e-9;"08:00 EURUSD bucket: both requests hit"];
+    .testutil.assertApprox[hour2`hit_ratio;0f;1e-9;"09:00 EURUSD bucket: neither request hit"]};
+
+test_hit_ratio_by_daily_bucket_no_other_grouping:{[t]
+    requests:mk_hit_ratio_requests[::];
+    t0:2026.01.01D08:00:00.000000000;
+    r:.uqf.hit_ratio_by[requests;t0;t0+2D;1D;`symbol$();`amount];
+    day1:first select from r where ts=2026.01.01D00:00:00.000000000;
+    day2:first select from r where ts=2026.01.02D00:00:00.000000000;
+    .testutil.assertApprox[day1`hit_ratio;0.3;1e-9;"day 1: (100+200 hit)/(100+200+300+400) = 300/1000"];
+    .testutil.assertApprox[day2`hit_ratio;500%1100;1e-9;"day 2: 500 hit / (500+600) total"]};
+
+test_hit_ratio_by_rejects_bad_mode:{[t]
+    requests:mk_hit_ratio_requests[::];
+    t0:2026.01.01D08:00:00.000000000;
+    wrapper:{[q] .uqf.hit_ratio_by[q;t0;t0+2D;0Nn;enlist `sym;`bogus]};
+    .qunit.assertError[wrapper;requests;"mode must be `count or `amount is rejected"]};
+
+test_hit_ratio_by_rejects_requests_missing_a_column:{[t]
+    requests:mk_hit_ratio_requests[::];
+    bad:delete size from requests;
+    t0:2026.01.01D08:00:00.000000000;
+    wrapper:{[q] .uqf.hit_ratio_by[q;t0;t0+2D;0Nn;enlist `sym;`amount]};
+    .qunit.assertError[wrapper;bad;"a requests table missing a required column is rejected immediately"]};
+
 test_vwap_known_example:{[t] .testutil.assertApprox[.uqf.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000];1.100625;1e-9;"size-weighted average across three fills"]};
 test_vwap_single_fill_equals_that_price:{[t] .testutil.assertApprox[.uqf.vwap[enlist 1.1234;enlist 1000000];1.1234;1e-9;"a single fill's vwap is just its own price"]};
 test_vwap_equal_sizes_equals_simple_average:{[t]
