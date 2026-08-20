@@ -64,6 +64,10 @@ lib/
   q-doc/          vendored q-doc doc generator + its kdb-common dependency
                   (see Licensing) - run via scripts/run_qdoc.sh, see
                   Documentation
+  kdb-parquet/    vendored kdb+/Parquet bridge (see Licensing) - NOT loaded
+                  by src/init.q or anything else in this repo; native
+                  extension, unbuilt/unused as vendored (see
+                  lib/kdb-parquet/NOTICE.md)
 
 tests/
   lib/qunit.q            vendored qUnit test framework (see Licensing)
@@ -254,3 +258,18 @@ two vendored files:
   uses `.Q.opt`/`.h.ty` and kdb+'s built-in HTTP request handlers, further
   beyond what PeachQ implements). Verified working end-to-end against
   this repo's own `src/*.q` under real KDB-X.
+- `lib/kdb-parquet/`, vendored from
+  [DataIntellectTech/kdb-parquet](https://github.com/DataIntellectTech/kdb-parquet)
+  at commit `e5cd641`. **Unlike the vendored files above, upstream has no
+  LICENSE file at all** (verified against its full git tree, not just
+  GitHub's auto-detection) - no explicit grant of rights exists, so
+  ordinary copyright applies. It's vendored here regardless, at the repo
+  owner's explicit choice; see `lib/kdb-parquet/NOTICE.md` for the full
+  caveat plus what wasn't copied (the Arrow submodule) and why the
+  checked-in `libPQ.so` (a Linux x86-64 build) can't be used as-is on this
+  repo's primary macOS dev machine. Not loaded by `src/init.q` or anything
+  else in this repo, and not verified working here - it's a native `2:`
+  extension, and PeachQ has no `2:` support at all; real kdb+/KDB-X would
+  need a from-source rebuild for the target platform before it could be
+  loaded. Real KDB-X also bundles its own official parquet module at
+  `~/.kx/mod/kx/pq/`, worth checking as a licensed alternative first.
