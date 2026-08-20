@@ -83,6 +83,7 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
+    DEBUG "running: .uqf.inv_ncdf p";
     z:.uqf.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*z;
     start_ts+sums gaps};
@@ -110,6 +111,7 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
+DEBUG "running: .uqf.derive_level_groups[cols t;level_prefix_targets]";
 level_groups:.uqf.derive_level_groups[cols t;level_prefix_targets];
 DEBUG "level_groups - target_col -> ordered source_cols:";
 show level_groups;
@@ -119,6 +121,7 @@ show level_groups;
 / single-letter values ("A"/"B"/...) kdb+ collapses that column into a plain
 / char vector rather than a list of strings, so it isn't a "string column"
 / by candidate_symbol_columns's own type check.
+DEBUG "running: .uqf.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";
 candidates:.uqf.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
 INFO ("candidates - columns to symbolize: %1";enlist ", " sv string candidates);
 
@@ -127,6 +130,7 @@ INFO ("candidates - columns to symbolize: %1";enlist ", " sv string candidates);
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
 col_order:`ts`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
+DEBUG "running: .uqf.book_from_wide_levels[t;level_groups;candidates]";
 out:col_order#.uqf.book_from_wide_levels[t;level_groups;candidates];
 INFO ("out - reshaped table: %1 rows, %2 columns";(count out;count cols out));
 show out;
@@ -143,6 +147,7 @@ book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(row`bid_prices;row`bid_sizes;ro
 DEBUG "book - row 0's book dict, forwards.q's sweep_price/cross_book shape:";
 show book;
 
+DEBUG "running: .uqf.sweep_price[book`ask_prices;book`ask_sizes;250]";
 sweep_result:.uqf.sweep_price[book`ask_prices;book`ask_sizes;250];
 INFO ("sweep_result - swept 250 units against row 0's ask side: avg_price=%1 filled_size=%2 fully_filled=%3";(sweep_result`avg_price;sweep_result`filled_size;sweep_result`fully_filled));
 show sweep_result;

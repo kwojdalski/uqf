@@ -373,4 +373,126 @@ cross_book_chain_at_sizes:{[syms;books;sizes;sides]
     want_cols:`size`sym , raze side_cols each sides;
     want_cols#rows};
 
+/ Private: an undirected currency graph, one edge per direction per
+/ available quoted pair - e.g. `EURUSD contributes both EUR->USD and
+/ USD->EUR, both tagged with the symbol `EURUSD (the direction it needs
+/ inverting, if any, is worked out later by ccy_orient_chain, not here).
+/ @param avail_syms currency pair symbols known to be quotable
+/ @return table `src`dst`via, one row per direction per pair
+ccy_graph_edges:{[avail_syms]
+    legs:ccy_pair_legs each avail_syms;
+    src_ccy:legs[`base],legs[`quote];
+    dst_ccy:legs[`quote],legs[`base];
+    via_sym:avail_syms,avail_syms;
+    ([] src:src_ccy; dst:dst_ccy; via:via_sym)};
+
+/ Breadth-first search for the shortest chain of available quoted pairs
+/ connecting two currencies - e.g. given `AUDUSD`EURUSD`EURPLN available,
+/ finds that AUD->PLN needs `AUDUSD`EURUSD`EURPLN (via the shared USD and
+/ EUR legs), while USD->PLN only needs `EURUSD`EURPLN. Returned symbols
+/ are in their own original (unoriented) form - pass the result straight
+/ to ccy_orient_chain/cross_book_chain_at_sizes, which work out which legs
+/ need inverting.
+/ @param avail_syms currency pair symbols known to be quotable
+/ @param start_ccy the starting 3-letter currency code
+/ @param goal_ccy the target 3-letter currency code
+/ @return ordered list of pair symbols to chain, or an empty symbol list
+/   if start_ccy and goal_ccy aren't connected by avail_syms at all
+/ @eg .uqf.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`AUD;`PLN]  -> `AUDUSD`EURUSD`EURPLN
+ccy_shortest_path:{[avail_syms;start_ccy;goal_ccy]
+    if[start_ccy~goal_ccy; :`symbol$()];
+    edges:ccy_graph_edges avail_syms;
+    visited:enlist start_ccy;
+    frontier:enlist start_ccy;
+    parent:(enlist start_ccy)!(enlist (`;`));
+    found:0b;
+    while[(not found) and count frontier;
+        next_frontier:`symbol$();
+        i:0;
+        while[i<count frontier;
+            cur:frontier i;
+            out_edges:select dst,via from edges where src=cur;
+            j:0;
+            while[j<count out_edges;
+                nbr:out_edges[j]`dst;
+                if[not nbr in visited;
+                    visited:visited,nbr;
+                    parent[nbr]:(cur;out_edges[j]`via);
+                    next_frontier:next_frontier,nbr;
+                    if[nbr~goal_ccy; found:1b]];
+                j+:1];
+            i+:1];
+        frontier:next_frontier];
+    if[not found; :`symbol$()];
+    path_syms:`symbol$();
+    cur:goal_ccy;
+    while[not cur~start_ccy;
+        step:parent cur;
+        path_syms:(enlist step 1),path_syms;
+        cur:step 0];
+    path_syms};
+
+/ Private: one symbol's book, as of a given time, pulled out of a quotes
+/ table (see cross_book_at) - the most recent row at or before at_time.
+/ @throws error if quotes has no row for target_sym at or before at_time
+leg_book_as_of:{[quotes;at_time;target_sym]
+    matched:select ts,bid_prices,bid_sizes,ask_prices,ask_sizes from quotes where sym=target_sym, ts<=at_time;
+    if[0=count matched; '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string at_time];
+    latest_idx:matched[`ts]?max matched`ts;
+    latest:matched latest_idx;
+    `bid_prices`bid_sizes`ask_prices`ask_sizes!(latest`bid_prices;latest`bid_sizes;latest`ask_prices;latest`ask_sizes)};
+
+/ Private: bid, ask and mid for a single already-available leg at one
+/ size - the 1-leg-chain analogue of cross_book_at_one_size, used by
+/ cross_book_at when the requested pair (or its inverse) is quoted
+/ directly, with no chaining needed.
+single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
+    bid_lvl:oriented_levels[`bid;leg_book;invert];
+    ask_lvl:oriented_levels[`ask;leg_book;invert];
+    bid_r:sweep_price[bid_lvl 0;bid_lvl 1;size];
+    ask_r:sweep_price[ask_lvl 0;ask_lvl 1;size];
+    mid_price:0.5*bid_r[`avg_price]+ask_r[`avg_price];
+    `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
+      (size;cross_sym;bid_r`avg_price;bid_r`filled_size;bid_r`fully_filled;ask_r`avg_price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
+
+/ Private: like cross_book_chain_at_sizes, but for exactly one leg.
+single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
+    rows:single_leg_at_one_size[cross_sym;leg_book;invert;] each sizes;
+    want_cols:`size`sym , raze side_cols each sides;
+    want_cols#rows};
+
+/ Depth-aware synthetic book for any pair, found automatically by chaining
+/ together whatever quoted pairs are available in `quotes` - unlike
+/ cross_book_chain_at_sizes, you don't need to know or supply the leg
+/ chain yourself. Finds the shortest currency-graph path (ccy_shortest_path)
+/ from sym's base to its quote currency using quotes' own distinct `sym`
+/ column as the available quoted pairs, looks up each leg's most recent
+/ quote at or before at_time (leg_book_as_of), then delegates the actual
+/ depth-aware pricing to cross_book_chain_at_sizes - or, if sym (or its
+/ inverse) is quoted directly and no chaining is needed at all, prices
+/ that single leg directly.
+/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
+/   any number of rows per sym (the most recent one at or before at_time
+/   is used for each leg) - see the shape reshape_wide_order_book_*.q's
+/   `out` and book_from_wide_levels produce
+/ @param sym the pair to price, any format ccy.q's normalize_ccy_pair accepts
+/ @param at_time only consider quotes at or before this time
+/ @param sizes list of sizes to price, e.g. 1000000 3000000
+/ @param sides subset of `bid`ask`mid to include in the result
+/ @return a table, one row per size - see cross_book_chain_at_sizes
+/ @throws error if no chain of pairs currently in quotes connects sym's
+/   two currencies, or if some required leg has no quote at or before
+/   at_time
+/ @eg .uqf.cross_book_at[quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
+cross_book_at:{[quotes;sym;at_time;sizes;sides]
+    cross_sym:normalize_ccy_pair sym;
+    legs:ccy_pair_legs cross_sym;
+    avail_syms:distinct quotes`sym;
+    path:ccy_shortest_path[avail_syms;legs`base;legs`quote];
+    if[0=count path;
+        '"cross_book_at: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
+    $[1=count path;
+        single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;at_time;path 0];not (path 0)~cross_sym;sizes;sides];
+        cross_book_chain_at_sizes[path;leg_book_as_of[quotes;at_time;] each path;sizes;sides]]};
+
 \d .

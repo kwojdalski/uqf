@@ -80,6 +80,7 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
+    DEBUG "running: .uqf.inv_ncdf p";
     z:.uqf.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*z;
     start_ts+sums gaps};
@@ -127,6 +128,7 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
+DEBUG "running: .uqf.derive_level_groups[cols t;level_prefix_targets]";
 level_groups:.uqf.derive_level_groups[cols t;level_prefix_targets];
 DEBUG "level_groups - target_col -> ordered source_cols:";
 show level_groups;
@@ -136,6 +138,7 @@ show level_groups;
 / values ("A"/"B"/...) kdb+ collapses that column into a plain char vector
 / rather than a list of strings, so it isn't a "string column" by
 / candidate_symbol_columns's own type check.
+DEBUG "running: .uqf.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";
 candidates:.uqf.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
 INFO ("candidates - columns to symbolize: %1";enlist ", " sv string candidates);
 
@@ -144,6 +147,7 @@ INFO ("candidates - columns to symbolize: %1";enlist ", " sv string candidates);
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
 col_order:`ts`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
+DEBUG "running: .uqf.book_from_wide_levels[t;level_groups;candidates]";
 out:col_order#.uqf.book_from_wide_levels[t;level_groups;candidates];
 INFO ("out - reshaped table: %1 rows, %2 columns";(count out;count cols out));
 show out;
@@ -163,6 +167,7 @@ show first_row_per_pair;
 
 sweep_by_pair:{[t;pair]
     row:t pair;
+    DEBUG ("running: .uqf.sweep_price[row`ask_prices;row`ask_sizes;250] for pair %1";pair);
     result:.uqf.sweep_price[row`ask_prices;row`ask_sizes;250];
     result,enlist[`sym]!enlist pair}[first_row_per_pair;] each exec sym from first_row_per_pair;
 INFO ("sweep_by_pair - swept 250 units against each pair's ask side (%1 pairs)";count sweep_by_pair);

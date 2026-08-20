@@ -1,23 +1,16 @@
-// cross_book_chain_example.q - worked example of what forwards.q
-// currently supports for building a book on a pair with no direct
-// interbank market: AUDPLN. There's no such thing as a live AUDUSD/PLN
-// order book to load - AUDPLN has to be synthesized by chaining legs that
-// do trade directly and share currencies with their neighbours:
+// cross_book_chain_example.q - worked example of forwards.q's
+// cross_book_at: give it a quotes table, a target pair with no direct
+// interbank market (AUDPLN), and a time - it works out the chain of
+// available legs itself:
 //   AUDUSD (AUD/USD) -> EURUSD (EUR/USD, shares USD) -> EURPLN (EUR/PLN, shares EUR)
-// Books come from a `quotes` table (ts, sym, bid_prices, bid_sizes,
-// ask_prices, ask_sizes - one row per pair, same shape as the other
-// example scripts' `out`), not bare per-leg dicts - book_for_sym below
-// pulls a leg's row back out as the dict cross_book_chain_at_sizes wants.
-// forwards.q's ccy_orient_chain works out which legs need inverting and
-// what the resulting pair is; cross_book_chain_at_sizes then walks real
-// depth on every leg to price AUDPLN at whatever sizes you ask for. There
-// is currently no automatic path-finder or time-based book lookup - you
-// name the leg chain yourself, and book_for_sym only ever returns the one
-// row currently in `quotes` (no as-of-time semantics). (See the
-// conversation that led to this script for what a `time`+`sym` ->
-// automatic book convenience function would still need: currency-graph
-// path discovery, plus a real as-of lookup into some quotes source -
-// neither exists yet.)
+// and prices AUDPLN at whatever sizes you ask for. You do NOT need to
+// name the leg chain yourself; cross_book_at finds the shortest chain of
+// currently-available pairs (ccy_shortest_path, a BFS over the currency
+// graph implied by quotes' own `sym` column) and looks up each leg's most
+// recent quote at or before the requested time (leg_book_as_of) on its
+// own. The second half of this script shows the lower-level machinery
+// cross_book_at is built on (ccy_orient_chain, cross_book_chain_at_sizes)
+// for anyone who wants to supply the leg chain by hand instead.
 //
 // Narration/status uses lib/log4q.q's INFO/DEBUG/ERROR (see README's
 // Licensing section) - actual table contents still go through `show`,
@@ -70,6 +63,7 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
+    DEBUG "running: .uqf.inv_ncdf p";
     z:.uqf.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*z;
     start_ts+sums gaps};
@@ -86,28 +80,13 @@ quotes:([] ts;sym:pairs),'(mk_book each approx_spot_rates);
 INFO ("quotes - %1 rows, one 10-level book per pair, no wide-table reshape needed for this example";count quotes);
 show quotes;
 
-/ Private: one symbol's book, pulled back out of the quotes table as a
-/ plain dict - the shape cross_book_chain_at_sizes expects for each leg.
-book_for_sym:{[quotes;target_sym]
-    matched:select bid_prices,bid_sizes,ask_prices,ask_sizes from quotes where sym=target_sym;
-    if[0=count matched; '"book_for_sym: no quote for ",string target_sym];
-    matched 0};
-
-/ Work out how the three legs chain together before pricing anything -
-/ cross_book_chain_at_sizes does this internally too, but resolving it up
-/ front makes the leg orientation (which books get inverted) visible.
-chain_syms:`AUDUSD`EURUSD`EURPLN;
-orient:.uqf.ccy_orient_chain[chain_syms];
-INFO ("orient - chain resolves to %1, invert flags per leg %2";(orient`cross_sym;orient`inverts));
-show orient;
-
-/ Depth-aware AUDPLN book at a few AUD notional sizes (cross_book_chain_at_sizes's
-/ `size` is always denominated in leg 1's currency - AUD here, since
-/ chain_syms[0] is AUDUSD).
+/ ==== cross_book_at: just give it the target pair and a time ====
 sizes:1000000 3000000 5000000;
-chain_books:book_for_sym[quotes;] each chain_syms;
-audpln_book:.uqf.cross_book_chain_at_sizes[chain_syms;chain_books;sizes;`bid`ask`mid];
-INFO ("audpln_book - synthetic %1 book at %2 sizes, chained through %3";(orient`cross_sym;count sizes;", " sv string chain_syms));
+as_of:.z.p+1D;
+
+DEBUG "running: .uqf.cross_book_at[quotes;`AUDPLN;as_of;sizes;`bid`ask`mid]";
+audpln_book:.uqf.cross_book_at[quotes;`AUDPLN;as_of;sizes;`bid`ask`mid];
+INFO ("audpln_book - synthetic AUDPLN book at %1 sizes, chain found automatically from quotes";count sizes);
 show audpln_book;
 
 if[not all audpln_book`bid_fully_filled;
@@ -115,6 +94,38 @@ if[not all audpln_book`bid_fully_filled;
     exit 1];
 if[not all audpln_book`ask_fully_filled;
     ERROR "at least one requested size did not fully fill on the ask side - unexpected for this synthetic depth";
+    exit 1];
+
+/ cross_book_at also handles a pair that's already directly quoted (no
+/ chaining needed at all) and the inverse of a directly quoted pair
+/ (USDAUD, when only AUDUSD is in `quotes`) the same way, transparently.
+DEBUG "running: .uqf.cross_book_at[quotes;`AUDUSD;as_of;sizes;`mid]";
+show .uqf.cross_book_at[quotes;`AUDUSD;as_of;sizes;`mid];
+DEBUG "running: .uqf.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid]";
+show .uqf.cross_book_at[quotes;`USDAUD;as_of;sizes;`mid];
+
+/ ==== what cross_book_at does internally, run by hand ====
+/ ccy_shortest_path is the piece that replaces having to name the chain
+/ yourself - it BFS-searches quotes' own distinct `sym` column for the
+/ shortest route between two currencies.
+DEBUG "running: .uqf.ccy_shortest_path[distinct quotes`sym;`AUD;`PLN]";
+chain_syms:.uqf.ccy_shortest_path[distinct quotes`sym;`AUD;`PLN];
+INFO ("chain_syms - ccy_shortest_path found %1";enlist ", " sv string chain_syms);
+
+DEBUG "running: .uqf.ccy_orient_chain[chain_syms]";
+orient:.uqf.ccy_orient_chain[chain_syms];
+INFO ("orient - chain resolves to %1, invert flags per leg %2";(orient`cross_sym;orient`inverts));
+show orient;
+
+DEBUG "running: .uqf.leg_book_as_of[quotes;as_of;] each chain_syms";
+chain_books:.uqf.leg_book_as_of[quotes;as_of;] each chain_syms;
+DEBUG "running: .uqf.cross_book_chain_at_sizes[chain_syms;chain_books;sizes;`bid`ask`mid]";
+manual_audpln_book:.uqf.cross_book_chain_at_sizes[chain_syms;chain_books;sizes;`bid`ask`mid];
+INFO "manual_audpln_book - same result, built leg by leg instead of via cross_book_at:";
+show manual_audpln_book;
+
+if[not manual_audpln_book~audpln_book;
+    ERROR "manual chain result disagrees with cross_book_at - the two paths should always match";
     exit 1];
 
 // exit 0

@@ -322,4 +322,61 @@ test_cross_book_chain_at_sizes_rejects_no_shared_currency:{[t]
     gbpchf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.20 1.19;1000000 1000000;1.21 1.22;1000000 1000000);
     .qunit.assertError[wrapper;(eurusd_book;usdjpy_book;gbpchf_book);"a break at leg 2 is rejected"]};
 
+test_ccy_shortest_path_finds_multi_leg_chain:{[t]
+    .qunit.assertEquals[.uqf.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`AUD;`PLN];`AUDUSD`EURUSD`EURPLN;"AUD->PLN needs both bridge legs"]};
+
+test_ccy_shortest_path_prefers_shorter_chain:{[t]
+    .qunit.assertEquals[.uqf.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`USD;`PLN];`EURUSD`EURPLN;"USD->PLN only needs the 2 legs that actually touch USD and PLN, not the AUDUSD leg too"]};
+
+test_ccy_shortest_path_direct_single_leg:{[t]
+    .qunit.assertEquals[.uqf.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`AUD;`USD];enlist `AUDUSD;"currencies already directly connected -> one-leg path"]};
+
+test_ccy_shortest_path_empty_when_unreachable:{[t]
+    .qunit.assertEquals[.uqf.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`AUD;`JPY];`symbol$();"no chain of available pairs connects AUD and JPY"]};
+
+test_ccy_shortest_path_empty_for_same_currency:{[t]
+    .qunit.assertEquals[.uqf.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`USD;`USD];`symbol$();"start and goal the same currency needs no legs at all"]};
+
+/ Shared 3-pair quotes table (AUDUSD, EURUSD, EURPLN, one row each, all at
+/ the same synthetic timestamp) reused by the cross_book_at tests below.
+mk_quotes_table:{[dummy]
+    mk_book:{[spot]
+        `bid_prices`bid_sizes`ask_prices`ask_sizes!(
+            spot-0 0.0001;1000000 2000000;spot+0.0001 0.0002;1000000 2000000)};
+    ts:2026.01.01D00:00:00.000000000+0D 0D00:00:00.001 0D00:00:00.002;
+    ([] ts;sym:`AUDUSD`EURUSD`EURPLN),'(mk_book each 0.6550 1.0850 4.2500)};
+
+test_cross_book_at_chains_through_available_pairs:{[t]
+    quotes:mk_quotes_table[::];
+    direct:.uqf.cross_book_chain_at_sizes[`AUDUSD`EURUSD`EURPLN;.uqf.leg_book_as_of[quotes;2026.01.02D00:00:00.000000000;] each `AUDUSD`EURUSD`EURPLN;enlist 500000;`bid`ask`mid];
+    auto:.uqf.cross_book_at[quotes;`AUDPLN;2026.01.02D00:00:00.000000000;enlist 500000;`bid`ask`mid];
+    .qunit.assertEquals[first auto`sym;`AUDPLN;"cross_book_at resolves the chain and labels the result AUDPLN"];
+    .testutil.assertApprox[first auto`bid;first direct`bid;1e-9;"matches manually chaining the same legs through cross_book_chain_at_sizes"];
+    .testutil.assertApprox[first auto`ask;first direct`ask;1e-9;"ask side also matches the manually-chained equivalent"]};
+
+test_cross_book_at_direct_quote_needs_no_chaining:{[t]
+    quotes:mk_quotes_table[::];
+    r:.uqf.cross_book_at[quotes;`AUDUSD;2026.01.02D00:00:00.000000000;enlist 500000;`bid`ask`mid];
+    .qunit.assertEquals[first r`sym;`AUDUSD;"AUDUSD is quoted directly, no chain needed"];
+    .testutil.assertApprox[first r`bid;0.655;1e-6;"top-of-book bid matches the quoted spot at negligible size"]};
+
+test_cross_book_at_inverse_of_a_direct_quote:{[t]
+    quotes:mk_quotes_table[::];
+    r:.uqf.cross_book_at[quotes;`USDAUD;2026.01.02D00:00:00.000000000;enlist 500000;`mid];
+    / 500000 fits entirely inside level 0 on both sides (1000000 available
+    / each), so the AUDUSD mid at this size is just the level-0 mid: (bid
+    / 0.6550 + ask 0.6551)/2.
+    audusd_mid:0.5*.6550+.6551;
+    .testutil.assertApprox[first r`mid;1%audusd_mid;1e-6;"USDAUD, not directly quoted, is priced as the inverse of AUDUSD"]};
+
+test_cross_book_at_rejects_unreachable_pair:{[t]
+    quotes:mk_quotes_table[::];
+    wrapper:{[q] .uqf.cross_book_at[q;`AUDJPY;2026.01.02D00:00:00.000000000;enlist 500000;`mid]};
+    .qunit.assertError[wrapper;quotes;"no chain of available pairs connects AUD and JPY"]};
+
+test_cross_book_at_rejects_quote_after_at_time:{[t]
+    quotes:mk_quotes_table[::];
+    wrapper:{[q] .uqf.cross_book_at[q;`AUDUSD;2025.12.31D00:00:00.000000000;enlist 500000;`mid]};
+    .qunit.assertError[wrapper;quotes;"no quote exists yet at or before the requested time"]};
+
 \d .
