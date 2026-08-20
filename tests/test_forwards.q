@@ -501,7 +501,18 @@ test_cross_markout_at_horizons_ts_col_is_configurable:{[t]
     .uqf.ts_col:`timestamp;
     r:.uqf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0;1];
     .uqf.ts_col:original;
-    .qunit.assertEquals[cols r;`horizon_ms`timestamp`ref_price`markout_pips;"overriding .uqf.ts_col renames the timestamp column in the output"]};
+    / col_precedence (`ts`sym) is independent of ts_col, so with ts_col
+    / overridden away from `ts, `ts is no longer a column at all - the
+    / precedence match fails entirely and apply_col_precedence leaves the
+    / column order exactly as originally built, unreordered.
+    .qunit.assertEquals[cols r;`horizon_ms`timestamp`sym`ref_price`markout_pips;"overriding .uqf.ts_col renames the timestamp column and disables col_precedence's reorder (it no longer matches)"]};
+
+test_cross_markout_at_horizons_col_precedence_orders_ts_then_sym:{[t]
+    quotes:mk_ts_quotes_table[::];
+    trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
+    r:.uqf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0;1];
+    .qunit.assertEquals[cols r;`ts`sym`horizon_ms`ref_price`markout_pips;"ts and sym lead, by default col_precedence"];
+    .qunit.assertEquals[first r`sym;`AUDPLN;"sym is the (normalized) traded pair"]};
 
 test_cross_markout_at_horizons_nulls_out_of_range_horizon_instead_of_erroring:{[t]
     quotes:mk_ts_quotes_table[::];
@@ -565,5 +576,44 @@ test_cross_impact_at_horizons_rejects_same_pair:{[t]
     trade_time:t0+0D00:00:00.500;
     wrapper:{[q] .uqf.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0;1]};
     .qunit.assertError[wrapper;quotes;"impact_sym the same as traded_sym is rejected"]};
+
+test_cross_impact_at_horizons_sym_column_is_impact_sym_not_traded_sym:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    trade_time:t0+0D00:00:00.500;
+    r:.uqf.cross_impact_at_horizons[quotes;`EURPLN;`AUDUSD;trade_time;1;10000;enlist 0;1];
+    .qunit.assertEquals[first r`sym;`AUDUSD;"the sym column reports the impact pair, not the traded one"]};
+
+test_cross_book_at_rejects_quotes_missing_a_column:{[t]
+    quotes:mk_quotes_table[::];
+    bad:delete ask_prices from quotes;
+    wrapper:{[q] .uqf.cross_book_at[q;`AUDUSD;2026.01.02D00:00:00.000000000;enlist 500000;`mid]};
+    .qunit.assertError[wrapper;bad;"a quotes table missing a required column is rejected immediately"]};
+
+test_cross_markout_at_horizons_rejects_quotes_missing_a_column_instead_of_nulling:{[t]
+    / without this check, a typo'd/missing column doesn't error at all -
+    / cross_ref_price_at's own protective error handling (meant for "no
+    / quote exists yet") silently swallows it into a null instead, which
+    / is exactly the confusing failure mode this check exists to prevent.
+    quotes:mk_ts_quotes_table[::];
+    bad:delete ask_prices from quotes;
+    trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
+    wrapper:{[q] .uqf.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]};
+    .qunit.assertError[wrapper;bad;"a quotes table missing a required column throws immediately, not a silent null"]};
+
+test_cross_markout_decomp_rejects_quotes_missing_a_column:{[t]
+    quotes:mk_ts_quotes_table[::];
+    bad:delete ask_prices from quotes;
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    wrapper:{[q] .uqf.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]};
+    .qunit.assertError[wrapper;bad;"a quotes table missing a required column is rejected immediately"]};
+
+test_apply_col_precedence_leaves_table_unchanged_when_precedence_not_fully_present:{[t]
+    / cross_book_chain_at_sizes-style tables (`size`sym`bid`... - no
+    / timestamp column at all) must never get partially reordered just
+    / because they happen to have a `sym column.
+    t:([] size:1 2; sym:`EURUSD`EURUSD; mid:1.1 1.2);
+    .qunit.assertEquals[.uqf.apply_col_precedence t;t;"a table with sym but no ts column is left completely unchanged"]};
 
 \d .

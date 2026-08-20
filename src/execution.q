@@ -38,7 +38,9 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 /   pre-sorted, this sorts its own copy before joining
 / @param horizons a timespan, or list of timespans, to look ahead from
 /   each trade's time, e.g. 0D00:00:01 0D00:00:10 0D00:01:00 for 1s/10s/1m
-/ @return a table with one row per (trade, horizon): `sym`trade_time`horizon`ts`trade_price`ref_price`markout_pips
+/ @return a table with one row per (trade, horizon), columns reordered
+/   by forwards.q's col_precedence (`ts`sym leading by default) when
+/   both are present: `ts`sym`trade_time`horizon`trade_price`ref_price`markout_pips
 /   (the target-time column is named per ts_col, `ts by default, matching
 /   the quotes-table timestamp convention used elsewhere in this
 /   library, e.g. forwards.q's cross_book_at/cross_markout_at_horizons)
@@ -60,7 +62,7 @@ markout_at_horizons:{[trades;quotes;horizons]
     markout_pips:markout[exp_trades`side;exp_trades`trade_price;ref_price;exp_trades`pip_factor];
     col_names:`sym`trade_time`horizon,ts_col,`trade_price`ref_price`markout_pips;
     col_values:(exp_trades`sym;exp_trades`time;exp_horizons;target_time;exp_trades`trade_price;ref_price;markout_pips);
-    flip col_names!col_values};
+    apply_col_precedence flip col_names!col_values};
 
 / Effective spread paid/received relative to the prevailing mid at the
 / moment of execution, in pips. Positive = cost to the side that traded.
