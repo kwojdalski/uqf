@@ -1,0 +1,11 @@
+file,totalLines,codeLines,commentLines,commentRatio,functionCount,maxFunctionLines,avgFunctionLines,maxParams,maxCyclomaticComplexity
+ccy.q,66,29,36,55,5,8,4.6,2,5
+init.q,11,8,2,18,0,0,0.0,0,0
+execution.q,128,42,85,66,8,15,4.6,4,5
+rates.q,44,8,35,80,6,1,1.0,2,1
+options.q,251,87,163,65,16,8,4.6,7,6
+risk.q,61,16,44,72,6,6,2.0,4,1
+data.q,81,30,50,62,7,7,3.3,2,4
+daycount.q,49,15,33,67,4,10,3.8,3,2
+stats.q,64,31,33,52,6,9,3.3,7,3
+forwards.q,239,67,171,72,20,11,2.7,6,5

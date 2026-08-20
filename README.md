@@ -172,7 +172,7 @@ Generate browsable HTML API docs with:
 ```
 brew install openjdk                        # or any JDK 8+
 curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place at repo root
-./scripts/gen-docs.sh                        # writes docs/index.html (gitignored)
+./scripts/gen-docs.sh                        # writes docs/index.html (tracked in the repo)
 ```
 
 `qstudio.jar` also bundles a small q linter that `gen-docs.sh` runs as a
