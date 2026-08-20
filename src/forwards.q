@@ -519,4 +519,139 @@ cross_book_at:{[quotes;sym;at_time;sizes;sides]
         single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;at_time;path 0];not (path 0)~cross_sym;sizes;sides];
         cross_book_chain_at_sizes[path;leg_book_as_of[quotes;at_time;] each path;sizes;sides]]};
 
+/ Private: true if sweeping `size` on `side` (via cross_book_at) still
+/ lands at an average price at least as good as price_limit, and the
+/ sweep is fully filled. `bid` side: good means avg_price>=price_limit
+/ (selling at proceeds no worse than wanted); `ask` side: good means
+/ avg_price<=price_limit (buying at cost no worse than wanted).
+cross_price_ok_at_size:{[quotes;sym;at_time;side;price_limit;size]
+    if[size<=0; :1b];
+    r:cross_book_at[quotes;sym;at_time;enlist size;enlist side];
+    px:first r side;
+    fully_col:`$(string side),"_fully_filled";
+    fully:first r fully_col;
+    fully and $[side=`bid; px>=price_limit; px<=price_limit]};
+
+/ Largest size (in sym's base currency) tradeable on one side without the
+/ average swept price crossing price_limit - the inverse question to
+/ cross_book_at's "at this size, what's the price". There is no closed
+/ form for this: the swept average price compounds across every leg's
+/ own depth (see cross_sweep_chain), so it can only be evaluated
+/ forward, size -> price, not inverted directly. This binary-searches
+/ size instead, using cross_book_at itself as the price oracle at each
+/ candidate (first doubling to find an upper bound, since sym's total
+/ tradeable depth isn't known up front either).
+/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`ts xasc
+/ @param sym the pair to price, any format ccy.q's normalize_ccy_pair accepts
+/ @param at_time only consider quotes at or before this time
+/ @param side `bid (how much can be SOLD at avg price at least price_limit) or
+/   `ask (how much can be BOUGHT at avg price at most price_limit)
+/ @param price_limit the price boundary
+/ @return the largest size tradeable without the average price crossing
+/   price_limit; 0 if even a negligible size already breaches it
+/ @throws error if side isn't `bid or `ask, or anything cross_book_at itself throws
+/ @eg .uqf.cross_size_at_price[quotes;`AUDPLN;.z.p;`bid;2.5650]
+cross_size_at_price:{[quotes;sym;at_time;side;price_limit]
+    if[not side in `bid`ask; '"cross_size_at_price: side must be `bid or `ask, got ",string side];
+    lo:0f;
+    hi:1f;
+    doublings:0;
+    while[(cross_price_ok_at_size[quotes;sym;at_time;side;price_limit;hi]) and doublings<60;
+        hi*:2;
+        doublings+:1];
+    tol:hi*1e-7;
+    halvings:0;
+    while[((hi-lo)>tol) and halvings<200;
+        probe:0.5*lo+hi;
+        $[cross_price_ok_at_size[quotes;sym;at_time;side;price_limit;probe]; lo:probe; hi:probe];
+        halvings+:1];
+    lo};
+
+/ Private: cross_book_at's mid for sym at t, at a caller-chosen
+/ (typically negligible, top-of-book-ish) size - used wherever a "price
+/ at a point in time" is needed for a synthetic pair with no quoted mid
+/ of its own. Nulls out rather than throwing if no quote exists yet for
+/ some required leg at or before t, so a caller sweeping many timestamps
+/ (cross_markout_at_horizons, get_markout_decomp) can null one bad
+/ lookup instead of failing the whole batch.
+cross_ref_price_at:{[quotes;sym;ref_size;t]
+    @[{[quotes;sym;ref_size;t] first cross_book_at[quotes;sym;t;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];t;{0n}]};
+
+/ Markout at one or more horizons around a single trade on a synthetic
+/ cross pair - the cross_book_at-based analogue of execution.q's
+/ markout_at_horizons, for pairs with no quoted mid of their own to as-of
+/ join against (a synthetic AUDPLN, priced by chaining whatever's in
+/ `quotes`, rather than a plain pair already sitting in a `sym`time`mid
+/ quote table). Horizons may be negative (looking backward from the
+/ trade, e.g. -500 for "500ms before") the same way markout_at_horizons'
+/ do; markout sign convention matches execution.q's markout.
+/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`ts xasc
+/ @param sym the pair traded, any format ccy.q's normalize_ccy_pair accepts
+/ @param trade_time the trade's own timestamp
+/ @param side 1 for a buy, -1 for a sell
+/ @param trade_price the execution price
+/ @param pip_factor 10000 for most pairs, 100 for JPY crosses
+/ @param horizons_ms one or more offsets from trade_time, in
+/   milliseconds - negative looks backward, 0 is at the trade itself,
+/   positive looks forward
+/ @param ref_size the (typically negligible) size to sweep for the
+/   reference price at each horizon - a synthetic pair has no single
+/   quoted mid, so this is priced the same way any other cross_book_at
+/   call is, not looked up directly
+/ @return a table, one row per horizon: `horizon_ms`target_time`ref_price`markout_pips -
+/   ref_price/markout_pips are null for a horizon with no quote yet for
+/   some required leg, rather than throwing
+/ @eg .uqf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;-500 -300 0 100 300;1]
+cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;horizons_ms;ref_size]
+    horizons_ms:horizons_ms,();
+    target_time:trade_time+horizons_ms*1000000;
+    ref_price:cross_ref_price_at[quotes;sym;ref_size;] each target_time;
+    markout_pips:markout[side;trade_price;ref_price;pip_factor];
+    ([] horizon_ms:horizons_ms; target_time; ref_price; markout_pips)};
+
+/ Decompose a synthetic cross pair's price move between two times into
+/ exact per-leg contributions, by revaluing one leg at a time - in the
+/ chain's own order (cross_decomp) - from its t0 price to its t1 price,
+/ and attributing each step's resulting price change to that leg. This
+/ is exact (contribution_pips sums exactly to
+/ pip_factor*(cross_mid[t1]-cross_mid[t0]), not an approximation), but it
+/ is ORDER-DEPENDENT: attributing leg 2's move happens with leg 1 already
+/ held at its t1 price, so which leg "gets credit" for a move that
+/ happens to coincide with another leg's move depends on chain order -
+/ a well-known property of any sequential/waterfall-style attribution,
+/ not a bug.
+/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`ts xasc
+/ @param sym the pair, any format ccy.q's normalize_ccy_pair accepts
+/ @param t0 the earlier reference time
+/ @param t1 the later reference time
+/ @param pip_factor 10000 for most pairs, 100 for JPY crosses
+/ @param ref_size the (typically negligible) size to sweep for each
+/   leg's own reference price at t0/t1 (see cross_ref_price_at)
+/ @return a table, one row per leg in chain order: `leg`invert`price_t0`price_t1`contribution_pips
+/ @throws error if no chain of pairs currently in quotes connects sym's
+/   two currencies
+/ @eg .uqf.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1]
+cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
+    cross_sym:normalize_ccy_pair sym;
+    path:cross_decomp[distinct quotes`sym;cross_sym];
+    if[0=count path;
+        legs:ccy_pair_legs cross_sym;
+        '"cross_markout_decomp: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
+    inverts:$[1=count path; enlist not (path 0)~cross_sym; (ccy_orient_chain path)`inverts];
+    n:count path;
+    price_t0:cross_ref_price_at[quotes;;ref_size;t0] each path;
+    price_t1:cross_ref_price_at[quotes;;ref_size;t1] each path;
+    oriented_t0:?[inverts;1%price_t0;price_t0];
+    oriented_t1:?[inverts;1%price_t1;price_t1];
+    running:oriented_t0;
+    contributions:n#0f;
+    i:0;
+    while[i<n;
+        before:prd running;
+        running[i]:oriented_t1 i;
+        after:prd running;
+        contributions[i]:after-before;
+        i+:1];
+    ([] leg:path; invert:inverts; price_t0; price_t1; contribution_pips:pip_factor*contributions)};
+
 \d .

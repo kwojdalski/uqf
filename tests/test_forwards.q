@@ -302,6 +302,26 @@ test_cross_book_chain_at_sizes_shortfall_on_middle_leg_marks_not_fully_filled:{[
     .qunit.assertFalse[first r`bid_fully_filled;"middle-leg shortfall marks the cross as not fully filled"];
     .qunit.assertFalse[first r`ask_fully_filled;"middle-leg shortfall marks the cross as not fully filled"]};
 
+test_cross_book_chain_at_sizes_recovers_via_deeper_levels_on_thin_bridge_leg:{[t]
+    / leg 1 fills 1,000,000 EUR fully off its own top of book, converting
+    / to a bridge notional of 1,000,000*1.1000=1,100,000 USD needed on
+    / leg 2. USDJPY's own top-of-book ask (700,000) is NOT enough for
+    / that on its own - unlike the shortfall test above, there IS a
+    / second level (500,000 more, 1,200,000 total) deep enough to cover
+    / the shortfall, so this must still fully fill by walking into it,
+    / not fail the way a single-level-only thin book would.
+    big_eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;50000000 50000000;1.1000 1.1002;50000000 50000000);
+    two_level_usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;700000 500000;150.00 150.02;700000 500000);
+    / leg 3's notional is leg 2's fill converted through ~150 JPY/USD, so
+    / its depth needs to be sized in the hundreds of millions, not the
+    / tens of millions "big" was elsewhere in this file - easy to
+    / underestimate by an order of magnitude and get a false shortfall.
+    big_jpychf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(0.0065 0.0064;500000000 500000000;0.0066 0.0067;500000000 500000000);
+    r:.uqf.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(big_eurusd_book;two_level_usdjpy_book;big_jpychf_book);enlist 1000000;`bid`ask];
+    .testutil.assertApprox[first r`bid_filled_size;1000000f;1e-6;"leg 1's full 1mm EUR request is met"];
+    .qunit.assertTrue[first r`bid_fully_filled;"bridge leg's thin top-of-book didn't block the fill - the deeper level covered the shortfall"];
+    .qunit.assertTrue[first r`ask_fully_filled;"same recovery on the ask side"]};
+
 test_cross_book_chain_at_sizes_sides_filtering:{[t]
     eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
     usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
@@ -406,5 +426,106 @@ test_cross_book_at_rejects_unsorted_quotes:{[t]
     unsorted:reverse mk_quotes_table[::];
     wrapper:{[q] .uqf.cross_book_at[q;`AUDPLN;2026.01.02D00:00:00.000000000;enlist 500000;`mid]};
     .qunit.assertError[wrapper;unsorted;"quotes rows out of `sym`ts xasc order is rejected"]};
+
+/ A 5-level, single-snapshot quotes table with real depth (15mm total per
+/ leg) - needed so the price has genuine room to worsen with size before
+/ hitting total-depth exhaustion. mk_quotes_table's 2 levels (3mm total)
+/ are too shallow for that: at 2.5650, sweeping their full depth still
+/ satisfies the limit, so the search boundary there is "ran out of
+/ liquidity", not "the price got too bad" - a different thing.
+mk_deep_quotes_table:{[dummy]
+    mk_book:{[spot]
+        levels:til 5;
+        `bid_prices`bid_sizes`ask_prices`ask_sizes!(
+            spot-0.0001*levels;1000000*1+levels;
+            (spot+0.0001)+0.0001*levels;1000000*1+levels)};
+    t0:2026.01.01D00:00:00.000000000;
+    audusd_q:([] ts:enlist t0;sym:enlist `AUDUSD),'(enlist mk_book 0.6550);
+    eurusd_q:([] ts:enlist t0;sym:enlist `EURUSD),'(enlist mk_book 1.0850);
+    eurpln_q:([] ts:enlist t0;sym:enlist `EURPLN),'(enlist mk_book 4.2500);
+    `sym`ts xasc (audusd_q,eurusd_q,eurpln_q)};
+
+test_cross_size_at_price_finds_boundary_size:{[t]
+    quotes:mk_deep_quotes_table[::];
+    at_time:2026.01.01D00:00:00.000000000+0D00:00:01;
+    max_sz:.uqf.cross_size_at_price[quotes;`AUDPLN;at_time;`bid;2.5650];
+    r_at_max:.uqf.cross_book_at[quotes;`AUDPLN;at_time;enlist max_sz;enlist `bid];
+    r_above:.uqf.cross_book_at[quotes;`AUDPLN;at_time;enlist (max_sz*1.01);enlist `bid];
+    .qunit.assertTrue[(first r_at_max`bid)>=2.5650;"price at the found max size still meets the limit"];
+    .qunit.assertTrue[(first r_above`bid)<2.5650;"a slightly larger size breaches the limit"]};
+
+test_cross_size_at_price_rejects_bad_side:{[t]
+    quotes:mk_quotes_table[::];
+    wrapper:{[q] .uqf.cross_size_at_price[q;`AUDPLN;2026.01.02D00:00:00.000000000;`mid;2.5650]};
+    .qunit.assertError[wrapper;quotes;"side must be `bid or `ask"]};
+
+test_cross_size_at_price_near_zero_when_even_negligible_size_breaches:{[t]
+    / top-of-book bid is ~2.5654 - a limit of 10 can never be met, even
+    / at a negligible size, so the search should converge to ~0.
+    quotes:mk_quotes_table[::];
+    at_time:2026.01.02D00:00:00.000000000;
+    max_sz:.uqf.cross_size_at_price[quotes;`AUDPLN;at_time;`bid;10f];
+    .testutil.assertApprox[max_sz;0f;1e-6;"an unreachable price limit returns ~zero tradeable size"]};
+
+/ Shared 3-pair, 2-timestamp (1s apart) quotes table for the markout
+/ tests below: AUDUSD and EURPLN each drift up by 10 pips, EURUSD stays
+/ flat - so a synthetic AUDPLN move should be attributable to AUDUSD and
+/ EURPLN only, with EURUSD contributing exactly zero.
+mk_ts_quotes_table:{[dummy]
+    mk_book:{[spot]
+        levels:til 5;
+        `bid_prices`bid_sizes`ask_prices`ask_sizes!(
+            spot-0.0001*levels;1000000*1+levels;
+            (spot+0.0001)+0.0001*levels;1000000*1+levels)};
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    audusd_q:([] ts:(t0;t1);sym:`AUDUSD`AUDUSD),'(mk_book each 0.6550 0.6560);
+    eurusd_q:([] ts:(t0;t1);sym:`EURUSD`EURUSD),'(mk_book each 1.0850 1.0850);
+    eurpln_q:([] ts:(t0;t1);sym:`EURPLN`EURPLN),'(mk_book each 4.2500 4.2600);
+    `sym`ts xasc (audusd_q,eurusd_q,eurpln_q)};
+
+test_cross_markout_at_horizons_negative_horizon_looks_backward:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    trade_time:t0+0D00:00:00.500;
+    r:.uqf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;-500 0 500;1];
+    .qunit.assertEquals[count r;3;"one row per horizon"];
+    .qunit.assertEquals[r[0]`target_time;t0;"a -500ms horizon from a t0+500ms trade lands exactly on t0"];
+    .testutil.assertApprox[r[0]`ref_price;r[1]`ref_price;1e-9;"the -500ms and 0ms horizons both land before t1, so see the same (t0) quote"];
+    .qunit.assertTrue[(r[2]`ref_price)>(r[0]`ref_price);"the +500ms horizon (at t1) sees the higher price after AUDUSD/EURPLN drifted up"]};
+
+test_cross_markout_at_horizons_nulls_out_of_range_horizon_instead_of_erroring:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    trade_time:t0+0D00:00:00.500;
+    r:.uqf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist -10000;1];
+    .qunit.assertTrue[null first r`ref_price;"a horizon before any quote exists nulls out rather than throwing"];
+    .qunit.assertTrue[null first r`markout_pips;"markout_pips is null alongside the null ref_price"]};
+
+test_cross_markout_decomp_sums_exactly_to_the_total_move:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    decomp:.uqf.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
+    total_from_decomp:sum decomp`contribution_pips;
+    mid_t0:.uqf.cross_ref_price_at[quotes;`AUDPLN;1;t0];
+    mid_t1:.uqf.cross_ref_price_at[quotes;`AUDPLN;1;t1];
+    actual_total:10000*mid_t1-mid_t0;
+    .testutil.assertApprox[total_from_decomp;actual_total;1e-6;"per-leg contributions sum exactly to the actual total price move"]};
+
+test_cross_markout_decomp_flat_leg_contributes_zero:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    decomp:.uqf.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
+    eurusd_row:first select from decomp where leg=`EURUSD;
+    .testutil.assertApprox[eurusd_row`contribution_pips;0f;1e-6;"EURUSD didn't move between t0 and t1, so it contributes exactly zero"]};
+
+test_cross_markout_decomp_rejects_unreachable_pair:{[t]
+    quotes:mk_ts_quotes_table[::];
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    wrapper:{[q] .uqf.cross_markout_decomp[q;`AUDJPY;t0;t1;10000;1]};
+    .qunit.assertError[wrapper;quotes;"no chain of available pairs connects AUD and JPY"]};
 
 \d .
