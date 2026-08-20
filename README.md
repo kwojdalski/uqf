@@ -61,6 +61,9 @@ lib/
   log4q.q         vendored log4q logger (see Licensing) - not loaded by
                   src/init.q; \l lib/log4q.q from whichever script wants it
   LICENSE-log4q   log4q's own Apache License 2.0 text
+  q-doc/          vendored q-doc doc generator + its kdb-common dependency
+                  (see Licensing) - run via scripts/run_qdoc.sh, see
+                  Documentation
 
 tests/
   lib/qunit.q            vendored qUnit test framework (see Licensing)
@@ -71,6 +74,7 @@ tests/
 
 scripts/
   gen-docs.sh   regenerates docs/ via qDoc (see Documentation)
+  run_qdoc.sh   alternative: serves browsable docs live via lib/q-doc/ (see Documentation)
 
 .claude/skills/kdb-q-conventions/   q-language conventions for this repo,
                                      including the operator-precedence gotcha
@@ -182,6 +186,31 @@ see across `src/*.q`), so don't be alarmed by those specifically.
 backwards. The verified, working order (baked into `gen-docs.sh`) is
 `QDocMain <targetFolder> <sourceFolder>`.
 
+### Alternative: q-doc (live, no external download)
+
+[`lib/q-doc/`](lib/q-doc) is a vendored copy of
+[jasraj/q-doc](https://github.com/jasraj/q-doc) (see Licensing) - unlike
+`gen-docs.sh`, it needs no jar download, but it runs as a live kdb+
+process serving docs over HTTP rather than writing static files:
+
+```
+./scripts/run_qdoc.sh                        # starts on port 8090 by default
+q) .qdoc.parser.init `:src                    # at the q) prompt once it's up
+```
+
+Then browse `http://localhost:8090/index-kdb.html`. Requires real
+kdb+/KDB-X (see Licensing).
+
+**Known gap:** q-doc's `@param` tag expects `@param name (Type)
+description` - one token for the type, in parentheses. This repo's
+existing `@param` comments (written for `gen-docs.sh`'s qDoc) instead
+follow `@param name description` with no type token, so q-doc misparses
+the first description word as an (unrecognized, logged-as-a-warning) type
+and drops it from the rendered description. Harmless - parsing still
+succeeds and the rest of each description renders correctly - but don't
+expect q-doc's rendered `@param` text to exactly match the source
+comment.
+
 ## Licensing
 
 Everything in this repository is MIT licensed (see `LICENSE`), **except**
@@ -213,3 +242,15 @@ two vendored files:
   that same expression (valid, standard q right-to-left evaluation,
   confirmed working under real kdb+/KDB-X) in a way PeachQ doesn't
   evaluate correctly. Use real kdb+/KDB-X if you want to use log4q here.
+- `lib/q-doc/`, vendored from [jasraj/q-doc](https://github.com/jasraj/q-doc)
+  (BSD-3-Clause, full text at `lib/q-doc/LICENSE-q-doc`), plus its
+  `kdb-common` dependency vendored into `lib/q-doc/kdb-common/` from
+  [BuaBook/kdb-common](https://github.com/BuaBook/kdb-common) at the
+  commit q-doc's own `.gitmodules` pins (Apache License 2.0, full text at
+  `lib/q-doc/kdb-common/LICENSE-kdb-common`) - both permissive and fine to
+  combine with this repository's MIT code. Not loaded by `src/init.q`;
+  run via `scripts/run_qdoc.sh` (see Documentation). Requires real
+  kdb+/KDB-X, not PeachQ - same reason as log4q above (q-doc additionally
+  uses `.Q.opt`/`.h.ty` and kdb+'s built-in HTTP request handlers, further
+  beyond what PeachQ implements). Verified working end-to-end against
+  this repo's own `src/*.q` under real KDB-X.
