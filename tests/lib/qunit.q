@@ -8,6 +8,7 @@
 / .
 / @author TimeStored.com
 / @website http://www.timestored.com/kdb-guides/kdb-regression-unit-tests
+/ @source https://github.com/timestored/kdb/blob/master/qunit/qunit.q
 / © TimeStored - Free for non-commercial use.
 / License: Attribution-NonCommercial-ShareAlike 2.0 UK: England & Wales (CC BY-NC-SA 2.0 UK)
 

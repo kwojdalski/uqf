@@ -57,6 +57,11 @@ src/
                 vwap, order-book sweep pricing
   init.q        loads every module above, in dependency order
 
+lib/
+  log4q.q         vendored log4q logger (see Licensing) - not loaded by
+                  src/init.q; \l lib/log4q.q from whichever script wants it
+  LICENSE-log4q   log4q's own Apache License 2.0 text
+
 tests/
   lib/qunit.q            vendored qUnit test framework (see Licensing)
   lib/testutil.q         tolerance-based float assertion helper used by every test
@@ -180,15 +185,31 @@ backwards. The verified, working order (baked into `gen-docs.sh`) is
 ## Licensing
 
 Everything in this repository is MIT licensed (see `LICENSE`), **except**
-`tests/lib/qunit.q`, which is vendored from
-[TimeStored's qUnit](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)
-and distributed under its own license (CC BY-NC-SA 2.0 UK -
-Attribution-NonCommercial-ShareAlike). That file's non-commercial term
-applies only to the test framework itself, not to `src/`; if you need to
-use this library commercially and want to keep a fully-commercial-license
-test setup, swap `tests/lib/qunit.q` for a permissively-licensed
-alternative (e.g. [q-unit](https://github.com/jasraj/q-unit) or
-[qtb2](https://github.com/ktsr42/qtb2)) - the `tests/lib/testutil.q` helper
-and all `test_*.q` files use only qUnit's documented
-`assertThat`/`assertEquals`/`assertTrue`/`assertFalse`/`assertError` API,
-so swapping frameworks should be a small, mechanical change.
+two vendored files:
+
+- `tests/lib/qunit.q`, vendored from
+  [TimeStored's qUnit](https://github.com/timestored/kdb/blob/master/qunit/qunit.q)
+  (see also [the guide](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)),
+  distributed under its own license (CC BY-NC-SA 2.0 UK -
+  Attribution-NonCommercial-ShareAlike). That file's non-commercial term
+  applies only to the test framework itself, not to `src/`; if you need to
+  use this library commercially and want to keep a fully-commercial-license
+  test setup, swap `tests/lib/qunit.q` for a permissively-licensed
+  alternative (e.g. [q-unit](https://github.com/jasraj/q-unit) or
+  [qtb2](https://github.com/ktsr42/qtb2)) - the `tests/lib/testutil.q` helper
+  and all `test_*.q` files use only qUnit's documented
+  `assertThat`/`assertEquals`/`assertTrue`/`assertFalse`/`assertError` API,
+  so swapping frameworks should be a small, mechanical change.
+- `lib/log4q.q`, vendored from
+  [prodrive11's log4q](https://github.com/prodrive11/log4q/blob/master/log4q.q),
+  distributed under the Apache License 2.0 (full text at
+  `lib/LICENSE-log4q`) - permissive and fine to combine with this
+  repository's MIT code. Not loaded by `src/init.q` (nothing in `src/`
+  depends on it); load it explicitly (`\l lib/log4q.q`) from whichever
+  script wants logging. **Known gap:** one of its internal helper
+  functions (`.log4q.l`, used to render the log message pattern) throws
+  under the local PeachQ interpreter used for dev in this repo - it
+  relies on a variable being assigned mid-expression and read earlier in
+  that same expression (valid, standard q right-to-left evaluation,
+  confirmed working under real kdb+/KDB-X) in a way PeachQ doesn't
+  evaluate correctly. Use real kdb+/KDB-X if you want to use log4q here.
