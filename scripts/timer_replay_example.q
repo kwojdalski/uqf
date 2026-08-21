@@ -15,6 +15,20 @@
 // the same "replay, then immediately react" shape timersvc.q's publish
 // step demonstrates.
 //
+// The pre-generated historical data is deliberately in WIDE, per-level
+// column form (bid_px_00.._04, bid_sz_00.._04, ask_px_00.._04,
+// ask_sz_00.._04 - one scalar column per level, Databento-style naming,
+// same convention reshape_wide_order_book_example.q uses) rather than
+// already sitting in the vector-of-vectors book_prices/bid_sizes/
+// ask_prices/ask_sizes shape uqf's pricing functions expect - a real
+// feed or CSV export is far more likely to arrive column-wide than
+// pre-shaped. Each tick's timer callback reshapes JUST that tick's own
+// row via src/book.q's derive_level_groups/book_from_wide_levels (the
+// same reshape machinery, applied per-row instead of to a whole table
+// upfront) before appending the result to the live quotes table -
+// demonstrating that the wide-to-vector reshape composes naturally with
+// a live/incremental feed, not only a one-shot batch load.
+//
 // Narration/status uses lib/log4q.q's INFO/DEBUG/ERROR (see README's
 // Licensing section) - actual table contents still go through `show`,
 // since log4q's %N message formatting serializes a whole value onto one
@@ -59,15 +73,37 @@
 key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
 / ==== Step 1: pre-generate the "historical" tick series, once ====
-/ Same EURUSD single-pair shape as cross_markout_example.q's mk_book,
-/ scaled by .qex.pip_size/.qex.size_unit (src/example_defaults.q) -
-/ stands in for timersvc.q's tradeGE.N0821.csv, a fixed dataset with its
-/ own recorded timestamps, generated/loaded once before replay starts.
-mk_book:{[spot]
+/ Same EURUSD single-pair spot/scale as cross_markout_example.q's
+/ mk_book, scaled by .qex.pip_size/.qex.size_unit (src/example_defaults.q)
+/ - stands in for timersvc.q's tradeGE.N0821.csv, a fixed dataset with
+/ its own recorded timestamps, generated/loaded once before replay
+/ starts. Unlike mk_book elsewhere, this builds one WIDE row (a dict of
+/ 20 scalar bid_px_NN/bid_sz_NN/ask_px_NN/ask_sz_NN columns, not the
+/ vector-of-vectors book shape) - see the header comment for why.
+mk_wide_row:{[spot]
     levels:til 5;
-    `bid_prices`bid_sizes`ask_prices`ask_sizes!(
-        spot-.qex.pip_size*levels;.qex.size_unit*1+levels;
-        (spot+.qex.pip_size)+.qex.pip_size*levels;.qex.size_unit*1+levels)};
+    lvl_suffix:{[i] $[i<10;"0","",string i;string i]} each levels;
+    bid_px_names:`$"bid_px_",/:lvl_suffix;
+    bid_sz_names:`$"bid_sz_",/:lvl_suffix;
+    ask_px_names:`$"ask_px_",/:lvl_suffix;
+    ask_sz_names:`$"ask_sz_",/:lvl_suffix;
+    bid_px_vals:spot-.qex.pip_size*levels;
+    bid_sz_vals:.qex.size_unit*1+levels;
+    ask_px_vals:(spot+.qex.pip_size)+.qex.pip_size*levels;
+    ask_sz_vals:.qex.size_unit*1+levels;
+    (bid_px_names,bid_sz_names,ask_px_names,ask_sz_names)!(bid_px_vals,bid_sz_vals,ask_px_vals,ask_sz_vals)};
+
+/ derive_level_groups' (prefix;target_col) rules for the wide columns
+/ above, and the target column order to project each reshaped row down
+/ to - both computed once, reused by every tick's reshape (a real system
+/ would derive its schema once from the feed's own column names too, not
+/ re-derive it per incoming row).
+level_prefix_targets:(
+    ("bid_px_";`bid_prices);
+    ("bid_sz_";`bid_sizes);
+    ("ask_px_";`ask_prices);
+    ("ask_sz_";`ask_sizes));
+col_order:`ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
 
 / Command-line params: q scripts/timer_replay_example.q [n_ticks] [tick_ms]
 / - .z.x is the list of args after the script name, always strings; cast
@@ -88,8 +124,16 @@ z:.qstats.inv_ncdf p;
 gaps:min_gap|mean_gap+std_gap*z;
 hist_ts:.z.p+sums gaps;
 hist_spots:1.0850+0.00002*til n_ticks;
-hist_books:mk_book each hist_spots;
-INFO ("historical - %1 pre-generated EURUSD ticks, ready to replay";n_ticks);
+
+/ hist_wide - the wide-form "historical feed", ts/sym plus 20 scalar
+/ level columns per row (bid_px_00.._04, ...). sym is deliberately a
+/ STRING, not a symbol - the same mis-typed-identifier-column shape
+/ book_from_wide_levels/symbolize_columns exist to fix, matching how a
+/ real CSV/vendor feed would actually arrive.
+hist_wide:([] ts:hist_ts; sym:n_ticks#enlist "EURUSD"),'(mk_wide_row each hist_spots);
+INFO ("historical - %1 pre-generated EURUSD ticks in wide column form, ready to replay";n_ticks);
+DEBUG "running: .qbook.derive_level_groups[cols hist_wide;level_prefix_targets]";
+level_groups:.qbook.derive_level_groups[cols hist_wide;level_prefix_targets];
 
 / ==== Step 2: replay onto a live, growing quotes table on a timer ====
 / quotes starts empty - unlike every other scripts/*.q example, which
@@ -98,16 +142,21 @@ INFO ("historical - %1 pre-generated EURUSD ticks, ready to replay";n_ticks);
 quotes:0#([] ts:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:());
 cnt:0;
 
-/ Timer callback: append this tick's historical row (its own pre-recorded
-/ hist_ts timestamp, not .z.p - the replay's real-time pacing and the
-/ data's own timestamps are independent, exactly like timersvc.q) to the
-/ live quotes table, then re-run .qmicro.mid_price against the table as
-/ it now stands. Stops its own timer and exits once every historical row
-/ has been replayed - see README's Requirements/Quick start for why every
+/ Timer callback: reshape this tick's own wide row (its ts is its own
+/ pre-recorded hist_ts, not .z.p - the replay's real-time pacing and the
+/ data's own timestamps are independent, exactly like timersvc.q) via
+/ book_from_wide_levels - the same function reshape_wide_order_book_
+/ example.q applies to a whole table upfront, here applied to one row at
+/ a time as it "arrives" - then append the result to the live quotes
+/ table, then re-run .qmicro.mid_price against the table as it now
+/ stands. Stops its own timer and exits once every historical row has
+/ been replayed - see README's Requirements/Quick start for why every
 / scripts/*.q example ends this way rather than falling into an
 / interactive prompt.
 .z.ts:{
-    row:([] ts:enlist hist_ts cnt; sym:enlist `EURUSD),'enlist hist_books cnt;
+    wide_row:1#cnt _ hist_wide;
+    DEBUG "running: .qbook.book_from_wide_levels[wide_row;level_groups;`sym]";
+    row:col_order#.qbook.book_from_wide_levels[wide_row;level_groups;`sym];
     quotes,:row;
     DEBUG "running: .qmicro.mid_price[quotes`bid_prices;quotes`ask_prices]";
     mid:.qmicro.mid_price[quotes`bid_prices;quotes`ask_prices];
