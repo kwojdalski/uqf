@@ -102,6 +102,14 @@ tests/
 scripts/
   gen-docs.sh   regenerates docs/ via qDoc (see Documentation)
   run_qdoc.sh   alternative: serves browsable docs live via lib/q-doc/ (see Documentation)
+  timer_replay_example.q   replays pre-generated synthetic ticks into a
+                            live, growing quotes table on a system timer
+                            (.z.ts), reacting after each row, instead of
+                            building the whole dataset upfront in one
+                            batch like the other scripts/*.q examples -
+                            run non-interactively with
+                            `yes "" | q scripts/timer_replay_example.q`
+                            (see the script's own header for why)
 
 .claude/skills/kdb-q-conventions/   q-language conventions for this repo,
                                      including the operator-precedence gotcha
