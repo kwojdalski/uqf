@@ -68,6 +68,11 @@ lib/
                   by src/init.q or anything else in this repo; native
                   extension, unbuilt/unused as vendored (see
                   lib/kdb-parquet/NOTICE.md)
+  torq/           vendored TorQ kdb+ production framework (see Licensing) -
+                  NOT loaded by src/init.q or anything else in this repo;
+                  this library has no long-running processes for TorQ's
+                  tickerplant/RDB/gateway machinery to manage, vendored for
+                  reference only
 
 tests/
   lib/qunit.q            vendored qUnit test framework (see Licensing)
@@ -273,3 +278,13 @@ two vendored files:
   need a from-source rebuild for the target platform before it could be
   loaded. Real KDB-X also bundles its own official parquet module at
   `~/.kx/mod/kx/pq/`, worth checking as a licensed alternative first.
+- `lib/torq/`, vendored from [DataIntellectTech/TorQ](https://github.com/DataIntellectTech/TorQ)
+  at commit `a6cee6c`, distributed under the MIT License (full text at
+  `lib/torq/LICENSE-torq`) - permissive and fine to combine with this
+  repository's MIT code. TorQ is a full kdb+ production framework (process
+  management, tickerplant/RDB/HDB/gateway, EOD lifecycle, monitoring) -
+  this library is a stateless collection of pure pricing/risk/execution
+  functions with no long-running processes for any of that machinery to
+  manage, so nothing in `src/*.q` calls into it. Not loaded by `src/init.q`
+  or anything else in this repo, and not verified working here; vendored
+  for reference only, at the repo owner's explicit choice.
