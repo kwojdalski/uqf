@@ -44,23 +44,23 @@ stay off unless you have a fully-licensed kdb+/KDB-X. `killtick` and
 `tpreplay1` are on-demand utility processes, not part of the standing
 stack, so they also don't auto-start.
 
-Default ports (base `6000`, override with `TORQ_DEMO_PORT=<n>
+Default ports (base `6010`, override with `TORQ_DEMO_PORT=<n>
 scripts/torq_demo.sh start all`):
 
 | Port | Process | Role |
 |---|---|---|
-| 6000 | stp1 | segmented tickerplant |
-| 6001 | discovery1 | service discovery |
-| 6002 | rdb1 | real-time DB (today's ticks) |
-| 6003 / 6004 | hdb1 / hdb2 | historical DB (the vendored sample data) |
-| 6005 | wdb1 | writedown process (rolls RDB -> HDB) |
-| 6006 | sort1 | sorts data before writedown |
-| 6007 | gateway1 | single query entry point across hdb/rdb |
-| 6011 | housekeeping1 | log/process housekeeping |
-| 6014 | feed1 | the dummy feed generating simulated quotes/trades |
-| 6015 | sctp1 | segmented chained tickerplant |
-| 6016 / 6017 | sortworker1/2 | sort worker pool |
-| 6018 | metrics1 | metrics collector |
+| 6010 | stp1 | segmented tickerplant |
+| 6011 | discovery1 | service discovery |
+| 6012 | rdb1 | real-time DB (today's ticks) |
+| 6013 / 6014 | hdb1 / hdb2 | historical DB (the vendored sample data) |
+| 6015 | wdb1 | writedown process (rolls RDB -> HDB) |
+| 6016 | sort1 | sorts data before writedown |
+| 6017 | gateway1 | single query entry point across hdb/rdb |
+| 6021 | housekeeping1 | log/process housekeeping |
+| 6024 | feed1 | the dummy feed generating simulated quotes/trades |
+| 6025 | sctp1 | segmented chained tickerplant |
+| 6026 / 6027 | sortworker1/2 | sort worker pool |
+| 6028 | metrics1 | metrics collector |
 
 ## Connecting
 
@@ -70,12 +70,12 @@ placeholder demo credentials, `admin:admin` works for everything. From any
 q session:
 
 ```
-q)h:hopen `:localhost:6002:admin:admin        / rdb1 - today's live ticks
+q)h:hopen `:localhost:6012:admin:admin        / rdb1 - today's live ticks
 q)h "select count i by sym from quote"
 q)hclose h
 ```
 
-The gateway (6007) is the intended single entry point for querying across
+The gateway (6017) is the intended single entry point for querying across
 the RDB and HDB together rather than connecting to each directly - see
 `lib/torq-finance-starter-pack/docs/gettingstarted.md` and
 `lib/torq/code/processes/gateway.q` for its `.gw.execute` API; this repo

@@ -70,7 +70,7 @@ if [ ! -d "$torq_data/hdb" ]; then
 fi
 mkdir -p "$torq_data/logs" "$torq_data/tplogs" "$torq_data/wdbhdb"
 
-kdb_base_port="${TORQ_DEMO_PORT:-6000}"
+kdb_base_port="${TORQ_DEMO_PORT:-6010}"
 
 # torq.sh unconditionally sources $SETENV (defaulting to lib/torq/setenv.sh,
 # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's own
