@@ -25,19 +25,29 @@
 // evaluate correctly (see README's Licensing section).
 //
 // Run from the repository root, with stdin kept open:
-//   yes "" | q scripts/timer_replay_example.q
-// Run in an actual interactive terminal, plain `q scripts/timer_replay_example.q`
-// is fine too (stdin naturally stays open until you type something). But
-// run non-interactively - stdin closed/redirected from /dev/null, as any
-// CI job or subprocess-launched invocation would do - a genuine, confirmed
-// kdb+ race exists between "stdin hit EOF, exit the process" and "the
-// system \"t 50\" timer's next .z.ts tick", decided by scheduler timing:
-// sometimes only tick 1 of n_ticks fires before the process exits. Piping
-// an infinite stream of blank lines through stdin (evaluated as harmless
-// no-ops) means it never reaches EOF, so only this script's own explicit
-// `exit 0` inside .z.ts (once every historical row has replayed) ends the
-// process - confirmed reliable across repeated runs; without it, failed
-// non-deterministically (varied 1-5 of 5 ticks firing across identical runs).
+//   yes "" | q scripts/timer_replay_example.q [n_ticks] [tick_ms]
+// n_ticks (default 8) is how many historical rows to generate and
+// replay; tick_ms (default 50) is the system timer interval between
+// replayed rows, in milliseconds. Both are optional and positional, e.g.
+// `yes "" | q scripts/timer_replay_example.q 20 100` for 20 ticks 100ms
+// apart. Run in an actual interactive terminal, plain
+// `q scripts/timer_replay_example.q` is fine too (stdin naturally stays
+// open until you type something). But run non-interactively - stdin
+// closed/redirected from /dev/null, as any CI job or subprocess-launched
+// invocation would do - a genuine, confirmed kdb+ race exists between
+// "stdin hit EOF, exit the process" and the timer's next .z.ts tick,
+// decided by scheduler timing: sometimes only tick 1 of n_ticks fires
+// before the process exits. Piping an infinite stream of blank lines
+// through stdin (evaluated as harmless no-ops) means it never reaches
+// EOF, so only this script's own explicit `exit 0` inside .z.ts (once
+// every historical row has replayed) ends the process - confirmed
+// reliable across repeated runs; without it, failed non-deterministically
+// (varied 1-5 of 5 ticks firing across identical runs).
+//
+// The growing quotes table is persisted to scripts/output/timer_replay_quotes
+// (gitignored - a run artifact, not source) after every tick, so it
+// survives the process exiting rather than only living in memory - reload
+// it in any q session with `quotes:get \`:scripts/output/timer_replay_quotes`.
 
 \c 400 1000
 \l src/init.q
@@ -59,7 +69,18 @@ mk_book:{[spot]
         spot-.qex.pip_size*levels;.qex.size_unit*1+levels;
         (spot+.qex.pip_size)+.qex.pip_size*levels;.qex.size_unit*1+levels)};
 
-n_ticks:8;
+/ Command-line params: q scripts/timer_replay_example.q [n_ticks] [tick_ms]
+/ - .z.x is the list of args after the script name, always strings; cast
+/ and fall back to the default whenever an arg wasn't given.
+default_n_ticks:8;
+default_tick_ms:50;
+n_ticks:$[0<count .z.x; "J"$first .z.x; default_n_ticks];
+tick_ms:$[1<count .z.x; "J"$.z.x 1; default_tick_ms];
+
+output_dir:"scripts/output";
+output_path:`$":",output_dir,"/timer_replay_quotes";
+system "mkdir -p ",output_dir;
+
 mean_gap:0D00:00:00.200; std_gap:0D00:00:00.050; min_gap:0D00:00:00.050;
 p:1e-9+(1-2e-9)*n_ticks?1.0;
 DEBUG "running: .qstats.inv_ncdf p";
@@ -90,15 +111,16 @@ cnt:0;
     quotes,:row;
     DEBUG "running: .qmicro.mid_price[quotes`bid_prices;quotes`ask_prices]";
     mid:.qmicro.mid_price[quotes`bid_prices;quotes`ask_prices];
-    INFO ("tick %1/%2 - quotes has %3 row(s) now, latest mid %4";(cnt+1;n_ticks;count quotes;last mid));
+    output_path set quotes;
+    INFO ("tick %1/%2 - quotes has %3 row(s) now, latest mid %4, persisted to %5";(cnt+1;n_ticks;count quotes;last mid;output_path));
     cnt+:1;
     if[cnt>=n_ticks;
         system "t 0";
-        INFO "replay complete - stopping the timer";
+        INFO ("replay complete - stopping the timer; final table persisted at %1";output_path);
         show quotes;
         exit 0]};
 
-INFO "starting replay - one historical tick appended every 50ms of wall-clock time";
-system "t 50";
+INFO ("starting replay - one historical tick appended every %1ms of wall-clock time";tick_ms);
+system "t ",string tick_ms;
 
 // exit 0
