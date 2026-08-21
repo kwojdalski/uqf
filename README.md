@@ -55,6 +55,9 @@ src/
   risk.q        pip value, P&L, carry, parametric & historical VaR
   execution.q   markouts, effective spread, slippage, fill/reject ratios,
                 vwap, order-book sweep pricing
+  example_defaults.q   shared scaling constants (pip_size, size_unit,
+                        size_row_drift) for scripts/*.q's synthetic data -
+                        not consumed by any pricing/execution function
   init.q        loads every module above, in dependency order
 
 lib/

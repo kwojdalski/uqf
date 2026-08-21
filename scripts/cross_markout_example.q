@@ -29,18 +29,16 @@
 key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
 / Illustrative, approximately realistic spot rates (not live market data) -
-/ same three pairs as the other example scripts. pip_size is one pip
-/ (0.0001); size_unit is one depth level's notional, in clean round
-/ millions.
-pip_size:0.0001;
-size_unit:1e6;
+/ same three pairs as the other example scripts. .qf.pip_size/
+/ .qf.size_unit (src/example_defaults.q) are one pip (0.0001) and one
+/ depth level's notional, in clean round millions.
 
 mk_book:{[spot]
     levels:til 10;
-    bid_prices:spot-pip_size*levels;
-    ask_prices:(spot+pip_size)+pip_size*levels;
-    bid_sizes:size_unit*1+levels;
-    ask_sizes:(size_unit-size_unit%10)+size_unit*levels;
+    bid_prices:spot-.qf.pip_size*levels;
+    ask_prices:(spot+.qf.pip_size)+.qf.pip_size*levels;
+    bid_sizes:.qf.size_unit*1+levels;
+    ask_sizes:(.qf.size_unit-.qf.size_unit%10)+.qf.size_unit*levels;
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(bid_prices;bid_sizes;ask_prices;ask_sizes)};
 
 / Synthetic tick timestamps, ~200ms apart with Normal(200ms,50ms) jitter -

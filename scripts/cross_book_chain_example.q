@@ -34,24 +34,23 @@ key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
 / Illustrative, approximately realistic spot rates (not live market data) -
 / same three pairs and levels as reshape_wide_order_book_multi_pair_example.q,
-/ so the two scripts' numbers agree if you compare them. pip_size is one
-/ pip (0.0001); size_unit is one depth level's notional, in clean round
-/ millions (1e6, 2e6, ... 1e7 across 10 levels) - typical order-of-
-/ magnitude for eFX top-of-book depth on a major pair.
-pip_size:0.0001;
-size_unit:1e6;
+/ so the two scripts' numbers agree if you compare them. .qf.pip_size/
+/ .qf.size_unit (src/example_defaults.q) are one pip (0.0001) and one
+/ depth level's notional, in clean round millions (1e6, 2e6, ... 1e7
+/ across 10 levels) - typical order-of-magnitude for eFX top-of-book
+/ depth on a major pair.
 
-/ A single 10-level top-of-book: bid/ask start pip_size apart at spot and
-/ walk out one pip per level; sizes grow by size_unit per level, ask
-/ offset a tenth of a level below bid so bid/ask sizes stay visually
+/ A single 10-level top-of-book: bid/ask start .qf.pip_size apart at spot
+/ and walk out one pip per level; sizes grow by .qf.size_unit per level,
+/ ask offset a tenth of a level below bid so bid/ask sizes stay visually
 / distinct - see mk_level_cols in the other example scripts for the same
 / pattern applied to a whole table instead of one book dict.
 mk_book:{[spot]
     levels:til 10;
-    bid_prices:spot-pip_size*levels;
-    ask_prices:(spot+pip_size)+pip_size*levels;
-    bid_sizes:size_unit*1+levels;
-    ask_sizes:(size_unit-size_unit%10)+size_unit*levels;
+    bid_prices:spot-.qf.pip_size*levels;
+    ask_prices:(spot+.qf.pip_size)+.qf.pip_size*levels;
+    bid_sizes:.qf.size_unit*1+levels;
+    ask_sizes:(.qf.size_unit-.qf.size_unit%10)+.qf.size_unit*levels;
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(bid_prices;bid_sizes;ask_prices;ask_sizes)};
 
 / Synthetic per-leg event timestamps, ~1ms apart - see
