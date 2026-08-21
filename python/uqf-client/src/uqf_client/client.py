@@ -11,7 +11,7 @@ class UqfClient:
     """Thin wrapper around kola.Q for querying a running uqf q session.
 
     Expects a q process with `src/init.q` loaded and listening on a port,
-    e.g. `q src/init.q -p 5000` from the uqf repo root, so `.uqf.*`
+    e.g. `q src/init.q -p 5000` from the uqf repo root, so `.qf.*`
     functions are callable by name.
     """
 
@@ -53,8 +53,8 @@ class UqfClient:
         return self._q.sync(expr, *args)
 
     def call(self, fn: str, *args: Any) -> Any:
-        """Call a `.uqf.<fn>` function, e.g. `call("gkCall", 1.10, 1.12, 0.045, 0.02, 0.10, 0.75)`.
+        """Call a `.qf.<fn>` function, e.g. `call("gk_call", 1.10, 1.12, 0.045, 0.02, 0.10, 0.75)`.
 
-        Equivalent to `sync(".uqf." + fn, *args)`.
+        Equivalent to `sync(".qf." + fn, *args)`.
         """
-        return self._q.sync(f".uqf.{fn}", *args)
+        return self._q.sync(f".qf.{fn}", *args)

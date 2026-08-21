@@ -32,14 +32,14 @@
               <p class="caption"><span class="caption-text">Namespaces</span></p>
 
 
-<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.uqf (ccy.q)</a></li>
-	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.uqf (execution.q)</a></li>
-	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.uqf (rates.q)</a></li>
-	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.uqf (options.q)</a></li>
-	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.uqf (risk.q)</a></li>
-	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.uqf (daycount.q)</a></li>
-	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.uqf (stats.q)</a></li>
-	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.uqf (forwards.q)</a></li>
+<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.qf (ccy.q)</a></li>
+	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.qf (execution.q)</a></li>
+	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.qf (rates.q)</a></li>
+	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.qf (options.q)</a></li>
+	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.qf (risk.q)</a></li>
+	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.qf (daycount.q)</a></li>
+	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.qf (stats.q)</a></li>
+	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.qf (forwards.q)</a></li>
 	<li class="toctree-l1 cls-uqfdata-cls"><a class="reference internal cls-uqfdata-cls" href='data.q.html' >.uqfdata</a></li>
 </ul><!--NAMESPACE_END-->
 
@@ -88,33 +88,33 @@
 	<div id='headerDoc'>stats.q - normal distribution helpers used throughout uqf. ncdf/npdf use the Abramowitz & Stegun 7.1.26 rational approximation to the error function (max absolute error ~1.5e-7). inv_ncdf uses Peter Acklam's rational approximation to the inverse standard normal CDF (max relative error ~1.15e-9), released by its author into the public domain. See: https://web.archive.org/web/20151030215612/http://home.online.no/~pjacklam/notes/invnorm/ .</div>
 	<div id='summary'><h2>Entity Summary</h2><table class='overviewSummary'><tbody>
 <tr><th>Entities</th><th>Short Description</th></tr>
-		<tr><td>.uqf.PI</td><td>The constant pi, used by npdf.</td></tr>
-		<tr><td><a href='#-uqf-horner_eval'>.uqf.horner_eval</a></td><td>Evaluate a polynomial at x via Horner's method - the one pla</td></tr>
-		<tr><td><a href='#-uqf-inv_ncdf'>.uqf.inv_ncdf</a></td><td>Inverse standard normal CDF (probit function).</td></tr>
-		<tr><td><a href='#-uqf-ncdf'>.uqf.ncdf</a></td><td>Standard normal cumulative distribution function N(x).</td></tr>
-		<tr><td><a href='#-uqf-npdf'>.uqf.npdf</a></td><td>Standard normal probability density function n(x).</td></tr>
+		<tr><td>.qf.PI</td><td>The constant pi, used by npdf.</td></tr>
+		<tr><td><a href='#-uqf-horner_eval'>.qf.horner_eval</a></td><td>Evaluate a polynomial at x via Horner's method - the one pla</td></tr>
+		<tr><td><a href='#-uqf-inv_ncdf'>.qf.inv_ncdf</a></td><td>Inverse standard normal CDF (probit function).</td></tr>
+		<tr><td><a href='#-uqf-ncdf'>.qf.ncdf</a></td><td>Standard normal cumulative distribution function N(x).</td></tr>
+		<tr><td><a href='#-uqf-npdf'>.qf.npdf</a></td><td>Standard normal probability density function n(x).</td></tr>
 </tbody></table></div>
 	<div class='details'>
 	<h2>Entity Details</h2>
-		<div class='entity' id='-uqf-horner_eval'><h2>.uqf.horner_eval</h2><p>Evaluate a polynomial at x via Horner's method - the one place q's lack of operator precedence for hand-written Horner chains is worked out and tested, so no other formula in this repo has to re-derive it. See the kdb-q-conventions skill for why (`a*x+b` means `a*(x+b)` in q, not `(a*x)+b`, which silently broke early drafts of this function).</p><table>
-<tr><th>eg: </th><td>.uqf.horner_eval[2 3 4;5]  -> 69 (i.e. 2*5*5+3*5+4)</td></tr>
+		<div class='entity' id='-uqf-horner_eval'><h2>.qf.horner_eval</h2><p>Evaluate a polynomial at x via Horner's method - the one place q's lack of operator precedence for hand-written Horner chains is worked out and tested, so no other formula in this repo has to re-derive it. See the kdb-q-conventions skill for why (`a*x+b` means `a*(x+b)` in q, not `(a*x)+b`, which silently broke early drafts of this function).</p><table>
+<tr><th>eg: </th><td>.qf.horner_eval[2 3 4;5]  -> 69 (i.e. 2*5*5+3*5+4)</td></tr>
 <tr><th>Return: </th><td>coeffs[0]*x^n + coeffs[1]*x^(n-1) + ... + coeffs[n]</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>coeffs</strong> - polynomial coefficients, highest degree first, constant term last (as in numpy.polyval)</li>
 	<li><strong>x</strong> - the point to evaluate the polynomial at</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-inv_ncdf'><h2>.uqf.inv_ncdf</h2><p>Inverse standard normal CDF (probit function).</p><table>
-<tr><th>eg: </th><td>.uqf.inv_ncdf 0.95  -> 1.644854 (the one-tailed 95% z-score)</td></tr>
+		<div class='entity' id='-uqf-inv_ncdf'><h2>.qf.inv_ncdf</h2><p>Inverse standard normal CDF (probit function).</p><table>
+<tr><th>eg: </th><td>.qf.inv_ncdf 0.95  -> 1.644854 (the one-tailed 95% z-score)</td></tr>
 <tr><th>Return: </th><td>x such that ncdf[x]~p</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>p</strong> - probability, strictly within (0,1); an atom or a list of atoms</li></ul></td></tr>
 <tr><th>throws: </th><td>error if any element of p is not strictly between 0 and 1</td></tr></table></div>
-		<div class='entity' id='-uqf-ncdf'><h2>.uqf.ncdf</h2><p>Standard normal cumulative distribution function N(x).</p><table>
-<tr><th>eg: </th><td>.uqf.ncdf 1.96  -> 0.9750022</td></tr>
+		<div class='entity' id='-uqf-ncdf'><h2>.qf.ncdf</h2><p>Standard normal cumulative distribution function N(x).</p><table>
+<tr><th>eg: </th><td>.qf.ncdf 1.96  -> 0.9750022</td></tr>
 <tr><th>Return: </th><td>P(Z is at most x) for a standard normal Z</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>x</strong> - point(s) to evaluate at (atom or vector)</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-npdf'><h2>.uqf.npdf</h2><p>Standard normal probability density function n(x).</p><table>
-<tr><th>eg: </th><td>.uqf.npdf 0f  -> 0.3989423</td></tr>
+		<div class='entity' id='-uqf-npdf'><h2>.qf.npdf</h2><p>Standard normal probability density function n(x).</p><table>
+<tr><th>eg: </th><td>.qf.npdf 0f  -> 0.3989423</td></tr>
 <tr><th>Return: </th><td>the standard normal density at x</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>x</strong> - point(s) to evaluate at (atom or vector)</li></ul></td></tr></table></div></div><!--MAIN_END-->

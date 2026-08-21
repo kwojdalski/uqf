@@ -32,14 +32,14 @@
               <p class="caption"><span class="caption-text">Namespaces</span></p>
 
 
-<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.uqf (ccy.q)</a></li>
-	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.uqf (execution.q)</a></li>
-	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.uqf (rates.q)</a></li>
-	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.uqf (options.q)</a></li>
-	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.uqf (risk.q)</a></li>
-	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.uqf (daycount.q)</a></li>
-	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.uqf (stats.q)</a></li>
-	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.uqf (forwards.q)</a></li>
+<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.qf (ccy.q)</a></li>
+	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.qf (execution.q)</a></li>
+	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.qf (rates.q)</a></li>
+	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.qf (options.q)</a></li>
+	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.qf (risk.q)</a></li>
+	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.qf (daycount.q)</a></li>
+	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.qf (stats.q)</a></li>
+	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.qf (forwards.q)</a></li>
 	<li class="toctree-l1 cls-uqfdata-cls"><a class="reference internal cls-uqfdata-cls" href='data.q.html' >.uqfdata</a></li>
 </ul><!--NAMESPACE_END-->
 
@@ -88,70 +88,70 @@
 	<div id='headerDoc'>execution.q - eFX execution-quality analytics: markouts, effective spread, slippage and quoting/fill statistics. . Sign convention used throughout: side is 1 for a client/algo buy (long base currency) and -1 for a sell. Every *cost* style metric (eff_spread, slippage) is positive when it went against the side taking the trade; markout is positive when the market moved in that side's favour after the trade (i.e. positive markout received by a client is "toxic flow" from a liquidity provider's point of view - flip side to view it from the LP's side of the same trade).</div>
 	<div id='summary'><h2>Entity Summary</h2><table class='overviewSummary'><tbody>
 <tr><th>Entities</th><th>Short Description</th></tr>
-		<tr><td><a href='#-uqf-eff_spread'>.uqf.eff_spread</a></td><td>Effective spread paid/received relative to the prevailing mi</td></tr>
-		<tr><td><a href='#-uqf-fill_ratio'>.uqf.fill_ratio</a></td><td>Fraction of quotes/orders that resulted in a fill.</td></tr>
-		<tr><td><a href='#-uqf-markout'>.uqf.markout</a></td><td>Post-trade price movement: how far the reference/mid price h</td></tr>
-		<tr><td><a href='#-uqf-markout_at_horizons'>.uqf.markout_at_horizons</a></td><td>Markout at one or more time horizons after each trade, looki</td></tr>
-		<tr><td><a href='#-uqf-reject_ratio'>.uqf.reject_ratio</a></td><td>Fraction of trade requests rejected (e.</td></tr>
-		<tr><td><a href='#-uqf-slippage'>.uqf.slippage</a></td><td>Slippage between a decision/arrival price and the actual exe</td></tr>
-		<tr><td><a href='#-uqf-sweep_price'>.uqf.sweep_price</a></td><td>Walk a stack of order book levels to price a sweep of target</td></tr>
-		<tr><td><a href='#-uqf-vwap'>.uqf.vwap</a></td><td>Size-weighted average execution price across a set of fills.</td></tr>
+		<tr><td><a href='#-uqf-eff_spread'>.qf.eff_spread</a></td><td>Effective spread paid/received relative to the prevailing mi</td></tr>
+		<tr><td><a href='#-uqf-fill_ratio'>.qf.fill_ratio</a></td><td>Fraction of quotes/orders that resulted in a fill.</td></tr>
+		<tr><td><a href='#-uqf-markout'>.qf.markout</a></td><td>Post-trade price movement: how far the reference/mid price h</td></tr>
+		<tr><td><a href='#-uqf-markout_at_horizons'>.qf.markout_at_horizons</a></td><td>Markout at one or more time horizons after each trade, looki</td></tr>
+		<tr><td><a href='#-uqf-reject_ratio'>.qf.reject_ratio</a></td><td>Fraction of trade requests rejected (e.</td></tr>
+		<tr><td><a href='#-uqf-slippage'>.qf.slippage</a></td><td>Slippage between a decision/arrival price and the actual exe</td></tr>
+		<tr><td><a href='#-uqf-sweep_price'>.qf.sweep_price</a></td><td>Walk a stack of order book levels to price a sweep of target</td></tr>
+		<tr><td><a href='#-uqf-vwap'>.qf.vwap</a></td><td>Size-weighted average execution price across a set of fills.</td></tr>
 </tbody></table></div>
 	<div class='details'>
 	<h2>Entity Details</h2>
-		<div class='entity' id='-uqf-eff_spread'><h2>.uqf.eff_spread</h2><p>Effective spread paid/received relative to the prevailing mid at the moment of execution, in pips. Positive = cost to the side that traded.</p><table>
-<tr><th>eg: </th><td>.uqf.eff_spread[1;1.1002;1.1000;10000]  -> 4f</td></tr>
+		<div class='entity' id='-uqf-eff_spread'><h2>.qf.eff_spread</h2><p>Effective spread paid/received relative to the prevailing mid at the moment of execution, in pips. Positive = cost to the side that traded.</p><table>
+<tr><th>eg: </th><td>.qf.eff_spread[1;1.1002;1.1000;10000]  -> 4f</td></tr>
 <tr><th>Return: </th><td>the effective spread, in pips</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>mid_at_trade</strong> - the mid price at the moment of execution</li>
 	<li><strong>side</strong> - 1 for a buy, -1 for a sell</li>
 	<li><strong>trade_price</strong> - the execution price</li>
 	<li><strong>pip_factor</strong> - 10000 for most pairs, 100 for JPY crosses</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-fill_ratio'><h2>.uqf.fill_ratio</h2><p>Fraction of quotes/orders that resulted in a fill.</p><table>
-<tr><th>eg: </th><td>.uqf.fill_ratio[73;100]  -> 0.73</td></tr>
+		<div class='entity' id='-uqf-fill_ratio'><h2>.qf.fill_ratio</h2><p>Fraction of quotes/orders that resulted in a fill.</p><table>
+<tr><th>eg: </th><td>.qf.fill_ratio[73;100]  -> 0.73</td></tr>
 <tr><th>Return: </th><td>the fill ratio, in [0,1]</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>num_fills</strong> - number of filled orders</li>
 	<li><strong>num_quotes</strong> - number of quotes/orders sent</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-markout'><h2>.uqf.markout</h2><p>Post-trade price movement: how far the reference/mid price has moved, in pips, from the trade price by the time ref_price was observed. ref_price may be a single price or a vector of prices at several horizons (t+1s, t+10s, t+60s, ...) - the function vectorises naturally.</p><table>
-<tr><th>eg: </th><td>.uqf.markout[1;1.1000;1.1010;10000]  -> 10f</td></tr>
+		<div class='entity' id='-uqf-markout'><h2>.qf.markout</h2><p>Post-trade price movement: how far the reference/mid price has moved, in pips, from the trade price by the time ref_price was observed. ref_price may be a single price or a vector of prices at several horizons (t+1s, t+10s, t+60s, ...) - the function vectorises naturally.</p><table>
+<tr><th>eg: </th><td>.qf.markout[1;1.1000;1.1010;10000]  -> 10f</td></tr>
 <tr><th>Return: </th><td>the markout, in pips</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>side</strong> - 1 for a buy, -1 for a sell</li>
 	<li><strong>trade_price</strong> - the execution price</li>
 	<li><strong>ref_price</strong> - the reference/mid price at the markout horizon (atom or vector)</li>
 	<li><strong>pip_factor</strong> - 10000 for most pairs, 100 for JPY crosses</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-markout_at_horizons'><h2>.uqf.markout_at_horizons</h2><p>Markout at one or more time horizons after each trade, looking up the reference mid itself via an as-of join against a quote table - the table-native companion to markout, for when you have trades and quotes as tables rather than an already-aligned ref_price vector. For each trade and each horizon, finds the most recent quote at or before trade_time+horizon (same semantics as kdb+'s aj) and computes markout against its mid. A trade/horizon pair with no quote at or before the target time gets a null ref_price and a null markout_pips - filter with `where not null markout_pips` if you want to drop those rather than see them.</p><table>
-<tr><th>eg: </th><td>.uqf.markout_at_horizons[trades;quotes;0D00:00:01 0D00:00:10]</td></tr>
+		<div class='entity' id='-uqf-markout_at_horizons'><h2>.qf.markout_at_horizons</h2><p>Markout at one or more time horizons after each trade, looking up the reference mid itself via an as-of join against a quote table - the table-native companion to markout, for when you have trades and quotes as tables rather than an already-aligned ref_price vector. For each trade and each horizon, finds the most recent quote at or before trade_time+horizon (same semantics as kdb+'s aj) and computes markout against its mid. A trade/horizon pair with no quote at or before the target time gets a null ref_price and a null markout_pips - filter with `where not null markout_pips` if you want to drop those rather than see them.</p><table>
+<tr><th>eg: </th><td>.qf.markout_at_horizons[trades;quotes;0D00:00:01 0D00:00:10]</td></tr>
 <tr><th>Return: </th><td>a table with one row per (trade, horizon): `sym`trade_time`horizon`target_time`trade_price`ref_price`markout_pips</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>trades</strong> - table with columns `sym`time`side`trade_price`pip_factor</li>
 	<li><strong>quotes</strong> - table with columns `sym`time`mid - need not be pre-sorted, this sorts its own copy before joining</li>
 	<li><strong>horizons</strong> - a timespan, or list of timespans, to look ahead from each trade's time, e.g. 0D00:00:01 0D00:00:10 0D00:01:00 for 1s/10s/1m</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-reject_ratio'><h2>.uqf.reject_ratio</h2><p>Fraction of trade requests rejected (e.g. under last look).</p><table>
-<tr><th>eg: </th><td>.uqf.reject_ratio[4;100]  -> 0.04</td></tr>
+		<div class='entity' id='-uqf-reject_ratio'><h2>.qf.reject_ratio</h2><p>Fraction of trade requests rejected (e.g. under last look).</p><table>
+<tr><th>eg: </th><td>.qf.reject_ratio[4;100]  -> 0.04</td></tr>
 <tr><th>Return: </th><td>the reject ratio, in [0,1]</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>num_rejects</strong> - number of rejected requests</li>
 	<li><strong>num_requests</strong> - total number of requests</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-slippage'><h2>.uqf.slippage</h2><p>Slippage between a decision/arrival price and the actual execution price, in pips. Positive = cost to the side that traded.</p><table>
-<tr><th>eg: </th><td>.uqf.slippage[1;1.1000;1.1003;10000]  -> 3f</td></tr>
+		<div class='entity' id='-uqf-slippage'><h2>.qf.slippage</h2><p>Slippage between a decision/arrival price and the actual execution price, in pips. Positive = cost to the side that traded.</p><table>
+<tr><th>eg: </th><td>.qf.slippage[1;1.1000;1.1003;10000]  -> 3f</td></tr>
 <tr><th>Return: </th><td>the slippage, in pips</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>arrival_price</strong> - the decision/arrival price</li>
 	<li><strong>side</strong> - 1 for a buy, -1 for a sell</li>
 	<li><strong>exec_price</strong> - the actual execution price</li>
 	<li><strong>pip_factor</strong> - 10000 for most pairs, 100 for JPY crosses</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-sweep_price'><h2>.uqf.sweep_price</h2><p>Walk a stack of order book levels to price a sweep of target_size: the blended price you'd get consuming best-to-worst levels until target_size is filled or the book runs out. Pass the ask side (best/lowest price first) to price a buy/sweep-the-offer, or the bid side (best/highest price first) to price a sell/sweep-the-bid - this function doesn't care which side it is, only that prices/sizes are already ordered best-first.</p><table>
-<tr><th>eg: </th><td>.uqf.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled!(1.100233;1.1005;3000000;1b)</td></tr>
+		<div class='entity' id='-uqf-sweep_price'><h2>.qf.sweep_price</h2><p>Walk a stack of order book levels to price a sweep of target_size: the blended price you'd get consuming best-to-worst levels until target_size is filled or the book runs out. Pass the ask side (best/lowest price first) to price a buy/sweep-the-offer, or the bid side (best/highest price first) to price a sell/sweep-the-bid - this function doesn't care which side it is, only that prices/sizes are already ordered best-first.</p><table>
+<tr><th>eg: </th><td>.qf.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled!(1.100233;1.1005;3000000;1b)</td></tr>
 <tr><th>Return: </th><td>dict `avg_price`worst_price`filled_size`fully_filled - avg_price is the size-weighted blended execution price (null if nothing filled), worst_price is the price of the last level touched (the marginal fill, null if nothing filled), filled_size is how much actually filled (may be less than target_size if the book doesn't have enough depth), and fully_filled is 1b iff filled_size>=target_size</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>target_size</strong> - the size you want to sweep</li>
 	<li><strong>sizes</strong> - level sizes, same length as prices, aligned to the same levels</li>
 	<li><strong>prices</strong> - level prices, best (most aggressive) first</li></ul></td></tr>
 <tr><th>throws: </th><td>error if target_size is not positive, or prices/sizes differ in length</td></tr></table></div>
-		<div class='entity' id='-uqf-vwap'><h2>.uqf.vwap</h2><p>Size-weighted average execution price across a set of fills.</p><table>
-<tr><th>eg: </th><td>.uqf.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625</td></tr>
+		<div class='entity' id='-uqf-vwap'><h2>.qf.vwap</h2><p>Size-weighted average execution price across a set of fills.</p><table>
+<tr><th>eg: </th><td>.qf.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625</td></tr>
 <tr><th>Return: </th><td>the size-weighted average price</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>sizes</strong> - list of fill sizes, same length as prices</li>

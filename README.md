@@ -35,12 +35,12 @@ paths relative to it (e.g. `src/stats.q`).
 
 ```
 q src/init.q
-q).uqf.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
-q).uqf.fwd_simple[1.10;0.05;0.02;1]              / CIRP outright forward
-q).uqf.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
+q).qf.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
+q).qf.fwd_simple[1.10;0.05;0.02;1]              / CIRP outright forward
+q).qf.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 ```
 
-Every function lives in the `.uqf` namespace after loading `src/init.q`.
+Every function lives in the `.qf` namespace after loading `src/init.q`.
 
 ## Layout
 
@@ -68,6 +68,11 @@ lib/
                   by src/init.q or anything else in this repo; native
                   extension, unbuilt/unused as vendored (see
                   lib/kdb-parquet/NOTICE.md)
+  torq/           vendored TorQ kdb+ production framework (see Licensing) -
+                  NOT loaded by src/init.q or anything else in this repo;
+                  this library has no long-running processes for TorQ's
+                  tickerplant/RDB/gateway machinery to manage, vendored for
+                  reference only
 
 tests/
   lib/qunit.q            vendored qUnit test framework (see Licensing)
@@ -181,7 +186,7 @@ curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place 
 
 `qstudio.jar` also bundles a small q linter that `gen-docs.sh` runs as a
 side effect (`docs/lint.csv`/`docs/lint.html`); this repo's multi-file
-`.uqf` namespace triggers a number of expected "undeclared variable"
+`.qf` namespace triggers a number of expected "undeclared variable"
 false positives there (the linter checks each file in isolation and can't
 see across `src/*.q`), so don't be alarmed by those specifically.
 
@@ -273,3 +278,13 @@ two vendored files:
   need a from-source rebuild for the target platform before it could be
   loaded. Real KDB-X also bundles its own official parquet module at
   `~/.kx/mod/kx/pq/`, worth checking as a licensed alternative first.
+- `lib/torq/`, vendored from [DataIntellectTech/TorQ](https://github.com/DataIntellectTech/TorQ)
+  at commit `a6cee6c`, distributed under the MIT License (full text at
+  `lib/torq/LICENSE-torq`) - permissive and fine to combine with this
+  repository's MIT code. TorQ is a full kdb+ production framework (process
+  management, tickerplant/RDB/HDB/gateway, EOD lifecycle, monitoring) -
+  this library is a stateless collection of pure pricing/risk/execution
+  functions with no long-running processes for any of that machinery to
+  manage, so nothing in `src/*.q` calls into it. Not loaded by `src/init.q`
+  or anything else in this repo, and not verified working here; vendored
+  for reference only, at the repo owner's explicit choice.

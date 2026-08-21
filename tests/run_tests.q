@@ -19,9 +19,10 @@
 \l tests/test_execution.q
 \l tests/test_execution_scale.q
 \l tests/test_book.q
+\l tests/test_microstructure.q
 \l tests/test_data.q
 
-nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.executiontest`.executionscaletest`.booktest`.datatest;
+nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.datatest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;

@@ -3,19 +3,27 @@
 Candidate functions for a possible new `src/microstructure.q` module, covering
 liquidity/order-flow signals that quantify *what the book looks like* and
 *how it's moving* rather than pricing/execution outcomes (which is what
-`book.q`, `forwards.q` and `execution.q` already cover). Not implemented yet
-- this is a planning document only.
+`book.q`, `forwards.q` and `execution.q` already cover).
 
-**Source:** feature/formula definitions mined from
-`../masters_thesis/docs/hft_features.md` (an equity LOB deep-RL feature set,
-built on Databento MBP-10 data). uqf's data model is different - `quotes`
-tables of `` `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes `` (level-0-first
+**Status: implemented.** Every Tier 1 and Tier 2 function below now lives in
+`src/microstructure.q` (tests in `tests/test_microstructure.q`) - see
+`docs/prompts/microstructure-features.md` for the implementation prompt this
+was built from, including the one deliberate shape change from what's written
+below: every function takes a whole `quotes`-table COLUMN (a vector of
+per-row level vectors), not one row's flat vectors, and returns a
+row-aligned vector, the same generalization `markout_at_horizons`/
+`cross_book_at_sizes` already make elsewhere in this library.
+
+**Source:** feature/formula definitions mined from an external equity LOB
+deep-RL feature catalog (built on Databento MBP-10 data). uqf's data model
+is different - `quotes` tables of
+`` `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes `` (level-0-first
 vectors per row, see `forwards.q`'s `require_quotes_cols`), i.e. periodic
 book *snapshots*, not an L3 add/cancel/trade event tape. Every candidate
-below is filtered and re-expressed against that shape; several
-masters_thesis features that depend on a genuine event tape (`action`/`side`
-per order) don't carry over and are listed separately at the bottom as
-explicitly out of scope for now.
+below is filtered and re-expressed against that shape; several source
+features that depend on a genuine event tape (`action`/`side` per order)
+don't carry over and are listed separately at the bottom as explicitly out
+of scope for now.
 
 Sign/parameter conventions follow the rest of the library: `pip_factor`
 (10000 / 100 for JPY), `side` (1 buy / -1 sell), snake_case, one qDoc block
@@ -28,7 +36,7 @@ the same, matching `sweep_price`'s level-0-first convention) for one row and
 return a scalar. No history needed - straightforward, highest value per unit
 effort.
 
-| Candidate function | masters_thesis source | Formula | Notes |
+| Candidate function | Source feature | Formula | Notes |
 |---|---|---|---|
 | `book_pressure_at_level[bid_sizes;ask_sizes;level]` | `book_pressure` (#1) | $(V^{bid}_i-V^{ask}_i)/(V^{bid}_i+V^{ask}_i)$ | Range $[-1,1]$, 0 when both sides empty at that level. The concrete example the user asked about. |
 | `order_book_imbalance[bid_sizes;ask_sizes;n_levels]` | `order_book_imbalance` (#5) | same ratio, summed over levels 0..n_levels-1 | Multi-level generalisation of the above; more robust per the cited literature. |
@@ -49,7 +57,7 @@ aligned to the input rows. First row is conventionally 0/null (no prior
 snapshot to diff against) - same convention `markout_at_horizons` already
 uses for "no quote yet" cases.
 
-| Candidate function | masters_thesis source | Formula sketch | Notes |
+| Candidate function | Source feature | Formula sketch | Notes |
 |---|---|---|---|
 | `mid_price_velocity[quotes;sym]` | `mid_price_velocity` (#14) | first difference of mid | |
 | `mid_price_acceleration[quotes;sym]` | `mid_price_acceleration` (#15) | second difference of mid | |
@@ -76,7 +84,7 @@ uses for "no quote yet" cases.
 
 ## Explicitly out of scope for now
 
-These masters_thesis features require a genuine order/trade *event* tape
+These source features require a genuine order/trade *event* tape
 (`action` in `{A,C,T}`, aggressor `side`, per-event `size`) rather than
 periodic book snapshots - uqf has no such ingestion path today, and adding
 one is a bigger scope decision than adding a function:

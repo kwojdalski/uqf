@@ -7,7 +7,7 @@
 / .
 / Requires stats.q (ncdf/npdf) and rates.q (df_cont) to be loaded first.
 
-\d .uqf
+\d .qf
 
 / Private: (d1;d2) computed together so callers never duplicate the
 / underlying arithmetic (see src/stats.q for why that matters in q).
@@ -18,7 +18,7 @@
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return (d1;d2)
-/ @eg .uqf.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> (0.05174784;-0.0348547)
+/ @eg .qf.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> (0.05174784;-0.0348547)
 d1_d2:{[s;k;rd;rf;sigma;t]
     log_moneyness:log[s%k];
     variance_adj:0.5*sigma*sigma;
@@ -37,7 +37,7 @@ d1_d2:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the Garman-Kohlhagen d1 term
-/ @eg .uqf.d1[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784
+/ @eg .qf.d1[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784
 d1:{[s;k;rd;rf;sigma;t] first d1_d2[s;k;rd;rf;sigma;t]};
 
 / The Garman-Kohlhagen d2 term.
@@ -48,7 +48,7 @@ d1:{[s;k;rd;rf;sigma;t] first d1_d2[s;k;rd;rf;sigma;t]};
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the Garman-Kohlhagen d2 term
-/ @eg .uqf.d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.0348547
+/ @eg .qf.d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.0348547
 d2:{[s;k;rd;rf;sigma;t] last d1_d2[s;k;rd;rf;sigma;t]};
 
 / European call premium, in domestic/quote currency per unit of base notional.
@@ -59,7 +59,7 @@ d2:{[s;k;rd;rf;sigma;t] last d1_d2[s;k;rd;rf;sigma;t]};
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the call premium
-/ @eg .uqf.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03781082
+/ @eg .qf.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03781082
 gk_call:{[s;k;rd;rf;sigma;t]
     dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
     domestic_df:df_cont[rd;t]; foreign_df:df_cont[rf;t];
@@ -75,7 +75,7 @@ gk_call:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the put premium
-/ @eg .uqf.gk_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03701845
+/ @eg .qf.gk_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.03701845
 gk_put:{[s;k;rd;rf;sigma;t]
     dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
     domestic_df:df_cont[rd;t]; foreign_df:df_cont[rf;t];
@@ -92,7 +92,7 @@ gk_put:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return the call or put premium
-/ @eg .uqf.gk_price[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.03781082
+/ @eg .qf.gk_price[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.03781082
 gk_price:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_call[s;k;rd;rf;sigma;t];gk_put[s;k;rd;rf;sigma;t]]};
 
 / Call delta: sensitivity of the premium to a change in spot.
@@ -103,7 +103,7 @@ gk_price:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_call[s;k;rd;rf;sigma;t];gk_pu
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the call delta, in (0, exp(-rf*t))
-/ @eg .uqf.gk_delta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.512884
+/ @eg .qf.gk_delta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.512884
 gk_delta_call:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
     foreign_df:df_cont[rf;t];
@@ -117,7 +117,7 @@ gk_delta_call:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the put delta, in (-exp(-rf*t), 0)
-/ @eg .uqf.gk_delta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4722279
+/ @eg .qf.gk_delta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4722279
 gk_delta_put:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
     foreign_df:df_cont[rf;t];
@@ -131,7 +131,7 @@ gk_delta_put:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return gamma (always positive)
-/ @eg .uqf.gk_gamma[1.10;1.12;0.045;0.02;0.10;0.75]  -> 4.11994
+/ @eg .qf.gk_gamma[1.10;1.12;0.045;0.02;0.10;0.75]  -> 4.11994
 gk_gamma:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
     foreign_df:df_cont[rf;t];
@@ -149,7 +149,7 @@ gk_gamma:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return vega (always positive)
-/ @eg .uqf.gk_vega[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3738845
+/ @eg .qf.gk_vega[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3738845
 gk_vega:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
     foreign_df:df_cont[rf;t];
@@ -164,7 +164,7 @@ gk_vega:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the call's theta
-/ @eg .uqf.gk_theta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.03732846
+/ @eg .qf.gk_theta_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.03732846
 gk_theta_call:{[s;k;rd;rf;sigma;t]
     dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
     domestic_df:df_cont[rd;t]; foreign_df:df_cont[rf;t];
@@ -181,7 +181,7 @@ gk_theta_call:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the put's theta
-/ @eg .uqf.gk_theta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.01027354
+/ @eg .qf.gk_theta_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.01027354
 gk_theta_put:{[s;k;rd;rf;sigma;t]
     dd:d1_d2[s;k;rd;rf;sigma;t]; d1v:first dd; d2v:last dd;
     domestic_df:df_cont[rd;t]; foreign_df:df_cont[rf;t];
@@ -197,7 +197,7 @@ gk_theta_put:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the call's rho
-/ @eg .uqf.gk_rho_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3947712
+/ @eg .qf.gk_rho_call[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.3947712
 gk_rho_call:{[s;k;rd;rf;sigma;t]
     d2v:d2[s;k;rd;rf;sigma;t];
     domestic_df:df_cont[rd;t];
@@ -211,7 +211,7 @@ gk_rho_call:{[s;k;rd;rf;sigma;t]
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return the put's rho
-/ @eg .uqf.gk_rho_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4173519
+/ @eg .qf.gk_rho_put[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.4173519
 gk_rho_put:{[s;k;rd;rf;sigma;t]
     d2v:d2[s;k;rd;rf;sigma;t];
     domestic_df:df_cont[rd;t];
@@ -228,7 +228,7 @@ gk_rho_put:{[s;k;rd;rf;sigma;t]
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return sigma such that gk_price[...;sigma;...;is_call] ~ price
-/ @eg .uqf.bisect_vol[0.03781082;1.10;1.12;0.045;0.02;0.75;1b]  -> 0.1 (approx)
+/ @eg .qf.bisect_vol[0.03781082;1.10;1.12;0.045;0.02;0.75;1b]  -> 0.1 (approx)
 bisect_vol:{[price;s;k;rd;rf;t;is_call]
     lo:0.00001; hi:5.0;
     i:0;
@@ -249,7 +249,7 @@ bisect_vol:{[price;s;k;rd;rf;t;is_call]
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return sigma such that gk_price[...;sigma;...;is_call] ~ price
-/ @eg .uqf.implied_vol[.uqf.gk_call[1.10;1.12;0.045;0.02;0.12;0.75];1.10;1.12;0.045;0.02;0.75;1b]  -> 0.12
+/ @eg .qf.implied_vol[.qf.gk_call[1.10;1.12;0.045;0.02;0.12;0.75];1.10;1.12;0.045;0.02;0.75;1b]  -> 0.12
 implied_vol:{[price;s;k;rd;rf;t;is_call]
     sigma:0.20;
     i:0;

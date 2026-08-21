@@ -42,7 +42,7 @@ implicit grouping. Instead:
 2. When a one-liner is unavoidable, **parenthesize explicitly** even where
    q's right-to-left rule would happen to give the right answer anyway -
    don't make the next reader re-derive the evaluation order.
-3. Any polynomial evaluation goes through `.uqf.horner_eval[coeffs;x]`
+3. Any polynomial evaluation goes through `.qf.horner_eval[coeffs;x]`
    (defined in `src/stats.q`) rather than a hand-written Horner chain -
    that arithmetic is tricky exactly once, in one tested place.
 4. After writing any new formula, **verify it numerically against a known
@@ -145,8 +145,8 @@ library with no processes/IPC/tables).
 
 ## Layout
 
-- `src/*.q` - one module per topic, each wrapped in `\d .uqf` ... `\d .` so
-  everything lands in the `.uqf` namespace. Load order doesn't matter for
+- `src/*.q` - one module per topic, each wrapped in `\d .qf` ... `\d .` so
+  everything lands in the `.qf` namespace. Load order doesn't matter for
   function *definitions* (q resolves names at call time), but `src/init.q`
   loads them in a sensible dependency order (stats -> ccy -> daycount ->
   rates -> forwards -> options -> risk -> execution). `forwards.q`'s
@@ -220,7 +220,7 @@ between:
 / @param other ...
 / @return what gets returned
 / @throws when this errors, if it can
-/ @eg .uqf.someFunc[1;2]  -> 3
+/ @eg .qf.someFunc[1;2]  -> 3
 someFunc:{[name;other] ...};
 ```
 
@@ -237,15 +237,15 @@ running `com.timestored.qdoc.QDocMain` against a scratch file:
   with a blank "short description" in the generated index (this happened
   to `d1`/`d2` in `options.q` originally; fixed by adding a one-line lead-in).
 - A file-level doc block (single-`/` lines, ending in a lone `/ .` line)
-  goes **before** `\d .uqf` at the top of the file and becomes that file's
+  goes **before** `\d .qf` at the top of the file and becomes that file's
   description in the generated docs.
 - The CLI is `java -cp qstudio.jar com.timestored.qdoc.QDocMain <target> <source>`.
   TimeStored's own help page states the reverse order
   (`<source> <target>`) - that is wrong; passing it that way silently
   writes qDoc's own output files into your source folder and finds
   nothing to document. `scripts/gen-docs.sh` has the verified order baked in.
-- qDoc documents `.uqf` separately per source file in its nav
-  (`.uqf (options.q)`, `.uqf (risk.q)`, ...) rather than merging same-named
+- qDoc documents `.qf` separately per source file in its nav
+  (`.qf (options.q)`, `.qf (risk.q)`, ...) rather than merging same-named
   namespaces from different files into one page - expected, not a bug.
 - **Never write a literal `<` in doc text** (descriptions, `@return`,
   `@throws`, etc.) - qDoc drops it and everything after it into the HTML
@@ -260,7 +260,7 @@ running `com.timestored.qdoc.QDocMain` against a scratch file:
   (`docs/lint.csv`), which throws a lot of `UNDECLARED_VAR` false
   positives for this repo specifically, because it lints each file in
   isolation and can't see that e.g. `df_cont` (from `rates.q`) is available
-  in `options.q` once both are loaded into the shared `.uqf` namespace via
+  in `options.q` once both are loaded into the shared `.qf` namespace via
   `src/init.q`. Safe to ignore those; do look at anything else it flags.
 
 See the README's Documentation section for the actual `gen-docs.sh` usage.

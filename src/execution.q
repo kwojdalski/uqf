@@ -9,7 +9,7 @@
 / from a liquidity provider's point of view - flip side to view it from
 / the LP's side of the same trade).
 
-\d .uqf
+\d .qf
 
 / Post-trade price movement: how far the reference/mid price has moved,
 / in pips, from the trade price by the time ref_price was observed.
@@ -20,7 +20,7 @@
 / @param ref_price the reference/mid price at the markout horizon (atom or vector)
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the markout, in pips
-/ @eg .uqf.markout[1;1.1000;1.1010;10000]  -> 10f
+/ @eg .qf.markout[1;1.1000;1.1010;10000]  -> 10f
 markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trade_price)};
 
 / Markout at one or more time horizons after each trade, looking up the
@@ -44,7 +44,7 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 /   (the target-time column is named per ts_col, `ts by default, matching
 /   the quotes-table timestamp convention used elsewhere in this
 /   library, e.g. forwards.q's cross_book_at/cross_markout_at_horizons)
-/ @eg .uqf.markout_at_horizons[trades;quotes;0D00:00:01 0D00:00:10]
+/ @eg .qf.markout_at_horizons[trades;quotes;0D00:00:01 0D00:00:10]
 markout_at_horizons:{[trades;quotes;horizons]
     horizon_list:$[0>type horizons; enlist horizons; horizons];
     sorted_quotes:`sym`time xasc quotes;
@@ -71,7 +71,7 @@ markout_at_horizons:{[trades;quotes;horizons]
 / @param mid_at_trade the mid price at the moment of execution
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the effective spread, in pips
-/ @eg .uqf.eff_spread[1;1.1002;1.1000;10000]  -> 4f
+/ @eg .qf.eff_spread[1;1.1002;1.1000;10000]  -> 4f
 eff_spread:{[side;trade_price;mid_at_trade;pip_factor] 2*side*pip_factor*(trade_price-mid_at_trade)};
 
 / Slippage between a decision/arrival price and the actual execution
@@ -81,21 +81,21 @@ eff_spread:{[side;trade_price;mid_at_trade;pip_factor] 2*side*pip_factor*(trade_
 / @param exec_price the actual execution price
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the slippage, in pips
-/ @eg .uqf.slippage[1;1.1000;1.1003;10000]  -> 3f
+/ @eg .qf.slippage[1;1.1000;1.1003;10000]  -> 3f
 slippage:{[side;arrival_price;exec_price;pip_factor] side*pip_factor*(exec_price-arrival_price)};
 
 / Fraction of quotes/orders that resulted in a fill.
 / @param num_fills number of filled orders
 / @param num_quotes number of quotes/orders sent
 / @return the fill ratio, in [0,1]
-/ @eg .uqf.fill_ratio[73;100]  -> 0.73
+/ @eg .qf.fill_ratio[73;100]  -> 0.73
 fill_ratio:{[num_fills;num_quotes] num_fills%num_quotes};
 
 / Fraction of trade requests rejected (e.g. under last look).
 / @param num_rejects number of rejected requests
 / @param num_requests total number of requests
 / @return the reject ratio, in [0,1]
-/ @eg .uqf.reject_ratio[4;100]  -> 0.04
+/ @eg .qf.reject_ratio[4;100]  -> 0.04
 reject_ratio:{[num_rejects;num_requests] num_rejects%num_requests};
 
 / Hit ratio (fraction of requests that resulted in a fill/hit), windowed
@@ -124,7 +124,7 @@ reject_ratio:{[num_rejects;num_requests] num_rejects%num_requests};
 /   single row if bucket_size is null and group_cols is empty
 / @throws error if requests is missing a required column (ts, hit, size,
 /   or any column named in group_cols), or if mode isn't `count or `amount
-/ @eg .uqf.hit_ratio_by[requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
+/ @eg .qf.hit_ratio_by[requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
 hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
     group_cols:group_cols,();
     req_cols:distinct `ts`hit`size,group_cols;
@@ -150,7 +150,7 @@ hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
 / @param prices list of fill prices
 / @param sizes list of fill sizes, same length as prices
 / @return the size-weighted average price
-/ @eg .uqf.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625
+/ @eg .qf.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625
 vwap:{[prices;sizes]
     weighted_sum:sum prices*sizes;
     total_size:sum sizes;
@@ -172,7 +172,7 @@ vwap:{[prices;sizes]
 /   be less than target_size if the book doesn't have enough depth), and
 /   fully_filled is 1b iff filled_size>=target_size
 / @throws error if target_size is not positive, or prices/sizes differ in length
-/ @eg .uqf.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled!(1.100233;1.1005;3000000;1b)
+/ @eg .qf.sweep_price[1.1000 1.1002 1.1005;1000000 1000000 2000000;3000000]  -> `avg_price`worst_price`filled_size`fully_filled!(1.100233;1.1005;3000000;1b)
 sweep_price:{[prices;sizes;target_size]
     if[target_size<=0; '"sweep_price: size must be positive"];
     if[(count prices)<>count sizes; '"sweep_price: prices and sizes must be the same length"];

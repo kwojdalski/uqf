@@ -32,14 +32,14 @@
               <p class="caption"><span class="caption-text">Namespaces</span></p>
 
 
-<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.uqf (ccy.q)</a></li>
-	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.uqf (execution.q)</a></li>
-	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.uqf (rates.q)</a></li>
-	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.uqf (options.q)</a></li>
-	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.uqf (risk.q)</a></li>
-	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.uqf (daycount.q)</a></li>
-	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.uqf (stats.q)</a></li>
-	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.uqf (forwards.q)</a></li>
+<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.qf (ccy.q)</a></li>
+	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.qf (execution.q)</a></li>
+	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.qf (rates.q)</a></li>
+	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.qf (options.q)</a></li>
+	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.qf (risk.q)</a></li>
+	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.qf (daycount.q)</a></li>
+	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.qf (stats.q)</a></li>
+	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.qf (forwards.q)</a></li>
 	<li class="toctree-l1 cls-uqfdata-cls"><a class="reference internal cls-uqfdata-cls" href='data.q.html' >.uqfdata</a></li>
 </ul><!--NAMESPACE_END-->
 
@@ -88,47 +88,47 @@
 	<div id='headerDoc'>rates.q - discount/growth factors and compounding conversions. t is a year fraction (see daycount.q), r a decimal annual rate (0.05 = 5%). .</div>
 	<div id='summary'><h2>Entity Summary</h2><table class='overviewSummary'><tbody>
 <tr><th>Entities</th><th>Short Description</th></tr>
-		<tr><td><a href='#-uqf-cont_to_simple'>.uqf.cont_to_simple</a></td><td>Convert a continuously compounded rate to the equivalent sim</td></tr>
-		<tr><td><a href='#-uqf-df_cont'>.uqf.df_cont</a></td><td>Continuous-compounding discount factor.</td></tr>
-		<tr><td><a href='#-uqf-df_simple'>.uqf.df_simple</a></td><td>Simple-compounding discount factor.</td></tr>
-		<tr><td><a href='#-uqf-growth_cont'>.uqf.growth_cont</a></td><td>Continuous-compounding growth factor.</td></tr>
-		<tr><td><a href='#-uqf-growth_simple'>.uqf.growth_simple</a></td><td>Simple-compounding growth factor.</td></tr>
-		<tr><td><a href='#-uqf-simple_to_cont'>.uqf.simple_to_cont</a></td><td>Convert a simple-compounded rate to the equivalent continuou</td></tr>
+		<tr><td><a href='#-uqf-cont_to_simple'>.qf.cont_to_simple</a></td><td>Convert a continuously compounded rate to the equivalent sim</td></tr>
+		<tr><td><a href='#-uqf-df_cont'>.qf.df_cont</a></td><td>Continuous-compounding discount factor.</td></tr>
+		<tr><td><a href='#-uqf-df_simple'>.qf.df_simple</a></td><td>Simple-compounding discount factor.</td></tr>
+		<tr><td><a href='#-uqf-growth_cont'>.qf.growth_cont</a></td><td>Continuous-compounding growth factor.</td></tr>
+		<tr><td><a href='#-uqf-growth_simple'>.qf.growth_simple</a></td><td>Simple-compounding growth factor.</td></tr>
+		<tr><td><a href='#-uqf-simple_to_cont'>.qf.simple_to_cont</a></td><td>Convert a simple-compounded rate to the equivalent continuou</td></tr>
 </tbody></table></div>
 	<div class='details'>
 	<h2>Entity Details</h2>
-		<div class='entity' id='-uqf-cont_to_simple'><h2>.uqf.cont_to_simple</h2><p>Convert a continuously compounded rate to the equivalent simple rate over the same period t.</p><table>
-<tr><th>eg: </th><td>.uqf.cont_to_simple[0.04879016;1]  -> 0.05</td></tr>
+		<div class='entity' id='-uqf-cont_to_simple'><h2>.qf.cont_to_simple</h2><p>Convert a continuously compounded rate to the equivalent simple rate over the same period t.</p><table>
+<tr><th>eg: </th><td>.qf.cont_to_simple[0.04879016;1]  -> 0.05</td></tr>
 <tr><th>Return: </th><td>the simple rate with the same growth over t</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>r</strong> - continuously compounded decimal annual rate</li>
 	<li><strong>t</strong> - year fraction</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-df_cont'><h2>.uqf.df_cont</h2><p>Continuous-compounding discount factor.</p><table>
-<tr><th>eg: </th><td>.uqf.df_cont[0.05;1]  -> 0.9512294</td></tr>
+		<div class='entity' id='-uqf-df_cont'><h2>.qf.df_cont</h2><p>Continuous-compounding discount factor.</p><table>
+<tr><th>eg: </th><td>.qf.df_cont[0.05;1]  -> 0.9512294</td></tr>
 <tr><th>Return: </th><td>exp(-r*t)</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>r</strong> - decimal annual rate</li>
 	<li><strong>t</strong> - year fraction</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-df_simple'><h2>.uqf.df_simple</h2><p>Simple-compounding discount factor.</p><table>
-<tr><th>eg: </th><td>.uqf.df_simple[0.05;1]  -> 0.952381</td></tr>
+		<div class='entity' id='-uqf-df_simple'><h2>.qf.df_simple</h2><p>Simple-compounding discount factor.</p><table>
+<tr><th>eg: </th><td>.qf.df_simple[0.05;1]  -> 0.952381</td></tr>
 <tr><th>Return: </th><td>1/(1+r*t)</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>r</strong> - decimal annual rate</li>
 	<li><strong>t</strong> - year fraction</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-growth_cont'><h2>.uqf.growth_cont</h2><p>Continuous-compounding growth factor.</p><table>
-<tr><th>eg: </th><td>.uqf.growth_cont[0.05;1]  -> 1.051271</td></tr>
+		<div class='entity' id='-uqf-growth_cont'><h2>.qf.growth_cont</h2><p>Continuous-compounding growth factor.</p><table>
+<tr><th>eg: </th><td>.qf.growth_cont[0.05;1]  -> 1.051271</td></tr>
 <tr><th>Return: </th><td>exp(r*t)</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>r</strong> - decimal annual rate</li>
 	<li><strong>t</strong> - year fraction</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-growth_simple'><h2>.uqf.growth_simple</h2><p>Simple-compounding growth factor.</p><table>
-<tr><th>eg: </th><td>.uqf.growth_simple[0.05;1]  -> 1.05</td></tr>
+		<div class='entity' id='-uqf-growth_simple'><h2>.qf.growth_simple</h2><p>Simple-compounding growth factor.</p><table>
+<tr><th>eg: </th><td>.qf.growth_simple[0.05;1]  -> 1.05</td></tr>
 <tr><th>Return: </th><td>1+r*t</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>r</strong> - decimal annual rate</li>
 	<li><strong>t</strong> - year fraction</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-simple_to_cont'><h2>.uqf.simple_to_cont</h2><p>Convert a simple-compounded rate to the equivalent continuously compounded rate over the same period t.</p><table>
-<tr><th>eg: </th><td>.uqf.simple_to_cont[0.05;1]  -> 0.04879016</td></tr>
+		<div class='entity' id='-uqf-simple_to_cont'><h2>.qf.simple_to_cont</h2><p>Convert a simple-compounded rate to the equivalent continuously compounded rate over the same period t.</p><table>
+<tr><th>eg: </th><td>.qf.simple_to_cont[0.05;1]  -> 0.04879016</td></tr>
 <tr><th>Return: </th><td>the continuously compounded rate with the same growth over t</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>r</strong> - simple decimal annual rate</li>

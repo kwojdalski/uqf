@@ -82,7 +82,7 @@ git log PREV..HEAD --oneline | wc -l
 Now write the release notes. Structure them as follows:
 
 - **Overview** (2-3 sentences): what was the main thrust of today's work — new q functions, bug fixes, new example scripts, test coverage, refactoring, or documentation? Be specific about which subsystems moved.
-- **Changes by area**: group commits by module/directory. For each group, write 1-2 sentences describing what changed and why it matters. Focus on: `src/*.q` (the `.uqf` namespace's pricing/risk/execution modules — stats, ccy, daycount, rates, forwards, options, risk, execution, book), `tests/` (qUnit suite), `scripts/` (worked examples and dev tooling), `lib/` (vendored third-party dependencies), `docs/` (qDoc output), and config/dependency files (`README.md`, `.claude/skills/`). Skip areas with no changes.
+- **Changes by area**: group commits by module/directory. For each group, write 1-2 sentences describing what changed and why it matters. Focus on: `src/*.q` (the `.qf` namespace's pricing/risk/execution modules — stats, ccy, daycount, rates, forwards, options, risk, execution, book), `tests/` (qUnit suite), `scripts/` (worked examples and dev tooling), `lib/` (vendored third-party dependencies), `docs/` (qDoc output), and config/dependency files (`README.md`, `.claude/skills/`). Skip areas with no changes.
 - **Files changed**: include the `git diff --stat` summary line (e.g. "12 files changed, 340 insertions(+), 45 deletions(-)").
 
 Keep the notes factual, concise, and under 40 lines total. No preamble, no sign-off.
