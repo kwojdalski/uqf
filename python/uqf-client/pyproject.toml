@@ -8,7 +8,10 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "fastmcp>=3.4.7",
     "kola>=2.5.0",
+    "loguru>=0.7.3",
+    "typer>=0.27.1",
 ]
 
 [build-system]

@@ -26,3 +26,7 @@ actual/
 # run artifacts from scripts/timer_replay_example.q - regenerate on demand,
 # don't commit it
 /scripts/output/
+
+# bytecode cache from running scripts/torq_demo.py directly
+__pycache__/
+*.pyc
