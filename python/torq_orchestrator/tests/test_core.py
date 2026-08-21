@@ -77,7 +77,7 @@ def test_clean_removes_generated_data_dir(fake_paths: core.TorqDemoPaths, monkey
 
 
 def test_get_process_config_returns_vendored_row(fake_paths: core.TorqDemoPaths):
-    row = core.get_process_config(fake_paths, "discovery1")
+    row = core.get_process_config(fake_paths, "discovery1", resolve=False)
     assert row["proctype"] == "discovery"
     assert row["port"] == "{KDBBASEPORT}"
 
@@ -85,6 +85,31 @@ def test_get_process_config_returns_vendored_row(fake_paths: core.TorqDemoPaths)
 def test_get_process_config_unknown_process_raises(fake_paths: core.TorqDemoPaths):
     with pytest.raises(core.TorqDemoError):
         core.get_process_config(fake_paths, "nope1")
+
+
+def test_get_process_config_resolves_brace_arith_placeholder(fake_paths: core.TorqDemoPaths):
+    row = core.get_process_config(fake_paths, "fxfeed1", base_port=7000)
+    assert row["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
+
+
+def test_get_process_config_resolves_dollar_brace_placeholder(fake_paths: core.TorqDemoPaths):
+    row = core.get_process_config(fake_paths, "discovery1")
+    assert row["load"] == str(fake_paths.torqhome / "code" / "processes" / "discovery.q")
+
+
+def test_get_process_config_resolve_false_leaves_placeholders_literal(
+    fake_paths: core.TorqDemoPaths,
+):
+    row = core.get_process_config(fake_paths, "discovery1", resolve=False)
+    assert row["load"] == "${KDBCODE}/processes/discovery.q"
+    assert row["port"] == "{KDBBASEPORT}"
+
+
+def test_resolve_process_config_leaves_unknown_var_literal():
+    row = {"port": "{NOT_A_REAL_VAR}", "load": "${ALSO_NOT_REAL}/x.q"}
+    resolved = core.resolve_process_config(row, {"KDBBASEPORT": "6010"})
+    assert resolved["port"] == "{NOT_A_REAL_VAR}"
+    assert resolved["load"] == "${ALSO_NOT_REAL}/x.q"
 
 
 def test_set_process_config_unknown_field_raises(fake_paths: core.TorqDemoPaths):

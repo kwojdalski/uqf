@@ -61,7 +61,7 @@ summary [--port N]                    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s)
 clean                                 wipe ../../scripts/output/torq-demo/
 query EXPR --port N                   run a synchronous q expression
-config-get PROCNAME [FIELD]           show a process's effective process.csv row
+config-get PROCNAME [FIELD] [--raw]   show a process's effective process.csv row, resolved
 config-set PROCNAME FIELD VALUE       persist a process.csv field override
 raw -- ARGS...                        anything else torq.sh supports
 ```
@@ -82,6 +82,12 @@ rows every time `bootstrap()` (re)generates `process.csv`.
 ```
 uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py config-set fxfeed1 startwithall 0
 ```
+
+`config-get` resolves both of `process.csv`'s placeholder styles by
+default - `${VAR}`/`$VAR` (`load=${KDBHDB}` -> the real path) and the port
+column's `{VAR}`/`{VAR}+N` arithmetic shorthand (`port={KDBBASEPORT}+3` ->
+`6013`), evaluated the same way `torq.sh` itself does at process-start
+time. Pass `--raw` to see the literal value instead.
 
 Valid fields are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`,

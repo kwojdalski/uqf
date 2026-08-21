@@ -103,11 +103,19 @@ def torq_demo_query(
 
 
 @mcp.tool
-def torq_demo_get_config(procname: str) -> dict[str, str]:
+def torq_demo_get_config(
+    procname: str, port: int = core.DEFAULT_BASE_PORT, resolve: bool = True
+) -> dict[str, str]:
     """Return a process's effective process.csv row (vendored/fxfeed1
-    values with any torq_demo_set_config overrides applied on top)."""
+    values with any torq_demo_set_config overrides applied on top). With
+    resolve=True (the default), ${VAR}/{VAR}+N placeholders (KDBBASEPORT,
+    KDBHDB, ...) are evaluated against the same env torq.sh itself would
+    use; pass resolve=False to see them literal.
+    """
     try:
-        return core.get_process_config(core.default_paths(), procname)
+        return core.get_process_config(
+            core.default_paths(), procname, base_port=port, resolve=resolve
+        )
     except core.TorqDemoError as exc:
         return {"error": str(exc)}
 

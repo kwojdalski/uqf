@@ -54,7 +54,9 @@ summary [--port N]                    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/torq-demo/
 query EXPR --port N                   run a synchronous q expression against a process
-config-get PROCNAME [FIELD]           show a process's effective process.csv row (or one field)
+config-get PROCNAME [FIELD] [--port N] [--raw]  show a process's effective process.csv row
+                                                 (or one field), with placeholders resolved
+                                                 unless --raw
 config-set PROCNAME FIELD VALUE       persist a process.csv field override for a process
 raw -- ARGS...                        pass any other torq.sh verb straight through
                                        (e.g. `raw -- debug rdb1`, `raw -- top feed1`)
@@ -114,6 +116,15 @@ uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py 
 uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py config-get fxfeed1 startwithall
 uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py config-set fxfeed1 startwithall 0
 ```
+
+`config-get` resolves `process.csv`'s two placeholder styles by default -
+`${VAR}`/`$VAR` (e.g. `load=${KDBHDB}` -> the real path,
+`U=${TORQAPPHOME}/appconfig/passwords/accesslist.txt` -> the real path) and
+the port column's own `{VAR}`/`{VAR}+N`/`{VAR}-N` arithmetic shorthand
+(e.g. `port={KDBBASEPORT}+3` -> `6013`) - the same values `torq.sh` itself
+substitutes at process-start time, evaluated against
+`build_env(paths, --port)`. Pass `--raw` to see the literal, unresolved
+value instead (e.g. to copy it into a `config-set` call).
 
 Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`,
