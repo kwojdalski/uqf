@@ -32,14 +32,14 @@
               <p class="caption"><span class="caption-text">Namespaces</span></p>
 
 
-<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.uqf (ccy.q)</a></li>
-	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.uqf (execution.q)</a></li>
-	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.uqf (rates.q)</a></li>
-	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.uqf (options.q)</a></li>
-	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.uqf (risk.q)</a></li>
-	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.uqf (daycount.q)</a></li>
-	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.uqf (stats.q)</a></li>
-	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.uqf (forwards.q)</a></li>
+<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.qf (ccy.q)</a></li>
+	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.qf (execution.q)</a></li>
+	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.qf (rates.q)</a></li>
+	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.qf (options.q)</a></li>
+	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.qf (risk.q)</a></li>
+	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.qf (daycount.q)</a></li>
+	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.qf (stats.q)</a></li>
+	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.qf (forwards.q)</a></li>
 	<li class="toctree-l1 cls-uqfdata-cls"><a class="reference internal cls-uqfdata-cls" href='data.q.html' >.uqfdata</a></li>
 </ul><!--NAMESPACE_END-->
 
@@ -88,50 +88,50 @@
 	<div id='headerDoc'>risk.q - position-level P&L, carry and Value-at-Risk helpers for an FX book. Requires stats.q (inv_ncdf) to be loaded first for var_parametric. .</div>
 	<div id='summary'><h2>Entity Summary</h2><table class='overviewSummary'><tbody>
 <tr><th>Entities</th><th>Short Description</th></tr>
-		<tr><td><a href='#-uqf-carry_pnl'>.uqf.carry_pnl</a></td><td>Money value of that same forward premium/discount on a given</td></tr>
-		<tr><td><a href='#-uqf-carry_return'>.uqf.carry_return</a></td><td>Forward premium/discount implied by spot vs.</td></tr>
-		<tr><td><a href='#-uqf-pip_value'>.uqf.pip_value</a></td><td>Money value of a 1-pip move on a given base-currency notiona</td></tr>
-		<tr><td><a href='#-uqf-pnl'>.uqf.pnl</a></td><td>Mark-to-market P&L of a spot position, in quote currency.</td></tr>
-		<tr><td><a href='#-uqf-var_historical'>.uqf.var_historical</a></td><td>Historical simulation VaR: the magnitude of the (1-confidenc</td></tr>
-		<tr><td><a href='#-uqf-var_parametric'>.uqf.var_parametric</a></td><td>One-sided parametric (variance-covariance) VaR for a positio</td></tr>
+		<tr><td><a href='#-uqf-carry_pnl'>.qf.carry_pnl</a></td><td>Money value of that same forward premium/discount on a given</td></tr>
+		<tr><td><a href='#-uqf-carry_return'>.qf.carry_return</a></td><td>Forward premium/discount implied by spot vs.</td></tr>
+		<tr><td><a href='#-uqf-pip_value'>.qf.pip_value</a></td><td>Money value of a 1-pip move on a given base-currency notiona</td></tr>
+		<tr><td><a href='#-uqf-pnl'>.qf.pnl</a></td><td>Mark-to-market P&L of a spot position, in quote currency.</td></tr>
+		<tr><td><a href='#-uqf-var_historical'>.qf.var_historical</a></td><td>Historical simulation VaR: the magnitude of the (1-confidenc</td></tr>
+		<tr><td><a href='#-uqf-var_parametric'>.qf.var_parametric</a></td><td>One-sided parametric (variance-covariance) VaR for a positio</td></tr>
 </tbody></table></div>
 	<div class='details'>
 	<h2>Entity Details</h2>
-		<div class='entity' id='-uqf-carry_pnl'><h2>.uqf.carry_pnl</h2><p>Money value of that same forward premium/discount on a given notional.</p><table>
-<tr><th>eg: </th><td>.uqf.carry_pnl[1000000;1.10;1.1050]  -> 5000f</td></tr>
+		<div class='entity' id='-uqf-carry_pnl'><h2>.qf.carry_pnl</h2><p>Money value of that same forward premium/discount on a given notional.</p><table>
+<tr><th>eg: </th><td>.qf.carry_pnl[1000000;1.10;1.1050]  -> 5000f</td></tr>
 <tr><th>Return: </th><td>the carry P&L, in quote currency</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>notional</strong> - position size in base currency units</li>
 	<li><strong>fwd</strong> - outright forward rate</li>
 	<li><strong>spot</strong> - spot rate</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-carry_return'><h2>.uqf.carry_return</h2><p>Forward premium/discount implied by spot vs. an outright, as a decimal return: (F-S)/S. Positive means the base currency trades forward at a premium (i.e. rf is below rd under CIRP).</p><table>
-<tr><th>eg: </th><td>.uqf.carry_return[1.10;1.1050]  -> 0.004545455</td></tr>
+		<div class='entity' id='-uqf-carry_return'><h2>.qf.carry_return</h2><p>Forward premium/discount implied by spot vs. an outright, as a decimal return: (F-S)/S. Positive means the base currency trades forward at a premium (i.e. rf is below rd under CIRP).</p><table>
+<tr><th>eg: </th><td>.qf.carry_return[1.10;1.1050]  -> 0.004545455</td></tr>
 <tr><th>Return: </th><td>the decimal forward premium/discount</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>fwd</strong> - outright forward rate</li>
 	<li><strong>spot</strong> - spot rate</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-pip_value'><h2>.uqf.pip_value</h2><p>Money value of a 1-pip move on a given base-currency notional, in quote currency.</p><table>
-<tr><th>eg: </th><td>.uqf.pip_value[1000000;10000]  -> 100f</td></tr>
+		<div class='entity' id='-uqf-pip_value'><h2>.qf.pip_value</h2><p>Money value of a 1-pip move on a given base-currency notional, in quote currency.</p><table>
+<tr><th>eg: </th><td>.qf.pip_value[1000000;10000]  -> 100f</td></tr>
 <tr><th>Return: </th><td>the value of a 1-pip move, in quote currency</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>notional</strong> - position size in base currency units</li>
 	<li><strong>pip_factor</strong> - 10000 for most pairs, 100 for JPY crosses</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-pnl'><h2>.uqf.pnl</h2><p>Mark-to-market P&L of a spot position, in quote currency.</p><table>
-<tr><th>eg: </th><td>.uqf.pnl[1000000;1.1000;1.1050;1]  -> 5000f</td></tr>
+		<div class='entity' id='-uqf-pnl'><h2>.qf.pnl</h2><p>Mark-to-market P&L of a spot position, in quote currency.</p><table>
+<tr><th>eg: </th><td>.qf.pnl[1000000;1.1000;1.1050;1]  -> 5000f</td></tr>
 <tr><th>Return: </th><td>the P&L, in quote currency</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>notional</strong> - position size in base currency units</li>
 	<li><strong>side</strong> - 1 for long base currency, -1 for short</li>
 	<li><strong>entry_rate</strong> - the rate the position was opened at</li>
 	<li><strong>exit_rate</strong> - the current/closing rate</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-var_historical'><h2>.uqf.var_historical</h2><p>Historical simulation VaR: the magnitude of the (1-confidence) empirical percentile of a series of historical P&L outcomes.</p><table>
-<tr><th>eg: </th><td>.uqf.var_historical[-100+til 200;0.95]  -> 90 (5th percentile of a 200-outcome series)</td></tr>
+		<div class='entity' id='-uqf-var_historical'><h2>.qf.var_historical</h2><p>Historical simulation VaR: the magnitude of the (1-confidence) empirical percentile of a series of historical P&L outcomes.</p><table>
+<tr><th>eg: </th><td>.qf.var_historical[-100+til 200;0.95]  -> 90 (5th percentile of a 200-outcome series)</td></tr>
 <tr><th>Return: </th><td>a positive loss estimate, in the same units as pnl_series</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>pnl_series</strong> - a list of historical P&L outcomes</li>
 	<li><strong>confidence</strong> - one-tailed confidence level, e.g. 0.95 or 0.99</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-var_parametric'><h2>.uqf.var_parametric</h2><p>One-sided parametric (variance-covariance) VaR for a position with annualised volatility vol over a horizon of t years, at a one-tailed confidence level (e.g. 0.95, 0.99).</p><table>
-<tr><th>eg: </th><td>.uqf.var_parametric[1000000;0.10;1%252;0.95]  -> 10361.6 (1-day 95% VaR)</td></tr>
+		<div class='entity' id='-uqf-var_parametric'><h2>.qf.var_parametric</h2><p>One-sided parametric (variance-covariance) VaR for a position with annualised volatility vol over a horizon of t years, at a one-tailed confidence level (e.g. 0.95, 0.99).</p><table>
+<tr><th>eg: </th><td>.qf.var_parametric[1000000;0.10;1%252;0.95]  -> 10361.6 (1-day 95% VaR)</td></tr>
 <tr><th>Return: </th><td>a positive loss estimate, in the notional's currency</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>notional</strong> - position size (sign ignored - VaR is a loss magnitude)</li>

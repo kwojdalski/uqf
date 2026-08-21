@@ -35,12 +35,12 @@ paths relative to it (e.g. `src/stats.q`).
 
 ```
 q src/init.q
-q).uqf.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
-q).uqf.fwd_simple[1.10;0.05;0.02;1]              / CIRP outright forward
-q).uqf.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
+q).qf.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
+q).qf.fwd_simple[1.10;0.05;0.02;1]              / CIRP outright forward
+q).qf.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 ```
 
-Every function lives in the `.uqf` namespace after loading `src/init.q`.
+Every function lives in the `.qf` namespace after loading `src/init.q`.
 
 ## Layout
 
@@ -181,7 +181,7 @@ curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place 
 
 `qstudio.jar` also bundles a small q linter that `gen-docs.sh` runs as a
 side effect (`docs/lint.csv`/`docs/lint.html`); this repo's multi-file
-`.uqf` namespace triggers a number of expected "undeclared variable"
+`.qf` namespace triggers a number of expected "undeclared variable"
 false positives there (the linter checks each file in isolation and can't
 see across `src/*.q`), so don't be alarmed by those specifically.
 

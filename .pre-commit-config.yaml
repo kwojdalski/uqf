@@ -1,8 +1,8 @@
 # Pre-commit configuration for uqf (q/kdb+ quant library).
-# Structure inherited from ../masters_thesis; local hooks swapped for q/qUnit
-# since the library itself is pure q. python/uqf-client is a small Python/uv
-# subproject (a kola/Polars IPC client), so it gets its own ruff + pytest
-# hooks, scoped to that subtree only.
+# Local hooks are scoped for q/qUnit since the library itself is pure q.
+# python/uqf-client is a small Python/uv subproject (a kola/Polars IPC
+# client), so it gets its own ruff + pytest hooks, scoped to that subtree
+# only.
 repos:
   # Basic file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks

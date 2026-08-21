@@ -88,9 +88,9 @@ Compose the above into one function:
   the caller consults first.
 
 WHERE THIS LIVES
-New file src/book.q, `\d .uqf` at top / `\d .` at end like every other
+New file src/book.q, `\d .qf` at top / `\d .` at end like every other
 src/*.q file (see kdb-q-conventions skill's Layout section), added to
-src/init.q's load order after data.q. Reuse the existing `.uqf` namespace -
+src/init.q's load order after data.q. Reuse the existing `.qf` namespace -
 don't invent a new one.
 
 CONVENTIONS TO FOLLOW (this repo, not generic TorQ)

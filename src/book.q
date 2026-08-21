@@ -6,7 +6,7 @@
 / first) list per row.
 / .
 
-\d .uqf
+\d .qf
 
 / Fold N per-level source columns into one vector-valued column, for each
 / group in level_groups. Each row of the resulting column holds the N
@@ -18,7 +18,7 @@
 / @param level_groups dict target_col!ordered_source_cols - one entry per
 /   group to fold, source columns listed in the desired fold order
 / @return t with each group's source columns replaced by one target_col
-/ @eg .uqf.fold_level_columns[t;(enlist `bid_prices)!(enlist `bid0`bid1)]
+/ @eg .qf.fold_level_columns[t;(enlist `bid_prices)!(enlist `bid0`bid1)]
 fold_level_columns:{[t;level_groups]
     target_cols:(key level_groups),();
     i:0;
@@ -80,7 +80,7 @@ sorted_source_cols_for_prefix:{[col_names;col_strs;prefix_target]
 / @return dict target_col!ordered_source_cols, ready for fold_level_columns
 / @throws error if a group's parsed level indices aren't a contiguous
 /   0..N-1 run, naming the prefix and the levels actually found
-/ @eg .uqf.derive_level_groups[`bid0`bid1`bidSize0`bidSize1;enlist ("bid";`bid_prices)]
+/ @eg .qf.derive_level_groups[`bid0`bid1`bidSize0`bidSize1;enlist ("bid";`bid_prices)]
 derive_level_groups:{[col_names;prefix_targets]
     col_names:col_names,();
     prefix_targets:prefix_targets,();
@@ -104,7 +104,7 @@ derive_level_groups:{[col_names;prefix_targets]
 / @param t the table (already relevelled, if applicable)
 / @param sym_cols explicit list of column names to cast to symbol
 / @return t with sym_cols cast to symbol
-/ @eg .uqf.symbolize_columns[t;`sym`side]
+/ @eg .qf.symbolize_columns[t;`sym`side]
 symbolize_columns:{[t;sym_cols]
     sym_cols:sym_cols,();
     i:0;
@@ -132,7 +132,7 @@ is_string_column:{[t;col] (count t col) and all 10h=type each t col};
 / @param allowlist column names always flagged when present and string-typed, e.g. `sym`side`exchange`venue`ccy
 / @param cardinality_ratio flag a string column when (distinct count / row count) is below this ratio
 / @return list of column names likely to be mis-typed symbol columns
-/ @eg .uqf.candidate_symbol_columns[t;`sym`side;0.1]
+/ @eg .qf.candidate_symbol_columns[t;`sym`side;0.1]
 candidate_symbol_columns:{[t;allowlist;cardinality_ratio]
     allowlist:allowlist,();
     all_cols:cols t;
@@ -155,7 +155,7 @@ candidate_symbol_columns:{[t;allowlist;cardinality_ratio]
 /   resolved - run derive_level_groups first, or build it by hand)
 / @param sym_cols explicit list of column names to cast string->symbol
 / @return the corrected table
-/ @eg .uqf.book_from_wide_levels[t;.uqf.derive_level_groups[cols t;prefix_targets];`sym`side]
+/ @eg .qf.book_from_wide_levels[t;.qf.derive_level_groups[cols t;prefix_targets];`sym`side]
 book_from_wide_levels:{[t;level_groups;sym_cols]
     folded:fold_level_columns[t;level_groups];
     symbolize_columns[folded;sym_cols]};
