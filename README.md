@@ -91,6 +91,14 @@ lib/
                       pattern (a .z.ts callback publishing rows into a
                       table on a fixed interval, simulating a live feed
                       from historical data)
+  torq-finance-starter-pack/  vendored TorQ layered reference application
+                              (see Licensing) - NOT loaded by src/init.q;
+                              a full example data-capture system (feed
+                              handlers, tickerplant, HDB with two days of
+                              sample quote/trade data, RDB/gateway config)
+                              built on top of lib/torq - see env/ for
+                              uqf's own, much lighter-weight take on some
+                              of the same table shapes
 
 tests/
   lib/qunit.q            vendored qUnit test framework (see Licensing)
@@ -337,3 +345,17 @@ two vendored files:
   dataset upfront in one vectorized batch (uqf's own `scripts/*.q`
   examples do the latter). Not loaded by `src/init.q` or anything else in
   this repo; vendored for reference only.
+- `lib/torq-finance-starter-pack/`, vendored from
+  [DataIntellectTech/TorQ-Finance-Starter-Pack](https://github.com/DataIntellectTech/TorQ-Finance-Starter-Pack)
+  at commit `50fcd5a`, distributed under the MIT License (full text at
+  `lib/torq-finance-starter-pack/LICENSE-torq-finance-starter-pack`) -
+  permissive and fine to combine with this repository's MIT code. The
+  layered reference application built on top of `lib/torq` - a full
+  example data-capture system (feed handlers, tickerplant, RDB, an HDB
+  with two days of sample quote/trade data, gateway config) rather than
+  the bare framework TorQ itself is. Same rationale as `lib/torq`: this
+  library has no long-running processes for any of that machinery to
+  manage, so nothing in `src/*.q` calls into it - vendored for reference
+  only, at the repo owner's explicit choice. `env/`'s own table schemas
+  cover some of the same shapes (quotes/trades) at a much lighter weight,
+  without the process/feed-handler layer this pulls in.
