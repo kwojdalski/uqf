@@ -111,6 +111,15 @@ scripts/
                             `yes "" | q scripts/timer_replay_example.q`
                             (see the script's own header for why)
 
+env/
+  schemas.q   10 empty, typed table schemas for a broader trading system
+              (market_data, positions, predictions, orders, trades,
+              markouts, reference_data, order_routing, connections,
+              economic_calendar) - scaffolding/reference, not part of the
+              uqf pricing library itself; see env/README.md
+  seed.q      populates every env/schemas.q table with a small, coherent
+              example scenario
+
 .claude/skills/kdb-q-conventions/   q-language conventions for this repo,
                                      including the operator-precedence gotcha
                                      below (loaded automatically by Claude
