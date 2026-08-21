@@ -29,26 +29,26 @@ rows_per_pair:20;
 
 / Illustrative, approximately realistic spot rates (not live market data).
 / tick_scale is the price columns' unit relative to the quoted rate (1 =
-/ hold the rate directly, as a float); pip_size is one pip (0.0001) in
-/ that same unit, so a level step of one pip_size is a 1-pip gap between
-/ depth levels, matching typical eFX top-of-book spacing. row_drift is a
-/ small, sub-pip synthetic drift between the demo's rows, just so they
-/ aren't all identical - kept far smaller than pip_size so it never reads
-/ as another price level.
+/ hold the rate directly, as a float); .qf.pip_size (one pip, 0.0001 -
+/ src/example_defaults.q) scaled by tick_scale gives a level step of one
+/ pip in that same unit, matching typical eFX top-of-book spacing.
+/ row_drift is a small, sub-pip synthetic drift between the demo's rows,
+/ just so they aren't all identical - kept far smaller than pip_size so it
+/ never reads as another price level.
 pairs:`AUDUSD`EURUSD`EURPLN;
 approx_spot_rates:0.6550 1.0850 4.2500;
 tick_scale:1;
-pip_size:0.0001*tick_scale;
+pip_size:.qf.pip_size*tick_scale;
 row_drift:pip_size%10;
 base_prices:tick_scale*approx_spot_rates;
 
-/ Size levels in clean round millions (1e6, 2e6, ... 1e7 across 10 levels)
+/ Size levels in clean round millions (.qf.size_unit, src/example_defaults.q)
 / - typical order-of-magnitude for eFX top-of-book depth on a major pair.
 / ask starts a tenth of a level below bid so bid/ask sizes stay visually
-/ distinct. size_row_drift is a small per-row jitter (1% of a level) so
-/ rows aren't identical, without blurring the clean million-level pattern.
-size_unit:1e6;
-size_row_drift:1e4;
+/ distinct. .qf.size_row_drift is a small per-row jitter (1% of a level)
+/ so rows aren't identical, without blurring the clean million-level pattern.
+size_unit:.qf.size_unit;
+size_row_drift:.qf.size_row_drift;
 
 / Build one prefix's worth of zero-padded, per-level columns as a single
 / dict col_name!column_vector, e.g. bid_px_00!... bid_px_09!... . row_step

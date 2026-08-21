@@ -11,3 +11,4 @@
 \l src/execution.q
 \l src/book.q
 \l src/microstructure.q
+\l src/example_defaults.q
