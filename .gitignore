@@ -22,3 +22,7 @@ actual/
 
 # build output from scripts/build.sh - regenerate on demand, don't commit it
 /dist/
+
+# run artifacts from scripts/timer_replay_example.q - regenerate on demand,
+# don't commit it
+/scripts/output/
