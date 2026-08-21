@@ -27,7 +27,7 @@ from torq_orchestrator.logger import get_logger
 
 log = get_logger(__name__)
 
-DEFAULT_BASE_PORT = 6010
+DEFAULT_BASE_PORT = 6050
 FXFEED_PORT_OFFSET = 19  # the one offset the vendored process.csv leaves free
 PROCESS_CSV_FIELDS = (
     "host",

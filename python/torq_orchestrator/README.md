@@ -97,7 +97,7 @@ uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py 
 `config-get` resolves both of `process.csv`'s placeholder styles by
 default - `${VAR}`/`$VAR` (`load=${KDBHDB}` -> the real path) and the port
 column's `{VAR}`/`{VAR}+N` arithmetic shorthand (`port={KDBBASEPORT}+3` ->
-`6013`), evaluated the same way `torq.sh` itself does at process-start
+`6053`), evaluated the same way `torq.sh` itself does at process-start
 time. Pass `--raw` to see the literal value instead.
 
 Valid fields are `process.csv`'s own columns: `host`, `port`, `proctype`,

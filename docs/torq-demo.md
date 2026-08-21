@@ -65,7 +65,7 @@ raw -- ARGS...                        pass any other torq.sh verb straight throu
 ```
 
 `PROCS` is `all` or a space-separated list of process names. `--port` sets
-`KDBBASEPORT` (default `6010`, see the port table below). Full `--help` is
+`KDBBASEPORT` (default `6050`, see the port table below). Full `--help` is
 available on the command itself and on every subcommand.
 
 ## Listing things
@@ -105,23 +105,23 @@ unless you have a fully-licensed kdb+/KDB-X. `killtick` and `tpreplay1` are
 on-demand utility processes, not part of the standing stack, so they also
 don't auto-start.
 
-Default ports (base `6010`, override with `--port <n>`):
+Default ports (base `6050`, override with `--port <n>`):
 
 | Port | Process | Role |
 |---|---|---|
-| 6010 | stp1 | segmented tickerplant |
-| 6011 | discovery1 | service discovery |
-| 6012 | rdb1 | real-time DB (today's ticks) |
-| 6013 / 6014 | hdb1 / hdb2 | historical DB (the vendored sample data) |
-| 6015 | wdb1 | writedown process (rolls RDB -> HDB) |
-| 6016 | sort1 | sorts data before writedown |
-| 6017 | gateway1 | single query entry point across hdb/rdb |
-| 6021 | housekeeping1 | log/process housekeeping |
-| 6024 | feed1 | the vendored dummy feed - simulated equity quotes/trades |
-| 6025 | sctp1 | segmented chained tickerplant |
-| 6026 / 6027 | sortworker1/2 | sort worker pool |
-| 6028 | metrics1 | metrics collector |
-| 6029 | fxfeed1 | uqf's own feed - simulated FX quotes (see below) |
+| 6050 | stp1 | segmented tickerplant |
+| 6051 | discovery1 | service discovery |
+| 6052 | rdb1 | real-time DB (today's ticks) |
+| 6053 / 6054 | hdb1 / hdb2 | historical DB (the vendored sample data) |
+| 6055 | wdb1 | writedown process (rolls RDB -> HDB) |
+| 6056 | sort1 | sorts data before writedown |
+| 6057 | gateway1 | single query entry point across hdb/rdb |
+| 6061 | housekeeping1 | log/process housekeeping |
+| 6064 | feed1 | the vendored dummy feed - simulated equity quotes/trades |
+| 6065 | sctp1 | segmented chained tickerplant |
+| 6066 / 6067 | sortworker1/2 | sort worker pool |
+| 6068 | metrics1 | metrics collector |
+| 6069 | fxfeed1 | uqf's own feed - simulated FX quotes (see below) |
 
 ## Changing a process's config
 
@@ -146,7 +146,7 @@ uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py 
 `${VAR}`/`$VAR` (e.g. `load=${KDBHDB}` -> the real path,
 `U=${TORQAPPHOME}/appconfig/passwords/accesslist.txt` -> the real path) and
 the port column's own `{VAR}`/`{VAR}+N`/`{VAR}-N` arithmetic shorthand
-(e.g. `port={KDBBASEPORT}+3` -> `6013`) - the same values `torq.sh` itself
+(e.g. `port={KDBBASEPORT}+3` -> `6053`) - the same values `torq.sh` itself
 substitutes at process-start time, evaluated against
 `build_env(paths, --port)`. Pass `--raw` to see the literal, unresolved
 value instead (e.g. to copy it into a `config-set` call).
@@ -190,17 +190,17 @@ placeholder demo credentials, `admin:admin` works for everything.
 
 ```
 uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py query \
-    "select count i by sym from quote" --port 6012        # rdb1
+    "select count i by sym from quote" --port 6052        # rdb1
 uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py query \
-    "select from quote where sym in \`EURUSD\`GBPUSD\`USDJPY\`AUDUSD" --port 6012
+    "select from quote where sym in \`EURUSD\`GBPUSD\`USDJPY\`AUDUSD" --port 6052
 ```
 
 `query` returns a Polars DataFrame (via `kola`, the same IPC library
 `uqf_client.UqfClient` uses for the pricing library itself) for table
 results. From a plain q session instead: `q)h:hopen
-\`:localhost:6012:admin:admin`, then `h "..."`, then `hclose h`.
+\`:localhost:6052:admin:admin`, then `h "..."`, then `hclose h`.
 
-The gateway (6017) is the intended single entry point for querying across
+The gateway (6057) is the intended single entry point for querying across
 the RDB and HDB together rather than connecting to each directly - see
 `lib/torq-finance-starter-pack/docs/gettingstarted.md` and
 `lib/torq/code/processes/gateway.q` for its `.gw.execute` API; this repo
