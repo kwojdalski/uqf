@@ -17,7 +17,9 @@
 // a mid-expression variable assignment/read pattern PeachQ doesn't
 // evaluate correctly (see README's Licensing section).
 //
-// Run from the repository root: q scripts/cross_markout_example.q
+// Run from the repository root: q scripts/cross_markout_example.q [n_ticks]
+// n_ticks (default 6) is how many ticks to generate per leg - optional,
+// positional, same convention as timer_replay_example.q's parameters.
 
 \c 400 1000
 \l src/init.q
@@ -65,8 +67,13 @@ mk_tick_series:{[sym;start_spot;drift_per_tick;ts]
 
 / 6 ticks per leg over roughly a second: AUDUSD and EURPLN drift up,
 / EURUSD drifts down - so a synthetic AUDPLN move should show up as a
-/ genuine multi-leg story, not one leg dominating everything.
-n_ticks:6;
+/ genuine multi-leg story, not one leg dominating everything. Overridable
+/ via the command line (q scripts/cross_markout_example.q [n_ticks]) -
+/ .z.x is the list of args after the script name, always strings; cast
+/ and fall back to the default whenever an arg wasn't given, same
+/ convention as timer_replay_example.q's parameters.
+default_n_ticks:6;
+n_ticks:$[0<count .z.x; "J"$first .z.x; default_n_ticks];
 start_ts:.z.p;
 audusd_ts:mk_timestamps[n_ticks;start_ts];
 eurusd_ts:mk_timestamps[n_ticks;start_ts];

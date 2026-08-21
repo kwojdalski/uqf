@@ -14,7 +14,10 @@
 // a mid-expression variable assignment/read pattern PeachQ doesn't
 // evaluate correctly (see README's Licensing section).
 //
-// Run from the repository root: q scripts/reshape_wide_order_book_multi_pair_example.q
+// Run from the repository root: q scripts/reshape_wide_order_book_multi_pair_example.q [rows_per_pair]
+// rows_per_pair (default 20) is how many rows each of the three pairs
+// contributes - optional, positional, same convention as
+// timer_replay_example.q's parameters.
 
 \c 400 1000
 \l src/init.q
@@ -25,7 +28,12 @@
 .log4q.sevl:`DEBUG;
 key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
-rows_per_pair:20;
+/ Overridable via the command line - .z.x is the list of args after the
+/ script name, always strings; cast and fall back to the default whenever
+/ an arg wasn't given, same convention as timer_replay_example.q's
+/ parameters.
+default_rows_per_pair:20;
+rows_per_pair:$[0<count .z.x; "J"$first .z.x; default_rows_per_pair];
 
 / Illustrative, approximately realistic spot rates (not live market data).
 / tick_scale is the price columns' unit relative to the quoted rate (1 =
