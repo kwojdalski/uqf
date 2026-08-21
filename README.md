@@ -110,6 +110,8 @@ tests/
 scripts/
   gen-docs.sh   regenerates docs/ via qDoc (see Documentation)
   run_qdoc.sh   alternative: serves browsable docs live via lib/q-doc/ (see Documentation)
+  torq_demo.sh  bridges lib/torq + lib/torq-finance-starter-pack into a
+                runnable demo (start/stop/summary) - see docs/torq-demo.md
   timer_replay_example.q   replays pre-generated synthetic ticks into a
                             live, growing quotes table on a system timer
                             (.z.ts), reacting after each row, instead of
@@ -358,4 +360,7 @@ two vendored files:
   manage, so nothing in `src/*.q` calls into it - vendored for reference
   only, at the repo owner's explicit choice. `env/`'s own table schemas
   cover some of the same shapes (quotes/trades) at a much lighter weight,
-  without the process/feed-handler layer this pulls in.
+  without the process/feed-handler layer this pulls in. It can still be
+  started up and queried, though - `scripts/torq_demo.sh` bridges it with
+  `lib/torq` (see docs/torq-demo.md) so the two vendored trees can run as
+  one demo without either being modified.
