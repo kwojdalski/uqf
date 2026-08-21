@@ -36,13 +36,17 @@ elsewhere in this repo for `src/`/`tests/` - plus `envsubst` and `rlwrap`
 
 ## What actually starts
 
-By default (`start all`) only the 13 processes marked `startwithall=1` in
-`lib/torq-finance-starter-pack/appconfig/process.csv` come up - the vendored
-README explains why: the KDB-X community edition's connection limits mean
-`monitor1`, `reporter1`, `filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1`
-stay off unless you have a fully-licensed kdb+/KDB-X. `killtick` and
-`tpreplay1` are on-demand utility processes, not part of the standing
-stack, so they also don't auto-start.
+By default (`start all`) 14 processes come up: the 13 marked
+`startwithall=1` in the vendored
+`lib/torq-finance-starter-pack/appconfig/process.csv`, plus `fxfeed1` -
+uqf's own addition, appended as one extra row to a *copy* of that csv that
+`torq_demo.sh` generates on the fly (never editing the vendored file
+itself; see the script's `generated_procs` section). The vendored README
+explains why the rest stay off: the KDB-X community edition's connection
+limits mean `monitor1`, `reporter1`, `filealerter1`, `dqc1`/`dqcdb1`,
+`dqe1`/`dqedb1` stay off unless you have a fully-licensed kdb+/KDB-X.
+`killtick` and `tpreplay1` are on-demand utility processes, not part of the
+standing stack, so they also don't auto-start.
 
 Default ports (base `6010`, override with `TORQ_DEMO_PORT=<n>
 scripts/torq_demo.sh start all`):
@@ -57,10 +61,37 @@ scripts/torq_demo.sh start all`):
 | 6016 | sort1 | sorts data before writedown |
 | 6017 | gateway1 | single query entry point across hdb/rdb |
 | 6021 | housekeeping1 | log/process housekeeping |
-| 6024 | feed1 | the dummy feed generating simulated quotes/trades |
+| 6024 | feed1 | the vendored dummy feed - simulated equity quotes/trades |
 | 6025 | sctp1 | segmented chained tickerplant |
 | 6026 / 6027 | sortworker1/2 | sort worker pool |
 | 6028 | metrics1 | metrics collector |
+| 6029 | fxfeed1 | uqf's own feed - simulated FX quotes (see below) |
+
+## fxfeed1 - adding your own row-generating process
+
+`scripts/torq_fx_feed.q` is a second, independent feed process publishing
+synthetic top-of-book quotes for `EURUSD`/`GBPUSD`/`USDJPY`/`AUDUSD` (a
+small random walk around a fixed spot, `+/-` 1 pip wide) into the same
+`quote` table the vendored `feed1` already writes equity quotes into -
+`sym` is just a symbol column, so FX pairs and equity tickers coexist in
+one table with no schema change. It's the concrete worked example for "how
+do I add a process that publishes rows": it mirrors
+`lib/torq-finance-starter-pack/code/tick/feed.q`'s own pattern exactly -
+
+1. find the tickerplant via discovery: `.servers.startupdepcycles[...]` /
+   `.servers.gethandlebytype[...]`
+2. build one row per pair as plain vectors (see the file's own comment on
+   why they must stay vectors, not dicts keyed by pair - a dict here
+   silently produces a `length` error on insert, the hard way to find out)
+3. publish with `h (`.u.upd;`quote;data)`
+4. repeat on a timer: `.timer.repeat[...]`
+
+To add your own: copy `torq_fx_feed.q`'s shape, drop the new file anywhere
+under `scripts/` (it's referenced by absolute path, not `KDBAPPCODE`, so it
+doesn't need to live inside either vendored `lib/` tree), and add a line
+for it to `torq_demo.sh`'s `generated_procs` section (pick a free port
+offset - `docs/torq-demo.md`'s table above lists every offset already
+taken).
 
 ## Connecting
 
@@ -72,6 +103,7 @@ q session:
 ```
 q)h:hopen `:localhost:6012:admin:admin        / rdb1 - today's live ticks
 q)h "select count i by sym from quote"
+q)h "select from quote where sym in `EURUSD`GBPUSD`USDJPY`AUDUSD"  / fxfeed1's rows
 q)hclose h
 ```
 

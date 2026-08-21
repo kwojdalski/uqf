@@ -72,6 +72,16 @@ mkdir -p "$torq_data/logs" "$torq_data/tplogs" "$torq_data/wdbhdb"
 
 kdb_base_port="${TORQ_DEMO_PORT:-6010}"
 
+# Extend (never edit in place) the vendored process.csv with uqf's own
+# extra processes - currently just fxfeed1 (scripts/torq_fx_feed.q), a
+# second row-generating process publishing synthetic FX quotes into the
+# same `quote` table feed1 already writes equity quotes into. Port
+# {KDBBASEPORT}+19 is the one offset the vendored csv leaves free (0-18,
+# 20-23 are all taken - see docs/torq-demo.md's port table).
+generated_procs="$torq_data/process.csv"
+cp "$TORQAPPHOME/appconfig/process.csv" "$generated_procs"
+echo "localhost,{KDBBASEPORT}+19,feed,fxfeed1,,1,0,,,\${UQFSCRIPTS}/torq_fx_feed.q,1,,q" >>"$generated_procs"
+
 # torq.sh unconditionally sources $SETENV (defaulting to lib/torq/setenv.sh,
 # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's own
 # defaults) - so generate our own setenv.sh into the gitignored data dir,
@@ -82,6 +92,7 @@ cat >"$generated_setenv" <<EOF
 export TORQHOME="$TORQHOME"
 export TORQAPPHOME="$TORQAPPHOME"
 export TORQDATA="$torq_data"
+export UQFSCRIPTS="$script_dir"
 export KDBCONFIG="$TORQHOME/config"
 export KDBCODE="$TORQHOME/code"
 export KDBAPPCONFIG="$TORQAPPHOME/appconfig"
@@ -96,7 +107,7 @@ export KDBDQCDB="$torq_data/dqe/dqcdb/database"
 export KDBDQEDB="$torq_data/dqe/dqedb/database"
 export KDBBASEPORT="$kdb_base_port"
 export KDBSTACKID="-stackid \${KDBBASEPORT}"
-export TORQPROCESSES="$TORQAPPHOME/appconfig/process.csv"
+export TORQPROCESSES="$generated_procs"
 export RLWRAP="rlwrap"
 export QCON="qcon"
 export QCMD="q"
