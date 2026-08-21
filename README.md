@@ -85,6 +85,12 @@ lib/
                   this library has no long-running processes for TorQ's
                   tickerplant/RDB/gateway machinery to manage, vendored for
                   reference only
+  qAutomatedTrading/  vendored q/kdb+ automated-trading example (see
+                      Licensing) - NOT loaded by src/init.q; reference for
+                      histTickData/timersvc.q's timer-driven CSV-replay
+                      pattern (a .z.ts callback publishing rows into a
+                      table on a fixed interval, simulating a live feed
+                      from historical data)
 
 tests/
   lib/qunit.q            vendored qUnit test framework (see Licensing)
@@ -96,6 +102,14 @@ tests/
 scripts/
   gen-docs.sh   regenerates docs/ via qDoc (see Documentation)
   run_qdoc.sh   alternative: serves browsable docs live via lib/q-doc/ (see Documentation)
+  timer_replay_example.q   replays pre-generated synthetic ticks into a
+                            live, growing quotes table on a system timer
+                            (.z.ts), reacting after each row, instead of
+                            building the whole dataset upfront in one
+                            batch like the other scripts/*.q examples -
+                            run non-interactively with
+                            `yes "" | q scripts/timer_replay_example.q`
+                            (see the script's own header for why)
 
 .claude/skills/kdb-q-conventions/   q-language conventions for this repo,
                                      including the operator-precedence gotcha
@@ -301,3 +315,16 @@ two vendored files:
   manage, so nothing in `src/*.q` calls into it. Not loaded by `src/init.q`
   or anything else in this repo, and not verified working here; vendored
   for reference only, at the repo owner's explicit choice.
+- `lib/qAutomatedTrading/`, vendored from
+  [shahrzl/qAutomatedTrading](https://github.com/shahrzl/qAutomatedTrading)
+  at commit `e508156`, distributed under the MIT License (full text at
+  `lib/qAutomatedTrading/LICENSE-qAutomatedTrading`) - permissive and fine
+  to combine with this repository's MIT code. A small automated-trading
+  example (tick replay, order management, a portfolio/P&L tracker) - the
+  part of interest here is `histTickData/timersvc.q`'s pattern for
+  simulating a live feed from historical data: load a CSV into a table,
+  then a `.z.ts` timer callback advances through it row-by-row on a fixed
+  interval, publishing each row rather than generating the whole synthetic
+  dataset upfront in one vectorized batch (uqf's own `scripts/*.q`
+  examples do the latter). Not loaded by `src/init.q` or anything else in
+  this repo; vendored for reference only.
