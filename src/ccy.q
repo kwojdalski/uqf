@@ -4,22 +4,22 @@
 / Canonical form used throughout this library is CURCUR - six uppercase
 / letters, no separator, e.g. `EURUSD (not `eurusd, not "EUR/USD").
 
-\d .qf
+\d .qccy
 
 / Private: string-coerce x without exploding an already-string input into
 / a list of 1-char strings - `string` on a char vector maps over each
 / char instead of acting as the identity, which is a real q gotcha.
 / @param x a symbol or string
 / @return x as a plain string
-/ @eg .qf.ccy_to_str `EURUSD  -> "EURUSD"
+/ @eg .qccy.ccy_to_str `EURUSD  -> "EURUSD"
 ccy_to_str:{[x] $[10h=type x; x; string x]};
 
 / True if x is already in canonical CURCUR form: exactly 6 uppercase
 / letters, no separator.
 / @param x a symbol or string
 / @return 1b if x is a valid CURCUR pair, else 0b
-/ @eg .qf.is_ccy_pair `EURUSD  -> 1b
-/ @eg .qf.is_ccy_pair "eur/usd"  -> 0b
+/ @eg .qccy.is_ccy_pair `EURUSD  -> 1b
+/ @eg .qccy.is_ccy_pair "eur/usd"  -> 0b
 is_ccy_pair:{[x]
     s:ccy_to_str x;
     length_ok:(count s)=6;
@@ -31,7 +31,7 @@ is_ccy_pair:{[x]
 / @param x a symbol or string, e.g. `eurusd, "EUR/USD", "eur-usd"
 / @return the canonical CURCUR symbol, e.g. `EURUSD
 / @throws error if x cannot be normalized to a 6-letter CURCUR pair
-/ @eg .qf.normalize_ccy_pair "eur/usd"  -> `EURUSD
+/ @eg .qccy.normalize_ccy_pair "eur/usd"  -> `EURUSD
 normalize_ccy_pair:{[x]
     s:ccy_to_str x;
     no_slash:ssr[s;"/";""];
@@ -48,7 +48,7 @@ normalize_ccy_pair:{[x]
 / @param quote 3-letter quote currency code, e.g. `USD or "usd"
 / @return the canonical CURCUR symbol, e.g. `EURUSD
 / @throws error if base or quote is not a 3-letter alphabetic code
-/ @eg .qf.ccy_pair_symbol[`EUR;`USD]  -> `EURUSD
+/ @eg .qccy.ccy_pair_symbol[`EUR;`USD]  -> `EURUSD
 ccy_pair_symbol:{[base;quote]
     b:upper ccy_to_str base;
     q:upper ccy_to_str quote;
@@ -63,7 +63,7 @@ ccy_pair_symbol:{[base;quote]
 / @param pair a symbol or string, e.g. `EURUSD, "eur/usd"
 / @return dict `base`quote!(baseSym;quoteSym)
 / @throws error if pair cannot be normalized to a 6-letter CURCUR pair
-/ @eg .qf.ccy_pair_legs `EURUSD  -> `base`quote!(`EUR;`USD)
+/ @eg .qccy.ccy_pair_legs `EURUSD  -> `base`quote!(`EUR;`USD)
 ccy_pair_legs:{[pair]
     canonical:normalize_ccy_pair pair;
     s:string canonical;

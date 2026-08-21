@@ -188,6 +188,13 @@ every other src/*.q file. Reuses the existing .qf namespace - this module
 calls execution.q's sweep_price/vwap and forwards.q's require_quotes_cols
 directly by name (same cross-file reuse pattern src/options.q already uses
 for stats.q's horner_eval), so it must load after both in src/init.q -
+
+[Note: this reflects the single-`.qf`-namespace convention in place when
+this prompt was drafted. The repo has since split into one flat namespace
+per file - microstructure.q now loads into `.qmicro`, and its cross-file
+calls are explicitly qualified (`.qexec.sweep_price`, `.qexec.vwap`,
+`.qfwd.require_quotes_cols`), not bare names. See kdb-q-conventions's
+current Layout section.]
 append `\l src/microstructure.q` as the new last line.
 
 CONVENTIONS TO FOLLOW (this repo, not generic q)

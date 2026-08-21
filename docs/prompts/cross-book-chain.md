@@ -6,7 +6,7 @@ repo's own conventions in `src/forwards.q`, `src/ccy.q`, and
 implement the function.
 
 ```
-Implement an N-leg generalization of .qf.cross_book_at_sizes in src/forwards.q.
+Implement an N-leg generalization of .qfwd.cross_book_at_sizes in src/forwards.q.
 Read src/forwards.q in full first (cross_book, ccy_orient_cross, oriented_levels,
 cross_sweep_side, cross_book_at_one_size, cross_book_at_sizes, side_cols) and
 src/ccy.q (ccy_pair_legs, ccy_pair_symbol) before writing anything - the new
@@ -78,7 +78,9 @@ CONVENTIONS TO FOLLOW (this repo, not generic TorQ)
 - snake_case everywhere (functions, params, locals) - see the Aug 2026 rename
   commits for precedent.
 - \d .qf at top of any new top-level function, \d . stays at end of file
-  (don't move it).
+  (don't move it). [Note: forwards.q now loads into `.qfwd`, not `.qf` -
+  the repo has since split into one flat namespace per file. See
+  kdb-q-conventions's current Layout section.]
 - Doc comment style: /@param, /@return, /@throws, /@eg immediately above each
   public function, matching the exact style already in forwards.q - do not
   switch to TorQ's .api.add convention, this library doesn't use it.

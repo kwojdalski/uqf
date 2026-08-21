@@ -35,27 +35,36 @@ paths relative to it (e.g. `src/stats.q`).
 
 ```
 q src/init.q
-q).qf.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
-q).qf.fwd_simple[1.10;0.05;0.02;1]              / CIRP outright forward
-q).qf.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
+q).qopt.gk_call[1.10;1.12;0.045;0.02;0.10;0.75]   / Garman-Kohlhagen call premium
+q).qfwd.fwd_simple[1.10;0.05;0.02;1]              / CIRP outright forward
+q).qexec.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 ```
 
-Every function lives in the `.qf` namespace after loading `src/init.q`.
+Each module loads into its own flat namespace after loading `src/init.q` -
+`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`,
+`.qexec`, `.qbook`, `.qmicro`, `.qex` (see Layout below for which file maps
+to which namespace). Kept single-level throughout rather than nested under
+a shared parent (e.g. not `.q.options`) - multi-level `\d` namespace paths
+don't resolve under the PeachQ interpreter this repo also targets.
 
 ## Layout
 
 ```
-src/
-  stats.q       normal distribution helpers (ncdf, npdf, inv_ncdf) + horner_eval
-  ccy.q         currency pair symbol convention: CURCUR validation/normalization
-  daycount.q    day count fraction conventions (ACT/360, ACT/365, 30E/360)
-  rates.q       discount/growth factors, simple<->continuous rate conversion
-  forwards.q    CIRP forwards/swap points, cross rates, synthetic cross books
-  options.q     Garman-Kohlhagen pricing, Greeks, implied vol
-  risk.q        pip value, P&L, carry, parametric & historical VaR
-  execution.q   markouts, effective spread, slippage, fill/reject ratios,
+src/  (each file loads into its own flat namespace, shown in [])
+  stats.q       [.qstats] normal distribution helpers (ncdf, npdf, inv_ncdf) + horner_eval
+  ccy.q         [.qccy] currency pair symbol convention: CURCUR validation/normalization
+  daycount.q    [.qdcf] day count fraction conventions (ACT/360, ACT/365, 30E/360)
+  rates.q       [.qrates] discount/growth factors, simple<->continuous rate conversion
+  forwards.q    [.qfwd] CIRP forwards/swap points, cross rates, synthetic cross books
+  options.q     [.qopt] Garman-Kohlhagen pricing, Greeks, implied vol
+  risk.q        [.qrisk] pip value, P&L, carry, parametric & historical VaR
+  execution.q   [.qexec] markouts, effective spread, slippage, fill/reject ratios,
                 vwap, order-book sweep pricing
-  example_defaults.q   shared scaling constants (pip_size, size_unit,
+  book.q        [.qbook] reshapes wide/mis-typed order book tables into the
+                vector-column shape execution.q/forwards.q expect
+  microstructure.q  [.qmicro] LOB microstructure signals: book pressure,
+                    microprice, order flow imbalance, VAMP, and more
+  example_defaults.q   [.qex] shared scaling constants (pip_size, size_unit,
                         size_row_drift) for scripts/*.q's synthetic data -
                         not consumed by any pricing/execution function
   init.q        loads every module above, in dependency order
@@ -188,10 +197,11 @@ curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place 
 ```
 
 `qstudio.jar` also bundles a small q linter that `gen-docs.sh` runs as a
-side effect (`docs/lint.csv`/`docs/lint.html`); this repo's multi-file
-`.qf` namespace triggers a number of expected "undeclared variable"
+side effect (`docs/lint.csv`/`docs/lint.html`); this repo's cross-module
+calls between `src/*.q`'s separate namespaces (e.g. `forwards.q` calling
+`.qccy.ccy_pair_legs`) trigger a number of expected "undeclared variable"
 false positives there (the linter checks each file in isolation and can't
-see across `src/*.q`), so don't be alarmed by those specifically.
+see the other loaded namespaces), so don't be alarmed by those specifically.
 
 **Note:** TimeStored's own qDoc docs state the CLI usage as
 `QDocMain <sourceFolder> <targetFolder>` - that argument order is

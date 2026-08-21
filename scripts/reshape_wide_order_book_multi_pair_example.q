@@ -29,7 +29,7 @@ rows_per_pair:20;
 
 / Illustrative, approximately realistic spot rates (not live market data).
 / tick_scale is the price columns' unit relative to the quoted rate (1 =
-/ hold the rate directly, as a float); .qf.pip_size (one pip, 0.0001 -
+/ hold the rate directly, as a float); .qex.pip_size (one pip, 0.0001 -
 / src/example_defaults.q) scaled by tick_scale gives a level step of one
 / pip in that same unit, matching typical eFX top-of-book spacing.
 / row_drift is a small, sub-pip synthetic drift between the demo's rows,
@@ -38,17 +38,17 @@ rows_per_pair:20;
 pairs:`AUDUSD`EURUSD`EURPLN;
 approx_spot_rates:0.6550 1.0850 4.2500;
 tick_scale:1;
-pip_size:.qf.pip_size*tick_scale;
+pip_size:.qex.pip_size*tick_scale;
 row_drift:pip_size%10;
 base_prices:tick_scale*approx_spot_rates;
 
-/ Size levels in clean round millions (.qf.size_unit, src/example_defaults.q)
+/ Size levels in clean round millions (.qex.size_unit, src/example_defaults.q)
 / - typical order-of-magnitude for eFX top-of-book depth on a major pair.
 / ask starts a tenth of a level below bid so bid/ask sizes stay visually
-/ distinct. .qf.size_row_drift is a small per-row jitter (1% of a level)
+/ distinct. .qex.size_row_drift is a small per-row jitter (1% of a level)
 / so rows aren't identical, without blurring the clean million-level pattern.
-size_unit:.qf.size_unit;
-size_row_drift:.qf.size_row_drift;
+size_unit:.qex.size_unit;
+size_row_drift:.qex.size_row_drift;
 
 / Build one prefix's worth of zero-padded, per-level columns as a single
 / dict col_name!column_vector, e.g. bid_px_00!... bid_px_09!... . row_step
@@ -70,7 +70,7 @@ mk_level_cols:{[prefix;n_levels;base;step;row_step]
 / pair's rows back-to-back (so the final table's ts column is strictly
 / increasing top to bottom, same as row order): each row lands ~1ms after
 / the previous one, with gap jitter drawn from Normal(1ms, 1ms) via this
-/ repo's own .qf.inv_ncdf (inverse normal CDF) - approximates the
+/ repo's own .qstats.inv_ncdf (inverse normal CDF) - approximates the
 / irregular arrival cadence of a real order book feed. Floored at a small
 / positive gap so timestamps stay strictly increasing (an unclamped
 / Normal(1ms,1ms) draw goes negative ~16% of the time, which a real feed
@@ -80,8 +80,8 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
-    DEBUG "running: .qf.inv_ncdf p";
-    z:.qf.inv_ncdf p;
+    DEBUG "running: .qstats.inv_ncdf p";
+    z:.qstats.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*z;
     start_ts+sums gaps};
 all_ts:mk_timestamps[rows_per_pair*count pairs;.z.p];
@@ -128,8 +128,8 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
-DEBUG "running: .qf.derive_level_groups[cols t;level_prefix_targets]";
-level_groups:.qf.derive_level_groups[cols t;level_prefix_targets];
+DEBUG "running: .qbook.derive_level_groups[cols t;level_prefix_targets]";
+level_groups:.qbook.derive_level_groups[cols t;level_prefix_targets];
 DEBUG "level_groups - target_col -> ordered source_cols:";
 show level_groups;
 
@@ -138,8 +138,8 @@ show level_groups;
 / values ("A"/"B"/...) kdb+ collapses that column into a plain char vector
 / rather than a list of strings, so it isn't a "string column" by
 / candidate_symbol_columns's own type check.
-DEBUG "running: .qf.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";
-candidates:.qf.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
+DEBUG "running: .qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";
+candidates:.qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
 INFO ("candidates - columns to symbolize: %1";enlist ", " sv string candidates);
 
 / Explicit final column order - edit this list to reorder (or drop) columns.
@@ -147,8 +147,8 @@ INFO ("candidates - columns to symbolize: %1";enlist ", " sv string candidates);
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
 col_order:`ts`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
-DEBUG "running: .qf.book_from_wide_levels[t;level_groups;candidates]";
-out:col_order#.qf.book_from_wide_levels[t;level_groups;candidates];
+DEBUG "running: .qbook.book_from_wide_levels[t;level_groups;candidates]";
+out:col_order#.qbook.book_from_wide_levels[t;level_groups;candidates];
 INFO ("out - reshaped table: %1 rows, %2 columns";(count out;count cols out));
 show out;
 DEBUG "meta out - column types after reshaping:";
@@ -167,8 +167,8 @@ show first_row_per_pair;
 
 sweep_by_pair:{[t;pair]
     row:t pair;
-    DEBUG ("running: .qf.sweep_price[row`ask_prices;row`ask_sizes;250] for pair %1";pair);
-    result:.qf.sweep_price[row`ask_prices;row`ask_sizes;250];
+    DEBUG ("running: .qexec.sweep_price[row`ask_prices;row`ask_sizes;250] for pair %1";pair);
+    result:.qexec.sweep_price[row`ask_prices;row`ask_sizes;250];
     result,enlist[`sym]!enlist pair}[first_row_per_pair;] each exec sym from first_row_per_pair;
 INFO ("sweep_by_pair - swept 250 units against each pair's ask side (%1 pairs)";count sweep_by_pair);
 show sweep_by_pair;

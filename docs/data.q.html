@@ -32,15 +32,15 @@
               <p class="caption"><span class="caption-text">Namespaces</span></p>
 
 
-<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.qf (ccy.q)</a></li>
-	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.qf (execution.q)</a></li>
-	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.qf (rates.q)</a></li>
-	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.qf (options.q)</a></li>
-	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.qf (risk.q)</a></li>
-	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.qf (daycount.q)</a></li>
-	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.qf (stats.q)</a></li>
-	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.qf (forwards.q)</a></li>
-	<li class="toctree-l1 cls-uqfdata-cls"><a class="reference internal cls-uqfdata-cls" href='data.q.html' >.uqfdata</a></li>
+<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.qccy (ccy.q)</a></li>
+	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.qexec (execution.q)</a></li>
+	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.qrates (rates.q)</a></li>
+	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.qopt (options.q)</a></li>
+	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.qrisk (risk.q)</a></li>
+	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.qdcf (daycount.q)</a></li>
+	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.qstats (stats.q)</a></li>
+	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.qfwd (forwards.q)</a></li>
+	<li class="toctree-l1 cls-qdata-cls"><a class="reference internal cls-qdata-cls" href='data.q.html' >.qdata</a></li>
 </ul><!--NAMESPACE_END-->
 
               <p class="caption"><span class="caption-text">Files</span></p>
@@ -88,49 +88,49 @@
 	<div id='headerDoc'>data.q - optional Databento parquet data access, keyed by symbol and date. Not loaded by src/init.q: it needs a real kdb+/KDB-X interpreter (PeachQ has no `2:`, so it can't load KX's native pq module) and a local .env pointing at the data. Load explicitly with `\l src/data.q`.  Expects DATABENTO_DATA_DIR (from a repo-root .env file, or the OS environment) to point at a folder laid out as: <DATABENTO_DATA_DIR>/<SYMBOL>/<SYMBOL>_<YYYY-MM-DD>_raw_mbp-10_us_hours.parquet .</div>
 	<div id='summary'><h2>Entity Summary</h2><table class='overviewSummary'><tbody>
 <tr><th>Entities</th><th>Short Description</th></tr>
-		<tr><td><a href='#-uqfdata-cfg'>.uqfdata.cfg</a></td><td>Look up a config value: the OS environment first, then the p</td></tr>
-		<tr><td><a href='#-uqfdata-databentoDir'>.uqfdata.databentoDir</a></td><td>Root folder for locally-available Databento parquet dumps (D</td></tr>
-		<tr><td><a href='#-uqfdata-databentoFile'>.uqfdata.databentoFile</a></td><td>Expected path to one symbol/date's daily Databento MBP-10 pa</td></tr>
-		<tr><td><a href='#-uqfdata-env'>.uqfdata.env</a></td><td>Parsed contents of the repo-root .</td></tr>
-		<tr><td><a href='#-uqfdata-getBySymbolDate'>.uqfdata.getBySymbolDate</a></td><td>Open one symbol/date's Databento parquet file as a lazy, row</td></tr>
-		<tr><td><a href='#-uqfdata-parseEnv'>.uqfdata.parseEnv</a></td><td>Parse a .</td></tr>
-		<tr><td>.uqfdata.pqModule</td><td></td></tr>
-		<tr><td><a href='#-uqfdata-pqm'>.uqfdata.pqm</a></td><td>KX's official pq module (github kx.</td></tr>
+		<tr><td><a href='#-uqfdata-cfg'>.qdata.cfg</a></td><td>Look up a config value: the OS environment first, then the p</td></tr>
+		<tr><td><a href='#-uqfdata-databentoDir'>.qdata.databentoDir</a></td><td>Root folder for locally-available Databento parquet dumps (D</td></tr>
+		<tr><td><a href='#-uqfdata-databentoFile'>.qdata.databentoFile</a></td><td>Expected path to one symbol/date's daily Databento MBP-10 pa</td></tr>
+		<tr><td><a href='#-uqfdata-env'>.qdata.env</a></td><td>Parsed contents of the repo-root .</td></tr>
+		<tr><td><a href='#-uqfdata-getBySymbolDate'>.qdata.getBySymbolDate</a></td><td>Open one symbol/date's Databento parquet file as a lazy, row</td></tr>
+		<tr><td><a href='#-uqfdata-parseEnv'>.qdata.parseEnv</a></td><td>Parse a .</td></tr>
+		<tr><td>.qdata.pqModule</td><td></td></tr>
+		<tr><td><a href='#-uqfdata-pqm'>.qdata.pqm</a></td><td>KX's official pq module (github kx.</td></tr>
 </tbody></table></div>
 	<div class='details'>
 	<h2>Entity Details</h2>
-		<div class='entity' id='-uqfdata-cfg'><h2>.uqfdata.cfg</h2><p>Look up a config value: the OS environment first, then the parsed .env dict, then the given default.</p><table>
-<tr><th>eg: </th><td>.uqfdata.cfg[`DATABENTO_DATA_DIR;::]</td></tr>
+		<div class='entity' id='-uqfdata-cfg'><h2>.qdata.cfg</h2><p>Look up a config value: the OS environment first, then the parsed .env dict, then the given default.</p><table>
+<tr><th>eg: </th><td>.qdata.cfg[`DATABENTO_DATA_DIR;::]</td></tr>
 <tr><th>Return: </th><td>the string value</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>dflt</strong> - fallback value, or generic null (::) to error if unset</li>
 	<li><strong>k</strong> - the variable name, e.g. `DATABENTO_DATA_DIR`</li></ul></td></tr>
 <tr><th>throws: </th><td>configMissing if k isn't set anywhere and no default was given</td></tr></table></div>
-		<div class='entity' id='-uqfdata-databentoDir'><h2>.uqfdata.databentoDir</h2><p>Root folder for locally-available Databento parquet dumps (DATABENTO_DATA_DIR), one subfolder per symbol.</p><table>
-<tr><th>eg: </th><td>.uqfdata.databentoDir[]</td></tr>
+		<div class='entity' id='-uqfdata-databentoDir'><h2>.qdata.databentoDir</h2><p>Root folder for locally-available Databento parquet dumps (DATABENTO_DATA_DIR), one subfolder per symbol.</p><table>
+<tr><th>eg: </th><td>.qdata.databentoDir[]</td></tr>
 <tr><th>Return: </th><td>the configured folder path, as a string</td></tr>
 <tr><th>throws: </th><td>configMissing if DATABENTO_DATA_DIR isn't set anywhere</td></tr></table></div>
-		<div class='entity' id='-uqfdata-databentoFile'><h2>.uqfdata.databentoFile</h2><p>Expected path to one symbol/date's daily Databento MBP-10 parquet file.</p><table>
-<tr><th>eg: </th><td>.uqfdata.databentoFile[`AAPL;2026.02.25]</td></tr>
+		<div class='entity' id='-uqfdata-databentoFile'><h2>.qdata.databentoFile</h2><p>Expected path to one symbol/date's daily Databento MBP-10 parquet file.</p><table>
+<tr><th>eg: </th><td>.qdata.databentoFile[`AAPL;2026.02.25]</td></tr>
 <tr><th>Return: </th><td>an hsym (file symbol) - the file need not exist yet</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>date</strong> - a q date, e.g. 2026.02.25</li>
 	<li><strong>sym</strong> - ticker symbol, e.g. `AAPL`</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqfdata-env'><h2>.uqfdata.env</h2><p>Parsed contents of the repo-root .env file, if present - see parseEnv.</p></div>
-		<div class='entity' id='-uqfdata-getBySymbolDate'><h2>.uqfdata.getBySymbolDate</h2><p>Open one symbol/date's Databento parquet file as a lazy, row-group-pruned virtual table (via pqModule) - select from it like a normal table, e.g. select avg price by 1 xbar ts_event.minute from .uqfdata.getBySymbolDate[`AAPL;2026.02.25]</p><table>
-<tr><th>eg: </th><td>.uqfdata.getBySymbolDate[`AAPL;2026.02.25]</td></tr>
+		<div class='entity' id='-uqfdata-env'><h2>.qdata.env</h2><p>Parsed contents of the repo-root .env file, if present - see parseEnv.</p></div>
+		<div class='entity' id='-uqfdata-getBySymbolDate'><h2>.qdata.getBySymbolDate</h2><p>Open one symbol/date's Databento parquet file as a lazy, row-group-pruned virtual table (via pqModule) - select from it like a normal table, e.g. select avg price by 1 xbar ts_event.minute from .qdata.getBySymbolDate[`AAPL;2026.02.25]</p><table>
+<tr><th>eg: </th><td>.qdata.getBySymbolDate[`AAPL;2026.02.25]</td></tr>
 <tr><th>Return: </th><td>a virtual table handle over the matching parquet file</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>date</strong> - a q date, e.g. 2026.02.25</li>
 	<li><strong>sym</strong> - ticker symbol, e.g. `AAPL`</li></ul></td></tr>
 <tr><th>throws: </th><td>fileNotFound if no file exists for that symbol/date</td></tr></table></div>
-		<div class='entity' id='-uqfdata-parseEnv'><h2>.uqfdata.parseEnv</h2><p>Parse a .env-style file (KEY=VALUE lines; blank lines and lines starting with `#` are ignored) into a dict. Missing file -> empty dict, so this is safe to call unconditionally at load time.</p><table>
-<tr><th>eg: </th><td>.uqfdata.parseEnv[`:.env]</td></tr>
+		<div class='entity' id='-uqfdata-parseEnv'><h2>.qdata.parseEnv</h2><p>Parse a .env-style file (KEY=VALUE lines; blank lines and lines starting with `#` are ignored) into a dict. Missing file -> empty dict, so this is safe to call unconditionally at load time.</p><table>
+<tr><th>eg: </th><td>.qdata.parseEnv[`:.env]</td></tr>
 <tr><th>Return: </th><td>a symbol!string dict of the parsed key/value pairs</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>file</strong> - the .env file to parse, e.g. `:.env`</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqfdata-pqm'><h2>.uqfdata.pqm</h2><p>KX's official pq module (github kx.com KDB-X distribution), loaded and memoized on first use rather than at file-load time, so simply loading data.q doesn't require a module-capable interpreter.</p><table>
-<tr><th>eg: </th><td>.uqfdata.pqModule[][`pq]</td></tr>
+		<div class='entity' id='-uqfdata-pqm'><h2>.qdata.pqm</h2><p>KX's official pq module (github kx.com KDB-X distribution), loaded and memoized on first use rather than at file-load time, so simply loading data.q doesn't require a module-capable interpreter.</p><table>
+<tr><th>eg: </th><td>.qdata.pqModule[][`pq]</td></tr>
 <tr><th>Return: </th><td>the pq module namespace, exposing `.pq` (open file), `.op`/`.rd` (low-level access)</td></tr>
 <tr><th>throws: </th><td>if `use` (KDB-X's module loader) is unavailable - real kdb+/KDB-X is required here, not PeachQ</td></tr></table></div></div><!--MAIN_END-->
 

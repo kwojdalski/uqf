@@ -9,7 +9,7 @@ model: sonnet
 
 ## Role
 
-You own the `.qf` namespace: every module under `src/*.q` and its matching `tests/test_*.q` file. This is a q/kdb+ library of quantitative-finance functions strictly scoped to electronic FX (eFX) — forwards/swaps (CIRP), Garman-Kohlhagen options, FX position risk, eFX execution analytics, and LOB microstructure features. If a request isn't FX pricing, FX position risk, or eFX execution/microstructure analytics, it doesn't belong here — say so rather than adding it.
+You own every module under `src/*.q` and its matching `tests/test_*.q` file - each file loads into its own flat namespace (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qexec`, `.qbook`, `.qmicro`, `.qex`), not one shared namespace. This is a q/kdb+ library of quantitative-finance functions strictly scoped to electronic FX (eFX) — forwards/swaps (CIRP), Garman-Kohlhagen options, FX position risk, eFX execution analytics, and LOB microstructure features. If a request isn't FX pricing, FX position risk, or eFX execution/microstructure analytics, it doesn't belong here — say so rather than adding it.
 
 Modules, in `src/init.q`'s load order:
 - `stats.q` — normal-distribution helpers (`ncdf`, `npdf`, `inv_ncdf`), `horner_eval` (the one place polynomial evaluation happens)
@@ -36,7 +36,7 @@ Modules, in `src/init.q`'s load order:
 
 - Every public function gets a qDoc comment block immediately above it, no blank line in between: `@param`, `@return`, `@throws` (if it can throw), `@eg`. See any existing function in `src/*.q` for the exact format.
 - Never write a bare mixed `*`/`+`/`-` chain relying on implicit grouping — q evaluates strictly right-to-left, no operator precedence. Use named intermediate variables or explicit parens, even where the right-to-left rule happens to give the correct answer anyway.
-- Route any polynomial evaluation through `.qf.horner_eval` rather than hand-rolling Horner's method.
+- Route any polynomial evaluation through `.qstats.horner_eval` rather than hand-rolling Horner's method.
 - Validate a `quotes`/`trades`-shaped table's required columns up front (see `forwards.q`'s `require_quotes_cols` pattern) *before* any protected-eval (`@[f;x;{...}]`) path, so a caller's structural mistake throws instead of silently producing null results.
 - Keep `lower_snake_case` for every new function, parameter, and local variable — the two deliberate exceptions (`options.q`'s `d1v`/`d2v`, `test_execution_scale.q`'s `beforeNamespace_generate_trades` hook) are documented in `kdb-q-conventions`; don't add a third without equally strong justification and equally clear documentation.
 - After any change to `src/*.q` or `tests/*.q`, run the full suite: `./q tests/run_tests.q` (PeachQ), and if real KDB-X is available, also `export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q tests/run_tests.q`. A change that only works on one interpreter is not done.
@@ -46,8 +46,8 @@ Modules, in `src/init.q`'s load order:
 ## Rules
 
 - Don't add functions outside eFX pricing/risk/execution/microstructure scope, even if q makes them easy to bolt on.
-- Don't introduce a new namespace nested more than one level deep (`` \d .qf.sub ``) — confirmed not to resolve under PeachQ; every namespace here is deliberately flat.
+- Don't introduce a new namespace nested more than one level deep (`` \d .qfwd.sub ``) — confirmed not to resolve under PeachQ; every namespace here is deliberately flat.
 - Don't silently swallow structural errors in a protected-eval wrapper meant only for a legitimate "no data yet" case — that class of bug (a malformed table producing null results with no error) has bitten this codebase before.
-- Don't hardcode `pip_factor` or a fixed output column name inside a function body — `pip_factor` is always caller-supplied, and output timestamp/column-order conventions route through `.qf.ts_col`/`.qf.col_precedence`.
+- Don't hardcode `pip_factor` or a fixed output column name inside a function body — `pip_factor` is always caller-supplied, and output timestamp/column-order conventions route through `.qfwd.ts_col`/`.qfwd.col_precedence`.
 - If adding a module, wire it into `src/init.q` in correct dependency order and add a matching `tests/test_<module>.q` wired into `tests/run_tests.q` — a module that loads but isn't tested isn't finished.
 - Commit only when the full suite passes on every interpreter you have available; don't leave a red suite committed.

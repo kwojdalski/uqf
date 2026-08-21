@@ -5,7 +5,7 @@
 / buys `rate` units of QUOTE (e.g. EURUSD 1.1000 -> 1 EUR = 1.10 USD).
 / rd is the QUOTE currency's interest rate, rf the BASE currency's.
 
-\d .qf
+\d .qfwd
 
 / Outright forward rate under simple-interest CIRP: F = S*(1+rd*t)/(1+rf*t)
 / @param spot spot rate, BASE/QUOTE
@@ -13,8 +13,8 @@
 / @param rf foreign (base currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the outright forward rate
-/ @eg .qf.fwd_simple[1.10;0.05;0.02;1]  -> 1.132353
-fwd_simple:{[spot;rd;rf;t] spot*growth_simple[rd;t]%growth_simple[rf;t]};
+/ @eg .qfwd.fwd_simple[1.10;0.05;0.02;1]  -> 1.132353
+fwd_simple:{[spot;rd;rf;t] spot*.qrates.growth_simple[rd;t]%.qrates.growth_simple[rf;t]};
 
 / Outright forward rate under continuous-compounding CIRP: F = S*exp((rd-rf)*t)
 / @param spot spot rate, BASE/QUOTE
@@ -22,15 +22,15 @@ fwd_simple:{[spot;rd;rf;t] spot*growth_simple[rd;t]%growth_simple[rf;t]};
 / @param rf foreign (base currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the outright forward rate
-/ @eg .qf.fwd_cont[1.10;0.05;0.02;1]  -> 1.1335
-fwd_cont:{[spot;rd;rf;t] spot*growth_cont[rd-rf;t]};
+/ @eg .qfwd.fwd_cont[1.10;0.05;0.02;1]  -> 1.1335
+fwd_cont:{[spot;rd;rf;t] spot*.qrates.growth_cont[rd-rf;t]};
 
 / Forward points = (F-S) scaled into pips.
 / @param fwd outright forward rate
 / @param spot spot rate
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the forward points, in pips
-/ @eg .qf.fwd_points[1.132353;1.10;10000]  -> 323.53
+/ @eg .qfwd.fwd_points[1.132353;1.10;10000]  -> 323.53
 fwd_points:{[fwd;spot;pip_factor] pip_factor*(fwd-spot)};
 
 / Recover the outright from spot plus forward points.
@@ -38,7 +38,7 @@ fwd_points:{[fwd;spot;pip_factor] pip_factor*(fwd-spot)};
 / @param points forward points, in pips
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
 / @return the outright forward rate
-/ @eg .qf.points_to_outright[1.10;323.53;10000]  -> 1.132353
+/ @eg .qfwd.points_to_outright[1.10;323.53;10000]  -> 1.132353
 points_to_outright:{[spot;points;pip_factor] spot+(points%pip_factor)};
 
 / Back out the implied foreign (base currency) rate from an observed
@@ -48,9 +48,9 @@ points_to_outright:{[spot;points;pip_factor] spot+(points%pip_factor)};
 / @param rd domestic (quote currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the implied foreign (base currency) decimal annual rate
-/ @eg .qf.implied_foreign_rate[1.10;1.132353;0.05;1]  -> 0.02
+/ @eg .qfwd.implied_foreign_rate[1.10;1.132353;0.05;1]  -> 0.02
 implied_foreign_rate:{[spot;fwd;rd;t]
-    scaled_spot:spot*growth_simple[rd;t];
+    scaled_spot:spot*.qrates.growth_simple[rd;t];
     ratio:scaled_spot%fwd;
     (ratio-1)%t};
 
@@ -61,22 +61,22 @@ implied_foreign_rate:{[spot;fwd;rd;t]
 / @param rf foreign (base currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the implied domestic (quote currency) decimal annual rate
-/ @eg .qf.implied_domestic_rate[1.10;1.132353;0.02;1]  -> 0.05
+/ @eg .qfwd.implied_domestic_rate[1.10;1.132353;0.02;1]  -> 0.05
 implied_domestic_rate:{[spot;fwd;rf;t]
-    ratio:(fwd%spot)*growth_simple[rf;t];
+    ratio:(fwd%spot)*.qrates.growth_simple[rf;t];
     (ratio-1)%t};
 
 / Triangulate a cross rate: A/B * B/C = A/C.
 / @param ab_rate rate for A/B
 / @param bc_rate rate for B/C
 / @return the implied rate for A/C
-/ @eg .qf.cross_rate[1.10;150]  -> 165f (EURUSD * USDJPY -> EURJPY)
+/ @eg .qfwd.cross_rate[1.10;150]  -> 165f (EURUSD * USDJPY -> EURJPY)
 cross_rate:{[ab_rate;bc_rate] ab_rate*bc_rate};
 
 / Invert a quote convention: BASE/QUOTE -> QUOTE/BASE.
 / @param rate a rate quoted BASE/QUOTE
 / @return the same rate quoted QUOTE/BASE
-/ @eg .qf.invert_rate 2f  -> 0.5
+/ @eg .qfwd.invert_rate 2f  -> 0.5
 invert_rate:{[rate] 1%rate};
 
 / Cross rate via a shared base currency: given two pairs both quoted
@@ -89,7 +89,7 @@ invert_rate:{[rate] 1%rate};
 / @param rate_ax rate for A/X (the shared base A over the first quote currency X)
 / @param rate_ay rate for A/Y (the shared base A over the second quote currency Y)
 / @return the implied rate for Y/X
-/ @eg .qf.cross_rate_shared_base[4.30;1.075]  -> 4f (EURPLN, EURUSD -> USDPLN)
+/ @eg .qfwd.cross_rate_shared_base[4.30;1.075]  -> 4f (EURPLN, EURUSD -> USDPLN)
 cross_rate_shared_base:{[rate_ax;rate_ay] cross_rate[rate_ax;invert_rate rate_ay]};
 
 / Invert an order book: BASE/QUOTE -> QUOTE/BASE. Inverting flips which
@@ -97,7 +97,7 @@ cross_rate_shared_base:{[rate_ax;rate_ay] cross_rate[rate_ax;invert_rate rate_ay
 / versa.
 / @param book a dict `bid`ask!(bidPx;askPx) quoted BASE/QUOTE
 / @return the same book quoted QUOTE/BASE
-/ @eg .qf.invert_book[`bid`ask!(1.1000;1.1002)]  -> `bid`ask!(0.9089256;0.9090909)
+/ @eg .qfwd.invert_book[`bid`ask!(1.1000;1.1002)]  -> `bid`ask!(0.9089256;0.9090909)
 invert_book:{[book] `bid`ask!(1%book`ask;1%book`bid)};
 
 / Combine two order books that are already oriented A/B and B/C (i.e. the
@@ -107,7 +107,7 @@ invert_book:{[book] `bid`ask!(1%book`ask;1%book`bid)};
 / @param book_ab dict `bid`ask!(bidPx;askPx) quoted A/B
 / @param book_bc dict `bid`ask!(bidPx;askPx) quoted B/C
 / @return dict `bid`ask!(bidPx;askPx) quoted A/C
-/ @eg .qf.combine_oriented_books[`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02)]  -> `bid`ask!(165;165.052)
+/ @eg .qfwd.combine_oriented_books[`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02)]  -> `bid`ask!(165;165.052)
 combine_oriented_books:{[book_ab;book_bc]
     bid:(book_ab`bid)*(book_bc`bid);
     ask:(book_ab`ask)*(book_bc`ask);
@@ -117,7 +117,7 @@ combine_oriented_books:{[book_ab;book_bc]
 / books built from cross_book/combine_oriented_books.
 / @param book a dict `bid`ask!(bidPx;askPx)
 / @return 1b if bid>ask, else 0b
-/ @eg .qf.book_crossed[`bid`ask!(1.1000;1.1002)]  -> 0b
+/ @eg .qfwd.book_crossed[`bid`ask!(1.1000;1.1002)]  -> 0b
 book_crossed:{[book] book[`bid]>book[`ask]};
 
 / Private: work out how two currency pairs relate - which currency they
@@ -131,14 +131,14 @@ book_crossed:{[book] book[`bid]>book[`ask]};
 /   symbol; invert1/invert2 say whether that leg's quote convention needs
 /   flipping (BASE/QUOTE -> QUOTE/BASE) before combining
 / @throws error if sym1 and sym2 share no common currency
-/ @eg .qf.ccy_orient_cross[`EURUSD;`USDJPY]  -> `cross_sym`invert1`invert2!(`EURJPY;0b;0b)
+/ @eg .qfwd.ccy_orient_cross[`EURUSD;`USDJPY]  -> `cross_sym`invert1`invert2!(`EURJPY;0b;0b)
 ccy_orient_cross:{[sym1;sym2]
-    legs1:ccy_pair_legs sym1; base1:string legs1`base; quote1:string legs1`quote;
-    legs2:ccy_pair_legs sym2; base2:string legs2`base; quote2:string legs2`quote;
-    if[quote1~base2; :`cross_sym`invert1`invert2!(ccy_pair_symbol[base1;quote2];0b;0b)];
-    if[quote1~quote2; :`cross_sym`invert1`invert2!(ccy_pair_symbol[base1;base2];0b;1b)];
-    if[base1~base2; :`cross_sym`invert1`invert2!(ccy_pair_symbol[quote1;quote2];1b;0b)];
-    if[base1~quote2; :`cross_sym`invert1`invert2!(ccy_pair_symbol[quote1;base2];1b;1b)];
+    legs1:.qccy.ccy_pair_legs sym1; base1:string legs1`base; quote1:string legs1`quote;
+    legs2:.qccy.ccy_pair_legs sym2; base2:string legs2`base; quote2:string legs2`quote;
+    if[quote1~base2; :`cross_sym`invert1`invert2!(.qccy.ccy_pair_symbol[base1;quote2];0b;0b)];
+    if[quote1~quote2; :`cross_sym`invert1`invert2!(.qccy.ccy_pair_symbol[base1;base2];0b;1b)];
+    if[base1~base2; :`cross_sym`invert1`invert2!(.qccy.ccy_pair_symbol[quote1;quote2];1b;0b)];
+    if[base1~quote2; :`cross_sym`invert1`invert2!(.qccy.ccy_pair_symbol[quote1;base2];1b;1b)];
     '"ccy_orient_cross: no shared currency between ",base1,quote1," and ",base2,quote2};
 
 / Build a synthetic top-of-book cross rate from two live order books on
@@ -156,7 +156,7 @@ ccy_orient_cross:{[sym1;sym2]
 / @param book2 dict `bid`ask!(bidPx;askPx) quoted in sym2's own convention
 / @return dict `sym`bid`ask!(cross_sym;bidPx;askPx) for the synthetic cross
 / @throws error if sym1 and sym2 share no common currency
-/ @eg .qf.cross_book[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165;165.052)
+/ @eg .qfwd.cross_book[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165;165.052)
 cross_book:{[sym1;book1;sym2;book2]
     orient:ccy_orient_cross[sym1;sym2];
     oriented1:$[orient`invert1; invert_book book1; book1];
@@ -173,7 +173,7 @@ cross_book:{[sym1;book1;sym2;book2]
 / @param prices level prices, best-first
 / @param sizes level sizes in the ladder's own base currency, aligned to prices
 / @return (invertedPrices;rescaledSizes), still best-first
-/ @eg .qf.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200)
+/ @eg .qfwd.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200)
 invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 
 / Private: the (prices;sizes) to sweep for one leg, for one side of the
@@ -201,11 +201,11 @@ oriented_levels:{[side;book;invert]
 / @return dict `price`filled_size`fully_filled for this side of the cross
 cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
     lvl1:oriented_levels[side;book1;invert1];
-    sweep1:sweep_price[lvl1 0;lvl1 1;size];
+    sweep1:.qexec.sweep_price[lvl1 0;lvl1 1;size];
     bridge_notional:sweep1[`filled_size]*sweep1[`avg_price];
     lvl2:oriented_levels[side;book2;invert2];
     empty_sweep:`avg_price`worst_price`filled_size`fully_filled!(0n;0n;0f;0b);
-    sweep2:$[bridge_notional>0; sweep_price[lvl2 0;lvl2 1;bridge_notional]; empty_sweep];
+    sweep2:$[bridge_notional>0; .qexec.sweep_price[lvl2 0;lvl2 1;bridge_notional]; empty_sweep];
     price:sweep1[`avg_price]*sweep2[`avg_price];
     fully_filled:sweep1[`fully_filled] and sweep2[`fully_filled];
     `price`filled_size`fully_filled!(price;sweep1[`filled_size];fully_filled)};
@@ -251,7 +251,7 @@ side_cols:{[s]
 /   mid were requested via sides
 / @throws error if sym1 and sym2 share no common currency, or sides has
 /   anything other than `bid`ask`mid
-/ @eg .qf.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;1000000 3000000;`bid`ask`mid]
+/ @eg .qfwd.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;1000000 3000000;`bid`ask`mid]
 cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
     rows:cross_book_at_one_size[sym1;book1;sym2;book2;] each sizes;
     want_cols:`size`sym , raze side_cols each sides;
@@ -271,7 +271,7 @@ cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
 /   as invert1/invert2 in ccy_orient_cross
 / @throws error if syms has fewer than 2 legs, or if two consecutive legs
 /   share no common currency (names the leg index and the two symbols)
-/ @eg .qf.ccy_orient_chain[`EURUSD`USDJPY`JPYCHF]  -> `cross_sym`inverts!(`EURCHF;000b)
+/ @eg .qfwd.ccy_orient_chain[`EURUSD`USDJPY`JPYCHF]  -> `cross_sym`inverts!(`EURCHF;000b)
 ccy_orient_chain:{[syms]
     syms:syms,();
     if[(count syms)<2; '"ccy_orient_chain: need at least 2 legs"];
@@ -304,7 +304,7 @@ ccy_orient_chain:{[syms]
 cross_sweep_chain:{[books;side;size;inverts]
     n:count books;
     lvl0:oriented_levels[side;books 0;inverts 0];
-    sweep0:sweep_price[lvl0 0;lvl0 1;size];
+    sweep0:.qexec.sweep_price[lvl0 0;lvl0 1;size];
     empty_sweep:`avg_price`worst_price`filled_size`fully_filled!(0n;0n;0f;0b);
     acc:sweep0;
     price:sweep0[`avg_price];
@@ -314,7 +314,7 @@ cross_sweep_chain:{[books;side;size;inverts]
     while[i<n;
         bridge_notional:acc[`filled_size]*acc[`avg_price];
         lvl:oriented_levels[side;books i;inverts i];
-        sweep_i:$[bridge_notional>0; sweep_price[lvl 0;lvl 1;bridge_notional]; empty_sweep];
+        sweep_i:$[bridge_notional>0; .qexec.sweep_price[lvl 0;lvl 1;bridge_notional]; empty_sweep];
         price*:sweep_i[`avg_price];
         fully_filled:fully_filled and sweep_i[`fully_filled];
         acc:sweep_i;
@@ -364,7 +364,7 @@ cross_book_chain_at_one_size:{[syms;books;size]
 / @throws error if syms has fewer than 2 legs, if syms and books aren't
 /   the same length, if two consecutive legs share no common currency,
 /   or if sides has anything other than `bid`ask`mid
-/ @eg .qf.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(eurusd_book;usdjpy_book;jpychf_book);1000000 3000000;`bid`ask`mid]
+/ @eg .qfwd.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(eurusd_book;usdjpy_book;jpychf_book);1000000 3000000;`bid`ask`mid]
 cross_book_chain_at_sizes:{[syms;books;sizes;sides]
     syms:syms,();
     books:books,();
@@ -380,7 +380,7 @@ cross_book_chain_at_sizes:{[syms;books;sizes;sides]
 / @param avail_syms currency pair symbols known to be quotable
 / @return table `src`dst`via, one row per direction per pair
 ccy_graph_edges:{[avail_syms]
-    legs:ccy_pair_legs each avail_syms;
+    legs:.qccy.ccy_pair_legs each avail_syms;
     src_ccy:legs[`base],legs[`quote];
     dst_ccy:legs[`quote],legs[`base];
     via_sym:avail_syms,avail_syms;
@@ -398,7 +398,8 @@ ccy_graph_edges:{[avail_syms]
 / @param goal_ccy the target 3-letter currency code
 / @return ordered list of pair symbols to chain, or an empty symbol list
 /   if start_ccy and goal_ccy aren't connected by avail_syms at all
-/ @eg .qf.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`AUD;`PLN]  -> `AUDUSD`EURUSD`EURPLN
+/ @eg .qfwd.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`AUD;`PLN]  -> `AUDUSD`EURUSD`EURPLN
+/ @eg .qfwd.ccy_shortest_path[`AUDUSD`EURUSD;`AUD;`JPY]  -> `symbol$() (JPY isn't reachable from the available pairs)
 ccy_shortest_path:{[avail_syms;start_ccy;goal_ccy]
     if[start_ccy~goal_ccy; :`symbol$()];
     edges:ccy_graph_edges avail_syms;
@@ -445,10 +446,10 @@ ccy_shortest_path:{[avail_syms;start_ccy;goal_ccy]
 /   unoriented form - see ccy_shortest_path) - a single-element list if
 /   sym (or its inverse) is already directly quoted, or an empty symbol
 /   list if sym's two currencies aren't connected by avail_syms at all
-/ @eg .qf.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDPLN]  -> `AUDUSD`EURUSD`EURPLN
-/ @eg .qf.cross_decomp[`EURUSD`USDRUB;`EURRUB]  -> `EURUSD`USDRUB
+/ @eg .qfwd.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDPLN]  -> `AUDUSD`EURUSD`EURPLN
+/ @eg .qfwd.cross_decomp[`EURUSD`USDRUB;`EURRUB]  -> `EURUSD`USDRUB
 cross_decomp:{[avail_syms;sym]
-    legs:ccy_pair_legs normalize_ccy_pair sym;
+    legs:.qccy.ccy_pair_legs .qccy.normalize_ccy_pair sym;
     ccy_shortest_path[avail_syms;legs`base;legs`quote]};
 
 / Private: one symbol's book, as of a given time, pulled out of a quotes
@@ -471,8 +472,8 @@ leg_book_as_of:{[quotes;at_time;target_sym]
 single_leg_at_one_size:{[cross_sym;leg_book;invert;size]
     bid_lvl:oriented_levels[`bid;leg_book;invert];
     ask_lvl:oriented_levels[`ask;leg_book;invert];
-    bid_r:sweep_price[bid_lvl 0;bid_lvl 1;size];
-    ask_r:sweep_price[ask_lvl 0;ask_lvl 1;size];
+    bid_r:.qexec.sweep_price[bid_lvl 0;bid_lvl 1;size];
+    ask_r:.qexec.sweep_price[ask_lvl 0;ask_lvl 1;size];
     mid_price:0.5*bid_r[`avg_price]+ask_r[`avg_price];
     `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
       (size;cross_sym;bid_r`avg_price;bid_r`filled_size;bid_r`fully_filled;ask_r`avg_price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
@@ -521,15 +522,16 @@ require_quotes_cols:{[fn_name;quotes]
 /   `sym`ts xasc, if no chain of pairs currently in quotes connects
 /   sym's two currencies, or if some required leg has no quote at or
 /   before at_time
-/ @eg .qf.cross_book_at[`sym`ts xasc quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
+/ @eg .qfwd.cross_book_at[`sym`ts xasc quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
+/ @eg .qfwd.cross_book_at[`sym`ts xasc quotes;`EURUSD;.z.p;enlist 1000000;enlist `mid]  -> EURUSD is quoted directly in this quotes table, so no chaining is needed
 cross_book_at:{[quotes;sym;at_time;sizes;sides]
     require_quotes_cols[`cross_book_at;quotes];
     if[not quotes~`sym`ts xasc quotes;
         '"cross_book_at: quotes must be sorted `sym`ts xasc for an as-of lookup - try `sym`ts xasc quotes first"];
-    cross_sym:normalize_ccy_pair sym;
+    cross_sym:.qccy.normalize_ccy_pair sym;
     path:cross_decomp[distinct quotes`sym;cross_sym];
     if[0=count path;
-        legs:ccy_pair_legs cross_sym;
+        legs:.qccy.ccy_pair_legs cross_sym;
         '"cross_book_at: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     $[1=count path;
         single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;at_time;path 0];not (path 0)~cross_sym;sizes;sides];
@@ -566,7 +568,8 @@ cross_price_ok_at_size:{[quotes;sym;at_time;side;price_limit;size]
 / @return the largest size tradeable without the average price crossing
 /   price_limit; 0 if even a negligible size already breaches it
 / @throws error if side isn't `bid or `ask, or anything cross_book_at itself throws
-/ @eg .qf.cross_size_at_price[quotes;`AUDPLN;.z.p;`bid;2.5650]
+/ @eg .qfwd.cross_size_at_price[quotes;`AUDPLN;.z.p;`bid;2.5650]
+/ @eg .qfwd.cross_size_at_price[quotes;`AUDPLN;.z.p;`ask;2.5700]  -> the ask-side (buy) boundary at a different price limit
 cross_size_at_price:{[quotes;sym;at_time;side;price_limit]
     if[not side in `bid`ask; '"cross_size_at_price: side must be `bid or `ask, got ",string side];
     lo:0f;
@@ -598,7 +601,7 @@ cross_ref_price_at:{[quotes;sym;ref_size;t]
 / to `ts to match the quotes table's own timestamp column convention
 / used throughout this file (cross_book_at, leg_book_as_of, ...).
 / Override before calling if some downstream consumer expects a
-/ different name, e.g. .qf.ts_col:`timestamp.
+/ different name, e.g. .qfwd.ts_col:`timestamp.
 ts_col:`ts;
 
 / Configurable column-ordering "precedence" for markout-family output
@@ -647,15 +650,21 @@ apply_col_precedence:{[t]
 /   named per ts_col, `ts by default) - ref_price/markout_pips are null
 /   for a horizon with no quote yet for some required leg, rather than
 /   throwing
-/ @throws error if quotes is missing a required column
-/ @eg .qf.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;-500 -300 0 100 300;1]
+/ @throws error if quotes is missing a required column, or isn't sorted
+/   `sym`ts xasc (checked explicitly here rather than left to leak out of
+/   cross_ref_price_at's protective error handling as a misleading null -
+/   see cross_ref_price_at's own comment)
+/ @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;-500 -300 0 100 300;1]
+/ @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;enlist -500;1]  -> a single backward-looking horizon, 500ms before the trade
 cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;horizons_ms;ref_size]
     require_quotes_cols[`cross_markout_at_horizons;quotes];
+    if[not quotes~`sym`ts xasc quotes;
+        '"cross_markout_at_horizons: quotes must be sorted `sym`ts xasc for an as-of lookup - try `sym`ts xasc quotes first"];
     horizons_ms:horizons_ms,();
-    cross_sym:normalize_ccy_pair sym;
+    cross_sym:.qccy.normalize_ccy_pair sym;
     target_time:trade_time+horizons_ms*1000000;
     ref_price:cross_ref_price_at[quotes;cross_sym;ref_size;] each target_time;
-    markout_pips:markout[side;trade_price;ref_price;pip_factor];
+    markout_pips:.qexec.markout[side;trade_price;ref_price;pip_factor];
     col_names:`horizon_ms,ts_col,`sym`ref_price`markout_pips;
     apply_col_precedence flip col_names!(horizons_ms;target_time;(count horizons_ms)#cross_sym;ref_price;markout_pips)};
 
@@ -678,15 +687,20 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
 / @param ref_size the (typically negligible) size to sweep for each
 /   leg's own reference price at t0/t1 (see cross_ref_price_at)
 / @return a table, one row per leg in chain order: `leg`invert`price_t0`price_t1`contribution_pips
-/ @throws error if quotes is missing a required column, or if no chain
-/   of pairs currently in quotes connects sym's two currencies
-/ @eg .qf.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1]
+/ @throws error if quotes is missing a required column, isn't sorted
+/   `sym`ts xasc (checked explicitly here rather than left to leak out of
+/   cross_ref_price_at's protective error handling as a misleading null -
+/   see cross_ref_price_at's own comment), or if no chain of pairs
+/   currently in quotes connects sym's two currencies
+/ @eg .qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1]
 cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
     require_quotes_cols[`cross_markout_decomp;quotes];
-    cross_sym:normalize_ccy_pair sym;
+    if[not quotes~`sym`ts xasc quotes;
+        '"cross_markout_decomp: quotes must be sorted `sym`ts xasc for an as-of lookup - try `sym`ts xasc quotes first"];
+    cross_sym:.qccy.normalize_ccy_pair sym;
     path:cross_decomp[distinct quotes`sym;cross_sym];
     if[0=count path;
-        legs:ccy_pair_legs cross_sym;
+        legs:.qccy.ccy_pair_legs cross_sym;
         '"cross_markout_decomp: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     inverts:$[1=count path; enlist not (path 0)~cross_sym; (ccy_orient_chain path)`inverts];
     n:count path;
@@ -735,9 +749,10 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 /   traded_sym) - impact_sym's own price drift, signed by traded_sym's side
 / @throws error if impact_sym normalizes to the same pair as traded_sym
 /   (nothing to compare against), or anything cross_ref_price_at/cross_book_at themselves throw
-/ @eg .qf.cross_impact_at_horizons[quotes;`EURPLN;`CZKPLN;trade_time;1;10000;-500 -300 0 100 300;1]
+/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`CZKPLN;trade_time;1;10000;-500 -300 0 100 300;1]
+/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`CZKPLN;trade_time;-1;10000;enlist 300;1]  -> a sell reports the impact pair's own drift with the opposite sign
 cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons_ms;ref_size]
-    if[(normalize_ccy_pair traded_sym)~normalize_ccy_pair impact_sym;
+    if[(.qccy.normalize_ccy_pair traded_sym)~.qccy.normalize_ccy_pair impact_sym;
         '"cross_impact_at_horizons: impact_sym must be different from traded_sym"];
     baseline:cross_ref_price_at[quotes;impact_sym;ref_size;trade_time];
     cross_markout_at_horizons[quotes;impact_sym;trade_time;side;baseline;pip_factor;horizons_ms;ref_size]};

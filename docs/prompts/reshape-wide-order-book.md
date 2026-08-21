@@ -93,6 +93,11 @@ src/*.q file (see kdb-q-conventions skill's Layout section), added to
 src/init.q's load order after data.q. Reuse the existing `.qf` namespace -
 don't invent a new one.
 
+[Note: this reflects the single-`.qf`-namespace convention in place when
+this prompt was drafted. The repo has since split into one flat namespace
+per file - book.q now loads into `.qbook`, not `.qf`. See
+kdb-q-conventions's current Layout section.]
+
 CONVENTIONS TO FOLLOW (this repo, not generic TorQ)
 - snake_case everywhere (functions, params, locals) per kdb-q-conventions
   skill and the Aug 2026 rename commits - src/data.q is the one deliberate
