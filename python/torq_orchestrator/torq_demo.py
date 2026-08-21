@@ -150,10 +150,20 @@ def query(
 
 
 @app.command("config-get")
-def config_get(procname: str, field: Annotated[str | None, typer.Argument()] = None) -> None:
-    """Show a process's effective process.csv row (or one field of it)."""
+def config_get(
+    procname: str,
+    field: Annotated[str | None, typer.Argument()] = None,
+    port: PortOpt = core.DEFAULT_BASE_PORT,
+    raw: Annotated[
+        bool, typer.Option("--raw", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
+    ] = False,
+) -> None:
+    """Show a process's effective process.csv row (or one field of it), with
+    ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
+    the same env torq.sh itself would use - pass --raw to see them literal.
+    """
     try:
-        row = core.get_process_config(_paths(), procname)
+        row = core.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
     except core.TorqDemoError as exc:
         _die(exc)
         return

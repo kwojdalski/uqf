@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from string import Template
 from typing import Any
 
 from torq_orchestrator.logger import get_logger
@@ -166,14 +168,49 @@ def list_process_names(paths: TorqDemoPaths) -> list[str]:
     return [row["procname"] for row in _base_process_rows(paths)]
 
 
-def get_process_config(paths: TorqDemoPaths, procname: str) -> dict[str, str]:
+# process.csv's two placeholder styles: `${VAR}` / `$VAR` (shell parameter
+# expansion, resolved via envsubst at runtime - handled here by
+# string.Template, which uses the same syntax) inside e.g. `load`/`U`/
+# `extras`; and `{VAR}` / `{VAR}+N` / `{VAR}-N` (no `$`, only ever in
+# `port` - resolved at runtime by torq.sh stripping the braces and letting
+# bash arithmetic-context evaluate the bare variable name plus offset).
+_BRACE_ARITH_RE = re.compile(r"^\{(\w+)\}([+-]\d+)?$")
+
+
+def _resolve_value(value: str, env: dict[str, str]) -> str:
+    m = _BRACE_ARITH_RE.match(value)
+    if m:
+        var, offset = m.groups()
+        if var in env and env[var].lstrip("-").isdigit():
+            return str(int(env[var]) + int(offset or 0))
+        return value  # unknown/non-numeric var - leave the placeholder as-is
+    return Template(value).safe_substitute(env)
+
+
+def resolve_process_config(row: dict[str, str], env: dict[str, str]) -> dict[str, str]:
+    return {field: _resolve_value(value, env) for field, value in row.items()}
+
+
+def get_process_config(
+    paths: TorqDemoPaths,
+    procname: str,
+    base_port: int = DEFAULT_BASE_PORT,
+    resolve: bool = True,
+) -> dict[str, str]:
     """The effective process.csv row for *procname* - vendored/fxfeed1 values
-    with any set_process_config() overrides applied on top."""
+    with any set_process_config() overrides applied on top. With
+    resolve=True (the default), also evaluates ${VAR}-style and
+    {VAR}(+N)-style placeholders (KDBBASEPORT, KDBHDB, UQFSCRIPTS, ...)
+    against build_env(paths, base_port) - the same values torq.sh itself
+    would substitute at process-start time.
+    """
     rows = {row["procname"]: row for row in _base_process_rows(paths)}
     if procname not in rows:
         raise TorqDemoError(f"unknown process {procname!r} - {sorted(rows)}")
     row = dict(rows[procname])
     row.update(_read_overrides(paths).get(procname, {}))
+    if resolve:
+        row = resolve_process_config(row, build_env(paths, base_port=base_port))
     return row
 
 
@@ -192,6 +229,38 @@ def set_process_config(paths: TorqDemoPaths, procname: str, field: str, value: s
     overrides.setdefault(procname, {})[field] = value
     _write_overrides(paths, overrides)
     log.info("set {}.{} = {}", procname, field, value)
+
+
+def build_env(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
+    """The env vars torq.sh (and process.csv's ${VAR}/{VAR}+N placeholders)
+    resolve against - pure, no filesystem writes. bootstrap() calls this and
+    also writes it out as setenv.sh; get_process_config() calls this to
+    resolve a row's placeholders without needing to bootstrap first.
+    """
+    return {
+        "TORQHOME": str(paths.torqhome),
+        "TORQAPPHOME": str(paths.torqapphome),
+        "TORQDATA": str(paths.torqdata),
+        "UQFSCRIPTS": str(paths.scripts_dir),
+        "KDBCONFIG": str(paths.torqhome / "config"),
+        "KDBCODE": str(paths.torqhome / "code"),
+        "KDBAPPCONFIG": str(paths.torqapphome / "appconfig"),
+        "KDBAPPCODE": str(paths.torqapphome / "code"),
+        "KDBLIB": str(paths.torqhome / "lib"),
+        "KDBTESTS": str(paths.torqhome / "tests"),
+        "KDBLOG": str(paths.torqdata / "logs"),
+        "KDBHDB": str(paths.torqdata / "hdb"),
+        "KDBWDB": str(paths.torqdata / "wdbhdb"),
+        "KDBTPLOG": str(paths.torqdata / "tplogs"),
+        "KDBDQCDB": str(paths.torqdata / "dqe" / "dqcdb" / "database"),
+        "KDBDQEDB": str(paths.torqdata / "dqe" / "dqedb" / "database"),
+        "KDBBASEPORT": str(base_port),
+        "KDBSTACKID": f"-stackid {base_port}",
+        "TORQPROCESSES": str(paths.generated_procs),
+        "RLWRAP": "rlwrap",
+        "QCON": "qcon",
+        "QCMD": "q",
+    }
 
 
 def bootstrap(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
@@ -228,30 +297,7 @@ def bootstrap(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[
         writer.writeheader()
         writer.writerows(rows)
 
-    env: dict[str, str] = {
-        "TORQHOME": str(paths.torqhome),
-        "TORQAPPHOME": str(paths.torqapphome),
-        "TORQDATA": str(paths.torqdata),
-        "UQFSCRIPTS": str(paths.scripts_dir),
-        "KDBCONFIG": str(paths.torqhome / "config"),
-        "KDBCODE": str(paths.torqhome / "code"),
-        "KDBAPPCONFIG": str(paths.torqapphome / "appconfig"),
-        "KDBAPPCODE": str(paths.torqapphome / "code"),
-        "KDBLIB": str(paths.torqhome / "lib"),
-        "KDBTESTS": str(paths.torqhome / "tests"),
-        "KDBLOG": str(paths.torqdata / "logs"),
-        "KDBHDB": str(paths.torqdata / "hdb"),
-        "KDBWDB": str(paths.torqdata / "wdbhdb"),
-        "KDBTPLOG": str(paths.torqdata / "tplogs"),
-        "KDBDQCDB": str(paths.torqdata / "dqe" / "dqcdb" / "database"),
-        "KDBDQEDB": str(paths.torqdata / "dqe" / "dqedb" / "database"),
-        "KDBBASEPORT": str(base_port),
-        "KDBSTACKID": f"-stackid {base_port}",
-        "TORQPROCESSES": str(paths.generated_procs),
-        "RLWRAP": "rlwrap",
-        "QCON": "qcon",
-        "QCMD": "q",
-    }
+    env = build_env(paths, base_port=base_port)
 
     # torq.sh unconditionally sources $SETENV (defaulting to lib/torq/setenv.sh,
     # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's
