@@ -9,10 +9,12 @@
 / change needed.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - this is a
-/ TorQ demo process, registered only in the process.csv torq_demo.sh
-/ generates on the fly (appending one row to a copy of the vendored csv,
-/ never editing lib/torq-finance-starter-pack/appconfig/process.csv
-/ itself), port {KDBBASEPORT}+19. Mirrors feed.q's own
+/ TorQ demo process, registered only in the process.csv
+/ uqf_client.torq_demo.bootstrap() (python/uqf-client/src/uqf_client/
+/ torq_demo.py, driven by scripts/torq_demo.py/torq_demo_mcp.py) generates
+/ on the fly, appending one row to a copy of the vendored csv - never
+/ editing lib/torq-finance-starter-pack/appconfig/process.csv itself -
+/ port {KDBBASEPORT}+19. Mirrors feed.q's own
 / discover-tickerplant-then-timer pattern exactly, so it's the concrete
 / worked example for "how do I add a process that publishes rows" - copy
 / this file's shape for a new one.
