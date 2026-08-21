@@ -88,8 +88,8 @@ The known reference value(s) this formula is tested against (textbook example, p
 
 ## Functions
 
-- **`.qf.<fn>`** in `src/<module>.q` — <one-line role>
-- **`.qf.<related_fn>`** — <how it composes with the above, if applicable>
+- **`.q<abbrev>.<fn>`** in `src/<module>.q` — <one-line role>
+- **`.q<abbrev>.<related_fn>`** — <how it composes with the above, if applicable>
 
 ## See Also
 
@@ -112,7 +112,7 @@ One paragraph: what this workflow does, when to use it, and what it produces.
 
 ```mermaid
 flowchart TD
-    A["Entry point: .qf.<fn>"] --> B["..."]
+    A["Entry point: .q<abbrev>.<fn>"] --> B["..."]
     B --> C["..."]
 ```
 
@@ -120,7 +120,7 @@ flowchart TD
 
 ### 1. <First Stage>
 
-- **Entry point**: `.qf.<function>`
+- **Entry point**: `.q<abbrev>.<function>`
 - **Location**: `src/<path>.q`
 - **Steps**:
   1. <what happens>
@@ -128,7 +128,7 @@ flowchart TD
 
 ### 2. <Second Stage>
 
-- **Entry point**: `.qf.<function>`
+- **Entry point**: `.q<abbrev>.<function>`
 - **Location**: `src/<path>.q`
 - **Steps**:
   1. ...
@@ -148,7 +148,7 @@ flowchart TD
 
 ```q
 q)\l src/init.q
-q).qf.<function>[<args>]
+q).q<abbrev>.<function>[<args>]
 ```
 
 See `scripts/<relevant_example>.q` for a full worked example with synthetic data.
@@ -156,8 +156,8 @@ See `scripts/<relevant_example>.q` for a full worked example with synthetic data
 ### With configuration overrides
 
 ```q
-q).qf.ts_col:`target_time    / override the default `ts output column name
-q).qf.<function>[<args>]
+q).qfwd.ts_col:`target_time    / override the default `ts output column name
+q).q<abbrev>.<function>[<args>]
 ```
 
 ## Output Structure
@@ -204,7 +204,7 @@ flowchart TD
 ### <Function group 1, e.g. "Chain discovery">
 
 - **Purpose**: <what it does>
-- **Key functions**: `.qf.<fn>` in `src/<path>.q`
+- **Key functions**: `.q<abbrev>.<fn>` in `src/<path>.q`
 - **Notes**: any non-obvious constraints or invariants
 
 ### <Function group 2>
@@ -217,8 +217,8 @@ Namespace-level config variables this component reads, if any:
 
 | Variable | Default | Description |
 |---|---|---|
-| `.qf.ts_col` | `` `ts `` | output timestamp column name |
-| `.qf.col_precedence` | `` `ts`sym `` | leading column order for output tables |
+| `.qfwd.ts_col` | `` `ts `` | output timestamp column name |
+| `.qfwd.col_precedence` | `` `ts`sym `` | leading column order for output tables |
 
 ## Extension Points
 

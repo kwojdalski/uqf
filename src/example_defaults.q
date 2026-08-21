@@ -9,7 +9,7 @@
 / these defaults.
 / .
 
-\d .qf
+\d .qex
 
 / One pip, in rate terms - the increment example scripts use between
 / adjacent synthetic order book levels (e.g. spot, spot-pip_size,

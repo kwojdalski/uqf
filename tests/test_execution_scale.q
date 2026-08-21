@@ -1,4 +1,4 @@
-// test_execution_scale.q - a scale/integration test for .qf.markout: builds
+// test_execution_scale.q - a scale/integration test for .qexec.markout: builds
 // a large synthetic trade table spanning several currency pairs, times of
 // day, bid/ask levels and liquidity, then computes markout for every row
 // as a single vectorized call - the way this function is meant to be used
@@ -18,7 +18,7 @@ pip_factors:10000 10000 100 10000 10000 10000 10000 10000 100 100;
 // spread (smaller size -> wider spread), a random side, an execution
 // price consistent with that side (buys pay the ask, sells hit the bid),
 // and a post-trade reference price at some later, randomly-moved level -
-// exactly the shape .qf.markout is meant to consume.
+// exactly the shape .qexec.markout is meant to consume.
 gen_synthetic_trades:{[n]
     idx:n?count symbols;
     sym:symbols idx;
@@ -65,7 +65,7 @@ beforeNamespace_generate_trades:{[t]
     n:1000000;
     start_time:.z.p;
     trades::gen_synthetic_trades[n];
-    trades::update markout_pips:.qf.markout[side;trade_price;ref_price;pip_factor] from trades;
+    trades::update markout_pips:.qexec.markout[side;trade_price;ref_price;pip_factor] from trades;
     generation_elapsed::.z.p-start_time};
 
 test_row_count_and_coverage:{[t]
@@ -85,14 +85,14 @@ test_row_count_and_coverage:{[t]
 
 test_markout_has_no_nulls_and_matches_direct_call:{[t]
     .qunit.assertEmpty[select from trades where null markout_pips;"markout has no nulls across the full table"];
-    // The in-table vectorized markout must match calling .qf.markout
+    // The in-table vectorized markout must match calling .qexec.markout
     // directly on the same columns - i.e. table use and direct use agree.
     // Reduced to a scalar max-diff (rather than asserting on the two
     // 1mm-element vectors directly) so qUnit's results table only ever
     // holds small scalar actual/expected values - see the
     // kdb-q-conventions skill on why a huge vector embedded in a qUnit
     // result row is worth avoiding here.
-    direct_call:.qf.markout[trades`side;trades`trade_price;trades`ref_price;trades`pip_factor];
+    direct_call:.qexec.markout[trades`side;trades`trade_price;trades`ref_price;trades`pip_factor];
     max_diff:max abs (trades`markout_pips)-direct_call;
     .testutil.assertApprox[max_diff;0f;1e-9;"in-table markout matches a direct vectorized call on the same columns (max abs diff)"]};
 

@@ -27,7 +27,7 @@ timers) has been dropped as not applicable here.
 
 **Atom vs vector**: `type 42` is `-7h` (negative = atom); `type 42 43` is
 `7h` (positive = vector). This matters in this repo because most `src/*.q`
-functions are written to work on either - see how `.qf.inv_ncdf` branches
+functions are written to work on either - see how `.qstats.inv_ncdf` branches
 on `0>type p` to decide atom vs each-mapped vector handling.
 
 **Mixed-list promotion**: `1 2 3` is a long vector (`7h`); `1 2 3.0` is
@@ -54,7 +54,7 @@ f each 1 2 3          / same as f'[1 2 3]
 ```
 
 **Fold (over, `/`) with vs without a seed** - this is the exact mechanism
-`.qf.horner_eval` uses:
+`.qstats.horner_eval` uses:
 ```
 (+/) 1 2 3     / 6   - no seed: first element used as seed
 0 +/ 1 2 3     / 6   - explicit seed 0
@@ -96,23 +96,25 @@ call won't see errors that the inner one already handled.
 ## 4. Namespaces
 
 ```
-\d .qf
-myfunc:{x+1}   / becomes .qf.myfunc
+\d .qmodule
+myfunc:{x+1}   / becomes .qmodule.myfunc
 \d .
 otherfunc:{x+1}  / becomes .otherfunc (root)
 ```
 
-This is exactly the pattern every file in `src/` uses. Two traps worth
-knowing:
+This is exactly the pattern every file in `src/` uses - each with its own
+distinct flat namespace (`.qstats`, `.qfwd`, `.qexec`, etc. - see this
+skill's Layout section for the full list). Two traps worth knowing:
 
 - **`\d` persists for the rest of the file** until the next `\d` - forgetting
   the closing `\d .` at the bottom of a `src/*.q` file would leak later
-  definitions into `.qf` (or wherever you loaded next) unintentionally.
+  definitions into that file's namespace (or wherever you loaded next)
+  unintentionally.
 - **Local variables shadow globals, and don't leak out**: `f:{a:20;a}` sets
   a *local* `a` even if a global `a` already exists; the global is
   untouched unless you explicitly use `::` (e.g. `g:{a::20}`). This is
   exactly why qUnit's test functions can freely reuse names like `t`, `s`,
-  `k` as locals without clobbering anything in `.qf`.
+  `k` as locals without clobbering anything in any module's namespace.
 
 **Max 8 parameters per function.** None of uqf's functions are close to
 this limit (the largest, `gk_call`/`gk_put`/the Greeks, take 6), but if a

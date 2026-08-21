@@ -1,4 +1,8 @@
-// init.q - loads every uqf module into the .qf namespace.
+// init.q - loads every uqf module, each into its own flat namespace (one
+// per file - .qstats, .qccy, .qdcf, .qrates, .qfwd, .qopt, .qrisk, .qexec,
+// .qbook, .qmicro, .qex - kept single-level throughout, not nested under
+// a shared .q parent, since multi-level \d namespace paths don't resolve
+// under the PeachQ interpreter this repo also targets).
 // Run from the repository root, e.g. `q src/init.q` or `\l src/init.q`.
 
 \l src/stats.q

@@ -19,7 +19,7 @@ Scan for the following, in order of severity:
 
 ### 1. Precedence and Arithmetic Traps
 - q has **no operator precedence** (strictly right-to-left evaluation): any bare mixed `*`/`+`/`-` chain that isn't built from named intermediate variables or explicit parens is a latent bug (`a*r+b` evaluates as `a*(r+b)`, not `(a*r)+b`)
-- Hand-rolled polynomial evaluation instead of routing through `.qf.horner_eval` (`stats.q`) — this arithmetic is tricky exactly once, in one tested place
+- Hand-rolled polynomial evaluation instead of routing through `.qstats.horner_eval` (`stats.q`) — this arithmetic is tricky exactly once, in one tested place
 - A formula that was never verified against a known reference value (textbook example, provable identity, round-trip through an inverse function)
 
 ### 2. Silent Null and Error Swallowing
@@ -31,7 +31,7 @@ Scan for the following, in order of severity:
 - A local variable name that shadows a q builtin (`ss`, `cols`, `inv` are all confirmed live traps in this repo/interpreter combination) — causes confusing `assign`/`type` errors far from the actual mistake
 - A nested lambda referencing an *outer function's local* variable rather than a global — q closures only capture globals, so this fails at call time, not definition time
 - Single-key dict construction via `` `key!value `` on an atom key — collides with q's enum overload (type 20h); must be `(enlist key)!(enlist value)`
-- A new namespace nested more than one level deep (`` \d .qf.sub ``) — confirmed not to resolve under the PeachQ interpreter this repo also targets; every namespace in this library is deliberately flat for that reason
+- A new namespace nested more than one level deep (`` \d .qfwd.sub ``) — confirmed not to resolve under the PeachQ interpreter this repo also targets; every namespace in this library is deliberately flat for that reason
 
 ### 4. Cross-Interpreter Portability Gaps
 - Code that only works under one of the two interpreters this repo targets (PeachQ via `./q`, real KDB-X) without a documented reason — check `kdb-q-conventions`'s gotcha list: abbreviated timestamp literals (`` 2026.01.02D0 ``) silently truncate test discovery under PeachQ, `\c` console width isn't honored under PeachQ, an empty group-by dict (`()!()`) throws under PeachQ but returns one row under real KDB-X, `` `year$d ``-style casts and `floor` vs monadic `_` behave differently

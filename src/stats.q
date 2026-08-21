@@ -7,7 +7,7 @@
 / https://web.archive.org/web/20151030215612/http://home.online.no/~pjacklam/notes/invnorm/
 / .
 
-\d .qf
+\d .qstats
 
 / The constant pi, used by npdf.
 PI:acos -1;
@@ -21,20 +21,20 @@ PI:acos -1;
 /   term last (as in numpy.polyval)
 / @param x the point to evaluate the polynomial at
 / @return coeffs[0]*x^n + coeffs[1]*x^(n-1) + ... + coeffs[n]
-/ @eg .qf.horner_eval[2 3 4;5]  -> 69 (i.e. 2*5*5+3*5+4)
+/ @eg .qstats.horner_eval[2 3 4;5]  -> 69 (i.e. 2*5*5+3*5+4)
 horner_eval:{[coeffs;x]
     {[x;acc;c] (acc*x)+c}[x;]/[first coeffs;1 _ coeffs]};
 
 / Standard normal probability density function n(x).
 / @param x point(s) to evaluate at (atom or vector)
 / @return the standard normal density at x
-/ @eg .qf.npdf 0f  -> 0.3989423
+/ @eg .qstats.npdf 0f  -> 0.3989423
 npdf:{[x] exp[-0.5*x*x] % sqrt 2*PI};
 
 / Standard normal cumulative distribution function N(x).
 / @param x point(s) to evaluate at (atom or vector)
 / @return P(Z is at most x) for a standard normal Z
-/ @eg .qf.ncdf 1.96  -> 0.9750022
+/ @eg .qstats.ncdf 1.96  -> 0.9750022
 ncdf:{[x]
     coeffs:1.061405429 -1.453152027 1.421413741 -0.284496736 0.254829592 0f; / a5 a4 a3 a2 a1 0, highest degree first
     s:signum x;
@@ -48,7 +48,7 @@ ncdf:{[x]
 / @param p probability, strictly within (0,1); an atom or a list of atoms
 / @return x such that ncdf[x]~p
 / @throws error if any element of p is not strictly between 0 and 1
-/ @eg .qf.inv_ncdf 0.95  -> 1.644854 (the one-tailed 95% z-score)
+/ @eg .qstats.inv_ncdf 0.95  -> 1.644854 (the one-tailed 95% z-score)
 inv_ncdf:{[p]
     if[not all(p>0)&(p<1); '"inv_ncdf: p must be strictly between 0 and 1"];
     a:-39.69683028665376 220.9460984245205 -275.9285104469687 138.3577518672690 -30.66479806614716 2.506628277459239;

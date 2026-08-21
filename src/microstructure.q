@@ -14,7 +14,7 @@
 / elsewhere in this library. A single snapshot still works: wrap its 4
 / level vectors in `enlist` and read index 0 of the result.
 
-\d .qf
+\d .qmicro
 
 / Private: the level-th element of each row's own vector in levels (a
 / vector of vectors). Nulls out (0n) a row whose vector is shorter than
@@ -48,7 +48,7 @@ sum_levels:{[sizes;n_levels]
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @return a vector, one mid price per row
-/ @eg .qf.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> 1.1001
+/ @eg .qmicro.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> 1.1001
 mid_price:{[bid_prices;ask_prices]
     0.5*(level_at[bid_prices;0])+level_at[ask_prices;0]};
 
@@ -59,7 +59,7 @@ mid_price:{[bid_prices;ask_prices]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param level the level index (0 = top of book)
 / @return a vector, one pressure value per row
-/ @eg .qf.book_pressure_at_level[enlist 100 50;enlist 40 60;0]  -> 0.4285714
+/ @eg .qmicro.book_pressure_at_level[enlist 100 50;enlist 40 60;0]  -> 0.4285714
 book_pressure_at_level:{[bid_sizes;ask_sizes;level]
     bid_lvl:level_at[bid_sizes;level];
     ask_lvl:level_at[ask_sizes;level];
@@ -75,7 +75,7 @@ book_pressure_at_level:{[bid_sizes;ask_sizes;level]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to aggregate over
 / @return a vector, one imbalance value per row, in [-1,1]
-/ @eg .qf.order_book_imbalance[enlist 100 50;enlist 40 60;2]  -> 0.2
+/ @eg .qmicro.order_book_imbalance[enlist 100 50;enlist 40 60;2]  -> 0.2
 order_book_imbalance:{[bid_sizes;ask_sizes;n_levels]
     total_bid:sum_levels[bid_sizes;n_levels];
     total_ask:sum_levels[ask_sizes;n_levels];
@@ -89,7 +89,7 @@ order_book_imbalance:{[bid_sizes;ask_sizes;n_levels]
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, one microprice per row
-/ @eg .qf.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> 1.10005
+/ @eg .qmicro.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> 1.10005
 microprice:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
     bid_px0:level_at[bid_prices;0];
     ask_px0:level_at[ask_prices;0];
@@ -107,7 +107,7 @@ microprice:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, microprice - mid_price per row
-/ @eg .qf.microprice_divergence[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> -0.00005
+/ @eg .qmicro.microprice_divergence[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> -0.00005
 microprice_divergence:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
     microprice[bid_prices;bid_sizes;ask_prices;ask_sizes]-mid_price[bid_prices;ask_prices]};
 
@@ -118,7 +118,7 @@ microprice_divergence:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @return a vector, spread in bps per row
-/ @eg .qf.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002]  -> 1.818017
+/ @eg .qmicro.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002]  -> 1.818017
 spread_bps:{[bid_prices;ask_prices]
     bid_px0:level_at[bid_prices;0];
     ask_px0:level_at[ask_prices;0];
@@ -133,7 +133,7 @@ spread_bps:{[bid_prices;ask_prices]
 / @param bid_sizes a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, depth ratio per row
-/ @eg .qf.depth_ratio[enlist 100 20 20 20 20;enlist 100 20 20 20 20]  -> 1.25
+/ @eg .qmicro.depth_ratio[enlist 100 20 20 20 20;enlist 100 20 20 20 20]  -> 1.25
 depth_ratio:{[bid_sizes;ask_sizes]
     top:(level_at[bid_sizes;0])+level_at[ask_sizes;0];
     deeper_bid:sum level_at[bid_sizes;] each 1 2 3 4;
@@ -146,7 +146,7 @@ depth_ratio:{[bid_sizes;ask_sizes]
 / L0 spread.
 vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
     idx:til n_levels;
-    vw_mid:vwap[(bid_prices idx),ask_prices idx;(bid_sizes idx),ask_sizes idx];
+    vw_mid:.qexec.vwap[(bid_prices idx),ask_prices idx;(bid_sizes idx),ask_sizes idx];
     simple_mid:0.5*(bid_prices 0)+ask_prices 0;
     l0_spread:(ask_prices 0)-bid_prices 0;
     (vw_mid-simple_mid)%l0_spread};
@@ -160,7 +160,7 @@ vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to volume-weight over
 / @return a vector, skew per row
-/ @eg .qf.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> 0f
+/ @eg .qmicro.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> 0f
 vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
     n:count bid_prices;
     result:n#0n;
@@ -181,7 +181,7 @@ book_slope_one:{[prices;sizes] (first[prices]-last prices)%sum sizes};
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, slope per row
-/ @eg .qf.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> 1.333333e-06
+/ @eg .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> 1.333333e-06
 book_slope:{[prices;sizes]
     n:count prices;
     result:n#0n;
@@ -210,7 +210,7 @@ book_convexity_one:{[side;prices]
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param side `bid or `ask - which side prices belongs to
 / @return a vector, convexity per row
-/ @eg .qf.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> -0.0001
+/ @eg .qmicro.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> -0.0001
 book_convexity:{[prices;side]
     n:count prices;
     result:n#0n;
@@ -226,8 +226,8 @@ book_convexity:{[prices;side]
 vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     ask_size_target:notional%first ask_prices;
     bid_size_target:notional%first bid_prices;
-    buy_leg:sweep_price[ask_prices;ask_sizes;ask_size_target];
-    sell_leg:sweep_price[bid_prices;bid_sizes;bid_size_target];
+    buy_leg:.qexec.sweep_price[ask_prices;ask_sizes;ask_size_target];
+    sell_leg:.qexec.sweep_price[bid_prices;bid_sizes;bid_size_target];
     0.5*(buy_leg`avg_price)+sell_leg`avg_price};
 
 / VAMP (volume-adjusted mid price): convert notional into a size via each
@@ -242,7 +242,7 @@ vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
 /   already aligned to rows - same atom-or-vector convention as
 /   execution.q's markout ref_price
 / @return a vector, VAMP per row
-/ @eg .qf.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> 1.1001
+/ @eg .qmicro.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> 1.1001
 vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     n:count bid_prices;
     notional:$[0>type notional; n#notional; notional];
@@ -262,7 +262,7 @@ vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
 / hit this exact bug already and named around it the same way.
 / @throws error if quotes is missing a required column (see require_quotes_cols)
 quotes_for_sym:{[fn_name;quotes;target_sym]
-    require_quotes_cols[fn_name;quotes];
+    .qfwd.require_quotes_cols[fn_name;quotes];
     `ts xasc select from quotes where sym=target_sym};
 
 / First difference of the L0 mid price for one sym's quotes, time-ordered.
@@ -273,7 +273,7 @@ quotes_for_sym:{[fn_name;quotes;target_sym]
 / @param target_sym the sym to compute velocity for
 / @return a vector, one velocity value per quote row for target_sym, in ts order
 / @throws error if quotes is missing a required column
-/ @eg .qf.mid_price_velocity[quotes;`EURUSD]
+/ @eg .qmicro.mid_price_velocity[quotes;`EURUSD]
 mid_price_velocity:{[quotes;target_sym]
     sub:quotes_for_sym[`mid_price_velocity;quotes;target_sym];
     mids:mid_price[sub`bid_prices;sub`ask_prices];
@@ -289,7 +289,7 @@ mid_price_velocity:{[quotes;target_sym]
 / @param target_sym the sym to compute acceleration for
 / @return a vector, one acceleration value per quote row for target_sym, in ts order
 / @throws error if quotes is missing a required column
-/ @eg .qf.mid_price_acceleration[quotes;`EURUSD]
+/ @eg .qmicro.mid_price_acceleration[quotes;`EURUSD]
 mid_price_acceleration:{[quotes;target_sym]
     deltas mid_price_velocity[quotes;target_sym]};
 
@@ -302,7 +302,7 @@ mid_price_acceleration:{[quotes;target_sym]
 / @param side `bid or `ask
 / @return a vector, one depletion rate per quote row for target_sym, in ts order
 / @throws error if quotes is missing a required column, or side isn't `bid or `ask
-/ @eg .qf.queue_depletion_rate[quotes;`EURUSD;`bid]
+/ @eg .qmicro.queue_depletion_rate[quotes;`EURUSD;`bid]
 queue_depletion_rate:{[quotes;target_sym;side]
     sub:quotes_for_sym[`queue_depletion_rate;quotes;target_sym];
     sizes_col:$[side=`bid; `bid_sizes; side=`ask; `ask_sizes;
@@ -327,7 +327,7 @@ queue_depletion_rate:{[quotes;target_sym;side]
 / @param target_sym the sym to compute OFI for
 / @return a vector, one OFI value per quote row for target_sym, in ts order
 / @throws error if quotes is missing a required column
-/ @eg .qf.ofi[quotes;`EURUSD]
+/ @eg .qmicro.ofi[quotes;`EURUSD]
 ofi:{[quotes;target_sym]
     sub:quotes_for_sym[`ofi;quotes;target_sym];
     bid_px:level_at[sub`bid_prices;0];
@@ -373,7 +373,7 @@ ofi_at_level:{[sub;level]
 / @param n_levels how many levels (0..n_levels-1) to sum OFI over
 / @return a vector, one multi-level OFI value per quote row for target_sym, in ts order
 / @throws error if quotes is missing a required column
-/ @eg .qf.ofi_multilevel[quotes;`EURUSD;3]
+/ @eg .qmicro.ofi_multilevel[quotes;`EURUSD;3]
 ofi_multilevel:{[quotes;target_sym;n_levels]
     sub:quotes_for_sym[`ofi_multilevel;quotes;target_sym];
     per_level:ofi_at_level[sub;] each til n_levels;
@@ -385,7 +385,7 @@ ofi_multilevel:{[quotes;target_sym;n_levels]
 / @param ofi_series an OFI vector, e.g. from ofi or ofi_multilevel
 / @param window the moving-window size, in number of rows
 / @return a vector, msum[window;ofi_series]
-/ @eg .qf.rolling_ofi[1 -1 2 0 -3;2]  -> 1 0 1 2 -3
+/ @eg .qmicro.rolling_ofi[1 -1 2 0 -3;2]  -> 1 0 1 2 -3
 rolling_ofi:{[ofi_series;window] msum[window;ofi_series]};
 
 / Ratio of the current quoted spread (spread_bps) to its own rolling mean
@@ -396,7 +396,7 @@ rolling_ofi:{[ofi_series;window] msum[window;ofi_series]};
 / @param window the moving-window size, in number of rows
 / @return a vector, one spread_ratio value per quote row for target_sym, in ts order
 / @throws error if quotes is missing a required column
-/ @eg .qf.spread_ratio[quotes;`EURUSD;5]
+/ @eg .qmicro.spread_ratio[quotes;`EURUSD;5]
 spread_ratio:{[quotes;target_sym;window]
     sub:quotes_for_sym[`spread_ratio;quotes;target_sym];
     spreads:spread_bps[sub`bid_prices;sub`ask_prices];
@@ -410,7 +410,7 @@ spread_ratio:{[quotes;target_sym;window]
 / @param target_sym the sym to compute inter-event time for
 / @return a vector, one log(1+gap_seconds) value per quote row for target_sym, in ts order
 / @throws error if quotes is missing a required column
-/ @eg .qf.inter_event_time[quotes;`EURUSD]
+/ @eg .qmicro.inter_event_time[quotes;`EURUSD]
 inter_event_time:{[quotes;target_sym]
     sub:quotes_for_sym[`inter_event_time;quotes;target_sym];
     gaps_ns:"j"$sub[`ts]-prev sub`ts;
@@ -427,7 +427,7 @@ inter_event_time:{[quotes;target_sym]
 / @param ofi_series an OFI vector, e.g. from ofi or ofi_multilevel
 / @param window the moving-window size, in number of rows (needs >=2)
 / @return a vector, same length as ofi_series, lag-1 autocorrelation per window ending at that index
-/ @eg .qf.ofi_autocorrelation[1 -1 2 0 -3 4;3]
+/ @eg .qmicro.ofi_autocorrelation[1 -1 2 0 -3 4;3]
 ofi_autocorrelation:{[ofi_series;window]
     n:count ofi_series;
     result:n#0n;

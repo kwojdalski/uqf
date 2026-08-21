@@ -11,8 +11,11 @@ class UqfClient:
     """Thin wrapper around kola.Q for querying a running uqf q session.
 
     Expects a q process with `src/init.q` loaded and listening on a port,
-    e.g. `q src/init.q -p 5000` from the uqf repo root, so `.qf.*`
-    functions are callable by name.
+    e.g. `q src/init.q -p 5000` from the uqf repo root. Each src/*.q
+    module loads into its own flat namespace rather than one shared
+    namespace - qstats, qccy, qdcf, qrates, qfwd, qopt, qrisk, qexec,
+    qbook, qmicro, qex (see README's Layout section for which file maps
+    to which namespace) - so `call()` takes the namespace explicitly.
     """
 
     def __init__(
@@ -52,9 +55,10 @@ class UqfClient:
         """Send a synchronous q expression/query and return the result."""
         return self._q.sync(expr, *args)
 
-    def call(self, fn: str, *args: Any) -> Any:
-        """Call a `.qf.<fn>` function, e.g. `call("gk_call", 1.10, 1.12, 0.045, 0.02, 0.10, 0.75)`.
+    def call(self, namespace: str, fn: str, *args: Any) -> Any:
+        """Call a `.<namespace>.<fn>` function, e.g.
+        `call("qopt", "gk_call", 1.10, 1.12, 0.045, 0.02, 0.10, 0.75)`.
 
-        Equivalent to `sync(".qf." + fn, *args)`.
+        Equivalent to `sync(f".{namespace}.{fn}", *args)`.
         """
-        return self._q.sync(f".qf.{fn}", *args)
+        return self._q.sync(f".{namespace}.{fn}", *args)

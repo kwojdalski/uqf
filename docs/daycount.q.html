@@ -32,15 +32,15 @@
               <p class="caption"><span class="caption-text">Namespaces</span></p>
 
 
-<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.qf (ccy.q)</a></li>
-	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.qf (execution.q)</a></li>
-	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.qf (rates.q)</a></li>
-	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.qf (options.q)</a></li>
-	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.qf (risk.q)</a></li>
-	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.qf (daycount.q)</a></li>
-	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.qf (stats.q)</a></li>
-	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.qf (forwards.q)</a></li>
-	<li class="toctree-l1 cls-uqfdata-cls"><a class="reference internal cls-uqfdata-cls" href='data.q.html' >.uqfdata</a></li>
+<ul><li class="toctree-l1 cls-uqf (ccyq)-cls"><a class="reference internal cls-uqf (ccyq)-cls" href='ccy.q.html' >.qccy (ccy.q)</a></li>
+	<li class="toctree-l1 cls-uqf (executionq)-cls"><a class="reference internal cls-uqf (executionq)-cls" href='execution.q.html' >.qexec (execution.q)</a></li>
+	<li class="toctree-l1 cls-uqf (ratesq)-cls"><a class="reference internal cls-uqf (ratesq)-cls" href='rates.q.html' >.qrates (rates.q)</a></li>
+	<li class="toctree-l1 cls-uqf (optionsq)-cls"><a class="reference internal cls-uqf (optionsq)-cls" href='options.q.html' >.qopt (options.q)</a></li>
+	<li class="toctree-l1 cls-uqf (riskq)-cls"><a class="reference internal cls-uqf (riskq)-cls" href='risk.q.html' >.qrisk (risk.q)</a></li>
+	<li class="toctree-l1 cls-uqf (daycountq)-cls"><a class="reference internal cls-uqf (daycountq)-cls" href='daycount.q.html' >.qdcf (daycount.q)</a></li>
+	<li class="toctree-l1 cls-uqf (statsq)-cls"><a class="reference internal cls-uqf (statsq)-cls" href='stats.q.html' >.qstats (stats.q)</a></li>
+	<li class="toctree-l1 cls-uqf (forwardsq)-cls"><a class="reference internal cls-uqf (forwardsq)-cls" href='forwards.q.html' >.qfwd (forwards.q)</a></li>
+	<li class="toctree-l1 cls-qdata-cls"><a class="reference internal cls-qdata-cls" href='data.q.html' >.qdata</a></li>
 </ul><!--NAMESPACE_END-->
 
               <p class="caption"><span class="caption-text">Files</span></p>
@@ -88,33 +88,33 @@
 	<div id='headerDoc'>daycount.q - day count fraction conventions used to turn a pair of dates into the year fraction t consumed by rates.q / forwards.q / options.q. . NOTE ON q ARITHMETIC: q has no operator precedence (strictly right to left evaluation), so every mixed +/-/* expression below is built from explicitly parenthesised, named intermediate terms rather than dense one-liners - see src/stats.q for the bug this avoids.</div>
 	<div id='summary'><h2>Entity Summary</h2><table class='overviewSummary'><tbody>
 <tr><th>Entities</th><th>Short Description</th></tr>
-		<tr><td><a href='#-uqf-dcf_30e_360'>.qf.dcf_30e_360</a></td><td>30E/360 (Eurobond basis): each month treated as having 30 da</td></tr>
-		<tr><td><a href='#-uqf-dcf_act_360'>.qf.dcf_act_360</a></td><td>Actual/360: (d2-d1) actual calendar days, annualised on a 36</td></tr>
-		<tr><td><a href='#-uqf-dcf_act_365'>.qf.dcf_act_365</a></td><td>Actual/365 (Fixed): (d2-d1) actual calendar days, annualised</td></tr>
-		<tr><td><a href='#-uqf-year_frac'>.qf.year_frac</a></td><td>Dispatch to a day count convention by name.</td></tr>
+		<tr><td><a href='#-uqf-dcf_30e_360'>.qdcf.dcf_30e_360</a></td><td>30E/360 (Eurobond basis): each month treated as having 30 da</td></tr>
+		<tr><td><a href='#-uqf-dcf_act_360'>.qdcf.dcf_act_360</a></td><td>Actual/360: (d2-d1) actual calendar days, annualised on a 36</td></tr>
+		<tr><td><a href='#-uqf-dcf_act_365'>.qdcf.dcf_act_365</a></td><td>Actual/365 (Fixed): (d2-d1) actual calendar days, annualised</td></tr>
+		<tr><td><a href='#-uqf-year_frac'>.qdcf.year_frac</a></td><td>Dispatch to a day count convention by name.</td></tr>
 </tbody></table></div>
 	<div class='details'>
 	<h2>Entity Details</h2>
-		<div class='entity' id='-uqf-dcf_30e_360'><h2>.qf.dcf_30e_360</h2><p>30E/360 (Eurobond basis): each month treated as having 30 days. Day-of-month is capped at 30 for both dates (the simple European variant - it does not carry the US/NASD end-of-February special case).</p><table>
-<tr><th>eg: </th><td>.qf.dcf_30e_360[2024.01.15;2024.02.15]  -> 0.08333333 (30/360)</td></tr>
+		<div class='entity' id='-uqf-dcf_30e_360'><h2>.qdcf.dcf_30e_360</h2><p>30E/360 (Eurobond basis): each month treated as having 30 days. Day-of-month is capped at 30 for both dates (the simple European variant - it does not carry the US/NASD end-of-February special case).</p><table>
+<tr><th>eg: </th><td>.qdcf.dcf_30e_360[2024.01.15;2024.02.15]  -> 0.08333333 (30/360)</td></tr>
 <tr><th>Return: </th><td>the 30E/360 year fraction between d1 and d2</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>d1</strong> - start date</li>
 	<li><strong>d2</strong> - end date</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-dcf_act_360'><h2>.qf.dcf_act_360</h2><p>Actual/360: (d2-d1) actual calendar days, annualised on a 360-day year. Common for USD, EUR money-market and most FX deposit/forward calcs.</p><table>
-<tr><th>eg: </th><td>.qf.dcf_act_360[2024.01.01;2025.01.01]  -> 1.016667 (2024 is a leap year)</td></tr>
+		<div class='entity' id='-uqf-dcf_act_360'><h2>.qdcf.dcf_act_360</h2><p>Actual/360: (d2-d1) actual calendar days, annualised on a 360-day year. Common for USD, EUR money-market and most FX deposit/forward calcs.</p><table>
+<tr><th>eg: </th><td>.qdcf.dcf_act_360[2024.01.01;2025.01.01]  -> 1.016667 (2024 is a leap year)</td></tr>
 <tr><th>Return: </th><td>(d2-d1) actual days, divided by 360</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>d1</strong> - start date</li>
 	<li><strong>d2</strong> - end date</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-dcf_act_365'><h2>.qf.dcf_act_365</h2><p>Actual/365 (Fixed): (d2-d1) actual calendar days, annualised on a 365-day year. Common for GBP money markets.</p><table>
-<tr><th>eg: </th><td>.qf.dcf_act_365[2023.01.01;2024.01.01]  -> 1f</td></tr>
+		<div class='entity' id='-uqf-dcf_act_365'><h2>.qdcf.dcf_act_365</h2><p>Actual/365 (Fixed): (d2-d1) actual calendar days, annualised on a 365-day year. Common for GBP money markets.</p><table>
+<tr><th>eg: </th><td>.qdcf.dcf_act_365[2023.01.01;2024.01.01]  -> 1f</td></tr>
 <tr><th>Return: </th><td>(d2-d1) actual days, divided by 365</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>d1</strong> - start date</li>
 	<li><strong>d2</strong> - end date</li></ul></td></tr></table></div>
-		<div class='entity' id='-uqf-year_frac'><h2>.qf.year_frac</h2><p>Dispatch to a day count convention by name.</p><table>
-<tr><th>eg: </th><td>.qf.year_frac[`act360;2024.01.01;2025.01.01]  -> 1.016667</td></tr>
+		<div class='entity' id='-uqf-year_frac'><h2>.qdcf.year_frac</h2><p>Dispatch to a day count convention by name.</p><table>
+<tr><th>eg: </th><td>.qdcf.year_frac[`act360;2024.01.01;2025.01.01]  -> 1.016667</td></tr>
 <tr><th>Return: </th><td>the year fraction between d1 and d2 under the chosen convention</td></tr>
 <tr><th>Parameters: </th><td><ul>
 	<li><strong>conv</strong> - one of `act360`act365`30e360</li>
