@@ -27,6 +27,7 @@ actual/
 # don't commit it
 /scripts/output/
 
-# bytecode cache from running scripts/torq_demo.py directly
+# Python bytecode cache (python/*/'s own .gitignore covers .venv/dist/etc
+# within each package; this is the general fallback)
 __pycache__/
 *.pyc

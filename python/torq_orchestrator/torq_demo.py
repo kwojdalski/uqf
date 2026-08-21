@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
 """torq_demo.py - Typer CLI for the vendored TorQ Finance Starter Pack demo
-(see docs/torq-demo.md). Python rewrite of the original torq_demo.sh (see
-git history) - same job (bridge lib/torq + lib/torq-finance-starter-pack
-without editing either vendored tree), now with proper subcommands/--help,
-colored logging via uqf_client.logger, and a `query` command for poking at
-a running process without leaving the terminal.
+(see docs/torq-demo.md). Bridges lib/torq + lib/torq-finance-starter-pack
+without editing either vendored tree.
 
-All the actual bootstrapping/env-var logic lives in
-python/uqf-client/src/uqf_client/torq_demo.py, shared with
-scripts/torq_demo_mcp.py's FastMCP server so the two front ends can't
-drift apart.
+All the actual bootstrapping/config logic lives in
+src/torq_orchestrator/core.py, shared with torq_demo_mcp.py's FastMCP
+server so the two front ends can't drift apart.
 
 Run via uv (from the repo root, no separate `uv sync` step needed - uv
-resolves python/uqf-client's dependencies on demand):
+resolves this project's dependencies on demand):
 
-    uv run --project python/uqf-client scripts/torq_demo.py start all
-    uv run --project python/uqf-client scripts/torq_demo.py summary
-    uv run --project python/uqf-client scripts/torq_demo.py stop all
+    uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py start all
+    uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py summary
+    uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py stop all
 """
 
 from __future__ import annotations
@@ -27,8 +23,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from uqf_client import torq_demo as demo
-from uqf_client.logger import configure_logging, get_logger
+from torq_orchestrator import core
+from torq_orchestrator.logger import configure_logging, get_logger
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -43,10 +39,10 @@ ProcsArg = Annotated[str, typer.Argument(help="'all', or space-separated process
 
 
 def _paths():
-    return demo.default_paths()
+    return core.default_paths()
 
 
-def _die(exc: demo.TorqDemoError) -> None:
+def _die(exc: core.TorqDemoError) -> None:
     log.error("{}", exc)
     raise typer.Exit(code=1)
 
@@ -54,39 +50,39 @@ def _die(exc: demo.TorqDemoError) -> None:
 def _run_streaming(result_fn, *args, **kwargs) -> None:
     try:
         result = result_fn(_paths(), *args, capture=False, **kwargs)
-    except demo.TorqDemoError as exc:
+    except core.TorqDemoError as exc:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
 
 
 @app.command()
-def start(procs: ProcsArg = "all", port: PortOpt = demo.DEFAULT_BASE_PORT) -> None:
+def start(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Start every startwithall=1 process (or specific process name(s))."""
-    _run_streaming(demo.start, procs, base_port=port)
+    _run_streaming(core.start, procs, base_port=port)
 
 
 @app.command()
-def stop(procs: ProcsArg = "all", port: PortOpt = demo.DEFAULT_BASE_PORT) -> None:
+def stop(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Stop every running process (or specific process name(s))."""
-    _run_streaming(demo.stop, procs, base_port=port)
+    _run_streaming(core.stop, procs, base_port=port)
 
 
 @app.command()
-def restart(procs: ProcsArg = "all", port: PortOpt = demo.DEFAULT_BASE_PORT) -> None:
+def restart(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
-    _run_streaming(demo.restart, procs, base_port=port)
+    _run_streaming(core.restart, procs, base_port=port)
 
 
 _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 
 
 @app.command()
-def summary(port: PortOpt = demo.DEFAULT_BASE_PORT) -> None:
+def summary(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Status table (up/down, pid, port) for every process in process.csv."""
     try:
-        result = demo.summary(_paths(), base_port=port)
-    except demo.TorqDemoError as exc:
+        result = core.summary(_paths(), base_port=port)
+    except core.TorqDemoError as exc:
         _die(exc)
         return
 
@@ -115,11 +111,11 @@ def summary(port: PortOpt = demo.DEFAULT_BASE_PORT) -> None:
 
 
 @app.command("print")
-def print_startlines(procs: ProcsArg = "all", port: PortOpt = demo.DEFAULT_BASE_PORT) -> None:
+def print_startlines(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Show the exact startup command line(s) without starting anything."""
     try:
-        result = demo.print_procs(_paths(), procs, base_port=port)
-    except demo.TorqDemoError as exc:
+        result = core.print_procs(_paths(), procs, base_port=port)
+    except core.TorqDemoError as exc:
         _die(exc)
         return
     console.print(result.stdout)
@@ -129,7 +125,7 @@ def print_startlines(procs: ProcsArg = "all", port: PortOpt = demo.DEFAULT_BASE_
 @app.command()
 def clean() -> None:
     """Wipe scripts/output/torq-demo/ (logs, tplogs, wdb, the copied sample data)."""
-    demo.clean(_paths())
+    core.clean(_paths())
 
 
 @app.command()
@@ -146,21 +142,53 @@ def query(
 ) -> None:
     """Run a synchronous q expression against a running demo process."""
     try:
-        result = demo.query(expr, port, host=host, user=user, passwd=passwd)
+        result = core.query(expr, port, host=host, user=user, passwd=passwd)
     except Exception as exc:  # kola raises its own exception types on connect/query failure
         log.error("query failed: {}", exc)
         raise typer.Exit(code=1) from exc
     console.print(result)
 
 
+@app.command("config-get")
+def config_get(procname: str, field: Annotated[str | None, typer.Argument()] = None) -> None:
+    """Show a process's effective process.csv row (or one field of it)."""
+    try:
+        row = core.get_process_config(_paths(), procname)
+    except core.TorqDemoError as exc:
+        _die(exc)
+        return
+    if field is not None:
+        console.print(row.get(field, ""))
+        return
+    table = Table(title=f"{procname} config")
+    table.add_column("field")
+    table.add_column("value")
+    for k, v in row.items():
+        table.add_row(k, v)
+    console.print(table)
+
+
+@app.command("config-set")
+def config_set(procname: str, field: str, value: str) -> None:
+    """Set one process.csv field for *procname* (persisted to
+    process_overrides.csv, applied on every later start/stop/summary/...).
+    """
+    try:
+        core.set_process_config(_paths(), procname, field, value)
+    except core.TorqDemoError as exc:
+        _die(exc)
+        return
+    console.print(f"{procname}.{field} = {value}")
+
+
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-def raw(ctx: typer.Context, port: PortOpt = demo.DEFAULT_BASE_PORT) -> None:
+def raw(ctx: typer.Context, port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Pass any other torq.sh verb straight through, e.g.:
     `raw -- debug rdb1`, `raw -- qcon gateway1 admin:admin`, `raw -- top feed1`.
     """
     try:
-        result = demo.run_torq_sh(_paths(), ctx.args, base_port=port, capture=False)
-    except demo.TorqDemoError as exc:
+        result = core.run_torq_sh(_paths(), ctx.args, base_port=port, capture=False)
+    except core.TorqDemoError as exc:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)

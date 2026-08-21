@@ -8,32 +8,36 @@ Licensing section) but neither is wired into `src/init.q` or anything else
 uqf itself runs - this library has no long-running processes for TorQ's
 machinery to manage.
 
-`scripts/torq_demo.py` bridges the two vendored trees so you can actually
-start the demo up and poke at it, without editing or writing into either
-`lib/` directory. The actual bootstrapping logic lives in
-`python/uqf-client/src/uqf_client/torq_demo.py`, shared with
-`scripts/torq_demo_mcp.py`'s FastMCP server (see "MCP server" below) so the
-CLI and the MCP tools can't drift apart.
+`python/torq_orchestrator/torq_demo.py` bridges the two vendored trees so
+you can actually start the demo up and poke at it, without editing or
+writing into either `lib/` directory. The actual bootstrapping/config logic
+lives in `python/torq_orchestrator/src/torq_orchestrator/core.py`, shared
+with `torq_demo_mcp.py`'s FastMCP server (see "MCP server" below) so the
+CLI and the MCP tools can't drift apart. It's a standalone package
+(`python/torq_orchestrator/`), separate from `python/uqf-client/` (the
+pricing library's q-IPC client) - this has nothing to do with pricing, and
+keeping it separate keeps `uqf-client` itself down to its one real
+dependency (`kola`).
 
 ## Quick start
 
 ```
-uv run --project python/uqf-client scripts/torq_demo.py start all      # start every startwithall=1 process
-uv run --project python/uqf-client scripts/torq_demo.py summary        # status table
-uv run --project python/uqf-client scripts/torq_demo.py stop all       # stop everything
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py start all      # start every startwithall=1 process
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py summary        # status table
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py stop all       # stop everything
 ```
 
 Run from anywhere - the command resolves its own location and works out
 `lib/torq`/`lib/torq-finance-starter-pack`'s absolute paths itself; `uv run
---project python/uqf-client` resolves that package's dependencies (typer,
-loguru, rich, kola, fastmcp) on demand, no separate `uv sync` step needed.
-First `start` bootstraps a data directory at `scripts/output/torq-demo/`
-(already gitignored, matching `scripts/output/`'s existing use for
-`timer_replay_example.q`'s run artifacts) by copying the app's sample
-`hdb/`/`dqe/` data there - `logs/`, `tplogs/`, `wdbhdb/`, and every process's
-actual read/write activity all happen inside that directory, never inside
-`lib/`. Run `... scripts/torq_demo.py clean` to wipe it and start fresh
-next time.
+--project python/torq_orchestrator` resolves that package's dependencies
+(typer, loguru, rich, kola, fastmcp) on demand, no separate `uv sync` step
+needed. First `start` bootstraps a data directory at
+`scripts/output/torq-demo/` (already gitignored, matching
+`scripts/output/`'s existing use for `timer_replay_example.q`'s run
+artifacts) by copying the app's sample `hdb/`/`dqe/` data there - `logs/`,
+`tplogs/`, `wdbhdb/`, and every process's actual read/write activity all
+happen inside that directory, never inside `lib/`. Run `... torq_demo.py
+clean` to wipe it and start fresh next time.
 
 Requires real kdb+/KDB-X (`q` on `PATH`) - not the PeachQ binary used
 elsewhere in this repo for `src/`/`tests/` - plus `envsubst` and `rlwrap`
@@ -43,15 +47,17 @@ on macOS: `brew install gettext rlwrap`).
 ## Commands
 
 ```
-start [PROCS] [--port N]      start (default: all startwithall=1 processes)
-stop [PROCS] [--port N]       stop
-restart [PROCS] [--port N]    restart
-summary [--port N]            rich status table (up/down, pid, port)
-print [PROCS] [--port N]      show exact startup command line(s), no-op otherwise
-clean                         wipe scripts/output/torq-demo/
-query EXPR --port N           run a synchronous q expression against a process
-raw -- ARGS...                pass any other torq.sh verb straight through
-                               (e.g. `raw -- debug rdb1`, `raw -- top feed1`)
+start [PROCS] [--port N]              start (default: all startwithall=1 processes)
+stop [PROCS] [--port N]               stop
+restart [PROCS] [--port N]            restart
+summary [--port N]                    rich status table (up/down, pid, port)
+print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
+clean                                 wipe scripts/output/torq-demo/
+query EXPR --port N                   run a synchronous q expression against a process
+config-get PROCNAME [FIELD]           show a process's effective process.csv row (or one field)
+config-set PROCNAME FIELD VALUE       persist a process.csv field override for a process
+raw -- ARGS...                        pass any other torq.sh verb straight through
+                                       (e.g. `raw -- debug rdb1`, `raw -- top feed1`)
 ```
 
 `PROCS` is `all` or a space-separated list of process names. `--port` sets
@@ -64,9 +70,9 @@ By default (`start all`) 14 processes come up: the 13 marked
 `startwithall=1` in the vendored
 `lib/torq-finance-starter-pack/appconfig/process.csv`, plus `fxfeed1` -
 uqf's own addition, appended as one extra row to a *copy* of that csv that
-`uqf_client.torq_demo.bootstrap()` generates on the fly (never editing the
-vendored file itself). The vendored README explains why the rest stay off:
-the KDB-X community edition's connection limits mean `monitor1`,
+`torq_orchestrator.core.bootstrap()` generates on the fly (never editing
+the vendored file itself). The vendored README explains why the rest stay
+off: the KDB-X community edition's connection limits mean `monitor1`,
 `reporter1`, `filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off
 unless you have a fully-licensed kdb+/KDB-X. `killtick` and `tpreplay1` are
 on-demand utility processes, not part of the standing stack, so they also
@@ -90,6 +96,30 @@ Default ports (base `6010`, override with `--port <n>`):
 | 6028 | metrics1 | metrics collector |
 | 6029 | fxfeed1 | uqf's own feed - simulated FX quotes (see below) |
 
+## Changing a process's config
+
+`config-get`/`config-set` read and write a *process.csv field override* -
+not the vendored `process.csv` (never edited) and not the *generated* one
+in `scripts/output/torq-demo/` either (regenerated from scratch on every
+`bootstrap()` call, i.e. every `start`/`stop`/`summary`/...  - anything
+written directly there would just be clobbered on the next command).
+Overrides persist instead in `python/torq_orchestrator/process_overrides.csv`
+(a small `procname,field,value` csv, created on first `config-set` -
+tracked in git like any other config, not gitignored), and
+`bootstrap()` applies them on top of the vendored+fxfeed1 rows every time
+it (re)generates `process.csv`.
+
+```
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py config-get fxfeed1
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py config-get fxfeed1 startwithall
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py config-set fxfeed1 startwithall 0
+```
+
+Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
+`procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`,
+`extras`, `qcmd`. A change takes effect on the next `start`/`restart` of
+that process (the running process itself isn't touched).
+
 ## fxfeed1 - adding your own row-generating process
 
 `scripts/torq_fx_feed.q` is a second, independent feed process publishing
@@ -112,9 +142,9 @@ do I add a process that publishes rows": it mirrors
 To add your own: copy `torq_fx_feed.q`'s shape, drop the new file anywhere
 under `scripts/` (it's referenced by absolute path, not `KDBAPPCODE`, so it
 doesn't need to live inside either vendored `lib/` tree), and add a line
-for it in `uqf_client.torq_demo.bootstrap()`'s process.csv-generation block
-(pick a free port offset - the table above lists every offset already
-taken).
+for it in `torq_orchestrator.core.bootstrap()`'s process.csv-generation
+block (pick a free port offset - the table above lists every offset
+already taken).
 
 ## Connecting
 
@@ -123,9 +153,9 @@ Every process (except the passwordless `feed1`) is protected by
 placeholder demo credentials, `admin:admin` works for everything.
 
 ```
-uv run --project python/uqf-client scripts/torq_demo.py query \
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py query \
     "select count i by sym from quote" --port 6012        # rdb1
-uv run --project python/uqf-client scripts/torq_demo.py query \
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py query \
     "select from quote where sym in \`EURUSD\`GBPUSD\`USDJPY\`AUDUSD" --port 6012
 ```
 
@@ -144,7 +174,7 @@ whichever port you give it).
 ## Verifying it's alive
 
 ```
-uv run --project python/uqf-client scripts/torq_demo.py summary
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py summary
 ```
 
 prints a status table (`up`/`down`, pid, port, color-coded) for every
@@ -155,18 +185,20 @@ process shows `down` unexpectedly.
 
 ## MCP server
 
-`scripts/torq_demo_mcp.py` exposes the same start/stop/restart/summary/
-clean/query operations as MCP tools (`torq_demo_start`, `torq_demo_stop`,
-etc.), built with [FastMCP](https://gofastmcp.com/), for an MCP client (e.g.
-Claude) to drive the demo directly instead of shelling out to the CLI.
-Point an MCP client's server command at:
+`python/torq_orchestrator/torq_demo_mcp.py` exposes the same
+start/stop/restart/summary/clean/query/config-get/config-set operations as
+MCP tools (`torq_demo_start`, `torq_demo_stop`, `torq_demo_get_config`,
+`torq_demo_set_config`, etc.), built with
+[FastMCP](https://gofastmcp.com/), for an MCP client (e.g. Claude) to
+drive the demo directly instead of shelling out to the CLI. Point an MCP
+client's server command at:
 
 ```
-uv run --project python/uqf-client scripts/torq_demo_mcp.py
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo_mcp.py
 ```
 
 (stdio transport, the default). `torq_demo_query` returns a list of row
-dicts for table results (via the same `kola`-backed `uqf_client.torq_demo.query`
+dicts for table results (via the same `kola`-backed `torq_orchestrator.core.query`
 the CLI's `query` command calls), or the raw scalar/dict result otherwise.
 
 ## Other commands
