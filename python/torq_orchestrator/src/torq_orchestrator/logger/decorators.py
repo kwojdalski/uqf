@@ -10,7 +10,7 @@ from typing import Any
 
 from loguru import logger
 
-from uqf_client.logger.core import is_level_enabled
+from torq_orchestrator.logger.core import is_level_enabled
 
 # Thread-local storage for call depth tracking
 _call_depth = threading.local()

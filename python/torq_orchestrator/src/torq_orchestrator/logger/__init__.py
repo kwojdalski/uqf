@@ -5,14 +5,14 @@ what's left is the generic loguru wrapper plus a handful of formatting
 helpers, useful anywhere in this repo's Python code.
 """
 
-from uqf_client.logger.core import (
+from torq_orchestrator.logger.core import (
     configure_logging,
     get_logger,
     is_level_enabled,
     setup_logging,
 )
-from uqf_client.logger.decorators import trace_calls
-from uqf_client.logger.utils import (
+from torq_orchestrator.logger.decorators import trace_calls
+from torq_orchestrator.logger.utils import (
     LogContext,
     log_banner,
     log_error_with_context,

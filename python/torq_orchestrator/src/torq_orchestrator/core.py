@@ -1,20 +1,19 @@
 """Shared business logic for running the vendored TorQ Finance Starter Pack
 demo (see docs/torq-demo.md) - bootstrapping the writable data directory,
-generating process.csv/setenv.sh, and driving lib/torq/torq.sh.
+generating process.csv/setenv.sh, driving lib/torq/torq.sh, and reading/
+writing per-process config overrides.
 
-Pure logic, no CLI/MCP framework concerns - scripts/torq_demo.py (Typer)
-and scripts/torq_demo_mcp.py (FastMCP) both import from here so the two
-front ends can't drift out of sync. This is the Python port of the
-original scripts/torq_demo.sh (see git history) - same env-var bridging
-approach (TorQ's own installtorqapp.sh convention: point TORQHOME/
-TORQAPPHOME/etc at wherever the framework and app live, generate an
-overlay process.csv/setenv.sh rather than editing either vendored tree),
-just with real error handling and a shared library instead of a shell
-script.
+Pure logic, no CLI/MCP framework concerns - ../../torq_demo.py (Typer) and
+../../torq_demo_mcp.py (FastMCP) both import from here so the two front
+ends can't drift out of sync. Same env-var bridging approach throughout
+(TorQ's own installtorqapp.sh convention: point TORQHOME/TORQAPPHOME/etc
+at wherever the framework and app live, generate an overlay process.csv/
+setenv.sh rather than editing either vendored tree).
 """
 
 from __future__ import annotations
 
+import csv
 import os
 import shutil
 import subprocess
@@ -22,12 +21,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from uqf_client.logger import get_logger
+from torq_orchestrator.logger import get_logger
 
 log = get_logger(__name__)
 
 DEFAULT_BASE_PORT = 6010
 FXFEED_PORT_OFFSET = 19  # the one offset the vendored process.csv leaves free
+PROCESS_CSV_FIELDS = (
+    "host",
+    "port",
+    "proctype",
+    "procname",
+    "U",
+    "localtime",
+    "g",
+    "T",
+    "w",
+    "load",
+    "startwithall",
+    "extras",
+    "qcmd",
+)
 
 
 class TorqDemoError(RuntimeError):
@@ -41,6 +55,7 @@ class TorqDemoPaths:
     torqapphome: Path
     torqdata: Path
     scripts_dir: Path
+    orchestrator_dir: Path
 
     @property
     def generated_procs(self) -> Path:
@@ -50,17 +65,22 @@ class TorqDemoPaths:
     def generated_setenv(self) -> Path:
         return self.torqdata / "setenv.sh"
 
+    @property
+    def overrides_path(self) -> Path:
+        return self.orchestrator_dir / "process_overrides.csv"
+
 
 def default_paths() -> TorqDemoPaths:
-    # this file: <repo_root>/python/uqf-client/src/uqf_client/torq_demo.py
-    repo_root = Path(__file__).resolve().parents[4]
-    scripts_dir = repo_root / "scripts"
+    # this file: <repo_root>/python/torq_orchestrator/src/torq_orchestrator/core.py
+    orchestrator_dir = Path(__file__).resolve().parents[2]
+    repo_root = orchestrator_dir.parents[1]
     return TorqDemoPaths(
         repo_root=repo_root,
         torqhome=repo_root / "lib" / "torq",
         torqapphome=repo_root / "lib" / "torq-finance-starter-pack",
         torqdata=repo_root / "scripts" / "output" / "torq-demo",
-        scripts_dir=scripts_dir,
+        scripts_dir=repo_root / "scripts",
+        orchestrator_dir=orchestrator_dir,
     )
 
 
@@ -88,6 +108,92 @@ def clean(paths: TorqDemoPaths) -> None:
         log.info("{} does not exist, nothing to clean", paths.torqdata)
 
 
+# ---------------------------------------------------------------------------
+# process.csv rows + config overrides (get/set)
+# ---------------------------------------------------------------------------
+
+
+def _base_process_rows(paths: TorqDemoPaths) -> list[dict[str, str]]:
+    """The vendored process.csv rows, plus uqf's own fxfeed1 row appended -
+    never mutated, always read fresh from the vendored file.
+    """
+    vendored_procs = paths.torqapphome / "appconfig" / "process.csv"
+    with vendored_procs.open(newline="") as f:
+        rows = list(csv.DictReader(f))
+    rows.append(
+        {
+            "host": "localhost",
+            "port": f"{{KDBBASEPORT}}+{FXFEED_PORT_OFFSET}",
+            "proctype": "feed",
+            "procname": "fxfeed1",
+            "U": "",
+            "localtime": "1",
+            "g": "0",
+            "T": "",
+            "w": "",
+            "load": "${UQFSCRIPTS}/torq_fx_feed.q",
+            "startwithall": "1",
+            "extras": "",
+            "qcmd": "q",
+        }
+    )
+    return rows
+
+
+def _read_overrides(paths: TorqDemoPaths) -> dict[str, dict[str, str]]:
+    """{procname: {field: value}} from process_overrides.csv, or {} if it
+    doesn't exist yet (nothing has been set())."""
+    if not paths.overrides_path.is_file():
+        return {}
+    overrides: dict[str, dict[str, str]] = {}
+    with paths.overrides_path.open(newline="") as f:
+        for row in csv.DictReader(f):
+            overrides.setdefault(row["procname"], {})[row["field"]] = row["value"]
+    return overrides
+
+
+def _write_overrides(paths: TorqDemoPaths, overrides: dict[str, dict[str, str]]) -> None:
+    paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
+    with paths.overrides_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["procname", "field", "value"], lineterminator="\n")
+        writer.writeheader()
+        for procname, fields in overrides.items():
+            for field, value in fields.items():
+                writer.writerow({"procname": procname, "field": field, "value": value})
+
+
+def list_process_names(paths: TorqDemoPaths) -> list[str]:
+    return [row["procname"] for row in _base_process_rows(paths)]
+
+
+def get_process_config(paths: TorqDemoPaths, procname: str) -> dict[str, str]:
+    """The effective process.csv row for *procname* - vendored/fxfeed1 values
+    with any set_process_config() overrides applied on top."""
+    rows = {row["procname"]: row for row in _base_process_rows(paths)}
+    if procname not in rows:
+        raise TorqDemoError(f"unknown process {procname!r} - {sorted(rows)}")
+    row = dict(rows[procname])
+    row.update(_read_overrides(paths).get(procname, {}))
+    return row
+
+
+def set_process_config(paths: TorqDemoPaths, procname: str, field: str, value: str) -> None:
+    """Persist a process.csv field override for *procname*, applied by every
+    later bootstrap() (i.e. every start/stop/summary/... call) until
+    changed again. Read-modify-write against process_overrides.csv - the
+    only file this touches; the vendored process.csv is never edited.
+    """
+    if field not in PROCESS_CSV_FIELDS:
+        raise TorqDemoError(f"unknown process.csv field {field!r} - {PROCESS_CSV_FIELDS}")
+    if procname not in list_process_names(paths):
+        raise TorqDemoError(f"unknown process {procname!r} - {list_process_names(paths)}")
+
+    overrides = _read_overrides(paths)
+    overrides.setdefault(procname, {})[field] = value
+    _write_overrides(paths, overrides)
+    log.info("set {}.{} = {}", procname, field, value)
+
+
 def bootstrap(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
     """Idempotently set up the writable data dir and generated config, and
     return the full env dict torq.sh should run under.
@@ -104,18 +210,23 @@ def bootstrap(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[
         (paths.torqdata / sub).mkdir(parents=True, exist_ok=True)
 
     # Extend (never edit in place) the vendored process.csv with uqf's own
-    # extra processes - currently just fxfeed1 (scripts/torq_fx_feed.q), a
-    # second row-generating process publishing synthetic FX quotes into the
-    # same `quote` table feed1 already writes equity quotes into.
-    vendored_procs = paths.torqapphome / "appconfig" / "process.csv"
-    procs_text = vendored_procs.read_text()
-    if not procs_text.endswith("\n"):
-        procs_text += "\n"
-    procs_text += (
-        f"localhost,{{KDBBASEPORT}}+{FXFEED_PORT_OFFSET},feed,fxfeed1,,1,0,,,"
-        "${UQFSCRIPTS}/torq_fx_feed.q,1,,q\n"
-    )
-    paths.generated_procs.write_text(procs_text)
+    # extra processes (fxfeed1) and any process_overrides.csv fields set via
+    # set_process_config()/`config-set`/torq_demo_set_config.
+    overrides = _read_overrides(paths)
+    rows = _base_process_rows(paths)
+    for row in rows:
+        row.update(overrides.get(row["procname"], {}))
+    with paths.generated_procs.open("w", newline="") as f:
+        # torq.sh's own field lookups are a naive awk -F, parse expecting
+        # plain \n line endings, like the vendored csv itself - csv module's
+        # default \r\n (the "excel" dialect) corrupts the last column's
+        # value (a trailing \r glued onto qcmd breaks the qcmd==qcmd header
+        # match, which every single process start looks up), producing a
+        # bare `print $` awk syntax error for every process - hard-won via
+        # `start all` throwing exactly that for every process at once.
+        writer = csv.DictWriter(f, fieldnames=PROCESS_CSV_FIELDS, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
 
     env: dict[str, str] = {
         "TORQHOME": str(paths.torqhome),

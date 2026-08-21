@@ -8,7 +8,7 @@ from typing import Any
 
 from loguru import logger as _loguru_logger
 
-from uqf_client.logger.core import is_level_enabled
+from torq_orchestrator.logger.core import is_level_enabled
 
 _BANNER_WIDTH = 100
 
