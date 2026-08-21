@@ -178,6 +178,35 @@ def config_get(
     console.print(table)
 
 
+@app.command("list")
+def list_items(
+    kind: Annotated[
+        str | None, typer.Argument(help="'processes', 'fields', 'overrides', or 'env'")
+    ] = None,
+    port: PortOpt = core.DEFAULT_BASE_PORT,
+) -> None:
+    """List every item of KIND - run with no argument to see the available
+    kinds. Not just processes: 'fields' lists process.csv's valid config-set
+    columns, 'overrides' lists every process_overrides.csv entry currently
+    set, 'env' lists build_env()'s resolved KDBBASEPORT/KDBHDB/... values.
+    """
+    if kind is None:
+        console.print(f"Available kinds: {', '.join(sorted(core.LISTABLE_KINDS))}")
+        return
+    try:
+        items = core.list_items(_paths(), kind, base_port=port)
+    except core.TorqDemoError as exc:
+        _die(exc)
+        return
+    table = Table(title=f"{kind} ({len(items)})")
+    if items:
+        for col in items[0]:
+            table.add_column(col)
+        for item in items:
+            table.add_row(*item.values())
+    console.print(table)
+
+
 @app.command("config-set")
 def config_set(procname: str, field: str, value: str) -> None:
     """Set one process.csv field for *procname* (persisted to

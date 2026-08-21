@@ -61,12 +61,23 @@ summary [--port N]                    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s)
 clean                                 wipe ../../scripts/output/torq-demo/
 query EXPR --port N                   run a synchronous q expression
+list [KIND]                           list every item of KIND - no argument shows the kinds
 config-get PROCNAME [FIELD] [--raw]   show a process's effective process.csv row, resolved
 config-set PROCNAME FIELD VALUE       persist a process.csv field override
 raw -- ARGS...                        anything else torq.sh supports
 ```
 
 `--help` on the command itself or any subcommand has the full picture.
+
+## Listing things
+
+`list` isn't limited to processes - it dispatches on a small registry
+(`core.LISTABLE_KINDS`), currently `processes` (procname/proctype/port/
+startwithall, resolved and with overrides applied - the default), `fields`
+(`process.csv`'s valid `config-set` columns), `overrides` (every
+`config-set` override in effect), and `env` (`build_env()`'s resolved
+`KDBBASEPORT`/`KDBHDB`/... values). Adding a new kind is one function plus
+one registry entry - see `core.py`'s `_list_*` functions.
 
 ## Config setters
 
