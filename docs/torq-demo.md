@@ -54,6 +54,8 @@ summary [--port N]                    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/torq-demo/
 query EXPR --port N                   run a synchronous q expression against a process
+list [KIND] [--port N]                list every item of KIND ('processes', 'fields',
+                                       'overrides', 'env') - no argument shows the kinds
 config-get PROCNAME [FIELD] [--port N] [--raw]  show a process's effective process.csv row
                                                  (or one field), with placeholders resolved
                                                  unless --raw
@@ -65,6 +67,29 @@ raw -- ARGS...                        pass any other torq.sh verb straight throu
 `PROCS` is `all` or a space-separated list of process names. `--port` sets
 `KDBBASEPORT` (default `6010`, see the port table below). Full `--help` is
 available on the command itself and on every subcommand.
+
+## Listing things
+
+`list` (no argument) prints the kinds it knows about; `list KIND` lists
+every item of that kind - not just processes:
+
+```
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py list
+uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py list processes
+```
+
+- `processes` - every process's `procname`/`proctype`/`port`/`startwithall`,
+  resolved and with any `config-set` overrides applied - the full set
+  `config-get`/`config-set`/`start <procname>` accept, without already
+  needing to know a name ahead of time
+- `fields` - `process.csv`'s valid columns (what `config-set`'s `FIELD`
+  argument accepts)
+- `overrides` - every `config-set` override currently in effect
+- `env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values (the
+  same env `config-get`'s placeholder resolution and `torq.sh` itself use)
+
+New kinds are one function + one `core.LISTABLE_KINDS` entry, not a new
+CLI command each time - see `core.py`'s `_list_*` functions.
 
 ## What actually starts
 

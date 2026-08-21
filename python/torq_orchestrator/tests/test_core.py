@@ -144,3 +144,43 @@ def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
     with fake_paths.generated_procs.open(newline="") as f:
         generated_rows = {r["procname"]: r for r in csv.DictReader(f)}
     assert generated_rows["fxfeed1"]["startwithall"] == "0"
+
+
+def test_list_items_unknown_kind_raises(fake_paths: core.TorqDemoPaths):
+    with pytest.raises(core.TorqDemoError):
+        core.list_items(fake_paths, "not_a_kind")
+
+
+def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.TorqDemoPaths):
+    items = core.list_items(fake_paths, "processes", base_port=7000)
+    by_name = {item["procname"]: item for item in items}
+    assert set(by_name) == {"discovery1", "fxfeed1"}
+    assert by_name["discovery1"]["port"] == "7000"
+    assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
+
+
+def test_list_processes_reflects_overrides(fake_paths: core.TorqDemoPaths):
+    core.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
+    items = core.list_items(fake_paths, "processes")
+    by_name = {item["procname"]: item for item in items}
+    assert by_name["fxfeed1"]["startwithall"] == "0"
+
+
+def test_list_fields_matches_process_csv_fields(fake_paths: core.TorqDemoPaths):
+    items = core.list_items(fake_paths, "fields")
+    assert [item["field"] for item in items] == list(core.PROCESS_CSV_FIELDS)
+
+
+def test_list_overrides_empty_then_populated(fake_paths: core.TorqDemoPaths):
+    assert core.list_items(fake_paths, "overrides") == []
+
+    core.set_process_config(fake_paths, "discovery1", "port", "9999")
+    items = core.list_items(fake_paths, "overrides")
+    assert items == [{"procname": "discovery1", "field": "port", "value": "9999"}]
+
+
+def test_list_env_includes_kdbbaseport(fake_paths: core.TorqDemoPaths):
+    items = core.list_items(fake_paths, "env", base_port=7000)
+    by_name = {item["name"]: item["value"] for item in items}
+    assert by_name["KDBBASEPORT"] == "7000"
+    assert by_name["KDBHDB"] == str(fake_paths.torqdata / "hdb")

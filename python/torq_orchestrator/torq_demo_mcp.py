@@ -135,5 +135,26 @@ def torq_demo_set_config(procname: str, field: str, value: str) -> str:
     return f"{procname}.{field} = {value}"
 
 
+@mcp.tool
+def torq_demo_list_kinds() -> list[str]:
+    """List the kinds torq_demo_list accepts - not just processes."""
+    return sorted(core.LISTABLE_KINDS)
+
+
+@mcp.tool
+def torq_demo_list(kind: str = "processes", port: int = core.DEFAULT_BASE_PORT) -> Any:
+    """List every item of *kind* - call torq_demo_list_kinds() for the full
+    set. 'processes' (procname/proctype/port/startwithall, resolved and
+    with overrides applied) is the default; 'fields' lists process.csv's
+    valid torq_demo_set_config columns; 'overrides' lists every
+    torq_demo_set_config override currently in effect; 'env' lists
+    build_env()'s resolved KDBBASEPORT/KDBHDB/... values.
+    """
+    try:
+        return core.list_items(core.default_paths(), kind, base_port=port)
+    except core.TorqDemoError as exc:
+        return {"error": str(exc)}
+
+
 if __name__ == "__main__":
     mcp.run()
