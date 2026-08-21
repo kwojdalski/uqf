@@ -14,7 +14,10 @@
 // a mid-expression variable assignment/read pattern PeachQ doesn't
 // evaluate correctly (see README's Licensing section).
 //
-// Run from the repository root: q scripts/reshape_wide_order_book_example.q
+// Run from the repository root: q scripts/reshape_wide_order_book_example.q [n_rows]
+// n_rows (default 3) is how many rows the wide source table has -
+// optional, positional, same convention as timer_replay_example.q's
+// parameters.
 
 \c 400 1000
 \l src/init.q
@@ -25,7 +28,12 @@
 .log4q.sevl:`DEBUG;
 key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
-n_rows:3;
+/ Overridable via the command line - .z.x is the list of args after the
+/ script name, always strings; cast and fall back to the default whenever
+/ an arg wasn't given, same convention as timer_replay_example.q's
+/ parameters.
+default_n_rows:3;
+n_rows:$[0<count .z.x; "J"$first .z.x; default_n_rows];
 
 / Illustrative, approximately realistic EURUSD spot rate (not live market
 / data). tick_scale is the price columns' unit relative to the quoted rate
@@ -90,14 +98,23 @@ mk_timestamps:{[n;start_ts]
 ts:mk_timestamps[n_rows;.z.p];
 
 / Identifier columns ingested as strings (type 10h cells) instead of
-/ symbols - the shape symbolize_columns/candidate_symbol_columns exist for.
+/ symbols - the shape symbolize_columns/candidate_symbol_columns exist
+/ for. action/side cycle through a small repeating pattern so rows aren't
+/ all identical, scaling with n_rows the same way
+/ reshape_wide_order_book_multi_pair_example.q's mk_pair_table does (with
+/ n_rows=3, this reproduces the original fixed "A","M","C"/"B","S","B"
+/ exactly).
+action_idx:(til n_rows) mod 3;
+side_idx:(til n_rows) mod 2;
+actions:("A";"M";"C") action_idx;
+sides:("B";"S") side_idx;
 meta_table:flip `ts`sym`venue`exchange`action`side!(
     ts;
-    ("EURUSD";"EURUSD";"EURUSD");
-    ("XCME";"XCME";"XCME");
-    ("GLBX";"GLBX";"GLBX");
-    ("A";"M";"C");
-    ("B";"S";"B"));
+    n_rows#enlist "EURUSD";
+    n_rows#enlist "XCME";
+    n_rows#enlist "GLBX";
+    actions;
+    sides);
 
 t:meta_table,'level_table;
 INFO ("t - wide source table: %1 rows, %2 columns";(count t;count cols t));
