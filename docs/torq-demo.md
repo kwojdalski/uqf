@@ -281,6 +281,34 @@ rolling/restart-aliasing correctly) and merges them through a queue; without
 printed sorted by the log's own timestamp - not wall-clock arrival order.
 `--level` filters to that level and above (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
 
+### tap1 - printing every row landing in kdb+
+
+`tap1` (`torq_tap.q`) is a generic debug tap: it subscribes to some (or,
+by default, every) table on the tickerplant and logs each incoming batch
+unmodified through the same `logs` pipeline above - the table name lands
+in the log line's `id` field, so `torq-demo logs -f tap1` shows you
+literally everything being written to kdb+, and `torq-demo logs -f tap1 |
+grep quotes`-style filtering works even without narrowing the subscription
+itself. `startwithall=0` (debug utility, not part of the standing stack):
+
+```
+torq-demo start tap1
+torq-demo logs -f tap1
+```
+
+Restrict it to specific tables via the same `extras`-as-CLI-flags
+mechanism `sctp1`/others already use - no orchestrator code needed for
+the filtering itself:
+
+```
+torq-demo config-set -- tap1 extras "-tables quote wide_book"
+torq-demo restart tap1
+```
+
+(the leading `--` is needed so the CLI doesn't try to parse `-tables` as
+one of its own options). Set `extras` back to `""` to return to "every
+table".
+
 ## Adding a new process interactively
 
 `torq-demo new-process` is a console wizard for the "how do I add a
