@@ -138,7 +138,7 @@ depth_ratio:{[bid_sizes;ask_sizes]
     top:(level_at[bid_sizes;0])+level_at[ask_sizes;0];
     deeper_bid:sum level_at[bid_sizes;] each 1 2 3 4;
     deeper_ask:sum level_at[ask_sizes;] each 1 2 3 4;
-    top%deeper_bid+deeper_ask};
+    top%(deeper_bid+deeper_ask)};
 
 / Private: vwmp_skew for a single row - volume-weighted mid over the first
 / n_levels (via execution.q's vwap, concatenating that row's bid and ask

@@ -612,6 +612,19 @@ test_cross_markout_at_horizons_rejects_unsorted_quotes_instead_of_nulling:{[t]
     wrapper:{[q] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]};
     .qunit.assertError[wrapper;unsorted;"quotes rows out of `sym`ts xasc order throws immediately, not a silent null"]};
 
+test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
+    / without this check, an unbridgeable sym (mistyped, or the bridge
+    / currency's feed never subscribed at all) doesn't error at all -
+    / cross_ref_price_at's own protective error handling (meant only for
+    / "no quote exists yet") silently swallows cross_book_at's "no chain
+    / of available pairs" error into a null too, across every horizon.
+    / Same failure mode cross_markout_decomp already guards against
+    / (test_cross_markout_decomp_rejects_unreachable_pair). See issue #25.
+    quotes:mk_ts_quotes_table[::];
+    trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
+    wrapper:{[q] .qfwd.cross_markout_at_horizons[q;`AUDJPY;trade_time;1;150.0;100;enlist 0;1]};
+    .qunit.assertError[wrapper;quotes;"no chain of available pairs connects AUD and JPY"]};
+
 test_cross_markout_decomp_rejects_quotes_missing_a_column:{[t]
     quotes:mk_ts_quotes_table[::];
     bad:delete ask_prices from quotes;

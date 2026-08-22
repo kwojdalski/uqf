@@ -14,9 +14,13 @@ but `kola`) and carries its own dependencies (`typer`, `rich`, `loguru`,
 ## Layout
 
 ```
-torq_demo.py       Typer CLI - the main entry point
+torq_demo.py       thin backward-compatible shim over src/torq_orchestrator/cli.py
 torq_demo_mcp.py    FastMCP server exposing the same operations as MCP tools
 src/torq_orchestrator/
+  cli.py            the Typer CLI itself - also reachable as the `torq-demo`
+                     script entry point (pyproject.toml [project.scripts])
+  wizard.py         `new-process`'s interactive console wizard - prompts,
+                     writes a Stage-1-only skeleton .q file, registers it
   core.py           all the actual logic (paths, bootstrap, process.csv
                      generation, config get/set, torq.sh driving, q query)
                      - no CLI/MCP framework code, both front ends import
@@ -27,6 +31,11 @@ src/torq_orchestrator/
 process_overrides.csv   created on first `config-set` - per-process
                          process.csv field overrides (see "Config setters"
                          below); tracked in git like any other config
+extra_processes.csv     created by `new-process` (or add_extra_process()) -
+                         whole new process rows, process_overrides.csv's
+                         sibling for adding a process rather than tweaking one
+extra_schema.q           created by add_extra_table_schema() - extra table
+                         defs appended to the generated stp1 schema copy
 tests/
   test_core.py      tests core.py's pure logic (paths, process.csv
                      generation/idempotency, config get/set) against a
@@ -35,16 +44,33 @@ tests/
 
 ## Quick start
 
+One-time, installs the `torq-demo` command onto your `PATH` as an editable
+link back to this source (edits picked up immediately, no reinstall):
+
 ```
-uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py start all
-uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py summary
-uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py stop all
+uv tool install --editable python/torq_orchestrator
 ```
 
-Run from the repo root (or anywhere - both scripts resolve their own
-location). `uv run --project python/torq_orchestrator` resolves this
-package's dependencies on demand, no separate `uv sync` needed - though
-`uv sync` here also works if you want the `.venv` up front.
+then, from anywhere:
+
+```
+torq-demo start all
+torq-demo summary
+torq-demo stop all
+```
+
+Without that step (e.g. CI, a fresh checkout), `uv run` works the same,
+just longer:
+
+```
+uv run --project python/torq_orchestrator torq-demo start all
+```
+
+The full `.../torq_demo.py` path form still works too (a thin shim over
+the same CLI, kept for anything that already invokes it that way).
+`uv run --project python/torq_orchestrator` resolves this package's
+dependencies on demand, no separate `uv sync` needed - though `uv sync`
+here also works if you want the `.venv` up front.
 
 Requires real kdb+/KDB-X (`q` on `PATH`, not the PeachQ binary used
 elsewhere in this repo) plus `envsubst` and `rlwrap` on `PATH` (`torq.sh`,
@@ -64,6 +90,9 @@ query EXPR --port N                   run a synchronous q expression
 list [KIND]                           list every item of KIND - no argument shows the kinds
 config-get PROCNAME [FIELD] [--raw]   show a process's effective process.csv row, resolved
 config-set PROCNAME FIELD VALUE       persist a process.csv field override
+logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own logger
+new-process                           interactive wizard to add a new process
+crypto-start/-stop/-status            proof of concept: cryptorust (Rust) publishing over kdb+ IPC
 raw -- ARGS...                        anything else torq.sh supports
 ```
 
@@ -91,7 +120,7 @@ would just be overwritten by the next `start`/`stop`/`summary`/... call.
 rows every time `bootstrap()` (re)generates `process.csv`.
 
 ```
-uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py config-set fxfeed1 startwithall 0
+torq-demo config-set fxfeed1 startwithall 0
 ```
 
 `config-get` resolves both of `process.csv`'s placeholder styles by
@@ -104,6 +133,32 @@ Valid fields are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`,
 `extras`, `qcmd`. Takes effect on that process's next `start`/`restart` -
 a currently-running instance of it is untouched.
+
+## Logs
+
+`logs` tails each process's `out_<procname>.log`/`err_<procname>.log`
+(stable aliases TorQ maintains onto the current run's timestamped file)
+through the same colorized loguru logger the rest of the CLI uses, parsing
+`.lg.format`'s pipe-delimited `time|host|proctype|procname|loglevel|id|message`
+line shape - no TorQ-side config change (no `-jsonlogs`). `-f`/`--follow`
+runs one `tail -F` per file (correctly follows TorQ's own log rolling)
+merged through a queue; without it, the last `-n` lines per file are
+parsed and printed sorted by the log's own timestamp. `--level` filters to
+that level and above.
+
+```
+torq-demo logs "stp1 rdb1" -n 50
+torq-demo logs -f --level WARNING
+```
+
+## crypto recorder (cryptorust) - a proof of concept
+
+`crypto-start`/`crypto-stop`/`crypto-status` build and launch a sibling
+`~/github_projects/cryptorust` checkout's own `kdb-market-data-recorder`
+Rust binary, pointed at this demo's `stp1` - proving the kdb+ infra here
+isn't TorQ/q-specific, any process that speaks kdb+ IPC can publish onto
+it. See `docs/torq-demo.md`'s own section for the full picture (schema,
+credentials, `$CRYPTORUST_ROOT`).
 
 ## MCP server
 
