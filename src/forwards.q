@@ -650,10 +650,13 @@ apply_col_precedence:{[t]
 /   named per ts_col, `ts by default) - ref_price/markout_pips are null
 /   for a horizon with no quote yet for some required leg, rather than
 /   throwing
-/ @throws error if quotes is missing a required column, or isn't sorted
+/ @throws error if quotes is missing a required column, isn't sorted
 /   `sym`ts xasc (checked explicitly here rather than left to leak out of
 /   cross_ref_price_at's protective error handling as a misleading null -
-/   see cross_ref_price_at's own comment)
+/   see cross_ref_price_at's own comment), or if no chain of pairs
+/   currently in quotes connects sym's two currencies (same check
+/   cross_markout_decomp does, for the same reason - a permanently
+/   unbridgeable sym is a structural problem, not "no quote yet")
 / @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;-500 -300 0 100 300;1]
 / @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;enlist -500;1]  -> a single backward-looking horizon, 500ms before the trade
 cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;horizons_ms;ref_size]
@@ -662,6 +665,10 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
         '"cross_markout_at_horizons: quotes must be sorted `sym`ts xasc for an as-of lookup - try `sym`ts xasc quotes first"];
     horizons_ms:horizons_ms,();
     cross_sym:.qccy.normalize_ccy_pair sym;
+    path:cross_decomp[distinct quotes`sym;cross_sym];
+    if[0=count path;
+        legs:.qccy.ccy_pair_legs cross_sym;
+        '"cross_markout_at_horizons: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     target_time:trade_time+horizons_ms*1000000;
     ref_price:cross_ref_price_at[quotes;cross_sym;ref_size;] each target_time;
     markout_pips:.qexec.markout[side;trade_price;ref_price;pip_factor];
