@@ -182,8 +182,8 @@ def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
 def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.TorqDemoPaths):
     # fixture's vendored csv: discovery1 (bare {KDBBASEPORT}), stp1 (+1);
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
-    # widefeed1(+26)/vectorize1(+27)
-    assert core.next_free_port_offset(fake_paths) == core.VECTORIZE_ETL_PORT_OFFSET + 1
+    # widefeed1(+26)/vectorize1(+27)/tap1(+28)
+    assert core.next_free_port_offset(fake_paths) == core.TAP_PORT_OFFSET + 1
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.TorqDemoPaths):
@@ -245,6 +245,7 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "cross1",
         "widefeed1",
         "vectorize1",
+        "tap1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -252,6 +253,8 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
     assert by_name["cross1"]["port"] == str(7000 + core.CROSS_ETL_PORT_OFFSET)
     assert by_name["widefeed1"]["port"] == str(7000 + core.WIDE_BOOK_FEED_PORT_OFFSET)
     assert by_name["vectorize1"]["port"] == str(7000 + core.VECTORIZE_ETL_PORT_OFFSET)
+    assert by_name["tap1"]["port"] == str(7000 + core.TAP_PORT_OFFSET)
+    assert by_name["tap1"]["startwithall"] == "0"
 
 
 def test_list_processes_reflects_overrides(fake_paths: core.TorqDemoPaths):
@@ -305,6 +308,7 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.TorqDemoPa
         "cross1",
         "widefeed1",
         "vectorize1",
+        "tap1",
     }
 
 

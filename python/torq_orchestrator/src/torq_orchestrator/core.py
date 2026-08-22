@@ -34,6 +34,7 @@ QUOTES_FEED_PORT_OFFSET = 24  # next free offset after the vendored dqc/dqe bloc
 CROSS_ETL_PORT_OFFSET = 25  # next free offset after quotesfeed1
 WIDE_BOOK_FEED_PORT_OFFSET = 26  # next free offset after cross1
 VECTORIZE_ETL_PORT_OFFSET = 27  # next free offset after widefeed1
+TAP_PORT_OFFSET = 28  # next free offset after vectorize1
 
 # Appended (never edited in place) to a *copy* of the vendored database.q -
 # see _generated_schema_content(). Matches src/forwards.q's require_quotes_cols
@@ -309,6 +310,32 @@ def _base_process_rows(paths: TorqDemoPaths) -> list[dict[str, str]]:
             "w": "",
             "load": "${UQFSCRIPTS}/torq_vectorize_etl.q",
             "startwithall": "1",
+            "extras": "",
+            "qcmd": "q",
+        }
+    )
+    rows.append(
+        {
+            "host": "localhost",
+            "port": f"{{KDBBASEPORT}}+{TAP_PORT_OFFSET}",
+            # proctype "metrics" borrowed for the same reason as cross1's
+            # row above - a real .sub.subscribe subscriber needs
+            # .servers.startup[]'s access-listed handle to stp1.
+            "proctype": "metrics",
+            "procname": "tap1",
+            "U": "${TORQAPPHOME}/appconfig/passwords/accesslist.txt",
+            "localtime": "1",
+            "g": "0",
+            "T": "",
+            "w": "",
+            "load": "${UQFSCRIPTS}/torq_tap.q",
+            # debug/verbose utility, not part of the standing demo stack -
+            # same reasoning as killtick/tpreplay1 staying off by default.
+            "startwithall": "0",
+            # -tables t1 t2 ... restricts the tap to those tables; blank
+            # (the default) subscribes to every table - see torq_tap.q.
+            # `torq-demo config-set tap1 extras "-tables quote wide_book"`
+            # to change it.
             "extras": "",
             "qcmd": "q",
         }
