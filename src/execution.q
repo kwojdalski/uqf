@@ -44,8 +44,17 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 /   (the target-time column is named per ts_col, `ts by default, matching
 /   the quotes-table timestamp convention used elsewhere in this
 /   library, e.g. forwards.q's cross_book_at/cross_markout_at_horizons)
+/ @throws error naming every column missing from trades (`sym`time`side`trade_price`pip_factor)
+/   or quotes (`sym`time`mid) - checked explicitly up front so a malformed/mistyped
+/   table fails loudly here rather than surfacing as a bare `domain error deep inside aj
 / @eg .qexec.markout_at_horizons[trades;quotes;0D00:00:01 0D00:00:10]
 markout_at_horizons:{[trades;quotes;horizons]
+    trades_req:`sym`time`side`trade_price`pip_factor;
+    trades_missing:trades_req where not trades_req in cols trades;
+    if[count trades_missing; '"markout_at_horizons: trades is missing required column(s) ",", " sv string trades_missing];
+    quotes_req:`sym`time`mid;
+    quotes_missing:quotes_req where not quotes_req in cols quotes;
+    if[count quotes_missing; '"markout_at_horizons: quotes is missing required column(s) ",", " sv string quotes_missing];
     horizon_list:$[0>type horizons; enlist horizons; horizons];
     sorted_quotes:`sym`time xasc quotes;
     num_trades:count trades;

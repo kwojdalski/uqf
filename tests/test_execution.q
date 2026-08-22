@@ -68,6 +68,18 @@ test_markout_at_horizons_works_with_unsorted_quotes:{[t]
     r:.qexec.markout_at_horizons[trades;shuffled_quotes;0D00:00:01];
     .testutil.assertApprox[first r`ref_price;1.1010;1e-9;"correct as-of match even though the input quotes weren't sorted"]};
 
+test_markout_at_horizons_rejects_trades_missing_a_required_column:{[t]
+    trades:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; side:enlist 1; trade_price:enlist 1.1000);
+    quotes:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; mid:enlist 1.1000);
+    wrapper:{[tr;q] .qexec.markout_at_horizons[tr;q;0D00:00:01]};
+    .qunit.assertError[wrapper[;quotes];trades;"trades missing pip_factor is rejected immediately, not left to fail deep inside the join"]};
+
+test_markout_at_horizons_rejects_quotes_missing_a_required_column:{[t]
+    trades:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; side:enlist 1; trade_price:enlist 1.1000; pip_factor:enlist 10000);
+    quotes:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; midprice:enlist 1.1000);
+    wrapper:{[tr;q] .qexec.markout_at_horizons[tr;q;0D00:00:01]};
+    .qunit.assertError[wrapper[trades;];quotes;"quotes with a typo'd mid column (midprice) is rejected immediately, not left to throw a bare `domain error inside aj"]};
+
 test_eff_spread_known_buy_above_mid:{[t] .testutil.assertApprox[.qexec.eff_spread[1;1.1002;1.1000;10000];4f;1e-6;"buy 0.2 pips above mid -> 2*0.2=0.4... scaled: 4 pip effective spread"]};
 test_eff_spread_known_sell_below_mid:{[t] .testutil.assertApprox[.qexec.eff_spread[-1;1.0998;1.1000;10000];4f;1e-6;"sell 0.2 pips below mid -> same 4 pip effective spread (symmetric)"]};
 test_eff_spread_zero_at_mid:{[t] .testutil.assertApprox[.qexec.eff_spread[1;1.1000;1.1000;10000];0f;1e-9;"trade exactly at mid -> zero effective spread"]};
