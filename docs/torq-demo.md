@@ -378,10 +378,12 @@ process shows `down` unexpectedly.
 
 ## crypto recorder (cryptorust) - a proof of concept
 
-`torq-demo crypto-start`/`crypto-stop`/`crypto-status` are a proof of
-concept that this demo's kdb+ infra isn't TorQ/q-specific: anything that
-can speak kdb+ IPC can publish onto the same tickerplant alongside the q
-feeds above, including a process written in an entirely different
+`torq-demo crypto start`/`stop`/`status` (a nested command group, not
+flat `crypto-*` commands - these don't drive `torq.sh`/`process.csv` at
+all, a distinct enough concern to read as its own namespace) are a proof
+of concept that this demo's kdb+ infra isn't TorQ/q-specific: anything
+that can speak kdb+ IPC can publish onto the same tickerplant alongside
+the q feeds above, including a process written in an entirely different
 language, in a completely separate project. Specifically, they build and
 launch a sibling checkout of [cryptorust](https://github.com/kwojdalski/cryptorust)
 (a Rust crypto trading system - see `~/github_projects/cryptorust`) - its
@@ -389,13 +391,15 @@ own `kdb-market-data-recorder` binary (`src/bin/kdb_market_data_recorder.rs`
 there) connects live venue order books (Binance, Bybit, ...) straight to
 this demo's `stp1` over raw IPC (via the [`kxkdb`](https://github.com/KxSystems/kxkdb)
 crate) and calls `.u.upd` directly - the exact same wire protocol
-`torq_fx_feed.q`/`torq_quotes_feed.q` use, just from Rust instead of q.
+`torq_fx_feed.q`/`torq_quotes_feed.q` use, just from Rust instead of q -
+with its own reconnect-on-drop loop, so a `stp1` restart doesn't take it
+down permanently.
 
 ```
-torq-demo crypto-start                    # binance_spot, BTC-USDT/ETH-USDT by default
-torq-demo crypto-start --venues binance_spot,bybit_spot --symbols BTC-USDT
-torq-demo crypto-status
-torq-demo crypto-stop
+torq-demo crypto start                    # binance_spot, BTC-USDT/ETH-USDT by default
+torq-demo crypto start --venues binance_spot,bybit_spot --symbols BTC-USDT
+torq-demo crypto status
+torq-demo crypto stop
 ```
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
@@ -408,7 +412,7 @@ torq-demo query "select from crypto_book" --port <rdb1's port>
 ```
 
 Requires a `~/github_projects/cryptorust` checkout (override the path via
-`$CRYPTORUST_ROOT`) with a Rust toolchain on `PATH` - `crypto-start` runs
+`$CRYPTORUST_ROOT`) with a Rust toolchain on `PATH` - `crypto start` runs
 `cargo build` itself the first time, which can take a while. It also
 reuses this demo's own `feed:pass` credential (see `appconfig/passwords/
 feed.txt`) to authenticate against `stp1`'s access-list, same as any other

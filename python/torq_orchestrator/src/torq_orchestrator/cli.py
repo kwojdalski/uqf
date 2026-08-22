@@ -259,7 +259,20 @@ def new_process(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
         _die(exc)
 
 
-@app.command("crypto-start")
+# Proof of concept: cryptorust (Rust, no TorQ/q involved) publishing live
+# venue order books onto stp1 over kdb+ IPC - a separate sub-app (`torq-demo
+# crypto start/stop/status`) rather than flat crypto-* commands, since these
+# don't drive torq.sh/process.csv at all (see core.py's start_crypto_recorder
+# docstring) - a distinct enough concern to read as its own namespace.
+crypto_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Proof of concept: cryptorust (Rust) publishing live order books over kdb+ IPC.",
+)
+app.add_typer(crypto_app, name="crypto")
+
+
+@crypto_app.command("start")
 def crypto_start(
     venues: Annotated[
         str, typer.Option(help="Comma-separated cryptorust venue names to connect")
@@ -273,12 +286,12 @@ def crypto_start(
     interval_ms: Annotated[int, typer.Option(help="Publish interval in milliseconds")] = 1000,
     port: PortOpt = core.DEFAULT_BASE_PORT,
 ) -> None:
-    """Proof of concept: build and launch a sibling cryptorust checkout's
-    own kdb-market-data-recorder (Rust, no TorQ/q involved) and point it at
-    this demo's stp1 - publishing live venue order books onto the same
-    kdb+ infra everything else here already runs on, into `crypto_book`
-    (see core.py's CRYPTO_BOOK_TABLE_SCHEMA). Requires a cryptorust
-    checkout - see $CRYPTORUST_ROOT in core.cryptorust_root's docstring.
+    """Build and launch a sibling cryptorust checkout's own
+    kdb-market-data-recorder and point it at this demo's stp1 - publishing
+    live venue order books onto the same kdb+ infra everything else here
+    already runs on, into `crypto_book` (see core.py's
+    CRYPTO_BOOK_TABLE_SCHEMA). Requires a cryptorust checkout - see
+    $CRYPTORUST_ROOT in core.cryptorust_root's docstring.
     """
     try:
         pid = core.start_crypto_recorder(
@@ -295,9 +308,9 @@ def crypto_start(
     console.print(f"crypto recorder started (pid {pid})")
 
 
-@app.command("crypto-stop")
+@crypto_app.command("stop")
 def crypto_stop() -> None:
-    """Stop the cryptorust recorder started by `crypto-start`."""
+    """Stop the cryptorust recorder started by `crypto start`."""
     try:
         core.stop_crypto_recorder(_paths())
     except core.TorqDemoError as exc:
@@ -306,7 +319,7 @@ def crypto_stop() -> None:
     console.print("crypto recorder stopped")
 
 
-@app.command("crypto-status")
+@crypto_app.command("status")
 def crypto_status() -> None:
     """Show whether the cryptorust recorder is running, its pid, and where
     its config/log live."""

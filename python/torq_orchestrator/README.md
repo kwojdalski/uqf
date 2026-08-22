@@ -92,7 +92,7 @@ config-get PROCNAME [FIELD] [--raw]   show a process's effective process.csv row
 config-set PROCNAME FIELD VALUE       persist a process.csv field override
 logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own logger
 new-process                           interactive wizard to add a new process
-crypto-start/-stop/-status            proof of concept: cryptorust (Rust) publishing over kdb+ IPC
+crypto start/stop/status              proof of concept: cryptorust (Rust) publishing over kdb+ IPC
 raw -- ARGS...                        anything else torq.sh supports
 ```
 
@@ -153,7 +153,7 @@ torq-demo logs -f --level WARNING
 
 ## crypto recorder (cryptorust) - a proof of concept
 
-`crypto-start`/`crypto-stop`/`crypto-status` build and launch a sibling
+`crypto start`/`stop`/`status` (a nested command group) build and launch a sibling
 `~/github_projects/cryptorust` checkout's own `kdb-market-data-recorder`
 Rust binary, pointed at this demo's `stp1` - proving the kdb+ infra here
 isn't TorQ/q-specific, any process that speaks kdb+ IPC can publish onto
