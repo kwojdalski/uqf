@@ -6,21 +6,31 @@ Daily stable snapshots of this repository. Newest first.
 
 ## Overview
 
-Two days of work: the TorQ demo orchestrator (`torq-demo`) grows a real-time debug tap, a proof-of-concept cryptorust IPC integration, nested `crypto` subcommands, and CSV/Parquet export on every tabular command; `src/*.q` gains a full FX position tracker with per-currency/cross-currency exposure decomposition; and a new Claude Code skill codifies how to wire uqf to a real external kdb+ database.
+A big day: `src/positions.q` lands as a new module (weighted-average-cost FX position tracking, per-currency exposure decomposition/revaluation, and trades-vs-reference reconciliation), joined by `src/dqchecks.q` (data quality / risk limit checks with actionable output). The `torq-demo` orchestrator grows substantially - Typer CLI + FastMCP server rewrite, a debug tap, a cryptorust IPC proof of concept, CSV/Parquet export, and a `new-process` wizard that now offers ready-to-run recipes instead of only blank skeletons. Two numerical-method functions (`implied_vol`/`bisect_vol`, `cross_size_at_price`) get their hardcoded tuning extracted into named config. This repo's own daily-snapshot skill now actually maintains a `CHANGELOG.md`.
 
 ## Changes by area
 
-**src/positions.q (new)** - Weighted-average-cost FX position tracking (`apply_fill`, `unrealized_pnl`, `total_pnl`), plus per-currency exposure: `ccy_exposure` decomposes every position into its currency legs at cost and nets them across pairs/crosses (e.g. EURAUD + AUDUSD both netting AUD), `ccy_exposure_in` revalues that net exposure into one reporting currency by chaining through `forwards.q`'s own `cross_book_at` (a PLN leg with no direct USD quote bridges through EUR automatically). 19 new qUnit tests.
+**src/positions.q (new)** - Weighted-average-cost FX position tracking (`apply_fill`/`apply_fills`), per-currency exposure (`ccy_exposure`/`ccy_exposure_in`, chaining through `forwards.q`'s `cross_book_at` to revalue into one reporting currency), and `reconcile_trades` (diff a computed book against an independent reference, flagging qty/avg_price breaks). 33 new qUnit tests.
 
-**src/forwards.q / src/microstructure.q** - Bug fixes: `cross_markout_at_horizons` now checks chain connectivity before use, `markout_at_horizons` validates required columns up front, `depth_ratio`'s `%`/`+` chain is correctly parenthesized.
+**src/dqchecks.q (new)** - Data quality / risk limit checks mirroring `reconcile_trades`'s output shape (one row per entity/check, breaches sorted first): `check_limit` (generic per-entity threshold check) with `check_position_notional_limits`/`check_ccy_exposure_limits` wrappers, `check_market_data_quality` (crossed books, outlier spreads), `check_stale_quotes`, and `summarize_checks` (flattens several checks into one actionable report). 24 new tests - surfaced and fixed 3 real cross-interpreter q bugs (a locked builtin, `select`/`update` clause ordering, vectorized `$` conditionals), now recorded in the `kdb-q-conventions` skill.
 
-**python/torq_orchestrator** - New `tap1` process: a generic, filterable debug tap printing every update hitting any subscribed table. New `crypto` sub-app (`torq-demo crypto start/stop/status`) wiring a Rust (cryptorust) market-data recorder into the demo stack as an IPC proof of concept, alongside `widefeed1`/`vectorize1`/`cross1` uqf-computed-table processes. Every tabular command (`summary`, `query`, `config-get`, `list`) gains `--export FILE`, writing CSV or Parquet via polars. `config-get` also resolves `${VAR}`/`{VAR}+N` placeholders against the real environment; a new generic `list` command covers fields/overrides/env, not just processes.
+**src/options.q / src/forwards.q** - `implied_vol`/`bisect_vol`'s and `cross_size_at_price`'s iteration caps, tolerances, and search brackets are now named, documented, overridable module-level constants instead of inline magic numbers.
 
-**.github/skills** - New `wire-external-kdb` skill: an MCP-only, live-discovery workflow for connecting uqf to a real external kdb+/KDB-X database (explicitly never the local PeachQ test db or the vendored torq-demo sample stack), reusing `book.q`/`ccy.q`'s existing reshape helpers instead of re-deriving wide-column/string-symbol/pair-format handling per wiring.
+**src/forwards.q / src/microstructure.q** - Bug fixes: `cross_markout_at_horizons` checks chain connectivity before use, `markout_at_horizons` validates required columns up front, `depth_ratio`'s `%`/`+` chain is correctly parenthesized.
 
-**docs/** - `docs/torq-demo.md` and `python/torq_orchestrator/README.md` updated for all of the above.
+**python/torq_orchestrator** - `torq_demo.sh` rewritten as a Typer CLI with a FastMCP server sharing the same `core.py` logic; `--export` (CSV/Parquet) on every tabular command; a generic `list` command (fields/overrides/env, not just processes); `config-get` resolves `${VAR}`/`{VAR}+N` placeholders; new `tap1` debug-tap and `crypto start/stop/status` (cryptorust market-data recorder IPC proof of concept) processes; the `new-process` wizard now offers "FX quotes feed"/"cross-rate reprice ETL" ready-to-run recipes alongside the original blank publisher/subscriber skeletons; the MCP server gains `print`/`logs`/crypto-lifecycle tools to match the CLI.
 
-Test coverage grew from 296 to 318 qUnit tests, verified passing on PeachQ.
+**env/ (new)** - Empty, typed table schemas for a broader trading system (positions, trades, markouts, ccy_exposure, reference data, ...) plus `seed.q`, a small coherent example scenario built from real calls into `positions.q`/`execution.q`, not hand-typed values.
+
+**.claude/skills, .github/skills** - New `wire-external-kdb` skill (MCP-only, live-discovery workflow for wiring uqf to a real external kdb+ database). The `snapshot` skill now actually writes `CHANGELOG.md` (this entry) instead of only a GitHub Release.
+
+**lib/** - Vendored TorQ-Finance-Starter-Pack (the layered reference app `torq_demo.sh`/`torq-demo` drives).
+
+Test coverage grew from 318 to 342 qUnit tests, verified passing on both PeachQ and real KDB-X throughout.
+
+## Files changed
+
+196 files changed, 11158 insertions(+), 84 deletions(-)
 
 ## stable/2026-08-21
 
