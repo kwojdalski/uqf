@@ -274,10 +274,12 @@ def logs(
 
 @app.command("new-process")
 def new_process(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
-    """Interactive wizard: add a new TorQ demo process - prompts for name/
-    publish-or-subscribe/table/port, writes a Stage-1-only skeleton .q file
-    (see docs/torq-demo.md), registers it, and optionally starts it to run
-    through the Stage 1 verification checklist live.
+    """Interactive wizard: add a new TorQ demo process. Opens with a menu of
+    recipes - "FX quotes feed" and "cross-rate reprice ETL" are fully
+    working (answer a few prompts, no q editing needed), "blank
+    publisher"/"blank subscriber" write a Stage-1-only skeleton .q file for
+    q/kdb+ users to finish by hand (see docs/torq-demo.md). Registers
+    whatever gets built and optionally starts it to verify it's alive.
     """
     try:
         wizard.run(_paths(), base_port=port)
