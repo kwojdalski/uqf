@@ -16,13 +16,14 @@
 \l tests/test_forwards.q
 \l tests/test_options.q
 \l tests/test_risk.q
+\l tests/test_positions.q
 \l tests/test_execution.q
 \l tests/test_execution_scale.q
 \l tests/test_book.q
 \l tests/test_microstructure.q
 \l tests/test_data.q
 
-nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.datatest;
+nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.datatest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;
