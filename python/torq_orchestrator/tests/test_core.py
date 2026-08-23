@@ -354,6 +354,39 @@ def test_print_recent_logs_filters_by_min_level(fake_paths: core.TorqDemoPaths, 
     assert "quiet info" not in out
 
 
+def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: core.TorqDemoPaths):
+    # the data source torq_demo_mcp.py's torq_demo_logs tool returns
+    # directly - print_recent_logs just formats/prints this same data.
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(
+        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|INF|x|second\n"
+        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INF|x|first\n"
+    )
+
+    records = core.get_recent_logs(fake_paths, "discovery1")
+
+    assert [r["message"] for r in records] == ["first", "second"]
+
+
+def test_get_recent_logs_filters_by_min_level(fake_paths: core.TorqDemoPaths):
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(
+        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INF|x|quiet info\n"
+        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|ERR|x|loud error\n"
+    )
+
+    records = core.get_recent_logs(fake_paths, "discovery1", min_level="ERROR")
+
+    assert [r["message"] for r in records] == ["loud error"]
+
+
+def test_get_recent_logs_raises_when_no_log_files(fake_paths: core.TorqDemoPaths):
+    with pytest.raises(core.TorqDemoError):
+        core.get_recent_logs(fake_paths, "discovery1")
+
+
 def test_list_env_includes_kdbbaseport(fake_paths: core.TorqDemoPaths):
     items = core.list_items(fake_paths, "env", base_port=7000)
     by_name = {item["name"]: item["value"] for item in items}

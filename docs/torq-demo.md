@@ -438,11 +438,17 @@ feed process here - no separate cryptorust-side credential to set up.
 ## MCP server
 
 `python/torq_orchestrator/torq_demo_mcp.py` exposes the same
-start/stop/restart/summary/clean/query/config-get/config-set operations as
-MCP tools (`torq_demo_start`, `torq_demo_stop`, `torq_demo_get_config`,
-`torq_demo_set_config`, etc.), built with
+start/stop/restart/summary/print/clean/query/config-get/config-set/list/
+logs/crypto-lifecycle operations as MCP tools (`torq_demo_start`,
+`torq_demo_stop`, `torq_demo_get_config`, `torq_demo_set_config`,
+`torq_demo_logs`, `torq_demo_crypto_start`/`_stop`/`_status`,
+`torq_demo_crypto_fills_start`/`_stop`/`_status`, etc. - see the file
+itself for the full, current list), built with
 [FastMCP](https://gofastmcp.com/), for an MCP client (e.g. Claude) to
-drive the demo directly instead of shelling out to the CLI. Point an MCP
+drive the demo directly instead of shelling out to the CLI. Not
+exposed: `new-process` (an interactive terminal wizard - doesn't map to
+a stateless MCP tool as-is) and `raw` (an arbitrary passthrough to
+`torq.sh`, deliberately left off as a scope boundary). Point an MCP
 client's server command at:
 
 ```

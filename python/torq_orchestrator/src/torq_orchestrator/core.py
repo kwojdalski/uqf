@@ -873,11 +873,14 @@ def _emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
     ).log(level, rec["message"])
 
 
-def print_recent_logs(
+def get_recent_logs(
     paths: TorqDemoPaths, procs: str = "all", lines: int = 20, min_level: str | None = None
-) -> None:
-    """Print the last *lines* lines of each matching process's out_/err_
-    log, merged and sorted by timestamp, through the shared loguru logger.
+) -> list[dict[str, str]]:
+    """The last *lines* lines of each matching process's out_/err_ log,
+    merged, sorted by timestamp, and filtered to min_level - the data
+    print_recent_logs formats and prints through the shared loguru
+    logger, and torq_demo_mcp.py's torq_demo_logs tool returns as-is for
+    an MCP client to read directly.
     """
     procnames = resolve_procnames(paths, procs)
     files = _log_files(paths, procnames)
@@ -893,9 +896,23 @@ def print_recent_logs(
         records.extend(rec for line in tail if (rec := parse_log_line(line)) is not None)
     records.sort(key=lambda r: r["time"])
 
+    if min_level is None:
+        return records
+    return [
+        r for r in records if _passes_level(_LOGURU_LEVEL.get(r["loglevel"], "INFO"), min_level)
+    ]
+
+
+def print_recent_logs(
+    paths: TorqDemoPaths, procs: str = "all", lines: int = 20, min_level: str | None = None
+) -> None:
+    """Print the last *lines* lines of each matching process's out_/err_
+    log, merged and sorted by timestamp, through the shared loguru logger.
+    """
+    records = get_recent_logs(paths, procs, lines, min_level)
     log = _configure_kdb_log_sink()
     for rec in records:
-        _emit(log, rec, min_level)
+        _emit(log, rec, None)
 
 
 def _pump(stream: Any, out_queue: Any) -> None:
