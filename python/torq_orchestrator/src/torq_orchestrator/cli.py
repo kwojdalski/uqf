@@ -17,6 +17,7 @@ Exposed two ways - both call main() below, so they can't drift apart either:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -36,6 +37,21 @@ log = get_logger(__name__)
 
 PortOpt = Annotated[int, typer.Option("--port", help="KDBBASEPORT - shifts every process's port")]
 ProcsArg = Annotated[str, typer.Argument(help="'all', or space-separated process name(s)")]
+ExportOpt = Annotated[
+    Path | None,
+    typer.Option("--export", help="Also write output to FILE as .csv or .parquet"),
+]
+
+
+def _export(rows, export: Path | None) -> None:
+    if export is None:
+        return
+    try:
+        core.export_table(rows, export)
+    except core.TorqDemoError as exc:
+        _die(exc)
+        return
+    console.print(f"[green]exported to {export}[/]")
 
 
 def _paths():
@@ -78,7 +94,7 @@ _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 
 
 @app.command()
-def summary(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
+def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) -> None:
     """Status table (up/down, pid, port) for every process in process.csv."""
     try:
         result = core.summary(_paths(), base_port=port)
@@ -86,10 +102,12 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
         _die(exc)
         return
 
+    columns = ("Time", "Process", "Status", "PID", "Port")
     table = Table(title=f"torq_demo summary (base port {port})")
-    for col in ("Time", "Process", "Status", "PID", "Port"):
+    for col in columns:
         table.add_column(col)
 
+    rows: list[dict[str, str]] = []
     for line in result.stdout.splitlines():
         cells = [c.strip() for c in line.split("|")]
         # "up" rows have all 5 fields (time/process/status/pid/port); "down"
@@ -98,6 +116,7 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
         if len(cells) < 3 or cells[0] in ("", "TIME"):
             continue
         cells += [""] * (5 - len(cells))
+        rows.append(dict(zip(columns, cells, strict=True)))
         status_style = _STATUS_STYLE.get(cells[2], "")
         table.add_row(
             cells[0],
@@ -107,6 +126,7 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
             cells[4],
         )
     console.print(table)
+    _export(rows, export)
     raise typer.Exit(code=result.returncode)
 
 
@@ -139,6 +159,7 @@ def query(
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",
+    export: ExportOpt = None,
 ) -> None:
     """Run a synchronous q expression against a running demo process."""
     try:
@@ -147,6 +168,7 @@ def query(
         log.error("query failed: {}", exc)
         raise typer.Exit(code=1) from exc
     console.print(result)
+    _export(result, export)
 
 
 @app.command("config-get")
@@ -157,6 +179,7 @@ def config_get(
     raw: Annotated[
         bool, typer.Option("--raw", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
     ] = False,
+    export: ExportOpt = None,
 ) -> None:
     """Show a process's effective process.csv row (or one field of it), with
     ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
@@ -176,6 +199,7 @@ def config_get(
     for k, v in row.items():
         table.add_row(k, v)
     console.print(table)
+    _export([{"field": k, "value": v} for k, v in row.items()], export)
 
 
 @app.command("list")
@@ -184,6 +208,7 @@ def list_items(
         str | None, typer.Argument(help="'processes', 'fields', 'overrides', or 'env'")
     ] = None,
     port: PortOpt = core.DEFAULT_BASE_PORT,
+    export: ExportOpt = None,
 ) -> None:
     """List every item of KIND - run with no argument to see the available
     kinds. Not just processes: 'fields' lists process.csv's valid config-set
@@ -205,6 +230,7 @@ def list_items(
         for item in items:
             table.add_row(*item.values())
     console.print(table)
+    _export(items, export)
 
 
 @app.command("config-set")
