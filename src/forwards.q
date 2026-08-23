@@ -550,6 +550,19 @@ cross_price_ok_at_size:{[quotes;sym;at_time;side;price_limit;size]
     fully:first r fully_col;
     fully and $[side=`bid; px>=price_limit; px<=price_limit]};
 
+/ Configurable search tuning for cross_size_at_price's two-phase binary
+/ search - max_doublings bounds the initial upper-bound search (a hi of
+/ 2^60 base-currency units is past any realistic tradeable size, so this
+/ is a worst-case cap, not an expected one); rel_tol/max_halvings bound
+/ the bisection phase once a bracket is found (relative, not absolute,
+/ since "close enough" scales with the size itself - 2.5mm needs a much
+/ coarser absolute tolerance than 2.5). Override before calling if your
+/ instrument universe needs a coarser/finer size resolution, e.g.
+/ .qfwd.CROSS_SIZE_REL_TOL:1e-4 for faster, coarser sizing.
+CROSS_SIZE_MAX_DOUBLINGS:60;
+CROSS_SIZE_REL_TOL:1e-7;
+CROSS_SIZE_MAX_HALVINGS:200;
+
 / Largest size (in sym's base currency) tradeable on one side without the
 / average swept price crossing price_limit - the inverse question to
 / cross_book_at's "at this size, what's the price". There is no closed
@@ -575,12 +588,12 @@ cross_size_at_price:{[quotes;sym;at_time;side;price_limit]
     lo:0f;
     hi:1f;
     doublings:0;
-    while[(cross_price_ok_at_size[quotes;sym;at_time;side;price_limit;hi]) and doublings<60;
+    while[(cross_price_ok_at_size[quotes;sym;at_time;side;price_limit;hi]) and doublings<CROSS_SIZE_MAX_DOUBLINGS;
         hi*:2;
         doublings+:1];
-    tol:hi*1e-7;
+    tol:hi*CROSS_SIZE_REL_TOL;
     halvings:0;
-    while[((hi-lo)>tol) and halvings<200;
+    while[((hi-lo)>tol) and halvings<CROSS_SIZE_MAX_HALVINGS;
         probe:0.5*lo+hi;
         $[cross_price_ok_at_size[quotes;sym;at_time;side;price_limit;probe]; lo:probe; hi:probe];
         halvings+:1];
