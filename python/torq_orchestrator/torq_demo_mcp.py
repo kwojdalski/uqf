@@ -156,5 +156,76 @@ def torq_demo_list(kind: str = "processes", port: int = core.DEFAULT_BASE_PORT) 
         return {"error": str(exc)}
 
 
+@mcp.tool
+def torq_demo_print(procs: str = "all", port: int = core.DEFAULT_BASE_PORT) -> str:
+    """Show the exact startup command line(s) for procs, without starting
+    anything.
+    """
+    return _run(core.print_procs, procs, base_port=port)
+
+
+@mcp.tool
+def torq_demo_logs(
+    procs: str = "all", lines: int = 20, min_level: str | None = None
+) -> list[dict[str, str]]:
+    """The last *lines* lines of each matching process's out_/err_ log,
+    merged and sorted by timestamp, each as a field dict (time, procname,
+    proctype, loglevel, message, ...). Pass min_level (e.g. "WARN") to
+    only see that level and above. This is a snapshot, not a live stream -
+    call again for newer lines.
+    """
+    try:
+        return core.get_recent_logs(core.default_paths(), procs, lines, min_level)
+    except core.TorqDemoError as exc:
+        return [{"error": str(exc)}]
+
+
+@mcp.tool
+def torq_demo_crypto_start(
+    venues: str = ",".join(core.CRYPTO_RECORDER_DEFAULT_VENUES),
+    symbols: str = ",".join(core.CRYPTO_RECORDER_DEFAULT_SYMBOLS),
+    top_n_levels: int = 5,
+    interval_ms: int = 1000,
+    port: int = core.DEFAULT_BASE_PORT,
+) -> str:
+    """Build and launch a sibling cryptorust checkout's own
+    kdb-market-data-recorder, publishing live venue order books into
+    `crypto_book` (see core.py's CRYPTO_BOOK_TABLE_SCHEMA) on this demo's
+    own stp1. venues/symbols are comma-separated (cryptorust's own
+    venue-agnostic symbol format). Requires a cryptorust checkout - see
+    $CRYPTORUST_ROOT in core.cryptorust_root's docstring.
+    """
+    try:
+        pid = core.start_crypto_recorder(
+            core.default_paths(),
+            base_port=port,
+            venues=tuple(v.strip() for v in venues.split(",") if v.strip()),
+            symbols=tuple(s.strip() for s in symbols.split(",") if s.strip()),
+            top_n_levels=top_n_levels,
+            interval_ms=interval_ms,
+        )
+    except core.TorqDemoError as exc:
+        return f"ERROR: {exc}"
+    return f"crypto recorder started (pid {pid})"
+
+
+@mcp.tool
+def torq_demo_crypto_stop() -> str:
+    """Stop the cryptorust recorder started by torq_demo_crypto_start."""
+    try:
+        core.stop_crypto_recorder(core.default_paths())
+    except core.TorqDemoError as exc:
+        return f"ERROR: {exc}"
+    return "crypto recorder stopped"
+
+
+@mcp.tool
+def torq_demo_crypto_status() -> dict[str, str]:
+    """Whether the cryptorust recorder is running, its pid, and where its
+    config/log live.
+    """
+    return core.crypto_recorder_status(core.default_paths())
+
+
 if __name__ == "__main__":
     mcp.run()

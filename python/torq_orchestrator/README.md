@@ -182,9 +182,13 @@ credentials, `$CRYPTORUST_ROOT`).
 uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo_mcp.py
 ```
 
-Exposes `torq_demo_start`/`stop`/`restart`/`summary`/`clean`/`query`/
-`get_config`/`set_config` as MCP tools (stdio transport) for an MCP client
-to drive the demo directly.
+Exposes `torq_demo_start`/`stop`/`restart`/`summary`/`print`/`clean`/`query`/
+`get_config`/`set_config`/`list`/`logs`, plus the crypto recorder lifecycle
+(`crypto_start`/`stop`/`status`, `crypto_fills_start`/`stop`/`status`), as
+MCP tools (stdio transport) for an MCP client to drive the demo directly.
+`new-process` (an interactive wizard) and `raw` (an arbitrary passthrough
+to `torq.sh`) aren't exposed - see `torq_demo_mcp.py` for the exact,
+current tool list.
 
 ## Testing
 
