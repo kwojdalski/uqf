@@ -148,20 +148,21 @@ library with no processes/IPC/tables).
 - `src/*.q` - one module per topic, each wrapped in its own `\d .q<abbrev>`
   ... `\d .` block, so each file lands in its own flat namespace rather
   than sharing one (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`,
-  `.qopt`, `.qrisk`, `.qexec`, `.qbook`, `.qmicro`, `.qex` - `src/data.q`
-  is `.qdata`, out of scope for this library, see below). Every one of
-  these is single-level (not nested under a shared `.q` parent) for the
-  same portability reason as the rest of this list - see the PeachQ
-  multi-level `\d` gotcha further down. A function calling another
-  module's function must qualify it explicitly (e.g. `forwards.q`'s
+  `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qex` -
+  `src/data.q` is `.qdata`, out of scope for this library, see below).
+  Every one of these is single-level (not nested under a shared `.q`
+  parent) for the same portability reason as the rest of this list - see
+  the PeachQ multi-level `\d` gotcha further down. A function calling
+  another module's function must qualify it explicitly (e.g. `forwards.q`'s
   `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a
   bare, unqualified name) - there is no shared namespace for cross-file
   calls to resolve into implicitly. Load order doesn't matter for
   function *definitions* (q resolves names at call time, and every
   namespace is fully loaded before any cross-module call actually runs),
   but `src/init.q` loads them in a sensible dependency order (stats -> ccy
-  -> daycount -> rates -> forwards -> options -> risk -> execution ->
-  book -> microstructure -> example_defaults) anyway, for readability.
+  -> daycount -> rates -> forwards -> options -> risk -> positions ->
+  execution -> book -> microstructure -> example_defaults) anyway, for
+  readability.
 - `tests/lib/qunit.q` - vendored TimeStored qUnit framework (CC BY-NC-SA,
   non-commercial - keep the attribution header intact; see README's
   Licensing section before using this repo commercially).
