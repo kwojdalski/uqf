@@ -1157,6 +1157,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "kola" },
     { name = "loguru" },
+    { name = "polars" },
     { name = "rich" },
     { name = "typer" },
 ]
@@ -1172,6 +1173,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=3.4.7" },
     { name = "kola", specifier = ">=2.5.0" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "polars", specifier = ">=1.31.0" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "typer", specifier = ">=0.27.1" },
 ]

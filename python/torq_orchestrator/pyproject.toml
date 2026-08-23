@@ -11,6 +11,7 @@ dependencies = [
     "fastmcp>=3.4.7",
     "kola>=2.5.0",
     "loguru>=0.7.3",
+    "polars>=1.31.0",
     "rich>=15.0.0",
     "typer>=0.27.1",
 ]
