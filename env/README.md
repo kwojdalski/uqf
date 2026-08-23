@@ -35,7 +35,7 @@ loaded by `src/init.q`.
 | Table | Shape notes |
 |---|---|
 | `market_data` | Identical to `forwards.q`'s `quotes` shape (`require_quotes_cols`/`cross_book_at`) - level-0-first vector columns, one row per (ts, sym) snapshot. |
-| `positions` | One row per (account, sym) snapshot; `side`/`notional`/`avg_entry_rate` follow `risk.q`'s own `pnl`/`carry_pnl` naming and `1`/`-1` side convention. |
+| `positions` | One row per (account, sym) snapshot; `side`/`notional`/`avg_entry_rate` follow `risk.q`'s own `pnl`/`carry_pnl` naming and `1`/`-1` side convention. `seed.q` builds it from `trades` for real via `positions.q`'s `apply_fills`/`unrealized_pnl`, not a hand-typed value. |
 | `predictions` | One row per (ts, sym, horizon_ms, model); `horizon_ms` matches `cross_markout_at_horizons`' horizon convention. |
 | `orders` | One row per order, updated in place as `status` changes (`new`/`filled`/`cancelled`/`rejected`). |
 | `trades` | `sym`/`time`/`side`/`trade_price`/`pip_factor` are exactly `execution.q`'s `markout_at_horizons` input shape - select those five columns straight off this table and pass it in directly, no reshaping. |

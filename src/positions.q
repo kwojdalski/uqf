@@ -78,6 +78,24 @@ apply_fill:{[pos;sym;qty;price;side]
     ];
     pos upsert enlist `sym`qty`avg_price`realized_pnl!(sym;result`qty;result`avg_price;result`realized_pnl)};
 
+/ Fold a whole trades table through apply_fill, in time order, to build up
+/ a position book from history - the many-fills counterpart to apply_fill's
+/ single fill. trades only needs to have these four columns (by name, in
+/ any order, alongside whatever else the caller's trades table carries -
+/ e.g. execution.q's markout_at_horizons shape, or a superset of it like
+/ env/schemas.q's .envschema.trades); positions.q has no dependency on
+/ where the table actually comes from.
+/ @param pos a position book (see empty_book) to fold trades into - not
+/   mutated, the updated book is returned
+/ @param trades a table with at least sym (symbol), size (fill qty, base
+/   currency units, unsigned), trade_price (the fill price), side (1 buy /
+/   -1 sell), and time (sorted into time order before folding - the table
+/   need not already be sorted)
+/ @return pos with every trade in trades applied, oldest first
+/ @eg .qpos.apply_fills[.qpos.empty_book[];trades] (trades: .envschema.trades-shaped)
+apply_fills:{[pos;trades]
+    {[pos;row] apply_fill[pos;row`sym;row`size;row`trade_price;row`side]}/[pos;`time xasc trades]};
+
 / Mark-to-market unrealized P&L of sym's currently open position, in quote
 / currency - built on risk.q's own pnl formula (side/notional decomposed
 / from the book's signed qty) rather than reimplementing it.

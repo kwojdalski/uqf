@@ -8,11 +8,12 @@
 // than ten unrelated tables.
 //
 // Reuses uqf's own conventions/helpers throughout (loads src/init.q) -
-// .qccy.ccy_pair_legs for reference_data's base/quote split,
-// .qrisk.pnl for the position's unrealized P&L, and a real call through
-// .qexec.markout_at_horizons for the markouts row (not a hand-typed
-// fake result) - env/schemas.q's trades shape is exactly that
-// function's expected input, so no reshaping is needed to call it.
+// .qccy.ccy_pair_legs for reference_data's base/quote split, a real call
+// through .qexec.markout_at_horizons for the markouts row, and a real
+// call through .qpos.apply_fills/unrealized_pnl for the positions row
+// (none of these are hand-typed fake results) - env/schemas.q's trades
+// shape is exactly what both functions expect as input, so no reshaping
+// is needed to call either one.
 //
 // Narration/status uses lib/log4q.q's INFO/DEBUG (see README's Licensing
 // section) - requires real kdb+/KDB-X, not the local PeachQ binary, for
@@ -73,10 +74,17 @@ DEBUG "running: .qexec.markout_at_horizons[trades_for_markout;mo_quotes;0D00:00:
 INFO ("markouts - %1 horizon(s) computed for trade 1";count .envschema.markouts);
 
 / ==== positions: the resulting open position, marked to a later rate ====
+/ Built from .envschema.trades itself via .qpos.apply_fills, not
+/ hand-typed - the same "real call, not a fake result" approach markouts
+/ takes above. A single filled buy folds to exactly the fill's own
+/ qty/price, but apply_fills is the same path a book with many fills
+/ would go through.
 mark_rate:1.0855;
-DEBUG "running: .qrisk.pnl[1000000;1.0850;mark_rate;1]";
-unrealized:.qrisk.pnl[1000000;1.0850;mark_rate;1];
-.envschema.positions,:([] ts:enlist t0+0D00:00:01; account:enlist `desk1; sym:enlist `EURUSD; side:enlist 1; notional:enlist 1000000f; avg_entry_rate:enlist 1.0850; mark_rate:enlist mark_rate; unrealized_pnl:enlist unrealized; realized_pnl:enlist 0f);
+DEBUG "running: .qpos.apply_fills[.qpos.empty_book[];.envschema.trades]";
+book:.qpos.apply_fills[.qpos.empty_book[];.envschema.trades];
+pos_row:book`EURUSD;
+unrealized:.qpos.unrealized_pnl[book;`EURUSD;mark_rate];
+.envschema.positions,:([] ts:enlist t0+0D00:00:01; account:enlist `desk1; sym:enlist `EURUSD; side:enlist signum pos_row`qty; notional:enlist abs pos_row`qty; avg_entry_rate:enlist pos_row`avg_price; mark_rate:enlist mark_rate; unrealized_pnl:enlist unrealized; realized_pnl:enlist pos_row`realized_pnl);
 INFO ("positions - EURUSD position marked, unrealized P&L %1";first .envschema.positions`unrealized_pnl);
 
 / ==== predictions: a signal that motivated the trade above ====
