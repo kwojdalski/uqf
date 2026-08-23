@@ -83,12 +83,12 @@ gettext rlwrap`).
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
-summary [--port N]                    rich status table (up/down, pid, port)
+summary [--port N] [--export FILE]    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s)
 clean                                 wipe ../../scripts/output/torq-demo/
-query EXPR --port N                   run a synchronous q expression
-list [KIND]                           list every item of KIND - no argument shows the kinds
-config-get PROCNAME [FIELD] [--raw]   show a process's effective process.csv row, resolved
+query EXPR --port N [--export FILE]   run a synchronous q expression
+list [KIND] [--export FILE]           list every item of KIND - no argument shows the kinds
+config-get PROCNAME [FIELD] [--raw] [--export FILE]   show a process's effective process.csv row, resolved
 config-set PROCNAME FIELD VALUE       persist a process.csv field override
 logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own logger
 new-process                           interactive wizard to add a new process
@@ -97,6 +97,22 @@ raw -- ARGS...                        anything else torq.sh supports
 ```
 
 `--help` on the command itself or any subcommand has the full picture.
+
+## Exporting output
+
+`summary`/`query`/`config-get`/`list` all take `--export FILE`, writing the
+same rows shown on screen to `FILE` as CSV or Parquet (format inferred from
+the extension) via [polars](https://pola.rs/) - `query`'s table results are
+already a `polars.DataFrame` (that's what [kola](https://pypi.org/project/kola/)
+returns for a table-shaped q result), the other commands' row lists get
+wrapped into one the same way. Anything not tabular (e.g. `query`'s result
+for `count t`, a bare atom) is rejected with an error rather than silently
+exported as a bogus one-cell table.
+
+```
+torq-demo list processes --export processes.csv
+torq-demo query "select from quotes" --port 6050 --export quotes.parquet
+```
 
 ## Listing things
 

@@ -41,7 +41,7 @@ q).qexec.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 ```
 
 Each module loads into its own flat namespace after loading `src/init.q` -
-`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`,
+`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
 `.qexec`, `.qbook`, `.qmicro`, `.qex` (see Layout below for which file maps
 to which namespace). Kept single-level throughout rather than nested under
 a shared parent (e.g. not `.q.options`) - multi-level `\d` namespace paths
@@ -58,6 +58,11 @@ src/  (each file loads into its own flat namespace, shown in [])
   forwards.q    [.qfwd] CIRP forwards/swap points, cross rates, synthetic cross books
   options.q     [.qopt] Garman-Kohlhagen pricing, Greeks, implied vol
   risk.q        [.qrisk] pip value, P&L, carry, parametric & historical VaR
+  positions.q   [.qpos] weighted-average-cost FX position tracking (apply_fill/
+                apply_fills), per-currency exposure decomposition and revaluation
+                into one reporting currency (ccy_exposure/ccy_exposure_in), and
+                reconciling a computed book against an independent reference
+                (reconcile_trades)
   execution.q   [.qexec] markouts, effective spread, slippage, fill/reject ratios,
                 vwap, order-book sweep pricing
   book.q        [.qbook] reshapes wide/mis-typed order book tables into the
@@ -123,13 +128,15 @@ scripts/
                             (see the script's own header for why)
 
 env/
-  schemas.q   10 empty, typed table schemas for a broader trading system
+  schemas.q   11 empty, typed table schemas for a broader trading system
               (market_data, positions, predictions, orders, trades,
-              markouts, reference_data, order_routing, connections,
-              economic_calendar) - scaffolding/reference, not part of the
-              uqf pricing library itself; see env/README.md
+              markouts, ccy_exposure, reference_data, order_routing,
+              connections, economic_calendar) - scaffolding/reference, not
+              part of the uqf pricing library itself; see env/README.md
   seed.q      populates every env/schemas.q table with a small, coherent
-              example scenario
+              example scenario - including a real .qpos.apply_fills/
+              ccy_exposure_in call to derive positions/ccy_exposure from
+              trades/market_data, not hand-typed values
 
 python/
   uqf-client/         Python/Polars client for a running uqf q session over
@@ -189,6 +196,23 @@ Setting `rf=0` reduces Garman-Kohlhagen to plain Black-Scholes.
 **risk.q** - `pip_value`, `pnl`, `carry_return`/`carry_pnl`, `var_parametric`,
 `var_historical`.
 
+**positions.q** - `apply_fill`/`apply_fills` (weighted-average-cost FX
+position tracking - a single fill, or folding a whole trades table in time
+order; `apply_fill` handles opening, adding, partial-reducing, exact-closing
+and flip-through-flat, realizing P&L via `risk.q`'s `pnl` on every closed
+slice), `unrealized_pnl`/`total_pnl` (mark a position to a current price),
+`ccy_legs`/`ccy_exposure` (decompose every position into its two currency
+legs at cost and net exposure per currency across pairs/crosses - e.g.
+EURAUD and AUDUSD both netting AUD), `ccy_exposure_in` (revalue that net
+exposure into one reporting currency, chaining through whatever pairs are
+available via `forwards.q`'s `cross_book_at` - a currency with no direct
+quote against the reporting currency, e.g. PLN needing PLN->EUR->USD,
+bridges the same way `cross_book_at` itself chains a multi-leg cross like
+AUDPLN), and `reconcile_trades` (recompute a book from a trades table and
+diff it, per sym, against an independent reference book - e.g. a broker
+statement - flagging qty/avg_price breaks beyond caller-supplied
+tolerances).
+
 **execution.q** - `markout` (vectorizes naturally across multiple
 post-trade horizons), `eff_spread`, `slippage`, `fill_ratio`, `reject_ratio`,
 `vwap`, `sweep_price` (walks best-to-worst order book levels to price
@@ -210,7 +234,7 @@ q tests/run_tests.q
 
 This loads every module, loads every `test_*.q` file, runs the full qUnit
 suite, prints a pass/fail summary, and exits non-zero if anything failed -
-safe to wire into CI as-is. As of this writing: **195 tests, all passing**.
+safe to wire into CI as-is. As of this writing: **326 tests, all passing**.
 
 Every function is tested against at least one of: a published textbook
 reference value (e.g. Hull's Black-Scholes worked example for

@@ -81,26 +81,31 @@ on macOS: `brew install gettext rlwrap`).
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
-summary [--port N]                    rich status table (up/down, pid, port)
+summary [--port N] [--export FILE]    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/torq-demo/
-query EXPR --port N                   run a synchronous q expression against a process
-list [KIND] [--port N]                list every item of KIND ('processes', 'fields',
+query EXPR --port N [--export FILE]   run a synchronous q expression against a process
+list [KIND] [--port N] [--export FILE]  list every item of KIND ('processes', 'fields',
                                        'overrides', 'env') - no argument shows the kinds
-config-get PROCNAME [FIELD] [--port N] [--raw]  show a process's effective process.csv row
-                                                 (or one field), with placeholders resolved
-                                                 unless --raw
+config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective
+                                                 process.csv row (or one field), with
+                                                 placeholders resolved unless --raw
 config-set PROCNAME FIELD VALUE       persist a process.csv field override for a process
 logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own colorized
                                        logger instead of raw files (see "Logs" below)
 new-process                           interactive wizard to add a new process (see below)
+crypto start/stop/status              proof of concept: cryptorust (Rust) publishing over
+                                       kdb+ IPC (see "crypto recorder" below)
 raw -- ARGS...                        pass any other torq.sh verb straight through
                                        (e.g. `raw -- debug rdb1`, `raw -- top feed1`)
 ```
 
 `PROCS` is `all` or a space-separated list of process names. `--port` sets
-`KDBBASEPORT` (default `6050`, see the port table below). Full `--help` is
-available on the command itself and on every subcommand.
+`KDBBASEPORT` (default `6050`, see the port table below). `--export FILE`
+(on `summary`/`query`/`list`/`config-get`) additionally writes the same
+rows to `FILE` as CSV or Parquet, format inferred from the extension - see
+`python/torq_orchestrator/README.md`'s "Exporting output" section. Full
+`--help` is available on the command itself and on every subcommand.
 
 ## Listing things
 
