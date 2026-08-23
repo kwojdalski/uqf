@@ -115,6 +115,70 @@ test_apply_fills_on_an_empty_trades_table_is_a_noop:{[t]
     b:.qpos.apply_fills[.qpos.empty_book[];trades];
     .qunit.assertEmpty[b;"no trades -> book stays empty"]};
 
+test_reconcile_trades_flags_no_breaks_when_book_matches_trades:{[t]
+    trades:([] sym:`EURUSD`GBPUSD; size:1000000 500000f; trade_price:1.1000 1.2500; side:1 -1; time:2026.01.01D09:00:00.000000000+0D 0D00:00:00.001);
+    reference:.qpos.apply_fills[.qpos.empty_book[];trades];
+    r:.qpos.reconcile_trades[reference;trades;0f;1e-9];
+    .qunit.assertEquals[exec status from r;`match`match;"reference book built from the same trades matches exactly, no breaks"]};
+
+test_reconcile_trades_flags_a_qty_break:{[t]
+    trades:([] sym:enlist `EURUSD; size:enlist 1000000f; trade_price:enlist 1.1000; side:enlist 1; time:enlist 2026.01.01D09:00:00.000000000);
+    / broker shows 900000, not the 1,000,000 trades imply - a missed fill or booking error
+    reference:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;900000;1.1000;1];
+    r:.qpos.reconcile_trades[reference;trades;0f;1e-9];
+    row:first r;
+    .qunit.assertTrue[row`qty_break;"900000 (reference) vs 1000000 (computed from trades) exceeds qty_tol -> break"];
+    .testutil.assertApprox[row`qty_diff;100000f;1e-6;"qty_diff is computed - reference"];
+    .qunit.assertEquals[row`status;`break;"a qty break marks the row `break"]};
+
+test_reconcile_trades_qty_tol_absorbs_small_diffs:{[t]
+    trades:([] sym:enlist `EURUSD; size:enlist 1000000f; trade_price:enlist 1.1000; side:enlist 1; time:enlist 2026.01.01D09:00:00.000000000);
+    reference:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;999999.5;1.1000;1];
+    r:.qpos.reconcile_trades[reference;trades;1;1e-9];
+    .qunit.assertEquals[first exec status from r;`match;"a 0.5-unit qty diff is within qty_tol=1 -> not a break"]};
+
+test_reconcile_trades_flags_an_avg_price_break_when_both_sides_open:{[t]
+    trades:([] sym:enlist `EURUSD; size:enlist 1000000f; trade_price:enlist 1.1000; side:enlist 1; time:enlist 2026.01.01D09:00:00.000000000);
+    / same qty, but the broker's avg_price disagrees with what these trades imply
+    reference:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1010;1];
+    r:.qpos.reconcile_trades[reference;trades;0f;1e-6];
+    row:first r;
+    .qunit.assertTrue[not row`qty_break;"qty matches exactly -> no qty break"];
+    .qunit.assertTrue[row`avg_price_break;"avg_price disagrees beyond price_tol while both sides are open -> break"];
+    .qunit.assertEquals[row`status;`break;"an avg_price break alone still marks the row `break"]};
+
+test_reconcile_trades_does_not_flag_avg_price_when_one_side_is_flat:{[t]
+    / trades fully close the EURUSD position (flat, avg_price resets to 0
+    / by convention) but the broker's reference book still shows it open -
+    / that's a real qty break, but avg_price comparison would be
+    / meaningless (0 vs a real rate) and must not double-count as its own break.
+    trades:([]
+        sym:`EURUSD`EURUSD;
+        size:1000000 1000000f;
+        trade_price:1.1000 1.1050;
+        side:1 -1;
+        time:2026.01.01D09:00:00.000000000+0D 0D00:00:00.001);
+    reference:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];
+    r:.qpos.reconcile_trades[reference;trades;0f;1e-9];
+    row:first r;
+    .qunit.assertTrue[row`qty_break;"computed is flat (0) vs reference's still-open 1000000 -> a real qty break"];
+    .qunit.assertTrue[not row`avg_price_break;"one side flat -> avg_price isn't compared, no separate break"]};
+
+test_reconcile_trades_includes_a_sym_missing_from_either_side:{[t]
+    / GBPUSD only exists in trades (reference never booked it) - and
+    / AUDUSD only exists in reference (no trades at all, e.g. a manual
+    / adjustment) - both must still show up as rows, not get silently dropped.
+    trades:([] sym:enlist `GBPUSD; size:enlist 500000f; trade_price:enlist 1.2500; side:enlist 1; time:enlist 2026.01.01D09:00:00.000000000);
+    reference:.qpos.apply_fill[.qpos.empty_book[];`AUDUSD;200000;0.6500;1];
+    r:.qpos.reconcile_trades[reference;trades;0f;1e-9];
+    syms:exec sym from r;
+    .qunit.assertTrue[`GBPUSD in syms;"a sym only in trades still appears in the reconciliation"];
+    .qunit.assertTrue[`AUDUSD in syms;"a sym only in the reference book still appears in the reconciliation"];
+    gbpusd_row:first select from r where sym=`GBPUSD;
+    .testutil.assertApprox[gbpusd_row`reference_qty;0f;1e-9;"GBPUSD has no reference qty -> defaults to 0"];
+    audusd_row:first select from r where sym=`AUDUSD;
+    .testutil.assertApprox[audusd_row`computed_qty;0f;1e-9;"AUDUSD has no trades -> computed qty defaults to 0"]};
+
 test_ccy_legs_splits_pair_into_base_and_quote:{[t]
     legs:.qpos.ccy_legs[`EURAUD;1000000;1.6000];
     .qunit.assertEquals[exec ccy from legs;`EUR`AUD;"legs are base then quote"];

@@ -96,6 +96,49 @@ apply_fill:{[pos;sym;qty;price;side]
 apply_fills:{[pos;trades]
     {[pos;row] apply_fill[pos;row`sym;row`size;row`trade_price;row`side]}/[pos;`time xasc trades]};
 
+/ Recompute a position book from a trades table (via apply_fills) and diff
+/ it, per sym, against an independent reference book - e.g. a broker/prime
+/ broker statement, or any other qty/avg_price snapshot not itself derived
+/ from trades. A break here means the two sources disagree about what's
+/ actually open: a missed or duplicated fill, a booking error on either
+/ side, or a fill this trades table simply doesn't have yet.
+/ .
+/ avg_price is only compared when *both* sides show a nonzero position -
+/ avg_price is 0 by empty_book/apply_fill convention once flat, so
+/ comparing it while one side is flat would flag a meaningless "break"
+/ every time a position closes out on one side before the other.
+/ @param reference_book a position book (see empty_book) from a source
+/   other than trades - e.g. a broker statement reshaped into this shape
+/ @param trades a table with at least sym/size/trade_price/side/time -
+/   the exact shape apply_fills expects
+/ @param qty_tol qty difference at or below this (in absolute base
+/   currency units) doesn't count as a break - use 0 for an exact match
+/ @param price_tol avg_price difference at or below this doesn't count
+/   as a break (only checked when both sides are non-flat - see above)
+/ @return a table sym/computed_qty/reference_qty/qty_diff/
+/   computed_avg_price/reference_avg_price/avg_price_diff/qty_break/
+/   avg_price_break/status (`break`match), one row per sym seen in
+/   either side, sorted breaks-first
+/ @eg .qpos.reconcile_trades[broker_book;trades;0f;1e-6]
+reconcile_trades:{[reference_book;trades;qty_tol;price_tol]
+    computed_book:apply_fills[empty_book[];trades];
+    ref_syms:exec sym from reference_book;
+    comp_syms:exec sym from computed_book;
+    all_syms:asc distinct ref_syms,comp_syms;
+    col_for:{[book;syms;all_syms;col] {[book;syms;col;sym] $[sym in syms; (book sym)col; 0f]}[book;syms;col;] each all_syms};
+    ref_qty:col_for[reference_book;ref_syms;all_syms;`qty];
+    ref_avg:col_for[reference_book;ref_syms;all_syms;`avg_price];
+    comp_qty:col_for[computed_book;comp_syms;all_syms;`qty];
+    comp_avg:col_for[computed_book;comp_syms;all_syms;`avg_price];
+    result:([]
+        sym:all_syms;
+        computed_qty:comp_qty; reference_qty:ref_qty; qty_diff:comp_qty-ref_qty;
+        computed_avg_price:comp_avg; reference_avg_price:ref_avg; avg_price_diff:comp_avg-ref_avg);
+    result:update qty_break:qty_tol<abs qty_diff from result;
+    result:update avg_price_break:(qty_tol<abs computed_qty) and (qty_tol<abs reference_qty) and price_tol<abs avg_price_diff from result;
+    result:update status:`match`break qty_break or avg_price_break from result;
+    `status xasc result};
+
 / Mark-to-market unrealized P&L of sym's currently open position, in quote
 / currency - built on risk.q's own pnl formula (side/notional decomposed
 / from the book's signed qty) rather than reimplementing it.
