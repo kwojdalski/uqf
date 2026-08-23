@@ -316,33 +316,45 @@ table".
 
 ## Adding a new process interactively
 
-`torq-demo new-process` is a console wizard for the "how do I add a
-process" question `fxfeed1`/`torq_quotes_feed.q`/`torq_cross_etl.q` answer
-by example - it walks through the same handful of decisions (name,
-publish-or-subscribe, which table, port), writes a **Stage 1 only**
-skeleton `.q` file into `scripts/` (connects/subscribes and logs - no
-business logic, per the torq-developer skill's PROCESS SETUP GUIDE),
-registers it, and optionally starts it immediately to run through the
-Stage 1 verification checklist live (checks `err_<proc>.log` is empty and
-the process shows up in `summary`):
+`torq-demo new-process` is a console wizard for adding a process, opening
+with a menu of recipes:
 
 ```
 torq-demo new-process
 ```
 
+```
+1. FX quotes feed - publish quotes for currency pairs you pick (ready to run, no q editing)
+2. Cross-rate reprice ETL - watch a quotes table and reprice synthetic cross pairs you pick (ready to run, no q editing)
+3. Blank publisher - write your own row-generating process from scratch (for q/kdb+ users)
+4. Blank subscriber - write your own table-watching process from scratch (for q/kdb+ users)
+```
+
+**1** and **2** are for anyone, no q/kdb+ knowledge needed - answer a few
+prompts (pairs, starting rates, table/port names) and the generated `.q`
+file is a fully working process already, not a stub: a parametrized copy
+of `scripts/torq_quotes_feed.q` (1) or `scripts/torq_cross_etl.q` (2)'s
+own working shape. **1** also registers its new table's schema
+automatically (see below) - nothing left to do by hand before starting it.
+
+**3** and **4** are for q/kdb+ users who want to write their own
+publish/subscribe logic - the same **Stage 1 only** skeleton the wizard
+always wrote (connects/subscribes and logs - no business logic, per the
+torq-developer skill's PROCESS SETUP GUIDE). If the process you write
+publishes into a brand-new table (not `quote`/`trade`/`quotes`), add its
+schema line to `python/torq_orchestrator/extra_schema.q` by hand before
+starting it - recipe **1** does this step for you; **3** doesn't, since a
+blank skeleton might not even settle on its final table shape yet.
+
+Every recipe starts it immediately if you ask, running the same
+alive-check either way (checks `err_<proc>.log` is empty and the process
+shows up in `summary`).
+
 Registration goes into `python/torq_orchestrator/extra_processes.csv` (a
-new sibling of `process_overrides.csv` - same never-edit-the-vendored/
+sibling of `process_overrides.csv` - same never-edit-the-vendored/
 generated-files approach, tracked in git) rather than editing `core.py`
 source - `_base_process_rows()` reads it generically, so adding a process
-this way is a data change, not a code change. If the new process publishes
-into a brand-new table (not `quote`/`trade`/`quotes`), add its schema line
-to `python/torq_orchestrator/extra_schema.q` by hand (also read
-generically, same idea) before starting it.
-
-The skeleton file only gets you through Stage 1 (plumbing) - fill in the
-actual publish/subscribe logic afterwards by hand, copying whichever of
-`scripts/torq_fx_feed.q`/`torq_quotes_feed.q` (publisher) or
-`torq_cross_etl.q` (subscriber) matches what you picked.
+this way is a data change, not a code change.
 
 ## Connecting
 
