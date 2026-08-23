@@ -146,7 +146,12 @@ ccy_legs:{[sym;qty;avg_price]
 / @eg .qpos.ccy_exposure[b] (b: long 1mm EURAUD @ 1.60, long 500k AUDUSD @ 0.65) -> AUD: -1,600,000+500,000 = -1,100,000; EUR: 1,000,000; USD: -325,000
 ccy_exposure:{[pos]
     legs:raze {[row] ccy_legs[row`sym;row`qty;row`avg_price]} each 0!pos;
-    select amount:sum amount by ccy from legs};
+    / 0! - a plain table, not the keyed-by-ccy table `by` naturally
+    / produces: every other function in this file returns/consumes plain
+    / tables, and a keyed result here silently breaks a caller doing
+    / e.g. `t,:this_result` onto a plain table (join of a plain and a
+    / keyed table is a type error).
+    0!select amount:sum amount by ccy from legs};
 
 / Net exposure per currency (see ccy_exposure), revalued into one
 / reporting currency via forwards.q's own cross-currency chaining

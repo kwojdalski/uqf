@@ -19,7 +19,7 @@ loaded by `src/init.q`.
 
 ## Files
 
-- **`schemas.q`** - the 10 empty table definitions, one `\d .envschema` block.
+- **`schemas.q`** - the 11 empty table definitions, one `\d .envschema` block.
   Not loaded by `src/init.q`; `\l env/schemas.q` on its own works under
   either interpreter (PeachQ or real KDB-X) with no other dependency.
 - **`seed.q`** - loads `src/init.q` + `schemas.q` + `lib/log4q.q`, then
@@ -40,6 +40,7 @@ loaded by `src/init.q`.
 | `orders` | One row per order, updated in place as `status` changes (`new`/`filled`/`cancelled`/`rejected`). |
 | `trades` | `sym`/`time`/`side`/`trade_price`/`pip_factor` are exactly `execution.q`'s `markout_at_horizons` input shape - select those five columns straight off this table and pass it in directly, no reshaping. |
 | `markouts` | Exactly `markout_at_horizons`'s output shape (`ts`/`sym` leading, per its `col_precedence` convention). |
+| `ccy_exposure` | One row per (ts, ccy) - `positions.q`'s `ccy_exposure_in` output (`ccy`/`amount`/`reporting_amount`) extended with `ts`/`reporting_ccy`. `seed.q` builds it for real from `positions` + `market_data`, chaining through whatever pairs are available (e.g. a PLN leg with no direct USD quote bridges through EUR) the same way `forwards.q`'s `cross_book_at` chains a single cross pair. |
 | `reference_data` | One row per pair; `base_ccy`/`quote_ccy` match `ccy.q`'s `ccy_pair_legs` field names. |
 | `order_routing` | One row per (order, venue) an order was routed to - not 1:1 with `orders`, since an order can split across venues. |
 | `connections` | Venue/process connection registry - up/down status, a much simpler stand-in for what `lib/torq/code/handlers/trackservers.q` does at production scale. |

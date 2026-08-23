@@ -1,7 +1,7 @@
 / schemas.q - empty, typed table schemas for a broader eFX trading
 / system's data model: market data, positions, predictions, orders,
-/ trades, markouts, reference data, order routing, connections, and an
-/ economic calendar.
+/ trades, markouts, currency exposure, reference data, order routing,
+/ connections, and an economic calendar.
 / .
 / Deliberately separate from src/*.q and its per-module .q<abbrev>
 / namespace convention (.qstats, .qfwd, .qexec, ...) - this is scaffolding/
@@ -15,7 +15,9 @@
 / matches forwards.q's require_quotes_cols quotes shape exactly; trades
 / matches execution.q's markout_at_horizons input shape (sym/time/side/
 / trade_price/pip_factor) so .envschema.trades is directly usable there
-/ with no reshaping; markouts matches that same function's output shape.
+/ with no reshaping; markouts matches that same function's output shape;
+/ ccy_exposure matches positions.q's ccy_exposure_in output shape
+/ (ccy/amount/reporting_amount).
 / Still single-level/flat (not nested under a shared parent) for the
 / same PeachQ multi-level \d portability reason every src/*.q file is.
 / .
@@ -54,6 +56,16 @@ trades:0#([] trade_id:`long$(); order_id:`long$(); time:`timestamp$(); sym:`symb
 / execution.q's markout_at_horizons output shape (ts/sym leading per its
 / col_precedence convention).
 markouts:0#([] ts:`timestamp$(); sym:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$());
+
+/ Net FX exposure per currency at a point in time, revalued into one
+/ reporting currency - positions.q's ccy_exposure_in output
+/ (ccy/amount/reporting_amount) extended with ts/reporting_ccy, the same
+/ way `positions` above extends apply_fill's own output. amount is the
+/ raw currency-unit exposure (summed across every pair/cross touching
+/ that currency); reporting_amount is amount revalued into reporting_ccy,
+/ chaining through whatever pairs are available - see ccy_exposure_in's
+/ own doc comment.
+ccy_exposure:0#([] ts:`timestamp$(); ccy:`symbol$(); amount:`float$(); reporting_ccy:`symbol$(); reporting_amount:`float$());
 
 / Static instrument reference, one row per pair. base_ccy/quote_ccy match
 / ccy.q's ccy_pair_legs field names.
