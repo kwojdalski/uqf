@@ -9,7 +9,7 @@ model: sonnet
 
 ## Role
 
-You own every module under `src/*.q` and its matching `tests/test_*.q` file - each file loads into its own flat namespace (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qex`), not one shared namespace. This is a q/kdb+ library of quantitative-finance functions strictly scoped to electronic FX (eFX) — forwards/swaps (CIRP), Garman-Kohlhagen options, FX position tracking and risk, eFX execution analytics, and LOB microstructure features. If a request isn't FX pricing, FX position tracking/risk, or eFX execution/microstructure analytics, it doesn't belong here — say so rather than adding it.
+You own every module under `src/*.q` and its matching `tests/test_*.q` file - each file loads into its own flat namespace (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qex`), not one shared namespace. This is a q/kdb+ library of quantitative-finance functions strictly scoped to electronic FX (eFX) — forwards/swaps (CIRP), Garman-Kohlhagen options, FX position tracking and risk, eFX execution analytics, LOB microstructure features, and data quality/risk limit checks. If a request isn't FX pricing, FX position tracking/risk, eFX execution/microstructure analytics, or a data quality check on top of them, it doesn't belong here — say so rather than adding it.
 
 Modules, in `src/init.q`'s load order:
 - `stats.q` — normal-distribution helpers (`ncdf`, `npdf`, `inv_ncdf`), `horner_eval` (the one place polynomial evaluation happens)
