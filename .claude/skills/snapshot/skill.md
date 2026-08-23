@@ -1,6 +1,6 @@
 ---
 name: snapshot
-description: Create a dated stable-version git tag (stable/YYYY-MM-DD), push it, create a GitHub Release with an AI-generated changelog from the last day's commits, and summarise changes. Use when the user wants to mark the current state as a stable checkpoint or review daily progress.
+description: Create a dated stable-version git tag (stable/YYYY-MM-DD), push it, append an AI-generated entry to CHANGELOG.md, create a GitHub Release with the same notes, and summarise changes. Use when the user wants to mark the current state as a stable checkpoint or review daily progress.
 ---
 
 # Snapshot
@@ -24,30 +24,11 @@ Run:
 git tag --list "stable/YYYY-MM-DD"
 ```
 
-If the tag already exists, skip creation and tell the user. Proceed to step 4 (changelog) anyway.
+If the tag already exists, skip tag/CHANGELOG creation and tell the user. Proceed to step 7 (GitHub Release) anyway, in case the release itself is still missing.
 
-### 3. Create the tag
+### 3. Find the previous snapshot tag from GitHub Releases
 
-Check if there are uncommitted changes first:
-```bash
-git status --short
-```
-
-If uncommitted changes exist, warn the user and ask whether to proceed. If they confirm (or there are no uncommitted changes), create an annotated tag:
-```bash
-git tag -a stable/YYYY-MM-DD -m "Daily stable snapshot YYYY-MM-DD"
-```
-
-Report the tag SHA: `git rev-parse stable/YYYY-MM-DD`
-
-Push the tag to GitHub:
-```bash
-git push origin stable/YYYY-MM-DD
-```
-
-### 4. Find the previous snapshot tag from GitHub Releases
-
-Query GitHub Releases to find the most recently published daily build (at this point today's release has not been created yet, so the first result is yesterday's):
+Query GitHub Releases to find the most recently published daily build (today's release does not exist yet at this point, so the first result is yesterday's):
 
 ```bash
 gh release list --limit 50 --json tagName --jq '.[].tagName' | grep "^stable/" | head -1
@@ -60,7 +41,7 @@ git rev-list --max-parents=0 HEAD
 
 Store the result as PREV.
 
-### 5. Analyse changes since PREV
+### 4. Analyse changes since PREV
 
 Collect the raw material:
 
@@ -82,14 +63,63 @@ git log PREV..HEAD --oneline | wc -l
 Now write the release notes. Structure them as follows:
 
 - **Overview** (2-3 sentences): what was the main thrust of today's work — new q functions, bug fixes, new example scripts, test coverage, refactoring, or documentation? Be specific about which subsystems moved.
-- **Changes by area**: group commits by module/directory. For each group, write 1-2 sentences describing what changed and why it matters. Focus on: `src/*.q` (the pricing/risk/execution modules, each its own namespace — stats, ccy, daycount, rates, forwards, options, risk, execution, book, microstructure), `tests/` (qUnit suite), `scripts/` (worked examples and dev tooling), `lib/` (vendored third-party dependencies), `docs/` (qDoc output), and config/dependency files (`README.md`, `.claude/skills/`). Skip areas with no changes.
+- **Changes by area**: group commits by module/directory. For each group, write 1-2 sentences describing what changed and why it matters. Focus on: `src/*.q` (the pricing/risk/execution modules, each its own namespace — stats, ccy, daycount, rates, forwards, options, risk, execution, book, microstructure, dqchecks), `tests/` (qUnit suite), `scripts/` (worked examples and dev tooling), `python/torq_orchestrator/` (the CLI/MCP demo orchestrator), `lib/` (vendored third-party dependencies), `docs/` (qDoc output), and config/dependency files (`README.md`, `.claude/skills/`). Skip areas with no changes.
 - **Files changed**: include the `git diff --stat` summary line (e.g. "12 files changed, 340 insertions(+), 45 deletions(-)").
 
-Keep the notes factual, concise, and under 40 lines total. No preamble, no sign-off.
+Keep the notes factual, concise, and under 40 lines total. No preamble, no sign-off. These same notes are reused verbatim for both the CHANGELOG.md entry (step 5) and the GitHub Release body (step 7) — write them once here.
 
-### 6. Create the GitHub Release
+If the tag already exists (step 2), skip this step too - there is nothing new to analyse, and step 7 will just verify the release exists.
 
-Compose the release body from the notes above, then run:
+### 5. Update CHANGELOG.md
+
+This is the persistent, in-repo, git-diffable record - distinct from the GitHub Release notes in step 7, which only live on GitHub's Releases page and aren't visible in a plain clone. Do not skip this step in favor of step 7 alone.
+
+If `CHANGELOG.md` doesn't exist at the repo root, create it with this header:
+```
+# Changelog
+
+Daily stable snapshots of this repository. Newest first.
+```
+
+Prepend a new section immediately after the header (newest entry on top, reverse-chronological), using the exact notes written in step 4:
+
+```
+## stable/YYYY-MM-DD
+
+<the notes from step 4>
+```
+
+Stage and commit just this file:
+```bash
+git add CHANGELOG.md
+git commit -m "Add changelog entry for stable/YYYY-MM-DD"
+```
+
+If there's nothing to commit (e.g. re-running after the tag already existed), skip the commit.
+
+### 6. Create the tag
+
+Check if there are uncommitted changes first (the CHANGELOG.md commit above should be the only one, but confirm):
+```bash
+git status --short
+```
+
+If *other* uncommitted changes exist (beyond what step 5 just committed), warn the user and ask whether to proceed. If they confirm (or there are none), create an annotated tag - now on top of the CHANGELOG.md commit, so the tagged state is self-describing:
+```bash
+git tag -a stable/YYYY-MM-DD -m "Daily stable snapshot YYYY-MM-DD"
+```
+
+Report the tag SHA: `git rev-parse stable/YYYY-MM-DD`
+
+Push the branch (carrying the CHANGELOG.md commit) and the tag to GitHub:
+```bash
+git push origin HEAD
+git push origin stable/YYYY-MM-DD
+```
+
+### 7. Create the GitHub Release
+
+Compose the release body from the same notes written in step 4, then run:
 
 ```bash
 gh release create stable/YYYY-MM-DD \
@@ -102,7 +132,7 @@ If the release already exists (exit code non-zero with "already exists" message)
 
 Report the release URL returned by `gh release create`.
 
-### 7. Output format
+### 8. Output format
 
 Print to the user:
 
@@ -110,6 +140,7 @@ Print to the user:
 Snapshot: stable/YYYY-MM-DD  (SHA: <sha>)
 Previous: stable/PREV-DATE   (or "first commit")
 Release:  <GitHub release URL>
+Changelog: CHANGELOG.md updated (or "already up to date")
 
 ## Commits since last snapshot (<N> total)
 <git log --oneline output>
@@ -118,5 +149,5 @@ Release:  <GitHub release URL>
 <git diff --stat output>
 
 ## Release notes
-<the notes written in step 5>
+<the notes written in step 4>
 ```
