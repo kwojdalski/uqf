@@ -142,27 +142,58 @@ library with no processes/IPC/tables).
   to the house style" and "the third-party framework's naming contract"
   are in direct conflict, and the framework wins - you won't get an error
   when you get it wrong, the hook just quietly stops firing.
+- **A `select`/`update` clause's `by` must come before `from`** under
+  PeachQ - `select c by g from t where p` (canonical order) works, `select
+  c from t by g` (real kdb+ tolerates the reordering) throws a bare
+  `error: parse` at load time with no line number, and - worse - silently
+  aborts loading the rest of that file, so every later function in the
+  same file ends up undefined too (found via `src/dqchecks.q`'s
+  `check_stale_quotes` - always re-check the whole file loaded cleanly
+  after a `parse` error, not just that one function).
+- **PeachQ's `$[cond;a;b]` only supports a scalar `cond`** - `$[boolvec;a;b]`
+  throws `'type`, even nested, though real kdb+ supports both. Build a
+  status column via boolean-indexing a symbol vector instead (`` `ok`bad
+  boolvec ``, already used elsewhere in this repo for 2-way statuses); for
+  3+-way branching, compute a 0/1/2... index via ordinary arithmetic on
+  the condition vectors, then index a symbol vector by that, rather than
+  reaching for `$` on a vector at all (found via `src/dqchecks.q`'s
+  `check_market_data_quality`).
+- **Real KDB-X: inside a `select`/`update` clause's per-row expression, a
+  bare (unqualified) call to a function defined in the *same* namespace
+  can fail to resolve** - throws an error literally named after the
+  function (e.g. `` 'limit_for ``) - even though the identical bare call
+  works everywhere else, including elsewhere in the very same enclosing
+  function. Root cause unconfirmed (plausibly: the clause's generated
+  per-row lambda evaluates against the root `.` context, not the
+  enclosing function's own namespace), but the fix is simple: always
+  fully-qualify a same-namespace function call used *inside* a
+  select/update clause (e.g. `.qdqc.limit_for[...]`, not bare
+  `limit_for[...]`) - unusual style anywhere else in this codebase, but
+  required there. PeachQ doesn't require this; only surfaces under real
+  KDB-X (found via `src/dqchecks.q`'s `check_limit`).
 
 ## Layout
 
 - `src/*.q` - one module per topic, each wrapped in its own `\d .q<abbrev>`
   ... `\d .` block, so each file lands in its own flat namespace rather
   than sharing one (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`,
-  `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qex` -
-  `src/data.q` is `.qdata`, out of scope for this library, see below).
-  Every one of these is single-level (not nested under a shared `.q`
-  parent) for the same portability reason as the rest of this list - see
-  the PeachQ multi-level `\d` gotcha further down. A function calling
+  `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
+  `.qex` - `src/data.q` is `.qdata`, out of scope for this library, see
+  below). Every one of these is single-level (not nested under a shared
+  `.q` parent) for the same portability reason as the rest of this list -
+  see the PeachQ multi-level `\d` gotcha further down. A function calling
   another module's function must qualify it explicitly (e.g. `forwards.q`'s
   `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a
   bare, unqualified name) - there is no shared namespace for cross-file
-  calls to resolve into implicitly. Load order doesn't matter for
-  function *definitions* (q resolves names at call time, and every
+  calls to resolve into implicitly, and (see the real-KDB-X gotcha further
+  down) even a *same*-namespace call from inside a select/update clause's
+  per-row expression needs to be qualified too. Load order doesn't matter
+  for function *definitions* (q resolves names at call time, and every
   namespace is fully loaded before any cross-module call actually runs),
   but `src/init.q` loads them in a sensible dependency order (stats -> ccy
   -> daycount -> rates -> forwards -> options -> risk -> positions ->
-  execution -> book -> microstructure -> example_defaults) anyway, for
-  readability.
+  execution -> book -> microstructure -> dqchecks -> example_defaults)
+  anyway, for readability.
 - `tests/lib/qunit.q` - vendored TimeStored qUnit framework (CC BY-NC-SA,
   non-commercial - keep the attribution header intact; see README's
   Licensing section before using this repo commercially).

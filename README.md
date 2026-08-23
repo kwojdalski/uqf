@@ -42,10 +42,11 @@ q).qexec.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 
 Each module loads into its own flat namespace after loading `src/init.q` -
 `.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
-`.qexec`, `.qbook`, `.qmicro`, `.qex` (see Layout below for which file maps
-to which namespace). Kept single-level throughout rather than nested under
-a shared parent (e.g. not `.q.options`) - multi-level `\d` namespace paths
-don't resolve under the PeachQ interpreter this repo also targets.
+`.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qex` (see Layout below for which
+file maps to which namespace). Kept single-level throughout rather than
+nested under a shared parent (e.g. not `.q.options`) - multi-level `\d`
+namespace paths don't resolve under the PeachQ interpreter this repo also
+targets.
 
 ## Layout
 
@@ -69,6 +70,12 @@ src/  (each file loads into its own flat namespace, shown in [])
                 vector-column shape execution.q/forwards.q expect
   microstructure.q  [.qmicro] LOB microstructure signals: book pressure,
                     microprice, order flow imbalance, VAMP, and more
+  dqchecks.q    [.qdqc] data quality / risk limit checks - per-entity
+                threshold checks (check_limit, and check_position_notional_limits/
+                check_ccy_exposure_limits built on it), market data sanity
+                (check_market_data_quality, check_stale_quotes), and
+                summarize_checks to flatten several checks into one
+                actionable "what needs attention" report
   example_defaults.q   [.qex] shared scaling constants (pip_size, size_unit,
                         size_row_drift) for scripts/*.q's synthetic data -
                         not consumed by any pricing/execution function
@@ -219,6 +226,23 @@ post-trade horizons), `eff_spread`, `slippage`, `fill_ratio`, `reject_ratio`,
 sweeping a given size - the blended fill price, the marginal/worst level
 touched, how much actually filled, and whether the book had enough depth).
 
+**dqchecks.q** - turns other modules' computations into an "is this
+actually fine?" report, mirroring `positions.q`'s `reconcile_trades`
+output shape (one row per entity/check, a `status` column, breaches
+sorted first) generalized beyond book-vs-reference reconciliation:
+`check_limit` (generic per-entity value-vs-configured-limit check, with
+`check_position_notional_limits`/`check_ccy_exposure_limits` as thin
+named wrappers over a position book/`ccy_exposure_in`'s own shape),
+`check_market_data_quality` (crossed books, outlier spreads - built on
+`microstructure.q`'s `spread_bps`), `check_stale_quotes`, and
+`summarize_checks` (flattens several already-run checks into one
+actionable, human-readable report). Deliberately doesn't overlap with
+`reconcile_trades` (book-vs-reference correctness is a different concern
+from threshold/sanity checks) or any other module's own validation
+(everywhere else in `src/*.q` throws immediately on a bad input; this
+module never throws for a business-level problem like a breached limit,
+since the point is surfacing many possible problems in one report).
+
 Currency pairs follow BASE/QUOTE quoting throughout (`rate` = 1 BASE in
 QUOTE units); `side` is `1` for long/buy, `-1` for short/sell;
 `pip_factor` is `10000` for most pairs and `100` for JPY crosses. All
@@ -234,7 +258,7 @@ q tests/run_tests.q
 
 This loads every module, loads every `test_*.q` file, runs the full qUnit
 suite, prints a pass/fail summary, and exits non-zero if anything failed -
-safe to wire into CI as-is. As of this writing: **326 tests, all passing**.
+safe to wire into CI as-is. As of this writing: **342 tests, all passing**.
 
 Every function is tested against at least one of: a published textbook
 reference value (e.g. Hull's Black-Scholes worked example for
