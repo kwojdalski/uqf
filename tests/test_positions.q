@@ -86,6 +86,35 @@ test_total_pnl_combines_realized_and_unrealized:{[t]
     expected:2000f+.qrisk.pnl[600000;1.1000;1.1100;1];
     .testutil.assertApprox[.qpos.total_pnl[b;`EURUSD;1.1100];expected;1e-6;"total = realized + mark-to-market on what's left open"]};
 
+test_apply_fills_folds_a_trades_table_in_time_order:{[t]
+    / env/schemas.q's .envschema.trades shape (trade_id/order_id/time/sym/
+    / side/trade_price/size/pip_factor) - deliberately out of time order
+    / here, to check apply_fills sorts before folding rather than trusting
+    / row order.
+    trades:([]
+        trade_id:1 2 3; order_id:1 2 3;
+        time:2026.01.01D09:00:00.200 2026.01.01D09:00:00.000 2026.01.01D09:00:00.100;
+        sym:`EURUSD`EURUSD`EURUSD;
+        side:-1 1 1;
+        trade_price:1.1050 1.1000 1.1020;
+        size:400000 1000000 200000f;
+        pip_factor:10000 10000 10000);
+    b:.qpos.apply_fills[.qpos.empty_book[];trades];
+    row:b`EURUSD;
+    / applied in time order: buy 1mm@1.1000, buy 200k@1.1020 (avg weighted),
+    / sell 400k@1.1050 (partial reduce) - same arithmetic as apply_fill's
+    / own weighted-average/partial-reduce tests, just via the folded path.
+    expected:.qpos.apply_fill[.qpos.apply_fill[.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];`EURUSD;200000;1.1020;1];`EURUSD;400000;1.1050;-1];
+    exp_row:expected`EURUSD;
+    .testutil.assertApprox[row`qty;exp_row`qty;1e-9;"apply_fills' final qty matches folding apply_fill by hand, in time order"];
+    .testutil.assertApprox[row`avg_price;exp_row`avg_price;1e-9;"apply_fills' final avg_price matches the hand-folded sequence"];
+    .testutil.assertApprox[row`realized_pnl;exp_row`realized_pnl;1e-6;"apply_fills' final realized_pnl matches the hand-folded sequence"]};
+
+test_apply_fills_on_an_empty_trades_table_is_a_noop:{[t]
+    trades:0#([] sym:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); time:`timestamp$());
+    b:.qpos.apply_fills[.qpos.empty_book[];trades];
+    .qunit.assertEmpty[b;"no trades -> book stays empty"]};
+
 test_ccy_legs_splits_pair_into_base_and_quote:{[t]
     legs:.qpos.ccy_legs[`EURAUD;1000000;1.6000];
     .qunit.assertEquals[exec ccy from legs;`EUR`AUD;"legs are base then quote"];
