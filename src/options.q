@@ -217,6 +217,18 @@ gk_rho_put:{[s;k;rd;rf;sigma;t]
     domestic_df:.qrates.df_cont[rd;t];
     neg (k*t*domestic_df*.qstats.ncdf[neg d2v])};
 
+/ Configurable search bracket/iteration cap for bisect_vol's fallback
+/ search - lo/hi should stay well outside any real-world vol (0.001% to
+/ 500%), wide enough that gk_price[lo] < price < gk_price[hi] always
+/ holds for a genuine premium. max_iter=200 over that bracket already
+/ gets sigma's precision down to (hi-lo)/2^200, far past float64 - the
+/ cap exists to bound worst-case work, not because convergence is in
+/ doubt. Override before calling if a narrower/wider bracket fits your
+/ instrument universe better, e.g. .qopt.BISECT_VOL_HI:2.0.
+BISECT_VOL_LO:0.00001;
+BISECT_VOL_HI:5.0;
+BISECT_VOL_MAX_ITER:200;
+
 / Private: bisection search used as a robust fallback for implied_vol when
 / Newton-Raphson stalls (vega ~ 0). gk_price is monotone increasing in
 / sigma, so bisection over a wide bracket always converges.
@@ -230,14 +242,29 @@ gk_rho_put:{[s;k;rd;rf;sigma;t]
 / @return sigma such that gk_price[...;sigma;...;is_call] ~ price
 / @eg .qopt.bisect_vol[0.03781082;1.10;1.12;0.045;0.02;0.75;1b]  -> 0.1 (approx)
 bisect_vol:{[price;s;k;rd;rf;t;is_call]
-    lo:0.00001; hi:5.0;
+    lo:BISECT_VOL_LO; hi:BISECT_VOL_HI;
     i:0;
-    while[i<200;
+    while[i<BISECT_VOL_MAX_ITER;
         mid:0.5*(lo+hi);
         mid_price:gk_price[s;k;rd;rf;mid;t;is_call];
         $[mid_price>price;hi:mid;lo:mid];
         i+:1];
     0.5*(lo+hi)};
+
+/ Configurable Newton-Raphson tuning for implied_vol - a 20% initial
+/ guess is a reasonable central starting point across FX vol regimes;
+/ price_tol/max_iter bound how precisely/how long NR is allowed to
+/ chase convergence before accepting whatever it has; vega_floor is the
+/ point below which NR's sigma step (diff%vega) would blow up, so it
+/ hands off to bisect_vol instead; sigma_floor keeps a single NR step
+/ from driving sigma negative or to exactly 0 (where vega is itself 0).
+/ Override before calling if your instruments need tighter/looser
+/ convergence, e.g. .qopt.IMPLIED_VOL_PRICE_TOL:1e-6 for faster, coarser fits.
+IMPLIED_VOL_INITIAL_SIGMA:0.20;
+IMPLIED_VOL_MAX_ITER:100;
+IMPLIED_VOL_PRICE_TOL:1e-10;
+IMPLIED_VOL_VEGA_FLOOR:1e-12;
+IMPLIED_VOL_SIGMA_FLOOR:0.0001;
 
 / Implied volatility via Newton-Raphson (vega as derivative), falling back
 / to bisection if vega collapses.
@@ -251,18 +278,18 @@ bisect_vol:{[price;s;k;rd;rf;t;is_call]
 / @return sigma such that gk_price[...;sigma;...;is_call] ~ price
 / @eg .qopt.implied_vol[.qopt.gk_call[1.10;1.12;0.045;0.02;0.12;0.75];1.10;1.12;0.045;0.02;0.75;1b]  -> 0.12
 implied_vol:{[price;s;k;rd;rf;t;is_call]
-    sigma:0.20;
+    sigma:IMPLIED_VOL_INITIAL_SIGMA;
     i:0;
     result:0n;
-    while[i<100;
+    while[i<IMPLIED_VOL_MAX_ITER;
         model_price:gk_price[s;k;rd;rf;sigma;t;is_call];
         diff:model_price-price;
-        if[(abs diff)<1e-10; result:sigma; i:100];
-        if[i<100;
+        if[(abs diff)<IMPLIED_VOL_PRICE_TOL; result:sigma; i:IMPLIED_VOL_MAX_ITER];
+        if[i<IMPLIED_VOL_MAX_ITER;
             vega_val:gk_vega[s;k;rd;rf;sigma;t];
-            $[vega_val<1e-12;
-                [result:bisect_vol[price;s;k;rd;rf;t;is_call]; i:100];
-                [sigma-:diff%vega_val; sigma:0.0001|sigma; i+:1]]]];
+            $[vega_val<IMPLIED_VOL_VEGA_FLOOR;
+                [result:bisect_vol[price;s;k;rd;rf;t;is_call]; i:IMPLIED_VOL_MAX_ITER];
+                [sigma-:diff%vega_val; sigma:IMPLIED_VOL_SIGMA_FLOOR|sigma; i+:1]]]];
     $[null result; bisect_vol[price;s;k;rd;rf;t;is_call]; result]};
 
 \d .
