@@ -76,6 +76,21 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Static checks for q traps that produce a WRONG ANSWER rather than an
+      # error - a lone `/` silently commenting out a whole file, a builtin
+      # used as a parameter name, a `where col=col` that matches every row.
+      # The q test suite cannot catch these: several of them made a file load
+      # "successfully" or a check report a failure that never happened.
+      # always_run because the rules scan every tracked .q file, not only the
+      # staged ones - a rule added today should flag a file touched last
+      # month.
+      - id: q-traps
+        name: Check q files for silent-failure traps
+        entry: python3 scripts/check_q_traps.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: q-tests
         name: Run qUnit tests for uqf
         entry: bash

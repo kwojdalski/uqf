@@ -27,7 +27,7 @@ spec_for:{[version;from_n;to_n]
 beforeNamespace_isolate:{[]
     setenv[`UQFSTATUSDIR;"build/test-status"];
     system"mkdir -p build/test-status";
-    `etl_coverage set 0#.qcov.init_ledger[];
+    .testutil.reset_coverage_ledger[];
     }
 
 setUp_fresh:{[]
