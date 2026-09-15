@@ -39,3 +39,45 @@ def test_credentials_are_not_in_the_default_settings():
     """
     s = Settings()
     assert s.user == "" and s.passwd == ""
+
+
+# --- process registry (F-04 fan-out) --------------------------------------
+
+
+def test_processes_default_to_empty():
+    """Empty, not a guessed list: the usage view then reports it has nothing
+    configured rather than showing an empty log as an idle fleet.
+    """
+    assert Settings().processes == ()
+
+
+def test_processes_parse_name_and_port(monkeypatch):
+    monkeypatch.setenv("UQF_FRONTEND_PROCESSES", "rdb1:6052,hdb1:6053")
+    procs = Settings.from_env().processes
+    assert [(p.name, p.host, p.port) for p in procs] == [
+        ("rdb1", "localhost", 6052),
+        ("hdb1", "localhost", 6053),
+    ]
+
+
+def test_processes_parse_an_explicit_host(monkeypatch):
+    monkeypatch.setenv("UQF_FRONTEND_PROCESSES", "rdb1:db.internal:6052")
+    p = Settings.from_env().processes[0]
+    assert (p.name, p.host, p.port) == ("rdb1", "db.internal", 6052)
+
+
+def test_processes_tolerate_whitespace_and_trailing_commas(monkeypatch):
+    monkeypatch.setenv("UQF_FRONTEND_PROCESSES", " rdb1:6052 , hdb1:6053 ,")
+    assert len(Settings.from_env().processes) == 2
+
+
+def test_a_malformed_process_entry_fails_loudly(monkeypatch):
+    monkeypatch.setenv("UQF_FRONTEND_PROCESSES", "rdb1")
+    with pytest.raises(ValueError, match="name:port or name:host:port"):
+        Settings.from_env()
+
+
+def test_a_non_integer_process_port_fails_loudly(monkeypatch):
+    monkeypatch.setenv("UQF_FRONTEND_PROCESSES", "rdb1:not-a-port")
+    with pytest.raises(ValueError, match="non-integer port"):
+        Settings.from_env()

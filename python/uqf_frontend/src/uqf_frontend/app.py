@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from uqf_frontend import catalog, coverage, queries
+from uqf_frontend import catalog, coverage, ops, queries
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
     CoverageIncomplete,
@@ -20,26 +20,35 @@ from uqf_frontend.errors import (
     GatewayReloading,
     GatewayUnavailable,
 )
+from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.models import (
     CatalogResponse,
     ColumnInfo,
+    ConnectionsResponse,
     CoverageRequirement,
     CoverageResponse,
     HealthResponse,
     IntervalOut,
+    OpsTableResponse,
     QueryRequest,
     QueryResponse,
     TableInfo,
+    UsageResponse,
 )
 
 
-def create_app(gateway: Gateway | None = None, settings: Settings | None = None) -> FastAPI:
-    """Build the app. Both dependencies are injectable so tests need no q
+def create_app(
+    gateway: Gateway | None = None,
+    settings: Settings | None = None,
+    fleet: Fleet | None = None,
+) -> FastAPI:
+    """Build the app. Every dependency is injectable so tests need no q
     process and no environment.
     """
     settings = settings or Settings.from_env()
     gateway = gateway or KolaGateway(settings)
+    fleet = fleet or KolaFleet(settings)
 
     app = FastAPI(
         title="uqf frontend API",
@@ -48,6 +57,7 @@ def create_app(gateway: Gateway | None = None, settings: Settings | None = None)
     )
     app.state.settings = settings
     app.state.gateway = gateway
+    app.state.fleet = fleet
 
     @app.exception_handler(FrontendError)
     async def _handle(_: Request, exc: FrontendError) -> JSONResponse:
@@ -88,6 +98,39 @@ def create_app(gateway: Gateway | None = None, settings: Settings | None = None)
                 for t in catalog.TABLES.values()
             ],
             operators=sorted(catalog.OPERATORS),
+        )
+
+    @app.get("/ops/queue", response_model=OpsTableResponse)
+    def ops_queue() -> OpsTableResponse:
+        """Pending and running queries on the gateway (F-02)."""
+        return OpsTableResponse(
+            rows=_rows(gateway.call(ops.QUEUE)), poll_seconds=ops.POLL_SECONDS["queue"]
+        )
+
+    @app.get("/ops/connections", response_model=ConnectionsResponse)
+    def ops_connections() -> ConnectionsResponse:
+        """Which backend handles the gateway has, and who is connected (F-03)."""
+        return ConnectionsResponse(
+            servers=_rows(gateway.call(ops.SERVERS)),
+            clients=_rows(gateway.call(ops.CLIENTS)),
+            poll_seconds=ops.POLL_SECONDS["connections"],
+        )
+
+    @app.get("/ops/usage", response_model=UsageResponse)
+    def ops_usage(limit: int = 500) -> UsageResponse:
+        """Fleet-wide query log, assembled here because none exists in q (F-04).
+
+        `unreachable` is part of the response rather than an error: one process
+        being down must not blank the view for the other nine.
+        """
+        capped = min(limit, settings.max_rows)
+        rows, unreachable = ops.merge_usage(fleet.per_process(ops.USAGE, capped))
+        return UsageResponse(
+            rows=rows[:capped],
+            row_count=min(len(rows), capped),
+            unreachable=unreachable,
+            processes_configured=len(fleet.processes),
+            poll_seconds=ops.POLL_SECONDS["usage"],
         )
 
     @app.get("/coverage", response_model=CoverageResponse)

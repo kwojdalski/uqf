@@ -95,3 +95,38 @@ class HealthResponse(BaseModel):
     ok: bool
     gateway: Literal["up", "reloading", "unreachable"]
     detail: str | None = None
+
+
+class OpsTableResponse(BaseModel):
+    """A raw operational table, plus the cadence the UI should poll it at.
+
+    The cadence is advisory and served rather than hardcoded in the client,
+    because F-10 makes polling the only mechanism and the right interval
+    depends on how fast the underlying state moves.
+    """
+
+    rows: list[dict[str, Any]]
+    poll_seconds: int
+
+
+class ConnectionsResponse(BaseModel):
+    servers: list[dict[str, Any]]
+    clients: list[dict[str, Any]]
+    poll_seconds: int
+
+
+class UsageResponse(BaseModel):
+    """The fleet-wide query log that q itself does not provide."""
+
+    rows: list[dict[str, Any]]
+    row_count: int
+    unreachable: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Processes that could not be reached. Reported rather than raised, so one "
+        "process being down does not blank the whole view",
+    )
+    processes_configured: int = Field(
+        description="0 means nothing is configured to fan out to - an empty log here means "
+        "unconfigured, not an idle fleet"
+    )
+    poll_seconds: int
