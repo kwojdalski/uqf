@@ -29,7 +29,7 @@ that a merge happened. Sources are `docs/drift-reports/`,
 | D4 | `src/*.q` flat; canonical splits into `foundation/ pricing/ portfolio/ execution/ market_data/ integrations/ examples/` | `blocked` | B-02 (what replaces `init.q`'s load order) and B-03 (do namespaces change with directories) are unanswered. Renaming without those answers would need redoing |
 | D5 | `tests/test_*.q` flat with `tests/run_tests.q`; canonical uses `tests/q/test_*.q`, `tests/q/run_unit.q`, `scripts/test.sh` dispatcher | `blocked` | Depends on D4's namespace answer, and on #61 (commit-time budget) for which lanes gate a commit |
 | D6 | Generated qDoc HTML committed under `docs/`; canonical regenerates into `build/docs/` | `closed` | Output retargeted to `build/docs/`, 15 generated files removed from git, `build/` ignored. **Also defused a `rm -rf docs` in `gen-docs.sh`** that would have deleted all 13 hand-written documents. GitHub Pages is not configured (404), so nothing was serving from `docs/` |
-| D7 | Per-package `pyproject.toml`/`uv.lock`; canonical consolidates to one root Python project | `blocked` | Forces `uqf_client`, `torq_orchestrator` and `uqf_frontend` onto one dependency resolution — a real decision, not a move |
+| D7 | Per-package `pyproject.toml`/`uv.lock`; canonical consolidates to one root Python project | `closed` | uv **workspace** at the repo root: one lockfile, one `.venv` (1.1 GB → 383 MB), shared ruff/pytest config, ruff pinned to pre-commit's own version. Members keep their names and the `torq-demo` script. Safe by inspection — zero cross-package imports, every shared constraint an open lower bound |
 | D8 | `docs/torq-demo.md`; canonical supersedes with `docs/guides/torq-demo.md` | `blocked` | Deliberately deferred. Moving it alone creates a single-file `docs/guides/` and costs ~24 reference edits, for no benefit until the taxonomy is settled — J-05: what belongs in `guides/` vs `architecture/` vs `reference/` vs `decisions/` vs `integrations/` |
 | D9 | No `src/etl/` at all; canonical has `core/` (14 files) and `workers/` (7) | `blocked` | Reimplementation, not a port. Gated on F-04 and the ETL open questions (#62) |
 | D10 | No `python/uqf_airflow_provider/`; canonical has the full package | `blocked` | #55 (F-21) must pick the status mechanism first |
@@ -41,20 +41,31 @@ that a merge happened. Sources are `docs/drift-reports/`,
 ## Counters
 
 ```
-closed   3     D1, D2, D6
-open     0
-blocked  8     D4 D5 D7 D8 D9 D10 D11 D14
+closed   4     D1, D2, D6, D7
+open     2     D4, D5      (unblocked by the src/ layout decision)
+blocked  6     D8 D9 D10 D11 D14
 wontfix  3     D3, D12, D13
 ```
 
+Eight design decisions were taken on 2026-09-15, which moved D4 and D5 from
+`blocked` to `open` and closed D7. See
+`~/.claude/plans/sprightly-brewing-catmull.md` for the full record; the two
+that bear on this ledger:
+
+- **`src/` adopts domain directories, namespaces stay unchanged.** The split
+  is organisational only: the dependency graph has a genuine cycle
+  (`pricing/forwards.q` ↔ `execution/execution.q`) and `market_data/dqchecks.q`
+  reaches into three candidate groups, so no directory layering is implied.
+- **Python consolidates to one root project**, closing D7 above.
+
 ## The ceiling has been reached
 
-**`open` is now zero.** Every remaining row needs something this tree cannot
-produce:
+**`open` is 2, both newly actionable.** D4 and D5 are the `src/` and
+`tests/q/` moves, now unblocked. Every other remaining row needs something
+this tree cannot produce:
 
 | Waiting on | Rows |
 |---|---|
-| The `src/` namespace decision — B-02, B-03 | D4, D5 |
 | A mechanism or audience decision — #55, #60, F-04 | D9, D10, D11 |
 | A docs taxonomy decision — J-05 | D8 |
 | A packaging decision — one root Python project | D7 |
