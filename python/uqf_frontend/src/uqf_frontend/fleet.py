@@ -45,6 +45,16 @@ class Fleet(Protocol):
 
     def per_process(self, program: str, *args: Any) -> list[ProcessResult]: ...
 
+    def probe(self, host: str, port: int, program: str, *args: Any) -> ProcessResult:
+        """Run a program against an arbitrary host and port.
+
+        Distinct from :meth:`one`, which addresses a *configured* process by
+        name. Fleet health probes what ``process.csv`` declares, which is a
+        wider set than this package configures - so it needs to reach an
+        address rather than a name.
+        """
+        ...
+
 
 class KolaFleet:
     """A :class:`Fleet` over real IPC connections, one per process."""
@@ -83,6 +93,23 @@ class KolaFleet:
     def per_process(self, program: str, *args: Any) -> list[ProcessResult]:
         return [self.one(name, program, *args) for name in self.processes]
 
+    def probe(self, host: str, port: int, program: str, *args: Any) -> ProcessResult:
+        from uqf_frontend.gateway import KolaGateway
+
+        label = f"{host}:{port}"
+        at = Settings(
+            host=host,
+            port=port,
+            user=self._settings.user,
+            passwd=self._settings.passwd,
+            timeout=self._settings.timeout,
+            max_rows=self._settings.max_rows,
+        )
+        try:
+            return ProcessResult(process=label, ok=True, value=KolaGateway(at).call(program, *args))
+        except Exception as exc:
+            return ProcessResult(process=label, ok=False, error=str(exc))
+
 
 class FakeFleet:
     """An in-process :class:`Fleet` for tests."""
@@ -93,6 +120,8 @@ class FakeFleet:
         #: test can vary the answer by watermark.
         self.responses: dict[str, Any] = responses or {}
         self.calls: list[tuple[str, str, tuple[Any, ...]]] = []
+        #: address ("host:port") or bare port -> value / Exception, for probe()
+        self.probes: dict[Any, Any] = {}
 
     @property
     def processes(self) -> tuple[str, ...]:
@@ -109,3 +138,14 @@ class FakeFleet:
 
     def per_process(self, program: str, *args: Any) -> list[ProcessResult]:
         return [self.one(name, program, *args) for name in self.processes]
+
+    def probe(self, host: str, port: int, program: str, *args: Any) -> ProcessResult:
+        """Answers by ``host:port``, so a test can stage a specific address."""
+        label = f"{host}:{port}"
+        self.calls.append((label, program, args))
+        value = self.probes.get(label, self.probes.get(port))
+        if value is None:
+            return ProcessResult(process=label, ok=False, error="connection refused")
+        if isinstance(value, Exception):
+            return ProcessResult(process=label, ok=False, error=str(value))
+        return ProcessResult(process=label, ok=True, value=value)

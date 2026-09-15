@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 DEFAULT_MAX_ROWS = 10_000
 
@@ -66,6 +67,14 @@ class Settings:
     #: cannot usefully render more, and an unbounded select against an HDB
     #: is how a demo process runs out of memory.
     max_rows: int = DEFAULT_MAX_ROWS
+    #: TorQ's generated process.csv - the declared process set for fleet
+    #: health (F-01). None means fleet health reports itself unconfigured
+    #: rather than returning an empty fleet.
+    process_csv: Path | None = None
+    #: Base port the {KDBBASEPORT} placeholders in process.csv resolve
+    #: against. Must match whatever the stack was started with, or every
+    #: probe targets the wrong port.
+    base_port: int = 6050
     #: Processes to fan out to for the per-process query log (F-04). Empty by
     #: default: the fleet view then reports that it has nothing configured,
     #: rather than silently showing an empty log as if the fleet were idle.
@@ -87,6 +96,8 @@ class Settings:
             timeout=_int_env("UQF_FRONTEND_TIMEOUT", cls.timeout),
             max_rows=_int_env("UQF_FRONTEND_MAX_ROWS", cls.max_rows),
             processes=_parse_processes(os.environ.get("UQF_FRONTEND_PROCESSES", "")),
+            process_csv=_path_env("UQF_FRONTEND_PROCESS_CSV"),
+            base_port=_int_env("UQF_FRONTEND_BASE_PORT", cls.base_port),
         )
 
 
@@ -98,3 +109,8 @@ def _int_env(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from None
+
+
+def _path_env(name: str) -> Path | None:
+    raw = os.environ.get(name)
+    return Path(raw).expanduser() if raw else None

@@ -12,13 +12,14 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from uqf_frontend import catalog, coverage, ops, queries
+from uqf_frontend import catalog, coverage, health, ops, procfile, queries
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
     CoverageIncomplete,
     FrontendError,
     GatewayReloading,
     GatewayUnavailable,
+    ValidationFailed,
 )
 from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
@@ -28,9 +29,11 @@ from uqf_frontend.models import (
     ConnectionsResponse,
     CoverageRequirement,
     CoverageResponse,
+    FleetHealthResponse,
     HealthResponse,
     IntervalOut,
     OpsTableResponse,
+    ProcessHealthOut,
     QueryRequest,
     QueryResponse,
     TableInfo,
@@ -74,7 +77,10 @@ def create_app(
         )
 
     @app.get("/health", response_model=HealthResponse)
-    def health() -> HealthResponse:
+    def gateway_health() -> HealthResponse:
+        # Not named `health`: that would shadow the health module imported
+        # above, and health.check() in ops_processes would resolve to this
+        # function instead. ruff's F811 caught it.
         try:
             gateway.call(queries.PING)
         except GatewayReloading as exc:
@@ -131,6 +137,37 @@ def create_app(
             unreachable=unreachable,
             processes_configured=len(fleet.processes),
             poll_seconds=ops.POLL_SECONDS["usage"],
+        )
+
+    @app.get("/ops/processes", response_model=FleetHealthResponse)
+    def ops_processes() -> FleetHealthResponse:
+        """Fleet health for every process process.csv declares (F-01).
+
+        Liveness comes from an IPC probe rather than OS process inspection,
+        so the same mechanism works whether or not the process is on this
+        machine - see health.py for why that matters to F-22.
+        """
+        if settings.process_csv is None:
+            raise ValidationFailed(
+                "fleet health needs UQF_FRONTEND_PROCESS_CSV set to TorQ's generated "
+                "process.csv; without it the declared process set is unknown"
+            )
+        try:
+            declared = procfile.read(settings.process_csv, settings.base_port)
+        except FileNotFoundError as exc:
+            raise ValidationFailed(str(exc)) from None
+
+        checked = health.check(fleet, declared)
+        groups: dict[str, int] = {}
+        for proc in declared:
+            groups[proc.group] = groups.get(proc.group, 0) + 1
+
+        return FleetHealthResponse(
+            summary=health.summarise(checked),
+            processes=[ProcessHealthOut(**vars(h)) for h in checked],
+            groups=dict(sorted(groups.items())),
+            source=str(settings.process_csv),
+            poll_seconds=ops.POLL_SECONDS["processes"],
         )
 
     @app.get("/coverage", response_model=CoverageResponse)

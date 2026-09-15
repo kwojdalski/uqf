@@ -1,7 +1,7 @@
 # uqf-frontend
 
-Backend-for-frontend over the uqf TorQ gateway. Implements phases **B0**,
-**B1** and **B2** of
+Backend-for-frontend over the uqf TorQ gateway. Implements phases **B0**
+through **B3** of
 [`docs/frontend-requirements.md`](../../docs/frontend-requirements.md).
 
 ## What this is
@@ -42,6 +42,10 @@ rather than assumed:
 - The lambda must be sent as a **char vector**, meaning `bytes` from Python.
   kola maps `str` to a q *symbol*, and a symbol at the head of the query list
   makes `value` try to resolve a variable named the entire lambda text.
+- A **niladic** `{[] ...}` sent with no arguments makes q return the *function
+  itself*, which kola cannot deserialise. Such a program must be a plain
+  expression. This bit twice (`queries.PING`, `ops.IDENTITY`), so
+  `test_q_programs.py` now asserts no program is a bare niladic lambda.
 
 ### A naming trap worth knowing
 
@@ -63,6 +67,7 @@ scalar-from-vector. This has cost this repository three debugging sessions
 | `GET /ops/queue` | Pending and running gateway queries (**F-02**) |
 | `GET /ops/connections` | Registered backend handles and connected clients (**F-03**) |
 | `GET /ops/usage` | Fleet-wide query log, assembled here because q has none (**F-04**) |
+| `GET /ops/processes` | Fleet health for every process `process.csv` declares (**F-01**) |
 | `POST /query` | Validated, parameterised table query, tier-routed (**F-07**, **F-08**) |
 
 Errors carry a `transient` flag so a UI can tell an EOD window or a timeout
@@ -100,6 +105,9 @@ Configuration is environment-only, so credentials stay server-side
 | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty |
 | `UQF_FRONTEND_TIMEOUT` | `30` |
 | `UQF_FRONTEND_MAX_ROWS` | `10000` |
+| `UQF_FRONTEND_PROCESSES` | empty — `rdb1:6052,hdb1:6053` or `name:host:port` |
+| `UQF_FRONTEND_PROCESS_CSV` | unset — TorQ's generated `process.csv` |
+| `UQF_FRONTEND_BASE_PORT` | `6050` — what `{KDBBASEPORT}` resolves to |
 
 A malformed numeric value fails at startup rather than falling back to a
 default — the same posture **E-14** takes on the q side.
@@ -191,6 +199,52 @@ default — so the view says it has nothing configured rather than lying.
 - **`.usage.flushtime` defaults to `0D03` — three hours, not the one day the
   requirements state.** Measured on a live process. A capture pipeline sized
   for a day would lose most of the log.
+
+## Fleet health (B3)
+
+`GET /ops/processes` reports every process `process.csv` declares, probed for
+liveness. The declared set comes from the **generated** `process.csv` — set
+`UQF_FRONTEND_PROCESS_CSV`, plus `UQF_FRONTEND_BASE_PORT` so `{KDBBASEPORT}+N`
+resolves to the ports the stack actually started on.
+
+### Why this wasn't blocked on F-22
+
+F-01 describes liveness as shelling out to `torq.sh` and inspecting **local OS
+processes**, and F-22 asks whether this is for the local demo or a
+production-shaped deployment — which makes B3 look gated.
+
+Liveness here comes from an **IPC probe** instead, which dissolves most of
+that gate: it doesn't shell out per request, and it works whether or not the
+process is on this machine. A process that answers IPC is up in the only
+sense a frontend cares about.
+
+What a probe *cannot* distinguish is a process that was never started from
+one that started and crashed — both simply don't answer. That needs OS or
+supervisor knowledge, and is called out rather than guessed.
+
+### Three states, not two
+
+- **up** — answered, with its self-reported pid, port, procname and proctype.
+- **down** — didn't answer. `down_unexpected` excludes `startwithall=0`
+  processes, since those being down is configured behaviour rather than a
+  fault. `tap1` is exactly that case, and counting it would make the headline
+  number permanently wrong.
+- **undetermined** — the port placeholder couldn't be resolved, so liveness
+  was never testable. Reporting that as "down" would be a guess.
+
+### The failure a port check misses
+
+A process answering the right port may be *the wrong process*. Health
+compares self-reported `procname` against what `process.csv` declares:
+
+```
+port 6053 is answering as 'WRONG1', but process.csv declares 'hdb1' there
+```
+
+Verified live. A stale process squatting a port looks perfectly healthy to
+anything that only asks whether something is listening. `unknown` (a plain q
+process with no `.proc`) is treated as absence of information, not evidence
+of the wrong process.
 
 ## Usage capture (F-13)
 
