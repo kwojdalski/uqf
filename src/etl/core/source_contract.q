@@ -238,9 +238,9 @@ declaration:{[source]
 / means an empty table validates the same way a populated one does - which
 / matters because a fixture may legitimately be empty, and a source may
 / legitimately return no rows for a window.
-type_chars:{[t] exec t from 0!meta t}
+type_chars:{[tbl] exec t from 0!meta tbl}
 
-column_names:{[t] exec c from 0!meta t}
+column_names:{[tbl] exec c from 0!meta tbl}
 
 / Validate a table against a source's declaration (E-12).
 / .
@@ -254,13 +254,13 @@ column_names:{[t] exec c from 0!meta t}
 / type, is precisely the silent breakage worth failing on - a missing column
 / reads as a null in most q code rather than as an error.
 / @param source a registered source name
-/ @param t a table to check
+/ @param tbl a table to check
 / @return 1b when the table satisfies the declaration
 / @throws error naming every missing field and every type mismatch at once
-validate:{[source;t]
+validate:{[source;tbl]
     decl:declaration source;
-    present:column_names t;
-    chars:type_chars t;
+    present:column_names tbl;
+    chars:type_chars tbl;
     missing:decl[`fields] where not decl[`fields] in present;
     / Report missing fields AND type mismatches together. Reporting only the
     / first class means fixing the columns, re-running, and only then
@@ -554,20 +554,20 @@ coercers:(!). flip (
 / entirely means the format changed and the window must not be published.
 / That judgement is the worker's, not this layer's.
 / @param source a registered source name
-/ @param t a table whose declared fields hold text
+/ @param tbl a table whose declared fields hold text
 / @return dict of `table (coerced) and `failures (field -> count)
 / @throws error when a declared type has no coercer
-coerce:{[source;t]
+coerce:{[source;tbl]
     decl:declaration source;
-    present:column_names t;
+    present:column_names tbl;
     fields:decl[`fields] where decl[`fields] in present;
     chars:(decl`types) (decl`fields)?fields;
     unknown:distinct chars where not chars in key coercers;
     if[count unknown;
         '"coerce: no coercer for declared type(s) \"",unknown,"\" in ",string[source],
          " - add one to .qsrc.coercers deliberately rather than casting privately (E-05)"];
-    results:{[t;f;c] .qcoer.coerce_column[coercers c;t f]}[t;;] .' flip (fields;chars);
-    coerced:t;
+    results:{[tb;f;c] .qcoer.coerce_column[coercers c;tb f]}[tbl;;] .' flip (fields;chars);
+    coerced:tbl;
     coerced:{[tb;f;r] @[tb;f;:;r`values]}/[coerced;fields;results];
     `table`failures!(coerced;fields!results[;`failed])}
 
@@ -668,12 +668,12 @@ source_bounds:{[decl;range_from;range_to]
 /     There is no instant to compare against a range, and a source emitting a
 /     wall-clock time its own calendar never had means the declared zone is
 /     wrong - which is a contract breach, not a windowing question.
-narrow_to_utc:{[decl;t;range_from;range_to]
+narrow_to_utc:{[decl;tbl;range_from;range_to]
     zone:decl`time_zone;
-    if[`UTC~zone; :t];
+    if[`UTC~zone; :tbl];
     f:decl`time_field;
-    local_ts:t f;
-    if[0=count local_ts; :t];
+    local_ts:tbl f;
+    if[0=count local_ts; :tbl];
     cs:local_candidates[zone;local_ts];
     nvalid:count each cs;
     if[any 0=nvalid;
@@ -685,7 +685,7 @@ narrow_to_utc:{[decl;t;range_from;range_to]
     / Every surviving row now has exactly one reading, so the conversion is
     / unambiguous and the half-open bound is applied in UTC - the direction
     / where the arithmetic cannot double-count or skip.
-    kept:t where in_range;
+    kept:tbl where in_range;
     ![kept;();0b;(enlist f)!enlist enlist first each cs where in_range]}
 
 / Private: apply the window to a fixture, on its declared time_field.

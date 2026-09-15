@@ -178,7 +178,7 @@ library with no processes/IPC/tables).
   ... `\d .` block, so each file lands in its own flat namespace rather
   than sharing one (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`,
   `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
-  `.qex` - `src/integrations/data.q` is `.qdata`, out of scope for this library, see
+  `.qexdef` - `src/integrations/data.q` is `.qdata`, out of scope for this library, see
   below). Every one of these is single-level (not nested under a shared
   `.q` parent) for the same portability reason as the rest of this list -
   see the PeachQ multi-level `\d` gotcha further down. A function calling

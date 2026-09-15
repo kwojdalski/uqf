@@ -37,7 +37,7 @@ n_rows:$[0<count .z.x; "J"$first .z.x; default_n_rows];
 
 / Illustrative, approximately realistic EURUSD spot rate (not live market
 / data). tick_scale is the price columns' unit relative to the quoted rate
-/ (1 = hold the rate directly, as a float); .qex.pip_size (one pip, 0.0001 -
+/ (1 = hold the rate directly, as a float); .qexdef.pip_size (one pip, 0.0001 -
 / src/examples/example_defaults.q) scaled by tick_scale gives a level step of one
 / pip in that same unit, matching typical eFX top-of-book spacing.
 / row_drift is a small, sub-pip synthetic drift between the demo's rows,
@@ -45,17 +45,17 @@ n_rows:$[0<count .z.x; "J"$first .z.x; default_n_rows];
 / never reads as another price level.
 eurusd_spot:1.0850;
 tick_scale:1;
-pip_size:.qex.pip_size*tick_scale;
+pip_size:.qexdef.pip_size*tick_scale;
 row_drift:pip_size%10;
 base:tick_scale*eurusd_spot;
 
-/ Size levels in clean round millions (.qex.size_unit, src/examples/example_defaults.q)
+/ Size levels in clean round millions (.qexdef.size_unit, src/examples/example_defaults.q)
 / - typical order-of-magnitude for eFX top-of-book depth on a major pair.
 / ask starts a tenth of a level below bid so bid/ask sizes stay visually
-/ distinct. .qex.size_row_drift is a small per-row jitter (1% of a level)
+/ distinct. .qexdef.size_row_drift is a small per-row jitter (1% of a level)
 / so rows aren't identical, without blurring the clean million-level pattern.
-size_unit:.qex.size_unit;
-size_row_drift:.qex.size_row_drift;
+size_unit:.qexdef.size_unit;
+size_row_drift:.qexdef.size_row_drift;
 
 / Build one prefix's worth of zero-padded, per-level columns as a single
 / dict col_name!column_vector, e.g. bid_px_00!... bid_px_09!... . row_step

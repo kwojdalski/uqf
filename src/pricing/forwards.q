@@ -629,12 +629,12 @@ ts_col:`ts;
 / timestamp column, or reordering will silently stop matching.
 col_precedence:`ts`sym;
 
-/ Private: move col_precedence's columns to the front of t, in that
-/ order, if every one of them is present in t - otherwise returns t
+/ Private: move col_precedence's columns to the front of tbl, in that
+/ order, if every one of them is present in tbl - otherwise returns tbl
 / unchanged.
-apply_col_precedence:{[t]
-    if[not all col_precedence in cols t; :t];
-    (col_precedence,(cols t) except col_precedence)#t};
+apply_col_precedence:{[tbl]
+    if[not all col_precedence in cols tbl; :tbl];
+    (col_precedence,(cols tbl) except col_precedence)#tbl};
 
 / Markout at one or more horizons around a single trade on a synthetic
 / cross pair - the cross_book_at-based analogue of execution.q's

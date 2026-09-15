@@ -52,14 +52,14 @@ INFO ("reference_data - %1 pairs seeded";count .envschema.reference_data);
 
 / ==== market_data: a three-pair order-book snapshot ====
 / Same shape/scaling as the other example scripts' mk_book -
-/ .qex.pip_size/.qex.size_unit (src/examples/example_defaults.q). EURPLN is here
+/ .qexdef.pip_size/.qexdef.size_unit (src/examples/example_defaults.q). EURPLN is here
 / (not just EURUSD/AUDUSD) specifically so ccy_exposure below has a
 / PLN quote to bridge through when it revalues into USD.
 mk_book_row:{[spot]
     levels:til 3;
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(
-        spot-.qex.pip_size*levels;.qex.size_unit*1+levels;
-        (spot+.qex.pip_size)+.qex.pip_size*levels;.qex.size_unit*1+levels)};
+        spot-.qexdef.pip_size*levels;.qexdef.size_unit*1+levels;
+        (spot+.qexdef.pip_size)+.qexdef.pip_size*levels;.qexdef.size_unit*1+levels)};
 .envschema.market_data,:([] ts:3#t0; sym:pairs),'(mk_book_row each 1.0850 0.6550 4.2500);
 INFO ("market_data - %1 rows seeded";count .envschema.market_data);
 

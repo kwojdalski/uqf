@@ -14,25 +14,25 @@
 / ordering is the caller's responsibility (derive_level_groups builds that
 / order automatically from a naming convention; sort by hand otherwise).
 / Columns not mentioned in any group pass through untouched.
-/ @param t the source table
+/ @param tbl the source table
 / @param level_groups dict target_col!ordered_source_cols - one entry per
 /   group to fold, source columns listed in the desired fold order
-/ @return t with each group's source columns replaced by one target_col
-/ @eg .qbook.fold_level_columns[t;(enlist `bid_prices)!(enlist `bid0`bid1)]
-fold_level_columns:{[t;level_groups]
+/ @return tbl with each group's source columns replaced by one target_col
+/ @eg .qbook.fold_level_columns[tbl;(enlist `bid_prices)!(enlist `bid0`bid1)]
+fold_level_columns:{[tbl;level_groups]
     target_cols:(key level_groups),();
     i:0;
     while[i<count target_cols;
         target:target_cols i;
         source_cols:(level_groups target),();
-        col_vectors:{[tbl;c] tbl c}[t;] each source_cols;
+        col_vectors:{[tbl;c] tbl c}[tbl;] each source_cols;
         folded:flip col_vectors;
         new_col_table:flip (enlist target)!enlist folded;
-        t:t,'new_col_table;
+        tbl:tbl,'new_col_table;
         drop_cols:source_cols except enlist target;
-        if[count drop_cols; t:![t;();0b;drop_cols]];
+        if[count drop_cols; tbl:![tbl;();0b;drop_cols]];
         i+:1];
-    t};
+    tbl};
 
 / Private: true if s starts with prefix - a plain substring compare, not
 / `like`, since `like`'s "_" wildcard would misfire on prefixes such as
@@ -97,29 +97,29 @@ derive_level_groups:{[col_names;prefix_targets]
         i+:1];
     targets!source_lists};
 
-/ Cast the named columns of t from string (cells are char vectors) to
+/ Cast the named columns of tbl from string (cells are char vectors) to
 / symbol. A column already type 11h is left untouched, so re-running this
 / is idempotent. Uses `$` directly on the whole column (it maps over each
 / char-vector cell automatically) rather than `string` first - see
 / kdb-q-conventions' string-vs-symbol gotcha.
-/ @param t the table (already relevelled, if applicable)
+/ @param tbl the table (already relevelled, if applicable)
 / @param sym_cols explicit list of column names to cast to symbol
-/ @return t with sym_cols cast to symbol
-/ @eg .qbook.symbolize_columns[t;`sym`side]
-symbolize_columns:{[t;sym_cols]
+/ @return tbl with sym_cols cast to symbol
+/ @eg .qbook.symbolize_columns[tbl;`sym`side]
+symbolize_columns:{[tbl;sym_cols]
     sym_cols:sym_cols,();
     i:0;
     while[i<count sym_cols;
         col:sym_cols i;
-        if[11h<>type t col; t:@[t;col;:;`$ t col]];
+        if[11h<>type tbl col; tbl:@[tbl;col;:;`$ tbl col]];
         i+:1];
-    t};
+    tbl};
 
-/ Private: true if column col of t is a "string" column - its cells are
+/ Private: true if column col of tbl is a "string" column - its cells are
 / char vectors (type 10h each), not a symbol column. The column as a
 / whole is type 0h (a general list of char vectors), not 10h itself -
 / same gotcha as ccy_to_str.
-is_string_column:{[t;col] (count t col) and all 10h=type each t col};
+is_string_column:{[tbl;col] (count tbl col) and all 10h=type each tbl col};
 
 / Candidate identifier-like string columns that are LIKELY mis-typed and
 / should be symbols - advisory only, never applied automatically; run
@@ -129,21 +129,21 @@ is_string_column:{[t;col] (count t col) and all 10h=type each t col};
 / count. Only run this on tables/columns you don't already know are large
 / free text - `distinct` is pathologically slow on huge, high-cardinality
 / vectors under the PeachQ interpreter used for local dev in this repo.
-/ @param t the table to inspect
+/ @param tbl the table to inspect
 / @param allowlist column names always flagged when present and string-typed, e.g. `sym`side`exchange`venue`ccy
 / @param cardinality_ratio flag a string column when (distinct count / row count) is below this ratio
 / @return list of column names likely to be mis-typed symbol columns
-/ @eg .qbook.candidate_symbol_columns[t;`sym`side;0.1]
-candidate_symbol_columns:{[t;allowlist;cardinality_ratio]
+/ @eg .qbook.candidate_symbol_columns[tbl;`sym`side;0.1]
+candidate_symbol_columns:{[tbl;allowlist;cardinality_ratio]
     allowlist:allowlist,();
-    all_cols:cols t;
-    row_count:count t;
-    is_candidate:{[t;allowlist;cardinality_ratio;row_count;col]
-        if[not is_string_column[t;col]; :0b];
+    all_cols:cols tbl;
+    row_count:count tbl;
+    is_candidate:{[tbl;allowlist;cardinality_ratio;row_count;col]
+        if[not is_string_column[tbl;col]; :0b];
         if[col in allowlist; :1b];
         if[row_count=0; :0b];
-        distinct_ratio:(count distinct t col)%row_count;
-        distinct_ratio<cardinality_ratio}[t;allowlist;cardinality_ratio;row_count;];
+        distinct_ratio:(count distinct tbl col)%row_count;
+        distinct_ratio<cardinality_ratio}[tbl;allowlist;cardinality_ratio;row_count;];
     all_cols where is_candidate each all_cols};
 
 / Fix an incorrectly-ingested wide order book table in one call: folds each
@@ -151,14 +151,14 @@ candidate_symbol_columns:{[t;allowlist;cardinality_ratio]
 / then casts sym_cols from string to symbol (symbolize_columns). Does not
 / guess/auto-apply candidate_symbol_columns - detection is a separate,
 / explicitly-invoked helper the caller consults first.
-/ @param t the incorrectly-shaped source table
+/ @param tbl the incorrectly-shaped source table
 / @param level_groups dict target_col!ordered_source_cols (already
 /   resolved - run derive_level_groups first, or build it by hand)
 / @param sym_cols explicit list of column names to cast string->symbol
 / @return the corrected table
-/ @eg .qbook.book_from_wide_levels[t;.qbook.derive_level_groups[cols t;prefix_targets];`sym`side]
-book_from_wide_levels:{[t;level_groups;sym_cols]
-    folded:fold_level_columns[t;level_groups];
+/ @eg .qbook.book_from_wide_levels[tbl;.qbook.derive_level_groups[cols tbl;prefix_targets];`sym`side]
+book_from_wide_levels:{[tbl;level_groups;sym_cols]
+    folded:fold_level_columns[tbl;level_groups];
     symbolize_columns[folded;sym_cols]};
 
 \d .

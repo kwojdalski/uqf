@@ -69,19 +69,19 @@ numeric_chars:".-+eE0123456789"
 / than correcting it. It is stated explicitly here anyway, because a reader
 / should not have to know that to trust the function, and because a future
 / build changing it would otherwise change this function's meaning silently.
-/ @param s the text to coerce
+/ @param str the text to coerce
 / @return the float, or 0n when the text is empty or not numeric
 / @eg .qcoer.to_float["1.0842"]  ->  1.0842
 / @eg .qcoer.to_float["1,0842"]  ->  1.0842
 / @eg .qcoer.to_float[""]        ->  0n
-to_float:{[s]
-    t:trim s;
-    if[0=count t; :0n];
+to_float:{[str]
+    trimmed:trim str;
+    if[0=count trimmed; :0n];
     / a decimal comma, only when there is no dot - "1,234.56" is a thousands
     / separator and this layer deliberately does NOT guess at those, because
     / "1,234" is ambiguous between 1234 and 1.234 and no rule is safe.
-    normalised:$[(any t=",") and not any t="."; ssr[t;",";"."]; t];
-    if[any t=","; if[any t="."; :0n]];
+    normalised:$[(any trimmed=",") and not any trimmed="."; ssr[trimmed;",";"."]; trimmed];
+    if[any trimmed=","; if[any trimmed="."; :0n]];
     if[not all normalised in numeric_chars; :0n];
     v:"F"$normalised;
     / "F"$ on garbage also gives 0n, so this is belt-and-braces rather than
@@ -90,11 +90,11 @@ to_float:{[s]
     v}
 
 / Coerce text to a long, mapping empty to null rather than zero.
-to_long:{[s]
-    t:trim s;
-    if[0=count t; :0Nj];
-    if[not all t in numeric_chars; :0Nj];
-    "J"$t}
+to_long:{[str]
+    trimmed:trim str;
+    if[0=count trimmed; :0Nj];
+    if[not all trimmed in numeric_chars; :0Nj];
+    "J"$trimmed}
 
 / ------------------------------------------------------------- TIMESTAMP
 
@@ -113,14 +113,14 @@ to_long:{[s]
 / @return the timestamp, or 0Np when empty, malformed, or date-only
 / @eg .qcoer.to_timestamp["2026-09-15T09:30:00"]  ->  2026.09.15D09:30:00
 / @eg .qcoer.to_timestamp["2026-09-15"]           ->  0Np
-to_timestamp:{[s]
-    t:trim s;
-    if[0=count t; :0Np];
-    if[is_date_only t; :0Np];
+to_timestamp:{[str]
+    trimmed:trim str;
+    if[0=count trimmed; :0Np];
+    if[is_date_only trimmed; :0Np];
     / ISO uses "-" between date parts and "T" before the time; q uses "." and
     / "D". Normalise the separators rather than branching on format, so a
     / mixed source does not need two code paths.
-    normalised:ssr[ssr[t;"T";"D"];"-";"."];
+    normalised:ssr[ssr[trimmed;"T";"D"];"-";"."];
     @[{"P"$x};normalised;{0Np}]}
 
 / Is this text a date with no time part?
@@ -129,11 +129,11 @@ to_timestamp:{[s]
 / timestamp" is a question worth answering explicitly, and because
 / to_timestamp's refusal is otherwise indistinguishable from a parse
 / failure.
-is_date_only:{[s]
-    t:trim s;
-    if[0=count t; :0b];
+is_date_only:{[str]
+    trimmed:trim str;
+    if[0=count trimmed; :0b];
     / no time separator at all, and short enough to be just a date
-    (not any t in "TD ") and 10>=count t}
+    (not any trimmed in "TD ") and 10>=count trimmed}
 
 / Widen a date-only value to midnight, DELIBERATELY and visibly.
 / .
@@ -141,10 +141,10 @@ is_date_only:{[s]
 / correct for it" is a statement in the source declaration rather than an
 / accident of q's casting rules. If intraday ordering matters for the
 / dataset, this is the wrong function and the source needs a real timestamp.
-to_date_as_midnight:{[s]
-    t:trim s;
-    if[0=count t; :0Np];
-    d:@[{"D"$x};ssr[t;"-";"."];{0Nd}];
+to_date_as_midnight:{[str]
+    trimmed:trim str;
+    if[0=count trimmed; :0Np];
+    d:@[{"D"$x};ssr[trimmed;"-";"."];{0Nd}];
     $[null d; 0Np; `timestamp$d]}
 
 / ---------------------------------------------------------------- SYMBOL
@@ -165,18 +165,18 @@ to_date_as_midnight:{[s]
 / q behaviour and should not be cited as doing so.
 / @eg .qcoer.to_symbol["EURUSD "]  ->  `EURUSD
 / @eg .qcoer.to_symbol[" eurusd"]  ->  `EURUSD
-to_symbol:{[s]
-    t:trim s;
-    if[0=count t; :` ];
-    `$upper t}
+to_symbol:{[str]
+    trimmed:trim str;
+    if[0=count trimmed; :` ];
+    `$upper trimmed}
 
 / Coerce text to a symbol WITHOUT case folding, for identifiers where case
 / is meaningful - an exchange order id, say. Still trims, because trailing
 / whitespace is never meaningful and always silent.
-to_symbol_cased:{[s]
-    t:trim s;
-    if[0=count t; :` ];
-    `$t}
+to_symbol_cased:{[str]
+    trimmed:trim str;
+    if[0=count trimmed; :` ];
+    `$trimmed}
 
 / --------------------------------------------------------------- REQUIRE
 

@@ -74,7 +74,7 @@ key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
 / ==== Step 1: pre-generate the "historical" tick series, once ====
 / Same EURUSD single-pair spot/scale as cross_markout_example.q's
-/ mk_book, scaled by .qex.pip_size/.qex.size_unit (src/examples/example_defaults.q)
+/ mk_book, scaled by .qexdef.pip_size/.qexdef.size_unit (src/examples/example_defaults.q)
 / - stands in for timersvc.q's tradeGE.N0821.csv, a fixed dataset with
 / its own recorded timestamps, generated/loaded once before replay
 / starts. Unlike mk_book elsewhere, this builds one WIDE row (a dict of
@@ -87,10 +87,10 @@ mk_wide_row:{[spot]
     bid_sz_names:`$"bid_sz_",/:lvl_suffix;
     ask_px_names:`$"ask_px_",/:lvl_suffix;
     ask_sz_names:`$"ask_sz_",/:lvl_suffix;
-    bid_px_vals:spot-.qex.pip_size*levels;
-    bid_sz_vals:.qex.size_unit*1+levels;
-    ask_px_vals:(spot+.qex.pip_size)+.qex.pip_size*levels;
-    ask_sz_vals:.qex.size_unit*1+levels;
+    bid_px_vals:spot-.qexdef.pip_size*levels;
+    bid_sz_vals:.qexdef.size_unit*1+levels;
+    ask_px_vals:(spot+.qexdef.pip_size)+.qexdef.pip_size*levels;
+    ask_sz_vals:.qexdef.size_unit*1+levels;
     (bid_px_names,bid_sz_names,ask_px_names,ask_sz_names)!(bid_px_vals,bid_sz_vals,ask_px_vals,ask_sz_vals)};
 
 / derive_level_groups' (prefix;target_col) rules for the wide columns

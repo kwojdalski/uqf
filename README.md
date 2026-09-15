@@ -42,7 +42,7 @@ q).qexec.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 
 Each module loads into its own flat namespace after loading `src/init.q` -
 `.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
-`.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qex` (see Layout below for which
+`.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef` (see Layout below for which
 file maps to which namespace). Kept single-level throughout rather than
 nested under a shared parent (e.g. not `.q.options`) - multi-level `\d`
 namespace paths don't resolve under the PeachQ interpreter this repo also
@@ -85,7 +85,7 @@ src/  (directories are organisational; each file keeps its own FLAT namespace,
   integrations/
     data.q        [.qdata] NOT loaded by init.q - see its own header
   examples/
-    example_defaults.q   [.qex] shared scaling constants (pip_size, size_unit,
+    example_defaults.q   [.qexdef] shared scaling constants (pip_size, size_unit,
                           size_row_drift) for scripts/*.q's synthetic data -
                           not consumed by any pricing/execution function
   init.q          loads every module above

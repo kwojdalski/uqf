@@ -34,23 +34,23 @@ key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
 / Illustrative, approximately realistic spot rates (not live market data) -
 / same three pairs and levels as reshape_wide_order_book_multi_pair_example.q,
-/ so the two scripts' numbers agree if you compare them. .qex.pip_size/
-/ .qex.size_unit (src/examples/example_defaults.q) are one pip (0.0001) and one
+/ so the two scripts' numbers agree if you compare them. .qexdef.pip_size/
+/ .qexdef.size_unit (src/examples/example_defaults.q) are one pip (0.0001) and one
 / depth level's notional, in clean round millions (1e6, 2e6, ... 1e7
 / across 10 levels) - typical order-of-magnitude for eFX top-of-book
 / depth on a major pair.
 
-/ A single 10-level top-of-book: bid/ask start .qex.pip_size apart at spot
-/ and walk out one pip per level; sizes grow by .qex.size_unit per level,
+/ A single 10-level top-of-book: bid/ask start .qexdef.pip_size apart at spot
+/ and walk out one pip per level; sizes grow by .qexdef.size_unit per level,
 / ask offset a tenth of a level below bid so bid/ask sizes stay visually
 / distinct - see mk_level_cols in the other example scripts for the same
 / pattern applied to a whole table instead of one book dict.
 mk_book:{[spot]
     levels:til 10;
-    bid_prices:spot-.qex.pip_size*levels;
-    ask_prices:(spot+.qex.pip_size)+.qex.pip_size*levels;
-    bid_sizes:.qex.size_unit*1+levels;
-    ask_sizes:(.qex.size_unit-.qex.size_unit%10)+.qex.size_unit*levels;
+    bid_prices:spot-.qexdef.pip_size*levels;
+    ask_prices:(spot+.qexdef.pip_size)+.qexdef.pip_size*levels;
+    bid_sizes:.qexdef.size_unit*1+levels;
+    ask_sizes:(.qexdef.size_unit-.qexdef.size_unit%10)+.qexdef.size_unit*levels;
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(bid_prices;bid_sizes;ask_prices;ask_sizes)};
 
 / Synthetic per-leg event timestamps, ~1ms apart - see
