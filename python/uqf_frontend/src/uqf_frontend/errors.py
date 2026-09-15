@@ -75,3 +75,15 @@ class CoverageIncomplete(FrontendError):
     """
 
     status_code = 409
+
+
+class Forbidden(FrontendError):
+    """An authorisation policy refused the request.
+
+    403 rather than 401: there is no authentication to have failed, so
+    "unauthenticated" would be the wrong claim. The request was understood
+    and declined. See authz.py on why this layer has a seam rather than an
+    auth system.
+    """
+
+    status_code = 403
