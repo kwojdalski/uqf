@@ -189,6 +189,69 @@ def test_a_global_assignment_through_a_symbol_is_not_flagged():
     assert not cqt.rule_reserved_local_assignment("t.q", "f:{[x] `var set x;}")
 
 
+# -------------------------------------------------- overlong throws
+
+
+def test_a_long_thrown_message_is_flagged():
+    """q truncates a thrown string at 255 bytes, silently."""
+    msg = "x" * 260
+    found = cqt.rule_overlong_throw("t.q", "f:{[x] '\"" + msg + '"}')
+    assert len(found) == 1
+    assert "260 chars" in found[0].detail
+
+
+def test_a_short_thrown_message_is_not_flagged():
+    assert not cqt.rule_overlong_throw("t.q", 'f:{[x] \'"too small"}')
+
+
+def test_a_message_containing_an_apostrophe_is_measured_correctly():
+    """The case that broke the first two drafts.
+
+    `'"cannot normalize '",s,"' to a pair"` contains the sequence `'"` inside
+    its own text, so a naive scan started from there and ran past the end of
+    the function - reporting a 150-character message as 5142 once it had
+    swallowed the rest of the file.
+    """
+    src = (
+        "normalize:{[s]\n"
+        '    if[not ok s; \'"normalize: cannot normalize \'",s,"\' to a 6-letter pair"];\n'
+        "    `$s};\n"
+    )
+    assert not cqt.rule_overlong_throw("t.q", src)
+
+
+def test_a_dollar_bracket_throw_does_not_swallow_the_next_function():
+    """The case that broke the first draft.
+
+    A throw inside `$[...]` closes with `]}`, not `];`, so scanning to the
+    next `];` ran into the following function's string literals.
+    """
+    src = (
+        "owner:{[c]\n"
+        "    $[c in a; `q;\n"
+        '      \'"owner: not an assigned concern, so the split needs amending"]}\n'
+        "\n"
+        'other:{[x] "' + "y" * 300 + '"}\n'
+    )
+    assert not cqt.rule_overlong_throw("t.q", src)
+
+
+def test_a_long_message_inside_a_comment_is_not_flagged():
+    """Prose can contain anything, including an apostrophe and a quote."""
+    src = "/ this comment mentions '\"" + ("z" * 400) + '"\nf:{[x] x}\n'
+    assert not cqt.rule_overlong_throw("t.q", src)
+
+
+def test_interpolated_values_are_not_counted():
+    """Only literal text is counted, so a match is unambiguous.
+
+    The real budget is tighter once values are substituted; the threshold
+    sits below 255 to leave room for them.
+    """
+    src = 'f:{[x] \'"short: ",string[x]," also short"}'
+    assert not cqt.rule_overlong_throw("t.q", src)
+
+
 # ------------------------------------------------------ self comparison
 
 
