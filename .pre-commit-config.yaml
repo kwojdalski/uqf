@@ -45,29 +45,30 @@ repos:
   - repo: local
     hooks:
       # uqf_client's own pytest suite - spins up a real q server via kola/IPC.
-      - id: uqf-client-tests
-        name: Run uqf-client pytest suite
+      # Every Python test in the repository, from the uv workspace root.
+      # This replaced a hook scoped to python/uqf_client alone, under which
+      # 229 of the repo's 231 Python tests never ran on commit - and no CI
+      # exists as a backstop. All 231 run in about 0.6s, so the gap was never
+      # a cost question.
+      - id: python-tests
+        name: Run all Python tests (workspace)
         entry: bash
         language: system
         args:
           - -c
           - |
             set -euo pipefail
+            # uqf_client's conftest starts a real q process and skips if it
+            # finds no interpreter, so make ~/.kx discoverable when present.
             if [ -x "$HOME/.kx/bin/q" ]; then
               export QHOME="${QHOME:-$HOME/.kx}"
               export PATH="$HOME/.kx/bin:$PATH"
             fi
-            cd python/uqf_client && uv run pytest
-        files: '^python/uqf_client/.*\.py$'
+            uv run pytest -q
+        files: '\.py$'
+        exclude: '^lib/'
         pass_filenames: false
 
-      # Run the qUnit test suite (tests/run_tests.q) against every module.
-      # Guards the gate itself. A hook scoped to a path that no longer
-      # exists, or too narrow to cover the code it should, matches nothing
-      # and reports green - so the commit looks gated when it is not. This
-      # refuses both: a dead scope, and any tracked Python outside the lint
-      # hooks. Cheap (one git ls-files plus regex matching), so it runs
-      # always rather than only when the config changes.
       - id: check-hook-scopes
         name: Check pre-commit hook scopes cover the code
         entry: python3 scripts/check_hook_scopes.py
@@ -129,20 +130,25 @@ repos:
             # Try to get GitHub username from various sources
             github_username=""
 
-            # Method 1: Check if gh CLI is available and authenticated
-            if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+            # Method 1: the git remote URL. Local, free, and correct - it
+            # yields the same answer as the GitHub API for any GitHub remote.
+            # This runs FIRST because the API call below costs ~0.57s of
+            # network per commit, which measured as more than every test in
+            # this repository combined.
+            remote_url=$(git config --get remote.origin.url 2>/dev/null || echo "")
+            if [[ "$remote_url" =~ github\.com[:/]([^/]+)/ ]]; then
+              github_username="${BASH_REMATCH[1]}"
+            fi
+
+            # Method 2: ask GitHub, for a remote this cannot parse.
+            if [[ -z "$github_username" ]] && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
               github_username=$(gh api user --jq '.login' 2>/dev/null)
             fi
 
-            # Method 2: Extract from git remote URL if gh CLI not available
-            if [[ -z "$github_username" ]]; then
-              remote_url=$(git config --get remote.origin.url 2>/dev/null || echo "")
-              if [[ "$remote_url" =~ github\.com[:/]([^/]+)/ ]]; then
-                github_username="${BASH_REMATCH[1]}"
-              fi
-            fi
-
-            # Method 3: Fallback to git config user.name (normalized)
+            # Method 3: normalized git config user.name. Last resort, because
+            # it is a display name and need not match the GitHub login - here
+            # it yields "krzysztofwojdalski" where the login is "kwojdalski",
+            # which would rename a correctly-named branch.
             if [[ -z "$github_username" ]]; then
               github_username=$(git config user.name | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]//g')
             fi

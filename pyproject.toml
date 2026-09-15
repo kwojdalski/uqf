@@ -1,0 +1,95 @@
+# uv workspace root for this repository's three Python packages.
+#
+# A workspace rather than a flat merge: each member keeps its own
+# pyproject.toml, and therefore its own distribution name and console script
+# (torq-demo), while this root owns the single lockfile, the single .venv, and
+# the shared ruff/pytest config that was previously duplicated verbatim in
+# all three members.
+#
+# Why consolidate at all: the three packages have zero import-time
+# dependencies on each other, and every shared constraint is an open lower
+# bound, so one resolution is satisfiable by inspection. Before this, three
+# separate .venv directories totalled ~1.1 GB and the three lockfiles had
+# drifted to three different ruff versions (0.16.2 / 0.16.4 / 0.16.7), none
+# of which matched the version .pre-commit-config.yaml pins. Ruff is pinned
+# exactly here so the hook and the environment can no longer disagree.
+#
+# The directory layout is deliberately unchanged, because two couplings
+# depend on it and are documented as such at their call sites:
+#   - python/uqf_frontend/tests/test_catalog_drift.py resolves parents[2] to
+#     read torq_orchestrator's core.py as TEXT (never importing it)
+#   - python/uqf_client/tests/conftest.py resolves parents[3] to the repo
+#     root so it can launch `q src/init.q`
+# Moving the packages would break both.
+#
+# This root is not itself a distributable package - see [tool.uv] package.
+
+[project]
+name = "uqf-workspace"
+version = "0.0.0"
+description = "Workspace root aggregating uqf's Python packages; not published"
+requires-python = ">=3.14"
+dependencies = [
+    "uqf-client",
+    "torq-orchestrator",
+    "uqf-frontend",
+]
+
+[tool.uv]
+# An aggregator, not a package: nothing here to build or install.
+package = false
+
+[tool.uv.workspace]
+members = [
+    "python/uqf_client",
+    "python/torq_orchestrator",
+    "python/uqf_frontend",
+]
+
+[tool.uv.sources]
+uqf-client = { workspace = true }
+torq-orchestrator = { workspace = true }
+uqf-frontend = { workspace = true }
+
+[dependency-groups]
+# httpx is uqf_frontend's test-only dependency (fastapi's TestClient); it
+# lives here because the dev group is shared across the workspace.
+dev = [
+    "pytest>=9.1.1",
+    "ruff==0.16.2",
+    "httpx>=0.28",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+# Vendored trees are never edited here, so linting them produces findings
+# nobody may act on - lib/kdb-parquet alone has 32. The pre-commit hook
+# already carried `exclude: '^lib/'`; this is the same rule for a bare
+# `ruff check .` from the repo root, so the CLI and the hook cannot disagree.
+extend-exclude = ["lib"]
+
+# Each member's source root, so isort still classifies the three packages as
+# first-party. Run from inside a member, ruff infers this from the src layout;
+# run from the workspace root it cannot, and every intra-package import gets
+# treated as third-party - which silently reformats 13 files' import blocks.
+src = [
+    "python/uqf_client/src",
+    "python/torq_orchestrator/src",
+    "python/uqf_frontend/src",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+# All three members' suites, so `uv run pytest` from the repo root is the
+# single command that runs every Python test. The pre-commit hook relies on
+# this: before it existed, 229 of the repository's 231 Python tests never ran
+# on commit.
+testpaths = [
+    "python/uqf_client/tests",
+    "python/torq_orchestrator/tests",
+    "python/uqf_frontend/tests",
+]
