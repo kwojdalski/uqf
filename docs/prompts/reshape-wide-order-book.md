@@ -125,7 +125,7 @@ CONVENTIONS TO FOLLOW (this repo, not generic TorQ)
   not by `,`-joining symbols.
 
 TESTS
-Add tests/test_book.q following the existing pattern exactly (own `test`-
+Add tests/q/test_book.q following the existing pattern exactly (own `test`-
 suffixed namespace, `test*`-prefixed unary functions, qUnit assertions):
   - a small synthetic wide table (3-4 levels, 2-3 rows) with level columns
     out of schema order (e.g. bid2 defined before bid0) and mixed

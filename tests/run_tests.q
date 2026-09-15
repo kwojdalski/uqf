@@ -9,21 +9,24 @@
 \l src/init.q
 \l src/integrations/data.q
 
-\l tests/test_stats.q
-\l tests/test_ccy.q
-\l tests/test_daycount.q
-\l tests/test_rates.q
-\l tests/test_forwards.q
-\l tests/test_options.q
-\l tests/test_risk.q
-\l tests/test_positions.q
-\l tests/test_execution.q
-\l tests/test_execution_scale.q
-\l tests/test_book.q
-\l tests/test_microstructure.q
-\l tests/test_dqchecks.q
-\l tests/test_data.q
+\l tests/q/test_stats.q
+\l tests/q/test_ccy.q
+\l tests/q/test_daycount.q
+\l tests/q/test_rates.q
+\l tests/q/test_forwards.q
+\l tests/q/test_options.q
+\l tests/q/test_risk.q
+\l tests/q/test_positions.q
+\l tests/q/test_execution.q
+\l tests/q/test_execution_scale.q
+\l tests/q/test_book.q
+\l tests/q/test_microstructure.q
+\l tests/q/test_dqchecks.q
+\l tests/q/test_data.q
 
+/ The namespace list is unchanged by the tests/q/ move: it keys on test
+/ NAMESPACES, not file paths, and the move deliberately left namespaces
+/ alone - the same choice made for src/ (see src/init.q).
 nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest;
 res:.qunit.runTests[nsList];
 

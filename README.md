@@ -130,7 +130,8 @@ lib/
 tests/
   lib/qunit.q            vendored qUnit test framework (see Licensing)
   lib/testutil.q         tolerance-based float assertion helper used by every test
-  test_*.q                one test file per src/*.q module
+  q/
+    test_*.q              one test file per src/**/*.q module
   test_execution_scale.q  1mm-row synthetic markout scale/integration test
   run_tests.q             loads everything and runs the full suite
 
@@ -285,7 +286,7 @@ building a forward with `fwd_simple` and recovering the input rate with
 why this project leans on identities/round-trips rather than hand-computed
 expected values wherever possible.
 
-`tests/test_execution_scale.q` additionally generates a 1,000,000-row
+`tests/q/test_execution_scale.q` additionally generates a 1,000,000-row
 synthetic trade table (many currency pairs, times of day, bid/ask levels
 and liquidity sizes) and computes `markout` over it as a single vectorized
 call, as a scale/integration check beyond the per-function unit tests.

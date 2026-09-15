@@ -217,7 +217,7 @@ CONVENTIONS TO FOLLOW (this repo, not generic q)
   logic and vwmp_skew/vamp's reuse of vwap/sweep_price.
 
 TESTS
-New tests/test_microstructure.q, loaded from tests/run_tests.q in its own
+New tests/q/test_microstructure.q, loaded from tests/run_tests.q in its own
 `.microstructuretest` namespace (add it to run_tests.q's load list and
 nsList), following test_execution.q's pattern exactly. Cover, at minimum:
   - level_at nulls out a too-short row rather than throwing, and returns

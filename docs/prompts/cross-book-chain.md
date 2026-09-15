@@ -2,7 +2,7 @@
 
 Drafted with the `torq-developer` skill (q-language rules Q1-Q3) plus this
 repo's own conventions in `src/pricing/forwards.q`, `src/foundation/ccy.q`, and
-`tests/test_forwards.q`. Hand this prompt to an LLM session in this repo to
+`tests/q/test_forwards.q`. Hand this prompt to an LLM session in this repo to
 implement the function.
 
 ```
@@ -94,7 +94,7 @@ CONVENTIONS TO FOLLOW (this repo, not generic TorQ)
   `$"..."`, never backtick syntax.
 
 TESTS
-Add tests to tests/test_forwards.q following the existing pattern exactly:
+Add tests to tests/q/test_forwards.q following the existing pattern exactly:
   - a 3-leg (or more) chain whose result matches chaining two calls to the
     existing cross_book_at_sizes by hand, as a self-consistency check (mirrors
     test_cross_book_at_sizes_matches_cross_book_at_negligible_size's approach)

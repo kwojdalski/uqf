@@ -215,7 +215,7 @@ library with no processes/IPC/tables).
     any name assigned anywhere in a function local for the *whole*
     function body, so the call on the right-hand side would try to
     invoke the not-yet-set local instead of the global function.
-  - `beforeNamespace_generate_trades` in `tests/test_execution_scale.q`
+  - `beforeNamespace_generate_trades` in `tests/q/test_execution_scale.q`
     keeps the literal `beforeNamespace` prefix - see the qUnit hook
     gotcha below for why.
 

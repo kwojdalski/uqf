@@ -96,7 +96,7 @@ DOCSTRING EXAMPLE AUDIT   (rows below are format illustrations, not findings)
 =======================
  # | Module:line        | Documented @eg                              | Expected  | Computed    | KDB-X | Verdict        | Proposed test
 ---|--------------------|---------------------------------------------|-----------|-------------|-------|----------------|---------------
- 1 | execution.q:23      | .qexec.markout[1;1.1000;1.1010;10000]      | 10f       | 10f         | PASS  | TEST-CANDIDATE | .qexectest.test_markout_doc_eg in tests/test_execution.q (paste-ready below)
+ 1 | execution.q:23      | .qexec.markout[1;1.1000;1.1010;10000]      | 10f       | 10f         | PASS  | TEST-CANDIDATE | .qexectest.test_markout_doc_eg in tests/q/test_execution.q (paste-ready below)
  2 | forwards.q:NNN      | .qfwd.cross_book_at[...]                   | (table)   | throws rank | FAIL  | THROWS         | signature gained a 4th param; comment not updated
  3 | microstructure.q:245| .qmicro.vamp[...]                          | 1.1001    | 1.10009999  | PASS  | TEST-CANDIDATE | display artifact, documented value correct
 ```

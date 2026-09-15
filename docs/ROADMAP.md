@@ -6,7 +6,7 @@ liquidity/order-flow signals that quantify *what the book looks like* and
 `book.q`, `forwards.q` and `execution.q` already cover).
 
 **Status: implemented.** Every Tier 1 and Tier 2 function below now lives in
-`src/market_data/microstructure.q` (tests in `tests/test_microstructure.q`) - see
+`src/market_data/microstructure.q` (tests in `tests/q/test_microstructure.q`) - see
 `docs/prompts/microstructure-features.md` for the implementation prompt this
 was built from, including the one deliberate shape change from what's written
 below: every function takes a whole `quotes`-table COLUMN (a vector of
