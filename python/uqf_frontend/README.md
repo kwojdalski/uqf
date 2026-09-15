@@ -1,7 +1,8 @@
 # uqf-frontend
 
-Backend-for-frontend over the uqf TorQ gateway. Implements phases **B0** and
-**B1** of [`docs/frontend-requirements.md`](../../docs/frontend-requirements.md).
+Backend-for-frontend over the uqf TorQ gateway. Implements phases **B0**,
+**B1** and **B2** of
+[`docs/frontend-requirements.md`](../../docs/frontend-requirements.md).
 
 ## What this is
 
@@ -59,6 +60,9 @@ scalar-from-vector. This has cost this repository three debugging sessions
 | `GET /health` | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure (**F-12**) |
 | `GET /catalog` | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts |
 | `GET /coverage` | Composed coverage intervals and any gaps, for one dataset at one source release (**F-09**) |
+| `GET /ops/queue` | Pending and running gateway queries (**F-02**) |
+| `GET /ops/connections` | Registered backend handles and connected clients (**F-03**) |
+| `GET /ops/usage` | Fleet-wide query log, assembled here because q has none (**F-04**) |
 | `POST /query` | Validated, parameterised table query, tier-routed (**F-07**, **F-08**) |
 
 Errors carry a `transient` flag so a UI can tell an EOD window or a timeout
@@ -152,6 +156,65 @@ only upstream. The `COVERAGE` program assumes `dataset`, `source_version`,
 requirements together imply. Confirm before trusting it against a real
 ledger.
 
+## Ops views (B2)
+
+Three sources, all already reachable, none needing q-side work. Two are read
+from the **gateway process itself** rather than routed to a backend tier —
+which still respects the gateway-only boundary, since the gateway is the
+thing being asked about.
+
+`/ops/usage` is the interesting one: `.usage.usage` is per-process and **no
+fleet-wide rollup exists in q** (F-04), so it is fanned out and merged here.
+The rule that shaped the design: **one unreachable process must not blank the
+view.** Unreachable processes are part of the response, not an error —
+
+```json
+{"row_count": 9, "processes_configured": 10,
+ "unreachable": [{"process": "hdb1", "error": "connection refused"}]}
+```
+
+`processes_configured` is there because an empty log with nothing configured
+looks identical to an idle fleet. Every view also serves its own
+`poll_seconds`, because F-10 makes polling the only mechanism and the right
+interval depends on how fast the underlying state moves.
+
+Configure the fan-out targets with
+`UQF_FRONTEND_PROCESSES=rdb1:6052,hdb1:6053` (or `name:host:port`). Empty by
+default — so the view says it has nothing configured rather than lying.
+
+### Two live-process findings
+
+- `.gw.servers` is **keyed** by serverid and its `attributes` column holds a
+  **dict per server**, which kola cannot serialise at all (`Not supported
+  nested list - k type 99`). The program unkeys the table and drops that one
+  column; leaving it in fails the entire view for a field no dashboard shows.
+- **`.usage.flushtime` defaults to `0D03` — three hours, not the one day the
+  requirements state.** Measured on a live process. A capture pipeline sized
+  for a day would lose most of the log.
+
+## Usage capture (F-13)
+
+`.usage.usage` rows are flushed to disk and dropped from memory after
+`flushtime`. Any view of error or latency history longer than that window is
+therefore **not a query — it is a capture pipeline**, and it has to run
+before the rows are pruned.
+
+This is why B2 builds it rather than deferring it alongside the views that
+read it: get it wrong and the history in between is simply gone, which is not
+true of most bugs.
+
+```python
+capture = UsageCapture(KolaFleet(settings), JsonlSink(Path("captured")))
+capture.capture_once()  # safe to call repeatedly, on any scheduler
+```
+
+The ordering is deliberately dull and matches **E-05**'s
+publish-before-checkpoint rule: fetch everything strictly newer than the
+watermark, append to the sink, and advance the watermark **only after the
+append succeeds**. A failed write keeps the old watermark so the next pass
+retries the same rows rather than losing them, and because the fetch filters
+strictly greater, a successful pass captures each row exactly once.
+
 ## Not in scope here
 
 Phases **B3** (process fleet health) and **B4** (Airflow/backfill status) are
@@ -159,6 +222,10 @@ the two requirements that need new q-side or Airflow-side work, and both are
 gated on open questions (**F-21**, **F-22**). **B5** (auth) is gated on
 **F-20**; until then the layer connects with one credential from its
 environment.
+
+The capture pipeline ships as a callable, not a daemon. What schedules it —
+a timer in this process, cron, or an Airflow task — is a deployment question,
+and **F-23** notes no hosting model is established yet.
 
 The React application is deliberately not here. This package is Python; a
 browser app should live outside `python/`.
