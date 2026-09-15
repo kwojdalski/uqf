@@ -102,4 +102,39 @@ test_implied_vol_robust_for_tiny_vega:{[t]
     iv:.qopt.implied_vol[deep_otm_price;1.10;2.00;0.045;0.02;0.05;1b];
     .qunit.assertTrue[iv>0;"implied_vol does not error or return a nonsensical value when vega collapses"]};
 
+/ Vanna and volga are second cross-derivatives, so the honest test is a
+/ finite difference against functions implemented independently of them -
+/ not a restatement of their own formula, which would pass even if both
+/ were wrong the same way.
+test_vanna_equals_dvega_dspot:{[t]
+    s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;h:1e-4;
+    fd:(.qopt.gk_vega[s+h;k;rd;rf;sigma;tt]-.qopt.gk_vega[s-h;k;rd;rf;sigma;tt])%2*h;
+    .testutil.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];fd;1e-4;"vanna = d(vega)/d(spot)"]};
+
+test_vanna_equals_ddelta_dvol:{[t]
+    s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;h:1e-4;
+    fd:(.qopt.gk_delta_call[s;k;rd;rf;sigma+h;tt]-.qopt.gk_delta_call[s;k;rd;rf;sigma-h;tt])%2*h;
+    .testutil.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];fd;1e-4;"vanna = d(delta)/d(vol) - the same number from the other side"]};
+
+test_volga_equals_dvega_dvol:{[t]
+    s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;h:1e-4;
+    fd:(.qopt.gk_vega[s;k;rd;rf;sigma+h;tt]-.qopt.gk_vega[s;k;rd;rf;sigma-h;tt])%2*h;
+    .testutil.assertApprox[.qopt.gk_volga[s;k;rd;rf;sigma;tt];fd;1e-4;"volga = d(vega)/d(vol)"]};
+
+/ Both are type-independent, like gamma and vega: a call and a put with the
+/ same parameters share them exactly.
+test_vanna_and_volga_are_type_independent:{[t]
+    s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
+    vanna_from_put:(.qopt.gk_delta_put[s;k;rd;rf;sigma+1e-4;tt]-.qopt.gk_delta_put[s;k;rd;rf;sigma-1e-4;tt])%2e-4;
+    .testutil.assertApprox[.qopt.gk_vanna[s;k;rd;rf;sigma;tt];vanna_from_put;1e-4;"vanna from the put's delta matches - no option-type term"]};
+
+/ Volga's sign follows d1*d2: negative only in the narrow band where the two
+/ straddle zero, positive on both wings. A butterfly is long the wings.
+test_volga_is_negative_only_near_the_vol_maximising_strike:{[t]
+    ks:1.00 1.05 1.20 1.40;
+    wings:.qopt.gk_volga[1.10;ks;0.045;0.02;0.10;0.75];
+    middle:.qopt.gk_volga[1.10;1.12;0.045;0.02;0.10;0.75];
+    .qunit.assertTrue[all wings>0;"volga is positive on both wings"];
+    .qunit.assertTrue[middle<0;"volga is negative where d1 and d2 straddle zero"]};
+
 \d .

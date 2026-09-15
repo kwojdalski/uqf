@@ -112,6 +112,32 @@ check_ccy_exposure_limits:{[exposure;limits]
     metrics:([] ccy:exposure`ccy; metric:abs exposure`reporting_amount);
     check_limit[metrics;limits;`ccy]};
 
+/ Reject ratios (see execution.q's reject_ratio_by, already windowed and
+/ grouped - a limit only means anything against a stated window) vs. a
+/ per-entity limit - check_limit specialized to reject_ratio_by's own output
+/ shape, so a reject-rate breach lands in the same summarize_checks report
+/ as position, exposure and market-data breaches rather than being eyeballed
+/ out of raw ratios.
+/ .
+/ key_col is whatever reject_ratio_by was grouped by - `sym for a per-pair
+/ limit, or a counterparty column if that is how the desk sets them. The
+/ limit is a ratio in [0,1], matching reject_ratio's own units, not a
+/ percentage.
+/ @param reject_ratios reject_ratio_by's output - a table with at least
+/   key_col and reject_ratio columns
+/ @param limits a table `key_col`limit - the max tolerated reject ratio per
+/   entity, as a fraction
+/ @param key_col the column naming the entity, e.g. `sym
+/ @return see check_limit - columns key_col/metric/limit/status
+/ @throws error if reject_ratios is missing key_col or reject_ratio
+/ @eg .qdqc.check_reject_ratio_limits[rr;([] sym:enlist `EURUSD; limit:enlist 0.05);`sym]
+check_reject_ratio_limits:{[reject_ratios;limits;key_col]
+    req_cols:key_col,`reject_ratio;
+    missing:req_cols where not req_cols in cols reject_ratios;
+    if[count missing; '"check_reject_ratio_limits: reject_ratios is missing required column(s) ",", " sv string missing];
+    metrics:flip (key_col,`metric)!(reject_ratios key_col;reject_ratios`reject_ratio);
+    check_limit[metrics;limits;key_col]};
+
 / Per-row market data sanity, built on microstructure.q's own spread_bps
 / (no re-derivation of top-of-book/mid here) - a negative spread means the
 / book is crossed (bid at or through the ask, a genuine data error, not

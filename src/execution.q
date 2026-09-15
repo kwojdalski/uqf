@@ -156,6 +156,50 @@ hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
         (enlist `hit_ratio)!enlist (%;(sum;(*;`size;`hit));(sum;`size))];
     0!?[windowed;();by_arg;select_dict]};
 
+/ Fraction of trade requests rejected, windowed by time, optionally
+/ time-bucketed and grouped by arbitrary columns - the table-native,
+/ group-by-aware companion to the flat reject_ratio above, and the
+/ reject-side mirror of hit_ratio_by.
+/ .
+/ Exists because a flat reject ratio hides exactly what an LP needs to see:
+/ whether rejects cluster in the minutes after a spread widening, or on one
+/ counterparty, or on one pair. Same two modes as hit_ratio_by - `count
+/ (number rejected / number of requests) and `amount (size-weighted, so one
+/ large reject counts for more than several small ones).
+/ @param requests table with at least `ts`reject`size, plus whatever columns group_cols names
+/ @param start_ts only consider requests at or after this time
+/ @param end_ts only consider requests at or before this time
+/ @param bucket_size a timespan to floor ts into buckets by (xbar) and group
+/   by alongside group_cols, e.g. 0D01:00:00 for hourly - a null timespan
+/   (0Nn) disables time-bucketing entirely
+/ @param group_cols column names to group by in addition to any time bucket,
+/   e.g. `sym or `sym`counterparty - empty () for no additional grouping
+/ @param mode `count (by number of requests) or `amount (weighted by size)
+/ @return a table, ts (if bucket_size isn't null) then group_cols columns
+/   (if any) then reject_ratio - one row per distinct combination, or a
+/   single row if bucket_size is null and group_cols is empty
+/ @throws error if requests is missing a required column (ts, reject, size,
+/   or any column named in group_cols), or if mode isn't `count or `amount
+/ @eg .qexec.reject_ratio_by[requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
+/ @eg .qexec.reject_ratio_by[requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio
+reject_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
+    group_cols:group_cols,();
+    req_cols:distinct `ts`reject`size,group_cols;
+    missing:req_cols where not req_cols in cols requests;
+    if[count missing; '"reject_ratio_by: requests is missing required column(s) ",", " sv string missing];
+    if[not mode in `count`amount; '"reject_ratio_by: mode must be `count or `amount, got ",string mode];
+    windowed:select from requests where ts within (start_ts;end_ts);
+    windowed:$[null bucket_size; windowed; update ts:bucket_size xbar ts from windowed];
+    time_group:$[null bucket_size; `symbol$(); enlist `ts];
+    effective_group_cols:time_group,group_cols;
+    / 0b, not an empty dict - see hit_ratio_by's own comment on why an empty
+    / group-by dict is not portable across kdb+-family interpreters.
+    by_arg:$[0=count effective_group_cols; 0b; effective_group_cols!effective_group_cols];
+    select_dict:$[mode=`count;
+        (enlist `reject_ratio)!enlist (avg;`reject);
+        (enlist `reject_ratio)!enlist (%;(sum;(*;`size;`reject));(sum;`size))];
+    0!?[windowed;();by_arg;select_dict]};
+
 / Size-weighted average execution price across a set of fills.
 / @param prices list of fill prices
 / @param sizes list of fill sizes, same length as prices
@@ -165,6 +209,25 @@ vwap:{[prices;sizes]
     weighted_sum:sum prices*sizes;
     total_size:sum sizes;
     weighted_sum%total_size};
+
+/ Size-weighted average execution price as of each fill, rather than for
+/ the whole set: element i is the VWAP of fills 0..i inclusive.
+/ .
+/ The point of this over `vwap` is honesty about what was knowable when.
+/ A single full-window VWAP is a fine summary of fills that already
+/ happened, but used as a *benchmark* - comparing fill i against a VWAP
+/ computed over a window extending past it - it is look-ahead, and every
+/ "beat VWAP" figure built on it flatters or punishes by hindsight. The
+/ expanding form only ever sees fills up to and including the one being
+/ judged.
+/ @param prices list of fill prices, in execution order
+/ @param sizes list of fill sizes, same length as prices, aligned to it
+/ @return a vector the same length as prices - the VWAP as of each fill
+/ @eg .qexec.vwap_expanding[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.1 1.100667 1.100625
+vwap_expanding:{[prices;sizes]
+    weighted_sums:sums prices*sizes;
+    total_sizes:sums sizes;
+    weighted_sums%total_sizes};
 
 / Walk a stack of order book levels to price a sweep of target_size: the
 / blended price you'd get consuming best-to-worst levels until target_size
