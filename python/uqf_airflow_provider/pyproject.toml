@@ -1,0 +1,31 @@
+[project]
+name = "uqf-airflow-provider"
+version = "0.1.0"
+description = "Translates q's backfill status files into Airflow's sensor vocabulary (F-21/D10)"
+readme = "README.md"
+authors = [
+    { name = "Krzysztof Wojdalski", email = "krzysztof.wojdalski@gmail.com" }
+]
+requires-python = ">=3.14"
+# Deliberately NO apache-airflow dependency (F-22/F-23, A-04). This is a
+# public repo and a local single-host demo; a licensed or heavy external
+# dependency cannot be required or the whole path becomes undemonstrable
+# outside a real Airflow install - the same reasoning src/etl/core's
+# SingleStore ODBC driver already follows via a fixture. sensor.py imports
+# airflow lazily, inside build_sensor_class(), so this package is fully
+# importable and testable with Airflow absent.
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.11.19,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.2",
+]
+
+# ruff and pytest configuration live in the repository-root pyproject.toml,
+# which is the uv workspace root - see its header. Keeping a [tool.ruff] block
+# here would shadow the shared one, since ruff resolves the nearest config.
