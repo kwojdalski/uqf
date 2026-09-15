@@ -360,6 +360,74 @@ def crypto_status() -> None:
     console.print(table)
 
 
+@crypto_app.command("fills-start")
+def crypto_fills_start(
+    oms_socket_path: Annotated[
+        str, typer.Option(help="Unix socket of an already-running cryptorust OMS to poll")
+    ] = core.DEFAULT_OMS_SOCKET_PATH,
+    symbol: Annotated[
+        str, typer.Option(help="Symbol to tag published rows with (the OMS's fills carry none)")
+    ] = core.CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
+    poll_interval_ms: Annotated[int, typer.Option(help="Poll interval in milliseconds")] = (
+        core.CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS
+    ),
+    port: PortOpt = core.DEFAULT_BASE_PORT,
+) -> None:
+    """Build and launch a sibling cryptorust checkout's own
+    kdb-fills-recorder, publishing BOTH the market-making bot's SIMULATED
+    (paper) fills into `crypto_sim_fills` (core.py's
+    CRYPTO_SIM_FILLS_TABLE_SCHEMA) AND real confirmed exchange executions
+    into `crypto_trades` (CRYPTO_TRADES_TABLE_SCHEMA) - see that binary's
+    own doc header for how each source differs. Requires an already-running
+    cryptorust service (its OMS IPC socket, default /tmp/beacon.sock) -
+    this doesn't start one itself, unlike `crypto start` which owns its
+    own exchange connectors.
+    """
+    try:
+        pid = core.start_crypto_fills_recorder(
+            _paths(),
+            base_port=port,
+            oms_socket_path=oms_socket_path,
+            symbol=symbol,
+            poll_interval_ms=poll_interval_ms,
+        )
+    except core.TorqDemoError as exc:
+        _die(exc)
+        return
+    console.print(
+        f"crypto fills recorder started (pid {pid}) - "
+        f"{core.CRYPTO_FILLS_RECORDER_TABLE} is SIMULATED, "
+        f"{core.CRYPTO_REAL_FILLS_RECORDER_TABLE} is real"
+    )
+
+
+@crypto_app.command("fills-stop")
+def crypto_fills_stop() -> None:
+    """Stop the cryptorust fills recorder started by `crypto fills-start`."""
+    try:
+        core.stop_crypto_fills_recorder(_paths())
+    except core.TorqDemoError as exc:
+        _die(exc)
+        return
+    console.print("crypto fills recorder stopped")
+
+
+@crypto_app.command("fills-status")
+def crypto_fills_status() -> None:
+    """Show whether the cryptorust fills recorder is running, its pid, and
+    where its log lives."""
+    status = core.crypto_fills_recorder_status(_paths())
+    table = Table(
+        title="crypto fills recorder status "
+        "(sim_table = paper fills, real_table = confirmed executions)"
+    )
+    table.add_column("field")
+    table.add_column("value")
+    for k, v in status.items():
+        table.add_row(k, v)
+    console.print(table)
+
+
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def raw(ctx: typer.Context, port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Pass any other torq.sh verb straight through, e.g.:

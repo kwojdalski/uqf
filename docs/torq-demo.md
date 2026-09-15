@@ -96,6 +96,8 @@ logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own 
 new-process                           interactive wizard to add a new process (see below)
 crypto start/stop/status              proof of concept: cryptorust (Rust) publishing over
                                        kdb+ IPC (see "crypto recorder" below)
+crypto fills-start/fills-stop/        proof of concept: cryptorust's simulated + real fills
+  fills-status                        over kdb+ IPC (see "crypto fills recorder" below)
 raw -- ARGS...                        pass any other torq.sh verb straight through
                                        (e.g. `raw -- debug rdb1`, `raw -- top feed1`)
 ```
@@ -434,6 +436,57 @@ Requires a `~/github_projects/cryptorust` checkout (override the path via
 reuses this demo's own `feed:pass` credential (see `appconfig/passwords/
 feed.txt`) to authenticate against `stp1`'s access-list, same as any other
 feed process here - no separate cryptorust-side credential to set up.
+
+### crypto fills recorder - simulated AND real fills, two tables
+
+`torq-demo crypto fills-start`/`fills-stop`/`fills-status` are a separate
+proof of concept, alongside the book recorder above: cryptorust's own
+`kdb-fills-recorder` binary (`src/bin/kdb_fills_recorder.rs`) polls an
+*already-running* cryptorust service's OMS over its own IPC unix socket
+(default `/tmp/beacon.sock`) and republishes new fills onto this demo's
+`stp1`, the bridge role `torq_posbook_etl.q`/`torq_markout_etl.q` play
+inside this repo's own TorQ demo - except this one bridges two entirely
+different IPC protocols (cryptorust's JSON-RPC and kdb+'s wire protocol)
+rather than two kdb+ processes. It polls two independent methods each
+tick, into two separate tables:
+
+- **`get_recent_fills` -> `crypto_sim_fills`** - the market-making bot's
+  *simulated* (paper) fill model: a probabilistic fill simulation run
+  against live market data, not a confirmed order that actually executed
+  on an exchange. Traced precisely in that binary's own doc header.
+- **`get_recent_real_fills` -> `crypto_trades`** - real, confirmed
+  exchange fills (cryptorust's `services::trading::execution::Fill`, with
+  `venue`/`symbol`/`exchange_fill_id`/`fee`), fed from `Oms::
+  subscribe_fills()` on the cryptorust side. This method didn't exist
+  until it was added specifically to close this gap - see
+  `connectors/ipc/ipc.rs`'s real-fill listener task and
+  `connectors/ipc/cycle.rs`'s handler on the cryptorust side.
+
+Both are empty/unavailable whenever the polled service has no OMS
+attached or no fills have happened yet - not an error, just nothing to
+publish that tick.
+
+Unlike `crypto start`, this doesn't launch its own exchange connectors -
+it needs a cryptorust service already running (e.g. `helm start beacon`
+inside the cryptorust checkout), with its OMS/trading cycle active before
+either method returns anything.
+
+```
+torq-demo crypto fills-start                       # polls /tmp/beacon.sock, tags sim rows BTC-USDT
+torq-demo crypto fills-start --oms-socket-path /tmp/beacon.sock --symbol ETH-USDT
+torq-demo crypto fills-status
+torq-demo crypto fills-stop
+```
+
+Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/
+`realized_delta_pnl` - see `core.py`'s `CRYPTO_SIM_FILLS_TABLE_SCHEMA`)
+and `crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
+`fee`/`fee_currency`/`exchange_fill_id` - `CRYPTO_TRADES_TABLE_SCHEMA`):
+
+```
+torq-demo query "select from crypto_sim_fills" --port <rdb1's port>
+torq-demo query "select from crypto_trades" --port <rdb1's port>
+```
 
 ## MCP server
 

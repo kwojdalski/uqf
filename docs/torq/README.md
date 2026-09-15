@@ -4,7 +4,8 @@ Diagrams for the running state of the TorQ Finance Starter Pack demo (see
 [docs/torq-demo.md](../torq-demo.md) for how to actually start/stop/query
 it). Reflects what `torq-demo list processes` shows today: the vendored
 14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
-`widefeed1`, `cross1`, `vectorize1`).
+`widefeed1`, `cross1`, `vectorize1`, `fxtradesfeed1`, `posbook1`,
+`markout1`).
 
 ## Process topology
 
@@ -26,11 +27,14 @@ flowchart LR
         fxfeed1["fxfeed1<br/>uqf FX<br/>:6069"]
         quotesfeed1["quotesfeed1<br/>uqf depth-aware FX<br/>:6074"]
         widefeed1["widefeed1<br/>uqf wide book<br/>:6076"]
+        fxtradesfeed1["fxtradesfeed1<br/>uqf synthetic fills<br/>:6079"]
     end
 
     subgraph etl["uqf ETL (subscribe + republish, credentialed)"]
         cross1["cross1<br/>cross-rate reprice<br/>:6075"]
         vectorize1["vectorize1<br/>wide->vector fold<br/>:6077"]
+        posbook1["posbook1<br/>position/PnL from fills<br/>:6080"]
+        markout1["markout1<br/>execution-quality markouts<br/>:6081"]
     end
 
     subgraph storage["Storage"]
@@ -49,11 +53,16 @@ flowchart LR
     fxfeed1 -->|"upd quote"| stp
     quotesfeed1 -->|"upd quotes"| stp
     widefeed1 -->|"upd wide_book"| stp
+    fxtradesfeed1 -->|"upd trades"| stp
     vectorize1 -->|"upd mkt_orderbook<br/>(2nd, unauth handle)"| stp
+    posbook1 -->|"upd position<br/>(2nd, unauth handle)"| stp
+    markout1 -->|"upd execution_quality<br/>(2nd, unauth handle)"| stp
 
     stp -->|"subscribeto: all tables<br/>(default)"| rdb1
     stp -->|"sub.subscribe quotes"| cross1
     stp -->|"sub.subscribe wide_book"| vectorize1
+    stp -->|"sub.subscribe trades,quote"| posbook1
+    stp -->|"sub.subscribe trades,quote"| markout1
     sctp -.->|"chained from"| stp
 
     rdb1 -->|"EOD writedown"| wdb1
@@ -108,16 +117,45 @@ flowchart TD
     wide_book -->|"sub.subscribe"| vectorize1["vectorize1<br/>.qbook.book_from_wide_levels"]
     vectorize1 -->|"republished via upd"| mkt_orderbook[("mkt_orderbook<br/>time,sym,bid/ask_prices")]
 
+    fxtradesfeed1["fxtradesfeed1"] -->|writes| trades[("trades<br/>time,sym,side,trade_price,size,pip_factor")]
+    trades -->|"sub.subscribe"| posbook1["posbook1<br/>.qpos.apply_fill + .qrisk.pnl"]
+    quote -->|"sub.subscribe<br/>(mark-to-mid)"| posbook1
+    posbook1 -->|"republished via upd"| position[("position<br/>time,sym,qty,avg_price,realized_pnl,<br/>mark_price,unrealized_pnl,total_pnl")]
+
+    trades -->|"sub.subscribe<br/>(buffered)"| markout1["markout1<br/>.qexec.markout_at_horizons<br/>(1s timer)"]
+    quote -->|"sub.subscribe<br/>(buffered)"| markout1
+    markout1 -->|"republished via upd"| execution_quality[("execution_quality<br/>time,sym,trade_time,horizon,<br/>trade_price,ref_price,markout_pips")]
+
     quote --> rdb1[("rdb1<br/>(today's ticks, in memory)")]
     trade --> rdb1
     quotes --> rdb1
     wide_book --> rdb1
     mkt_orderbook --> rdb1
+    trades --> rdb1
+    position --> rdb1
+    execution_quality --> rdb1
 
     rdb1 -->|EOD writedown| hdb[("hdb1/hdb2<br/>(on-disk history)")]
 
     style cross_quotes stroke-dasharray: 5 5
 ```
+
+`posbook1` and `markout1` are the two processes in this stack that run
+uqf's actual eFX business logic (position/PnL and execution quality, not
+just market-data reshaping) against live data. `posbook1`'s
+`.posbook.book` (a private, in-process `.qpos`-shaped keyed table, same
+"wrap a pure function with local mutable state" pattern `cross1`'s
+`.cross.quotes` mirror uses) accumulates fills via `.qpos.apply_fill`,
+marked to a live mid tracked off its own `quote` subscription; `position`
+is a snapshot republished per fill. `markout1` can't score a fill the
+instant it arrives - `.qexec.markout_at_horizons` needs a reference quote
+at trade_time+horizon, which by definition hasn't happened yet - so it
+buffers trades/quotes in `.markout.pending_trades`/`.markout.quote_hist`
+and scores+drains them on a 1s repeating timer once each trade is old
+enough that its furthest horizon's quote should already exist. Unlike
+`cross_quotes`, both `position` and `execution_quality` are real,
+persisted tables (round-trip through `rdb1`/`wdb1`/`hdb`, same as
+`mkt_orderbook`), since this history is worth keeping.
 
 `cross_quotes` is drawn dashed because it never becomes a real database
 table - it's `.cross.cross_quotes`, a plain in-memory table inside
