@@ -464,6 +464,66 @@ ambiguous_message:{[zone;bad;cs]
     "backfill window, which the ledger would still record as complete. Have the ",
     "source hand over UTC (L-05)"}
 
+/ ------------------------------------------------------------- COERCION
+
+/ The coercion function for each declared q type character (E-05).
+/ .
+/ Declared here rather than left to each adapter, because E-05's question was
+/ "is there ONE shared coercion layer" and the answer is only true if every
+/ source reaches it by default. A source that casts its own text is a source
+/ that can get the decimal comma or the date-only timestamp wrong privately.
+/ .
+/ `p` deliberately maps to to_timestamp, which REFUSES a date-only value
+/ rather than widening it to midnight. A source whose column really is a
+/ date, and for which midnight is correct, has to say so by coercing with
+/ .qcoer.to_date_as_midnight explicitly - which is greppable, unlike an
+/ accident of q's casting rules.
+/ A KNOWN LIMITATION, recorded rather than shipped silently: this maps every
+/ `s` column to to_symbol, which UPPER-CASES. That is right for currency
+/ pairs, which is this library's convention throughout - but it is a guess
+/ for enum-like columns. A text source returning "buy" yields `BUY, while
+/ demo_deals' own fixture uses `buy, so the two paths disagree on case for
+/ that one column.
+/ .
+/ It does not bite today: the fixture returns typed data, so `coerce` is
+/ never applied to it. It WOULD bite the first time a real text source lands
+/ a side or venue column, and the fix is a per-field coercer override in the
+/ declaration rather than a cleverer default - there is no case rule that is
+/ right for both `EURUSD and `buy. Left undone deliberately because
+/ inventing the override mechanism before a source needs it would be
+/ guessing at its shape.
+coercers:(!). flip (
+    ("f";.qcoer.to_float);
+    ("j";.qcoer.to_long);
+    ("p";.qcoer.to_timestamp);
+    ("s";.qcoer.to_symbol))
+
+/ Coerce a table of TEXT columns into the declared types (E-05).
+/ .
+/ For a source that returns text - which is what E-05 is about - this is the
+/ step between fetch and validate. Returns the coerced table plus a per-
+/ column failure count, so the worker can decide: a few bad rows in a
+/ million might be tolerable and worth logging, while a column that failed
+/ entirely means the format changed and the window must not be published.
+/ That judgement is the worker's, not this layer's.
+/ @param source a registered source name
+/ @param t a table whose declared fields hold text
+/ @return dict of `table (coerced) and `failures (field -> count)
+/ @throws error when a declared type has no coercer
+coerce:{[source;t]
+    decl:declaration source;
+    present:column_names t;
+    fields:decl[`fields] where decl[`fields] in present;
+    chars:(decl`types) (decl`fields)?fields;
+    unknown:distinct chars where not chars in key coercers;
+    if[count unknown;
+        '"coerce: no coercer for declared type(s) \"",unknown,"\" in ",string[source],
+         " - add one to .qsrc.coercers deliberately rather than casting privately (E-05)"];
+    results:{[t;f;c] .qcoer.coerce_column[coercers c;t f]}[t;;] .' flip (fields;chars);
+    coerced:t;
+    coerced:{[tb;f;r] @[tb;f;:;r`values]}/[coerced;fields;results];
+    `table`failures!(coerced;fields!results[;`failed])}
+
 / ------------------------------------------------------------- FETCHING
 
 / Fetch one window, from the live source or from the fixture (E-04).

@@ -166,6 +166,58 @@ test_the_whole_fixture_is_reachable:{[t]
 test_the_fetch_path_is_announced:{[t]
     .qunit.assertEquals[first .qsrc.fetch_window[`demo_deals;0Ni;.srctest.d 1;.srctest.d 2];`fixture;"synthetic data is announced in the return value, never inferred"]};
 
+/ --- coercion through the contract (E-05) --------------------------------
+
+/ The three trap classes named on #73, all present in one table, coerced in
+/ one call - which is what "one shared coercion layer" has to mean to be
+/ worth anything.
+test_the_contract_coerces_all_three_trap_classes:{[t]
+    txt:([] deal_id:enlist "1";
+            deal_time:enlist "2026-09-15T09:30:00";
+            sym:enlist "eurusd";
+            side:enlist "buy";
+            notional:enlist "1000000";
+            rate:enlist "1,0842");
+    r:.qsrc.coerce[`demo_deals;txt];
+    row:first r`table;
+    .qunit.assertEquals[
+        (row`rate;row`sym;row`deal_time);
+        (1.0842;`EURUSD;2026.09.15D09:30:00.000000000);
+        "comma decimal recovered, case folded, ISO timestamp parsed"]};
+
+/ A date-only value must be COUNTED as a failure, not silently widened to
+/ midnight - that is the worst of the three traps, because midnight destroys
+/ intraday ordering and every markout then reads the wrong quote.
+test_a_date_only_column_is_reported_as_a_failure:{[t]
+    txt:([] deal_id:enlist "1";
+            deal_time:enlist "2026-09-16";
+            sym:enlist "EURUSD";
+            side:enlist "buy";
+            notional:enlist "1000000";
+            rate:enlist "1.0842");
+    r:.qsrc.coerce[`demo_deals;txt];
+    .qunit.assertEquals[(r[`failures]`deal_time;null first r[`table]`deal_time);(1;1b);"the failure is visible to the worker rather than becoming midnight"]};
+
+test_a_clean_text_table_reports_no_failures:{[t]
+    txt:([] deal_id:enlist "1";
+            deal_time:enlist "2026-09-15T09:30:00";
+            sym:enlist "EURUSD";
+            side:enlist "buy";
+            notional:enlist "1000000";
+            rate:enlist "1.0842");
+    r:.qsrc.coerce[`demo_deals;txt];
+    .qunit.assertEquals[sum value r`failures;0;"a well-formed source costs nothing"]};
+
+/ A declared type with no coercer must be an error, not a silent pass-
+/ through: a column nobody coerced is a column still holding text, and it
+/ would fail validate later with a much less useful message.
+test_an_uncoercible_declared_type_is_refused:{[t]
+    .qsrc.register[`weird;
+        `source`table`target`time_field`fields`types`query`fixture`time_zone!
+        (`weird;`e;`l;`ts;`ts`blob;"px";{[h;a;b] ()};{([] ts:enlist .srctest.d 1; blob:enlist 1b)};`UTC)];
+    txt:([] ts:enlist "2026-09-15T09:30:00"; blob:enlist "x");
+    .qunit.assertError[{.qsrc.coerce[`weird;x]};txt;"a type with no coercer is named rather than passed through as text"]};
+
 / --- credentials (E-07) --------------------------------------------------
 
 test_the_credential_variable_is_mechanical:{[t]
