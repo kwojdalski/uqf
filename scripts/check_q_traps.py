@@ -22,6 +22,12 @@ records its false-positive rate against this repository's existing working q,
 and rules that could not clear the bar are listed at the bottom as
 deliberately NOT implemented, with the reason.
 
+One rule here (`rule_datetime_type`) guards a trap that has NOT yet bitten
+this tree. It is included because the canonical repository's `z->p` cast
+restoration says it bit there, that tree is unreachable so the bug itself
+cannot be read, and the trap is measurable from first principles - see that
+rule's docstring for the numbers. Every other rule is a post-mortem.
+
 Run directly, or via the pre-commit hook. Exits 1 on any finding.
 """
 
@@ -563,11 +569,82 @@ def rule_self_comparison(path: str, lines: list[str]) -> list[Finding]:
     return findings
 
 
+#: Every way to bring a q `datetime` into existence: the two casts, the
+#: type-number cast that sidesteps them, the null and infinity literals, and
+#: a datetime literal (`2026.09.15T10:00:00`, which the `T` distinguishes
+#: from a timestamp's `D`).
+DATETIME_PATTERNS = (
+    (r'"z"\s*\$', '`"z"$` cast'),
+    (r"`datetime\s*\$", "``datetime$` cast"),
+    (r"\b15h\s*\$", "`15h$` cast"),
+    (r"(?<![\w.])-?0[NW]z\b", "a datetime null/infinity literal"),
+    (r"\b\d{4}\.\d{2}\.\d{2}T\d", "a datetime literal"),
+)
+
+
+def rule_datetime_type(path: str, lines: list[str]) -> list[Finding]:
+    """q's `datetime` (type 15h, `z`) has no legitimate use in this tree.
+
+    It is a FLOAT count of days, where a timestamp is a long count of
+    nanoseconds, so every z->p conversion is a float-to-long rounding. It is
+    quiet in the worst way: measured under KDB-X, 999 of 1000
+    nanosecond-spaced instants do not survive a p->z->p round trip (largest
+    error 629ns, up to 447ns of it *backwards*), while a full day of whole
+    seconds survives exactly - so the bug passes every hand-check, demo and
+    fixture built from round numbers and only shows up on real trade
+    timestamps. `=` then says a z and a p at the same instant are equal while
+    `~` says they do not match, and `distinct` keeps a value and its own
+    round trip as two values, which is how a retry-safe dedupe silently
+    stops recognising rows it already published. That is issue #80's L-03.
+
+    This forbids the TYPE rather than the cast, and the distinction is the
+    reason the rule can exist at all: telling a z->p cast from any other
+    `"p"$` needs the input's type, which is not local information (the same
+    obstacle that keeps the fully-applied-projection trap off this list). The
+    type's mere presence is local, and this tree's whole convention -
+    everything is UTC timestamps internally, E-08/R9.1 - means there is
+    nothing a datetime can be here except a mistake.
+
+    Scoped to non-test files, deliberately. A test that PROVES the trap has
+    to construct the value the trap needs, and
+    `tests/q/test_time_zone.q` does exactly that. Narrowing the scope is
+    better than a suppression comment: a rule with an escape hatch gets the
+    hatch used, and then it protects nothing.
+
+    False positives in this repo: 0 on non-test files, and 0 across all
+    tracked `.q` files except that one test - the datetime type appears
+    nowhere else, in src/, scripts/ or tests/.
+    """
+    if path.startswith("tests/"):
+        return []
+    findings = []
+    for n, raw in enumerate(lines, 1):
+        code = _strip_comments(raw)
+        for pattern, detail in DATETIME_PATTERNS:
+            if re.search(pattern, code):
+                findings.append(
+                    Finding(
+                        path,
+                        n,
+                        "datetime-type",
+                        detail,
+                        "q's datetime (type 15h) is a float count of days, so "
+                        "converting it to a timestamp rounds sub-second values by "
+                        "hundreds of nanoseconds without erroring - and whole "
+                        "seconds survive, so it passes every round-number check. "
+                        "Use a timestamp (`p`) throughout; everything is UTC "
+                        "internally (E-08/R9.1, and #80's L-03)",
+                    )
+                )
+    return findings
+
+
 LINE_RULES = (
     rule_bare_slash_comment_block,
     rule_reserved_parameter_names,
     rule_niladic_dot_empty,
     rule_self_comparison,
+    rule_datetime_type,
 )
 TEXT_RULES = (
     rule_multiparam_lambda_under_at,
@@ -587,6 +664,11 @@ TEXT_RULES = (
 #   * Right-to-left precedence (`d 1+0D12` is `d[1+0D12]`). Legitimate in
 #     `til 3+1`, and flagging every unparenthesised arithmetic argument would
 #     fire across the whole repository.
+#   * The z->p cast DIRECTION (`"p"$` applied to something that is a
+#     datetime). Indistinguishable from any other `"p"$` without the input's
+#     type, which is the same obstacle as above. `rule_datetime_type`
+#     forbids the datetime type outright instead, which is checkable and -
+#     given that everything here is UTC timestamps - loses nothing.
 #   * Atom-vs-string and int-vs-long mismatches under `~`. Needs types.
 #   * `in` on two strings comparing per-character. Needs types.
 #
