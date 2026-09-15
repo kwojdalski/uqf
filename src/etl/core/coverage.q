@@ -66,6 +66,38 @@ init_ledger:{[]
 / see init_ledger's note on namespace resolution.
 ledger:{[] value `etl_coverage}
 
+/ Attach to the ledger, validating its shape only if it already existed.
+/ .
+/ This is the function a worker's init should call, and it exists because
+/ `require_schema` alone was the wrong shape for a caller: a worker cannot
+/ tell whether it is the process that created the table, so it either
+/ validated a table it had just built (trivially true, and therefore
+/ pointless) or skipped the check entirely. Making that distinction here
+/ rather than at every call site means no worker has to get it right.
+/ .
+/ The asymmetry is the whole point:
+/ .
+/   ledger absent   -> we create it, so it matches by construction. Nothing
+/                      to check, and checking would only ever confirm
+/                      itself.
+/   ledger present  -> someone else created it, so its shape is EVIDENCE
+/                      rather than assumption, and it must be validated
+/                      before a single read is trusted.
+/ .
+/ That second case is the one #60 is about. If a real ledger carries a
+/ partition key, every read in this file aggregates ACROSS partitions, so a
+/ range covered in one partition and empty in the others reports as
+/ COMPLETE - with no error, because every row found is valid.
+/ @return the ledger table name
+/ @throws error, via require_schema, when an existing ledger has a
+/   different shape
+/ @eg .qcov.attach[]
+attach:{[]
+    existed:`etl_coverage in tables `.;
+    init_ledger[];
+    if[existed; require_schema[]];
+    `etl_coverage}
+
 / Refuse to trust a ledger whose shape is not the one this file assumes
 / (issue #60).
 / .

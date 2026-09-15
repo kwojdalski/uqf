@@ -75,6 +75,17 @@ init:{[run_spec]
 
     .qsrc.validate_fixture source_name;
 
+    / Validate the coverage ledger's shape before trusting a single read of
+    / it (#60). Only bites when the ledger already exists, i.e. when some
+    / other process created it - which is exactly the case where its shape
+    / is evidence rather than our own assumption.
+    / .
+    / This call is the point of .qcov.require_schema. Without it the
+    / function was defined, tested and never invoked on any live path: a
+    / guard that cannot fire protects nothing, and worse, its existence
+    / reads as protection to anyone auditing this.
+    .qcov.attach[];
+
     .qbfstate.acquire_lock worker_name;
 
     / Live only when a credential is configured. An absent credential is an
