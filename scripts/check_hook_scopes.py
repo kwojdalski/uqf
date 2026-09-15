@@ -56,6 +56,15 @@ LINT_HOOKS = ("ruff", "ruff-format")
 #: Python outside these is never exercised on commit.
 TEST_HOOKS = ("python-tests",)
 
+#: Hook ids that constitute the Python TYPE gate. Same requirement again.
+#:
+#: Checked here rather than trusted because the lint gate already drifted
+#: once, from a directory scope that stayed valid while the code moved out
+#: from under it - 43 of 47 files ungated, and nothing complained. A type
+#: gate can drift exactly the same way, and the symptom is identical:
+#: everything passes because almost nothing is checked.
+TYPE_HOOKS = ("ty",)
+
 #: Path prefixes exempt from needing lint coverage, each with its reason.
 #: Vendored trees only: this repository's standing rule is never to edit a
 #: vendored tree, so linting one would produce findings nobody may fix.
@@ -137,7 +146,11 @@ def main() -> int:
 
     ungated: list[str] = []
     print()
-    for gate_name, gate_hooks in (("lint", LINT_HOOKS), ("test", TEST_HOOKS)):
+    for gate_name, gate_hooks in (
+        ("lint", LINT_HOOKS),
+        ("test", TEST_HOOKS),
+        ("type", TYPE_HOOKS),
+    ):
         patterns = [re.compile(p) for hook_id, p in hooks if hook_id in gate_hooks]
         if not patterns:
             print(
@@ -185,7 +198,8 @@ def main() -> int:
         print(file=sys.stderr)
         print(
             f"{len(ungated)} tracked Python file(s) fall outside the lint gate "
-            f"{LINT_HOOKS} or the test gate {TEST_HOOKS}, so they are not fully "
+            f"{LINT_HOOKS}, the test gate {TEST_HOOKS} or the type gate "
+            f"{TYPE_HOOKS}, so they are not fully "
             f"checked on commit. Widen the relevant scopes, or add a path to "
             f"LINT_EXEMPT with a reason.",
             file=sys.stderr,

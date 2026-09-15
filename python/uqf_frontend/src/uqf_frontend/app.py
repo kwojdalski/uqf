@@ -212,7 +212,7 @@ def create_app(
         statuses, unreadable = status.read_dir(settings.status_dir)
         return BackfillStatusResponse(
             summary=status.summarise(statuses),
-            workers=[WorkerStatusOut(**{**vars(s), "terminal": s.terminal}) for s in statuses],
+            workers=[_worker_status_out(s) for s in statuses],
             unreadable=unreadable,
             source=str(settings.status_dir) if settings.status_dir else None,
             poll_seconds=ops.POLL_SECONDS["backfill"],
@@ -258,6 +258,37 @@ def create_app(
         )
 
     return app
+
+
+def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:
+    """One status record as its response model, field by field.
+
+    Explicit rather than `WorkerStatusOut(**{**vars(s), "terminal": s.terminal})`.
+    The splat is shorter but unverifiable - every field arrives as `Any`, so
+    nothing checks that the dataclass and the model still agree. Worse, the
+    failure mode is silent in the direction that matters: rename a field on
+    `WorkerStatus` and the splat keeps type-checking while raising at
+    runtime, on a request rather than in the suite.
+
+    `terminal` is a property, not a field, so `vars()` never carried it and
+    it had to be patched in by hand - which is the hint that the splat was
+    already not describing the model.
+    """
+    return WorkerStatusOut(
+        worker=s.worker,
+        instance_id=s.instance_id,
+        state=s.state,
+        source_version=s.source_version,
+        range_from=s.range_from,
+        range_to=s.range_to,
+        cursor=s.cursor,
+        rows_published=s.rows_published,
+        windows_completed=s.windows_completed,
+        error=s.error,
+        updated_at=s.updated_at,
+        terminal=s.terminal,
+        warnings=s.warnings,
+    )
 
 
 def _iso(interval: coverage.Interval) -> IntervalOut:

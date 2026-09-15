@@ -52,8 +52,12 @@ def trace_calls(show_return: bool = False) -> Callable:
             arrow_in = "→" if depth == 0 else "↳"
             arrow_out = "←"
 
-            func_name = func.__name__
-            module_name = func.__module__.split(".")[-1]
+            # getattr with a fallback, not direct access: this decorator
+            # accepts any Callable, and a callable class instance has
+            # neither __name__ nor __module__. Same latent AttributeError
+            # as in utils.py.
+            func_name = getattr(func, "__name__", repr(func))
+            module_name = getattr(func, "__module__", "?").split(".")[-1]
 
             args_repr = []
             try:

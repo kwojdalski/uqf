@@ -136,14 +136,22 @@ def logged_function(
     """Decorator to automatically log function calls and performance."""
 
     def decorator(func: Callable) -> Callable:
+        # Resolved once at decoration time rather than read off `func` on
+        # every call. `Callable` genuinely has no `__name__` - a callable
+        # class instance or a functools.partial has none - so the direct
+        # attribute access was a latent AttributeError for exactly the
+        # targets this decorator's own annotation permits, not merely
+        # something a type checker disliked.
+        func_name = getattr(func, "__name__", repr(func))
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             func_logger = logger or _loguru_logger
 
             if log_args:
-                log_function_call(func_logger, func.__name__, args, kwargs, level)
+                log_function_call(func_logger, func_name, args, kwargs, level)
             else:
-                log_function_call(func_logger, func.__name__, level=level)
+                log_function_call(func_logger, func_name, level=level)
 
             start_time = time.time()
             try:
@@ -151,13 +159,13 @@ def logged_function(
                 duration = time.time() - start_time
 
                 if log_performance:
-                    log_performance_metrics(func_logger, f"Function {func.__name__}", duration)
+                    log_performance_metrics(func_logger, f"Function {func_name}", duration)
 
                 if log_result:
                     result_str = str(result)
                     if len(result_str) > 100:
                         result_str = result_str[:100] + "..."
-                    func_logger.debug("Function {} returned: {}", func.__name__, result_str)
+                    func_logger.debug("Function {} returned: {}", func_name, result_str)
 
                 return result
 
@@ -166,8 +174,8 @@ def logged_function(
                 log_error_with_context(
                     func_logger,
                     e,
-                    f"Function {func.__name__}",
-                    {"duration_seconds": duration, "function": func.__name__},
+                    f"Function {func_name}",
+                    {"duration_seconds": duration, "function": func_name},
                 )
                 raise
 

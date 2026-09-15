@@ -57,8 +57,48 @@ uqf-frontend = { workspace = true }
 dev = [
     "pytest>=9.1.1",
     "ruff==0.16.2",
+    # Pinned exactly, like ruff: a type checker that changes its mind between
+    # machines turns a clean gate into an argument about whose version is
+    # right. Bump deliberately, with the findings reviewed.
+    "ty==0.0.81",
     "httpx>=0.28",
 ]
+
+# ---------------------------------------------------------------- ty
+#
+# The type gate. Two scoping decisions, both matching ruff's for the same
+# reasons:
+#
+#   * `lib/` is vendored and never edited here, so findings in it are noise
+#     that cannot be acted on - and noise is what gets a gate suppressed.
+#   * the three members' src roots are declared, so ty resolves intra-package
+#     imports the same way ruff's isort does. Without them every
+#     `from uqf_frontend...` is an unresolved-import, which buries the real
+#     findings under ten fake ones.
+[tool.ty.src]
+exclude = ["lib", ".venv", "build"]
+
+[tool.ty.environment]
+root = [
+    "python/uqf_client/src",
+    "python/torq_orchestrator/src",
+    "python/uqf_frontend/src",
+]
+
+# No [tool.ty.rules] block, deliberately.
+#
+# The first version of this config relaxed `unresolved-attribute` to a warning
+# on the grounds that kola ships no type information. That turned out to be
+# wrong twice over: kola produced none of the findings, and the nine that did
+# appear were all in this repo's own code - seven of them a genuine latent
+# AttributeError, since `Callable` really has no `__name__` and these
+# decorators accept callable class instances. Relaxing the rule would have
+# hidden a real bug to silence a problem that did not exist.
+#
+# Everything is now clean at full strength, so there is nothing to relax. A
+# third-party gap that genuinely cannot be fixed here gets a narrow
+# `# ty: ignore[rule]` at the line, with the reason - see core.py's
+# deliberate read of loguru's private `_core`.
 
 [tool.ruff]
 line-length = 100

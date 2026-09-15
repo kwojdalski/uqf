@@ -84,6 +84,23 @@ repos:
       # always_run because the rules scan every tracked .q file, not only the
       # staged ones - a rule added today should flag a file touched last
       # month.
+      # The TYPE gate. Scoped like the lint and test gates - all Python,
+      # vendored excluded - and enforced by check_hook_scopes.py so it
+      # cannot narrow silently the way the lint hook once did.
+      #
+      # pass_filenames is false because ty type-checks a PROJECT, not a file
+      # list: a change in one module can only be judged against the modules
+      # that import it. Passing just the staged files would check each in
+      # isolation and miss exactly the cross-module breakage a type checker
+      # is for.
+      - id: ty
+        name: ty (all python)
+        entry: uv run ty check
+        language: system
+        files: '\.py$'
+        exclude: '^lib/'
+        pass_filenames: false
+
       - id: q-traps
         name: Check q files for silent-failure traps
         entry: python3 scripts/check_q_traps.py
