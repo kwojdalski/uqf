@@ -51,6 +51,12 @@ class Table:
     name: str
     columns: dict[str, QType]
     description: str
+    #: Set when this table's column list is inferred rather than read off a
+    #: writer we control - currently only etl_coverage, per #60. Surfaced so
+    #: a consumer can tell "this is the shape" from "this is our best
+    #: understanding of the shape", which are very different claims to make
+    #: to someone deciding whether a range is complete.
+    shape_is_assumed: bool = False
     #: Columns a caller may filter on - everything except vector-valued ones.
     filterable: frozenset[str] = field(init=False)
 
@@ -124,6 +130,48 @@ TABLES: dict[str, Table] = {
                 "bid_sizes": _LIST,
                 "ask_prices": _LIST,
                 "ask_sizes": _LIST,
+            },
+        ),
+        Table(
+            name="etl_coverage",
+            # Shape ASSUMED, not verified - issue #60. The requirements
+            # describe coverage "by dataset, partition key, and time range"
+            # and partition key is NOT here. If the real ledger carries one,
+            # a query filtering on dataset and version alone aggregates
+            # across partitions and reports a gap-ridden range as complete.
+            #
+            # Exposing it anyway, with two guards rather than a comment:
+            # .qcov.require_schema refuses a differently-shaped ledger at
+            # init, and scripts/verify_coverage_schema.q settles the question
+            # in one command. test_catalog_drift.py cross-checks these
+            # columns against coverage.q, so the catalog and the q writer
+            # cannot drift apart even while the shape is unconfirmed.
+            shape_is_assumed=True,
+            description="Append-only completeness ledger: which [range_from, range_to) "
+            "window of which dataset is published, at which source_version. A window "
+            "with rows_published=0 still counts as covered - that is what distinguishes "
+            "'ran, found nothing' from 'never ran'",
+            columns={
+                "dataset": _SYM,
+                "source_version": _SYM,
+                "range_from": _TS,
+                "range_to": _TS,
+                "rows_published": _L,
+                "recorded_at": _TS,
+            },
+        ),
+        Table(
+            name="demo_deals",
+            description="Generic analogue of an external relational deal source, landed by "
+            "the demo_deals_backfill bounded worker. Synthetic by design - the real source "
+            "is bank-internal and out of scope for this repository (A-04)",
+            columns={
+                "deal_id": _L,
+                "deal_time": _TS,
+                "sym": _SYM,
+                "side": _SYM,
+                "notional": _F,
+                "rate": _F,
             },
         ),
         Table(
