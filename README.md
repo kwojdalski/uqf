@@ -291,6 +291,12 @@ cannot prove what they claim if folded into the first:
   q refusing itself, not the mutual exclusion the lock exists to provide -
   and an in-process "resume" never discards its own memory, so it cannot
   show the state on disk was sufficient.
+- **`smoke`** also carries E-12's live half: every registered source is
+  validated against **the same declaration** its fixture is validated
+  against in the deterministic suite. That is what makes a fixture
+  meaningful rather than merely present — two separate declarations would
+  let a suite pass while the real source had changed. A source whose
+  credential is unset is skipped, not failed.
 - **`smoke`** is the only lane that touches a live external source
   (requirement E-20), and is excluded from `all` on purpose. Folding it in
   would make every local run depend on a remote host being up, which trains

@@ -33,6 +33,9 @@
 \c 400 1000
 
 \l src/etl/core/worker_config.q
+\l src/etl/core/coverage.q
+\l src/etl/core/source_contract.q
+\l src/etl/sources/demo_deals.q
 
 / --- configuration ------------------------------------------------------
 
@@ -84,6 +87,11 @@ if[0=count live;
     exit 1];
 
 h:first live;
+/ ...and the host it belongs to. Needed because the source-contract checks
+/ below must know WHICH target this handle reaches: `target` is only ever a
+/ lambda parameter above, never a global, so referring to it here silently
+/ resolved to nothing.
+live_target:first targets where not null handles;
 
 / --- compatibility ------------------------------------------------------
 
@@ -115,6 +123,30 @@ check_table:{[expectation]
          0=count missing]}
 
 check_table each expectations;
+
+/ --- E-12's live half: every registered source, against its own contract --
+
+/ The requirement is that live external metadata is validated against "that
+/ SAME contract" the fixture is validated against. The fixture side runs in
+/ the deterministic suite (test_source_contract.q); this is the other side,
+/ and it is the same declaration and the same comparison - which is what
+/ makes the fixture meaningful rather than a thing that merely exists.
+/ .
+/ Each registered source is checked only when its credential names THIS
+/ target, so a run pointed at one host does not report every source as
+/ broken. A source whose credential is unset is skipped, not failed: E-20's
+/ whole point is that an unconfigured checkout is not a failure.
+check_source:{[source]
+    if[not .qsrc.has_credentials source;
+        -1 "skip  ",string[source]," (",.qsrc.credential_var[source]," unset)";
+        :1b];
+    if[not (.qsrc.require_credentials source)~live_target;
+        -1 "skip  ",string[source]," (configured for a different target)";
+        :1b];
+    r:@[{.qsrc.validate_live[x;h]; ""};source;{x}];
+    note["contract: ",string[source],$[count r;" - ",r;""];0=count r]}
+
+check_source each .qsrc.registered[];
 
 {@[hclose;x;::]} each live;
 

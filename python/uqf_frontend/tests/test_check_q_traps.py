@@ -152,6 +152,43 @@ def test_dot_apply_with_an_argument_list_is_not_flagged():
     assert not _text_rule(cqt.rule_multiparam_lambda_under_at, ".[{[a;b] a+b};(x;y);{0n}]")
 
 
+# --------------------------------------------------- reserved locals
+
+
+def test_the_var_bug_is_flagged():
+    """The real bug: `var:credential_var source` in source_contract.q.
+
+    `var` is variance. Assigning it as a lambda local throws `assign at LOAD
+    time and aborts the rest of the file, leaving a half-populated namespace -
+    and the parameter-name rule cannot see it, because it is not a parameter.
+    Sixth reserved-name collision in this repo, first as a local.
+    """
+    bug = "f:{[source]\n    var:credential_var source;\n    v:getenv `$var;\n    }"
+    found = cqt.rule_reserved_local_assignment("t.q", bug)
+    assert len(found) == 1
+    assert "var" in found[0].detail
+
+
+def test_the_rename_is_not_flagged():
+    ok = "f:{[source]\n    env_var:credential_var source;\n    }"
+    assert not cqt.rule_reserved_local_assignment("t.q", ok)
+
+
+def test_a_namespace_level_definition_is_not_flagged():
+    """Outside a lambda the same name is legal - it defines `.ns.var`."""
+    assert not cqt.rule_reserved_local_assignment("t.q", "\\d .qsrc\nvar:1\n")
+
+
+def test_a_qsql_column_alias_is_not_flagged():
+    """`select max:max px` is an alias, not an assignment."""
+    assert not cqt.rule_reserved_local_assignment("t.q", "f:{[t] select max:max px from t}")
+
+
+def test_a_global_assignment_through_a_symbol_is_not_flagged():
+    """Backtick-set is absolute and unambiguous, so it is not a local."""
+    assert not cqt.rule_reserved_local_assignment("t.q", "f:{[x] `var set x;}")
+
+
 # ------------------------------------------------------ self comparison
 
 
