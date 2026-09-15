@@ -10,6 +10,12 @@ that a merge happened. Sources are `docs/drift-reports/`,
 `docs/migrations/`, `docs/etl-framework-requirements.md` and
 `docs/frontend-requirements.md`.
 
+Design decisions do **not** belong in this table. They live in
+`docs/decisions.md`, derived from the GitHub question bank by
+`scripts/build_decision_log.py`. Keeping them apart avoids a real collision:
+this ledger numbers its rows `D1`, `D2`, ... while the bank dash-numbers its
+backfill questions, so `D8` here is not `D-08` there.
+
 ## Status vocabulary
 
 | Status | Meaning |

@@ -105,7 +105,7 @@ Close with: how many `@eg` lines scanned and how many carried an assertion; the 
 
 For each STALE and THROWS finding, give the corrected `@eg` line as paste-ready text. For each TEST-CANDIDATE you recommend locking down, give the complete qUnit test function in the target file's own namespace and helper style, ready to paste — not a sketch.
 
-Then persist the run: write `docs/audits/YYYY-MM-DD-docstring-eg-<scope>.md` (append a `## Run <timestamp>` section if that file already exists today) and add a row to `docs/audits/README.md`. Create the directory and a README with a header row if neither exists yet. Report the full table inline to the caller as well — the file is a copy, not a replacement.
+Then persist the run: write `docs/audits/YYYY-MM-DD-docstring-eg-<scope>.md` (append a `## Run <timestamp>` section if that file already exists today) and add a row to `docs/audits/README.md` using the column contract that file defines (Date, Agent, Scope, Report, Findings, Cleared, Not checked) — `Not checked` names the modules you did not reach, so an unchecked module never reads as a cleared one. Report the full table inline to the caller as well — the file is a copy, not a replacement.
 
 ## Rules
 
