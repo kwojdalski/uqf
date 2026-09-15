@@ -65,3 +65,13 @@ class QueryRejected(FrontendError):
     """
 
     status_code = 400
+
+
+class CoverageIncomplete(FrontendError):
+    """A coverage pre-check failed: the requested range is not fully published.
+
+    409 rather than 4xx-validation: the request was well-formed and the data
+    simply is not there yet, which is a state the caller can retry later.
+    """
+
+    status_code = 409

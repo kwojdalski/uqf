@@ -7,8 +7,27 @@ IPC *arguments*; a caller's values are passed as typed IPC arguments and
 never rendered into text at all. That is what satisfies F-14, and it is
 strictly stronger than escaping or quoting a concatenated string.
 
-Two q details this depends on, both verified against a live KDB-X process
+Three q details this depends on, all verified against a live KDB-X process
 rather than assumed:
+
+0. A TorQ backend evaluates a routed query with ``value`` (gateway.q:253), and
+   ``value`` applied to a *list* **applies** rather than parses:
+   ``value ("{[s] ...}"; `EURUSD)`` runs the lambda on the argument. That is
+   what carries parameterisation through the gateway rather than losing it at
+   the tier boundary. The lambda must be sent as a **char vector**, which
+   means ``bytes`` from Python - kola maps ``str`` to a q *symbol*, and a
+   symbol head makes ``value`` try to resolve a variable named the entire
+   lambda text.
+
+A naming hazard these programs must respect: **a q builtin cannot be used as
+a lambda parameter name.** Doing so raises a bare ``'nyi`` when the lambda is
+*called*, not when it is defined, and regardless of whether the body
+references the parameter. ``{[ds;sv] 1+1}[\`a;\`b]`` fails because ``sv`` is
+scalar-from-vector; ``{[ds;release] ...}`` is fine. ``test_q_programs.py``
+checks every parameter in this module against the 182 reserved and ``.q``
+names, because this trap has already cost this repository three separate
+debugging sessions (``desc`` and ``tables`` in scripts/torq_pipeline.q, and
+``sv`` here).
 
 1. A functional select accepts the table *name* as a symbol -
    ``?[`trades; ...; 0b; ()]`` - so there is no ``get`` on a
@@ -43,6 +62,14 @@ SELECT = """{[t;fc;fo;fv;lim]
   wc:{[o;c;v;m;w] (m o;c;w v)}[;;;ops;wrap]'[fo;fc;fv];
   r:?[t;wc;0b;()];
   $[lim>0; lim sublist r; r]}"""
+
+#: Coverage intervals for one dataset at one source release.
+#:
+#: E-09 requires consumers to filter on ``source_version``; doing it inside
+#: the program rather than in Python means a caller cannot omit it.
+COVERAGE = """{[ds;release]
+  select range_from, range_to from etl_coverage
+    where dataset=ds, source_version=release}"""
 
 #: Row count for a whitelisted table, so a UI can page without pulling rows.
 COUNT = "{[t] count value t}"

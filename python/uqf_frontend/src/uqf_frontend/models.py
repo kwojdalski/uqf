@@ -18,19 +18,56 @@ class Filter(BaseModel):
     value: Any
 
 
+class CoverageRequirement(BaseModel):
+    """An opt-in pre-check: refuse the query unless this range is published.
+
+    F-09. ``source_version`` is mandatory, not optional, because E-09 requires
+    coverage consumers to filter on it - coverage under one source release
+    says nothing about another.
+    """
+
+    dataset: str = Field(min_length=1)
+    source_version: str = Field(min_length=1)
+    range_from: str = Field(description="ISO-8601 with an explicit offset")
+    range_to: str = Field(description="ISO-8601 with an explicit offset, exclusive")
+
+
 class QueryRequest(BaseModel):
     table: str = Field(min_length=1)
     filters: list[Filter] = Field(default_factory=list, max_length=16)
     limit: int = Field(default=1000, ge=1)
+    tier: Literal["rdb", "hdb", "both"] = Field(
+        default="both",
+        description="rdb = today's session, hdb = completed partitions, both = razed. "
+        "hdb is expected to be slower (F-11)",
+    )
+    require_coverage: CoverageRequirement | None = None
 
 
 class QueryResponse(BaseModel):
     table: str
+    tier: str
     rows: list[dict[str, Any]]
     row_count: int
     truncated: bool = Field(
         description="True when the server's max_rows cap, not the caller's limit, cut the result"
     )
+
+
+class IntervalOut(BaseModel):
+    range_from: str
+    range_to: str
+
+
+class CoverageResponse(BaseModel):
+    """Composed coverage and any gaps, for one dataset at one source release."""
+
+    dataset: str
+    source_version: str
+    covered: list[IntervalOut]
+    requested: IntervalOut | None = None
+    gaps: list[IntervalOut] = Field(default_factory=list)
+    complete: bool = Field(description="True when the requested range has no gaps")
 
 
 class ColumnInfo(BaseModel):

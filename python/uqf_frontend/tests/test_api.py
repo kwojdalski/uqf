@@ -102,3 +102,170 @@ def test_too_many_filters_is_refused(client, gw):
     filters = [{"column": "sym", "op": "eq", "value": "EURUSD"} for _ in range(17)]
     assert client.post("/query", json={"table": "trades", "filters": filters}).status_code == 422
     assert gw.calls == []
+
+
+# --- B1: tier routing and coverage ----------------------------------------
+
+
+def test_tier_defaults_to_both(client, gw):
+    client.post("/query", json={"table": "trades", "filters": []})
+    assert gw.last_tiers == ["rdb", "hdb"]
+
+
+@pytest.mark.parametrize(
+    ("tier", "expected"),
+    [("rdb", ["rdb"]), ("hdb", ["hdb"]), ("both", ["rdb", "hdb"])],
+)
+def test_tier_maps_to_gateway_servertypes(client, gw, tier, expected):
+    client.post("/query", json={"table": "trades", "filters": [], "tier": tier})
+    assert gw.last_tiers == expected
+
+
+def test_unknown_tier_is_refused(client, gw):
+    resp = client.post("/query", json={"table": "trades", "filters": [], "tier": "everything"})
+    assert resp.status_code == 422
+    assert gw.routed == []
+
+
+def test_response_echoes_the_tier_that_served_it(client):
+    body = client.post("/query", json={"table": "trades", "filters": [], "tier": "hdb"}).json()
+    assert body["tier"] == "hdb"
+
+
+def _cov(rows):
+    from uqf_frontend import queries
+    from uqf_frontend.gateway import FakeGateway
+
+    return FakeGateway({queries.COVERAGE: rows})
+
+
+def test_coverage_composes_adjacent_intervals(client_for):
+    import datetime as dt
+
+    gw = _cov(
+        [
+            {"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 14)},
+            {"range_from": dt.datetime(2026, 9, 14), "range_to": dt.datetime(2026, 9, 15)},
+        ]
+    )
+    resp = client_for(gw).get("/coverage", params={"dataset": "trades", "source_version": "v1"})
+    body = resp.json()
+    assert len(body["covered"]) == 1, "boundary-adjacent intervals must compose"
+
+
+def test_coverage_reports_gaps_for_a_requested_range(client_for):
+    import datetime as dt
+
+    gw = _cov([{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 14)}])
+    body = (
+        client_for(gw)
+        .get(
+            "/coverage",
+            params={
+                "dataset": "trades",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00Z",
+                "range_to": "2026-09-15T00:00:00Z",
+            },
+        )
+        .json()
+    )
+    assert body["complete"] is False
+    assert len(body["gaps"]) == 1
+    assert body["gaps"][0]["range_from"].startswith("2026-09-14")
+
+
+def test_coverage_filters_on_source_version(client_for):
+    """E-09: the version is passed to q, not applied afterwards in Python."""
+    gw = _cov([])
+    client_for(gw).get("/coverage", params={"dataset": "trades", "source_version": "v7"})
+    program, args, _ = gw.routed[-1]
+    assert args == ("trades", "v7")
+
+
+def test_query_is_refused_when_required_coverage_has_gaps(client_for):
+    import datetime as dt
+
+    gw = _cov([{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 14)}])
+    resp = client_for(gw).post(
+        "/query",
+        json={
+            "table": "trades",
+            "filters": [],
+            "require_coverage": {
+                "dataset": "trades",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00Z",
+                "range_to": "2026-09-16T00:00:00Z",
+            },
+        },
+    )
+    assert resp.status_code == 409
+    assert "missing" in resp.json()["detail"]
+    assert "2026-09-14" in resp.json()["detail"], "the caller must be told which range is missing"
+
+
+def test_query_proceeds_when_required_coverage_is_complete(client_for):
+    import datetime as dt
+
+    from uqf_frontend import queries
+
+    gw = _cov([{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 16)}])
+    gw._responses[queries.SELECT] = [{"sym": "EURUSD"}]
+    resp = client_for(gw).post(
+        "/query",
+        json={
+            "table": "trades",
+            "filters": [],
+            "require_coverage": {
+                "dataset": "trades",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00Z",
+                "range_to": "2026-09-16T00:00:00Z",
+            },
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["row_count"] == 1
+
+
+def test_coverage_precheck_runs_before_the_select(client_for):
+    """Order matters: a refused query must not have touched the table."""
+    gw = _cov([])
+    client_for(gw).post(
+        "/query",
+        json={
+            "table": "trades",
+            "filters": [],
+            "require_coverage": {
+                "dataset": "trades",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00Z",
+                "range_to": "2026-09-14T00:00:00Z",
+            },
+        },
+    )
+    from uqf_frontend import queries
+
+    programs = [p for p, _, _ in gw.routed]
+    assert queries.SELECT not in programs
+
+
+def test_coverage_requires_a_source_version(client):
+    resp = client.get("/coverage", params={"dataset": "trades"})
+    assert resp.status_code == 422
+
+
+def test_coverage_rejects_a_naive_requested_range(client_for):
+    gw = _cov([])
+    resp = client_for(gw).get(
+        "/coverage",
+        params={
+            "dataset": "trades",
+            "source_version": "v1",
+            "range_from": "2026-09-13T00:00:00",
+            "range_to": "2026-09-14T00:00:00",
+        },
+    )
+    assert resp.status_code == 422
+    assert "timezone" in resp.json()["detail"]
