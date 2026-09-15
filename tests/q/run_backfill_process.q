@@ -32,7 +32,7 @@ if[""~getenv `UQFSTATUSDIR;
 
 statusdir:getenv `UQFSTATUSDIR;
 system"mkdir -p ",statusdir;
-`etl_coverage set 0#.qcov.init_ledger[];
+.testutil.reset_coverage_ledger[];
 
 Q:$[""~getenv `UQFQ; (getenv[`HOME]),"/.kx/bin/q"; getenv `UQFQ];
 

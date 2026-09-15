@@ -11,8 +11,14 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 beforeNamespace_isolate:{[]
     setenv[`UQFSTATUSDIR;"build/test-status"];
     system"mkdir -p build/test-status";
-    / a fresh ledger per run, so these tests never depend on each other's rows
-    `etl_coverage set 0#.qcov.init_ledger[];
+    / a fresh ledger per run, so these tests never depend on each other's rows.
+    / `value` is load-bearing: init_ledger returns the SYMBOL `etl_coverage,
+    / so `0#init_ledger[]` is an empty SYMBOL VECTOR, not an empty table.
+    / That went unnoticed because init_ledger re-creates the table on the
+    / next call (an empty vector is not in `tables`), so every test healed
+    / itself on first use - until require_schema called `meta` directly and
+    / got a type error. Another silent-heal, in the test harness this time.
+    .testutil.reset_coverage_ledger[];
     }
 
 setUp_fresh_ledger:{[] `etl_coverage set 0#value `etl_coverage;}
@@ -150,5 +156,39 @@ test_clearing_a_checkpoint_restarts_from_the_beginning:{[t]
 test_a_checkpoint_is_not_coverage:{[t]
     .qbfstate.save_checkpoint[`cp_private;.coveragetest.spec[];.coveragetest.d 2];
     .qunit.assertTrue[not .qcov.is_covered[`markouts;`v1;.coveragetest.d 1;.coveragetest.d 2];"a worker reaching the end of a range does not by itself make it covered"]};
+
+/ --- the assumed schema, and refusing to trust a different one (#60) -----
+
+/ These are not tests of the schema (which is unverified by definition) but of
+/ the GUARD: that a differently-shaped ledger is refused loudly rather than
+/ read silently. That is the whole mitigation available without canonical
+/ access.
+
+test_the_assumed_schema_is_accepted:{[t]
+    .testutil.reset_coverage_ledger[];
+    .qunit.assertEquals[.qcov.require_schema[];1b;"the shape this file creates is the shape it assumes"]};
+
+/ The dangerous case #60 was filed for. A partition key means every read here
+/ aggregates across partitions, so a range covered in one partition and empty
+/ in the others reads as COMPLETE - with no error, because every row found is
+/ valid.
+test_a_partition_key_is_refused_rather_than_ignored:{[t]
+    `etl_coverage set ([] date:`date$(); dataset:`symbol$(); source_version:`symbol$();
+        range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$();
+        recorded_at:`timestamp$());
+    r:@[{.qcov.require_schema[]; ""};::;{x}];
+    / restore via the helper, which DELETES first - calling init_ledger here
+    / would leave the wrong-shaped table in place for every later suite.
+    .testutil.reset_coverage_ledger[];
+    .qunit.assertEquals[r like "*partition*";1b;"an unexpected column is refused, and the message says what it would silently do"]};
+
+test_a_missing_column_is_refused:{[t]
+    `etl_coverage set ([] dataset:`symbol$(); range_from:`timestamp$();
+        range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$());
+    r:@[{.qcov.require_schema[]; ""};::;{x}];
+    / restore via the helper, which DELETES first - calling init_ledger here
+    / would leave the wrong-shaped table in place for every later suite.
+    .testutil.reset_coverage_ledger[];
+    .qunit.assertEquals[r like "*source_version*";1b;"a ledger without source_version is named as such, not read anyway"]};
 
 \d .

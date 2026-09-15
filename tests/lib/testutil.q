@@ -12,4 +12,24 @@ approx:{[tol;a;b] all tol>=abs a-b};
 // assertThat wrapper for approximate numeric equality.
 assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];expected;msg]};
 
+// A genuinely empty etl_coverage ledger, whatever shape it currently has.
+//
+// The DELETE is the point. `.qcov.init_ledger` creates the table only when
+// absent, which is the right contract - but it means a test that replaced the
+// ledger with a differently-shaped one cannot restore it by calling
+// init_ledger again: the wrong-shaped table exists, so init_ledger leaves it,
+// and the bad shape leaks into every suite that runs afterwards. That is
+// exactly what happened when the #60 schema-guard tests were added, and it
+// broke 21 tests in two other namespaces.
+//
+// Also note `value`: init_ledger returns the SYMBOL `etl_coverage, so
+// `0#init_ledger[]` is an empty symbol VECTOR rather than an empty table.
+// Every suite healed itself on first use, because an empty vector is not in
+// `tables` and init_ledger then re-created the table - silent, and invisible
+// until something called `meta` directly.
+reset_coverage_ledger:{[]
+    ![`.;();0b;enlist `etl_coverage];
+    .qcov.init_ledger[];
+    value `etl_coverage};
+
 \d .

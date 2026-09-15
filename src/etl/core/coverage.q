@@ -66,6 +66,39 @@ init_ledger:{[]
 / see init_ledger's note on namespace resolution.
 ledger:{[] value `etl_coverage}
 
+/ Refuse to trust a ledger whose shape is not the one this file assumes
+/ (issue #60).
+/ .
+/ The point is to convert a SILENT wrong answer into a loud refusal. If the
+/ real table carries a partition key, every read here aggregates across
+/ partitions, so a range covered in one partition and empty in the others is
+/ reported COMPLETE - and nothing errors, because every row found is valid.
+/ A consumer then reads a gap-ridden range believing it is whole.
+/ .
+/ Call this from a worker's init when attached to a ledger this process did
+/ not create. It is NOT called from init_ledger: a table this file just built
+/ trivially matches, so checking there would only ever confirm itself.
+/ .
+/ `scripts/verify_coverage_schema.q` is the same check as a standalone
+/ command, for settling #60 without starting a worker.
+/ @return 1b when the live shape matches
+/ @throws error naming the difference, and what it would silently do
+require_schema:{[]
+    live:exec c from 0!meta ledger[];
+    missing:schema where not schema in live;
+    extra:live where not live in schema;
+    if[count missing;
+        '"require_schema: etl_coverage is missing ",(", " sv string missing),
+         " - the assumed shape (see #60) is wrong, and reads here would fail or return nulls"];
+    if[count extra;
+        '"require_schema: etl_coverage carries unexpected column(s) ",
+         (", " sv string extra),
+         " - if any of them is a partition key, every read here aggregates ",
+         "ACROSS partitions and would report a range covered in one partition ",
+         "as complete. Settle it with scripts/verify_coverage_schema.q before ",
+         "trusting is_covered (#60)"];
+    1b}
+
 / -------------------------------------------------------------- INTERVALS
 
 / Validate a half-open [from;to) interval (E-08).
