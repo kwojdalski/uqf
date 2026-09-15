@@ -225,6 +225,59 @@ def rule_reserved_parameter_names(path: str, lines: list[str]) -> list[Finding]:
     return findings
 
 
+def rule_reserved_local_assignment(path: str, text: str) -> list[Finding]:
+    """A q builtin assigned as a lambda LOCAL throws `assign at load time.
+
+    And it aborts the rest of the file while the enclosing script carries on,
+    leaving a half-populated namespace - the same silent-partial-load failure
+    as the bare-slash comment block.
+
+    Distinct from `rule_reserved_parameter_names`, which inspects signatures.
+    This is the sixth reserved-name collision in this repository and the
+    first as a local: `var:credential_var source` in source_contract.q, where
+    `var` is variance. A parameter-only rule does not see it.
+
+    Scoped to lambda BODIES, because the same name at namespace level is fine
+    (a ``\\d .qsrc`` then ``var:1`` defines ``.qsrc.var``, legal). qSQL lines
+    are skipped: `select max:...` is a column alias, not an assignment.
+
+    False positives in this repo: 0.
+    """
+    findings = []
+    for m in re.finditer(r"\{", text):
+        end = _match_forward(text, m.start(), "{", "}")
+        if end < 0:
+            continue
+        body = text[m.start() : end]
+        # Only the outermost lambda of each nest needs scanning; an inner one
+        # is inside this body already. Cheap dedupe: skip a `{` that is not
+        # the first of its nesting level.
+        if text.rfind("}", 0, m.start()) < text.rfind("{", 0, m.start()):
+            continue
+        for line_off, line in enumerate(body.split("\n")):
+            code = _strip_comments(line)
+            if re.search(r"\b(?:select|exec|update|delete|by)\b", code):
+                continue
+            for a in re.finditer(r"(?<![.`\w])([a-z][a-z0-9_]*)\s*:(?!:)", code):
+                name = a.group(1)
+                if name not in RISKY_PARAM_NAMES:
+                    continue
+                line_no = text.count("\n", 0, m.start()) + 1 + line_off
+                findings.append(
+                    Finding(
+                        path,
+                        line_no,
+                        "reserved-local",
+                        f"local assignment to `{name}`",
+                        "shadows a q builtin as a lambda local, which throws "
+                        "`assign at LOAD time and aborts the rest of the file "
+                        "while the enclosing script carries on - leaving a "
+                        "half-populated namespace. Rename it",
+                    )
+                )
+    return findings
+
+
 def rule_niladic_dot_empty(path: str, lines: list[str]) -> list[Finding]:
     """`f . ()` is a type error; `f . enlist(::)` applies a niladic.
 
@@ -396,7 +449,7 @@ LINE_RULES = (
     rule_niladic_dot_empty,
     rule_self_comparison,
 )
-TEXT_RULES = (rule_multiparam_lambda_under_at,)
+TEXT_RULES = (rule_multiparam_lambda_under_at, rule_reserved_local_assignment)
 
 
 # Deliberately NOT implemented, because no formulation cleared the bar above:
