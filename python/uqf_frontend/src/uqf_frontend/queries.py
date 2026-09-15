@@ -1,0 +1,165 @@
+"""Server-authored q programs, and the coercion that feeds them.
+
+The whole point of this module: **the q text below is a constant written
+here, never assembled from client input.** A caller's table name, column
+names and operator are validated against the catalog and then passed as
+IPC *arguments*; a caller's values are passed as typed IPC arguments and
+never rendered into text at all. That is what satisfies F-14, and it is
+strictly stronger than escaping or quoting a concatenated string.
+
+Two q details this depends on, both verified against a live KDB-X process
+rather than assumed:
+
+1. A functional select accepts the table *name* as a symbol -
+   ``?[`trades; ...; 0b; ()]`` - so there is no ``get`` on a
+   caller-influenced symbol anywhere in the path.
+2. In a functional where-clause a bare symbol is read as a *column name*.
+   A symbol **value** must therefore be enlisted or it silently becomes a
+   column reference. Any other type must **not** be enlisted, because a
+   1-element list does not broadcast against a column vector and raises
+   'length. The ``wrap`` lambda below encodes exactly that rule.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from typing import Any
+
+from uqf_frontend.catalog import LIST_OPERATORS, OPERATORS, QType, Table
+from uqf_frontend.errors import ValidationFailed
+
+#: Filter a whitelisted table by validated (column, operator, value) triples.
+#:
+#: Parameters arrive as IPC arguments: t=table name symbol, fc=column symbols,
+#: fo=operator symbols, fv=values, lim=row cap (0 for no cap).
+#:
+#: The operator dictionary is defined *inside* q and looked up by key, so an
+#: unrecognised operator raises there too - a second line of defence behind
+#: the catalog check, rather than relying on it alone.
+SELECT = """{[t;fc;fo;fv;lim]
+  ops:`eq`ne`lt`le`gt`ge`in!(=;<>;<;<=;>;>=;in);
+  if[not all fo in key ops;'"uqf_frontend: unknown operator"];
+  wrap:{$[11h=abs type x; enlist x; x]};
+  wc:{[o;c;v;m;w] (m o;c;w v)}[;;;ops;wrap]'[fo;fc;fv];
+  r:?[t;wc;0b;()];
+  $[lim>0; lim sublist r; r]}"""
+
+#: Row count for a whitelisted table, so a UI can page without pulling rows.
+COUNT = "{[t] count value t}"
+
+#: Cheap liveness probe. Returns the gateway's own UTC time.
+#:
+#: An *expression*, not a lambda: sending ``"{[] .z.p}"`` with no arguments
+#: makes q return the function itself, and kola cannot deserialise a q
+#: function ("Not supported k type 100"). Confirmed against a live process.
+PING = ".z.p"
+
+
+def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
+    """Turn one JSON value into the Python type kola maps to *qtype*.
+
+    Verified kola conversions: ``str`` becomes a symbol atom, ``list[str]`` a
+    symbol vector, ``float`` a float atom, ``int`` a long atom, ``bool`` a
+    boolean atom, and a **timezone-aware** ``datetime`` a timestamp.
+
+    A naive datetime is rejected by kola itself with an unhelpful TypeError,
+    so this function requires UTC explicitly. That is not a workaround - it
+    is E-08/R9.1 (everything is UTC internally) enforced at the boundary
+    where a browser's local time would otherwise leak in.
+    """
+    if as_list:
+        if not isinstance(value, list) or not value:
+            raise ValidationFailed(
+                f"operator on column {column!r} needs a non-empty list of values"
+            )
+        return [coerce(v, qtype, column, as_list=False) for v in value]
+
+    match qtype:
+        case QType.SYMBOL:
+            if not isinstance(value, str):
+                raise ValidationFailed(f"column {column!r} is a symbol; expected a string")
+            return value
+        case QType.FLOAT:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValidationFailed(f"column {column!r} is a float; expected a number")
+            return float(value)
+        case QType.LONG:
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValidationFailed(f"column {column!r} is a long; expected an integer")
+            return value
+        case QType.BOOLEAN:
+            if not isinstance(value, bool):
+                raise ValidationFailed(f"column {column!r} is a boolean; expected true or false")
+            return value
+        case QType.TIMESTAMP:
+            return _utc(value, column)
+        case QType.TIMESPAN:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValidationFailed(
+                    f"column {column!r} is a timespan; expected nanoseconds as a number"
+                )
+            return dt.timedelta(microseconds=float(value) / 1000.0)
+        case QType.LIST:  # pragma: no cover - blocked earlier by Table.filterable
+            raise ValidationFailed(
+                f"column {column!r} holds a vector per row and cannot be filtered"
+            )
+
+    raise ValidationFailed(f"column {column!r} has unsupported type {qtype}")  # pragma: no cover
+
+
+def _utc(value: Any, column: str) -> dt.datetime:
+    """Parse an ISO-8601 string (or accept a datetime) as an aware UTC value."""
+    if isinstance(value, dt.datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = dt.datetime.fromisoformat(value)
+        except ValueError:
+            raise ValidationFailed(
+                f"column {column!r} is a timestamp; expected an ISO-8601 datetime, got {value!r}"
+            ) from None
+    else:
+        raise ValidationFailed(f"column {column!r} is a timestamp; expected an ISO-8601 string")
+
+    if parsed.tzinfo is None:
+        raise ValidationFailed(
+            f"column {column!r} needs an explicit timezone offset (e.g. "
+            f"'2026-09-15T10:30:00Z'); everything is stored in UTC and a naive "
+            f"local time would be silently wrong"
+        )
+    return parsed.astimezone(dt.UTC)
+
+
+def build_filters(
+    tbl: Table, filters: list[tuple[str, str, Any]]
+) -> tuple[list[str], list[str], list[Any]]:
+    """Validate filters against the catalog and split them into the three
+    parallel argument lists ``SELECT`` expects.
+
+    Every rejection here happens before any IPC call.
+    """
+    columns: list[str] = []
+    operators: list[str] = []
+    values: list[Any] = []
+
+    for column, operator, value in filters:
+        if column not in tbl.columns:
+            known = ", ".join(sorted(tbl.filterable))
+            raise ValidationFailed(
+                f"unknown column {column!r} on table {tbl.name!r}; filterable columns are: {known}"
+            )
+        if column not in tbl.filterable:
+            raise ValidationFailed(
+                f"column {column!r} holds a vector per row and cannot be filtered on"
+            )
+        if operator not in OPERATORS:
+            known = ", ".join(sorted(OPERATORS))
+            raise ValidationFailed(f"unknown operator {operator!r}; supported: {known}")
+
+        columns.append(column)
+        operators.append(operator)
+        values.append(
+            coerce(value, tbl.columns[column], column, as_list=operator in LIST_OPERATORS)
+        )
+
+    return columns, operators, values
