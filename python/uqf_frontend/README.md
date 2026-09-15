@@ -68,6 +68,7 @@ scalar-from-vector. This has cost this repository three debugging sessions
 | `GET /ops/connections` | Registered backend handles and connected clients (**F-03**) |
 | `GET /ops/usage` | Fleet-wide query log, assembled here because q has none (**F-04**) |
 | `GET /ops/processes` | Fleet health for every process `process.csv` declares (**F-01**) |
+| `GET /ops/backfill` | Backfill and Airflow task status, read from the files q writes (**F-06**) |
 | `POST /query` | Validated, parameterised table query, tier-routed (**F-07**, **F-08**) |
 
 Errors carry a `transient` flag so a UI can tell an EOD window or a timeout
@@ -108,6 +109,7 @@ Configuration is environment-only, so credentials stay server-side
 | `UQF_FRONTEND_PROCESSES` | empty — `rdb1:6052,hdb1:6053` or `name:host:port` |
 | `UQF_FRONTEND_PROCESS_CSV` | unset — TorQ's generated `process.csv` |
 | `UQF_FRONTEND_BASE_PORT` | `6050` — what `{KDBBASEPORT}` resolves to |
+| `UQF_FRONTEND_STATUS_DIR` | unset — where q writes status files (pairs with `UQFSTATUSDIR`) |
 
 A malformed numeric value fails at startup rather than falling back to a
 default — the same posture **E-14** takes on the q side.
@@ -269,13 +271,48 @@ append succeeds**. A failed write keeps the old watermark so the next pass
 retries the same rows rather than losing them, and because the fetch filters
 strictly greater, a successful pass captures each row exactly once.
 
+## Backfill status (B4)
+
+`GET /ops/backfill` reads the status files q writes, rather than calling
+Airflow's REST API. That keeps q authoritative for the facts **E-15** says it
+owns and adds no Airflow dependency to a frontend that should work without
+one. Set `UQF_FRONTEND_STATUS_DIR` to the directory `.qpipe.status_dir`
+writes into.
+
+**The format is defined here, not inherited.** This tree has no Airflow
+provider to be compatible with, so `.qpipe.write_status` in
+`scripts/torq_pipeline.q` defines it and `status.py` consumes it.
+`test_status.py` parses the q source to assert the two field sets and state
+sets match — without that, adding a field on one side would silently drop
+data on the other.
+
+### The boundary this deliberately does not cross
+
+**E-15** splits authority: q owns process startup, source reads, query
+failures, checkpoints, run and window counts, and coverage events; Airflow
+owns task ordering, scheduling, retries, timeouts, concurrency and alerting.
+These files carry only the first set, and a test asserts no Airflow-owned
+field (`retries`, `try_number`, `timeout`, `concurrency`, `queue`) appears in
+the response. Inferring one layer's facts from the other's output is exactly
+what E-15 forbids.
+
+### Three outcomes, not two
+
+`idle` is a **success**, distinct from `completed`: "ran, found no work" is
+not "ran, did work", and neither is a failure. An orchestrator that cannot
+tell them apart retries a successful no-op forever (**C-07**). The summary
+counts `failed` separately from `running` for the same reason — a worker
+still in flight is not a problem.
+
+Writes are atomic (serialise, temp file, rename), because the frontend polls
+(**F-10**) and would otherwise be able to read a half-written file. Files
+ending `.tmp` are ignored by the reader, and a test covers that.
+
 ## Not in scope here
 
-Phases **B3** (process fleet health) and **B4** (Airflow/backfill status) are
-the two requirements that need new q-side or Airflow-side work, and both are
-gated on open questions (**F-21**, **F-22**). **B5** (auth) is gated on
-**F-20**; until then the layer connects with one credential from its
-environment.
+**B5** (auth) is gated on **F-20**; until then the layer connects with one
+credential from its environment, and **F-14** — credentials server-side only,
+no client input in query text — is what carries the security weight.
 
 The capture pipeline ships as a callable, not a daemon. What schedules it —
 a timer in this process, cron, or an Airflow task — is a deployment question,

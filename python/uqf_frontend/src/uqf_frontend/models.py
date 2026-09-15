@@ -162,3 +162,42 @@ class FleetHealthResponse(BaseModel):
     groups: dict[str, int] = Field(description="declared process count per proctype")
     source: str | None = Field(default=None, description="the process.csv that was read")
     poll_seconds: int
+
+
+class WorkerStatusOut(BaseModel):
+    worker: str
+    instance_id: str
+    state: str
+    source_version: str
+    range_from: str
+    range_to: str
+    cursor: str | None = None
+    rows_published: int
+    windows_completed: int
+    error: str | None = None
+    updated_at: str
+    terminal: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class BackfillStatusResponse(BaseModel):
+    """What q reports about its own backfill runs.
+
+    Carries only facts q owns per E-15 - startup, source reads, failures,
+    checkpoints, run and window counts. Airflow's facts (task ordering,
+    retries, timeouts, concurrency) are deliberately absent: inferring them
+    from these files is the cross-layer inference E-15 forbids.
+    """
+
+    summary: dict[str, int] = Field(
+        description="`failed` is counted separately from `running`, since a worker still "
+        "in flight is not a problem"
+    )
+    workers: list[WorkerStatusOut]
+    unreadable: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Files present but not parseable. Reported rather than raised, so one "
+        "damaged file cannot hide every healthy worker",
+    )
+    source: str | None = Field(default=None, description="the directory that was read")
+    poll_seconds: int
