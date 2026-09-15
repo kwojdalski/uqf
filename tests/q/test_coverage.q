@@ -182,6 +182,48 @@ test_a_partition_key_is_refused_rather_than_ignored:{[t]
     .testutil.reset_coverage_ledger[];
     .qunit.assertEquals[r like "*partition*";1b;"an unexpected column is refused, and the message says what it would silently do"]};
 
+/ --- attach: the guard that actually fires (#60) ---------------------------
+
+/ require_schema existed, was tested, and was called from NO live path -
+/ a guard that cannot fire protects nothing, and worse, its existence reads
+/ as protection to anyone auditing the code. attach is the call site, and
+/ these tests are about WHEN it bites rather than what it checks.
+
+test_attaching_to_an_absent_ledger_creates_it:{[t]
+    ![`.;();0b;enlist `etl_coverage];
+    .qunit.assertEquals[.qcov.attach[];`etl_coverage;"a first attach creates the ledger rather than refusing"]};
+
+/ Checking a table we just built would only ever confirm itself, so the
+/ absent case deliberately does not validate.
+test_attaching_to_a_ledger_we_created_does_not_second_guess_it:{[t]
+    ![`.;();0b;enlist `etl_coverage];
+    .qcov.attach[];
+    .qunit.assertEquals[.qcov.attach[];`etl_coverage;"a second attach to our own ledger is fine"]};
+
+/ The case #60 is about: a ledger someone ELSE created, whose shape is
+/ evidence rather than our assumption.
+test_attaching_to_a_foreign_partitioned_ledger_is_refused:{[t]
+    `etl_coverage set ([] date:`date$(); dataset:`symbol$(); source_version:`symbol$();
+        range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$();
+        recorded_at:`timestamp$());
+    r:@[{.qcov.attach[]; ""};::;{x}];
+    .testutil.reset_coverage_ledger[];
+    .qunit.assertEquals[r like "*partition*";1b;"an existing ledger of the wrong shape is refused before a single read is trusted"]};
+
+test_attaching_to_a_foreign_ledger_missing_a_column_is_refused:{[t]
+    `etl_coverage set ([] dataset:`symbol$(); range_from:`timestamp$();
+        range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$());
+    r:@[{.qcov.attach[]; ""};::;{x}];
+    .testutil.reset_coverage_ledger[];
+    .qunit.assertEquals[r like "*source_version*";1b;"a ledger without source_version is named, not read anyway"]};
+
+test_attaching_to_a_correctly_shaped_foreign_ledger_succeeds:{[t]
+    / same columns, built independently of init_ledger
+    `etl_coverage set ([] dataset:`symbol$(); source_version:`symbol$();
+        range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$();
+        recorded_at:`timestamp$());
+    .qunit.assertEquals[.qcov.attach[];`etl_coverage;"a foreign ledger of the right shape is accepted"]};
+
 test_a_missing_column_is_refused:{[t]
     `etl_coverage set ([] dataset:`symbol$(); range_from:`timestamp$();
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$());
