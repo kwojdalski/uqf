@@ -18,7 +18,7 @@ def fake_paths(tmp_path: Path) -> core.TorqDemoPaths:
     (torqhome / "torq.q").touch()
     (torqapphome / "appconfig").mkdir(parents=True)
     (torqapphome / "database.q").write_text(
-        'quote:([]time:`timestamp$(); sym:`g#`symbol$(); bid:`float$())\n'
+        "quote:([]time:`timestamp$(); sym:`g#`symbol$(); bid:`float$())\n"
     )
     (torqapphome / "appconfig" / "process.csv").write_text(
         "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
@@ -152,9 +152,7 @@ def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
     assert generated_rows["fxfeed1"]["startwithall"] == "0"
 
 
-def test_bootstrap_generates_schema_with_quotes_table(
-    fake_paths: core.TorqDemoPaths, monkeypatch
-):
+def test_bootstrap_generates_schema_with_quotes_table(fake_paths: core.TorqDemoPaths, monkeypatch):
     monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
 
     core.bootstrap(fake_paths, base_port=7000)

@@ -25,13 +25,22 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.2
     hooks:
+      # Scoped by INTENT - every .py file except vendored - rather than by
+      # directory. A directory list goes stale silently: this was scoped
+      # '^python/uqf-client/' while Python was being added under
+      # torq_orchestrator/ and uqf_frontend/, so 43 of 47 tracked .py files
+      # were never linted, and nothing complained because the scope was
+      # still valid, merely too narrow. Matching all Python and excluding
+      # lib/ cannot drift that way. scripts/check_hook_scopes.py enforces it.
       - id: ruff
-        name: ruff (uqf-client)
+        name: ruff (all python)
         args: ['--fix']
-        files: '^python/uqf-client/'
+        files: '\.py$'
+        exclude: '^lib/'
       - id: ruff-format
-        name: ruff-format (uqf-client)
-        files: '^python/uqf-client/'
+        name: ruff-format (all python)
+        files: '\.py$'
+        exclude: '^lib/'
 
   - repo: local
     hooks:
@@ -53,6 +62,19 @@ repos:
         pass_filenames: false
 
       # Run the qUnit test suite (tests/run_tests.q) against every module.
+      # Guards the gate itself. A hook scoped to a path that no longer
+      # exists, or too narrow to cover the code it should, matches nothing
+      # and reports green - so the commit looks gated when it is not. This
+      # refuses both: a dead scope, and any tracked Python outside the lint
+      # hooks. Cheap (one git ls-files plus regex matching), so it runs
+      # always rather than only when the config changes.
+      - id: check-hook-scopes
+        name: Check pre-commit hook scopes cover the code
+        entry: python3 scripts/check_hook_scopes.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: q-tests
         name: Run qUnit tests for uqf
         entry: bash
