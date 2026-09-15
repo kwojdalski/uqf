@@ -3,16 +3,16 @@
 Drafted with the `kdb-q-conventions` skill (layout, snake_case, doc style,
 testing, and the string-vs-symbol/keyword-shadowing gotchas) plus the
 `torq-developer` skill (q-language rules Q1-Q3) and this repo's own
-conventions in `src/forwards.q` and `src/data.q`. Hand this prompt to an LLM
+conventions in `src/pricing/forwards.q` and `src/integrations/data.q`. Hand this prompt to an LLM
 session in this repo to implement the function.
 
 ```
 Implement a reshape utility that fixes an incorrectly-ingested order book
 table in kdb+/q: today it has one column per depth level (e.g. bid0, bid1,
 ..., bidSize0, bidSize1, ... or whatever the source vendor names them) and
-symbol-like columns stored as strings instead of symbols. Read src/forwards.q
+symbol-like columns stored as strings instead of symbols. Read src/pricing/forwards.q
 in full first (the `bid_prices`/`bid_sizes`/`ask_prices`/`ask_sizes` dict
-shape used by cross_book/cross_book_at_sizes/sweep_price) and src/data.q
+shape used by cross_book/cross_book_at_sizes/sweep_price) and src/integrations/data.q
 (Databento MBP-10 parquet loader - the likely real-world source of tables
 shaped like this) before writing anything - the target shape here must match
 the book dict convention already established in forwards.q, not invent a new
@@ -88,7 +88,7 @@ Compose the above into one function:
   the caller consults first.
 
 WHERE THIS LIVES
-New file src/book.q, `\d .qf` at top / `\d .` at end like every other
+New file src/market_data/book.q, `\d .qf` at top / `\d .` at end like every other
 src/*.q file (see kdb-q-conventions skill's Layout section), added to
 src/init.q's load order after data.q. Reuse the existing `.qf` namespace -
 don't invent a new one.
@@ -100,7 +100,7 @@ kdb-q-conventions's current Layout section.]
 
 CONVENTIONS TO FOLLOW (this repo, not generic TorQ)
 - snake_case everywhere (functions, params, locals) per kdb-q-conventions
-  skill and the Aug 2026 rename commits - src/data.q is the one deliberate
+  skill and the Aug 2026 rename commits - src/integrations/data.q is the one deliberate
   camelCase exception (left alone, not a precedent to follow here).
 - Doc comment style: /@param, /@return, /@throws, /@eg immediately above
   each public function, exactly matching forwards.q's style - no blank line
@@ -145,7 +145,7 @@ suffixed namespace, `test*`-prefixed unary functions, qUnit assertions):
     same values, same row order.
 
 Do not touch forwards.q's book dict consumers (cross_book, cross_book_at_sizes,
-sweep_price, etc.) or src/data.q's parquet loader - this is a new, additive
+sweep_price, etc.) or src/integrations/data.q's parquet loader - this is a new, additive
 reshape step meant to sit between reading a raw wide table and handing its
 output to those existing functions, not a rewrite of either.
 ```

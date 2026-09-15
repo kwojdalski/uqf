@@ -7,7 +7,7 @@
 \l tests/lib/qunit.q
 \l tests/lib/testutil.q
 \l src/init.q
-\l src/data.q
+\l src/integrations/data.q
 
 \l tests/test_stats.q
 \l tests/test_ccy.q

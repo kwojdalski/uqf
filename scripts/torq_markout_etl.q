@@ -3,7 +3,7 @@
 / torq_fx_trades_feed.q's `trades` and the vendored `quote` table (which
 / torq_fx_feed.q also writes FX top-of-book into - see torq_fx_feed.q's
 / own header comment), and periodically runs uqf's own
-/ .qexec.markout_at_horizons (src/execution.q) to score each fill's
+/ .qexec.markout_at_horizons (src/execution/execution.q) to score each fill's
 / post-trade price movement at a couple of horizons - the process that
 / closes out execution.q the same way posbook1 closed out
 / positions.q/risk.q: every uqf module now has at least one live TorQ

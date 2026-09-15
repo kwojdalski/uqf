@@ -10,7 +10,7 @@
 \d .qopt
 
 / Private: (d1;d2) computed together so callers never duplicate the
-/ underlying arithmetic (see src/stats.q for why that matters in q).
+/ underlying arithmetic (see src/foundation/stats.q for why that matters in q).
 / @param s spot rate
 / @param k strike
 / @param rd domestic (quote currency) decimal annual rate

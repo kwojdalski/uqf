@@ -1,5 +1,5 @@
-// test_stats.q - tests for src/stats.q (.qstats.ncdf, .qstats.npdf, .qstats.inv_ncdf,
-// .qstats.horner_eval). Load src/stats.q, tests/lib/qunit.q and
+// test_stats.q - tests for src/foundation/stats.q (.qstats.ncdf, .qstats.npdf, .qstats.inv_ncdf,
+// .qstats.horner_eval). Load src/foundation/stats.q, tests/lib/qunit.q and
 // tests/lib/testutil.q before this file.
 
 \d .statstest

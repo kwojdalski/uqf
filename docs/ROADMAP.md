@@ -1,12 +1,12 @@
 # Roadmap: order-book / microstructure feature candidates
 
-Candidate functions for a possible new `src/microstructure.q` module, covering
+Candidate functions for a possible new `src/market_data/microstructure.q` module, covering
 liquidity/order-flow signals that quantify *what the book looks like* and
 *how it's moving* rather than pricing/execution outcomes (which is what
 `book.q`, `forwards.q` and `execution.q` already cover).
 
 **Status: implemented.** Every Tier 1 and Tier 2 function below now lives in
-`src/microstructure.q` (tests in `tests/test_microstructure.q`) - see
+`src/market_data/microstructure.q` (tests in `tests/test_microstructure.q`) - see
 `docs/prompts/microstructure-features.md` for the implementation prompt this
 was built from, including the one deliberate shape change from what's written
 below: every function takes a whole `quotes`-table COLUMN (a vector of

@@ -178,7 +178,7 @@
 .man.registerArg (".qopt.d1";"param";"k";"strike");
 .man.registerArg (".qopt.d1";"eg";"";".qopt.d1[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784");
 .man.registerArg (".qopt.d1";"return";"";"the Garman-Kohlhagen d1 term");
-.man.registerFunc (".qopt.d1_d2";".qopt";"Private: (d1;d2) computed together so callers never duplicate the underlying arithmetic (see src/stats.q for why that matters in q).";".qopt.d1_d2";".qopt.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> (0.05174784;-0.0348547)");
+.man.registerFunc (".qopt.d1_d2";".qopt";"Private: (d1;d2) computed together so callers never duplicate the underlying arithmetic (see src/foundation/stats.q for why that matters in q).";".qopt.d1_d2";".qopt.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> (0.05174784;-0.0348547)");
 .man.registerArg (".qopt.d1_d2";"param";"sigma";"volatility, decimal (0.10 = 10%)");
 .man.registerArg (".qopt.d1_d2";"param";"rd";"domestic (quote currency) decimal annual rate");
 .man.registerArg (".qopt.d1_d2";"param";"s";"spot rate");
@@ -342,7 +342,7 @@
 .man.registerArg (".qrisk.var_parametric";"param";"confidence";"one-tailed confidence level, e.g. 0.95 or 0.99");
 .man.registerArg (".qrisk.var_parametric";"eg";"";".qrisk.var_parametric[1000000;0.10;1%252;0.95]  -> 10361.6 (1-day 95% VaR)");
 .man.registerArg (".qrisk.var_parametric";"return";"";"a positive loss estimate, in the notional's currency");
-.man.registerFile ("data.q";"";".qdata";"data.q - optional Databento parquet data access, keyed by symbol and date. Not loaded by src/init.q: it needs a real kdb+/KDB-X interpreter (PeachQ has no `2:`, so it can't load KX's native pq module) and a local .env pointing at the data. Load explicitly with `\l src/data.q`.  Expects DATABENTO_DATA_DIR (from a repo-root .env file, or the OS environment) to point at a folder laid out as: <DATABENTO_DATA_DIR>/<SYMBOL>/<SYMBOL>_<YYYY-MM-DD>_raw_mbp-10_us_hours.parquet .");
+.man.registerFile ("data.q";"";".qdata";"data.q - optional Databento parquet data access, keyed by symbol and date. Not loaded by src/init.q: it needs a real kdb+/KDB-X interpreter (PeachQ has no `2:`, so it can't load KX's native pq module) and a local .env pointing at the data. Load explicitly with `\l src/integrations/data.q`.  Expects DATABENTO_DATA_DIR (from a repo-root .env file, or the OS environment) to point at a folder laid out as: <DATABENTO_DATA_DIR>/<SYMBOL>/<SYMBOL>_<YYYY-MM-DD>_raw_mbp-10_us_hours.parquet .");
 .man.registerFunc (".qdata.cfg";".qdata";"Look up a config value: the OS environment first, then the parsed .env dict, then the given default.";".qdata.cfg";".qdata.cfg[`DATABENTO_DATA_DIR;::]");
 .man.registerArg (".qdata.cfg";"param";"dflt";"fallback value, or generic null (::) to error if unset");
 .man.registerArg (".qdata.cfg";"param";"k";"the variable name, e.g. `DATABENTO_DATA_DIR`");
@@ -374,7 +374,7 @@
 .man.registerArg (".qdata.pqm";"eg";"";".qdata.pqModule[][`pq]");
 .man.registerArg (".qdata.pqm";"throws";"";"if `use` (KDB-X's module loader) is unavailable - real kdb+/KDB-X is required here, not PeachQ");
 .man.registerArg (".qdata.pqm";"return";"";"the pq module namespace, exposing `.pq` (open file), `.op`/`.rd` (low-level access)");
-.man.registerFile ("daycount.q";"";".qdcf";"daycount.q - day count fraction conventions used to turn a pair of dates into the year fraction t consumed by rates.q / forwards.q / options.q. . NOTE ON q ARITHMETIC: q has no operator precedence (strictly right to left evaluation), so every mixed +/-/* expression below is built from explicitly parenthesised, named intermediate terms rather than dense one-liners - see src/stats.q for the bug this avoids.");
+.man.registerFile ("daycount.q";"";".qdcf";"daycount.q - day count fraction conventions used to turn a pair of dates into the year fraction t consumed by rates.q / forwards.q / options.q. . NOTE ON q ARITHMETIC: q has no operator precedence (strictly right to left evaluation), so every mixed +/-/* expression below is built from explicitly parenthesised, named intermediate terms rather than dense one-liners - see src/foundation/stats.q for the bug this avoids.");
 .man.registerFunc (".qdcf.dcf_30e_360";".qdcf";"30E/360 (Eurobond basis): each month treated as having 30 days. Day-of-month is capped at 30 for both dates (the simple European variant - it does not carry the US/NASD end-of-February special case).";".qdcf.dcf_30e_360";".qdcf.dcf_30e_360[2024.01.15;2024.02.15]  -> 0.08333333 (30/360)");
 .man.registerArg (".qdcf.dcf_30e_360";"param";"d1";"start date");
 .man.registerArg (".qdcf.dcf_30e_360";"param";"d2";"end date");

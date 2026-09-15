@@ -23,7 +23,7 @@
 // ask_prices/ask_sizes shape uqf's pricing functions expect - a real
 // feed or CSV export is far more likely to arrive column-wide than
 // pre-shaped. Each tick's timer callback reshapes JUST that tick's own
-// row via src/book.q's derive_level_groups/book_from_wide_levels (the
+// row via src/market_data/book.q's derive_level_groups/book_from_wide_levels (the
 // same reshape machinery, applied per-row instead of to a whole table
 // upfront) before appending the result to the live quotes table -
 // demonstrating that the wide-to-vector reshape composes naturally with
@@ -74,7 +74,7 @@ key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
 / ==== Step 1: pre-generate the "historical" tick series, once ====
 / Same EURUSD single-pair spot/scale as cross_markout_example.q's
-/ mk_book, scaled by .qex.pip_size/.qex.size_unit (src/example_defaults.q)
+/ mk_book, scaled by .qex.pip_size/.qex.size_unit (src/examples/example_defaults.q)
 / - stands in for timersvc.q's tradeGE.N0821.csv, a fixed dataset with
 / its own recorded timestamps, generated/loaded once before replay
 / starts. Unlike mk_book elsewhere, this builds one WIDE row (a dict of

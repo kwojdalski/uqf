@@ -1,4 +1,4 @@
-// test_execution.q - tests for src/execution.q. Load src/execution.q,
+// test_execution.q - tests for src/execution/execution.q. Load src/execution/execution.q,
 // tests/lib/qunit.q and tests/lib/testutil.q before this file.
 
 \d .executiontest

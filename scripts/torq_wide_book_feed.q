@@ -3,7 +3,7 @@
 / vector-column `quotes` table. Publishes the same kind of depth-aware
 / book, deliberately in the wrong shape - `bids0..bids10`/`asks0..asks10`,
 / one scalar column per level, exactly the "incorrectly-ingested wide
-/ order book table" src/book.q's own header comment describes - so it can
+/ order book table" src/market_data/book.q's own header comment describes - so it can
 / be fixed back into forwards.q's vector-column shape downstream by uqf's
 / own .qbook.book_from_wide_levels (see torq_vectorize_etl.q/vectorize1),
 / rather than by a synthetic example.

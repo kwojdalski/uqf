@@ -29,7 +29,7 @@ You need a q/kdb+ interpreter. Two options:
   ```
 
 Either way, run everything from the repository root - the load scripts use
-paths relative to it (e.g. `src/stats.q`).
+paths relative to it (e.g. `src/foundation/stats.q`).
 
 ## Quick start
 
@@ -51,35 +51,50 @@ targets.
 ## Layout
 
 ```
-src/  (each file loads into its own flat namespace, shown in [])
-  stats.q       [.qstats] normal distribution helpers (ncdf, npdf, inv_ncdf) + horner_eval
-  ccy.q         [.qccy] currency pair symbol convention: CURCUR validation/normalization
-  daycount.q    [.qdcf] day count fraction conventions (ACT/360, ACT/365, 30E/360)
-  rates.q       [.qrates] discount/growth factors, simple<->continuous rate conversion
-  forwards.q    [.qfwd] CIRP forwards/swap points, cross rates, synthetic cross books
-  options.q     [.qopt] Garman-Kohlhagen pricing, Greeks, implied vol
-  risk.q        [.qrisk] pip value, P&L, carry, parametric & historical VaR
-  positions.q   [.qpos] weighted-average-cost FX position tracking (apply_fill/
-                apply_fills), per-currency exposure decomposition and revaluation
-                into one reporting currency (ccy_exposure/ccy_exposure_in), and
-                reconciling a computed book against an independent reference
-                (reconcile_trades)
-  execution.q   [.qexec] markouts, effective spread, slippage, fill/reject ratios,
-                vwap, order-book sweep pricing
-  book.q        [.qbook] reshapes wide/mis-typed order book tables into the
-                vector-column shape execution.q/forwards.q expect
-  microstructure.q  [.qmicro] LOB microstructure signals: book pressure,
-                    microprice, order flow imbalance, VAMP, and more
-  dqchecks.q    [.qdqc] data quality / risk limit checks - per-entity
-                threshold checks (check_limit, and check_position_notional_limits/
-                check_ccy_exposure_limits built on it), market data sanity
-                (check_market_data_quality, check_stale_quotes), and
-                summarize_checks to flatten several checks into one
-                actionable "what needs attention" report
-  example_defaults.q   [.qex] shared scaling constants (pip_size, size_unit,
-                        size_row_drift) for scripts/*.q's synthetic data -
-                        not consumed by any pricing/execution function
-  init.q        loads every module above, in dependency order
+src/  (directories are organisational; each file keeps its own FLAT namespace,
+      shown in [] - the namespace does NOT track the directory)
+  foundation/
+    stats.q       [.qstats] normal distribution helpers (ncdf, npdf, inv_ncdf) + horner_eval
+    ccy.q         [.qccy] currency pair symbol convention: CURCUR validation/normalization
+    daycount.q    [.qdcf] day count fraction conventions (ACT/360, ACT/365, 30E/360)
+    rates.q       [.qrates] discount/growth factors, simple<->continuous rate conversion
+  pricing/
+    forwards.q    [.qfwd] CIRP forwards/swap points, cross rates, synthetic cross books
+    options.q     [.qopt] Garman-Kohlhagen pricing, Greeks (incl. vanna/volga), implied vol
+  portfolio/
+    risk.q        [.qrisk] pip value, P&L, carry, parametric & historical VaR
+    positions.q   [.qpos] weighted-average-cost FX position tracking (apply_fill/
+                  apply_fills), per-currency exposure decomposition and revaluation
+                  into one reporting currency (ccy_exposure/ccy_exposure_in), and
+                  reconciling a computed book against an independent reference
+                  (reconcile_trades)
+  execution/
+    execution.q   [.qexec] markouts, effective spread, slippage, fill/reject ratios
+                  (incl. reject_ratio_by), vwap and vwap_expanding, sweep pricing
+  market_data/
+    book.q        [.qbook] reshapes wide/mis-typed order book tables into the
+                  vector-column shape execution/ and pricing/ expect
+    microstructure.q  [.qmicro] LOB microstructure signals: book pressure,
+                      microprice, order flow imbalance, VAMP, and more
+    dqchecks.q    [.qdqc] data quality / risk limit checks - per-entity
+                  threshold checks (check_limit, and check_position_notional_limits/
+                  check_ccy_exposure_limits/check_reject_ratio_limits built on it),
+                  market data sanity (check_market_data_quality, check_stale_quotes),
+                  and summarize_checks to flatten several checks into one
+                  actionable "what needs attention" report
+  integrations/
+    data.q        [.qdata] NOT loaded by init.q - see its own header
+  examples/
+    example_defaults.q   [.qex] shared scaling constants (pip_size, size_unit,
+                          size_row_drift) for scripts/*.q's synthetic data -
+                          not consumed by any pricing/execution function
+  init.q          loads every module above
+
+  The directories do NOT imply a dependency layering. The module graph has a
+  genuine cycle - pricing/forwards.q calls .qexec.sweep_price/.qexec.markout
+  while execution/execution.q reads .qfwd.ts_col/.qfwd.apply_col_precedence -
+  which resolves only because q binds names at call time. market_data/
+  dqchecks.q likewise reaches into .qfwd, .qmicro and .qpos. See src/init.q.
 
 lib/
   log4q.q         vendored log4q logger (see Licensing) - not loaded by

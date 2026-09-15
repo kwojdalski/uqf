@@ -24,7 +24,7 @@ Evaluate the codebase against these architectural concerns, in order of impact:
 ### 1. Layering and Separation of Concerns
 - Pricing/execution math (`forwards.q`, `options.q`, `execution.q`, `risk.q`) mixed with I/O, logging, or example-script concerns that belong in `scripts/`
 - A module reaching directly into another module's clearly-private helper (naming convention aside, a function only ever called internally within its own file) rather than through its public surface
-- `src/data.q` (deliberately out-of-scope, camelCase, "not part of this library") boundary respected — flag anything in `src/*.q` that starts depending on `data.q` internals, blurring that intentional separation
+- `src/integrations/data.q` (deliberately out-of-scope, camelCase, "not part of this library") boundary respected — flag anything in `src/*.q` that starts depending on `data.q` internals, blurring that intentional separation
 
 ### 2. Single Responsibility (per module, not per class)
 - A module that has drifted to own more than one reason to change (e.g. `forwards.q` growing cross-rate chaining *and* an unrelated concern that would be cleaner as its own file)

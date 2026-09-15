@@ -1,4 +1,4 @@
-// test_daycount.q - tests for src/daycount.q. Load src/daycount.q,
+// test_daycount.q - tests for src/foundation/daycount.q. Load src/foundation/daycount.q,
 // tests/lib/qunit.q and tests/lib/testutil.q before this file.
 
 \d .daycounttest

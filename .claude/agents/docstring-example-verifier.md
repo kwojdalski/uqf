@@ -30,7 +30,7 @@ by module (@eg count): forwards 31, microstructure 20, options 16,
   ccy 6, book 6, stats 4, daycount 4
 ```
 
-`src/data.q` is out of scope — it is not part of this library and is deliberately left in camelCase (see `uqf-developer`). Skip its 6 `@eg` lines and say you skipped them.
+`src/integrations/data.q` is out of scope — it is not part of this library and is deliberately left in camelCase (see `uqf-developer`). Skip its 6 `@eg` lines and say you skipped them.
 
 ## What to check first
 
@@ -115,5 +115,5 @@ Then persist the run: write `docs/audits/YYYY-MM-DD-docstring-eg-<scope>.md` (ap
 - A finding needs an executed check, not a reading. "This example looks like it predates the signature change" is not a finding; "this example throws `rank` under KDB-X, here is the output" is.
 - Distinguish verified-clean from not-checked in every report. An `@eg` you skipped for time is not an `@eg` that passed.
 - Don't audit whether the documented behaviour is *correct finance* — a formula that is wrong but consistently documented is `bugfinder`'s territory, not yours. You check documentation against implementation, not implementation against theory.
-- Skip `src/data.q` entirely and say that you did.
+- Skip `src/integrations/data.q` entirely and say that you did.
 - Do not use emojis.

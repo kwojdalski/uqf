@@ -233,7 +233,7 @@ pricing code understands - rather than the vendored pack's generic
 `quote`/`trade` tables. It publishes synthetic depth-aware FX quotes (3
 levels per side, level-0-first vectors) into a new `quotes` table:
 `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes - the same shape
-`src/forwards.q`'s `require_quotes_cols` expects (`ts` there; `time` here,
+`src/pricing/forwards.q`'s `require_quotes_cols` expects (`ts` there; `time` here,
 since the tickerplant's own `upd` machinery requires the first column
 literally named `time` - rename it back with `select ts:time,... from
 quotes` before handing rows to `.qfwd.cross_book_at`/etc).

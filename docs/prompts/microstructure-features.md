@@ -1,18 +1,18 @@
-# Prompt: Order-book / microstructure feature module (`src/microstructure.q`)
+# Prompt: Order-book / microstructure feature module (`src/market_data/microstructure.q`)
 
 Drafted with the `kdb-q-conventions` skill (layout, snake_case, doc style,
 testing, and the string-vs-symbol/keyword-shadowing/null-arithmetic
-gotchas) plus this repo's own conventions in `src/execution.q` and
-`src/forwards.q`. Hand this prompt to an LLM session in this repo to
+gotchas) plus this repo's own conventions in `src/execution/execution.q` and
+`src/pricing/forwards.q`. Hand this prompt to an LLM session in this repo to
 implement the module - it turns every candidate function listed in
 `docs/ROADMAP.md` into working code.
 
 ```
-Implement docs/ROADMAP.md's candidate `src/microstructure.q` module: every
+Implement docs/ROADMAP.md's candidate `src/market_data/microstructure.q` module: every
 Tier 1 and Tier 2 function listed there, all of them, none deferred. Read
-docs/ROADMAP.md in full first, then src/execution.q (sweep_price, vwap,
+docs/ROADMAP.md in full first, then src/execution/execution.q (sweep_price, vwap,
 markout's "atom or vector ref_price vectorises naturally" convention) and
-src/forwards.q (require_quotes_cols, the quotes table shape, the `?[cond;a;b]`
+src/pricing/forwards.q (require_quotes_cols, the quotes table shape, the `?[cond;a;b]`
 vectorized-ternary idiom used throughout, leg_book_as_of's target_sym
 naming) before writing anything - every new function must be built on top
 of what's already there wherever the roadmap says it can be (vamp on
@@ -183,10 +183,10 @@ even though the arithmetic around it would have nulled correctly).
   ends on; leave every earlier index null (not enough history yet).
 
 WHERE THIS LIVES
-New file src/microstructure.q, `\d .qf` at top / `\d .` at end like
+New file src/market_data/microstructure.q, `\d .qf` at top / `\d .` at end like
 every other src/*.q file. Reuses the existing .qf namespace - this module
 calls execution.q's sweep_price/vwap and forwards.q's require_quotes_cols
-directly by name (same cross-file reuse pattern src/options.q already uses
+directly by name (same cross-file reuse pattern src/pricing/options.q already uses
 for stats.q's horner_eval), so it must load after both in src/init.q -
 
 [Note: this reflects the single-`.qf`-namespace convention in place when
@@ -195,7 +195,7 @@ per file - microstructure.q now loads into `.qmicro`, and its cross-file
 calls are explicitly qualified (`.qexec.sweep_price`, `.qexec.vwap`,
 `.qfwd.require_quotes_cols`), not bare names. See kdb-q-conventions's
 current Layout section.]
-append `\l src/microstructure.q` as the new last line.
+append `\l src/market_data/microstructure.q` as the new last line.
 
 CONVENTIONS TO FOLLOW (this repo, not generic q)
 - snake_case everywhere; qDoc block (/@param /@return /@throws /@eg, no

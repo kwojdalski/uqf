@@ -1,5 +1,5 @@
-// test_options.q - tests for src/options.q (Garman-Kohlhagen). Load
-// src/stats.q, src/rates.q, src/options.q, tests/lib/qunit.q and
+// test_options.q - tests for src/pricing/options.q (Garman-Kohlhagen). Load
+// src/foundation/stats.q, src/foundation/rates.q, src/pricing/options.q, tests/lib/qunit.q and
 // tests/lib/testutil.q before this file.
 
 \d .optionstest

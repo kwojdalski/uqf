@@ -2,7 +2,7 @@
 / alongside torq_fx_feed.q/torq_quotes_feed.q's own new rows: subscribes to
 / the tickerplant's `quotes` table (torq_quotes_feed.q's depth-aware FX
 / quotes) and, on every batch, re-prices a handful of synthetic cross pairs
-/ through uqf's own .qfwd.cross_book_at (src/forwards.q) - none of
+/ through uqf's own .qfwd.cross_book_at (src/pricing/forwards.q) - none of
 / EURJPY/GBPJPY/EURGBP/AUDJPY are quoted directly by torq_quotes_feed.q, so
 / cross_book_at always has to chain two legs through the shared USD quote
 / currency. Results land in a second local table, `cross_quotes` - a
@@ -93,7 +93,7 @@ init:{
 
 / pull in uqf's own src/init.q (loads .qfwd/.qccy/... - see UQFROOT in
 / core.py's build_env). init.q's own \l lines are repo-root-relative
-/ (`\l src/stats.q`, ...), and torq.sh doesn't launch us from the repo
+/ (`\l src/foundation/stats.q`, ...), and torq.sh doesn't launch us from the repo
 / root, so cd there for the load and back again immediately after -
 / system"cd ..." is q's own builtin chdir, not a subshell, so it sticks
 / across the two calls.

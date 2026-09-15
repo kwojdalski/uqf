@@ -159,7 +159,7 @@ When the user types `done`, or all items have been reviewed:
 ## Important
 
 - Do not suggest theoretical improvements — only flag things that will actually cause a problem in this codebase.
-- Do not flag deliberate exceptions already documented in `kdb-q-conventions` (e.g. `options.q`'s `d1v`/`d2v` instead of `d1`/`d2`, the `beforeNamespace_generate_trades` hook name, `src/data.q`'s camelCase) — those are known, intentional, and explained.
+- Do not flag deliberate exceptions already documented in `kdb-q-conventions` (e.g. `options.q`'s `d1v`/`d2v` instead of `d1`/`d2`, the `beforeNamespace_generate_trades` hook name, `src/integrations/data.q`'s camelCase) — those are known, intentional, and explained.
 - Do not rewrite working code just to make it "cleaner" — focus on correctness, reliability, and testability.
 - Do not use emojis.
 - Cite the exact line number for every finding. If you cannot find the line number, read the file again before reporting.

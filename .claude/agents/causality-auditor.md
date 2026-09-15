@@ -23,15 +23,15 @@ And one shape that is explicitly **not** a finding: a metric whose whole purpose
 
 - **`docs/audits/README.md`** and the entries it indexes. You share this log with `docstring-example-verifier`. Read what prior runs cleared and build on it instead of re-deriving. The facts in "Already verified" below came from the run that wrote this agent — re-verify them after any edit to the file in question, but do not spend a fresh audit rediscovering them.
 - **`.claude/skills/kdb-q-conventions/SKILL.md`** — q's right-to-left evaluation and this repo's recorded gotchas. A causality check that depends on a `where`-clause or functional-select subtlety needs this first. The file also documents PeachQ-vs-KDB-X divergences: **ignore those**, this audit targets KDB-X only.
-- **`src/execution.q` lines 1-10** — the module header asserts a sign convention for the whole file (side `1` buy / `-1` sell; cost metrics positive against the taker; markout positive in the taker's favour). It is a claim about ten functions, and it is checkable.
+- **`src/execution/execution.q` lines 1-10** — the module header asserts a sign convention for the whole file (side `1` buy / `-1` sell; cost metrics positive against the taker; markout positive in the taker's favour). It is a claim about ten functions, and it is checkable.
 
 ## The five checks, in value order
 
 **1. `.qexec.vwap` as an execution benchmark.** `vwap:{[prices;sizes] (sum prices*sizes)%sum sizes}` — a full-window size-weighted mean. As documented ("size-weighted average execution price across a set of fills") this is a correct aggregation of fills that already happened, and there is no defect. But VWAP is also the standard execution *benchmark*, and used that way — comparing a fill against the VWAP of a window that extends past it — it is a look-ahead benchmark that flatters or punishes every execution-quality number built on it. The docstring does not distinguish the two uses. Check: does any caller in `src/`, `tests/`, `scripts/`, or `python/` use it as a benchmark rather than as a fill aggregate; and does the docstring warn. This is the highest-value check in the audit because a look-ahead benchmark silently changes every "beat VWAP" claim downstream.
 
 **2. `aj` sort-order invariants across every path.** Two call sites:
-- `src/execution.q:69` — `markout_at_horizons` sorts its own copy (`sorted_quotes:`sym`time xasc quotes`). Self-contained, safe.
-- `src/forwards.q:463` — `leg_book_as_of` does **not** sort, and its own comment states the invariant is checked once up front by `cross_book_at` instead.
+- `src/execution/execution.q:69` — `markout_at_horizons` sorts its own copy (`sorted_quotes:`sym`time xasc quotes`). Self-contained, safe.
+- `src/pricing/forwards.q:463` — `leg_book_as_of` does **not** sort, and its own comment states the invariant is checked once up front by `cross_book_at` instead.
 
 That second pattern is the auditable one: an invariant enforced at one entry point and assumed by the function itself. Enumerate every path that reaches `leg_book_as_of` (`cross_book_at`, the markout family, `cross_impact_at_horizons`, cross-book chaining, and anything in `scripts/` or the TorQ overlay) and confirm each one passes through the check. Construct the adversarial case: feed a deliberately `ts`-unsorted quotes table down each path and show whether it throws or silently returns a wrong-time book. A path that returns a plausible number from unsorted input is a CRITICAL finding — it is a time-travel bug that never announces itself.
 
@@ -52,7 +52,7 @@ Do not re-derive these; re-check only the file that changed.
 - The OFI family and `queue_depletion_rate` are built on `prev`. Causal.
 - `quotes_for_sym` (`microstructure.q:264`) sorts `` `ts xasc `` before every Tier 2 rolling computation, so the rolling family carries its own ordering guarantee.
 
-`src/data.q` is out of scope — not part of this library (see `uqf-developer`). Say that you skipped it.
+`src/integrations/data.q` is out of scope — not part of this library (see `uqf-developer`). Say that you skipped it.
 
 ## Standard of evidence
 

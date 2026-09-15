@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generates HTML API docs for src/*.q using qDoc (bundled inside qStudio's
+# Generates HTML API docs for src/**/*.q using qDoc (bundled inside qStudio's
 # jar) into build/docs/ (gitignored - regenerate on demand, don't commit it).
 #
 # Output goes to build/docs/, NOT docs/. This used to `rm -rf docs` before
@@ -38,6 +38,11 @@ fi
 
 rm -rf build/docs
 mkdir -p build/docs
+# UNVERIFIED since the src/ domain split: this passes `src` as the source
+# folder, and whether qDoc recurses into subdirectories has not been tested
+# here (it needs the ~120MB qstudio.jar plus a JDK). If the generated index
+# comes back with fewer than the 14 modules, qDoc is not recursing and this
+# needs one invocation per subdirectory, or a find|xargs over them.
 java -cp "$QSTUDIO_JAR" com.timestored.qdoc.QDocMain build/docs src
 
 echo ""
