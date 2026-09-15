@@ -335,7 +335,8 @@ credentials stay server-side and no client input reaches query text.
 
 ```python
 from uqf_frontend.authz import deny_tables
-app = create_app(policy=deny_tables({"position"}))   # 403 on that table
+
+app = create_app(policy=deny_tables({"position"}))  # 403 on that table
 ```
 
 The identity comes from an `x-uqf-user` header and is **claimed, not
