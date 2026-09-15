@@ -35,3 +35,6 @@ __pycache__/
 # editor swap files
 *.swp
 *.swo
+
+# generated documentation - regenerate with scripts/gen-docs.sh
+build/

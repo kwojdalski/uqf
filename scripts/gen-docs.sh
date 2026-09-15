@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Generates HTML API docs for src/*.q using qDoc (bundled inside qStudio's
-# jar) into docs/ (gitignored - regenerate on demand, don't commit it).
+# jar) into build/docs/ (gitignored - regenerate on demand, don't commit it).
+#
+# Output goes to build/docs/, NOT docs/. This used to `rm -rf docs` before
+# regenerating, which would have deleted every hand-written document in
+# docs/ - ROADMAP.md, the requirements files, migrations/, drift-reports/,
+# torq/. Generated output and authored documentation must not share a
+# directory when the generator clears its target.
 #
 # Requires:
 #   - Java 8+ on PATH
@@ -30,9 +36,9 @@ if [ ! -f "$QSTUDIO_JAR" ]; then
     exit 1
 fi
 
-rm -rf docs
-mkdir -p docs
-java -cp "$QSTUDIO_JAR" com.timestored.qdoc.QDocMain docs src
+rm -rf build/docs
+mkdir -p build/docs
+java -cp "$QSTUDIO_JAR" com.timestored.qdoc.QDocMain build/docs src
 
 echo ""
-echo "Docs generated at docs/index.html"
+echo "Docs generated at build/docs/index.html"
