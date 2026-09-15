@@ -195,6 +195,34 @@ commit:{[dry;effect;action;args]
     applied:$[0=count args; enlist(::); args];
     $[dry; (`skipped;effect); (`done;effect;action . applied)]}
 
+/ ----------------------------------------------------------- WINDOWS
+
+/ Split [from_ts;to_ts) into consecutive half-open windows of `width`.
+/ .
+/ E-18 names "window boundaries" as one of six lifecycle decision points
+/ where a wrong answer is silent, and this is where that answer lives. Two
+/ properties make it right, and both are tested:
+/ .
+/   - the windows TILE the range: each one's range_to is the next one's
+/     range_from, with no overlap and no gap. Overlap double-publishes;
+/     a gap leaves data unfetched while coverage composes cleanly over the
+/     whole range and reports it complete.
+/   - the LAST window is clipped to to_ts, never extended past it. An
+/     over-running final window records coverage for a range that was never
+/     requested, which a later run then skips.
+/ @param from_ts range start
+/ @param to_ts range end, exclusive
+/ @param width a timespan, e.g. 1D
+/ @return a table of range_from/range_to
+/ @eg .qwrt.windows[2026.09.01D00:00;2026.09.04D00:00;1D]  -> 3 daily windows
+windows:{[from_ts;to_ts;width]
+    .qcov.require_interval[from_ts;to_ts];
+    if[not width>0D00:00;
+        '"windows: width must be positive, got ",string width];
+    n:"j"$ceiling (to_ts-from_ts)%width;
+    starts:from_ts+width*til n;
+    ([] range_from:starts; range_to:to_ts&starts+width)}
+
 / ----------------------------------------------------- COVERAGE SKIPPING
 
 / Should this window be fetched, or is it already published (E-13)?
