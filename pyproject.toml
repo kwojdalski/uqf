@@ -76,7 +76,12 @@ dev = [
 #     `from uqf_frontend...` is an unresolved-import, which buries the real
 #     findings under ten fake ones.
 [tool.ty.src]
-exclude = ["lib", ".venv", "build"]
+# `.claude/worktrees` holds agent worktrees, which are full CHECKOUTS of this
+# repository nested inside it. Without excluding them every gate scans the
+# repo twice - reporting duplicate findings, and reporting them against the
+# vendored code in the copy, which is doubly unactionable. The harness
+# creates these, so this is a standing exclusion rather than a workaround.
+exclude = ["lib", ".venv", "build", ".claude/worktrees"]
 
 [tool.ty.environment]
 root = [
@@ -108,7 +113,10 @@ target-version = "py314"
 # nobody may act on - lib/kdb-parquet alone has 32. The pre-commit hook
 # already carried `exclude: '^lib/'`; this is the same rule for a bare
 # `ruff check .` from the repo root, so the CLI and the hook cannot disagree.
-extend-exclude = ["lib"]
+# `.claude/worktrees` holds agent worktrees - nested checkouts of this same
+# repository. Scanning them lints the repo twice and surfaces findings in the
+# copy's vendored tree. See the note in [tool.ty.src].
+extend-exclude = ["lib", ".claude/worktrees"]
 
 # Each member's source root, so isort still classifies the three packages as
 # first-party. Run from inside a member, ruff infers this from the src layout;

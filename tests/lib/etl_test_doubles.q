@@ -42,7 +42,10 @@ calls:();
 / @eg .qetldbl.install[`fetch;{[a;b] ([] px:1 2 3.)}]
 install:{[adapter;impl]
     if[adapter in protected;
-        '"install: ",string[adapter]," must not be doubled - E-19: \"do not let adapter doubles substitute for transform and coverage tests; doubling the edges is not the same as testing the middle\". Test it against the real implementation instead"];
+        / Short by necessity: a thrown string is truncated at 255 bytes, and
+        / E-19's full sentence plus the adapter name exceeded it. The quote
+        / is in this file's header; what belongs here is the instruction.
+        '"install: ",string[adapter]," must not be doubled (E-19: doubling the edges is not testing the middle) - test it against the real implementation"];
     if[not adapter in doubleable;
         '"install: ",string[adapter]," is not a doubleable adapter - E-19 permits ",", " sv string doubleable];
     installed[adapter]:impl;

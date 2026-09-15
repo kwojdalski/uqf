@@ -411,6 +411,126 @@ def rule_multiparam_lambda_under_at(path: str, text: str) -> list[Finding]:
     return findings
 
 
+def _strip_comments_preserving_lines(text: str) -> str:
+    """The file with q comments blanked out, newlines kept so lines still map.
+
+    Needed because a comment can contain anything, including an apostrophe
+    followed by a quote, and the throw scanner below must not mistake prose
+    for code.
+    """
+    return "\n".join(_strip_comments(line) for line in text.split("\n"))
+
+
+def _throw_starts(code: str) -> list[int]:
+    """Indices of `'\"` sequences that are genuinely a throw.
+
+    The naive `re.finditer(r"'\"")` also matches INSIDE a message: q code
+    like `'\"cannot normalize '\",s,\"' to a pair\"` contains the sequence
+    `'\"` in the middle of its own text, so the scan started from there and
+    ran past the end of the function - reporting a 150-character message as
+    5142, once it had swallowed the rest of the file.
+
+    So this tracks string state and reports only a `'` that appears OUTSIDE
+    a string literal and is immediately followed by one.
+    """
+    starts = []
+    i = 0
+    n = len(code)
+    while i < n:
+        c = code[i]
+        if c == '"':
+            i += 1
+            while i < n and code[i] != '"':
+                i += 2 if code[i] == "\\" else 1
+            i += 1
+            continue
+        if c == "'" and i + 1 < n and code[i + 1] == '"':
+            starts.append(i)
+            # skip into the string so its contents are not rescanned
+            i += 1
+            continue
+        i += 1
+    return starts
+
+
+def _throw_literal_length(code: str, start: int) -> int:
+    """Total literal characters in the throw expression beginning at `start`.
+
+    Scans the expression rather than "everything up to the next `];`". The
+    first version did the latter and ran past the end of a `$[...]` closing
+    with `]}`, swallowing quotes from the next function. The expression ends
+    at the first `;`, `]`, `}` or `)` that is not inside a nested bracket or
+    a string.
+    """
+    i = start + 1
+    n = len(code)
+    depth = 0
+    total = 0
+    while i < n:
+        c = code[i]
+        if c == '"':
+            i += 1
+            while i < n and code[i] != '"':
+                if code[i] == "\\":
+                    i += 1
+                total += 1
+                i += 1
+            i += 1
+            continue
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            if depth == 0:
+                break
+            depth -= 1
+        elif c == ";" and depth == 0:
+            break
+        i += 1
+    return total
+
+
+def rule_overlong_throw(path: str, text: str) -> list[Finding]:
+    """q truncates a thrown error string at 255 bytes, silently.
+
+    So a long message loses its tail - and the tail is where the
+    explanation lives, since the mechanical prefix ("function: value X is
+    wrong") comes first by convention. The diagnosis disappears exactly when
+    someone needs it, and nothing reports that anything was cut.
+
+    Found by a test asserting an error message contained a phrase it should
+    have: the message was 254 bytes and the phrase had been cut mid-word. It
+    had been passing as prose review for three files.
+
+    Counts only the LITERAL text of a throw, not interpolated values, so a
+    match means the message is over the limit *before* any value is
+    substituted - which is unambiguous. The real budget is tighter, since
+    interpolation adds to it; the threshold is deliberately below 255 to
+    leave room.
+
+    False positives in this repo: 0 (3 genuine findings when first run).
+    """
+    findings = []
+    budget = 200
+    code = _strip_comments_preserving_lines(text)
+    for start in _throw_starts(code):
+        literal = _throw_literal_length(code, start)
+        if literal > budget:
+            line = code.count("\n", 0, start) + 1
+            findings.append(
+                Finding(
+                    path,
+                    line,
+                    "overlong-throw",
+                    f"thrown message with {literal} chars of literal text",
+                    "q truncates a thrown string at 255 bytes silently, so the "
+                    "tail - where the explanation lives - is lost. Put the "
+                    "consequence FIRST and move the long form into a comment "
+                    "at the definition",
+                )
+            )
+    return findings
+
+
 def rule_self_comparison(path: str, lines: list[str]) -> list[Finding]:
     """`where dataset=dataset` compares a column to itself and matches all rows.
 
@@ -449,7 +569,11 @@ LINE_RULES = (
     rule_niladic_dot_empty,
     rule_self_comparison,
 )
-TEXT_RULES = (rule_multiparam_lambda_under_at, rule_reserved_local_assignment)
+TEXT_RULES = (
+    rule_multiparam_lambda_under_at,
+    rule_reserved_local_assignment,
+    rule_overlong_throw,
+)
 
 
 # Deliberately NOT implemented, because no formulation cleared the bar above:

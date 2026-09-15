@@ -233,6 +233,87 @@ publish:{[h;tbl;data]
 /   failed    - error set, see the error field (terminal)
 status_states:`starting`running`idle`completed`failed
 
+/ Which states may legally follow which (question-bank G-02).
+/ .
+/ G-02 asks for "the legal status values AND which transitions are
+/ forbidden". The values were already here and validated; the transitions
+/ were not, so every illegal one wrote cleanly. The dangerous case is
+/ specific and silent:
+/ .
+/   completed -> running, or failed -> completed
+/ .
+/ Either RESURRECTS a terminal run. A reader polling this file sees the new
+/ state and nothing else - the previous one is gone, because the file is
+/ overwritten per instance - so a failure that was correctly recorded
+/ vanishes and the run reports as healthy. Nothing errors; the history is
+/ simply no longer there to contradict it.
+/ .
+/ Two transitions out of a terminal state are legal, and the second was
+/ missing from the first version of this rule - found by running it against
+/ the real worker path rather than only in isolation:
+/ .
+/   -> starting  a worker beginning a genuinely new run.
+/   -> failed    a failure, which must ALWAYS be recordable.
+/ .
+/ That second one matters more than it looks. .qbfstate.fail is the shell's
+/ error path, so refusing `failed -> failed` made a second consecutive
+/ failure THROW INSIDE THE ERROR HANDLER - masking the original error with a
+/ complaint about state transitions. A rule that exists to stop a failure
+/ being hidden must not itself hide one.
+/ .
+/ It is also safe by the rule's own logic: replacing one terminal state with
+/ `failed` is strictly LESS optimistic, so it cannot manufacture the false
+/ health the rule guards against. What is forbidden is claiming progress
+/ (`running`) or success (`completed`/`idle`) after finishing.
+/ .
+/ So the rule reads: you may always begin again, and you may always report a
+/ failure; you may never claim progress or success without declaring a new
+/ start.
+/ .
+/ running -> running is legal and normal: it is the next window.
+legal_transitions:(!). flip (
+    (`starting;  `running`idle`completed`failed);
+    (`running;   `running`idle`completed`failed);
+    / terminal states: begin again, or report a failure
+    (`idle;      `starting`failed);
+    (`completed; `starting`failed);
+    (`failed;    `starting`failed))
+
+/ Validate a transition, or throw naming what it would have hidden.
+/ .
+/ `from` of `` ` `` (no previous status) permits any state: a first write has
+/ nothing to contradict, and a worker whose init failed before it could write
+/ `starting` should still be able to record `failed`. Being strict at entry
+/ would trade a real diagnostic for a rule with nothing to protect.
+/ @throws error when the transition is forbidden
+/ @eg .qpipe.require_transition[`completed;`running]  -> throws
+require_transition:{[from;to]
+    if[null from; :1b];
+    if[not from in key legal_transitions;
+        '"require_transition: unknown previous state ",string from];
+    allowed:legal_transitions from;
+    if[not to in allowed;
+        '"require_transition: ",string[from]," -> ",string[to]," is forbidden",
+         $[from in `idle`completed`failed;
+            / Consequence FIRST: q truncates a thrown string at 255 bytes,
+            / so anything after that is silently lost - and what gets lost
+            / is the part that explains the failure. This message was 254
+            / bytes and "read as healthy" was cut off mid-phrase.
+            " - a recorded failure would silently read as healthy. Write `starting for a new run, or `failed to report a failure";
+            " - legal next states are ",", " sv string allowed]];
+    1b}
+
+/ The state recorded in an instance's existing status file, or ` if there is
+/ none. Exists so write_status can validate a transition without the caller
+/ having to remember what it last wrote - which it would get wrong precisely
+/ when it matters, after a restart.
+previous_state:{[instance_id]
+    path:(status_dir[]),"/airflow_status_",string[instance_id],".txt";
+    raw:@[{first read0 hsym `$x};path;{""}];
+    if[0=count raw; :`];
+    saved:@[{.j.k x};raw;{()!()}];
+    $[`state in key saved; `$saved`state; `]}
+
 / Where status files go. Overridden by UQFSTATUSDIR so the demo and a real
 / deployment can differ without a code change; defaults under TORQDATA
 / alongside the other generated state.
@@ -288,6 +369,11 @@ write_status:{[worker;instance_id;state;spec;progress;err]
          string[spec`range_from],"; ",string[spec`range_to],")"];
     if[(state=`failed) and 0=count err;
         '"write_status: a failed state must carry an error string"];
+    / G-02: refuse a transition that would resurrect a terminal run. Checked
+    / HERE rather than left to the caller, because the caller gets it wrong
+    / exactly when it matters - after a restart, when it no longer remembers
+    / what it last wrote.
+    require_transition[previous_state instance_id;state];
     dir:status_dir[];
     / mkdir -p is idempotent, and cheaper than checking first.
     system"mkdir -p ",dir;

@@ -91,12 +91,12 @@ require_schema:{[]
         '"require_schema: etl_coverage is missing ",(", " sv string missing),
          " - the assumed shape (see #60) is wrong, and reads here would fail or return nulls"];
     if[count extra;
-        '"require_schema: etl_coverage carries unexpected column(s) ",
+        / Kept short deliberately: q truncates a thrown string at 255 bytes,
+        / and the consequence is the part worth keeping. The long form lives
+        / in this function's own comment above and in #60.
+        '"require_schema: etl_coverage has unexpected column(s) ",
          (", " sv string extra),
-         " - if any of them is a partition key, every read here aggregates ",
-         "ACROSS partitions and would report a range covered in one partition ",
-         "as complete. Settle it with scripts/verify_coverage_schema.q before ",
-         "trusting is_covered (#60)"];
+         " - a partition key here means reads aggregate ACROSS partitions and report a gap-ridden range as complete. See #60"];
     1b}
 
 / -------------------------------------------------------------- INTERVALS

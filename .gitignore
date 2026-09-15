@@ -40,3 +40,9 @@ __pycache__/
 build/
 
 .venv/
+
+# Agent worktrees: full checkouts of this repository nested inside it, created
+# by the agent harness. Never committable - a `git add -A` otherwise records the
+# nested checkout as a gitlink, which clones of this repo cannot resolve. Also
+# excluded from ruff and ty in pyproject.toml, or every gate scans the repo twice.
+.claude/worktrees/
