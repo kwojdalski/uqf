@@ -599,15 +599,15 @@ cross_size_at_price:{[quotes;sym;at_time;side;price_limit]
         halvings+:1];
     lo};
 
-/ Private: cross_book_at's mid for sym at t, at a caller-chosen
+/ Private: cross_book_at's mid for sym at at_time, at a caller-chosen
 / (typically negligible, top-of-book-ish) size - used wherever a "price
 / at a point in time" is needed for a synthetic pair with no quoted mid
 / of its own. Nulls out rather than throwing if no quote exists yet for
-/ some required leg at or before t, so a caller sweeping many timestamps
+/ some required leg at or before at_time, so a caller sweeping many timestamps
 / (cross_markout_at_horizons, cross_markout_decomp) can null one bad
 / lookup instead of failing the whole batch.
-cross_ref_price_at:{[quotes;sym;ref_size;t]
-    @[{[quotes;sym;ref_size;t] first cross_book_at[quotes;sym;t;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];t;{0n}]};
+cross_ref_price_at:{[quotes;sym;at_time;ref_size]
+    @[{[quotes;sym;ref_size;at_time] first cross_book_at[quotes;sym;at_time;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];at_time;{0n}]};
 
 / Configurable output column name for the "point in time" a row in
 / cross_markout_at_horizons/cross_impact_at_horizons refers to - defaults
@@ -683,7 +683,7 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
         legs:.qccy.ccy_pair_legs cross_sym;
         '"cross_markout_at_horizons: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     target_time:trade_time+horizons_ms*1000000;
-    ref_price:cross_ref_price_at[quotes;cross_sym;ref_size;] each target_time;
+    ref_price:cross_ref_price_at[quotes;cross_sym;;ref_size] each target_time;
     markout_pips:.qexec.markout[side;trade_price;ref_price;pip_factor];
     col_names:`horizon_ms,ts_col,`sym`ref_price`markout_pips;
     apply_col_precedence flip col_names!(horizons_ms;target_time;(count horizons_ms)#cross_sym;ref_price;markout_pips)};
@@ -724,8 +724,8 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
         '"cross_markout_decomp: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     inverts:$[1=count path; enlist not (path 0)~cross_sym; (ccy_orient_chain path)`inverts];
     n:count path;
-    price_t0:cross_ref_price_at[quotes;;ref_size;t0] each path;
-    price_t1:cross_ref_price_at[quotes;;ref_size;t1] each path;
+    price_t0:cross_ref_price_at[quotes;;t0;ref_size] each path;
+    price_t1:cross_ref_price_at[quotes;;t1;ref_size] each path;
     oriented_t0:?[inverts;1%price_t0;price_t0];
     oriented_t1:?[inverts;1%price_t1;price_t1];
     running:oriented_t0;
@@ -774,7 +774,7 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons_ms;ref_size]
     if[(.qccy.normalize_ccy_pair traded_sym)~.qccy.normalize_ccy_pair impact_sym;
         '"cross_impact_at_horizons: impact_sym must be different from traded_sym"];
-    baseline:cross_ref_price_at[quotes;impact_sym;ref_size;trade_time];
+    baseline:cross_ref_price_at[quotes;impact_sym;trade_time;ref_size];
     cross_markout_at_horizons[quotes;impact_sym;trade_time;side;baseline;pip_factor;horizons_ms;ref_size]};
 
 \d .

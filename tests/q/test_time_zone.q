@@ -44,14 +44,14 @@ beforeNamespace_zones:{[]
 setUp_sources:{[]
     .tztest.drop_sources[];
     .qsrc.register[`tz_london;
-        `source`table`target`time_field`fields`types`query`fixture`time_zone!
-        (`tz_london;`ext;`loc;`ts;`ts`px;"pf";
+        `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+        (`tz_london;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:2026.10.25D00:30:00.000000000+0D00:30*til 8; px:8#1.5)};
          .tztest.london)];
     .qsrc.register[`tz_summer;
-        `source`table`target`time_field`fields`types`query`fixture`time_zone!
-        (`tz_summer;`ext;`loc;`ts;`ts`px;"pf";
+        `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+        (`tz_summer;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:enlist 2026.07.15D09:00:00.000000000; px:enlist 1.5)};
          .tztest.london)];

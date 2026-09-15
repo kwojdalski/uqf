@@ -108,7 +108,7 @@
 / bug: it reads as a decision downstream while nobody ever made one. Stating
 / `UTC` costs one symbol and makes "this source hands over UTC" a claim
 / somebody wrote, which validate_live can then be run against.
-required_declarations:`source`table`target`time_field`fields`types`query`fixture`time_zone
+required_declarations:`source`table`target`time_field`row_key`fields`types`query`fixture`time_zone
 
 / source -> its declaration dict.
 sources:(`symbol$())!();
@@ -126,6 +126,7 @@ sources:(`symbol$())!();
 /   table   - the external table name, as a symbol
 /   target  - the local table it lands in, as a symbol
 /   time_field - the column the window is taken on, as a symbol
+/   row_key - the column(s) identifying a row uniquely, as a symbol vector
 /   fields  - the columns this adapter READS, as a symbol vector
 /   types   - the expected q type characters, one per field, as a string
 /   query   - a parameterised lambda taking (handle;range_from;range_to)
@@ -156,6 +157,34 @@ register:{[source;decl]
     / surfaces two layers down: validate never checks the column (it is not
     / in `fields`), the live query filters on something the declaration never
     / described, and only window_fixture notices - at fetch time, mid-run.
+    / row_key: declared and VALIDATED, deliberately not yet used (D-11).
+    / .
+    / The mechanism lands ahead of the semantics on purpose. docs/restatement-
+    / design.md sets out why: answering D-11 "rows can be superseded in
+    / place" changes what is_covered MEANS, and sixteen files rest on the
+    / current meaning - so the shape of that change needs agreeing before
+    / any of it is built. A declared key is the one piece that is a
+    / prerequisite either way and has zero blast radius on its own.
+    / .
+    / It also earns its place independently of restatements. D-08 was
+    / answered "leave the published rows, record no coverage, re-run redoes
+    / the window", and that duplicates rows unless the publish path can
+    / dedupe - E-13 promises retry-SAFE publication, which is explicitly
+    / weaker than exactly-once. A row key is exactly what makes that dedupe
+    / possible, so this is worth having even if supersession is deferred.
+    / `11h=abs type`, not `-11h=abs type`: abs is always positive, so the
+    / latter can never be true and rejected every row_key including a
+    / correct one. 11h=abs accepts both a symbol atom (-11h) and a symbol
+    / vector (11h), which is the point - a single-column key should not have
+    / to be enlisted at the call site.
+    if[not 11h=abs type decl`row_key;
+        '"register: ",string[source],"'s row_key must be a symbol or symbol vector naming the column(s) that identify a row uniquely (D-11)"];
+    key_cols:(),decl`row_key;
+    key_absent:key_cols where not key_cols in decl`fields;
+    if[count key_absent;
+        '"register: ",string[source],"'s row_key names ",(", " sv string key_absent),
+         " which is not among its declared fields - a key this contract cannot see cannot identify a row"];
+
     if[not (decl`time_field) in decl`fields;
         '"register: ",string[source],"'s time_field ",string[decl`time_field],
          " is not one of its declared fields (",(", " sv string decl`fields),
@@ -173,10 +202,28 @@ register:{[source;decl]
         / long form lives in the comment above rather than in the message.
         '"register: ",string[source],"'s time_field ",string[decl`time_field],
          " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently (L-03)"];
-    sources[source]:decl;
+    / Store row_key NORMALISED to a vector, always.
+    / .
+    / Two reasons, and the second is not obvious. Semantically it means no
+    / consumer has to decide whether a single-column key needs enlisting.
+    / Mechanically it is required: `sources[source]:decl` throws `type` when
+    / one stored declaration's row_key is an atom and another's is a vector,
+    / because the dict's value list has already settled on a shape. Storing
+    / one shape keeps every declaration mutually assignable.
+    sources[source]:@[decl;`row_key;:;key_cols];
     source}
 
 registered:{[] key sources}
+
+/ The column(s) identifying a row uniquely, always as a vector.
+/ .
+/ Exported so a future dedupe or restatement path has one place to ask,
+/ rather than each caller reaching into the declaration and deciding for
+/ itself whether a single symbol needs enlisting.
+/ Stored normalised by `register`, so this is already a vector - the `(),`
+/ is belt-and-braces for a declaration written directly into `sources` by a
+/ test rather than through register.
+row_key:{[source] (),(declaration source)`row_key}
 
 declaration:{[source]
     if[not source in key sources;
