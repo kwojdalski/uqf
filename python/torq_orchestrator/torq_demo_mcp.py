@@ -227,5 +227,55 @@ def torq_demo_crypto_status() -> dict[str, str]:
     return core.crypto_recorder_status(core.default_paths())
 
 
+@mcp.tool
+def torq_demo_crypto_fills_start(
+    oms_socket_path: str = core.DEFAULT_OMS_SOCKET_PATH,
+    symbol: str = core.CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
+    poll_interval_ms: int = core.CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
+    port: int = core.DEFAULT_BASE_PORT,
+) -> str:
+    """Build and launch a sibling cryptorust checkout's own
+    kdb-fills-recorder, publishing the market-making bot's SIMULATED
+    fills (paper trades, NOT confirmed exchange executions) into
+    `crypto_sim_fills`. Requires an already-running cryptorust service
+    (its OMS IPC socket, default /tmp/beacon.sock) - this doesn't start
+    one itself, unlike torq_demo_crypto_start which owns its own exchange
+    connectors.
+    """
+    try:
+        pid = core.start_crypto_fills_recorder(
+            core.default_paths(),
+            base_port=port,
+            oms_socket_path=oms_socket_path,
+            symbol=symbol,
+            poll_interval_ms=poll_interval_ms,
+        )
+    except core.TorqDemoError as exc:
+        return f"ERROR: {exc}"
+    return (
+        f"crypto fills recorder started (pid {pid}) - publishing SIMULATED fills, not real trades"
+    )
+
+
+@mcp.tool
+def torq_demo_crypto_fills_stop() -> str:
+    """Stop the cryptorust fills recorder started by
+    torq_demo_crypto_fills_start.
+    """
+    try:
+        core.stop_crypto_fills_recorder(core.default_paths())
+    except core.TorqDemoError as exc:
+        return f"ERROR: {exc}"
+    return "crypto fills recorder stopped"
+
+
+@mcp.tool
+def torq_demo_crypto_fills_status() -> dict[str, str]:
+    """Whether the cryptorust fills recorder is running, its pid, and
+    where its log lives. SIMULATED fills, not real trades.
+    """
+    return core.crypto_fills_recorder_status(core.default_paths())
+
+
 if __name__ == "__main__":
     mcp.run()

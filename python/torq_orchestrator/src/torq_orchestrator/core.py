@@ -29,12 +29,16 @@ from torq_orchestrator.logger import get_logger
 log = get_logger(__name__)
 
 DEFAULT_BASE_PORT = 6050
-FXFEED_PORT_OFFSET = 19  # the one offset the vendored process.csv leaves free
-QUOTES_FEED_PORT_OFFSET = 24  # next free offset after the vendored dqc/dqe block (+20..+23)
-CROSS_ETL_PORT_OFFSET = 25  # next free offset after quotesfeed1
-WIDE_BOOK_FEED_PORT_OFFSET = 26  # next free offset after cross1
-VECTORIZE_ETL_PORT_OFFSET = 27  # next free offset after widefeed1
-TAP_PORT_OFFSET = 28  # next free offset after vectorize1
+
+# fxfeed1 sits at the one offset the vendored process.csv leaves free below
+# its own dqc/dqe block (+20..+23); every other uqf process is allocated
+# contiguously from PIPELINE_BLOCK_START by the PIPELINES registry further
+# down this file, which is also where the per-process port offset constants
+# (FXFEED_PORT_OFFSET, MARKOUT_PORT_OFFSET, ...) are now derived rather than
+# hand-chained. Adding a pipeline means adding one Pipeline() entry, not
+# picking a number and remembering three other places to edit.
+FXFEED_PINNED_OFFSET = 19
+PIPELINE_BLOCK_START = 24
 
 # Appended (never edited in place) to a *copy* of the vendored database.q -
 # see _generated_schema_content(). Matches src/forwards.q's require_quotes_cols
@@ -87,6 +91,271 @@ CRYPTO_BOOK_TABLE_SCHEMA = (
     "crypto_book:([]time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); "
     "bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())"
 )
+
+# Destination for the external, non-TorQ cryptorust (Rust) fills publisher
+# - see ~/github_projects/cryptorust/src/bin/kdb_fills_recorder.rs, which
+# polls TWO separate IPC methods and publishes into TWO separate tables:
+# this one (get_recent_fills) is the market-making bot's own SIMULATED
+# (paper) fill model, not confirmed exchange executions - see
+# CRYPTO_TRADES_TABLE_SCHEMA below for the real-fill counterpart, and that
+# Rust file's own doc header for the full trace of why these are distinct.
+# side is a signed long (1 buy/-1 sell), matching every other
+# trades-shaped table here (TRADES_TABLE_SCHEMA), not the raw "buy"/"sell"
+# string the OMS uses internally. No `pip_factor` (that's an FX convention
+# uqf's own .qexec/.qrisk functions expect - crypto isn't pip-quoted) and
+# no `venue` (the OMS's own CycleFillRecord doesn't carry one).
+CRYPTO_SIM_FILLS_TABLE_SCHEMA = (
+    "crypto_sim_fills:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); "
+    "trade_price:`float$(); size:`float$(); realized_delta_pnl:`float$())"
+)
+
+# Real, confirmed exchange fills - services::trading::execution::Fill
+# (cryptorust), fed from Oms::subscribe_fills() (itself fed by each
+# venue's GatewayConnector::fills_subscribe) via the new
+# get_recent_real_fills IPC method. Unlike CRYPTO_SIM_FILLS_TABLE_SCHEMA,
+# this carries `venue`, `fee`/`fee_currency`, and a genuine
+# `exchange_fill_id` (the OMS's own unique ID for the fill, kept as a
+# symbol here like every other id-ish column in this demo) - all things
+# the simulated path's CycleFillRecord doesn't have.
+CRYPTO_TRADES_TABLE_SCHEMA = (
+    "crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); "
+    "side:`long$(); trade_price:`float$(); size:`float$(); fee:`float$(); "
+    "fee_currency:`symbol$(); exchange_fill_id:`symbol$())"
+)
+
+# For torq_fx_trades_feed.q. Deliberately its own table rather than the
+# vendored `trade` (price/size/side:`symbol$() for an equity buy/sell
+# marker) - column names/types instead match src/positions.q's
+# apply_fill/apply_fills and src/execution.q's markout_at_horizons exactly
+# (side is a signed long, 1/-1; trade_price not price), same as env/
+# schemas.q's .envschema.trades, so posbook1 can consume rows with zero
+# reshaping. pip_factor carried per-row (not looked up from reference
+# data, which this demo doesn't have) so a future execution-quality
+# process can also consume this table directly.
+TRADES_TABLE_SCHEMA = (
+    "trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); "
+    "trade_price:`float$(); size:`float$(); pip_factor:`long$())"
+)
+
+# posbook1's (torq_posbook_etl.q) output: one row per fill applied, the
+# resulting position book row for that sym plus a mark-to-last-trade
+# unrealized P&L - republished onto the tickerplant like
+# MKT_ORDERBOOK_TABLE_SCHEMA above (vectorize1's pattern), not kept
+# private like cross1's cross_quotes, since position/PnL history is worth
+# keeping in the HDB.
+POSITION_TABLE_SCHEMA = (
+    "position:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); "
+    "avg_price:`float$(); realized_pnl:`float$(); mark_price:`float$(); "
+    "unrealized_pnl:`float$(); total_pnl:`float$())"
+)
+
+# markout1's (torq_markout_etl.q) output: .qexec.markout_at_horizons'
+# result, reshaped so `time` (the target quote-lookup time, `ts` in that
+# function's own output) leads and `sym` is second (Rule S1) - its
+# natural column order doesn't put time/sym first. Republished onto the
+# tickerplant like POSITION_TABLE_SCHEMA above.
+EXECUTION_QUALITY_TABLE_SCHEMA = (
+    "execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); "
+    "trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); "
+    "ref_price:`float$(); markout_pips:`float$())"
+)
+# The q library every uqf pipeline process loads before its own script -
+# scripts/torq_pipeline.q's .qpipe blocks (SOURCE/STATE/TRIGGER/SINK) and the
+# seven TorQ invariants they enforce. TorQ's own -load flag takes multiple
+# files ("[-load x [y..z]]" in lib/torq/torq.q) and .proc.reloadf's each
+# loads them in order, so listing the library first in a row's `load` column
+# is what guarantees .qpipe exists before the pipeline script's top-level
+# .qpipe.load_uqf[] call runs.
+PIPELINE_LIB_SCRIPT = "torq_pipeline.q"
+
+# The access list a real .sub.subscribe subscriber needs: an ETL process
+# borrows an already-credentialed proctype so .servers.startup[] can open an
+# access-listed handle to stp1. Feeds only publish and need no credentials.
+_ETL_ACCESS_LIST = "${TORQAPPHOME}/appconfig/passwords/accesslist.txt"
+
+
+@dataclass(frozen=True)
+class Pipeline:
+    """One uqf-authored TorQ demo process, declared once.
+
+    Everything a pipeline needs in three generated places - its
+    `{KDBBASEPORT}+N` port offset, its process.csv row, and its `database.q`
+    table definition - is derived from this single entry, so adding a
+    pipeline is one list entry rather than a port constant plus a schema
+    string plus a _base_process_rows() block (and remembering to chain the
+    offset comment to the previous one).
+
+    `kind` picks the two fields that always move together: a "feed" gets
+    proctype "feed" and no access list, an "etl" gets proctype "metrics" and
+    the subscriber access list.
+    """
+
+    procname: str
+    script: str
+    kind: str  # "feed" (publishes only) | "etl" (subscribes, so needs credentials)
+    table: str | None = None  # the table it publishes onto the tickerplant, if any
+    schema: str | None = None  # that table's database.q definition
+    uses_qpipe: bool = False  # load scripts/torq_pipeline.q ahead of its own script
+    offset: int | None = None  # None = allocate from PIPELINE_BLOCK_START in list order
+    localtime: str = "1"
+    startwithall: str = "1"
+    note: str = ""  # why this row deviates from the defaults, if it does
+
+    @property
+    def proctype(self) -> str:
+        return "feed" if self.kind == "feed" else "metrics"
+
+    @property
+    def access_list(self) -> str:
+        return "" if self.kind == "feed" else _ETL_ACCESS_LIST
+
+    def load_column(self) -> str:
+        """The process.csv `load` value - the .qpipe library first when the
+        script needs it, then the script itself. Order matters: see
+        PIPELINE_LIB_SCRIPT.
+        """
+        scripts = [self.script]
+        if self.uses_qpipe:
+            scripts.insert(0, PIPELINE_LIB_SCRIPT)
+        return " ".join(f"${{UQFSCRIPTS}}/{s}" for s in scripts)
+
+
+# Declared in port order. Reordering this list renumbers ports, so
+# test_pipeline_offsets_are_stable pins every derived offset to its current
+# value - an accidental reorder fails the suite rather than silently moving a
+# running demo's ports.
+PIPELINES: tuple[Pipeline, ...] = (
+    Pipeline(
+        procname="fxfeed1",
+        script="torq_fx_feed.q",
+        kind="feed",
+        offset=FXFEED_PINNED_OFFSET,
+        note="pinned below the vendored dqc/dqe block, not part of the contiguous run",
+    ),
+    Pipeline(
+        procname="quotesfeed1",
+        script="torq_quotes_feed.q",
+        kind="feed",
+        table="quotes",
+        schema=QUOTES_TABLE_SCHEMA,
+    ),
+    Pipeline(
+        procname="cross1",
+        script="torq_cross_etl.q",
+        kind="etl",
+        note="keeps cross_quotes as private process state, publishes no table",
+    ),
+    Pipeline(
+        procname="widefeed1",
+        script="torq_wide_book_feed.q",
+        kind="feed",
+        table="wide_book",
+        schema=WIDE_BOOK_TABLE_SCHEMA,
+    ),
+    Pipeline(
+        procname="vectorize1",
+        script="torq_vectorize_etl.q",
+        kind="etl",
+        table="mkt_orderbook",
+        schema=MKT_ORDERBOOK_TABLE_SCHEMA,
+    ),
+    Pipeline(
+        procname="tap1",
+        script="torq_tap.q",
+        kind="etl",
+        startwithall="0",
+        note="diagnostic subscriber - started on demand, not with the whole stack",
+    ),
+    Pipeline(
+        procname="fxtradesfeed1",
+        script="torq_fx_trades_feed.q",
+        kind="feed",
+        table="trades",
+        schema=TRADES_TABLE_SCHEMA,
+    ),
+    Pipeline(
+        procname="posbook1",
+        script="torq_posbook_etl.q",
+        kind="etl",
+        table="position",
+        schema=POSITION_TABLE_SCHEMA,
+    ),
+    Pipeline(
+        procname="markout1",
+        script="torq_markout_etl.q",
+        kind="etl",
+        table="execution_quality",
+        schema=EXECUTION_QUALITY_TABLE_SCHEMA,
+        uses_qpipe=True,
+        localtime="0",
+        note=(
+            "localtime:0, unlike every other process here - markout1 is the only "
+            "process in this demo that compares .proc.cp[] against incoming data "
+            "timestamps (its process_ready cutoff calc); every other process just "
+            "reacts to each tick immediately, so localtime never mattered for them. "
+            ".u.upd stamps trades/quote with the tickerplant's own .z.p (UTC) - with "
+            "localtime:1, .proc.cp[] returns local time instead, silently skewing the "
+            "cutoff by the local UTC offset (confirmed live: a full hour off on a "
+            "UTC+1 machine)"
+        ),
+    ),
+)
+
+
+def _resolved_offsets() -> dict[str, int]:
+    """Each pipeline's `{KDBBASEPORT}+N` offset: explicit where pinned,
+    otherwise allocated contiguously from PIPELINE_BLOCK_START in list order.
+    """
+    offsets: dict[str, int] = {}
+    nxt = PIPELINE_BLOCK_START
+    for pipeline in PIPELINES:
+        if pipeline.offset is not None:
+            offsets[pipeline.procname] = pipeline.offset
+            continue
+        offsets[pipeline.procname] = nxt
+        nxt += 1
+    return offsets
+
+
+PIPELINE_OFFSETS = _resolved_offsets()
+PIPELINE_BY_NAME = {pipeline.procname: pipeline for pipeline in PIPELINES}
+
+# Per-process offset constants, kept as a stable public surface (tests and
+# docs reference them by name) but derived from PIPELINES rather than
+# hand-maintained.
+FXFEED_PORT_OFFSET = PIPELINE_OFFSETS["fxfeed1"]
+QUOTES_FEED_PORT_OFFSET = PIPELINE_OFFSETS["quotesfeed1"]
+CROSS_ETL_PORT_OFFSET = PIPELINE_OFFSETS["cross1"]
+WIDE_BOOK_FEED_PORT_OFFSET = PIPELINE_OFFSETS["widefeed1"]
+VECTORIZE_ETL_PORT_OFFSET = PIPELINE_OFFSETS["vectorize1"]
+TAP_PORT_OFFSET = PIPELINE_OFFSETS["tap1"]
+FX_TRADES_FEED_PORT_OFFSET = PIPELINE_OFFSETS["fxtradesfeed1"]
+POSBOOK_PORT_OFFSET = PIPELINE_OFFSETS["posbook1"]
+MARKOUT_PORT_OFFSET = PIPELINE_OFFSETS["markout1"]
+
+
+def _pipeline_rows() -> list[dict[str, str]]:
+    """One process.csv row per PIPELINES entry, in port order."""
+    return [
+        {
+            "host": "localhost",
+            "port": f"{{KDBBASEPORT}}+{PIPELINE_OFFSETS[pipeline.procname]}",
+            "proctype": pipeline.proctype,
+            "procname": pipeline.procname,
+            "U": pipeline.access_list,
+            "localtime": pipeline.localtime,
+            "g": "0",
+            "T": "",
+            "w": "",
+            "load": pipeline.load_column(),
+            "startwithall": pipeline.startwithall,
+            "extras": "",
+            "qcmd": "q",
+        }
+        for pipeline in PIPELINES
+    ]
+
+
 PROCESS_CSV_FIELDS = (
     "host",
     "port",
@@ -149,6 +418,10 @@ class TorqDemoPaths:
     def crypto_recorder_config_path(self) -> Path:
         return self.torqdata / "crypto_recorder_config.yaml"
 
+    @property
+    def crypto_fills_recorder_pid_path(self) -> Path:
+        return self.orchestrator_dir / "crypto_fills_recorder.pid"
+
 
 def default_paths() -> TorqDemoPaths:
     # this file: <repo_root>/python/torq_orchestrator/src/torq_orchestrator/core.py
@@ -194,9 +467,12 @@ def clean(paths: TorqDemoPaths) -> None:
 
 
 def _base_process_rows(paths: TorqDemoPaths) -> list[dict[str, str]]:
-    """The vendored process.csv rows, plus uqf's own fxfeed1/quotesfeed1/
-    cross1 rows appended (and stp1's -schemafile extras repointed) - never
-    mutated, always read fresh from the vendored file.
+    """The vendored process.csv rows, plus one row per PIPELINES entry
+    appended (and stp1's -schemafile extras repointed) - never mutated,
+    always read fresh from the vendored file. The nine uqf rows used to be
+    nine literal dicts here; they are generated by _pipeline_rows() now, so
+    a new pipeline is a Pipeline() entry rather than an edit to this
+    function.
     """
     vendored_procs = paths.torqapphome / "appconfig" / "process.csv"
     with vendored_procs.open(newline="") as f:
@@ -210,136 +486,7 @@ def _base_process_rows(paths: TorqDemoPaths) -> list[dict[str, str]]:
             row["extras"] = row["extras"].replace(
                 "${TORQAPPHOME}/database.q", "${TORQDATA}/database.q"
             )
-    rows.append(
-        {
-            "host": "localhost",
-            "port": f"{{KDBBASEPORT}}+{FXFEED_PORT_OFFSET}",
-            "proctype": "feed",
-            "procname": "fxfeed1",
-            "U": "",
-            "localtime": "1",
-            "g": "0",
-            "T": "",
-            "w": "",
-            "load": "${UQFSCRIPTS}/torq_fx_feed.q",
-            "startwithall": "1",
-            "extras": "",
-            "qcmd": "q",
-        }
-    )
-    rows.append(
-        {
-            "host": "localhost",
-            "port": f"{{KDBBASEPORT}}+{QUOTES_FEED_PORT_OFFSET}",
-            "proctype": "feed",
-            "procname": "quotesfeed1",
-            "U": "",
-            "localtime": "1",
-            "g": "0",
-            "T": "",
-            "w": "",
-            "load": "${UQFSCRIPTS}/torq_quotes_feed.q",
-            "startwithall": "1",
-            "extras": "",
-            "qcmd": "q",
-        }
-    )
-    rows.append(
-        {
-            "host": "localhost",
-            "port": f"{{KDBBASEPORT}}+{CROSS_ETL_PORT_OFFSET}",
-            # proctype "metrics" (not e.g. "etl") deliberately reuses an
-            # existing, already-credentialed vendored type: unlike
-            # fxfeed1/quotesfeed1 (which only ever *publish* via a
-            # self-managed .servers.gethandlebytype handle), cross1 is a
-            # real .sub.subscribe subscriber - that needs .servers.startup[]
-            # to open a live, access-listed handle to stp1, which in turn
-            # needs a proctype with a password file torq.q's own lookup
-            # (procname.txt, then proctype.txt, then default.txt) resolves
-            # to a credential discovery1's vendored accesslist.txt accepts.
-            # A made-up type like "etl" would need a new etl.txt added to
-            # the vendored appconfig/passwords/ dir - "metrics" already has
-            # one (metrics.txt / metrics:pass), so cross1 borrows it rather
-            # than adding to the vendored tree. Harmless: proctype is just
-            # a label here, `load` below is what actually decides which
-            # script runs, same as multiple real hdb/sortworker rows above
-            # already share one proctype each.
-            "proctype": "metrics",
-            "procname": "cross1",
-            "U": "${TORQAPPHOME}/appconfig/passwords/accesslist.txt",
-            "localtime": "1",
-            "g": "0",
-            "T": "",
-            "w": "",
-            "load": "${UQFSCRIPTS}/torq_cross_etl.q",
-            "startwithall": "1",
-            "extras": "",
-            "qcmd": "q",
-        }
-    )
-    rows.append(
-        {
-            "host": "localhost",
-            "port": f"{{KDBBASEPORT}}+{WIDE_BOOK_FEED_PORT_OFFSET}",
-            "proctype": "feed",
-            "procname": "widefeed1",
-            "U": "",
-            "localtime": "1",
-            "g": "0",
-            "T": "",
-            "w": "",
-            "load": "${UQFSCRIPTS}/torq_wide_book_feed.q",
-            "startwithall": "1",
-            "extras": "",
-            "qcmd": "q",
-        }
-    )
-    rows.append(
-        {
-            "host": "localhost",
-            "port": f"{{KDBBASEPORT}}+{VECTORIZE_ETL_PORT_OFFSET}",
-            # proctype "metrics" borrowed for the same reason as cross1's
-            # row above - a real .sub.subscribe subscriber needs
-            # .servers.startup[]'s access-listed handle to stp1.
-            "proctype": "metrics",
-            "procname": "vectorize1",
-            "U": "${TORQAPPHOME}/appconfig/passwords/accesslist.txt",
-            "localtime": "1",
-            "g": "0",
-            "T": "",
-            "w": "",
-            "load": "${UQFSCRIPTS}/torq_vectorize_etl.q",
-            "startwithall": "1",
-            "extras": "",
-            "qcmd": "q",
-        }
-    )
-    rows.append(
-        {
-            "host": "localhost",
-            "port": f"{{KDBBASEPORT}}+{TAP_PORT_OFFSET}",
-            # proctype "metrics" borrowed for the same reason as cross1's
-            # row above - a real .sub.subscribe subscriber needs
-            # .servers.startup[]'s access-listed handle to stp1.
-            "proctype": "metrics",
-            "procname": "tap1",
-            "U": "${TORQAPPHOME}/appconfig/passwords/accesslist.txt",
-            "localtime": "1",
-            "g": "0",
-            "T": "",
-            "w": "",
-            "load": "${UQFSCRIPTS}/torq_tap.q",
-            # debug/verbose utility, not part of the standing demo stack -
-            # same reasoning as killtick/tpreplay1 staying off by default.
-            "startwithall": "0",
-            # -tables t1 t2 ... restricts the tap to those tables; blank
-            # (the default) subscribes to every table - see torq_tap.q.
-            # `torq-demo config-set tap1 extras "-tables quote wide_book"`
-            # to change it.
-            "extras": "",
-            "qcmd": "q",
-        }
-    )
+    rows.extend(_pipeline_rows())
     rows.extend(_read_extra_processes(paths))
     return rows
 
@@ -413,19 +560,19 @@ def _generated_schema_content(paths: TorqDemoPaths) -> str:
     """
     vendored = (paths.torqapphome / "database.q").read_text()
     extra = paths.extra_schema_path.read_text() if paths.extra_schema_path.is_file() else ""
-    return (
-        vendored.rstrip("\n")
-        + "\n"
-        + QUOTES_TABLE_SCHEMA
-        + "\n"
-        + WIDE_BOOK_TABLE_SCHEMA
-        + "\n"
-        + MKT_ORDERBOOK_TABLE_SCHEMA
-        + "\n"
-        + CRYPTO_BOOK_TABLE_SCHEMA
-        + "\n"
-        + extra
-    )
+    # Pipeline-owned tables come from the PIPELINES registry, so a new
+    # pipeline that publishes a table gets its definition here automatically.
+    # The crypto tables are not pipelines - they are written by the external
+    # cryptorust recorders (see start_crypto_recorder/start_crypto_fills_recorder),
+    # not by any scripts/torq_*.q process - so they stay listed explicitly.
+    # Definition order among independent table declarations is immaterial to
+    # q, which is why grouping them this way is safe.
+    definitions = [p.schema for p in PIPELINES if p.schema is not None] + [
+        CRYPTO_BOOK_TABLE_SCHEMA,
+        CRYPTO_SIM_FILLS_TABLE_SCHEMA,
+        CRYPTO_TRADES_TABLE_SCHEMA,
+    ]
+    return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions) + extra
 
 
 def _read_overrides(paths: TorqDemoPaths) -> dict[str, dict[str, str]]:
@@ -1163,4 +1310,152 @@ def crypto_recorder_status(paths: TorqDemoPaths) -> dict[str, str]:
         "table": CRYPTO_RECORDER_TABLE,
         "config": str(paths.crypto_recorder_config_path),
         "log": str(paths.torqdata / "logs" / "crypto_recorder.log"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# crypto fills recorder - kdb-fills-recorder, cryptorust's fills publisher
+# (src/bin/kdb_fills_recorder.rs) - polls BOTH get_recent_fills
+# (SIMULATED/paper, -> crypto_sim_fills) and get_recent_real_fills (real
+# confirmed executions, -> crypto_trades) each tick, into two separate
+# tables. Independent lifecycle from start_crypto_recorder above: that one
+# owns a Supervisor + live exchange connectors and needs a generated YAML
+# config; this one just polls an already-running cryptorust service's OMS
+# IPC socket (no connectors of its own), so plain CLI flags are enough -
+# no config file to generate. Can run with or without the book recorder.
+# ---------------------------------------------------------------------------
+
+CRYPTO_FILLS_RECORDER_TABLE = "crypto_sim_fills"
+CRYPTO_REAL_FILLS_RECORDER_TABLE = "crypto_trades"
+DEFAULT_OMS_SOCKET_PATH = "/tmp/beacon.sock"
+CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL = "BTC-USDT"
+CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS = 1000
+
+
+def _read_crypto_fills_recorder_pid(paths: TorqDemoPaths) -> int | None:
+    if not paths.crypto_fills_recorder_pid_path.is_file():
+        return None
+    try:
+        return int(paths.crypto_fills_recorder_pid_path.read_text().strip())
+    except ValueError:
+        return None
+
+
+def is_crypto_fills_recorder_running(paths: TorqDemoPaths) -> bool:
+    pid = _read_crypto_fills_recorder_pid(paths)
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def start_crypto_fills_recorder(
+    paths: TorqDemoPaths,
+    base_port: int = DEFAULT_BASE_PORT,
+    oms_socket_path: str = DEFAULT_OMS_SOCKET_PATH,
+    symbol: str = CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
+    poll_interval_ms: int = CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
+) -> int:
+    """Build (if needed) and launch cryptorust's kdb-fills-recorder,
+    pointed at this demo's own stp1 - publishes SIMULATED (paper) fills
+    into `crypto_sim_fills` (CRYPTO_SIM_FILLS_TABLE_SCHEMA) and real
+    confirmed executions into `crypto_trades` (CRYPTO_TRADES_TABLE_SCHEMA)
+    - see that binary's own doc header for the full trace of how each
+    source differs. `oms_socket_path` must point at an already-running
+    cryptorust service's IPC socket (its own `ipc.socket_path` config,
+    default /tmp/beacon.sock) - this recorder has no exchange connectors
+    of its own, it only polls that socket. Returns the spawned PID.
+    """
+    root = cryptorust_root(paths)
+    if not (root / "Cargo.toml").is_file():
+        raise TorqDemoError(
+            f"{root} doesn't look like a cryptorust checkout (no Cargo.toml) - "
+            f"set ${CRYPTORUST_ROOT_ENV} if it's checked out somewhere else"
+        )
+    if is_crypto_fills_recorder_running(paths):
+        raise TorqDemoError("crypto fills recorder is already running - stop it first")
+
+    stp1 = get_process_config(paths, "stp1", base_port=base_port)
+
+    # same PyO3/system-Python workaround as start_crypto_recorder above.
+    env = {**os.environ, "PYO3_USE_ABI3_FORWARD_COMPATIBILITY": "1"}
+    log.info("building cryptorust's kdb-fills-recorder (first run may take a while)...")
+    build = subprocess.run(
+        ["cargo", "build", "--quiet", "--features", "standalone", "--bin", "kdb-fills-recorder"],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if build.returncode != 0:
+        raise TorqDemoError(f"cargo build failed:\n{build.stderr}")
+
+    binary = root / "target" / "debug" / "kdb-fills-recorder"
+    (paths.torqdata / "logs").mkdir(parents=True, exist_ok=True)
+    log_path = paths.torqdata / "logs" / "crypto_fills_recorder.log"
+    with log_path.open("w") as log_file:
+        process = subprocess.Popen(
+            [
+                str(binary),
+                "--oms-socket-path",
+                oms_socket_path,
+                "--kdb-host",
+                "localhost",
+                "--kdb-port",
+                str(stp1["port"]),
+                "--kdb-credential",
+                CRYPTO_RECORDER_CREDENTIAL,
+                "--kdb-table",
+                CRYPTO_FILLS_RECORDER_TABLE,
+                "--real-kdb-table",
+                CRYPTO_REAL_FILLS_RECORDER_TABLE,
+                "--poll-interval-ms",
+                str(poll_interval_ms),
+                "--symbol",
+                symbol,
+            ],
+            cwd=root,
+            env=env,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+        )
+
+    paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
+    paths.crypto_fills_recorder_pid_path.write_text(str(process.pid))
+    log.info(
+        "started cryptorust kdb-fills-recorder (pid {}), polling {} - "
+        "SIMULATED fills -> {}, real fills -> {} - logging to {}",
+        process.pid,
+        oms_socket_path,
+        CRYPTO_FILLS_RECORDER_TABLE,
+        CRYPTO_REAL_FILLS_RECORDER_TABLE,
+        log_path,
+    )
+    return process.pid
+
+
+def stop_crypto_fills_recorder(paths: TorqDemoPaths) -> None:
+    pid = _read_crypto_fills_recorder_pid(paths)
+    if pid is None:
+        raise TorqDemoError("crypto fills recorder is not running (no pid file)")
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    paths.crypto_fills_recorder_pid_path.unlink(missing_ok=True)
+    log.info("stopped cryptorust kdb-fills-recorder (pid {})", pid)
+
+
+def crypto_fills_recorder_status(paths: TorqDemoPaths) -> dict[str, str]:
+    pid = _read_crypto_fills_recorder_pid(paths)
+    return {
+        "running": str(is_crypto_fills_recorder_running(paths)),
+        "pid": str(pid) if pid is not None else "",
+        "sim_table": CRYPTO_FILLS_RECORDER_TABLE,
+        "real_table": CRYPTO_REAL_FILLS_RECORDER_TABLE,
+        "log": str(paths.torqdata / "logs" / "crypto_fills_recorder.log"),
     }

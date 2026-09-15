@@ -165,6 +165,9 @@ def test_bootstrap_generates_schema_with_quotes_table(
     generated = fake_paths.generated_schema.read_text()
     assert "quote:" in generated  # vendored table still present
     assert core.QUOTES_TABLE_SCHEMA in generated
+    assert core.TRADES_TABLE_SCHEMA in generated
+    assert core.POSITION_TABLE_SCHEMA in generated
+    assert core.EXECUTION_QUALITY_TABLE_SCHEMA in generated
 
 
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
@@ -182,8 +185,9 @@ def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
 def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.TorqDemoPaths):
     # fixture's vendored csv: discovery1 (bare {KDBBASEPORT}), stp1 (+1);
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
-    # widefeed1(+26)/vectorize1(+27)/tap1(+28)
-    assert core.next_free_port_offset(fake_paths) == core.TAP_PORT_OFFSET + 1
+    # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
+    # markout1(+31)
+    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 1
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.TorqDemoPaths):
@@ -246,6 +250,9 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "widefeed1",
         "vectorize1",
         "tap1",
+        "fxtradesfeed1",
+        "posbook1",
+        "markout1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -255,6 +262,9 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
     assert by_name["vectorize1"]["port"] == str(7000 + core.VECTORIZE_ETL_PORT_OFFSET)
     assert by_name["tap1"]["port"] == str(7000 + core.TAP_PORT_OFFSET)
     assert by_name["tap1"]["startwithall"] == "0"
+    assert by_name["fxtradesfeed1"]["port"] == str(7000 + core.FX_TRADES_FEED_PORT_OFFSET)
+    assert by_name["posbook1"]["port"] == str(7000 + core.POSBOOK_PORT_OFFSET)
+    assert by_name["markout1"]["port"] == str(7000 + core.MARKOUT_PORT_OFFSET)
 
 
 def test_list_processes_reflects_overrides(fake_paths: core.TorqDemoPaths):
@@ -309,6 +319,9 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.TorqDemoPa
         "widefeed1",
         "vectorize1",
         "tap1",
+        "fxtradesfeed1",
+        "posbook1",
+        "markout1",
     }
 
 
@@ -454,3 +467,128 @@ def test_is_crypto_recorder_running_false_for_dead_pid(fake_paths: core.TorqDemo
 def test_stop_crypto_recorder_raises_without_pidfile(fake_paths: core.TorqDemoPaths):
     with pytest.raises(core.TorqDemoError):
         core.stop_crypto_recorder(fake_paths)
+
+
+# --- the PIPELINES registry ------------------------------------------------
+#
+# Ports, process.csv rows and database.q definitions are all derived from one
+# Pipeline() entry each, so these tests guard the derivation rather than the
+# nine literal dicts they replaced.
+
+
+def test_pipeline_offsets_are_stable():
+    """Offsets are allocated from PIPELINE_BLOCK_START in list order, so
+    reordering PIPELINES would renumber ports and move a running demo's
+    processes. Pin every one: an accidental reorder fails here instead of
+    silently breaking someone's running stack.
+    """
+    assert core.PIPELINE_OFFSETS == {
+        "fxfeed1": 19,
+        "quotesfeed1": 24,
+        "cross1": 25,
+        "widefeed1": 26,
+        "vectorize1": 27,
+        "tap1": 28,
+        "fxtradesfeed1": 29,
+        "posbook1": 30,
+        "markout1": 31,
+    }
+
+
+def test_pipeline_offsets_are_unique():
+    offsets = list(core.PIPELINE_OFFSETS.values())
+    assert len(offsets) == len(set(offsets))
+
+
+def test_feed_and_etl_kinds_derive_proctype_and_credentials():
+    """`kind` drives the two fields that always move together: a feed only
+    publishes and needs no credentials, an ETL subscribes and so needs
+    .servers.startup[]'s access-listed handle to stp1.
+    """
+    for pipeline in core.PIPELINES:
+        if pipeline.kind == "feed":
+            assert pipeline.proctype == "feed"
+            assert pipeline.access_list == ""
+        else:
+            assert pipeline.kind == "etl"
+            assert pipeline.proctype == "metrics"
+            assert pipeline.access_list.endswith("accesslist.txt")
+
+
+def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
+    """scripts/torq_pipeline.q must come FIRST in the load column: the
+    pipeline script calls .qpipe.load_uqf[] at top level, and TorQ's
+    .proc.reloadf each loads -load's files in the order given.
+    """
+    markout = core.PIPELINE_BY_NAME["markout1"]
+    assert markout.uses_qpipe
+    loaded = markout.load_column().split()
+    assert loaded[0].endswith(core.PIPELINE_LIB_SCRIPT)
+    assert loaded[1].endswith("torq_markout_etl.q")
+
+
+def test_pipelines_not_using_qpipe_load_only_their_own_script():
+    for pipeline in core.PIPELINES:
+        if not pipeline.uses_qpipe:
+            assert pipeline.load_column() == f"${{UQFSCRIPTS}}/{pipeline.script}"
+            assert core.PIPELINE_LIB_SCRIPT not in pipeline.load_column()
+
+
+def test_every_pipeline_script_exists_on_disk():
+    """Catches a typo in a Pipeline(script=...) at test time rather than as a
+    process that silently fails to start.
+    """
+    scripts_dir = core.default_paths().scripts_dir
+    for pipeline in core.PIPELINES:
+        assert (scripts_dir / pipeline.script).is_file(), pipeline.script
+        if pipeline.uses_qpipe:
+            assert (scripts_dir / core.PIPELINE_LIB_SCRIPT).is_file()
+
+
+def test_table_and_schema_are_declared_together():
+    """A pipeline that names a published table must carry that table's
+    definition, and vice versa - otherwise it publishes into a table the
+    tickerplant has no schema for.
+    """
+    for pipeline in core.PIPELINES:
+        assert (pipeline.table is None) == (pipeline.schema is None), pipeline.procname
+        if pipeline.table:
+            assert pipeline.schema.startswith(f"{pipeline.table}:(["), pipeline.procname
+
+
+def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: core.TorqDemoPaths):
+    rows = {r["procname"]: r for r in core._base_process_rows(fake_paths)}
+    for pipeline in core.PIPELINES:
+        row = rows[pipeline.procname]
+        assert row["port"] == f"{{KDBBASEPORT}}+{core.PIPELINE_OFFSETS[pipeline.procname]}"
+        assert row["proctype"] == pipeline.proctype
+        assert row["U"] == pipeline.access_list
+        assert row["localtime"] == pipeline.localtime
+        assert row["startwithall"] == pipeline.startwithall
+        assert row["load"] == pipeline.load_column()
+        assert row["host"] == "localhost"
+        assert row["qcmd"] == "q"
+
+
+def test_markout_runs_on_utc_and_tap_does_not_autostart():
+    """The two rows that deviate from the defaults, kept honest: markout1 is
+    the only process comparing .proc.cp[] against tickerplant-stamped data
+    timestamps (localtime:1 would skew its cutoff by the local UTC offset),
+    and tap1 is a diagnostic subscriber started on demand.
+    """
+    assert core.PIPELINE_BY_NAME["markout1"].localtime == "0"
+    assert all(p.localtime == "1" for p in core.PIPELINES if p.procname != "markout1")
+    assert core.PIPELINE_BY_NAME["tap1"].startwithall == "0"
+    assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname != "tap1")
+
+
+def test_generated_schema_covers_every_published_table(fake_paths: core.TorqDemoPaths):
+    generated = core._generated_schema_content(fake_paths)
+    for pipeline in core.PIPELINES:
+        if pipeline.schema:
+            assert pipeline.schema in generated, pipeline.procname
+    # the crypto tables are written by the external cryptorust recorders, not
+    # by any pipeline, so they are listed explicitly and must survive too
+    assert core.CRYPTO_BOOK_TABLE_SCHEMA in generated
+    assert core.CRYPTO_SIM_FILLS_TABLE_SCHEMA in generated
+    assert core.CRYPTO_TRADES_TABLE_SCHEMA in generated
