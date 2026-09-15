@@ -269,12 +269,34 @@ arithmetic gotcha that shaped how this code is written.
 ## Testing
 
 ```
-q tests/run_tests.q
+scripts/test.sh q-unit              # deterministic qUnit suite
+scripts/test.sh q-backfill-process  # bounded lifecycle, real filesystem, second process
+scripts/test.sh python              # orchestrator and frontend
+scripts/test.sh smoke               # live external metadata check
+scripts/test.sh all                 # everything except smoke
 ```
 
-This loads every module, loads every `test_*.q` file, runs the full qUnit
-suite, prints a pass/fail summary, and exits non-zero if anything failed -
-safe to wire into CI as-is. As of this writing: **342 tests, all passing**.
+Run the lane matching the layer you changed (requirement E-21). `q-unit` is
+also runnable directly as `q tests/run_tests.q`: it loads every module and
+every `test_*.q` file, prints a pass/fail summary, and exits non-zero if
+anything failed - safe to wire into CI as-is. As of this writing:
+**491 tests, all passing**.
+
+The lanes are separate because they prove different things, and two of them
+cannot prove what they claim if folded into the first:
+
+- **`q-backfill-process`** checks single-instance locking and resumption
+  across a restart. Both need a real filesystem and a genuinely separate q
+  process: an in-process test can assert `acquire_lock` throws, but that is
+  q refusing itself, not the mutual exclusion the lock exists to provide -
+  and an in-process "resume" never discards its own memory, so it cannot
+  show the state on disk was sufficient.
+- **`smoke`** is the only lane that touches a live external source
+  (requirement E-20), and is excluded from `all` on purpose. Folding it in
+  would make every local run depend on a remote host being up, which trains
+  everyone to read a red suite as "the network again" - which is how a real
+  schema change gets ignored. Unconfigured, it **skips and exits 0**: an
+  unconfigured checkout is not a failure.
 
 Every function is tested against at least one of: a published textbook
 reference value (e.g. Hull's Black-Scholes worked example for
