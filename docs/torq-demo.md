@@ -14,9 +14,9 @@ writing into either `lib/` directory. The actual bootstrapping/config logic
 lives in `python/torq_orchestrator/src/torq_orchestrator/core.py`, shared
 with `torq_demo_mcp.py`'s FastMCP server (see "MCP server" below) so the
 CLI and the MCP tools can't drift apart. It's a standalone package
-(`python/torq_orchestrator/`), separate from `python/uqf-client/` (the
+(`python/torq_orchestrator/`), separate from `python/uqf_client/` (the
 pricing library's q-IPC client) - this has nothing to do with pricing, and
-keeping it separate keeps `uqf-client` itself down to its one real
+keeping it separate keeps `uqf_client` itself down to its one real
 dependency (`kola`).
 
 See [docs/torq/README.md](torq/README.md) for diagrams of the current

@@ -31,3 +31,7 @@ actual/
 # within each package; this is the general fallback)
 __pycache__/
 *.pyc
+
+# editor swap files
+*.swp
+*.swo

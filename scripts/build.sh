@@ -9,7 +9,7 @@
 # lib/kdb-parquet is deliberately excluded - per its own NOTICE.md and
 # README.md's Layout section it's vendored for reference only, "NOT
 # loaded by src/init.q or anything else in this repo", not part of the
-# uqf library itself. python/uqf-client is its own separately-versioned
+# uqf library itself. python/uqf_client is its own separately-versioned
 # package (own pyproject.toml/uv build) and is excluded too.
 #
 # Usage:
