@@ -38,3 +38,5 @@ __pycache__/
 
 # generated documentation - regenerate with scripts/gen-docs.sh
 build/
+
+.venv/

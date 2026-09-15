@@ -118,9 +118,7 @@ def main() -> int:
             dead.append((hook_id, pattern))
 
     # --- coverage: is any tracked Python outside the lint gate? ---------
-    lint_patterns = [
-        re.compile(pattern) for hook_id, pattern in hooks if hook_id in LINT_HOOKS
-    ]
+    lint_patterns = [re.compile(pattern) for hook_id, pattern in hooks if hook_id in LINT_HOOKS]
     py_files = [
         f
         for f in files
