@@ -27,12 +27,32 @@ _RELOADING_MARKERS = ("eod", "reload", "not available")
 _TIMEOUT_MARKERS = ("timeout", "timed out")
 
 
+#: The backend tiers a query may be routed to. `rdb` holds today's session,
+#: `hdb` the completed partitions - F-08 requires the split be explicit
+#: rather than hidden, because F-11 expects hdb to be slower.
+TIERS: dict[str, list[str]] = {
+    "rdb": ["rdb"],
+    "hdb": ["hdb"],
+    "both": ["rdb", "hdb"],
+}
+
+
 @runtime_checkable
 class Gateway(Protocol):
     """Everything the API layer needs from q. Deliberately tiny."""
 
     def call(self, program: str, *args: Any) -> Any:
-        """Send a server-authored q program with typed arguments."""
+        """Run a server-authored program on the gateway process itself."""
+        ...
+
+    def route(self, program: str, args: tuple[Any, ...], tiers: list[str]) -> Any:
+        """Route a server-authored program to backend tiers via
+        ``.gw.syncexec``, which razes the results.
+
+        The program travels as a **char vector** at the head of a query list
+        so the backend's ``value`` *applies* it to *args* instead of parsing
+        anything. See queries.py.
+        """
         ...
 
 
@@ -49,6 +69,16 @@ class KolaGateway:
         self._settings = settings
 
     def call(self, program: str, *args: Any) -> Any:
+        return self._exec(program, args)
+
+    def route(self, program: str, args: tuple[Any, ...], tiers: list[str]) -> Any:
+        # bytes, not str: kola maps str to a q symbol, and a symbol at the
+        # head of the query list makes the backend's `value` try to resolve a
+        # variable named the whole lambda.
+        query = [program.encode(), *args]
+        return self._exec(".gw.syncexec", (query, tiers))
+
+    def _exec(self, program: str, args: tuple[Any, ...]) -> Any:
         import kola
 
         s = self._settings
@@ -101,6 +131,7 @@ class FakeGateway:
 
     def __init__(self, responses: dict[str, Any] | None = None) -> None:
         self.calls: list[tuple[str, tuple[Any, ...]]] = []
+        self.routed: list[tuple[str, tuple[Any, ...], list[str]]] = []
         self._responses = responses or {}
         self.raises: Exception | None = None
 
@@ -110,10 +141,20 @@ class FakeGateway:
             raise self.raises
         return self._responses.get(program)
 
+    def route(self, program: str, args: tuple[Any, ...], tiers: list[str]) -> Any:
+        self.routed.append((program, args, tiers))
+        if self.raises is not None:
+            raise self.raises
+        return self._responses.get(program)
+
     @property
     def last_program(self) -> str:
-        return self.calls[-1][0]
+        return self.routed[-1][0] if self.routed else self.calls[-1][0]
 
     @property
     def last_args(self) -> tuple[Any, ...]:
-        return self.calls[-1][1]
+        return self.routed[-1][1] if self.routed else self.calls[-1][1]
+
+    @property
+    def last_tiers(self) -> list[str]:
+        return self.routed[-1][2]
