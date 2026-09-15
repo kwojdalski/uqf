@@ -48,6 +48,17 @@ target:`demo_deals
 / .qsrc can window the fixture exactly as the live query windows the source.
 time_field:`deal_time
 
+/ What identifies a row uniquely (D-11). `deal_id` is the natural key for a
+/ deal-shaped source and is obviously right for this synthetic one, where
+/ the fixture generates distinct ids.
+/ .
+/ Worth stating that a natural key is NOT obviously right for a real source:
+/ it is only correct if the source guarantees uniqueness, and a source that
+/ reuses ids after a purge would silently merge unrelated rows. That choice
+/ is per-source, which is why the key is declared here rather than inferred
+/ - see docs/restatement-design.md §2.1.
+row_key:`deal_id
+
 / The zone deal_time is expressed in (L-06).
 / .
 / Stated rather than left to a default, because an unstated zone is exactly
@@ -105,7 +116,7 @@ fixture:{[]
 / Register on load, so the declaration and the implementation cannot drift:
 / there is no way to have one without the other.
 .qsrc.register[source_name;
-    `source`table`target`time_field`fields`types`query`fixture`time_zone!
-    (source_name;`demo_deals;target;time_field;fields;types;query;fixture;time_zone)];
+    `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+    (source_name;`demo_deals;target;time_field;row_key;fields;types;query;fixture;time_zone)];
 
 \d .

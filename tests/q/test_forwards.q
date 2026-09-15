@@ -528,8 +528,8 @@ test_cross_markout_decomp_sums_exactly_to_the_total_move:{[t]
     t1:t0+0D00:00:01;
     decomp:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
     total_from_decomp:sum decomp`contribution_pips;
-    mid_t0:.qfwd.cross_ref_price_at[quotes;`AUDPLN;1;t0];
-    mid_t1:.qfwd.cross_ref_price_at[quotes;`AUDPLN;1;t1];
+    mid_t0:.qfwd.cross_ref_price_at[quotes;`AUDPLN;t0;1];
+    mid_t1:.qfwd.cross_ref_price_at[quotes;`AUDPLN;t1;1];
     actual_total:10000*mid_t1-mid_t0;
     .testutil.assertApprox[total_from_decomp;actual_total;1e-6;"per-leg contributions sum exactly to the actual total price move"]};
 

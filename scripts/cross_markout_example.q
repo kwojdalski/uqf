@@ -120,10 +120,10 @@ INFO "decomp - AUDPLN's total move over the window, split by leg:";
 show decomp;
 
 decomp_total:sum decomp`contribution_pips;
-DEBUG "running: .qfwd.cross_ref_price_at[quotes;`AUDPLN;1;t0]";
-mid_t0:.qfwd.cross_ref_price_at[quotes;`AUDPLN;1;t0];
-DEBUG "running: .qfwd.cross_ref_price_at[quotes;`AUDPLN;1;t1]";
-mid_t1:.qfwd.cross_ref_price_at[quotes;`AUDPLN;1;t1];
+DEBUG "running: .qfwd.cross_ref_price_at[quotes;`AUDPLN;t0;1]";
+mid_t0:.qfwd.cross_ref_price_at[quotes;`AUDPLN;t0;1];
+DEBUG "running: .qfwd.cross_ref_price_at[quotes;`AUDPLN;t1;1]";
+mid_t1:.qfwd.cross_ref_price_at[quotes;`AUDPLN;t1;1];
 actual_total:10000*mid_t1-mid_t0;
 INFO ("decomp_total vs actual_total - %1 vs %2, must match exactly (this is an exact decomposition, not an approximation)";(decomp_total;actual_total));
 if[1e-6<abs decomp_total-actual_total;

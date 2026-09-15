@@ -14,8 +14,8 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 / rather than reusing the demo source's keeps a test's failure attributable
 / to the thing it changed.
 decl:{[]
-    `source`table`target`time_field`fields`types`query`fixture`time_zone!
-    (`t;`ext;`loc;`ts;`ts`px;"pf";
+    `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+    (`t;`ext;`loc;`ts;`ts;`ts`px;"pf";
      {[h;a;b] ()};
      {([] ts:enlist .srctest.d 1; px:enlist 1.5)};
      `UTC)}
@@ -166,6 +166,41 @@ test_the_whole_fixture_is_reachable:{[t]
 test_the_fetch_path_is_announced:{[t]
     .qunit.assertEquals[first .qsrc.fetch_window[`demo_deals;0Ni;.srctest.d 1;.srctest.d 2];`fixture;"synthetic data is announced in the return value, never inferred"]};
 
+/ --- the row key (D-11) --------------------------------------------------
+
+/ Declared and validated, deliberately unused. The mechanism lands ahead of
+/ the semantics because answering D-11 "superseded in place" changes what
+/ is_covered MEANS - see docs/restatement-design.md. A declared key is the
+/ one piece that is a prerequisite either way with no blast radius.
+
+test_a_single_column_key_is_accepted:{[t]
+    .qunit.assertEquals[.qsrc.register[`t;.srctest.decl[]];`t;"a symbol atom is a legal key and needs no enlisting"]};
+
+test_a_composite_key_is_accepted:{[t]
+    .qunit.assertEquals[.qsrc.register[`t;@[.srctest.decl[];`row_key;:;`ts`px]];`t;"a multi-column key is equally legal"]};
+
+/ `11h=abs type`, not `-11h=abs type`: abs is always positive, so the latter
+/ can never be true and rejected every key including correct ones. This
+/ pins both shapes so that regression cannot return.
+test_the_key_accessor_always_returns_a_vector:{[t]
+    .qsrc.register[`t;.srctest.decl[]];
+    single:.qsrc.row_key `t;
+    .qsrc.register[`t;@[.srctest.decl[];`row_key;:;`ts`px]];
+    .qunit.assertEquals[(count single;count .qsrc.row_key `t);(1;2);"one place decides whether an atom needs enlisting, so no caller has to"]};
+
+/ A key naming a column the contract cannot see cannot identify a row.
+test_a_key_outside_the_declared_fields_is_refused:{[t]
+    .qunit.assertError[{.qsrc.register[`t;x]};@[.srctest.decl[];`row_key;:;`nosuch];"a key the contract cannot see cannot identify a row"]};
+
+test_a_partly_unknown_composite_key_is_refused:{[t]
+    .qunit.assertError[{.qsrc.register[`t;x]};@[.srctest.decl[];`row_key;:;`ts`nosuch];"one bad column in a composite key is still a bad key"]};
+
+test_a_non_symbol_key_is_refused:{[t]
+    .qunit.assertError[{.qsrc.register[`t;x]};@[.srctest.decl[];`row_key;:;"ts"];"a key must name columns, not be a string"]};
+
+test_the_demo_source_declares_its_key:{[t]
+    .qunit.assertEquals[.qsrc.row_key `demo_deals;enlist `deal_id;"the natural key for a deal-shaped source"]};
+
 / --- coercion through the contract (E-05) --------------------------------
 
 / The three trap classes named on #73, all present in one table, coerced in
@@ -213,8 +248,8 @@ test_a_clean_text_table_reports_no_failures:{[t]
 / would fail validate later with a much less useful message.
 test_an_uncoercible_declared_type_is_refused:{[t]
     .qsrc.register[`weird;
-        `source`table`target`time_field`fields`types`query`fixture`time_zone!
-        (`weird;`e;`l;`ts;`ts`blob;"px";{[h;a;b] ()};{([] ts:enlist .srctest.d 1; blob:enlist 1b)};`UTC)];
+        `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+        (`weird;`e;`l;`ts;`ts;`ts`blob;"px";{[h;a;b] ()};{([] ts:enlist .srctest.d 1; blob:enlist 1b)};`UTC)];
     txt:([] ts:enlist "2026-09-15T09:30:00"; blob:enlist "x");
     .qunit.assertError[{.qsrc.coerce[`weird;x]};txt;"a type with no coercer is named rather than passed through as text"]};
 

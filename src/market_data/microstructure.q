@@ -194,7 +194,7 @@ book_slope:{[prices;sizes]
 / Private: book_convexity for a single row - (P0-P1)-(P1-P2), negated for
 / side=`ask. Nulls out a row with fewer than 3 levels rather than
 / indexing out of bounds.
-book_convexity_one:{[side;prices]
+book_convexity_one:{[prices;side]
     $[3>count prices;
         0n;
         [raw:(prices[0]-prices[1])-(prices[1]-prices[2]);
@@ -216,7 +216,7 @@ book_convexity:{[prices;side]
     result:n#0n;
     i:0;
     while[i<n;
-        result[i]:book_convexity_one[side;prices i];
+        result[i]:book_convexity_one[prices i;side];
         i+:1];
     result};
 
