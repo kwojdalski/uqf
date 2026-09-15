@@ -5,15 +5,24 @@ give a small, stable API while loguru itself handles formatting, coloring,
 rotation, and serialisation.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    # loguru declares Record in its stub but does not export it at runtime,
+    # so this import has to be type-checking-only. Annotating the filter
+    # with `dict` instead makes `logger.add` match no overload: loguru's
+    # FilterFunction is Callable[[Record], bool], and Record is a TypedDict.
+    from loguru import Record
 
 # ---------------------------------------------------------------------------
 # Level-check helper (replaces logging.Logger.isEnabledFor)
@@ -23,7 +32,11 @@ from loguru import logger
 def is_level_enabled(level: str) -> bool:
     """Return True if messages at *level* would reach at least one handler."""
     try:
-        return logger.level(level).no >= logger._core.min_level  # type: ignore[attr-defined]
+        # Deliberate private-API read: loguru exposes no public way to ask
+        # for the minimum enabled level, and the whole call is wrapped in a
+        # try/except that returns True if loguru's internals ever change
+        # shape. Narrow ignore rather than a rule-wide relaxation.
+        return logger.level(level).no >= logger._core.min_level  # ty: ignore[unresolved-attribute]
     except Exception:
         return True
 
@@ -162,7 +175,7 @@ def setup_logging(
             # logger has no sinks yet at this point in setup, so print is the only way out
             print(f"Invalid LOG_REGEX ignored: {log_regex}", file=sys.stderr)  # noqa: T201
 
-    def _filter(record: dict) -> bool:
+    def _filter(record: Record) -> bool:
         if compiled_re is not None:
             return bool(compiled_re.search(record["message"]))
         return True

@@ -276,6 +276,27 @@ scripts/test.sh smoke               # live external metadata check
 scripts/test.sh all                 # everything except smoke
 ```
 
+The Python side is gated three ways on every commit, all scoped by *intent*
+(every `.py` file except vendored) rather than by directory:
+
+| gate | hook | what it proves |
+|---|---|---|
+| lint | `ruff`, `ruff-format` | style and a curated rule set (`E F I UP B`) |
+| type | `ty` | types resolve across module boundaries |
+| test | `python-tests` | the whole workspace suite passes |
+
+`scripts/check_hook_scopes.py` asserts all three cover **every** tracked
+Python file, and fails the commit otherwise. That check exists because the
+lint gate silently drifted once: it was scoped to a directory that stayed
+valid while the code moved out from under it, leaving **43 of 47 files
+ungated** with nothing to complain about. A type gate can drift the same way,
+and the symptom is identical — everything passes because almost nothing is
+checked.
+
+`ty` runs with `pass_filenames: false` on purpose: it type-checks a *project*,
+not a file list. Passing only the staged files would check each in isolation
+and miss exactly the cross-module breakage a type checker is for.
+
 Run the lane matching the layer you changed (requirement E-21). `q-unit` is
 also runnable directly as `q tests/run_tests.q`: it loads every module and
 every `test_*.q` file, prints a pass/fail summary, and exits non-zero if

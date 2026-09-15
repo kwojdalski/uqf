@@ -238,6 +238,19 @@ def test_the_checker_finds_the_repo_s_q_files():
     assert "tests/lib/etl_test_doubles.q" in rel
 
 
+def test_the_type_gate_is_registered_in_the_scope_checker():
+    """`ty` must be in the scope checker's gate list, not just in the config.
+
+    A hook present in .pre-commit-config.yaml but absent from
+    check_hook_scopes.py is unenforced: it can narrow to a stale path and
+    nothing complains - which is exactly how 43 of 47 files went unlinted.
+    """
+    scope_checker = Path(__file__).resolve().parents[3] / "scripts" / "check_hook_scopes.py"
+    text = scope_checker.read_text()
+    assert 'TYPE_HOOKS = ("ty",)' in text
+    assert '("type", TYPE_HOOKS)' in text
+
+
 def test_the_real_repo_is_clean():
     """The rules hold on every tracked .q file, so the hook is committable."""
     assert cqt.main() == 0

@@ -147,8 +147,14 @@ def summarise(health: list[ProcessHealth]) -> dict[str, int]:
 
 
 def _first_row(value: object) -> dict:
-    if hasattr(value, "to_dicts"):
-        rows = value.to_dicts()
+    # `getattr` then `callable`, not `hasattr` then `value.to_dicts()`: after
+    # a hasattr check the static type is still `object`, so the call is
+    # unverifiable. Binding the attribute first gives something a checker can
+    # see is callable - and it is also what actually guards the call, since
+    # hasattr passing does not mean the attribute is a method.
+    to_dicts = getattr(value, "to_dicts", None)
+    if callable(to_dicts):
+        rows = to_dicts()
         return rows[0] if rows else {}
     if isinstance(value, list) and value and isinstance(value[0], dict):
         return value[0]
@@ -156,7 +162,16 @@ def _first_row(value: object) -> dict:
 
 
 def _int(value: object) -> int | None:
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except TypeError, ValueError:
-        return None
+    # Narrow explicitly rather than calling int() on `object` behind an
+    # ignore comment. int() accepts str/bytes/SupportsInt/SupportsIndex, so
+    # `object` really is wrong - the ignore was hiding a genuine gap rather
+    # than a checker quirk, and a value of some other type reached the
+    # except clause instead of being rejected here.
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int | float | str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None

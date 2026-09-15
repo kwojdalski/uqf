@@ -551,6 +551,11 @@ def test_table_and_schema_are_declared_together():
     for pipeline in core.PIPELINES:
         assert (pipeline.table is None) == (pipeline.schema is None), pipeline.procname
         if pipeline.table:
+            # Restated rather than inferred from the assert above: the
+            # equivalence there means a table implies a schema, but nothing
+            # in the type says so, and a reader (or a checker) should not
+            # have to derive it two lines later.
+            assert pipeline.schema is not None, pipeline.procname
             assert pipeline.schema.startswith(f"{pipeline.table}:(["), pipeline.procname
 
 
