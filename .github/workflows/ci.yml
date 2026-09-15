@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Repository checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # uv run inside the hooks must use the committed resolution.
+      UV_LOCKED: "true"
+      # These govern local commits/branch names, not a detached PR merge ref.
+      SKIP: no-commit-to-branch,branch-naming-with-git-username
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.14"
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install workspace dependencies
+        run: uv sync --locked
+      - name: Report q runtime coverage
+        shell: bash
+        run: |
+          if command -v q >/dev/null 2>&1 || [ -x "$HOME/.kx/bin/q" ] || [ -x ./q ] || [ -x ./peachq/q ]; then
+            echo "A q interpreter is available; the q-tests hook will run." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "SKIP=$SKIP,q-tests" >> "$GITHUB_ENV"
+            echo "::warning::No q interpreter on this runner. qUnit and q-dependent Python IPC tests are not exercised; static q checks still run."
+            echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
+            echo "No q interpreter is installed on this hosted runner. The qUnit hook is skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Run repository hooks
+        run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
+      - name: Check decision register against GitHub
+        # This gate should still report stale decisions if a code hook fails.
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/build_decision_log.py --check
