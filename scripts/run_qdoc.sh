@@ -3,7 +3,7 @@
 # as a live kdb+ process serving browsable API docs over HTTP - an
 # alternative to gen-docs.sh's qStudio-jar static-HTML approach that needs
 # no external download, at the cost of staying up as a server instead of
-# writing files to docs/.
+# writing files to build/docs/.
 #
 # Requires real kdb+/KDB-X, not the local PeachQ binary: q-doc uses
 # .Q.opt/.h.ty/HTTP request handlers PeachQ doesn't support.

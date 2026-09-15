@@ -284,11 +284,11 @@ Generate browsable HTML API docs with:
 ```
 brew install openjdk                        # or any JDK 8+
 curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place at repo root
-./scripts/gen-docs.sh                        # writes docs/index.html (tracked in the repo)
+./scripts/gen-docs.sh                        # writes build/docs/index.html (gitignored)
 ```
 
 `qstudio.jar` also bundles a small q linter that `gen-docs.sh` runs as a
-side effect (`docs/lint.csv`/`docs/lint.html`); this repo's cross-module
+side effect (`build/docs/lint.csv`/`build/docs/lint.html`); this repo's cross-module
 calls between `src/*.q`'s separate namespaces (e.g. `forwards.q` calling
 `.qccy.ccy_pair_legs`) trigger a number of expected "undeclared variable"
 false positives there (the linter checks each file in isolation and can't
