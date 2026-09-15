@@ -75,8 +75,7 @@ WIDE_BOOK_TABLE_SCHEMA = "wide_book:([]time:`timestamp$(); sym:`g#`symbol$(); " 
 # normal database table like quotes/wide_book (flows through
 # rdb1/wdb1/hdb), not private state on vectorize1's own process.
 MKT_ORDERBOOK_TABLE_SCHEMA = (
-    "mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); "
-    "bid_prices:(); ask_prices:())"
+    "mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); ask_prices:())"
 )
 
 # Destination for the external, non-TorQ cryptorust (Rust) publisher - see
