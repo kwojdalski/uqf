@@ -10,6 +10,7 @@
 \l src/integrations/data.q
 \l scripts/torq_pipeline.q
 \l src/etl/core/backfill_state.q
+\l src/etl/core/coverage.q
 
 \l tests/q/test_stats.q
 \l tests/q/test_ccy.q
@@ -26,11 +27,12 @@
 \l tests/q/test_dqchecks.q
 \l tests/q/test_data.q
 \l tests/q/test_backfill_state.q
+\l tests/q/test_coverage.q
 
 / The namespace list is unchanged by the tests/q/ move: it keys on test
 / NAMESPACES, not file paths, and the move deliberately left namespaces
 / alone - the same choice made for src/ (see src/init.q).
-nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.backfillstatetest;
+nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.backfillstatetest`.coveragetest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;
