@@ -155,6 +155,52 @@ gk_vega:{[s;k;rd;rf;sigma;t]
     foreign_df:.qrates.df_cont[rf;t];
     s*foreign_df*.qstats.npdf[d1v]*sqrt[t]};
 
+/ Vanna: sensitivity of delta to vol, equivalently of vega to spot
+/ (d2V/dS dsigma). Identical for call and put, like gamma and vega - it is a
+/ second cross-derivative of the premium and carries no option-type term.
+/ Drives risk-reversal hedging, and is one of the two inputs the vanna-volga
+/ method needs alongside volga.
+/ .
+/ Sign: opposite to d2, since vanna is -df*npdf[d1]*d2/sigma and both the
+/ discount factor and the density are positive. So vanna is negative for
+/ strikes below the forward and positive above it.
+/ @param s spot rate
+/ @param k strike
+/ @param rd domestic (quote currency) decimal annual rate
+/ @param rf foreign (base currency) decimal annual rate
+/ @param sigma volatility, decimal (0.10 = 10%)
+/ @param t year fraction to expiry
+/ @return vanna
+/ @eg .qopt.gk_vanna[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.1367967
+gk_vanna:{[s;k;rd;rf;sigma;t]
+    d1v:d1[s;k;rd;rf;sigma;t];
+    d2v:d2[s;k;rd;rf;sigma;t];
+    foreign_df:.qrates.df_cont[rf;t];
+    density:foreign_df*.qstats.npdf[d1v];
+    neg density*d2v%sigma};
+
+/ Volga (vomma): sensitivity of vega to vol (d2V/dsigma2). Identical for
+/ call and put. Drives butterfly hedging, and is the second vanna-volga
+/ input.
+/ .
+/ Sign follows d1*d2: negative only in the narrow band where d1 and d2
+/ straddle zero (close to the vol-maximising strike), positive on both wings.
+/ Verified across k=1.00..1.40 at s=1.10: negative at k=1.12 alone, positive
+/ either side. That is why a butterfly, long the wings, is long volga.
+/ @param s spot rate
+/ @param k strike
+/ @param rd domestic (quote currency) decimal annual rate
+/ @param rf foreign (base currency) decimal annual rate
+/ @param sigma volatility, decimal (0.10 = 10%)
+/ @param t year fraction to expiry
+/ @return volga
+/ @eg .qopt.gk_volga[1.10;1.12;0.045;0.02;0.10;0.75]  -> -0.006743588
+gk_volga:{[s;k;rd;rf;sigma;t]
+    d1v:d1[s;k;rd;rf;sigma;t];
+    d2v:d2[s;k;rd;rf;sigma;t];
+    vega:gk_vega[s;k;rd;rf;sigma;t];
+    vega*(d1v*d2v)%sigma};
+
 / Call theta: time decay per year (-dV/dT); divide by 365 for a
 / per-calendar-day figure.
 / @param s spot rate

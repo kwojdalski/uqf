@@ -128,4 +128,41 @@ test_summarize_checks_all_ok_checks_produce_an_empty_report:{[t]
     r:.qdqc.summarize_checks[enlist (`position_limits;check_a)];
     .qunit.assertEmpty[r;"nothing needs attention -> an empty report, not a spurious row"]};
 
+/ check_reject_ratio_limits is fed reject_ratio_by's own output shape, so
+/ the test builds it that way rather than hand-rolling a metrics table -
+/ a hand-built fixture would pass even if the two shapes had diverged.
+mk_reject_ratios:{[]
+    reqs:([] ts:2026.09.15D10:00:00.000000000 2026.09.15D10:30:00.000000000 2026.09.15D11:00:00.000000000 2026.09.15D11:30:00.000000000;
+            sym:`EURUSD`EURUSD`GBPUSD`GBPUSD;
+            reject:1001b;
+            size:4#1000000f);
+    .qexec.reject_ratio_by[reqs;2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000;0Nn;enlist `sym;`count]};
+
+test_check_reject_ratio_limits_flags_the_breach_only:{[t]
+    limits:([] sym:`EURUSD`GBPUSD; limit:0.20 0.90);
+    r:.qdqc.check_reject_ratio_limits[.dqcheckstest.mk_reject_ratios[];limits;`sym];
+    .qunit.assertEquals[first exec status from r where sym=`EURUSD;`breach;"0.5 over a 0.20 limit breaches"];
+    .qunit.assertEquals[first exec status from r where sym=`GBPUSD;`ok;"0.5 under a 0.90 limit is ok"]};
+
+/ check_limit sorts breaches first so summarize_checks and a human both see
+/ the problems without scrolling - that ordering is part of the contract.
+test_check_reject_ratio_limits_sorts_breaches_first:{[t]
+    limits:([] sym:`EURUSD`GBPUSD; limit:0.20 0.90);
+    r:.qdqc.check_reject_ratio_limits[.dqcheckstest.mk_reject_ratios[];limits;`sym];
+    .qunit.assertEquals[first r`status;`breach;"breaches come first"]};
+
+/ The reason this wrapper exists: a reject-rate breach must land in the same
+/ report as position, exposure and market-data breaches.
+test_check_reject_ratio_limits_feeds_summarize_checks:{[t]
+    limits:([] sym:`EURUSD`GBPUSD; limit:0.20 0.90);
+    r:.qdqc.check_reject_ratio_limits[.dqcheckstest.mk_reject_ratios[];limits;`sym];
+    summary:.qdqc.summarize_checks enlist (`reject_ratio_limits;r);
+    .qunit.assertEquals[count summary;1;"one non-ok row reaches the summary"];
+    .qunit.assertEquals[first summary`check;`reject_ratio_limits;"tagged with the check name"]};
+
+test_check_reject_ratio_limits_rejects_a_missing_column:{[t]
+    limits:([] sym:enlist `EURUSD; limit:enlist 0.20);
+    .qunit.assertError[{.qdqc.check_reject_ratio_limits[([] sym:enlist `EURUSD);x;`sym]};limits;"a table without reject_ratio is refused"]};
+
+
 \d .

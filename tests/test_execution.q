@@ -3,6 +3,14 @@
 
 \d .executiontest
 
+/ Four requests, two per sym, one rejected each - so a count-mode ratio is
+/ 0.5 per sym and 0.5 overall, and the collapse identity is checkable by eye.
+mk_requests:{[]
+    ([] ts:2026.09.15D10:00:00.000000000 2026.09.15D10:30:00.000000000 2026.09.15D11:00:00.000000000 2026.09.15D11:30:00.000000000;
+        sym:`EURUSD`EURUSD`GBPUSD`GBPUSD;
+        reject:1001b;
+        size:4#1000000f)};
+
 test_markout_known_single_buy:{[t] .testutil.assertApprox[.qexec.markout[1;1.1000;1.1010;10000];10f;1e-6;"buy, price rallies 10 pips after -> +10 pip markout"]};
 test_markout_known_single_sell:{[t] .testutil.assertApprox[.qexec.markout[-1;1.1000;1.0990;10000];10f;1e-6;"sell, price falls 10 pips after -> +10 pip markout (favourable)"]};
 test_markout_adverse_move:{[t] .testutil.assertApprox[.qexec.markout[1;1.1000;1.0990;10000];-10f;1e-6;"buy, price falls after -> negative (adverse) markout"]};
@@ -236,5 +244,73 @@ test_sweep_price_rejects_non_positive_size:{[t]
 test_sweep_price_rejects_mismatched_lengths:{[t]
     wrapper:{[x] .qexec.sweep_price[1.10 1.11;enlist 100;500]};
     .qunit.assertError[wrapper;::;"mismatched prices/sizes lengths are rejected"]};
+
+/ The expanding VWAP's terminal value must be the flat VWAP exactly - that
+/ identity is what makes it a drop-in honest replacement for the benchmark
+/ use rather than a different statistic.
+test_vwap_expanding_ends_at_the_flat_vwap:{[t]
+    prices:1.1000 1.1010 1.1005 1.1020;
+    sizes:1000000 2000000 1000000 3000000f;
+    .testutil.assertApprox[last .qexec.vwap_expanding[prices;sizes];.qexec.vwap[prices;sizes];1e-12;"last expanding VWAP equals the flat VWAP"]};
+
+test_vwap_expanding_starts_at_the_first_price:{[t]
+    prices:1.1000 1.1010 1.1005;
+    sizes:1000000 2000000 1000000f;
+    .testutil.assertApprox[first .qexec.vwap_expanding[prices;sizes];first prices;1e-12;"one fill's VWAP is its own price, whatever its size"]};
+
+test_vwap_expanding_is_row_aligned:{[t]
+    prices:1.1000 1.1010 1.1005 1.1020;
+    .qunit.assertEquals[count .qexec.vwap_expanding[prices;4#1000000f];count prices;"one VWAP per fill"]};
+
+/ Each element must depend only on fills up to and including its own - the
+/ whole point over the flat VWAP. Appending a later fill must not move it.
+test_vwap_expanding_never_looks_ahead:{[t]
+    prices:1.1000 1.1010 1.1005;
+    sizes:3#1000000f;
+    short_run:.qexec.vwap_expanding[prices;sizes];
+    long_run:.qexec.vwap_expanding[prices,1.5000;sizes,9000000f];
+    .testutil.assertApprox[3#long_run;short_run;1e-12;"a later fill cannot change an earlier element"]};
+
+/ reject_ratio_by collapses to the flat reject_ratio when nothing is grouped
+/ or bucketed - the same relationship hit_ratio_by has to fill_ratio.
+test_reject_ratio_by_no_grouping_matches_flat_reject_ratio:{[t]
+    reqs:.executiontest.mk_requests[];
+    window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
+    grouped:.qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;`symbol$();`count];
+    flat:.qexec.reject_ratio[sum reqs`reject;count reqs];
+    .testutil.assertApprox[first exec reject_ratio from grouped;flat;1e-12;"ungrouped reject_ratio_by equals reject_ratio"]};
+
+test_reject_ratio_by_count_mode_grouped_by_sym:{[t]
+    reqs:.executiontest.mk_requests[];
+    window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
+    r:`sym xasc .qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;enlist `sym;`count];
+    .qunit.assertEquals[count r;2;"one row per sym"];
+    .testutil.assertApprox[r`reject_ratio;0.5 0.5;1e-12;"each sym rejected one of two requests"]};
+
+/ Amount mode weights by size, so one large reject outweighs several small
+/ fills - a distinction a count-mode ratio hides entirely.
+test_reject_ratio_by_amount_mode_weights_by_size:{[t]
+    reqs:([] ts:4#2026.09.15D10:00:00.000000000; sym:4#`EURUSD;
+            reject:1000b; size:9000000 1000000 1000000 1000000f);
+    window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
+    by_count:first exec reject_ratio from .qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;`symbol$();`count];
+    by_amount:first exec reject_ratio from .qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;`symbol$();`amount];
+    .testutil.assertApprox[by_count;0.25;1e-12;"one of four requests rejected"];
+    .testutil.assertApprox[by_amount;0.75;1e-12;"but three quarters of the size"]};
+
+test_reject_ratio_by_respects_the_time_window:{[t]
+    reqs:.executiontest.mk_requests[];
+    early:(2026.09.15D00:00:00.000000000;2026.09.15D10:15:00.000000000);
+    r:.qexec.reject_ratio_by[reqs;early 0;early 1;0Nn;`symbol$();`count];
+    .testutil.assertApprox[first exec reject_ratio from r;1.0;1e-12;"only the first request, which was rejected"]};
+
+test_reject_ratio_by_rejects_bad_mode:{[t]
+    reqs:.executiontest.mk_requests[];
+    window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
+    .qunit.assertError[{.qexec.reject_ratio_by[x 0;x 1;x 2;0Nn;`symbol$();`sideways]};(reqs;window 0;window 1);"an unknown mode is refused"]};
+
+test_reject_ratio_by_rejects_requests_missing_a_column:{[t]
+    window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
+    .qunit.assertError[{.qexec.reject_ratio_by[([] ts:enlist 2026.09.15D10:00:00.000000000);x 0;x 1;0Nn;`symbol$();`count]};(window 0;window 1);"a missing reject/size column is refused"]};
 
 \d .
