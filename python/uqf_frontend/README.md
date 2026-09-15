@@ -308,11 +308,43 @@ Writes are atomic (serialise, temp file, rename), because the frontend polls
 (**F-10**) and would otherwise be able to read a half-written file. Files
 ending `.tmp` are ignored by the reader, and a test covers that.
 
-## Not in scope here
+## Authorisation seam (B5)
 
-**B5** (auth) is gated on **F-20**; until then the layer connects with one
-credential from its environment, and **F-14** — credentials server-side only,
-no client input in query text — is what carries the security weight.
+`create_app(policy=...)` takes an authorisation policy, defaulting to
+`allow_all`. Every data route passes through it before touching the gateway:
+`/query`, `/ops/queue`, `/ops/connections`, `/ops/usage`, `/ops/processes`,
+`/ops/backfill`. `/health` and `/catalog` are deliberately outside it —
+gating liveness and the surface description would leave an unauthorised
+caller unable to discover why.
+
+### Why this is a seam and not an auth system
+
+**F-20** says the layer connects with one service credential, so q never
+sees a per-user identity. **F-22/F-23** say local demo, single host, so there
+is no user directory and in practice one operator.
+
+Together those make #59's stated acceptance criterion — "two users with
+different entitlements get different result sets" — **unreachable**, not
+because it is hard but because there are no distinct users to distinguish.
+A login flow here would be inventing a requirement.
+
+What is useful now is one place every request passes through, defaulting to
+allow, exercised by tests, ready for a real policy the moment an identity
+exists. **F-14** remains what actually carries the security weight:
+credentials stay server-side and no client input reaches query text.
+
+```python
+from uqf_frontend.authz import deny_tables
+app = create_app(policy=deny_tables({"position"}))   # 403 on that table
+```
+
+The identity comes from an `x-uqf-user` header and is **claimed, not
+verified** — anyone can set it. It is a label for audit and for a policy to
+key on, and `authz.py` says so at length so nobody mistakes it for proof.
+
+A refusal is **403, not 401**: there is no authentication to have failed. And
+a refused query never reaches q — a test asserts the gateway saw nothing,
+since that is what makes this a gate rather than a filter on the way out.
 
 The capture pipeline ships as a callable, not a daemon. What schedules it —
 a timer in this process, cron, or an Airflow task — is a deployment question,

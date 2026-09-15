@@ -12,7 +12,8 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from uqf_frontend import catalog, coverage, health, ops, procfile, queries, status
+from uqf_frontend import authz, catalog, coverage, health, ops, procfile, queries, status
+from uqf_frontend.authz import Policy, Request_, allow_all, enforce
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
     CoverageIncomplete,
@@ -47,13 +48,20 @@ def create_app(
     gateway: Gateway | None = None,
     settings: Settings | None = None,
     fleet: Fleet | None = None,
+    policy: Policy | None = None,
 ) -> FastAPI:
     """Build the app. Every dependency is injectable so tests need no q
     process and no environment.
+
+    *policy* is the authorisation seam (F-15/F-20). It defaults to
+    ``allow_all``, which is the correct policy for a single-host demo with
+    one shared credential - see authz.py on why this is a seam rather than an
+    auth system.
     """
     settings = settings or Settings.from_env()
     gateway = gateway or KolaGateway(settings)
     fleet = fleet or KolaFleet(settings)
+    policy = policy or allow_all
 
     app = FastAPI(
         title="uqf frontend API",
@@ -63,6 +71,22 @@ def create_app(
     app.state.settings = settings
     app.state.gateway = gateway
     app.state.fleet = fleet
+    app.state.policy = policy
+
+    def authorise(request: Request, table: str | None = None) -> None:
+        """Run the seam for this request. One call per route, so "was this
+        authorised" has exactly one answer per request.
+
+        The identity is CLAIMED, never verified - see authz.IDENTITY_HEADER.
+        """
+        enforce(
+            policy,
+            Request_(
+                identity=request.headers.get(authz.IDENTITY_HEADER, authz.ANONYMOUS),
+                path=request.url.path,
+                table=table,
+            ),
+        )
 
     @app.exception_handler(FrontendError)
     async def _handle(_: Request, exc: FrontendError) -> JSONResponse:
@@ -109,15 +133,17 @@ def create_app(
         )
 
     @app.get("/ops/queue", response_model=OpsTableResponse)
-    def ops_queue() -> OpsTableResponse:
+    def ops_queue(request: Request) -> OpsTableResponse:
         """Pending and running queries on the gateway (F-02)."""
+        authorise(request)
         return OpsTableResponse(
             rows=_rows(gateway.call(ops.QUEUE)), poll_seconds=ops.POLL_SECONDS["queue"]
         )
 
     @app.get("/ops/connections", response_model=ConnectionsResponse)
-    def ops_connections() -> ConnectionsResponse:
+    def ops_connections(request: Request) -> ConnectionsResponse:
         """Which backend handles the gateway has, and who is connected (F-03)."""
+        authorise(request)
         return ConnectionsResponse(
             servers=_rows(gateway.call(ops.SERVERS)),
             clients=_rows(gateway.call(ops.CLIENTS)),
@@ -125,12 +151,13 @@ def create_app(
         )
 
     @app.get("/ops/usage", response_model=UsageResponse)
-    def ops_usage(limit: int = 500) -> UsageResponse:
+    def ops_usage(request: Request, limit: int = 500) -> UsageResponse:
         """Fleet-wide query log, assembled here because none exists in q (F-04).
 
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
         """
+        authorise(request)
         capped = min(limit, settings.max_rows)
         rows, unreachable = ops.merge_usage(fleet.per_process(ops.USAGE, capped))
         return UsageResponse(
@@ -142,13 +169,14 @@ def create_app(
         )
 
     @app.get("/ops/processes", response_model=FleetHealthResponse)
-    def ops_processes() -> FleetHealthResponse:
+    def ops_processes(request: Request) -> FleetHealthResponse:
         """Fleet health for every process process.csv declares (F-01).
 
         Liveness comes from an IPC probe rather than OS process inspection,
         so the same mechanism works whether or not the process is on this
         machine - see health.py for why that matters to F-22.
         """
+        authorise(request)
         if settings.process_csv is None:
             raise ValidationFailed(
                 "fleet health needs UQF_FRONTEND_PROCESS_CSV set to TorQ's generated "
@@ -173,13 +201,14 @@ def create_app(
         )
 
     @app.get("/ops/backfill", response_model=BackfillStatusResponse)
-    def ops_backfill() -> BackfillStatusResponse:
+    def ops_backfill(request: Request) -> BackfillStatusResponse:
         """Backfill and Airflow task status, read from the files q writes (F-06).
 
         Read from disk rather than from the gateway because q writes these
         and nothing publishes them over IPC. Carries only q's own facts -
         see status.py on the E-15 boundary this deliberately does not cross.
         """
+        authorise(request)
         statuses, unreadable = status.read_dir(settings.status_dir)
         return BackfillStatusResponse(
             summary=status.summarise(statuses),
@@ -202,8 +231,10 @@ def create_app(
         return _coverage(gateway, dataset, source_version, range_from, range_to)
 
     @app.post("/query", response_model=QueryResponse)
-    def run_query(req: QueryRequest) -> QueryResponse:
+    def run_query(req: QueryRequest, request: Request) -> QueryResponse:
         tbl = catalog.table(req.table)
+        # after catalog.table, so an unknown table is a 422 rather than a 403
+        authorise(request, table=tbl.name)
         columns, operators, values = queries.build_filters(
             tbl, [(f.column, f.op, f.value) for f in req.filters]
         )
