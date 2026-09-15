@@ -595,3 +595,52 @@ def test_generated_schema_covers_every_published_table(fake_paths: core.TorqDemo
     assert core.CRYPTO_BOOK_TABLE_SCHEMA in generated
     assert core.CRYPTO_SIM_FILLS_TABLE_SCHEMA in generated
     assert core.CRYPTO_TRADES_TABLE_SCHEMA in generated
+
+
+def test_declared_dataflow_edges_match_the_q_scripts():
+    """Every pipeline's `subscribes`/`publishes` declaration agrees with the
+    `.sub.subscribe` / `.qpipe.subscribe_etl` / `.u.upd` calls in its own
+    script.
+
+    `verify_pipeline_edges` existed and passed - when someone ran it by hand.
+    Nothing exercised it in the suite, so a declaration could drift from the
+    script it describes and the diagrams derived from it would go stale with
+    no signal. That is the same dormant-guard shape as `.qcov.require_schema`
+    before it was wired into a worker's init: a check that cannot fire
+    protects nothing, and its existence reads as protection to anyone
+    auditing the code.
+    """
+    problems = core.verify_pipeline_edges(core.default_paths().scripts_dir)
+    assert not problems, "\n".join(problems)
+
+
+def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
+    """A verifier nobody has seen fail might match nothing.
+
+    Write a script whose subscription disagrees with what the registry
+    declares for it, point the verifier at that directory, and require that
+    the mismatch is reported by pipeline name. Only the pipelines with a
+    static, non-.qpipe subscription can be checked this way, so this picks
+    the first such one rather than hard-coding a name that a later registry
+    edit would silently invalidate.
+    """
+    target = next(
+        p for p in core.PIPELINES if p.subscribes and not p.subscribes_dynamic and not p.uses_qpipe
+    )
+    real = core.default_paths().scripts_dir
+    for p in core.PIPELINES:
+        (tmp_path / p.script).write_text((real / p.script).read_text())
+    (tmp_path / core.PIPELINE_LIB_SCRIPT).write_text((real / core.PIPELINE_LIB_SCRIPT).read_text())
+    # Flip the subscription to a table the registry does not declare - at the
+    # actual `.sub.subscribe[` call, not the first bare backtick-name in the
+    # file. The first draft replaced the first occurrence anywhere, which
+    # landed in a comment, left the real call intact, and the "negative"
+    # test passed the unmodified script as if drift had been detected.
+    original = (tmp_path / target.script).read_text()
+    call = f".sub.subscribe[`{target.subscribes[0]}"
+    assert call in original, f"expected {call!r} in {target.script}"
+    drifted = original.replace(call, ".sub.subscribe[`not_a_declared_table", 1)
+    (tmp_path / target.script).write_text(drifted)
+
+    problems = core.verify_pipeline_edges(tmp_path)
+    assert any(target.procname in problem for problem in problems), problems

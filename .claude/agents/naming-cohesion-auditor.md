@@ -214,8 +214,8 @@ skill rather than a rename you invented.
 
 Persist the run: write `docs/audits/YYYY-MM-DD-naming-cohesion-<scope>.md`
 (append a `## Run <timestamp>` section if that file exists already today) and
-add a row to `docs/audits/README.md`, creating the directory and a README
-header row if neither exists. The file is a copy of the inline report, not a
+add a row to `docs/audits/README.md` using the column contract that file
+defines (Date, Agent, Scope, Report, Findings, Cleared, Not checked). The file is a copy of the inline report, not a
 replacement for it.
 
 ## Rules

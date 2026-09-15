@@ -200,6 +200,21 @@ class Pipeline:
     startwithall: str = "1"
     note: str = ""  # why this row deviates from the defaults, if it does
 
+    # --- dataflow edges, for scripts/generate_diagrams.py ---------------
+    # Declared here so a diagram can be DERIVED rather than drawn, and
+    # verified: verify_pipeline_edges() below greps each pipeline's own .q
+    # script for its `.sub.subscribe`/`.qpipe.subscribe_etl`/`.u.upd` calls
+    # and fails if the declaration and the code disagree. A hand-drawn
+    # diagram goes stale silently; this one cannot (see docs J-04).
+    subscribes: tuple[str, ...] = ()  # tickerplant tables it subscribes to
+    # Tables it publishes via `.u.upd`. Defaults to (table,) - set it
+    # explicitly only when a pipeline publishes onto a table whose schema it
+    # does NOT own (fxfeed1 -> the vendored `quote`), or onto more than one.
+    publishes: tuple[str, ...] | None = None
+    # tap1 chooses its subscription at runtime from -tables, so no fixed
+    # edge exists to declare or to verify.
+    subscribes_dynamic: bool = False
+
     @property
     def proctype(self) -> str:
         return "feed" if self.kind == "feed" else "metrics"
@@ -207,6 +222,18 @@ class Pipeline:
     @property
     def access_list(self) -> str:
         return "" if self.kind == "feed" else _ETL_ACCESS_LIST
+
+    @property
+    def published_tables(self) -> tuple[str, ...]:
+        """Tables this pipeline publishes onto the tickerplant.
+
+        `table` is schema ownership and is the common case, so it doubles as
+        the publish edge; `publishes` overrides it for the pipelines that
+        publish onto a table they did not define.
+        """
+        if self.publishes is not None:
+            return self.publishes
+        return (self.table,) if self.table else ()
 
     def load_column(self) -> str:
         """The process.csv `load` value - the .qpipe library first when the
@@ -228,6 +255,7 @@ PIPELINES: tuple[Pipeline, ...] = (
         procname="fxfeed1",
         script="torq_fx_feed.q",
         kind="feed",
+        publishes=("quote",),
         offset=FXFEED_PINNED_OFFSET,
         note="pinned below the vendored dqc/dqe block, not part of the contiguous run",
     ),
@@ -242,6 +270,7 @@ PIPELINES: tuple[Pipeline, ...] = (
         procname="cross1",
         script="torq_cross_etl.q",
         kind="etl",
+        subscribes=("quotes",),
         note="keeps cross_quotes as private process state, publishes no table",
     ),
     Pipeline(
@@ -255,6 +284,7 @@ PIPELINES: tuple[Pipeline, ...] = (
         procname="vectorize1",
         script="torq_vectorize_etl.q",
         kind="etl",
+        subscribes=("wide_book",),
         table="mkt_orderbook",
         schema=MKT_ORDERBOOK_TABLE_SCHEMA,
     ),
@@ -262,6 +292,7 @@ PIPELINES: tuple[Pipeline, ...] = (
         procname="tap1",
         script="torq_tap.q",
         kind="etl",
+        subscribes_dynamic=True,
         startwithall="0",
         note="diagnostic subscriber - started on demand, not with the whole stack",
     ),
@@ -276,6 +307,7 @@ PIPELINES: tuple[Pipeline, ...] = (
         procname="posbook1",
         script="torq_posbook_etl.q",
         kind="etl",
+        subscribes=("trades", "quote"),
         table="position",
         schema=POSITION_TABLE_SCHEMA,
     ),
@@ -283,6 +315,7 @@ PIPELINES: tuple[Pipeline, ...] = (
         procname="markout1",
         script="torq_markout_etl.q",
         kind="etl",
+        subscribes=("trades", "quote"),
         table="execution_quality",
         schema=EXECUTION_QUALITY_TABLE_SCHEMA,
         uses_qpipe=True,
@@ -318,6 +351,91 @@ def _resolved_offsets() -> dict[str, int]:
 
 PIPELINE_OFFSETS = _resolved_offsets()
 PIPELINE_BY_NAME = {pipeline.procname: pipeline for pipeline in PIPELINES}
+
+
+# --- edge verification -------------------------------------------------
+#
+# The dataflow edges declared above are what the generated diagrams draw.
+# A declaration nobody checks is just a second place for the truth to rot,
+# so these three patterns read the edges back out of the q scripts:
+#
+#   .sub.subscribe[`trades`quote;...]        direct subscribe
+#   .qpipe.subscribe_etl[`markout;`trades`quote]  subscribe via the library
+#   h (`.u.upd;`position;...)                publish
+#
+# A q symbol-vector literal is backtick-joined with no separator
+# (`trades`quote), which is why one regex yields the whole list and it is
+# split afterwards.
+_SUB_DIRECT_RE = re.compile(r"^\s*\.sub\.subscribe\[\s*((?:`[a-zA-Z_][a-zA-Z0-9_]*)+)\s*;", re.M)
+_SUB_QPIPE_RE = re.compile(
+    r"\.qpipe\.subscribe_etl\[\s*`[a-zA-Z0-9_]*\s*;\s*((?:`[a-zA-Z_][a-zA-Z0-9_]*)+)\s*\]"
+)
+_PUB_RE = re.compile(r"h\s*\(\s*`\.u\.upd\s*;\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;")
+
+
+def _symbol_list(match_text: str) -> tuple[str, ...]:
+    """A q symbol vector, e.g. trades+quote, split into ("trades", "quote")."""
+    return tuple(part for part in match_text.split("`") if part)
+
+
+def _strip_q_comments(source: str) -> str:
+    """Drop q line comments so a `.u.upd` inside prose is not read as code.
+
+    q treats `/` as a comment only at line start or after whitespace, which
+    is exactly the distinction needed here - the publish calls all sit
+    inside expressions where no bare `/` precedes them.
+    """
+    out = []
+    for line in source.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("/"):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def verify_pipeline_edges(scripts_dir: Path) -> list[str]:
+    """Check every pipeline's declared edges against its own q script.
+
+    Returns a list of human-readable mismatches - empty means the registry
+    and the code agree, so the generated diagrams describe what actually
+    runs. Pipelines whose edges are chosen at runtime
+    (``subscribes_dynamic``) are skipped, and a publish routed through
+    ``.qpipe`` resolves to the library's generic publish call, whose table
+    is a parameter, so no table name can be read out of the script.
+    """
+    problems: list[str] = []
+    for pipeline in PIPELINES:
+        script = scripts_dir / pipeline.script
+        if not script.is_file():
+            problems.append(f"{pipeline.procname}: script {script} does not exist")
+            continue
+        source = _strip_q_comments(script.read_text())
+
+        if not pipeline.subscribes_dynamic:
+            found: list[str] = []
+            for match in _SUB_DIRECT_RE.finditer(source):
+                found.extend(_symbol_list(match.group(1)))
+            for match in _SUB_QPIPE_RE.finditer(source):
+                found.extend(_symbol_list(match.group(1)))
+            if tuple(found) != tuple(pipeline.subscribes):
+                problems.append(
+                    f"{pipeline.procname}: declares subscribes={pipeline.subscribes!r} "
+                    f"but {pipeline.script} subscribes to {tuple(found)!r}"
+                )
+
+        published = [match.group(1) for match in _PUB_RE.finditer(source)]
+        if pipeline.uses_qpipe:
+            # The publish goes through .qpipe.publish, whose table is a
+            # parameter - nothing table-shaped to read out of this script.
+            continue
+        if tuple(published) != tuple(pipeline.published_tables):
+            problems.append(
+                f"{pipeline.procname}: declares publishes={pipeline.published_tables!r} "
+                f"but {pipeline.script} publishes {tuple(published)!r}"
+            )
+    return problems
+
 
 # Per-process offset constants, kept as a stable public surface (tests and
 # docs reference them by name) but derived from PIPELINES rather than

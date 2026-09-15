@@ -12,8 +12,8 @@
 ## Purpose and users
 
 Scopes a general-purpose React (or React-like) single-page application on top
-of uqf's TorQ stack. Two audiences are equally plausible candidates, and this
-document deliberately does not pick one — see [Open questions](#open-questions).
+of uqf's TorQ stack. Two audiences were equally plausible candidates; F-19 has
+since answered **both** — see [Decisions](#decisions).
 
 - **Ops-monitoring audience** — operators who need process health, ETL
   coverage, and backfill/Airflow status for the running demo or a
@@ -134,27 +134,59 @@ requiring new backend work.
 | Process fleet up/down | `torq-demo summary`, which shells to `torq.sh` and inspects local OS processes | CLI-only; **new backend work** |
 | Airflow / backfill task status | Status file on disk, or Airflow's own REST API for task-instance state | File-based only; **new work either way** |
 
-## Open questions
+## Decisions
 
-- **F-19** — **Which audience is in scope** — ops-monitoring, desk-facing
-  analytics, or both? Determines whether the API layer must support
-  parameterised domain-table queries at all, or only fixed operational views.
-  Everything else here is downstream of this.
+All five of this document's open questions were answered on 2026-09-15, each on
+its own issue, and each issue is closed. Each bullet keeps the question before
+the arrow, because the reason it was worth asking is the reason the answer costs
+what it does.
+Machine-derived index: [`docs/decisions.md`](decisions.md).
 
-- **F-20** — **Auth model for the API layer**: per-user q credentials mapped to
-  access-list entries, or one shared service credential with authorisation
-  enforced in the API layer?
+- **F-19 — which audience is in scope?** → **both**, ops-monitoring *and*
+  desk-facing analytics ([#53]). Because B0's query layer was built
+  audience-agnostic, roughly half of what exists already serves each: the
+  `/query` `/catalog` `/coverage` surface for desk, `/ops/*` plus the
+  usage-capture pipeline for ops. The cost of "both" is carrying both.
 
-- **F-21** — **Airflow status integration**: read the q-written status files
-  from a shared filesystem, or call Airflow's REST API for task-instance
-  state? Both are new integration work.
+- **F-20 — auth model for the API layer?** → **one service credential, with
+  authorisation enforced in the API layer** ([#54]), and built:
+  `python/uqf_frontend/src/uqf_frontend/authz.py` is the single seam every
+  request passes through. Two things it states rather than papers over — the
+  identity is *claimed* (an `x-uqf-user` header anyone can set), not
+  authenticated; and `allow_all` is the correct policy on a single-host demo
+  with one credential, not a placeholder. What carries the real security weight
+  is F-14: credentials stay server-side and no client input reaches query text.
 
-- **F-22** — **Target deployment**: the local synthetic `torq-demo` stack only,
-  or a production-shaped deployment backed by the external-source processes?
-  Affects credential handling, expected latency and data volume.
+- **F-21 — how does Airflow/backfill status reach the frontend?** → **read q's
+  own status files** ([#55]), merged in #68. `.qpipe.write_status` writes,
+  `uqf_frontend/status.py` reads, and `test_status.py` parses the q source to
+  keep the two field sets in step. The format is defined here rather than
+  inherited — there is no Airflow provider in this tree to be compatible with
+  (F-04) — and per E-15 the files carry only q's own facts.
 
-- **F-23** — **No hosting model** is established for either the API layer or
-  the React app. Must be decided before implementation.
+- **F-22 — target deployment?** → **local demo, single host** ([#56]). The API
+  layer runs beside the `torq-demo` stack on one machine, which is what makes
+  F-21's plain local path work with no shared volume. B3's fleet health was
+  unconstrained by this (liveness is an IPC probe either way), and the existing
+  10k row cap and 30s gateway timeout were sized for it.
+
+- **F-23 — hosting model for the API layer and the React app?** → **answered
+  together with F-22: one host** ([#57]). This gives F-13's usage-capture
+  pipeline a home — it ships as `UsageCapture.capture_once()`, and a timer in
+  the API process or a cron entry both work. That matters more than it sounds:
+  `.usage.flushtime` defaults to **three hours** (measured, not the one day the
+  requirements state), so unscheduled capture means history older than three
+  hours is simply gone. The React app is still unwritten and deliberately not
+  under `python/`.
+
+The B-phase gates below still name the question they were gated on (B3 on F-22,
+B4 on F-21, B5 on F-20); those gates are now open rather than blocked.
+
+[#53]: ../../issues/53
+[#54]: ../../issues/54
+[#55]: ../../issues/55
+[#56]: ../../issues/56
+[#57]: ../../issues/57
 
 ---
 

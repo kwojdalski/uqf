@@ -82,7 +82,7 @@ CAUSALITY AUDIT   (rows below are format illustrations, not findings)
 
 Close with: which of the five checks ran and what each concluded; every check you did **not** run, named explicitly so an unchecked vector never reads as a cleared one; and the severity split. State the verified-clean list separately from the not-checked list — conflating them is the one reporting error that makes this audit worse than useless.
 
-Then persist the run: write `docs/audits/YYYY-MM-DD-causality-<scope>.md` (append a `## Run <timestamp>` section if that file already exists today) and add a row to `docs/audits/README.md`, creating the directory and README if neither exists. Report the full table inline as well — the file is a copy, not a replacement.
+Then persist the run: write `docs/audits/YYYY-MM-DD-causality-<scope>.md` (append a `## Run <timestamp>` section if that file already exists today) and add a row to `docs/audits/README.md` using the column contract that file defines (Date, Agent, Scope, Report, Findings, Cleared, Not checked) — the `Cleared` and `Not checked` cells carry the same split your inline report must keep. Report the full table inline as well — the file is a copy, not a replacement.
 
 ## Rules
 
