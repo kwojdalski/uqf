@@ -140,6 +140,72 @@ release_lock:{[worker]
 / gating on this would reintroduce the race acquire_lock avoids.
 lock_held:{[worker] not () ~ @[{key hsym `$x};lock_path worker;{()}]}
 
+/ -------------------------------------------------------- CHECKPOINT
+
+/ Where a worker's private state file lives. PRIVATE is the operative word
+/ (E-06): one worker's checkpoint is never evidence that a dataset is
+/ complete, and no other worker may read it. Cross-process completeness has
+/ exactly one channel, the append-only etl_coverage ledger (E-07), and
+/ conflating the two is how a dataset gets declared complete because some
+/ unrelated worker happened to get far enough.
+checkpoint_path:{[worker] (lock_dir[]),"/",string[worker],".checkpoint"}
+
+/ Save a cursor together with the FULL run specification that produced it
+/ (E-06).
+/ .
+/ The specification is stored, not just the cursor, because a cursor is only
+/ meaningful relative to the run that produced it. A cursor from a [Sep 1;
+/ Sep 5) run at source_version v1 says nothing about a [Sep 1; Sep 30) run
+/ at v2, and resuming from it would skip most of the second run's range
+/ while reporting progress.
+/ @param worker the worker's name
+/ @param spec the run specification - source_version, range_from, range_to
+/ @param cursor how far the run has got
+/ @return the path written
+save_checkpoint:{[worker;spec;cursor]
+    dir:lock_dir[];
+    system"mkdir -p ",dir;
+    path:checkpoint_path worker;
+    payload:`source_version`range_from`range_to`cursor`saved_at!
+            (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);
+    (hsym `$path) 0: enlist .j.j payload;
+    path}
+
+/ Load a cursor, but only if it belongs to THIS run specification (E-06).
+/ .
+/ Returns the saved cursor when the specification matches, and a null
+/ timestamp when there is no checkpoint or the specification differs -
+/ "discard saved state when the current specification differs", which is the
+/ requirement's own wording. Discarding is the safe direction: re-running a
+/ window that was already done is idempotent under E-13's retry-safe
+/ publication, whereas resuming from a foreign cursor silently skips data.
+/ @param worker the worker's name
+/ @param spec the CURRENT run specification
+/ @return the cursor to resume from, or 0Np to start from range_from
+load_checkpoint:{[worker;spec]
+    path:checkpoint_path worker;
+    raw:@[{first read0 hsym `$x};path;{""}];
+    if[0=count raw; :0Np];
+    saved:@[{.j.k x};raw;{()!()}];
+    if[0=count saved; :0Np];
+    / Compare PARSED values, not strings. .j.j writes a timestamp as ISO
+    / ("2026-09-13T00:00:00.000000000") while `string` on a q timestamp
+    / gives "2026.09.13D00:00:00.000000000" - so a string comparison fails
+    / even for an identical specification, and every resume silently
+    / restarted from the beginning while reporting success.
+    matches:all (
+        (`$saved`source_version) ~ spec`source_version;
+        ("P"$saved`range_from)   ~ spec`range_from;
+        ("P"$saved`range_to)     ~ spec`range_to);
+    / every element must match, not just the version: a narrowed or widened
+    / range is a different run, and resuming across one skips data.
+    $[matches; "P"$saved`cursor; 0Np]}
+
+/ Remove a worker's checkpoint, for a deliberate restart from the beginning.
+clear_checkpoint:{[worker]
+    system"rm -f ",checkpoint_path worker;
+    checkpoint_path worker}
+
 / ------------------------------------------------------------------- SHELL
 
 / Convert a thrown error into a terminal failed status (question-bank M-01).
