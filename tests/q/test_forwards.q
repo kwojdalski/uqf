@@ -1,5 +1,5 @@
-// test_forwards.q - tests for src/forwards.q. Load src/rates.q,
-// src/forwards.q, tests/lib/qunit.q and tests/lib/testutil.q before this
+// test_forwards.q - tests for src/pricing/forwards.q. Load src/foundation/rates.q,
+// src/pricing/forwards.q, tests/lib/qunit.q and tests/lib/testutil.q before this
 // file.
 
 \d .forwardstest

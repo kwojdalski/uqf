@@ -1,4 +1,4 @@
-// test_microstructure.q - tests for src/microstructure.q. Load
+// test_microstructure.q - tests for src/market_data/microstructure.q. Load
 // src/init.q, tests/lib/qunit.q and tests/lib/testutil.q before this file.
 
 \d .microstructuretest

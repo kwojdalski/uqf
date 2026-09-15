@@ -26,8 +26,8 @@ that a merge happened. Sources are `docs/drift-reports/`,
 | D1 | `python/uqf-client/` hyphenated; canonical uses `python/uqf_client/`. The drift report names this a **blocking packaging conflict** | `closed` | Directory renamed, 7 live references updated, venv rebuilt. Verified: `check_hook_scopes.py` 43/43, all four suites green |
 | D2 | Lint gate scoped to one package; 43 of 47 tracked `.py` files ungated | `closed` | PR #52 — scoped by intent (`\.py$` less `^lib/`), plus `scripts/check_hook_scopes.py` as a standing gate |
 | D3 | Agent definitions in `.claude/agents/`; canonical has `.github/agents/*.agent.md` | `wontfix` | **False equivalence.** `.agent.md` is GitHub Copilot's custom-agent format; `.claude/agents/*.md` is Claude Code's, with `tools:`/`model:` frontmatter. Different tools, not one artifact in two places — which is why the report dispositions them "side-local workflow rules". Converging them would break both. See D14 for the real gap |
-| D4 | `src/*.q` flat; canonical splits into `foundation/ pricing/ portfolio/ execution/ market_data/ integrations/ examples/` | `blocked` | B-02 (what replaces `init.q`'s load order) and B-03 (do namespaces change with directories) are unanswered. Renaming without those answers would need redoing |
-| D5 | `tests/test_*.q` flat with `tests/run_tests.q`; canonical uses `tests/q/test_*.q`, `tests/q/run_unit.q`, `scripts/test.sh` dispatcher | `blocked` | Depends on D4's namespace answer, and on #61 (commit-time budget) for which lanes gate a commit |
+| D4 | `src/*.q` flat; canonical splits into `foundation/ pricing/ portfolio/ execution/ market_data/ integrations/ examples/` | `closed` | Split adopted with **namespaces unchanged** (B-03 answered), so no call site or test assertion moved — only `init.q`'s 13 load lines and 124 path references. `init.q` and README now record that the directories are organisational, since the graph has a real `pricing/` ↔ `execution/` cycle |
+| D5 | `tests/test_*.q` flat; canonical uses `tests/q/test_*.q` | `closed` | 14 files moved, runner retargeted, 19 doc references fixed. `nsList` untouched (keys on namespaces, not paths). Canonical's `run_unit.q` + `scripts/test.sh` dispatcher deliberately **not** built: one q lane makes a one-option dispatcher premature |
 | D6 | Generated qDoc HTML committed under `docs/`; canonical regenerates into `build/docs/` | `closed` | Output retargeted to `build/docs/`, 15 generated files removed from git, `build/` ignored. **Also defused a `rm -rf docs` in `gen-docs.sh`** that would have deleted all 13 hand-written documents. GitHub Pages is not configured (404), so nothing was serving from `docs/` |
 | D7 | Per-package `pyproject.toml`/`uv.lock`; canonical consolidates to one root Python project | `closed` | uv **workspace** at the repo root: one lockfile, one `.venv` (1.1 GB → 383 MB), shared ruff/pytest config, ruff pinned to pre-commit's own version. Members keep their names and the `torq-demo` script. Safe by inspection — zero cross-package imports, every shared constraint an open lower bound |
 | D8 | `docs/torq-demo.md`; canonical supersedes with `docs/guides/torq-demo.md` | `blocked` | Deliberately deferred. Moving it alone creates a single-file `docs/guides/` and costs ~24 reference edits, for no benefit until the taxonomy is settled — J-05: what belongs in `guides/` vs `architecture/` vs `reference/` vs `decisions/` vs `integrations/` |
@@ -41,9 +41,9 @@ that a merge happened. Sources are `docs/drift-reports/`,
 ## Counters
 
 ```
-closed   4     D1, D2, D6, D7
-open     2     D4, D5      (unblocked by the src/ layout decision)
-blocked  6     D8 D9 D10 D11 D14
+closed   6     D1, D2, D4, D5, D6, D7
+open     0
+blocked  5     D8 D9 D10 D11 D14
 wontfix  3     D3, D12, D13
 ```
 
@@ -60,9 +60,9 @@ that bear on this ledger:
 
 ## The ceiling has been reached
 
-**`open` is 2, both newly actionable.** D4 and D5 are the `src/` and
-`tests/q/` moves, now unblocked. Every other remaining row needs something
-this tree cannot produce:
+**`open` is zero again, and this time nothing structural is left.** Six rows
+are closed. The five that remain each need something this tree cannot
+produce:
 
 | Waiting on | Rows |
 |---|---|

@@ -32,7 +32,7 @@ key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 
 / Illustrative, approximately realistic spot rates (not live market data) -
 / same three pairs as the other example scripts. .qex.pip_size/
-/ .qex.size_unit (src/example_defaults.q) are one pip (0.0001) and one
+/ .qex.size_unit (src/examples/example_defaults.q) are one pip (0.0001) and one
 / depth level's notional, in clean round millions.
 
 mk_book:{[spot]

@@ -9,7 +9,7 @@
 / `trades`'s shape (TRADES_TABLE_SCHEMA in python/torq_orchestrator/src/
 / torq_orchestrator/core.py) is deliberately not the vendored `trade`
 / table (price/size/side:`symbol$(), an equity buy/sell marker) - it
-/ matches src/positions.q's apply_fill/apply_fills and src/execution.q's
+/ matches src/portfolio/positions.q's apply_fill/apply_fills and src/execution/execution.q's
 / markout_at_horizons parameter shape exactly (trade_price, side as
 / signed 1/-1, pip_factor carried per row), the same shape env/schemas.q's
 / .envschema.trades documents - so torq_posbook_etl.q can fold rows

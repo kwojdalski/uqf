@@ -3,7 +3,7 @@
 / vendored pack's own code/tick/feed.q and this repo's own torq_fx_feed.q.
 / Publishes synthetic depth-aware FX quotes into a new `quotes` table -
 / schema `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, matching
-/ src/forwards.q's require_quotes_cols shape (`ts` there, `time` here - see
+/ src/pricing/forwards.q's require_quotes_cols shape (`ts` there, `time` here - see
 / QUOTES_TABLE_SCHEMA in python/torq_orchestrator/src/torq_orchestrator/
 / core.py for why) so rows landing in the resulting HDB/RDB are directly
 / usable by uqf's own cross_book_at/cross_markout_at_horizons/etc after a

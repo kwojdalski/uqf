@@ -23,7 +23,7 @@ Modules, in `src/init.q`'s load order:
 - `book.q` — reshapes wide/mis-typed order book tables into the vector-column shape everything above expects
 - `microstructure.q` — LOB feature family (book pressure, microprice, OFI, VAMP, etc.) — see `docs/ROADMAP.md` for the source formulas and which candidates are/aren't implemented yet
 
-`src/data.q` is explicitly out of scope — not part of this library, deliberately left in its original camelCase, don't touch it.
+`src/integrations/data.q` is explicitly out of scope — not part of this library, deliberately left in its original camelCase, don't touch it.
 
 ## What to check first
 

@@ -1,4 +1,4 @@
-// reshape_wide_order_book_example.q - worked example of src/book.q's
+// reshape_wide_order_book_example.q - worked example of src/market_data/book.q's
 // book_from_wide_levels: reshapes a wide, per-level order book table
 // (Databento MBP-10-style column naming, 10 depth levels per side, plus
 // string-typed identifier columns) into the vector-column book dict shape
@@ -38,7 +38,7 @@ n_rows:$[0<count .z.x; "J"$first .z.x; default_n_rows];
 / Illustrative, approximately realistic EURUSD spot rate (not live market
 / data). tick_scale is the price columns' unit relative to the quoted rate
 / (1 = hold the rate directly, as a float); .qex.pip_size (one pip, 0.0001 -
-/ src/example_defaults.q) scaled by tick_scale gives a level step of one
+/ src/examples/example_defaults.q) scaled by tick_scale gives a level step of one
 / pip in that same unit, matching typical eFX top-of-book spacing.
 / row_drift is a small, sub-pip synthetic drift between the demo's rows,
 / just so they aren't all identical - kept far smaller than pip_size so it
@@ -49,7 +49,7 @@ pip_size:.qex.pip_size*tick_scale;
 row_drift:pip_size%10;
 base:tick_scale*eurusd_spot;
 
-/ Size levels in clean round millions (.qex.size_unit, src/example_defaults.q)
+/ Size levels in clean round millions (.qex.size_unit, src/examples/example_defaults.q)
 / - typical order-of-magnitude for eFX top-of-book depth on a major pair.
 / ask starts a tenth of a level below bid so bid/ask sizes stay visually
 / distinct. .qex.size_row_drift is a small per-row jitter (1% of a level)

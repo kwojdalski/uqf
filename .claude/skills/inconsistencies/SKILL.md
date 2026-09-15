@@ -110,7 +110,7 @@ When the user types `done` or all items are reviewed:
 
 - Only flag real inconsistencies — two things that genuinely do the same job but differently. Do not flag cases where different names reflect different semantics.
 - Do not refactor working code just to make it uniform. Focus on interfaces, signatures, and naming — not internals.
-- Do not flag the deliberate, documented exceptions in `kdb-q-conventions` (`d1v`/`d2v`, `beforeNamespace_generate_trades`, `src/data.q`'s camelCase) — those are known and explained, not drift.
+- Do not flag the deliberate, documented exceptions in `kdb-q-conventions` (`d1v`/`d2v`, `beforeNamespace_generate_trades`, `src/integrations/data.q`'s camelCase) — those are known and explained, not drift.
 - If fixing an inconsistency requires changing a public function signature used in many places, flag it clearly and let the user decide scope before applying.
 - Do not use emojis.
 - Cite exact line numbers for both sides of every finding.

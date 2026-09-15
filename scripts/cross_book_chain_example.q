@@ -35,7 +35,7 @@ key[.log4q.snk] set' .log4q.sev .log4q.sevl;
 / Illustrative, approximately realistic spot rates (not live market data) -
 / same three pairs and levels as reshape_wide_order_book_multi_pair_example.q,
 / so the two scripts' numbers agree if you compare them. .qex.pip_size/
-/ .qex.size_unit (src/example_defaults.q) are one pip (0.0001) and one
+/ .qex.size_unit (src/examples/example_defaults.q) are one pip (0.0001) and one
 / depth level's notional, in clean round millions (1e6, 2e6, ... 1e7
 / across 10 levels) - typical order-of-magnitude for eFX top-of-book
 / depth on a major pair.

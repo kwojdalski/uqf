@@ -1,7 +1,7 @@
 / torq_vectorize_etl.q - proof-of-concept ETL: subscribes to
 / torq_wide_book_feed.q's `wide_book` table (bids0..bids10/asks0..asks10,
 / one scalar column per depth level - the "incorrectly-ingested wide order
-/ book" shape src/book.q's own header describes) and, on every batch,
+/ book" shape src/market_data/book.q's own header describes) and, on every batch,
 / folds it into forwards.q's vector-column book shape via uqf's own
 / .qbook.book_from_wide_levels/derive_level_groups - then publishes the
 / result back onto the tickerplant as a second table, `mkt_orderbook`
@@ -27,7 +27,7 @@
 / pull in uqf's own src/init.q (loads .qbook/.qfwd/... - see UQFROOT in
 / core.py's build_env) FIRST - level_groups below calls .qbook.
 / derive_level_groups at load time, so .qbook has to already exist.
-/ init.q's own \l lines are repo-root-relative (`\l src/stats.q`, ...),
+/ init.q's own \l lines are repo-root-relative (`\l src/foundation/stats.q`, ...),
 / and torq.sh doesn't launch us from the repo root, so cd there for the
 / load and back again immediately after - system"cd ..." is q's own
 / builtin chdir, not a subshell, so it sticks across the two calls. Same

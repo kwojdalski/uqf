@@ -28,7 +28,7 @@ This bit us for real while building this repo: a hand-written Horner
 polynomial (`b[0]*r+b[1]`) silently evaluated as `b[0]*(r+b[1])` and produced
 plausible-looking but wrong numbers that only surfaced by tracing
 intermediate values against known references (see git history / PR
-description for `src/stats.q`).
+description for `src/foundation/stats.q`).
 
 **Rule for this repo:** never write a bare mixed `*`/`+`/`-` chain and rely on
 implicit grouping. Instead:
@@ -43,7 +43,7 @@ implicit grouping. Instead:
    q's right-to-left rule would happen to give the right answer anyway -
    don't make the next reader re-derive the evaluation order.
 3. Any polynomial evaluation goes through `.qstats.horner_eval[coeffs;x]`
-   (defined in `src/stats.q`) rather than a hand-written Horner chain -
+   (defined in `src/foundation/stats.q`) rather than a hand-written Horner chain -
    that arithmetic is tricky exactly once, in one tested place.
 4. After writing any new formula, **verify it numerically against a known
    reference value** before trusting it (textbook example, a documented
@@ -147,7 +147,7 @@ library with no processes/IPC/tables).
   c from t by g` (real kdb+ tolerates the reordering) throws a bare
   `error: parse` at load time with no line number, and - worse - silently
   aborts loading the rest of that file, so every later function in the
-  same file ends up undefined too (found via `src/dqchecks.q`'s
+  same file ends up undefined too (found via `src/market_data/dqchecks.q`'s
   `check_stale_quotes` - always re-check the whole file loaded cleanly
   after a `parse` error, not just that one function).
 - **PeachQ's `$[cond;a;b]` only supports a scalar `cond`** - `$[boolvec;a;b]`
@@ -156,7 +156,7 @@ library with no processes/IPC/tables).
   boolvec ``, already used elsewhere in this repo for 2-way statuses); for
   3+-way branching, compute a 0/1/2... index via ordinary arithmetic on
   the condition vectors, then index a symbol vector by that, rather than
-  reaching for `$` on a vector at all (found via `src/dqchecks.q`'s
+  reaching for `$` on a vector at all (found via `src/market_data/dqchecks.q`'s
   `check_market_data_quality`).
 - **Real KDB-X: inside a `select`/`update` clause's per-row expression, a
   bare (unqualified) call to a function defined in the *same* namespace
@@ -170,7 +170,7 @@ library with no processes/IPC/tables).
   select/update clause (e.g. `.qdqc.limit_for[...]`, not bare
   `limit_for[...]`) - unusual style anywhere else in this codebase, but
   required there. PeachQ doesn't require this; only surfaces under real
-  KDB-X (found via `src/dqchecks.q`'s `check_limit`).
+  KDB-X (found via `src/market_data/dqchecks.q`'s `check_limit`).
 
 ## Layout
 
@@ -178,7 +178,7 @@ library with no processes/IPC/tables).
   ... `\d .` block, so each file lands in its own flat namespace rather
   than sharing one (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`,
   `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
-  `.qex` - `src/data.q` is `.qdata`, out of scope for this library, see
+  `.qex` - `src/integrations/data.q` is `.qdata`, out of scope for this library, see
   below). Every one of these is single-level (not nested under a shared
   `.q` parent) for the same portability reason as the rest of this list -
   see the PeachQ multi-level `\d` gotcha further down. A function calling
@@ -215,11 +215,11 @@ library with no processes/IPC/tables).
     any name assigned anywhere in a function local for the *whole*
     function body, so the call on the right-hand side would try to
     invoke the not-yet-set local instead of the global function.
-  - `beforeNamespace_generate_trades` in `tests/test_execution_scale.q`
+  - `beforeNamespace_generate_trades` in `tests/q/test_execution_scale.q`
     keeps the literal `beforeNamespace` prefix - see the qUnit hook
     gotcha below for why.
 
-  `src/data.q` (not authored as part of this library - see its own
+  `src/integrations/data.q` (not authored as part of this library - see its own
   header) still uses camelCase throughout and was deliberately left
   alone.
 - Currency pair quoting: BASE/QUOTE, so `rate` means 1 BASE = `rate` QUOTE

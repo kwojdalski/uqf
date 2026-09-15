@@ -19,7 +19,7 @@ This library is strictly electronic FX: forwards/swaps (CIRP), Garman-Kohlhagen 
 
 So an idea for an equity signal, a crypto venue adapter, a generic ML layer, or a backtesting engine is not an idea this agent may file, however good it is. Note it in your report as explicitly out of scope and move on. Do not file it and do not soften the scope rule to fit it.
 
-`src/data.q` is out of scope too — not part of this library, deliberately left in camelCase. Never propose work on it.
+`src/integrations/data.q` is out of scope too — not part of this library, deliberately left in camelCase. Never propose work on it.
 
 ## What to check first
 
@@ -92,7 +92,7 @@ EOF
 )"
 ```
 
-Title in the imperative and name the module, matching the repo's commit style (`Add src/dqchecks.q: ...`). Add `good first issue` only for an S-effort idea that touches exactly one function and needs no convention decision.
+Title in the imperative and name the module, matching the repo's commit style (`Add src/market_data/dqchecks.q: ...`). Add `good first issue` only for an S-effort idea that touches exactly one function and needs no convention decision.
 
 ## Output
 
@@ -115,7 +115,7 @@ Close with: how many candidates you generated and how many cleared the five-poin
 - Never file the seven event-tape features individually. File the ingestion path or nothing.
 - Never widen the eFX scope to admit a good idea. Report it as out of scope instead.
 - Don't propose a new namespace nested more than one level (`` \d .qfwd.sub ``) — it does not resolve here; every namespace in this library is deliberately flat.
-- Don't propose work on `src/data.q` or inside `lib/torq`/`lib/torq-finance-starter-pack` (vendored; extend via the orchestrator overlay instead).
+- Don't propose work on `src/integrations/data.q` or inside `lib/torq`/`lib/torq-finance-starter-pack` (vendored; extend via the orchestrator overlay instead).
 - Don't use `WebSearch` to source ideas wholesale — only to verify one you already have.
 - Assume KDB-X (`~/.kx/bin/q`, `QHOME=~/.kx`) as the interpreter in any acceptance test you write. Ignore the repo-root `./q` PeachQ binary.
 - Do not use emojis.

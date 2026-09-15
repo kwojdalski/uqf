@@ -1,7 +1,7 @@
 // data.q - optional Databento parquet data access, keyed by symbol and
 // date. Not loaded by src/init.q: it needs a real kdb+/KDB-X interpreter
 // (PeachQ has no `2:`, so it can't load KX's native pq module) and a local
-// .env pointing at the data. Load explicitly with `\l src/data.q`.
+// .env pointing at the data. Load explicitly with `\l src/integrations/data.q`.
 //
 // Expects DATABENTO_DATA_DIR (from a repo-root .env file, or the OS
 // environment) to point at a folder laid out as:

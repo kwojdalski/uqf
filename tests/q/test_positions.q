@@ -1,5 +1,5 @@
-// test_positions.q - tests for src/positions.q. Load src/risk.q,
-// src/positions.q, tests/lib/qunit.q and tests/lib/testutil.q before this
+// test_positions.q - tests for src/portfolio/positions.q. Load src/portfolio/risk.q,
+// src/portfolio/positions.q, tests/lib/qunit.q and tests/lib/testutil.q before this
 // file.
 
 \d .positionstest

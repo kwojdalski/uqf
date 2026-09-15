@@ -1,4 +1,4 @@
-// test_risk.q - tests for src/risk.q. Load src/stats.q, src/risk.q,
+// test_risk.q - tests for src/portfolio/risk.q. Load src/foundation/stats.q, src/portfolio/risk.q,
 // tests/lib/qunit.q and tests/lib/testutil.q before this file.
 
 \d .risktest

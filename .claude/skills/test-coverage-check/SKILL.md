@@ -19,16 +19,16 @@ The library lives in `src/`. The main testable components and their canonical te
 
 | Component | Source path | Expected test file |
 |---|---|---|
-| Normal-distribution helpers | `src/stats.q` (`ncdf`, `npdf`, `inv_ncdf`, `horner_eval`) | `tests/test_stats.q` |
-| Currency pair conventions | `src/ccy.q` (`is_ccy_pair`, `normalize_ccy_pair`, `ccy_pair_symbol`/`ccy_pair_legs`) | `tests/test_ccy.q` |
-| Day count fractions | `src/daycount.q` (`dcf_act_360`, `dcf_act_365`, `dcf_30e_360`, `year_frac`) | `tests/test_daycount.q` |
-| Rate/discount conversions | `src/rates.q` (`growth_simple`/`growth_cont`, `df_simple`/`df_cont`) | `tests/test_rates.q` |
-| CIRP forwards + cross-book chaining | `src/forwards.q` (`fwd_simple`/`fwd_cont`, `cross_book`, `cross_book_at_sizes`, `cross_book_chain_at_sizes`, `ccy_shortest_path`, `cross_book_at`, `cross_markout_at_horizons`, `cross_markout_decomp`, `cross_impact_at_horizons`) | `tests/test_forwards.q` |
-| Garman-Kohlhagen options | `src/options.q` (`gk_call`/`gk_put`, `d1`/`d2`, Greeks, `implied_vol`) | `tests/test_options.q` |
-| Position risk | `src/risk.q` (`pip_value`, `pnl`, `carry_return`/`carry_pnl`, `var_parametric`, `var_historical`) | `tests/test_risk.q` |
-| Execution analytics | `src/execution.q` (`markout`, `markout_at_horizons`, `eff_spread`, `slippage`, `fill_ratio`/`reject_ratio`, `hit_ratio_by`, `vwap`, `sweep_price`) | `tests/test_execution.q` (+ `tests/test_execution_scale.q` for the 1mm-row scale check) |
-| Wide-book reshaping | `src/book.q` (`fold_level_columns`, `derive_level_groups`, `symbolize_columns`, `book_from_wide_levels`) | `tests/test_book.q` |
-| LOB microstructure features | `src/microstructure.q` | `tests/test_microstructure.q` |
+| Normal-distribution helpers | `src/foundation/stats.q` (`ncdf`, `npdf`, `inv_ncdf`, `horner_eval`) | `tests/q/test_stats.q` |
+| Currency pair conventions | `src/foundation/ccy.q` (`is_ccy_pair`, `normalize_ccy_pair`, `ccy_pair_symbol`/`ccy_pair_legs`) | `tests/q/test_ccy.q` |
+| Day count fractions | `src/foundation/daycount.q` (`dcf_act_360`, `dcf_act_365`, `dcf_30e_360`, `year_frac`) | `tests/q/test_daycount.q` |
+| Rate/discount conversions | `src/foundation/rates.q` (`growth_simple`/`growth_cont`, `df_simple`/`df_cont`) | `tests/q/test_rates.q` |
+| CIRP forwards + cross-book chaining | `src/pricing/forwards.q` (`fwd_simple`/`fwd_cont`, `cross_book`, `cross_book_at_sizes`, `cross_book_chain_at_sizes`, `ccy_shortest_path`, `cross_book_at`, `cross_markout_at_horizons`, `cross_markout_decomp`, `cross_impact_at_horizons`) | `tests/q/test_forwards.q` |
+| Garman-Kohlhagen options | `src/pricing/options.q` (`gk_call`/`gk_put`, `d1`/`d2`, Greeks, `implied_vol`) | `tests/q/test_options.q` |
+| Position risk | `src/portfolio/risk.q` (`pip_value`, `pnl`, `carry_return`/`carry_pnl`, `var_parametric`, `var_historical`) | `tests/q/test_risk.q` |
+| Execution analytics | `src/execution/execution.q` (`markout`, `markout_at_horizons`, `eff_spread`, `slippage`, `fill_ratio`/`reject_ratio`, `hit_ratio_by`, `vwap`, `sweep_price`) | `tests/q/test_execution.q` (+ `tests/q/test_execution_scale.q` for the 1mm-row scale check) |
+| Wide-book reshaping | `src/market_data/book.q` (`fold_level_columns`, `derive_level_groups`, `symbolize_columns`, `book_from_wide_levels`) | `tests/q/test_book.q` |
+| LOB microstructure features | `src/market_data/microstructure.q` | `tests/q/test_microstructure.q` |
 
 Re-derive this map from `src/init.q`'s load order and `ls tests/test_*.q` before relying on it — it goes stale as modules are added.
 

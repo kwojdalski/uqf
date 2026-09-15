@@ -52,7 +52,7 @@ INFO ("reference_data - %1 pairs seeded";count .envschema.reference_data);
 
 / ==== market_data: a three-pair order-book snapshot ====
 / Same shape/scaling as the other example scripts' mk_book -
-/ .qex.pip_size/.qex.size_unit (src/example_defaults.q). EURPLN is here
+/ .qex.pip_size/.qex.size_unit (src/examples/example_defaults.q). EURPLN is here
 / (not just EURUSD/AUDUSD) specifically so ccy_exposure below has a
 / PLN quote to bridge through when it revalues into USD.
 mk_book_row:{[spot]

@@ -4,7 +4,7 @@
 / NOTE ON q ARITHMETIC: q has no operator precedence (strictly right to
 / left evaluation), so every mixed +/-/* expression below is built from
 / explicitly parenthesised, named intermediate terms rather than dense
-/ one-liners - see src/stats.q for the bug this avoids.
+/ one-liners - see src/foundation/stats.q for the bug this avoids.
 
 \d .qdcf
 

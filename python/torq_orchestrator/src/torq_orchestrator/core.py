@@ -41,7 +41,7 @@ FXFEED_PINNED_OFFSET = 19
 PIPELINE_BLOCK_START = 24
 
 # Appended (never edited in place) to a *copy* of the vendored database.q -
-# see _generated_schema_content(). Matches src/forwards.q's require_quotes_cols
+# see _generated_schema_content(). Matches src/pricing/forwards.q's require_quotes_cols
 # shape (`ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes) except `ts` is
 # named `time` here (Rule S1/S3: the tickerplant's upd/.u.upd machinery
 # requires the first column literally named `time`) - torq_quotes_feed.q's
@@ -52,7 +52,7 @@ QUOTES_TABLE_SCHEMA = (
 )
 
 # Appended alongside QUOTES_TABLE_SCHEMA - a deliberately "incorrectly-
-# ingested wide order book table" (src/book.q's own header comment), one
+# ingested wide order book table" (src/market_data/book.q's own header comment), one
 # scalar column per depth level rather than a vector column, for
 # torq_wide_book_feed.q/vectorize1 (torq_vectorize_etl.q) to demonstrate
 # uqf's own .qbook.book_from_wide_levels/derive_level_groups fixing it back
@@ -124,8 +124,8 @@ CRYPTO_TRADES_TABLE_SCHEMA = (
 
 # For torq_fx_trades_feed.q. Deliberately its own table rather than the
 # vendored `trade` (price/size/side:`symbol$() for an equity buy/sell
-# marker) - column names/types instead match src/positions.q's
-# apply_fill/apply_fills and src/execution.q's markout_at_horizons exactly
+# marker) - column names/types instead match src/portfolio/positions.q's
+# apply_fill/apply_fills and src/execution/execution.q's markout_at_horizons exactly
 # (side is a signed long, 1/-1; trade_price not price), same as env/
 # schemas.q's .envschema.trades, so posbook1 can consume rows with zero
 # reshaping. pip_factor carried per-row (not looked up from reference

@@ -1,4 +1,4 @@
-// test_book.q - tests for src/book.q. Load src/book.q, tests/lib/qunit.q
+// test_book.q - tests for src/market_data/book.q. Load src/market_data/book.q, tests/lib/qunit.q
 // and tests/lib/testutil.q before this file.
 
 \d .booktest

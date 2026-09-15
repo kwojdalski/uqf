@@ -1,10 +1,10 @@
-// test_data.q - tests for src/data.q. Load src/data.q, tests/lib/qunit.q
+// test_data.q - tests for src/integrations/data.q. Load src/integrations/data.q, tests/lib/qunit.q
 // and tests/lib/testutil.q before this file.
 //
 // Only exercises parseEnv/cfg/databentoFile - the pure path/parsing logic.
 // getBySymbolDate needs a real KDB-X interpreter (kx.pq module, via `2:`)
 // and a local Databento data folder, so it's verified manually rather than
-// in this portable suite - see src/data.q's doc comment.
+// in this portable suite - see src/integrations/data.q's doc comment.
 
 \d .datatest
 

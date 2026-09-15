@@ -1,4 +1,4 @@
-// test_rates.q - tests for src/rates.q. Load src/rates.q,
+// test_rates.q - tests for src/foundation/rates.q. Load src/foundation/rates.q,
 // tests/lib/qunit.q and tests/lib/testutil.q before this file.
 
 \d .ratestest

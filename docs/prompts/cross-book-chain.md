@@ -1,15 +1,15 @@
 # Prompt: N-leg cross-book chain (`cross_book_chain_at_sizes`)
 
 Drafted with the `torq-developer` skill (q-language rules Q1-Q3) plus this
-repo's own conventions in `src/forwards.q`, `src/ccy.q`, and
-`tests/test_forwards.q`. Hand this prompt to an LLM session in this repo to
+repo's own conventions in `src/pricing/forwards.q`, `src/foundation/ccy.q`, and
+`tests/q/test_forwards.q`. Hand this prompt to an LLM session in this repo to
 implement the function.
 
 ```
-Implement an N-leg generalization of .qfwd.cross_book_at_sizes in src/forwards.q.
-Read src/forwards.q in full first (cross_book, ccy_orient_cross, oriented_levels,
+Implement an N-leg generalization of .qfwd.cross_book_at_sizes in src/pricing/forwards.q.
+Read src/pricing/forwards.q in full first (cross_book, ccy_orient_cross, oriented_levels,
 cross_sweep_side, cross_book_at_one_size, cross_book_at_sizes, side_cols) and
-src/ccy.q (ccy_pair_legs, ccy_pair_symbol) before writing anything - the new
+src/foundation/ccy.q (ccy_pair_legs, ccy_pair_symbol) before writing anything - the new
 function must reuse this orientation/sweep logic, not reinvent it.
 
 GOAL
@@ -94,7 +94,7 @@ CONVENTIONS TO FOLLOW (this repo, not generic TorQ)
   `$"..."`, never backtick syntax.
 
 TESTS
-Add tests to tests/test_forwards.q following the existing pattern exactly:
+Add tests to tests/q/test_forwards.q following the existing pattern exactly:
   - a 3-leg (or more) chain whose result matches chaining two calls to the
     existing cross_book_at_sizes by hand, as a self-consistency check (mirrors
     test_cross_book_at_sizes_matches_cross_book_at_negligible_size's approach)
