@@ -210,6 +210,28 @@ commit:{[dry;effect;action;args]
 /   - the LAST window is clipped to to_ts, never extended past it. An
 /     over-running final window records coverage for a range that was never
 /     requested, which a later run then skips.
+/ .
+/ WHAT A "DAY" IS HERE (issue #80's L-04, and L-05 with it)
+/ .
+/ A 1D window is 24h of ELAPSED UTC TIME measured from from_ts. It is not a
+/ calendar day, not a business date, and not aligned to any venue's session:
+/ a range starting at 17:00 produces windows starting at 17:00, and a
+/ five-day range over a weekend is five windows, not five trading days.
+/ .
+/ WHAT DEFINES A TRADING DAY FOR THE CANONICAL WORKERS IS NOT KNOWABLE FROM
+/ THIS TREE - that answer lived with the bank's calendars, which A-04 keeps
+/ out of a public repository. So the assumption is written down instead of
+/ guessed at, and tests/q/test_time_zone.q pins it: whoever adds a venue
+/ calendar has to change a failing test rather than a comment. Nothing else
+/ here has a business-date notion either - .qcov composes half-open
+/ intervals and .qdcf counts actual calendar days - and the only day roll
+/ this tree knows about is TorQ's EOD reload, which is an operational state
+/ rather than a business date.
+/ .
+/ Cutting in UTC is also what makes DST harmless (L-05): a daily window is
+/ exactly 24h across a transition, never the 23h or 25h a local calendar day
+/ becomes, so coverage keeps tiling exactly. The variable local span is
+/ handled where it belongs, in .qsrc's per-source zone conversion.
 / @param from_ts range start
 / @param to_ts range end, exclusive
 / @param width a timespan, e.g. 1D

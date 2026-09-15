@@ -14,10 +14,11 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 / rather than reusing the demo source's keeps a test's failure attributable
 / to the thing it changed.
 decl:{[]
-    `source`table`target`time_field`fields`types`query`fixture!
+    `source`table`target`time_field`fields`types`query`fixture`time_zone!
     (`t;`ext;`loc;`ts;`ts`px;"pf";
      {[h;a;b] ()};
-     {([] ts:enlist .srctest.d 1; px:enlist 1.5)})}
+     {([] ts:enlist .srctest.d 1; px:enlist 1.5)};
+     `UTC)}
 
 / Remove only THIS suite's own test source, never the whole registry.
 / .
@@ -66,6 +67,36 @@ test_a_string_query_is_refused:{[t]
 test_a_source_without_a_fixture_is_refused:{[t]
     bad:@[.srctest.decl[];`fixture;:;()];
     .qunit.assertError[{.qsrc.register[`t;x]};bad;"without a fixture the whole backfill path is undemonstrable"]};
+
+/ L-06: the zone is a required declaration with no default. A defaulted zone
+/ reads as a decision downstream while nobody ever made one, and the failure
+/ is silent - every consumer assumes UTC while the source hands over local
+/ wall-clock time.
+test_a_source_without_a_time_zone_is_refused:{[t]
+    .qunit.assertError[{.qsrc.register[`t;x]};((enlist `time_zone) _ .srctest.decl[]);"an unstated zone is the bug, not a default"]};
+
+test_a_time_zone_must_be_a_single_symbol:{[t]
+    bad:@[.srctest.decl[];`time_zone;:;"Europe/London"];
+    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a string zone would silently fail the zone-table lookup"]};
+
+/ The window is taken on time_field, so a time_field outside `fields` is
+/ never type-checked by validate and only surfaces at fetch time, mid-run.
+test_a_time_field_outside_the_declared_fields_is_refused:{[t]
+    bad:@[.srctest.decl[];`time_field;:;`nosuch];
+    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a typo in time_field must fail at registration, not two layers down"]};
+
+/ L-03. q's datetime (`z`) is a FLOAT count of days, so z->p rounding loses
+/ sub-second precision silently: measured, 999 of 1000 nanosecond-spaced
+/ instants do not survive the round trip, while whole seconds do - which is
+/ why it passes every hand-check built from round numbers.
+test_a_non_timestamp_time_field_is_refused:{[t]
+    bad:@[.srctest.decl[];`types;:;"zf"];
+    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a datetime window column produces plausible numbers and misplaced rows rather than an error"]};
+
+test_the_time_field_type_error_names_the_trap:{[t]
+    bad:@[.srctest.decl[];`types;:;"zf"];
+    err:@[{.qsrc.register[`t;x]; ""};bad;{x}];
+    .qunit.assertEquals[err like "*not \"p\"*";1b;"the error says which type was expected, not merely that something is wrong"]};
 
 test_an_unregistered_source_is_an_error_not_a_miss:{[t]
     .qunit.assertError[{.qsrc.declaration x};`nosuch;"E-12 requires central registration, so an unknown source is a wiring bug"]};

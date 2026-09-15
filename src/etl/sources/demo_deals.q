@@ -48,6 +48,21 @@ target:`demo_deals
 / .qsrc can window the fixture exactly as the live query windows the source.
 time_field:`deal_time
 
+/ The zone deal_time is expressed in (L-06).
+/ .
+/ Stated rather than left to a default, because an unstated zone is exactly
+/ the shape of the bug: every later reader assumes UTC while the source may
+/ have been handing over wall-clock local time all along, and the two differ
+/ by an offset that changes twice a year. `UTC` here is a claim about this
+/ source that .qsrc.validate_live can be run against - not an absence of
+/ information.
+/ .
+/ It is also the only value that needs no zone table at all, which is why a
+/ real integration should push the conversion upstream rather than declare a
+/ zone: see .qsrc.local_to_utc for the hour of local timestamps that is
+/ irrecoverable in any other arrangement.
+time_zone:`UTC
+
 / ------------------------------------------------------------- THE QUERY
 
 / A PARAMETERISED lambda, never string concatenation (E-08, answered via
@@ -90,7 +105,7 @@ fixture:{[]
 / Register on load, so the declaration and the implementation cannot drift:
 / there is no way to have one without the other.
 .qsrc.register[source_name;
-    `source`table`target`time_field`fields`types`query`fixture!
-    (source_name;`demo_deals;target;time_field;fields;types;query;fixture)];
+    `source`table`target`time_field`fields`types`query`fixture`time_zone!
+    (source_name;`demo_deals;target;time_field;fields;types;query;fixture;time_zone)];
 
 \d .

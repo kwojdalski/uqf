@@ -11,8 +11,9 @@
 / the real source had changed - and a fixture that no longer resembles its
 / source is worse than no fixture, because it manufactures confidence.
 / .
-/ Four decisions recorded here rather than left implicit. They follow from
-/ answers already given, and are stated so nobody has to re-derive them:
+/ Four ETL decisions are recorded here rather than left implicit, and the
+/ time-and-timezone block after them likewise. They follow from answers
+/ already given, and are stated so nobody has to re-derive them:
 / .
 /   E-04 (answered via A-04 + F-22/F-23) - the external driver is NOT a hard
 /     dependency. A public single-host demo cannot require a licensed ODBC
@@ -33,6 +34,68 @@
 /     reimplementable here. What gets built is a generic ANALOGUE with the
 /     same shape and none of the logic. So this contract describes shapes, and
 /     deliberately carries no business semantics.
+/ .
+/ TIME AND TIMEZONE (issue #80: L-03, L-05, L-06)
+/ .
+/   L-06 - "do external sources return local times, and who converts?"
+/     WHAT THE BANK'S SOURCES ACTUALLY RETURN IS NOT KNOWABLE FROM HERE. The
+/     canonical tree is unreachable and A-04 forbids its schemas appearing
+/     here, so nobody in this repository can answer that half. What IS
+/     decidable is the policy, and the policy is what changes the code:
+/ .
+/       - internally, everything is UTC. That is not new: python/uqf_frontend
+/         already enforces it at the HTTP edge, where queries.coerce rejects
+/         a naive datetime outright. It cites that rule as "E-08/R9.1" in the
+/         FRONTEND's numbering - a different E-08 from this file's, which is
+/         the parameterised-query decision above. Same rule, two numbering
+/         schemes; this file's timezone handling is the q-side half of it.
+/       - the zone is therefore a PER-SOURCE property, because only the
+/         source knows it, and it is DECLARED rather than defaulted. An
+/         omitted zone is the exact shape of the bug: it reads as "UTC" to
+/         every later reader while the source was handing over wall-clock
+/         local time all along, which is silent and off by one offset.
+/       - the FRAMEWORK converts, once, at fetch, in fetch_window below.
+/         Not the worker (each would do it slightly differently, and a
+/         worker that forgot would be indistinguishable from a UTC source),
+/         and not the consumer (by then the zone is gone).
+/ .
+/   L-03 - the `z->p` cast bug class. THE CANONICAL BUG ITSELF IS NOT
+/     RECOVERABLE from this tree; what follows is the class, measured here
+/     under KDB-X, and the guards that stop it recurring. q's `datetime`
+/     (type 15h, `z`) is a FLOAT count of days; `timestamp` (12h, `p`) is a
+/     long count of nanoseconds. Going z->p is therefore a float-to-long
+/     rounding, and it is quiet:
+/ .
+/       - measured: of 1000 timestamps one nanosecond apart, 999 do not
+/         survive a p->z->p round trip; the largest error seen was 629ns,
+/         and up to 447ns of it BACKWARDS, i.e. to an earlier instant.
+/       - whole seconds DO survive (0 error across a full day of them), so
+/         the bug passes every hand-check built from round numbers and only
+/         shows up on real trade timestamps.
+/       - `=` says a z and a p at the same instant are equal (1b) while `~`
+/         says they do not match (0b), and `distinct` keeps a value and its
+/         own round trip as TWO values - so a dedupe on (key;time) silently
+/         stops recognising rows it has already published.
+/       - filtering a z column with p window bounds does not even warn: q
+/         promotes, the window comes back plausible, and the wrongness is
+/         carried in the data rather than raised.
+/ .
+/     Three things prevent recurrence, all of them enforcement rather than
+/     documentation: (1) register below requires the time_field to be one of
+/     the declared fields AND to be declared `p`, so a z time column is a
+/     registration failure; (2) validate/validate_live compare declared type
+/     characters against `meta`, so a source that silently changes a column
+/     from p to z fails on both the fixture and the live path; (3)
+/     scripts/check_q_traps.py forbids the q datetime type in src/ outright -
+/     the cast direction is not statically decidable, but the type's
+/     PRESENCE is, and this tree has no legitimate use for it.
+/ .
+/   L-05 - DST in windowed backfills. Windows are cut in UTC by
+/     .qwrt.windows, so a "daily" window is always exactly 24h of elapsed
+/     time: never short, never long, and the coverage ledger keeps tiling
+/     exactly across a transition. The variable thing is the LOCAL span, and
+/     that is handled here rather than by warping window widths - see
+/     source_bounds and local_to_utc for the two traps that produces.
 
 \d .qsrc
 
@@ -40,7 +103,12 @@
 
 / What every registered source must declare. Named as data so a test can
 / assert the set rather than trusting a code review.
-required_declarations:`source`table`target`time_field`fields`types`query`fixture
+/ .
+/ `time_zone` is REQUIRED, with no default (L-06). A defaulted zone is the
+/ bug: it reads as a decision downstream while nobody ever made one. Stating
+/ `UTC` costs one symbol and makes "this source hands over UTC" a claim
+/ somebody wrote, which validate_live can then be run against.
+required_declarations:`source`table`target`time_field`fields`types`query`fixture`time_zone
 
 / source -> its declaration dict.
 sources:(`symbol$())!();
@@ -62,6 +130,8 @@ sources:(`symbol$())!();
 /   types   - the expected q type characters, one per field, as a string
 /   query   - a parameterised lambda taking (handle;range_from;range_to)
 /   fixture - a niladic lambda returning a synthetic table of the same shape
+/   time_zone - the zone the source's time_field is expressed in, as a
+/     symbol: `UTC, or a tz-database name such as `$"Europe/London" (L-06)
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 register:{[source;decl]
@@ -79,6 +149,30 @@ register:{[source;decl]
         '"register: ",string[source],"'s query must be a lambda (E-08: parameterised, never concatenated)"];
     if[not 100h=type decl`fixture;
         '"register: ",string[source],"'s fixture must be a niladic lambda (E-04: the path must be exercisable with no driver)"];
+    if[not -11h=type decl`time_zone;
+        '"register: ",string[source],"'s time_zone must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\" (L-06)"];
+    / The window is taken on time_field, so time_field must be a field this
+    / adapter actually READS. Without this check a typo registers happily and
+    / surfaces two layers down: validate never checks the column (it is not
+    / in `fields`), the live query filters on something the declaration never
+    / described, and only window_fixture notices - at fetch time, mid-run.
+    if[not (decl`time_field) in decl`fields;
+        '"register: ",string[source],"'s time_field ",string[decl`time_field],
+         " is not one of its declared fields (",(", " sv string decl`fields),
+         ") - the window is taken on that column, so it must be one the contract describes"];
+    / L-03, enforced rather than hoped for: the window column must be a
+    / TIMESTAMP. q's datetime (`z`) is a float count of days, so z->p is a
+    / rounding that loses sub-second precision silently - 999 of 1000
+    / nanosecond-spaced instants do not survive it, and whole seconds do,
+    / which is why it passes every hand-check. A window cut on such a column
+    / produces plausible numbers and misplaced rows rather than an error.
+    time_idx:(decl`fields)?decl`time_field;
+    time_char:(decl`types)[time_idx];
+    if[not "p"=time_char;
+        / Short by necessity: q truncates a thrown string at 255 bytes, so the
+        / long form lives in the comment above rather than in the message.
+        '"register: ",string[source],"'s time_field ",string[decl`time_field],
+         " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently (L-03)"];
     sources[source]:decl;
     source}
 
@@ -208,6 +302,168 @@ require_credentials:{[source]
 / without throwing.
 has_credentials:{[source] 0<count getenv `$credential_var source}
 
+/ ---------------------------------------------------------------- ZONES
+
+/ The zone table: timezoneID, gmtDateTime, adjustment (L-06).
+/ .
+/ Empty until an operator loads one, and that is deliberate. q has no
+/ built-in tz database - `ltime`/`gtime` only ever speak the PROCESS's own
+/ TZ, which is a property of whoever started the process and therefore the
+/ least trustworthy input available. So conversion needs a real table, and a
+/ source that declares a non-UTC zone without one is refused rather than
+/ approximated (see require_zone_table).
+/ .
+/ Not vendored a second time: TorQ already ships a tzdata-derived table at
+/ lib/torq/config/tzinfo (631 zones, 70381 transitions), in exactly this
+/ shape. src/ deliberately does not reach into lib/, so the PATH is the
+/ caller's to supply - tests and processes pass it in.
+zone_table:0#([] timezoneID:`symbol$(); gmtDateTime:`timestamp$(); adjustment:`timespan$())
+
+/ Cached so require_zone_table is not a 70k-row scan per fetch.
+zone_names:`symbol$()
+
+/ Load a zone table from a serialised q table (L-06).
+/ @param path a file path, e.g. "lib/torq/config/tzinfo"
+/ @return the number of transitions loaded
+/ @throws error when the file does not hold a table of the expected shape
+load_zone_table:{[path]
+    zt:@[get;hsym `$path;{'"load_zone_table: cannot read a zone table from ",x," (",y,")"}[path]];
+    if[not .Q.qt zt;
+        '"load_zone_table: ",path," does not hold a table"];
+    needed:`timezoneID`gmtDateTime`adjustment;
+    absent:needed where not needed in column_names zt;
+    if[count absent;
+        '"load_zone_table: ",path," is missing ",(", " sv string absent),
+         " - a zone table needs a zone name, the UTC instant a rule takes effect, and the offset it applies"];
+    trimmed:?[zt;();0b;needed!needed];
+    / The sort is load-bearing: the lookup in offset_at is an `aj`, and on an
+    / unsorted right-hand table `aj` returns the wrong row SILENTLY rather
+    / than erroring. Sort FIRST and group after - `xasc` reorders rows, so a
+    / `g` attribute applied beforehand would be dropped, or worse, stale.
+    sorted:`gmtDateTime xasc trimmed;
+    zone_table::update `g#timezoneID from sorted;
+    zone_names::exec distinct timezoneID from zone_table;
+    count zone_table}
+
+/ Refuse to convert without a table, or for a zone it does not know (L-06).
+/ .
+/ There is deliberately no fallback to a fixed offset. A fixed offset is
+/ correct for part of the year and an hour wrong for the rest, which puts
+/ rows in the wrong window without ever failing - and a coverage ledger then
+/ records both windows as complete.
+require_zone_table:{[zone]
+    if[0=count zone_table;
+        / Consequence first, then the fix: the 255-byte truncation would
+        / otherwise cut the reason, which is the part that matters.
+        '"require_zone_table: no zone table loaded, and ",string[zone],
+         " needs one - a fixed-offset fallback would be an hour wrong for half the year and never error. See load_zone_table"];
+    if[not zone in zone_names;
+        '"require_zone_table: zone ",string[zone]," is not in the loaded zone table (",
+         string[count zone_names]," zones) - check the tz-database spelling, e.g. `$\"Europe/London\""];
+    zone}
+
+/ Private: the offsets this zone has ever used. At most 8 in tzdata, so the
+/ candidate search in local_to_utc is cheap and fully vectorised.
+offsets_for:{[zone] distinct exec adjustment from zone_table where timezoneID=zone}
+
+/ Private: the offset in effect at each UTC instant. Unambiguous by
+/ construction - every UTC instant has exactly one offset.
+offset_at:{[zone;ts]
+    exec adjustment from aj[`timezoneID`gmtDateTime;
+        ([] timezoneID:(count ts)#zone; gmtDateTime:ts);
+        zone_table]}
+
+/ UTC -> the source's local wall clock (L-06).
+/ .
+/ Shape-preserving: an atom in, an atom out, so a caller converting window
+/ bounds does not have to enlist and unwrap.
+/ @throws error when an instant predates the zone table's coverage - a null
+/   offset would otherwise propagate as a null timestamp, which reads as "no
+/   data" rather than as "the lookup missed"
+utc_to_local:{[zone;ts]
+    tsv:(),ts;
+    if[0=count tsv; :ts];
+    a:offset_at[zone;tsv];
+    if[any null a;
+        '"utc_to_local: ",string[zone]," has no rule covering ",
+         (-3!min tsv where null a)," - it predates the zone table's coverage"];
+    $[0>type ts; first; ::] tsv+a}
+
+/ The source's local wall clock -> UTC (L-06), and the answer to L-05.
+/ .
+/ This direction is the hard one, and it is the whole reason a fixed offset
+/ will not do. A local wall-clock reading is not a unique instant:
+/ .
+/   - on a spring-forward day an hour of local times NEVER HAPPENED
+/     (Europe/London 2026.03.29, local 01:00-01:59).
+/   - on an autumn day an hour of local times happens TWICE (Europe/London
+/     2026.10.25, local 01:00-01:59 - once as BST, once as GMT).
+/ .
+/ So the method is candidate-and-verify rather than a lookup: every offset
+/ the zone has ever used gives one candidate UTC instant, and a candidate is
+/ real only if converting it back (the unambiguous direction) reproduces the
+/ local reading. The count of survivors is the answer:
+/ .
+/   1 survivor - the normal case, converted.
+/   0 survivors - the local time never existed. THROW.
+/   2 survivors - the local time is ambiguous. THROW.
+/ .
+/ Throwing on both is the deliberate pick L-05 asks for, and it is the only
+/ one that cannot lie. Picking either candidate silently assigns the row a
+/ UTC instant that may be an hour off, which moves it into a neighbouring
+/ backfill window - and since the ledger records windows rather than rows,
+/ both windows then read as complete while one holds an hour of the other's
+/ data. A hard failure at fetch, naming the row, is recoverable; a
+/ misplaced hour discovered months later is not. The operator's fix is to
+/ have the source hand over UTC, which is why `UTC is the recommended
+/ declaration and the only one needing no table at all.
+/ @param zone a zone in the loaded table
+/ @param ts local wall-clock timestamp(s)
+/ @return the corresponding UTC timestamp(s), same shape as ts
+/ @throws error on a nonexistent or an ambiguous local time
+local_to_utc:{[zone;ts]
+    tsv:(),ts;
+    if[0=count tsv; :ts];
+    cs:local_candidates[zone;tsv];
+    nvalid:count each cs;
+    if[any 0=nvalid;
+        '"local_to_utc: ",nonexistent_message[zone;first tsv where 0=nvalid]];
+    if[any 1<nvalid;
+        pos:first where 1<nvalid;
+        '"local_to_utc: ",ambiguous_message[zone;tsv pos;cs pos]];
+    $[0>type ts; first; ::] first each cs}
+
+/ Private: every UTC instant a local reading could denote, per row.
+/ .
+/ Candidate-and-verify: every offset the zone has ever used gives one
+/ candidate, kept only if converting it back reproduces the reading. One
+/ vectorised round trip per offset (at most 8 in tzdata), not one lookup per
+/ row - a backfill window can hold millions.
+/ @return a list, one ragged entry per input row: 1 instant normally, 0 in a
+/   spring-forward gap, 2 in an autumn repeated hour
+local_candidates:{[zone;tsv]
+    offs:offsets_for zone;
+    if[0=count offs;
+        '"local_candidates: no offsets for zone ",string zone];
+    cands:tsv -\: offs;
+    ok:flip {[zone;tsv;o] tsv = utc_to_local[zone;tsv-o]}[zone;tsv] each offs;
+    cands @' where each ok}
+
+/ Private: the two error texts, shared by local_to_utc and narrow_to_utc so
+/ the two paths cannot explain the same failure differently.
+nonexistent_message:{[zone;bad]
+    "local time ",(-3!bad)," does not exist in ",string[zone],
+    " - it falls in a spring-forward gap, so no UTC instant maps to it. Either the ",
+    "declared time_zone is wrong for this source, or the source is emitting ",
+    "wall-clock readings its own calendar never had (L-05)"}
+
+ambiguous_message:{[zone;bad;cs]
+    "local time ",(-3!bad)," is ambiguous in ",string[zone],
+    " - it occurs twice on an autumn transition, at ",(" and " sv -3!'asc cs),
+    " UTC. Refusing to pick: either choice can move the row into a neighbouring ",
+    "backfill window, which the ledger would still record as complete. Have the ",
+    "source hand over UTC (L-05)"}
+
 / ------------------------------------------------------------- FETCHING
 
 / Fetch one window, from the live source or from the fixture (E-04).
@@ -236,11 +492,94 @@ has_credentials:{[source] 0<count getenv `$credential_var source}
 / forget it, and so the windowing is provably the same on both paths - the
 / live query filters `>=from, <to` and so does this.
 / @return (`live or `fixture; the table)
+/ .
+/ For a non-UTC source the window is translated in BOTH directions here -
+/ bounds out, timestamps back - so neither the query nor the fixture author
+/ has to know about zones. See source_bounds and narrow_to_utc.
 fetch_window:{[source;h;range_from;range_to]
     decl:declaration source;
-    $[null h;
-        (`fixture;window_fixture[decl;range_from;range_to]);
-        (`live;(decl`query)[h;range_from;range_to])]}
+    bounds:source_bounds[decl;range_from;range_to];
+    page:$[null h;
+        (`fixture;window_fixture[decl;bounds 0;bounds 1]);
+        (`live;(decl`query)[h;bounds 0;bounds 1])];
+    (page 0;narrow_to_utc[decl;page 1;range_from;range_to])}
+
+/ How far to widen a non-UTC source's window, in its own clock.
+/ .
+/ One day, which is far more than any offset change in tzdata (the largest
+/ is the date-line jump, 24h). It buys correctness at the cost of
+/ over-fetching, and the exact narrowing in narrow_to_utc throws the excess
+/ away - so the only cost is bandwidth on sources that are not UTC.
+bound_padding:1D
+
+/ Private: the window bounds to hand the source, in the SOURCE's clock.
+/ .
+/ For `UTC this is the identity, and that is the path every source in this
+/ tree takes today.
+/ .
+/ For a zoned source the bounds are deliberately WIDE rather than exact, and
+/ this is the trap worth stating because the obvious implementation is
+/ silently wrong. Converting each bound with the offset in effect AT THAT
+/ BOUND is not monotonic across an autumn transition: measured for
+/ Europe/London, the UTC window [2026.10.25D00:30; 2026.10.25D01:30)
+/ converts to local [01:30; 01:30) - an EMPTY range. The query returns no
+/ rows, nothing errors, and the coverage ledger records an hour of missing
+/ trades as a complete window.
+/ .
+/ So: pad the bounds, fetch a superset, and narrow exactly in UTC afterwards
+/ where the arithmetic is unambiguous.
+source_bounds:{[decl;range_from;range_to]
+    zone:decl`time_zone;
+    if[`UTC~zone; :(range_from;range_to)];
+    require_zone_table zone;
+    (utc_to_local[zone;range_from-bound_padding];
+     utc_to_local[zone;range_to+bound_padding])}
+
+/ Private: convert a fetched page's time_field to UTC and narrow it to the
+/ requested half-open range.
+/ .
+/ For `UTC this is the identity: the query (or window_fixture) has already
+/ applied [range_from;range_to) and re-filtering would be dead code that
+/ could only ever disagree.
+/ .
+/ For a zoned source the narrowing is NOT optional - source_bounds
+/ deliberately over-fetched, so without this every window would publish up
+/ to a day of its neighbours' rows while coverage recorded the narrow range.
+/ .
+/ It does NOT simply call local_to_utc on the column, and the reason is the
+/ padding above. local_to_utc refuses an ambiguous reading outright, which is
+/ right when a caller asks about one instant - but here the over-fetch has
+/ pulled in up to a day of a NEIGHBOUR's rows, and failing this window
+/ because of an ambiguous row that belongs to the next one would make every
+/ window on an autumn transition day unbackfillable, not just the affected
+/ hour. So the rule is range-scoped:
+/ .
+/   - an ambiguous row is refused only if one of its candidate instants
+/     actually lands in [range_from;range_to). Otherwise it is dropped: it is
+/     not this window's row, and the window that owns it will refuse it.
+/   - a NONEXISTENT reading is refused unconditionally, range or no range.
+/     There is no instant to compare against a range, and a source emitting a
+/     wall-clock time its own calendar never had means the declared zone is
+/     wrong - which is a contract breach, not a windowing question.
+narrow_to_utc:{[decl;t;range_from;range_to]
+    zone:decl`time_zone;
+    if[`UTC~zone; :t];
+    f:decl`time_field;
+    local_ts:t f;
+    if[0=count local_ts; :t];
+    cs:local_candidates[zone;local_ts];
+    nvalid:count each cs;
+    if[any 0=nvalid;
+        '"narrow_to_utc: ",nonexistent_message[zone;first local_ts where 0=nvalid]];
+    in_range:{[lo;hi;c] any (c>=lo) and c<hi}[range_from;range_to] each cs;
+    if[any in_range and 1<nvalid;
+        pos:first where in_range and 1<nvalid;
+        '"narrow_to_utc: ",ambiguous_message[zone;local_ts pos;cs pos]];
+    / Every surviving row now has exactly one reading, so the conversion is
+    / unambiguous and the half-open bound is applied in UTC - the direction
+    / where the arithmetic cannot double-count or skip.
+    kept:t where in_range;
+    ![kept;();0b;(enlist f)!enlist enlist first each cs where in_range]}
 
 / Private: apply the window to a fixture, on its declared time_field.
 / .
