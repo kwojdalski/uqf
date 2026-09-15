@@ -1,6 +1,6 @@
 # Pre-commit configuration for uqf (q/kdb+ quant library).
 # Local hooks are scoped for q/qUnit since the library itself is pure q.
-# python/uqf-client is a small Python/uv subproject (a kola/Polars IPC
+# python/uqf_client is a small Python/uv subproject (a kola/Polars IPC
 # client), so it gets its own ruff + pytest hooks, scoped to that subtree
 # only.
 repos:
@@ -21,7 +21,7 @@ repos:
       - id: mixed-line-ending
         args: ['--fix=lf']
 
-  # uqf-client (python/uqf-client) - Python linting/formatting
+  # uqf_client (python/uqf_client) - Python linting/formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.2
     hooks:
@@ -44,7 +44,7 @@ repos:
 
   - repo: local
     hooks:
-      # uqf-client's own pytest suite - spins up a real q server via kola/IPC.
+      # uqf_client's own pytest suite - spins up a real q server via kola/IPC.
       - id: uqf-client-tests
         name: Run uqf-client pytest suite
         entry: bash
@@ -57,8 +57,8 @@ repos:
               export QHOME="${QHOME:-$HOME/.kx}"
               export PATH="$HOME/.kx/bin:$PATH"
             fi
-            cd python/uqf-client && uv run pytest
-        files: '^python/uqf-client/.*\.py$'
+            cd python/uqf_client && uv run pytest
+        files: '^python/uqf_client/.*\.py$'
         pass_filenames: false
 
       # Run the qUnit test suite (tests/run_tests.q) against every module.

@@ -10,7 +10,7 @@
 #
 # Run from the repository root: ./scripts/run_qdoc.sh [port]
 # Once it's up, at the q) prompt run (any subset of this repo's folders):
-#   .qdoc.parser.init `:src`:python/uqf-client
+#   .qdoc.parser.init `:src`:python/uqf_client
 # then browse http://localhost:<port>/index-kdb.html
 
 set -euo pipefail

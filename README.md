@@ -146,7 +146,7 @@ env/
               trades/market_data, not hand-typed values
 
 python/
-  uqf-client/         Python/Polars client for a running uqf q session over
+  uqf_client/         Python/Polars client for a running uqf q session over
                       kdb+ IPC via kola - the only dependency it has
   torq_orchestrator/  standalone package bridging lib/torq +
                       lib/torq-finance-starter-pack into a runnable demo -
