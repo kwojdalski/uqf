@@ -32,7 +32,7 @@ that a merge happened. Sources are `docs/drift-reports/`,
 | D7 | Per-package `pyproject.toml`/`uv.lock`; canonical consolidates to one root Python project | `closed` | uv **workspace** at the repo root: one lockfile, one `.venv` (1.1 GB → 383 MB), shared ruff/pytest config, ruff pinned to pre-commit's own version. Members keep their names and the `torq-demo` script. Safe by inspection — zero cross-package imports, every shared constraint an open lower bound |
 | D8 | `docs/torq-demo.md`; canonical supersedes with `docs/guides/torq-demo.md` | `blocked` | Deliberately deferred. Moving it alone creates a single-file `docs/guides/` and costs ~24 reference edits, for no benefit until the taxonomy is settled — J-05: what belongs in `guides/` vs `architecture/` vs `reference/` vs `decisions/` vs `integrations/` |
 | D9 | No `src/etl/` at all; canonical has `core/` (14 files) and `workers/` (7) | `open` | **Unblocked and in progress.** Reimplementation from the requirements, not a port. `src/etl/core/` now holds 4 of canonical's 14: `backfill_state.q` (#85, E-01..E-05), `coverage.q` (#86, E-06..E-11), `worker_config.q` and `worker_runtime.q` (#87, E-13..E-17). #88 adds `tests/lib/etl_test_doubles.q`, the `q-backfill-process` and `smoke` lanes and `scripts/test.sh` (E-18..E-21). `src/etl/core/source_contract.q` adds E-12, `src/etl/sources/demo_deals.q` a generic analogue source (A-04), and `src/etl/workers/demo_deals_backfill.q` the first real bounded worker. Seven of canonical's `core/` 14 (`continuous_state.q` adds E-03's poll-and-cursor pattern), one source, one worker. The file COUNT will not converge — this tree is its own lineage per F-04, so only capability drift is meaningful. What remains genuinely blocked is a worker over a *real* source, which needs E-05's coercion trap list. |
-| D10 | No `python/uqf_airflow_provider/`; canonical has the full package | `blocked` | #55 (F-21) must pick the status mechanism first |
+| D10 | No `python/uqf_airflow_provider/`; canonical has the full package | `open` | **Unblocked: #55 is closed** (`gh issue view 55` → CLOSED), and the status-file mechanism it chose is built on both sides. `python/uqf_airflow_provider/` holds a status reader, an E-15 translator and a lazily-imported sensor. Proved by `uv run pytest -q` (322 passing, 14 this package's) and by `import uqf_airflow_provider.sensor` succeeding with **Airflow not installed** — deliberately not a dependency (F-22/F-23), so the demo needs no Airflow. What remains is DAG-level work that only runs inside a real Airflow environment |
 | D11 | `etl_coverage` schema assumed, not verified. Now **16 files** rest on the assumed shape (8 source, 8 test), up from `queries.py`/`catalog.py` alone — and `.qcov.require_schema`, the guard meant to refuse a wrong-shaped ledger, is **defined and tested but called from no live path** | `blocked` | #60, still open with no `meta` output posted back. `scripts/verify_coverage_schema.q` and `.qcov.require_schema` are built and tested, but only a machine that can reach the real ledger can discharge it: `QHOME=~/.kx ~/.kx/bin/q scripts/verify_coverage_schema.q -target host:port`. The requirements mention a **partition key** absent from the assumed shape, so the untested direction reports a gap-ridden range as complete |
 | D12 | `python/uqf_frontend/` exists only here: 253 callables of comparison-only drift | `wontfix` | Deliberate. It is the reimplementation the frontend requirements describe; it narrows capability drift while widening file drift |
 | D13 | `scripts/torq_pipeline.q` + the three demo pipelines exist only here | `wontfix` | Same reasoning as D12. Canonical has its own `src/etl/workers/`; reconciliation is F-04's job |
@@ -42,8 +42,8 @@ that a merge happened. Sources are `docs/drift-reports/`,
 
 ```
 closed   6     D1, D2, D4, D5, D6, D7
-open     1     D9
-blocked  4     D8 D10 D11 D14
+open     2     D9, D10
+blocked  3     D8, D11, D14
 wontfix  3     D3, D12, D13
 ```
 
@@ -62,14 +62,14 @@ that bear on this ledger:
 
 | Waiting on | Rows |
 |---|---|
-| Nothing — actively being worked | D9 |
+| Nothing — actively being worked | D9, D10 |
 | Access to the real table, to run one `meta` — #60 | D11 |
 | Re-test interrupted (agent hit a session limit); partial work on a branch | D10 |
 | A docs taxonomy decision — J-05 | D8 |
 | Knowing what a canonical file contains — O-03 | D14 |
 
 Six rows are closed by doing the work; three are deliberately divergent with
-reasons recorded. D9 is open and advancing — `src/etl/` now holds seven of
+reasons recorded. D9 and D10 are open and advancing — `src/etl/` now holds seven of
 canonical's fourteen `core/` files, one source and one worker, built from the
 requirements rather than ported.
 

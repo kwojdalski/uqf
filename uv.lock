@@ -5,6 +5,7 @@ requires-python = ">=3.14"
 [manifest]
 members = [
     "torq-orchestrator",
+    "uqf-airflow-provider",
     "uqf-client",
     "uqf-frontend",
     "uqf-workspace",
@@ -1329,6 +1330,25 @@ wheels = [
 ]
 
 [[package]]
+name = "uqf-airflow-provider"
+version = "0.1.0"
+source = { editable = "python/uqf_airflow_provider" }
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "ruff", specifier = ">=0.16.2" },
+]
+
+[[package]]
 name = "uqf-client"
 version = "0.1.0"
 source = { editable = "python/uqf_client" }
@@ -1390,6 +1410,7 @@ version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "torq-orchestrator" },
+    { name = "uqf-airflow-provider" },
     { name = "uqf-client" },
     { name = "uqf-frontend" },
 ]
@@ -1405,6 +1426,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "torq-orchestrator", editable = "python/torq_orchestrator" },
+    { name = "uqf-airflow-provider", editable = "python/uqf_airflow_provider" },
     { name = "uqf-client", editable = "python/uqf_client" },
     { name = "uqf-frontend", editable = "python/uqf_frontend" },
 ]

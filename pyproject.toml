@@ -33,6 +33,7 @@ dependencies = [
     "uqf-client",
     "torq-orchestrator",
     "uqf-frontend",
+    "uqf-airflow-provider",
 ]
 
 [tool.uv]
@@ -44,12 +45,21 @@ members = [
     "python/uqf_client",
     "python/torq_orchestrator",
     "python/uqf_frontend",
+    "python/uqf_airflow_provider",
 ]
 
+# A member needs THREE entries, not one: `members` above (so uv knows it is
+# part of the workspace), `dependencies` (so the root venv installs it), and
+# a `workspace = true` source here (so the dependency resolves locally rather
+# than from an index). Registering only `members` leaves the package
+# uninstalled, and its tests then fail to import rather than being reported
+# as missing - which is the same silently-never-runs shape as a pre-commit
+# scope that matches nothing.
 [tool.uv.sources]
 uqf-client = { workspace = true }
 torq-orchestrator = { workspace = true }
 uqf-frontend = { workspace = true }
+uqf-airflow-provider = { workspace = true }
 
 [dependency-groups]
 # httpx is uqf_frontend's test-only dependency (fastapi's TestClient); it
@@ -140,4 +150,5 @@ testpaths = [
     "python/uqf_client/tests",
     "python/torq_orchestrator/tests",
     "python/uqf_frontend/tests",
+    "python/uqf_airflow_provider/tests",
 ]
