@@ -9,7 +9,12 @@ Two distinct failures, and only the first is obvious:
 2. **Ungated code** - a scope that is still *valid* but too *narrow*. Python
    added outside it is simply never linted, and nothing anywhere complains.
 
-The second is what actually happened here.
+The second is what actually happened here - twice, because the first version
+of this script checked only the LINT hooks. While it reported 43/43 lint
+coverage and exited zero, 229 of the repository's 231 Python tests were not
+run by any hook, and no CI existed to catch them either. A gate-checker blind
+to half the gates is its own version of the bug it exists to prevent, so it
+now checks both.
 
 A hook scoped with ``files:`` to a path that no longer exists does not fail -
 it matches nothing, exits zero, and reports green. That is strictly worse
@@ -46,6 +51,10 @@ ALLOWED_EMPTY: dict[str, str] = {}
 #: Hook ids that constitute the Python lint gate. Every tracked .py file must
 #: be matched by at least one of them.
 LINT_HOOKS = ("ruff", "ruff-format")
+
+#: Hook ids that constitute the Python test gate. Same requirement: tracked
+#: Python outside these is never exercised on commit.
+TEST_HOOKS = ("python-tests",)
 
 #: Path prefixes exempt from needing lint coverage, each with its reason.
 #: Vendored trees only: this repository's standing rule is never to edit a
@@ -117,8 +126,7 @@ def main() -> int:
         if not count and hook_id not in ALLOWED_EMPTY:
             dead.append((hook_id, pattern))
 
-    # --- coverage: is any tracked Python outside the lint gate? ---------
-    lint_patterns = [re.compile(pattern) for hook_id, pattern in hooks if hook_id in LINT_HOOKS]
+    # --- coverage: is any tracked Python outside either gate? -----------
     py_files = [
         f
         for f in files
@@ -126,20 +134,36 @@ def main() -> int:
         and "/.venv/" not in f
         and not any(f.startswith(prefix) for prefix in LINT_EXEMPT)
     ]
-    ungated = [f for f in py_files if not any(p.search(f) for p in lint_patterns)]
 
+    ungated: list[str] = []
     print()
-    print(
-        f"check_hook_scopes: {len(py_files) - len(ungated)}/{len(py_files)} "
-        f"tracked .py file(s) covered by {LINT_HOOKS}"
-    )
-    if ungated:
-        by_dir: dict[str, int] = {}
-        for f in ungated:
-            top = "/".join(f.split("/")[:2])
-            by_dir[top] = by_dir.get(top, 0) + 1
-        for directory, count in sorted(by_dir.items()):
-            print(f"  UNGATED  {directory:34} {count:>5} file(s)", file=sys.stderr)
+    for gate_name, gate_hooks in (("lint", LINT_HOOKS), ("test", TEST_HOOKS)):
+        patterns = [re.compile(p) for hook_id, p in hooks if hook_id in gate_hooks]
+        if not patterns:
+            print(
+                f"  NO {gate_name.upper()} GATE  none of {gate_hooks} is configured",
+                file=sys.stderr,
+            )
+            ungated.extend(py_files)
+            continue
+        missed = [f for f in py_files if not any(p.search(f) for p in patterns)]
+        print(
+            f"check_hook_scopes: {len(py_files) - len(missed)}/{len(py_files)} "
+            f"tracked .py file(s) covered by the {gate_name} gate {gate_hooks}"
+        )
+        for f in missed:
+            if f not in ungated:
+                ungated.append(f)
+        if missed:
+            by_dir: dict[str, int] = {}
+            for f in missed:
+                top = "/".join(f.split("/")[:2])
+                by_dir[top] = by_dir.get(top, 0) + 1
+            for directory, count in sorted(by_dir.items()):
+                print(
+                    f"  UNGATED ({gate_name})  {directory:30} {count:>5} file(s)",
+                    file=sys.stderr,
+                )
 
     if dead:
         print(file=sys.stderr)
@@ -160,9 +184,10 @@ def main() -> int:
     if ungated:
         print(file=sys.stderr)
         print(
-            f"{len(ungated)} tracked Python file(s) are matched by no lint hook, so they "
-            f"are never checked on commit. Widen the {LINT_HOOKS} scopes, or add a path "
-            f"to LINT_EXEMPT with a reason.",
+            f"{len(ungated)} tracked Python file(s) fall outside the lint gate "
+            f"{LINT_HOOKS} or the test gate {TEST_HOOKS}, so they are not fully "
+            f"checked on commit. Widen the relevant scopes, or add a path to "
+            f"LINT_EXEMPT with a reason.",
             file=sys.stderr,
         )
         return 1
