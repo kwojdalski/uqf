@@ -58,34 +58,6 @@ recorded the substance, that is named too.
 
 - `F-19` (#53) - `~/.claude/plans/sprightly-brewing-catmull.md`; recorded in `docs/frontend-requirements.md`
 
-### Answered but still listed as open
-
-The issue body still carries these as open questions while its own comments
-answer them. The comment is the newer half; the body needs editing.
-
-- `A-01` - answered in #69, still under `blocking` in that issue's body
-- `A-04` - answered in #69, still under `blocking` in that issue's body
-- `A-06` - answered in #69, still under `blocking` in that issue's body
-- `B-02` - answered in #70, still under `blocking` in that issue's body
-- `B-03` - answered in #70, still under `blocking` in that issue's body
-- `C-01` - answered in #71, still under `blocking` in that issue's body
-- `C-02` - answered in #71, still under `blocking` in that issue's body
-- `C-09` - answered in #71, still under `blocking` in that issue's body
-- `D-02` - answered in #72, still under `blocking` in that issue's body
-- `D-07` - answered in #72, still under `blocking` in that issue's body
-- `D-08` - answered in #72, still under `blocking` in that issue's body
-- `D-11` - answered in #72, still under `blocking` in that issue's body
-- `E-04` - answered in #73, still under `blocking` in that issue's body
-- `E-05` - answered in #73, still under `blocking` in that issue's body
-- `E-08` - answered in #73, still under `blocking` in that issue's body
-- `E-09` - answered in #73, still under `blocking` in that issue's body
-- `G-02` - answered in #75, still under `blocking` in that issue's body
-- `H-06` - answered in #76, still under `blocking` in that issue's body
-- `K-07` - answered in #79, still under `blocking` in that issue's body
-- `M-01` - answered in #81, still under `blocking` in that issue's body
-- `M-04` - answered in #81, still under `blocking` in that issue's body
-- `M-05` - answered in #81, still under `blocking` in that issue's body
-
 ## Open
 
 | ID | Area | State | Question | Issue |

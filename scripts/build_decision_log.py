@@ -71,7 +71,13 @@ AREA_COUNTER_RE = re.compile(r"\s*\([^()]*\bopen\b[^()]*\)\s*$")
 DEFINITION_RE = re.compile(rf"^[-*]\s*\*\*({ID})\b", re.M)
 # "### D-02 - question text", the open-question entries in an issue body.
 QUESTION_RE = re.compile(rf"^###\s+(?P<id>{ID})\s*[-—–]+\s*(?P<text>[^\n]+)$", re.M)
-STATE_RE = re.compile(r"^##\s+(Blocking|Shaping|Deferrable)\s*$", re.M)
+# `Answered` is a state too. Once reconcile_question_bodies.py moves a settled
+# question under `## Answered`, that block still matches QUESTION_RE - it is
+# still a `### X-NN` heading - so without this the parser reported it under
+# whatever section preceded it and the register listed 22 questions as "still
+# listed as open" after every one had been moved. A question under
+# `## Answered` is neither open nor stale; it is the reconciled state.
+STATE_RE = re.compile(r"^##\s+(Blocking|Shaping|Deferrable|Answered)\s*$", re.M)
 AREA_RE = re.compile(r"^Design questions\s+([A-Z]):\s*(.+)$")
 # The older per-question issues carry the id in the *title* ("F-19: Decide the
 # frontend audience") and answer with a bare "**Answered: both audiences.**".
@@ -245,8 +251,11 @@ def render(bank: Bank) -> str:
     for a in bank.answers:
         for i in a.ids:
             answered.setdefault(i, a)
-    open_q = [q for q in bank.questions if q.id not in answered]
-    stale = [q for q in bank.questions if q.id in answered]
+    open_q = [q for q in bank.questions if q.id not in answered and q.state != "answered"]
+    # Stale means: answered in a comment, yet the body still shows it under an
+    # OPEN section. A block already under `## Answered` is the fixed state,
+    # not a stale one.
+    stale = [q for q in bank.questions if q.id in answered and q.state != "answered"]
     cited, defined = scan_docs()
     known_prefixes = {i[0] for i in answered} | {q.id[0] for q in bank.questions}
     # Ids the question bank itself owns. A title-form answer (#53's "F-19") is a
