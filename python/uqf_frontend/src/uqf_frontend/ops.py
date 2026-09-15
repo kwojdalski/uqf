@@ -57,6 +57,29 @@ USAGE_SINCE = """{[since;lim]
 #: sized for a day would lose most of the log.
 FLUSHTIME = "value `.usage.flushtime"
 
+#: What a process can say about itself over IPC.
+#:
+#: This is what makes fleet health work without shelling out to torq.sh and
+#: without inspecting local OS processes - and therefore without caring
+#: whether the process is on this machine (F-22's open question). ``.z.i`` is
+#: the pid and ``system"p"`` the listening port; ``.proc.procname`` and
+#: ``.proc.proctype`` are set by TorQ from its own command line.
+#:
+#: ``.proc`` is absent on a plain q process, so both reads are trapped and
+#: fall back to `unknown rather than failing the probe. Returns a one-row
+#: table rather than a dict so it projects the same way as every other view.
+#:
+#: An *expression*, not a ``{[] ...}`` lambda, for the same reason as
+#: :data:`uqf_frontend.queries.PING`: sending a niladic lambda with no
+#: arguments makes q return the function itself, which kola cannot
+#: deserialise ("Not supported k type 100"). Second time this bit, hence the
+#: test asserting no program in either module is a bare niladic lambda.
+IDENTITY = (
+    '([] pid:enlist .z.i; port:enlist "j"$system"p"; '
+    "procname:enlist @[{.proc.procname};::;`unknown]; "
+    "proctype:enlist @[{.proc.proctype};::;`unknown])"
+)
+
 #: Suggested poll intervals in seconds. Ops state changes fast; coverage and
 #: analytics move at their own publish cadence (F-10, and the refresh-cadence
 #: note in the requirements).
@@ -65,6 +88,7 @@ POLL_SECONDS: dict[str, int] = {
     "connections": 5,
     "usage": 10,
     "coverage": 60,
+    "processes": 5,
 }
 
 

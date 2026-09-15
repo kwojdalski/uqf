@@ -14,7 +14,7 @@ import re
 
 import pytest
 
-from uqf_frontend import queries
+from uqf_frontend import ops, queries
 
 #: q reserved words plus the `.q` namespace, as reported by
 #: `asc distinct .Q.res, key \`.q` on KDB-X. None may be a parameter name.
@@ -204,11 +204,12 @@ Q_RESERVED = frozenset(
     }
 )
 
-#: Every q lambda constant in queries.py, by name.
+#: Every q program constant in the package, by "module.NAME".
 Q_PROGRAMS = {
-    name: getattr(queries, name)
-    for name in dir(queries)
-    if name.isupper() and isinstance(getattr(queries, name), str)
+    f"{mod.__name__.rsplit('.', 1)[-1]}.{name}": getattr(mod, name)
+    for mod in (queries, ops)
+    for name in dir(mod)
+    if name.isupper() and isinstance(getattr(mod, name), str)
 }
 
 
@@ -250,3 +251,19 @@ def test_programs_are_balanced(name):
         assert program.count(opener) == program.count(closer), (
             f"{name} has unbalanced {opener}{closer}"
         )
+
+
+@pytest.mark.parametrize("name", sorted(Q_PROGRAMS))
+def test_no_program_is_a_bare_niladic_lambda(name):
+    """A niladic ``{[] ...}`` sent with no arguments makes q return the
+    *function itself*, which kola cannot deserialise ("Not supported k type
+    100"). Such a program must be written as a plain expression instead.
+
+    This has bitten twice - queries.PING and ops.IDENTITY - so it is a test
+    rather than a comment.
+    """
+    program = Q_PROGRAMS[name].strip()
+    assert not program.startswith("{[]"), (
+        f"{name} is a niladic lambda; send it as an expression instead, or q will "
+        f"return the function rather than calling it"
+    )

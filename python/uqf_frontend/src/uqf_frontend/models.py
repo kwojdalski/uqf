@@ -130,3 +130,35 @@ class UsageResponse(BaseModel):
         "unconfigured, not an idle fleet"
     )
     poll_seconds: int
+
+
+class ProcessHealthOut(BaseModel):
+    procname: str
+    proctype: str
+    group: str
+    host: str
+    declared_port: int | None
+    start_with_all: bool
+    up: bool
+    pid: int | None = None
+    reported_port: int | None = None
+    reported_procname: str | None = None
+    error: str | None = None
+    identity_mismatch: str | None = Field(
+        default=None,
+        description="Set when the process answering that port is not the one process.csv declares "
+        "there - a stale process squatting a port looks healthy to any check that only asks "
+        "whether something is listening",
+    )
+    port_unresolved: bool = False
+
+
+class FleetHealthResponse(BaseModel):
+    summary: dict[str, int] = Field(
+        description="down_unexpected excludes processes with startwithall=0, since those being "
+        "down is configured behaviour rather than a fault"
+    )
+    processes: list[ProcessHealthOut]
+    groups: dict[str, int] = Field(description="declared process count per proctype")
+    source: str | None = Field(default=None, description="the process.csv that was read")
+    poll_seconds: int
