@@ -140,12 +140,25 @@ TABLES: dict[str, Table] = {
             # a query filtering on dataset and version alone aggregates
             # across partitions and reports a gap-ridden range as complete.
             #
-            # Exposing it anyway, with two guards rather than a comment:
-            # .qcov.require_schema refuses a differently-shaped ledger at
-            # init, and scripts/verify_coverage_schema.q settles the question
-            # in one command. test_catalog_drift.py cross-checks these
-            # columns against coverage.q, so the catalog and the q writer
-            # cannot drift apart even while the shape is unconfirmed.
+            # What actually protects this today, stated precisely - an
+            # earlier version of this comment claimed `.qcov.require_schema`
+            # "refuses a differently-shaped ledger at init", and that was
+            # NOT TRUE: the function exists and is tested, but nothing on a
+            # live path calls it. A comment asserting a guard that does not
+            # run is worse than no comment, because it stops someone adding
+            # the real one.
+            #
+            #   ACTIVE:  test_catalog_drift.py cross-checks these columns
+            #            against coverage.q, so the catalog and the q writer
+            #            cannot drift apart even while the shape is
+            #            unconfirmed.
+            #   MANUAL:  scripts/verify_coverage_schema.q settles the shape
+            #            in one command, but only when someone runs it.
+            #   DORMANT: .qcov.require_schema would turn the silent wrong
+            #            answer into a loud refusal, and should be called
+            #            from a worker's init when it attaches to a ledger
+            #            it did not create. Nothing calls it yet, so a
+            #            worker meeting a partitioned ledger is not stopped.
             shape_is_assumed=True,
             description="Append-only completeness ledger: which [range_from, range_to) "
             "window of which dataset is published, at which source_version. A window "

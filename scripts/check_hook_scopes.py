@@ -84,23 +84,47 @@ def tracked_files() -> list[str]:
     return out.stdout.splitlines()
 
 
-def scoped_hooks(config_text: str) -> list[tuple[str, str]]:
-    """Every (hook id, files pattern) pair, in file order.
+def scoped_hooks(config_text: str) -> list[tuple[str, str, str | None]]:
+    """Every (hook id, files pattern, exclude pattern) triple, in file order.
 
     Parsed with a regex rather than a YAML library so this script has no
     dependencies and can run as a plain system hook. The config's shape is
-    stable and this only needs two fields.
+    stable and this only needs three fields.
+
+    `exclude` is read as well as `files`, and that matters for honesty rather
+    than correctness: without it the per-hook diagnostic below counted the 5
+    vendored files under `lib/` that every hook excludes, and so reported "54
+    file(s)" for a gate that actually enforces on 49. The coverage assertion
+    was right either way, because it filters through LINT_EXEMPT separately -
+    but a diagnostic line that disagrees with the number being enforced is
+    the kind of small lie that costs someone an afternoon.
     """
-    hooks: list[tuple[str, str]] = []
+    hooks: list[tuple[str, str, str | None]] = []
     current: str | None = None
+    pending_files: str | None = None
+
+    def flush() -> None:
+        nonlocal pending_files
+        if current is not None and pending_files is not None:
+            hooks.append((current, pending_files, None))
+        pending_files = None
+
     for line in config_text.splitlines():
         id_match = re.match(r"\s*-\s*id:\s*(\S+)", line)
         if id_match:
+            flush()
             current = id_match.group(1)
             continue
         files_match = re.match(r"""\s*files:\s*['"]?(.+?)['"]?\s*$""", line)
         if files_match and current is not None:
-            hooks.append((current, files_match.group(1)))
+            flush()
+            pending_files = files_match.group(1)
+            continue
+        excl_match = re.match(r"""\s*exclude:\s*['"]?(.+?)['"]?\s*$""", line)
+        if excl_match and current is not None and pending_files is not None:
+            hooks.append((current, pending_files, excl_match.group(1)))
+            pending_files = None
+    flush()
     return hooks
 
 
@@ -122,16 +146,26 @@ def main() -> int:
 
     dead: list[tuple[str, str]] = []
     print(f"check_hook_scopes: {len(hooks)} path-scoped hook(s) in {CONFIG.name}")
-    for hook_id, pattern in hooks:
+    for hook_id, pattern, exclude in hooks:
         try:
             matcher = re.compile(pattern)
         except re.error as exc:
             print(f"  {hook_id:28} INVALID REGEX {pattern!r}: {exc}", file=sys.stderr)
             dead.append((hook_id, pattern))
             continue
-        count = sum(1 for f in files if matcher.search(f))
+        try:
+            excluder = re.compile(exclude) if exclude else None
+        except re.error as exc:
+            print(f"  {hook_id:28} INVALID EXCLUDE {exclude!r}: {exc}", file=sys.stderr)
+            dead.append((hook_id, pattern))
+            continue
+        matched = [f for f in files if matcher.search(f)]
+        if excluder is not None:
+            matched = [f for f in matched if not excluder.search(f)]
+        count = len(matched)
         status = "ok" if count else "MATCHES NOTHING"
-        print(f"  {hook_id:28} {pattern:34} {count:>5} file(s)  {status}")
+        shown = pattern if not exclude else f"{pattern} less {exclude}"
+        print(f"  {hook_id:28} {shown:34} {count:>5} file(s)  {status}")
         if not count and hook_id not in ALLOWED_EMPTY:
             dead.append((hook_id, pattern))
 
@@ -151,7 +185,7 @@ def main() -> int:
         ("test", TEST_HOOKS),
         ("type", TYPE_HOOKS),
     ):
-        patterns = [re.compile(p) for hook_id, p in hooks if hook_id in gate_hooks]
+        patterns = [re.compile(p) for hook_id, p, _ in hooks if hook_id in gate_hooks]
         if not patterns:
             print(
                 f"  NO {gate_name.upper()} GATE  none of {gate_hooks} is configured",
