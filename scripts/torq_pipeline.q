@@ -220,6 +220,91 @@ publish:{[h;tbl;data]
     h (`.u.upd;tbl;value flip out);
     count out}
 
+/ ---------------------------------------------------------------- STATUS
+
+/ The lifecycle states a worker may report. Three of them are terminal, and
+/ the distinction between the first two is the one C-07 asks for - "nothing
+/ to do" must not look like "failed", or an orchestrator retries a
+/ successful no-op forever.
+/   starting  - initialising, not yet acquired work
+/   running   - processing a window
+/   idle      - ran, found no work, nothing wrong (terminal for this run)
+/   completed - ran, did work, finished the window (terminal)
+/   failed    - error set, see the error field (terminal)
+status_states:`starting`running`idle`completed`failed
+
+/ Where status files go. Overridden by UQFSTATUSDIR so the demo and a real
+/ deployment can differ without a code change; defaults under TORQDATA
+/ alongside the other generated state.
+status_dir:{[]
+    d:getenv`UQFSTATUSDIR;
+    $[0<count d; d; (getenv[`TORQDATA]),"/status"]}
+
+/ Publish one worker's status as a JSON object, for a reader outside q.
+/ .
+/ This is the q side of the frontend's backfill view. The format is defined
+/ HERE rather than inferred, because this tree has no Airflow provider to be
+/ compatible with - see the F-04 decision to develop the pipeline layer in
+/ this repository.
+/ .
+/ What belongs in this file is exactly what E-15 says q owns: process
+/ startup, source reads, query failures, checkpoints, run and window counts,
+/ and coverage events. It deliberately carries NO retry count, task ordering,
+/ timeout or concurrency state - those are Airflow's facts, and a reader that
+/ wants them must ask Airflow. Mixing the two is what E-15 forbids.
+/ .
+/ Written atomically: serialise, write to a temp path, then rename over the
+/ target. A reader polling the directory (the frontend polls, per F-10) would
+/ otherwise be able to read a half-written file and see a truncated JSON
+/ object as a parse error.
+/ @param worker the worker's name, e.g. `markout_backfill
+/ @param instance_id the process instance, e.g. `markout1 - names the file,
+/   so two instances of one worker do not overwrite each other
+/ @param state one of status_states
+/ @param spec dict with `source_version`range_from`range_to - the run
+/   specification. range is half-open [range_from;range_to) per E-08, and
+/   source_version is mandatory per E-09 (coverage under one source release
+/   says nothing about another)
+/ @param progress dict with `cursor`rows_published`windows_completed
+/ @param err an error string, or "" when there is none
+/ @return the path written
+/ @throws error if state is unknown, if the range is empty or reversed, if
+/   source_version is missing, or if a failed state carries no error
+/ @eg .qpipe.write_status[`markout_backfill;`markout1;`completed;
+/       `source_version`range_from`range_to!(`v1;2026.09.13D00:00;2026.09.14D00:00);
+/       `cursor`rows_published`windows_completed!(2026.09.14D00:00;1234;1);
+/       ""]
+write_status:{[worker;instance_id;state;spec;progress;err]
+    if[not state in status_states;
+        '"write_status: unknown state ",string[state]," - expected one of ",", " sv string status_states];
+    req:`source_version`range_from`range_to;
+    missing:req where not req in key spec;
+    if[count missing; '"write_status: spec is missing ",", " sv string missing];
+    if[null spec`source_version; '"write_status: source_version must be set (E-09)"];
+    / E-08: half-open and forward-going. Rejecting here means a bad range
+    / can never reach the file, rather than being caught by the reader.
+    if[not spec[`range_to]>spec`range_from;
+        '"write_status: range must be non-empty and forward-going, got [",
+         string[spec`range_from],"; ",string[spec`range_to],")"];
+    if[(state=`failed) and 0=count err;
+        '"write_status: a failed state must carry an error string"];
+    dir:status_dir[];
+    / mkdir -p is idempotent, and cheaper than checking first.
+    system"mkdir -p ",dir;
+    payload:`worker`instance_id`state`source_version`range_from`range_to,
+            `cursor`rows_published`windows_completed`error`updated_at;
+    values_:(worker;instance_id;state;spec`source_version;
+             spec`range_from;spec`range_to;
+             progress`cursor;progress`rows_published;progress`windows_completed;
+             err;.z.p);
+    target:dir,"/airflow_status_",string[instance_id],".txt";
+    tmp:target,".tmp";
+    (hsym `$tmp) 0: enlist .j.j payload!values_;
+    / atomic on the same filesystem, so a polling reader sees the old file or
+    / the new one, never a partial write
+    system"mv ",tmp," ",target;
+    target}
+
 / --------------------------------------------------------------- TRIGGER
 
 / Register a repeating timer that runs fn and can never throw (invariant 4).

@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from uqf_frontend import catalog, coverage, health, ops, procfile, queries
+from uqf_frontend import catalog, coverage, health, ops, procfile, queries, status
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
     CoverageIncomplete,
@@ -24,6 +24,7 @@ from uqf_frontend.errors import (
 from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.models import (
+    BackfillStatusResponse,
     CatalogResponse,
     ColumnInfo,
     ConnectionsResponse,
@@ -38,6 +39,7 @@ from uqf_frontend.models import (
     QueryResponse,
     TableInfo,
     UsageResponse,
+    WorkerStatusOut,
 )
 
 
@@ -168,6 +170,23 @@ def create_app(
             groups=dict(sorted(groups.items())),
             source=str(settings.process_csv),
             poll_seconds=ops.POLL_SECONDS["processes"],
+        )
+
+    @app.get("/ops/backfill", response_model=BackfillStatusResponse)
+    def ops_backfill() -> BackfillStatusResponse:
+        """Backfill and Airflow task status, read from the files q writes (F-06).
+
+        Read from disk rather than from the gateway because q writes these
+        and nothing publishes them over IPC. Carries only q's own facts -
+        see status.py on the E-15 boundary this deliberately does not cross.
+        """
+        statuses, unreadable = status.read_dir(settings.status_dir)
+        return BackfillStatusResponse(
+            summary=status.summarise(statuses),
+            workers=[WorkerStatusOut(**{**vars(s), "terminal": s.terminal}) for s in statuses],
+            unreadable=unreadable,
+            source=str(settings.status_dir) if settings.status_dir else None,
+            poll_seconds=ops.POLL_SECONDS["backfill"],
         )
 
     @app.get("/coverage", response_model=CoverageResponse)

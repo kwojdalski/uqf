@@ -89,6 +89,7 @@ POLL_SECONDS: dict[str, int] = {
     "usage": 10,
     "coverage": 60,
     "processes": 5,
+    "backfill": 10,
 }
 
 

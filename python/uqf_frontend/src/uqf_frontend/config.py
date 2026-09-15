@@ -75,6 +75,11 @@ class Settings:
     #: against. Must match whatever the stack was started with, or every
     #: probe targets the wrong port.
     base_port: int = 6050
+    #: Directory q writes backfill status files into (F-06). None means the
+    #: backfill view reports itself unconfigured rather than returning an
+    #: empty list, which would be indistinguishable from an idle fleet.
+    #: Pairs with UQFSTATUSDIR on the q side - see .qpipe.status_dir.
+    status_dir: Path | None = None
     #: Processes to fan out to for the per-process query log (F-04). Empty by
     #: default: the fleet view then reports that it has nothing configured,
     #: rather than silently showing an empty log as if the fleet were idle.
@@ -97,6 +102,7 @@ class Settings:
             max_rows=_int_env("UQF_FRONTEND_MAX_ROWS", cls.max_rows),
             processes=_parse_processes(os.environ.get("UQF_FRONTEND_PROCESSES", "")),
             process_csv=_path_env("UQF_FRONTEND_PROCESS_CSV"),
+            status_dir=_path_env("UQF_FRONTEND_STATUS_DIR"),
             base_port=_int_env("UQF_FRONTEND_BASE_PORT", cls.base_port),
         )
 
