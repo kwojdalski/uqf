@@ -134,17 +134,46 @@ CLI command each time - see `core.py`'s `_list_*` functions.
 
 ## What actually starts
 
-By default (`start all`) 15 processes come up: the 13 marked
-`startwithall=1` in the vendored
-`lib/torq-finance-starter-pack/appconfig/process.csv`, plus `fxfeed1` and
-`quotesfeed1` - uqf's own additions, appended as extra rows to a *copy* of
-that csv that `torq_orchestrator.core.bootstrap()` generates on the fly
-(never editing the vendored file itself). The vendored README explains why
-the rest stay off: the KDB-X community edition's connection limits mean
-`monitor1`, `reporter1`, `filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1`
-stay off unless you have a fully-licensed kdb+/KDB-X. `killtick` and
-`tpreplay1` are on-demand utility processes, not part of the standing
-stack, so they also don't auto-start.
+By default (`start all`) the processes marked `startwithall=1` come up: the
+vendored rows in `lib/torq-finance-starter-pack/appconfig/process.csv`, plus
+uqf's own pipelines, appended as extra rows to a *copy* of that csv that
+`torq_orchestrator.core.bootstrap()` generates on the fly (never editing the
+vendored file itself). The vendored README explains why the rest stay off:
+the KDB-X community edition's connection limits mean `reporter1`,
+`filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off unless you have a
+fully-licensed kdb+/KDB-X. `killtick` and `tpreplay1` are on-demand utility
+processes, not part of the standing stack, so they also don't auto-start.
+
+### monitor1 is the one vendored default this tree overrides
+
+Upstream ships `monitor1` with `startwithall=0`, for the licence reason
+above. That left the heartbeat unusable: every process *publishes* a
+heartbeat regardless, but `monitor1` is the only thing that *collects* them,
+so `.hb.hb` was empty and `torq-demo summary`'s Heartbeat column read
+"not collected" on a perfectly healthy stack. A health signal that only ever
+appears if an operator knows to start one more process by hand is not a
+health signal, so `procs.VENDORED_STARTWITHALL_OVERLAY` turns it on.
+
+Two consequences worth knowing:
+
+- **Under the community licence the coverage is partial.** `monitor1`
+  saturates at roughly 16 connections and the processes past that point are
+  never subscribed to - they show `-` in the Heartbeat column, and `summary`
+  names them explicitly rather than leaving the dash to be guessed at. On a
+  fully-licensed kdb+/KDB-X it reaches the whole fleet.
+- **`monitor1` subscribes to the proctypes in `.servers.CONNECTIONS`**, and
+  the vendored settings file lists TorQ's own types only. The orchestrator
+  reads that list back out and appends `metrics` (via a `-.servers.CONNECTIONS`
+  command-line override, since `.proc.override[]` runs after every config
+  layer) so uqf's standing ETLs are covered too. `backfill` is deliberately
+  left off: a bounded worker's heartbeat row would outlive the job and age
+  into a permanent false `error`.
+
+To get the upstream behaviour back:
+
+```bash
+torq-demo config-set monitor1 startwithall 0
+```
 
 Default ports (base `6050`, override with `--port <n>`):
 

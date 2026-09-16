@@ -157,10 +157,28 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
     console.print(table)
     if heartbeats is None:
         console.print(
-            "[dim]Heartbeats not collected: monitor1 is not running (it carries "
-            "startwithall=0). Status above is a PID check, which cannot tell a "
-            "hung process from a working one.[/]"
+            "[dim]Heartbeats not collected: monitor1 is not running. It starts "
+            "with the stack, so this means it died or was stopped - run "
+            "`torq-demo start monitor1`. Status above is a PID check, which "
+            "cannot tell a hung process from a working one.[/]"
         )
+    else:
+        # A "-" on an `up` process is not an all-clear and not a fault: it
+        # means monitor1 holds no subscription to it. On the KDB-X community
+        # edition that is the usual cause - the licence caps concurrent
+        # connections (~16 in practice), so monitor1 saturates partway
+        # through the fleet and the rest are simply never subscribed. Saying
+        # so beats leaving a dash the reader has to guess at.
+        unheard = [r["Process"] for r in rows if r["Status"] == "up" and r["Heartbeat"] == "-"]
+        if unheard:
+            console.print(
+                f"[dim]No heartbeat collected for {len(unheard)} running "
+                f"process(es): {', '.join(unheard)}. monitor1 holds no "
+                "subscription to them - on the KDB-X community edition its "
+                "connection count is licence-capped, so it cannot reach the "
+                "whole fleet. This is a monitoring gap, not a fault in those "
+                "processes.[/]"
+            )
     if any(r["PortSource"] == "configured" for r in rows):
         console.print(
             "[dim]Dimmed ports come from process.csv: that is where the process "

@@ -1,3 +1,5 @@
+import csv
+import io
 import os
 from pathlib import Path
 
@@ -869,6 +871,64 @@ def test_the_edge_verifier_detects_a_duplicate_procname(monkeypatch, tmp_path):
     duplicate_reports = [p for p in problems if "declared twice" in p]
     assert duplicate_reports, problems
     assert core.PIPELINES[0].procname in duplicate_reports[0]
+
+
+def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
+    """Every process publishes a heartbeat; only monitor1 collects them.
+
+    TorQ ships monitor1 `startwithall=0`, which made `.hb.hb` empty on a
+    fully healthy stack and `torq-demo summary`'s Heartbeat column read
+    "not collected" unless an operator knew to start one more process by
+    hand. VENDORED_STARTWITHALL_OVERLAY fixes that without editing the
+    vendored file (H-01).
+
+    Read against the REAL vendored csv rather than the fixture's two-row
+    stand-in, because the whole point is what upstream ships.
+    """
+    real = core.default_paths()
+    vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
+    upstream = {
+        row["procname"]: row["startwithall"] for row in csv.DictReader(io.StringIO(vendored))
+    }
+
+    # If upstream ever flips this itself, the overlay becomes a no-op that
+    # still looks load-bearing - fail here so it gets deleted instead.
+    assert upstream["monitor1"] == "0", (
+        "the vendored csv no longer ships monitor1 off by default - "
+        "VENDORED_STARTWITHALL_OVERLAY is now redundant and should be removed"
+    )
+
+    composed = {row["procname"]: row for row in core._base_process_rows(real)}
+    assert composed["monitor1"]["startwithall"] == "1"
+
+    # Nothing else moved: the overlay is one field on one process.
+    for procname, value in upstream.items():
+        if procname == "monitor1":
+            continue
+        assert composed[procname]["startwithall"] == value, (
+            f"{procname} changed, but the overlay only declares "
+            f"{sorted(core.VENDORED_STARTWITHALL_OVERLAY)}"
+        )
+
+
+def test_an_operator_can_put_monitor1_back_to_the_upstream_default(
+    fake_paths: core.TorqDemoPaths,
+):
+    """The overlay is a default, not a decree.
+
+    It sits at the vendored layer, so process_overrides.csv still outranks
+    it - which is what makes it safe to change the shape of the running
+    stack on everyone's behalf.
+    """
+    (fake_paths.torqapphome / "appconfig" / "process.csv").write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,{KDBBASEPORT}+9,monitor,monitor1,,1,0,,,"
+        "${KDBCODE}/processes/monitor.q,0,,q\n"
+    )
+    assert core.get_process_config(fake_paths, "monitor1", base_port=7000)["startwithall"] == "1"
+
+    core.set_process_config(fake_paths, "monitor1", "startwithall", "0")
+    assert core.get_process_config(fake_paths, "monitor1", base_port=7000)["startwithall"] == "0"
 
 
 def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core.TorqDemoPaths):
