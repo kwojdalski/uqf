@@ -25,12 +25,20 @@ _Q_TO_CATALOG = {
     "boolean": QType.BOOLEAN,
 }
 
-CORE_PY = (
+#: The generated table schemas, read as TEXT - no import, so this gate cannot
+#: silently skip itself if torq_orchestrator's environment is broken.
+#:
+#: They lived in core.py until it was split by concern; this path moved with
+#: them, and the move is why `test_the_schema_module_is_where_this_test_expects_it`
+#: exists below. A stale path here would make every parametrised case fail
+#: loudly, which is what happened during the split and is the behaviour to
+#: keep - a silent skip would have been far worse.
+SCHEMAS_PY = (
     Path(__file__).resolve().parents[2]
     / "torq_orchestrator"
     / "src"
     / "torq_orchestrator"
-    / "core.py"
+    / "schemas.py"
 )
 
 #: Repository root, for the q files that own the ETL-side schemas.
@@ -51,11 +59,11 @@ def _schema_text(const: str) -> str:
     """Pull one `NAME = (...)` schema constant out of core.py and splice its
     string fragments together, the way Python would.
     """
-    source = CORE_PY.read_text()
+    source = SCHEMAS_PY.read_text()
     m = re.search(rf"^{const} = \((.*?)\n\)", source, re.S | re.M)
     if m is None:
         m = re.search(rf'^{const} = ("(?:[^"\\]|\\.)*")', source, re.M)
-        assert m, f"{const} not found in {CORE_PY}"
+        assert m, f"{const} not found in {SCHEMAS_PY}"
         return m.group(1).strip('"')
     return "".join(re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1)))
 
@@ -104,9 +112,14 @@ def _q_contract_columns(path: Path, fields_const: str, types_const: str) -> dict
     return {n: _CHAR_TO_CATALOG[c] for n, c in zip(names, chars, strict=True)}
 
 
-def test_core_py_is_where_this_test_expects_it():
-    """If core.py moves, this gate must fail loudly rather than skip."""
-    assert CORE_PY.is_file(), f"expected the generated schemas at {CORE_PY}"
+def test_the_schema_module_is_where_this_test_expects_it():
+    """If the schemas move again, this gate must fail loudly rather than skip.
+
+    They already moved once, from core.py to schemas.py when core.py was split
+    by concern. This assertion is what turns that into one clear failure
+    instead of five confusing ones.
+    """
+    assert SCHEMAS_PY.is_file(), f"expected the generated schemas at {SCHEMAS_PY}"
 
 
 @pytest.mark.parametrize(

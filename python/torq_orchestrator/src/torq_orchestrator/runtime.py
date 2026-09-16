@@ -1,0 +1,191 @@
+"""Bootstrapping, the env bridge, and driving lib/torq/torq.sh.
+
+bootstrap() is idempotent and regenerates the overlay config on every call
+from the vendored inputs plus uqf's own additions (ETL-17: never hand-edit
+vendored configuration, and never depend on a previously generated file
+still being correct)."""
+
+from __future__ import annotations
+
+import csv
+import os
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
+
+from torq_orchestrator.env import build_env
+from torq_orchestrator.logger import get_logger
+from torq_orchestrator.paths import TorqDemoError, TorqDemoPaths, check_prerequisites
+from torq_orchestrator.pipelines import DEFAULT_BASE_PORT, PROCESS_CSV_FIELDS
+from torq_orchestrator.procs import (
+    _base_process_rows,
+    _generated_schema_content,
+    _read_overrides,
+)
+
+log = get_logger(__name__)
+
+
+def bootstrap(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
+    """Idempotently set up the writable data dir and generated config, and
+    return the full env dict torq.sh should run under.
+    """
+    check_prerequisites(paths)
+
+    if not (paths.torqdata / "hdb").is_dir():
+        log.info("Bootstrapping {} (first run) - copying sample hdb/dqe data...", paths.torqdata)
+        paths.torqdata.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(paths.torqapphome / "hdb", paths.torqdata / "hdb")
+        shutil.copytree(paths.torqapphome / "dqe", paths.torqdata / "dqe")
+
+    for sub in ("logs", "tplogs", "wdbhdb"):
+        (paths.torqdata / sub).mkdir(parents=True, exist_ok=True)
+
+    # Extend (never edit in place) the vendored process.csv with uqf's own
+    # extra processes (fxfeed1) and any process_overrides.csv fields set via
+    # set_process_config()/`config-set`/torq_demo_set_config.
+    overrides = _read_overrides(paths)
+    rows = _base_process_rows(paths)
+    for row in rows:
+        row.update(overrides.get(row["procname"], {}))
+    with paths.generated_procs.open("w", newline="") as f:
+        # torq.sh's own field lookups are a naive awk -F, parse expecting
+        # plain \n line endings, like the vendored csv itself - csv module's
+        # default \r\n (the "excel" dialect) corrupts the last column's
+        # value (a trailing \r glued onto qcmd breaks the qcmd==qcmd header
+        # match, which every single process start looks up), producing a
+        # bare `print $` awk syntax error for every process - hard-won via
+        # `start all` throwing exactly that for every process at once.
+        writer = csv.DictWriter(f, fieldnames=PROCESS_CSV_FIELDS, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+    # Same extend-never-edit approach as process.csv above, for stp1's
+    # -schemafile (see _generated_schema_content/_base_process_rows).
+    paths.generated_schema.write_text(_generated_schema_content(paths))
+
+    env = build_env(paths, base_port=base_port)
+
+    # torq.sh unconditionally sources $SETENV (defaulting to lib/torq/setenv.sh,
+    # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's
+    # own defaults) - generate our own and point SETENV at it instead.
+    setenv_lines = [f'export {k}="{v}"' for k, v in env.items()]
+    paths.generated_setenv.write_text("\n".join(setenv_lines) + "\n")
+    env["SETENV"] = str(paths.generated_setenv)
+
+    return env
+
+
+def run_torq_sh(
+    paths: TorqDemoPaths,
+    args: list[str],
+    base_port: int = DEFAULT_BASE_PORT,
+    capture: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    """Bootstrap, then run lib/torq/torq.sh with *args* under the generated env."""
+    overrides = bootstrap(paths, base_port=base_port)
+    # subprocess.run's env= *replaces* the environment rather than extending
+    # it - merge onto the inherited one (PATH, etc.) or envsubst/rlwrap/q
+    # stop resolving even though they're on PATH in the calling shell.
+    env = {**os.environ, **overrides}
+    cmd = [str(paths.torqhome / "torq.sh"), *args]
+    log.debug("running: {}", " ".join(cmd))
+    return subprocess.run(
+        cmd,
+        env=env,
+        capture_output=capture,
+        text=True,
+        check=False,
+    )
+
+
+def start(
+    paths: TorqDemoPaths,
+    procs: str = "all",
+    base_port: int = DEFAULT_BASE_PORT,
+    capture: bool = False,
+):
+    return run_torq_sh(paths, ["start", procs], base_port=base_port, capture=capture)
+
+
+def stop(
+    paths: TorqDemoPaths,
+    procs: str = "all",
+    base_port: int = DEFAULT_BASE_PORT,
+    capture: bool = False,
+):
+    return run_torq_sh(paths, ["stop", procs], base_port=base_port, capture=capture)
+
+
+def restart(
+    paths: TorqDemoPaths,
+    procs: str = "all",
+    base_port: int = DEFAULT_BASE_PORT,
+    capture: bool = False,
+):
+    return run_torq_sh(paths, ["restart", procs], base_port=base_port, capture=capture)
+
+
+def summary(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT, capture: bool = True):
+    return run_torq_sh(paths, ["summary"], base_port=base_port, capture=capture)
+
+
+def print_procs(
+    paths: TorqDemoPaths,
+    procs: str = "all",
+    base_port: int = DEFAULT_BASE_PORT,
+    capture: bool = True,
+):
+    return run_torq_sh(paths, ["print", procs], base_port=base_port, capture=capture)
+
+
+def query(
+    expr: str,
+    port: int,
+    host: str = "localhost",
+    user: str = "admin",
+    passwd: str = "admin",
+) -> Any:
+    """Run a synchronous q expression against a running demo process (e.g.
+    rdb1 on base_port+2) over kdb+ IPC via kola.
+    """
+    import kola
+
+    q = kola.Q(host, port, user=user, passwd=passwd)
+    q.connect()
+    try:
+        return q.sync(expr)
+    finally:
+        q.disconnect()
+
+
+def export_table(rows: Any, path: Path) -> None:
+    """Write *rows* to *path* as CSV or Parquet, format inferred from the
+    file extension. *rows* is either a list[dict] (list_items/config-get's
+    own shape) or a polars.DataFrame (what kola's query() returns for a
+    table-shaped q result - kola is a Polars interface to q, so this is
+    already the native return type for `select ... from t`, no conversion
+    needed). Anything else (a q scalar/atom from query(), e.g. `count t`)
+    isn't rows, so it's rejected rather than silently wrapped into a bogus
+    one-cell table.
+    """
+    import polars as pl
+
+    if isinstance(rows, pl.DataFrame):
+        df = rows
+    elif isinstance(rows, list):
+        df = pl.DataFrame(rows)
+    else:
+        raise TorqDemoError(
+            f"can't export a {type(rows).__name__} result to a table - --export needs "
+            "tabular output (a process/config list, or a query returning a table)"
+        )
+
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        df.write_csv(path)
+    elif suffix == ".parquet":
+        df.write_parquet(path)
+    else:
+        raise TorqDemoError(f"unsupported export extension {suffix!r} - use .csv or .parquet")
