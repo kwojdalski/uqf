@@ -82,25 +82,38 @@ uses for "no quote yet" cases.
    primitives it doesn't actually depend on are in place and tested.
 5. Everything else in Tier 2, roughly in the table's order.
 
-## Explicitly out of scope for now
+## Unblocked by the event tape (was: explicitly out of scope)
 
-These source features require a genuine order/trade *event* tape
-(`action` in `{A,C,T}`, aggressor `side`, per-event `size`) rather than
-periodic book snapshots - uqf has no such ingestion path today, and adding
-one is a bigger scope decision than adding a function:
+**The event tape now exists** (issue #46, 2026-09-16): shape and contract in
+`docs/event-tape.md`, ingested as the `demo_events` source, with
+`action` in `` `add`cancel`trade ``, an aggressor `side` and a per-event
+`size`. Two of the features below are implemented; the rest are ordinary
+function work over a table that is now there.
 
-- `signed_trade_flow` / cumulative delta (#19)
-- `vpin` (#25)
-- `trade_arrival_rate` (#26)
-- `large_trade_ratio` (#27)
-- `cancel_to_trade_ratio` (#23)
-- `odd_lot_trade_ratio` / `odd_lot_imbalance` (#20-21)
-- `order_count_imbalance` (#18) - needs resting-order *counts* per level
-  (`bid_ct_NN`/`ask_ct_NN`), which `quotes` doesn't carry alongside
-  `bid_sizes`/`ask_sizes`
+- **`cancel_to_trade_ratio` (#23) — DONE.** `.qmicro.cancel_to_trade_ratio`
+  and `.qmicro.cancel_to_trade_ratio_by`, the latter in `hit_ratio_by`'s
+  windowed-groupby shape as this section asked for.
+- **`signed_trade_flow` (#19) — DONE.** `.qmicro.signed_trade_flow` for the
+  scalar and `.qmicro.cumulative_trade_flow` for the per-trade series `vpin`
+  builds on.
 
-If/when uqf grows a trades/order-event ingestion path (e.g. alongside the
-`trades` table shape `markout_at_horizons` already consumes -
-`` `sym`time`side`trade_price`pip_factor ``), these become straightforward
-rolling-window counts/ratios over that table, mirroring `hit_ratio_by`'s
-windowed-groupby shape.
+Still to do, each now a function rather than a scope decision:
+
+- `vpin` (#25) - volume-bucketed signed flow, on top of
+  `cumulative_trade_flow`
+- `trade_arrival_rate` (#26) - a windowed count of `` action=`trade ``
+- `large_trade_ratio` (#27) - needs a size-threshold decision
+- `odd_lot_trade_ratio` / `odd_lot_imbalance` (#20-21) - needs an odd-lot
+  size definition, which is venue-specific
+
+**`order_count_imbalance` (#18) is still blocked, and not by the tape.** It
+needs resting-order *counts* per level (`bid_ct_NN`/`ask_ct_NN`) alongside
+`bid_sizes`/`ask_sizes` in `quotes` - a snapshot-schema change, which the
+event tape does nothing for. Six of the seven were unblocked, not seven.
+
+The tape is deliberately a **superset of the `trades` shape**
+`` `time`sym`side`size`pip_factor `` that `markout_at_horizons` already
+consumes, so a tape filtered to `` action=`trade `` is trade-shaped and the
+existing markout family works on it unchanged. The one divergence is `price`
+rather than `trade_price`, because an add or a cancel has a price and is not
+a trade - see `docs/event-tape.md`.
