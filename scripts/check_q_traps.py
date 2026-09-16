@@ -284,6 +284,46 @@ def rule_reserved_local_assignment(path: str, text: str) -> list[Finding]:
     return findings
 
 
+def rule_underscore_parameter(path: str, lines: list[str]) -> list[Finding]:
+    """`_` as a lambda parameter makes application throw a bare `'match`.
+
+    `_` is q's drop/cut operator, not an ordinary name. A lambda declaring it
+    parses without complaint and even *projects* without complaint — it fails
+    only when applied, with `'match`, which names nothing and points at
+    nothing. So the file loads, the namespace populates, early calls succeed,
+    and the failure surfaces at whichever call site happens to apply the
+    projection first.
+
+    That is exactly how it presented: `bounded_worker.q` loaded cleanly,
+    planned its windows correctly, and died on the first publish. The
+    conventional name for an ignored parameter here is `unused`.
+
+    Distinct from `rule_reserved_parameter_names`, which checks q builtins by
+    name — this is punctuation, and no name list contains it.
+
+    False positives in this repo: 0.
+    """
+    findings = []
+    for n, raw in enumerate(lines, 1):
+        code = _strip_comments(raw)
+        for sig in re.finditer(r"\{\s*\[([^\]]*)\]", code):
+            params = [p.strip() for p in sig.group(1).split(";")]
+            if any(p == "_" for p in params):
+                findings.append(
+                    Finding(
+                        path,
+                        n,
+                        "underscore-parameter",
+                        "`_` as a lambda parameter",
+                        "`_` is q's drop/cut operator, so applying the lambda "
+                        "throws a bare `'match` that names nothing - and only "
+                        "at the first call site that applies it, long after the "
+                        "file loaded cleanly. Name it `unused`",
+                    )
+                )
+    return findings
+
+
 def rule_niladic_dot_empty(path: str, lines: list[str]) -> list[Finding]:
     """`f . ()` is a type error; `f . enlist(::)` applies a niladic.
 
@@ -642,6 +682,7 @@ def rule_datetime_type(path: str, lines: list[str]) -> list[Finding]:
 LINE_RULES = (
     rule_bare_slash_comment_block,
     rule_reserved_parameter_names,
+    rule_underscore_parameter,
     rule_niladic_dot_empty,
     rule_self_comparison,
     rule_datetime_type,

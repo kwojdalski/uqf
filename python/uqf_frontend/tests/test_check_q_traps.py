@@ -189,6 +189,34 @@ def test_a_global_assignment_through_a_symbol_is_not_flagged():
     assert not cqt.rule_reserved_local_assignment("t.q", "f:{[x] `var set x;}")
 
 
+# ------------------------------------------------ underscore params
+
+
+def test_an_underscore_parameter_is_flagged():
+    """`_` is q's drop operator, so applying such a lambda throws `'match`.
+
+    It parses and projects without complaint and fails only when applied -
+    `bounded_worker.q` loaded cleanly, planned its windows, and died on the
+    first publish.
+    """
+    found = cqt.rule_underscore_parameter("t.q", ["f:{[a;_] a+1}"])
+    assert len(found) == 1
+    assert "_" in found[0].detail
+
+
+def test_the_conventional_replacement_is_not_flagged():
+    assert not cqt.rule_underscore_parameter("t.q", ["f:{[a;unused] a+1}"])
+
+
+def test_a_snake_case_parameter_is_not_flagged():
+    """Names merely containing an underscore are the norm in this tree."""
+    assert not cqt.rule_underscore_parameter("t.q", ["f:{[from_ts;to_ts] 1}"])
+
+
+def test_an_underscore_in_a_comment_is_not_flagged():
+    assert not cqt.rule_underscore_parameter("t.q", ["/ mentions {[a;_] x} in prose"])
+
+
 # -------------------------------------------------- overlong throws
 
 
