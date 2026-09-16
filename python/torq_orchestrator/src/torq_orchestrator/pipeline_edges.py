@@ -113,9 +113,13 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
                 )
 
         published = [match.group(1) for match in _PUB_RE.finditer(source)]
-        if pipeline.uses_qpipe:
+        if pipeline.publishes_via_qpipe:
             # The publish goes through .qpipe.publish, whose table is a
             # parameter - nothing table-shaped to read out of this script.
+            #
+            # NOT `loads_qpipe`: a pipeline can load the library to SUBSCRIBE
+            # through it and still publish directly, and those still have a
+            # readable table name that this check must keep verifying.
             continue
         if tuple(published) != tuple(pipeline.published_tables):
             problems.append(
