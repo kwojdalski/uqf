@@ -21,7 +21,7 @@
 /      missing" is a normal condition on a developer machine, not an error.
 / .
 / FACT 2 IS THE HARD ONE, and it is why this file exists rather than a
-/ three-line wrapper. Bank E-08 decided: parameterise where the driver
+/ three-line wrapper. Per bank E-08: parameterise where the driver
 / allows, ONE escape function otherwise. ODBC via .odbc.eval is the
 / "otherwise", so there is exactly one escaping path here and every value
 / goes through it. A second place that builds SQL is the bug this design
@@ -201,7 +201,8 @@ table_names:{[h] require_available[]; .odbc.tables h}
 / .
 / The table and column names are q SYMBOLS from the source declaration, not
 / caller input - they are validated at registration - while the two bounds
-/ are values and go through `literal`. That split is the whole of E-08 here.
+/ are values and go through `literal`. That split is the whole of bank E-08
+/ here.
 / @param h an ODBC handle
 / @param tbl the table to read, as a symbol
 / @param time_field the timestamp column to window on, as a symbol
