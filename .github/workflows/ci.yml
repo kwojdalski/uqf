@@ -53,6 +53,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/build_decision_log.py --check
+      - name: Check the generated operational docs match the registry
+        # J-01/J-02: operational docs are generated, committed and checked.
+        # Where the source and the document disagree the source is right by
+        # definition, so this fails the build rather than reconciling.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/generate_operational_docs.py --check
       - name: Check no bare E-/F- requirement citation has crept back in
         # Requirements are ETL-nn / FE-nn since #109; a bare E-nn in source
         # is now the question bank's id, and must be marked as such. The
