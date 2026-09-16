@@ -97,14 +97,28 @@ function work over a table that is now there.
   scalar and `.qmicro.cumulative_trade_flow` for the per-trade series `vpin`
   builds on.
 
-Still to do, each now a function rather than a scope decision:
+- **`vpin` (#25) — DONE.** `.qmicro.vpin`, on `.qmicro.volume_buckets`.
+  Equal-**volume** buckets, not time buckets: informed trading shows up as
+  imbalance per unit volume, and time-bucketing a flow-toxicity metric makes
+  it a measure of how busy the market was. A trade straddling a bucket
+  boundary is **split** proportionally, because VPIN divides by
+  (n × bucket_volume) and unequal buckets make that denominator wrong.
+  Easley/López de Prado/O'Hara's own bulk volume classification is **not**
+  needed here - it exists to infer buy and sell volume on a tape that does
+  not say who the aggressor was, and this one does.
+- **`trade_arrival_rate` (#26) — DONE.** `.qmicro.trade_arrival_rate` for
+  trades per second, `.qmicro.trade_arrival_rate_by` for the windowed-groupby
+  form. Counts **intervals**, not events.
 
-- `vpin` (#25) - volume-bucketed signed flow, on top of
-  `cumulative_trade_flow`
-- `trade_arrival_rate` (#26) - a windowed count of `` action=`trade ``
-- `large_trade_ratio` (#27) - needs a size-threshold decision
+Still to do, and each needs one decision before it can be written:
+
+- `large_trade_ratio` (#27) - needs a size threshold. Not derivable from the
+  tape: "large" is relative to a venue's typical clip, so picking a number
+  here would be inventing a market convention.
 - `odd_lot_trade_ratio` / `odd_lot_imbalance` (#20-21) - needs an odd-lot
-  size definition, which is venue-specific
+  size, which is venue-specific in the same way. In FX there is no round-lot
+  convention at all, so this may not be meaningful for this tree's
+  instruments - worth settling before implementing rather than after.
 
 **`order_count_imbalance` (#18) is still blocked, and not by the tape.** It
 needs resting-order *counts* per level (`bid_ct_NN`/`ask_ct_NN`) alongside

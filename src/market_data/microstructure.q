@@ -570,4 +570,161 @@ cancel_to_trade_ratio_by:{[tape;bucket_size;group_cols]
       (enlist `ratio)!enlist
         (%;(sum;(=;`action;enlist `cancel));(sum;(=;`action;enlist `trade)))]}
 
+/ Split the trades in a tape into equal-VOLUME buckets (ROADMAP #25).
+/ .
+/ The primitive vpin is built on, exposed separately because it is the
+/ interesting intermediate: a reader who distrusts a VPIN number wants to see
+/ the buckets it came from, and it is far easier to test on its own.
+/ .
+/ WHY VOLUME BUCKETS AND NOT TIME BUCKETS
+/ .
+/ This is the "volume-synchronized" in VPIN. Informed trading shows up as an
+/ imbalance per unit VOLUME, not per unit time: an hour with four trades and
+/ an hour with four thousand are not comparable observations, but two buckets
+/ of 10,000 lots each are. Time-bucketing a flow-toxicity metric makes it a
+/ measure of how busy the market was.
+/ .
+/ A TRADE THAT STRADDLES A BOUNDARY IS SPLIT
+/ .
+/ Its volume goes partly in one bucket and partly in the next, proportionally.
+/ That is not a nicety: VPIN divides by (n * bucket_volume), so every bucket
+/ must hold exactly bucket_volume or the denominator is wrong. Assigning whole
+/ trades to whichever bucket they end in would leave buckets of unequal
+/ volume and a VPIN that is systematically off by however lumpy the tape is.
+/ .
+/ THE LAST, INCOMPLETE BUCKET IS DISCARDED
+/ .
+/ A bucket holding less than bucket_volume has a smaller denominator, so its
+/ imbalance is not comparable with the others - and including it makes VPIN
+/ jump around as the final partial bucket fills. Only complete buckets are
+/ returned, which means a tape with less volume than one bucket returns none.
+/ @param tape an event tape table
+/ @param bucket_volume the volume each bucket holds
+/ @return a table of bucket, end_time, buy_volume, sell_volume, imbalance
+/   (the absolute difference) - one row per COMPLETE bucket
+/ @throws error when bucket_volume is not positive
+/ @eg .qmicro.volume_buckets[tape;1000000f]
+volume_buckets:{[tape;bucket_volume]
+    require_tape tape;
+    if[not bucket_volume>0;
+        '"volume_buckets: bucket_volume must be positive, got ",.Q.s1 bucket_volume];
+    trades:select time, side, size from tape where action=`trade;
+    if[0=count trades; :empty_buckets[]];
+    cum:sums trades`size;
+    starts:cum-trades`size;
+    total:last cum;
+    n:"j"$floor total%bucket_volume;
+    if[0=n; :empty_buckets[]];
+    / For bucket b spanning [lo;hi), each trade contributes the overlap of
+    / its own [start;end) with that span - which is what splits a straddling
+    / trade proportionally without special-casing it.
+    slice:{[trades;starts;cum;bucket_volume;b]
+        lo:bucket_volume*b;
+        hi:lo+bucket_volume;
+        overlap:0f|(hi&cum)-lo|starts;
+        buys:sum overlap where 0<trades`side;
+        sells:sum overlap where 0>trades`side;
+        / end_time is the time of the trade that FILLED the bucket - the
+        / instant the observation completed, which is what a series of VPIN
+        / values should be indexed by.
+        filled:first where cum>=hi;
+        (b;trades[`time] filled;buys;sells;abs buys-sells)};
+    rows:slice[trades;starts;cum;bucket_volume] each til n;
+    flip `bucket`end_time`buy_volume`sell_volume`imbalance!flip rows}
+
+empty_buckets:{[] ([] bucket:`long$(); end_time:`timestamp$();
+    buy_volume:`float$(); sell_volume:`float$(); imbalance:`float$())}
+
+/ VPIN - volume-synchronized probability of informed trading (ROADMAP #25).
+/ .
+/ Easley, Lopez de Prado and O'Hara (2012). Over a trailing window of
+/ n_buckets equal-volume buckets:
+/ .
+/     VPIN = sum |buy_volume - sell_volume| / (n_buckets * bucket_volume)
+/ .
+/ which is the mean absolute order imbalance per bucket, normalised to a
+/ 0..1 fraction of bucket volume. 0 means every bucket was perfectly
+/ balanced; 1 means every bucket was entirely one-sided.
+/ .
+/ ONE SIMPLIFICATION THIS TAPE PERMITS, AND IT IS WORTH KNOWING
+/ .
+/ The paper classifies volume with BULK VOLUME CLASSIFICATION - a normal CDF
+/ over price changes - because most tapes do not say who was the aggressor,
+/ so buy and sell volume has to be INFERRED. This tape carries the aggressor
+/ side (docs/event-tape.md), so the classification is exact and BVC is not
+/ needed. That makes these numbers cleaner than a BVC-based VPIN, not
+/ comparable-but-different: same definition, better inputs.
+/ .
+/ If a future source cannot supply the aggressor side, BVC is the thing to
+/ add, and it belongs here rather than in the tape - the tape should not
+/ invent a side it does not know.
+/ .
+/ Returns one value per bucket, NULL until n_buckets have accumulated, which
+/ is ofi_autocorrelation's convention in this file: a window that has not
+/ filled yet has no answer, and 0 would be a wrong one.
+/ @param tape an event tape table
+/ @param bucket_volume the volume each bucket holds
+/ @param n_buckets how many trailing buckets each value averages over
+/ @return a table of bucket, end_time and vpin
+/ @throws error when n_buckets is not positive
+/ @eg .qmicro.vpin[tape;1000000f;50]
+vpin:{[tape;bucket_volume;n_buckets]
+    if[not n_buckets>0;
+        '"vpin: n_buckets must be positive, got ",.Q.s1 n_buckets];
+    buckets:volume_buckets[tape;bucket_volume];
+    if[0=count buckets; :select bucket, end_time, vpin:`float$() from buckets];
+    imb:buckets`imbalance;
+    n:count imb;
+    / A trailing mean of the absolute imbalance, normalised by bucket volume.
+    / `msum` gives the trailing sums, but its first n_buckets-1 entries are
+    / sums over a PARTLY EMPTY window - a smaller numerator over the same
+    / denominator, which would read as an unusually balanced market rather
+    / than as "not enough data yet". Those are nulled.
+    / .
+    / Named vpin_series, not `values`: `value` is a q builtin and this file
+    / has no business getting that close to it.
+    vpin_series:n#0n;
+    if[n>=n_buckets;
+        defined:(n_buckets-1)+til 1+n-n_buckets;
+        vpin_series[defined]:(n_buckets msum imb)[defined]%n_buckets*bucket_volume];
+    ([] bucket:buckets`bucket; end_time:buckets`end_time; vpin:vpin_series)}
+
+/ Trade arrival rate: trades per second over the tape's span (ROADMAP #26).
+/ .
+/ Only `trade` events count - an add or a cancel is not an arrival in the
+/ sense this measures, which is how fast executions are happening.
+/ .
+/ Returns 0n when the span is zero, NOT infinity: one trade, or several at
+/ the same instant, gives no information about a rate. 0w would propagate
+/ into any average a caller takes, and 0 would read as "no trading", the
+/ opposite of the truth.
+/ @param tape an event tape table
+/ @return trades per second, or 0n when the span is zero
+/ @eg .qmicro.trade_arrival_rate[tape]  ->  0.2
+trade_arrival_rate:{[tape]
+    require_tape tape;
+    ts:exec time from tape where action=`trade;
+    if[2>count ts; :0n];
+    span:`float$(last[ts]-first ts)%1000000000;
+    $[span<=0; 0n; (count[ts]-1)%span]}
+
+/ Trade arrival rate per time bucket and grouping.
+/ .
+/ Mirrors cancel_to_trade_ratio_by and hit_ratio_by. Here the rate is trades
+/ per bucket rather than per second, because the bucket IS the unit the
+/ caller chose - dividing again by the bucket's length would throw away the
+/ thing that makes buckets comparable.
+/ @param tape an event tape table
+/ @param bucket_size a timespan to floor time into, or 0Nn for no bucketing
+/ @param group_cols extra columns to group by, e.g. enlist `sym
+/ @eg .qmicro.trade_arrival_rate_by[tape;0D01:00:00;enlist `sym]
+trade_arrival_rate_by:{[tape;bucket_size;group_cols]
+    require_tape tape;
+    t:select time, sym from tape where action=`trade;
+    by_cols:$[null bucket_size; (),group_cols; (`time,(),group_cols)];
+    t:$[null bucket_size; t; update time:bucket_size xbar time from t];
+    if[0=count by_cols;
+        :([] trades:enlist count t)];
+    ?[t;();by_cols!by_cols;(enlist `trades)!enlist (#:;`i)]}
+
 \d .
