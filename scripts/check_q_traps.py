@@ -211,6 +211,41 @@ def _strip_comments(line: str) -> str:
     return re.split(r"(?:^|\s)/", line, maxsplit=1)[0]
 
 
+def _strip_strings(line: str) -> str:
+    """Blank out q string literals, preserving length.
+
+    A qSQL-looking phrase inside a STRING is prose, not a filter. The
+    generated `docs/man.q` carries a description containing `col=col` - a
+    sentence about indexing a table by a key column - and the self-comparison
+    rule reported it as a filter that matches every row.
+
+    Blanked rather than removed so a finding's column position still lines up
+    with the source. A `\\` escape consumes its second character, so an
+    escaped quote does not flip the state.
+    """
+    out = []
+    in_string = False
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if ch == '"':
+            in_string = not in_string
+            out.append(" ")
+            i += 1
+            continue
+        if in_string:
+            if ch == "\\" and i + 1 < len(line):
+                out.append("  ")
+                i += 2
+                continue
+            out.append(" ")
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 # --------------------------------------------------------------------- rules
 
 
@@ -631,7 +666,7 @@ def rule_self_comparison(path: str, lines: list[str]) -> list[Finding]:
     """
     findings = []
     for n, raw in enumerate(lines, 1):
-        code = _strip_comments(raw)
+        code = _strip_strings(_strip_comments(raw))
         if not re.search(r"\b(?:where|select|exec|update|delete)\b", code):
             continue
         for m in re.finditer(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(=|~)\s*\1\b", code):
