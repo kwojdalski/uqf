@@ -53,6 +53,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/build_decision_log.py --check
+      - name: Check no bare E-/F- requirement citation has crept back in
+        # Requirements are ETL-nn / FE-nn since #109; a bare E-nn in source
+        # is now the question bank's id, and must be marked as such. The
+        # very first run after the rename caught four in a file written the
+        # same day - by the author of the rename.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/renumber_requirement_ids.py --check
 
   web:
     name: Browser application
