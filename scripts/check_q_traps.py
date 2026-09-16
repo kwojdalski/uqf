@@ -679,6 +679,72 @@ def rule_datetime_type(path: str, lines: list[str]) -> list[Finding]:
     return findings
 
 
+#: The escapes q accepts inside a string literal. Everything else makes q
+#: signal the WHOLE STRING as the error, with no mention of escaping - so the
+#: diagnostic points at the text rather than at the backslash in it.
+VALID_STRING_ESCAPES = set('\\"nrt')
+
+
+def rule_invalid_string_escape(path: str, lines: list[str]) -> list[Finding]:
+    r"""A backslash inside a q string literal that is not a valid escape.
+
+    q accepts \\, \", \n, \r, \t and \NNN (three octal digits). Anything
+    else - \d, \l, \s - is invalid, and q's response is to signal the entire
+    string as the error. Nothing in the message says "escape", so the reader
+    sees their own prose thrown back at them and goes looking for a problem
+    in the text.
+
+    This one bit hard. Two strings in docs/man.q mentioned `\d` and
+    `\l src/init.q` as prose. The file aborted on line 79, .man.getDocs was
+    unreachable, and all 78 of its function registrations existed nowhere at
+    runtime. Nothing noticed for as long as the file existed, because no test
+    had ever loaded it - the document was not stale, it was inert.
+
+    Tracking string state is what keeps this quiet. `\[` (scan with brackets)
+    and `\:` (each-left) are ordinary q operators and appear three times in
+    that same file; a naive backslash search reports all three. Only a
+    backslash BETWEEN quotes counts, and a trailing comment is stripped
+    first.
+
+    False positives in this repo: 0.
+    """
+    findings = []
+    for n, raw in enumerate(lines, 1):
+        code = _strip_comments(raw)
+        in_string = False
+        i = 0
+        while i < len(code):
+            ch = code[i]
+            if ch == '"':
+                in_string = not in_string
+                i += 1
+                continue
+            if not in_string or ch != "\\":
+                i += 1
+                continue
+            nxt = code[i + 1] if i + 1 < len(code) else ""
+            if nxt in VALID_STRING_ESCAPES:
+                # A valid escape consumes its second character, so a doubled
+                # backslash leaves no lone one behind to re-examine.
+                i += 2
+                continue
+            if code[i + 1 : i + 4].isdigit():
+                i += 4
+                continue
+            findings.append(
+                Finding(
+                    path,
+                    n,
+                    "invalid-string-escape",
+                    f"`\\{nxt}` inside a string literal",
+                    "is not a q escape, so q signals the WHOLE STRING as the "
+                    "error and never mentions escaping. Double the backslash",
+                )
+            )
+            i += 2
+    return findings
+
+
 LINE_RULES = (
     rule_bare_slash_comment_block,
     rule_reserved_parameter_names,
@@ -686,6 +752,7 @@ LINE_RULES = (
     rule_niladic_dot_empty,
     rule_self_comparison,
     rule_datetime_type,
+    rule_invalid_string_escape,
 )
 TEXT_RULES = (
     rule_multiparam_lambda_under_at,

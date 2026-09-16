@@ -324,7 +324,38 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.TorqDemoPa
 
 
 def test_resolve_procnames_specific_splits_on_space(fake_paths: core.TorqDemoPaths):
-    assert core.resolve_procnames(fake_paths, "stp1 rdb1") == ["stp1", "rdb1"]
+    assert core.resolve_procnames(fake_paths, "stp1 fxfeed1") == ["stp1", "fxfeed1"]
+
+
+def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.TorqDemoPaths):
+    """H-03: an unknown name used to be returned as given.
+
+    This test previously asserted exactly that, using `"stp1 rdb1"` - and
+    `rdb1` is not a process in this fixture. So the test passed a name
+    nothing had and got it straight back, which is the defect rather than the
+    contract: `logs posbook1 typo1` returned one process's log as though one
+    had been asked for, and a reader diagnosing a quiet process saw an empty
+    section and concluded it was idle.
+    """
+    with pytest.raises(core.TorqDemoError) as excinfo:
+        core.resolve_procnames(fake_paths, "stp1 rdb1")
+    message = str(excinfo.value)
+    assert "rdb1" in message, "the refusal must name the offending process"
+    assert "stp1" not in message.split(" - ")[0], "only the unknown name is the problem"
+
+
+def test_resolve_procnames_still_allows_a_process_with_no_log_file(
+    fake_paths: core.TorqDemoPaths,
+):
+    """The distinction that makes H-03 fixable rather than a trade-off.
+
+    A name absent from process.csv is a typo. A name present in process.csv
+    with no log file yet is legitimate - a process that has never started has
+    no log - and must still resolve, with the skipping left to `_log_files`
+    downstream. Conflating the two is what the old docstring did by calling
+    both "just skipped".
+    """
+    assert core.resolve_procnames(fake_paths, "discovery1") == ["discovery1"]
 
 
 def test_print_recent_logs_raises_when_no_log_files(fake_paths: core.TorqDemoPaths):

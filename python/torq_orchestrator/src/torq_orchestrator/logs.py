@@ -71,11 +71,37 @@ def _configure_kdb_log_sink() -> Any:
 def resolve_procnames(paths: TorqDemoPaths, procs: str) -> list[str]:
     """'all' -> every process.csv row (not just startwithall=1 - a stopped
     process's last-run log is still worth reading); otherwise the given
-    space-separated names, unvalidated (missing log files are just skipped).
+    space-separated names, each of which must name a real process.
+
+    H-03: these names used to be unvalidated, and the mixed case was the bad
+    one. `logs posbook1 typo1` silently dropped the typo and returned
+    posbook1's log as though one process had been asked for - so a reader
+    diagnosing a quiet process saw an empty section and concluded it was
+    idle, when in fact they had misspelled its name.
+
+    The distinction that makes this fixable rather than a trade-off: a name
+    ABSENT FROM process.csv is a typo and gets reported, while a name present
+    with NO LOG FILE YET is legitimate and is still skipped downstream in
+    `_log_files` - a process that has never started has no log, and
+    complaining about that on every invocation would be noise. The old
+    docstring conflated the two by calling both "just skipped".
+
+    Only the log commands route through here. `start`/`stop`/`restart`/`print`
+    hand `procs` straight to the vendored torq.sh, which owns its own
+    handling of an unknown name and is never edited (H-01).
     """
     if procs == "all":
         return list_process_names(paths)
-    return procs.split()
+    requested = procs.split()
+    known = list_process_names(paths)
+    unknown = [name for name in requested if name not in known]
+    if unknown:
+        raise TorqDemoError(
+            f"unknown process(es) {unknown} - known processes are {known}. "
+            "A process that exists but has never started has no log file yet; "
+            "that case is skipped silently rather than reported here."
+        )
+    return requested
 
 
 def parse_log_line(line: str) -> dict[str, str] | None:
