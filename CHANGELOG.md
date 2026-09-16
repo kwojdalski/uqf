@@ -2,6 +2,70 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-09-16
+
+## Overview
+
+Three weeks in which this repository stopped being a description of another
+system and became its own. The ETL framework landed in full — source contract,
+generic bounded-worker shell, coverage ledger, continuous feeders, event tape,
+job graph — alongside a React desk application, an Airflow provider that does
+not require Airflow, and a nine-module split of the orchestrator. The
+reimplementation question bank went from open to **110 answered, 0 open**, and
+the drift ledger was closed: A-02/A-03 record that canonical is frozen and this
+tree is the primary lineage now.
+
+The through-line in the defects found was **things that existed and did
+nothing**. `docs/man.q` had never loaded in its life (a bare `\d` in a string
+aborts the file), so its 78 registrations existed nowhere at runtime. The
+operational-docs CI gate died on an import before checking anything, so master
+was red for it and nobody could tell. `check_q_traps` skipped untracked files —
+exactly where a new-file bug lives. `.qwcfg.set_layers` populates three of four
+documented config layers and is called only by tests. Each is now either fixed
+or documented as the narrower thing it actually is.
+
+## Changes by area
+
+**`src/etl/` (new).** The framework the four-part series specified: `.qsrc`
+source contract with parameterised q lambdas and environment-only credentials,
+`.qbw` generic bounded worker, `.qcov` append-only coverage ledger with
+half-open intervals and `source_version` provenance, `.qcont` continuous
+feeders with dataset freshness, `.qcoer` shared text coercion, `.qlog` four
+levels over TorQ's `.lg`, `.qhb` per-worker heartbeat, and `.qdag` — a job
+graph that derives its edges from the three registries rather than re-declaring
+them, so a DAG can be ordered and drawn in pure q.
+
+**`src/market_data/`.** The event tape (#46) and the features over it: VPIN on
+equal-volume buckets, trade arrival rate, signed and cumulative trade flow,
+cancel-to-trade ratio. `large_trade_ratio` (#27) was unparked by taking a
+*quantile* rather than an invented size threshold, shipped alongside
+`large_trade_volume_share` because the count share is pinned near `1-q` by
+construction and mostly restates its own input.
+
+**`python/`.** A React desk and operations application (#120) over a FastAPI
+BFF; `uqf_airflow_provider` that reads q's status files rather than calling
+into q, with Airflow imported lazily so the package is testable without it;
+`torq_orchestrator`'s `core.py` split into nine modules behind a facade that
+defines nothing.
+
+**Gates.** Eleven now, several of which caught their own author on the first
+run: `check_q_traps` (10 rules for q constructs that return a wrong answer
+rather than erroring), `check_hook_scopes`, `check_env_reference`,
+`check_etl_layering`, the contract-surface export and its baseline check, the
+generated `man.q`, `processes.md`, `pipeline_dag.q` and decision register, and
+the requirement-id citation check.
+
+**`docs/`.** Reorganised into the five-way taxonomy (`guides/`,
+`architecture/`, `reference/`, `decisions/`, `integrations/`) with the rule
+stated: the category is what a document is *for*. 110 generated decision pages,
+a machine-checked environment reference, and `man.q` regenerated from source —
+78 functions to 422, with a coverage ratchet.
+
+**`tests/`.** 843 q tests and 382 Python. The 113 `@eg` examples in the qDoc
+blocks are now executed, which found 21 wrong — eleven documenting an atom
+where the function returns a one-element vector, three overstating precision,
+and one that no environment could ever have satisfied.
+
 ## stable/2026-08-23
 
 ## Overview
