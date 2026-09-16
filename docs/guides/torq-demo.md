@@ -19,7 +19,7 @@ pricing library's q-IPC client) - this has nothing to do with pricing, and
 keeping it separate keeps `uqf_client` itself down to its one real
 dependency (`kola`).
 
-See [docs/torq/README.md](torq/README.md) for diagrams of the current
+See [docs/integrations/torq/README.md](torq/README.md) for diagrams of the current
 process topology, table-level data pipeline, and config-generation flow.
 
 ## Quick start

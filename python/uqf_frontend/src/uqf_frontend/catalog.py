@@ -174,7 +174,7 @@ TABLES: dict[str, Table] = {
             description="Per-event order/trade tape: add, cancel and trade events with the "
             "aggressor side on a trade. A superset of trades, so a tape filtered to "
             "action='trade' is trade-shaped. Sorted ascending by time by contract - see "
-            "docs/event-tape.md",
+            "docs/architecture/event-tape.md",
             columns={
                 "time": _TS,
                 "sym": _SYM,

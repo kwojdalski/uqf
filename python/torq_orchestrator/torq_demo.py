@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """torq_demo.py - thin backward-compatible shim over
-src/torq_orchestrator/cli.py's Typer app (see docs/torq-demo.md).
+src/torq_orchestrator/cli.py's Typer app (see docs/guides/torq-demo.md).
 
 The CLI itself now lives in the installable package so it can also be
 reached as the shorter `torq-demo` script entry point (pyproject.toml

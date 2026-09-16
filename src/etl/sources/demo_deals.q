@@ -56,7 +56,7 @@ time_field:`deal_time
 / it is only correct if the source guarantees uniqueness, and a source that
 / reuses ids after a purge would silently merge unrelated rows. That choice
 / is per-source, which is why the key is declared here rather than inferred
-/ - see docs/restatement-design.md §2.1.
+/ - see docs/architecture/restatement-design.md §2.1.
 row_key:`deal_id
 
 / The zone deal_time is expressed in (L-06).

@@ -2,7 +2,7 @@
 
 Backend-for-frontend over the uqf TorQ gateway. Implements phases **B0**
 through **B3** of
-[`docs/frontend-requirements.md`](../../docs/frontend-requirements.md).
+[`docs/reference/frontend-requirements.md`](../../docs/reference/frontend-requirements.md).
 
 ## What this is
 

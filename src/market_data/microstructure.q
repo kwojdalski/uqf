@@ -443,7 +443,7 @@ ofi_autocorrelation:{[ofi_series;window]
 / ======================================================= EVENT TAPE
 / .
 / Features over the order/trade event tape (issue #46). Shape and the
-/ decision behind it: docs/event-tape.md. Unlike the Tier 1 functions
+/ decision behind it: docs/architecture/event-tape.md. Unlike the Tier 1 functions
 / above, which take whole COLUMNS from a quotes snapshot table, these take
 / the tape TABLE - because every one of them filters on `action`, and a
 / caller splitting the table into columns first would have to do that
@@ -490,7 +490,7 @@ require_tape:{[tape]
          ". An unmatched action makes every trade-based ratio report on an empty set rather than erroring"];
     ts:exec time from tape;
     if[not ts~asc ts;
-        '"require_tape: tape is not sorted ascending by time - a rolling window over an unsorted tape returns a plausible wrong number rather than erroring (docs/event-tape.md)"];
+        '"require_tape: tape is not sorted ascending by time - a rolling window over an unsorted tape returns a plausible wrong number rather than erroring (docs/architecture/event-tape.md)"];
     1b}
 
 / Signed trade flow: the net direction of aggressive volume (ROADMAP #19).
@@ -651,7 +651,7 @@ empty_buckets:{[] ([] bucket:`long$(); end_time:`timestamp$();
 / The paper classifies volume with BULK VOLUME CLASSIFICATION - a normal CDF
 / over price changes - because most tapes do not say who was the aggressor,
 / so buy and sell volume has to be INFERRED. This tape carries the aggressor
-/ side (docs/event-tape.md), so the classification is exact and BVC is not
+/ side (docs/architecture/event-tape.md), so the classification is exact and BVC is not
 / needed. That makes these numbers cleaner than a BVC-based VPIN, not
 / comparable-but-different: same definition, better inputs.
 / .

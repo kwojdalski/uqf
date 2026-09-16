@@ -1,7 +1,7 @@
 / worker_runtime.q - retry classification, dry-run, and the authority split
 / (.qwrt).
 / .
-/ Implements requirements ETL-13 to ETL-17 of docs/etl-framework-requirements.md,
+/ Implements requirements ETL-13 to ETL-17 of docs/reference/etl-framework-requirements.md,
 / and the retry decisions recorded on issues #71/#72 (question-bank M-04,
 / M-05).
 / .

@@ -99,7 +99,7 @@ If there's nothing to commit (e.g. re-running after the tag already existed), sk
 
 ### 6. Refresh the decision register
 
-`docs/decisions.md` is derived from the GitHub `decision` issues, so it goes
+`docs/decisions/README.md` is derived from the GitHub `decision` issues, so it goes
 stale silently whenever a question is answered in a comment. A snapshot is
 the right moment to catch that, because the tag is what someone will clone.
 
@@ -109,7 +109,7 @@ python3 scripts/build_decision_log.py
 
 If it changes the file, commit it before tagging:
 ```bash
-git add docs/decisions.md && git commit -m "Refresh the decision register for stable/YYYY-MM-DD"
+git add docs/decisions/README.md && git commit -m "Refresh the decision register for stable/YYYY-MM-DD"
 ```
 
 If `gh` is unauthenticated or offline the script exits non-zero - say so in the

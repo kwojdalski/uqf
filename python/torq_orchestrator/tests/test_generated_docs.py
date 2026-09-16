@@ -6,7 +6,7 @@ source and the document disagree, **the source is right by definition**.
 
 These tests exist because the document is worthless if nothing notices it
 going stale, and that is not hypothetical here: the hand-written
-`docs/torq/README.md` listed uqf's processes in prose and had already lost
+`docs/integrations/torq/README.md` listed uqf's processes in prose and had already lost
 `tap1`, which had been in the registry since the tap pipeline landed. Nobody
 noticed, because prose cannot fail.
 """
@@ -21,7 +21,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 GENERATOR = REPO / "scripts" / "generate_operational_docs.py"
-GENERATED = REPO / "docs" / "torq" / "processes.md"
+GENERATED = REPO / "docs" / "integrations" / "torq" / "processes.md"
 
 _spec = importlib.util.spec_from_file_location("gen_ops_docs", GENERATOR)
 assert _spec and _spec.loader
@@ -126,7 +126,7 @@ def test_the_generator_refuses_when_the_edges_disagree(monkeypatch):
 
 
 def test_the_vendored_count_is_read_not_remembered():
-    """`docs/torq/README.md` says "the vendored 14-process stack" in prose.
+    """`docs/integrations/torq/README.md` says "the vendored 14-process stack" in prose.
 
     The real count is whatever `process.csv` holds, and a number in prose is
     a number nobody re-counts. This asserts the generator reports the read
@@ -140,7 +140,7 @@ def test_the_vendored_count_is_read_not_remembered():
 
 
 def test_the_prose_architecture_doc_is_consistent_with_the_registry():
-    """`docs/torq/README.md` is authored — diagrams and explanation — but the
+    """`docs/integrations/torq/README.md` is authored — diagrams and explanation — but the
     process names in it are facts, and facts in prose go stale.
 
     This is the check that would have caught the missing `tap1`. It is
@@ -149,10 +149,11 @@ def test_the_prose_architecture_doc_is_consistent_with_the_registry():
     so the right gate is one that verifies its facts, not one that overwrites
     its wording.
     """
-    readme = (REPO / "docs" / "torq" / "README.md").read_text()
+    readme = (REPO / "docs" / "integrations" / "torq" / "README.md").read_text()
     missing = [p.procname for p in PIPELINES if not re.search(rf"\b{p.procname}\b", readme)]
     assert not missing, (
-        f"docs/torq/README.md does not mention {missing}; it is authored prose, so add "
+        f"docs/integrations/torq/README.md does not mention {missing}; it is "
+        f"authored prose, so add "
         f"them there by hand — or if the diagram deliberately omits a process, say so "
         f"in the text and this test will still fail, which is the prompt to reconsider"
     )

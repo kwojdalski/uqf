@@ -1,6 +1,6 @@
 """Backend-for-frontend over the uqf TorQ gateway.
 
-Implements phase B0 of docs/frontend-requirements.md: a thin server-side API
+Implements phase B0 of docs/reference/frontend-requirements.md: a thin server-side API
 layer in front of the gateway, reusing the kola IPC pattern already proven in
 this repo, with validated and genuinely parameterised query construction.
 

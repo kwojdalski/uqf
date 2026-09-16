@@ -1,7 +1,7 @@
 """Operational views: the gateway's own state, and the fleet's query log.
 
 All three sources already exist and need no q-side work (see the access-path
-table in docs/frontend-requirements.md). Two of them are read from the
+table in docs/reference/frontend-requirements.md). Two of them are read from the
 gateway *process itself* rather than routed to a backend tier, which still
 respects the gateway-only query boundary - the gateway is the thing being
 asked about.

@@ -34,7 +34,7 @@ hook retains its existing configuration.
 `python3 scripts/build_decision_log.py --check` needs GitHub access, so it
 runs in CI instead of during every local commit. After an answer or issue
 body changes, run `python3 scripts/build_decision_log.py` from an authenticated
-checkout, inspect `docs/decisions.md`, and commit the regenerated snapshot.
+checkout, inspect `docs/decisions/README.md`, and commit the regenerated snapshot.
 The check compares against live issue data; an API failure also fails it.
 No manual changes to generated text are needed.
 

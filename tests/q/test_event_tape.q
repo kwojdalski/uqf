@@ -1,5 +1,5 @@
 // test_event_tape.q - the event tape shape and the two features it unblocks
-// (issue #46). Contract and rationale: docs/event-tape.md.
+// (issue #46). Contract and rationale: docs/architecture/event-tape.md.
 //
 // Load src/init.q, src/etl/core/source_contract.q,
 // src/etl/sources/demo_events.q, tests/lib/qunit.q and tests/lib/testutil.q

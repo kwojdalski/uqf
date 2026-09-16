@@ -1,7 +1,7 @@
 # TorQ demo architecture
 
 Diagrams for the running state of the TorQ Finance Starter Pack demo (see
-[docs/torq-demo.md](../torq-demo.md) for how to actually start/stop/query
+[docs/guides/torq-demo.md](../torq-demo.md) for how to actually start/stop/query
 it). Reflects what `torq-demo list processes` shows today: the vendored
 14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
