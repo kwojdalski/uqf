@@ -124,11 +124,11 @@ freshness:{[worker]
 
 / ----------------------------------------------------- DATASET FRESHNESS
 
-/ worker -> the dataset it feeds (bank question E-22, answered on #62).
+/ worker -> the dataset it feeds (ETL-22, decided on #62).
 / .
-/ The one dict E-22 needed. It is the only registry continuous workers
+/ The one dict ETL-22 needed. It is the only registry continuous workers
 / have, and it is deliberately NOT a contract: registering says which
-/ dataset a tailer feeds, nothing about how it must behave. E-24's
+/ dataset a tailer feeds, nothing about how it must behave. ETL-24's
 / "no enforced lifecycle for continuous workers" stands.
 feeds:(`symbol$())!`symbol$()
 
@@ -140,7 +140,7 @@ register_feeder:{[worker;dataset]
 
 feeders_of:{[dataset] key[feeds] where value[feeds]=dataset}
 
-/ How current is a DATASET, across every worker that feeds it (E-22)?
+/ How current is a DATASET, across every worker that feeds it (ETL-22)?
 / .
 / A dataset is only as fresh as its SLOWEST feeder. Three tailers with
 / cursors at 09:41, 09:41 and 09:12 mean the dataset is current to 09:12,
@@ -156,7 +156,7 @@ feeders_of:{[dataset] key[feeds] where value[feeds]=dataset}
 / .
 / Still not a completeness claim, and the payload says so. This aggregates
 / "seen up to here" across feeders; it does not say everything before that
-/ point is published. That distinction is E-03's, and it survives
+/ point is published. That distinction is ETL-03's, and it survives
 / aggregation unchanged.
 / @return dict of dataset, cursor (min), lag (max), laggard, feeders, and
 /   is_completeness_claim (always 0b)
