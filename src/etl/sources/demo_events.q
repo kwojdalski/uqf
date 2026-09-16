@@ -2,7 +2,7 @@
 / (.qsevt).
 / .
 / The ingestion half of issue #46. Shape and rationale in docs/event-tape.md;
-/ this file is the E-12 source declaration for it.
+/ this file is the ETL-12 source declaration for it.
 / .
 / SYNTHETIC BY DESIGN (A-04)
 / .
@@ -49,7 +49,7 @@ time_zone:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
-/ Parameterised, never concatenated (ETL-08 / F-14). Half-open
+/ Parameterised, never concatenated (ETL-08 / FE-14). Half-open
 / [range_from;range_to) per ETL-08 - >= on the lower bound and < on the
 / upper, so a boundary event is published exactly once.
 query:{[h;range_from;range_to]

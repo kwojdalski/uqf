@@ -22,7 +22,7 @@ tape:{[actions;sides;sizes]
         order_id:"j"$til count actions;
         pip_factor:(count actions)#10000j)}
 
-/ --- the shape is a registered source under the E-12 contract ------------
+/ --- the shape is a registered source under the ETL-12 contract ------------
 
 test_the_event_source_is_registered_on_load:{[t]
     .qunit.assertEquals[`demo_events in .qsrc.registered[];1b;"loading the source file registers it, so declaration and implementation cannot drift"]};
@@ -160,5 +160,77 @@ test_grouped_ratios_match_the_ungrouped_one_for_a_single_group:{[t]
 
 test_the_grouped_form_also_validates_its_tape:{[t]
     .qunit.assertError[{.qmicro.cancel_to_trade_ratio_by[x;0Nn;enlist `sym]};`time xdesc .evttest.tape[`cancel`trade`add;1 1 1;3#1000f];"every entry point checks the precondition, not just the scalar one"]};
+
+/ --- the worker over this source (#124's second worker) -----------------
+
+/ The point of the generic shell: this worker is 47 lines, of which the
+/ contract globals are most, and it inherits coverage, retry, dry-run,
+/ resumption and logging without restating any of it.
+
+beforeNamespace_worker:{[]
+    setenv[`UQFSTATUSDIR;"build/test-status"];
+    system"mkdir -p build/test-status";
+    }
+
+setUp_worker:{[]
+    .testutil.reset_coverage_ledger[];
+    .qwcfg.reset[];
+    .qwcfg.set_layers[()!();()!();()!()];
+    setenv[`UQF_DRY_RUN;""];
+    setenv[`UQF_SOURCE_CRED_DEMO_EVENTS;""];
+    .qbfstate.release_lock `demo_events_backfill;
+    .qbfstate.clear_checkpoint `demo_events_backfill;
+    `event_tape set 0#.qsevt.fixture[];
+    }
+
+tearDown_worker:{[] .qevbf.cleanup[];}
+
+espec:{[from_n;to_n] `source_version`range_from`range_to!(`v1;.evttest.d from_n;.evttest.d to_n)}
+
+test_the_worker_satisfies_the_bounded_contract:{[t]
+    .qunit.assertEquals[.qevbf.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies ETL-01 in full"]};
+
+test_the_worker_publishes_the_windowed_events:{[t]
+    .qevbf.init .evttest.espec[0;10];
+    r:.qevbf.run[];
+    .qunit.assertEquals[(r`state;r`rows_published;count value `event_tape);(`completed;10;10);"ten seconds of a ten-event tape, published once each"]};
+
+/ Inherited from the shell, not restated in the worker: an already-covered
+/ range is idle, and idle is a success (C-07).
+test_a_second_run_is_idle:{[t]
+    .qevbf.init .evttest.espec[0;10];
+    .qevbf.run[];
+    .qunit.assertEquals[(.qevbf.run[])`state;`idle;"coverage skipping comes free with the shell"]};
+
+test_the_worker_honours_dry_run:{[t]
+    setenv[`UQF_DRY_RUN;"true"];
+    .qevbf.init .evttest.espec[0;10];
+    .qevbf.run[];
+    setenv[`UQF_DRY_RUN;""];
+    .qunit.assertEquals[(count value `event_tape;count value `etl_coverage);(0;0);"ETL-14 comes free too - nothing published, no coverage staged"]};
+
+/ The two workers must not share state. They have separate namespaces and
+/ separate `progress` globals for exactly this reason.
+test_the_two_workers_have_separate_state:{[t]
+    .qevbf.init .evttest.espec[0;10];
+    .qunit.assertEquals[(.qevbf.worker_name;.qddbf.worker_name);(`demo_events_backfill;`demo_deals_backfill);"two workers in one process, two sets of accumulators"]};
+
+/ The declared width is hourly, but the fixture's range is ten SECONDS, so
+/ the single window is clipped to the range - the final window is never
+/ extended past to_ts (ETL-18). The first draft of this test asserted the
+/ window was an hour wide and failed, which is the clipping working: a
+/ window running past the requested range would record coverage for a range
+/ nobody asked for.
+test_the_worker_uses_its_own_window_width:{[t]
+    .qunit.assertEquals[.qbw.declaration[`demo_events_backfill]`width;0D01:00:00;"an event tape is denser than a deal feed, so its windows are hourly, not daily"]};
+
+test_a_short_range_gives_one_clipped_window:{[t]
+    .qevbf.init .evttest.espec[0;10];
+    w:first .qevbf.plan 0Np;
+    .qunit.assertEquals[w`range_to;.evttest.d 10;"the final window is clipped to the range, never extended past it"]};
+
+test_a_long_range_is_split_at_the_declared_width:{[t]
+    .qevbf.init `source_version`range_from`range_to!(`v1;.evttest.d 0;(.evttest.d 0)+0D03:00:00);
+    .qunit.assertEquals[count .qevbf.plan 0Np;3;"three hours at one hour each"]};
 
 \d .

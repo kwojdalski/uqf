@@ -31,9 +31,11 @@
 \l src/etl/core/worker_runtime.q
 \l src/etl/core/continuous_state.q
 \l src/etl/core/source_contract.q
+\l src/etl/core/bounded_worker.q
 \l src/etl/sources/demo_deals.q
 \l src/etl/sources/demo_events.q
 \l src/etl/workers/demo_deals_backfill.q
+\l src/etl/workers/demo_events_backfill.q
 \l tests/lib/etl_test_doubles.q
 \l tests/q/reference_worker.q
 
