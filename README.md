@@ -1,10 +1,16 @@
 # uqf
 
-A q/kdb+ library of quantitative-finance functions **strictly scoped to
-electronic FX (eFX)**: covered-interest-rate-parity forwards and swap
-points, synthetic cross-rate order books, Garman-Kohlhagen FX option
-pricing and Greeks, FX position risk (P&L, carry, VaR), and eFX execution
-analytics (markouts, slippage, effective spread, fill/reject ratios).
+A q/kdb+ tree covering the span of an electronic FX (eFX) data platform:
+the **data engineering** that lands and backfills market data, the
+**quantitative library** that prices and measures it, the **data
+processing** that reshapes raw venue feeds into the shapes analytics
+expects, and the **operational tooling** — process orchestration, an HTTP
+gateway and a browser application — that runs the whole thing as a fleet.
+
+These are separate components with separate contracts, not one library with
+extras bolted on. See [Components](#components) for what each is and where
+it lives; the quantitative library is described under
+[Quant modules](#quant-modules).
 
 Every function has a corresponding unit test written against the vendored
 [qUnit](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)
@@ -14,7 +20,8 @@ framework - see [Testing](#testing).
 
 - [Requirements](#requirements) — KDB-X, and why there is no fallback interpreter
 - [Quick start](#quick-start) — load it and price something
-- [Modules](#modules) — what each `src/` file is for, with its namespace and tests
+- [Components](#components) — what this tree contains, and which part owns what
+- [Quant modules](#quant-modules) — each `src/` pricing file, its namespace and tests
   - [Conventions](#conventions) — quoting, sign, pip factors, naming
 - [Further reading](#further-reading) — the `docs/` map and component READMEs
 - [Browser application](#browser-application) — the React desk and operations app
@@ -51,14 +58,34 @@ q).qexec.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 
 Each module loads into its own flat namespace after loading `src/init.q` -
 `.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
-`.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef` (see [Modules](#modules)
+`.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef` (see [Quant modules](#quant-modules)
 for which file maps to which namespace). Kept single-level throughout rather than
 nested under a shared parent (e.g. not `.q.options`). This began as a
 portability constraint and is now a convention the tree keeps: the
 filename-to-namespace tie is what the naming auditor checks and what
 `docs/man.q`'s registry is generated against.
 
-## Modules
+## Components
+
+Six of them, each with its own contract and its own place in `docs/`. A
+change usually belongs to exactly one.
+
+| Component | Where | What it does |
+|---|---|---|
+| **Data engineering** | [`src/etl/`](src/etl) | The pipeline framework: bounded and continuous workers, a bitemporal coverage ledger, run identity, IO managers, source contracts, and a job graph derived from declared inputs and outputs. Asset-oriented, in the sense [the philosophy note](docs/architecture/pipeline-philosophy.md) sets out |
+| **Quant library** | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. [Detailed below](#quant-modules) |
+| **Data processing** | [`src/market_data/`](src/market_data) | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw |
+| **Fleet and orchestration** | [`scripts/`](scripts), [`python/torq_orchestrator/`](python/torq_orchestrator) | The TorQ demo stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
+| **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`python/uqf_client/`](python/uqf_client), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, a q client, and the React desk and operations app |
+| **Reference data model** | [`env/`](env/README.md) | Typed table shapes for a broader eFX system — market data, positions, predictions, orders, routing, an economic calendar — as scaffolding this library's functions could sit inside |
+
+Authority is split deliberately between them: q and TorQ own process
+startup, source reads and coverage; Airflow owns ordering, retries and
+alerting. Neither infers the other's facts from log text. That rule, and
+the others the tree is built on, are written down in
+[the pipeline philosophy](docs/architecture/pipeline-philosophy.md).
+
+## Quant modules
 
 Each file loads into its own flat namespace. Every module has a matching
 test file, and every function carries a [qDoc](#documentation) block with
@@ -82,10 +109,9 @@ table below only says what each module is *for*.
 | [`integrations/data.q`](src/integrations/data.q) | `.qdata` | external data access | [tests](tests/q/test_data.q) |
 | [`examples/example_defaults.q`](src/examples/example_defaults.q) | `.qexdef` | shared example inputs used by docstrings and demos | — |
 
-[`src/etl/`](src/etl) is a separate concern from the pricing library: the
-ingestion framework (DAG, workers, backfill state, coverage, IO manager).
-See [pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md)
-for what it has and lacks, and
+The data-engineering component is documented separately: see
+[pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md)
+for what `src/etl/` has and lacks, and
 [etl-framework-requirements.md](docs/reference/etl-framework-requirements.md)
 for the contract CI holds it to.
 
