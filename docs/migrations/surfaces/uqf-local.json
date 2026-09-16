@@ -796,6 +796,28 @@
       },
       {
         "kind": "function",
+        "name": "ledger_path",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "lock_path",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "lock_wait",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
         "name": "materialisations_of",
         "params": [
           "id"
@@ -813,6 +835,22 @@
           "to_ts"
         ],
         "rank": 5
+      },
+      {
+        "kind": "function",
+        "name": "persist",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "reload",
+        "params": [
+          ""
+        ],
+        "rank": 1
       },
       {
         "kind": "function",
@@ -880,6 +918,17 @@
       },
       {
         "kind": "function",
+        "name": "supersede_locked",
+        "params": [
+          "ds",
+          "version",
+          "from_ts",
+          "to_ts"
+        ],
+        "rank": 4
+      },
+      {
+        "kind": "function",
         "name": "valid_at",
         "params": [
           "ds",
@@ -887,6 +936,15 @@
           "as_of"
         ],
         "rank": 3
+      },
+      {
+        "kind": "function",
+        "name": "with_lock",
+        "params": [
+          "f",
+          "args"
+        ],
+        "rank": 2
       }
     ],
     "qdag": [

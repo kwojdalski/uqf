@@ -86,6 +86,24 @@ Preserve the distinction between two worker shapes:
   bind historical correctness to an rdb-only handle: completion data moves
   after EOD.**
 
+  > **NOT IMPLEMENTED, and deliberately so for now.** The ledger is durable
+  > and cross-process as of the persistence layer in `src/etl/core/coverage.q`
+  > — it round-trips to a file beside the checkpoints and every `attach`
+  > reloads it — but it is *not* tiered through the tickerplant into `rdb`
+  > and `hdb`, and no read here goes via a gateway.
+  >
+  > The obstacle is specific rather than effort: a tickerplant stream is
+  > append-only, and D-11's `supersede` **updates** rows to stamp
+  > `superseded_at`. Tiering therefore requires supersession to be re-modelled
+  > as an *event* that readers compose, which is a redesign of the bitemporal
+  > layer rather than a change of storage. Doing it as a side effect of a
+  > durability fix would have been the wrong trade.
+  >
+  > What this costs today: coverage is single-host, and does not migrate at
+  > EOD. What it does *not* cost: correctness within a host, which is what
+  > ETL-13's skip-what-is-covered actually depends on, and which is now
+  > verified across processes by the `q-backfill-process` lane.
+
 - **ETL-12** — Register every external source table, target mapping, required
   field and required type in the centralised source contract. Validate both
   generated fixtures and live external metadata against that same contract.

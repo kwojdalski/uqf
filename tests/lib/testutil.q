@@ -44,6 +44,12 @@ foreign_coverage_ledger:{[]
 
 reset_coverage_ledger:{[]
     ![`.;();0b;enlist `etl_coverage];
+    // The ledger is persisted now, so deleting the in-memory table is no
+    // longer a reset: the next attach or stage_completion reloads whatever
+    // the last suite left on disk. Remove the file too, or tests leak rows
+    // into each other in run order - which is the same silent cross-test
+    // dependency this helper was written to prevent.
+    @[{system"rm -f ",x};.qcov.ledger_path[];{[e] (::)}];
     .qcov.init_ledger[];
     value `etl_coverage};
 

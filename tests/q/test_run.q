@@ -8,6 +8,12 @@
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
 beforeNamespace_isolate:{[]
+    // Set explicitly rather than inherited from whichever suite ran first.
+    // The ledger is persisted now, so where it persists TO is this suite's
+    // business, and depending on another file's setenv is exactly the kind
+    // of ordering coupling that makes a suite pass alone and fail in a run.
+    setenv[`UQFSTATUSDIR;"build/test-status"];
+    system"mkdir -p build/test-status";
     .testutil.reset_coverage_ledger[];
     }
 
@@ -20,7 +26,11 @@ setUp_fresh:{[]
     ![`.;();0b;`etl_runs`etl_run_meta];
     .qrun.init_runs[];
     .qrun.init_meta[];
-    `etl_coverage set 0#value `etl_coverage;
+    // Clears the FILE as well as the table. Since the ledger is persisted,
+    // emptying the in-memory copy alone is not a reset - the next
+    // stage_completion reloads from disk first and resurrects the previous
+    // test's rows.
+    .testutil.reset_coverage_ledger[];
     }
 
 / --- identity ---------------------------------------------------------------
