@@ -24,20 +24,46 @@
 
 / ---------------------------------------------------------------- SCHEMA
 
-/ ASSUMED, NOT VERIFIED - see issue #60.
+/ DECIDED, and this tree is the authority (issue #60, closed 2026-09-16).
 / .
-/ etl_coverage exists only in the canonical Bitbucket tree, which is
-/ unreachable from here, so these columns are inferred from what ETL-07/ETL-08/
-/ ETL-09 require plus the frontend requirements' description of coverage "by
-/ dataset, partition key, and time range".
+/ This block used to read "ASSUMED, NOT VERIFIED", because etl_coverage
+/ existed only in a canonical tree that could not be reached from here. That
+/ premise is gone: A-03 made this repository the primary lineage and A-02
+/ froze canonical, so there is no other schema to verify against. The shape
+/ below IS the schema, and `scripts/verify_coverage_schema.q -local 1`
+/ confirms the code and the table agree.
 / .
-/ Note that description mentions a PARTITION KEY, which is not in the shape
-/ below. If canonical carries one, a query filtering only on dataset and
-/ version could report a gap-ridden range as complete - the dangerous
-/ direction. One `meta etl_coverage` on the work machine settles it.
+/ ON THE PARTITION KEY, WHICH IS THE PART WORTH READING
 / .
-/ Deliberately one constant in one place: correcting it should be an edit
-/ here plus the writer's column list, not a hunt through the file.
+/ The frontend requirements describe coverage "by dataset, partition key, and
+/ time range", and there is no partition key here. That was the open worry on
+/ #60 - if a real ledger carried one, a query filtering on dataset and
+/ version alone would aggregate ACROSS partitions and report a range covered
+/ in one partition as covered everywhere.
+/ .
+/ It is deliberately absent, because coverage in this tree has no partition
+/ dimension to record. There is exactly one caller of stage_completion -
+/ .qwrt.finish_window - and it takes (dataset; source_version; range_from;
+/ range_to; rows). A bounded worker covers a WHOLE dataset for a window;
+/ nothing backfills one partition at a time. A partition-key column would
+/ hold one value per dataset and widen every signature below for nothing.
+/ .
+/ WHAT WOULD CHANGE THAT ANSWER
+/ .
+/ A worker that backfills per partition - per sym, per venue, per region.
+/ Then coverage genuinely needs the fourth dimension, and it must be a
+/ REQUIRED parameter for the same reason source_version is (ETL-09): an
+/ optional filter is one a caller forgets, and forgetting this one reports a
+/ gap-ridden range as complete.
+/ .
+/ That is not left to memory. .qbw.define refuses two workers declaring the
+/ same dataset, which is the concrete shape the problem takes - two things
+/ filling one dataset with no way to tell their coverage apart. A future
+/ per-partition worker trips that guard and has to make the decision
+/ deliberately.
+/ .
+/ Deliberately one constant in one place: changing it should be an edit here
+/ plus the writer's column list, not a hunt through the file.
 schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at
 
 / Create the ledger if absent. Append-only by contract (ETL-07) - nothing in
@@ -84,10 +110,11 @@ ledger:{[] value `etl_coverage}
 /                      rather than assumption, and it must be validated
 /                      before a single read is trusted.
 / .
-/ That second case is the one #60 is about. If a real ledger carries a
-/ partition key, every read in this file aggregates ACROSS partitions, so a
-/ range covered in one partition and empty in the others reports as
-/ COMPLETE - with no error, because every row found is valid.
+/ That second case is why this exists. A ledger another process created may
+/ have a shape this file does not expect - a partition key, say - and then
+/ every read here aggregates across whatever that column distinguishes, so a
+/ range covered for one value of it reports as COMPLETE for all of them,
+/ with no error, because every row found is valid.
 / @return the ledger table name
 / @throws error, via require_schema, when an existing ledger has a
 /   different shape
@@ -98,21 +125,25 @@ attach:{[]
     if[existed; require_schema[]];
     `etl_coverage}
 
-/ Refuse to trust a ledger whose shape is not the one this file assumes
-/ (issue #60).
+/ Refuse to trust a ledger whose shape is not the one this file declares.
 / .
-/ The point is to convert a SILENT wrong answer into a loud refusal. If the
-/ real table carries a partition key, every read here aggregates across
-/ partitions, so a range covered in one partition and empty in the others is
-/ reported COMPLETE - and nothing errors, because every row found is valid.
-/ A consumer then reads a gap-ridden range believing it is whole.
+/ Converts a SILENT wrong answer into a loud refusal. A ledger carrying an
+/ extra column that distinguishes rows - a partition key is the obvious one -
+/ makes every read here aggregate across it, so a range covered for one value
+/ reports as COMPLETE for all of them, and nothing errors because every row
+/ found is valid. A consumer then reads a gap-ridden range believing it whole.
 / .
-/ Call this from a worker's init when attached to a ledger this process did
-/ not create. It is NOT called from init_ledger: a table this file just built
-/ trivially matches, so checking there would only ever confirm itself.
+/ With #60 closed this is no longer a guard against an unknown canonical
+/ shape; it is a drift guard. The shape is decided (see the header), and this
+/ catches a ledger some other process built to a different one.
+/ .
+/ Call it from a worker's init when attaching to a ledger this process did
+/ not create - .qbw.init does, via attach. NOT called from init_ledger: a
+/ table this file just built trivially matches, so checking there would only
+/ ever confirm itself.
 / .
 / `scripts/verify_coverage_schema.q` is the same check as a standalone
-/ command, for settling #60 without starting a worker.
+/ command, against a local table or a remote handle.
 / @return 1b when the live shape matches
 / @throws error naming the difference, and what it would silently do
 require_schema:{[]
@@ -121,14 +152,14 @@ require_schema:{[]
     extra:live where not live in schema;
     if[count missing;
         '"require_schema: etl_coverage is missing ",(", " sv string missing),
-         " - the assumed shape (see #60) is wrong, and reads here would fail or return nulls"];
+         " - this ledger was built to a different shape, and reads here would fail or return nulls"];
     if[count extra;
         / Kept short deliberately: q truncates a thrown string at 255 bytes,
         / and the consequence is the part worth keeping. The long form lives
-        / in this function's own comment above and in #60.
+        / in this function's own comment above.
         '"require_schema: etl_coverage has unexpected column(s) ",
          (", " sv string extra),
-         " - a partition key here means reads aggregate ACROSS partitions and report a gap-ridden range as complete. See #60"];
+         " - an extra column that distinguishes rows makes reads aggregate across it and report a gap-ridden range as complete"];
     1b}
 
 / -------------------------------------------------------------- INTERVALS

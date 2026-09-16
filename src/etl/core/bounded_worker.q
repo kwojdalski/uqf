@@ -62,6 +62,28 @@ define:{[worker;cfg]
     if[not (cfg`width)>0D00:00;
         '"define: ",string[worker],"'s width must be positive - a zero width plans infinitely many empty windows"];
     .qsrc.declaration cfg`source;
+
+    / Refuse two workers filling one dataset (#60).
+    / .
+    / Coverage has no partition dimension: stage_completion records
+    / (dataset; source_version; range; rows), so two workers writing the
+    / same dataset produce coverage rows nothing can tell apart. If they
+    / cover different RANGES that composes correctly and is the intended
+    / design; if they cover different PARTITIONS of the same range - per
+    / sym, per venue, per region - their coverage wrongly composes and a
+    / range covered for one partition reads as covered for all.
+    / .
+    / Nothing distinguishes those two cases at registration, so the
+    / conservative refusal is the right one: it forces the second case to be
+    / a deliberate decision (add the partition dimension to .qcov, as a
+    / REQUIRED parameter per ETL-09) rather than an accident nobody notices.
+    clash:(key config) where (value config)[;`dataset]=cfg`dataset;
+    clash:clash except worker;
+    if[count clash;
+        '"define: ",string[worker]," declares dataset ",string[cfg`dataset],
+         ", already claimed by ",", " sv string clash,
+         " - coverage has no partition dimension, so two workers writing one dataset produce rows nothing can tell apart"];
+
     config[worker]:cfg;
     worker}
 

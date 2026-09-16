@@ -186,4 +186,42 @@ test_a_contract_breaking_source_fails_the_window:{[t]
     .qsrc.sources[`demo_deals]:@[.qsrc.sources`demo_deals;`fixture;:;orig];
     .qunit.assertEquals[0=count value `etl_coverage;1b;"a source missing declared columns records no coverage, rather than publishing nulls as complete"]};
 
+/ --- the shell's own guards (#124, #60) ---------------------------------
+
+/ Coverage has no partition dimension, so two workers writing one dataset
+/ produce rows nothing can tell apart. If they cover different RANGES that
+/ composes correctly and is the design; if they cover different PARTITIONS
+/ of one range their coverage wrongly composes and a range covered for one
+/ partition reads as covered for all. Nothing distinguishes those at
+/ registration, so the conservative refusal forces the second case to be a
+/ deliberate decision.
+test_two_workers_may_not_claim_one_dataset:{[t]
+    .qunit.assertError[{.qbw.define[`clashing_worker;x]};
+        `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);
+        "a second worker on one dataset would produce coverage rows nothing can tell apart (#60)"]};
+
+test_the_clash_error_names_the_existing_claimant:{[t]
+    err:@[{.qbw.define[`clashing_worker;x]; ""};
+        `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);{x}];
+    .qunit.assertEquals[err like "*demo_deals_backfill*";1b;"the refusal names who already owns the dataset"]};
+
+/ Redefining the SAME worker must stay legal - the shell's define is called
+/ at load, and reloading a worker file is ordinary.
+test_a_worker_may_redeclare_itself:{[t]
+    .qunit.assertEquals[
+        .qbw.define[`demo_deals_backfill;`ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D)];
+        `demo_deals_backfill;
+        "reloading a worker file re-runs its own define, which must not trip the clash guard"]};
+
+/ The two real workers declare distinct datasets, so the guard is satisfied
+/ by the tree as it stands rather than by luck.
+test_the_two_shipped_workers_claim_distinct_datasets:{[t]
+    ds:(value .qbw.config)[;`dataset];
+    .qunit.assertEquals[count[ds];count distinct ds;"every registered worker owns its dataset alone"]};
+
+test_a_zero_width_is_refused:{[t]
+    .qunit.assertError[{.qbw.define[`zero_width;x]};
+        `ns`source`dataset`width!(`.qddbf;`demo_deals;`something_else;0D00:00);
+        "a zero width plans infinitely many empty windows"]};
+
 \d .

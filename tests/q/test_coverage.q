@@ -180,7 +180,12 @@ test_a_partition_key_is_refused_rather_than_ignored:{[t]
     / restore via the helper, which DELETES first - calling init_ledger here
     / would leave the wrong-shaped table in place for every later suite.
     .testutil.reset_coverage_ledger[];
-    .qunit.assertEquals[r like "*partition*";1b;"an unexpected column is refused, and the message says what it would silently do"]};
+    / Asserts the offending COLUMN is named, not that the message contains a
+    / particular English word. The first version matched "*partition*" - my
+    / own prose - and failed the moment the wording improved, which is a
+    / test coupled to phrasing rather than to behaviour. The column name is
+    / what an operator actually needs.
+    .qunit.assertEquals[r like "*date*";1b;"an unexpected column is refused, and the refusal names it"]};
 
 / --- attach: the guard that actually fires (#60) ---------------------------
 
@@ -208,7 +213,7 @@ test_attaching_to_a_foreign_partitioned_ledger_is_refused:{[t]
         recorded_at:`timestamp$());
     r:@[{.qcov.attach[]; ""};::;{x}];
     .testutil.reset_coverage_ledger[];
-    .qunit.assertEquals[r like "*partition*";1b;"an existing ledger of the wrong shape is refused before a single read is trusted"]};
+    .qunit.assertEquals[r like "*date*";1b;"an existing ledger of the wrong shape is refused by column name before a single read is trusted"]};
 
 test_attaching_to_a_foreign_ledger_missing_a_column_is_refused:{[t]
     `etl_coverage set ([] dataset:`symbol$(); range_from:`timestamp$();
