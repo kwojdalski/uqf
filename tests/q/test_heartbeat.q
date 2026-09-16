@@ -123,9 +123,9 @@ test_stale_cannot_report_a_worker_that_never_beat:{[t]
         "an empty table has nothing stale in it, rather than everything"]};
 
 test_never_started_comes_from_the_worker_registry:{[t]
-    / Derived from .qbw.config rather than a second list, so a worker cannot
+    / Derived from .qbw.cfgs rather than a second list, so a worker cannot
     / go unmonitored by being forgotten here.
-    ws:key .qbw.config;
+    ws:key .qbw.cfgs;
     .qunit.assertEquals[asc .qhb.never_started[];asc ws;
         "with no beats recorded, every registered worker is not-yet-started"]};
 

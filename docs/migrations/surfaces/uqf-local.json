@@ -246,6 +246,12 @@
         "rank": 3
       },
       {
+        "kind": "dict",
+        "name": "cfgs",
+        "params": [],
+        "rank": null
+      },
+      {
         "kind": "function",
         "name": "checkpoint",
         "params": [
@@ -261,12 +267,6 @@
           "worker"
         ],
         "rank": 1
-      },
-      {
-        "kind": "dict",
-        "name": "config",
-        "params": [],
-        "rank": null
       },
       {
         "kind": "function",
@@ -339,6 +339,20 @@
       },
       {
         "kind": "function",
+        "name": "normalised",
+        "params": [
+          "cfg"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "optional_cfg",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
         "name": "plan",
         "params": [
           "worker",
@@ -383,7 +397,7 @@
       },
       {
         "kind": "value",
-        "name": "required_config",
+        "name": "required_cfg",
         "params": [],
         "rank": null
       },
@@ -2106,6 +2120,70 @@
           "max_age"
         ],
         "rank": 1
+      }
+    ],
+    "qio": [
+      {
+        "kind": "dict",
+        "name": "discard",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "for_cfg",
+        "params": [
+          "cfg"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "dict",
+        "name": "memory",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "require_manager",
+        "params": [
+          "mgr"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "required",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "write",
+        "params": [
+          "mgr",
+          "target",
+          "batch"
+        ],
+        "rank": 3
+      },
+      {
+        "kind": "function",
+        "name": "write_discard",
+        "params": [
+          "target",
+          "batch"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "write_memory",
+        "params": [
+          "target",
+          "batch"
+        ],
+        "rank": 2
       }
     ],
     "qlog": [
@@ -3939,6 +4017,7 @@
     "qexec",
     "qfwd",
     "qhb",
+    "qio",
     "qlog",
     "qmicro",
     "qopt",

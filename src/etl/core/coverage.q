@@ -92,6 +92,14 @@ schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at`su
 / a plausible answer instead of erroring.
 still_current:0Wp
 
+/ Create the root ledger table if it is absent, and return its name.
+/ .
+/ Inside \d .qcov a bare `etl_coverage` resolves to `.qcov.etl_coverage`, NOT
+/ the root table. Backtick forms (`etl_coverage set / insert) are absolute and
+/ hit the root; bare reads are not. Every read below therefore goes through
+/ ledger[] rather than naming the table directly.
+/ @return the ledger table name
+/ @eg .qcov.init_ledger[]
 init_ledger:{[]
     if[not `etl_coverage in tables `.;
         `etl_coverage set ([] dataset:`symbol$(); source_version:`symbol$();

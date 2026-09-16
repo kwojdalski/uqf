@@ -35,7 +35,24 @@ they are the three this tree does have.
 
 ## 2. The three real gaps
 
-### 2.1 No IO manager — compute and storage are fused
+### 2.1 ~~No IO manager~~ — CLOSED
+
+**Fixed.** `.qio` declares where output goes: a manager is a dict carrying
+`write`, defaulting to `.qio.memory` — today's in-process insert — so a worker
+that says nothing about io behaves exactly as before. `.qio.discard` writes
+nothing and reports honestly, which is what makes a pipeline runnable end to
+end without touching storage.
+
+No `read` or `exists`: nothing in this framework reads a target back through
+an abstraction, and a capability reached from no live path is the shape this
+repository keeps finding. They go in when something calls them.
+
+The original text follows, because the fusion it describes is why the seam
+exists.
+
+---
+
+### 2.1 (as written) No IO manager — compute and storage are fused
 
 `.qbw.publish` is four lines and they decide everything:
 
@@ -157,10 +174,7 @@ discovered later:
 ## 5. Recommended order, by leverage
 
 1. ~~**Asset checks in the publish path.**~~ **Done** — see §2.2.
-2. **IO manager.** Extract `publish`'s four lines behind a declared
-   `io` dict (`write`/`read`/`exists`), defaulting to today's in-memory
-   insert so nothing changes for existing workers. Unlocks testing,
-   alternative storage, and multi-target writes.
+2. ~~**IO manager.**~~ **Done** — see §2.1.
 3. **Run identity and materialisation metadata.** A `run_id` on the coverage
    row plus a free-form metadata dict, and a `.qrun` table recording each
    execution. Makes the ledger an event log.
