@@ -38,9 +38,9 @@
 / worker -> its configuration. `ns` is the worker's namespace symbol,
 / `source` its registered .qsrc source, `dataset` the name coverage is
 / recorded under, `width` its window size.
-config:(`symbol$())!();
+cfgs:(`symbol$())!();
 
-required_config:`ns`source`dataset`width
+required_cfg:`ns`source`dataset`width
 
 / The keys a worker MAY declare. Absent ones are filled with (::) at
 / registration, which is not tidiness - it is load-bearing.
@@ -57,7 +57,7 @@ required_config:`ns`source`dataset`width
 / INTENDED rather than emergent: registration order stops mattering, a new
 / optional key is one entry here, and no worker is handed a key it did not
 / ask for with a value it did not choose.
-optional_config:`check`io
+optional_cfg:`check`io
 
 / Declare a worker's configuration.
 / .
@@ -69,7 +69,7 @@ optional_config:`check`io
 / @param cfg dict of ns, source, dataset, width
 / @throws error naming every missing or malformed field at once
 define:{[worker;cfg]
-    missing:required_config where not required_config in key cfg;
+    missing:required_cfg where not required_cfg in key cfg;
     if[count missing;
         '"define: ",string[worker]," is missing ",", " sv string missing];
     if[not -11h=type cfg`ns;
@@ -81,7 +81,7 @@ define:{[worker;cfg]
     / Validate the io manager HERE, not at first write. A worker with a
     / malformed manager should fail at declaration, not halfway through a
     / backfill having already fetched a window it is now unable to store.
-    .qio.for_config cfg;
+    .qio.for_cfg cfg;
     .qsrc.declaration cfg`source;
 
     / Refuse two workers filling one dataset (#60).
@@ -98,20 +98,20 @@ define:{[worker;cfg]
     / conservative refusal is the right one: it forces the second case to be
     / a deliberate decision (add the partition dimension to .qcov, as a
     / REQUIRED parameter per ETL-09) rather than an accident nobody notices.
-    clash:(key config) where (value config)[;`dataset]=cfg`dataset;
+    clash:(key cfgs) where (value cfgs)[;`dataset]=cfg`dataset;
     clash:clash except worker;
     if[count clash;
         '"define: ",string[worker]," declares dataset ",string[cfg`dataset],
          ", already claimed by ",", " sv string clash,
          " - coverage has no partition dimension, so two workers writing one dataset produce rows nothing can tell apart"];
 
-    / Normalise to the full key set before storing - see optional_config.
-    config[worker]:normalised cfg;
+    / Normalise to the full key set before storing - see optional_cfg.
+    cfgs[worker]:normalised cfg;
     worker}
 
 / Private: a config carrying every optional key, absent ones as (::).
 normalised:{[cfg]
-    missing:optional_config where not optional_config in key cfg;
+    missing:optional_cfg where not optional_cfg in key cfg;
     if[0=count missing; :cfg];
     cfg,missing!count[missing]#enlist (::)}
 
@@ -124,9 +124,9 @@ normalised:{[cfg]
 / @throws error naming the worker when define was never called for it
 / @eg .qbw.declaration `demo_deals_backfill
 declaration:{[worker]
-    if[not worker in key config;
+    if[not worker in key cfgs;
         '"declaration: ",string[worker]," has no configuration - call .qbw.define first"];
-    config worker}
+    cfgs worker}
 
 / ------------------------------------------------------- WORKER STATE
 
@@ -270,7 +270,7 @@ fetch:{[worker;from_ts;to_ts]
 publish:{[worker;batch]
     cfg:declaration worker;
     t:.qsrc.declaration[cfg`source]`target;
-    .qio.write[.qio.for_config cfg;t;batch]}
+    .qio.write[.qio.for_cfg cfg;t;batch]}
 
 / Save the cursor. Present because the contract requires it (ETL-01); the
 / write goes through .qbfstate so ETL-06's spec-binding is not

@@ -216,7 +216,7 @@ test_a_worker_may_redeclare_itself:{[t]
 / The two real workers declare distinct datasets, so the guard is satisfied
 / by the tree as it stands rather than by luck.
 test_the_two_shipped_workers_claim_distinct_datasets:{[t]
-    ds:(value .qbw.config)[;`dataset];
+    ds:(value .qbw.cfgs)[;`dataset];
     .qunit.assertEquals[count[ds];count distinct ds;"every registered worker owns its dataset alone"]};
 
 / --- the cursor is forward-only (D-09) ------------------------------------

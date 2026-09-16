@@ -246,6 +246,12 @@
         "rank": 3
       },
       {
+        "kind": "dict",
+        "name": "cfgs",
+        "params": [],
+        "rank": null
+      },
+      {
         "kind": "function",
         "name": "checkpoint",
         "params": [
@@ -261,12 +267,6 @@
           "worker"
         ],
         "rank": 1
-      },
-      {
-        "kind": "dict",
-        "name": "config",
-        "params": [],
-        "rank": null
       },
       {
         "kind": "function",
@@ -347,7 +347,7 @@
       },
       {
         "kind": "value",
-        "name": "optional_config",
+        "name": "optional_cfg",
         "params": [],
         "rank": null
       },
@@ -397,7 +397,7 @@
       },
       {
         "kind": "value",
-        "name": "required_config",
+        "name": "required_cfg",
         "params": [],
         "rank": null
       },
@@ -2131,7 +2131,7 @@
       },
       {
         "kind": "function",
-        "name": "for_config",
+        "name": "for_cfg",
         "params": [
           "cfg"
         ],

@@ -103,8 +103,8 @@ discard:(enlist `write)!enlist write_discard
 / @param cfg a worker's configuration dictionary
 / @return the manager dict
 / @throws error, via require_manager, when a declared manager is malformed
-/ @eg .qio.for_config[`ns`source`dataset`width!(`.qddbf;`s;`d;1D)]  ->  .qio.memory
-for_config:{[cfg]
+/ @eg .qio.for_cfg[`ns`source`dataset`width!(`.qddbf;`s;`d;1D)]  ->  .qio.memory
+for_cfg:{[cfg]
     if[not `io in key cfg; :memory];
     m:cfg`io;
     if[(::)~m; :memory];

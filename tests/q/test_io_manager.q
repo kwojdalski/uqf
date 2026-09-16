@@ -62,16 +62,16 @@ test_a_config_without_io_gets_memory:{[t]
     / The property that makes this seam safe to introduce: a declaration
     / saying nothing about io behaves exactly as it did before the seam
     / existed.
-    .qunit.assertEquals[.qio.for_config[`ns`source`dataset`width!(`.x;`s;`d;1D)];.qio.memory;
+    .qunit.assertEquals[.qio.for_cfg[`ns`source`dataset`width!(`.x;`s;`d;1D)];.qio.memory;
         "a worker that declares no manager gets the in-memory default"]};
 
 test_a_declared_manager_is_used:{[t]
     cfg:`ns`source`dataset`width`io!(`.x;`s;`d;1D;.qio.discard);
-    .qunit.assertEquals[.qio.for_config cfg;.qio.discard;
+    .qunit.assertEquals[.qio.for_cfg cfg;.qio.discard;
         "a declared manager is returned rather than the default"]};
 
 test_a_malformed_declared_manager_is_refused:{[t]
-    .qunit.assertError[{.qio.for_config x};`ns`source`dataset`width`io!(`.x;`s;`d;1D;42);
+    .qunit.assertError[{.qio.for_cfg x};`ns`source`dataset`width`io!(`.x;`s;`d;1D;42);
         "a malformed manager is refused when resolved, not when first written through"]};
 
 / --- the wiring ----------------------------------------------------------
@@ -118,7 +118,7 @@ test_a_worker_declaring_a_new_optional_key_can_register:{[t]
 
 test_every_registered_config_has_the_same_keys:{[t]
     / The invariant that keeps the table coercion harmless.
-    ks:key each value .qbw.config;
+    ks:key each value .qbw.cfgs;
     .qunit.assertEquals[count distinct ks;1;
         "every config carries the same key set, so the registry's shape is stable"]};
 
