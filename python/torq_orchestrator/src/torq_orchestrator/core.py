@@ -59,6 +59,7 @@ from torq_orchestrator.listing import (
     LISTABLE_KINDS,
     SUMMARY_COLUMNS,
     configured_ports,
+    heartbeat_states,
     list_items,
     summary_rows,  # noqa: F401
 )
@@ -189,6 +190,7 @@ __all__ = [
     "list_items",
     "SUMMARY_COLUMNS",
     "configured_ports",
+    "heartbeat_states",
     "summary_rows",
     "list_process_names",
     "next_free_port_offset",

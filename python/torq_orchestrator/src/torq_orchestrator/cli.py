@@ -113,7 +113,16 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
         # map could not be built - the reported ports are unaffected.
         ports = {}
 
-    rows = core.summary_rows(result.stdout, ports)
+    # Heartbeat state, which answers a different question from Status: the
+    # latter comes from torq.sh's PID lookup, and a hung process still has a
+    # PID. None here means monitor1 could not be reached, which is a gap in
+    # MONITORING rather than a verdict on the fleet - rendered as such below.
+    try:
+        heartbeats = core.heartbeat_states(_paths(), base_port=port)
+    except core.TorqDemoError:
+        heartbeats = None
+
+    rows = core.summary_rows(result.stdout, ports, heartbeats)
 
     table = Table(title=f"torq_demo summary (base port {port})")
     for col in core.SUMMARY_COLUMNS:
@@ -127,14 +136,31 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
         port_cell = row["Port"]
         if row["PortSource"] == "configured" and port_cell:
             port_cell = f"[dim]{port_cell}[/]"
+        # A heartbeat error is the most serious thing this table can show -
+        # the process answers ps but not its own monitor - so it is the only
+        # cell in red besides a `down` status.
+        hb = row["Heartbeat"]
+        hb_cell = {
+            "ok": "[green]ok[/]",
+            "warning": "[yellow]warning[/]",
+            "error": "[bold red]error[/]",
+            "not collected": "[dim]not collected[/]",
+        }.get(hb, hb)
         table.add_row(
             row["Time"],
             row["Process"],
             f"[{status_style}]{row['Status']}[/]" if status_style else row["Status"],
             row["PID"],
             port_cell,
+            hb_cell,
         )
     console.print(table)
+    if heartbeats is None:
+        console.print(
+            "[dim]Heartbeats not collected: monitor1 is not running (it carries "
+            "startwithall=0). Status above is a PID check, which cannot tell a "
+            "hung process from a working one.[/]"
+        )
     if any(r["PortSource"] == "configured" for r in rows):
         console.print(
             "[dim]Dimmed ports come from process.csv: that is where the process "

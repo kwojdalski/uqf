@@ -392,6 +392,63 @@ def test_summary_fills_the_port_torq_omits_for_a_stopped_process():
     assert [r["Port"] for r in rows] == ["6081", "6078", "6070"], "no row is left portless"
 
 
+def test_heartbeat_absent_is_distinguished_from_heartbeat_silent():
+    """The distinction this whole change turns on.
+
+    `None` means monitor1 could not be reached, so NOTHING is known about any
+    process. An empty dict means the collector is up and has heard from
+    nobody — a fleet-wide outage. Rendering both as a blank column would turn
+    a monitoring gap into an all-clear, or an all-clear into a panic.
+    """
+    absent = core.summary_rows(_SUMMARY_STDOUT, {}, None)
+    silent = core.summary_rows(_SUMMARY_STDOUT, {}, {})
+    assert absent[0]["Heartbeat"] == "not collected"
+    assert silent[0]["Heartbeat"] == "-"
+    assert absent[0]["Heartbeat"] != silent[0]["Heartbeat"]
+
+
+def test_heartbeat_state_is_reported_per_process():
+    rows = core.summary_rows(_SUMMARY_STDOUT, {}, {"markout1": "ok", "tap1": "error"})
+    by_name = {r["Process"]: r for r in rows}
+    assert by_name["markout1"]["Heartbeat"] == "ok"
+    assert by_name["tap1"]["Heartbeat"] == "error"
+    # dqc1 is in the stdout fixture but not in the heartbeat map: the
+    # collector is up and simply has no row for it.
+    assert by_name["dqc1"]["Heartbeat"] == "-"
+
+
+def test_a_process_can_be_up_by_pid_and_failing_by_heartbeat():
+    """The case that motivates the column.
+
+    torq.sh reports `up` from a PID lookup, and a hung process still has a
+    PID. A row showing `up` beside `error` is exactly what this is for — and
+    it must not be collapsed into one verdict.
+    """
+    rows = core.summary_rows(_SUMMARY_STDOUT, {}, {"markout1": "error"})
+    markout = next(r for r in rows if r["Process"] == "markout1")
+    assert markout["Status"] == "up"
+    assert markout["Heartbeat"] == "error"
+
+
+def test_error_wins_over_warning():
+    """A process past the error tolerance is also past the warning one, so
+    reporting the lesser would understate it."""
+    from torq_orchestrator import listing
+
+    got = listing._heartbeat_by_procname([{"procname": "a", "warning": True, "error": True}])
+    assert got == {"a": "error"}
+
+
+def test_a_heartbeat_row_without_a_procname_is_skipped():
+    """A malformed row must not become a process called empty-string."""
+    from torq_orchestrator import listing
+
+    got = listing._heartbeat_by_procname(
+        [{"procname": "", "error": True}, {"procname": "b", "error": False}]
+    )
+    assert got == {"b": "ok"}
+
+
 def test_summary_marks_a_filled_port_as_configured_not_reported():
     """A filled port is a different claim, and the row has to say which.
 
