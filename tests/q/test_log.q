@@ -15,9 +15,10 @@
 
 captured:()
 
-/ The real transport, saved before any setUp replaces it, so the one test
-/ that exercises the transport itself can put it back.
+/ The real transport and renderer, saved before any setUp replaces them, so
+/ the tests that swap one out can put it back.
 real_emit:.qlog.emit
+real_render:.qlog.render
 
 / Replace the transport's stdout write with a capture. `emit` calls -1 on
 / the fallback path; we shadow it by swapping `emit` itself for a version
@@ -105,6 +106,39 @@ test_other_levels_are_unaffected_by_debug:{[t]
     .qlog.debug[0b];
     .qlog.info[`w;"a";()!()]; .qlog.warn[`w;"b";()!()]; .qlog.err[`w;"c";()!()];
     .qunit.assertEquals[.logtest.captured[;0];`INF`WARN`ERR;"INF, WARN and ERR emit regardless of the debug switch"]};
+
+/ --- lazy rendering (bank K-02) -----------------------------------------
+
+/ The suppression check must precede rendering, because DBG is off by
+/ default and is the level a worker emits per WINDOW - a million-row
+/ backfill with debug off would otherwise render and discard one message
+/ per window.
+/ .
+/ Proved by a field value whose RENDERING throws: if the message were built
+/ before the gate, the throw would escape.
+test_a_suppressed_message_is_not_rendered:{[t]
+    `.logtest.rendered set 0b;
+    `.qlog.render set {[fields] `.logtest.rendered set 1b; "x"};
+    .qlog.dbg[`w;"expensive";(enlist `k)!enlist 1];
+    r:.logtest.rendered;
+    `.qlog.render set .logtest.real_render;
+    .qunit.assertEquals[r;0b;"debug off means the fields are never rendered, not rendered and discarded"]};
+
+test_an_emitted_message_is_rendered:{[t]
+    `.logtest.rendered set 0b;
+    `.qlog.render set {[fields] `.logtest.rendered set 1b; "x"};
+    .qlog.info[`w;"wanted";(enlist `k)!enlist 1];
+    r:.logtest.rendered;
+    `.qlog.render set .logtest.real_render;
+    .qunit.assertEquals[r;1b;"an INF message is rendered, or the gate is refusing everything"]};
+
+test_enabled_reports_the_gate:{[t]
+    .qlog.debug[0b];
+    off:.qlog.enabled `DBG;
+    .qlog.debug[1b];
+    on:.qlog.enabled `DBG;
+    .qlog.debug[0b];
+    .qunit.assertEquals[(off;on;.qlog.enabled `ERR);(0b;1b;1b);"exported so a caller can skip building an expensive field value itself"]};
 
 / --- transport detection: the bug that made every process use the fallback --
 

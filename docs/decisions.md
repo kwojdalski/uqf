@@ -15,7 +15,7 @@ and the question bank's backfill area is numbered `D-01..D-12` - one file
 holding both would put `D8` and `D-08` in adjacent tables meaning unrelated
 things.
 
-**43 answered, 67 still open** across 15 areas.
+**66 answered, 44 still open** across 15 areas.
 
 ## Answered
 
@@ -25,24 +25,37 @@ things.
 | `A-02` | Strategy & scope | canonical is frozen from here on | [#69](../../issues/69) | 2026-09-16 |
 | `A-03` | Strategy & scope | this repository is the primary lineage now | [#69](../../issues/69) | 2026-09-16 |
 | `A-04` | Strategy & scope | no — generic analogues only | [#69](../../issues/69) | 2026-09-15 |
+| `A-05` | Strategy & scope | design freely — dissolved by A-03 | [#69](../../issues/69) | 2026-09-16 |
 | `A-06` | Strategy & scope | a file listing and table `meta` dumps may come over | [#69](../../issues/69) | 2026-09-15 |
+| `A-07` | Strategy & scope | a green suite plus a running demo — and "matches a document" was never available | [#69](../../issues/69) | 2026-09-16 |
+| `A-08` | Strategy & scope | no — recording a baseline commit would be recording a fiction | [#69](../../issues/69) | 2026-09-16 |
+| `B-01` | Repository structure | adopted, and long since done | [#70](../../issues/70) | 2026-09-16 |
 | `B-02` | Repository structure | answered by #67, not by discussion | [#70](../../issues/70) | 2026-09-15 |
 | `B-03` | Repository structure | answered by #67, not by discussion | [#70](../../issues/70) | 2026-09-15 |
+| `B-05` | Repository structure | done | [#70](../../issues/70) | 2026-09-16 |
+| `B-06` | Repository structure | one root project, as a uv workspace | [#70](../../issues/70) | 2026-09-16 |
+| `B-09` | Repository structure | it stays at `scripts/torq_pipeline.q`, not `src/etl/core/` | [#70](../../issues/70) | 2026-09-16 |
 | `C-01` | ETL worker runtime & config | an enforced registry | [#71](../../issues/71) | 2026-09-15 |
 | `C-02` | ETL worker runtime & config | env > process_overrides.csv > YAML > default | [#71](../../issues/71) | 2026-09-15 |
+| `C-05` | ETL worker runtime & config | configuration reads, runtime decides | [#71](../../issues/71) | 2026-09-16 |
+| `C-07` | ETL worker runtime & config | `idle` is a success, `failed` is not | [#71](../../issues/71) | 2026-09-16 |
 | `C-09` | ETL worker runtime & config | one instance per worker, enforced by a lock file | [#71](../../issues/71) | 2026-09-15 |
 | `D-02` | Backfill semantics | overlap and dedupe on a natural key | [#72](../../issues/72) | 2026-09-15 |
 | `D-07` | Backfill semantics | row cap and wall-clock cap, whichever binds first | [#72](../../issues/72) | 2026-09-15 |
 | `D-08` | Backfill semantics | no publication, no checkpoint — retry the whole window | [#72](../../issues/72) | 2026-09-15 |
 | `D-11` | Backfill semantics | append with `source_version` | [#72](../../issues/72) | 2026-09-15 |
 | `E-01` | External sources & the source contract | a callback dict of four operations | [#73](../../issues/73) | 2026-09-15 |
+| `E-02` | External sources & the source contract | yes — registration is a declaration, and core never changes | [#73](../../issues/73) | 2026-09-16 |
 | `E-04` | External sources & the source contract | fake, generic file source, *and* a skippable ODBC adapter | [#73](../../issues/73) | 2026-09-15 |
 | `E-05` | External sources & the source contract | answered and built | [#73](../../issues/73) | 2026-09-15 |
+| `E-06` | External sources & the source contract | connection per run, opened at init; retry is in-attempt and transport-only | [#73](../../issues/73) | 2026-09-16 |
 | `E-07` | External sources & the source contract | environment only, no file, no vault — built in #99 | [#73](../../issues/73) | 2026-09-16 |
 | `E-08` | External sources & the source contract | parameterise where the driver allows, one escape function otherwise | [#73](../../issues/73) | 2026-09-15 |
 | `E-09` | External sources & the source contract | answered by A-04 | [#73](../../issues/73) | 2026-09-15 |
 | `E-11` | External sources & the source contract | introspection verifies a declared shape, it does not discover one | [#73](../../issues/73) | 2026-09-16 |
+| `F-03` | Coverage, markout & attribution | yes, coverage drives it — the planner is `.qbw.plan` | [#74](../../issues/74) | 2026-09-16 |
 | `F-06` | Coverage, markout & attribution | the attribution model is `cross_markout_decomp`'s, verified by its sum-to-total test; canonical's fix history is unrecoverable | [#74](../../issues/74) | 2026-09-16 |
+| `F-08` | Coverage, markout & attribution | `core/` is framework, `sources/` and `workers/` are declarations | [#74](../../issues/74) | 2026-09-16 |
 | `F-19` | - | both audiences | [#53](../../issues/53) | 2026-09-15 |
 | `F-20` | - | option 2 — one service credential, authorisation in the API layer | [#54](../../issues/54) | 2026-09-15 |
 | `F-21` | - | read q's status files | [#55](../../issues/55) | 2026-09-15 |
@@ -52,18 +65,28 @@ things.
 | `G-03` | Airflow integration | the idempotency key is the coverage window, not the task or the DAG | [#75](../../issues/75) | 2026-09-16 |
 | `G-09` | Airflow integration | strictly optional — and proved, not asserted | [#75](../../issues/75) | 2026-09-16 |
 | `H-01` | TorQ orchestration & process registry | overrides last, vendored file never edited | [#76](../../issues/76) | 2026-09-16 |
+| `H-05` | TorQ orchestration & process registry | the `Pipeline` registry IS the source of truth; the CSV is generated from it | [#76](../../issues/76) | 2026-09-16 |
 | `H-06` | TorQ orchestration & process registry | answered by #66's Pipeline registry | [#76](../../issues/76) | 2026-09-15 |
 | `I-01` | Testing strategy & gates | seeded, and enforced by a test rather than a comment | [#77](../../issues/77) | 2026-09-16 |
+| `I-04` | Testing strategy & gates | the question's file does not exist here, and the suite is seeded | [#77](../../issues/77) | 2026-09-16 |
+| `I-06` | Testing strategy & gates | yes, wired — and it is its own lane precisely because it cannot be a unit test | [#77](../../issues/77) | 2026-09-16 |
 | `J-01` | Documentation & generation | generated at build AND committed, with a CI check that they match | [#78](../../issues/78) | 2026-09-16 |
 | `J-02` | Documentation & generation | it extracts facts the code already declares, and the code wins | [#78](../../issues/78) | 2026-09-16 |
+| `J-04` | Documentation & generation | the registry is the source of truth, and the generated table is derived from it — #129 | [#78](../../issues/78) | 2026-09-16 |
 | `K-01` | Observability & diagnostics | a levelled layer over TorQ's `.lg`, and structured fields — built in #119 | [#79](../../issues/79) | 2026-09-16 |
+| `K-02` | Observability & diagnostics | they were built eagerly; now they are not — and the first fix silently did nothing | [#79](../../issues/79) | 2026-09-16 |
+| `K-03` | Observability & diagnostics | one boolean switch, per process — not a level | [#79](../../issues/79) | 2026-09-16 |
 | `K-07` | Observability & diagnostics | answered by #68 plus M-05 | [#79](../../issues/79) | 2026-09-15 |
 | `M-01` | Error handling & failure modes | throw in pure code, return status at the shell | [#81](../../issues/81) | 2026-09-15 |
 | `M-04` | Error handling & failure modes | transport retries, data failures don't — config-driven | [#81](../../issues/81) | 2026-09-15 |
 | `M-05` | Error handling & failure modes | terminal failed state, the worker moves on | [#81](../../issues/81) | 2026-09-15 |
 | `N-01` | Naming & conventions | one flat `.q<abbrev>` namespace per file, and the file list is the registry | [#82](../../issues/82) | 2026-09-16 |
+| `N-02` | Naming & conventions | yes, `lower_snake_case` everywhere, and it is audited rather than assumed | [#82](../../issues/82) | 2026-09-16 |
 | `O-01` | Tooling, hooks & agents | they no longer exist, so there is nothing to arbitrate | [#83](../../issues/83) | 2026-09-16 |
+| `O-02` | Tooling, hooks & agents | `.claude/agents/` wins, and one file cannot serve both — this is D3's false equivalence | [#83](../../issues/83) | 2026-09-16 |
+| `O-04` | Tooling, hooks & agents | unknowable, and the overlap question has been answered a better way | [#83](../../issues/83) | 2026-09-16 |
 | `P-02` | Process & provenance | the maintainer arbitrates; Claude proposes with reasoning | [#84](../../issues/84) | 2026-09-16 |
+| `P-03` | Process & provenance | in both requirement documents' provenance headers and the drift ledger's closing section — and the phrasing has since changed | [#84](../../issues/84) | 2026-09-16 |
 
 ### Answered off-repo
 
@@ -77,50 +100,27 @@ recorded the substance, that is named too.
 
 | ID | Area | State | Question | Issue |
 |---|---|---|---|---|
-| `A-05` | Strategy & scope | `shaping` | Mirror upstream's structure exactly so a future manual diff stays possible, or design freely now that no merge is planned? | [#69](../../issues/69) |
-| `A-07` | Strategy & scope | `shaping` | What is the acceptance test for “reimplemented” — a running demo, a green suite, or a document that matches? | [#69](../../issues/69) |
-| `B-01` | Repository structure | `shaping` | Adopt the `src/{foundation,pricing,portfolio,execution,market_data,integrations,examples}/` split? | [#70](../../issues/70) |
-| `B-05` | Repository structure | `shaping` | Move `tests/test_*.q` to `tests/q/test_*.q`? | [#70](../../issues/70) |
-| `B-06` | Repository structure | `shaping` | Consolidate to a single root Python project, or keep per-package `pyproject.toml`/`uv.lock`? | [#70](../../issues/70) |
-| `B-09` | Repository structure | `shaping` | Where does the `.qpipe` block library belong under the new structure — `src/etl/core/pipeline.q`? | [#70](../../issues/70) |
 | `C-04` | ETL worker runtime & config | `shaping` | What is the required versus optional environment variable set, and where is it documented as one list? | [#71](../../issues/71) |
-| `C-05` | ETL worker runtime & config | `shaping` | What splits `worker_config.q` from `worker_runtime.q`? | [#71](../../issues/71) |
-| `C-07` | ETL worker runtime & config | `shaping` | How does a worker distinguish “nothing to do” from “failed”? | [#71](../../issues/71) |
 | `D-04` | Backfill semantics | `shaping` | What was the ordering bug behind `Load backfill checkpoint before completion check`, and what is the invariant now? | [#72](../../issues/72) |
 | `D-09` | Backfill semantics | `shaping` | Is backfill strictly oldest-first, and does order matter to correctness or only to observability? | [#72](../../issues/72) |
 | `D-12` | Backfill semantics | `shaping` | Is there a general symbol quoting and escaping contract, and where does it live? | [#72](../../issues/72) |
-| `E-02` | External sources & the source contract | `shaping` | Can a new source be registered without editing core, and how is it discovered? | [#73](../../issues/73) |
 | `E-03` | External sources & the source contract | `shaping` | What is the layering between `external_rdb.q` and `backfill_source_rdb.q`? | [#73](../../issues/73) |
-| `E-06` | External sources & the source contract | `shaping` | Connection lifecycle — per-query, pooled, or persistent, and what is the retry and backoff policy? | [#73](../../issues/73) |
-| `F-03` | Coverage, markout & attribution | `shaping` | Does coverage drive what gets backfilled next — is there a planner? | [#74](../../issues/74) |
 | `F-05` | Coverage, markout & attribution | `shaping` | What splits `markout.q` from `markout_backfill.q` — live versus historical? | [#74](../../issues/74) |
-| `F-08` | Coverage, markout & attribution | `shaping` | `book_liquidity.q` appears in both `core/` and `workers/` — what is the core/worker split rule in general? | [#74](../../issues/74) |
 | `G-04` | Airflow integration | `shaping` | Where does the workflow-to-process mapping live, and which side is the source of truth? | [#75](../../issues/75) |
 | `G-05` | Airflow integration | `shaping` | Does Airflow reach q over IPC, REST, or by shelling out, and how does it authenticate? | [#75](../../issues/75) |
 | `G-07` | Airflow integration | `shaping` | What happens if a DAG is triggered while the previous run is still in flight? | [#75](../../issues/75) |
 | `G-08` | Airflow integration | `shaping` | Are failures visible anywhere a desk user can query, or only in the Airflow UI? | [#75](../../issues/75) |
 | `H-02` | TorQ orchestration & process registry | `shaping` | What is a process group, and which operations accept one — start, stop, query, logs? | [#76](../../issues/76) |
 | `H-04` | TorQ orchestration & process registry | `shaping` | Does every query now route through the gateway, and what is the fallback when it is down? | [#76](../../issues/76) |
-| `H-05` | TorQ orchestration & process registry | `shaping` | Does today's `Pipeline` dataclass registry belong here, or does the CSV-based approach supersede it? | [#76](../../issues/76) |
 | `H-07` | TorQ orchestration & process registry | `shaping` | What lives in `config/backfill.yaml` versus `config/endpoints.yaml`, and how do they relate to `process.csv`? | [#76](../../issues/76) |
-| `I-04` | Testing strategy & gates | `shaping` | Is `source_data_gen.q` seeded and reproducible, or fresh per run? | [#77](../../issues/77) |
-| `I-06` | Testing strategy & gates | `shaping` | Is the backfill-worker regression suite wired to run automatically yet, and should it be scoped to a `.q` file pattern or run alongside q-unit on every commit? | [#77](../../issues/77) |
 | `I-08` | Testing strategy & gates | `shaping` | Are documentation examples executed, and may they touch external systems? | [#77](../../issues/77) |
 | `J-03` | Documentation & generation | `shaping` | Is `d2` a required tool, and are SVGs committed or built? | [#78](../../issues/78) |
-| `J-04` | Documentation & generation | `shaping` | What is the source of truth for the diagrams — are they derived from `process.csv`? | [#78](../../issues/78) |
 | `J-05` | Documentation & generation | `shaping` | What belongs in `guides/` versus `architecture/` versus `reference/` versus `decisions/` versus `integrations/`? | [#78](../../issues/78) |
-| `K-02` | Observability & diagnostics | `shaping` | Are log messages built lazily, and what was unsafe about the eager version? | [#79](../../issues/79) |
-| `K-03` | Observability & diagnostics | `shaping` | What are the final verbose-flag semantics — boolean, level, or both? | [#79](../../issues/79) |
 | `K-04` | Observability & diagnostics | `shaping` | Is there a per-worker heartbeat or metrics table, and does monitoring read it? | [#79](../../issues/79) |
 | `M-02` | Error handling & failure modes | `shaping` | Where does query-boundary input validation live? | [#81](../../issues/81) |
 | `M-03` | Error handling & failure modes | `shaping` | What must never throw, and is that enforced or merely remembered? | [#81](../../issues/81) |
-| `N-02` | Naming & conventions | `shaping` | Is `lower_snake_case` still the rule everywhere? | [#82](../../issues/82) |
 | `N-05` | Naming & conventions | `shaping` | What rules did the upstream `q-naming-expert` agent encode? | [#82](../../issues/82) |
-| `O-02` | Tooling, hooks & agents | `shaping` | Upstream uses `.github/agents/*.agent.md`; today's three agents went to `.claude/agents/`. Which convention wins, and can one file serve both? | [#83](../../issues/83) |
-| `O-04` | Tooling, hooks & agents | `shaping` | Do the four agents written today overlap the ten upstream ones? | [#83](../../issues/83) |
 | `P-01` | Process & provenance | `shaping` | Should each answered question here become an ADR in `docs/decisions/`? | [#84](../../issues/84) |
-| `P-03` | Process & provenance | `shaping` | Where is “reimplemented from description, not ported” recorded permanently? | [#84](../../issues/84) |
-| `A-08` | Strategy & scope | `deferrable` | Should the reimplementation record upstream `b44b2c8` as its stated baseline in a decision record? | [#69](../../issues/69) |
 | `B-04` | Repository structure | `deferrable` | Is `src/execution/execution.q` a single-file directory for symmetry, or does something else join it? | [#70](../../issues/70) |
 | `B-08` | Repository structure | `deferrable` | Does a root `examples/` supersede `scripts/*_example.q`, and are examples executed by tests? | [#70](../../issues/70) |
 | `C-08` | ETL worker runtime & config | `deferrable` | Where does the debug sink write — table, file, or stdout? | [#71](../../issues/71) |
@@ -151,7 +151,7 @@ Prose that leans on a decision id with no answer and no open question
 behind it - either the decision was made somewhere unrecorded, or the
 citation is wrong.
 
-- `E-12` - cited in `docs/drift-reports/drift-ledger.md`
+- `E-12` - cited in `docs/drift-reports/drift-ledger.md`, `docs/event-tape.md`
 - `E-13` - cited in `docs/drift-reports/drift-ledger.md`, `docs/restatement-design.md`
 - `E-15` - cited in `docs/drift-reports/drift-ledger.md`, `docs/restatement-design.md`
 - `E-17` - cited in `docs/drift-reports/drift-ledger.md`

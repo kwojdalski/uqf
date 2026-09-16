@@ -99,9 +99,38 @@ emit:{[level;id;msg]
         ::;
       -1 "|" sv string[(.z.p;level;id)],enlist msg]}
 
+/ Private: is this level going to be emitted at all?
+/ .
+/ Split out so `line` can check BEFORE rendering. Mirrors the transport's own
+/ gating: TorQ's outmap when it is loaded, the debug switch when it is not.
+enabled:{[level]
+    $[torq_loaded[];
+        0<0^.lg.outmap level;
+      level=`DBG;
+        debug_enabled;
+      1b]}
+
 / Private: assemble and emit one line.
+/ .
+/ The suppression check comes FIRST, before the fields are rendered (bank
+/ question K-02). Rendering a message nobody will read is pure waste, and
+/ the waste is concentrated exactly where it hurts: DBG is off by default and
+/ is the level a worker emits per WINDOW, so a million-row backfill with
+/ debug off would otherwise render and discard one message per window.
+/ .
+/ q has no lazy arguments, so a caller that wants to avoid building an
+/ expensive FIELD VALUE still has to check `enabled` itself - this only
+/ avoids the rendering, not the caller's own work. That is the honest limit
+/ of the fix, and it is why `enabled` is not private.
+/ Written as `if[enabled ...; emit ...]` rather than an early return: the
+/ first draft used `if[not enabled level; :::]` and `:::` does NOT parse as
+/ "return generic null" - the if body was a no-op, execution fell through,
+/ and the rendering happened anyway. The gate read as correct and did
+/ nothing. Wrapping the emit has no such ambiguity.
 line:{[level;id;text;fields]
-    emit[level;id;$[0=count fields; text; text," ",render fields]]}
+    if[enabled level;
+        emit[level;id;$[0=count fields; text; text," ",render fields]]];
+    }
 
 / The four levels. `id` is the worker or component name - it becomes
 / TorQ's `id` column, so `select from logmsg where id=`demo_deals_backfill`
