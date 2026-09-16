@@ -47,7 +47,35 @@ rather than substituting.
 Run everything from the repository root - the load scripts use
 paths relative to it (e.g. `src/foundation/stats.q`).
 
+### Also needed, by component
+
+| Tool | For | Required? |
+|---|---|---|
+| **KDB-X** | everything in `src/`, `scripts/` and `tests/` | yes |
+| **[uv](https://docs.astral.sh/uv/)** | the Python packages and every `torq-demo` command | yes, for the fleet |
+| **`qcon`** | attaching a console to a running process: `torq-demo raw -- qcon gateway1 admin:admin` | no - only that command |
+| **`rlwrap`** | line editing and history inside `qcon` | no - `qcon` runs without it |
+| **Node** | building and running the [browser application](#browser-application) | no - only for `web/` |
+
+`qcon` is kdb's console client. It ships with some kdb+ distributions and
+**not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q`
+and `pg` - so `torq-demo raw -- qcon ...` is the one documented command that
+may not work out of the box. Everything else reaches a running process
+through IPC instead: `torq-demo query`, `torq-demo summary` and
+`torq-demo logs` need nothing beyond what is already installed.
+
+`torq.sh` resolves both through `$QCON` and `$RLWRAP`, which
+`torq_orchestrator`'s `build_env()` sets, so a differently-named or
+differently-located binary is a variable to set rather than a patch.
+
 ## Quick start
+
+Four entry points, one per thing you might have come for. None depends on
+the others - the library prices without a running process, and the fleet
+runs without anyone loading the library by hand.
+
+**Price something.** The quant library is pure functions and no processes,
+so this needs nothing but the interpreter:
 
 ```
 q src/init.q
@@ -56,14 +84,44 @@ q).qfwd.fwd_simple[1.10;0.05;0.02;1]              / CIRP outright forward
 q).qexec.markout[1;1.1000;1.1010;10000]           / post-trade markout, in pips
 ```
 
-Each module loads into its own flat namespace after loading `src/init.q` -
-`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
-`.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef` (see [Quant modules](#quant-modules)
-for which file maps to which namespace). Kept single-level throughout rather than
-nested under a shared parent (e.g. not `.q.options`). This began as a
-portability constraint and is now a convention the tree keeps: the
-filename-to-namespace tie is what the naming auditor checks and what
-`docs/man.q`'s registry is generated against.
+**Run the fleet.** The TorQ stack - tickerplant, RDB, HDB, gateway, the
+feeds and the ETL processes - with generated configuration:
+
+```
+uv sync
+uv run torq-demo start all
+uv run torq-demo summary            # up/down, pid, port and heartbeat per process
+uv run torq-demo query "count quotes" --port 6052   # 6052 = base port + 2 = rdb1
+```
+
+**Run a backfill.** A bounded worker takes its range from the environment
+and exits once the window is covered, which is why it is a job an operator
+or Airflow triggers rather than a process that starts with the stack. It
+registers with discovery, so the fleet above has to be up:
+
+```
+UQF_BACKFILL_WORKER=demo_deals_backfill \
+UQF_BACKFILL_VERSION=v1 \
+UQF_BACKFILL_FROM=2026.09.13D00:00 \
+UQF_BACKFILL_TO=2026.09.15D00:00 \
+  uv run torq-demo start deals_backfill1
+```
+
+All four variables are required together: the process refuses to start and
+names every missing one at once, because a backfill that silently defaulted
+its range would publish the wrong window and record coverage for it.
+
+**Check it all still works.** Four lanes, described under
+[Testing](#testing):
+
+```
+./scripts/test.sh all
+```
+
+`all` runs three of them - the q suite, the bounded-worker lifecycle against
+a real filesystem, and the Python suite. The fourth, `smoke`, is deliberately
+separate: it checks a live external source's metadata against its declared
+contract (ETL-20) and so needs credentials and a reachable source.
 
 ## Components
 
@@ -87,7 +145,15 @@ the others the tree is built on, are written down in
 
 ## Quant modules
 
-Each file loads into its own flat namespace. Every module has a matching
+Each module loads into its own flat namespace after `src/init.q` -
+`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
+`.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef`. Kept single-level
+throughout rather than nested under a shared parent (e.g. not
+`.q.options`). This began as a portability constraint and is now a
+convention the tree keeps: the filename-to-namespace tie is what the naming
+auditor checks and what `docs/man.q`'s registry is generated against.
+
+Every module has a matching
 test file, and every function carries a [qDoc](#documentation) block with
 `@param`/`@return`/`@eg` — those are the per-function reference, so the
 table below only says what each module is *for*.
