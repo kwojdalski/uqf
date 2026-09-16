@@ -233,4 +233,116 @@ test_a_long_range_is_split_at_the_declared_width:{[t]
     .qevbf.init `source_version`range_from`range_to!(`v1;.evttest.d 0;(.evttest.d 0)+0D03:00:00);
     .qunit.assertEquals[count .qevbf.plan 0Np;3;"three hours at one hour each"]};
 
+/ --- volume bucketing (ROADMAP #25's primitive) -------------------------
+
+/ The hand-worked example, with a trade that STRADDLES a boundary - the case
+/ the whole splitting design exists for. Sizes 100, 250, 100 with V=200:
+/ .
+/   bucket 0 [0,200):   trade0's 100 buy + trade1's first 100 sell
+/   bucket 1 [200,400): trade1's remaining 150 sell + trade2's first 50 buy
+/   bucket 2 [400,450): trade2's last 50 - INCOMPLETE, discarded
+test_a_straddling_trade_is_split_across_buckets:{[t]
+    b:.qmicro.volume_buckets[.evttest.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
+    .qunit.assertEquals[
+        (exec buy_volume from b;exec sell_volume from b);
+        (100 50f;100 150f);
+        "trade1's 250 splits 100/150 across the boundary, so each bucket holds exactly 200"]};
+
+test_the_incomplete_final_bucket_is_discarded:{[t]
+    b:.qmicro.volume_buckets[.evttest.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
+    .qunit.assertEquals[count b;2;"450 of volume at V=200 is two complete buckets; the trailing 50 is not comparable"]};
+
+/ Every complete bucket must hold exactly bucket_volume, or VPIN's
+/ denominator (n * bucket_volume) is wrong.
+test_every_bucket_holds_exactly_the_bucket_volume:{[t]
+    b:.qmicro.volume_buckets[.evttest.tape[`trade`trade`trade`trade;1 -1 1 -1;70 130 90 110f];100f];
+    .qunit.assertEquals[exec buy_volume+sell_volume from b;(count b)#100f;"unequal buckets would make VPIN systematically wrong by however lumpy the tape is"]};
+
+test_only_trades_are_bucketed:{[t]
+    with_noise:.evttest.tape[`add`trade`cancel`trade;1 1 1 -1;5000 100 5000 100f];
+    b:.qmicro.volume_buckets[with_noise;100f];
+    .qunit.assertEquals[(count b;exec buy_volume from b);(2;100 0f);"a 5000 add does not become 50 buckets of volume"]};
+
+test_a_tape_with_less_volume_than_one_bucket_gives_no_buckets:{[t]
+    .qunit.assertEquals[count .qmicro.volume_buckets[.evttest.tape[enlist `trade;enlist 1;enlist 50f];200f];0;"an incomplete bucket is not an observation"]};
+
+test_a_tape_with_no_trades_gives_no_buckets:{[t]
+    .qunit.assertEquals[count .qmicro.volume_buckets[.evttest.tape[`add`cancel;1 1;100 100f];10f];0;"adds and cancels move no volume"]};
+
+test_the_end_time_is_when_the_bucket_filled:{[t]
+    b:.qmicro.volume_buckets[.evttest.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f];
+    .qunit.assertEquals[exec end_time from b;.evttest.d each 1 2;"a bucket's observation completes at the trade that filled it"]};
+
+test_a_non_positive_bucket_volume_is_refused:{[t]
+    .qunit.assertError[{.qmicro.volume_buckets[.evttest.tape[enlist `trade;enlist 1;enlist 100f];x]};0f;"a zero bucket volume would divide by zero and produce infinitely many buckets"]};
+
+/ --- vpin (ROADMAP #25) -------------------------------------------------
+
+/ With n_buckets=1 each value is just that bucket's imbalance over the
+/ bucket volume, which makes the arithmetic checkable by hand: 0/200 and
+/ 100/200.
+test_vpin_is_the_imbalance_as_a_fraction_of_bucket_volume:{[t]
+    v:.qmicro.vpin[.evttest.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f;1];
+    .qunit.assertEquals[exec vpin from v;0 0.5;"a balanced bucket is 0, one 50% one-sided is 0.5"]};
+
+/ The trailing window: (0 + 100) / (2 * 200) = 0.25, and the first bucket
+/ has no answer because the window has not filled.
+test_vpin_averages_over_the_trailing_window:{[t]
+    v:.qmicro.vpin[.evttest.tape[`trade`trade`trade;1 -1 1;100 250 100f];200f;2];
+    .qunit.assertEquals[exec vpin from v;(0n;0.25);"the mean absolute imbalance over two buckets, normalised"]};
+
+/ A partly-filled msum window gives a smaller numerator over the same
+/ denominator, which would read as an unusually BALANCED market rather than
+/ as "not enough data". Nulled instead.
+test_vpin_is_null_until_the_window_fills:{[t]
+    v:.qmicro.vpin[.evttest.tape[`trade`trade`trade`trade;1 -1 1 -1;100 100 100 100f];100f;3];
+    .qunit.assertEquals[null exec vpin from v;1100b;"the first two of four buckets have no answer, and 0 would be a wrong one"]};
+
+/ A perfectly one-sided tape is the definitional maximum.
+test_an_entirely_one_sided_tape_gives_vpin_one:{[t]
+    v:.qmicro.vpin[.evttest.tape[`trade`trade;1 1;100 100f];100f;1];
+    .qunit.assertEquals[exec vpin from v;1 1f;"every bucket entirely one-sided is the maximum toxicity the measure can report"]};
+
+test_a_perfectly_balanced_tape_gives_vpin_zero:{[t]
+    v:.qmicro.vpin[.evttest.tape[`trade`trade;1 -1;100 100f];200f;1];
+    .qunit.assertEquals[exec vpin from v;enlist 0f;"buys exactly offsetting sells is zero imbalance"]};
+
+test_vpin_is_bounded_by_zero_and_one:{[t]
+    v:exec vpin from .qmicro.vpin[.qsevt.fixture[];1000000f;1];
+    defined:v where not null v;
+    .qunit.assertEquals[all (defined>=0f) and defined<=1f;1b;"a fraction of bucket volume cannot leave 0..1"]};
+
+test_a_non_positive_n_buckets_is_refused:{[t]
+    .qunit.assertError[{.qmicro.vpin[.evttest.tape[enlist `trade;enlist 1;enlist 100f];100f;x]};0;"averaging over zero buckets is not a question"]};
+
+test_vpin_on_a_tape_with_no_buckets_is_empty:{[t]
+    .qunit.assertEquals[count .qmicro.vpin[.evttest.tape[`add`cancel;1 1;100 100f];10f;1];0;"no trades, no buckets, no values - rather than a zero"]};
+
+/ --- trade_arrival_rate (ROADMAP #26) -----------------------------------
+
+/ Three trades one second apart is two intervals over two seconds = 1/s.
+/ Intervals, not events: three events do not make three arrivals-per-second.
+test_the_arrival_rate_counts_intervals_not_events:{[t]
+    .qunit.assertEquals[.qmicro.trade_arrival_rate .evttest.tape[`trade`trade`trade;1 1 1;3#100f];1f;"three trades one second apart is one arrival per second"]};
+
+test_adds_and_cancels_are_not_arrivals:{[t]
+    mixed:.evttest.tape[`trade`add`cancel`trade;1 1 1 1;4#100f];
+    .qunit.assertEquals[.qmicro.trade_arrival_rate mixed;(1%3)*1;"two trades three seconds apart, whatever happened between them"]};
+
+/ One trade gives no information about a rate, and neither do several at the
+/ same instant. 0n, not 0w - which would propagate into any average - and
+/ not 0, which would read as "no trading".
+test_a_single_trade_has_no_rate:{[t]
+    .qunit.assertEquals[null .qmicro.trade_arrival_rate .evttest.tape[enlist `trade;enlist 1;enlist 100f];1b;"one event is not a rate"]};
+
+test_a_tape_with_no_trades_has_no_rate:{[t]
+    .qunit.assertEquals[null .qmicro.trade_arrival_rate .evttest.tape[`add`cancel;1 1;100 100f];1b;"undefined, not zero"]};
+
+test_the_grouped_form_counts_trades_per_bucket:{[t]
+    r:.qmicro.trade_arrival_rate_by[.qsevt.fixture[];0D01:00:00;enlist `sym];
+    .qunit.assertEquals[first exec trades from r;2;"the fixture's two trades fall in one hourly bucket"]};
+
+test_the_grouped_form_validates_its_tape:{[t]
+    .qunit.assertError[{.qmicro.trade_arrival_rate_by[x;0Nn;enlist `sym]};`time xdesc .evttest.tape[`trade`trade`add;1 1 1;3#100f];"every entry point checks the precondition"]};
+
 \d .
