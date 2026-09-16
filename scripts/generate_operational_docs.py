@@ -221,7 +221,14 @@ def render_dag() -> str:
             + "\n  ".join(problems)
         )
 
-    lines = [Q_BANNER, "", ".qdag.register_pipelines:{[]"]
+    lines = [
+        Q_BANNER,
+        "",
+        "/ Register the nine TorQ streaming processes into the job graph.",
+        "/ @return the process names registered",
+        "/ @eg .qdag.register_pipelines[]",
+        ".qdag.register_pipelines:{[]",
+    ]
     for pipeline in PIPELINES:
         lines.append(
             f"    .qdag.register[`{pipeline.procname};`kind`inputs`outputs!"

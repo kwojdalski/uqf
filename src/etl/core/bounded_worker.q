@@ -87,6 +87,14 @@ define:{[worker;cfg]
     config[worker]:cfg;
     worker}
 
+/ One worker's configuration, or a refusal naming it.
+/ .
+/ Throws rather than returning a null for the same reason .qsrc.declaration
+/ does: a caller handed an empty dict fails later and somewhere else.
+/ @param worker the defined worker's name, as a symbol
+/ @return the config dict (ns, source, dataset, width)
+/ @throws error naming the worker when define was never called for it
+/ @eg .qbw.declaration `demo_deals_backfill
 declaration:{[worker]
     if[not worker in key config;
         '"declaration: ",string[worker]," has no configuration - call .qbw.define first"];

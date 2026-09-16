@@ -316,6 +316,14 @@ declare_dependencies:{[worker;procs]
 / one.
 connected_override:();
 
+/ The proctypes currently reachable in the fleet.
+/ .
+/ Empty when TorQ is absent, which makes require_dependencies report every
+/ declared dependency as missing and refuse to start - the direction a total
+/ function has to pick, so that a broken probe stops a worker at init rather
+/ than letting it run blind.
+/ @return a symbol vector of proctypes, empty outside a TorQ process
+/ @eg .qwrt.connected[]
 connected:{[]
     if[count connected_override; :connected_override];
     @[{exec distinct proctype from .servers.SERVERS where not null w};::;{`symbol$()}]}

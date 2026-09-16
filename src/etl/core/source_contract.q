@@ -213,6 +213,13 @@ register:{[source;decl]
     sources[source]:@[decl;`row_key;:;key_cols];
     source}
 
+/ Every registered source's name.
+/ .
+/ The registry IS the list - there is no second declaration of which sources
+/ exist, which is what makes bank E-02 true: adding a source is a file plus a
+/ registration, with no core change.
+/ @return a symbol vector, empty when nothing has registered yet
+/ @eg .qsrc.registered[]
 registered:{[] key sources}
 
 / The column(s) identifying a row uniquely, always as a vector.
@@ -225,6 +232,17 @@ registered:{[] key sources}
 / test rather than through register.
 row_key:{[source] (),(declaration source)`row_key}
 
+/ One source's full declaration, or a refusal naming it.
+/ .
+/ The single read path every other module uses to reach a source's contract -
+/ five files call it - so it throws rather than returning a null: a caller
+/ that got an empty dict back would fail later, somewhere else, on a missing
+/ key.
+/ @param source the registered source's name, as a symbol
+/ @return the declaration dict (source, table, target, time_field, row_key,
+/   fields, types, query, fixture, time_zone)
+/ @throws error naming the source when it was never registered
+/ @eg .qsrc.declaration `demo_deals
 declaration:{[source]
     if[not source in key sources;
         '"declaration: ",string[source]," is not a registered source - ETL-12 requires central registration, so an unregistered source is a wiring bug rather than a lookup miss"];

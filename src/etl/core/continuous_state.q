@@ -73,6 +73,16 @@ save_cursor:{[worker;cursor]
     (hsym `$path) 0: enlist .j.j `cursor`saved_at!(cursor;.z.p);
     path}
 
+/ Forget a feeder's saved cursor, so its next run starts from the source's
+/ own beginning.
+/ .
+/ Deliberately separate from advance: losing a cursor is a decision, not a
+/ side effect of moving one. Continuous output has no coverage ledger to
+/ notice re-published pages, so this is destructive in a way the bounded
+/ path's checkpoint is not.
+/ @param worker the feeder's name, as a symbol
+/ @return the worker's name
+/ @eg .qcont.clear_cursor `fx_feed_2
 clear_cursor:{[worker]
     system"rm -f ",cursor_path worker;
     cursor_path worker}

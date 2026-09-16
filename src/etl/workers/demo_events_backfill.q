@@ -32,6 +32,9 @@ last_batch:();
 
 / --- the contract's required methods, delegated -------------------------
 
+/ Ordinary names in this namespace that happen to delegate. A worker needing
+/ a genuinely different publish path defines its own here and the shell does
+/ not object - .qbw is a default, not an owner.
 spec:{[] .qbw.spec worker_name}
 init:{[run_spec] .qbw.init[worker_name;run_spec]}
 plan:{[cursor] .qbw.plan[worker_name;cursor]}

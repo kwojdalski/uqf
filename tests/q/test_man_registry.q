@@ -87,6 +87,42 @@ test_the_registry_covers_the_etl_tree:{[t]
     .qunit.assertTrue[any names like ".qcov.*";
         "the coverage namespace is documented, not just the original library"]};
 
+/ The coverage ratchet. A FLOOR, not a target.
+/ .
+/ Coverage went 78 -> 419 registrations when docs/man.q became generated, and
+/ the seven public functions still undocumented are internal helpers with no
+/ caller outside their own namespace - checked objectively rather than by eye.
+/ This test stops that sliding back: a new public function with no qDoc block
+/ lowers the count and fails here.
+/ .
+/ Phrased as "at most 12 undocumented" rather than an exact number so adding a
+/ function does not require editing this test, while a wholesale regression -
+/ a parser change that stopped attaching blocks, say - still fails. Two such
+/ regressions were caught this way while building the generator: a shared
+/ block attaching to only the first of four levels, and fully-qualified
+/ definitions being invisible to the scan.
+test_documentation_coverage_does_not_regress:{[t]
+    documented:exec fullname from .man.funcs;
+    nss:key `; nss:nss where (string nss) like "q*";
+    / Only namespaces docs/man.q actually covers, which is src/. The first
+    / version of this test counted every q-prefixed namespace in the suite
+    / process and failed on scaffolding: .qunit is the vendored test
+    / framework, .qetldbl and .qrefw are test doubles, and .qpipe lives in
+    / scripts/ rather than src/ (B-09). None is this library's public API, and
+    / demanding qDoc blocks for them would have meant documenting the test
+    / harness to satisfy a counter.
+    nss:nss except `q`qunit`qetldbl`qrefw`qpipe;
+    public:raze {[n]
+        full:` sv `,n;
+        ks:key full;
+        ks:ks where not ks in `;
+        ks:ks where not (string ks) like "_*";
+        ks:ks where {[f;k] 100h=type value ` sv f,k}[full] each ks;
+        string ` sv/: full,/:ks} each nss;
+    undocumented:public where not public in documented;
+    .qunit.assertTrue[12>=count undocumented;
+        "public functions without a qDoc block have not increased - see the count in the failure"]};
+
 test_the_registry_is_not_a_token_sample:{[t]
     / A floor, not an exact count: adding a function must not require editing
     / this test, but a generator that silently started emitting a handful of
