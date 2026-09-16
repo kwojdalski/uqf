@@ -358,6 +358,86 @@ def test_resolve_procnames_still_allows_a_process_with_no_log_file(
     assert core.resolve_procnames(fake_paths, "discovery1") == ["discovery1"]
 
 
+#: TorQ's own `summary` output shape. The load-bearing detail is that a
+#: `down` row STOPS after its status field rather than emitting empty pid and
+#: port cells, which is why the parser pads instead of requiring an exact
+#: width - and why every down process used to show a blank port.
+_SUMMARY_STDOUT = """TIME | PROCESS | STATUS | PID | PORT
+2026.09.16 | markout1 | up | 4242 | 6081
+2026.09.16 | tap1 | down
+2026.09.16 | dqc1 | down
+"""
+
+
+def test_summary_fills_the_port_torq_omits_for_a_stopped_process():
+    """The whole point: a `down` row has a known port and used to show none.
+
+    "What port will this be on when I start it" is a question you ask about a
+    process that is NOT running, so the blank was precisely where the answer
+    was wanted.
+    """
+    rows = core.summary_rows(_SUMMARY_STDOUT, {"tap1": "6078", "dqc1": "6070"})
+    by_name = {r["Process"]: r for r in rows}
+    assert by_name["tap1"]["Port"] == "6078"
+    assert by_name["dqc1"]["Port"] == "6070"
+    assert [r["Port"] for r in rows] == ["6081", "6078", "6070"], "no row is left portless"
+
+
+def test_summary_marks_a_filled_port_as_configured_not_reported():
+    """A filled port is a different claim, and the row has to say which.
+
+    Collapsing "configured to listen here" into "listening here" would mean a
+    reader could not tell a running process from a planned one by looking at
+    the port - worse than the blank it replaced.
+    """
+    rows = core.summary_rows(_SUMMARY_STDOUT, {"tap1": "6078", "dqc1": "6070"})
+    by_name = {r["Process"]: r for r in rows}
+    assert by_name["markout1"]["PortSource"] == "reported"
+    assert by_name["tap1"]["PortSource"] == "configured"
+
+
+def test_summary_never_overwrites_a_reported_port():
+    """If the running stack and process.csv disagree, the running truth wins.
+
+    Someone restarting with a different base port is exactly when a summary
+    must not tidy the disagreement away.
+    """
+    rows = core.summary_rows(_SUMMARY_STDOUT, {"markout1": "9999", "tap1": "6078"})
+    by_name = {r["Process"]: r for r in rows}
+    assert by_name["markout1"]["Port"] == "6081"
+    assert by_name["markout1"]["PortSource"] == "reported"
+
+
+def test_summary_leaves_a_port_blank_when_nothing_declares_one():
+    """The one case where the answer genuinely is not known.
+
+    A process TorQ reports but process.csv does not contain gets a blank and
+    `unknown`, rather than an invented number.
+    """
+    rows = core.summary_rows("2026.09.16 | mystery1 | down\n", {"tap1": "6078"})
+    assert rows[0]["Port"] == ""
+    assert rows[0]["PortSource"] == "unknown"
+
+
+def test_summary_skips_the_header_and_blank_lines():
+    rows = core.summary_rows(_SUMMARY_STDOUT, {})
+    assert [r["Process"] for r in rows] == ["markout1", "tap1", "dqc1"]
+
+
+def test_every_process_has_a_configured_port(fake_paths: core.TorqDemoPaths):
+    """The fill can only work if every process declares a port.
+
+    process.csv carries `{KDBBASEPORT}+N` and `resolve_process_config`
+    evaluates it, so this should hold for every row - and if a future process
+    is added without a port, this fails here rather than showing one blank
+    cell in a table nobody is diffing.
+    """
+    ports = core.configured_ports(fake_paths, base_port=6050)
+    names = core.list_process_names(fake_paths)
+    missing = [n for n in names if not ports.get(n)]
+    assert not missing, f"no configured port for {missing}"
+
+
 def test_print_recent_logs_raises_when_no_log_files(fake_paths: core.TorqDemoPaths):
     with pytest.raises(core.TorqDemoError):
         core.print_recent_logs(fake_paths, "discovery1")
