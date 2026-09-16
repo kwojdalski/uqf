@@ -15,7 +15,7 @@ and the question bank's backfill area is numbered `D-01..D-12` - one file
 holding both would put `D8` and `D-08` in adjacent tables meaning unrelated
 things.
 
-**103 answered, 7 still open** across 15 areas.
+**105 answered, 5 still open** across 15 areas.
 
 ## Answered
 
@@ -32,6 +32,7 @@ things.
 | `B-01` | Repository structure | adopted, and long since done | [#70](../../issues/70) | 2026-09-16 |
 | `B-02` | Repository structure | answered by #67, not by discussion | [#70](../../issues/70) | 2026-09-15 |
 | `B-03` | Repository structure | answered by #67, not by discussion | [#70](../../issues/70) | 2026-09-15 |
+| `B-04` | Repository structure | single-file for symmetry, and it should stay that way — with a named condition for changing it | [#70](../../issues/70) | 2026-09-16 |
 | `B-05` | Repository structure | done | [#70](../../issues/70) | 2026-09-16 |
 | `B-06` | Repository structure | one root project, as a uv workspace | [#70](../../issues/70) | 2026-09-16 |
 | `B-08` | Repository structure | examples are executed now, and were not before | [#70](../../issues/70) | 2026-09-16 |
@@ -124,6 +125,7 @@ things.
 | `O-05` | Tooling, hooks & agents | fourteen here, confirmed — and the comparison is dissolved by A-02/A-03 | [#83](../../issues/83) | 2026-09-16 |
 | `P-02` | Process & provenance | the maintainer arbitrates; Claude proposes with reasoning | [#84](../../issues/84) | 2026-09-16 |
 | `P-03` | Process & provenance | in both requirement documents' provenance headers and the drift ledger's closing section — and the phrasing has since changed | [#84](../../issues/84) | 2026-09-16 |
+| `P-04` | Process & provenance | there is no cadence, because nothing is landing any more — dissolved by A-02/A-03 | [#84](../../issues/84) | 2026-09-16 |
 
 ### Answered off-repo
 
@@ -140,10 +142,8 @@ recorded the substance, that is named too.
 | `J-05` | Documentation & generation | `shaping` | What belongs in `guides/` versus `architecture/` versus `reference/` versus `decisions/` versus `integrations/`? | [#78](../../issues/78) |
 | `K-04` | Observability & diagnostics | `shaping` | Is there a per-worker heartbeat or metrics table, and does monitoring read it? | [#79](../../issues/79) |
 | `P-01` | Process & provenance | `shaping` | Should each answered question here become an ADR in `docs/decisions/`? | [#84](../../issues/84) |
-| `B-04` | Repository structure | `deferrable` | Is `src/execution/execution.q` a single-file directory for symmetry, or does something else join it? | [#70](../../issues/70) |
 | `J-06` | Documentation & generation | `deferrable` | Does `decisions/` hold ADRs, with what template, and are they immutable once accepted? | [#78](../../issues/78) |
 | `J-08` | Documentation & generation | `deferrable` | Who is the audience for each docs area — desk users, new developers, or operators? | [#78](../../issues/78) |
-| `P-04` | Process & provenance | `deferrable` | What is the cadence for re-describing upstream features as they continue to land? | [#84](../../issues/84) |
 
 ## Cited in docs, no record on GitHub
 
