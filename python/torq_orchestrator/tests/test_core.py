@@ -644,3 +644,54 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
 
     problems = core.verify_pipeline_edges(tmp_path)
     assert any(target.procname in problem for problem in problems), problems
+
+
+def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core.TorqDemoPaths):
+    """H-01: what is the precedence between the vendored `process.csv`,
+    `extra_processes.csv` and `process_overrides.csv`?
+
+    Answered by the code, asserted here so it stays answered. The order is:
+
+        vendored process.csv  ->  PIPELINES  ->  extra_processes.csv  (appended)
+        then process_overrides.csv applied LAST, per procname, field by field
+
+    So an override wins over every other source, and the vendored file is
+    never edited. The failure mode of an unstated precedence is "works on my
+    machine"; this test sets the same field in two layers and checks which
+    one wins, which is the only way an order is observable.
+    """
+    offset = core.next_free_port_offset(fake_paths)
+    core.add_extra_process(
+        fake_paths,
+        {
+            "host": "localhost",
+            "port": f"{{KDBBASEPORT}}+{offset}",
+            "proctype": "feed",
+            "procname": "layered1",
+            "U": "",
+            "localtime": "1",
+            "g": "0",
+            "T": "",
+            "w": "",
+            "load": "${UQFSCRIPTS}/layered1.q",
+            "startwithall": "1",
+            "extras": "from-extra",
+            "qcmd": "q",
+        },
+    )
+    # extra_processes.csv supplied extras="from-extra"; an override says otherwise
+    core.set_process_config(fake_paths, "layered1", "extras", "from-override")
+
+    row = core.get_process_config(fake_paths, "layered1", base_port=7000)
+    assert row["extras"] == "from-override", (
+        "process_overrides.csv must outrank extra_processes.csv for the same field"
+    )
+
+    # ...and an override on a VENDORED process outranks the vendored file too,
+    # without the vendored file being touched.
+    core.set_process_config(fake_paths, "stp1", "extras", "vendored-overridden")
+    assert core.get_process_config(fake_paths, "stp1", base_port=7000)["extras"] == (
+        "vendored-overridden"
+    )
+    vendored = (fake_paths.torqapphome / "appconfig" / "process.csv").read_text()
+    assert "vendored-overridden" not in vendored

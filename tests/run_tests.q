@@ -4,6 +4,20 @@
 
 \c 400 1000
 
+/ Seed q's random generator so the suite is DETERMINISTIC (question-bank
+/ I-01). test_execution_scale.q generates a million synthetic trades with
+/ `n?` and asserts statistical properties of them - "spans more than 20
+/ hours", "size spread over 1e7". Those hold with overwhelming probability
+/ on any seed, which is exactly the problem: a failure would be
+/ unreproducible, and a run that happened to pass would tell you nothing
+/ about the next one. With a fixed seed the same numbers come out every
+/ time, so a failure can be re-run and a pass means something.
+/ .
+/ The seed is asserted by test_seed.q, which checks that `n?` from a fresh
+/ process yields a known vector - so removing this line fails the suite
+/ rather than silently making it nondeterministic again.
+\S 20260916
+
 \l tests/lib/qunit.q
 \l tests/lib/testutil.q
 \l src/init.q
@@ -21,6 +35,7 @@
 \l tests/lib/etl_test_doubles.q
 \l tests/q/reference_worker.q
 
+\l tests/q/test_seed.q
 \l tests/q/test_stats.q
 \l tests/q/test_ccy.q
 \l tests/q/test_daycount.q
@@ -50,7 +65,7 @@
 / The namespace list is unchanged by the tests/q/ move: it keys on test
 / NAMESPACES, not file paths, and the move deliberately left namespaces
 / alone - the same choice made for src/ (see src/init.q).
-nsList:`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.backfillstatetest`.coveragetest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.ddbftest`.conttest`.statustest`.tztest;
+nsList:`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.backfillstatetest`.coveragetest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.ddbftest`.conttest`.statustest`.tztest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;
