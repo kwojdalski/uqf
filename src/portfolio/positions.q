@@ -173,7 +173,7 @@ total_pnl:{[pos;sym;mkt_price]
 / @param avg_price the position's average entry/cost-basis rate
 / @return a 2-row table `ccy`amount - the base currency's leg is +qty,
 /   the quote currency's leg is -(qty*avg_price)
-/ @eg .qpos.ccy_legs[`EURAUD;1000000;1.6000] -> (`EUR;1000000f), (`AUD;-1600000f)
+/ @eg .qpos.ccy_legs[`EURAUD;1000000;1.6000] -> +`ccy`amount!(`EUR`AUD;(1000000;-1600000f))
 ccy_legs:{[sym;qty;avg_price]
     legs:.qccy.ccy_pair_legs sym;
     ([] ccy:(legs`base;legs`quote); amount:(qty;neg qty*avg_price))};

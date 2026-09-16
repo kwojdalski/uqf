@@ -48,7 +48,9 @@ points_to_outright:{[spot;points;pip_factor] spot+(points%pip_factor)};
 / @param rd domestic (quote currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the implied foreign (base currency) decimal annual rate
-/ @eg .qfwd.implied_foreign_rate[1.10;1.132353;0.05;1]  -> 0.02
+/ @eg .qfwd.implied_foreign_rate[1.10;1.132353;0.05;1]  -> 0.01999995
+/   (0.02 to the eye; the residual is the rounding in the 1.132353 input,
+/   and documenting 0.02 overstated what the function returns)
 implied_foreign_rate:{[spot;fwd;rd;t]
     scaled_spot:spot*.qrates.growth_simple[rd;t];
     ratio:scaled_spot%fwd;
@@ -61,7 +63,8 @@ implied_foreign_rate:{[spot;fwd;rd;t]
 / @param rf foreign (base currency) decimal annual rate
 / @param t year fraction to the forward date
 / @return the implied domestic (quote currency) decimal annual rate
-/ @eg .qfwd.implied_domestic_rate[1.10;1.132353;0.02;1]  -> 0.05
+/ @eg .qfwd.implied_domestic_rate[1.10;1.132353;0.02;1]  -> 0.05000005
+/   (0.05 to the eye - same rounding residual as implied_foreign_rate)
 implied_domestic_rate:{[spot;fwd;rf;t]
     ratio:(fwd%spot)*.qrates.growth_simple[rf;t];
     (ratio-1)%t};
@@ -97,7 +100,7 @@ cross_rate_shared_base:{[rate_ax;rate_ay] cross_rate[rate_ax;invert_rate rate_ay
 / versa.
 / @param book a dict `bid`ask!(bidPx;askPx) quoted BASE/QUOTE
 / @return the same book quoted QUOTE/BASE
-/ @eg .qfwd.invert_book[`bid`ask!(1.1000;1.1002)]  -> `bid`ask!(0.9089256;0.9090909)
+/ @eg .qfwd.invert_book[`bid`ask!(1.1000;1.1002)]  -> `bid`ask!0.9089256 0.9090909
 invert_book:{[book] `bid`ask!(1%book`ask;1%book`bid)};
 
 / Combine two order books that are already oriented A/B and B/C (i.e. the
@@ -107,7 +110,7 @@ invert_book:{[book] `bid`ask!(1%book`ask;1%book`bid)};
 / @param book_ab dict `bid`ask!(bidPx;askPx) quoted A/B
 / @param book_bc dict `bid`ask!(bidPx;askPx) quoted B/C
 / @return dict `bid`ask!(bidPx;askPx) quoted A/C
-/ @eg .qfwd.combine_oriented_books[`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02)]  -> `bid`ask!(165;165.052)
+/ @eg .qfwd.combine_oriented_books[`bid`ask!(1.1000;1.1002);`bid`ask!(150.00;150.02)]  -> `bid`ask!165 165.052
 combine_oriented_books:{[book_ab;book_bc]
     bid:(book_ab`bid)*(book_bc`bid);
     ask:(book_ab`ask)*(book_bc`ask);
@@ -156,7 +159,7 @@ ccy_orient_cross:{[sym1;sym2]
 / @param book2 dict `bid`ask!(bidPx;askPx) quoted in sym2's own convention
 / @return dict `sym`bid`ask!(cross_sym;bidPx;askPx) for the synthetic cross
 / @throws error if sym1 and sym2 share no common currency
-/ @eg .qfwd.cross_book[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165;165.052)
+/ @eg .qfwd.cross_book[`EURUSD;`bid`ask!(1.1000;1.1002);`USDJPY;`bid`ask!(150.00;150.02)]  -> `sym`bid`ask!(`EURJPY;165f;165.052)
 cross_book:{[sym1;book1;sym2;book2]
     orient:ccy_orient_cross[sym1;sym2];
     oriented1:$[orient`invert1; invert_book book1; book1];
@@ -173,7 +176,7 @@ cross_book:{[sym1;book1;sym2;book2]
 / @param prices level prices, best-first
 / @param sizes level sizes in the ladder's own base currency, aligned to prices
 / @return (invertedPrices;rescaledSizes), still best-first
-/ @eg .qfwd.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200)
+/ @eg .qfwd.invert_book_depth[1.1000 1.1002;1000000 1000000]  -> (0.9090909 0.9089256;1100000 1100200f)
 invert_book_depth:{[prices;sizes] (1%prices;sizes*prices)};
 
 / Private: the (prices;sizes) to sweep for one leg, for one side of the

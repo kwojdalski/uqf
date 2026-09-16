@@ -48,7 +48,7 @@ sum_levels:{[sizes;n_levels]
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @return a vector, one mid price per row
-/ @eg .qmicro.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> 1.1001
+/ @eg .qmicro.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> ,1.1001
 mid_price:{[bid_prices;ask_prices]
     0.5*(level_at[bid_prices;0])+level_at[ask_prices;0]};
 
@@ -59,7 +59,7 @@ mid_price:{[bid_prices;ask_prices]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param level the level index (0 = top of book)
 / @return a vector, one pressure value per row
-/ @eg .qmicro.book_pressure_at_level[enlist 100 50;enlist 40 60;0]  -> 0.4285714
+/ @eg .qmicro.book_pressure_at_level[enlist 100 50;enlist 40 60;0]  -> ,0.4285714
 book_pressure_at_level:{[bid_sizes;ask_sizes;level]
     bid_lvl:level_at[bid_sizes;level];
     ask_lvl:level_at[ask_sizes;level];
@@ -75,7 +75,7 @@ book_pressure_at_level:{[bid_sizes;ask_sizes;level]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to aggregate over
 / @return a vector, one imbalance value per row, in [-1,1]
-/ @eg .qmicro.order_book_imbalance[enlist 100 50;enlist 40 60;2]  -> 0.2
+/ @eg .qmicro.order_book_imbalance[enlist 100 50;enlist 40 60;2]  -> ,0.2
 order_book_imbalance:{[bid_sizes;ask_sizes;n_levels]
     total_bid:sum_levels[bid_sizes;n_levels];
     total_ask:sum_levels[ask_sizes;n_levels];
@@ -89,7 +89,7 @@ order_book_imbalance:{[bid_sizes;ask_sizes;n_levels]
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, one microprice per row
-/ @eg .qmicro.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> 1.10005
+/ @eg .qmicro.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> ,1.10005
 microprice:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
     bid_px0:level_at[bid_prices;0];
     ask_px0:level_at[ask_prices;0];
@@ -107,7 +107,7 @@ microprice:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, microprice - mid_price per row
-/ @eg .qmicro.microprice_divergence[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> -0.00005
+/ @eg .qmicro.microprice_divergence[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> ,-5e-05
 microprice_divergence:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
     microprice[bid_prices;bid_sizes;ask_prices;ask_sizes]-mid_price[bid_prices;ask_prices]};
 
@@ -118,7 +118,7 @@ microprice_divergence:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @return a vector, spread in bps per row
-/ @eg .qmicro.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002]  -> 1.818017
+/ @eg .qmicro.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002]  -> ,1.818017
 spread_bps:{[bid_prices;ask_prices]
     bid_px0:level_at[bid_prices;0];
     ask_px0:level_at[ask_prices;0];
@@ -133,7 +133,7 @@ spread_bps:{[bid_prices;ask_prices]
 / @param bid_sizes a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, depth ratio per row
-/ @eg .qmicro.depth_ratio[enlist 100 20 20 20 20;enlist 100 20 20 20 20]  -> 1.25
+/ @eg .qmicro.depth_ratio[enlist 100 20 20 20 20;enlist 100 20 20 20 20]  -> ,1.25
 depth_ratio:{[bid_sizes;ask_sizes]
     top:(level_at[bid_sizes;0])+level_at[ask_sizes;0];
     deeper_bid:sum level_at[bid_sizes;] each 1 2 3 4;
@@ -160,7 +160,7 @@ vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to volume-weight over
 / @return a vector, skew per row
-/ @eg .qmicro.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> 0f
+/ @eg .qmicro.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> ,0f
 vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
     n:count bid_prices;
     result:n#0n;
@@ -181,7 +181,7 @@ book_slope_one:{[prices;sizes] (first[prices]-last prices)%sum sizes};
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, slope per row
-/ @eg .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> 1.333333e-06
+/ @eg .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> ,1.333333e-06
 book_slope:{[prices;sizes]
     n:count prices;
     result:n#0n;
@@ -210,7 +210,7 @@ book_convexity_one:{[prices;side]
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param side `bid or `ask - which side prices belongs to
 / @return a vector, convexity per row
-/ @eg .qmicro.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> -0.0001
+/ @eg .qmicro.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> ,-0.0001
 book_convexity:{[prices;side]
     n:count prices;
     result:n#0n;
@@ -242,7 +242,7 @@ vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
 /   already aligned to rows - same atom-or-vector convention as
 /   execution.q's markout ref_price
 / @return a vector, VAMP per row
-/ @eg .qmicro.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> 1.1001
+/ @eg .qmicro.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> ,1.1001
 vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     n:count bid_prices;
     notional:$[0>type notional; n#notional; notional];

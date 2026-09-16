@@ -6,6 +6,21 @@
 / .
 /   env  >  process_overrides.csv  >  config/backfill.yaml  >  code default
 / .
+/ ONLY THE FIRST LAYER IS WIRED TODAY, and saying so here matters more than
+/ the order does. `set_layers` below is what populates the lower three, and
+/ its only callers are tests - no production path calls it, so in a running
+/ worker override_values, yaml_values and default_values stay empty and `env`
+/ supplies everything. `config/` does not exist in this tree at all.
+/ .
+/ The precedence is therefore a decided contract with one supplier, not a
+/ description of four live layers. It is left standing rather than deleted
+/ because C-02 settled the ORDER and that answer does not expire - but a
+/ reader who concluded they could drop a key into a YAML file and have a
+/ worker pick it up would be wrong, and the previous version of this comment
+/ invited exactly that. Wiring the rest needs a YAML hand-off from the Python
+/ orchestrator (which already owns that parsing) plus a decision about where
+/ `config/` lives, which is bank question H-07.
+/ .
 / Most specific and most immediate wins, so an operator can override anything
 / from the environment without editing tracked config - which is what you
 / want when debugging a running process.
@@ -78,7 +93,17 @@ raw_from:{[source;k]
 / Exported rather than private because "where did this value come from" is
 / the question that actually gets asked when a worker misbehaves, and
 / answering it should not require reading the precedence order off a comment.
-/ @eg .qwcfg.explain[`backfill_from]  ->  (`env;"2026.09.01")
+/ @eg .qwcfg.explain[`dry_run]  ->  (`none;"")
+/ .
+/ That is the honest UNSET answer, and it is what the example asserts. Once
+/ UQF_DRY_RUN=true is exported the same call returns (`env;"true").
+/ .
+/ The previous example claimed (`env;"2026.09.01") for `backfill_from, which
+/ was wrong twice over: nothing in this repository sets UQF_BACKFILL_FROM (a
+/ worker's window comes from read_state, not from config - see C-04), and an
+/ example whose documented value depends on the caller's ambient environment
+/ cannot be verified by anything. `dry_run` is the one key production really
+/ reads, via .qwrt.is_dry_run.
 explain:{[k]
     hits:sources where 0<count each raw_from[;k] each sources;
     $[0=count hits; (`none;""); (first hits; raw_from[first hits;k])]}
