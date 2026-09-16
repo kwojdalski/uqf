@@ -181,6 +181,28 @@ is what makes a materialisation *auditable* rather than merely *recorded*.
   outputs, which is asset-shaped thinking. But an asset has no identity of its
   own: no description, no owner, no freshness policy attached to *the asset*
   rather than to the worker that happens to produce it.
+- **Only one of the three job roles has a shell.** `.qbw` makes a backfill a
+  declaration; `feed` and `etl` have nothing equivalent. `.qpipe.subscribe_etl`
+  is the closest thing to an ETL shell and **one of the five ETLs uses it** —
+  `torq_cross_etl.q`, `torq_posbook_etl.q`, `torq_vectorize_etl.q` and
+  `torq_tap.q` each hand-roll the same
+  `getsubscriptionhandles` → `first` → `.sub.subscribe` sequence, and
+  `torq_cross_etl.q`'s own comment says so: *"same as every ETL did by hand"*.
+
+  The copies are also weaker than the original in one specific way: each
+  returns `:()` when no tickerplant is found, where `.qpipe.subscribe_etl`
+  throws. In practice all four call `.servers.startupdepcycles[…;0W]` first,
+  which blocks until the tickerplant is up, so the silent path is reached
+  only if the tickerplant dies between that check and the subscribe. Narrow,
+  but the failure it produces — a process that subscribes to nothing and
+  still reports healthy — is the one this tree refuses everywhere else.
+
+  The question is whether `.qpipe` should become for ETLs what `.qbw` is for
+  backfills. It is a design decision rather than a defect: four scripts
+  duplicating a library function is a smell, and the same four blocking
+  correctly on startup is why nothing has broken. See the job-shape taxonomy
+  in
+  [etl-framework-requirements.md](../reference/etl-framework-requirements.md#the-job-shapes-on-two-axes).
 
 ## 4. Is this implementable in q? Yes — and q is a better fit than it looks
 
