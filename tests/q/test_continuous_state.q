@@ -115,6 +115,61 @@ test_a_stale_cursor_is_not_fresh:{[t]
     .qcont.save_cursor[`tailer;.z.p-2D];
     .qunit.assertEquals[.qcont.is_fresh[`tailer;0D00:05];0b;"a two-day-old cursor is not within five minutes"]};
 
+/ --- dataset freshness across feeders (bank E-22) ------------------------
+
+/ A dataset is only as fresh as its SLOWEST feeder, so the aggregate is
+/ min over cursors and the laggard is named. These tests use three tailers
+/ feeding one dataset with deliberately different lags.
+
+setUp_feeders:{[]
+    .qcont.feeds:(`symbol$())!`symbol$();
+    .qcont.clear_cursor each `f1`f2`f3;
+    }
+
+test_an_unfed_dataset_is_an_error_not_a_freshness:{[t]
+    .qunit.assertError[{.qcont.dataset_freshness x};`nobody_feeds_this;"a freshness for a dataset with no declared feeder would be invented"]};
+
+test_dataset_cursor_is_the_minimum_over_feeders:{[t]
+    .qcont.register_feeder[`f1;`quotes]; .qcont.register_feeder[`f2;`quotes];
+    .qcont.save_cursor[`f1;.conttest.d 5];
+    .qcont.save_cursor[`f2;.conttest.d 2];
+    .qunit.assertEquals[.qcont.dataset_freshness[`quotes]`cursor;.conttest.d 2;"the dataset is current only to the slowest feed"]};
+
+/ "The dataset is 29 minutes behind" is a symptom; "fx_feed_2 is 29 minutes
+/ behind" is a diagnosis.
+test_the_laggard_is_named:{[t]
+    .qcont.register_feeder[`f1;`quotes]; .qcont.register_feeder[`f2;`quotes]; .qcont.register_feeder[`f3;`quotes];
+    .qcont.save_cursor[`f1;.conttest.d 5];
+    .qcont.save_cursor[`f2;.conttest.d 1];
+    .qcont.save_cursor[`f3;.conttest.d 4];
+    .qunit.assertEquals[.qcont.dataset_freshness[`quotes]`laggard;`f2;"the slowest feeder is identified, not just its lag"]};
+
+/ A missing feed is the worst possible lag, not a feed to ignore. `min`
+/ would silently skip the null and report the dataset as fresh.
+test_a_feeder_with_no_cursor_makes_the_dataset_not_fresh:{[t]
+    .qcont.register_feeder[`f1;`quotes]; .qcont.register_feeder[`f2;`quotes];
+    .qcont.save_cursor[`f1;.z.p-0D00:01];
+    f:.qcont.dataset_freshness `quotes;
+    .qunit.assertEquals[(null f`cursor;f`laggard;.qcont.dataset_is_fresh[`quotes;1D]);(1b;`f2;0b);"a never-run feeder is the laggard and the dataset is not fresh, however generous the tolerance"]};
+
+test_other_datasets_feeders_are_not_counted:{[t]
+    .qcont.register_feeder[`f1;`quotes]; .qcont.register_feeder[`f2;`trades];
+    .qcont.save_cursor[`f1;.conttest.d 5];
+    .qcont.save_cursor[`f2;.conttest.d 1];
+    .qunit.assertEquals[.qcont.dataset_freshness[`quotes]`cursor;.conttest.d 5;"a slow feeder of a DIFFERENT dataset does not drag this one down"]};
+
+/ Aggregation must not turn "seen up to here" into "complete up to here".
+test_dataset_freshness_is_still_not_a_completeness_claim:{[t]
+    .qcont.register_feeder[`f1;`quotes];
+    .qcont.save_cursor[`f1;.conttest.d 5];
+    .qunit.assertEquals[.qcont.dataset_freshness[`quotes]`is_completeness_claim;0b;"the ETL-03 distinction survives aggregation"]};
+
+test_dataset_is_fresh_within_tolerance:{[t]
+    .qcont.register_feeder[`f1;`quotes]; .qcont.register_feeder[`f2;`quotes];
+    .qcont.save_cursor[`f1;.z.p-0D00:01];
+    .qcont.save_cursor[`f2;.z.p-0D00:03];
+    .qunit.assertEquals[(.qcont.dataset_is_fresh[`quotes;0D00:05];.qcont.dataset_is_fresh[`quotes;0D00:02]);10b;"fresh is judged against the slowest feed's lag"]};
+
 / --- polling (ETL-03, ETL-05) -----------------------------------------------
 
 test_a_poll_publishes_a_page_and_advances:{[t]
