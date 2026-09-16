@@ -1,0 +1,508 @@
+namespace,name,kind,rank,params
+qbfstate,acquire_lock,function,1,worker
+qbfstate,bounded_worker_globals,value,,
+qbfstate,bounded_worker_methods,value,,
+qbfstate,bounded_workers,dict,,
+qbfstate,checkpoint_path,function,1,worker
+qbfstate,clear_checkpoint,function,1,worker
+qbfstate,fail,function,4,worker spec progress err
+qbfstate,load_checkpoint,function,2,worker spec
+qbfstate,lock_dir,function,1,
+qbfstate,lock_held,function,1,worker
+qbfstate,lock_path,function,1,worker
+qbfstate,ns_names,function,1,ns
+qbfstate,register,function,2,worker ns
+qbfstate,registered,function,1,
+qbfstate,release_lock,function,1,worker
+qbfstate,require_contract,function,1,worker
+qbfstate,run_pass,function,3,worker spec pass
+qbfstate,save_checkpoint,function,3,worker spec cursor
+qbook,all_digit_string,function,1,s
+qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
+qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
+qbook,derive_level_groups,function,2,col_names prefix_targets
+qbook,fold_level_columns,function,2,tbl level_groups
+qbook,is_string_column,function,2,tbl col
+qbook,sorted_source_cols_for_prefix,function,3,col_names col_strs prefix_target
+qbook,starts_with,function,2,prefix s
+qbook,symbolize_columns,function,2,tbl sym_cols
+qbw,advanced_to,function,3,worker current next_cursor
+qbw,begin_run,function,1,worker
+qbw,cfgs,dict,,
+qbw,checkpoint,function,2,worker cursor
+qbw,cleanup,function,1,worker
+qbw,connect,function,1,worker
+qbw,declaration,function,1,worker
+qbw,define,function,2,worker cfg
+qbw,do_window,function,2,worker w
+qbw,empty_windows,function,1,
+qbw,end_run,function,1,state
+qbw,fetch,function,3,worker from_ts to_ts
+qbw,init,function,2,worker run_spec
+qbw,no_failures,function,1,
+qbw,normalised,function,1,cfg
+qbw,optional_cfg,value,,
+qbw,plan,function,2,worker cursor
+qbw,publish,function,2,worker batch
+qbw,publish_last_batch,function,2,worker unused
+qbw,publish_pending,function,1,worker
+qbw,read_state,function,2,worker nm
+qbw,record_facts,function,5,worker cfg w batch r
+qbw,required_cfg,value,,
+qbw,run,function,1,worker
+qbw,run_check,function,2,worker batch
+qbw,spec,function,1,worker
+qbw,write_state,function,3,worker nm v
+qccy,ccy_pair_legs,function,1,pair
+qccy,ccy_pair_symbol,function,2,base quote
+qccy,ccy_to_str,function,1,x
+qccy,is_ccy_pair,function,1,x
+qccy,normalize_ccy_pair,function,1,x
+qcoer,coerce_column,function,2,f col
+qcoer,is_date_only,function,1,str
+qcoer,numeric_chars,value,,
+qcoer,require_present,function,2,field v
+qcoer,to_date_as_midnight,function,1,str
+qcoer,to_float,function,1,str
+qcoer,to_long,function,1,str
+qcoer,to_symbol,function,1,str
+qcoer,to_symbol_cased,function,1,str
+qcoer,to_timestamp,function,1,str
+qcont,advance,function,3,worker current next_cursor
+qcont,clear_cursor,function,1,worker
+qcont,cursor_path,function,1,worker
+qcont,dataset_freshness,function,1,dataset
+qcont,dataset_is_fresh,function,2,dataset tolerance
+qcont,feeders_of,function,1,dataset
+qcont,feeds,dict,,
+qcont,freshness,function,1,worker
+qcont,is_fresh,function,2,worker tolerance
+qcont,load_cursor,function,1,worker
+qcont,poll_once,function,4,worker fetch_page publish_page next_cursor
+qcont,register_feeder,function,2,worker dataset
+qcont,save_cursor,function,2,worker cursor
+qcov,attach,function,1,
+qcov,compose,function,1,intervals
+qcov,contributing_runs,function,2,ds version
+qcov,current_run,function,1,
+qcov,gaps,function,3,from_ts to_ts covered
+qcov,history,function,2,ds version
+qcov,init_ledger,function,1,
+qcov,intervals,function,3,ds version as_of
+qcov,is_covered,function,5,ds version as_of from_ts to_ts
+qcov,ledger,function,1,
+qcov,ledger_path,function,1,
+qcov,lock_path,function,1,
+qcov,lock_wait,value,,
+qcov,materialisations_of,function,1,id
+qcov,missing,function,5,ds version as_of from_ts to_ts
+qcov,persist,function,1,
+qcov,reload,function,1,
+qcov,require_covered,function,5,ds version as_of from_ts to_ts
+qcov,require_interval,function,2,range_from range_to
+qcov,require_schema,function,1,
+qcov,schema,value,,
+qcov,stage_completion,function,5,dataset source_version range_from range_to rows_published
+qcov,still_current,value,,
+qcov,supersede,function,4,ds version from_ts to_ts
+qcov,supersede_locked,function,4,ds version from_ts to_ts
+qcov,valid_at,function,3,ds version as_of
+qcov,with_lock,function,2,f args
+qdag,adopt_all,function,1,
+qdag,adopt_feeders,function,1,
+qdag,adopt_pipelines,function,1,
+qdag,adopt_workers,function,1,
+qdag,consumers,function,1,tbl
+qdag,declaration,function,1,job
+qdag,edges,function,1,
+qdag,external_inputs,function,1,
+qdag,external_ref,function,2,source tbl
+qdag,id_chars,value,,
+qdag,job_edges,function,1,
+qdag,jobs,dict,,
+qdag,kinds,value,,
+qdag,layers,function,1,
+qdag,mermaid,function,1,
+qdag,no_edges,function,1,
+qdag,producers,function,1,tbl
+qdag,register,function,2,job spec
+qdag,register_pipelines,function,1,
+qdag,registry,function,1,
+qdag,required_spec,value,,
+qdag,reset,function,1,
+qdag,safe_id,function,1,s
+qdag,sinks,function,1,
+qdag,to_json,function,1,
+qdag,topological,function,1,
+qdata,cfg,function,2,k dflt
+qdata,databentoDir,function,1,
+qdata,databentoFile,function,2,sym date
+qdata,env,dict,,
+qdata,getBySymbolDate,function,2,sym date
+qdata,parseEnv,function,1,file
+qdata,pqModule,function,1,
+qdata,pqm,value,,
+qdcf,dcf_30e_360,function,2,d1 d2
+qdcf,dcf_act_360,function,2,d1 d2
+qdcf,dcf_act_365,function,2,d1 d2
+qdcf,year_frac,function,3,conv d1 d2
+qddbf,checkpoint,function,1,cursor
+qddbf,cleanup,function,1,
+qddbf,fetch,function,2,from_ts to_ts
+qddbf,handle,value,,
+qddbf,init,function,1,run_spec
+qddbf,last_batch,value,,
+qddbf,plan,function,1,cursor
+qddbf,progress,dict,,
+qddbf,publish,function,1,batch
+qddbf,quality_check,function,1,batch
+qddbf,range_from,value,,
+qddbf,range_to,value,,
+qddbf,run,function,1,
+qddbf,source_version,value,,
+qddbf,spec,function,1,
+qddbf,worker_name,value,,
+qdqc,check_ccy_exposure_limits,function,2,exposure limits
+qdqc,check_limit,function,3,metrics limits key_col
+qdqc,check_market_data_quality,function,2,quotes max_spread_bps
+qdqc,check_position_notional_limits,function,2,pos limits
+qdqc,check_reject_ratio_limits,function,3,reject_ratios limits key_col
+qdqc,check_stale_quotes,function,3,quotes at_time max_age
+qdqc,limit_for,function,3,limits key_col id
+qdqc,status_for,function,2,metric limit
+qdqc,summarize_checks,function,1,named_checks
+qevbf,checkpoint,function,1,cursor
+qevbf,cleanup,function,1,
+qevbf,facts,function,1,batch
+qevbf,fetch,function,2,from_ts to_ts
+qevbf,handle,value,,
+qevbf,init,function,1,run_spec
+qevbf,last_batch,value,,
+qevbf,plan,function,1,cursor
+qevbf,progress,dict,,
+qevbf,publish,function,1,batch
+qevbf,range_from,value,,
+qevbf,range_to,value,,
+qevbf,run,function,1,
+qevbf,source_version,value,,
+qevbf,spec,function,1,
+qevbf,worker_name,value,,
+qexdef,pip_size,value,,
+qexdef,size_row_drift,value,,
+qexdef,size_unit,value,,
+qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
+qexec,fill_ratio,function,2,num_fills num_quotes
+qexec,hit_ratio_by,function,6,requests start_ts end_ts bucket_size group_cols mode
+qexec,markout,function,4,side trade_price ref_price pip_factor
+qexec,markout_at_horizons,function,3,trades quotes horizons
+qexec,reject_ratio,function,2,num_rejects num_requests
+qexec,reject_ratio_by,function,6,requests start_ts end_ts bucket_size group_cols mode
+qexec,slippage,function,4,side arrival_price exec_price pip_factor
+qexec,sweep_price,function,3,prices sizes target_size
+qexec,vwap,function,2,prices sizes
+qexec,vwap_expanding,function,2,prices sizes
+qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
+qfwd,CROSS_SIZE_MAX_HALVINGS,value,,
+qfwd,CROSS_SIZE_REL_TOL,value,,
+qfwd,apply_col_precedence,function,1,tbl
+qfwd,book_crossed,function,1,book
+qfwd,ccy_graph_edges,function,1,avail_syms
+qfwd,ccy_orient_chain,function,1,syms
+qfwd,ccy_orient_cross,function,2,sym1 sym2
+qfwd,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
+qfwd,col_precedence,value,,
+qfwd,combine_oriented_books,function,2,book_ab book_bc
+qfwd,cross_book,function,4,sym1 book1 sym2 book2
+qfwd,cross_book_at,function,5,quotes sym at_time sizes sides
+qfwd,cross_book_at_one_size,function,5,sym1 book1 sym2 book2 size
+qfwd,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
+qfwd,cross_book_chain_at_one_size,function,3,syms books size
+qfwd,cross_book_chain_at_sizes,function,4,syms books sizes sides
+qfwd,cross_decomp,function,2,avail_syms sym
+qfwd,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons_ms ref_size
+qfwd,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons_ms ref_size
+qfwd,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
+qfwd,cross_price_ok_at_size,function,6,quotes sym at_time side price_limit size
+qfwd,cross_rate,function,2,ab_rate bc_rate
+qfwd,cross_rate_shared_base,function,2,rate_ax rate_ay
+qfwd,cross_ref_price_at,function,4,quotes sym at_time ref_size
+qfwd,cross_size_at_price,function,5,quotes sym at_time side price_limit
+qfwd,cross_sweep_chain,function,4,books side size inverts
+qfwd,cross_sweep_side,function,6,book1 book2 side size invert1 invert2
+qfwd,fwd_cont,function,4,spot rd rf t
+qfwd,fwd_points,function,3,fwd spot pip_factor
+qfwd,fwd_simple,function,4,spot rd rf t
+qfwd,implied_domestic_rate,function,4,spot fwd rf t
+qfwd,implied_foreign_rate,function,4,spot fwd rd t
+qfwd,invert_book,function,1,book
+qfwd,invert_book_depth,function,2,prices sizes
+qfwd,invert_rate,function,1,rate
+qfwd,leg_book_as_of,function,3,quotes at_time target_sym
+qfwd,oriented_levels,function,3,side book invert
+qfwd,points_to_outright,function,3,spot points pip_factor
+qfwd,require_quotes_cols,function,2,fn_name quotes
+qfwd,side_cols,function,1,s
+qfwd,single_leg_at_one_size,function,4,cross_sym leg_book invert size
+qfwd,single_leg_at_sizes,function,5,cross_sym leg_book invert sizes sides
+qfwd,ts_col,value,,
+qhb,attach,function,1,
+qhb,beat,function,2,worker state
+qhb,beat_window,function,1,worker
+qhb,columns,value,,
+qhb,has_beaten,function,1,worker
+qhb,init_table,function,1,
+qhb,ledger,function,1,
+qhb,never_started,function,1,
+qhb,report,function,1,
+qhb,require_schema,function,1,
+qhb,stale,function,1,max_age
+qio,discard,dict,,
+qio,for_cfg,function,1,cfg
+qio,memory,dict,,
+qio,require_manager,function,1,mgr
+qio,required,value,,
+qio,write,function,3,mgr target batch
+qio,write_discard,function,2,target batch
+qio,write_memory,function,2,target batch
+qlog,dbg,function,3,id text fields
+qlog,debug,function,1,on
+qlog,debug_enabled,value,,
+qlog,emit,function,3,level id msg
+qlog,enabled,function,1,level
+qlog,err,function,3,id text fields
+qlog,info,function,3,id text fields
+qlog,levels,value,,
+qlog,line,function,4,level id text fields
+qlog,register,function,1,
+qlog,render,function,1,fields
+qlog,torq_loaded,function,1,
+qlog,warn,function,3,id text fields
+qmicro,book_convexity,function,2,prices side
+qmicro,book_convexity_one,function,2,prices side
+qmicro,book_pressure_at_level,function,3,bid_sizes ask_sizes level
+qmicro,book_slope,function,2,prices sizes
+qmicro,book_slope_one,function,2,prices sizes
+qmicro,cancel_to_trade_ratio,function,1,tape
+qmicro,cancel_to_trade_ratio_by,function,3,tape bucket_size group_cols
+qmicro,cumulative_trade_flow,function,1,tape
+qmicro,depth_ratio,function,2,bid_sizes ask_sizes
+qmicro,empty_buckets,function,1,
+qmicro,inter_event_time,function,2,quotes target_sym
+qmicro,large_trade_ratio,function,2,tape q
+qmicro,large_trade_threshold,function,2,tape q
+qmicro,large_trade_volume_share,function,2,tape q
+qmicro,level_at,function,2,levels level
+qmicro,microprice,function,4,bid_prices bid_sizes ask_prices ask_sizes
+qmicro,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_sizes
+qmicro,mid_price,function,2,bid_prices ask_prices
+qmicro,mid_price_acceleration,function,2,quotes target_sym
+qmicro,mid_price_velocity,function,2,quotes target_sym
+qmicro,ofi,function,2,quotes target_sym
+qmicro,ofi_at_level,function,2,sub level
+qmicro,ofi_autocorrelation,function,2,ofi_series window
+qmicro,ofi_multilevel,function,3,quotes target_sym n_levels
+qmicro,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
+qmicro,queue_depletion_rate,function,3,quotes target_sym side
+qmicro,quotes_for_sym,function,3,fn_name quotes target_sym
+qmicro,require_tape,function,1,tape
+qmicro,rolling_ofi,function,2,ofi_series window
+qmicro,signed_trade_flow,function,1,tape
+qmicro,spread_bps,function,2,bid_prices ask_prices
+qmicro,spread_ratio,function,3,quotes target_sym window
+qmicro,sum_levels,function,2,sizes n_levels
+qmicro,tape_actions,value,,
+qmicro,tape_cols,value,,
+qmicro,trade_arrival_rate,function,1,tape
+qmicro,trade_arrival_rate_by,function,3,tape bucket_size group_cols
+qmicro,vamp,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
+qmicro,vamp_one,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
+qmicro,volume_buckets,function,2,tape bucket_volume
+qmicro,vpin,function,3,tape bucket_volume n_buckets
+qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
+qmicro,vwmp_skew_one,function,5,n_levels bid_prices bid_sizes ask_prices ask_sizes
+qodbc,available,function,1,
+qodbc,build_connection_string,function,5,host port database user password
+qodbc,close,function,1,h
+qodbc,escape_text,function,1,s
+qodbc,literal,function,1,v
+qodbc,loaded,function,1,
+qodbc,open,function,1,conn
+qodbc,require_available,function,1,
+qodbc,run_sql,function,2,h sql
+qodbc,table_names,function,1,h
+qodbc,window_query,function,6,h tbl time_field fields range_from range_to
+qodbc,with_connection,function,2,conn f
+qopt,BISECT_VOL_HI,value,,
+qopt,BISECT_VOL_LO,value,,
+qopt,BISECT_VOL_MAX_ITER,value,,
+qopt,IMPLIED_VOL_INITIAL_SIGMA,value,,
+qopt,IMPLIED_VOL_MAX_ITER,value,,
+qopt,IMPLIED_VOL_PRICE_TOL,value,,
+qopt,IMPLIED_VOL_SIGMA_FLOOR,value,,
+qopt,IMPLIED_VOL_VEGA_FLOOR,value,,
+qopt,bisect_vol,function,7,price s k rd rf t is_call
+qopt,d1,function,6,s k rd rf sigma t
+qopt,d1_d2,function,6,s k rd rf sigma t
+qopt,d2,function,6,s k rd rf sigma t
+qopt,gk_call,function,6,s k rd rf sigma t
+qopt,gk_delta_call,function,6,s k rd rf sigma t
+qopt,gk_delta_put,function,6,s k rd rf sigma t
+qopt,gk_gamma,function,6,s k rd rf sigma t
+qopt,gk_price,function,7,s k rd rf sigma t is_call
+qopt,gk_put,function,6,s k rd rf sigma t
+qopt,gk_rho_call,function,6,s k rd rf sigma t
+qopt,gk_rho_put,function,6,s k rd rf sigma t
+qopt,gk_theta_call,function,6,s k rd rf sigma t
+qopt,gk_theta_put,function,6,s k rd rf sigma t
+qopt,gk_vanna,function,6,s k rd rf sigma t
+qopt,gk_vega,function,6,s k rd rf sigma t
+qopt,gk_volga,function,6,s k rd rf sigma t
+qopt,implied_vol,function,7,price s k rd rf t is_call
+qpos,apply_fill,function,5,pos sym qty price side
+qpos,apply_fills,function,2,pos trades
+qpos,ccy_exposure,function,1,pos
+qpos,ccy_exposure_in,function,4,pos quotes reporting_ccy at_time
+qpos,ccy_legs,function,3,sym qty avg_price
+qpos,empty_book,function,1,
+qpos,reconcile_trades,function,4,reference_book trades qty_tol price_tol
+qpos,total_pnl,function,3,pos sym mkt_price
+qpos,unrealized_pnl,function,3,pos sym mkt_price
+qrates,cont_to_simple,function,2,r t
+qrates,df_cont,function,2,r t
+qrates,df_simple,function,2,r t
+qrates,growth_cont,function,2,r t
+qrates,growth_simple,function,2,r t
+qrates,simple_to_cont,function,2,r t
+qrisk,carry_pnl,function,3,notional spot fwd
+qrisk,carry_return,function,2,spot fwd
+qrisk,pip_value,function,2,notional pip_factor
+qrisk,pnl,function,4,notional entry_rate exit_rate side
+qrisk,var_historical,function,2,pnl_series confidence
+qrisk,var_parametric,function,4,notional vol t confidence
+qrun,as_text,function,1,v
+qrun,attach,function,1,
+qrun,begin,function,1,worker
+qrun,current,function,1,
+qrun,current_run,value,,
+qrun,facts_about,function,3,dataset range_from range_to
+qrun,facts_of,function,1,id
+qrun,finish,function,1,status
+qrun,history,function,1,
+qrun,in_flight,value,,
+qrun,init_meta,function,1,
+qrun,init_runs,function,1,
+qrun,is_running,function,1,
+qrun,meta_schema,value,,
+qrun,meta_table,function,1,
+qrun,mint,function,1,
+qrun,not_ended,value,,
+qrun,of_run,function,1,id
+qrun,proc_name,function,1,
+qrun,record,function,4,dataset range_from range_to facts
+qrun,release,function,1,
+qrun,require_current,function,1,
+qrun,require_run_schema,function,1,
+qrun,run_schema,value,,
+qrun,runs,function,1,
+qrun,unfinished,function,1,
+qsdemo,fields,value,,
+qsdemo,fixture,function,1,
+qsdemo,query,function,3,h range_from range_to
+qsdemo,row_key,value,,
+qsdemo,source_name,value,,
+qsdemo,target,value,,
+qsdemo,time_field,value,,
+qsdemo,time_zone,value,,
+qsdemo,types,value,,
+qsevt,fields,value,,
+qsevt,fixture,function,1,
+qsevt,query,function,3,h range_from range_to
+qsevt,row_key,value,,
+qsevt,source_name,value,,
+qsevt,target,value,,
+qsevt,time_field,value,,
+qsevt,time_zone,value,,
+qsevt,types,value,,
+qsrc,ambiguous_message,function,3,zone bad cs
+qsrc,bound_padding,value,,
+qsrc,coerce,function,2,source tbl
+qsrc,coercers,dict,,
+qsrc,column_names,function,1,tbl
+qsrc,credential_var,function,1,source
+qsrc,declaration,function,1,source
+qsrc,fetch_window,function,4,source h range_from range_to
+qsrc,has_credentials,function,1,source
+qsrc,load_zone_table,function,1,path
+qsrc,local_candidates,function,2,zone tsv
+qsrc,local_to_utc,function,2,zone ts
+qsrc,narrow_to_utc,function,4,decl tbl range_from range_to
+qsrc,nonexistent_message,function,2,zone bad
+qsrc,offset_at,function,2,zone ts
+qsrc,offsets_for,function,1,zone
+qsrc,register,function,2,source decl
+qsrc,registered,function,1,
+qsrc,require_credentials,function,1,source
+qsrc,require_zone_table,function,1,zone
+qsrc,required_declarations,value,,
+qsrc,row_key,function,1,source
+qsrc,source_bounds,function,3,decl range_from range_to
+qsrc,sources,dict,,
+qsrc,type_chars,function,1,tbl
+qsrc,utc_to_local,function,2,zone ts
+qsrc,validate,function,2,source tbl
+qsrc,validate_fixture,function,1,source
+qsrc,validate_live,function,2,source h
+qsrc,window_fixture,function,3,decl range_from range_to
+qsrc,zone_names,value,,
+qsrc,zone_table,table,,
+qstats,PI,value,,
+qstats,horner_eval,function,2,coeffs x
+qstats,inv_ncdf,function,1,p
+qstats,ncdf,function,1,x
+qstats,npdf,function,1,x
+qwcfg,default_values,dict,,
+qwcfg,env_name,function,1,k
+qwcfg,env_values,dict,,
+qwcfg,errors,value,,
+qwcfg,explain,function,1,k
+qwcfg,falsy,value,,
+qwcfg,get_flag,function,1,k
+qwcfg,get_positive,function,1,k
+qwcfg,get_symbol,function,1,k
+qwcfg,get_timestamp,function,1,k
+qwcfg,note,function,2,msg null_value
+qwcfg,override_values,dict,,
+qwcfg,raw,function,1,k
+qwcfg,raw_from,function,2,source k
+qwcfg,require_valid,function,1,
+qwcfg,reset,function,1,
+qwcfg,set_layers,function,3,overrides yaml defaults
+qwcfg,sources,value,,
+qwcfg,truthy,value,,
+qwcfg,yaml_values,dict,,
+qwrt,airflow_owned,value,,
+qwrt,backoff_ms,function,2,pol attempt
+qwrt,classify,function,1,err
+qwrt,commit,function,4,dry effect action args
+qwrt,connected,function,1,
+qwrt,connected_override,value,,
+qwrt,data_patterns,value,,
+qwrt,declare_dependencies,function,2,worker procs
+qwrt,declared_dependencies,dict,,
+qwrt,default_policy,dict,,
+qwrt,finish_window,function,6,worker ds spec from_ts to_ts publish
+qwrt,is_dry_run,function,1,
+qwrt,needs_fetch,function,5,ds version as_of from_ts to_ts
+qwrt,owner,function,1,concern
+qwrt,policy,function,1,
+qwrt,q_owned,value,,
+qwrt,remaining,function,5,ds version as_of from_ts to_ts
+qwrt,require_dependencies,function,1,worker
+qwrt,require_upstream,function,5,upstream version as_of from_ts to_ts
+qwrt,retry_boundary,value,,
+qwrt,retryable,function,1,err
+qwrt,sleep_ms,function,1,ms
+qwrt,suppressed_in_dry_run,value,,
+qwrt,transport_patterns,value,,
+qwrt,windows,function,3,from_ts to_ts width
+qwrt,with_retry,function,2,pol f

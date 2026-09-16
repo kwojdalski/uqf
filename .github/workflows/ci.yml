@@ -66,7 +66,7 @@ jobs:
         # stdlib-only and do not need the workspace.
         run: uv run python scripts/generate_operational_docs.py --check
       - name: Check the committed contract surface is current
-        # WP2 (#139): docs/migrations/surfaces/uqf-local.json is this tree's
+        # WP2 (#139): docs/migrations/surfaces/uqf-local/ is this tree's
         # half of the contract lock. A committed baseline nothing verifies
         # goes stale silently - the .qcov.require_schema shape, where a file's
         # existence reads as protection it is not providing. Reports the
