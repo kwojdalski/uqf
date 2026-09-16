@@ -102,30 +102,44 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
         _die(exc)
         return
 
-    columns = ("Time", "Process", "Status", "PID", "Port")
+    # TorQ reports a port only for a process that is UP, so every `down` row
+    # used to show a blank - for exactly the processes whose port a reader is
+    # most likely looking up. The port is declared in process.csv either way,
+    # so fill it from there and mark where it came from.
+    try:
+        ports = core.configured_ports(_paths(), base_port=port)
+    except core.TorqDemoError:
+        # A summary that still prints beats one that dies because the port
+        # map could not be built - the reported ports are unaffected.
+        ports = {}
+
+    rows = core.summary_rows(result.stdout, ports)
+
     table = Table(title=f"torq_demo summary (base port {port})")
-    for col in columns:
+    for col in core.SUMMARY_COLUMNS:
         table.add_column(col)
 
-    rows: list[dict[str, str]] = []
-    for line in result.stdout.splitlines():
-        cells = [c.strip() for c in line.split("|")]
-        # "up" rows have all 5 fields (time/process/status/pid/port); "down"
-        # rows omit pid/port entirely rather than leaving them empty - pad
-        # instead of requiring an exact width, or every down row vanishes.
-        if len(cells) < 3 or cells[0] in ("", "TIME"):
-            continue
-        cells += [""] * (5 - len(cells))
-        rows.append(dict(zip(columns, cells, strict=True)))
-        status_style = _STATUS_STYLE.get(cells[2], "")
+    for row in rows:
+        status_style = _STATUS_STYLE.get(row["Status"], "")
+        # A configured port is a different claim from a reported one -
+        # "will listen here" rather than "is listening here" - so it is dimmed
+        # rather than printed as though the process were up.
+        port_cell = row["Port"]
+        if row["PortSource"] == "configured" and port_cell:
+            port_cell = f"[dim]{port_cell}[/]"
         table.add_row(
-            cells[0],
-            cells[1],
-            f"[{status_style}]{cells[2]}[/]" if status_style else cells[2],
-            cells[3],
-            cells[4],
+            row["Time"],
+            row["Process"],
+            f"[{status_style}]{row['Status']}[/]" if status_style else row["Status"],
+            row["PID"],
+            port_cell,
         )
     console.print(table)
+    if any(r["PortSource"] == "configured" for r in rows):
+        console.print(
+            "[dim]Dimmed ports come from process.csv: that is where the process "
+            "will listen, not where it is listening.[/]"
+        )
     _export(rows, export)
     raise typer.Exit(code=result.returncode)
 

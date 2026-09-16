@@ -55,9 +55,12 @@ from torq_orchestrator.crypto import (  # noqa: F401
 from torq_orchestrator.env import (  # noqa: F401
     build_env,
 )
-from torq_orchestrator.listing import (  # noqa: F401
+from torq_orchestrator.listing import (
     LISTABLE_KINDS,
+    SUMMARY_COLUMNS,
+    configured_ports,
     list_items,
+    summary_rows,  # noqa: F401
 )
 from torq_orchestrator.logs import (  # noqa: F401
     follow_logs,
@@ -184,6 +187,9 @@ __all__ = [
     "get_recent_logs",
     "is_crypto_recorder_running",
     "list_items",
+    "SUMMARY_COLUMNS",
+    "configured_ports",
+    "summary_rows",
     "list_process_names",
     "next_free_port_offset",
     "parse_log_line",
