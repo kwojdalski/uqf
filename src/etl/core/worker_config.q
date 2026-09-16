@@ -6,6 +6,21 @@
 / .
 /   env  >  process_overrides.csv  >  config/backfill.yaml  >  code default
 / .
+/ ONLY THE FIRST LAYER IS WIRED TODAY, and saying so here matters more than
+/ the order does. `set_layers` below is what populates the lower three, and
+/ its only callers are tests - no production path calls it, so in a running
+/ worker override_values, yaml_values and default_values stay empty and `env`
+/ supplies everything. `config/` does not exist in this tree at all.
+/ .
+/ The precedence is therefore a decided contract with one supplier, not a
+/ description of four live layers. It is left standing rather than deleted
+/ because C-02 settled the ORDER and that answer does not expire - but a
+/ reader who concluded they could drop a key into a YAML file and have a
+/ worker pick it up would be wrong, and the previous version of this comment
+/ invited exactly that. Wiring the rest needs a YAML hand-off from the Python
+/ orchestrator (which already owns that parsing) plus a decision about where
+/ `config/` lives, which is bank question H-07.
+/ .
 / Most specific and most immediate wins, so an operator can override anything
 / from the environment without editing tracked config - which is what you
 / want when debugging a running process.

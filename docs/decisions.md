@@ -15,7 +15,7 @@ and the question bank's backfill area is numbered `D-01..D-12` - one file
 holding both would put `D8` and `D-08` in adjacent tables meaning unrelated
 things.
 
-**98 answered, 12 still open** across 15 areas.
+**103 answered, 7 still open** across 15 areas.
 
 ## Answered
 
@@ -75,14 +75,19 @@ things.
 | `F-23` | - | answered together with #56: local demo, single host | [#57](../../issues/57) | 2026-09-15 |
 | `G-02` | Airflow integration | answered by #68 and #93, not by discussion | [#75](../../issues/75) | 2026-09-15 |
 | `G-03` | Airflow integration | the idempotency key is the coverage window, not the task or the DAG | [#75](../../issues/75) | 2026-09-16 |
+| `G-04` | Airflow integration | the instance id is the mapping, and q owns it | [#75](../../issues/75) | 2026-09-16 |
+| `G-05` | Airflow integration | it does not reach q at all — the filesystem is the interface, so there is nothing to authenticate | [#75](../../issues/75) | 2026-09-16 |
 | `G-06` | Airflow integration | not a real provider package — a translation library, deliberately, and it says so | [#75](../../issues/75) | 2026-09-16 |
+| `G-07` | Airflow integration | the second run refuses to start, and the first is unharmed | [#75](../../issues/75) | 2026-09-16 |
 | `G-08` | Airflow integration | yes — `GET /ops/backfill`, and the honest limit is what q never saw | [#75](../../issues/75) | 2026-09-16 |
 | `G-09` | Airflow integration | strictly optional — and proved, not asserted | [#75](../../issues/75) | 2026-09-16 |
 | `H-01` | TorQ orchestration & process registry | overrides last, vendored file never edited | [#76](../../issues/76) | 2026-09-16 |
 | `H-02` | TorQ orchestration & process registry | there is no process group here, and `all` plus a name list is what exists instead | [#76](../../issues/76) | 2026-09-16 |
 | `H-03` | TorQ orchestration & process registry | there are no glob selectors, and an unknown name is silently dropped | [#76](../../issues/76) | 2026-09-16 |
+| `H-04` | TorQ orchestration & process registry | yes, every query routes through the gateway — and there is deliberately no fallback | [#76](../../issues/76) | 2026-09-16 |
 | `H-05` | TorQ orchestration & process registry | the `Pipeline` registry IS the source of truth; the CSV is generated from it | [#76](../../issues/76) | 2026-09-16 |
 | `H-06` | TorQ orchestration & process registry | answered by #66's Pipeline registry | [#76](../../issues/76) | 2026-09-15 |
+| `H-07` | TorQ orchestration & process registry | neither file exists — and the precedence that names them has three layers nothing supplies | [#76](../../issues/76) | 2026-09-16 |
 | `H-08` | TorQ orchestration & process registry | there is no `monitor.py`, and tmux appears nowhere in this repository | [#76](../../issues/76) | 2026-09-16 |
 | `H-09` | TorQ orchestration & process registry | role plus a 1-based instance digit, lower-case, no separator — and it is now enforced | [#76](../../issues/76) | 2026-09-16 |
 | `I-01` | Testing strategy & gates | seeded, and enforced by a test rather than a comment | [#77](../../issues/77) | 2026-09-16 |
@@ -132,11 +137,6 @@ recorded the substance, that is named too.
 
 | ID | Area | State | Question | Issue |
 |---|---|---|---|---|
-| `G-04` | Airflow integration | `shaping` | Where does the workflow-to-process mapping live, and which side is the source of truth? | [#75](../../issues/75) |
-| `G-05` | Airflow integration | `shaping` | Does Airflow reach q over IPC, REST, or by shelling out, and how does it authenticate? | [#75](../../issues/75) |
-| `G-07` | Airflow integration | `shaping` | What happens if a DAG is triggered while the previous run is still in flight? | [#75](../../issues/75) |
-| `H-04` | TorQ orchestration & process registry | `shaping` | Does every query now route through the gateway, and what is the fallback when it is down? | [#76](../../issues/76) |
-| `H-07` | TorQ orchestration & process registry | `shaping` | What lives in `config/backfill.yaml` versus `config/endpoints.yaml`, and how do they relate to `process.csv`? | [#76](../../issues/76) |
 | `J-05` | Documentation & generation | `shaping` | What belongs in `guides/` versus `architecture/` versus `reference/` versus `decisions/` versus `integrations/`? | [#78](../../issues/78) |
 | `K-04` | Observability & diagnostics | `shaping` | Is there a per-worker heartbeat or metrics table, and does monitoring read it? | [#79](../../issues/79) |
 | `P-01` | Process & provenance | `shaping` | Should each answered question here become an ADR in `docs/decisions/`? | [#84](../../issues/84) |
