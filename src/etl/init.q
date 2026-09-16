@@ -28,6 +28,15 @@
 /                                          load, so the registry it registers
 /                                          into has to exist
 / .
+/ NOT every loader should use this file. tests/q/try_acquire.q,
+/ read_checkpoint.q, run_backfill_process.q and smoke_external_metadata.q
+/ deliberately load a minimal subset - they are small scripts run as CHILD
+/ processes to prove one thing (a lock is exclusive; a real source's metadata
+/ matches its declaration), and pulling in the whole tree would be slower and,
+/ for the smoke script, wrong: it runs outside a worker on purpose, which is
+/ why it reads getenv rather than .qwcfg. Those are minimal by intent, not
+/ oversights to tidy into full loads.
+/ .
 / Assumes src/init.q has already been loaded: the ETL tree uses the library's
 / own namespaces. Run from the repository root, like every other loader here.
 
