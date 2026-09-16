@@ -21,7 +21,9 @@ reference or an architecture note, and only its purpose decides where it goes.
 (D-11's bitemporal design, now built),
 [`event-tape.md`](architecture/event-tape.md),
 [`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) (what
-`src/etl/` has and lacks relative to a Dagster-shaped framework).
+`src/etl/` has and lacks relative to a Dagster-shaped framework),
+[`cryptorust-discovery.md`](architecture/cryptorust-discovery.md) (why a
+non-listening process belongs in the client table, not the server one).
 
 **`reference/`** — [`environment.md`](reference/environment.md) (every
 variable, machine-checked),

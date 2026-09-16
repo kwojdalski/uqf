@@ -180,6 +180,36 @@ def create_app(
             poll_seconds=ops.POLL_SECONDS["usage"],
         )
 
+    @app.get("/ops/clients", response_model=UsageResponse)
+    def ops_clients(request: Request, limit: int = 500) -> UsageResponse:
+        """Every client connected to any process in the fleet.
+
+        Distinct from `/ops/connections`, which reports the GATEWAY's clients.
+        A process that connects to the tickerplant rather than the gateway
+        does not appear there at all — which is the whole reason this exists.
+
+        The motivating case is the cryptorust recorder: it opens an outbound
+        connection to `stp1` and never listens, so it cannot be a TorQ
+        discovery member, and registering it as one would put a permanently
+        unreachable row in the fleet view. TorQ already tracks it here, in
+        `.clients.clients` of the process it connects to. See
+        docs/architecture/cryptorust-discovery.md.
+
+        Reuses UsageResponse: the shape is the same fleet-wide-merge-plus-
+        unreachable, and a second identical model would be two places for one
+        idea.
+        """
+        authorise(request)
+        capped = min(limit, settings.max_rows)
+        rows, unreachable = ops.merge_process_clients(fleet.per_process(ops.PROCESS_CLIENTS))
+        return UsageResponse(
+            rows=rows[:capped],
+            row_count=min(len(rows), capped),
+            unreachable=unreachable,
+            processes_configured=len(fleet.processes),
+            poll_seconds=ops.POLL_SECONDS["connections"],
+        )
+
     @app.get("/ops/processes", response_model=FleetHealthResponse)
     def ops_processes(request: Request) -> FleetHealthResponse:
         """Fleet health for every process process.csv declares (FE-01).
