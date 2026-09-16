@@ -331,6 +331,14 @@
       },
       {
         "kind": "function",
+        "name": "no_failures",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
         "name": "plan",
         "params": [
           "worker",
@@ -386,6 +394,15 @@
           "worker"
         ],
         "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "run_check",
+        "params": [
+          "worker",
+          "batch"
+        ],
+        "rank": 2
       },
       {
         "kind": "function",
@@ -1176,6 +1193,14 @@
       {
         "kind": "function",
         "name": "publish",
+        "params": [
+          "batch"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "quality_check",
         "params": [
           "batch"
         ],

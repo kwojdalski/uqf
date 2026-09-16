@@ -59,7 +59,20 @@ That is the *only* thing a worker can do with its output. There is no way to:
 precisely because "what to compute" and "where it goes" change for different
 reasons and at different times.
 
-### 2.2 `.qdqc` is wired to nothing — a pipeline can publish garbage and record success
+### 2.2 ~~`.qdqc` is wired to nothing~~ — CLOSED
+
+**Fixed.** A worker declaration now takes an optional `check` callback, run
+between fetch and publish. A failed check takes the same terminal-window path
+as a failed fetch (M-05): not published, no coverage staged, run continues,
+and the next run plans the window again because coverage never claimed it.
+
+`demo_deals_backfill` declares one, so the path is exercised rather than
+merely available. The original text follows, because the failure it describes
+is the reason the gate exists.
+
+---
+
+### 2.2 (as written) `.qdqc` is wired to nothing — a pipeline can publish garbage and record success
 
 Nine check functions exist — `check_market_data_quality`, `check_stale_quotes`,
 `check_position_notional_limits`, `summarize_checks` and more. No worker calls
@@ -143,11 +156,7 @@ discovered later:
 
 ## 5. Recommended order, by leverage
 
-1. **Asset checks in the publish path.** `.qdqc` exists; the work is a
-   `check` callback on the worker declaration, run between fetch and publish,
-   with a failed check recorded as a *failed window* rather than a covered
-   one. Highest value per line, and it closes a case where the ledger
-   currently lies.
+1. ~~**Asset checks in the publish path.**~~ **Done** — see §2.2.
 2. **IO manager.** Extract `publish`'s four lines behind a declared
    `io` dict (`write`/`read`/`exists`), defaulting to today's in-memory
    insert so nothing changes for existing workers. Unlocks testing,

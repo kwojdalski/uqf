@@ -288,6 +288,45 @@ run:{[worker]
 / Private: one window, end to end. Accumulates into the worker's own
 / `progress` rather than returning, because a q lambda does not close over an
 / enclosing local and `each` over windows needs somewhere to put the totals.
+/ Private: run a worker's declared data-quality check over one batch.
+/ .
+/ Returns the FAILURES, so an empty result means the batch passed - the same
+/ convention .qdqc.summarize_checks already uses, and reusing it means a
+/ worker can hand that function's output straight back with no adapter.
+/ .
+/ A worker that declares no check returns no failures. That is deliberate:
+/ the framework does not force a check, because a check written to satisfy a
+/ requirement rather than to catch something is worse than none - it reads as
+/ protection while asserting nothing. What the framework does guarantee is
+/ that a check, once declared, is unskippable.
+/ .
+/ The check runs in DRY RUN too. It reads the batch and publishes nothing, so
+/ suppressing it would only hide the one signal a dry run could give about
+/ the data - and "would this have published garbage" is exactly what a dry
+/ run is for.
+/ @param worker the worker's name
+/ @param batch the fetched rows, before publication
+/ @return a table of failures, empty when the batch is acceptable
+/ @throws error when a declared check is not callable, or returns a
+/   non-table, naming the worker
+run_check:{[worker;batch]
+    cfg:declaration worker;
+    if[not `check in key cfg; :no_failures[]];
+    c:cfg`check;
+    if[(::)~c; :no_failures[]];
+    if[not 100h=type c;
+        '"run_check: ",string[worker],"'s check must be a function taking the batch"];
+    r:c batch;
+    / A check that returns something other than a table is refused rather
+    / than truthiness-tested: `if[count r]` on a stray atom would pass or
+    / fail on the value's LENGTH, which is a plausible wrong answer.
+    if[not .Q.qt r;
+        '"run_check: ",string[worker],"'s check must return a table of failures - an empty one means the batch passed"];
+    r}
+
+/ Private: the empty failure table, so every path returns one shape.
+no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
+
 do_window:{[worker;w]
     cfg:declaration worker;
     .qlog.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
@@ -300,6 +339,26 @@ do_window:{[worker;w]
         .qlog.err[worker;"window failed";
             `range_from`range_to`kind`attempts`error!
             (w`range_from;w`range_to;f`kind;f`attempts;f`error)];
+        write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
+        :0b];
+    / DATA QUALITY GATE, between fetch and publish.
+    / .
+    / Before this existed the sequence was fetch, publish, record coverage as
+    / complete - so a window of nulls, or one with every price at zero, was
+    / recorded as covered and read as published forever. The ledger could
+    / record a lie, and nothing anywhere would say so.
+    / .
+    / A failed check takes the SAME terminal-window path as a failed fetch
+    / (M-05): the window is not published, no coverage is staged, the run
+    / continues, and the next run plans the window again because coverage
+    / never claimed it. That is the behaviour that makes a check safe to add
+    / to an existing worker - the worst case is work redone, never data lost
+    / and never a gap silently marked complete.
+    bad:run_check[worker;f`result];
+    if[count bad;
+        .qlog.err[worker;"window failed data quality";
+            `range_from`range_to`failures`detail!
+            (w`range_from;w`range_to;count bad;.Q.s1 bad)];
         write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
         :0b];
     write_state[worker;`last_batch;f`result];
