@@ -24,6 +24,12 @@ beforeNamespace_isolate:{[]
 setUp_fresh:{[]
     .qrun.release[];
     ![`.;();0b;`etl_runs`etl_run_meta];
+    / The FILES too. Both tables are persisted now, so emptying the
+    / in-memory copies is no longer a reset: the next begin[] reloads from
+    / disk first and resurrects the previous test's runs - which made the
+    / two unfinished[] tests count rows they never created.
+    @[{system"rm -f ",x};.qrun.table_path `etl_runs;{[e] (::)}];
+    @[{system"rm -f ",x};.qrun.table_path `etl_run_meta;{[e] (::)}];
     .qrun.init_runs[];
     .qrun.init_meta[];
     // Clears the FILE as well as the table. Since the ledger is persisted,

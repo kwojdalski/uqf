@@ -6,6 +6,8 @@ qbfstate,bounded_workers,dict,,
 qbfstate,checkpoint_path,function,1,worker
 qbfstate,clear_checkpoint,function,1,worker
 qbfstate,fail,function,4,worker spec progress err
+qbfstate,file_lock_path,function,1,name
+qbfstate,file_lock_wait,value,,
 qbfstate,load_checkpoint,function,2,worker spec
 qbfstate,lock_dir,function,1,
 qbfstate,lock_held,function,1,worker
@@ -17,6 +19,7 @@ qbfstate,release_lock,function,1,worker
 qbfstate,require_contract,function,1,worker
 qbfstate,run_pass,function,3,worker spec pass
 qbfstate,save_checkpoint,function,3,worker spec cursor
+qbfstate,with_file_lock,function,3,name f args
 qbook,all_digit_string,function,1,s
 qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
@@ -93,7 +96,6 @@ qcov,is_covered,function,5,ds version as_of from_ts to_ts
 qcov,ledger,function,1,
 qcov,ledger_path,function,1,
 qcov,lock_path,function,1,
-qcov,lock_wait,value,,
 qcov,materialisations_of,function,1,id
 qcov,missing,function,5,ds version as_of from_ts to_ts
 qcov,persist,function,1,
@@ -397,13 +399,17 @@ qrun,meta_table,function,1,
 qrun,mint,function,1,
 qrun,not_ended,value,,
 qrun,of_run,function,1,id
+qrun,persist,function,1,
 qrun,proc_name,function,1,
 qrun,record,function,4,dataset range_from range_to facts
 qrun,release,function,1,
+qrun,reload,function,1,
 qrun,require_current,function,1,
 qrun,require_run_schema,function,1,
 qrun,run_schema,value,,
 qrun,runs,function,1,
+qrun,table_path,function,1,name
+qrun,under_lock,function,2,f args
 qrun,unfinished,function,1,
 qsdemo,fields,value,,
 qsdemo,fixture,function,1,

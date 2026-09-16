@@ -23,6 +23,7 @@
 \l scripts/torq_pipeline.q
 \l src/etl/core/backfill_state.q
 \l src/etl/core/coverage.q
+\l src/etl/core/run.q
 \l src/etl/core/worker_config.q
 \l src/etl/core/worker_runtime.q
 
@@ -122,6 +123,34 @@ check["and can answer is_covered from it";any covout like\: "COVERED:yes*"];
 .qcov.supersede[`durable_ds;`v1;d 1;d 2];
 supout:@[{system x};cchild;{enlist "SPAWN-FAILED: ",x}];
 check["a supersession survives the process too";any supout like\: "COVERED:no*"];
+
+/ --- the run ledger survives the process too (gap 2.3) -------------------
+
+/ etl_coverage carries a run_id. Until the run ledger persisted as well,
+/ that was a key into a table that died with the process that wrote it: a
+/ second process could read the coverage row, see the run id, and resolve
+/ nothing. And unfinished[] - which exists to find executions that began and
+/ never reported an outcome - could not see them, because a dead process
+/ takes its own rows with it. A backfill runs in its own process and exits,
+/ so that was every backfill.
+
+.qrun.attach[];
+runid:.qrun.begin[`durable_worker];
+/ A DIFFERENT dataset from the coverage checks above, which staged
+/ durable_ds before any run existed - so its row carries a null run_id,
+/ and `first` over durable_ds would pick that one and resolve nothing.
+.qcov.stage_completion[`run_ds;`v1;d 2;d 3;11];
+.qrun.record[`run_ds;d 2;d 3;(enlist `rows)!enlist 11];
+/ Released, not finished: this is what a process that died mid-run leaves.
+.qrun.release[];
+
+rchild2:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
+        " tests/q/read_runs.q < /dev/null 2>/dev/null";
+runout:@[{system x};rchild2;{enlist "SPAWN-FAILED: ",x}];
+check["a fresh process sees the run ledger";any runout like\: "RUNS:1*"];
+check["and finds the interrupted run";any runout like\: "UNFINISHED:1*"];
+check["a coverage row's run_id resolves to the run that made it";any runout like\: "RESOLVES:yes*"];
+check["and names the worker that ran it";any runout like\: "WORKER:durable_worker*"];
 
 -1 "";
 -1 "==================== q-backfill-process ====================";
