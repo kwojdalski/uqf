@@ -4,8 +4,17 @@ Diagrams for the running state of the TorQ Finance Starter Pack demo (see
 [docs/torq-demo.md](../torq-demo.md) for how to actually start/stop/query
 it). Reflects what `torq-demo list processes` shows today: the vendored
 14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
-`widefeed1`, `cross1`, `vectorize1`, `fxtradesfeed1`, `posbook1`,
+`widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
 `markout1`).
+
+For the authoritative per-process table - ports, scripts, the table each
+owns, and its subscribe/publish edges - see
+[processes.md](processes.md), which is **generated** from the pipeline
+registry (J-01/J-02) rather than written by hand. The diagrams below are
+authored, because choosing what to show is a judgement; their process
+*names* are checked against the registry by
+`test_generated_docs.test_the_prose_architecture_doc_is_consistent_with_the_registry`,
+which is how `tap1`'s absence from this paragraph was found.
 
 ## Process topology
 
@@ -35,6 +44,7 @@ flowchart LR
         vectorize1["vectorize1<br/>wide->vector fold<br/>:6077"]
         posbook1["posbook1<br/>position/PnL from fills<br/>:6080"]
         markout1["markout1<br/>execution-quality markouts<br/>:6081"]
+        tap1["tap1<br/>subscribe-and-log tap<br/>(tables chosen at runtime)<br/>:6078"]
     end
 
     subgraph storage["Storage"]
