@@ -395,6 +395,35 @@ Per-process stdout/stderr logs land in `scripts/output/torq-demo/logs/`
 (`out_<procname>.log` / `err_<procname>.log`) - check these first if a
 process shows `down` unexpectedly.
 
+## What lib/torq ships that uqf deliberately does not use
+
+Three access layers are vendored in `lib/torq` and wired into nothing:
+
+- the Grafana JSON datasource adapter
+- the generic `dataaccess.q` access layer
+- the `dqerest.q` REST bridge
+
+None is loaded by any process in the generated `process.csv`, and none is
+referenced under `src/`, `python/` or `docs/`. **This is a decision, not an
+oversight** (issue #89, 2026-09-16), recorded here so the next reader does
+not rediscover them and assume they are a shortcut.
+
+They look like free functionality and are not. Enabling any of them is
+backend work on the order of writing a small API layer, and none of them
+closes the two gaps that actually needed new work — fleet health and
+backfill status — which `python/uqf_frontend` was built for instead. With
+the frontend serving both the ops and desk audiences (#53), Grafana's
+fixed-panel model fits the desk side's user-driven filtering poorly, and the
+BFF authorises in Python under one service credential (#54), which the
+q-side access layers were designed to replace rather than sit beside.
+
+They stay in the vendored tree **untouched**, because the standing rule is
+that `lib/torq` is a pristine copy of upstream: removing files would turn
+the next TorQ upgrade from a copy into a three-way merge, and every overlay
+in `torq_orchestrator` relies on that copy being exact. Unused files cost
+nothing. If a future audience genuinely wants Grafana, the adapter is
+there; the decision to be revisited then is #54's, not this one.
+
 ## crypto recorder (cryptorust) - a proof of concept
 
 `torq-demo crypto start`/`stop`/`status` (a nested command group, not

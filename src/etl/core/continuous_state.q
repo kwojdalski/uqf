@@ -122,6 +122,66 @@ freshness:{[worker]
     `worker`cursor`lag`is_completeness_claim!
         (worker;c;$[null c; 0Nn; .z.p-c];0b)}
 
+/ ----------------------------------------------------- DATASET FRESHNESS
+
+/ worker -> the dataset it feeds (bank question E-22, answered on #62).
+/ .
+/ The one dict E-22 needed. It is the only registry continuous workers
+/ have, and it is deliberately NOT a contract: registering says which
+/ dataset a tailer feeds, nothing about how it must behave. E-24's
+/ "no enforced lifecycle for continuous workers" stands.
+feeds:(`symbol$())!`symbol$()
+
+/ Declare which dataset a continuous worker feeds.
+/ @eg .qcont.register_feeder[`fx_feed_2;`quotes]
+register_feeder:{[worker;dataset]
+    feeds[worker]:dataset;
+    worker}
+
+feeders_of:{[dataset] key[feeds] where value[feeds]=dataset}
+
+/ How current is a DATASET, across every worker that feeds it (E-22)?
+/ .
+/ A dataset is only as fresh as its SLOWEST feeder. Three tailers with
+/ cursors at 09:41, 09:41 and 09:12 mean the dataset is current to 09:12,
+/ not 09:41 - anything after 09:12 may be missing the third feed's rows.
+/ So the cursor reported is the MINIMUM over feeders and the lag the
+/ MAXIMUM, and the laggard is NAMED, because "the dataset is 29 minutes
+/ behind" is a symptom and "fx_feed_2 is 29 minutes behind" is a diagnosis.
+/ .
+/ A feeder with no cursor at all makes the dataset not-fresh, for the same
+/ reason a single never-run worker is not fresh: a missing feed is the
+/ worst possible lag, not a feed to ignore. Its cursor is reported as null
+/ and it is the laggard.
+/ .
+/ Still not a completeness claim, and the payload says so. This aggregates
+/ "seen up to here" across feeders; it does not say everything before that
+/ point is published. That distinction is E-03's, and it survives
+/ aggregation unchanged.
+/ @return dict of dataset, cursor (min), lag (max), laggard, feeders, and
+/   is_completeness_claim (always 0b)
+/ @throws error when no worker is registered as feeding the dataset - a
+/   dataset with no declared feeder cannot have a freshness, and reporting
+/   one would be the silent kind of wrong
+dataset_freshness:{[dataset]
+    ws:feeders_of dataset;
+    if[0=count ws;
+        '"dataset_freshness: no worker is registered as feeding ",string[dataset],
+         " - call register_feeder first, because a freshness for an unfed dataset would be invented"];
+    fs:freshness each ws;
+    cursors:fs[;`cursor];
+    / null sorts first under min? No - `min` ignores nulls. A null cursor
+    / must WIN (it is the worst lag), so pick the laggard explicitly.
+    laggard:$[any null cursors; first ws where null cursors; ws cursors?min cursors];
+    c:$[any null cursors; 0Np; min cursors];
+    `dataset`cursor`lag`laggard`feeders`is_completeness_claim!
+        (dataset;c;$[null c; 0Nn; .z.p-c];laggard;ws;0b)}
+
+/ Is a dataset within `tolerance` of now, across all its feeders?
+dataset_is_fresh:{[dataset;tolerance]
+    f:dataset_freshness dataset;
+    $[null f`cursor; 0b; (f`lag)<=tolerance]}
+
 / Is this worker's output within `tolerance` of now?
 / .
 / A missing cursor is NOT fresh, and that matters: a worker that has never
