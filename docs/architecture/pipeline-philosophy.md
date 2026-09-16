@@ -107,6 +107,16 @@ against the code it describes: `verify_pipeline_edges` reads each pipeline's
 they disagree with the registry. A hand-drawn diagram goes stale silently;
 that one cannot.
 
+Prose cannot be generated, so it is checked instead — the split J-01
+settled: generate what is mechanical, check what is not.
+`check_doc_references.py` reads every living document and confirms that each
+`.q*` function it names exists, and that any call it shows passes no more
+arguments than the function takes. The gate's first run found two references
+left behind by renames: a design note citing `.qmicro.require_sorted_tape`
+(the function is `require_tape`) and an agent citing `.qcoer.coerce` (it is
+`coerce_column`). Neither was caught by anything else, because a name that
+appears in no generated artifact has nothing to disagree with.
+
 The same reflex applies to borrowed values. The orchestrator extends
 `monitor1`'s subscription list by *parsing the vendored list and appending to
 it*, rather than pinning a copy made on the day it was written.
