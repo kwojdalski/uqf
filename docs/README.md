@@ -17,7 +17,9 @@ reference or an architecture note, and only its purpose decides where it goes.
 **`guides/`** — [`torq-demo.md`](guides/torq-demo.md) (running the stack),
 [`ci.md`](guides/ci.md) (what the gates do and how to run them locally).
 
-**`architecture/`** — [`restatement-design.md`](architecture/restatement-design.md)
+**`architecture/`** — [`pipeline-philosophy.md`](architecture/pipeline-philosophy.md)
+(the positions `src/etl/` is built on, and what enforces each),
+[`restatement-design.md`](architecture/restatement-design.md)
 (D-11's bitemporal design, now built),
 [`event-tape.md`](architecture/event-tape.md),
 [`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) (what
@@ -57,12 +59,3 @@ exception:
   deleting it would erase the history of how this repository got here.
 - **`migrations/`** — plans for restructurings, written before the work and
   kept afterwards as the reasoning behind it.
-
-## Adding a document
-
-Ask which of the five questions it answers. If the answer is "none of them",
-it probably belongs at the top level with a line added here saying why —
-which is a deliberately small amount of friction, because an unexplained file
-at the root is how a taxonomy stops meaning anything.
-
-If a document answers two of the five, it is two documents.
