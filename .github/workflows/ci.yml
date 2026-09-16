@@ -65,6 +65,13 @@ jobs:
         # still a gate that protected nothing. The other three gates here are
         # stdlib-only and do not need the workspace.
         run: uv run python scripts/generate_operational_docs.py --check
+      - name: Check the ETL core does not depend on its declarations
+        # F-08 makes core/ framework and sources//workers/ declarations; E-02
+        # is the property that buys - a new source needs no core change.
+        # N-04's answer noted the rule was a convention with no gate, so a
+        # file reaching the wrong way would break it with every test green.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_etl_layering.py --check
       - name: Check the environment reference lists every variable
         # C-04: docs/environment.md is the one operator-facing list. It is
         # hand-written because "optional, and here is what unset does" is a
