@@ -23,6 +23,7 @@ _Q_TO_CATALOG = {
     "long": QType.LONG,
     "symbol": QType.SYMBOL,
     "boolean": QType.BOOLEAN,
+    "guid": QType.GUID,
 }
 
 #: The generated table schemas, read as TEXT - no import, so this gate cannot

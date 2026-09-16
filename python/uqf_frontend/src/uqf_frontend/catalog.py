@@ -32,6 +32,7 @@ class QType(StrEnum):
     FLOAT = "float"
     LONG = "long"
     BOOLEAN = "boolean"
+    GUID = "guid"  # run identity: filtered by exact match, never by range
     LIST = "list"  # vector-valued column: returned, never filtered on
 
 
@@ -67,6 +68,7 @@ _SYM = QType.SYMBOL
 _F = QType.FLOAT
 _L = QType.LONG
 _LIST = QType.LIST
+_G = QType.GUID
 _SPAN = QType.TIMESPAN
 
 TABLES: dict[str, Table] = {
@@ -157,6 +159,10 @@ TABLES: dict[str, Table] = {
                 # current, so an as-of read needs no null special case - see
                 # .qcov.still_current.
                 "superseded_at": _TS,
+                # Gap 2.3: which execution produced this materialisation. Null
+                # guid when the row was staged outside a run, which is a real
+                # state rather than missing data - see .qrun's header.
+                "run_id": _G,
             },
         ),
         Table(

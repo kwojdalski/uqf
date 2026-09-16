@@ -62,9 +62,28 @@
 / per-partition worker trips that guard and has to make the decision
 / deliberately.
 / .
+/ ON run_id, WHICH IS THE COLUMN THAT DID GET ADDED
+/ .
+/ Gap 2.3 of the pipeline-framework assessment: every column above describes
+/ the WINDOW, and none described the EXECUTION, so "which materialisations
+/ came from one run" and "were these two datasets built together" had no
+/ answer. run_id is that column. It differs from the partition key above in
+/ exactly the way that matters - it does NOT partition the data, so no read
+/ here filters on it and no existing query can aggregate across it wrongly.
+/ Adding it cannot make a gap-ridden range report as complete; it can only
+/ add attribution that was absent.
+/ .
+/ It is written from .qrun.current[] rather than passed in - see that file's
+/ header for why an ambient fact is not the same as ETL-09's required choice.
+/ .
+/ A LEDGER WRITTEN BEFORE THIS COLUMN EXISTED will now fail require_schema
+/ with "missing run_id". That is deliberate and is the whole point of the
+/ guard: this file's reads would return nulls for a column the table does not
+/ have. `scripts/verify_coverage_schema.q` prints the remedy.
+/ .
 / Deliberately one constant in one place: changing it should be an edit here
 / plus the writer's column list, not a hunt through the file.
-schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at`superseded_at
+schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at`superseded_at`run_id
 
 / Create the ledger if absent. Append-only by contract (ETL-07) - nothing in
 / this file updates or deletes a row, and a reader should treat any such
@@ -105,7 +124,7 @@ init_ledger:{[]
         `etl_coverage set ([] dataset:`symbol$(); source_version:`symbol$();
             range_from:`timestamp$(); range_to:`timestamp$();
             rows_published:`long$(); recorded_at:`timestamp$();
-            superseded_at:`timestamp$())];
+            superseded_at:`timestamp$(); run_id:`guid$())];
     `etl_coverage}
 
 / The root ledger table. Exists so no read below names `etl_coverage` bare -
@@ -263,6 +282,20 @@ gaps:{[from_ts;to_ts;covered]
 
 / ---------------------------------------------------------------- RECORD
 
+/ Private: the run this process is executing, or the null guid.
+/ .
+/ Protected rather than a bare .qrun.current[] call, because run.q is not a
+/ load-time dependency of this file and several minimal loaders
+/ (tests/q/read_checkpoint.q and friends) pull in coverage.q alone. Without
+/ the wrapper, staging a completion in one of those would fail on a missing
+/ namespace rather than record a run-less materialisation, which is the
+/ honest outcome there.
+/ .
+/ @[f;::;e] rather than .[f;();e]: applying a niladic through the dot form
+/ passes no argument list q can match, and the error handler swallows the
+/ resulting rank error instead of the failure it was written for.
+current_run:{[] @[{.qrun.current[]};::;0Ng]}
+
 / Stage a completion event for one completed bounded window (ETL-07).
 / .
 / Called for EVERY completed window, including one that published no rows.
@@ -288,7 +321,7 @@ stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
     require_interval[range_from;range_to];
     init_ledger[];
     `etl_coverage insert (dataset;source_version;range_from;range_to;
-                          "j"$rows_published;.z.p;still_current);
+                          "j"$rows_published;.z.p;still_current;current_run[]);
     count ledger[]}
 
 / ------------------------------------------------------------------ READ
@@ -360,6 +393,39 @@ require_covered:{[ds;version;as_of;from_ts;to_ts]
 
 
 / ------------------------------------------------------- SUPERSESSION
+
+/ Every materialisation one execution produced (gap 2.3).
+/ .
+/ The question run_id was added to answer. A run that published three
+/ datasets has three rows here, and a reader comparing two datasets can tell
+/ whether they are consistent BECAUSE they were built together, rather than
+/ inferring it from two timestamps that happen to be close.
+/ .
+/ Includes superseded rows deliberately: what a run produced does not change
+/ when a later run supersedes it, and hiding the withdrawn rows would make a
+/ run that was entirely restated look like a run that did nothing.
+/ @param id the run id
+/ @return the coverage rows that run staged
+/ @eg .qcov.materialisations_of[.qrun.current[]]
+materialisations_of:{[id]
+    init_ledger[];
+    target:id;
+    select from ledger[] where run_id=target}
+
+/ Which runs contributed to a dataset's coverage at one release.
+/ .
+/ The reverse lookup: not "what did this run build" but "what built this".
+/ Distinct run ids on one dataset and version mean the coverage was assembled
+/ across several executions, which is normal for a backfill run in slices and
+/ is worth being able to see.
+/ @param ds the dataset
+/ @param version the source release
+/ @return the distinct run ids, in first-recorded order
+/ @eg .qcov.contributing_runs[`demo_deals;`v1]
+contributing_runs:{[ds;version]
+    init_ledger[];
+    distinct exec run_id from `recorded_at xasc ledger[]
+        where dataset=ds, source_version=version}
 
 / Withdraw the coverage claims overlapping [from_ts;to_ts), as of now.
 / .

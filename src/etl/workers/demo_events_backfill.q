@@ -30,6 +30,35 @@ handle:0Ni;
 progress:`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);
 last_batch:();
 
+/ Materialisation metadata for one window (gap 2.3).
+/ .
+/ The framework already records rows, source_version and dry_run, because it
+/ can know those without reading a column. Everything here needs to know what
+/ a column MEANS, which is exactly why the hook is the worker's and not the
+/ shell's:
+/ .
+/   event_span      min and max event time actually present. A window is
+/                   [from;to) by declaration; this is what ARRIVED in it, and
+/                   the two differing is the first sign of a source whose
+/                   clock or timezone is not what the declaration assumes.
+/   distinct_syms   how many instruments the window touched - a sudden drop
+/                   is a partial extract that still published rows, which a
+/                   row count alone reads as success.
+/   trade_events    the terminal-event share. `event_tape` mixes adds with
+/                   cancels and trades, so rows alone say nothing about how
+/                   much of the window is actual execution.
+/ .
+/ An empty batch is legal (ETL-07 records a zero-row window deliberately), so
+/ every aggregate here must survive it - hence the count guard rather than
+/ min/max over an empty column, which would yield infinities and record them
+/ as though they were observations.
+facts:{[batch]
+    if[0=count batch; :(enlist `event_span)!enlist "empty window"];
+    `event_span`distinct_syms`trade_events!
+        ((string min batch`time),"/",string max batch`time;
+         count distinct batch`sym;
+         sum `trade=batch`action)}
+
 / --- the contract's required methods, delegated -------------------------
 
 / Ordinary names in this namespace that happen to delegate. A worker needing
@@ -47,4 +76,5 @@ cleanup:{[] .qbw.cleanup worker_name}
 \d .
 
 .qbw.define[`demo_events_backfill;
-    `ns`source`dataset`width!(`.qevbf;`demo_events;`event_tape;0D01:00:00)];
+    `ns`source`dataset`width`facts!
+        (`.qevbf;`demo_events;`event_tape;0D01:00:00;.qevbf.facts)];

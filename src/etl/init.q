@@ -28,6 +28,14 @@
 /                                          load, so the registry it registers
 /                                          into has to exist
 / .
+/ run.q sits after coverage.q by READABILITY, not by necessity: .qrun.record
+/ calls .qcov.require_interval and .qcov.stage_completion reads
+/ .qrun.current[], so the two reference each other and q's call-time binding
+/ resolves both whichever order they load in. Both calls are additionally
+/ protected, because several minimal loaders pull in coverage.q without the
+/ rest of the tree and a missing .qrun must degrade to an unattributed
+/ materialisation rather than an error.
+/ .
 / NOT every loader should use this file. tests/q/try_acquire.q,
 / read_checkpoint.q, run_backfill_process.q and smoke_external_metadata.q
 / deliberately load a minimal subset - they are small scripts run as CHILD
@@ -44,6 +52,7 @@
 \l src/etl/core/log.q
 \l src/etl/core/coercion.q
 \l src/etl/core/coverage.q
+\l src/etl/core/run.q
 \l src/etl/core/io_manager.q
 \l src/etl/core/singlestore_odbc.q
 \l src/etl/core/heartbeat.q

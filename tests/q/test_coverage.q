@@ -179,9 +179,7 @@ test_a_partition_key_is_refused_rather_than_ignored:{[t]
     / for the wrong reason - the message named the missing column, and the
     / `date` assertion below would have gone on matching a refusal that was
     / no longer about a partition key at all.
-    `etl_coverage set ([] date:`date$(); dataset:`symbol$(); source_version:`symbol$();
-        range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$();
-        recorded_at:`timestamp$(); superseded_at:`timestamp$());
+    `etl_coverage set update date:`date$() from .testutil.foreign_coverage_ledger[];
     r:@[{.qcov.require_schema[]; ""};::;{x}];
     / restore via the helper, which DELETES first - calling init_ledger here
     / would leave the wrong-shaped table in place for every later suite.
@@ -220,9 +218,7 @@ test_attaching_to_a_foreign_partitioned_ledger_is_refused:{[t]
     / for the wrong reason - the message named the missing column, and the
     / `date` assertion below would have gone on matching a refusal that was
     / no longer about a partition key at all.
-    `etl_coverage set ([] date:`date$(); dataset:`symbol$(); source_version:`symbol$();
-        range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$();
-        recorded_at:`timestamp$(); superseded_at:`timestamp$());
+    `etl_coverage set update date:`date$() from .testutil.foreign_coverage_ledger[];
     r:@[{.qcov.attach[]; ""};::;{x}];
     .testutil.reset_coverage_ledger[];
     .qunit.assertEquals[r like "*date*";1b;"an existing ledger of the wrong shape is refused by column name before a single read is trusted"]};
@@ -236,10 +232,17 @@ test_attaching_to_a_foreign_ledger_missing_a_column_is_refused:{[t]
 
 test_attaching_to_a_correctly_shaped_foreign_ledger_succeeds:{[t]
     / same columns, built independently of init_ledger
-    `etl_coverage set ([] dataset:`symbol$(); source_version:`symbol$();
-        range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$();
-        recorded_at:`timestamp$(); superseded_at:`timestamp$());
+    `etl_coverage set .testutil.foreign_coverage_ledger[];
     .qunit.assertEquals[.qcov.attach[];`etl_coverage;"a foreign ledger of the right shape is accepted"]};
+
+test_the_foreign_fixture_tracks_the_declared_schema:{[t]
+    / The canary for the three tests above. They need a ledger carrying every
+    / declared column, so that a refusal exercises the EXTRA-column path
+    / rather than the missing-column one. When .qcov.schema gains a column and
+    / the fixture does not, they all start passing for the wrong reason or
+    / failing for a confusing one - so this fails first, and says what to fix.
+    .qunit.assertEquals[cols .testutil.foreign_coverage_ledger[];.qcov.schema;
+        "the hand-built fixture must carry exactly .qcov.schema's columns - update the fixture in testutil.q, not require_schema"]};
 
 test_a_missing_column_is_refused:{[t]
     `etl_coverage set ([] dataset:`symbol$(); range_from:`timestamp$();
