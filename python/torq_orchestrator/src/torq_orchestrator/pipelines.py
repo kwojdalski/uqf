@@ -279,6 +279,26 @@ def verify_pipeline_edges(scripts_dir: Path) -> list[str]:
     is a parameter, so no table name can be read out of the script.
     """
     problems: list[str] = []
+
+    # Uniqueness first, because every derived structure below and in this
+    # module keys on procname and a duplicate would not error - it would
+    # collapse. PIPELINE_BY_NAME and PIPELINE_OFFSETS are both dict
+    # comprehensions over PIPELINES, so a repeated name silently drops one
+    # pipeline from the registry and hands the survivor the other's port
+    # offset. add_extra_process already refuses a duplicate at runtime; the
+    # literal below it had no such check, which is the wrong way round.
+    seen: dict[str, int] = {}
+    for index, pipeline in enumerate(PIPELINES):
+        if pipeline.procname in seen:
+            problems.append(
+                f"{pipeline.procname}: declared twice in PIPELINES "
+                f"(entries {seen[pipeline.procname]} and {index}) - procnames key "
+                "PIPELINE_BY_NAME and PIPELINE_OFFSETS, so a duplicate loses a "
+                "process rather than reporting one"
+            )
+        else:
+            seen[pipeline.procname] = index
+
     for pipeline in PIPELINES:
         script = scripts_dir / pipeline.script
         if not script.is_file():
