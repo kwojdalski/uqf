@@ -4570,6 +4570,68 @@
     }
   ],
   "tables": {
+    "crypto_book": {
+      "columns": [
+        "time",
+        "venue",
+        "sym",
+        "bid_prices",
+        "bid_sizes",
+        "ask_prices",
+        "ask_sizes"
+      ],
+      "types": [
+        "p",
+        "s",
+        "s",
+        " ",
+        " ",
+        " ",
+        " "
+      ]
+    },
+    "crypto_sim_fills": {
+      "columns": [
+        "time",
+        "sym",
+        "side",
+        "trade_price",
+        "size",
+        "realized_delta_pnl"
+      ],
+      "types": [
+        "p",
+        "s",
+        "j",
+        "f",
+        "f",
+        "f"
+      ]
+    },
+    "crypto_trades": {
+      "columns": [
+        "time",
+        "sym",
+        "venue",
+        "side",
+        "trade_price",
+        "size",
+        "fee",
+        "fee_currency",
+        "exchange_fill_id"
+      ],
+      "types": [
+        "p",
+        "s",
+        "s",
+        "j",
+        "f",
+        "f",
+        "f",
+        "s",
+        "s"
+      ]
+    },
     "etl_coverage": {
       "columns": [
         "dataset",
@@ -4632,6 +4694,152 @@
         "p",
         "p",
         "s"
+      ]
+    },
+    "execution_quality": {
+      "columns": [
+        "time",
+        "sym",
+        "trade_time",
+        "horizon",
+        "trade_price",
+        "ref_price",
+        "markout_pips"
+      ],
+      "types": [
+        "p",
+        "s",
+        "p",
+        "n",
+        "f",
+        "f",
+        "f"
+      ]
+    },
+    "mkt_orderbook": {
+      "columns": [
+        "time",
+        "sym",
+        "bid_prices",
+        "ask_prices"
+      ],
+      "types": [
+        "p",
+        "s",
+        " ",
+        " "
+      ]
+    },
+    "position": {
+      "columns": [
+        "time",
+        "sym",
+        "qty",
+        "avg_price",
+        "realized_pnl",
+        "mark_price",
+        "unrealized_pnl",
+        "total_pnl"
+      ],
+      "types": [
+        "p",
+        "s",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f"
+      ]
+    },
+    "quotes": {
+      "columns": [
+        "time",
+        "sym",
+        "bid_prices",
+        "bid_sizes",
+        "ask_prices",
+        "ask_sizes"
+      ],
+      "types": [
+        "p",
+        "s",
+        " ",
+        " ",
+        " ",
+        " "
+      ]
+    },
+    "trades": {
+      "columns": [
+        "time",
+        "sym",
+        "side",
+        "trade_price",
+        "size",
+        "pip_factor"
+      ],
+      "types": [
+        "p",
+        "s",
+        "j",
+        "f",
+        "f",
+        "j"
+      ]
+    },
+    "wide_book": {
+      "columns": [
+        "time",
+        "sym",
+        "bids0",
+        "bids1",
+        "bids2",
+        "bids3",
+        "bids4",
+        "bids5",
+        "bids6",
+        "bids7",
+        "bids8",
+        "bids9",
+        "bids10",
+        "asks0",
+        "asks1",
+        "asks2",
+        "asks3",
+        "asks4",
+        "asks5",
+        "asks6",
+        "asks7",
+        "asks8",
+        "asks9",
+        "asks10"
+      ],
+      "types": [
+        "p",
+        "s",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f",
+        "f"
       ]
     },
     "worker_heartbeat": {
