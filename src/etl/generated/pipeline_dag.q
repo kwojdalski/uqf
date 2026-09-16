@@ -18,6 +18,9 @@
 / the registry could not restore the real graph.
 
 
+/ Register the nine TorQ streaming processes into the job graph.
+/ @return the process names registered
+/ @eg .qdag.register_pipelines[]
 .qdag.register_pipelines:{[]
     .qdag.register[`fxfeed1;`kind`inputs`outputs!(`stream;`$();`quote)];
     .qdag.register[`quotesfeed1;`kind`inputs`outputs!(`stream;`$();`quotes)];

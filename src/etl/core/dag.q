@@ -236,6 +236,9 @@ to_json:{[]
 / @eg .qdag.external_ref[`demo_deals;`demo_deals]  ->  `demo_deals@demo_deals
 external_ref:{[source;tbl] `$(string tbl),"@",string source}
 
+/ Register every bounded worker into the job graph, from .qbw's own registry.
+/ @return the worker names registered, empty when .qbw is not loaded
+/ @eg .qdag.adopt_workers[]
 adopt_workers:{[]
     if[not `qbw in key `; :`$()];
     ws:key .qbw.config;
@@ -266,6 +269,9 @@ adopt_feeders:{[]
 / source of truth and a hand-written q copy would be a second place for the
 / same edges to be wrong. Absent - a bare ETL process that never loads it -
 / this returns empty rather than throwing, so the graph is simply smaller.
+/ @return the process names registered, empty when the generated bridge is
+/   not loaded
+/ @eg .qdag.adopt_pipelines[]
 adopt_pipelines:{[]
     $[`register_pipelines in key `.qdag; register_pipelines[]; `$()]}
 

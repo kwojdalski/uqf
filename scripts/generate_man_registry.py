@@ -72,6 +72,13 @@ NS_RE = re.compile(r"^\\d\s+(\.[a-zA-Z][a-zA-Z0-9_]*)\s*$")
 #: the worst possible trade, because the loss hides inside the gain.
 #: Capitalised names are matched for the same reason: `PI` is not lowercase.
 FUNC_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*:")
+
+#: A FULLY-QUALIFIED top-level definition: `.qdag.register_pipelines:{`.
+#: A file that uses this form instead of `\d` has no namespace declaration at
+#: all, so without this it is invisible to the scan - silently, which is the
+#: failure mode this repository keeps finding. `src/etl/generated/
+#: pipeline_dag.q` is written that way on purpose.
+QUALIFIED_RE = re.compile(r"^(\.[A-Za-z][A-Za-z0-9_]*)\.([A-Za-z][A-Za-z0-9_]*)\s*:")
 #: A qDoc tag line.
 TAG_RE = re.compile(r"^\s*/+\s*@(param|return|throws|eg)\b[ \t]*(.*)$")
 #: A comment line that is not a tag.
@@ -134,16 +141,37 @@ def parse_file(path: Path) -> tuple[str, list[str], list[Documented]]:
                     namespaces.append(current_ns)
             continue
 
-        func_match = FUNC_RE.match(line)
-        if not func_match or not current_ns:
-            continue
-        name = func_match.group(1)
+        qualified = QUALIFIED_RE.match(line)
+        if qualified:
+            ns_for_this, name = qualified.group(1), qualified.group(2)
+            if ns_for_this not in namespaces:
+                namespaces.append(ns_for_this)
+        else:
+            func_match = FUNC_RE.match(line)
+            if not func_match or not current_ns:
+                continue
+            ns_for_this, name = current_ns, func_match.group(1)
         if name.startswith("_"):
             continue
 
         # Walk back over the contiguous comment block above the definition.
-        block: list[str] = []
+        #
+        # A run of definitions with no blank line between them SHARES the one
+        # block above the run. That is what the source actually means and
+        # says: log.q's block opens "The four levels" and its own @eg names
+        # `.qlog.info`, yet attaching the block only to the first definition
+        # left `info` and `warn` reported as undocumented. The eight worker
+        # delegator methods are the same shape, under a block that opens
+        # "Ordinary names in this namespace that happen to delegate".
+        #
+        # Treating that as a documentation gap would have been the wrong
+        # reading twice over: it invites writing eight near-identical
+        # docstrings to satisfy a counter, when the source is already correct
+        # and the parser was not.
         j = i - 1
+        while j >= 0 and (FUNC_RE.match(lines[j]) or QUALIFIED_RE.match(lines[j])):
+            j -= 1
+        block: list[str] = []
         while j >= 0 and (lines[j].lstrip().startswith("/")) and lines[j].strip() != "\\":
             block.append(lines[j])
             j -= 1
@@ -151,7 +179,7 @@ def parse_file(path: Path) -> tuple[str, list[str], list[Documented]]:
         if not block:
             continue
 
-        doc = Documented(fullname=f"{current_ns}.{name}", namespace=current_ns)
+        doc = Documented(fullname=f"{ns_for_this}.{name}", namespace=ns_for_this)
         prose: list[str] = []
         seen_tag = False
         for raw in block:
