@@ -708,15 +708,15 @@ def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
     .proc.reloadf each loads -load's files in the order given.
     """
     markout = core.PIPELINE_BY_NAME["markout1"]
-    assert markout.uses_qpipe
+    assert markout.loads_qpipe and markout.publishes_via_qpipe
     loaded = markout.load_column().split()
     assert loaded[0].endswith(core.PIPELINE_LIB_SCRIPT)
     assert loaded[1].endswith("torq_markout_etl.q")
 
 
-def test_pipelines_not_using_qpipe_load_only_their_own_script():
+def test_pipelines_not_loading_qpipe_load_only_their_own_script():
     for pipeline in core.PIPELINES:
-        if not pipeline.uses_qpipe:
+        if not pipeline.loads_qpipe:
             assert pipeline.load_column() == f"${{UQFSCRIPTS}}/{pipeline.script}"
             assert core.PIPELINE_LIB_SCRIPT not in pipeline.load_column()
 
@@ -728,7 +728,7 @@ def test_every_pipeline_script_exists_on_disk():
     scripts_dir = core.default_paths().scripts_dir
     for pipeline in core.PIPELINES:
         assert (scripts_dir / pipeline.script).is_file(), pipeline.script
-        if pipeline.uses_qpipe:
+        if pipeline.loads_qpipe:
             assert (scripts_dir / core.PIPELINE_LIB_SCRIPT).is_file()
 
 
@@ -812,13 +812,13 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     Write a script whose subscription disagrees with what the registry
     declares for it, point the verifier at that directory, and require that
     the mismatch is reported by pipeline name. Only the pipelines with a
-    static, non-.qpipe subscription can be checked this way, so this picks
-    the first such one rather than hard-coding a name that a later registry
-    edit would silently invalidate.
+    static subscription can be checked this way, so this picks the first such
+    one rather than hard-coding a name that a later registry edit would
+    silently invalidate. Both spellings are readable - verify_pipeline_edges
+    greps for `.sub.subscribe` AND `.qpipe.subscribe_etl` - so only a
+    RUNTIME-chosen subscription (tap1) is excluded.
     """
-    target = next(
-        p for p in core.PIPELINES if p.subscribes and not p.subscribes_dynamic and not p.uses_qpipe
-    )
+    target = next(p for p in core.PIPELINES if p.subscribes and not p.subscribes_dynamic)
     real = core.default_paths().scripts_dir
     for p in core.PIPELINES:
         (tmp_path / p.script).write_text((real / p.script).read_text())
@@ -828,10 +828,21 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     # file. The first draft replaced the first occurrence anywhere, which
     # landed in a comment, left the real call intact, and the "negative"
     # test passed the unmodified script as if drift had been detected.
+    # BOTH spellings, because a pipeline may subscribe directly or through
+    # the library, and this test picks its target from the registry rather
+    # than by name - so it must not assume which one that target uses. It
+    # asserted `.sub.subscribe` alone until three ETLs moved to
+    # `.qpipe.subscribe_etl` and the first static subscriber became one of
+    # them.
     original = (tmp_path / target.script).read_text()
-    call = f".sub.subscribe[`{target.subscribes[0]}"
-    assert call in original, f"expected {call!r} in {target.script}"
-    drifted = original.replace(call, ".sub.subscribe[`not_a_declared_table", 1)
+    first = target.subscribes[0]
+    for prefix in (".sub.subscribe[`", f".qpipe.subscribe_etl[`{target.procname[:-1]};`"):
+        call = f"{prefix}{first}"
+        if call in original:
+            break
+    else:
+        raise AssertionError(f"no readable subscribe call for {first!r} in {target.script}")
+    drifted = original.replace(call, f"{prefix}not_a_declared_table", 1)
     (tmp_path / target.script).write_text(drifted)
 
     problems = core.verify_pipeline_edges(tmp_path)

@@ -72,22 +72,7 @@ upd:{[t;x]
 
 \d .cross
 
-tickerplanttypes:`segmentedtickerplant
-requiredprocs:tickerplanttypes
-tpconsleep:10
-tpcheckcycles:0W
 
-subscribe:{
-  if[0=count s:.sub.getsubscriptionhandles[tickerplanttypes;();()!()];:()];
-  subproc:first s;
-  .lg.o[`subscribe;"subscribing to ",string subproc`procname];
-  .sub.subscribe[`quotes;`;0b;0b;subproc]
- }
-
-init:{
-  .servers.startupdepcycles[requiredprocs;tpconsleep;tpcheckcycles];
-  subscribe[];
- }
 
 \d .
 
@@ -104,12 +89,18 @@ init:{
   system"cd ",cwd;
  }[getenv[`UQFROOT]];
 
-/ unlike torq_fx_feed.q/torq_quotes_feed.q (which only ever publish, via
-/ their own self-managed .servers.gethandlebytype handle), .sub.subscribe
-/ below needs a live, .servers-managed handle to stp1 - .servers.startup[]
-/ is what actually opens and registers that, using cross1's own
-/ accesslist.txt credentials (see process.csv's `U` field in core.py) to
-/ authenticate with discovery1.
-.servers.CONNECTIONS:.cross.requiredprocs;
-.servers.startup[];
-.cross.init[];
+/ SOURCE: subscribe as a credentialed tickerplant subscriber.
+/ .
+/ .qpipe.subscribe_etl does the whole sequence this file used to spell out -
+/ set .servers.CONNECTIONS, .servers.startup[] (which opens the live,
+/ access-listed handle to stp1 using cross1's own accesslist.txt credentials,
+/ see process.csv's `U` field), block on startupdepcycles until the
+/ tickerplant is confirmed up, find it, and subscribe. It THROWS when no
+/ tickerplant is found, where the hand-rolled version returned an empty list
+/ and left this process subscribed to nothing while still reporting healthy.
+/ .
+/ The return value is a publish handle, which cross1 has no use for: it
+/ subscribes to `quotes` and keeps derived state locally, publishing nothing
+/ (see PIPELINES' published_tables=() for cross1). Dropped deliberately
+/ rather than assigned to an `h` nothing reads.
+.qpipe.subscribe_etl[`cross;`quotes];

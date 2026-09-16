@@ -70,7 +70,16 @@ class Pipeline:
     kind: str
     table: str | None = None  # the table it publishes onto the tickerplant, if any
     schema: str | None = None  # that table's database.q definition
-    uses_qpipe: bool = False  # load scripts/torq_pipeline.q ahead of its own script
+    # Two facts, deliberately separate, because they were one flag and that
+    # conflation would have silently disabled a gate. `uses_qpipe` meant both
+    # "load the library" AND "skip publish-edge verification, because the
+    # publish goes through .qpipe.publish whose table is a parameter". The
+    # moment a pipeline needed the library for SUBSCRIBING while still
+    # publishing directly with `h (`.u.upd;`position;...)`, setting one flag
+    # would have switched off the check that its declared publishes match
+    # its code.
+    loads_qpipe: bool = False  # load scripts/torq_pipeline.q ahead of its own script
+    publishes_via_qpipe: bool = False  # publishes through .qpipe.publish, so no table name to read
     offset: int | None = None  # None = allocate from PIPELINE_BLOCK_START in list order
     localtime: str = "1"
     startwithall: str = "1"
@@ -132,7 +141,7 @@ class Pipeline:
         PIPELINE_LIB_SCRIPT.
         """
         scripts = [self.script]
-        if self.uses_qpipe:
+        if self.loads_qpipe:
             scripts.insert(0, PIPELINE_LIB_SCRIPT)
         return " ".join(f"${{UQFSCRIPTS}}/{s}" for s in scripts)
 
@@ -160,6 +169,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
         procname="cross1",
         script="torq_cross_etl.q",
+        loads_qpipe=True,
         kind="etl",
         subscribes=("quotes",),
         note="keeps cross_quotes as private process state, publishes no table",
@@ -174,6 +184,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
         procname="vectorize1",
         script="torq_vectorize_etl.q",
+        loads_qpipe=True,
         kind="etl",
         subscribes=("wide_book",),
         table="mkt_orderbook",
@@ -197,6 +208,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
         procname="posbook1",
         script="torq_posbook_etl.q",
+        loads_qpipe=True,
         kind="etl",
         subscribes=("trades", "quote"),
         table="position",
@@ -209,7 +221,8 @@ PIPELINES: tuple[Pipeline, ...] = (
         subscribes=("trades", "quote"),
         table="execution_quality",
         schema=EXECUTION_QUALITY_TABLE_SCHEMA,
-        uses_qpipe=True,
+        loads_qpipe=True,
+        publishes_via_qpipe=True,
         localtime="0",
         note=(
             "localtime:0, unlike every other process here - markout1 is the only "
