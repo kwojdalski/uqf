@@ -82,6 +82,14 @@ jobs:
           else
             echo "::notice::No KDB-X on this runner; contract surface check skipped."
           fi
+      - name: Check docs/man.q matches the source qDoc comments
+        # WP8 (#146): the plan says keep source documentation authoritative
+        # and REGENERATE derived docs. man.q calls itself generated on line 1
+        # but had no generator, so it had fallen from covering the library to
+        # covering 78 of 348 public functions - and nobody noticed, because
+        # until recently it did not load at all.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/generate_man_registry.py --check
       - name: Check the ETL core does not depend on its declarations
         # F-08 makes core/ framework and sources//workers/ declarations; E-02
         # is the property that buys - a new source needs no core change.

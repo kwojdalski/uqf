@@ -59,6 +59,12 @@ databentoFile:{[sym;date]
     symStr:upper string sym;
     `$":",databentoDir[],"/",symStr,"/",symStr,"_",dateStr,"_raw_mbp-10_us_hours.parquet"};
 
+/ Private: the memo cell for pqModule below. Declared BEFORE that function's
+/ doc block rather than between it and the definition: a qDoc block belongs to
+/ whatever follows it, so sitting in the middle made the docs describe `pqm`
+/ while their own @eg named `pqModule`.
+pqm:(::);
+
 / KX's official pq module (github kx.com KDB-X distribution), loaded and
 / memoized on first use rather than at file-load time, so simply loading
 / data.q doesn't require a module-capable interpreter.
@@ -67,7 +73,6 @@ databentoFile:{[sym;date]
 / @throws if `use` (KDB-X's module loader) is unavailable - real kdb+/KDB-X
 /         is required here, not PeachQ
 / @eg .qdata.pqModule[][`pq]
-pqm:(::);
 pqModule:{[]
     if[pqm~(::); pqm::use`kx.pq];
     pqm};
