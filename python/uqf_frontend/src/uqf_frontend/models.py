@@ -45,6 +45,7 @@ class QueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
+    poll_seconds: int
     table: str
     tier: str
     rows: list[dict[str, Any]]
@@ -62,6 +63,7 @@ class IntervalOut(BaseModel):
 class CoverageResponse(BaseModel):
     """Composed coverage and any gaps, for one dataset at one source release."""
 
+    poll_seconds: int
     dataset: str
     source_version: str
     covered: list[IntervalOut]
@@ -92,6 +94,7 @@ class CatalogResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    poll_seconds: int
     ok: bool
     gateway: Literal["up", "reloading", "unreachable"]
     detail: str | None = None

@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from uqf_frontend import authz, catalog, coverage, health, ops, procfile, queries, status
 from uqf_frontend.authz import Policy, Request_, allow_all, enforce
@@ -110,10 +111,20 @@ def create_app(
         try:
             gateway.call(queries.PING)
         except GatewayReloading as exc:
-            return HealthResponse(ok=True, gateway="reloading", detail=str(exc))
+            return HealthResponse(
+                ok=True,
+                gateway="reloading",
+                detail=str(exc),
+                poll_seconds=ops.POLL_SECONDS["health"],
+            )
         except GatewayUnavailable as exc:
-            return HealthResponse(ok=False, gateway="unreachable", detail=str(exc))
-        return HealthResponse(ok=True, gateway="up")
+            return HealthResponse(
+                ok=False,
+                gateway="unreachable",
+                detail=str(exc),
+                poll_seconds=ops.POLL_SECONDS["health"],
+            )
+        return HealthResponse(ok=True, gateway="up", poll_seconds=ops.POLL_SECONDS["health"])
 
     @app.get("/catalog", response_model=CatalogResponse)
     def get_catalog() -> CatalogResponse:
@@ -250,12 +261,16 @@ def create_app(
         )
         rows = _rows(result)
         return QueryResponse(
+            poll_seconds=ops.POLL_SECONDS["query"],
             table=tbl.name,
             tier=req.tier,
             rows=rows,
             row_count=len(rows),
             truncated=len(rows) >= capped < req.limit,
         )
+
+    if settings.web_dist is not None:
+        app.mount("/ui", StaticFiles(directory=settings.web_dist, html=True), name="web")
 
     return app
 
@@ -319,6 +334,7 @@ def _coverage(
         missing = coverage.gaps(requested, covered)
 
     return CoverageResponse(
+        poll_seconds=ops.POLL_SECONDS["coverage"],
         dataset=dataset,
         source_version=source_version,
         covered=[_iso(i) for i in covered],

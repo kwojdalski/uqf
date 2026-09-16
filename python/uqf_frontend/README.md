@@ -351,5 +351,10 @@ The capture pipeline ships as a callable, not a daemon. What schedules it —
 a timer in this process, cron, or an Airflow task — is a deployment question,
 and **F-23** notes no hosting model is established yet.
 
-The React application is deliberately not here. This package is Python; a
-browser app should live outside `python/`.
+The React application lives in [`web/`](../../web/README.md), outside the Python
+packages. Build it with `npm --prefix web ci && npm --prefix web run build`,
+then set `UQF_FRONTEND_WEB_DIST` to the absolute path of `web/dist` when
+starting this API. The app is served at `/ui/`; all API paths remain unchanged.
+
+Health, coverage and query responses now also expose `poll_seconds`, using
+the same server-owned cadence map as the operations endpoints.

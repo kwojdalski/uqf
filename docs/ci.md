@@ -39,3 +39,11 @@ The check compares against live issue data; an API failure also fails it.
 No manual changes to generated text are needed.
 
 CI runs checks; this workflow does not configure branch-protection rules.
+
+## Browser application
+
+The `Browser application` job installs Node 24 and runs `npm ci`,
+`npm run check` (formatting, TypeScript and frontend tests), and
+`npm run build` in `web/`. It uses the committed npm lockfile.
+These checks exercise UI behaviour with API fixtures; a live TorQ gateway
+is not required and is not claimed as covered by this job.

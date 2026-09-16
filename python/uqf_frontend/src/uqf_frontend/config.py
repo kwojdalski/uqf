@@ -84,6 +84,8 @@ class Settings:
     #: default: the fleet view then reports that it has nothing configured,
     #: rather than silently showing an empty log as if the fleet were idle.
     processes: tuple[Process, ...] = ()
+    #: Optional built React app, served under /ui/ on the same origin as the API.
+    web_dist: Path | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -103,6 +105,7 @@ class Settings:
             processes=_parse_processes(os.environ.get("UQF_FRONTEND_PROCESSES", "")),
             process_csv=_path_env("UQF_FRONTEND_PROCESS_CSV"),
             status_dir=_path_env("UQF_FRONTEND_STATUS_DIR"),
+            web_dist=_path_env("UQF_FRONTEND_WEB_DIST"),
             base_port=_int_env("UQF_FRONTEND_BASE_PORT", cls.base_port),
         )
 
