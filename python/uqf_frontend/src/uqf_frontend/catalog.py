@@ -188,6 +188,23 @@ TABLES: dict[str, Table] = {
             },
         ),
         Table(
+            name="event_tape",
+            description="Per-event order/trade tape: add, cancel and trade events with the "
+            "aggressor side on a trade. A superset of trades, so a tape filtered to "
+            "action='trade' is trade-shaped. Sorted ascending by time by contract - see "
+            "docs/event-tape.md",
+            columns={
+                "time": _TS,
+                "sym": _SYM,
+                "action": _SYM,
+                "side": _L,
+                "size": _F,
+                "price": _F,
+                "order_id": _L,
+                "pip_factor": _L,
+            },
+        ),
+        Table(
             name="crypto_trades",
             description="Real confirmed exchange executions recorded from the OMS",
             columns={

@@ -440,4 +440,134 @@ ofi_autocorrelation:{[ofi_series;window]
         i+:1];
     result};
 
+/ ======================================================= EVENT TAPE
+/ .
+/ Features over the order/trade event tape (issue #46). Shape and the
+/ decision behind it: docs/event-tape.md. Unlike the Tier 1 functions
+/ above, which take whole COLUMNS from a quotes snapshot table, these take
+/ the tape TABLE - because every one of them filters on `action`, and a
+/ caller splitting the table into columns first would have to do that
+/ filtering itself and keep the columns aligned while doing it.
+
+/ The actions an event tape may carry.
+tape_actions:`add`cancel`trade
+
+/ Required columns for any tape function. A subset of the full shape: these
+/ are what the counting and flow features read, and demanding the rest
+/ (price, order_id, pip_factor) would refuse a legitimately projected tape.
+tape_cols:`time`sym`action`side`size
+
+/ Refuse a tape that is missing a column, carries an unknown action, or is
+/ not sorted by time.
+/ .
+/ ALL THREE are silent failures if unchecked, which is why this is a
+/ precondition rather than defensive normalisation:
+/ .
+/   - a missing column reads as a null in most q code, so a windowed count
+/     over it returns 0 rather than erroring
+/   - an unknown action (a typo'd `trades`, say) is simply never matched by
+/     `action=`trade`, so every trade-based ratio silently reports on an
+/     empty set
+/   - an UNSORTED tape makes every rolling window compute over the wrong
+/     rows and return a plausible number. Rejecting beats sorting here for
+/     the same reason cross_book_at rejects unsorted quotes: the tape is
+/     sorted by construction, so sorting on every call pays O(n log n) to
+/     hide a caller's bug.
+/ @param tape an event tape table
+/ @return 1b when the tape is usable
+/ @throws error naming what is wrong
+/ @eg .qmicro.require_tape[tape]
+require_tape:{[tape]
+    if[not .Q.qt tape; '"require_tape: expected a table"];
+    present:cols tape;
+    missing:tape_cols where not tape_cols in present;
+    if[count missing;
+        '"require_tape: tape is missing required column(s) ",", " sv string missing];
+    unknown:distinct (exec action from tape) except tape_actions;
+    if[count unknown;
+        '"require_tape: unknown action(s) ",(", " sv string unknown),
+         " - expected one of ",", " sv string tape_actions,
+         ". An unmatched action makes every trade-based ratio report on an empty set rather than erroring"];
+    ts:exec time from tape;
+    if[not ts~asc ts;
+        '"require_tape: tape is not sorted ascending by time - a rolling window over an unsorted tape returns a plausible wrong number rather than erroring (docs/event-tape.md)"];
+    1b}
+
+/ Signed trade flow: the net direction of aggressive volume (ROADMAP #19).
+/ .
+/ Only `trade` events count - an add or a cancel moves no volume. `side` on
+/ a trade is the AGGRESSOR's side (1 buy, -1 sell), which is what makes the
+/ result mean "buying pressure": summing the resting side instead would be
+/ the same number negated, and summing "one party was a buyer" would be the
+/ trade count.
+/ .
+/ `size` is unsigned in the tape and signed here by multiplying, per the
+/ shape contract - a signed size column would make `sum size` meaningless.
+/ @param tape an event tape table
+/ @return the net signed volume: positive when buyers were the aggressors
+/ @eg .qmicro.signed_trade_flow[tape]  ->  -1000000f
+signed_trade_flow:{[tape]
+    require_tape tape;
+    sum exec side*size from tape where action=`trade}
+
+/ Cumulative signed trade flow, one running total per trade event.
+/ .
+/ The per-event series vpin and the flow-toxicity family build on, rather
+/ than the single scalar above. Returned aligned to the TRADE events only,
+/ with their times, because a cumulative delta indexed against add and
+/ cancel rows would repeat values at every non-trade row and invite a
+/ reader to treat those repeats as observations.
+/ @return a table of time and cum_flow, one row per trade event
+cumulative_trade_flow:{[tape]
+    require_tape tape;
+    trades:select time, signed:side*size from tape where action=`trade;
+    select time, cum_flow:sums signed from trades}
+
+/ Cancel-to-trade ratio: cancels per trade (ROADMAP #23).
+/ .
+/ A standard flow-toxicity proxy - a venue where orders are posted and
+/ pulled without trading has a high ratio, and a sharp rise in it is a
+/ classic quote-stuffing signature.
+/ .
+/ Returns 0n when there are no trades, NOT infinity and not zero. Zero
+/ would read as "no cancelling happening", which is the opposite of the
+/ truth when the real situation is cancels with nothing trading; and 0w
+/ propagates into any average a caller takes. A null says "undefined here",
+/ which is what a ratio with an empty denominator is.
+/ @param tape an event tape table
+/ @return cancels divided by trades, or 0n when no trade occurred
+/ @eg .qmicro.cancel_to_trade_ratio[tape]  ->  1.5
+cancel_to_trade_ratio:{[tape]
+    require_tape tape;
+    n_trades:count select from tape where action=`trade;
+    n_cancels:count select from tape where action=`cancel;
+    $[0=n_trades; 0n; n_cancels%n_trades]}
+
+/ Cancel-to-trade ratio per time bucket and grouping.
+/ .
+/ Mirrors hit_ratio_by's windowed-groupby shape, which is what the ROADMAP
+/ asks these features to look like: xbar the time into buckets, group by
+/ those plus whatever columns the caller names, and report the ratio per
+/ group. A null bucket_size disables time-bucketing entirely.
+/ .
+/ Buckets with no trade get 0n, for the reason cancel_to_trade_ratio does -
+/ and that matters more here, because a quiet bucket is common and a 0 in
+/ one would drag any average over buckets toward zero.
+/ @param tape an event tape table
+/ @param bucket_size a timespan to floor time into, or 0Nn for no bucketing
+/ @param group_cols extra columns to group by, e.g. enlist `sym
+/ @eg .qmicro.cancel_to_trade_ratio_by[tape;0D01:00:00;enlist `sym]
+cancel_to_trade_ratio_by:{[tape;bucket_size;group_cols]
+    require_tape tape;
+    t:select time, sym, action from tape where action in `cancel`trade;
+    by_cols:$[null bucket_size;
+        (),group_cols;
+        (`time,(),group_cols)];
+    t:$[null bucket_size; t; update time:bucket_size xbar time from t];
+    if[0=count by_cols;
+        :([] ratio:enlist cancel_to_trade_ratio tape)];
+    ?[t;();by_cols!by_cols;
+      (enlist `ratio)!enlist
+        (%;(sum;(=;`action;enlist `cancel));(sum;(=;`action;enlist `trade)))]}
+
 \d .

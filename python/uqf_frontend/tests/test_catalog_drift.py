@@ -135,6 +135,9 @@ _Q_OWNED = {
     "demo_deals": lambda: _q_contract_columns(
         Path("src/etl/sources/demo_deals.q"), "fields", "types"
     ),
+    "event_tape": lambda: _q_contract_columns(
+        Path("src/etl/sources/demo_events.q"), "fields", "types"
+    ),
 }
 
 
