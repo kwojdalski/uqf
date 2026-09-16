@@ -6,6 +6,10 @@ test_core.test_the_three_process_csv_layers_compose_in_a_stated_order:
     vendored process.csv  ->  PIPELINES  ->  extra_processes.csv  (appended)
     then process_overrides.csv applied LAST, per procname, field by field
 
+with one field-level overlay on the vendored rows themselves
+(VENDORED_STARTWITHALL_OVERLAY, below) sitting at the first step, since it
+stands in for editing a file this tree may not edit.
+
 So an override wins over every other source, and the vendored file is never
 edited - every run regenerates the merged copy from scratch."""
 
@@ -32,6 +36,81 @@ from torq_orchestrator.schemas import (
 
 log = get_logger(__name__)
 
+# Vendored rows this tree deliberately starts with the stack, against the
+# upstream default. One entry so far:
+#
+#   monitor1 - TorQ ships it startwithall=0, so out of the box nothing runs
+#   `.hb.checkheartbeat` and `.hb.hb` is a table nobody fills. Every process
+#   still PUBLISHES its heartbeat regardless; the collector is the missing
+#   half. `torq-demo summary`'s Heartbeat column, and the frontend health
+#   view behind it, therefore reported "not collected" on a fully healthy
+#   stack - a monitoring surface that is only ever populated if an operator
+#   knows to start one more process by hand is not monitoring.
+#
+# This is an overlay, not an edit: the vendored file is never touched (H-01),
+# and because process_overrides.csv is still applied afterwards, an operator
+# who does want the upstream behaviour can put it back with
+# `torq-demo config-set monitor1 startwithall 0`.
+VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1"}
+
+# Proctypes monitor1 must also subscribe to, on top of the ten the vendored
+# settings file lists.
+#
+# Starting monitor1 is only half of collecting heartbeats. It subscribes to
+# the proctypes in `.servers.CONNECTIONS`, and the vendored
+# appconfig/settings/monitor.q lists TorQ's own types only - so the four
+# standing uqf ETLs (cross1, vectorize1, posbook1, markout1, all proctype
+# `metrics`) published heartbeats that nothing was listening for. The feeds
+# were already covered, since `feed` is on the vendored list.
+#
+# `backfill` is deliberately NOT here. A backfill is a bounded job that
+# registers, runs a window and exits (ETL-16). Its `.hb.hb` row would
+# outlive it, and `checkheartbeat` would age that row into `warning` and
+# then `error` - reporting a job that SUCCEEDED as a fault, permanently.
+# Absence is the expected end state for a bounded worker, so the thing to
+# monitor is its run record, not its heartbeat.
+MONITOR_EXTRA_CONNECTIONS = ("metrics",)
+
+
+def _vendored_monitor_connections(paths: TorqDemoPaths) -> list[str]:
+    """The proctypes the vendored monitor settings file subscribes to.
+
+    Parsed out rather than restated, so that if upstream adds a proctype to
+    its list we extend THEIR list instead of silently pinning a copy of it
+    made on the day this was written. The line looks like:
+
+        CONNECTIONS:`discovery`rdb`hdb`...`sortworker
+
+    Returns [] if the file or the line is not found, which makes the
+    override below a no-op rather than a truncation - losing nine
+    subscriptions would be a far worse failure than not adding one.
+    """
+    settings = paths.torqapphome / "appconfig" / "settings" / "monitor.q"
+    if not settings.is_file():
+        return []
+    for line in settings.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("CONNECTIONS:`"):
+            return [part for part in stripped[len("CONNECTIONS:") :].split("`") if part]
+    return []
+
+
+def _monitor_connection_extras(paths: TorqDemoPaths) -> str:
+    """`.servers.CONNECTIONS` as a command-line override for monitor1.
+
+    `.proc.override[]` runs after every config layer, including the vendored
+    appconfig, so a command-line value wins without that file being edited
+    (H-01). It REPLACES rather than appends, which is why the vendored list
+    is read back above and passed through in full.
+    """
+    connections = _vendored_monitor_connections(paths)
+    if not connections:
+        return ""
+    for proctype in MONITOR_EXTRA_CONNECTIONS:
+        if proctype not in connections:
+            connections.append(proctype)
+    return "-.servers.CONNECTIONS " + " ".join(connections)
+
 
 # ---------------------------------------------------------------------------
 # process.csv rows + config overrides (get/set)
@@ -40,7 +119,8 @@ log = get_logger(__name__)
 
 def _base_process_rows(paths: TorqDemoPaths) -> list[dict[str, str]]:
     """The vendored process.csv rows, plus one row per PIPELINES entry
-    appended (and stp1's -schemafile extras repointed) - never mutated,
+    appended (with stp1's -schemafile extras repointed and
+    VENDORED_STARTWITHALL_OVERLAY applied) - the FILE is never mutated,
     always read fresh from the vendored file. The nine uqf rows used to be
     nine literal dicts here; they are generated by _pipeline_rows() now, so
     a new pipeline is a Pipeline() entry rather than an edit to this
@@ -58,6 +138,12 @@ def _base_process_rows(paths: TorqDemoPaths) -> list[dict[str, str]]:
             row["extras"] = row["extras"].replace(
                 "${TORQAPPHOME}/database.q", "${TORQDATA}/database.q"
             )
+        if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
+            row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
+        if row["procname"] == "monitor1":
+            extras = _monitor_connection_extras(paths)
+            if extras:
+                row["extras"] = " ".join(x for x in (row["extras"], extras) if x)
     rows.extend(_pipeline_rows())
     rows.extend(_read_extra_processes(paths))
     return rows

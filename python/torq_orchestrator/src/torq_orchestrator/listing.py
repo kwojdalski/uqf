@@ -125,8 +125,10 @@ def heartbeat_states(
 
     **None and an empty dict mean different things, and conflating them is the
     trap this function exists to avoid.** None says "nobody is collecting
-    heartbeats" - monitor1 is down, or was never started, since it carries
-    `startwithall=0`. An empty dict would say "the collector is up and has
+    heartbeats" - monitor1 is down. It starts with the stack (see
+    VENDORED_STARTWITHALL_OVERLAY), so None means it died or was stopped
+    rather than that it was never asked for. An empty dict would say
+    "the collector is up and has
     heard from nobody", which is a fleet-wide outage. Rendering both as a
     blank column would turn a monitoring gap into an all-clear, or an
     all-clear into a panic.

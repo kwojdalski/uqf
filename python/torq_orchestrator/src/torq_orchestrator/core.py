@@ -97,6 +97,7 @@ from torq_orchestrator.pipelines import (  # noqa: F401
     verify_pipeline_edges,
 )
 from torq_orchestrator.procs import (  # noqa: F401
+    VENDORED_STARTWITHALL_OVERLAY,
     _base_process_rows,
     _generated_schema_content,
     add_extra_process,
@@ -169,6 +170,7 @@ __all__ = [
     "WIDE_BOOK_FEED_PORT_OFFSET",
     "WIDE_BOOK_LEVELS",
     "WIDE_BOOK_TABLE_SCHEMA",
+    "VENDORED_STARTWITHALL_OVERLAY",
     "_base_process_rows",
     "_crypto_recorder_config_yaml",
     "_generated_schema_content",
