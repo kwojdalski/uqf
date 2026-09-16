@@ -56,6 +56,11 @@ EXCLUDED_PREFIXES = ("lib/", "build/")
 #: every name below was checked against `key `.q` in a live KDB-X rather
 #: than recalled: adding one that is NOT reserved would make this rule
 #: report a correct name, which is how a checker earns being ignored.
+#: .
+#: The third block came from `eval` - a name so obviously a builtin in
+#: hindsight that the list not having it is the point. It aborted
+#: singlestore_odbc.q at load time, which was the NINTH collision here and
+#: the first this checker did not already know about.
 RISKY_PARAM_NAMES = frozenset(
     {
         "desc",
@@ -158,6 +163,7 @@ RISKY_PARAM_NAMES = frozenset(
         "cross",
         "ceiling",
         "xcols",
+        "parse",
     }
 )
 
@@ -820,6 +826,57 @@ def rule_invalid_string_escape(path: str, lines: list[str]) -> list[Finding]:
     return findings
 
 
+def rule_reserved_toplevel_definition(path: str, lines: list[str]) -> list[Finding]:
+    r"""A namespace-level definition whose name shadows a q builtin.
+
+    `eval:{[h;sql] ...}` inside `\d .qodbc` throws `'assign` at LOAD time and
+    aborts the rest of the file, leaving the namespace half-populated while
+    the enclosing script carries on - the same consequence as the local and
+    parameter cases, from a place neither of those rules looked.
+
+    This gap cost a file. `eval` was ALREADY in RISKY_PARAM_NAMES when
+    singlestore_odbc.q defined it at namespace level, and the checker reported
+    the file clean twice: `rule_reserved_parameter_names` inspects signatures,
+    `rule_reserved_local_assignment` inspects assignments INSIDE a lambda, and
+    a top-level definition is neither. Two rules covering two of three places
+    read as covering all three.
+
+    Only inside a namespace. At root, `eval:{...}` would shadow the builtin
+    globally, which is a different and more obvious mistake, and this
+    repository's convention (N-01) puts every definition in a namespace
+    anyway.
+
+    False positives in this repo: 0.
+    """
+    findings = []
+    in_namespace = False
+    for n, raw in enumerate(lines, 1):
+        stripped = raw.strip()
+        if stripped.startswith("\\d "):
+            in_namespace = stripped != "\\d ."
+            continue
+        if not in_namespace:
+            continue
+        code = _strip_comments(raw)
+        m = re.match(r"^([a-z][a-zA-Z0-9_]*)\s*:", code)
+        if not m:
+            continue
+        name = m.group(1)
+        if name in RISKY_PARAM_NAMES:
+            findings.append(
+                Finding(
+                    path,
+                    n,
+                    "reserved-definition",
+                    f"namespace-level `{name}`",
+                    "shadows a q builtin, which throws `assign at LOAD time and "
+                    "aborts the rest of the file - leaving the namespace "
+                    "half-populated while the script carries on. Rename it",
+                )
+            )
+    return findings
+
+
 LINE_RULES = (
     rule_bare_slash_comment_block,
     rule_reserved_parameter_names,
@@ -828,6 +885,7 @@ LINE_RULES = (
     rule_self_comparison,
     rule_datetime_type,
     rule_invalid_string_escape,
+    rule_reserved_toplevel_definition,
 )
 TEXT_RULES = (
     rule_multiparam_lambda_under_at,
