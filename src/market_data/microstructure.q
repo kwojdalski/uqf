@@ -727,4 +727,81 @@ trade_arrival_rate_by:{[tape;bucket_size;group_cols]
         :([] trades:enlist count t)];
     ?[t;();by_cols!by_cols;(enlist `trades)!enlist (#:;`i)]}
 
+
+/ ------------------------------------------------------- LARGE TRADES
+
+/ The size at or above which a trade counts as "large", taken from the tape's
+/ OWN distribution at the given quantile.
+/ .
+/ The ROADMAP parked large_trade_ratio (#27) on the grounds that "large" is
+/ relative to a venue's typical clip and picking a number here would be
+/ inventing a market convention. That is right about the number and wrong
+/ about the blocker: the threshold does not have to be a constant. Asking for
+/ a QUANTILE makes it derived rather than invented, and "relative to the
+/ venue's typical clip" is exactly what a quantile of that venue's own trades
+/ computes.
+/ .
+/ Quantile rather than a multiple of the mean, because trade sizes are
+/ heavy-tailed: a handful of very large clips drag a mean upward until
+/ "twice the mean" excludes trades that every desk would call large. A
+/ quantile is unmoved by how extreme the extremes are.
+/ .
+/ Nearest-rank, and the rank is taken on the SORTED sizes with `ceiling` - so
+/ q=1.0 is the largest trade and q just above 0 is the smallest, with no
+/ interpolation inventing a size that never traded.
+/ @param tape an event tape table
+/ @param q the quantile in (0;1], e.g. 0.9 for the top decile
+/ @return the size at that quantile, or 0n when the tape holds no trades
+/ @throws error when the tape is malformed, or q is outside (0;1]
+/ @eg .qmicro.large_trade_threshold[tape;0.9]
+large_trade_threshold:{[tape;q]
+    require_tape tape;
+    if[(not q>0) or q>1;
+        '"large_trade_threshold: quantile must be in (0;1], got ",string q];
+    sizes:asc exec size from tape where action=`trade;
+    if[0=count sizes; :0n];
+    sizes -1+"j"$ceiling q*count sizes};
+
+/ Share of trades at or above the quantile threshold, by COUNT.
+/ .
+/ Note what this is not: it is not the share of VOLUME those trades carry.
+/ The count share is pinned near 1-q by construction, so the count form
+/ mostly restates the quantile it was given. The volume form below is the one
+/ that says something, and both are here so the distinction is explicit
+/ rather than left to a caller who assumed one and got the other.
+/ .
+/ Near 1-q, not equal to it: the comparison is >=, and the nearest-rank
+/ threshold is itself a size that traded, so that trade counts as large. On
+/ ten trades of sizes 1..10 at q=0.9 the threshold is 9 and the ratio is 0.2,
+/ not 0.1. Using > instead would exclude a trade of exactly the
+/ ninetieth-percentile size, which is the wrong answer to "how much trades at
+/ or above this size".
+/ @param tape an event tape table
+/ @param q the quantile in (0;1]
+/ @return the fraction of trades at or above the threshold, 0n with no trades
+/ @eg .qmicro.large_trade_ratio[tape;0.9]
+large_trade_ratio:{[tape;q]
+    threshold:large_trade_threshold[tape;q];
+    if[null threshold; :0n];
+    sizes:exec size from tape where action=`trade;
+    (count sizes where sizes>=threshold)%count sizes};
+
+/ Share of traded VOLUME carried by trades at or above the threshold.
+/ .
+/ This is the one that carries information. If the top decile of trades by
+/ count moves half the volume, that is a market where a few clips dominate -
+/ and a desk reads that very differently from one where volume is spread
+/ evenly, even though the COUNT ratio is 0.1 in both.
+/ @param tape an event tape table
+/ @param q the quantile in (0;1]
+/ @return the fraction of traded volume in large trades, 0n with no trades
+/ @eg .qmicro.large_trade_volume_share[tape;0.9]
+large_trade_volume_share:{[tape;q]
+    threshold:large_trade_threshold[tape;q];
+    if[null threshold; :0n];
+    sizes:exec size from tape where action=`trade;
+    total:sum sizes;
+    if[0=total; :0n];
+    (sum sizes where sizes>=threshold)%total};
+
 \d .
