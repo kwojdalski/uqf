@@ -270,6 +270,6 @@ nsList), following test_execution.q's pattern exactly. Cover, at minimum:
 
 Do not touch execution.q, forwards.q, or book.q - this is a new, additive
 module that calls into them, not a rewrite of anything there. Run
-`./q tests/run_tests.q` (PeachQ, vendored at repo root) after implementing
+`q tests/run_tests.q` after implementing
 to confirm the full suite - old and new - still passes.
 ```

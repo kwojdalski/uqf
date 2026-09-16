@@ -159,10 +159,9 @@ check_reject_ratio_limits:{[reject_ratios;limits;key_col]
 check_market_data_quality:{[quotes;max_spread_bps]
     .qfwd.require_quotes_cols[`check_market_data_quality;quotes];
     spreads:.qmicro.spread_bps[quotes`bid_prices;quotes`ask_prices];
-    / boolean-indexed status vector, not nested vectorized $[cond;a;b] -
-    / PeachQ's $ only handles a scalar cond, not a per-row cond vector
-    / (confirmed: throws 'type on a vector cond even though real kdb+
-    / supports it) - `crossed`ok`wide idx is the same
+    / boolean-indexed status vector rather than a nested $[cond;a;b].
+    / KDB-X supports a vector cond, so this is now a style choice rather
+    / than a requirement - kept because `crossed`ok`wide idx is the same
     / index-a-status-vector idiom check_stale_quotes/reconcile_trades
     / already use for the 2-way case, generalized to 3 statuses via a
     / 0/1/2 index built from ordinary boolean arithmetic instead of $.
@@ -190,9 +189,8 @@ check_market_data_quality:{[quotes;max_spread_bps]
 / @eg .qdqc.check_stale_quotes[quotes;.z.p;0D00:00:05]
 check_stale_quotes:{[quotes;at_time;max_age]
     .qfwd.require_quotes_cols[`check_stale_quotes;quotes];
-    / by before from, where after from - PeachQ's parser requires this
-    / canonical clause order; real kdb+ tolerates from/by reordered but
-    / PeachQ (this repo's other targeted interpreter) does not.
+    / by before from, where after from - the canonical qSQL clause order,
+    / kept because a reordered clause reads as a typo to anyone scanning it.
     latest:select last_ts:last ts by sym from quotes where ts<=at_time;
     result:([] sym:exec sym from latest; last_ts:exec last_ts from latest);
     result:update age:at_time-last_ts from result;

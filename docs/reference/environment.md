@@ -96,8 +96,7 @@ spend an afternoon.
 ## Prerequisites, not configuration
 
 `QHOME` must point at a real KDB-X installation (`~/.kx` on this machine).
-The repository-root `./q` is PeachQ and will not run the ETL tree — see the
-note at the top of `src/init.q`. `HOME` is read only to locate that default.
+This tree targets KDB-X alone; there is no fallback interpreter. `HOME` is read only to locate that default.
 
 ## How this page is kept honest
 

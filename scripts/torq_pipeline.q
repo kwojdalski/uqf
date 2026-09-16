@@ -35,7 +35,7 @@
 /      every timer target must be trapped - but the textbook niladic trap
 /      `.[f;();errfn]` does not work for a niladic {[] ...} function: its
 /      handler fires even when f SUCCEEDS, discarding the real result.
-/      Measured on both KDB-X and PeachQ:
+/      Measured on KDB-X:
 /        .[{[] 1+1};();{`caught}]  ->  `caught     (wrong - nothing threw)
 /        @[{[] 1+1};::;{`caught}]  ->  2           (right)
 /        @[{[] '"boom"};::;{`caught}] -> `caught    (right)

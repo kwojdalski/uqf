@@ -227,7 +227,7 @@ How to add a new implementation (e.g., a new cross-pair convention, a new markou
 1. <step: implement following the existing family's shape>
 2. <step: add qDoc with `@param`/`@return`/`@throws`/`@eg`>
 3. <step: add tests to `tests/test_<module>.q` — known reference value or provable identity>
-4. <step: run `./q tests/run_tests.q` on both PeachQ and real KDB-X>
+4. <step: run `q tests/run_tests.q` under KDB-X>
 
 ## Known Constraints
 
@@ -282,7 +282,7 @@ Explanation of what happens and what to expect.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Test discovery silently finds 0 tests in a file | abbreviated timestamp literal (`` D0``) truncates parsing under PeachQ | use fully-qualified `` D00:00:00.000000000 `` |
+| Test discovery silently finds 0 tests in a file | abbreviated timestamp literal (`` D0``) | use fully-qualified `` D00:00:00.000000000 `` |
 | `` 'assign `` on a variable named `inv`/`cols`/`ss` | shadows a q builtin | rename the variable |
 | ... | | |
 

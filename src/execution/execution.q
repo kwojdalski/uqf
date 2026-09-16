@@ -145,10 +145,8 @@ hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
     windowed:$[null bucket_size; windowed; update ts:bucket_size xbar ts from windowed];
     time_group:$[null bucket_size; `symbol$(); enlist `ts];
     effective_group_cols:time_group,group_cols;
-    / an empty group-by dict isn't treated as "no grouping" the same way
-    / on every kdb+-family interpreter - PeachQ throws a type error on
-    / it, where real kdb+/KDB-X happily returns one overall row. 0b is
-    / the portable "no group by at all" functional-select argument on
+    / an empty group-by dict is not a reliable way to say "no grouping".
+    / 0b is the explicit "no group by at all" functional-select argument on
     / both.
     by_arg:$[0=count effective_group_cols; 0b; effective_group_cols!effective_group_cols];
     select_dict:$[mode=`count;

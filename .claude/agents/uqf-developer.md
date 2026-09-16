@@ -27,7 +27,7 @@ Modules, in `src/init.q`'s load order:
 
 ## What to check first
 
-- **`.claude/skills/kdb-q-conventions/SKILL.md`** (and its `q-language-reference.md`) before writing or editing any `.q` file — it documents this repo's actual, hard-won gotchas: q's lack of operator precedence, dict-construction ambiguity, PeachQ-vs-KDB-X portability gaps, the qUnit hook-naming trap, and the two deliberate snake_case exceptions.
+- **`.claude/skills/kdb-q-conventions/SKILL.md`** (and its `q-language-reference.md`) before writing or editing any `.q` file — it documents this repo's actual, hard-won gotchas: q's lack of operator precedence, dict-construction ambiguity, the qUnit hook-naming trap, and the two deliberate snake_case exceptions.
 - **`docs/ROADMAP.md`** before implementing a new microstructure/LOB feature — it already has a proposed function signature, formula, and priority tier for most plausible candidates; don't reinvent the shape.
 - **The relevant `src/*.q` file in full** before adding a function to it — this library reuses its own primitives heavily (`ccy_orient_cross`, `oriented_levels`, `sweep_price`, `require_quotes_cols`, `apply_col_precedence`); a new function that duplicates one of these instead of calling it is the most common mistake here.
 - **`tests/test_<module>.q`** for the existing test pattern in that file (helper builders like `mk_quotes_table`, the `.{module}test` namespace, `test*`-prefixed functions) before adding new tests — match the established style, don't invent a new one.
@@ -39,14 +39,14 @@ Modules, in `src/init.q`'s load order:
 - Route any polynomial evaluation through `.qstats.horner_eval` rather than hand-rolling Horner's method.
 - Validate a `quotes`/`trades`-shaped table's required columns up front (see `forwards.q`'s `require_quotes_cols` pattern) *before* any protected-eval (`@[f;x;{...}]`) path, so a caller's structural mistake throws instead of silently producing null results.
 - Keep `lower_snake_case` for every new function, parameter, and local variable — the two deliberate exceptions (`options.q`'s `d1v`/`d2v`, `test_execution_scale.q`'s `beforeNamespace_generate_trades` hook) are documented in `kdb-q-conventions`; don't add a third without equally strong justification and equally clear documentation.
-- After any change to `src/*.q` or `tests/*.q`, run the full suite: `./q tests/run_tests.q` (PeachQ), and if real KDB-X is available, also `export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q tests/run_tests.q`. A change that only works on one interpreter is not done.
+- After any change to `src/*.q` or `tests/*.q`, run the full suite: `export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q tests/run_tests.q`.
 - New tests assert against a known reference value or a provable identity (put-call parity, a round trip through an inverse function, an exact-decomposition sum) — not just "didn't throw."
-- Use fully-qualified timestamp literals in tests (`` D00:00:00.000000000 ``, never abbreviated `` D0``) — PeachQ silently truncates test discovery on the abbreviated form with no error.
+- Use fully-qualified timestamp literals in tests (`` D00:00:00.000000000 ``, never abbreviated `` D0``) — the abbreviated form is easy to misread and has bitten test discovery before.
 
 ## Rules
 
 - Don't add functions outside eFX pricing/risk/execution/microstructure scope, even if q makes them easy to bolt on.
-- Don't introduce a new namespace nested more than one level deep (`` \d .qfwd.sub ``) — confirmed not to resolve under PeachQ; every namespace here is deliberately flat.
+- Don't introduce a new namespace nested more than one level deep (`` \d .qfwd.sub ``) — every namespace here is flat by convention (N-01).
 - Don't silently swallow structural errors in a protected-eval wrapper meant only for a legitimate "no data yet" case — that class of bug (a malformed table producing null results with no error) has bitten this codebase before.
 - Don't hardcode `pip_factor` or a fixed output column name inside a function body — `pip_factor` is always caller-supplied, and output timestamp/column-order conventions route through `.qfwd.ts_col`/`.qfwd.col_precedence`.
 - If adding a module, wire it into `src/init.q` in correct dependency order and add a matching `tests/test_<module>.q` wired into `tests/run_tests.q` — a module that loads but isn't tested isn't finished.

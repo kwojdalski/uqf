@@ -17,7 +17,7 @@
 #     version defaults to `git describe --tags --always --dirty`, or
 #     today's date (YYYY-MM-DD) if this isn't a git checkout.
 #
-# Requires a q/kdb+ interpreter on PATH (or ./q, PeachQ, at the repo
+# Requires KDB-X on PATH (or at ~/.kx/bin/q, at the repo
 # root) to run the test suite - see README's Requirements section.
 
 set -euo pipefail

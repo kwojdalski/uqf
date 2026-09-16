@@ -22,7 +22,7 @@
 // itself does for pricing a single cross like AUDPLN.
 //
 // Narration/status uses lib/log4q.q's INFO/DEBUG (see README's Licensing
-// section) - requires real kdb+/KDB-X, not the local PeachQ binary, for
+// section) - requires KDB-X, for
 // the same reason every other scripts/*.q example does.
 //
 // Run from the repository root: q env/seed.q

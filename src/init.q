@@ -1,8 +1,14 @@
 // init.q - loads every uqf module, each into its own flat namespace (one
 // per file - .qstats, .qccy, .qdcf, .qrates, .qfwd, .qopt, .qrisk, .qpos,
 // .qexec, .qbook, .qmicro, .qdqc, .qexdef - kept single-level throughout, not
-// nested under a shared .q parent, since multi-level \d namespace paths
-// don't resolve under the PeachQ interpreter this repo also targets).
+// nested under a shared .q parent.
+// .
+// Flat namespaces began as a portability constraint and are now a CONVENTION
+// this tree keeps (N-01): one flat .q<abbrev> per file, with the file list as
+// the registry. The original constraint is gone, but the convention is load
+// bearing in its own right - the filename-to-namespace tie is what the naming
+// auditor checks and what docs/man.q's registry is generated against, and 30
+// namespaces now depend on it.
 // Run from the repository root, e.g. `q src/init.q` or `\l src/init.q`.
 //
 // The directories below are ORGANISATIONAL ONLY. Two things follow from

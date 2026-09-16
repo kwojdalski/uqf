@@ -72,7 +72,7 @@ the same CLI, kept for anything that already invokes it that way).
 dependencies on demand, no separate `uv sync` needed - though `uv sync`
 here also works if you want the `.venv` up front.
 
-Requires real kdb+/KDB-X (`q` on `PATH`, not the PeachQ binary used
+Requires KDB-X (`q` on `PATH`
 elsewhere in this repo) plus `envsubst` and `rlwrap` on `PATH` (`torq.sh`,
 which this drives under the hood, needs both - macOS: `brew install
 gettext rlwrap`).

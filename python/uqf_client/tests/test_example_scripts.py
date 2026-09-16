@@ -20,9 +20,9 @@ no gate at all.
 
 KDB-X specifically, not any q: three of these scripts say in their own
 headers that they need real kdb+ because ``lib/log4q.q`` uses a
-mid-expression assignment PeachQ does not support. Skipping when only the
-repository's ``./q`` is present is therefore correct, and a pass under PeachQ
-would be the misleading result.
+mid-expression assignment. This tree targets KDB-X alone, so the gate skips
+rather than substituting another interpreter: a pass obtained from something
+the code is not verified on would be the misleading result.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def _kdbx() -> tuple[str, dict[str, str]]:
     if kdbx.is_file():
         env.setdefault("QHOME", str(Path.home() / ".kx"))
         return str(kdbx), env
-    pytest.skip("no KDB-X interpreter (~/.kx/bin/q or $UQFQ); PeachQ cannot run log4q")
+    pytest.skip("no KDB-X interpreter (~/.kx/bin/q or $UQFQ)")
 
 
 def test_examples_are_discovered() -> None:

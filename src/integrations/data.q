@@ -1,6 +1,6 @@
 // data.q - optional Databento parquet data access, keyed by symbol and
-// date. Not loaded by src/init.q: it needs a real kdb+/KDB-X interpreter
-// (PeachQ has no `2:`, so it can't load KX's native pq module) and a local
+// date. Not loaded by src/init.q: it needs KDB-X's module loader for KX's
+// native pq module, and a local
 // .env pointing at the data. Load explicitly with `\l src/integrations/data.q`.
 //
 // Expects DATABENTO_DATA_DIR (from a repo-root .env file, or the OS
@@ -70,8 +70,7 @@ pqm:(::);
 / data.q doesn't require a module-capable interpreter.
 / @return the pq module namespace, exposing `.pq` (open file), `.op`/`.rd`
 /         (low-level access)
-/ @throws if `use` (KDB-X's module loader) is unavailable - real kdb+/KDB-X
-/         is required here, not PeachQ
+/ @throws if `use` (KDB-X's module loader) is unavailable
 / @eg .qdata.pqModule[][`pq]
 pqModule:{[]
     if[pqm~(::); pqm::use`kx.pq];

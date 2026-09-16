@@ -22,7 +22,7 @@ therefore does not mean the q runtime tests passed.
 
 Run `QHOME="$HOME/.kx" "$HOME/.kx/bin/q" tests/run_tests.q` locally before
 merging q changes. If the runner later supplies an interpreter through PATH,
-`~/.kx/bin/q`, `./q` or `./peachq/q`, CI automatically runs the existing q hook;
+`~/.kx/bin/q`, CI automatically runs the existing q hook;
 a failing interpreter/test is a failure, not a reason to skip it.
 
 The local branch-name and protected-branch hooks are excluded in CI because

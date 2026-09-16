@@ -35,7 +35,7 @@ by module (@eg count): forwards 31, microstructure 20, options 16,
 ## What to check first
 
 - **`docs/audits/README.md`** and the entries it indexes, before starting. You share this log with `causality-auditor`. Read what a previous run already cleared so you re-check rather than re-derive, and note anything a prior run flagged as blocked on a decision.
-- **`.claude/skills/kdb-q-conventions/SKILL.md`** — q has no operator precedence, and the file records this repo's hard-won gotchas. It also documents PeachQ-vs-KDB-X divergences: **ignore those.** This audit targets KDB-X only, and a PeachQ-specific quirk is out of scope rather than a finding.
+- **`.claude/skills/kdb-q-conventions/SKILL.md`** — q has no operator precedence, and the file records this repo's hard-won gotchas.
 - **`tests/test_<module>.q`** for the module you are auditing, before proposing any test. Each file has its own namespace (`.qexectest`, `.qfwdtest`, ...) and its own helper builders (`mk_quotes_table` and friends). A proposed test that invents a new style instead of matching the file's is not a finished finding.
 - **`git branch --show-current`** — an example fixed on `master` is not present in a feature-branch worktree. Do not report a finding as open without knowing which tree you are in.
 
@@ -61,7 +61,7 @@ exit 0
 export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q scratch/verify.q
 ```
 
-**KDB-X is the only interpreter in scope.** It lives at `~/.kx/bin/q` and needs `QHOME=~/.kx` set, as above. The repo also ships a PeachQ binary as `./q` at its root — do not use it, and do not report a result obtained from it. If `~/.kx/bin/q` is missing or will not start, stop and say so rather than falling back to `./q`; a PeachQ result silently substituted for a KDB-X one is worse than no result.
+**KDB-X is the only interpreter in scope.** It lives at `~/.kx/bin/q` and needs `QHOME=~/.kx` set, as above. If it is missing or will not start, stop and say so rather than falling back; a result from another interpreter silently substituted for a KDB-X one is worse than no result.
 
 Three properties of this harness matter and are easy to get wrong:
 
@@ -110,7 +110,7 @@ Then persist the run: write `docs/audits/YYYY-MM-DD-docstring-eg-<scope>.md` (ap
 ## Rules
 
 - Read-only on `src/*.q` and `tests/*.q`. You write only `docs/audits/**`. A STALE finding is not licence to rewrite the docstring yourself; report it with the corrected line and let the user apply it.
-- Run KDB-X (`~/.kx/bin/q` with `QHOME=~/.kx`) and nothing else. Never run the repo-root `./q` PeachQ binary, and never report a PeachQ result as a finding.
+- Run KDB-X (`~/.kx/bin/q` with `QHOME=~/.kx`).
 - Never report a float mismatch without the raw computed value next to it. Digit-8 differences are display artifacts and must be classified as such.
 - A finding needs an executed check, not a reading. "This example looks like it predates the signature change" is not a finding; "this example throws `rank` under KDB-X, here is the output" is.
 - Distinguish verified-clean from not-checked in every report. An `@eg` you skipped for time is not an `@eg` that passed.

@@ -31,10 +31,10 @@ Scan for the following, in order of severity:
 - A local variable name that shadows a q builtin (`ss`, `cols`, `inv` are all confirmed live traps in this repo/interpreter combination) — causes confusing `assign`/`type` errors far from the actual mistake
 - A nested lambda referencing an *outer function's local* variable rather than a global — q closures only capture globals, so this fails at call time, not definition time
 - Single-key dict construction via `` `key!value `` on an atom key — collides with q's enum overload (type 20h); must be `(enlist key)!(enlist value)`
-- A new namespace nested more than one level deep (`` \d .qfwd.sub ``) — confirmed not to resolve under the PeachQ interpreter this repo also targets; every namespace in this library is deliberately flat for that reason
+- A new namespace nested more than one level deep (`` \d .qfwd.sub ``) — every namespace here is flat by convention (N-01), and the filename-to-namespace tie depends on it
 
 ### 4. Cross-Interpreter Portability Gaps
-- Code that only works under one of the two interpreters this repo targets (PeachQ via `./q`, real KDB-X) without a documented reason — check `kdb-q-conventions`'s gotcha list: abbreviated timestamp literals (`` 2026.01.02D0 ``) silently truncate test discovery under PeachQ, `\c` console width isn't honored under PeachQ, an empty group-by dict (`()!()`) throws under PeachQ but returns one row under real KDB-X, `` `year$d ``-style casts and `floor` vs monadic `_` behave differently
+- Code relying on an undocumented q subtlety — check `kdb-q-conventions`'s gotcha list first
 - A new function added without running the full suite (`tests/run_tests.q`) on **both** interpreters before considering it done
 
 ### 5. Convention Drift
@@ -46,7 +46,7 @@ Scan for the following, in order of severity:
 
 ### 6. Testing and Observability Gaps
 - Core pricing/execution logic (anything in `forwards.q`, `options.q`, `execution.q`, `risk.q`) with no corresponding test in `tests/test_*.q`
-- A test that asserts on a full large vector/table instead of reducing to a scalar tolerance check first (qUnit embeds the full compared values in its results table; a huge vector assertion can break the whole suite's result-rendering under PeachQ with no indication of which assertion caused it)
+- A test that asserts on a full large vector/table instead of reducing to a scalar tolerance check first (qUnit embeds the full compared values in its results table; a huge vector assertion can break the whole suite's result-rendering with no indication of which assertion caused it)
 - A qUnit hook (`beforeNamespace*`, `afterNamespace*`, `setUp*`, `tearDown*`) renamed to snake_case past its required literal prefix — qUnit's hook discovery is a hardcoded, case-sensitive prefix match; get this wrong and the hook silently never runs, with no error
 
 ## Steps

@@ -31,8 +31,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# KDB-X, not the repo-root ./q (PeachQ), which does not support 2: and is not
-# what this suite is verified against.
+# KDB-X. This tree targets it alone, so there is no fallback interpreter -
+# a suite that passed on something it is not verified against is worse than
+# one that does not run.
 Q="${Q:-$HOME/.kx/bin/q}"
 export QHOME="${QHOME:-$HOME/.kx}"
 

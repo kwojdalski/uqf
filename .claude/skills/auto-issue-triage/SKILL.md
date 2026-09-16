@@ -57,7 +57,7 @@ gh issue view <number> --json number,title,body,labels,comments,author,createdAt
 - Trace execution path: input → computation → output. q evaluates strictly right-to-left with no operator precedence — a "wrong formula" claim often traces back to this, not a typo
 - Check whether described wrong behavior can actually occur given current code
 - Check git log for recent changes: `git log --oneline -20 -- <file>`
-- Run `./q tests/run_tests.q` (PeachQ) and, if available, real KDB-X to confirm/refute reproducibility on both interpreters before concluding it's a genuine library bug rather than an interpreter gap
+- Run `q tests/run_tests.q` under KDB-X to confirm or refute reproducibility before concluding it is a genuine library bug
 
 **Verification Points:**
 - Bug claims must match actual code logic
@@ -138,7 +138,7 @@ This skill uses `/claim` before starting work and `/release` when done. This pre
 - Always verify bug claims against actual code behavior
 - Provide file paths and line numbers when claiming bugs
 - Never accept issue author's assertions without evidence
-- Test all fixes with the existing qUnit suite (`tests/run_tests.q`) before closing issues, on both PeachQ and real KDB-X where feasible
+- Test all fixes with the existing qUnit suite (`tests/run_tests.q`) before closing issues
 - Respect severity hierarchy when prioritizing
 - Use labels like `bugfinder`, `triaged-confirmed`, `in-progress` for tracking progress
 - Do not use emojis

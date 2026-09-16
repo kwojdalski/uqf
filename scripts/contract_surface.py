@@ -53,9 +53,9 @@ BASELINE = REPO / "docs" / "migrations" / "surfaces" / "uqf-local.json"
 def _kdbx() -> tuple[str, dict[str, str]]:
     """Locate KDB-X, or fail with the reason.
 
-    Deliberately not falling back to the repository-root ./q: that is PeachQ,
-    which cannot load the ETL tree, and a surface exported from a partial load
-    would be a quietly incomplete contract - the worst kind for this purpose.
+    No fallback interpreter. This tree targets KDB-X alone, and a surface
+    exported from anything else would be a quietly incomplete contract - the
+    worst kind for this purpose.
     """
     env = os.environ.copy()
     override = env.get("UQFQ")
@@ -66,9 +66,9 @@ def _kdbx() -> tuple[str, dict[str, str]]:
         env.setdefault("QHOME", str(Path.home() / ".kx"))
         return str(kdbx), env
     raise SystemExit(
-        "no KDB-X interpreter (~/.kx/bin/q or $UQFQ). The repository-root ./q "
-        "is PeachQ and cannot load the ETL tree, so it would export a partial "
-        "surface rather than fail - which is why it is not a fallback."
+        "no KDB-X interpreter (~/.kx/bin/q or $UQFQ). There is deliberately no "
+        "fallback: another interpreter would export a partial surface rather "
+        "than fail, which is the one outcome this must not produce."
     )
 
 
