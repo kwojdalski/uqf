@@ -95,6 +95,34 @@ check["a fresh process resumes from the cursor on disk";any rout like\: "CURSOR:
 cout:@[{system x};rchild;{enlist "SPAWN-FAILED: ",x}];
 check["a cleared checkpoint gives a fresh process nothing to resume from";any cout like\: "CURSOR:0Np*"];
 
+/ --- the coverage ledger survives the process (ETL-07) -------------------
+
+/ The requirement calls etl_coverage the channel for "durable cross-process
+/ completeness". It was neither: an in-memory table created by attach, never
+/ written anywhere, so a bounded worker - which runs a range and exits - took
+/ its coverage with it and ETL-13's skip-what-is-covered could not fire
+/ across runs. Nothing caught that, because a single long-lived process
+/ behaves correctly.
+/ .
+/ This is the check that would have. Stage here, read from a process that
+/ shares nothing with this one but the directory.
+
+.qcov.attach[];
+.qcov.stage_completion[`durable_ds;`v1;d 1;d 2;7];
+
+cchild:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
+       " tests/q/read_coverage.q < /dev/null 2>/dev/null";
+covout:@[{system x};cchild;{enlist "SPAWN-FAILED: ",x}];
+check["a fresh process sees coverage this one staged";any covout like\: "ROWS:1*"];
+check["and can answer is_covered from it";any covout like\: "COVERED:yes*"];
+
+/ A withdrawn claim must stay withdrawn across a restart - a supersession
+/ that did not persist would let a claim come back from the dead, which is
+/ the worst failure this ledger has.
+.qcov.supersede[`durable_ds;`v1;d 1;d 2];
+supout:@[{system x};cchild;{enlist "SPAWN-FAILED: ",x}];
+check["a supersession survives the process too";any supout like\: "COVERED:no*"];
+
 -1 "";
 -1 "==================== q-backfill-process ====================";
 -1 $[0=failures; "all checks passed"; (string failures)," check(s) FAILED"];

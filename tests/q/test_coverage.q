@@ -21,7 +21,11 @@ beforeNamespace_isolate:{[]
     .testutil.reset_coverage_ledger[];
     }
 
-setUp_fresh_ledger:{[] `etl_coverage set 0#value `etl_coverage;}
+// Clears the FILE as well as the table. Since the ledger is persisted,
+// emptying the in-memory copy alone is not a reset - the next
+// stage_completion reloads from disk first and resurrects the previous
+// test's rows.
+setUp_fresh_ledger:{[] .testutil.reset_coverage_ledger[];}
 
 / --- interval validation (ETL-08) ------------------------------------------
 
@@ -234,6 +238,99 @@ test_attaching_to_a_correctly_shaped_foreign_ledger_succeeds:{[t]
     / same columns, built independently of init_ledger
     `etl_coverage set .testutil.foreign_coverage_ledger[];
     .qunit.assertEquals[.qcov.attach[];`etl_coverage;"a foreign ledger of the right shape is accepted"]};
+
+/ --- persistence (ETL-07: durable, cross-process) --------------------------
+
+test_a_staged_completion_reaches_disk:{[t]
+    / The bug this closes: the ledger used to be an in-memory table that died
+    / with the worker, so a bounded worker - which runs a range and exits -
+    / took its own coverage with it, and ETL-07's "durable cross-process
+    / completeness" was true of nothing.
+    .qcov.stage_completion[`ds1;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qunit.assertEquals[count key hsym `$.qcov.ledger_path[];1;
+        "staging a completion writes the ledger to disk"]};
+
+test_reload_restores_what_another_process_would_have_written:{[t]
+    / Stands in for a second process: stage, drop the in-memory table the way
+    / a fresh interpreter would have none, reload, and the rows are back.
+    .qcov.stage_completion[`ds1;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    ![`.;();0b;enlist `etl_coverage];
+    .qcov.reload[];
+    .qunit.assertEquals[count .qcov.ledger[];1;
+        "a process that did not stage the row can still read it"]};
+
+test_attach_reloads_so_a_worker_sees_earlier_coverage:{[t]
+    / attach is the entry point .qbw.init calls, so this is the path a real
+    / worker takes. Without the reload here, coverage skipping (ETL-13) can
+    / never fire across runs.
+    .qcov.stage_completion[`ds1;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    ![`.;();0b;enlist `etl_coverage];
+    .qcov.attach[];
+    .qunit.assertEquals[count .qcov.ledger[];1;"attach picks up the persisted ledger"]};
+
+test_a_supersession_is_persisted_too:{[t]
+    / A withdrawn claim that came back after a restart would be the worst
+    / failure this file has, so supersede persists on the same path.
+    .qcov.stage_completion[`ds1;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qcov.supersede[`ds1;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    ![`.;();0b;enlist `etl_coverage];
+    .qcov.reload[];
+    .qunit.assertEquals[count .qcov.valid_at[`ds1;`v1;.z.p];0;
+        "the withdrawal survives the process, not just the claim"]};
+
+test_reload_with_no_file_is_not_an_error:{[t]
+    / A first run has nothing to reload, which is ordinary rather than a
+    / fault.
+    @[{system"rm -f ",x};.qcov.ledger_path[];{[e] (::)}];
+    ![`.;();0b;enlist `etl_coverage];
+    .qcov.reload[];
+    .qunit.assertEquals[count .qcov.ledger[];0;"no file means an empty ledger, not a throw"]};
+
+test_reload_refuses_a_file_of_the_wrong_shape:{[t]
+    / A ledger written by an older version of this tree has an older shape.
+    / require_schema is the guard, and reload runs it - so an old file is
+    / refused by name rather than read and silently aggregated across a
+    / column it does not have.
+    (hsym `$.qcov.ledger_path[]) set ([] dataset:`symbol$(); range_from:`timestamp$());
+    r:@[{.qcov.reload[]; ""};::;{x}];
+    .testutil.reset_coverage_ledger[];
+    .qunit.assertEquals[r like "*source_version*";1b;
+        "a stale ledger file is named and refused, not loaded"]};
+
+/ Does the lock directory exist? `key` cannot answer this: it returns () for
+/ a missing path AND for an empty directory, so the obvious check passes
+/ whether or not the lock is held. Shelling out to `test -d` distinguishes
+/ them, which is the whole point of the two tests below.
+/ Is the ledger lock held?
+/ .
+/ `key` alone cannot answer it: it returns () for a missing path AND for an
+/ empty directory, so the obvious check passes whether or not the lock is
+/ held. What makes this work is that with_lock writes an `owner` file inside
+/ the lock directory - so a held lock is a NON-EMPTY directory and an absent
+/ one is (), which are distinguishable.
+/ .
+/ An earlier version shelled out to `test -d`. Two things were wrong with it:
+/ q's `system` throws 'os when the command exits non-zero, and its stdout was
+/ not reliably captured back into q - so the probe both raised on the absent
+/ case and misreported the present one.
+lock_exists:{[] 0<count @[{key hsym `$x};.qcov.lock_path[];{[e] ()}]}
+
+test_with_lock_releases_even_when_the_body_throws:{[t]
+    / An error path that skips the release wedges every later write on the
+    / host, so the release has to survive a throw.
+    r:@[{.qcov.with_lock[{[x] '"boom"};enlist 1]; ""};::;{x}];
+    .qunit.assertEquals[(r like "*boom*";.coveragetest.lock_exists[]);(1b;0b);
+        "the lock is released and the error re-thrown"]};
+
+test_with_lock_actually_defers_the_body:{[t]
+    / The trap that made the first version of this wrong: a fully-applied
+    / projection in q is a CALL, so `with_lock {...}[args]` runs the body
+    / BEFORE with_lock is entered, and the lock protects nothing. Nothing
+    / about the return value reveals that, which is why it shipped looking
+    / correct - so this asserts the lock is HELD while the body runs.
+    held:.qcov.with_lock[{[x] .coveragetest.lock_exists[]};enlist 1];
+    .qunit.assertEquals[(held;.coveragetest.lock_exists[]);(1b;0b);
+        "the body runs inside the critical section, and it is released after"]};
 
 test_the_foreign_fixture_tracks_the_declared_schema:{[t]
     / The canary for the three tests above. They need a ledger carrying every

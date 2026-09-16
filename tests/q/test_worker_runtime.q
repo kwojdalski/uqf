@@ -20,7 +20,11 @@ beforeNamespace_isolate:{[]
     }
 
 setUp_fresh:{[]
-    `etl_coverage set 0#value `etl_coverage;
+    // Clears the FILE as well as the table. Since the ledger is persisted,
+    // emptying the in-memory copy alone is not a reset - the next
+    // stage_completion reloads from disk first and resurrects the previous
+    // test's rows.
+    .testutil.reset_coverage_ledger[];
     .qwcfg.reset[];
     .qwcfg.set_layers[()!();()!();()!()];
     setenv[`UQF_DRY_RUN;""];

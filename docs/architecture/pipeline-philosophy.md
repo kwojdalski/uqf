@@ -235,8 +235,8 @@ What was deliberately **not** taken is scheduling, for the reason in §8.
 
 And the implementation is not a port. q makes some of this cheaper than it
 would be elsewhere — a table is a first-class value, so the ledger is an
-ordinary in-process table that any process can read with qSQL rather than a
-service to be called; names bind at call time, so a mutual reference between
+ordinary table that round-trips to disk with `set`/`get` and is queried with
+qSQL, rather than a service to be called; names bind at call time, so a mutual reference between
 two modules needs no dependency injection to resolve. It also makes some of
 it harder, which the code records where it bit: reserved builtins that shadow
 at load time, an empty-vector-versus-empty-table distinction that heals

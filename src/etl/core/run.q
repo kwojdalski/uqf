@@ -159,6 +159,12 @@ require_run_schema:{[]
 / discovers this tree's tables by calling every niladic `attach` in an owned
 / namespace, so a table reachable only through init_runs/init_meta would be
 / missing from the contract surface and a reconciliation would not compare it.
+/ .
+/ NOT YET PERSISTED, unlike .qcov's ledger. These two tables still die with
+/ the process, so `history` and `unfinished` describe this process only. That
+/ is a smaller gap than coverage's was - nothing decides whether to re-fetch
+/ based on a run row - but it is a gap, and the fix is the same shape:
+/ ledger_path/persist/reload under .qcov.with_lock.
 / @return the two table names
 / @eg .qrun.attach[]
 attach:{[]
@@ -214,9 +220,11 @@ require_current:{[]
 / assumed: three separate interpreters each returned
 / 8c6b8b64-6815-6084-0a3e-178401251b68 as their first.
 / .
-/ For a process-local id that would be harmless. `etl_runs` and
-/ `etl_coverage` are SHARED, so two backfill processes would stamp different
-/ executions with one identity and `materialisations_of` would merge them.
+/ For a process-local id that would be harmless. `etl_coverage` is persisted
+/ to disk and reloaded by every worker's attach, so it IS shared across
+/ processes - two backfill processes would stamp different executions with
+/ one identity and `materialisations_of` would merge them. (`etl_runs` is
+/ still process-local; see attach's note.)
 / That is worse than the gap it closes: absent attribution is visibly absent,
 / while wrong attribution reads as correct.
 / .
