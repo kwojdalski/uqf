@@ -219,6 +219,36 @@ test_the_two_shipped_workers_claim_distinct_datasets:{[t]
     ds:(value .qbw.config)[;`dataset];
     .qunit.assertEquals[count[ds];count distinct ds;"every registered worker owns its dataset alone"]};
 
+/ --- the cursor is forward-only (D-09) ------------------------------------
+
+/ D-09: backfill is oldest-first by construction, and plan[] uses the cursor
+/ as its LOWER bound - so a cursor pushed past windows that are still
+/ uncovered means the next run plans from beyond them and never comes back.
+/ Coverage still shows them as gaps, so nothing is wrongly reported complete;
+/ they just never get filled. That made the ordering load-bearing and
+/ unenforced, while .qcont.advance had guarded the same invariant on the
+/ continuous path all along.
+test_a_backwards_cursor_is_refused:{[t]
+    .qunit.assertError[{.qbw.advanced_to[`demo_deals_backfill;x 0;x 1]};
+        (.ddbftest.d 4;.ddbftest.d 2);
+        "a cursor that moves backwards skips windows that are still uncovered"]};
+
+test_a_standing_still_cursor_is_refused:{[t]
+    .qunit.assertError[{.qbw.advanced_to[`demo_deals_backfill;x;x]};
+        .ddbftest.d 3;
+        "strictly forward - a repeated cursor would re-plan the same window forever"]};
+
+test_the_first_cursor_of_a_run_is_allowed:{[t]
+    / The loaded checkpoint is a null timestamp on a first run, and a null
+    / cannot be compared - so the guard must let it through rather than
+    / refusing every worker's opening window.
+    .qunit.assertEquals[.qbw.advanced_to[`demo_deals_backfill;0Np;.ddbftest.d 2];
+        .ddbftest.d 2;"a null current cursor is a first run, not a regression"]};
+
+test_a_forward_cursor_is_returned_unchanged:{[t]
+    .qunit.assertEquals[.qbw.advanced_to[`demo_deals_backfill;.ddbftest.d 2;.ddbftest.d 3];
+        .ddbftest.d 3;"the guard is a pass-through on the legitimate path"]};
+
 test_a_zero_width_is_refused:{[t]
     .qunit.assertError[{.qbw.define[`zero_width;x]};
         `ns`source`dataset`width!(`.qddbf;`demo_deals;`something_else;0D00:00);

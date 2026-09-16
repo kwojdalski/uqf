@@ -58,7 +58,23 @@ jobs:
         # Where the source and the document disagree the source is right by
         # definition, so this fails the build rather than reconciling.
         if: ${{ !cancelled() }}
-        run: python3 scripts/generate_operational_docs.py --check
+        # `uv run`, not bare python3: this script imports torq_orchestrator,
+        # which imports loguru. Under the runner's system python3 it died with
+        # ModuleNotFoundError before checking anything - so the gate had never
+        # once run, and master was red for it. Loud rather than silent, but
+        # still a gate that protected nothing. The other three gates here are
+        # stdlib-only and do not need the workspace.
+        run: uv run python scripts/generate_operational_docs.py --check
+      - name: Check the environment reference lists every variable
+        # C-04: docs/environment.md is the one operator-facing list. It is
+        # hand-written because "optional, and here is what unset does" is a
+        # judgement, and checked in both directions because a hand-written
+        # reference otherwise ends up describing a previous version of the
+        # system. One variable (UQF_DRY_RUN) is built mechanically by
+        # .qwcfg.env_name and appears in no source file, so grep is not a
+        # substitute for this page.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_env_reference.py --check
       - name: Check no bare E-/F- requirement citation has crept back in
         # Requirements are ETL-nn / FE-nn since #109; a bare E-nn in source
         # is now the question bank's id, and must be marked as such. The

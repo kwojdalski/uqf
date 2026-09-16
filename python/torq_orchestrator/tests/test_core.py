@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from torq_orchestrator import core
+from torq_orchestrator import core, pipelines
 
 
 @pytest.fixture
@@ -644,6 +644,41 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
 
     problems = core.verify_pipeline_edges(tmp_path)
     assert any(target.procname in problem for problem in problems), problems
+
+
+def test_pipeline_procnames_are_unique():
+    """H-09: a procname identifies a process, so two entries cannot share one.
+
+    Nothing enforced this. `PIPELINE_BY_NAME` and `PIPELINE_OFFSETS` are both
+    dict comprehensions over `PIPELINES`, so a repeated name does not raise -
+    it drops one pipeline from the registry and hands the survivor the
+    other's port offset. `add_extra_process` already refuses a duplicate that
+    an operator adds at runtime, which made the unguarded literal the wrong
+    way round: the trusted source of truth was the one with no check.
+    """
+    names = [pipeline.procname for pipeline in core.PIPELINES]
+    assert len(names) == len(set(names)), f"duplicate procname in PIPELINES: {names}"
+
+
+def test_the_edge_verifier_detects_a_duplicate_procname(monkeypatch, tmp_path):
+    """And the guard is seen to fire, not merely to exist.
+
+    Duplicating the first pipeline is enough: the verifier should name the
+    procname and both offending positions, because "a duplicate exists"
+    without saying where leaves the reader diffing a nine-entry literal.
+    """
+    duplicated = (*core.PIPELINES, core.PIPELINES[0])
+    monkeypatch.setattr(pipelines, "PIPELINES", duplicated)
+
+    real = core.default_paths().scripts_dir
+    for pipeline in duplicated:
+        (tmp_path / pipeline.script).write_text((real / pipeline.script).read_text())
+    (tmp_path / core.PIPELINE_LIB_SCRIPT).write_text((real / core.PIPELINE_LIB_SCRIPT).read_text())
+
+    problems = pipelines.verify_pipeline_edges(tmp_path)
+    duplicate_reports = [p for p in problems if "declared twice" in p]
+    assert duplicate_reports, problems
+    assert core.PIPELINES[0].procname in duplicate_reports[0]
 
 
 def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core.TorqDemoPaths):

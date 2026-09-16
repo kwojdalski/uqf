@@ -287,8 +287,32 @@ do_window:{[worker;w]
         `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];
-          `cursor;:;w`range_to]];
+          `cursor;advanced_to[worker];w`range_to]];
     1b}
+
+/ Private: the new cursor, refusing any move that is not strictly forward.
+/ .
+/ D-09 asked whether backfill is strictly oldest-first, and whether the order
+/ matters to correctness or only to observability. It is oldest-first by
+/ construction - windows[] builds starts as from_ts+width*til n, and remaining
+/ hands back ascending sub-ranges - and the order matters to CORRECTNESS,
+/ because plan[] uses this cursor as its LOWER bound. A window processed out
+/ of order would push the cursor past windows that are still uncovered, and
+/ the next run would plan from there and never come back for them. Coverage
+/ would still show them as gaps, so nothing gets wrongly reported complete;
+/ they simply never get filled while that checkpoint stands.
+/ .
+/ So the ordering was load-bearing and unenforced. .qcont.advance already
+/ refuses a non-strictly-forward continuous cursor for a closely related
+/ reason; this is the same invariant on the bounded path, which had a plain
+/ assignment. One comparison, and the asymmetry is gone.
+/ @throws error when the cursor would stand still or move backwards
+advanced_to:{[worker;current;next_cursor]
+    if[(not null current) and not next_cursor>current;
+        '"cursor for ",string[worker]," would move from ",string[current],
+         " to ",string[next_cursor]," - plan uses it as a lower bound, so a ",
+         "cursor that is not strictly forward skips windows that are still uncovered"];
+    next_cursor}
 
 / Private: a NILADIC publisher for one worker's pending batch. A projection
 / with its last argument still missing, so finish_window's dry-run gate can
