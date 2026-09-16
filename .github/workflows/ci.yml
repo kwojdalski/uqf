@@ -58,7 +58,13 @@ jobs:
         # Where the source and the document disagree the source is right by
         # definition, so this fails the build rather than reconciling.
         if: ${{ !cancelled() }}
-        run: python3 scripts/generate_operational_docs.py --check
+        # `uv run`, not bare python3: this script imports torq_orchestrator,
+        # which imports loguru. Under the runner's system python3 it died with
+        # ModuleNotFoundError before checking anything - so the gate had never
+        # once run, and master was red for it. Loud rather than silent, but
+        # still a gate that protected nothing. The other three gates here are
+        # stdlib-only and do not need the workspace.
+        run: uv run python scripts/generate_operational_docs.py --check
       - name: Check the environment reference lists every variable
         # C-04: docs/environment.md is the one operator-facing list. It is
         # hand-written because "optional, and here is what unset does" is a
