@@ -88,6 +88,14 @@ init:{[run_spec]
 
     .qbfstate.acquire_lock worker_name;
 
+    / K-01: structured, levelled, and the same field names as every other
+    / worker. One INF line per init is the right volume; per-window detail
+    / is DBG and off unless someone asks.
+    .qlog.register[];
+    .qlog.info[worker_name;"initialised";
+        `source_version`range_from`range_to`live!
+        (source_version;range_from;range_to;not null handle)];
+
     / Live only when a credential is configured. An absent credential is an
     / explicit statement that this is a demo, NOT a fallback for a failed
     / connection - falling back on failure would turn an outage into
@@ -184,21 +192,35 @@ run:{[]
     `.qddbf.progress set `windows_completed`windows_failed`rows_published`cursor!(0;0;0;cursor);
     do_window each windows;
     p:progress;
-    `state`windows_completed`windows_failed`rows_published`cursor!
+    result:`state`windows_completed`windows_failed`rows_published`cursor!
         ($[p[`windows_failed]>0;`partial;`completed];
-         p`windows_completed;p`windows_failed;p`rows_published;p`cursor)}
+         p`windows_completed;p`windows_failed;p`rows_published;p`cursor);
+    / one summary line per run at INF - the aggregate a fleet view wants,
+    / without the per-window noise that stays at DBG.
+    .qlog.info[worker_name;"run finished";result];
+    result}
 
 / Private: one window, end to end. Accumulates into .qddbf.progress rather
 / than returning, because a q lambda does not close over an enclosing local
 / and `each` over windows needs somewhere to put the running totals.
 do_window:{[w]
+    .qlog.dbg[worker_name;"window start";`range_from`range_to!(w`range_from;w`range_to)];
     f:fetch[w`range_from;w`range_to];
     if[`failed~f`state;
+        / ERR, not a throw: per M-05 a failed window is terminal for that
+        / window and the run continues. Recording it here, with the window
+        / and the classified kind, is what makes "which windows failed and
+        / why" answerable from the log rather than from a debugger.
+        .qlog.err[worker_name;"window failed";
+            `range_from`range_to`kind`attempts`error!
+            (w`range_from;w`range_to;f`kind;f`attempts;f`error)];
         `.qddbf.progress set @[progress;`windows_failed;+;1];
         :0b];
     `.qddbf.last_batch set f`result;
     r:.qwrt.finish_window[worker_name;dataset;spec[];w`range_from;w`range_to;
         {.qddbf.publish .qddbf.last_batch}];
+    .qlog.dbg[worker_name;"window published";
+        `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
     `.qddbf.progress set
         @[@[@[progress;`windows_completed;+;1];`rows_published;+;r`rows_published];
           `cursor;:;w`range_to];
