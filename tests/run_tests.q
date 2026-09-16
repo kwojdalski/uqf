@@ -24,6 +24,7 @@
 \l src/integrations/data.q
 \l scripts/torq_pipeline.q
 \l src/etl/core/backfill_state.q
+\l src/etl/core/log.q
 \l src/etl/core/coercion.q
 \l src/etl/core/coverage.q
 \l src/etl/core/worker_config.q
@@ -52,6 +53,7 @@
 \l tests/q/test_data.q
 \l tests/q/test_backfill_state.q
 \l tests/q/test_coverage.q
+\l tests/q/test_log.q
 \l tests/q/test_coercion.q
 \l tests/q/test_worker_config.q
 \l tests/q/test_worker_runtime.q
@@ -65,7 +67,7 @@
 / The namespace list is unchanged by the tests/q/ move: it keys on test
 / NAMESPACES, not file paths, and the move deliberately left namespaces
 / alone - the same choice made for src/ (see src/init.q).
-nsList:`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.backfillstatetest`.coveragetest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.ddbftest`.conttest`.statustest`.tztest;
+nsList:`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.backfillstatetest`.coveragetest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.ddbftest`.conttest`.statustest`.tztest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;
