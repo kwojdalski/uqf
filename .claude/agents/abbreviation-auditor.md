@@ -77,7 +77,7 @@ State all five, or do not report it:
    easy to skip.
 4. **Whether the name is public API.** A renamed exported function breaks
    callers outside this tree, and `docs/man.q` and
-   `docs/migrations/surfaces/uqf-local.json` both record it.
+   `docs/migrations/surfaces/uqf-local/functions.csv` both record it.
 5. **A recommendation, including "keep both".** DECL and MESSAGE above are
    near-even splits where the right answer may be to pick one by fiat rather
    than by count — say which and why.
@@ -134,7 +134,7 @@ breaks three generated artefacts and two gates notice:
 ```bash
 scripts/test.sh q-unit
 uv run python scripts/generate_man_registry.py     # man.q records every name
-uv run python scripts/contract_surface.py export -o docs/migrations/surfaces/uqf-local.json
+uv run python scripts/contract_surface.py export
 ```
 
 The `man.q` registry gate is what caught the `config` → `cfg` rename leaving

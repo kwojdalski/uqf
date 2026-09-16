@@ -32,12 +32,13 @@ under KDB-X; this script invokes it and merges the result.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 REPO = Path(__file__).resolve().parent.parent
 Q_EXPORTER = REPO / "scripts" / "export_contract_surface.q"
@@ -47,7 +48,21 @@ Q_EXPORTER = REPO / "scripts" / "export_contract_surface.q"
 #: gated below so it cannot quietly go stale - a committed baseline nothing
 #: verifies is the `.qcov.require_schema` shape, where a file's existence
 #: reads as protection it is not providing.
-BASELINE = REPO / "docs" / "migrations" / "surfaces" / "uqf-local.json"
+#:
+#: A DIRECTORY OF CSVs rather than one JSON file, and the reason is review.
+#: The surface is read by people comparing two trees, and JSON at indent=2
+#: puts every list element on its own line: adding nine tables cost 208 diff
+#: lines, where the same change is 54 rows here. A renamed function is one
+#: changed line instead of a multi-line block, and the whole surface is ~670
+#: rows rather than 4,911 lines.
+#:
+#: Not q, despite this being a q repository. Nothing in q reads this - it is
+#: produced by Python merging three sources (q via subprocess, the pipeline
+#: registry, an env scan) and consumed by Python alone. A q file no q process
+#: loads is the shape this tree keeps finding and deleting. `docs/man.q` is a
+#: q artifact because a q session loads it; this is not that. CSV keeps the
+#: door open anyway: q reads it natively with `0:` if a consumer appears.
+BASELINE = REPO / "docs" / "migrations" / "surfaces" / "uqf-local"
 
 
 def _kdbx() -> tuple[str, dict[str, str]]:
@@ -147,6 +162,166 @@ def build_surface() -> dict[str, Any]:
     surface.update(export_python_surface())
     surface.update(export_env_surface())
     return surface
+
+
+# ------------------------------------------------------------ serialisation
+
+#: One file per relation. The surface is four relations once flattened, and
+#: one wide file with a `kind` discriminator and mostly-empty cells would be
+#: worse than the JSON it replaces.
+FILES = ("functions.csv", "table_columns.csv", "processes.csv", "variables.csv", "meta.csv")
+
+#: Lists live in one cell, space-separated. Safe because no q identifier,
+#: table name or parameter name contains a space - asserted by
+#: test_contract_surface.py rather than assumed, since the day one does the
+#: surface would silently mis-round-trip rather than fail.
+_SEP = " "
+
+
+def _join(values: list[str]) -> str:
+    return _SEP.join(values)
+
+
+def _split(cell: str) -> list[str]:
+    return cell.split(_SEP) if cell else []
+
+
+def write_surface(out_dir: Path, surface: dict[str, Any]) -> None:
+    """Write the surface as one CSV per relation, sorted for stable diffs."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    for ns in sorted(surface.get("functions", {})):
+        for entry in sorted(surface["functions"][ns], key=lambda e: e["name"]):
+            rows.append(
+                {
+                    "namespace": ns,
+                    "name": entry["name"],
+                    "kind": entry["kind"],
+                    # Empty for a non-function. That is not just a blank: it is
+                    # what tells the reader back that `params` was [] rather
+                    # than [""], the q spelling of a niladic. The two always
+                    # coincide, and test_contract_surface.py holds them to it.
+                    "rank": "" if entry["rank"] is None else str(entry["rank"]),
+                    "params": _join(entry["params"]),
+                }
+            )
+    _write_csv(out_dir / "functions.csv", ["namespace", "name", "kind", "rank", "params"], rows)
+
+    rows = []
+    for table in sorted(surface.get("tables", {})):
+        spec = surface["tables"][table]
+        for column, qtype in zip(spec["columns"], spec["types"], strict=True):
+            rows.append({"table": table, "column": column, "type": qtype})
+    # QUOTE_ALL here and nowhere else. q's `meta` reports a GENERAL (mixed)
+    # column's type as a literal SPACE, so `crypto_book,bid_prices, ` ends in
+    # whitespace that is invisible in review and - worse - stripped by this
+    # repository's own trailing-whitespace pre-commit hook, which would turn
+    # the type into an empty string and leave `check` failing against a file
+    # nothing could regenerate. Quoting makes the space survive.
+    _write_csv(
+        out_dir / "table_columns.csv",
+        ["table", "column", "type"],
+        rows,
+        quoting=csv.QUOTE_ALL,
+    )
+
+    rows = [
+        {
+            "procname": p["procname"],
+            "proctype": p["proctype"],
+            "offset": str(p["offset"]),
+            "subscribes": _join(p["subscribes"]),
+            "publishes": _join(p["publishes"]),
+        }
+        for p in sorted(surface.get("processes", []), key=lambda p: p["procname"])
+    ]
+    _write_csv(
+        out_dir / "processes.csv",
+        ["procname", "proctype", "offset", "subscribes", "publishes"],
+        rows,
+    )
+
+    _write_csv(
+        out_dir / "variables.csv",
+        ["name"],
+        [{"name": v} for v in sorted(surface.get("variables", []))],
+    )
+
+    # Provenance has nowhere else to go: CSV has no comment syntax, and
+    # dropping it would lose which interpreter produced the export.
+    _write_csv(
+        out_dir / "meta.csv",
+        ["key", "value"],
+        [{"key": "generated_by", "value": surface.get("generated_by", "")}],
+    )
+
+
+def _write_csv(
+    path: Path,
+    fieldnames: list[str],
+    rows: list[dict[str, str]],
+    quoting: Literal[0, 1, 2, 3, 4, 5] = csv.QUOTE_MINIMAL,
+) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n", quoting=quoting)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def read_surface(in_dir: Path) -> dict[str, Any]:
+    """Read a CSV surface back into the same shape `build_surface` produces.
+
+    The round trip must be exact, because `diff_surfaces` compares the two and
+    any asymmetry would read as a contract change that never happened.
+    """
+    functions: dict[str, list[dict[str, Any]]] = {}
+    for row in _read_csv(in_dir / "functions.csv"):
+        rank = int(row["rank"]) if row["rank"] else None
+        # A blank `params` means [""] for a function and [] for anything
+        # else - see write_surface's note on `rank`.
+        if row["params"]:
+            params = _split(row["params"])
+        else:
+            params = [] if rank is None else [""]
+        functions.setdefault(row["namespace"], []).append(
+            {"kind": row["kind"], "name": row["name"], "params": params, "rank": rank}
+        )
+
+    tables: dict[str, dict[str, list[str]]] = {}
+    for row in _read_csv(in_dir / "table_columns.csv"):
+        spec = tables.setdefault(row["table"], {"columns": [], "types": []})
+        spec["columns"].append(row["column"])
+        spec["types"].append(row["type"])
+
+    processes = [
+        {
+            "procname": row["procname"],
+            "proctype": row["proctype"],
+            "offset": int(row["offset"]),
+            "subscribes": _split(row["subscribes"]),
+            "publishes": _split(row["publishes"]),
+        }
+        for row in _read_csv(in_dir / "processes.csv")
+    ]
+
+    meta = {row["key"]: row["value"] for row in _read_csv(in_dir / "meta.csv")}
+
+    return {
+        "functions": functions,
+        "generated_by": meta.get("generated_by", ""),
+        "namespaces": sorted(functions),
+        "processes": processes,
+        "tables": tables,
+        "variables": [row["name"] for row in _read_csv(in_dir / "variables.csv")],
+    }
+
+
+def _read_csv(path: Path) -> list[dict[str, str]]:
+    if not path.is_file():
+        raise FileNotFoundError(f"{path} is missing from the surface")
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
 
 # --------------------------------------------------------------------- diff
@@ -251,12 +426,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
 
-    exp = sub.add_parser("export", help="write this tree's contract surface as JSON")
-    exp.add_argument("-o", "--out", type=Path, help="output file (default: stdout)")
+    exp = sub.add_parser("export", help="write this tree's contract surface as CSV")
+    exp.add_argument("-o", "--out", type=Path, help="output directory (default: the baseline)")
 
     dif = sub.add_parser("diff", help="report contract differences between two exports")
-    dif.add_argument("a", type=Path)
-    dif.add_argument("b", type=Path)
+    dif.add_argument("a", type=Path, help="a surface directory")
+    dif.add_argument("b", type=Path, help="a surface directory")
 
     sub.add_parser(
         "check",
@@ -267,29 +442,27 @@ def main() -> int:
 
     if args.command == "export":
         surface = build_surface()
-        text = json.dumps(surface, indent=2, sort_keys=True) + "\n"
-        if args.out:
-            args.out.write_text(text, encoding="utf-8")
-            fns = sum(len(v) for v in surface.get("functions", {}).values())
-            print(
-                f"wrote {args.out}: {len(surface.get('namespaces', []))} namespace(s), "
-                f"{fns} name(s), {len(surface.get('tables', {}))} table(s), "
-                f"{len(surface.get('processes', []))} process(es), "
-                f"{len(surface.get('variables', []))} env var(s)"
-            )
-        else:
-            sys.stdout.write(text)
+        out = args.out or BASELINE
+        write_surface(out, surface)
+        fns = sum(len(v) for v in surface.get("functions", {}).values())
+        print(
+            f"wrote {out}/: {len(surface.get('namespaces', []))} namespace(s), "
+            f"{fns} name(s), {len(surface.get('tables', {}))} table(s), "
+            f"{len(surface.get('processes', []))} process(es), "
+            f"{len(surface.get('variables', []))} env var(s)"
+        )
         return 0
 
     if args.command == "check":
-        if not BASELINE.is_file():
+        missing = [f for f in FILES if not (BASELINE / f).is_file()]
+        if missing:
             print(
-                f"{BASELINE.relative_to(REPO)} is missing - run "
-                f"`contract_surface.py export -o {BASELINE.relative_to(REPO)}`",
+                f"{BASELINE.relative_to(REPO)}/ is missing {', '.join(missing)} - run "
+                f"`contract_surface.py export`",
                 file=sys.stderr,
             )
             return 1
-        committed = json.loads(BASELINE.read_text(encoding="utf-8"))
+        committed = read_surface(BASELINE)
         current = build_surface()
         lines = diff_surfaces(committed, current, "committed", "current")
         if not lines:
@@ -301,16 +474,15 @@ def main() -> int:
         print(f"{BASELINE.relative_to(REPO)} is stale:", file=sys.stderr)
         print("\n".join(lines), file=sys.stderr)
         print(
-            f"\nIf the change is intended, rerun:\n"
-            f"  uv run python scripts/contract_surface.py export "
-            f"-o {BASELINE.relative_to(REPO)}",
+            "\nIf the change is intended, rerun:\n"
+            "  uv run python scripts/contract_surface.py export",
             file=sys.stderr,
         )
         return 1
 
-    a = json.loads(args.a.read_text(encoding="utf-8"))
-    b = json.loads(args.b.read_text(encoding="utf-8"))
-    lines = diff_surfaces(a, b, args.a.stem, args.b.stem)
+    a = read_surface(args.a)
+    b = read_surface(args.b)
+    lines = diff_surfaces(a, b, args.a.name, args.b.name)
     if not lines:
         print("no contract differences")
         return 0

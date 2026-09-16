@@ -47,22 +47,22 @@ function is doing its job.
 
 SOURCE OF TRUTH
 
-``docs/migrations/surfaces/uqf-local.json``, which is itself held current by
-``contract_surface.py check``. Reading it rather than launching q keeps this
-gate fast enough for a pre-commit hook; the cost is that a stale surface
-would make this check wrong, which is why that gate runs too.
+``docs/migrations/surfaces/uqf-local/functions.csv``, which is itself held
+current by ``contract_surface.py check``. Reading it rather than launching q
+keeps this gate fast enough for a pre-commit hook; the cost is that a stale
+surface would make this check wrong, which is why that gate runs too.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
+import csv
 import re
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-SURFACE = REPO / "docs" / "migrations" / "surfaces" / "uqf-local.json"
+SURFACE = REPO / "docs" / "migrations" / "surfaces" / "uqf-local" / "functions.csv"
 
 #: Where living documentation lives. Everything under these roots is checked.
 DOC_ROOTS = (
@@ -147,14 +147,24 @@ _CALL = re.compile(r"\.q([a-z][a-z0-9]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\[([^\[\]]*)\]
 
 
 def load_surface() -> dict[str, dict[str, dict]]:
-    """{namespace: {name: entry}} from the committed contract surface."""
+    """{namespace: {name: entry}} from the committed contract surface.
+
+    `rank` is blank for a non-function, which is how the CSV distinguishes a
+    value from a niladic function - see contract_surface.write_surface. A
+    blank here becomes None, and the arity check skips it rather than
+    treating a value as a zero-argument function.
+    """
     if not SURFACE.is_file():
         sys.exit(f"contract surface not found at {SURFACE} - run contract_surface.py export")
-    raw = json.loads(SURFACE.read_text())
-    return {
-        ns: {entry["name"]: entry for entry in entries}
-        for ns, entries in raw.get("functions", {}).items()
-    }
+    out: dict[str, dict[str, dict]] = {}
+    with SURFACE.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            out.setdefault(row["namespace"], {})[row["name"]] = {
+                "name": row["name"],
+                "kind": row["kind"],
+                "rank": int(row["rank"]) if row["rank"] else None,
+            }
+    return out
 
 
 def doc_files() -> list[Path]:
