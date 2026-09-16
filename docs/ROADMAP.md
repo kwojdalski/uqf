@@ -112,9 +112,22 @@ function work over a table that is now there.
 
 Still to do, and each needs one decision before it can be written:
 
-- `large_trade_ratio` (#27) - needs a size threshold. Not derivable from the
-  tape: "large" is relative to a venue's typical clip, so picking a number
-  here would be inventing a market convention.
+- **`large_trade_ratio` (#27) — DONE.** This was parked on needing a size
+  threshold, on the grounds that "large" is relative to a venue's typical clip
+  and picking a number would be inventing a market convention. That was right
+  about the number and wrong about the blocker: the threshold does not have to
+  be a constant. `.qmicro.large_trade_threshold[tape;q]` takes a **quantile**
+  and derives the size from the tape's own trades, which is precisely
+  "relative to this venue's typical clip", computed rather than assumed.
+  Quantile rather than a multiple of the mean because trade sizes are
+  heavy-tailed — a few very large clips drag a mean upward until "twice the
+  mean" excludes trades every desk would call large.
+
+  `.qmicro.large_trade_ratio` gives the share by count and
+  `.qmicro.large_trade_volume_share` the share by volume. Both exist because
+  the count share is pinned near `1-q` by construction and so mostly restates
+  its own input; the volume share is the one that says something. Sizes 9 and
+  10 out of 1..10 are 2 of 10 trades but carry 19 of 55 units.
 - `odd_lot_trade_ratio` / `odd_lot_imbalance` (#20-21) - needs an odd-lot
   size, which is venue-specific in the same way. In FX there is no round-lot
   convention at all, so this may not be meaningful for this tree's

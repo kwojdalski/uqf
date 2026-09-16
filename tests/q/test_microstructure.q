@@ -274,4 +274,85 @@ test_ofi_rejects_quotes_missing_a_required_column:{[t]
     wrapper:{[q] .qmicro.ofi[q;`EURUSD]};
     .qunit.assertError[wrapper;bad;"a quotes table missing a required column is rejected immediately"]};
 
+
+/ --- large trades (ROADMAP #27) -------------------------------------------
+
+/ A tape of ten trades with sizes 1..10, so every expected value below is
+/ arithmetic a reader can check: the sizes sum to 55, and the nearest-rank
+/ quantile of ten items is just an index.
+/ .
+/ The `add` and `cancel` rows are not decoration. Every function here filters
+/ to action=`trade, and a threshold computed over all events rather than
+/ trades would be silently wrong - it would not error, it would return a
+/ plausible number.
+lt_tape:{[]
+    ([] time:2026.09.11D09:00:00.000000000+0D00:00:01*til 12;
+        sym:12#`EURUSD;
+        action:(10#`trade),`add`cancel;
+        side:12#`buy;
+        / "f"$ on the whole vector, not `100 200f` appended to a long
+        / vector: concatenating a long vector with a float one in q yields a
+        / MIXED GENERAL LIST (type 0h), not a promoted float vector. The
+        / values print identically, so the first version of this fixture
+        / looked right and compared unequal against a float.
+        size:"f"$(1+til 10),100 200;
+        price:12#1.10)};
+
+test_the_threshold_is_the_largest_trade_at_q_one:{[t]
+    .qunit.assertEquals[.qmicro.large_trade_threshold[lt_tape[];1.0];10f;
+        "q=1.0 is the largest size that actually traded"]};
+
+test_the_threshold_is_a_size_that_traded:{[t]
+    / Nearest-rank, no interpolation: the threshold is always a real observed
+    / size, never a number between two of them.
+    .qunit.assertEquals[.qmicro.large_trade_threshold[lt_tape[];0.5];5f;
+        "the median of sizes 1..10 by nearest rank is the fifth smallest"]};
+
+test_non_trade_events_do_not_move_the_threshold:{[t]
+    / The add and cancel rows carry sizes of 100 and 200 - far larger than any
+    / trade. If they leaked into the distribution the threshold would jump,
+    / and nothing would report an error.
+    .qunit.assertEquals[.qmicro.large_trade_threshold[lt_tape[];1.0];10f;
+        "adds and cancels are excluded from the size distribution"]};
+
+test_the_count_ratio_includes_the_threshold_trade:{[t]
+    / >= not >, so a trade of exactly the ninetieth-percentile size counts as
+    / large. On ten trades that makes the ratio 0.2 rather than 0.1, which is
+    / the detail most likely to look like an off-by-one and is not.
+    .qunit.assertEquals[.qmicro.large_trade_ratio[lt_tape[];0.9];0.2;
+        "trades at or above the threshold are large, including the threshold itself"]};
+
+test_the_volume_share_is_not_the_count_share:{[t]
+    / The whole reason both exist. Sizes 9 and 10 are 2 of 10 trades but
+    / carry 19 of 55 units.
+    .testutil.assertApprox[.qmicro.large_trade_volume_share[lt_tape[];0.9];19%55;1e-12;
+        "the volume share reports the volume those trades carried, not their count"]};
+
+test_a_median_split_covers_most_volume:{[t]
+    / Sizes 5..10 sum to 45 of 55 - the heavy tail this metric exists to show.
+    .testutil.assertApprox[.qmicro.large_trade_volume_share[lt_tape[];0.5];45%55;1e-12;
+        "the larger half of trades by count carries far more than half the volume"]};
+
+test_an_empty_tape_is_null_not_zero:{[t]
+    / 0n, not 0: no trades means the question has no answer, and a 0 would
+    / read as "no large trades" and average into a series as though it were a
+    / measurement.
+    .qunit.assertEquals[.qmicro.large_trade_ratio[0#lt_tape[];0.9];0n;
+        "a tape with no trades reports null rather than zero"]};
+
+test_a_quantile_above_one_is_refused:{[t]
+    .qunit.assertError[{.qmicro.large_trade_threshold[lt_tape[];x]};1.5;
+        "a quantile outside (0;1] is refused rather than clamped"]};
+
+test_a_zero_quantile_is_refused:{[t]
+    / Zero would index before the smallest element. Refused rather than
+    / treated as "the smallest", because a caller writing 0 meant something
+    / and it was not that.
+    .qunit.assertError[{.qmicro.large_trade_threshold[lt_tape[];x]};0.0;
+        "a zero quantile is refused"]};
+
+test_a_malformed_tape_is_refused:{[t]
+    .qunit.assertError[{.qmicro.large_trade_ratio[x;0.9]};([] wrong:1 2 3);
+        "the tape contract is checked before any size is read"]};
+
 \d .

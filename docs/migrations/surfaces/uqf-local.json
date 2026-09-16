@@ -2259,6 +2259,33 @@
       },
       {
         "kind": "function",
+        "name": "large_trade_ratio",
+        "params": [
+          "tape",
+          "q"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "large_trade_threshold",
+        "params": [
+          "tape",
+          "q"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "large_trade_volume_share",
+        "params": [
+          "tape",
+          "q"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
         "name": "level_at",
         "params": [
           "levels",
