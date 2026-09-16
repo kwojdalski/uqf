@@ -95,3 +95,52 @@ def test_example_script_runs_clean(script: Path) -> None:
             + "\n".join(out)
             + ("\n--- stderr ---\n" + "\n".join(err) if err else "")
         )
+
+
+#: Two lines, then ask the graph a question. If the ETL tree's load order is
+#: wrong this exits non-zero, and if .qdag is unreachable the count is absent.
+_ETL_STANDALONE = """\\l src/init.q
+\\l src/etl/init.q
+.qdag.adopt_all[];
+-1 "JOBS:",string count .qdag.topological[];
+"""
+
+
+def test_the_etl_tree_loads_outside_the_test_harness(tmp_path: Path) -> None:
+    """`src/etl/init.q` is loadable on its own, and the graph works there.
+
+    Until `src/etl/init.q` existed, nothing loaded the ETL tree as a whole:
+    each worker was loaded piecemeal and `tests/run_tests.q` held the only
+    complete, correctly-ordered list in the repository. So `.qdag`'s job
+    graph - whose entire point is that a q PROCESS can order and draw its own
+    DAG - existed only inside the test runner. A capability that works only
+    under the test harness is not a capability.
+
+    This asserts the thing that was not true before. It is a separate lane
+    from `q tests/run_tests.q` on purpose: the suite loads the tree itself, so
+    it cannot notice that no one else can.
+
+    The order is load-bearing and not obvious - `coercion.q` must precede
+    `source_contract.q`, whose type table names `.qcoer.to_timestamp` at LOAD
+    TIME. Getting it wrong aborts the file with a bare `.qcoer.to_symbol,
+    which is how this was found while writing the loader.
+    """
+    qbin, env = _kdbx()
+    script = tmp_path / "load_etl.q"
+    script.write_text(_ETL_STANDALONE)
+    result = subprocess.run(
+        [qbin, str(script), "-q"],
+        cwd=UQF_ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=TIMEOUT_SECONDS,
+    )
+    out = result.stdout.decode(errors="replace")
+    err = result.stderr.decode(errors="replace")
+    assert result.returncode == 0, f"the ETL tree did not load:\n{out}\n{err}"
+    # Not just "it loaded": the graph has to have jobs in it. A tree that
+    # loaded but registered nothing would pass an exit-code-only check.
+    assert "JOBS:" in out, f"no job count reported:\n{out}"
+    count = int(out.split("JOBS:")[1].split("\n")[0])
+    assert count > 1, f"expected a graph with several jobs, got {count}"
