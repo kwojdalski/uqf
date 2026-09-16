@@ -280,6 +280,75 @@ test_an_idle_run_still_beats:{[t]
     .qunit.assertEquals[first exec state from .qhb.report[] where worker=`demo_deals_backfill;
         `idle;"an idle second run beats idle rather than going quiet"]};
 
+/ --- the data-quality gate -----------------------------------------------
+
+/ A fixture with one arithmetically impossible row. Swapped in as the
+/ source's fixture so the worker fetches it through the normal path rather
+/ than being handed a batch directly - the point is to prove the GATE runs
+/ inside do_window, not that the check function works in isolation.
+bad_fixture:{[]
+    update rate:0f from .qsdemo.fixture[] where deal_id=3};
+
+with_bad_fixture:{[f]
+    orig:(.qsrc.declaration[`demo_deals])`fixture;
+    .qsrc.sources[`demo_deals;`fixture]:{[] .ddbftest.bad_fixture[]};
+    r:@[f;::;{(`threw;x)}];
+    .qsrc.sources[`demo_deals;`fixture]:orig;
+    r};
+
+test_the_check_passes_the_real_fixture:{[t]
+    / The gate must not fire on good data, or it would be turned off.
+    .qunit.assertEquals[count .qddbf.quality_check[.qsdemo.fixture[]];0;
+        "the shipped fixture is acceptable, so the gate is not simply always-on"]};
+
+test_the_check_catches_a_nonpositive_rate:{[t]
+    .qunit.assertEquals[count .qddbf.quality_check[.ddbftest.bad_fixture[]];1;
+        "a zero rate is arithmetically impossible for a deal and is reported"]};
+
+test_a_failing_check_is_not_published:{[t]
+    / The consequence that matters. Before the gate, the offending row
+    / published and coverage recorded its window as complete.
+    / .
+    / Asserted on the OFFENDING ROW, not on the table being empty: the bad
+    / deal falls in one window and the other windows are fine, so they
+    / publish. That per-window granularity is the desired behaviour - one
+    / bad day must not block the good ones - and my first version of this
+    / test asserted zero rows and failed against correct code.
+    .qddbf.init[.ddbftest.spec_for[`chk1;1;4]];
+    .ddbftest.with_bad_fixture[{.qddbf.run[]}];
+    .qunit.assertEquals[count select from value `demo_deals where deal_id=3;0;
+        "the row that failed its check is absent, while clean windows publish"]};
+
+test_a_failing_check_leaves_the_window_uncovered:{[t]
+    / And the ledger does not claim it. This is the lie the gate removes:
+    / without it, is_covered would report the window published forever.
+    .qddbf.init[.ddbftest.spec_for[`chk2;1;4]];
+    .ddbftest.with_bad_fixture[{.qddbf.run[]}];
+    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`chk2;.z.p;.ddbftest.d 1;.ddbftest.d 4];0b;
+        "a window that failed its check is not recorded as covered"]};
+
+test_a_failing_check_counts_as_a_failed_window:{[t]
+    / M-05: terminal for that window, and the run continues rather than
+    / throwing - the same treatment a failed fetch gets.
+    .qddbf.init[.ddbftest.spec_for[`chk3;1;4]];
+    r:.ddbftest.with_bad_fixture[{.qddbf.run[]}];
+    .qunit.assertTrue[0<r`windows_failed;
+        "a check failure is a failed window, not a crash and not a silent skip"]};
+
+test_a_worker_without_a_check_still_runs:{[t]
+    / The gate is optional. demo_events_backfill declares none, and must be
+    / unaffected - otherwise adding the feature would have broken every
+    / worker that had not yet adopted it.
+    .qunit.assertEquals[count .qbw.run_check[`demo_events_backfill;.qsdemo.fixture[]];0;
+        "a worker that declares no check reports no failures"]};
+
+test_a_non_function_check_is_refused:{[t]
+    / Refused at run time rather than silently skipped: a check declared as
+    / the wrong thing is a mistake worth hearing about, and skipping it would
+    / leave the worker reading as protected when it is not.
+    .qunit.assertError[{.qbw.run_check[`demo_deals_backfill;x]};`not_a_table;
+        "a check must return a table of failures"]};
+
 test_a_zero_width_is_refused:{[t]
     .qunit.assertError[{.qbw.define[`zero_width;x]};
         `ns`source`dataset`width!(`.qddbf;`demo_deals;`something_else;0D00:00);

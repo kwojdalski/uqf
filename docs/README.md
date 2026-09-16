@@ -18,8 +18,10 @@ reference or an architecture note, and only its purpose decides where it goes.
 [`ci.md`](guides/ci.md) (what the gates do and how to run them locally).
 
 **`architecture/`** — [`restatement-design.md`](architecture/restatement-design.md)
-(D-11's bitemporal design, agreed and not yet built),
-[`event-tape.md`](architecture/event-tape.md).
+(D-11's bitemporal design, now built),
+[`event-tape.md`](architecture/event-tape.md),
+[`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) (what
+`src/etl/` has and lacks relative to a Dagster-shaped framework).
 
 **`reference/`** — [`environment.md`](reference/environment.md) (every
 variable, machine-checked),

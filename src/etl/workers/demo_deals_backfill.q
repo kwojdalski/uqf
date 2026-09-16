@@ -58,7 +58,47 @@ cleanup:{[] .qbw.cleanup worker_name}
 
 \d .
 
+/ --- the data-quality gate ------------------------------------------------
+
+\d .qddbf
+
+/ Refuse a batch that is shaped correctly but cannot be true.
+/ .
+/ Runs between fetch and publish, so a batch that fails is never published
+/ and its window is never recorded as covered - the next run plans it again.
+/ Before this gate existed the ledger would have recorded a window of nulls
+/ or of zero rates as complete, and read as published forever.
+/ .
+/ The three conditions are deliberately ones no correct deal can meet, rather
+/ than statistical outlier detection: a non-positive rate or notional is
+/ arithmetically impossible for a trade, and a null deal_id cannot be
+/ reconciled against anything. A check that fires on merely UNUSUAL data
+/ would train its reader to ignore it, and an ignored check is worse than
+/ none because it still reads as protection.
+/ .
+/ Returns FAILURES, so an empty table means the batch passed - the shape
+/ .qdqc.summarize_checks already uses.
+/ @param batch the fetched rows, before publication
+/ @return a table check/status/detail, one row per offending row
+/ @eg .qddbf.quality_check[.qsdemo.fixture[]]  ->  an empty table
+quality_check:{[batch]
+    if[0=count batch; :.qbw.no_failures[]];
+    bad_rate:select from batch where not rate>0;
+    bad_notional:select from batch where not notional>0;
+    bad_id:select from batch where null deal_id;
+    raze {[nm;t]
+        if[0=count t; :.qbw.no_failures[]];
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.Q.s1 each t)
+      }'[`nonpositive_rate`nonpositive_notional`null_deal_id;
+         (bad_rate;bad_notional;bad_id)]}
+
+\d .
+
 / Window width is this worker's own business rather than part of the
 / contract, but it is what makes the bound observable window by window.
+/ .
+/ `check` is optional on the declaration; this worker declares one, which
+/ makes it unskippable for every window this worker ever fetches.
 .qbw.define[`demo_deals_backfill;
-    `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D)];
+    `ns`source`dataset`width`check!
+    (`.qddbf;`demo_deals;`demo_deals;1D;.qddbf.quality_check)];
