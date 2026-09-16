@@ -51,3 +51,5 @@
 \l src/market_data/microstructure.q
 \l src/market_data/dqchecks.q
 \l src/examples/example_defaults.q
+
+\l src/metadata/metatables.q

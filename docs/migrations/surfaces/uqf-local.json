@@ -2301,6 +2301,57 @@
         "rank": 3
       }
     ],
+    "qmeta": [
+      {
+        "kind": "function",
+        "name": "collect",
+        "params": [
+          "spec",
+          "partitions"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "collect_partition",
+        "params": [
+          "spec",
+          "part",
+          "observed_at"
+        ],
+        "rank": 3
+      },
+      {
+        "kind": "function",
+        "name": "definition",
+        "params": [
+          "tab",
+          "partition_col",
+          "group_cols",
+          "aggregates"
+        ],
+        "rank": 4
+      },
+      {
+        "kind": "function",
+        "name": "refresh",
+        "params": [
+          "current",
+          "spec",
+          "partitions"
+        ],
+        "rank": 3
+      },
+      {
+        "kind": "function",
+        "name": "require_request",
+        "params": [
+          "spec",
+          "partitions"
+        ],
+        "rank": 2
+      }
+    ],
     "qmicro": [
       {
         "kind": "function",
@@ -4128,6 +4179,7 @@
     "qhb",
     "qio",
     "qlog",
+    "qmeta",
     "qmicro",
     "qodbc",
     "qopt",

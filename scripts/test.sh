@@ -43,6 +43,7 @@ usage: scripts/test.sh <lane>
 
 lanes:
   q-unit              deterministic qUnit suite (hermetic, fast)
+  q-metatables-hdb    metatable queries against a temporary partitioned HDB
   q-backfill-process  bounded worker lifecycle against a real filesystem
   python              orchestrator and frontend suites
   smoke               ETL-20 live external metadata check (needs a live stack)
@@ -66,6 +67,13 @@ lane_q_backfill_process() {
     UQFSTATUSDIR="$(mktemp -d)" "$Q" tests/q/run_backfill_process.q
 }
 
+lane_q_metatables_hdb() (
+    set -euo pipefail
+    metadata_test_dir="$(mktemp -d)"
+    trap 'rm -rf -- "$metadata_test_dir"' EXIT
+    "$Q" tests/q/run_metatables_hdb.q "$metadata_test_dir"
+)
+
 lane_python() {
     echo "== python: orchestrator and frontend =="
     uv run pytest -q
@@ -79,9 +87,10 @@ lane_smoke() {
 case "${1:-}" in
     q-unit)             lane_q_unit ;;
     q-backfill-process) lane_q_backfill_process ;;
+    q-metatables-hdb)    lane_q_metatables_hdb ;;
     python)             lane_python ;;
     smoke)              lane_smoke ;;
-    all)                lane_q_unit; lane_q_backfill_process; lane_python ;;
+    all)                lane_q_unit; lane_q_backfill_process; lane_q_metatables_hdb; lane_python ;;
     ""|-h|--help)       usage; exit 0 ;;
     *)                  echo "unknown lane: $1" >&2; usage >&2; exit 2 ;;
 esac

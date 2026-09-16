@@ -353,3 +353,9 @@ two vendored files:
   controls as MCP tools) bridge it with `lib/torq` (see docs/guides/torq-demo.md)
   so the two vendored trees can run as one demo without either being
   modified.
+
+## Database metatables
+
+[Metatable definitions](docs/guides/metatables.md) produce partition counts and
+configurable eFX breakdowns, with bounded refresh and a thin TorQ DQE adapter.
+Load `src/metadata/metatables.q` independently, or through `src/init.q`.
