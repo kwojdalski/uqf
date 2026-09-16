@@ -140,6 +140,68 @@ release_lock:{[worker]
 / gating on this would reintroduce the race acquire_lock avoids.
 lock_held:{[worker] not () ~ @[{key hsym `$x};lock_path worker;{()}]}
 
+/ ------------------------------------------------------------ LEDGER LOCK
+
+/ How long to wait for another process to finish its write before giving up.
+/ .
+/ Bounded rather than indefinite: a lock left behind by a process that died
+/ mid-write would otherwise wedge every worker on the host forever, and a
+/ loud failure after five seconds beats a silent hang.
+file_lock_wait:0D00:00:05
+
+/ Where a named ledger's mutex lives.
+/ @param name the ledger's name, e.g. `etl_coverage
+/ @return the lock directory path
+/ @eg .qbfstate.file_lock_path `etl_coverage
+file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
+
+/ Run `f . args` holding a named ledger's mutex, releasing it however f ends.
+/ .
+/ DISTINCT FROM acquire_lock above, which guards one INSTANCE of one worker
+/ and deliberately REFUSES when the lock is held - the right answer when a
+/ second instance would corrupt a private checkpoint. This is a short
+/ critical section that several processes legitimately contend for, so it
+/ WAITS instead.
+/ .
+/ mkdir is the atomic primitive here for the same reason it is there:
+/ `if[not exists; create]` is a race two processes can both win, while mkdir
+/ either succeeds or fails atomically on every POSIX filesystem.
+/ .
+/ ARGS ARE A SEPARATE PARAMETER, and that is not stylistic. The obvious
+/ spelling - with_file_lock[name] {[x] ...}[value] - defers nothing: a
+/ fully-applied projection in q is a CALL, so the body would run BEFORE this
+/ function is entered and the lock would protect nothing. The first version
+/ of the coverage ledger made exactly that mistake, and it was invisible
+/ from outside because the writes still happened and still persisted; only
+/ the mutual exclusion was missing.
+/ .
+/ The result is captured as (ok; value) so a throw inside f still releases
+/ the lock before being re-thrown. An error path that skips the release is
+/ how one failed write wedges every later one.
+/ @param name the ledger to lock, e.g. `etl_coverage
+/ @param f the function to run under the lock
+/ @param args its arguments, as a list
+/ @return whatever f returns
+/ @throws error when the lock cannot be taken within file_lock_wait
+/ @eg .qbfstate.with_file_lock[`etl_coverage;{[n] n};enlist 1]
+with_file_lock:{[name;f;args]
+    dir:lock_dir[];
+    system"mkdir -p ",dir;
+    path:file_lock_path name;
+    deadline:.z.p+file_lock_wait;
+    while[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
+        if[.z.p>deadline;
+            '"with_file_lock: could not take ",string[name]," at ",path," within ",
+             string[file_lock_wait]," - another process may have died mid-write"];
+        system"sleep 0.01"];
+    / Record the holder, so a lock left by a dead process can be diagnosed
+    / rather than deleted blindly. Same courtesy acquire_lock extends.
+    (hsym `$path,"/owner") 0: enlist .j.j `pid`started!(.z.i;.z.p);
+    r:@[{[fa] (1b; (fa 0) . fa 1)};(f;args);{[e] (0b;e)}];
+    system"rm -rf ",path;
+    if[not first r; 'last r];
+    last r}
+
 / -------------------------------------------------------- CHECKPOINT
 
 / Where a worker's private state file lives. PRIVATE is the operative word

@@ -160,11 +160,9 @@ require_run_schema:{[]
 / namespace, so a table reachable only through init_runs/init_meta would be
 / missing from the contract surface and a reconciliation would not compare it.
 / .
-/ NOT YET PERSISTED, unlike .qcov's ledger. These two tables still die with
-/ the process, so `history` and `unfinished` describe this process only. That
-/ is a smaller gap than coverage's was - nothing decides whether to re-fetch
-/ based on a run row - but it is a gap, and the fix is the same shape:
-/ ledger_path/persist/reload under .qcov.with_lock.
+/ Both tables are persisted and reloaded here, so `history` and `unfinished`
+/ describe every process that has written to this directory rather than only
+/ the calling one.
 / @return the two table names
 / @eg .qrun.attach[]
 attach:{[]
@@ -172,7 +170,55 @@ attach:{[]
     init_runs[];
     if[existed; require_run_schema[]];
     init_meta[];
+    / Pick up what earlier processes recorded. Without this, run_id in the
+    / coverage ledger is a key into a table that does not survive the
+    / process that wrote it, and unfinished[] cannot see the interrupted
+    / runs it exists to find.
+    reload[];
     `etl_runs`etl_run_meta}
+
+/ --------------------------------------------------------- PERSISTENCE
+
+/ Where each table lives between processes - beside the checkpoints and the
+/ coverage ledger, for the same reason: save_checkpoint already requires
+/ that directory, so persisting here adds no dependency a worker did not
+/ already have.
+/ @param name `etl_runs or `etl_run_meta
+/ @return that table's file path
+/ @eg .qrun.table_path `etl_runs
+table_path:{[name] (.qbfstate.lock_dir[]),"/",string name}
+
+/ Write both tables to disk. Call only under the lock.
+/ .
+/ q binary via `set`, like .qcov.persist: the run ledger carries a guid, an
+/ int pid and three timestamps including the 0Wp not_ended sentinel, and a
+/ sentinel that came back as a null would make every unfinished[] read wrong.
+/ @return the two paths written
+persist:{[]
+    (hsym `$table_path `etl_runs) set runs[];
+    (hsym `$table_path `etl_run_meta) set meta_table[];
+    (table_path `etl_runs; table_path `etl_run_meta)}
+
+/ Replace both in-memory tables with what is on disk, if anything is.
+/ .
+/ Validated on the way in, so a file written by an older version of this
+/ tree is refused by name rather than read and silently misinterpreted. No
+/ file is not an error: a first run has nothing to reload.
+/ @return the two table names
+/ @eg .qrun.reload[]
+reload:{[]
+    pr:hsym `$table_path `etl_runs;
+    if[not ()~key pr; `etl_runs set get pr; require_run_schema[]];
+    pm:hsym `$table_path `etl_run_meta;
+    if[not ()~key pm; `etl_run_meta set get pm];
+    `etl_runs`etl_run_meta}
+
+/ Private: read-modify-write under the run ledger's own mutex.
+/ .
+/ Its OWN mutex, not .qcov's: these are different tables, and guarding one
+/ with another's lock would serialise writes that never contend while
+/ leaving the pair that do unprotected the moment someone changed either.
+under_lock:{[f;args] .qbfstate.with_file_lock[`etl_runs;f;args]}
 
 / ---------------------------------------------------------------- IDENTITY
 
@@ -220,11 +266,11 @@ require_current:{[]
 / assumed: three separate interpreters each returned
 / 8c6b8b64-6815-6084-0a3e-178401251b68 as their first.
 / .
-/ For a process-local id that would be harmless. `etl_coverage` is persisted
-/ to disk and reloaded by every worker's attach, so it IS shared across
-/ processes - two backfill processes would stamp different executions with
-/ one identity and `materialisations_of` would merge them. (`etl_runs` is
-/ still process-local; see attach's note.)
+/ For a process-local id that would be harmless. `etl_coverage` and
+/ `etl_runs` are both persisted to disk and reloaded by every worker's
+/ attach, so they ARE shared across processes - two backfill processes would
+/ stamp different executions with one identity, and `materialisations_of`
+/ would merge them.
 / That is worse than the gap it closes: absent attribution is visibly absent,
 / while wrong attribution reads as correct.
 / .
@@ -259,7 +305,14 @@ begin:{[worker]
         '"begin: a run is already in flight in this process - finish or release it first"];
     init_runs[];
     id:mint[];
-    `etl_runs insert (id;worker;proc_name[];.z.h;.z.i;.z.p;not_ended;in_flight);
+    / Written to disk before this call returns, which is the whole point: a
+    / run that dies mid-flight has to leave a row behind, and a row that
+    / only ever existed in the dead process's memory leaves nothing.
+    under_lock[{[row]
+        reload[];
+        `etl_runs insert row;
+        persist[]};
+        enlist (id;worker;proc_name[];.z.h;.z.i;.z.p;not_ended;in_flight)];
     current_run::id;
     id}
 
@@ -274,13 +327,16 @@ begin:{[worker]
 finish:{[status]
     id:require_current[];
     init_runs[];
-    / Both locals are renamed before the qSQL below: a bare `id` in the where
-    / clause would resolve to the run_id column and a bare `status` to the
-    / status column, each comparing a column to itself and matching every
-    / row. Same trap .qcov.valid_at documents.
-    target:id;
-    outcome:status;
-    `etl_runs set update ended_at:.z.p, status:outcome from runs[] where run_id=target;
+    / The inner lambda's parameters are named `target` and `outcome` rather
+    / than `id` and `status`: a bare `id` in the where clause would resolve
+    / to the run_id column and a bare `status` to the status column, each
+    / comparing a column to itself and matching every row. Same trap
+    / .qcov.valid_at documents.
+    under_lock[{[target;outcome]
+        reload[];
+        `etl_runs set update ended_at:.z.p, status:outcome from runs[] where run_id=target;
+        persist[]};
+        (id;status)];
     current_run::0Ng;
     id}
 
@@ -335,8 +391,12 @@ record:{[dataset;range_from;range_to;facts]
     .qcov.require_interval[range_from;range_to];
     init_meta[];
     n:count ks;
-    `etl_run_meta insert (n#id;n#dataset;n#range_from;n#range_to;
-                          ks;as_text each value facts;n#.z.p);
+    under_lock[{[rows]
+        reload[];
+        `etl_run_meta insert rows;
+        persist[]};
+        enlist (n#id;n#dataset;n#range_from;n#range_to;
+                ks;as_text each value facts;n#.z.p)];
     n}
 
 / ------------------------------------------------------------------- READ

@@ -308,62 +308,23 @@ gaps:{[from_ts;to_ts;covered]
 / @eg .qcov.ledger_path[]
 ledger_path:{[] (.qbfstate.lock_dir[]),"/etl_coverage"}
 
-/ How long to wait for another process to finish its write before giving up.
-/ .
-/ Bounded rather than indefinite: a lock left behind by a process that died
-/ mid-write would otherwise wedge every worker on the host forever, and a
-/ loud failure after five seconds is a better outcome than a silent hang.
-lock_wait:0D00:00:05
+/ Private: this ledger's mutex path. Distinct from .qbfstate's per-worker
+/ INSTANCE lock, which guards something else entirely (one instance of one
+/ worker) and deliberately REFUSES rather than waits. A ledger write is a
+/ short critical section several workers legitimately contend for, so that
+/ one waits - see .qbfstate.with_file_lock.
+lock_path:{[] .qbfstate.file_lock_path `etl_coverage}
 
-/ Private: the ledger mutex path. Distinct from .qbfstate's per-worker
-/ instance lock, which guards something else entirely (one instance of one
-/ worker) and, deliberately, REFUSES rather than waits. A ledger write is a
-/ short critical section several workers legitimately contend for, so this
-/ one waits.
-lock_path:{[] (.qbfstate.lock_dir[]),"/etl_coverage.lock"}
-
-/ Run `f . args` holding the ledger mutex, releasing it however f ends.
+/ Run `f . args` holding this ledger's mutex.
 / .
-/ mkdir is the atomic primitive, for the same reason .qbfstate.acquire_lock
-/ uses it: `if[not exists; create]` is a race two processes can both win,
-/ while mkdir either succeeds or fails atomically on every POSIX filesystem.
-/ .
-/ ARGS ARE A SEPARATE PARAMETER, and that is not stylistic. The obvious
-/ spelling - with_lock {[x] ...}[value] - does not defer anything: a
-/ fully-applied projection in q is a CALL, so the body runs BEFORE with_lock
-/ is entered and the lock protects nothing at all. The first version of this
-/ file made exactly that mistake, and it was invisible from the outside
-/ because the writes still happened and still persisted; only the mutual
-/ exclusion was missing. bounded_worker.q documents the same trap for its
-/ niladic publish.
-/ .
-/ The result is captured as (ok; value) so that a throw inside f still
-/ releases the lock before being re-thrown. An error path that skips the
-/ release is how one failed write wedges every later one.
+/ A thin delegation: the mutex itself lives in .qbfstate, which already owns
+/ the lock directory and the mkdir primitive, so .qrun can guard its own
+/ tables with the same implementation rather than a second copy of it.
 / @param f the function to run under the lock
 / @param args its arguments, as a list
 / @return whatever f returns
-/ @throws error when the lock cannot be taken within lock_wait
 / @eg .qcov.with_lock[{[n] n};enlist 1]
-with_lock:{[f;args]
-    dir:.qbfstate.lock_dir[];
-    system"mkdir -p ",dir;
-    path:lock_path[];
-    deadline:.z.p+lock_wait;
-    while[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
-        if[.z.p>deadline;
-            '"with_lock: could not take the ledger lock at ",path," within ",
-             string[lock_wait]," - another process may have died mid-write"];
-        system"sleep 0.01"];
-    / Record the holder, so a lock left behind by a process that died can be
-    / diagnosed rather than deleted blindly - the error above tells an
-    / operator to remove it by hand, and this is what tells them whose it
-    / was. Same courtesy .qbfstate.acquire_lock extends.
-    (hsym `$path,"/owner") 0: enlist .j.j `pid`started!(.z.i;.z.p);
-    r:@[{[fa] (1b; (fa 0) . fa 1)};(f;args);{[e] (0b;e)}];
-    system"rm -rf ",path;
-    if[not first r; 'last r];
-    last r}
+with_lock:{[f;args] .qbfstate.with_file_lock[`etl_coverage;f;args]}
 
 / Write the in-memory ledger to disk.
 / .
