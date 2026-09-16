@@ -246,6 +246,14 @@
         "rank": 3
       },
       {
+        "kind": "function",
+        "name": "begin_run",
+        "params": [
+          "worker"
+        ],
+        "rank": 1
+      },
+      {
         "kind": "dict",
         "name": "cfgs",
         "params": [],
@@ -307,6 +315,14 @@
         "name": "empty_windows",
         "params": [
           ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "end_run",
+        "params": [
+          "state"
         ],
         "rank": 1
       },
@@ -394,6 +410,18 @@
           "nm"
         ],
         "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "record_facts",
+        "params": [
+          "worker",
+          "cfg",
+          "w",
+          "batch",
+          "r"
+        ],
+        "rank": 5
       },
       {
         "kind": "value",
@@ -694,6 +722,23 @@
       },
       {
         "kind": "function",
+        "name": "contributing_runs",
+        "params": [
+          "ds",
+          "version"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "current_run",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
         "name": "gaps",
         "params": [
           "from_ts",
@@ -746,6 +791,14 @@
         "name": "ledger",
         "params": [
           ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "materialisations_of",
+        "params": [
+          "id"
         ],
         "rank": 1
       },
@@ -1361,6 +1414,14 @@
         "name": "cleanup",
         "params": [
           ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "facts",
+        "params": [
+          "batch"
         ],
         "rank": 1
       },
@@ -3307,6 +3368,211 @@
         "rank": 4
       }
     ],
+    "qrun": [
+      {
+        "kind": "function",
+        "name": "as_text",
+        "params": [
+          "v"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "attach",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "begin",
+        "params": [
+          "worker"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "current",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "current_run",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "facts_about",
+        "params": [
+          "dataset",
+          "range_from",
+          "range_to"
+        ],
+        "rank": 3
+      },
+      {
+        "kind": "function",
+        "name": "facts_of",
+        "params": [
+          "id"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "finish",
+        "params": [
+          "status"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "history",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "in_flight",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "init_meta",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "init_runs",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "is_running",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "meta_schema",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "meta_table",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "mint",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "not_ended",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "of_run",
+        "params": [
+          "id"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "proc_name",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "record",
+        "params": [
+          "dataset",
+          "range_from",
+          "range_to",
+          "facts"
+        ],
+        "rank": 4
+      },
+      {
+        "kind": "function",
+        "name": "release",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "require_current",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "require_run_schema",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "run_schema",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "runs",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "unfinished",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      }
+    ],
     "qsdemo": [
       {
         "kind": "value",
@@ -4134,6 +4400,7 @@
     "qpos",
     "qrates",
     "qrisk",
+    "qrun",
     "qsdemo",
     "qsevt",
     "qsrc",
@@ -4253,7 +4520,8 @@
         "range_to",
         "rows_published",
         "recorded_at",
-        "superseded_at"
+        "superseded_at",
+        "run_id"
       ],
       "types": [
         "s",
@@ -4262,7 +4530,50 @@
         "p",
         "j",
         "p",
+        "p",
+        "g"
+      ]
+    },
+    "etl_run_meta": {
+      "columns": [
+        "run_id",
+        "dataset",
+        "range_from",
+        "range_to",
+        "label",
+        "text",
+        "recorded_at"
+      ],
+      "types": [
+        "g",
+        "s",
+        "p",
+        "p",
+        "s",
+        " ",
         "p"
+      ]
+    },
+    "etl_runs": {
+      "columns": [
+        "run_id",
+        "worker",
+        "process",
+        "host",
+        "pid",
+        "started_at",
+        "ended_at",
+        "status"
+      ],
+      "types": [
+        "g",
+        "s",
+        "s",
+        "s",
+        "i",
+        "p",
+        "p",
+        "s"
       ]
     },
     "worker_heartbeat": {

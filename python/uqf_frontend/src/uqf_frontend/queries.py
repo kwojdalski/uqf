@@ -42,6 +42,7 @@ debugging sessions (``desc`` and ``tables`` in scripts/torq_pipeline.q, and
 from __future__ import annotations
 
 import datetime as dt
+import uuid
 from typing import Any
 
 from uqf_frontend.catalog import LIST_OPERATORS, OPERATORS, QType, Table
@@ -146,6 +147,20 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
                     f"column {column!r} is a timespan; expected nanoseconds as a number"
                 )
             return dt.timedelta(microseconds=float(value) / 1000.0)
+        case QType.GUID:
+            # Validated here rather than passed through, so a malformed id is
+            # a 422 naming the column instead of a q-side type error the
+            # caller cannot act on. Returned as a string: the q side parses it
+            # with "G"$, and a uuid object would not survive the IPC encoding
+            # this layer uses.
+            if not isinstance(value, str):
+                raise ValidationFailed(f"column {column!r} is a guid; expected a string")
+            try:
+                return str(uuid.UUID(value))
+            except ValueError as exc:
+                raise ValidationFailed(
+                    f"column {column!r} is a guid; {value!r} is not one"
+                ) from exc
         case QType.LIST:  # pragma: no cover - blocked earlier by Table.filterable
             raise ValidationFailed(
                 f"column {column!r} holds a vector per row and cannot be filtered"

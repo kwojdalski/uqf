@@ -77,3 +77,39 @@ def test_filters_split_into_three_parallel_lists():
     assert cols == ["sym", "trade_price"]
     assert ops == ["eq", "gt"]
     assert vals == ["EURUSD", 1.0]
+
+
+def test_guid_accepts_a_well_formed_run_id():
+    got = coerce("8c6b8b64-6815-6084-0a3e-178401251b68", QType.GUID, "run_id", as_list=False)
+    assert got == "8c6b8b64-6815-6084-0a3e-178401251b68"
+
+
+def test_guid_normalises_case_and_surrounding_form():
+    # uuid.UUID accepts braces and uppercase; normalising here means the q side
+    # sees one spelling and an exact-match filter cannot miss by formatting.
+    got = coerce("{8C6B8B64-6815-6084-0A3E-178401251B68}", QType.GUID, "run_id", as_list=False)
+    assert got == "8c6b8b64-6815-6084-0a3e-178401251b68"
+
+
+def test_guid_rejects_a_non_string():
+    with pytest.raises(ValidationFailed, match="expected a string"):
+        coerce(5, QType.GUID, "run_id", as_list=False)
+
+
+def test_guid_rejects_a_malformed_id_with_a_422_not_a_q_side_error():
+    # The point of validating here: a caller gets a message naming the column
+    # instead of a type error raised inside q, which they cannot act on.
+    with pytest.raises(ValidationFailed, match="is not one"):
+        coerce("not-a-guid", QType.GUID, "run_id", as_list=False)
+
+
+def test_run_id_is_filterable_on_the_coverage_table():
+    # The whole reason the type exists: "show me everything one execution
+    # produced" has to be expressible through the API, not only in q.
+    tbl = table("etl_coverage")
+    cols, ops, vals = build_filters(tbl, [("run_id", "eq", "8c6b8b64-6815-6084-0a3e-178401251b68")])
+    assert (cols, ops, vals) == (
+        ["run_id"],
+        ["eq"],
+        ["8c6b8b64-6815-6084-0a3e-178401251b68"],
+    )
