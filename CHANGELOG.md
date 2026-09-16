@@ -2,6 +2,57 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-09-16.1
+
+The second snapshot of the day, cut after `stable/2026-09-16` because six PRs
+landed behind it. The thrust was the ETL framework: `src/etl/` was assessed
+against a Dagster-shaped design and the named gaps were closed (IO managers,
+data-quality gating, bitemporal coverage), while the surrounding fleet work
+made processes that already existed actually *visible* — backfill workers and
+cryptorust to discovery, and the heartbeat to the summary that reports it.
+
+### `src/etl/` — the pipeline framework
+
+D-11 landed: coverage claims are now bitemporal, true-until-superseded rather
+than overwritten, with `superseded_at` and a required as-of on `is_covered` so
+a restatement cannot silently rewrite history. The publish path is gated on
+data quality — `.qdqc` had nine check functions that nothing called, which
+meant the coverage ledger could record a window as complete that had failed its
+own checks. An IO-manager seam (`.qio`, `memory` and `discard`) and a
+`bounded_worker` config contract came out of the gap assessment in
+`docs/architecture/pipeline-framework-gaps.md`.
+
+### Sources — SingleStore over ODBC
+
+`.qodbc` adds the connector half of E-04, modelled on kx's q-client-for-ODBC:
+`with_connection`, parameterised `window_query`, and exactly one `escape_text`
+for the driver that cannot parameterise (E-08). Two q builtins (`eval`,
+`tables`) were shadowed by the first draft and aborted the load, which exposed
+a missing rule — `check_q_traps.py` had rules for reserved parameters and
+locals but not namespace-level definitions, and now has eleven.
+
+### Fleet visibility — discovery, heartbeats, KDB-X
+
+Spawnable backfill workers are wired to discovery under their own `backfill`
+proctype, so a bounded job registers rather than running unseen; cryptorust is
+now tracked where TorQ already tracks non-TorQ processes. `torq-demo summary`
+reports the heartbeat alongside the PID — a PID cannot tell a hung process from
+a working one — and `monitor1`, which upstream ships off, now starts with the
+stack so there is something collecting them. PeachQ support was dropped: this
+tree targets KDB-X only, and a second interpreter that silently satisfied the
+test search was a pass that meant less than no pass.
+
+### Tooling and vocabulary
+
+An abbreviation auditor was added, built from what a measurement of the tree
+actually showed rather than from a style opinion, and `config` was settled to
+`cfg` throughout. Output destinations are declared rather than assumed, which
+surfaced a registry bug in the process.
+
+### Files changed
+
+89 files changed, 2955 insertions(+), 409 deletions(-)
+
 ## stable/2026-09-16
 
 ## Overview
