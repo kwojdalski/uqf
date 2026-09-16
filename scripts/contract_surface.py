@@ -42,6 +42,13 @@ from typing import Any
 REPO = Path(__file__).resolve().parent.parent
 Q_EXPORTER = REPO / "scripts" / "export_contract_surface.q"
 
+#: The committed export of this tree's own surface. Checked in so a
+#: comparison against the authority needs only the authority's half, and
+#: gated below so it cannot quietly go stale - a committed baseline nothing
+#: verifies is the `.qcov.require_schema` shape, where a file's existence
+#: reads as protection it is not providing.
+BASELINE = REPO / "docs" / "migrations" / "surfaces" / "uqf-local.json"
+
 
 def _kdbx() -> tuple[str, dict[str, str]]:
     """Locate KDB-X, or fail with the reason.
@@ -251,6 +258,11 @@ def main() -> int:
     dif.add_argument("a", type=Path)
     dif.add_argument("b", type=Path)
 
+    sub.add_parser(
+        "check",
+        help="fail if the committed baseline no longer matches this tree",
+    )
+
     args = ap.parse_args()
 
     if args.command == "export":
@@ -268,6 +280,33 @@ def main() -> int:
         else:
             sys.stdout.write(text)
         return 0
+
+    if args.command == "check":
+        if not BASELINE.is_file():
+            print(
+                f"{BASELINE.relative_to(REPO)} is missing - run "
+                f"`contract_surface.py export -o {BASELINE.relative_to(REPO)}`",
+                file=sys.stderr,
+            )
+            return 1
+        committed = json.loads(BASELINE.read_text(encoding="utf-8"))
+        current = build_surface()
+        lines = diff_surfaces(committed, current, "committed", "current")
+        if not lines:
+            print(f"{BASELINE.relative_to(REPO)} matches this tree's contract surface")
+            return 0
+        # Report the CONTRACT difference, not a JSON diff. "is_covered gained
+        # an argument" is actionable; "line 2118 differs" is not, and the
+        # latter is what a plain file comparison would have said.
+        print(f"{BASELINE.relative_to(REPO)} is stale:", file=sys.stderr)
+        print("\n".join(lines), file=sys.stderr)
+        print(
+            f"\nIf the change is intended, rerun:\n"
+            f"  uv run python scripts/contract_surface.py export "
+            f"-o {BASELINE.relative_to(REPO)}",
+            file=sys.stderr,
+        )
+        return 1
 
     a = json.loads(args.a.read_text(encoding="utf-8"))
     b = json.loads(args.b.read_text(encoding="utf-8"))
