@@ -1,7 +1,7 @@
 """The Airflow-facing adapter: a sensor that pokes one q worker instance's
 status file and reports it in Airflow's own vocabulary.
 
-Airflow is optional here (F-22/F-23, A-04): this module has no
+Airflow is optional here (FE-22/FE-23, A-04): this module has no
 `import airflow` at module scope anywhere, so it is importable — and this
 whole package testable — with Airflow not installed at all. The real
 Airflow class is only assembled inside `build_sensor_class()`, which a DAG
@@ -58,7 +58,7 @@ def build_sensor_class() -> type[Any]:
     """
     # `ty: ignore` here is the intended consequence of Airflow being
     # optional, not a workaround: the package deliberately does not depend on
-    # apache-airflow (F-22/F-23), so these modules genuinely cannot resolve
+    # apache-airflow (FE-22/FE-23), so these modules genuinely cannot resolve
     # in this environment and a type checker is right to say so. Narrow and
     # per-line rather than a rule-wide relaxation - the same treatment as
     # logger/core.py's deliberate read of loguru's private _core.
@@ -72,7 +72,7 @@ def build_sensor_class() -> type[Any]:
     class QWorkerStatusSensor(BaseSensorOperator):
         """Waits for one q worker instance to reach a terminal state.
 
-        Reads `.qpipe.write_status`'s output directly (F-21's chosen
+        Reads `.qpipe.write_status`'s output directly (FE-21's chosen
         mechanism — see the package README) and never queries q or
         Airflow's own metadata database for the worker's state: the file
         is the single source of truth this sensor trusts.

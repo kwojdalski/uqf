@@ -1,6 +1,6 @@
 """Fleet health: what process.csv declares, against what actually answers.
 
-F-01. The requirements note that this exists today only as the
+FE-01. The requirements note that this exists today only as the
 ``torq-demo summary`` CLI, which shells out to ``torq.sh`` and inspects
 **local OS processes** - and that exposing it over HTTP is new backend work.
 
@@ -11,7 +11,7 @@ one:
 1. It does not shell out per request, which is the actual objection to
    wrapping the CLI.
 2. It works whether or not the process is on this machine. OS inspection only
-   ever works locally, which is why F-22 (local demo versus production-shaped
+   ever works locally, which is why FE-22 (local demo versus production-shaped
    deployment) reads like a blocker for this phase. Probing over IPC largely
    dissolves that gate: the same mechanism answers both deployments, and a
    process that answers IPC is up in the only sense a frontend cares about.

@@ -1,4 +1,4 @@
-"""Reading q's backfill status files (F-06, phase B4).
+"""Reading q's backfill status files (FE-06, phase B4).
 
 The load-bearing test here is test_reader_field_set_matches_the_q_writer: the
 format is defined in scripts/torq_pipeline.q and consumed here, and nothing
@@ -240,7 +240,7 @@ def test_endpoint_reports_unconfigured_as_422(tmp_path):
 
 
 def test_endpoint_carries_no_airflow_owned_fields(tmp_path):
-    """E-15: these files carry q's facts only. Retry counts, task ordering,
+    """ETL-15: these files carry q's facts only. Retry counts, task ordering,
     timeouts and concurrency are Airflow's, and inferring them here is the
     cross-layer inference the framework forbids.
     """

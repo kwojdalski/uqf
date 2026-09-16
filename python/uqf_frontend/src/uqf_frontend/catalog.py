@@ -1,7 +1,7 @@
 """The queryable-surface whitelist: which tables exist, which of their columns
 may be filtered, and what q type each column holds.
 
-This module is the security boundary. Per F-14 no client input is ever
+This module is the security boundary. Per FE-14 no client input is ever
 interpolated into query text, so the only things a caller can influence are
 (a) which table, (b) which columns, (c) which operator, and (d) which values
 - and (a) through (c) are checked against this catalog before anything is

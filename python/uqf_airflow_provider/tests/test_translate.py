@@ -1,4 +1,4 @@
-"""The E-15 boundary, exercised directly: this mapping may only ever look at
+"""The ETL-15 boundary, exercised directly: this mapping may only ever look at
 `state` and `error` — the q-owned facts — and must never surface an
 Airflow-owned concept (retry count, queue position, timeout, concurrency).
 """

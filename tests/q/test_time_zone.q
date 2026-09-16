@@ -94,7 +94,7 @@ test_equals_and_match_disagree_across_the_two_types:{[t]
     p:2026.09.15D10:00:00.000000000;
     .qunit.assertEquals[(("z"$p)=p;("z"$p)~p);(1b;0b);"`=` says same instant, `~` says no match - the two guards cannot both be right"]};
 
-/ The consequence for a retry-safe pipeline: dedupe stops working. E-13's
+/ The consequence for a retry-safe pipeline: dedupe stops working. ETL-13's
 / guarantee is retry-safe publication, and a row that no longer matches
 / itself is published again on every retry.
 test_a_value_and_its_own_round_trip_are_two_distinct_values:{[t]

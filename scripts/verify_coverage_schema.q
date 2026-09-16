@@ -1,7 +1,7 @@
 / verify_coverage_schema.q - settles issue #60 in one command.
 / .
 / src/etl/core/coverage.q's schema is ASSUMED. It was inferred from what
-/ E-07/E-08/E-09 require plus the frontend requirements' description of
+/ ETL-07/ETL-08/ETL-09 require plus the frontend requirements' description of
 / coverage "by dataset, partition key, and time range" - and PARTITION KEY is
 / not in the assumed shape. Four files now depend on that assumption:
 / coverage.q, worker_runtime.q, tests/q/test_coverage.q and
@@ -93,7 +93,7 @@ if[count partition_like;
     -1 "            1. add the column to .qcov.schema and init_ledger";
     -1 "            2. add it as a REQUIRED parameter to intervals/";
     -1 "               is_covered/missing/require_covered - required, not";
-    -1 "               optional, for the same reason source_version is (E-09)";
+    -1 "               optional, for the same reason source_version is (ETL-09)";
     -1 "            3. add it to uqf_frontend/queries.py's COVERAGE program";
     -1 "            4. add a test that coverage in one partition does not";
     -1 "               satisfy a query for another";

@@ -1,5 +1,5 @@
 // test_coverage.q - tests for src/etl/core/coverage.q (the append-only
-// completeness ledger) and the E-06 checkpoint functions in
+// completeness ledger) and the ETL-06 checkpoint functions in
 // src/etl/core/backfill_state.q. Load scripts/torq_pipeline.q,
 // src/etl/core/backfill_state.q, src/etl/core/coverage.q, tests/lib/qunit.q
 // and tests/lib/testutil.q before this file.
@@ -23,7 +23,7 @@ beforeNamespace_isolate:{[]
 
 setUp_fresh_ledger:{[] `etl_coverage set 0#value `etl_coverage;}
 
-/ --- interval validation (E-08) ------------------------------------------
+/ --- interval validation (ETL-08) ------------------------------------------
 
 test_an_empty_interval_is_rejected:{[t]
     .qunit.assertError[{.qcov.require_interval[x;x]};.coveragetest.d 1;"from=to covers nothing, so recording it would claim completeness for no data"]};
@@ -31,7 +31,7 @@ test_an_empty_interval_is_rejected:{[t]
 test_a_reversed_interval_is_rejected:{[t]
     .qunit.assertError[{.qcov.require_interval[x 0;x 1]};(.coveragetest.d 2;.coveragetest.d 1);"a reversed interval is rejected at construction"]};
 
-/ --- composition: the boundary rule (E-08) -------------------------------
+/ --- composition: the boundary rule (ETL-08) -------------------------------
 
 / With half-open intervals [Mon;Tue) and [Tue;Wed) are contiguous, so they
 / compose. This is the case a naive implementation gets right by accident.
@@ -56,14 +56,14 @@ test_composition_is_order_independent:{[t]
     rev:([] range_from:(.coveragetest.d 2;.coveragetest.d 1); range_to:(.coveragetest.d 3;.coveragetest.d 2));
     .qunit.assertEquals[count .qcov.compose fwd;count .qcov.compose rev;"composition does not depend on input order"]};
 
-/ --- recording (E-07) ----------------------------------------------------
+/ --- recording (ETL-07) ----------------------------------------------------
 
 test_a_completed_window_is_recorded:{[t]
     .qcov.stage_completion[`markouts;`v1;.coveragetest.d 1;.coveragetest.d 2;1234];
     .qunit.assertEquals[count .qcov.intervals[`markouts;`v1];1;"a staged window appears in the ledger"]};
 
 / The counter-intuitive requirement, and the one most likely to be
-/ optimised away by someone who has not read E-07: an EMPTY window is still
+/ optimised away by someone who has not read ETL-07: an EMPTY window is still
 / recorded. It is positive evidence the range was examined and held nothing,
 / which is not the same as never having been attempted.
 test_an_empty_window_is_still_recorded:{[t]
@@ -71,14 +71,14 @@ test_an_empty_window_is_still_recorded:{[t]
     .qunit.assertTrue[.qcov.is_covered[`markouts;`v1;.coveragetest.d 1;.coveragetest.d 2];"a window that published nothing still counts as covered"]};
 
 test_a_null_source_version_is_refused:{[t]
-    .qunit.assertError[{.qcov.stage_completion[`markouts;`;x 0;x 1;5]};(.coveragetest.d 1;.coveragetest.d 2);"coverage under one source release says nothing about another (E-09)"]};
+    .qunit.assertError[{.qcov.stage_completion[`markouts;`;x 0;x 1;5]};(.coveragetest.d 1;.coveragetest.d 2);"coverage under one source release says nothing about another (ETL-09)"]};
 
 test_staging_rejects_an_empty_range:{[t]
     .qunit.assertError[{.qcov.stage_completion[`markouts;`v1;x;x;5]};.coveragetest.d 1;"a zero-width window cannot be recorded as coverage"]};
 
-/ --- version isolation (E-09, E-10) --------------------------------------
+/ --- version isolation (ETL-09, ETL-10) --------------------------------------
 
-/ The rule E-10 states: intervals from different versions are NEVER merged
+/ The rule ETL-10 states: intervals from different versions are NEVER merged
 / to satisfy a dependency. A v1 window must not make a v2 range look covered.
 test_coverage_does_not_leak_across_source_versions:{[t]
     .qcov.stage_completion[`markouts;`v1;.coveragetest.d 1;.coveragetest.d 5;100];
@@ -120,7 +120,7 @@ test_require_covered_passes_when_complete:{[t]
     .qcov.stage_completion[`markouts;`v1;.coveragetest.d 1;.coveragetest.d 3;5];
     .qunit.assertTrue[.qcov.require_covered[`markouts;`v1;.coveragetest.d 1;.coveragetest.d 3];"a fully covered range is admitted"]};
 
-/ --- private checkpoints (E-06) ------------------------------------------
+/ --- private checkpoints (ETL-06) ------------------------------------------
 
 test_no_checkpoint_returns_null:{[t]
     .qbfstate.clear_checkpoint[`cp_absent];
@@ -132,7 +132,7 @@ test_a_matching_specification_resumes:{[t]
     .qbfstate.save_checkpoint[`cp_match;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
     .qunit.assertEquals[.qbfstate.load_checkpoint[`cp_match;.coveragetest.spec[]];(.coveragetest.d 1)+0D12;"an identical run specification resumes from its cursor"]};
 
-/ E-06's "discard saved state when the current specification differs". A
+/ ETL-06's "discard saved state when the current specification differs". A
 / cursor is only meaningful relative to the run that produced it: resuming a
 / [Sep1,Sep5) cursor into a [Sep1,Sep30) run would skip most of the range
 / while reporting progress.
@@ -151,7 +151,7 @@ test_clearing_a_checkpoint_restarts_from_the_beginning:{[t]
     .qbfstate.clear_checkpoint[`cp_clear];
     .qunit.assertTrue[null .qbfstate.load_checkpoint[`cp_clear;.coveragetest.spec[]];"a cleared checkpoint means start over"]};
 
-/ A checkpoint is private (E-06): it is never evidence that a dataset is
+/ A checkpoint is private (ETL-06): it is never evidence that a dataset is
 / complete. Completeness has exactly one channel, the etl_coverage ledger.
 test_a_checkpoint_is_not_coverage:{[t]
     .qbfstate.save_checkpoint[`cp_private;.coveragetest.spec[];.coveragetest.d 2];

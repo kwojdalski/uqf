@@ -4,7 +4,7 @@ The whole point of this module: **the q text below is a constant written
 here, never assembled from client input.** A caller's table name, column
 names and operator are validated against the catalog and then passed as
 IPC *arguments*; a caller's values are passed as typed IPC arguments and
-never rendered into text at all. That is what satisfies F-14, and it is
+never rendered into text at all. That is what satisfies FE-14, and it is
 strictly stronger than escaping or quoting a concatenated string.
 
 Three q details this depends on, all verified against a live KDB-X process
@@ -65,7 +65,7 @@ SELECT = """{[t;fc;fo;fv;lim]
 
 #: Coverage intervals for one dataset at one source release.
 #:
-#: E-09 requires consumers to filter on ``source_version``; doing it inside
+#: ETL-09 requires consumers to filter on ``source_version``; doing it inside
 #: the program rather than in Python means a caller cannot omit it.
 COVERAGE = """{[ds;release]
   select range_from, range_to from etl_coverage
@@ -91,7 +91,7 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
 
     A naive datetime is rejected by kola itself with an unhelpful TypeError,
     so this function requires UTC explicitly. That is not a workaround - it
-    is E-08/R9.1 (everything is UTC internally) enforced at the boundary
+    is ETL-08/R9.1 (everything is UTC internally) enforced at the boundary
     where a browser's local time would otherwise leak in.
     """
     if as_list:

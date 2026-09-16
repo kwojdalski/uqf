@@ -1,4 +1,4 @@
-"""Usage-log capture (F-13).
+"""Usage-log capture (FE-13).
 
 ``.usage.usage`` rows are flushed to disk and dropped from memory after
 ``.usage.flushtime`` - **three hours** by the vendored default, not the one
@@ -14,7 +14,7 @@ The design is deliberately dull: a watermark of the newest row captured, a
 fetch of everything strictly newer, an append to a sink, then the watermark
 advances - and only after the append succeeds, so a failed write is retried
 rather than skipped. That ordering is the same publish-before-checkpoint rule
-the ETL framework states in E-05.
+the ETL framework states in ETL-05.
 """
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ class UsageCapture:
             except Exception as exc:
                 result.failed[proc_result.process] = f"sink write failed: {exc}"
                 continue
-            # Advance only after a successful write (E-05's ordering).
+            # Advance only after a successful write (ETL-05's ordering).
             newest = max(_aware(r["time"]) for r in rows if r.get("time") is not None)
             self._watermarks[proc_result.process] = newest
             result.captured[proc_result.process] = len(rows)
@@ -138,7 +138,7 @@ class UsageCapture:
 
 def _aware(value: Any) -> dt.datetime:
     """q stores UTC and kola returns naive datetimes, so label rather than
-    convert (E-08/R9.1).
+    convert (ETL-08/R9.1).
     """
     if isinstance(value, dt.datetime):
         return value if value.tzinfo else value.replace(tzinfo=dt.UTC)

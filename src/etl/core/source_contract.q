@@ -1,6 +1,6 @@
 / source_contract.q - the centralised external-source contract (.qsrc).
 / .
-/ Implements requirement E-12: "register every external source table, target
+/ Implements requirement ETL-12: "register every external source table, target
 / mapping, required field and required type in the centralised source
 / contract. Validate both generated fixtures and live external metadata
 / against that same contract."
@@ -15,22 +15,22 @@
 / time-and-timezone block after them likewise. They follow from answers
 / already given, and are stated so nobody has to re-derive them:
 / .
-/   E-04 (answered via A-04 + F-22/F-23) - the external driver is NOT a hard
+/   bank E-04 (answered via A-04 + FE-22/FE-23) - the external driver is NOT a hard
 /     dependency. A public single-host demo cannot require a licensed ODBC
 /     driver, or the whole backfill path is undemonstrable. Every source
 /     declares a fixture, so the path is exercisable with no driver at all.
 / .
-/   E-07 (answered via A-04 + the F-20 precedent) - credentials come from the
+/   bank E-07 (answered via A-04 + the FE-20 precedent) - credentials come from the
 /     ENVIRONMENT only. Nothing secret lives in this tree, and the YAML layer
 /     must never carry one. `require_credentials` enforces that rather than
 /     documenting it.
 / .
-/   E-08 (answered via F-14) - source queries are PARAMETERISED q lambdas,
-/     never built by string concatenation. F-14's guarantee is that no caller
+/   bank E-08 (answered via FE-14) - source queries are PARAMETERISED q lambdas,
+/     never built by string concatenation. FE-14's guarantee is that no caller
 /     input reaches query text; uqf_frontend/queries.py already honours it,
 /     and a source adapter is the same problem with a less friendly input.
 / .
-/   E-09 (answered via A-04) - bank-internal business logic is not
+/   bank E-09 (answered via A-04) - bank-internal business logic is not
 /     reimplementable here. What gets built is a generic ANALOGUE with the
 /     same shape and none of the logic. So this contract describes shapes, and
 /     deliberately carries no business semantics.
@@ -45,8 +45,8 @@
 / .
 /       - internally, everything is UTC. That is not new: python/uqf_frontend
 /         already enforces it at the HTTP edge, where queries.coerce rejects
-/         a naive datetime outright. It cites that rule as "E-08/R9.1" in the
-/         FRONTEND's numbering - a different E-08 from this file's, which is
+/         a naive datetime outright. It cites that rule as "ETL-08/R9.1" in the
+/         FRONTEND's numbering - a different ETL-08 from this file's, which is
 /         the parameterised-query decision above. Same rule, two numbering
 /         schemes; this file's timezone handling is the q-side half of it.
 /       - the zone is therefore a PER-SOURCE property, because only the
@@ -113,7 +113,7 @@ required_declarations:`source`table`target`time_field`row_key`fields`types`query
 / source -> its declaration dict.
 sources:(`symbol$())!();
 
-/ Register an external source table (E-12).
+/ Register an external source table (ETL-12).
 / .
 / Registration VALIDATES immediately, unlike .qbfstate.register which
 / deliberately defers. The asymmetry is deliberate and worth stating: a
@@ -145,11 +145,11 @@ register:{[source;decl]
         '"register: ",string[source],"'s types must be a string of q type characters, one per field"];
     if[(count decl`fields)<>count decl`types;
         '"register: ",string[source]," declares ",string[count decl`fields],
-         " field(s) but ",string[count decl`types]," type(s) - E-12 requires a type per required field"];
+         " field(s) but ",string[count decl`types]," type(s) - ETL-12 requires a type per required field"];
     if[not 100h=type decl`query;
-        '"register: ",string[source],"'s query must be a lambda (E-08: parameterised, never concatenated)"];
+        '"register: ",string[source],"'s query must be a lambda (ETL-08: parameterised, never concatenated)"];
     if[not 100h=type decl`fixture;
-        '"register: ",string[source],"'s fixture must be a niladic lambda (E-04: the path must be exercisable with no driver)"];
+        '"register: ",string[source],"'s fixture must be a niladic lambda (ETL-04: the path must be exercisable with no driver)"];
     if[not -11h=type decl`time_zone;
         '"register: ",string[source],"'s time_zone must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\" (L-06)"];
     / The window is taken on time_field, so time_field must be a field this
@@ -169,7 +169,7 @@ register:{[source;decl]
     / It also earns its place independently of restatements. D-08 was
     / answered "leave the published rows, record no coverage, re-run redoes
     / the window", and that duplicates rows unless the publish path can
-    / dedupe - E-13 promises retry-SAFE publication, which is explicitly
+    / dedupe - ETL-13 promises retry-SAFE publication, which is explicitly
     / weaker than exactly-once. A row key is exactly what makes that dedupe
     / possible, so this is worth having even if supersession is deferred.
     / `11h=abs type`, not `-11h=abs type`: abs is always positive, so the
@@ -227,7 +227,7 @@ row_key:{[source] (),(declaration source)`row_key}
 
 declaration:{[source]
     if[not source in key sources;
-        '"declaration: ",string[source]," is not a registered source - E-12 requires central registration, so an unregistered source is a wiring bug rather than a lookup miss"];
+        '"declaration: ",string[source]," is not a registered source - ETL-12 requires central registration, so an unregistered source is a wiring bug rather than a lookup miss"];
     sources source}
 
 / ------------------------------------------------------------ VALIDATION
@@ -242,7 +242,7 @@ type_chars:{[tbl] exec t from 0!meta tbl}
 
 column_names:{[tbl] exec c from 0!meta tbl}
 
-/ Validate a table against a source's declaration (E-12).
+/ Validate a table against a source's declaration (ETL-12).
 / .
 / This is the single function both the fixture check and the live metadata
 / check go through, which is what makes "that same contract" true rather
@@ -279,19 +279,19 @@ validate:{[source;tbl]
             ""]];
     1b}
 
-/ Validate a source's own fixture (E-12's "generated fixtures").
+/ Validate a source's own fixture (ETL-12's "generated fixtures").
 / .
 / Runs in the deterministic suite, with no connection anywhere. A fixture
 / that does not satisfy the contract is a broken test double, and finding
 / that out from a failing worker test is a much longer path.
 validate_fixture:{[source] validate[source;(declaration[source]`fixture)[]]}
 
-/ Validate LIVE external metadata against the same declaration (E-12).
+/ Validate LIVE external metadata against the same declaration (ETL-12).
 / .
 / Separate from validate_fixture only in where the table comes from - the
 / contract and the checking are identical, which is the requirement.
 / .
-/ Belongs to the `smoke` lane, not the deterministic suite (E-20): the
+/ Belongs to the `smoke` lane, not the deterministic suite (ETL-20): the
 / deterministic suite proves local behaviour, not that a configured external
 / service is reachable or compatible.
 / @param source a registered source name
@@ -316,7 +316,7 @@ validate_live:{[source;h]
 
 / ---------------------------------------------------------- CREDENTIALS
 
-/ The environment variable holding a source's credential (E-07).
+/ The environment variable holding a source's credential (ETL-07).
 / .
 / Mechanical from the source name, so an operator can guess it. Deliberately
 / a separate prefix from .qwcfg's UQF_: a credential is not configuration,
@@ -324,7 +324,7 @@ validate_live:{[source;h]
 / through the YAML or overrides layer by accident.
 credential_var:{[source] "UQF_SOURCE_CRED_",upper string source}
 
-/ Read a source's credential, or refuse (E-07).
+/ Read a source's credential, or refuse (ETL-07).
 / .
 / Environment ONLY. There is no file fallback and no vault, on purpose:
 / nothing secret can live in this tree, and a file fallback is how a
@@ -342,7 +342,7 @@ require_credentials:{[source]
     if[0=count v;
         '"require_credentials: ",string[source]," has no credential - set ",env_var,
          " in the environment. There is deliberately no file or vault fallback: ",
-         "nothing secret lives in this repository (E-07)"];
+         "nothing secret lives in this repository (ETL-07)"];
     v}
 
 / Is a credential available? For deciding between the live and fixture paths
@@ -513,9 +513,9 @@ ambiguous_message:{[zone;bad;cs]
 
 / ------------------------------------------------------------- COERCION
 
-/ The coercion function for each declared q type character (E-05).
+/ The coercion function for each declared q type character (ETL-05).
 / .
-/ Declared here rather than left to each adapter, because E-05's question was
+/ Declared here rather than left to each adapter, because ETL-05's question was
 / "is there ONE shared coercion layer" and the answer is only true if every
 / source reaches it by default. A source that casts its own text is a source
 / that can get the decimal comma or the date-only timestamp wrong privately.
@@ -545,9 +545,9 @@ coercers:(!). flip (
     ("p";.qcoer.to_timestamp);
     ("s";.qcoer.to_symbol))
 
-/ Coerce a table of TEXT columns into the declared types (E-05).
+/ Coerce a table of TEXT columns into the declared types (ETL-05).
 / .
-/ For a source that returns text - which is what E-05 is about - this is the
+/ For a source that returns text - which is what ETL-05 is about - this is the
 / step between fetch and validate. Returns the coerced table plus a per-
 / column failure count, so the worker can decide: a few bad rows in a
 / million might be tolerable and worth logging, while a column that failed
@@ -565,7 +565,7 @@ coerce:{[source;tbl]
     unknown:distinct chars where not chars in key coercers;
     if[count unknown;
         '"coerce: no coercer for declared type(s) \"",unknown,"\" in ",string[source],
-         " - add one to .qsrc.coercers deliberately rather than casting privately (E-05)"];
+         " - add one to .qsrc.coercers deliberately rather than casting privately (ETL-05)"];
     results:{[tb;f;c] .qcoer.coerce_column[coercers c;tb f]}[tbl;;] .' flip (fields;chars);
     coerced:tbl;
     coerced:{[tb;f;r] @[tb;f;:;r`values]}/[coerced;fields;results];
@@ -573,7 +573,7 @@ coerce:{[source;tbl]
 
 / ------------------------------------------------------------- FETCHING
 
-/ Fetch one window, from the live source or from the fixture (E-04).
+/ Fetch one window, from the live source or from the fixture (ETL-04).
 / .
 / The fixture is not a fallback for a FAILED connection - that would turn an
 / outage into silently synthetic data, which is the worst possible outcome

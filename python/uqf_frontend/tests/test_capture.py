@@ -1,4 +1,4 @@
-"""Usage capture (F-13).
+"""Usage capture (FE-13).
 
 The ordering property here is the one that cannot be fixed after the fact: if
 a write fails and the watermark advances anyway, those rows are pruned from q

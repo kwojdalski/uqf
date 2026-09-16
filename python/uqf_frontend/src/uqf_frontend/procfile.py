@@ -1,12 +1,12 @@
 """Read the declared process set from TorQ's ``process.csv``.
 
-F-01 asks for health "for every process in ``process.csv``", so the declared
+FE-01 asks for health "for every process in ``process.csv``", so the declared
 set comes from that file rather than from this package's own configuration -
 otherwise the fleet view can only report on processes someone remembered to
 list twice.
 
 The file is *generated* by ``torq_orchestrator.core.bootstrap()`` from
-vendored inputs plus uqf's own additions (E-17), and its port column carries
+vendored inputs plus uqf's own additions (ETL-17), and its port column carries
 unresolved placeholders: ``{KDBBASEPORT}`` or ``{KDBBASEPORT}+N``. Resolving
 them here duplicates a few lines of the orchestrator rather than importing
 it, deliberately: this package must not depend on torq_orchestrator at

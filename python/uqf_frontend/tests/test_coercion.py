@@ -37,7 +37,7 @@ def test_long_rejects_a_float():
 
 def test_naive_timestamp_is_rejected_with_a_reason_a_caller_can_act_on():
     """kola itself raises an opaque TypeError on a naive datetime. Rejecting
-    it here, explicitly, is E-08/R9.1 enforced at the edge.
+    it here, explicitly, is ETL-08/R9.1 enforced at the edge.
     """
     with pytest.raises(ValidationFailed, match="explicit timezone"):
         coerce("2026-09-15T10:30:00", QType.TIMESTAMP, "time", as_list=False)

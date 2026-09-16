@@ -1,4 +1,4 @@
-"""Coverage interval arithmetic - E-08's composition rule is the whole point."""
+"""Coverage interval arithmetic - ETL-08's composition rule is the whole point."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def test_coverage_wider_than_the_request_clips_to_the_request():
 
 def test_naive_timestamps_from_q_are_treated_as_utc():
     """q stores UTC and kola hands back naive datetimes, so this is
-    re-labelling rather than conversion (E-08/R9.1).
+    re-labelling rather than conversion (ETL-08/R9.1).
     """
     rows = [{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 14)}]
     got = from_rows(rows)

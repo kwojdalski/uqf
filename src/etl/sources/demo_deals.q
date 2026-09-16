@@ -1,7 +1,7 @@
 / demo_deals.q - a generic analogue of an external relational deal source
 / (.qsdemo).
 / .
-/ WHY THIS IS AN ANALOGUE AND NOT A PORT (E-09, answered via A-04)
+/ WHY THIS IS AN ANALOGUE AND NOT A PORT (bank question E-09, answered via A-04)
 / .
 / The canonical tree has workers over `marketwarehouse_deals` and
 / `piggybank_general_ledger`. Those names, their schemas, and the business
@@ -18,7 +18,7 @@
 / .
 / Two consequences worth stating plainly, rather than discovering later:
 / .
-/   1. This CANNOT validate the real source contract. E-12 asks that live
+/   1. This CANNOT validate the real source contract. ETL-12 asks that live
 /      external metadata be validated against the same declaration as the
 /      fixture, and the machinery for that is built - but the declaration
 /      itself is a guess at a shape nobody here can see. Running
@@ -34,7 +34,7 @@
 source_name:`demo_deals
 
 / The columns this adapter reads, and their q types. Deliberately a small
-/ subset of what such a table would have: E-12 asks for the required fields,
+/ subset of what such a table would have: ETL-12 asks for the required fields,
 / not every field, and declaring columns the worker does not read would make
 / an upstream change to an unused column break the run.
 fields:`deal_id`deal_time`sym`side`notional`rate
@@ -76,8 +76,8 @@ time_zone:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
-/ A PARAMETERISED lambda, never string concatenation (E-08, answered via
-/ F-14).
+/ A PARAMETERISED lambda, never string concatenation (bank question E-08, answered via
+/ FE-14).
 / .
 / The window bounds are arguments to a functional select evaluated on the
 / remote side, so no caller value is ever spliced into query text. The
@@ -86,7 +86,7 @@ time_zone:`UTC
 / and it is also how a type coercion bug becomes a silent wrong answer
 / rather than an error.
 / .
-/ Half-open [range_from;range_to) throughout, per E-08: >= on the lower
+/ Half-open [range_from;range_to) throughout, per ETL-08: >= on the lower
 / bound and < on the upper. Getting that wrong by one operator
 / double-publishes every boundary row, which then appears as a duplicate
 / nobody can explain.
@@ -99,7 +99,7 @@ query:{[h;range_from;range_to]
 
 / ------------------------------------------------------------ THE FIXTURE
 
-/ A synthetic table of the same shape (E-04, answered via A-04 + F-22/F-23).
+/ A synthetic table of the same shape (bank question E-04, answered via A-04 + FE-22/FE-23).
 / .
 / Deterministic - fixed values, no .z.p, no random - because a fixture that
 / changes between runs makes a failing assertion impossible to attribute.

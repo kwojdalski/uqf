@@ -42,11 +42,11 @@ test_a_failed_state_must_carry_an_error:{[t]
 
 test_a_reversed_range_is_refused:{[t]
     bad:`source_version`range_from`range_to!(`v1;.statustest.d 2;.statustest.d 1);
-    .qunit.assertError[{.qpipe.write_status[`w;`st1;`running;x;.statustest.progress[];""]};bad;"a bad range can never reach the file (E-08)"]};
+    .qunit.assertError[{.qpipe.write_status[`w;`st1;`running;x;.statustest.progress[];""]};bad;"a bad range can never reach the file (ETL-08)"]};
 
 test_a_null_source_version_is_refused:{[t]
     bad:`source_version`range_from`range_to!(`;.statustest.d 1;.statustest.d 2);
-    .qunit.assertError[{.qpipe.write_status[`w;`st1;`running;x;.statustest.progress[];""]};bad;"source_version is mandatory (E-09)"]};
+    .qunit.assertError[{.qpipe.write_status[`w;`st1;`running;x;.statustest.progress[];""]};bad;"source_version is mandatory (ETL-09)"]};
 
 / --- reading the previous state --------------------------------------------
 

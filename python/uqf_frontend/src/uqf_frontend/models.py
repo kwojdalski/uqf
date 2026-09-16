@@ -21,7 +21,7 @@ class Filter(BaseModel):
 class CoverageRequirement(BaseModel):
     """An opt-in pre-check: refuse the query unless this range is published.
 
-    F-09. ``source_version`` is mandatory, not optional, because E-09 requires
+    FE-09. ``source_version`` is mandatory, not optional, because ETL-09 requires
     coverage consumers to filter on it - coverage under one source release
     says nothing about another.
     """
@@ -39,7 +39,7 @@ class QueryRequest(BaseModel):
     tier: Literal["rdb", "hdb", "both"] = Field(
         default="both",
         description="rdb = today's session, hdb = completed partitions, both = razed. "
-        "hdb is expected to be slower (F-11)",
+        "hdb is expected to be slower (FE-11)",
     )
     require_coverage: CoverageRequirement | None = None
 
@@ -104,7 +104,7 @@ class OpsTableResponse(BaseModel):
     """A raw operational table, plus the cadence the UI should poll it at.
 
     The cadence is advisory and served rather than hardcoded in the client,
-    because F-10 makes polling the only mechanism and the right interval
+    because FE-10 makes polling the only mechanism and the right interval
     depends on how fast the underlying state moves.
     """
 
@@ -186,10 +186,10 @@ class WorkerStatusOut(BaseModel):
 class BackfillStatusResponse(BaseModel):
     """What q reports about its own backfill runs.
 
-    Carries only facts q owns per E-15 - startup, source reads, failures,
+    Carries only facts q owns per ETL-15 - startup, source reads, failures,
     checkpoints, run and window counts. Airflow's facts (task ordering,
     retries, timeouts, concurrency) are deliberately absent: inferring them
-    from these files is the cross-layer inference E-15 forbids.
+    from these files is the cross-layer inference ETL-15 forbids.
     """
 
     summary: dict[str, int] = Field(

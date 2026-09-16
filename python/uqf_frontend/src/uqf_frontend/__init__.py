@@ -8,7 +8,7 @@ The design property worth knowing: client input never reaches q as text. The
 q programs in :mod:`uqf_frontend.queries` are constants written in this
 package; a caller's table, columns and operator are checked against
 :mod:`uqf_frontend.catalog` and then sent as IPC arguments, and a caller's
-values are sent as typed IPC arguments only. See F-14.
+values are sent as typed IPC arguments only. See FE-14.
 """
 
 from uqf_frontend.app import create_app

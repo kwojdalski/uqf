@@ -74,7 +74,7 @@ test_a_flag_accepts_the_usual_spellings:{[t]
 test_an_absent_flag_is_false_not_an_error:{[t]
     .qunit.assertEquals[.qwcfg.get_flag `never_set;0b;"an unset flag is off, so a misconfigured worker does real work rather than none"]};
 
-/ --- accumulated validation (E-16) ---------------------------------------
+/ --- accumulated validation (ETL-16) ---------------------------------------
 
 / Reporting one error at a time means finding out over N restarts that a
 / worker was never configured. require_contract in backfill_state.q makes

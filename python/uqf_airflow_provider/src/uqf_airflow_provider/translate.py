@@ -1,6 +1,6 @@
 """Maps a q worker's lifecycle state onto Airflow's poke vocabulary.
 
-This is the E-15 boundary as code: the input is exactly what q wrote
+This is the ETL-15 boundary as code: the input is exactly what q wrote
 (`status_reader.WorkerStatus`) and the output is exactly Airflow's own poke
 contract (pending / success / failure) — nothing here invents a retry
 count, a queue position, a timeout, or any other fact q's status file does

@@ -1,4 +1,4 @@
-"""HTTP surface behaviour, including the transient/fatal distinction F-12
+"""HTTP surface behaviour, including the transient/fatal distinction FE-12
 requires the UI to be able to make.
 """
 
@@ -176,7 +176,7 @@ def test_coverage_reports_gaps_for_a_requested_range(client_for):
 
 
 def test_coverage_filters_on_source_version(client_for):
-    """E-09: the version is passed to q, not applied afterwards in Python."""
+    """ETL-09: the version is passed to q, not applied afterwards in Python."""
     gw = _cov([])
     client_for(gw).get("/coverage", params={"dataset": "trades", "source_version": "v7"})
     program, args, _ = gw.routed[-1]

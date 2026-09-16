@@ -1,6 +1,6 @@
 """Settings, read from the environment once at startup.
 
-Credentials live here and nowhere else in the request path: per F-14 the
+Credentials live here and nowhere else in the request path: per FE-14 the
 browser never receives or sends q credentials, so they are read from the
 process environment on the server and held only in this object.
 """
@@ -19,7 +19,7 @@ class Process:
     """One TorQ process this layer can reach directly.
 
     Needed because ``.usage.usage`` is per-process with **no fleet-wide
-    rollup** (F-04), so a single query log across the stack has to be
+    rollup** (FE-04), so a single query log across the stack has to be
     fanned out and merged here.
     """
 
@@ -60,7 +60,7 @@ class Settings:
     port: int = 6052
     user: str = ""
     passwd: str = ""
-    #: Seconds. Passed to kola, which enforces it per query. F-11: historical
+    #: Seconds. Passed to kola, which enforces it per query. FE-11: historical
     #: HDB queries are legitimately slower than current-session RDB ones.
     timeout: int = 30
     #: Hard cap on rows returned, whatever the caller asks for. A browser
@@ -68,19 +68,19 @@ class Settings:
     #: is how a demo process runs out of memory.
     max_rows: int = DEFAULT_MAX_ROWS
     #: TorQ's generated process.csv - the declared process set for fleet
-    #: health (F-01). None means fleet health reports itself unconfigured
+    #: health (FE-01). None means fleet health reports itself unconfigured
     #: rather than returning an empty fleet.
     process_csv: Path | None = None
     #: Base port the {KDBBASEPORT} placeholders in process.csv resolve
     #: against. Must match whatever the stack was started with, or every
     #: probe targets the wrong port.
     base_port: int = 6050
-    #: Directory q writes backfill status files into (F-06). None means the
+    #: Directory q writes backfill status files into (FE-06). None means the
     #: backfill view reports itself unconfigured rather than returning an
     #: empty list, which would be indistinguishable from an idle fleet.
     #: Pairs with UQFSTATUSDIR on the q side - see .qpipe.status_dir.
     status_dir: Path | None = None
-    #: Processes to fan out to for the per-process query log (F-04). Empty by
+    #: Processes to fan out to for the per-process query log (FE-04). Empty by
     #: default: the fleet view then reports that it has nothing configured,
     #: rather than silently showing an empty log as if the fleet were idle.
     processes: tuple[Process, ...] = ()
@@ -92,7 +92,7 @@ class Settings:
         """Build settings from UQF_FRONTEND_* environment variables.
 
         Fails loudly on a malformed numeric value rather than silently
-        falling back to a default, matching the config posture in E-14
+        falling back to a default, matching the config posture in ETL-14
         (refuse to start rather than start misconfigured).
         """
         return cls(

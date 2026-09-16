@@ -6,9 +6,9 @@ gateway *process itself* rather than routed to a backend tier, which still
 respects the gateway-only query boundary - the gateway is the thing being
 asked about.
 
-Poll-only throughout, per F-10: none of these has a subscribe mechanism to a
+Poll-only throughout, per FE-10: none of these has a subscribe mechanism to a
 browser, so cadence is the caller's choice. Suggested cadences are attached
-to each view rather than hardcoded, since F-10's consequence is that the UI
+to each view rather than hardcoded, since FE-10's consequence is that the UI
 decides.
 """
 
@@ -36,13 +36,13 @@ CLIENTS = ".gw.clients"
 
 #: This process's own query log, newest first, capped.
 #:
-#: `.usage.usage` is per-process with no fleet-wide rollup (F-04), so this is
+#: `.usage.usage` is per-process with no fleet-wide rollup (FE-04), so this is
 #: fanned out by :class:`uqf_frontend.fleet.Fleet` and merged here.
 USAGE = """{[lim]
   r:`time xdesc .usage.usage;
   $[lim>0; lim sublist r; r]}"""
 
-#: Rows newer than a watermark, oldest first - the capture query for F-13.
+#: Rows newer than a watermark, oldest first - the capture query for FE-13.
 #:
 #: Strictly greater than the watermark so a row already captured is never
 #: captured twice, which makes the capture idempotent under retry.
@@ -61,7 +61,7 @@ FLUSHTIME = "value `.usage.flushtime"
 #:
 #: This is what makes fleet health work without shelling out to torq.sh and
 #: without inspecting local OS processes - and therefore without caring
-#: whether the process is on this machine (F-22's open question). ``.z.i`` is
+#: whether the process is on this machine (FE-22's open question). ``.z.i`` is
 #: the pid and ``system"p"`` the listening port; ``.proc.procname`` and
 #: ``.proc.proctype`` are set by TorQ from its own command line.
 #:
@@ -81,7 +81,7 @@ IDENTITY = (
 )
 
 #: Suggested poll intervals in seconds. Ops state changes fast; coverage and
-#: analytics move at their own publish cadence (F-10, and the refresh-cadence
+#: analytics move at their own publish cadence (FE-10, and the refresh-cadence
 #: note in the requirements).
 POLL_SECONDS: dict[str, int] = {
     "health": 5,

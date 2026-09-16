@@ -1,6 +1,6 @@
 / coercion.q - the shared text-to-type layer for external sources (.qcoer).
 / .
-/ Implements requirement E-05, answered on issue #73: sources return text
+/ Implements bank question E-05 (issue #73), answered there: sources return text
 / that q must coerce, and there IS one shared coercion layer rather than a
 / per-source cast. Three trap classes were named as having actually bitten
 / the real sources, and each is handled explicitly below rather than left to
@@ -193,7 +193,7 @@ to_symbol_cased:{[str]
 / @throws error when v is null
 require_present:{[field;v]
     if[null v;
-        '"require_present: ",string[field]," coerced to null - the source text was empty or malformed, and this column cannot be null (E-05)"];
+        '"require_present: ",string[field]," coerced to null - the source text was empty or malformed, and this column cannot be null (ETL-05)"];
     v}
 
 / Coerce a whole column and report how many values failed.

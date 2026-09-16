@@ -1,6 +1,6 @@
 """HTTP surface.
 
-REST rather than WebSocket, because F-10 is explicit that the gateway path
+REST rather than WebSocket, because FE-10 is explicit that the gateway path
 has no push or subscribe mechanism to a browser client - every view is
 poll-only, so a socket would add a moving part without adding liveness.
 """
@@ -54,7 +54,7 @@ def create_app(
     """Build the app. Every dependency is injectable so tests need no q
     process and no environment.
 
-    *policy* is the authorisation seam (F-15/F-20). It defaults to
+    *policy* is the authorisation seam (FE-15/FE-20). It defaults to
     ``allow_all``, which is the correct policy for a single-host demo with
     one shared credential - see authz.py on why this is a seam rather than an
     auth system.
@@ -92,7 +92,7 @@ def create_app(
     @app.exception_handler(FrontendError)
     async def _handle(_: Request, exc: FrontendError) -> JSONResponse:
         """Render a typed failure, keeping the transient flag the UI needs to
-        tell an EOD reload window apart from a real error (F-12).
+        tell an EOD reload window apart from a real error (FE-12).
         """
         return JSONResponse(
             status_code=exc.status_code,
@@ -145,7 +145,7 @@ def create_app(
 
     @app.get("/ops/queue", response_model=OpsTableResponse)
     def ops_queue(request: Request) -> OpsTableResponse:
-        """Pending and running queries on the gateway (F-02)."""
+        """Pending and running queries on the gateway (FE-02)."""
         authorise(request)
         return OpsTableResponse(
             rows=_rows(gateway.call(ops.QUEUE)), poll_seconds=ops.POLL_SECONDS["queue"]
@@ -153,7 +153,7 @@ def create_app(
 
     @app.get("/ops/connections", response_model=ConnectionsResponse)
     def ops_connections(request: Request) -> ConnectionsResponse:
-        """Which backend handles the gateway has, and who is connected (F-03)."""
+        """Which backend handles the gateway has, and who is connected (FE-03)."""
         authorise(request)
         return ConnectionsResponse(
             servers=_rows(gateway.call(ops.SERVERS)),
@@ -163,7 +163,7 @@ def create_app(
 
     @app.get("/ops/usage", response_model=UsageResponse)
     def ops_usage(request: Request, limit: int = 500) -> UsageResponse:
-        """Fleet-wide query log, assembled here because none exists in q (F-04).
+        """Fleet-wide query log, assembled here because none exists in q (FE-04).
 
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
@@ -181,11 +181,11 @@ def create_app(
 
     @app.get("/ops/processes", response_model=FleetHealthResponse)
     def ops_processes(request: Request) -> FleetHealthResponse:
-        """Fleet health for every process process.csv declares (F-01).
+        """Fleet health for every process process.csv declares (FE-01).
 
         Liveness comes from an IPC probe rather than OS process inspection,
         so the same mechanism works whether or not the process is on this
-        machine - see health.py for why that matters to F-22.
+        machine - see health.py for why that matters to FE-22.
         """
         authorise(request)
         if settings.process_csv is None:
@@ -213,11 +213,11 @@ def create_app(
 
     @app.get("/ops/backfill", response_model=BackfillStatusResponse)
     def ops_backfill(request: Request) -> BackfillStatusResponse:
-        """Backfill and Airflow task status, read from the files q writes (F-06).
+        """Backfill and Airflow task status, read from the files q writes (FE-06).
 
         Read from disk rather than from the gateway because q writes these
         and nothing publishes them over IPC. Carries only q's own facts -
-        see status.py on the E-15 boundary this deliberately does not cross.
+        see status.py on the ETL-15 boundary this deliberately does not cross.
         """
         authorise(request)
         statuses, unreadable = status.read_dir(settings.status_dir)
@@ -237,7 +237,7 @@ def create_app(
         range_to: str | None = None,
     ) -> CoverageResponse:
         """Composed coverage for one dataset at one source release, plus the
-        gaps in a requested range if one is given (F-09).
+        gaps in a requested range if one is given (FE-09).
         """
         return _coverage(gateway, dataset, source_version, range_from, range_to)
 

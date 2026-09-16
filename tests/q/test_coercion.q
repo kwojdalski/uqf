@@ -1,5 +1,5 @@
 // test_coercion.q - tests for src/etl/core/coercion.q (.qcoer), the shared
-// text-to-type layer answering E-05.
+// text-to-type layer answering ETL-05.
 //
 // The three trap classes named on issue #73 as having actually bitten the
 // real sources: floats, timestamps, and symbols. Each is asserted against

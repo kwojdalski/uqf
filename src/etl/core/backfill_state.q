@@ -1,17 +1,17 @@
 / backfill_state.q - the bounded worker lifecycle contract (.qbfstate).
 / .
-/ Implements requirements E-01 to E-05 of docs/etl-framework-requirements.md.
+/ Implements requirements ETL-01 to ETL-05 of docs/etl-framework-requirements.md.
 / Note those IDs belong to the REQUIREMENTS document; the question bank uses
 / an overlapping E-nn scheme for a different set of questions about source
 / adapters. Where a question-bank answer is cited below it is named as such.
 / .
-/ The distinction this file exists to enforce (E-02):
+/ The distinction this file exists to enforce (ETL-02):
 /   a BOUNDED worker takes an explicit [range_from;range_to) request, a
 /   resumable run specification, a private state file, and has a terminal
 /   completion path. That is an enforced contract, checked at init.
 /   a CONTINUOUS worker is a long-running poll-and-cursor loop. That is an
-/   established pattern with NO registry and no contract (E-03), and the
-/   asymmetry is deliberate - see docs issue E-22/E-24.
+/   established pattern with NO registry and no contract (ETL-03), and the
+/   asymmetry is deliberate - see docs issue ETL-22/ETL-24.
 / .
 / "A bounded worker must not silently become an unbounded tailer" is the
 / sentence the whole contract exists to make true.
@@ -29,7 +29,7 @@ bounded_worker_methods:`init`plan`fetch`publish`checkpoint
 / ...and these globals. range_from/range_to make the bound explicit and
 / inspectable rather than buried in a call; source_version is mandatory
 / because coverage recorded under one source release says nothing about
-/ another (E-09), so a run that cannot name its release cannot record
+/ another (ETL-09), so a run that cannot name its release cannot record
 / coverage either.
 bounded_worker_globals:`source_version`range_from`range_to
 
@@ -67,7 +67,7 @@ registered:{[] key bounded_workers}
 / worker was never wired up.
 / .
 / This is what makes "is this worker complete" a deterministic test rather
-/ than a code-review question, which is what E-18 asks for.
+/ than a code-review question, which is what ETL-18 asks for.
 / @param worker a name previously passed to register
 / @return the worker name, so it can be used inline in an init chain
 / @throws error if the worker is unregistered, its namespace is absent, or
@@ -100,7 +100,7 @@ lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
 / Take an exclusive single-instance lock, or refuse to start
 / (question-bank C-09).
 / .
-/ One instance per worker is what lets E-06's checkpoint stay PRIVATE to that
+/ One instance per worker is what lets ETL-06's checkpoint stay PRIVATE to that
 / worker: no claim column, no shared cursor state, no claim-expiry logic for
 / dead instances. Double-processing becomes impossible rather than unlikely,
 / and the cost - no horizontal scaling of a single worker - costs nothing on
@@ -143,15 +143,15 @@ lock_held:{[worker] not () ~ @[{key hsym `$x};lock_path worker;{()}]}
 / -------------------------------------------------------- CHECKPOINT
 
 / Where a worker's private state file lives. PRIVATE is the operative word
-/ (E-06): one worker's checkpoint is never evidence that a dataset is
+/ (ETL-06): one worker's checkpoint is never evidence that a dataset is
 / complete, and no other worker may read it. Cross-process completeness has
-/ exactly one channel, the append-only etl_coverage ledger (E-07), and
+/ exactly one channel, the append-only etl_coverage ledger (ETL-07), and
 / conflating the two is how a dataset gets declared complete because some
 / unrelated worker happened to get far enough.
 checkpoint_path:{[worker] (lock_dir[]),"/",string[worker],".checkpoint"}
 
 / Save a cursor together with the FULL run specification that produced it
-/ (E-06).
+/ (ETL-06).
 / .
 / The specification is stored, not just the cursor, because a cursor is only
 / meaningful relative to the run that produced it. A cursor from a [Sep 1;
@@ -171,13 +171,13 @@ save_checkpoint:{[worker;spec;cursor]
     (hsym `$path) 0: enlist .j.j payload;
     path}
 
-/ Load a cursor, but only if it belongs to THIS run specification (E-06).
+/ Load a cursor, but only if it belongs to THIS run specification (ETL-06).
 / .
 / Returns the saved cursor when the specification matches, and a null
 / timestamp when there is no checkpoint or the specification differs -
 / "discard saved state when the current specification differs", which is the
 / requirement's own wording. Discarding is the safe direction: re-running a
-/ window that was already done is idempotent under E-13's retry-safe
+/ window that was already done is idempotent under ETL-13's retry-safe
 / publication, whereas resuming from a foreign cursor silently skips data.
 / @param worker the worker's name
 / @param spec the CURRENT run specification
@@ -212,8 +212,8 @@ clear_checkpoint:{[worker]
 / .
 / The convention is: deterministic code throws with a message prefixed by its
 / own name, and the worker SHELL catches once and converts. That follows
-/ E-04's existing pure/impure split rather than adding a second axis to
-/ remember - the code that throws is exactly the code E-04 already calls
+/ ETL-04's existing pure/impure split rather than adding a second axis to
+/ remember - the code that throws is exactly the code ETL-04 already calls
 / unit-testable, and the code that converts is exactly the shell.
 / .
 / Note an empty result is NOT an error and must not come through here: "ran,
@@ -223,7 +223,7 @@ clear_checkpoint:{[worker]
 / @param worker the worker's name
 / @param spec the run specification, for the status record
 / @param progress what had been done when it failed - partial progress is
-/   kept, since a failed window published nothing (E-05) but earlier windows
+/   kept, since a failed window published nothing (ETL-05) but earlier windows
 /   in the pass did
 / @param err the caught error string
 / @return the status file path written
