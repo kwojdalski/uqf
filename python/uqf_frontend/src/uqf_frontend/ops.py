@@ -84,6 +84,8 @@ IDENTITY = (
 #: analytics move at their own publish cadence (F-10, and the refresh-cadence
 #: note in the requirements).
 POLL_SECONDS: dict[str, int] = {
+    "health": 5,
+    "query": 10,
     "queue": 2,
     "connections": 5,
     "usage": 10,

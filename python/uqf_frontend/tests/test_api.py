@@ -19,7 +19,7 @@ from uqf_frontend.errors import (
 
 def test_health_reports_up(client):
     body = client.get("/health").json()
-    assert body == {"ok": True, "gateway": "up", "detail": None}
+    assert body == {"ok": True, "gateway": "up", "detail": None, "poll_seconds": 5}
 
 
 def test_health_reports_reloading_as_ok_because_it_is_transient(gw):

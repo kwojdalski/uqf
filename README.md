@@ -266,6 +266,13 @@ function names, parameters and locals use `lower_snake_case`. See the
 `kdb-q-conventions` skill for the full set of conventions and the q
 arithmetic gotcha that shaped how this code is written.
 
+## Browser application
+
+The local React [desk and operations app](web/README.md) provides catalog-driven
+queries, coverage gaps, backfill status, fleet health, queue, connections and
+usage views. It can run against the API through a development proxy or be
+served by the API under `/ui/`.
+
 ## Testing
 
 ```
