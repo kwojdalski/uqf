@@ -140,7 +140,7 @@ scripts/
   run_qdoc.sh   alternative: serves browsable docs live via lib/q-doc/ (see Documentation)
   torq_fx_feed.q    a second demo feed process (FX quotes) - the worked
                      example for adding your own row-generating process,
-                     see docs/torq-demo.md and python/torq_orchestrator/
+                     see docs/guides/torq-demo.md and python/torq_orchestrator/
   timer_replay_example.q   replays pre-generated synthetic ticks into a
                             live, growing quotes table on a system timer
                             (.z.ts), reacting after each row, instead of
@@ -168,7 +168,7 @@ python/
                       lib/torq-finance-starter-pack into a runnable demo -
                       torq_demo.py (Typer CLI), torq_demo_mcp.py (FastMCP
                       server), both driven by src/torq_orchestrator/core.py;
-                      see docs/torq-demo.md
+                      see docs/guides/torq-demo.md
 
 .claude/skills/kdb-q-conventions/   q-language conventions for this repo,
                                      including the operator-precedence gotcha
@@ -493,6 +493,6 @@ two vendored files:
   without the process/feed-handler layer this pulls in. It can still be
   started up and queried, though - `python/torq_orchestrator/torq_demo.py`
   (a Typer CLI) and `torq_demo_mcp.py` (a FastMCP server exposing the same
-  controls as MCP tools) bridge it with `lib/torq` (see docs/torq-demo.md)
+  controls as MCP tools) bridge it with `lib/torq` (see docs/guides/torq-demo.md)
   so the two vendored trees can run as one demo without either being
   modified.

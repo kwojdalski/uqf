@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """torq_demo_mcp.py - FastMCP server exposing the TorQ Finance Starter Pack
-demo (see docs/torq-demo.md) as MCP tools, so an MCP client (e.g. Claude)
+demo (see docs/guides/torq-demo.md) as MCP tools, so an MCP client (e.g. Claude)
 can start/stop/query/configure it without shelling out.
 
 Shares its bootstrapping/config logic with torq_demo.py's Typer CLI via
@@ -92,7 +92,7 @@ def torq_demo_query(
 ) -> Any:
     """Run a synchronous q expression against a running demo process, e.g.
     expr="select count i by sym from quote", port=6012 for rdb1 (base port
-    + 2). See docs/torq-demo.md's port table for every process's offset.
+    + 2). See docs/guides/torq-demo.md's port table for every process's offset.
     Returns a list of row dicts for a table result, or the raw scalar/dict
     result otherwise.
     """

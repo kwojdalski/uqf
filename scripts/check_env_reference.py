@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep ``docs/environment.md`` and the code's actual environment surface in
+"""Keep ``docs/reference/environment.md`` and the code's actual environment surface in
 agreement, in both directions.
 
 C-04 asked what the required-versus-optional environment set is and where it
@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-DOC = REPO / "docs" / "environment.md"
+DOC = REPO / "docs" / "reference" / "environment.md"
 
 #: Directories whose reads are an operator's business. `web/` is included
 #: because a Vite config's `process.env` is as much a knob as a q `getenv`.
@@ -201,17 +201,20 @@ def main() -> int:
     problems = 0
     if undocumented:
         problems += len(undocumented)
-        print("Read by the code, absent from docs/environment.md:", file=sys.stderr)
+        print("Read by the code, absent from docs/reference/environment.md:", file=sys.stderr)
         for name, files in undocumented.items():
             print(f"  {name}  ({', '.join(sorted(set(files))[:3])})", file=sys.stderr)
     if missing_produced:
         problems += len(missing_produced)
-        print("\nProduced by build_env, absent from docs/environment.md:", file=sys.stderr)
+        print(
+            "\nProduced by build_env, absent from docs/reference/environment.md:",
+            file=sys.stderr,
+        )
         for name in missing_produced:
             print(f"  {name}", file=sys.stderr)
     if stale:
         problems += len(stale)
-        print("\nListed in docs/environment.md, read by nothing:", file=sys.stderr)
+        print("\nListed in docs/reference/environment.md, read by nothing:", file=sys.stderr)
         for name in stale:
             print(f"  {name}", file=sys.stderr)
         print(
@@ -221,15 +224,16 @@ def main() -> int:
 
     if problems:
         print(
-            f"\n{problems} problem(s). docs/environment.md is the list C-04 asked for;",
+            f"\n{problems} problem(s). docs/reference/environment.md is the list C-04 asked for;",
             file=sys.stderr,
         )
         print("it is only worth having while it is complete.", file=sys.stderr)
         return 1
 
+    read_count = len(reads) - len(PREREQUISITES & set(reads))
     print(
-        f"docs/environment.md matches the code: {len(reads) - len(PREREQUISITES & set(reads))} "
-        f"read, {len(produced)} produced, {len(prefixes)} pattern(s)."
+        f"docs/reference/environment.md matches the code: {read_count} read, "
+        f"{len(produced)} produced, {len(prefixes)} pattern(s)."
     )
     return 0
 

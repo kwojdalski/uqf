@@ -1,5 +1,5 @@
 / torq_fx_feed.q - a second, independent row-generating process for the
-/ TorQ-Finance-Starter-Pack demo (see docs/torq-demo.md), alongside the
+/ TorQ-Finance-Starter-Pack demo (see docs/guides/torq-demo.md), alongside the
 / vendored pack's own code/tick/feed.q. Publishes synthetic top-of-book FX
 / quotes for a handful of currency pairs into the same generic `quote`
 / table feed.q already writes equity quotes into (schema: time, sym, bid,

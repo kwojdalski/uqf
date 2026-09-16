@@ -8,7 +8,7 @@
 > to-do list — and no row will be added to it.
 >
 > What replaces it: capability gaps are tracked as ordinary GitHub issues, and
-> design decisions live in `docs/decisions.md`, derived from the question
+> design decisions live in `docs/decisions/README.md`, derived from the question
 > bank by `scripts/build_decision_log.py`.
 
 
@@ -20,11 +20,11 @@ One row per known divergence between this tree and the canonical Bitbucket
 Canonical is not reachable from here, so "closed" means *this tree now
 matches what the requirements and drift reports say canonical does* — not
 that a merge happened. Sources are `docs/drift-reports/`,
-`docs/migrations/`, `docs/etl-framework-requirements.md` and
-`docs/frontend-requirements.md`.
+`docs/migrations/`, `docs/reference/etl-framework-requirements.md` and
+`docs/reference/frontend-requirements.md`.
 
 Design decisions do **not** belong in this table. They live in
-`docs/decisions.md`, derived from the GitHub question bank by
+`docs/decisions/README.md`, derived from the GitHub question bank by
 `scripts/build_decision_log.py`. Keeping them apart avoids a real collision:
 this ledger numbers its rows `D1`, `D2`, ... while the bank dash-numbers its
 backfill questions, so `D8` here is not `D-08` there.
@@ -36,11 +36,11 @@ One row per known divergence between this tree and the canonical Bitbucket
 Canonical is not reachable from here, so "closed" means *this tree now
 matches what the requirements and drift reports say canonical does* — not
 that a merge happened. Sources are `docs/drift-reports/`,
-`docs/migrations/`, `docs/etl-framework-requirements.md` and
-`docs/frontend-requirements.md`.
+`docs/migrations/`, `docs/reference/etl-framework-requirements.md` and
+`docs/reference/frontend-requirements.md`.
 
 Design decisions do **not** belong in this table. They live in
-`docs/decisions.md`, derived from the GitHub question bank by
+`docs/decisions/README.md`, derived from the GitHub question bank by
 `scripts/build_decision_log.py`. Keeping them apart avoids a real collision:
 this ledger numbers its rows `D1`, `D2`, ... while the bank dash-numbers its
 backfill questions, so `D8` here is not `D-08` there.
@@ -65,7 +65,7 @@ backfill questions, so `D8` here is not `D-08` there.
 | D5 | `tests/test_*.q` flat; canonical uses `tests/q/test_*.q` | `closed` | 14 files moved, runner retargeted, 19 doc references fixed. `nsList` untouched (keys on namespaces, not paths). The `scripts/test.sh` dispatcher was deliberately deferred here — a one-option dispatcher is worse than none — and **built in #88**, once E-21's three lanes made it earn its place |
 | D6 | Generated qDoc HTML committed under `docs/`; canonical regenerates into `build/docs/` | `closed` | Output retargeted to `build/docs/`, 15 generated files removed from git, `build/` ignored. **Also defused a `rm -rf docs` in `gen-docs.sh`** that would have deleted all 13 hand-written documents. GitHub Pages is not configured (404), so nothing was serving from `docs/` |
 | D7 | Per-package `pyproject.toml`/`uv.lock`; canonical consolidates to one root Python project | `closed` | uv **workspace** at the repo root: one lockfile, one `.venv` (1.1 GB → 383 MB), shared ruff/pytest config, ruff pinned to pre-commit's own version. Members keep their names and the `torq-demo` script. Safe by inspection — zero cross-package imports, every shared constraint an open lower bound |
-| D8 | `docs/torq-demo.md`; canonical supersedes with `docs/guides/torq-demo.md` | `wontfix` | **Closed by A-03.** Canonical's layout is no longer a target; this tree's docs taxonomy is decided here on its own merits (J-05 remains a live question in #78, about *this* tree's docs, not about matching another's) |
+| D8 | `docs/guides/torq-demo.md`; canonical supersedes with `docs/guides/torq-demo.md` | `wontfix` | **Closed by A-03.** Canonical's layout is no longer a target; this tree's docs taxonomy is decided here on its own merits (J-05 remains a live question in #78, about *this* tree's docs, not about matching another's) |
 | D9 | No `src/etl/` at all; canonical has `core/` (14 files) and `workers/` (7) | `open` | **Unblocked and in progress.** Reimplementation from the requirements, not a port. `src/etl/core/` now holds 4 of canonical's 14: `backfill_state.q` (#85, E-01..E-05), `coverage.q` (#86, E-06..E-11), `worker_config.q` and `worker_runtime.q` (#87, E-13..E-17). #88 adds `tests/lib/etl_test_doubles.q`, the `q-backfill-process` and `smoke` lanes and `scripts/test.sh` (E-18..E-21). `src/etl/core/source_contract.q` adds E-12, `src/etl/sources/demo_deals.q` a generic analogue source (A-04), and `src/etl/workers/demo_deals_backfill.q` the first real bounded worker. Seven of canonical's `core/` 14 — the last two being `continuous_state.q` (E-03's poll-and-cursor pattern) and `coercion.q` (E-05's shared text-to-type layer) — one source, one worker. The file COUNT will not converge — this tree is its own lineage per F-04, so only capability drift is meaningful. **E-05 is now answered** (#106), so a worker over a real source is no longer blocked on the coercion trap list; it is blocked only on having a real source to point at, which A-04 rules out for this public tree. |
 | D10 | No `python/uqf_airflow_provider/`; canonical has the full package | `open` | **Unblocked: #55 is closed** (`gh issue view 55` → CLOSED), and the status-file mechanism it chose is built on both sides. `python/uqf_airflow_provider/` holds a status reader, an E-15 translator and a lazily-imported sensor. Proved by `uv run pytest -q` (322 passing, 14 this package's) and by `import uqf_airflow_provider.sensor` succeeding with **Airflow not installed** — deliberately not a dependency (F-22/F-23), so the demo needs no Airflow. What remains is DAG-level work that only runs inside a real Airflow environment |
 | D11 | **The one row that survives the closure, re-scoped:** `etl_coverage` schema assumed, not verified. Now **16 files** rest on the assumed shape (8 source, 8 test), up from `queries.py`/`catalog.py` alone — and `.qcov.require_schema`, the guard meant to refuse a wrong-shaped ledger, is **defined and tested but called from no live path** | `blocked` | #60, still open with no `meta` output posted back. `scripts/verify_coverage_schema.q` and `.qcov.require_schema` are built and tested, but only a machine that can reach the real ledger can discharge it: `QHOME=~/.kx ~/.kx/bin/q scripts/verify_coverage_schema.q -target host:port`. The requirements mention a **partition key** absent from the assumed shape, so the untested direction reports a gap-ridden range as complete |
@@ -127,7 +127,7 @@ What the ledger got right while it was open, and is worth keeping:
   table. Counters are recomputed from the table by hand, every time.
 
 Capability gaps are now ordinary GitHub issues. Design decisions live in
-`docs/decisions.md`, derived from the question bank by
+`docs/decisions/README.md`, derived from the question bank by
 `scripts/build_decision_log.py` and reconciled into the issue bodies by
 `scripts/reconcile_question_bodies.py` — which together answer the question
 this ledger could not: not "how far are we from canonical" but "what have we

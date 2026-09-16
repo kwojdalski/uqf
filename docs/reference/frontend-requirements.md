@@ -144,7 +144,7 @@ All five of this document's open questions were answered on 2026-09-15, each on
 its own issue, and each issue is closed. Each bullet keeps the question before
 the arrow, because the reason it was worth asking is the reason the answer costs
 what it does.
-Machine-derived index: [`docs/decisions.md`](decisions.md).
+Machine-derived index: [`docs/decisions/README.md`](decisions.md).
 
 - **FE-19 — which audience is in scope?** → **both**, ops-monitoring *and*
   desk-facing analytics ([#53]). Because B0's query layer was built

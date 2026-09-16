@@ -1,5 +1,5 @@
 """cli.py - Typer CLI for the vendored TorQ Finance Starter Pack demo (see
-docs/torq-demo.md). Bridges lib/torq + lib/torq-finance-starter-pack
+docs/guides/torq-demo.md). Bridges lib/torq + lib/torq-finance-starter-pack
 without editing either vendored tree.
 
 All the actual bootstrapping/config logic lives in core.py, shared with
@@ -292,7 +292,7 @@ def new_process(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     recipes - "FX quotes feed" and "cross-rate reprice ETL" are fully
     working (answer a few prompts, no q editing needed), "blank
     publisher"/"blank subscriber" write a Stage-1-only skeleton .q file for
-    q/kdb+ users to finish by hand (see docs/torq-demo.md). Registers
+    q/kdb+ users to finish by hand (see docs/guides/torq-demo.md). Registers
     whatever gets built and optionally starts it to verify it's alive.
     """
     try:

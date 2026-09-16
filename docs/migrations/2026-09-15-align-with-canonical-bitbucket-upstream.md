@@ -85,9 +85,9 @@ reviewable diff and `git checkout --` cannot restore anything. The same is true 
 `scripts/torq_posbook_etl.q` (120 lines) and `scripts/torq_fx_trades_feed.q` (52 lines). These three
 files exist **only** in the working tree. Losing them loses them.
 
-### Correction 5: `docs/torq/` already exists locally
+### Correction 5: `docs/integrations/torq/` already exists locally
 
-It is listed as an absent upstream-only subsystem, but `docs/torq/README.md` is present and modified.
+It is listed as an absent upstream-only subsystem, but `docs/integrations/torq/README.md` is present and modified.
 `docs/{guides,architecture,reference,decisions,integrations}` are genuinely absent.
 
 ---
@@ -337,8 +337,8 @@ Steps 0–2 are the only ones startable today. Steps 3+ are gated on the mirror 
 
 - **Precondition:** Step 4 green; the crypto-fills patch from Step 0 kept separate.
 - **Action:** Apply the `cli.py` / `core.py` / `torq_demo_mcp.py` crypto-fills changes and the
-  `docs/torq-demo.md` + `docs/torq/README.md` edits to the new layout. Note that upstream supersedes
-  `docs/torq-demo.md` with `docs/guides/torq-demo.md`, so the doc edits must be re-targeted or they
+  `docs/guides/torq-demo.md` + `docs/integrations/torq/README.md` edits to the new layout. Note that upstream supersedes
+  `docs/guides/torq-demo.md` with `docs/guides/torq-demo.md`, so the doc edits must be re-targeted or they
   will be applied to a file that is no longer the live one. This work is **independent of the
   migration** and could equally be landed first on the old branch and cherry-picked.
 - **Gate:** `cd python/torq_orchestrator && uv run pytest` (note: `pytest` is not on `PATH` — only

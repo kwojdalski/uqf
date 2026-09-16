@@ -85,7 +85,7 @@ uses for "no quote yet" cases.
 ## Unblocked by the event tape (was: explicitly out of scope)
 
 **The event tape now exists** (issue #46, 2026-09-16): shape and contract in
-`docs/event-tape.md`, ingested as the `demo_events` source, with
+`docs/architecture/event-tape.md`, ingested as the `demo_events` source, with
 `action` in `` `add`cancel`trade ``, an aggressor `side` and a per-event
 `size`. Two of the features below are implemented; the rest are ordinary
 function work over a table that is now there.
@@ -130,4 +130,4 @@ The tape is deliberately a **superset of the `trades` shape**
 consumes, so a tape filtered to `` action=`trade `` is trade-shaped and the
 existing markout family works on it unchanged. The one divergence is `price`
 rather than `trade_price`, because an add or a cancel has a price and is not
-a trade - see `docs/event-tape.md`.
+a trade - see `docs/architecture/event-tape.md`.

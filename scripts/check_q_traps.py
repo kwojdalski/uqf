@@ -49,6 +49,13 @@ EXCLUDED_PREFIXES = ("lib/", "build/")
 #: plausibly reach for, and flagging `count` or `select` as a parameter name
 #: would be noise. Every name here has either already bitten this repository
 #: or is an obvious candidate for a window/table/config variable.
+#: .
+#: The second block was added after `prior` - a plausible name for a
+#: previous value - aborted heartbeat.q at load time with a bare `'prior`.
+#: That was the EIGHTH collision here, and the list had seven of them. So
+#: every name below was checked against `key `.q` in a live KDB-X rather
+#: than recalled: adding one that is NOT reserved would make this rule
+#: report a correct name, which is how a checker earns being ignored.
 RISKY_PARAM_NAMES = frozenset(
     {
         "desc",
@@ -139,6 +146,18 @@ RISKY_PARAM_NAMES = frozenset(
         "update",
         "wsum",
         "wavg",
+        "prior",
+        "deltas",
+        "ratios",
+        "differ",
+        "sums",
+        "prds",
+        "rank",
+        "except",
+        "inter",
+        "cross",
+        "ceiling",
+        "xcols",
     }
 )
 
@@ -153,10 +172,31 @@ class Finding:
 
 
 def _tracked_q_files() -> list[Path]:
-    out = subprocess.run(
+    """Every `.q` file git knows about, TRACKED OR NOT YET ADDED.
+
+    `git ls-files` alone was the original implementation, and it skipped
+    exactly the files that need checking most. A brand-new module is where a
+    reserved-name collision or a `/`-only line is most likely, and it is
+    unstaged for the whole time it is being written - so the author gets no
+    signal until after `git add`, by which point they have already debugged
+    the symptom by hand. `heartbeat.q` was written, hit `'prior` at load
+    time, and reported clean twice before this was noticed.
+
+    `--others --exclude-standard` adds untracked files while still honouring
+    .gitignore, so build output and vendored trees stay out.
+    """
+    tracked = subprocess.run(
         ["git", "ls-files", "*.q"], cwd=REPO, capture_output=True, text=True, check=True
     ).stdout.split()
-    return [REPO / p for p in out if not p.startswith(EXCLUDED_PREFIXES)]
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "*.q"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    paths = dict.fromkeys(tracked + untracked)
+    return [REPO / p for p in paths if not p.startswith(EXCLUDED_PREFIXES)]
 
 
 def _strip_comments(line: str) -> str:
@@ -809,8 +849,7 @@ def main() -> int:
         return 1
 
     print(
-        f"check_q_traps: {len(files)} tracked .q file(s) clean "
-        f"({len(LINE_RULES) + len(TEXT_RULES)} rules)"
+        f"check_q_traps: {len(files)} .q file(s) clean ({len(LINE_RULES) + len(TEXT_RULES)} rules)"
     )
     return 0
 

@@ -1,7 +1,7 @@
 / coverage.q - the append-only completeness ledger and its interval
 / arithmetic (.qcov).
 / .
-/ Implements requirements ETL-07 to ETL-11 of docs/etl-framework-requirements.md.
+/ Implements requirements ETL-07 to ETL-11 of docs/reference/etl-framework-requirements.md.
 / Those IDs are the REQUIREMENTS document's; the question bank uses an
 / overlapping E-nn scheme for source-adapter questions, so question-bank
 / answers are named as such below.

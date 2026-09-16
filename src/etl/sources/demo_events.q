@@ -1,7 +1,7 @@
 / demo_events.q - a generic analogue of a venue order/trade event tape
 / (.qsevt).
 / .
-/ The ingestion half of issue #46. Shape and rationale in docs/event-tape.md;
+/ The ingestion half of issue #46. Shape and rationale in docs/architecture/event-tape.md;
 / this file is the ETL-12 source declaration for it.
 / .
 / SYNTHETIC BY DESIGN (A-04)
@@ -18,7 +18,7 @@
 / An OMS lifecycle tape (new/ack/fill/cancel/reject over our own orders)
 / unblocks execution-quality metrics instead, which is a different set and
 / largely already served by hit_ratio_by and markout_at_horizons. See
-/ docs/event-tape.md for the comparison.
+/ docs/architecture/event-tape.md for the comparison.
 
 \d .qsevt
 
@@ -62,7 +62,7 @@ query:{[h;range_from;range_to]
 / ------------------------------------------------------------ THE FIXTURE
 
 / A deterministic synthetic tape, ordered by time (the sortedness contract
-/ in docs/event-tape.md).
+/ in docs/architecture/event-tape.md).
 / .
 / Deliberately shaped so the two implemented features have something to
 / measure rather than degenerate:

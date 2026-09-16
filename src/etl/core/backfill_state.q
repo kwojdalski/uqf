@@ -1,6 +1,6 @@
 / backfill_state.q - the bounded worker lifecycle contract (.qbfstate).
 / .
-/ Implements requirements ETL-01 to ETL-05 of docs/etl-framework-requirements.md.
+/ Implements requirements ETL-01 to ETL-05 of docs/reference/etl-framework-requirements.md.
 / Note those IDs belong to the REQUIREMENTS document; the question bank uses
 / an overlapping E-nn scheme for a different set of questions about source
 / adapters. Where a question-bank answer is cited below it is named as such.

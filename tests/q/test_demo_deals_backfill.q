@@ -249,6 +249,37 @@ test_a_forward_cursor_is_returned_unchanged:{[t]
     .qunit.assertEquals[.qbw.advanced_to[`demo_deals_backfill;.ddbftest.d 2;.ddbftest.d 3];
         .ddbftest.d 3;"the guard is a pass-through on the legitimate path"]};
 
+/ --- the heartbeat is actually written (K-04) -----------------------------
+
+/ .qhb's own tests cover the table's behaviour. These two prove the worker
+/ loop CALLS it - which every one of those tests would pass without.
+test_a_real_run_beats_once_per_window:{[t]
+    `worker_heartbeat set 0#value .qhb.attach[];
+    .qddbf.init[.ddbftest.spec_for[`hb1;1;4]];
+    r:.qddbf.run[];
+    beats:first exec windows from .qhb.report[] where worker=`demo_deals_backfill;
+    .qunit.assertEquals[beats;"j"$r`windows_completed;
+        "the heartbeat's window count matches the run's own completed count"]};
+
+test_a_finished_run_does_not_read_as_wedged:{[t]
+    / Without the terminal beat a completed worker keeps its last mid-window
+    / state and ages into looking stuck - which is the exact failure the
+    / status file already has and this table exists to avoid.
+    `worker_heartbeat set 0#value .qhb.attach[];
+    .qddbf.init[.ddbftest.spec_for[`hb2;1;4]];
+    r:.qddbf.run[];
+    .qunit.assertEquals[first exec state from .qhb.report[] where worker=`demo_deals_backfill;
+        r`state;"the last beat carries the run's terminal state"]};
+
+test_an_idle_run_still_beats:{[t]
+    / "Ran, found no work" must not look like a worker that stopped beating.
+    `worker_heartbeat set 0#value .qhb.attach[];
+    .qddbf.init[.ddbftest.spec_for[`hb3;1;4]];
+    .qddbf.run[];
+    r:.qddbf.run[];
+    .qunit.assertEquals[first exec state from .qhb.report[] where worker=`demo_deals_backfill;
+        `idle;"an idle second run beats idle rather than going quiet"]};
+
 test_a_zero_width_is_refused:{[t]
     .qunit.assertError[{.qbw.define[`zero_width;x]};
         `ns`source`dataset`width!(`.qddbf;`demo_deals;`something_else;0D00:00);

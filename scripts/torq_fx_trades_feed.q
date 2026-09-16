@@ -1,5 +1,5 @@
 / torq_fx_trades_feed.q - a synthetic fills generator for the TorQ-
-/ Finance-Starter-Pack demo (see docs/torq-demo.md), alongside
+/ Finance-Starter-Pack demo (see docs/guides/torq-demo.md), alongside
 / torq_fx_feed.q's synthetic quotes. Publishes one random client fill per
 / tick into a new `trades` table - independent of torq_fx_feed.q's own
 / spot walk (same reasoning torq_fx_feed.q gives for not reading real

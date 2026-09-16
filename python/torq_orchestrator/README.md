@@ -3,7 +3,7 @@
 Bridges the two vendored TorQ trees at the repo root - `lib/torq/` (the
 production framework) and `lib/torq-finance-starter-pack/` (a layered
 reference app built on top of it) - into a runnable demo, without editing
-or writing into either. Full writeup: [docs/torq-demo.md](../../docs/torq-demo.md)
+or writing into either. Full writeup: [docs/guides/torq-demo.md](../../docs/guides/torq-demo.md)
 at the repo root.
 
 Standalone package on purpose: this is process orchestration, not q
@@ -173,7 +173,7 @@ torq-demo logs -f --level WARNING
 `~/github_projects/cryptorust` checkout's own `kdb-market-data-recorder`
 Rust binary, pointed at this demo's `stp1` - proving the kdb+ infra here
 isn't TorQ/q-specific, any process that speaks kdb+ IPC can publish onto
-it. See `docs/torq-demo.md`'s own section for the full picture (schema,
+it. See `docs/guides/torq-demo.md`'s own section for the full picture (schema,
 credentials, `$CRYPTORUST_ROOT`).
 
 ## MCP server

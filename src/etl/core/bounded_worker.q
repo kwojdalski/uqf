@@ -142,6 +142,11 @@ init:{[worker;run_spec]
     / our own assumption.
     .qcov.attach[];
 
+    / Same reasoning one table over (K-04): create it and verify its shape
+    / here, in a live path, rather than leaving a checker that never fires.
+    .qhb.attach[];
+    .qhb.beat[worker;`starting];
+
     .qbfstate.acquire_lock worker;
 
     / Live only when a credential is configured. An absent credential is an
@@ -245,9 +250,11 @@ run:{[worker]
         / "ran, found no work" is a SUCCESS, not a failure (C-07). An
         / orchestrator that cannot tell them apart retries a successful
         / no-op forever.
+        .qhb.beat[worker;`idle];
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
     write_state[worker;`progress;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;cursor)];
+    .qhb.beat[worker;`running];
     do_window[worker] each windows;
     p:read_state[worker;`progress];
     result:`state`windows_completed`windows_failed`rows_published`cursor!
@@ -256,6 +263,11 @@ run:{[worker]
     / one summary line per run at INF - the aggregate a fleet view wants,
     / without the per-window noise that stays at DBG.
     .qlog.info[worker;"run finished";result];
+    / The terminal beat, so a finished worker does not read as wedged. The
+    / per-window beat inside do_window is the one that catches a worker
+    / stuck mid-window, which is the case a status file cannot show - it
+    / says `running` and keeps saying it.
+    .qhb.beat[worker;result`state];
     result}
 
 / Private: one window, end to end. Accumulates into the worker's own
@@ -288,6 +300,7 @@ do_window:{[worker;w]
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];
           `cursor;advanced_to[worker];w`range_to]];
+    .qhb.beat_window[worker];
     1b}
 
 / Private: the new cursor, refusing any move that is not strictly forward.

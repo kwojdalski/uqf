@@ -44,6 +44,7 @@
 \l src/etl/core/log.q
 \l src/etl/core/coercion.q
 \l src/etl/core/coverage.q
+\l src/etl/core/heartbeat.q
 \l src/etl/core/dag.q
 \l src/etl/generated/pipeline_dag.q
 \l src/etl/core/worker_config.q

@@ -73,7 +73,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/check_etl_layering.py --check
       - name: Check the environment reference lists every variable
-        # C-04: docs/environment.md is the one operator-facing list. It is
+        # C-04: docs/reference/environment.md is the one operator-facing list. It is
         # hand-written because "optional, and here is what unset does" is a
         # judgement, and checked in both directions because a hand-written
         # reference otherwise ends up describing a previous version of the

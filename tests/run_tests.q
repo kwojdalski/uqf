@@ -48,6 +48,7 @@
 \l tests/q/test_man_registry.q
 \l tests/q/test_dag.q
 \l tests/q/test_docstring_examples.q
+\l tests/q/test_heartbeat.q
 \l tests/q/test_backfill_state.q
 \l tests/q/test_coverage.q
 \l tests/q/test_log.q
@@ -65,7 +66,7 @@
 / The namespace list is unchanged by the tests/q/ move: it keys on test
 / NAMESPACES, not file paths, and the move deliberately left namespaces
 / alone - the same choice made for src/ (see src/init.q).
-nsList:`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.dagtest`.egtest`.backfillstatetest`.coveragetest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest;
+nsList:`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.dagtest`.egtest`.hbtest`.backfillstatetest`.coveragetest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;

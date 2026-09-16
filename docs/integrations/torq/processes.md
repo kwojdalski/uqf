@@ -6,7 +6,7 @@
 
 Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 `process.csv`. For how to start, stop and query the stack see
-[docs/torq-demo.md](../torq-demo.md); for the topology diagrams see
+[docs/guides/torq-demo.md](../torq-demo.md); for the topology diagrams see
 [README.md](README.md).
 
 **23 vendored processes** plus **9 uqf processes** — 32 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
