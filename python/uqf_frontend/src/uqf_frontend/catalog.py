@@ -51,12 +51,6 @@ class Table:
     name: str
     columns: dict[str, QType]
     description: str
-    #: Set when this table's column list is inferred rather than read off a
-    #: writer we control - currently only etl_coverage, per #60. Surfaced so
-    #: a consumer can tell "this is the shape" from "this is our best
-    #: understanding of the shape", which are very different claims to make
-    #: to someone deciding whether a range is complete.
-    shape_is_assumed: bool = False
     #: Columns a caller may filter on - everything except vector-valued ones.
     filterable: frozenset[str] = field(init=False)
 
@@ -134,32 +128,20 @@ TABLES: dict[str, Table] = {
         ),
         Table(
             name="etl_coverage",
-            # Shape ASSUMED, not verified - issue #60. The requirements
-            # describe coverage "by dataset, partition key, and time range"
-            # and partition key is NOT here. If the real ledger carries one,
-            # a query filtering on dataset and version alone aggregates
-            # across partitions and reports a gap-ridden range as complete.
+            # The shape is DECIDED, not assumed (#60, closed 2026-09-16).
+            # This tree is the primary lineage (A-03) so there is no other
+            # schema to verify against, and there is no partition key
+            # because coverage has no partition dimension to record - see
+            # coverage.q's header for the reasoning and for what would
+            # change it.
             #
-            # What actually protects this today, stated precisely - an
-            # earlier version of this comment claimed `.qcov.require_schema`
-            # "refuses a differently-shaped ledger at init", and that was
-            # NOT TRUE: the function exists and is tested, but nothing on a
-            # live path calls it. A comment asserting a guard that does not
-            # run is worse than no comment, because it stops someone adding
-            # the real one.
-            #
-            #   ACTIVE:  test_catalog_drift.py cross-checks these columns
-            #            against coverage.q, so the catalog and the q writer
-            #            cannot drift apart even while the shape is
-            #            unconfirmed.
-            #   MANUAL:  scripts/verify_coverage_schema.q settles the shape
-            #            in one command, but only when someone runs it.
-            #   DORMANT: .qcov.require_schema would turn the silent wrong
-            #            answer into a loud refusal, and should be called
-            #            from a worker's init when it attaches to a ledger
-            #            it did not create. Nothing calls it yet, so a
-            #            worker meeting a partitioned ledger is not stopped.
-            shape_is_assumed=True,
+            # Three things keep this entry honest, and all three now run:
+            #   test_catalog_drift.py cross-checks these columns against
+            #     coverage.q on every commit;
+            #   .qcov.require_schema refuses a differently-shaped ledger,
+            #     reached from .qbw.init via .qcov.attach;
+            #   .qbw.define refuses two workers claiming one dataset, which
+            #     is the shape a missing partition dimension would take.
             description="Append-only completeness ledger: which [range_from, range_to) "
             "window of which dataset is published, at which source_version. A window "
             "with rows_published=0 still counts as covered - that is what distinguishes "

@@ -1,17 +1,22 @@
-/ verify_coverage_schema.q - settles issue #60 in one command.
+/ verify_coverage_schema.q - check a coverage ledger against the shape
+/ src/etl/core/coverage.q declares.
 / .
-/ src/etl/core/coverage.q's schema is ASSUMED. It was inferred from what
-/ ETL-07/ETL-08/ETL-09 require plus the frontend requirements' description of
-/ coverage "by dataset, partition key, and time range" - and PARTITION KEY is
-/ not in the assumed shape. Four files now depend on that assumption:
-/ coverage.q, worker_runtime.q, tests/q/test_coverage.q and
-/ uqf_frontend/queries.py's COVERAGE program.
+/ Written to settle issue #60, which asked whether the assumed shape matched
+/ a canonical one. That question is closed: A-03 made this tree the primary
+/ lineage and A-02 froze canonical, so the shape coverage.q declares IS the
+/ schema and there is nothing else to compare it to.
 / .
-/ The dangerous direction is specific. If the real table carries a partition
-/ key, a query filtering only on dataset and source_version aggregates across
-/ partitions, so a range covered in ONE partition and empty in the others is
-/ reported COMPLETE. A consumer then reads a gap-ridden range believing it is
-/ whole - and nothing errors, because every row it does find is valid.
+/ What the script is still for is DRIFT: a ledger some other process built
+/ to a different shape. Every read in coverage.q filters on dataset and
+/ source_version, so an extra column that distinguishes rows - a partition
+/ key is the obvious one - makes those reads aggregate across it, and a
+/ range covered for one value of it reports as COMPLETE for all of them.
+/ Nothing errors, because every row found is valid. That is the failure this
+/ catches.
+/ .
+/ .qcov.require_schema is the same check inside a worker's init, reached via
+/ .qcov.attach. This is the standalone form, for looking at a ledger without
+/ starting a worker.
 / .
 / Usage, on a machine that can reach the real ledger:
 / .
@@ -108,7 +113,7 @@ if[count extra except partition_like;
 
 -1 "=================== verdict ===================";
 -1 $[0=problems;
-     "MATCH - the assumed schema is correct. Close #60 and drop the ASSUMED note in coverage.q.";
+     "MATCH - the ledger agrees with the shape coverage.q declares.";
      "MISMATCH - ",string[problems]," problem class(es) above. Paste this whole output into #60."];
 -1 "===============================================";
 exit $[0=problems; 0; 1];
