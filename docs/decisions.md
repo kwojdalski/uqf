@@ -15,7 +15,7 @@ and the question bank's backfill area is numbered `D-01..D-12` - one file
 holding both would put `D8` and `D-08` in adjacent tables meaning unrelated
 things.
 
-**85 answered, 25 still open** across 15 areas.
+**98 answered, 12 still open** across 15 areas.
 
 ## Answered
 
@@ -44,22 +44,29 @@ things.
 | `C-08` | ETL worker runtime & config | through TorQ's `.lg`, so wherever `.lg` is configured to put it — never a table | [#71](../../issues/71) | 2026-09-16 |
 | `C-09` | ETL worker runtime & config | one instance per worker, enforced by a lock file | [#71](../../issues/71) | 2026-09-15 |
 | `D-02` | Backfill semantics | overlap and dedupe on a natural key | [#72](../../issues/72) | 2026-09-15 |
+| `D-04` | Backfill semantics | the historical bug is unrecoverable, the invariant is documented and load-bearing | [#72](../../issues/72) | 2026-09-16 |
+| `D-06` | Backfill semantics | neither — there is no five-day default here, and the window is always explicit | [#72](../../issues/72) | 2026-09-16 |
 | `D-07` | Backfill semantics | row cap and wall-clock cap, whichever binds first | [#72](../../issues/72) | 2026-09-15 |
 | `D-08` | Backfill semantics | no publication, no checkpoint — retry the whole window | [#72](../../issues/72) | 2026-09-15 |
 | `D-09` | Backfill semantics | strictly oldest-first, and it matters to correctness — which is why it is now enforced | [#72](../../issues/72) | 2026-09-16 |
 | `D-10` | Backfill semantics | `state`idle`, all counters zero, and the cursor unchanged | [#72](../../issues/72) | 2026-09-16 |
 | `D-11` | Backfill semantics | append with `source_version` | [#72](../../issues/72) | 2026-09-15 |
+| `D-12` | Backfill semantics | no escaping contract, because nothing is ever concatenated into query text | [#72](../../issues/72) | 2026-09-16 |
 | `E-01` | External sources & the source contract | a callback dict of four operations | [#73](../../issues/73) | 2026-09-15 |
 | `E-02` | External sources & the source contract | yes — registration is a declaration, and core never changes | [#73](../../issues/73) | 2026-09-16 |
+| `E-03` | External sources & the source contract | neither file exists, and the layering question was answered a different way by E-01 | [#73](../../issues/73) | 2026-09-16 |
 | `E-04` | External sources & the source contract | fake, generic file source, *and* a skippable ODBC adapter | [#73](../../issues/73) | 2026-09-15 |
 | `E-05` | External sources & the source contract | answered and built | [#73](../../issues/73) | 2026-09-15 |
 | `E-06` | External sources & the source contract | connection per run, opened at init; retry is in-attempt and transport-only | [#73](../../issues/73) | 2026-09-16 |
 | `E-07` | External sources & the source contract | environment only, no file, no vault — built in #99 | [#73](../../issues/73) | 2026-09-16 |
 | `E-08` | External sources & the source contract | parameterise where the driver allows, one escape function otherwise | [#73](../../issues/73) | 2026-09-15 |
 | `E-09` | External sources & the source contract | answered by A-04 | [#73](../../issues/73) | 2026-09-15 |
+| `E-10` | External sources & the source contract | `hdb_stats.q` does not exist here — dissolved | [#73](../../issues/73) | 2026-09-16 |
 | `E-11` | External sources & the source contract | introspection verifies a declared shape, it does not discover one | [#73](../../issues/73) | 2026-09-16 |
 | `F-03` | Coverage, markout & attribution | yes, coverage drives it — the planner is `.qbw.plan` | [#74](../../issues/74) | 2026-09-16 |
+| `F-05` | Coverage, markout & attribution | neither file exists here, and what replaced the split is a better answer than the split | [#74](../../issues/74) | 2026-09-16 |
 | `F-06` | Coverage, markout & attribution | the attribution model is `cross_markout_decomp`'s, verified by its sum-to-total test; canonical's fix history is unrecoverable | [#74](../../issues/74) | 2026-09-16 |
+| `F-07` | Coverage, markout & attribution | 1s and 10s in the one live process, hardcoded there — a function parameter everywhere else, and not per-source configurable | [#74](../../issues/74) | 2026-09-16 |
 | `F-08` | Coverage, markout & attribution | `core/` is framework, `sources/` and `workers/` are declarations | [#74](../../issues/74) | 2026-09-16 |
 | `F-19` | - | both audiences | [#53](../../issues/53) | 2026-09-15 |
 | `F-20` | - | option 2 — one service credential, authorisation in the API layer | [#54](../../issues/54) | 2026-09-15 |
@@ -68,11 +75,15 @@ things.
 | `F-23` | - | answered together with #56: local demo, single host | [#57](../../issues/57) | 2026-09-15 |
 | `G-02` | Airflow integration | answered by #68 and #93, not by discussion | [#75](../../issues/75) | 2026-09-15 |
 | `G-03` | Airflow integration | the idempotency key is the coverage window, not the task or the DAG | [#75](../../issues/75) | 2026-09-16 |
+| `G-06` | Airflow integration | not a real provider package — a translation library, deliberately, and it says so | [#75](../../issues/75) | 2026-09-16 |
 | `G-08` | Airflow integration | yes — `GET /ops/backfill`, and the honest limit is what q never saw | [#75](../../issues/75) | 2026-09-16 |
 | `G-09` | Airflow integration | strictly optional — and proved, not asserted | [#75](../../issues/75) | 2026-09-16 |
 | `H-01` | TorQ orchestration & process registry | overrides last, vendored file never edited | [#76](../../issues/76) | 2026-09-16 |
+| `H-02` | TorQ orchestration & process registry | there is no process group here, and `all` plus a name list is what exists instead | [#76](../../issues/76) | 2026-09-16 |
+| `H-03` | TorQ orchestration & process registry | there are no glob selectors, and an unknown name is silently dropped | [#76](../../issues/76) | 2026-09-16 |
 | `H-05` | TorQ orchestration & process registry | the `Pipeline` registry IS the source of truth; the CSV is generated from it | [#76](../../issues/76) | 2026-09-16 |
 | `H-06` | TorQ orchestration & process registry | answered by #66's Pipeline registry | [#76](../../issues/76) | 2026-09-15 |
+| `H-08` | TorQ orchestration & process registry | there is no `monitor.py`, and tmux appears nowhere in this repository | [#76](../../issues/76) | 2026-09-16 |
 | `H-09` | TorQ orchestration & process registry | role plus a 1-based instance digit, lower-case, no separator — and it is now enforced | [#76](../../issues/76) | 2026-09-16 |
 | `I-01` | Testing strategy & gates | seeded, and enforced by a test rather than a comment | [#77](../../issues/77) | 2026-09-16 |
 | `I-04` | Testing strategy & gates | the question's file does not exist here, and the suite is seeded | [#77](../../issues/77) | 2026-09-16 |
@@ -100,8 +111,10 @@ things.
 | `N-02` | Naming & conventions | yes, `lower_snake_case` everywhere, and it is audited rather than assumed | [#82](../../issues/82) | 2026-09-16 |
 | `N-03` | Naming & conventions | mixed, and two live table names differ only by a trailing `s` | [#82](../../issues/82) | 2026-09-16 |
 | `N-04` | Naming & conventions | the prefixes carry no enforced meaning — the directories do, and F-08 replaced them | [#82](../../issues/82) | 2026-09-16 |
+| `N-05` | Naming & conventions | unknowable, and the rules that matter here are written down and audited instead | [#82](../../issues/82) | 2026-09-16 |
 | `O-01` | Tooling, hooks & agents | they no longer exist, so there is nothing to arbitrate | [#83](../../issues/83) | 2026-09-16 |
 | `O-02` | Tooling, hooks & agents | `.claude/agents/` wins, and one file cannot serve both — this is D3's false equivalence | [#83](../../issues/83) | 2026-09-16 |
+| `O-03` | Tooling, hooks & agents | there is no `AGENTS.md` here, and adding one now would create a second instruction file with no reader | [#83](../../issues/83) | 2026-09-16 |
 | `O-04` | Tooling, hooks & agents | unknowable, and the overlap question has been answered a better way | [#83](../../issues/83) | 2026-09-16 |
 | `O-05` | Tooling, hooks & agents | fourteen here, confirmed — and the comparison is dissolved by A-02/A-03 | [#83](../../issues/83) | 2026-09-16 |
 | `P-02` | Process & provenance | the maintainer arbitrates; Claude proposes with reasoning | [#84](../../issues/84) | 2026-09-16 |
@@ -119,30 +132,17 @@ recorded the substance, that is named too.
 
 | ID | Area | State | Question | Issue |
 |---|---|---|---|---|
-| `D-04` | Backfill semantics | `shaping` | What was the ordering bug behind `Load backfill checkpoint before completion check`, and what is the invariant now? | [#72](../../issues/72) |
-| `D-12` | Backfill semantics | `shaping` | Is there a general symbol quoting and escaping contract, and where does it live? | [#72](../../issues/72) |
-| `E-03` | External sources & the source contract | `shaping` | What is the layering between `external_rdb.q` and `backfill_source_rdb.q`? | [#73](../../issues/73) |
-| `F-05` | Coverage, markout & attribution | `shaping` | What splits `markout.q` from `markout_backfill.q` — live versus historical? | [#74](../../issues/74) |
 | `G-04` | Airflow integration | `shaping` | Where does the workflow-to-process mapping live, and which side is the source of truth? | [#75](../../issues/75) |
 | `G-05` | Airflow integration | `shaping` | Does Airflow reach q over IPC, REST, or by shelling out, and how does it authenticate? | [#75](../../issues/75) |
 | `G-07` | Airflow integration | `shaping` | What happens if a DAG is triggered while the previous run is still in flight? | [#75](../../issues/75) |
-| `H-02` | TorQ orchestration & process registry | `shaping` | What is a process group, and which operations accept one — start, stop, query, logs? | [#76](../../issues/76) |
 | `H-04` | TorQ orchestration & process registry | `shaping` | Does every query now route through the gateway, and what is the fallback when it is down? | [#76](../../issues/76) |
 | `H-07` | TorQ orchestration & process registry | `shaping` | What lives in `config/backfill.yaml` versus `config/endpoints.yaml`, and how do they relate to `process.csv`? | [#76](../../issues/76) |
 | `J-05` | Documentation & generation | `shaping` | What belongs in `guides/` versus `architecture/` versus `reference/` versus `decisions/` versus `integrations/`? | [#78](../../issues/78) |
 | `K-04` | Observability & diagnostics | `shaping` | Is there a per-worker heartbeat or metrics table, and does monitoring read it? | [#79](../../issues/79) |
-| `N-05` | Naming & conventions | `shaping` | What rules did the upstream `q-naming-expert` agent encode? | [#82](../../issues/82) |
 | `P-01` | Process & provenance | `shaping` | Should each answered question here become an ADR in `docs/decisions/`? | [#84](../../issues/84) |
 | `B-04` | Repository structure | `deferrable` | Is `src/execution/execution.q` a single-file directory for symmetry, or does something else join it? | [#70](../../issues/70) |
-| `D-06` | Backfill semantics | `deferrable` | Is “previous five days” a business rule or an arbitrary default, and is it per-source configurable? | [#72](../../issues/72) |
-| `E-10` | External sources & the source contract | `deferrable` | What does `hdb_stats.q` measure, and who consumes it? | [#73](../../issues/73) |
-| `F-07` | Coverage, markout & attribution | `deferrable` | What horizons are standard, and are they configurable per source? | [#74](../../issues/74) |
-| `G-06` | Airflow integration | `deferrable` | Is `uqf_airflow_provider` a real provider package with entry points and connection types, or just DAG code in a package shape? | [#75](../../issues/75) |
-| `H-03` | TorQ orchestration & process registry | `deferrable` | How do glob and group selectors resolve ambiguity, and what happens on no match? | [#76](../../issues/76) |
-| `H-08` | TorQ orchestration & process registry | `deferrable` | Is tmux a hard dependency of `monitor.py`, and what is the non-tmux path? | [#76](../../issues/76) |
 | `J-06` | Documentation & generation | `deferrable` | Does `decisions/` hold ADRs, with what template, and are they immutable once accepted? | [#78](../../issues/78) |
 | `J-08` | Documentation & generation | `deferrable` | Who is the audience for each docs area — desk users, new developers, or operators? | [#78](../../issues/78) |
-| `O-03` | Tooling, hooks & agents | `deferrable` | What is `AGENTS.md`'s role relative to `CLAUDE.md`? | [#83](../../issues/83) |
 | `P-04` | Process & provenance | `deferrable` | What is the cadence for re-describing upstream features as they continue to land? | [#84](../../issues/84) |
 
 ## Cited in docs, no record on GitHub
