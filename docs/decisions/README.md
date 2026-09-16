@@ -15,7 +15,7 @@ and the question bank's backfill area is numbered `D-01..D-12` - one file
 holding both would put `D8` and `D-08` in adjacent tables meaning unrelated
 things.
 
-**105 answered, 5 still open** across 15 areas.
+**110 answered, 0 still open** across 15 areas.
 
 ## Answered
 
@@ -100,10 +100,14 @@ things.
 | `J-02` | Documentation & generation | it extracts facts the code already declares, and the code wins | [#78](../../../issues/78) | 2026-09-16 |
 | `J-03` | Documentation & generation | `d2` is not a tool here, and no SVG is committed or built | [#78](../../../issues/78) | 2026-09-16 |
 | `J-04` | Documentation & generation | the registry is the source of truth, and the generated table is derived from it — #129 | [#78](../../../issues/78) | 2026-09-16 |
+| `J-05` | Documentation & generation | the five directories, and the rule is what a document is FOR | [#78](../../../issues/78) | 2026-09-16 |
+| `J-06` | Documentation & generation | `decisions/` holds ADRs, generated, and immutable in the only sense that matters | [#78](../../../issues/78) | 2026-09-16 |
 | `J-07` | Documentation & generation | no — three gates check generated docs against their source, none checks a symbol | [#78](../../../issues/78) | 2026-09-16 |
+| `J-08` | Documentation & generation | named per directory, in the map itself | [#78](../../../issues/78) | 2026-09-16 |
 | `K-01` | Observability & diagnostics | a levelled layer over TorQ's `.lg`, and structured fields — built in #119 | [#79](../../../issues/79) | 2026-09-16 |
 | `K-02` | Observability & diagnostics | they were built eagerly; now they are not — and the first fix silently did nothing | [#79](../../../issues/79) | 2026-09-16 |
 | `K-03` | Observability & diagnostics | one boolean switch, per process — not a level | [#79](../../../issues/79) | 2026-09-16 |
+| `K-04` | Observability & diagnostics | yes, a heartbeat table — and it answers the one question the status files cannot | [#79](../../../issues/79) | 2026-09-16 |
 | `K-05` | Observability & diagnostics | yes, and the two paths have different guarantees on purpose | [#79](../../../issues/79) | 2026-09-16 |
 | `K-06` | Observability & diagnostics | multitail is not required, and `--columns 0` has no analogue here | [#79](../../../issues/79) | 2026-09-16 |
 | `K-07` | Observability & diagnostics | answered by #68 plus M-05 | [#79](../../../issues/79) | 2026-09-15 |
@@ -123,6 +127,7 @@ things.
 | `O-03` | Tooling, hooks & agents | there is no `AGENTS.md` here, and adding one now would create a second instruction file with no reader | [#83](../../../issues/83) | 2026-09-16 |
 | `O-04` | Tooling, hooks & agents | unknowable, and the overlap question has been answered a better way | [#83](../../../issues/83) | 2026-09-16 |
 | `O-05` | Tooling, hooks & agents | fourteen here, confirmed — and the comparison is dissolved by A-02/A-03 | [#83](../../../issues/83) | 2026-09-16 |
+| `P-01` | Process & provenance | yes, one page per decision — generated, not written | [#84](../../../issues/84) | 2026-09-16 |
 | `P-02` | Process & provenance | the maintainer arbitrates; Claude proposes with reasoning | [#84](../../../issues/84) | 2026-09-16 |
 | `P-03` | Process & provenance | in both requirement documents' provenance headers and the drift ledger's closing section — and the phrasing has since changed | [#84](../../../issues/84) | 2026-09-16 |
 | `P-04` | Process & provenance | there is no cadence, because nothing is landing any more — dissolved by A-02/A-03 | [#84](../../../issues/84) | 2026-09-16 |
@@ -139,11 +144,6 @@ recorded the substance, that is named too.
 
 | ID | Area | State | Question | Issue |
 |---|---|---|---|---|
-| `J-05` | Documentation & generation | `shaping` | What belongs in `guides/` versus `architecture/` versus `reference/` versus `decisions/` versus `integrations/`? | [#78](../../../issues/78) |
-| `K-04` | Observability & diagnostics | `shaping` | Is there a per-worker heartbeat or metrics table, and does monitoring read it? | [#79](../../../issues/79) |
-| `P-01` | Process & provenance | `shaping` | Should each answered question here become an ADR in `docs/decisions/`? | [#84](../../../issues/84) |
-| `J-06` | Documentation & generation | `deferrable` | Does `decisions/` hold ADRs, with what template, and are they immutable once accepted? | [#78](../../../issues/78) |
-| `J-08` | Documentation & generation | `deferrable` | Who is the audience for each docs area — desk users, new developers, or operators? | [#78](../../../issues/78) |
 
 ## Cited in docs, no record on GitHub
 
