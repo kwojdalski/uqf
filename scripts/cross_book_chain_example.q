@@ -17,9 +17,8 @@
 // since log4q's %N message formatting serializes a whole value onto one
 // line rather than the readable grid `show` produces.
 //
-// Requires real kdb+/KDB-X, not the local PeachQ binary: log4q relies on
-// a mid-expression variable assignment/read pattern PeachQ doesn't
-// evaluate correctly (see README's Licensing section).
+// Requires KDB-X: log4q relies on a mid-expression variable assignment/read
+// pattern (see README's Licensing section).
 //
 // Run from the repository root: q scripts/cross_book_chain_example.q
 

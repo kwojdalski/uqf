@@ -5,8 +5,7 @@
 # no external download, at the cost of staying up as a server instead of
 # writing files to build/docs/.
 #
-# Requires real kdb+/KDB-X, not the local PeachQ binary: q-doc uses
-# .Q.opt/.h.ty/HTTP request handlers PeachQ doesn't support.
+# Requires KDB-X: q-doc uses .Q.opt, .h.ty and HTTP request handlers.
 #
 # Run from the repository root: ./scripts/run_qdoc.sh [port]
 # Once it's up, at the q) prompt run (any subset of this repo's folders):
@@ -25,7 +24,7 @@ elif [ -x "$HOME/.kx/bin/q" ]; then
     export QHOME="${QHOME:-$HOME/.kx}"
 else
     echo "No real kdb+/KDB-X interpreter found (checked PATH and ~/.kx/bin/q)." >&2
-    echo "Install KDB-X/kdb+ (https://kx.com/kdb-personal-edition-download/) - PeachQ isn't compatible with q-doc." >&2
+    echo "Install KDB-X (https://kx.com/kdb-personal-edition-download/)." >&2
     exit 1
 fi
 

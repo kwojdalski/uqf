@@ -70,7 +70,7 @@ artifacts) by copying the app's sample `hdb/`/`dqe/` data there - `logs/`,
 happen inside that directory, never inside `lib/`. Run `torq-demo clean`
 to wipe it and start fresh next time.
 
-Requires real kdb+/KDB-X (`q` on `PATH`) - not the PeachQ binary used
+Requires KDB-X (`q` on `PATH`)
 elsewhere in this repo for `src/`/`tests/` - plus `envsubst` and `rlwrap`
 (TorQ's own `torq.sh`, which this still drives under the hood, needs both;
 on macOS: `brew install gettext rlwrap`).

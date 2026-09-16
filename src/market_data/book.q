@@ -128,7 +128,7 @@ is_string_column:{[tbl;col] (count tbl col) and all 10h=type each tbl col};
 / allowlist, or its distinct-value cardinality is low relative to row
 / count. Only run this on tables/columns you don't already know are large
 / free text - `distinct` is pathologically slow on huge, high-cardinality
-/ vectors under the PeachQ interpreter used for local dev in this repo.
+/ vectors.
 / @param tbl the table to inspect
 / @param allowlist column names always flagged when present and string-typed, e.g. `sym`side`exchange`venue`ccy
 / @param cardinality_ratio flag a string column when (distinct count / row count) is below this ratio

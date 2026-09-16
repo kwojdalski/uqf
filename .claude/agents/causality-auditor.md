@@ -22,7 +22,7 @@ And one shape that is explicitly **not** a finding: a metric whose whole purpose
 ## What to check first
 
 - **`docs/audits/README.md`** and the entries it indexes. You share this log with `docstring-example-verifier`. Read what prior runs cleared and build on it instead of re-deriving. The facts in "Already verified" below came from the run that wrote this agent — re-verify them after any edit to the file in question, but do not spend a fresh audit rediscovering them.
-- **`.claude/skills/kdb-q-conventions/SKILL.md`** — q's right-to-left evaluation and this repo's recorded gotchas. A causality check that depends on a `where`-clause or functional-select subtlety needs this first. The file also documents PeachQ-vs-KDB-X divergences: **ignore those**, this audit targets KDB-X only.
+- **`.claude/skills/kdb-q-conventions/SKILL.md`** — q's right-to-left evaluation and this repo's recorded gotchas. A causality check that depends on a `where`-clause or functional-select subtlety needs this first.
 - **`src/execution/execution.q` lines 1-10** — the module header asserts a sign convention for the whole file (side `1` buy / `-1` sell; cost metrics positive against the taker; markout positive in the taker's favour). It is a claim about ten functions, and it is checkable.
 
 ## The five checks, in value order
@@ -58,7 +58,7 @@ Do not re-derive these; re-check only the file that changed.
 
 A claim needs a verification method, not a mechanism. "This could leak because the window looks wide" is not a finding. "Here is the line, here is the q snippet, here is the output, here is what it shows" is.
 
-Where a check can be made numerical, make it numerical. The strongest form is a differential: compute the quantity two ways — the shipped implementation against an obviously-causal reimplementation over a small hand-built table — and diff. Run from the repository root (`src/init.q` uses relative `\l` paths) under **KDB-X only**: `export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q <script>`. The repo-root `./q` is a PeachQ binary — do not use it, and do not report a result obtained from it. If KDB-X will not start, stop and say so rather than falling back. Write scratch scripts to the scratchpad directory, not into the repo.
+Where a check can be made numerical, make it numerical. The strongest form is a differential: compute the quantity two ways — the shipped implementation against an obviously-causal reimplementation over a small hand-built table — and diff. Run from the repository root (`src/init.q` uses relative `\l` paths): `export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q <script>`. If KDB-X will not start, stop and say so rather than falling back. Write scratch scripts to the scratchpad directory, not into the repo.
 
 Some findings cannot be settled numerically — check 1 is partly a documentation question, and an invariant-enforcement gap is settled by path enumeration plus one adversarial input. For those, say which kind of evidence you have and stop there rather than dressing a reading up as a measurement.
 

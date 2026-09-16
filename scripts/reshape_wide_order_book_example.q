@@ -10,9 +10,8 @@
 // since log4q's %N message formatting serializes a whole value onto one
 // line rather than the readable grid `show` produces.
 //
-// Requires real kdb+/KDB-X, not the local PeachQ binary: log4q relies on
-// a mid-expression variable assignment/read pattern PeachQ doesn't
-// evaluate correctly (see README's Licensing section).
+// Requires KDB-X: log4q relies on a mid-expression variable assignment/read
+// pattern (see README's Licensing section).
 //
 // Run from the repository root: q scripts/reshape_wide_order_book_example.q [n_rows]
 // n_rows (default 3) is how many rows the wide source table has -

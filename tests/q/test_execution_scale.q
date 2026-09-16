@@ -49,7 +49,7 @@ gen_synthetic_trades:{[n]
 // `generation_elapsed` globals set with `::`. This also happens to keep
 // each test's own result/actual/expected values a mix of types
 // (boolean/float/etc.) across the namespace's several rows, which matters
-// under PeachQ: a namespace with only a single, all-boolean-result test
+// a namespace with only a single, all-boolean-result test
 // got its qUnit results table typed as a boolean column instead of a
 // general one, and razing that against every other (general-typed) test
 // namespace's results threw a bare `type` error - see the
@@ -76,7 +76,7 @@ test_row_count_and_coverage:{[t]
     // `distinct` is cheap there. time/size are ~1mm-way high-cardinality -
     // deliberately checked via max-min spread instead of `distinct`,
     // since `distinct` over a large high-cardinality vector is
-    // pathologically slow under the PeachQ interpreter this suite is
+    // pathologically slow on high-cardinality vectors, which this suite is
     // validated against (see the kdb-q-conventions skill).
     time_spread:(max trades`time)-(min trades`time);
     .qunit.assertTrue[time_spread>20:00:00.000;"synthetic data spans most of the day (time range > 20h)"];

@@ -117,5 +117,5 @@ Close with: how many candidates you generated and how many cleared the five-poin
 - Don't propose a new namespace nested more than one level (`` \d .qfwd.sub ``) — it does not resolve here; every namespace in this library is deliberately flat.
 - Don't propose work on `src/integrations/data.q` or inside `lib/torq`/`lib/torq-finance-starter-pack` (vendored; extend via the orchestrator overlay instead).
 - Don't use `WebSearch` to source ideas wholesale — only to verify one you already have.
-- Assume KDB-X (`~/.kx/bin/q`, `QHOME=~/.kx`) as the interpreter in any acceptance test you write. Ignore the repo-root `./q` PeachQ binary.
+- Assume KDB-X (`~/.kx/bin/q`, `QHOME=~/.kx`) as the interpreter in any acceptance test you write.
 - Do not use emojis.

@@ -12,23 +12,20 @@ framework - see [Testing](#testing).
 
 ## Requirements
 
-You need a q/kdb+ interpreter. Two options:
+You need **KDB-X**, KX's own interpreter. The personal edition is free for
+non-commercial use; it requires registering for a license at
+[kx.com](https://kx.com/kdb-personal-edition-download/).
 
-- **kdb+** - KX's own interpreter. The 64-bit personal edition is free for
-  non-commercial use but requires registering for a license at
-  [kx.com](https://kx.com/developers/download-licenses/) and an always-on
-  internet connection to validate it.
-- **[PeachQ](https://www.timestored.com/peachq/download)** - a free,
-  MIT-licensed, from-scratch q-language implementation with no license
-  server dependency. This repo was developed and its test suite validated
-  against PeachQ; a self-contained binary is enough:
-  ```
-  curl -LO https://peachq.org/file/peachq-v0.74.0-darwin-arm64.tar.gz   # pick your platform's asset
-  tar -xzf peachq-v0.74.0-darwin-arm64.tar.gz
-  ./q tests/run_tests.q
-  ```
+```
+q tests/run_tests.q
+```
 
-Either way, run everything from the repository root - the load scripts use
+This tree targets KDB-X alone. There is deliberately no fallback interpreter
+anywhere in the tooling: a suite that passed against something the code is not
+verified on is worse than one that does not run, so every entry point skips
+rather than substituting.
+
+Run everything from the repository root - the load scripts use
 paths relative to it (e.g. `src/foundation/stats.q`).
 
 ## Quick start
@@ -44,9 +41,10 @@ Each module loads into its own flat namespace after loading `src/init.q` -
 `.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
 `.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef` (see Layout below for which
 file maps to which namespace). Kept single-level throughout rather than
-nested under a shared parent (e.g. not `.q.options`) - multi-level `\d`
-namespace paths don't resolve under the PeachQ interpreter this repo also
-targets.
+nested under a shared parent (e.g. not `.q.options`). This began as a
+portability constraint and is now a convention the tree keeps: the
+filename-to-namespace tie is what the naming auditor checks and what
+`docs/man.q`'s registry is generated against.
 
 ## Layout
 
@@ -421,12 +419,10 @@ two vendored files:
   repository's MIT code. Not loaded by `src/init.q` (nothing in `src/`
   depends on it); load it explicitly (`\l lib/log4q.q`) from whichever
   script wants logging. **Known gap:** one of its internal helper
-  functions (`.log4q.l`, used to render the log message pattern) throws
-  under the local PeachQ interpreter used for dev in this repo - it
-  relies on a variable being assigned mid-expression and read earlier in
-  that same expression (valid, standard q right-to-left evaluation,
-  confirmed working under real kdb+/KDB-X) in a way PeachQ doesn't
-  evaluate correctly. Use real kdb+/KDB-X if you want to use log4q here.
+  functions (`.log4q.l`, used to render the log message pattern) relies on
+  a variable being assigned mid-expression and read earlier in that same
+  expression - valid, standard q right-to-left evaluation, and confirmed
+  working under KDB-X.
 - `lib/q-doc/`, vendored from [jasraj/q-doc](https://github.com/jasraj/q-doc)
   (BSD-3-Clause, full text at `lib/q-doc/LICENSE-q-doc`), plus its
   `kdb-common` dependency vendored into `lib/q-doc/kdb-common/` from
@@ -434,11 +430,9 @@ two vendored files:
   commit q-doc's own `.gitmodules` pins (Apache License 2.0, full text at
   `lib/q-doc/kdb-common/LICENSE-kdb-common`) - both permissive and fine to
   combine with this repository's MIT code. Not loaded by `src/init.q`;
-  run via `scripts/run_qdoc.sh` (see Documentation). Requires real
-  kdb+/KDB-X, not PeachQ - same reason as log4q above (q-doc additionally
-  uses `.Q.opt`/`.h.ty` and kdb+'s built-in HTTP request handlers, further
-  beyond what PeachQ implements). Verified working end-to-end against
-  this repo's own `src/*.q` under real KDB-X.
+  run via `scripts/run_qdoc.sh` (see Documentation). Requires KDB-X:
+  q-doc uses `.Q.opt`/`.h.ty` and kdb+'s built-in HTTP request handlers.
+  Verified working end-to-end against this repo's own `src/*.q`.
 - `lib/kdb-parquet/`, vendored from
   [DataIntellectTech/kdb-parquet](https://github.com/DataIntellectTech/kdb-parquet)
   at commit `e5cd641`. **Unlike the vendored files above, upstream has no
@@ -450,9 +444,9 @@ two vendored files:
   checked-in `libPQ.so` (a Linux x86-64 build) can't be used as-is on this
   repo's primary macOS dev machine. Not loaded by `src/init.q` or anything
   else in this repo, and not verified working here - it's a native `2:`
-  extension, and PeachQ has no `2:` support at all; real kdb+/KDB-X would
-  need a from-source rebuild for the target platform before it could be
-  loaded. Real KDB-X also bundles its own official parquet module at
+  extension and would need a from-source rebuild for the target platform
+  before it could be loaded. KDB-X also bundles its own official parquet
+  module at
   `~/.kx/mod/kx/pq/`, worth checking as a licensed alternative first.
 - `lib/torq/`, vendored from [DataIntellectTech/TorQ](https://github.com/DataIntellectTech/TorQ)
   at commit `a6cee6c`, distributed under the MIT License (full text at

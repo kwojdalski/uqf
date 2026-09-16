@@ -19,7 +19,7 @@
 / ccy_exposure matches positions.q's ccy_exposure_in output shape
 / (ccy/amount/reporting_amount).
 / Still single-level/flat (not nested under a shared parent) for the
-/ same PeachQ multi-level \d portability reason every src/*.q file is.
+/ same flat-namespace convention every src/*.q file follows (N-01).
 / .
 / See env/seed.q to populate these with example rows, and env/README.md
 / for the full table-by-table rationale.

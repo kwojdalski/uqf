@@ -1,13 +1,13 @@
 ---
 name: wire-external-kdb
-description: Connect uqf to a real external kdb+/KDB-X database over the qmcp MCP server, discover its actual live table/column schema, and wire it into uqf's quotes-table shape. Never analyzes from static files alone (MCP connection is mandatory), and never targets the local PeachQ test db or the vendored torq-demo sample stack. Use when the user wants uqf connected to a production, staging, or other real external kdb+ source rather than local example data.
+description: Connect uqf to a real external kdb+/KDB-X database over the qmcp MCP server, discover its actual live table/column schema, and wire it into uqf's quotes-table shape. Never analyzes from static files alone (MCP connection is mandatory), and never targets a local test database or the vendored torq-demo sample stack. Use when the user wants uqf connected to a production, staging, or other real external kdb+ source rather than local example data.
 ---
 
 # Wire External kdb+ Database
 
 uqf's `src/*.q` functions (forwards.q, microstructure.q, execution.q) consume a
 `quotes` table of a specific shape. Locally that shape is only ever seen via
-synthetic test fixtures (`tests/`) or the local PeachQ instance
+synthetic test fixtures (`tests/`) or a local test instance
 (`servers.default` in the qmcp config, `localhost:5001`). This skill wires a
 *real* external kdb+/KDB-X database into that same shape - and every fact it
 relies on about that database must come from actually querying it, not from
@@ -23,7 +23,7 @@ assumption.
    must be backed by a live `describe_table`/`meta`/`query_q` call made
    during this session, not recalled from a prior run.
 2. **Never target the example databases.**
-   - `servers.default` in the qmcp config is the local PeachQ instance
+   - `servers.default` in the qmcp config is the local test instance
      `tests/run_tests.q` exercises - not a legitimate target for this skill.
    - `lib/torq-finance-starter-pack`'s vendored sample HDB (managed via
      `python/torq_orchestrator`/`torq-demo`, see `docs/guides/torq-demo.md`) is also
@@ -117,7 +117,7 @@ Based on what step 3 actually found (not a generic template):
   the user can review before anything downstream depends on it.
 
 ## Non-goals
-- The local PeachQ instance (`servers.default`, port 5001) used by
+- The local test instance (`servers.default`, port 5001) used by
   `tests/run_tests.q` - explicitly excluded, it's the example db this skill
   exists to go beyond.
 - `lib/torq-finance-starter-pack`'s vendored sample stack driven by

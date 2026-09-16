@@ -23,9 +23,9 @@
 / extracted value is cast to float ("f"$), including real ones, so the
 / returned vector is always uniformly typed even when levels holds long
 / (integer) prices/sizes - a float null 0n mixed element-by-element into an
-/ otherwise-long vector produces a mixed-type general list under real
-/ kdb+/KDB-X (PeachQ tolerates it, real kdb+ then throws a 'type error on
-/ later arithmetic against it), so every element is normalized to float
+/ otherwise-long vector produces a mixed-type general list, and KDB-X then
+/ throws a 'type error on later arithmetic against it - so every element is
+/ normalized to float
 / here, at the source, rather than only the null ones.
 / @param levels a vector of vectors, one level-0-first vector per row
 / @param level the level index to extract from every row

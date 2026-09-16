@@ -1,9 +1,12 @@
 """Spins up a real uqf q server for integration tests.
 
-Looks for a q/kdb+ binary the same way the repo's pre-commit q-tests hook
-does: PATH, then ~/.kx/bin/q (KDB-X), then ./q or ./peachq/q at the uqf repo
-root (PeachQ - note PeachQ has no `2:` support, but IPC/`-p` isn't affected
-by that gap).
+Looks for KDB-X the same way the repo's pre-commit q-tests hook does: PATH,
+then ~/.kx/bin/q.
+
+The repo-root `./q` is no longer a fallback. This tree targets KDB-X only, and
+a second interpreter that silently satisfied the search would have run the
+suite against something the code is not verified on - a pass that means less
+than no pass at all.
 """
 
 from __future__ import annotations
@@ -29,10 +32,7 @@ def _find_q_binary() -> tuple[str, dict[str, str]]:
     if kdbx.is_file():
         env.setdefault("QHOME", str(Path.home() / ".kx"))
         return str(kdbx), env
-    for candidate in (UQF_ROOT / "q", UQF_ROOT / "peachq" / "q"):
-        if candidate.is_file():
-            return str(candidate), env
-    pytest.skip("no q/kdb+ interpreter found (PATH, ~/.kx/bin/q, ./q, ./peachq/q)")
+    pytest.skip("no KDB-X interpreter found (PATH, ~/.kx/bin/q)")
 
 
 def _free_port() -> int:

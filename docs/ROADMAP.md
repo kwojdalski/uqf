@@ -27,7 +27,7 @@ of scope for now.
 
 Sign/parameter conventions follow the rest of the library: `pip_factor`
 (10000 / 100 for JPY), `side` (1 buy / -1 sell), snake_case, one qDoc block
-per function, tested on both PeachQ and KDB-X.
+per function, tested on KDB-X.
 
 ## Tier 1 - single-snapshot (one row of a `quotes` table)
 

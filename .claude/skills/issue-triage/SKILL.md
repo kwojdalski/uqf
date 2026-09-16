@@ -49,7 +49,7 @@ Read the issue body and all comments carefully. Note:
 
 ### 4. Investigate the codebase
 
-Use Read and Bash tools to inspect the relevant code. Do not guess — verify. Run the test suite if the claim is testable: `./q tests/run_tests.q` (PeachQ) and, if available, `q tests/run_tests.q` under real KDB-X (`export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH"`) — see the `kdb-q-conventions` skill for why both interpreters matter here.
+Use Read and Bash tools to inspect the relevant code. Do not guess — verify. Run the test suite if the claim is testable: `export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q tests/run_tests.q`.
 
 For **bug reports**:
 - Find the exact file and line the issue refers to (or the closest relevant code) — `src/*.q`, one module per topic
@@ -57,7 +57,7 @@ For **bug reports**:
 - Check whether the described wrong behavior can actually occur given the current code
 - Check git log for recent changes to the file: `git log --oneline -20 -- <file>`
 - If the bug was fixed in a recent commit, note the commit hash and message
-- Check whether the claim is actually a PeachQ-vs-real-KDB-X interpreter gap rather than a library bug (see `kdb-q-conventions`'s interpreter-gaps notes) — reproduce on both before concluding it's a real defect
+- Reproduce under KDB-X before concluding it is a real defect
 
 For **feature requests or enhancements**:
 - Check if the feature already exists under a different name (this library snake_cases everything: `fwd_simple`, `cross_book_at_sizes`, etc.)

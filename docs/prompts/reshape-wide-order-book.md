@@ -69,7 +69,7 @@ inverse of `` `$ `` on an already-string column - cast directly with `` `$ ``
     (e.g. `sym`symbol`side`exchange`venue`ccy`action) or (b) cardinality is
     low relative to row count (distinct count below a caller-supplied
     ratio/threshold - see the kdb-q-conventions gotcha about `distinct`
-    being slow on huge high-cardinality columns under PeachQ; only run this
+    being slow on huge high-cardinality columns; only run this
     check on columns you don't already know are free text).
   Keep detection and conversion as two separate functions - conversion
   takes an explicit column list (auditable, no surprises), detection is

@@ -44,10 +44,10 @@ empty_book:{[] ([sym:`symbol$()] qty:`float$(); avg_price:`float$(); realized_pn
 / @eg .qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1] -> qty 1000000, avg_price 1.1, realized_pnl 0
 / @eg .qpos.apply_fill[b;`EURUSD;400000;1.1050;-1] (b = book from the previous example) -> qty 600000, avg_price 1.1 (unchanged), realized_pnl 2000 (400000 closed at a 50-pip gain)
 apply_fill:{[pos;sym;qty;price;side]
-    / exec sym from pos, not key pos: PeachQ returns a 1-col table (not a
-    / plain vector) from `key` on a single-key-column keyed table, which
-    / breaks `in` - exec gives a portable plain symbol vector on both
-    / PeachQ and real kdb+/KDB-X.
+    / exec sym from pos, not key pos: `key` on a single-key-column keyed
+    / table does not always give a plain symbol vector, and `in` against
+    / anything else fails. exec says exactly what is wanted, so it is kept
+    / for clarity rather than for portability.
     old:$[sym in exec sym from pos; pos sym; `qty`avg_price`realized_pnl!0 0 0f];
     old_qty:old`qty;
     old_avg:old`avg_price;

@@ -59,7 +59,7 @@ Derived from Andrej Karpathy's observations on LLM coding pitfalls.
 | Instead of... | Transform to... |
 |---|---|
 | "Add validation" | "Write a test for the invalid-input case (missing column, unsorted table), then make it pass" |
-| "Fix the bug" | "Write a test that reproduces it, then make it pass on both PeachQ and real KDB-X" |
+| "Fix the bug" | "Write a test that reproduces it, then make it pass" |
 | "Refactor X" | "Run `./q tests/run_tests.q` before and after; ensure identical pass count" |
 
 For multi-step tasks, state a brief plan:

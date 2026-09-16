@@ -78,7 +78,7 @@ Evaluate the codebase against these architectural concerns, in order of impact:
 4. Rank findings by architectural impact:
    - How many future changes does this make harder?
    - How many files must change when the design is corrected?
-   - Does it prevent testing in isolation (on both PeachQ and real KDB-X)?
+   - Does it prevent testing in isolation?
    - Does it create a structural trap that gets harder to escape the longer it is left?
 
 5. Output a summary table:

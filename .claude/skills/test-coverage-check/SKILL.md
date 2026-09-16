@@ -49,7 +49,7 @@ For each component in the map above:
 - Which functions are actually called
 - Whether assertions check specific values — a known reference value (e.g. Hull's Black-Scholes worked example), a provable identity (put-call parity, delta-call minus delta-put equals the foreign discount factor, day-count-neutral round trips), or a tight `qunit.assertNear`/tolerance check — not just "didn't throw"
 - Whether edge cases are covered: empty/null input, zero division guards, unsorted-input rejection (`aj`-based lookups), missing-column rejection (`require_quotes_cols`), first-row conventions in rolling functions
-- Whether the test suite has been run on **both** interpreters (PeachQ via `./q`, real KDB-X) — a test that only passes on one silently hides a portability bug
+- Whether the test suite has been run under KDB-X
 
 ### 3. For each component, assign a status
 
@@ -94,7 +94,7 @@ Rank gaps by how critical the untested code is:
 
 **Priority 3 — MEDIUM (missing but lower risk)**
 - Multi-currency-pair / N-leg chain edge cases beyond the 2-leg happy path
-- Cross-interpreter portability (does the test pass on both PeachQ and real KDB-X, not just one)
+- Determinism (does the test pass repeatably, not just once)
 
 For each gap, cite:
 - The specific function that is untested
@@ -117,7 +117,7 @@ When the user says `write <component>`:
    - Assert specific numeric values where the formula is deterministic — a known reference value or a tight tolerance check via `tests/lib/testutil.q`'s helper, not `assert result is not null`
    - Test the happy path AND at least one edge case per function (null/empty input, a zero-division guard, an unsorted-input rejection, a missing-column rejection)
    - For rolling/stateful `microstructure.q`-style functions: test the documented first-row convention explicitly
-   - Use fully-qualified timestamp literals (`` D00:00:00.000000000 ``, not abbreviated `` D0``) — see `kdb-q-conventions`'s PeachQ test-discovery gotcha
+   - Use fully-qualified timestamp literals (`` D00:00:00.000000000 ``, not abbreviated `` D0``)
 4. Do not mock — q functions here are pure and cheap to call directly; test the real logic.
 5. Keep each test function focused on one behavior. Prefer multiple small tests over one large one.
 6. Run the tests after writing: `./q tests/run_tests.q`, and real KDB-X if available (`export QHOME=~/.kx PATH="$HOME/.kx/bin:$PATH" && q tests/run_tests.q`).

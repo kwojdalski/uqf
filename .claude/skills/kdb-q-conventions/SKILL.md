@@ -58,9 +58,8 @@ library with no processes/IPC/tables).
 
 ## Other q gotchas hit in this repo
 
-- `floor` is the keyword to use (works). Monadic `_` for floor did **not**
-  work under the PeachQ interpreter used for local dev here - stick with
-  `floor`.
+- `floor` is the keyword to use. Monadic `_` also floors but reads as drop
+  at a glance, so this codebase spells it out.
 - `` `year$d ``, `` `mm$d ``, `` `dd$d `` cast a date to its year/month/day
   components as ints.
 - `|` and `&` are max/min on numerics (not just boolean or/and) - e.g.
@@ -79,17 +78,16 @@ library with no processes/IPC/tables).
   list (`{[w;x;y;z] ...}`), not implicit `x,y,z,u,v,w` - `u`/`v`/`w` are
   not auto-bound and calling with more than 3 implicit args fails with a
   `rank` error.
-- `distinct` over a large (~1mm+), high-cardinality vector (e.g. near-
-  unique floats/timestamps) is pathologically slow under the PeachQ
-  interpreter used for local dev here - plausibly O(n^2) rather than
-  hash-based. Low-cardinality columns are fine. For a large-scale test
-  that needs to assert "many distinct values" over a big, high-cardinality
-  column, check `(max x)-(min x)` spread instead of `count distinct x`.
+- `distinct` over a large, high-cardinality vector was pathologically slow
+  on the second interpreter this repo used to target. **That constraint is
+  gone** - KDB-X hashes. The `(max x)-(min x)` spread idiom still appears in
+  `test_execution_scale.q`; it is now a choice rather than a workaround, and
+  a new test may use `count distinct x` freely.
 - Don't pass a huge (e.g. 1mm-element) vector as the `actual`/`expected` of
   a single qUnit assertion. qUnit embeds whatever you pass into its
   results table, and razing that row together with every other suite's
   (scalar-valued) result rows made `.qunit.runTests` throw a bare `type`
-  error under PeachQ once results from all namespaces were combined - with
+  error once results from all namespaces were combined - with
   no indication of which assertion caused it. For a large-scale test,
   reduce a vector comparison to a scalar first (e.g. `max abs a-b` against
   a tolerance) rather than asserting on the two vectors directly - smaller
@@ -142,18 +140,19 @@ library with no processes/IPC/tables).
   to the house style" and "the third-party framework's naming contract"
   are in direct conflict, and the framework wins - you won't get an error
   when you get it wrong, the hook just quietly stops firing.
-- **A `select`/`update` clause's `by` must come before `from`** under
-  PeachQ - `select c by g from t where p` (canonical order) works, `select
-  c from t by g` (real kdb+ tolerates the reordering) throws a bare
-  `error: parse` at load time with no line number, and - worse - silently
-  aborts loading the rest of that file, so every later function in the
+- **Write a `select`/`update` clause's `by` before `from`** - the canonical
+  order. KDB-X tolerates the reordering, so this is now legibility rather
+  than a parse requirement; a reordered clause reads as a typo. It is worth
+  knowing that a `parse` error at load time carries no line number and
+  silently aborts the rest of that file, so every later function in the
   same file ends up undefined too (found via `src/market_data/dqchecks.q`'s
   `check_stale_quotes` - always re-check the whole file loaded cleanly
   after a `parse` error, not just that one function).
-- **PeachQ's `$[cond;a;b]` only supports a scalar `cond`** - `$[boolvec;a;b]`
-  throws `'type`, even nested, though real kdb+ supports both. Build a
-  status column via boolean-indexing a symbol vector instead (`` `ok`bad
-  boolvec ``, already used elsewhere in this repo for 2-way statuses); for
+- **`$[cond;a;b]` with a vector `cond` works under KDB-X.** The second
+  interpreter this repo used to target accepted only a scalar, which is why
+  `dqchecks.q` builds status columns by boolean-indexing a symbol vector
+  (`` `ok`bad boolvec ``). **That constraint is gone.** The idiom is kept
+  where it already reads well; for
   3+-way branching, compute a 0/1/2... index via ordinary arithmetic on
   the condition vectors, then index a symbol vector by that, rather than
   reaching for `$` on a vector at all (found via `src/market_data/dqchecks.q`'s
@@ -169,8 +168,7 @@ library with no processes/IPC/tables).
   fully-qualify a same-namespace function call used *inside* a
   select/update clause (e.g. `.qdqc.limit_for[...]`, not bare
   `limit_for[...]`) - unusual style anywhere else in this codebase, but
-  required there. PeachQ doesn't require this; only surfaces under real
-  KDB-X (found via `src/market_data/dqchecks.q`'s `check_limit`).
+  required there (found via `src/market_data/dqchecks.q`'s `check_limit`).
 
 ## Layout
 
@@ -180,8 +178,9 @@ library with no processes/IPC/tables).
   `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
   `.qexdef` - `src/integrations/data.q` is `.qdata`, out of scope for this library, see
   below). Every one of these is single-level (not nested under a shared
-  `.q` parent) for the same portability reason as the rest of this list -
-  see the PeachQ multi-level `\d` gotcha further down. A function calling
+  `.q` parent) by convention (N-01) - the filename-to-namespace tie is what
+  the naming auditor checks and what `docs/man.q` is generated against. A
+  function calling
   another module's function must qualify it explicitly (e.g. `forwards.q`'s
   `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a
   bare, unqualified name) - there is no shared namespace for cross-file
@@ -244,9 +243,7 @@ Run the whole suite from the repo root:
 q tests/run_tests.q
 ```
 
-(or with the MIT-licensed PeachQ interpreter used during initial
-development of this repo, if you don't have kdb+ installed: `./q
-tests/run_tests.q`). Every new function needs a qUnit test in the matching
+Every new function needs a qUnit test in the matching
 `tests/test_*.q` file - prefer known reference values or a provable
 identity (put-call parity, a round trip through an inverse function, a
 boundary case) over an assertion that just repeats the implementation.
