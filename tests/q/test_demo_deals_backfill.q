@@ -73,7 +73,7 @@ test_a_full_run_publishes_the_windowed_rows:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
     .qddbf.run[];
-    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`v1;.ddbftest.d 1;.ddbftest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
+    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`v1;.z.p;.ddbftest.d 1;.ddbftest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
 
 test_the_cursor_lands_on_the_range_end:{[t]
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];

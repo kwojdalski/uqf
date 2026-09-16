@@ -200,6 +200,42 @@ independent of everything else in this note.
 
 ---
 
+## Decisions taken (2026-09-16), and what was built
+
+The three questions §2 said had to be settled before any code were answered
+by the maintainer, and steps 3–5 of §5 are implemented:
+
+| Question | Decision |
+|---|---|
+| §2.1 row key | **Natural key, per-source.** Already declared and validated in the `.qsrc` contract; it now has a purpose rather than being reserved. |
+| §2.2 as-of shape | **Option A — bitemporal.** A restatement closes the old claim rather than overwriting it, so the earlier belief survives. |
+| §2.3 `is_covered` | **Required as-of.** `is_covered[ds;version;as_of;from;to]`, following `source_version`'s precedent. |
+
+**What that looks like in the ledger.** One new column, `superseded_at`,
+carrying `0Wp` while a claim is current. Not two columns: `recorded_at`
+already records when a claim began, so `valid_from` would have duplicated it.
+And `0Wp` rather than a null because `as_of<0Np` is *false* in q — a null
+would have dropped every current row from an as-of read and reported a fully
+published range as empty, which is a plausible wrong answer rather than an
+error.
+
+**What changed.** `.qcov.valid_at` filters to the claims true at an instant,
+and `intervals`/`is_covered`/`missing`/`require_covered` all take an as-of.
+`.qcov.supersede` withdraws overlapping claims; `.qcov.history` is the audit
+view. The five call sites migrated in one change, so no site was briefly
+using the old meaning. `.qbw.plan` captures **one** `.z.p` for a whole
+planning pass rather than reading it per call — otherwise a range could be
+reported both covered and uncovered within a single pass.
+
+**Frontend.** `queries.COVERAGE` takes the as-of; `/coverage` sends one taken
+at request time. The parameter is named `at`, not `asof`: **`asof` is a q
+builtin**, and `test_q_programs.py` caught it before it shipped.
+
+**Still open, and deliberately so.** Questions 4 and 5 below — whether
+restatements arrive as a feed or an operator action, and whether there is a
+bound on how far back one may reach. Neither blocks what is built: `supersede`
+is a function an operator or a feed can call, and nothing yet assumes either.
+
 ## Open questions for review
 
 1. **§2.2: A or B?** Bitemporal rows, or full-window replace recorded as a

@@ -64,7 +64,7 @@
 / .
 / Deliberately one constant in one place: changing it should be an edit here
 / plus the writer's column list, not a hunt through the file.
-schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at
+schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at`superseded_at
 
 / Create the ledger if absent. Append-only by contract (ETL-07) - nothing in
 / this file updates or deletes a row, and a reader should treat any such
@@ -81,11 +81,23 @@ schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at
 / (`etl_coverage set / insert) are absolute and hit the root; bare reads are
 / not. Every read below therefore goes through ledger[] rather than naming
 / the table directly.
+/ Sentinel for "this claim has not been superseded". 0Wp, not 0Np.
+/ .
+/ A null would make the validity test need a special case - `as_of<0Np` is
+/ false in q, so every current row would drop out of an as-of read and the
+/ ledger would report a fully published range as empty. Infinity makes
+/ `as_of<0Wp` true by arithmetic, so the current rows need no branch at all.
+/ That is the classic bitemporal encoding and it is chosen here specifically
+/ because this repository keeps being bitten by null comparisons that return
+/ a plausible answer instead of erroring.
+still_current:0Wp
+
 init_ledger:{[]
     if[not `etl_coverage in tables `.;
         `etl_coverage set ([] dataset:`symbol$(); source_version:`symbol$();
             range_from:`timestamp$(); range_to:`timestamp$();
-            rows_published:`long$(); recorded_at:`timestamp$())];
+            rows_published:`long$(); recorded_at:`timestamp$();
+            superseded_at:`timestamp$())];
     `etl_coverage}
 
 / The root ledger table. Exists so no read below names `etl_coverage` bare -
@@ -268,7 +280,7 @@ stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
     require_interval[range_from;range_to];
     init_ledger[];
     `etl_coverage insert (dataset;source_version;range_from;range_to;
-                          "j"$rows_published;.z.p);
+                          "j"$rows_published;.z.p;still_current);
     count ledger[]}
 
 / ------------------------------------------------------------------ READ
@@ -285,21 +297,40 @@ stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
 / Parameters are ds/version, not dataset/source_version: those are column
 / names, and `where dataset=dataset` compares the column to itself and
 / matches every row. Same trap as gaps above.
-intervals:{[ds;version]
+/ Private: the coverage claims that were true AT `as_of`.
+/ .
+/ A row is valid from when it was recorded until it was superseded, so the
+/ test is `recorded_at<=as_of<superseded_at`. Current rows carry
+/ `still_current` (0Wp) rather than a null, so they satisfy the upper bound
+/ by arithmetic and need no branch - see that constant's note.
+/ .
+/ Composing AFTER the as-of filter is what makes intervals from different
+/ revisions safe to merge: every row reaching `compose` was true at the same
+/ instant, so adjacency means what it meant before supersession existed.
+/ Filtering after composing would merge a live interval with one that had
+/ already been withdrawn.
+valid_at:{[ds;version;as_of]
     init_ledger[];
-    matching:select range_from, range_to from ledger[]
-        where dataset=ds, source_version=version;
-    compose matching}
+    select range_from, range_to from ledger[]
+        where dataset=ds, source_version=version,
+              recorded_at<=as_of, as_of<superseded_at}
+
+/ The composed intervals covered for a dataset and source_version, as
+/ understood at `as_of` (D-11).
+/ @param as_of the instant to answer as of; .z.p for "now"
+/ @eg .qcov.intervals[`demo_deals;`v1;.z.p]
+intervals:{[ds;version;as_of]
+    compose valid_at[ds;version;as_of]}
 
 / Is [range_from;range_to) fully covered for this dataset and release?
 / @return 1b when there are no gaps
-is_covered:{[ds;version;from_ts;to_ts]
-    0=count gaps[from_ts;to_ts;intervals[ds;version]]}
+is_covered:{[ds;version;as_of;from_ts;to_ts]
+    0=count gaps[from_ts;to_ts;intervals[ds;version;as_of]]}
 
 / The uncovered sub-ranges of a requested range, for a caller that wants to
 / narrow its request rather than be refused outright.
-missing:{[ds;version;from_ts;to_ts]
-    gaps[from_ts;to_ts;intervals[ds;version]]}
+missing:{[ds;version;as_of;from_ts;to_ts]
+    gaps[from_ts;to_ts;intervals[ds;version;as_of]]}
 
 / Admission check: refuse the caller unless the range is fully covered.
 / .
@@ -310,13 +341,71 @@ missing:{[ds;version;from_ts;to_ts]
 / and simply no longer in memory. Callers must therefore route this read,
 / not run it against a single tier.
 / @throws error naming the missing ranges when not fully covered
-require_covered:{[ds;version;from_ts;to_ts]
-    m:missing[ds;version;from_ts;to_ts];
+require_covered:{[ds;version;as_of;from_ts;to_ts]
+    m:missing[ds;version;as_of;from_ts;to_ts];
     if[count m;
         '"require_covered: ",string[ds]," at source_version ",
          string[version]," is not fully published for [",
          string[from_ts],"; ",string[to_ts],") - missing: ",
          ", " sv {"[",string[x`range_from],"; ",string[x`range_to],")"} each m];
     1b}
+
+
+/ ------------------------------------------------------- SUPERSESSION
+
+/ Withdraw the coverage claims overlapping [from_ts;to_ts), as of now.
+/ .
+/ D-11, option A: a restatement does not DELETE the old claim, it closes it.
+/ The row stays in the ledger with `superseded_at` set, so a read at an
+/ earlier as_of still sees it - which is the whole point of recording a
+/ restatement rather than overwriting one. "What did we believe on the 12th"
+/ remains answerable after the 13th says otherwise.
+/ .
+/ Append-only is preserved in the sense that matters: no row is removed and
+/ no historical answer changes. What changes is the answer to questions asked
+/ from now on, which is exactly what a restatement means.
+/ .
+/ OVERLAP, not containment: a claim covering [09-01;09-10) is withdrawn by a
+/ restatement of [09-05;09-06), because after that restatement the original
+/ claim is no longer wholly true and leaving it standing would report the
+/ restated days as still covered by the old belief. The caller republishes
+/ whatever is still correct; this only withdraws.
+/ @param ds the dataset
+/ @param version the source_version whose claims are being withdrawn
+/ @param from_ts inclusive lower bound of the restated range
+/ @param to_ts exclusive upper bound
+/ @return the number of claims withdrawn
+/ @throws error when the interval is not a proper half-open range
+/ @eg .qcov.supersede[`demo_deals;`v1;2026.09.12D00:00;2026.09.13D00:00]
+supersede:{[ds;version;from_ts;to_ts]
+    require_interval[from_ts;to_ts];
+    init_ledger[];
+    now:.z.p;
+    / `cur` is a LOCAL copy of still_current, not the namespace global.
+    / Inside \d .qcov a bare name in a qSQL where-clause does not resolve to
+    / the namespace's own global - the same trap this file documents at
+    / length for `etl_coverage`, and it throws 'still_current rather than
+    / silently matching nothing, which is the better of the two failures.
+    cur:still_current;
+    / Half-open overlap: two intervals overlap when each starts before the
+    / other ends. Both bounds are strict for that reason - [1;2) and [2;3)
+    / share an endpoint and do NOT overlap.
+    idx:exec i from ledger[]
+        where dataset=ds, source_version=version,
+              superseded_at=cur,
+              range_from<to_ts, from_ts<range_to;
+    if[0=count idx; :0];
+    `etl_coverage set update superseded_at:now from ledger[] where i in idx;
+    count idx}
+
+/ Every claim ever made for a dataset and source_version, withdrawn or not.
+/ .
+/ The audit view. `intervals` answers "what is true", this answers "what was
+/ ever said", which is the question a restatement makes worth asking.
+/ @return the ledger rows for this dataset/version, in record order
+/ @eg .qcov.history[`demo_deals;`v1]
+history:{[ds;version]
+    init_ledger[];
+    select from ledger[] where dataset=ds, source_version=version}
 
 \d .

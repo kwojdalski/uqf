@@ -199,7 +199,14 @@ plan:{[worker;cursor]
     s:spec worker;
     start:$[null cursor; s`range_from; cursor];
     if[not start<s`range_to; :empty_windows[]];
-    todo:.qwrt.remaining[cfg`dataset;s`source_version;start;s`range_to];
+    / ONE as_of for the whole plan, captured here rather than read per call
+    / (D-11). Calling .z.p inside each coverage read would plan against a
+    / ledger that could be superseded midway, so a range could be reported
+    / both covered and uncovered within a single planning pass - and the
+    / resulting window list would correspond to no coherent belief about the
+    / data at any instant.
+    as_of:.z.p;
+    todo:.qwrt.remaining[cfg`dataset;s`source_version;as_of;start;s`range_to];
     if[0=count todo; :empty_windows[]];
     / one set of windows per uncovered sub-range, then flattened - a gap in
     / the middle must not be bridged by a window spanning it.

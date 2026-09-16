@@ -673,6 +673,15 @@
       },
       {
         "kind": "function",
+        "name": "history",
+        "params": [
+          "ds",
+          "version"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
         "name": "init_ledger",
         "params": [
           ""
@@ -684,9 +693,10 @@
         "name": "intervals",
         "params": [
           "ds",
-          "version"
+          "version",
+          "as_of"
         ],
-        "rank": 2
+        "rank": 3
       },
       {
         "kind": "function",
@@ -694,10 +704,11 @@
         "params": [
           "ds",
           "version",
+          "as_of",
           "from_ts",
           "to_ts"
         ],
-        "rank": 4
+        "rank": 5
       },
       {
         "kind": "function",
@@ -713,10 +724,11 @@
         "params": [
           "ds",
           "version",
+          "as_of",
           "from_ts",
           "to_ts"
         ],
-        "rank": 4
+        "rank": 5
       },
       {
         "kind": "function",
@@ -724,10 +736,11 @@
         "params": [
           "ds",
           "version",
+          "as_of",
           "from_ts",
           "to_ts"
         ],
-        "rank": 4
+        "rank": 5
       },
       {
         "kind": "function",
@@ -763,6 +776,33 @@
           "rows_published"
         ],
         "rank": 5
+      },
+      {
+        "kind": "value",
+        "name": "still_current",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "supersede",
+        "params": [
+          "ds",
+          "version",
+          "from_ts",
+          "to_ts"
+        ],
+        "rank": 4
+      },
+      {
+        "kind": "function",
+        "name": "valid_at",
+        "params": [
+          "ds",
+          "version",
+          "as_of"
+        ],
+        "rank": 3
       }
     ],
     "qdag": [
@@ -3740,10 +3780,11 @@
         "params": [
           "ds",
           "version",
+          "as_of",
           "from_ts",
           "to_ts"
         ],
-        "rank": 4
+        "rank": 5
       },
       {
         "kind": "function",
@@ -3773,10 +3814,11 @@
         "params": [
           "ds",
           "version",
+          "as_of",
           "from_ts",
           "to_ts"
         ],
-        "rank": 4
+        "rank": 5
       },
       {
         "kind": "function",
@@ -3792,10 +3834,11 @@
         "params": [
           "upstream",
           "version",
+          "as_of",
           "from_ts",
           "to_ts"
         ],
-        "rank": 4
+        "rank": 5
       },
       {
         "kind": "value",
@@ -3981,7 +4024,8 @@
         "range_from",
         "range_to",
         "rows_published",
-        "recorded_at"
+        "recorded_at",
+        "superseded_at"
       ],
       "types": [
         "s",
@@ -3989,6 +4033,7 @@
         "p",
         "p",
         "j",
+        "p",
         "p"
       ]
     },
