@@ -2703,6 +2703,115 @@
         "rank": 5
       }
     ],
+    "qodbc": [
+      {
+        "kind": "function",
+        "name": "available",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "build_connection_string",
+        "params": [
+          "host",
+          "port",
+          "database",
+          "user",
+          "password"
+        ],
+        "rank": 5
+      },
+      {
+        "kind": "function",
+        "name": "close",
+        "params": [
+          "h"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "escape_text",
+        "params": [
+          "s"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "literal",
+        "params": [
+          "v"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "loaded",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "open",
+        "params": [
+          "conn"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "require_available",
+        "params": [
+          ""
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "run_sql",
+        "params": [
+          "h",
+          "sql"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "table_names",
+        "params": [
+          "h"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "function",
+        "name": "window_query",
+        "params": [
+          "h",
+          "tbl",
+          "time_field",
+          "fields",
+          "range_from",
+          "range_to"
+        ],
+        "rank": 6
+      },
+      {
+        "kind": "function",
+        "name": "with_connection",
+        "params": [
+          "conn",
+          "f"
+        ],
+        "rank": 2
+      }
+    ],
     "qopt": [
       {
         "kind": "value",
@@ -4020,6 +4129,7 @@
     "qio",
     "qlog",
     "qmicro",
+    "qodbc",
     "qopt",
     "qpos",
     "qrates",
@@ -4040,6 +4150,20 @@
       "subscribes": [
         "quotes"
       ]
+    },
+    {
+      "offset": 32,
+      "procname": "deals_backfill1",
+      "proctype": "backfill",
+      "publishes": [],
+      "subscribes": []
+    },
+    {
+      "offset": 33,
+      "procname": "events_backfill1",
+      "proctype": "backfill",
+      "publishes": [],
+      "subscribes": []
     },
     {
       "offset": 19,
@@ -4186,6 +4310,10 @@
     "UQFSCRIPTS",
     "UQFSTATUSDIR",
     "UQF_API_ORIGIN",
+    "UQF_BACKFILL_FROM",
+    "UQF_BACKFILL_TO",
+    "UQF_BACKFILL_VERSION",
+    "UQF_BACKFILL_WORKER",
     "UQF_DRY_RUN",
     "UQF_FRONTEND_BASE_PORT",
     "UQF_FRONTEND_GATEWAY_HOST",

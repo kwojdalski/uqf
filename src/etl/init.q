@@ -45,6 +45,7 @@
 \l src/etl/core/coercion.q
 \l src/etl/core/coverage.q
 \l src/etl/core/io_manager.q
+\l src/etl/core/singlestore_odbc.q
 \l src/etl/core/heartbeat.q
 \l src/etl/core/dag.q
 \l src/etl/generated/pipeline_dag.q

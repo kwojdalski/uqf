@@ -31,4 +31,6 @@
     .qdag.register[`fxtradesfeed1;`kind`inputs`outputs!(`stream;`$();`trades)];
     .qdag.register[`posbook1;`kind`inputs`outputs!(`stream;`trades`quote;`position)];
     .qdag.register[`markout1;`kind`inputs`outputs!(`stream;`trades`quote;`execution_quality)];
-    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1}
+    .qdag.register[`deals_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
+    .qdag.register[`events_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
+    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1}

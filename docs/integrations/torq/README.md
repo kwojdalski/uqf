@@ -5,7 +5,22 @@ Diagrams for the running state of the TorQ Finance Starter Pack demo (see
 it). Reflects what `torq-demo list processes` shows today: the vendored
 14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
-`markout1`).
+`markout1`), and two bounded backfill processes (`deals_backfill1`,
+`events_backfill1`).
+
+**The backfills are not in the diagrams below, deliberately.** Those draw the
+streaming dataflow — who publishes to the tickerplant and who subscribes — and
+a backfill does neither: it reads an external source and writes its target
+table directly. It appears in `torq-demo list processes` and, once started, in
+discovery, but drawing it on a tickerplant diagram would put an edge where
+there is none.
+
+They are declared processes so that **starting one wires it to discovery**:
+TorQ registers a declared process at startup, so a running backfill is visible
+in `.servers.SERVERS` and can be found by proctype `backfill`. Before that they
+were spawned ad hoc and were invisible to the fleet. `startwithall=0` on both —
+a backfill is a bounded job triggered with a window range (ETL-15 gives that
+trigger to Airflow), not part of the stack `torq-demo start` brings up.
 
 For the authoritative per-process table - ports, scripts, the table each
 owns, and its subscribe/publish edges - see

@@ -9,7 +9,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 [docs/guides/torq-demo.md](../torq-demo.md); for the topology diagrams see
 [README.md](README.md).
 
-**23 vendored processes** plus **9 uqf processes** — 32 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **11 uqf processes** — 34 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -24,6 +24,8 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `fxtradesfeed1` | 6079 | feed | `torq_fx_trades_feed.q` | `trades` | — | `trades` |
 | `posbook1` | 6080 | etl | `torq_posbook_etl.q` | `position` | `trades`, `quote` | `position` |
 | `markout1` | 6081 | etl | `torq_markout_etl.q` | `execution_quality` | `trades`, `quote` | `execution_quality` |
+| `deals_backfill1` | 6082 | backfill | `torq_backfill.q` | — | — | — |
+| `events_backfill1` | 6083 | backfill | `torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -31,6 +33,8 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 - **`cross1`** — keeps cross_quotes as private process state, publishes no table
 - **`tap1`** — diagnostic subscriber - started on demand, not with the whole stack
 - **`markout1`** — localtime:0, unlike every other process here - markout1 is the only process in this demo that compares .proc.cp[] against incoming data timestamps (its process_ready cutoff calc); every other process just reacts to each tick immediately, so localtime never mattered for them. .u.upd stamps trades/quote with the tickerplant's own .z.p (UTC) - with localtime:1, .proc.cp[] returns local time instead, silently skewing the cutoff by the local UTC offset (confirmed live: a full hour off on a UTC+1 machine)
+- **`deals_backfill1`** — bounded: runs a window range and exits, so it must not start with the stack
+- **`events_backfill1`** — bounded: see deals_backfill1
 
 ## Tables these processes publish
 

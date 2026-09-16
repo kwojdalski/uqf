@@ -25,6 +25,10 @@ without it:
 | Variable | Read by | Required | Unset behaviour |
 |---|---|---|---|
 | `UQF_DRY_RUN` | `.qwrt.is_dry_run` (`src/etl/core/worker_runtime.q`) | no | false — the worker publishes for real. Opt-in on purpose: defaulting to true would make a worker silently do nothing and report success |
+| `UQF_BACKFILL_WORKER` | `scripts/torq_backfill.q` | yes, for a backfill process | the process refuses to start and names every missing variable at once |
+| `UQF_BACKFILL_VERSION` | as above | yes | as above — a run that cannot name its source release cannot record coverage (ETL-09) |
+| `UQF_BACKFILL_FROM` | as above | yes | as above. Deliberately no default: a backfill that guessed a range would publish the wrong window and record it as covered |
+| `UQF_BACKFILL_TO` | as above | yes | as above |
 | `UQF_SOURCE_CRED_<SOURCE>` | `.qsrc.require_credentials` (`src/etl/core/source_contract.q`) | per live source | `require_credentials` refuses and names the variable. There is deliberately no file and no vault fallback (ETL-07) |
 | `UQFROOT` | `scripts/torq_*.q`, `wizard.py`'s generated q | yes | the `\l` of every repository script fails. Set by `build_env`, not by hand |
 | `UQFSTATUSDIR` | `.qpipe.status_dir` (`scripts/torq_pipeline.q`) | no | falls back to `$TORQDATA/status`. Pairs with `UQF_FRONTEND_STATUS_DIR` on the reading side |

@@ -10,7 +10,6 @@ the code. A hand-drawn diagram goes stale silently; a derived one cannot."""
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,7 +64,10 @@ class Pipeline:
 
     procname: str
     script: str
-    kind: str  # "feed" (publishes only) | "etl" (subscribes, so needs credentials)
+    # "feed"     publishes only
+    # "etl"      subscribes, so needs credentials
+    # "backfill" bounded: registers with discovery, runs a window range, exits
+    kind: str
     table: str | None = None  # the table it publishes onto the tickerplant, if any
     schema: str | None = None  # that table's database.q definition
     uses_qpipe: bool = False  # load scripts/torq_pipeline.q ahead of its own script
@@ -91,10 +93,25 @@ class Pipeline:
 
     @property
     def proctype(self) -> str:
-        return "feed" if self.kind == "feed" else "metrics"
+        """The TorQ proctype, which is what discovery indexes processes BY.
+
+        `backfill` is its own type rather than reusing `metrics`, because
+        proctype is the lookup key: gethandlebytype on `backfill`
+        has to find backfill workers and not the four metrics pipelines that
+        happen to share a code path with them.
+        """
+        if self.kind == "feed":
+            return "feed"
+        if self.kind == "backfill":
+            return "backfill"
+        return "metrics"
 
     @property
     def access_list(self) -> str:
+        """A backfill reads from the fleet the way an etl does, so it carries
+        the same access list. Only a pure feed, which publishes and subscribes
+        to nothing, needs none.
+        """
         return "" if self.kind == "feed" else _ETL_ACCESS_LIST
 
     @property
@@ -205,6 +222,34 @@ PIPELINES: tuple[Pipeline, ...] = (
             "UTC+1 machine)"
         ),
     ),
+    # --- bounded backfill workers ------------------------------------
+    #
+    # Declared so that STARTING one wires it to discovery: TorQ registers a
+    # declared process at startup, so a running backfill appears in
+    # .servers.SERVERS and .qwrt.connected can see it. Previously these were
+    # spawned with `system "q ..."` and were invisible to the fleet.
+    #
+    # startwithall="0" on both: a backfill is a bounded job an operator or
+    # Airflow triggers with a range, not part of the streaming stack. Starting
+    # the fleet must not kick off a backfill over whatever range the
+    # environment happens to carry.
+    #
+    # One script serves both - which worker and which window come from the
+    # environment, so a third worker is an entry here and nothing else.
+    Pipeline(
+        procname="deals_backfill1",
+        script="torq_backfill.q",
+        kind="backfill",
+        startwithall="0",
+        note="bounded: runs a window range and exits, so it must not start with the stack",
+    ),
+    Pipeline(
+        procname="events_backfill1",
+        script="torq_backfill.q",
+        kind="backfill",
+        startwithall="0",
+        note="bounded: see deals_backfill1",
+    ),
 )
 
 
@@ -227,124 +272,6 @@ PIPELINE_OFFSETS = _resolved_offsets()
 PIPELINE_BY_NAME = {pipeline.procname: pipeline for pipeline in PIPELINES}
 
 
-# --- edge verification -------------------------------------------------
-#
-# The dataflow edges declared above are what the generated diagrams draw.
-# A declaration nobody checks is just a second place for the truth to rot,
-# so these three patterns read the edges back out of the q scripts:
-#
-#   .sub.subscribe[`trades`quote;...]        direct subscribe
-#   .qpipe.subscribe_etl[`markout;`trades`quote]  subscribe via the library
-#   h (`.u.upd;`position;...)                publish
-#
-# A q symbol-vector literal is backtick-joined with no separator
-# (`trades`quote), which is why one regex yields the whole list and it is
-# split afterwards.
-_SUB_DIRECT_RE = re.compile(r"^\s*\.sub\.subscribe\[\s*((?:`[a-zA-Z_][a-zA-Z0-9_]*)+)\s*;", re.M)
-_SUB_QPIPE_RE = re.compile(
-    r"\.qpipe\.subscribe_etl\[\s*`[a-zA-Z0-9_]*\s*;\s*((?:`[a-zA-Z_][a-zA-Z0-9_]*)+)\s*\]"
-)
-_PUB_RE = re.compile(r"h\s*\(\s*`\.u\.upd\s*;\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;")
-
-
-def _symbol_list(match_text: str) -> tuple[str, ...]:
-    """A q symbol vector, e.g. trades+quote, split into ("trades", "quote")."""
-    return tuple(part for part in match_text.split("`") if part)
-
-
-def _strip_q_comments(source: str) -> str:
-    """Drop q line comments so a `.u.upd` inside prose is not read as code.
-
-    q treats `/` as a comment only at line start or after whitespace, which
-    is exactly the distinction needed here - the publish calls all sit
-    inside expressions where no bare `/` precedes them.
-    """
-    out = []
-    for line in source.splitlines():
-        stripped = line.lstrip()
-        if stripped.startswith("/"):
-            continue
-        out.append(line)
-    return "\n".join(out)
-
-
-def verify_pipeline_edges(scripts_dir: Path) -> list[str]:
-    """Check every pipeline's declared edges against its own q script.
-
-    Returns a list of human-readable mismatches - empty means the registry
-    and the code agree, so the generated diagrams describe what actually
-    runs. Pipelines whose edges are chosen at runtime
-    (``subscribes_dynamic``) are skipped, and a publish routed through
-    ``.qpipe`` resolves to the library's generic publish call, whose table
-    is a parameter, so no table name can be read out of the script.
-    """
-    problems: list[str] = []
-
-    # Uniqueness first, because every derived structure below and in this
-    # module keys on procname and a duplicate would not error - it would
-    # collapse. PIPELINE_BY_NAME and PIPELINE_OFFSETS are both dict
-    # comprehensions over PIPELINES, so a repeated name silently drops one
-    # pipeline from the registry and hands the survivor the other's port
-    # offset. add_extra_process already refuses a duplicate at runtime; the
-    # literal below it had no such check, which is the wrong way round.
-    seen: dict[str, int] = {}
-    for index, pipeline in enumerate(PIPELINES):
-        if pipeline.procname in seen:
-            problems.append(
-                f"{pipeline.procname}: declared twice in PIPELINES "
-                f"(entries {seen[pipeline.procname]} and {index}) - procnames key "
-                "PIPELINE_BY_NAME and PIPELINE_OFFSETS, so a duplicate loses a "
-                "process rather than reporting one"
-            )
-        else:
-            seen[pipeline.procname] = index
-
-    for pipeline in PIPELINES:
-        script = scripts_dir / pipeline.script
-        if not script.is_file():
-            problems.append(f"{pipeline.procname}: script {script} does not exist")
-            continue
-        source = _strip_q_comments(script.read_text())
-
-        if not pipeline.subscribes_dynamic:
-            found: list[str] = []
-            for match in _SUB_DIRECT_RE.finditer(source):
-                found.extend(_symbol_list(match.group(1)))
-            for match in _SUB_QPIPE_RE.finditer(source):
-                found.extend(_symbol_list(match.group(1)))
-            if tuple(found) != tuple(pipeline.subscribes):
-                problems.append(
-                    f"{pipeline.procname}: declares subscribes={pipeline.subscribes!r} "
-                    f"but {pipeline.script} subscribes to {tuple(found)!r}"
-                )
-
-        published = [match.group(1) for match in _PUB_RE.finditer(source)]
-        if pipeline.uses_qpipe:
-            # The publish goes through .qpipe.publish, whose table is a
-            # parameter - nothing table-shaped to read out of this script.
-            continue
-        if tuple(published) != tuple(pipeline.published_tables):
-            problems.append(
-                f"{pipeline.procname}: declares publishes={pipeline.published_tables!r} "
-                f"but {pipeline.script} publishes {tuple(published)!r}"
-            )
-    return problems
-
-
-# Per-process offset constants, kept as a stable public surface (tests and
-# docs reference them by name) but derived from PIPELINES rather than
-# hand-maintained.
-FXFEED_PORT_OFFSET = PIPELINE_OFFSETS["fxfeed1"]
-QUOTES_FEED_PORT_OFFSET = PIPELINE_OFFSETS["quotesfeed1"]
-CROSS_ETL_PORT_OFFSET = PIPELINE_OFFSETS["cross1"]
-WIDE_BOOK_FEED_PORT_OFFSET = PIPELINE_OFFSETS["widefeed1"]
-VECTORIZE_ETL_PORT_OFFSET = PIPELINE_OFFSETS["vectorize1"]
-TAP_PORT_OFFSET = PIPELINE_OFFSETS["tap1"]
-FX_TRADES_FEED_PORT_OFFSET = PIPELINE_OFFSETS["fxtradesfeed1"]
-POSBOOK_PORT_OFFSET = PIPELINE_OFFSETS["posbook1"]
-MARKOUT_PORT_OFFSET = PIPELINE_OFFSETS["markout1"]
-
-
 def _pipeline_rows() -> list[dict[str, str]]:
     """One process.csv row per PIPELINES entry, in port order."""
     return [
@@ -365,6 +292,38 @@ def _pipeline_rows() -> list[dict[str, str]]:
         }
         for pipeline in PIPELINES
     ]
+
+
+# Per-process offset constants, kept as a stable public surface (tests and
+# docs reference them by name) but derived from PIPELINES rather than
+# hand-maintained.
+FXFEED_PORT_OFFSET = PIPELINE_OFFSETS["fxfeed1"]
+QUOTES_FEED_PORT_OFFSET = PIPELINE_OFFSETS["quotesfeed1"]
+CROSS_ETL_PORT_OFFSET = PIPELINE_OFFSETS["cross1"]
+WIDE_BOOK_FEED_PORT_OFFSET = PIPELINE_OFFSETS["widefeed1"]
+VECTORIZE_ETL_PORT_OFFSET = PIPELINE_OFFSETS["vectorize1"]
+TAP_PORT_OFFSET = PIPELINE_OFFSETS["tap1"]
+FX_TRADES_FEED_PORT_OFFSET = PIPELINE_OFFSETS["fxtradesfeed1"]
+POSBOOK_PORT_OFFSET = PIPELINE_OFFSETS["posbook1"]
+MARKOUT_PORT_OFFSET = PIPELINE_OFFSETS["markout1"]
+
+
+# Edge verification lives in pipeline_edges.py - see its header for why the
+# split is there. Re-exported so `from pipelines import verify_pipeline_edges`
+# keeps working for every existing caller.
+from torq_orchestrator.pipeline_edges import (  # noqa: E402
+    verify_pipeline_edges as _verify_edges,
+)
+
+
+def verify_pipeline_edges(scripts_dir: Path) -> list[str]:
+    """Check every pipeline's declared edges against its own q script.
+
+    A thin wrapper that supplies THIS module's registry to the checker in
+    `pipeline_edges`, keeping the one-argument signature every existing
+    caller uses while the two modules import in only one direction.
+    """
+    return _verify_edges(scripts_dir, PIPELINES)
 
 
 PROCESS_CSV_FIELDS = (
