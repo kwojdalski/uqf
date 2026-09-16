@@ -18,7 +18,7 @@
 / @param sigma volatility, decimal (0.10 = 10%)
 / @param t year fraction to expiry
 / @return (d1;d2)
-/ @eg .qopt.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> (0.05174784;-0.0348547)
+/ @eg .qopt.d1_d2[1.10;1.12;0.045;0.02;0.10;0.75]  -> 0.05174784 -0.0348547
 d1_d2:{[s;k;rd;rf;sigma;t]
     log_moneyness:log[s%k];
     variance_adj:0.5*sigma*sigma;
@@ -286,7 +286,9 @@ BISECT_VOL_MAX_ITER:200;
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
 / @return sigma such that gk_price[...;sigma;...;is_call] ~ price
-/ @eg .qopt.bisect_vol[0.03781082;1.10;1.12;0.045;0.02;0.75;1b]  -> 0.1 (approx)
+/ @eg .qopt.bisect_vol[0.03781082;1.10;1.12;0.045;0.02;0.75;1b]  -> 0.09999999
+/   (0.1 to the eye. The residual is the bisection's own tolerance, so the
+/   exact digits are a property of BISECT_VOL_TOL rather than of the option)
 bisect_vol:{[price;s;k;rd;rf;t;is_call]
     lo:BISECT_VOL_LO; hi:BISECT_VOL_HI;
     i:0;

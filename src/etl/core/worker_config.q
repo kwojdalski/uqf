@@ -78,7 +78,17 @@ raw_from:{[source;k]
 / Exported rather than private because "where did this value come from" is
 / the question that actually gets asked when a worker misbehaves, and
 / answering it should not require reading the precedence order off a comment.
-/ @eg .qwcfg.explain[`backfill_from]  ->  (`env;"2026.09.01")
+/ @eg .qwcfg.explain[`dry_run]  ->  (`none;"")
+/ .
+/ That is the honest UNSET answer, and it is what the example asserts. Once
+/ UQF_DRY_RUN=true is exported the same call returns (`env;"true").
+/ .
+/ The previous example claimed (`env;"2026.09.01") for `backfill_from, which
+/ was wrong twice over: nothing in this repository sets UQF_BACKFILL_FROM (a
+/ worker's window comes from read_state, not from config - see C-04), and an
+/ example whose documented value depends on the caller's ambient environment
+/ cannot be verified by anything. `dry_run` is the one key production really
+/ reads, via .qwrt.is_dry_run.
 explain:{[k]
     hits:sources where 0<count each raw_from[;k] each sources;
     $[0=count hits; (`none;""); (first hits; raw_from[first hits;k])]}
