@@ -339,6 +339,20 @@
       },
       {
         "kind": "function",
+        "name": "normalised",
+        "params": [
+          "cfg"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "optional_config",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
         "name": "plan",
         "params": [
           "worker",
@@ -2106,6 +2120,70 @@
           "max_age"
         ],
         "rank": 1
+      }
+    ],
+    "qio": [
+      {
+        "kind": "dict",
+        "name": "discard",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "for_config",
+        "params": [
+          "cfg"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "dict",
+        "name": "memory",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "require_manager",
+        "params": [
+          "mgr"
+        ],
+        "rank": 1
+      },
+      {
+        "kind": "value",
+        "name": "required",
+        "params": [],
+        "rank": null
+      },
+      {
+        "kind": "function",
+        "name": "write",
+        "params": [
+          "mgr",
+          "target",
+          "batch"
+        ],
+        "rank": 3
+      },
+      {
+        "kind": "function",
+        "name": "write_discard",
+        "params": [
+          "target",
+          "batch"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "write_memory",
+        "params": [
+          "target",
+          "batch"
+        ],
+        "rank": 2
       }
     ],
     "qlog": [
@@ -3939,6 +4017,7 @@
     "qexec",
     "qfwd",
     "qhb",
+    "qio",
     "qlog",
     "qmicro",
     "qopt",

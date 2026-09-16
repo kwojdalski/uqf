@@ -42,6 +42,23 @@ config:(`symbol$())!();
 
 required_config:`ns`source`dataset`width
 
+/ The keys a worker MAY declare. Absent ones are filled with (::) at
+/ registration, which is not tidiness - it is load-bearing.
+/ .
+/ `config` is a dictionary of dictionaries, and q coerces same-keyed dicts
+/ into a TABLE. That coercion was happening by accident: with two workers
+/ declaring different keys, `value config` became a table anyway and every
+/ worker silently acquired every other worker's keys - demo_events_backfill
+/ reported a `check` it had never declared. Worse, a worker declaring a key
+/ no earlier worker had made registration fail outright with 'mismatch,
+/ because a table cannot gain a column that way.
+/ .
+/ Normalising every config to the same key set makes the table shape
+/ INTENDED rather than emergent: registration order stops mattering, a new
+/ optional key is one entry here, and no worker is handed a key it did not
+/ ask for with a value it did not choose.
+optional_config:`check`io
+
 / Declare a worker's configuration.
 / .
 / Validated here rather than at first use, because a declaration is one
@@ -61,6 +78,10 @@ define:{[worker;cfg]
         '"define: ",string[worker],"'s width must be a timespan, e.g. 1D"];
     if[not (cfg`width)>0D00:00;
         '"define: ",string[worker],"'s width must be positive - a zero width plans infinitely many empty windows"];
+    / Validate the io manager HERE, not at first write. A worker with a
+    / malformed manager should fail at declaration, not halfway through a
+    / backfill having already fetched a window it is now unable to store.
+    .qio.for_config cfg;
     .qsrc.declaration cfg`source;
 
     / Refuse two workers filling one dataset (#60).
@@ -84,8 +105,15 @@ define:{[worker;cfg]
          ", already claimed by ",", " sv string clash,
          " - coverage has no partition dimension, so two workers writing one dataset produce rows nothing can tell apart"];
 
-    config[worker]:cfg;
+    / Normalise to the full key set before storing - see optional_config.
+    config[worker]:normalised cfg;
     worker}
+
+/ Private: a config carrying every optional key, absent ones as (::).
+normalised:{[cfg]
+    missing:optional_config where not optional_config in key cfg;
+    if[0=count missing; :cfg];
+    cfg,missing!count[missing]#enlist (::)}
 
 / One worker's configuration, or a refusal naming it.
 / .
@@ -240,10 +268,9 @@ fetch:{[worker;from_ts;to_ts]
 / is legal and meaningful (ETL-07): an empty window is positive evidence the
 / range was examined and held nothing.
 publish:{[worker;batch]
-    t:.qsrc.declaration[(declaration worker)`source]`target;
-    if[not t in tables `.; t set 0#batch];
-    t insert batch;
-    count batch}
+    cfg:declaration worker;
+    t:.qsrc.declaration[cfg`source]`target;
+    .qio.write[.qio.for_config cfg;t;batch]}
 
 / Save the cursor. Present because the contract requires it (ETL-01); the
 / write goes through .qbfstate so ETL-06's spec-binding is not
@@ -327,6 +354,15 @@ run_check:{[worker;batch]
 / Private: the empty failure table, so every path returns one shape.
 no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 
+/ Private: one window, end to end - fetch, check, publish, record.
+/ .
+/ Accumulates into the worker's own `progress` rather than returning, because
+/ a q lambda does not close over an enclosing local and `each` over windows
+/ needs somewhere to put the totals.
+/ @param worker the worker's name
+/ @param w a row carrying range_from and range_to
+/ @return 1b when the window completed, 0b when it failed and the run
+/   should continue with the next one (M-05)
 do_window:{[worker;w]
     cfg:declaration worker;
     .qlog.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
