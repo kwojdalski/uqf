@@ -7,6 +7,7 @@ poll-only, so a socket would add a moving part without adding liveness.
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -317,7 +318,13 @@ def _coverage(
     range_from: str | None,
     range_to: str | None,
 ) -> CoverageResponse:
-    raw = gateway.route(queries.COVERAGE, (dataset, source_version), TIERS["both"])
+    # D-11: coverage is now a claim that is true until superseded, so the
+    # read needs an as-of. `datetime.now(UTC)` here rather than letting q use
+    # its own `.z.p`: the value is sent as a parameter so the answer is
+    # reproducible and the test doubles can pin it, and a caller asking twice
+    # in one request gets one consistent belief rather than two.
+    as_of = dt.datetime.now(dt.UTC)
+    raw = gateway.route(queries.COVERAGE, (dataset, source_version, as_of), TIERS["both"])
     covered = coverage.compose(coverage.from_rows(_rows(raw)))
 
     requested = None

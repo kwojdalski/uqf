@@ -180,7 +180,26 @@ def test_coverage_filters_on_source_version(client_for):
     gw = _cov([])
     client_for(gw).get("/coverage", params={"dataset": "trades", "source_version": "v7"})
     program, args, _ = gw.routed[-1]
-    assert args == ("trades", "v7")
+    assert args[:2] == ("trades", "v7")
+
+
+def test_coverage_passes_an_as_of_to_q(client_for):
+    """D-11: a coverage row is true until superseded, so the read needs an
+    as-of.
+
+    Asserted as a third argument rather than by exact tuple, because the
+    value is a timestamp taken at request time. What matters is that one is
+    sent at all: without it the q program would report withdrawn claims as
+    current, and would do so silently.
+    """
+    import datetime as dt
+
+    gw = _cov([])
+    client_for(gw).get("/coverage", params={"dataset": "trades", "source_version": "v7"})
+    _program, args, _tier = gw.routed[-1]
+    assert len(args) == 3, f"expected (dataset, version, as_of), got {args}"
+    assert isinstance(args[2], dt.datetime)
+    assert args[2].tzinfo is not None, "the as-of must be timezone-aware, not naive"
 
 
 def test_query_is_refused_when_required_coverage_has_gaps(client_for):

@@ -63,13 +63,33 @@ SELECT = """{[t;fc;fo;fv;lim]
   r:?[t;wc;0b;()];
   $[lim>0; lim sublist r; r]}"""
 
-#: Coverage intervals for one dataset at one source release.
+#: Coverage intervals for one dataset at one source release, as understood at
+#: an instant.
 #:
 #: ETL-09 requires consumers to filter on ``source_version``; doing it inside
-#: the program rather than in Python means a caller cannot omit it.
-COVERAGE = """{[ds;release]
+#: the program rather than in Python means a caller cannot omit it. D-11 adds
+#: the same reasoning one dimension over: a coverage row is true *until
+#: superseded*, so a read without an as-of silently reports withdrawn claims
+#: as current.
+#:
+#: The as-of is a REQUIRED parameter for the reason `source_version` is
+#: (bank E-09): an optional filter is one a caller forgets, and forgetting this one
+#: returns a plausible interval list rather than an error. Pass the gateway's
+#: own `.z.p` for "now".
+#:
+#: `recorded_at<=at<superseded_at` — current rows carry `0Wp` rather than a
+#: null precisely so this comparison needs no special case; see
+#: `.qcov.still_current`.
+#:
+#: The parameter is `at`, not `asof`: **`asof` is a q builtin**, and a builtin
+#: used as a lambda parameter raises a bare ``'nyi`` when the lambda is
+#: CALLED - not when it is defined, and whether or not the body references it.
+#: `test_q_programs.py` caught this before it shipped, which is the fourth
+#: name this repository has lost to that trap.
+COVERAGE = """{[ds;release;at]
   select range_from, range_to from etl_coverage
-    where dataset=ds, source_version=release}"""
+    where dataset=ds, source_version=release,
+          recorded_at<=at, at<superseded_at}"""
 
 #: Row count for a whitelisted table, so a UI can page without pulling rows.
 COUNT = "{[t] count value t}"

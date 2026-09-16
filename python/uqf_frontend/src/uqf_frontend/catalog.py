@@ -153,6 +153,10 @@ TABLES: dict[str, Table] = {
                 "range_to": _TS,
                 "rows_published": _L,
                 "recorded_at": _TS,
+                # D-11: a coverage claim is true until superseded. 0Wp while
+                # current, so an as-of read needs no null special case - see
+                # .qcov.still_current.
+                "superseded_at": _TS,
             },
         ),
         Table(

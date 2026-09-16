@@ -175,23 +175,23 @@ test_a_real_run_publishes_all_three:{[t]
 / --- coverage skipping (ETL-13) -------------------------------------------
 
 test_an_uncovered_window_needs_fetching:{[t]
-    .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`v1;.wrttest.d 1;.wrttest.d 2];1b;"nothing published means there is work to do"]};
+    .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"nothing published means there is work to do"]};
 
 test_a_covered_window_is_skipped:{[t]
     .qcov.stage_completion[`markouts;`v1;.wrttest.d 1;.wrttest.d 2;10];
-    .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`v1;.wrttest.d 1;.wrttest.d 2];0b;"a retry does not re-fetch a published window"]};
+    .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];0b;"a retry does not re-fetch a published window"]};
 
 / ETL-10, in the direction that matters: a version bump exists precisely to
 / force re-extraction, so v1 coverage must not suppress a v2 fetch.
 test_coverage_at_one_version_does_not_skip_another:{[t]
     .qcov.stage_completion[`markouts;`v1;.wrttest.d 1;.wrttest.d 2;10];
-    .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`v2;.wrttest.d 1;.wrttest.d 2];1b;"a source_version bump forces the re-fetch it exists to force"]};
+    .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`v2;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"a source_version bump forces the re-fetch it exists to force"]};
 
 / A retry after a partial run should redo only what is missing, not the
 / whole range.
 test_a_partial_run_leaves_only_the_gap_to_redo:{[t]
     .qcov.stage_completion[`markouts;`v1;.wrttest.d 1;.wrttest.d 2;10];
-    gap:.qwrt.remaining[`markouts;`v1;.wrttest.d 1;.wrttest.d 4];
+    gap:.qwrt.remaining[`markouts;`v1;.z.p;.wrttest.d 1;.wrttest.d 4];
     .qunit.assertEquals[(count gap;first gap`range_from);(1;.wrttest.d 2);"the retry resumes at the boundary, not at the start"]};
 
 / --- dependencies (ETL-16) ------------------------------------------------
@@ -224,10 +224,10 @@ test_every_missing_dependency_is_named_at_once:{[t]
 / about its INPUT. Computing markouts over a range whose trades are missing
 / would record coverage asserting the work was done.
 test_an_unpublished_upstream_blocks_the_run:{[t]
-    .qunit.assertError[{.qwrt.require_upstream[`trades;`v1;x 0;x 1]};(.wrttest.d 1;.wrttest.d 2);"a coverage precondition is checked before the run, not assumed"]};
+    .qunit.assertError[{.qwrt.require_upstream[`trades;`v1;.z.p;x 0;x 1]};(.wrttest.d 1;.wrttest.d 2);"a coverage precondition is checked before the run, not assumed"]};
 
 test_a_published_upstream_admits_the_run:{[t]
     .qcov.stage_completion[`trades;`v1;.wrttest.d 1;.wrttest.d 2;500];
-    .qunit.assertEquals[.qwrt.require_upstream[`trades;`v1;.wrttest.d 1;.wrttest.d 2];1b;"a fully published upstream lets the run proceed"]};
+    .qunit.assertEquals[.qwrt.require_upstream[`trades;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"a fully published upstream lets the run proceed"]};
 
 \d .

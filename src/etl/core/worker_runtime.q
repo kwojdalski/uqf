@@ -254,8 +254,8 @@ windows:{[from_ts;to_ts;width]
 / v2. That is ETL-10, and it is the direction that matters - the alternative
 / skips a re-extraction the version bump exists to force.
 / @return 1b when the window still needs fetching
-needs_fetch:{[ds;version;from_ts;to_ts]
-    not .qcov.is_covered[ds;version;from_ts;to_ts]}
+needs_fetch:{[ds;version;as_of;from_ts;to_ts]
+    not .qcov.is_covered[ds;version;as_of;from_ts;to_ts]}
 
 / Narrow a requested range to the parts not yet published (ETL-13).
 / .
@@ -263,8 +263,8 @@ needs_fetch:{[ds;version;from_ts;to_ts]
 / re-fetches only what is missing instead of the whole range. An empty result
 / means there is nothing to do - which under C-07 is an `idle success, not a
 / failure.
-remaining:{[ds;version;from_ts;to_ts]
-    .qcov.missing[ds;version;from_ts;to_ts]}
+remaining:{[ds;version;as_of;from_ts;to_ts]
+    .qcov.missing[ds;version;as_of;from_ts;to_ts]}
 
 / Complete one window: publish rows, record coverage, save the checkpoint -
 / in that order, and all three behind the dry-run gate.
@@ -354,7 +354,7 @@ require_dependencies:{[worker]
 / not yet published would compute markouts against missing trades and record
 / coverage saying it had done so.
 / @throws error naming the missing upstream ranges
-require_upstream:{[upstream;version;from_ts;to_ts]
-    .qcov.require_covered[upstream;version;from_ts;to_ts]}
+require_upstream:{[upstream;version;as_of;from_ts;to_ts]
+    .qcov.require_covered[upstream;version;as_of;from_ts;to_ts]}
 
 \d .
