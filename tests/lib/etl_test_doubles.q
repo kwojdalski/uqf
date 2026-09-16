@@ -1,7 +1,7 @@
 // etl_test_doubles.q - adapter doubles for testing stateful control flow
-// (.qetldbl). Implements requirement E-19.
+// (.qetldbl). Implements requirement ETL-19.
 //
-// E-19 permits doubling exactly four things - fetch, publish, checkpoint and
+// ETL-19 permits doubling exactly four things - fetch, publish, checkpoint and
 // logging - and then says the part that matters twice:
 //
 //   "Do not let adapter doubles substitute for transform and coverage tests.
@@ -9,7 +9,7 @@
 //
 // That warning is ENFORCED here rather than repeated as a comment. The set of
 // doubleable adapters is closed, and asking to double a transform or the
-// coverage ledger throws with E-19's own wording. The failure it prevents is
+// coverage ledger throws with ETL-19's own wording. The failure it prevents is
 // specific and plausible: a suite where .qcov.stage_completion is a double
 // passes whatever the real ledger does, so the interval arithmetic that
 // decides whether a range is complete goes untested while the test names all
@@ -20,7 +20,7 @@
 
 \d .qetldbl
 
-/ The closed set E-19 permits. Everything about this list is deliberate,
+/ The closed set ETL-19 permits. Everything about this list is deliberate,
 / including its shortness.
 doubleable:`fetch`publish`checkpoint`log
 
@@ -43,11 +43,11 @@ calls:();
 install:{[adapter;impl]
     if[adapter in protected;
         / Short by necessity: a thrown string is truncated at 255 bytes, and
-        / E-19's full sentence plus the adapter name exceeded it. The quote
+        / ETL-19's full sentence plus the adapter name exceeded it. The quote
         / is in this file's header; what belongs here is the instruction.
-        '"install: ",string[adapter]," must not be doubled (E-19: doubling the edges is not testing the middle) - test it against the real implementation"];
+        '"install: ",string[adapter]," must not be doubled (ETL-19: doubling the edges is not testing the middle) - test it against the real implementation"];
     if[not adapter in doubleable;
-        '"install: ",string[adapter]," is not a doubleable adapter - E-19 permits ",", " sv string doubleable];
+        '"install: ",string[adapter]," is not a doubleable adapter - ETL-19 permits ",", " sv string doubleable];
     installed[adapter]:impl;
     adapter}
 
@@ -84,7 +84,7 @@ call_count:{[adapter]
     if[0=count calls; :0j];
     "j"$sum adapter~/: first each calls}
 
-/ The adapters that were called, in order. This is the assertion E-19's
+/ The adapters that were called, in order. This is the assertion ETL-19's
 / "stateful control flow" actually needs: that publish happened before
 / checkpoint, not merely that both did.
 call_order:{[]

@@ -1,7 +1,7 @@
 / continuous_state.q - the continuous-worker poll-and-cursor pattern
 / (.qcont).
 / .
-/ Implements requirement E-03: "implement continuous workers as long-running
+/ Implements requirement ETL-03: "implement continuous workers as long-running
 / poll loops: load a local cursor at startup, publish a transformed page,
 / then advance and persist the cursor. Do not publish a resume-completion
 / claim merely because a continuous cursor advanced."
@@ -9,11 +9,11 @@
 / THE ASYMMETRY WITH BOUNDED WORKERS IS DELIBERATE
 / .
 / There is no registry here and no enforced contract, unlike
-/ .qbfstate.bounded_workers. E-01/E-02 give bounded workers both because the
+/ .qbfstate.bounded_workers. ETL-01/ETL-02 give bounded workers both because the
 / thing being prevented is specific: "a bounded worker must not silently
 / become an unbounded tailer". A continuous worker is already unbounded, so
 / there is no such failure to prevent, and a registry with nothing to enforce
-/ is ceremony. E-22/E-24 (issue #62) ask whether that should change; this
+/ is ceremony. ETL-22/ETL-24 (issue #62) ask whether that should change; this
 / file deliberately does not pre-empt that answer by inventing a contract.
 / .
 / THE SENTENCE THIS FILE EXISTS TO ENFORCE
@@ -28,7 +28,7 @@
 / .
 / Freshness is reported instead, which is the honest statement a consumer of
 / continuous output can actually use. That it is not a cross-worker contract
-/ is E-22's open question, and `freshness` says so at the point of use.
+/ is ETL-22's open question, and `freshness` says so at the point of use.
 
 \d .qcont
 
@@ -40,7 +40,7 @@
 / resume reading a tailer's cursor would skip history it never published.
 cursor_path:{[worker] (.qbfstate.lock_dir[]),"/",string[worker],".cursor"}
 
-/ Load the cursor at startup (E-03).
+/ Load the cursor at startup (ETL-03).
 / .
 / Returns 0Np when there is none, which a worker reads as "start from
 / whatever its own policy says" - typically now, or a configured lookback.
@@ -59,7 +59,7 @@ load_cursor:{[worker]
     @[{"P"$x};saved`cursor;{0Np}]}
 
 / Persist the cursor AFTER the page it acknowledges has been published
-/ (E-03, E-05).
+/ (ETL-03, ETL-05).
 / .
 / The ordering is the requirement. Persisting first and publishing second
 / means a crash between them loses the page for good: the cursor says it was
@@ -84,7 +84,7 @@ clear_cursor:{[worker]
 / A cursor going backwards is the one way a tailer silently re-publishes: it
 / re-reads a page it has already handled, and because continuous output has
 / no coverage ledger, nothing anywhere records that it happened twice. A
-/ bounded worker is protected from the same mistake by E-13's coverage
+/ bounded worker is protected from the same mistake by ETL-13's coverage
 / precheck; a continuous worker has only this.
 / .
 / Equal is also refused. A page that does not move the cursor means the poll
@@ -107,11 +107,11 @@ advance:{[worker;current;next_cursor]
 / How current is this worker's output?
 / .
 / This is the honest statement a consumer of continuous output can make, and
-/ it is deliberately NOT a completeness claim (E-03). "I have seen up to
+/ it is deliberately NOT a completeness claim (ETL-03). "I have seen up to
 / 09:41" says nothing about whether everything before 09:41 is published -
 / only that the tailer has passed it.
 / .
-/ E-22 asks whether continuous workers need a framework-level public
+/ ETL-22 asks whether continuous workers need a framework-level public
 / freshness contract. They do not have one: this is per-worker, there is no
 / cross-worker aggregate, and nothing consuming continuous output has a
 / sanctioned way to ask "is this fresh enough". Reporting the gap in the
@@ -133,10 +133,10 @@ is_fresh:{[worker;tolerance]
 
 / ------------------------------------------------------------------ POLL
 
-/ One poll iteration: fetch a page, publish it, advance (E-03).
+/ One poll iteration: fetch a page, publish it, advance (ETL-03).
 / .
 / Returns a dict rather than looping, so the LOOP belongs to the worker's own
-/ timer and this function stays testable without one. That follows E-04's
+/ timer and this function stays testable without one. That follows ETL-04's
 / split: the page's transformation and the cursor arithmetic are
 / deterministic and unit-testable, while the timer that calls this lives in
 / the shell.

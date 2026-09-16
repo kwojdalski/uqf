@@ -602,7 +602,7 @@ def rule_datetime_type(path: str, lines: list[str]) -> list[Finding]:
     `"p"$` needs the input's type, which is not local information (the same
     obstacle that keeps the fully-applied-projection trap off this list). The
     type's mere presence is local, and this tree's whole convention -
-    everything is UTC timestamps internally, E-08/R9.1 - means there is
+    everything is UTC timestamps internally, ETL-08/R9.1 - means there is
     nothing a datetime can be here except a mistake.
 
     Scoped to non-test files, deliberately. A test that PROVES the trap has
@@ -633,7 +633,7 @@ def rule_datetime_type(path: str, lines: list[str]) -> list[Finding]:
                         "hundreds of nanoseconds without erroring - and whole "
                         "seconds survive, so it passes every round-number check. "
                         "Use a timestamp (`p`) throughout; everything is UTC "
-                        "internally (E-08/R9.1, and #80's L-03)",
+                        "internally (ETL-08/R9.1, and #80's L-03)",
                     )
                 )
     return findings

@@ -20,7 +20,7 @@ def test_env_overrides_are_read(monkeypatch):
 
 
 def test_a_malformed_numeric_setting_fails_loudly(monkeypatch):
-    """Refuse to start rather than start misconfigured - the posture E-14
+    """Refuse to start rather than start misconfigured - the posture ETL-14
     takes on the q side.
     """
     monkeypatch.setenv("UQF_FRONTEND_GATEWAY_PORT", "not-a-port")
@@ -34,14 +34,14 @@ def test_empty_env_value_falls_back_to_the_default(monkeypatch):
 
 
 def test_credentials_are_not_in_the_default_settings():
-    """F-14: credentials come from the server environment, never a default
+    """FE-14: credentials come from the server environment, never a default
     baked into the package.
     """
     s = Settings()
     assert s.user == "" and s.passwd == ""
 
 
-# --- process registry (F-04 fan-out) --------------------------------------
+# --- process registry (FE-04 fan-out) --------------------------------------
 
 
 def test_processes_default_to_empty():

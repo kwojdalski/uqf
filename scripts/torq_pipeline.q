@@ -325,17 +325,17 @@ status_dir:{[]
 / .
 / This is the q side of the frontend's backfill view. The format is defined
 / HERE rather than inferred, because this tree has no Airflow provider to be
-/ compatible with - see the F-04 decision to develop the pipeline layer in
+/ compatible with - see the FE-04 decision to develop the pipeline layer in
 / this repository.
 / .
-/ What belongs in this file is exactly what E-15 says q owns: process
+/ What belongs in this file is exactly what ETL-15 says q owns: process
 / startup, source reads, query failures, checkpoints, run and window counts,
 / and coverage events. It deliberately carries NO retry count, task ordering,
 / timeout or concurrency state - those are Airflow's facts, and a reader that
-/ wants them must ask Airflow. Mixing the two is what E-15 forbids.
+/ wants them must ask Airflow. Mixing the two is what ETL-15 forbids.
 / .
 / Written atomically: serialise, write to a temp path, then rename over the
-/ target. A reader polling the directory (the frontend polls, per F-10) would
+/ target. A reader polling the directory (the frontend polls, per FE-10) would
 / otherwise be able to read a half-written file and see a truncated JSON
 / object as a parse error.
 / @param worker the worker's name, e.g. `markout_backfill
@@ -343,8 +343,8 @@ status_dir:{[]
 /   so two instances of one worker do not overwrite each other
 / @param state one of status_states
 / @param spec dict with `source_version`range_from`range_to - the run
-/   specification. range is half-open [range_from;range_to) per E-08, and
-/   source_version is mandatory per E-09 (coverage under one source release
+/   specification. range is half-open [range_from;range_to) per ETL-08, and
+/   source_version is mandatory per ETL-09 (coverage under one source release
 /   says nothing about another)
 / @param progress dict with `cursor`rows_published`windows_completed
 / @param err an error string, or "" when there is none
@@ -361,8 +361,8 @@ write_status:{[worker;instance_id;state;spec;progress;err]
     req:`source_version`range_from`range_to;
     missing:req where not req in key spec;
     if[count missing; '"write_status: spec is missing ",", " sv string missing];
-    if[null spec`source_version; '"write_status: source_version must be set (E-09)"];
-    / E-08: half-open and forward-going. Rejecting here means a bad range
+    if[null spec`source_version; '"write_status: source_version must be set (ETL-09)"];
+    / ETL-08: half-open and forward-going. Rejecting here means a bad range
     / can never reach the file, rather than being caught by the reader.
     if[not spec[`range_to]>spec`range_from;
         '"write_status: range must be non-empty and forward-going, got [",

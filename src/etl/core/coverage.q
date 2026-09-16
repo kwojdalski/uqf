@@ -1,7 +1,7 @@
 / coverage.q - the append-only completeness ledger and its interval
 / arithmetic (.qcov).
 / .
-/ Implements requirements E-07 to E-11 of docs/etl-framework-requirements.md.
+/ Implements requirements ETL-07 to ETL-11 of docs/etl-framework-requirements.md.
 / Those IDs are the REQUIREMENTS document's; the question bank uses an
 / overlapping E-nn scheme for source-adapter questions, so question-bank
 / answers are named as such below.
@@ -9,13 +9,13 @@
 / The two things most easily got wrong here, both counter-intuitive and both
 / stated explicitly in the canonical document:
 / .
-/   1. Coverage is RECORDED, not derived (E-07). It is not computed from the
+/   1. Coverage is RECORDED, not derived (ETL-07). It is not computed from the
 /      target data; a completion event is staged for every completed bounded
 /      window, INCLUDING AN EMPTY ONE. The empty-window rule is what makes
 /      "we ran and there was nothing" distinguishable from "we never ran" -
 /      and a derived ledger cannot express that difference at all.
 / .
-/   2. source_version is not optional and not advisory (E-09, E-10).
+/   2. source_version is not optional and not advisory (ETL-09, ETL-10).
 /      Coverage recorded under one source release says nothing about
 /      another, so every read filters on it and intervals from different
 /      versions are NEVER merged to satisfy a dependency.
@@ -27,8 +27,8 @@
 / ASSUMED, NOT VERIFIED - see issue #60.
 / .
 / etl_coverage exists only in the canonical Bitbucket tree, which is
-/ unreachable from here, so these columns are inferred from what E-07/E-08/
-/ E-09 require plus the frontend requirements' description of coverage "by
+/ unreachable from here, so these columns are inferred from what ETL-07/ETL-08/
+/ ETL-09 require plus the frontend requirements' description of coverage "by
 / dataset, partition key, and time range".
 / .
 / Note that description mentions a PARTITION KEY, which is not in the shape
@@ -40,7 +40,7 @@
 / here plus the writer's column list, not a hunt through the file.
 schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at
 
-/ Create the ledger if absent. Append-only by contract (E-07) - nothing in
+/ Create the ledger if absent. Append-only by contract (ETL-07) - nothing in
 / this file updates or deletes a row, and a reader should treat any such
 / mutation elsewhere as a bug.
 / .
@@ -133,7 +133,7 @@ require_schema:{[]
 
 / -------------------------------------------------------------- INTERVALS
 
-/ Validate a half-open [from;to) interval (E-08).
+/ Validate a half-open [from;to) interval (ETL-08).
 / .
 / Rejecting empty and reversed intervals at construction is what stops a
 / zero-width backfill reporting success: a window where from=to covers
@@ -146,7 +146,7 @@ require_interval:{[range_from;range_to]
     (range_from;range_to)}
 
 / Merge overlapping and boundary-adjacent intervals, leaving real gaps
-/ (E-08).
+/ (ETL-08).
 / .
 / "Only at their common boundary" is the load-bearing phrase. With half-open
 / intervals [Mon;Tue) and [Tue;Wed) are contiguous with nothing between
@@ -212,7 +212,7 @@ gaps:{[from_ts;to_ts;covered]
 
 / ---------------------------------------------------------------- RECORD
 
-/ Stage a completion event for one completed bounded window (E-07).
+/ Stage a completion event for one completed bounded window (ETL-07).
 / .
 / Called for EVERY completed window, including one that published no rows.
 / That is not an oversight to optimise away: an empty window is positive
@@ -220,10 +220,10 @@ gaps:{[from_ts;to_ts;covered]
 / reader cannot distinguish that from a range never attempted. Recording
 / rows_published=0 is the whole point.
 / .
-/ Only ever called AFTER the underlying work is complete (E-07), which is
-/ the same publish-before-acknowledge ordering E-05 requires of cursors.
+/ Only ever called AFTER the underlying work is complete (ETL-07), which is
+/ the same publish-before-acknowledge ordering ETL-05 requires of cursors.
 / @param dataset the dataset completed, e.g. `markouts
-/ @param source_version the immutable source-release label (E-09)
+/ @param source_version the immutable source-release label (ETL-09)
 / @param range_from window start
 / @param range_to window end, exclusive
 / @param rows_published how many rows the window published; 0 is legal and
@@ -233,7 +233,7 @@ gaps:{[from_ts;to_ts;covered]
 / @eg .qcov.stage_completion[`markouts;`v1;2026.09.13D00:00;2026.09.14D00:00;1234]
 stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
     if[null source_version;
-        '"stage_completion: source_version must be set - coverage under one source release says nothing about another (E-09)"];
+        '"stage_completion: source_version must be set - coverage under one source release says nothing about another (ETL-09)"];
     require_interval[range_from;range_to];
     init_ledger[];
     `etl_coverage insert (dataset;source_version;range_from;range_to;
@@ -245,9 +245,9 @@ stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
 / Every coverage interval for one dataset at one source release.
 / .
 / source_version is a required parameter rather than an optional filter,
-/ because E-09 requires consumers to filter on it and an optional filter is
+/ because ETL-09 requires consumers to filter on it and an optional filter is
 / one a caller forgets. Intervals from other versions are not returned, so
-/ they cannot be merged into this answer (E-10).
+/ they cannot be merged into this answer (ETL-10).
 / @param dataset the dataset to report on
 / @param source_version the release to report for
 / @return a table of composed intervals
@@ -272,7 +272,7 @@ missing:{[ds;version;from_ts;to_ts]
 
 / Admission check: refuse the caller unless the range is fully covered.
 / .
-/ E-11 requires that local historical reads, INCLUDING this check, go
+/ ETL-11 requires that local historical reads, INCLUDING this check, go
 / through a gateway addressing both `rdb and `hdb. That matters because
 / completion data moves after EOD: a check bound to an rdb-only handle
 / starts returning false gaps the morning after, for data that is present

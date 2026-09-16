@@ -297,7 +297,7 @@ checked.
 not a file list. Passing only the staged files would check each in isolation
 and miss exactly the cross-module breakage a type checker is for.
 
-Run the lane matching the layer you changed (requirement E-21). `q-unit` is
+Run the lane matching the layer you changed (requirement ETL-21). `q-unit` is
 also runnable directly as `q tests/run_tests.q`: it loads every module and
 every `test_*.q` file, prints a pass/fail summary, and exits non-zero if
 anything failed - safe to wire into CI as-is. As of this writing:
@@ -312,14 +312,14 @@ cannot prove what they claim if folded into the first:
   q refusing itself, not the mutual exclusion the lock exists to provide -
   and an in-process "resume" never discards its own memory, so it cannot
   show the state on disk was sufficient.
-- **`smoke`** also carries E-12's live half: every registered source is
+- **`smoke`** also carries ETL-12's live half: every registered source is
   validated against **the same declaration** its fixture is validated
   against in the deterministic suite. That is what makes a fixture
   meaningful rather than merely present — two separate declarations would
   let a suite pass while the real source had changed. A source whose
   credential is unset is skipped, not failed.
 - **`smoke`** is the only lane that touches a live external source
-  (requirement E-20), and is excluded from `all` on purpose. Folding it in
+  (requirement ETL-20), and is excluded from `all` on purpose. Folding it in
   would make every local run depend on a remote host being up, which trains
   everyone to read a red suite as "the network again" - which is how a real
   schema change gets ignored. Unconfigured, it **skips and exits 0**: an

@@ -1,7 +1,7 @@
 """Fan-out to individual TorQ processes.
 
 ``.usage.usage`` lives in each process and there is **no fleet-wide rollup**
-(F-04), so a single query log across the stack must be assembled here by
+(FE-04), so a single query log across the stack must be assembled here by
 querying each process directly.
 
 The design rule: **one unreachable process must not blank the whole view.**

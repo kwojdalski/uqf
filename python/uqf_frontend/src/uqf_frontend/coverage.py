@@ -1,20 +1,20 @@
 """Coverage interval arithmetic: is a requested range actually published?
 
-F-09 requires that before querying a bounded dataset the caller can confirm
+FE-09 requires that before querying a bounded dataset the caller can confirm
 its inputs are covered. The rules come from the ETL framework, not from here:
 
-- **E-08** - every coverage interval is half-open ``[range_from, range_to)``,
+- **ETL-08** - every coverage interval is half-open ``[range_from, range_to)``,
   and adjacent intervals compose **only at their common boundary**. So
   ``[Mon,Tue)`` and ``[Tue,Wed)`` merge into ``[Mon,Wed)``; ``[Mon,Tue)`` and
   ``[Wed,Thu)`` leave Tuesday as a gap and must not be merged across it.
-- **E-09** - ``source_version`` is an immutable source-release label and
+- **ETL-09** - ``source_version`` is an immutable source-release label and
   coverage consumers **must filter on it**. Coverage recorded under one
   release says nothing about another.
-- **E-10** - intervals from different versions are never merged to satisfy a
+- **ETL-10** - intervals from different versions are never merged to satisfy a
   dependency.
 
 This module is deliberately pure so the interval logic is unit-testable
-without a gateway, which is the same split E-04 asks for on the q side.
+without a gateway, which is the same split ETL-04 asks for on the q side.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ class Interval:
 def compose(intervals: list[Interval]) -> list[Interval]:
     """Merge overlapping and boundary-adjacent intervals, leaving real gaps.
 
-    Composing only at a common boundary is E-08's rule, and it is the whole
+    Composing only at a common boundary is ETL-08's rule, and it is the whole
     reason a naive "merge anything close" would be wrong: it would silently
     report a missing day as covered.
     """
@@ -92,7 +92,7 @@ def from_rows(
     """Build intervals from ``etl_coverage`` rows, skipping malformed ones.
 
     A row whose end is at or before its start would be rejected at write time
-    by E-08, so encountering one here means the ledger itself is damaged. It
+    by ETL-08, so encountering one here means the ledger itself is damaged. It
     is skipped rather than raised on, so one bad row cannot make an otherwise
     answerable coverage question unanswerable - but the caller is told how
     many were dropped.
@@ -110,7 +110,7 @@ def from_rows(
 
 
 def _aware(value: dt.datetime) -> dt.datetime:
-    """Treat a naive timestamp from q as UTC, per E-08/R9.1.
+    """Treat a naive timestamp from q as UTC, per ETL-08/R9.1.
 
     q stores UTC, and kola hands back naive datetimes for a timestamp column,
     so this is a re-labelling rather than a conversion.

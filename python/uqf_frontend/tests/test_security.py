@@ -1,4 +1,4 @@
-"""The F-14 property, asserted directly: client input never reaches q as text.
+"""The FE-14 property, asserted directly: client input never reaches q as text.
 
 These are the tests that matter most in this package. Everything else is
 plumbing; this is the boundary.

@@ -1,12 +1,12 @@
 / worker_runtime.q - retry classification, dry-run, and the authority split
 / (.qwrt).
 / .
-/ Implements requirements E-13 to E-17 of docs/etl-framework-requirements.md,
+/ Implements requirements ETL-13 to ETL-17 of docs/etl-framework-requirements.md,
 / and the retry decisions recorded on issues #71/#72 (question-bank M-04,
 / M-05).
 / .
 / The guarantee this file provides is deliberately WEAKER than the one people
-/ assume. E-13 says so in as many words: "do not assume exactly-once
+/ assume. ETL-13 says so in as many words: "do not assume exactly-once
 / processing - the framework establishes retry-safe publication and coverage
 / skipping, which is a weaker and more honest guarantee." So a window may be
 / fetched twice; what must not happen is that a window is published twice
@@ -21,7 +21,7 @@
 /   2. Unclassifiable errors are treated as DATA, i.e. terminal. Defaulting
 /      the other way means a genuine bug retries until the backoff cap and
 /      then fails anyway, having hidden itself for the duration.
-/   3. Dry-run must suppress THREE side effects, not one (E-14). Suppressing
+/   3. Dry-run must suppress THREE side effects, not one (ETL-14). Suppressing
 /      only the row publication leaves coverage claiming the window is
 /      complete - the exact lie the ledger exists to prevent.
 
@@ -29,12 +29,12 @@
 
 / ------------------------------------------------------------- AUTHORITY
 
-/ E-15's split, written down as data so a diagnostic can cite it and a test
+/ ETL-15's split, written down as data so a diagnostic can cite it and a test
 / can assert nobody quietly moved a concern across the line.
 q_owned:`startup`source_reads`query_failures`checkpoints`run_counts`window_counts`coverage_events
 airflow_owned:`task_ordering`scheduling`retries`timeouts`concurrency`alert_routing
 
-/ E-15 assigns RETRIES to Airflow, and M-04 has this file retrying transport
+/ ETL-15 assigns RETRIES to Airflow, and M-04 has this file retrying transport
 / errors in-process. That reads like a contradiction and is not, so state the
 / resolution plainly rather than leaving the next reader to reconcile it:
 / .
@@ -55,7 +55,7 @@ retry_boundary:"in-attempt transport retry is q's; task-level retry is Airflow's
 owner:{[concern]
     $[concern in q_owned; `q;
       concern in airflow_owned; `airflow;
-      '"owner: ",string[concern]," is not an assigned concern - E-15 splits a fixed list, so an unlisted concern means the split needs amending, not guessing"]}
+      '"owner: ",string[concern]," is not an assigned concern - ETL-15 splits a fixed list, so an unlisted concern means the split needs amending, not guessing"]}
 
 / ------------------------------------------------------ CLASSIFICATION
 
@@ -155,7 +155,7 @@ with_retry:{[pol;f]
 
 / ------------------------------------------------------------- DRY RUN
 
-/ The three side effects E-14 suppresses, named once so they cannot drift
+/ The three side effects ETL-14 suppresses, named once so they cannot drift
 / apart. Suppressing a subset is the dangerous case: rows withheld while
 / coverage is still published leaves the ledger asserting a window is
 / complete when nothing was written.
@@ -169,7 +169,7 @@ is_dry_run:{[] @[{.qwcfg.get_flag `dry_run};::;{0b}]}
 
 / Perform one named side effect, or record that dry-run withheld it.
 / .
-/ Every E-14-suppressed effect goes through here rather than being guarded
+/ Every ETL-14-suppressed effect goes through here rather than being guarded
 / inline at its call site, so "what does dry-run skip" has one answer that a
 / test can enumerate.
 / Takes the action and its arguments SEPARATELY, applying them with `.` only
@@ -188,7 +188,7 @@ is_dry_run:{[] @[{.qwcfg.get_flag `dry_run};::;{0b}]}
 / @throws error on an unrecognised effect name
 commit:{[dry;effect;action;args]
     if[not effect in suppressed_in_dry_run;
-        '"commit: ",string[effect]," is not one of the effects E-14 suppresses (",
+        '"commit: ",string[effect]," is not one of the effects ETL-14 suppresses (",
          ", " sv string suppressed_in_dry_run,") - add it there deliberately rather than bypassing the gate"];
     / `f . ()` is a TYPE error rather than a niladic call; the unary-null
     / argument list is what actually applies a niladic function.
@@ -199,7 +199,7 @@ commit:{[dry;effect;action;args]
 
 / Split [from_ts;to_ts) into consecutive half-open windows of `width`.
 / .
-/ E-18 names "window boundaries" as one of six lifecycle decision points
+/ ETL-18 names "window boundaries" as one of six lifecycle decision points
 / where a wrong answer is silent, and this is where that answer lives. Two
 / properties make it right, and both are tested:
 / .
@@ -247,17 +247,17 @@ windows:{[from_ts;to_ts;width]
 
 / ----------------------------------------------------- COVERAGE SKIPPING
 
-/ Should this window be fetched, or is it already published (E-13)?
+/ Should this window be fetched, or is it already published (ETL-13)?
 / .
 / Version-specific by construction: is_covered takes source_version as a
 / required parameter, so a window covered at v1 does NOT suppress a fetch at
-/ v2. That is E-10, and it is the direction that matters - the alternative
+/ v2. That is ETL-10, and it is the direction that matters - the alternative
 / skips a re-extraction the version bump exists to force.
 / @return 1b when the window still needs fetching
 needs_fetch:{[ds;version;from_ts;to_ts]
     not .qcov.is_covered[ds;version;from_ts;to_ts]}
 
-/ Narrow a requested range to the parts not yet published (E-13).
+/ Narrow a requested range to the parts not yet published (ETL-13).
 / .
 / Returns the gaps rather than a yes/no, so a retry after a partial run
 / re-fetches only what is missing instead of the whole range. An empty result
@@ -270,7 +270,7 @@ remaining:{[ds;version;from_ts;to_ts]
 / in that order, and all three behind the dry-run gate.
 / .
 / The ORDER is the requirement, not an implementation detail. Coverage is
-/ staged only after the publication it describes has happened (E-07), and the
+/ staged only after the publication it describes has happened (ETL-07), and the
 / checkpoint only after coverage, so every possible interruption point leaves
 / an under-claim rather than an over-claim: a re-run redoes work, which
 / retry-safe publication tolerates, instead of skipping work the ledger
@@ -296,7 +296,7 @@ finish_window:{[worker;ds;spec;from_ts;to_ts;publish]
 
 / ---------------------------------------------------------- DEPENDENCIES
 
-/ worker -> the TorQ process types it needs a connection to (E-16).
+/ worker -> the TorQ process types it needs a connection to (ETL-16).
 declared_dependencies:(`symbol$())!();
 
 / Declare what a worker needs before it can run.
@@ -320,7 +320,7 @@ connected:{[]
     if[count connected_override; :connected_override];
     @[{exec distinct proctype from .servers.SERVERS where not null w};::;{`symbol$()}]}
 
-/ Fail at INITIALISATION when a declared dependency is unavailable (E-16).
+/ Fail at INITIALISATION when a declared dependency is unavailable (ETL-16).
 / .
 / At init, not at first use: a worker that starts, runs for twenty minutes
 / and then discovers the hdb was never reachable has already published a
@@ -335,11 +335,11 @@ require_dependencies:{[worker]
     if[count missing;
         '"require_dependencies: ",string[worker]," cannot start - no connection to ",
          ", " sv string missing,
-         " (declared dependencies must resolve through .servers at init, E-16)"];
+         " (declared dependencies must resolve through .servers at init, ETL-16)"];
     worker}
 
 / Fail at initialisation when an upstream dataset is not published for the
-/ requested range (E-16's "coverage precondition").
+/ requested range (ETL-16's "coverage precondition").
 / .
 / Distinct from needs_fetch above, which asks about THIS worker's own output.
 / This asks about its INPUT: a markout backfill over a range whose trades are

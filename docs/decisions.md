@@ -15,13 +15,15 @@ and the question bank's backfill area is numbered `D-01..D-12` - one file
 holding both would put `D8` and `D-08` in adjacent tables meaning unrelated
 things.
 
-**37 answered, 73 still open** across 15 areas.
+**43 answered, 67 still open** across 15 areas.
 
 ## Answered
 
 | ID | Area | Answer | Issue | Date |
 |---|---|---|---|---|
 | `A-01` | Strategy & scope | a named subset | [#69](../../issues/69) | 2026-09-15 |
+| `A-02` | Strategy & scope | canonical is frozen from here on | [#69](../../issues/69) | 2026-09-16 |
+| `A-03` | Strategy & scope | this repository is the primary lineage now | [#69](../../issues/69) | 2026-09-16 |
 | `A-04` | Strategy & scope | no — generic analogues only | [#69](../../issues/69) | 2026-09-15 |
 | `A-06` | Strategy & scope | a file listing and table `meta` dumps may come over | [#69](../../issues/69) | 2026-09-15 |
 | `B-02` | Repository structure | answered by #67, not by discussion | [#70](../../issues/70) | 2026-09-15 |
@@ -40,17 +42,20 @@ things.
 | `E-08` | External sources & the source contract | parameterise where the driver allows, one escape function otherwise | [#73](../../issues/73) | 2026-09-15 |
 | `E-09` | External sources & the source contract | answered by A-04 | [#73](../../issues/73) | 2026-09-15 |
 | `E-11` | External sources & the source contract | introspection verifies a declared shape, it does not discover one | [#73](../../issues/73) | 2026-09-16 |
-| `F-19` | `docs/frontend-requirements.md` | both audiences | [#53](../../issues/53) | 2026-09-15 |
-| `F-20` | `docs/frontend-requirements.md` | option 2 — one service credential, authorisation in the API layer | [#54](../../issues/54) | 2026-09-15 |
-| `F-21` | `docs/frontend-requirements.md` | read q's status files | [#55](../../issues/55) | 2026-09-15 |
-| `F-22` | `docs/frontend-requirements.md` | local demo, single host | [#56](../../issues/56) | 2026-09-15 |
-| `F-23` | `docs/frontend-requirements.md` | answered together with #56: local demo, single host | [#57](../../issues/57) | 2026-09-15 |
+| `F-06` | Coverage, markout & attribution | the attribution model is `cross_markout_decomp`'s, verified by its sum-to-total test; canonical's fix history is unrecoverable | [#74](../../issues/74) | 2026-09-16 |
+| `F-19` | - | both audiences | [#53](../../issues/53) | 2026-09-15 |
+| `F-20` | - | option 2 — one service credential, authorisation in the API layer | [#54](../../issues/54) | 2026-09-15 |
+| `F-21` | - | read q's status files | [#55](../../issues/55) | 2026-09-15 |
+| `F-22` | - | local demo, single host | [#56](../../issues/56) | 2026-09-15 |
+| `F-23` | - | answered together with #56: local demo, single host | [#57](../../issues/57) | 2026-09-15 |
 | `G-02` | Airflow integration | answered by #68 and #93, not by discussion | [#75](../../issues/75) | 2026-09-15 |
 | `G-03` | Airflow integration | the idempotency key is the coverage window, not the task or the DAG | [#75](../../issues/75) | 2026-09-16 |
 | `G-09` | Airflow integration | strictly optional — and proved, not asserted | [#75](../../issues/75) | 2026-09-16 |
 | `H-01` | TorQ orchestration & process registry | overrides last, vendored file never edited | [#76](../../issues/76) | 2026-09-16 |
 | `H-06` | TorQ orchestration & process registry | answered by #66's Pipeline registry | [#76](../../issues/76) | 2026-09-15 |
 | `I-01` | Testing strategy & gates | seeded, and enforced by a test rather than a comment | [#77](../../issues/77) | 2026-09-16 |
+| `J-01` | Documentation & generation | generated at build AND committed, with a CI check that they match | [#78](../../issues/78) | 2026-09-16 |
+| `J-02` | Documentation & generation | it extracts facts the code already declares, and the code wins | [#78](../../issues/78) | 2026-09-16 |
 | `K-01` | Observability & diagnostics | a levelled layer over TorQ's `.lg`, and structured fields — built in #119 | [#79](../../issues/79) | 2026-09-16 |
 | `K-07` | Observability & diagnostics | answered by #68 plus M-05 | [#79](../../issues/79) | 2026-09-15 |
 | `M-01` | Error handling & failure modes | throw in pure code, return status at the shell | [#81](../../issues/81) | 2026-09-15 |
@@ -58,6 +63,7 @@ things.
 | `M-05` | Error handling & failure modes | terminal failed state, the worker moves on | [#81](../../issues/81) | 2026-09-15 |
 | `N-01` | Naming & conventions | one flat `.q<abbrev>` namespace per file, and the file list is the registry | [#82](../../issues/82) | 2026-09-16 |
 | `O-01` | Tooling, hooks & agents | they no longer exist, so there is nothing to arbitrate | [#83](../../issues/83) | 2026-09-16 |
+| `P-02` | Process & provenance | the maintainer arbitrates; Claude proposes with reasoning | [#84](../../issues/84) | 2026-09-16 |
 
 ### Answered off-repo
 
@@ -65,18 +71,12 @@ The GitHub record points at a path outside this tree, unreachable from a
 clone and from any other machine. Where a repository document has since
 recorded the substance, that is named too.
 
-- `F-19` (#53) - `~/.claude/plans/sprightly-brewing-catmull.md`; recorded in `docs/frontend-requirements.md`
+- `F-19` (#53) - `~/.claude/plans/sprightly-brewing-catmull.md`; not recorded in this repository
 
 ## Open
 
 | ID | Area | State | Question | Issue |
 |---|---|---|---|---|
-| `A-02` | Strategy & scope | `blocking` | Will the Bitbucket tree keep evolving in parallel, and if so who re-describes its features? | [#69](../../issues/69) |
-| `A-03` | Strategy & scope | `blocking` | Does this repo become the primary lineage, or stay a public demo while real work continues at the bank? | [#69](../../issues/69) |
-| `F-06` | Coverage, markout & attribution | `blocking` | What is the cross-currency attribution model, and what was wrong in `Fix: revalue cross markout attribution`? | [#74](../../issues/74) |
-| `J-01` | Documentation & generation | `blocking` | Is `docs/torq/processes.md` committed or generated at build time? | [#78](../../issues/78) |
-| `J-02` | Documentation & generation | `blocking` | What facts does `generate_operational_docs.py` extract, from where, and what happens when source and document disagree? | [#78](../../issues/78) |
-| `P-02` | Process & provenance | `blocking` | Who arbitrates a question that has no obvious answer and no consultable source? | [#84](../../issues/84) |
 | `A-05` | Strategy & scope | `shaping` | Mirror upstream's structure exactly so a future manual diff stays possible, or design freely now that no merge is planned? | [#69](../../issues/69) |
 | `A-07` | Strategy & scope | `shaping` | What is the acceptance test for “reimplemented” — a running demo, a green suite, or a document that matches? | [#69](../../issues/69) |
 | `B-01` | Repository structure | `shaping` | Adopt the `src/{foundation,pricing,portfolio,execution,market_data,integrations,examples}/` split? | [#70](../../issues/70) |
@@ -145,6 +145,21 @@ recorded the substance, that is named too.
 | `O-05` | Tooling, hooks & agents | `deferrable` | Are the upstream `.claude/skills/` the same fourteen present here, or a different set? | [#83](../../issues/83) |
 | `P-04` | Process & provenance | `deferrable` | What is the cadence for re-describing upstream features as they continue to land? | [#84](../../issues/84) |
 
+## Cited in docs, no record on GitHub
+
+Prose that leans on a decision id with no answer and no open question
+behind it - either the decision was made somewhere unrecorded, or the
+citation is wrong.
+
+- `E-12` - cited in `docs/drift-reports/drift-ledger.md`
+- `E-13` - cited in `docs/drift-reports/drift-ledger.md`, `docs/restatement-design.md`
+- `E-15` - cited in `docs/drift-reports/drift-ledger.md`, `docs/restatement-design.md`
+- `E-17` - cited in `docs/drift-reports/drift-ledger.md`
+- `E-18` - cited in `docs/drift-reports/drift-ledger.md`
+- `E-21` - cited in `docs/drift-reports/drift-ledger.md`
+- `E-23` - cited in `docs/restatement-design.md`
+- `F-04` - cited in `docs/drift-reports/drift-ledger.md`
+
 ## Ids that mean two different things
 
 These ids are both a question-bank id (above) and a requirement defined
@@ -152,22 +167,8 @@ in a requirement document. The requirement documents number their own
 `E-`/`F-` requirements independently of the bank's areas E and F, so a
 bare id in prose is ambiguous - say which namespace you mean.
 
-- `E-01` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-02` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-03` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-04` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-05` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-06` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-07` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-08` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-09` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-10` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `E-11` - defined as a requirement in `docs/etl-framework-requirements.md`
-- `F-03` - defined as a requirement in `docs/frontend-requirements.md`
-- `F-05` - defined as a requirement in `docs/frontend-requirements.md`
-- `F-06` - defined as a requirement in `docs/frontend-requirements.md`
-- `F-07` - defined as a requirement in `docs/frontend-requirements.md`
-- `F-08` - defined as a requirement in `docs/frontend-requirements.md`
+- `A-02` - defined as a requirement in `docs/drift-reports/drift-ledger.md`
+- `A-03` - defined as a requirement in `docs/drift-reports/drift-ledger.md`
 
 ## How a decision gets in here
 

@@ -64,7 +64,7 @@ test_backoff_is_exponential:{[t]
     .qunit.assertEquals[.qwrt.backoff_ms[.qwrt.default_policy] each 1 2 3;250 500 1000j;"each attempt waits twice as long"]};
 
 / Unbounded growth would leave a worker sitting in backoff for longer than
-/ Airflow's own timeout, which is the layer that owns timing out (E-15).
+/ Airflow's own timeout, which is the layer that owns timing out (ETL-15).
 test_backoff_is_capped:{[t]
     .qunit.assertEquals[.qwrt.backoff_ms[.qwrt.default_policy;20];8000j;"backoff never exceeds max_delay_ms"]};
 
@@ -106,7 +106,7 @@ test_exhaustion_returns_a_failed_state_rather_than_throwing:{[t]
     r:.qwrt.with_retry[.wrttest.fast 2;{'"connection reset"}];
     .qunit.assertEquals[(r`state;0<count r`error);(`failed;1b);"a terminal failure carries its error rather than unwinding the caller"]};
 
-/ --- the authority split (E-15) ------------------------------------------
+/ --- the authority split (ETL-15) ------------------------------------------
 
 test_q_owns_checkpoints_and_coverage:{[t]
     .qunit.assertEquals[.qwrt.owner each `checkpoints`coverage_events`source_reads;`q`q`q;"the facts q produces are q's"]};
@@ -114,12 +114,12 @@ test_q_owns_checkpoints_and_coverage:{[t]
 test_airflow_owns_scheduling_and_alerting:{[t]
     .qunit.assertEquals[.qwrt.owner each `scheduling`retries`alert_routing;`airflow`airflow`airflow;"the decisions about when and whether are Airflow's"]};
 
-/ E-15 splits a FIXED list. An unlisted concern means the split needs
+/ ETL-15 splits a FIXED list. An unlisted concern means the split needs
 / amending, which is a decision - not something to infer at runtime.
 test_an_unassigned_concern_is_an_error_not_a_guess:{[t]
     .qunit.assertError[{.qwrt.owner x};`log_rotation;"an unlisted concern is reported rather than assigned by guesswork"]};
 
-/ --- dry run (E-14) -----------------------------------------------------
+/ --- dry run (ETL-14) -----------------------------------------------------
 
 test_the_gate_performs_the_effect_on_a_real_run:{[t]
     .qunit.assertEquals[.qwrt.commit[0b;`publish_rows;{99};()];(`done;`publish_rows;99);"a real run does the work"]};
@@ -172,7 +172,7 @@ test_a_real_run_publishes_all_three:{[t]
         (7;1;.wrttest.d 2);
         "rows, one coverage row, and a cursor at the window's end"]};
 
-/ --- coverage skipping (E-13) -------------------------------------------
+/ --- coverage skipping (ETL-13) -------------------------------------------
 
 test_an_uncovered_window_needs_fetching:{[t]
     .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`v1;.wrttest.d 1;.wrttest.d 2];1b;"nothing published means there is work to do"]};
@@ -181,7 +181,7 @@ test_a_covered_window_is_skipped:{[t]
     .qcov.stage_completion[`markouts;`v1;.wrttest.d 1;.wrttest.d 2;10];
     .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`v1;.wrttest.d 1;.wrttest.d 2];0b;"a retry does not re-fetch a published window"]};
 
-/ E-10, in the direction that matters: a version bump exists precisely to
+/ ETL-10, in the direction that matters: a version bump exists precisely to
 / force re-extraction, so v1 coverage must not suppress a v2 fetch.
 test_coverage_at_one_version_does_not_skip_another:{[t]
     .qcov.stage_completion[`markouts;`v1;.wrttest.d 1;.wrttest.d 2;10];
@@ -194,7 +194,7 @@ test_a_partial_run_leaves_only_the_gap_to_redo:{[t]
     gap:.qwrt.remaining[`markouts;`v1;.wrttest.d 1;.wrttest.d 4];
     .qunit.assertEquals[(count gap;first gap`range_from);(1;.wrttest.d 2);"the retry resumes at the boundary, not at the start"]};
 
-/ --- dependencies (E-16) ------------------------------------------------
+/ --- dependencies (ETL-16) ------------------------------------------------
 
 test_a_worker_with_no_declared_dependencies_starts:{[t]
     .qunit.assertEquals[.qwrt.require_dependencies[`plain];`plain;"declaring nothing requires nothing"]};

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# test.sh - the lane dispatcher E-21 names.
+# test.sh - the lane dispatcher ETL-21 names.
 #
-# E-21: "Use the suite that matches the changed layer: q-unit for q
+# ETL-21: "Use the suite that matches the changed layer: q-unit for q
 # behaviour, q-backfill-process for bounded process behaviour, and the
 # focused Python suites for orchestration."
 #
@@ -19,7 +19,7 @@
 #                        and coverage - which needs a real filesystem and a
 #                        real second process to be worth anything.
 #   python               orchestration and the BFF.
-#   smoke                E-20's live external check. Explicitly NOT part of
+#   smoke                ETL-20's live external check. Explicitly NOT part of
 #                        any other lane: the deterministic suite proves local
 #                        behaviour, not that a configured external service is
 #                        reachable or compatible, and folding it in would
@@ -44,10 +44,10 @@ lanes:
   q-unit              deterministic qUnit suite (hermetic, fast)
   q-backfill-process  bounded worker lifecycle against a real filesystem
   python              orchestrator and frontend suites
-  smoke               E-20 live external metadata check (needs a live stack)
-  all                 every lane except smoke - see E-20
+  smoke               ETL-20 live external metadata check (needs a live stack)
+  all                 every lane except smoke - see ETL-20
 
-E-21: run the lane matching the layer you changed. `all` is for a release,
+ETL-21: run the lane matching the layer you changed. `all` is for a release,
 not for an edit.
 USAGE
 }
@@ -71,7 +71,7 @@ lane_python() {
 }
 
 lane_smoke() {
-    echo "== smoke: E-20 live external metadata check =="
+    echo "== smoke: ETL-20 live external metadata check =="
     "$Q" tests/q/smoke_external_metadata.q
 }
 

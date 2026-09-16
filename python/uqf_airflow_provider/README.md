@@ -4,11 +4,11 @@ Reads the status files `.qpipe.write_status` (`scripts/torq_pipeline.q`)
 writes, and translates them into Airflow's sensor vocabulary — a poke that
 is pending, succeeded, or failed.
 
-This answers F-21 / issue #55: Airflow/backfill task status reaches the
+This answers FE-21 / issue #55: Airflow/backfill task status reaches the
 frontend (and, here, Airflow itself) by reading the files q writes, not by
 a database table or a q-side call into Airflow's API.
 
-## What this package refuses to do (E-15)
+## What this package refuses to do (ETL-15)
 
 q owns process startup, source reads, query failures, checkpoints, run and
 window counts, and coverage events. Airflow owns task ordering, scheduling,
@@ -19,7 +19,7 @@ queue position, a timeout, or any other Airflow-owned fact — there is
 nothing in q's status file to manufacture it from, and `translate.py`'s
 tests assert the mapping touches only the fields q actually writes.
 
-## Airflow is optional (F-22/F-23, A-04)
+## Airflow is optional (FE-22/FE-23, A-04)
 
 This package has **no `apache-airflow` dependency**. `translate.py` and
 `status_reader.py` are plain stdlib and fully testable without Airflow
@@ -31,7 +31,7 @@ into `sys.modules`, the same reason `src/etl/core/source_contract.q`
 requires every source to declare a fixture: the path must be exercisable
 with no driver, or licensed dependency, at all.
 
-## Lineage (F-04)
+## Lineage (FE-04)
 
 This tree has no reachable canonical `uqf_airflow_provider` to port from.
 The format this package reads is the one `scripts/torq_pipeline.q` and

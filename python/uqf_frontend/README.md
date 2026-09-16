@@ -9,9 +9,9 @@ through **B3** of
 A thin server-side API layer in front of the TorQ `gateway`, reusing the kola
 IPC pattern already proven in this repo by `uqf_client` and by
 `torq_orchestrator.core.query()` rather than introducing a second mechanism
-(**F-16**). REST rather than WebSocket, because the gateway path has no
+(**FE-16**). REST rather than WebSocket, because the gateway path has no
 push or subscribe mechanism to a browser client — every view is poll-only
-(**F-10**).
+(**FE-10**).
 
 ## The property worth knowing
 
@@ -21,7 +21,7 @@ The q programs in `queries.py` are constants written in this package. A
 caller's table, column names and operator are checked against the whitelist
 in `catalog.py` and then passed as IPC *arguments*; a caller's values are
 passed as typed IPC arguments and never rendered into query text at all.
-That satisfies **F-14**, and is strictly stronger than escaping or quoting a
+That satisfies **FE-14**, and is strictly stronger than escaping or quoting a
 concatenated string.
 
 Parameterisation survives the tier boundary too. A TorQ backend evaluates a
@@ -61,15 +61,15 @@ scalar-from-vector. This has cost this repository three debugging sessions
 
 | | |
 |---|---|
-| `GET /health` | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure (**F-12**) |
+| `GET /health` | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure (**FE-12**) |
 | `GET /catalog` | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts |
-| `GET /coverage` | Composed coverage intervals and any gaps, for one dataset at one source release (**F-09**) |
-| `GET /ops/queue` | Pending and running gateway queries (**F-02**) |
-| `GET /ops/connections` | Registered backend handles and connected clients (**F-03**) |
-| `GET /ops/usage` | Fleet-wide query log, assembled here because q has none (**F-04**) |
-| `GET /ops/processes` | Fleet health for every process `process.csv` declares (**F-01**) |
-| `GET /ops/backfill` | Backfill and Airflow task status, read from the files q writes (**F-06**) |
-| `POST /query` | Validated, parameterised table query, tier-routed (**F-07**, **F-08**) |
+| `GET /coverage` | Composed coverage intervals and any gaps, for one dataset at one source release (**FE-09**) |
+| `GET /ops/queue` | Pending and running gateway queries (**FE-02**) |
+| `GET /ops/connections` | Registered backend handles and connected clients (**FE-03**) |
+| `GET /ops/usage` | Fleet-wide query log, assembled here because q has none (**FE-04**) |
+| `GET /ops/processes` | Fleet health for every process `process.csv` declares (**FE-01**) |
+| `GET /ops/backfill` | Backfill and Airflow task status, read from the files q writes (**FE-06**) |
+| `POST /query` | Validated, parameterised table query, tier-routed (**FE-07**, **FE-08**) |
 
 Errors carry a `transient` flag so a UI can tell an EOD window or a timeout
 apart from a real failure.
@@ -86,7 +86,7 @@ curl -s localhost:8000/query -H 'content-type: application/json' -d '{
 ```
 
 A timestamp **must** carry an explicit timezone offset. Everything is stored
-UTC (**E-08**, **R9.1**), and kola rejects a naive datetime anyway — so a
+UTC (**ETL-08**, **R9.1**), and kola rejects a naive datetime anyway — so a
 browser's local time is refused at the boundary with a reason rather than
 being silently wrong.
 
@@ -97,7 +97,7 @@ uv run uvicorn --factory uqf_frontend.app:create_app --port 8000
 ```
 
 Configuration is environment-only, so credentials stay server-side
-(**F-14**):
+(**FE-14**):
 
 | Variable | Default |
 |---|---|
@@ -112,7 +112,7 @@ Configuration is environment-only, so credentials stay server-side
 | `UQF_FRONTEND_STATUS_DIR` | unset — where q writes status files (pairs with `UQFSTATUSDIR`) |
 
 A malformed numeric value fails at startup rather than falling back to a
-default — the same posture **E-14** takes on the q side.
+default — the same posture **ETL-14** takes on the q side.
 
 ## Tests
 
@@ -133,7 +133,7 @@ when that package's environment is unavailable.
 
 `POST /query` takes `tier`: `rdb` (today's session), `hdb` (completed
 partitions) or `both` (razed). The split is explicit rather than hidden
-because **F-08** requires it and **F-11** expects `hdb` to be slower — the
+because **FE-08** requires it and **FE-11** expects `hdb` to be slower — the
 response echoes the tier that served it, so a UI can show which it got.
 
 `require_coverage` is an opt-in pre-check that refuses the query with **409**
@@ -147,12 +147,12 @@ published:
                       "range_to":   "2026-09-16T00:00:00Z"}}
 ```
 
-`source_version` is **mandatory**, not optional, because **E-09** requires
+`source_version` is **mandatory**, not optional, because **ETL-09** requires
 coverage consumers to filter on it — coverage under one source release says
 nothing about another. The filter is applied inside the q program rather than
 afterwards in Python, so a caller cannot omit it.
 
-Interval composition follows **E-08**: `[range_from, range_to)` is half-open
+Interval composition follows **ETL-08**: `[range_from, range_to)` is half-open
 and adjacent intervals compose **only at their common boundary**, so
 `[Mon,Tue)` and `[Tue,Wed)` merge while `[Mon,Tue)` and `[Wed,Thu)` leave
 Tuesday as a reported gap. That arithmetic is pure and unit-tested without a
@@ -162,7 +162,7 @@ gateway.
 
 `etl_coverage`'s real schema could not be verified from this repo — it exists
 only upstream. The `COVERAGE` program assumes `dataset`, `source_version`,
-`range_from`, `range_to`, which is what **E-08**/**E-09** and the frontend
+`range_from`, `range_to`, which is what **ETL-08**/**ETL-09** and the frontend
 requirements together imply. Confirm before trusting it against a real
 ledger.
 
@@ -174,7 +174,7 @@ which still respects the gateway-only boundary, since the gateway is the
 thing being asked about.
 
 `/ops/usage` is the interesting one: `.usage.usage` is per-process and **no
-fleet-wide rollup exists in q** (F-04), so it is fanned out and merged here.
+fleet-wide rollup exists in q** (FE-04), so it is fanned out and merged here.
 The rule that shaped the design: **one unreachable process must not blank the
 view.** Unreachable processes are part of the response, not an error —
 
@@ -185,7 +185,7 @@ view.** Unreachable processes are part of the response, not an error —
 
 `processes_configured` is there because an empty log with nothing configured
 looks identical to an idle fleet. Every view also serves its own
-`poll_seconds`, because F-10 makes polling the only mechanism and the right
+`poll_seconds`, because FE-10 makes polling the only mechanism and the right
 interval depends on how fast the underlying state moves.
 
 Configure the fan-out targets with
@@ -209,10 +209,10 @@ liveness. The declared set comes from the **generated** `process.csv` — set
 `UQF_FRONTEND_PROCESS_CSV`, plus `UQF_FRONTEND_BASE_PORT` so `{KDBBASEPORT}+N`
 resolves to the ports the stack actually started on.
 
-### Why this wasn't blocked on F-22
+### Why this wasn't blocked on FE-22
 
-F-01 describes liveness as shelling out to `torq.sh` and inspecting **local OS
-processes**, and F-22 asks whether this is for the local demo or a
+FE-01 describes liveness as shelling out to `torq.sh` and inspecting **local OS
+processes**, and FE-22 asks whether this is for the local demo or a
 production-shaped deployment — which makes B3 look gated.
 
 Liveness here comes from an **IPC probe** instead, which dissolves most of
@@ -248,7 +248,7 @@ anything that only asks whether something is listening. `unknown` (a plain q
 process with no `.proc`) is treated as absence of information, not evidence
 of the wrong process.
 
-## Usage capture (F-13)
+## Usage capture (FE-13)
 
 `.usage.usage` rows are flushed to disk and dropped from memory after
 `flushtime`. Any view of error or latency history longer than that window is
@@ -264,7 +264,7 @@ capture = UsageCapture(KolaFleet(settings), JsonlSink(Path("captured")))
 capture.capture_once()  # safe to call repeatedly, on any scheduler
 ```
 
-The ordering is deliberately dull and matches **E-05**'s
+The ordering is deliberately dull and matches **ETL-05**'s
 publish-before-checkpoint rule: fetch everything strictly newer than the
 watermark, append to the sink, and advance the watermark **only after the
 append succeeds**. A failed write keeps the old watermark so the next pass
@@ -274,7 +274,7 @@ strictly greater, a successful pass captures each row exactly once.
 ## Backfill status (B4)
 
 `GET /ops/backfill` reads the status files q writes, rather than calling
-Airflow's REST API. That keeps q authoritative for the facts **E-15** says it
+Airflow's REST API. That keeps q authoritative for the facts **ETL-15** says it
 owns and adds no Airflow dependency to a frontend that should work without
 one. Set `UQF_FRONTEND_STATUS_DIR` to the directory `.qpipe.status_dir`
 writes into.
@@ -288,13 +288,13 @@ data on the other.
 
 ### The boundary this deliberately does not cross
 
-**E-15** splits authority: q owns process startup, source reads, query
+**ETL-15** splits authority: q owns process startup, source reads, query
 failures, checkpoints, run and window counts, and coverage events; Airflow
 owns task ordering, scheduling, retries, timeouts, concurrency and alerting.
 These files carry only the first set, and a test asserts no Airflow-owned
 field (`retries`, `try_number`, `timeout`, `concurrency`, `queue`) appears in
 the response. Inferring one layer's facts from the other's output is exactly
-what E-15 forbids.
+what ETL-15 forbids.
 
 ### Three outcomes, not two
 
@@ -305,7 +305,7 @@ counts `failed` separately from `running` for the same reason — a worker
 still in flight is not a problem.
 
 Writes are atomic (serialise, temp file, rename), because the frontend polls
-(**F-10**) and would otherwise be able to read a half-written file. Files
+(**FE-10**) and would otherwise be able to read a half-written file. Files
 ending `.tmp` are ignored by the reader, and a test covers that.
 
 ## Authorisation seam (B5)
@@ -319,8 +319,8 @@ caller unable to discover why.
 
 ### Why this is a seam and not an auth system
 
-**F-20** says the layer connects with one service credential, so q never
-sees a per-user identity. **F-22/F-23** say local demo, single host, so there
+**FE-20** says the layer connects with one service credential, so q never
+sees a per-user identity. **FE-22/FE-23** say local demo, single host, so there
 is no user directory and in practice one operator.
 
 Together those make #59's stated acceptance criterion — "two users with
@@ -330,7 +330,7 @@ A login flow here would be inventing a requirement.
 
 What is useful now is one place every request passes through, defaulting to
 allow, exercised by tests, ready for a real policy the moment an identity
-exists. **F-14** remains what actually carries the security weight:
+exists. **FE-14** remains what actually carries the security weight:
 credentials stay server-side and no client input reaches query text.
 
 ```python
@@ -349,7 +349,7 @@ since that is what makes this a gate rather than a filter on the way out.
 
 The capture pipeline ships as a callable, not a daemon. What schedules it —
 a timer in this process, cron, or an Airflow task — is a deployment question,
-and **F-23** notes no hosting model is established yet.
+and **FE-23** notes no hosting model is established yet.
 
 The React application is deliberately not here. This package is Python; a
 browser app should live outside `python/`.

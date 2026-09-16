@@ -1,9 +1,9 @@
 / demo_deals_backfill.q - the first real bounded worker (.qddbf).
 / .
 / This is the file every piece of src/etl/core/ was built for. It satisfies
-/ the E-01 contract, reads through the E-12 source contract, windows the
-/ range per E-18, retries per M-04, honours dry-run per E-14, and records
-/ coverage per E-07 - and it does all of that over a synthetic source,
+/ the ETL-01 contract, reads through the ETL-12 source contract, windows the
+/ range per ETL-18, retries per M-04, honours dry-run per ETL-14, and records
+/ coverage per ETL-07 - and it does all of that over a synthetic source,
 / because A-04 forbids publishing the real one.
 / .
 / WHAT IT IS AND IS NOT
@@ -17,7 +17,7 @@
 / .
 / THE ONE ORDERING THAT IS LOAD-BEARING
 / .
-/ publish, then coverage, then checkpoint (E-05, E-07). Every interruption
+/ publish, then coverage, then checkpoint (ETL-05, ETL-07). Every interruption
 / point then leaves an UNDER-claim: a re-run redoes work, which retry-safe
 / publication tolerates, rather than an over-claim where the ledger believes
 / work was done that was not. .qwrt.finish_window owns that order, so this
@@ -30,9 +30,9 @@ worker_name:`demo_deals_backfill
 source_name:`demo_deals
 dataset:`demo_deals
 
-/ --- the contract's required globals (E-02) ------------------------------
+/ --- the contract's required globals (ETL-02) ------------------------------
 
-/ Explicit and inspectable rather than buried in a call, which is what E-02
+/ Explicit and inspectable rather than buried in a call, which is what ETL-02
 / asks for: a bounded worker must make its bound visible.
 source_version:`;
 range_from:0Np;
@@ -49,7 +49,7 @@ handle:0Ni;
 
 spec:{[] `source_version`range_from`range_to!(source_version;range_from;range_to)}
 
-/ Resolve everything that can fail BEFORE any work happens (E-16).
+/ Resolve everything that can fail BEFORE any work happens (ETL-16).
 / .
 / Order here is deliberate, cheapest and most-likely-misconfigured first:
 / configuration, then the contract, then the source declaration and its
@@ -67,7 +67,7 @@ init:{[run_spec]
     range_to::run_spec`range_to;
 
     if[null source_version;
-        '"init: source_version must be set - coverage under one source release says nothing about another (E-09)"];
+        '"init: source_version must be set - coverage under one source release says nothing about another (ETL-09)"];
     .qcov.require_interval[range_from;range_to];
 
     .qbfstate.register[worker_name;`.qddbf];
@@ -111,7 +111,7 @@ connect:{[]
     @[{hopen (hsym `$":",x;5000j)};cred;
         {'"connect: cannot reach the ",string[source_name]," source (",x,") - refusing to start rather than falling back to the fixture, which would record synthetic data as covered"}]}
 
-/ Turn a cursor into the windows still to do (E-13, E-18).
+/ Turn a cursor into the windows still to do (ETL-13, ETL-18).
 / .
 / Two narrowings, in this order, and the order matters:
 / .
@@ -121,7 +121,7 @@ connect:{[]
 / .
 / Doing coverage first and the cursor second would re-plan windows the
 / current run had already passed, which is merely wasteful. Doing only the
-/ cursor would re-fetch windows a PREVIOUS run published, which is what E-13
+/ cursor would re-fetch windows a PREVIOUS run published, which is what ETL-13
 / exists to avoid.
 plan:{[cursor]
     start:$[null cursor; range_from; cursor];
@@ -141,7 +141,7 @@ empty_windows:{[] ([] range_from:`timestamp$(); range_to:`timestamp$())}
 / dict rather than throwing, so the caller decides what a terminal failure
 / means - here, per M-05, the window fails and the run moves on.
 / .
-/ Every fetched window is validated against the source contract (E-12). That
+/ Every fetched window is validated against the source contract (ETL-12). That
 / is not belt-and-braces: a source that has dropped a column returns rows
 / where the missing column reads as a NULL in most q code, so without this
 / the worker would publish nulls and record the window as covered.
@@ -155,7 +155,7 @@ fetch:{[from_ts;to_ts]
 / Publish a window's rows into the target table.
 / .
 / Returns the row count, which .qwrt.finish_window records as the window's
-/ rows_published. Zero is legal and meaningful (E-07): an empty window is
+/ rows_published. Zero is legal and meaningful (ETL-07): an empty window is
 / positive evidence the range was examined and held nothing.
 publish:{[batch]
     t:.qsrc.declaration[source_name]`target;
@@ -163,8 +163,8 @@ publish:{[batch]
     t insert batch;
     count batch}
 
-/ Save the cursor. Present because the contract requires it (E-01); the
-/ actual write goes through .qbfstate so the spec-binding in E-06 is not
+/ Save the cursor. Present because the contract requires it (ETL-01); the
+/ actual write goes through .qbfstate so the spec-binding in ETL-06 is not
 / re-implemented here.
 checkpoint:{[cursor] .qbfstate.save_checkpoint[worker_name;spec[];cursor]}
 
@@ -179,7 +179,7 @@ checkpoint:{[cursor] .qbfstate.save_checkpoint[worker_name;spec[];cursor]}
 / plans them again.
 / .
 / Returns a progress dict rather than a status, because writing status is the
-/ shell's job (E-04) and .qbfstate.run_pass owns it.
+/ shell's job (ETL-04) and .qbfstate.run_pass owns it.
 run:{[]
     cursor:.qbfstate.load_checkpoint[worker_name;spec[]];
     windows:plan cursor;
