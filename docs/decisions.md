@@ -15,7 +15,7 @@ and the question bank's backfill area is numbered `D-01..D-12` - one file
 holding both would put `D8` and `D-08` in adjacent tables meaning unrelated
 things.
 
-**34 answered, 76 still open** across 15 areas.
+**37 answered, 73 still open** across 15 areas.
 
 ## Answered
 
@@ -36,8 +36,10 @@ things.
 | `E-01` | External sources & the source contract | a callback dict of four operations | [#73](../../issues/73) | 2026-09-15 |
 | `E-04` | External sources & the source contract | fake, generic file source, *and* a skippable ODBC adapter | [#73](../../issues/73) | 2026-09-15 |
 | `E-05` | External sources & the source contract | answered and built | [#73](../../issues/73) | 2026-09-15 |
+| `E-07` | External sources & the source contract | environment only, no file, no vault — built in #99 | [#73](../../issues/73) | 2026-09-16 |
 | `E-08` | External sources & the source contract | parameterise where the driver allows, one escape function otherwise | [#73](../../issues/73) | 2026-09-15 |
 | `E-09` | External sources & the source contract | answered by A-04 | [#73](../../issues/73) | 2026-09-15 |
+| `E-11` | External sources & the source contract | introspection verifies a declared shape, it does not discover one | [#73](../../issues/73) | 2026-09-16 |
 | `F-19` | `docs/frontend-requirements.md` | both audiences | [#53](../../issues/53) | 2026-09-15 |
 | `F-20` | `docs/frontend-requirements.md` | option 2 — one service credential, authorisation in the API layer | [#54](../../issues/54) | 2026-09-15 |
 | `F-21` | `docs/frontend-requirements.md` | read q's status files | [#55](../../issues/55) | 2026-09-15 |
@@ -49,6 +51,7 @@ things.
 | `H-01` | TorQ orchestration & process registry | overrides last, vendored file never edited | [#76](../../issues/76) | 2026-09-16 |
 | `H-06` | TorQ orchestration & process registry | answered by #66's Pipeline registry | [#76](../../issues/76) | 2026-09-15 |
 | `I-01` | Testing strategy & gates | seeded, and enforced by a test rather than a comment | [#77](../../issues/77) | 2026-09-16 |
+| `K-01` | Observability & diagnostics | a levelled layer over TorQ's `.lg`, and structured fields — built in #119 | [#79](../../issues/79) | 2026-09-16 |
 | `K-07` | Observability & diagnostics | answered by #68 plus M-05 | [#79](../../issues/79) | 2026-09-15 |
 | `M-01` | Error handling & failure modes | throw in pure code, return status at the shell | [#81](../../issues/81) | 2026-09-15 |
 | `M-04` | Error handling & failure modes | transport retries, data failures don't — config-driven | [#81](../../issues/81) | 2026-09-15 |
@@ -70,11 +73,9 @@ recorded the substance, that is named too.
 |---|---|---|---|---|
 | `A-02` | Strategy & scope | `blocking` | Will the Bitbucket tree keep evolving in parallel, and if so who re-describes its features? | [#69](../../issues/69) |
 | `A-03` | Strategy & scope | `blocking` | Does this repo become the primary lineage, or stay a public demo while real work continues at the bank? | [#69](../../issues/69) |
-| `E-07` | External sources & the source contract | `blocking` | How are external-source credentials supplied, and what is the public-repo story? | [#73](../../issues/73) |
 | `F-06` | Coverage, markout & attribution | `blocking` | What is the cross-currency attribution model, and what was wrong in `Fix: revalue cross markout attribution`? | [#74](../../issues/74) |
 | `J-01` | Documentation & generation | `blocking` | Is `docs/torq/processes.md` committed or generated at build time? | [#78](../../issues/78) |
 | `J-02` | Documentation & generation | `blocking` | What facts does `generate_operational_docs.py` extract, from where, and what happens when source and document disagree? | [#78](../../issues/78) |
-| `K-01` | Observability & diagnostics | `blocking` | What is the logging contract — bare `.lg.o`/`.lg.e`, or a levelled layer on top? | [#79](../../issues/79) |
 | `P-02` | Process & provenance | `blocking` | Who arbitrates a question that has no obvious answer and no consultable source? | [#84](../../issues/84) |
 | `A-05` | Strategy & scope | `shaping` | Mirror upstream's structure exactly so a future manual diff stays possible, or design freely now that no merge is planned? | [#69](../../issues/69) |
 | `A-07` | Strategy & scope | `shaping` | What is the acceptance test for “reimplemented” — a running demo, a green suite, or a document that matches? | [#69](../../issues/69) |
@@ -91,7 +92,6 @@ recorded the substance, that is named too.
 | `E-02` | External sources & the source contract | `shaping` | Can a new source be registered without editing core, and how is it discovered? | [#73](../../issues/73) |
 | `E-03` | External sources & the source contract | `shaping` | What is the layering between `external_rdb.q` and `backfill_source_rdb.q`? | [#73](../../issues/73) |
 | `E-06` | External sources & the source contract | `shaping` | Connection lifecycle — per-query, pooled, or persistent, and what is the retry and backoff policy? | [#73](../../issues/73) |
-| `E-11` | External sources & the source contract | `shaping` | What is the source-metadata discovery contract exercised by `external_source_meta_smoke`? | [#73](../../issues/73) |
 | `F-03` | Coverage, markout & attribution | `shaping` | Does coverage drive what gets backfilled next — is there a planner? | [#74](../../issues/74) |
 | `F-05` | Coverage, markout & attribution | `shaping` | What splits `markout.q` from `markout_backfill.q` — live versus historical? | [#74](../../issues/74) |
 | `F-08` | Coverage, markout & attribution | `shaping` | `book_liquidity.q` appears in both `core/` and `workers/` — what is the core/worker split rule in general? | [#74](../../issues/74) |
