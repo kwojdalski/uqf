@@ -127,7 +127,7 @@ present before reporting, and treat it as the pattern to hunt, not the whole
 result:
 
 - `t` appears ~41 times and means at least three things: a **table**
-  (`.qcoer.coerce[source;t]`, `apply_col_precedence[t]`), a **year fraction**
+  (`.qcoer.coerce_column[f;col]`, `apply_col_precedence[t]`), a **year fraction**
   (`d1[s;k;rd;rf;sigma;t]`, `cont_to_simple[r;t]`), and a **timestamp**
   (`cross_ref_price_at[quotes;sym;ref_size;t]`).
 - `s` similarly spans **spot price** (`d1[s;k;...]`) and **string**

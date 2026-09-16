@@ -190,7 +190,7 @@ is a full round trip instead: `vectorize1` folds `wide_book` and republishes
 onto `stp1`, so it flows through `rdb1`/`wdb1`/`hdb` exactly like any
 vendored table and survives past `vectorize1` restarting.
 
-## Config generation: never edit the vendored tree
+## Config generation
 
 Every process/table addition here (`fxfeed1` through `vectorize1`, and
 anything the `new-process` wizard adds) follows the same rule: read the
