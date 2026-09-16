@@ -4042,6 +4042,20 @@
       ]
     },
     {
+      "offset": 32,
+      "procname": "deals_backfill1",
+      "proctype": "backfill",
+      "publishes": [],
+      "subscribes": []
+    },
+    {
+      "offset": 33,
+      "procname": "events_backfill1",
+      "proctype": "backfill",
+      "publishes": [],
+      "subscribes": []
+    },
+    {
       "offset": 19,
       "procname": "fxfeed1",
       "proctype": "feed",
@@ -4186,6 +4200,10 @@
     "UQFSCRIPTS",
     "UQFSTATUSDIR",
     "UQF_API_ORIGIN",
+    "UQF_BACKFILL_FROM",
+    "UQF_BACKFILL_TO",
+    "UQF_BACKFILL_VERSION",
+    "UQF_BACKFILL_WORKER",
     "UQF_DRY_RUN",
     "UQF_FRONTEND_BASE_PORT",
     "UQF_FRONTEND_GATEWAY_HOST",

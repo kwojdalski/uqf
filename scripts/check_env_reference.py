@@ -60,6 +60,15 @@ LITERAL_READS = (
     re.compile(r"_(?:int|path)_env\s*\(\s*[\"']([A-Z][A-Z0-9_]*)[\"']"),
     # A module constant naming a variable, e.g. CRYPTORUST_ROOT_ENV = "..."
     re.compile(r"^[A-Z][A-Z0-9_]*_ENV\s*=\s*[\"']([A-Z][A-Z0-9_]*)[\"']", re.MULTILINE),
+    # A q process DECLARING the variables it requires as a symbol vector, then
+    # reading them through a loop: `required_env:`A`B`C` with `getenv nm`.
+    # The read itself carries no literal, so without this the names look
+    # unread - which is how scripts/torq_backfill.q's four variables were
+    # reported as documented-but-dead on their first run. Declaring the set is
+    # better practice than four scattered getenv calls (it lets the process
+    # refuse naming every missing one at once, per ETL-16), so the gate should
+    # understand the better idiom rather than push code toward the worse one.
+    re.compile(r"required_env\s*:\s*((?:`[A-Z][A-Z0-9_]*)+)"),
     # TypeScript: process.env.NAME
     re.compile(r"process\.env\.([A-Z][A-Z0-9_]*)"),
     # `.qdata.cfg` wraps getenv with a `.env`-file fallback, so its reads are
@@ -129,7 +138,11 @@ def read_names() -> dict[str, list[str]]:
         if path.suffix == ".q":
             text = Q_COMMENT_LINE.sub("", text)
         rel = str(path.relative_to(REPO))
-        names = {m for pattern in LITERAL_READS for m in pattern.findall(text)}
+        names = set()
+        for pattern in LITERAL_READS:
+            for m in pattern.findall(text):
+                # A backtick run like "`A`B`C" is one match; split it.
+                names.update(x for x in m.split("`") if x) if "`" in m else names.add(m)
         names |= {"UQF_" + key.upper() for key in QWCFG_READ.findall(text)}
         for name in names:
             found.setdefault(name, []).append(rel)

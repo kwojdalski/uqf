@@ -185,7 +185,12 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.TorqDemoPath
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
     # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
     # markout1(+31)
-    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 1
+    # +3, not +1: the two bounded backfill processes occupy the offsets
+    # immediately after markout1. They are declared processes like any other,
+    # so their ports are reserved even though they do not start with the
+    # stack - two backfills sharing a port with a feed would fail at bind
+    # time, and only when someone happened to run one.
+    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 3
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.TorqDemoPaths):
@@ -251,6 +256,8 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "fxtradesfeed1",
         "posbook1",
         "markout1",
+        "deals_backfill1",
+        "events_backfill1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -320,6 +327,8 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.TorqDemoPa
         "fxtradesfeed1",
         "posbook1",
         "markout1",
+        "deals_backfill1",
+        "events_backfill1",
     }
 
 
@@ -601,6 +610,8 @@ def test_pipeline_offsets_are_stable():
         "fxtradesfeed1": 29,
         "posbook1": 30,
         "markout1": 31,
+        "deals_backfill1": 32,
+        "events_backfill1": 33,
     }
 
 
@@ -618,6 +629,14 @@ def test_feed_and_etl_kinds_derive_proctype_and_credentials():
         if pipeline.kind == "feed":
             assert pipeline.proctype == "feed"
             assert pipeline.access_list == ""
+        elif pipeline.kind == "backfill":
+            # Its OWN proctype, because proctype is what discovery indexes by:
+            # gethandlebytype on `backfill` must find backfill workers and not
+            # the metrics pipelines they share a code path with.
+            assert pipeline.proctype == "backfill"
+            # It reads from the fleet like an etl, so it carries the same
+            # access list - only a pure feed needs none.
+            assert pipeline.access_list.endswith("accesslist.txt")
         else:
             assert pipeline.kind == "etl"
             assert pipeline.proctype == "metrics"
@@ -692,8 +711,11 @@ def test_markout_runs_on_utc_and_tap_does_not_autostart():
     """
     assert core.PIPELINE_BY_NAME["markout1"].localtime == "0"
     assert all(p.localtime == "1" for p in core.PIPELINES if p.procname != "markout1")
-    assert core.PIPELINE_BY_NAME["tap1"].startwithall == "0"
-    assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname != "tap1")
+    # tap1 is a diagnostic subscriber; the two backfills are bounded jobs
+    # triggered with a range. Neither belongs in `torq-demo start`.
+    on_demand = {"tap1", "deals_backfill1", "events_backfill1"}
+    assert all(core.PIPELINE_BY_NAME[n].startwithall == "0" for n in on_demand)
+    assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname not in on_demand)
 
 
 def test_generated_schema_covers_every_published_table(fake_paths: core.TorqDemoPaths):
