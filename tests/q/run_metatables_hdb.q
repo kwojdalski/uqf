@@ -4,9 +4,9 @@
 
 if[1<>count .z.x;'"supply one disposable HDB directory"];
 db:hsym `$first .z.x;
-fixture:([]sym:`EURUSD`EURUSD`GBPUSD;venue:`EBS`EBS`REUTERS;size:10 20 30f);
+fixture:([]sym:`EURUSD`EURUSD`GBPUSD;venue:`EBS`EBS`REUTERS;size:10 20 30f;time:2026.09.01D01:00:00.000000000 2026.09.01D02:00:00.000000000 2026.09.01D03:00:00.000000000);
 .Q.dpft[db;2026.09.01;`sym;`fixture];
-fixture:([]sym:enlist`EURUSD;venue:enlist`EBS;size:enlist 40f);
+fixture:([]sym:enlist`EURUSD;venue:enlist`EBS;size:enlist 40f;time:enlist 0Np);
 .Q.dpft[db;2026.09.02;`sym;`fixture];
 system "l ",first .z.x;
 
@@ -28,5 +28,13 @@ repeated:.qmeta.refresh[result;grouped;enlist 2026.09.01];
 assert[(delete meta_observed_at from result)~delete meta_observed_at from repeated;"repeat refresh does not double count"];
 adapted:.dqe.uqf_metatable[`fx_counts;`fixture;`date;enlist 2026.09.01;`sym`venue;metrics];
 assert[2 1j~(adapted`fx_counts)`rows;"DQE adapter against loaded HDB"];
--1 "metatables HDB: 9 checks passed";
+profile_metrics:.qmeta.profile[enlist`time;enlist`size;enlist[`large_size]!enlist(>;`size;15f)];
+profile_spec:.qmeta.definition[`fixture;`date;enlist`sym;profile_metrics];
+profile_result:.qmeta.collect[profile_spec;enlist 2026.09.01];
+assert[0 0j~profile_result`null_size;"HDB profile null counts"];
+assert[1 1j~profile_result`bad_large_size;"HDB quality violations per pair"];
+assert[2026.09.01D01:00:00.000000000~first profile_result`min_time;"HDB profile minimum timestamp"];
+null_range:.qmeta.collect[profile_spec;enlist 2026.09.02];
+assert[all null (null_range`min_time),null_range`max_time;"HDB all-null range"];
+-1 "metatables HDB: 13 checks passed";
 exit 0

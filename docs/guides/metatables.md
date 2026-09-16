@@ -58,6 +58,57 @@ query errors propagate rather than being recorded as zero. A map of named
 definitions can cover several tables or several breakdowns of one table;
 there is no mutable global registry or fixed list of eFX columns.
 
+## Broader profiling: counts, ranges, nulls and quality
+
+`profile[time_cols;null_cols;rules]` builds an aggregate dictionary for the
+same standalone `definition`/`collect`/`refresh` API and the DQE adapter:
+
+```q
+/ A rule is a per-row boolean expression: true marks a violation.
+/ Exclude nulls explicitly when a separate null count owns that policy.
+rules:`crossed`nonpositive_bid!
+    ((>;`bid;`ask);(&;(not;(null;`bid));(<=;`bid;0f)));
+measurements:.qmeta.profile[enlist`time;`time`bid`ask;rules];
+spec:.qmeta.definition[`quote;`date;`sym`venue;measurements];
+
+/ On demand: returns the current profile without storing it.
+current_profile:.qmeta.collect[spec;enlist 2026.09.01];
+
+/ Explicit refresh: replaces these slices in a previously collected table.
+stored_profile:.qmeta.refresh[stored_profile;spec;enlist 2026.09.01];
+```
+
+For each partition/group this produces:
+
+| Columns | Meaning |
+|---|---|
+| `rows` | Total row count, including rows with nulls |
+| `min_time`, `max_time` | Earliest/latest non-null time |
+| `null_time`, `null_bid`, `null_ask` | Null counts for each configured column |
+| `bad_crossed`, `bad_nonpositive_bid` | Number of rows violating each rule |
+| `meta_observed_at` | Collection start time in UTC |
+
+Temporal columns must have q temporal types. Empty/all-null time ranges
+return typed null bounds. Null counts follow q's `null` semantics, including
+its treatment of empty symbols; they are not generic string-blank checks.
+Quality rules must return one boolean per source row, including an empty
+boolean vector for an empty slice. Scalar, numeric and wrong-length rule
+outputs fail the query. Rules are trusted functional qSQL expressions, so
+column comparisons, allowed-value sets and custom predicates can express
+feed-specific checks without adding framework code.
+
+Q treats numeric nulls as less than ordinary numbers. A rule such as
+`bid <= 0` therefore counts null bids too; the example explicitly excludes
+them. Likewise, decide whether crossed-quote rules should exclude missing
+prices. Null counts remain separate, and rule violations can overlap; do
+not add them together as a count of distinct bad rows.
+
+Counts are long integers. Compute rates using `rows` as the denominator;
+zero rows mean no observations, not a 100% quality score. No automatic pass/fail
+thresholds, alerts, temporal-gap detector or duplicate-key policy are assumed.
+Use TorQ DQC or the existing `.qdqc` functions for applicable checks on these
+measurements. This keeps profiling separate from quality enforcement.
+
 ## Partition semantics and refresh
 
 - Supply a nonempty **typed vector** of partitions. There is no implicit

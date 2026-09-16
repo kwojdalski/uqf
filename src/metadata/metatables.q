@@ -95,4 +95,60 @@ refresh:{[current;spec;partitions]
     retained:?[current;enlist(not;(in;spec`partition_col;enlist partitions));0b;()];
     retained,replacement};
 
+/ Private: temporal bounds preserve typed nulls for empty/all-null slices.
+time_bound:{[direction;values]
+    if[not (type values) in 12 13 14 15 16 17 18 19h;
+        '"metatables: time range columns must be temporal vectors"];
+    present:values where not null values;
+    $[count present;direction present;first 0#values]};
+
+/ Count rows matching a quality violation expression; true means a bad row.
+/ @param violations boolean vector, one value per source row
+/ @param row_count number of rows in the source group
+/ @return long violation count
+/ @throws non-boolean, scalar or wrong-length rule result
+/ @eg .qmeta.count_bad[101b;3] -> 2
+count_bad:{[violations;row_count]
+    if[not 1h=type violations;'"metatables: quality rules must return boolean vectors"];
+    if[row_count<>count violations;
+        '"metatables: quality rules must return one boolean per source row"];
+    `long$sum violations};
+
+/ Build profiling aggregates usable by definition and the TorQ DQE adapter.
+/ @param time_cols temporal columns to measure with min_ and max_ outputs
+/ @param null_cols columns to measure with null_ counts using q null semantics
+/ @param rules dictionary of rule names to boolean violation expressions (true means bad)
+/ @return aggregate dictionary: rows, temporal bounds, null counts, bad_ rule counts
+/ @throws unnamed or duplicate column/rule names, malformed lists or dictionary
+/ @eg .qmeta.profile[enlist`time;`bid`ask;enlist[`crossed]!enlist(>;`bid;`ask)]
+profile:{[time_cols;null_cols;rules]
+    if[not all 11h=type each (time_cols;null_cols);
+        '"metatables: profile columns must be symbol vectors"];
+    if[(any null time_cols,null_cols) or not (time_cols;null_cols)~distinct each (time_cols;null_cols);
+        '"metatables: profile columns must be named and unique within each list"];
+    if[not 99h=type rules;'"metatables: rules must be a dictionary"];
+    rule_names:key rules;
+    if[count rules;
+        if[not 11h=type rule_names;'"metatables: rule names must be symbols"];
+        if[(any null rule_names) or not rule_names~distinct rule_names;
+            '"metatables: rule names must be named and unique"]];
+    metrics:enlist[`rows]!enlist(count;`i);
+    idx:0;
+    while[idx<count time_cols;
+        col:time_cols idx;
+        metrics,:(enlist `$"min_",string col)!enlist(.qmeta.time_bound;min;col);
+        metrics,:(enlist `$"max_",string col)!enlist(.qmeta.time_bound;max;col);
+        idx+:1];
+    idx:0;
+    while[idx<count null_cols;
+        col:null_cols idx;
+        metrics,:(enlist `$"null_",string col)!enlist($;enlist`long;(sum;(null;col)));
+        idx+:1];
+    idx:0;
+    while[idx<count rules;
+        rule_name:rule_names idx;
+        metrics,:(enlist `$"bad_",string rule_name)!enlist(.qmeta.count_bad;rules rule_name;(count;`i));
+        idx+:1];
+    metrics};
+
 \d .

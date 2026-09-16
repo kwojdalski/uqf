@@ -2323,6 +2323,15 @@
       },
       {
         "kind": "function",
+        "name": "count_bad",
+        "params": [
+          "violations",
+          "row_count"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
         "name": "definition",
         "params": [
           "tab",
@@ -2331,6 +2340,16 @@
           "aggregates"
         ],
         "rank": 4
+      },
+      {
+        "kind": "function",
+        "name": "profile",
+        "params": [
+          "time_cols",
+          "null_cols",
+          "rules"
+        ],
+        "rank": 3
       },
       {
         "kind": "function",
@@ -2348,6 +2367,15 @@
         "params": [
           "spec",
           "partitions"
+        ],
+        "rank": 2
+      },
+      {
+        "kind": "function",
+        "name": "time_bound",
+        "params": [
+          "direction",
+          "values"
         ],
         "rank": 2
       }

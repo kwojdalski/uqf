@@ -1163,6 +1163,20 @@
 .man.registerArg (".qmeta.refresh";"return";"";"replacement metatable; other partitions retain their original observations");
 .man.registerArg (".qmeta.refresh";"throws";"";"source/query failure or incompatible stored schema, leaving current untouched");
 .man.registerArg (".qmeta.refresh";"eg";"";"refreshed:.qmeta.refresh[stored;spec;enlist 2026.09.01]");
+.man.registerFunc (".qmeta.time_bound";".qmeta";"Private: temporal bounds preserve typed nulls for empty/all-null slices.";".qmeta.time_bound";"");
+.man.registerFunc (".qmeta.count_bad";".qmeta";"Count rows matching a quality violation expression; true means a bad row.";".qmeta.count_bad";".qmeta.count_bad[101b;3] -> 2");
+.man.registerArg (".qmeta.count_bad";"param";"violations";"boolean vector, one value per source row");
+.man.registerArg (".qmeta.count_bad";"param";"row_count";"number of rows in the source group");
+.man.registerArg (".qmeta.count_bad";"return";"";"long violation count");
+.man.registerArg (".qmeta.count_bad";"throws";"";"non-boolean, scalar or wrong-length rule result");
+.man.registerArg (".qmeta.count_bad";"eg";"";".qmeta.count_bad[101b;3] -> 2");
+.man.registerFunc (".qmeta.profile";".qmeta";"Build profiling aggregates usable by definition and the TorQ DQE adapter.";".qmeta.profile";".qmeta.profile[enlist`time;`bid`ask;enlist[`crossed]!enlist(>;`bid;`ask)]");
+.man.registerArg (".qmeta.profile";"param";"time_cols";"temporal columns to measure with min_ and max_ outputs");
+.man.registerArg (".qmeta.profile";"param";"null_cols";"columns to measure with null_ counts using q null semantics");
+.man.registerArg (".qmeta.profile";"param";"rules";"dictionary of rule names to boolean violation expressions (true means bad)");
+.man.registerArg (".qmeta.profile";"return";"";"aggregate dictionary: rows, temporal bounds, null counts, bad_ rule counts");
+.man.registerArg (".qmeta.profile";"throws";"";"unnamed or duplicate column/rule names, malformed lists or dictionary");
+.man.registerArg (".qmeta.profile";"eg";"";".qmeta.profile[enlist`time;`bid`ask;enlist[`crossed]!enlist(>;`bid;`ask)]");
 
 .man.registerFile ("positions.q";"";".qpos";"positions.q - a weighted-average-cost position tracker for an FX book, plus per-currency exposure decomposition. Requires risk.q (pnl), ccy.q (ccy_pair_legs/ccy_pair_symbol) and forwards.q (cross_book_at, for ccy_exposure_in's cross-currency revaluation) to be loaded first. Like every other module here, this is pure: the position book is an explicit keyed table threaded in and out of each function, never a hidden global - apply_fill returns the *updated* table rather than mutating one in place. A live caller (e.g. a TorQ process subscribing to a `trade` table) owns the actual mutable state itself, the same way torq_cross_etl.q/torq_vectorize_etl.q wrap other uqf pure functions with their own local state and glue.");
 .man.registerFunc (".qpos.empty_book";".qpos";"An empty position book: one row per sym once opened, running signed qty, volume-weighted average entry price of the *currently open* position, and cumulative realized P&L (quote currency). Unrealized P&L is never stored - see unrealized_pnl, computed on demand against a current market price.";".qpos.empty_book";".qpos.empty_book[]");

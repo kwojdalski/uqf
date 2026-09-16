@@ -76,4 +76,35 @@ test_dqe_adapter_preserves_requested_partition_in_payload:{[t]
     .qunit.assertEquals[key result;enlist`fx_counts;"DQE resultkeys identifier"];
     .qunit.assertEquals[(result`fx_counts)`date;2#2026.09.01;"source date independent of DQE observation partition"]};
 
+test_profile_counts_ranges_nulls_and_violations:{[t]
+    source[`size]:10 0n -5 40f;
+    source::update time:0Np from source where i=1;
+    metrics:.qmeta.profile[enlist`time;`time`size;enlist[`negative_size]!enlist(<;`size;0f)];
+    result:.qmeta.collect[spec[`symbol$();metrics];2026.09.01 2026.09.03];
+    .qunit.assertEquals[result`rows;3 0j;"profile denominator"];
+    .qunit.assertEquals[result`null_size;1 0j;"null counts"];
+    .qunit.assertEquals[result`null_time;1 0j;"timestamp null counts"];
+    .qunit.assertEquals[first result`min_time;first source`time;"minimum skips nulls"];
+    .qunit.assertEquals[first result`max_time;source[`time]2;"maximum time"];
+    .qunit.assertTrue[all null (last result`min_time;last result`max_time);"empty range is null, not infinity"];
+    / q comparisons include numeric nulls: the configured rule controls that policy.
+    .qunit.assertEquals[result`bad_negative_size;2 0j;"q null is below zero, explicitly counted by this rule"]};
+
+test_profile_grouped_all_null_bounds:{[t]
+    source[`time]:4#0Np;
+    metrics:.qmeta.profile[enlist`time;enlist`time;()!()];
+    result:.qmeta.collect[spec[enlist`sym;metrics];enlist 2026.09.01];
+    .qunit.assertEquals[result`null_time;2 1j;"per-pair null counts"];
+    .qunit.assertTrue[all null result`min_time;"all-null minimum"];
+    .qunit.assertTrue[all null result`max_time;"all-null maximum"]};
+
+test_profile_rejects_wrong_types_and_rules:{[t]
+    .qunit.assertError[.qmeta.profile[;`symbol$();()!()];`time`time;"duplicate temporal columns"];
+    metrics:.qmeta.profile[enlist`size;`symbol$();()!()];
+    .qunit.assertError[.qmeta.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"range must be temporal"];
+    metrics:.qmeta.profile[`symbol$();`symbol$();enlist[`broken]!enlist`size];
+    .qunit.assertError[.qmeta.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"rule must be boolean"];
+    metrics:.qmeta.profile[`symbol$();`symbol$();enlist[`short]!enlist(enlist;1b)];
+    .qunit.assertError[.qmeta.collect[spec[`symbol$();metrics];];enlist 2026.09.01;"one boolean per row required"]};
+
 \d .
