@@ -162,3 +162,28 @@ def test_the_export_is_deterministic() -> None:
         assert result.returncode == 0, result.stderr.decode(errors="replace")
         runs.append(result.stdout)
     assert runs[0] == runs[1], "the exporter is not deterministic"
+
+
+def test_the_committed_baseline_matches_this_tree() -> None:
+    """The gate itself, run in the test lane as well as CI.
+
+    A committed baseline that nothing verifies goes stale the first time
+    anyone changes a signature, and then every diff against it is measuring
+    against a tree that no longer exists. This repository has shipped that
+    exact shape before - `.qcov.require_schema` was defined, tested, and
+    called from no live path.
+
+    Here rather than only in CI because the q suite and the Python suite run
+    on a developer's machine, where the staleness is introduced.
+    """
+    if not (Path.home() / ".kx" / "bin" / "q").is_file():
+        pytest.skip("no KDB-X interpreter")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "check"],
+        cwd=UQF_ROOT,
+        capture_output=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, (
+        "the committed contract surface is stale:\n" + result.stderr.decode(errors="replace")
+    )
