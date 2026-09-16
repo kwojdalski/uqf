@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Keep `src/etl/core/` from depending on `sources/` or `workers/`.
 
-F-08 settled the split: `core/` is framework, `sources/` and `workers/` are
-declarations. E-02 is the property that split buys - adding a source is a
-file in `sources/` plus a registration, with NO core change - and it is the
-reason the ETL tree can grow without the framework learning about each new
-feed.
+Question bank F-08 settled the split: `core/` is framework, `sources/` and
+`workers/` are declarations, and bank question E-02 names the property that
+split buys - adding a source is a file in `sources/` plus a registration,
+with NO core change - and it is the reason the ETL tree can grow without the
+framework learning about each new feed.
 
 Nothing enforced it. N-04's answer said so plainly: the directory rule is a
 convention, and a file dropped into `core/` that reached into `sources/`
@@ -127,7 +127,8 @@ def main() -> int:
         for v in violations:
             print(f"  {v}", file=sys.stderr)
         print(
-            "\nF-08 makes core/ framework and the other two declarations; E-02 is\n"
+            "\nPer bank F-08 core/ is framework and the other two are\n"
+            "declarations; bank E-02 is\n"
             "the property that buys - a new source needs no core change. An arrow\n"
             "pointing this way removes it.",
             file=sys.stderr,
