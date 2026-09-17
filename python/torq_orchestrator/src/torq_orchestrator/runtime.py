@@ -16,7 +16,7 @@ from typing import Any
 
 from torq_orchestrator.env import build_env
 from torq_orchestrator.logger import get_logger
-from torq_orchestrator.paths import TorqDemoError, TorqDemoPaths, check_prerequisites
+from torq_orchestrator.paths import UqfStackError, UqfStackPaths, check_prerequisites
 from torq_orchestrator.pipelines import DEFAULT_BASE_PORT, PROCESS_CSV_FIELDS
 from torq_orchestrator.procs import (
     _base_process_rows,
@@ -27,7 +27,7 @@ from torq_orchestrator.procs import (
 log = get_logger(__name__)
 
 
-def bootstrap(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
+def bootstrap(paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
     """Idempotently set up the writable data dir and generated config, and
     return the full env dict torq.sh should run under.
     """
@@ -44,7 +44,7 @@ def bootstrap(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[
 
     # Extend (never edit in place) the vendored process.csv with uqf's own
     # extra processes (fxfeed1) and any process_overrides.csv fields set via
-    # set_process_config()/`config-set`/torq_demo_set_config.
+    # set_process_config()/`config-set`/uqf_stack_set_config.
     overrides = _read_overrides(paths)
     rows = _base_process_rows(paths)
     for row in rows:
@@ -78,7 +78,7 @@ def bootstrap(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[
 
 
 def run_torq_sh(
-    paths: TorqDemoPaths,
+    paths: UqfStackPaths,
     args: list[str],
     base_port: int = DEFAULT_BASE_PORT,
     capture: bool = False,
@@ -101,7 +101,7 @@ def run_torq_sh(
 
 
 def start(
-    paths: TorqDemoPaths,
+    paths: UqfStackPaths,
     procs: str = "all",
     base_port: int = DEFAULT_BASE_PORT,
     capture: bool = False,
@@ -110,7 +110,7 @@ def start(
 
 
 def stop(
-    paths: TorqDemoPaths,
+    paths: UqfStackPaths,
     procs: str = "all",
     base_port: int = DEFAULT_BASE_PORT,
     capture: bool = False,
@@ -119,7 +119,7 @@ def stop(
 
 
 def restart(
-    paths: TorqDemoPaths,
+    paths: UqfStackPaths,
     procs: str = "all",
     base_port: int = DEFAULT_BASE_PORT,
     capture: bool = False,
@@ -127,12 +127,12 @@ def restart(
     return run_torq_sh(paths, ["restart", procs], base_port=base_port, capture=capture)
 
 
-def summary(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT, capture: bool = True):
+def summary(paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT, capture: bool = True):
     return run_torq_sh(paths, ["summary"], base_port=base_port, capture=capture)
 
 
 def print_procs(
-    paths: TorqDemoPaths,
+    paths: UqfStackPaths,
     procs: str = "all",
     base_port: int = DEFAULT_BASE_PORT,
     capture: bool = True,
@@ -177,7 +177,7 @@ def export_table(rows: Any, path: Path) -> None:
     elif isinstance(rows, list):
         df = pl.DataFrame(rows)
     else:
-        raise TorqDemoError(
+        raise UqfStackError(
             f"can't export a {type(rows).__name__} result to a table - --export needs "
             "tabular output (a process/config list, or a query returning a table)"
         )
@@ -188,4 +188,4 @@ def export_table(rows: Any, path: Path) -> None:
     elif suffix == ".parquet":
         df.write_parquet(path)
     else:
-        raise TorqDemoError(f"unsupported export extension {suffix!r} - use .csv or .parquet")
+        raise UqfStackError(f"unsupported export extension {suffix!r} - use .csv or .parquet")

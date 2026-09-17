@@ -21,7 +21,7 @@ from string import Template
 
 from torq_orchestrator.env import build_env
 from torq_orchestrator.logger import get_logger
-from torq_orchestrator.paths import TorqDemoError, TorqDemoPaths
+from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 from torq_orchestrator.pipelines import (
     DEFAULT_BASE_PORT,
     PIPELINES,
@@ -42,7 +42,7 @@ log = get_logger(__name__)
 #   monitor1 - TorQ ships it startwithall=0, so out of the box nothing runs
 #   `.hb.checkheartbeat` and `.hb.hb` is a table nobody fills. Every process
 #   still PUBLISHES its heartbeat regardless; the collector is the missing
-#   half. `torq-demo summary`'s Heartbeat column, and the frontend health
+#   half. `uqf-stack summary`'s Heartbeat column, and the frontend health
 #   view behind it, therefore reported "not collected" on a fully healthy
 #   stack - a monitoring surface that is only ever populated if an operator
 #   knows to start one more process by hand is not monitoring.
@@ -50,7 +50,7 @@ log = get_logger(__name__)
 # This is an overlay, not an edit: the vendored file is never touched (H-01),
 # and because process_overrides.csv is still applied afterwards, an operator
 # who does want the upstream behaviour can put it back with
-# `torq-demo config-set monitor1 startwithall 0`.
+# `uqf-stack config-set monitor1 startwithall 0`.
 VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1"}
 
 # Proctypes monitor1 must also subscribe to, on top of the ten the vendored
@@ -72,7 +72,7 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1"}
 MONITOR_EXTRA_CONNECTIONS = ("metrics",)
 
 
-def _vendored_monitor_connections(paths: TorqDemoPaths) -> list[str]:
+def _vendored_monitor_connections(paths: UqfStackPaths) -> list[str]:
     """The proctypes the vendored monitor settings file subscribes to.
 
     Parsed out rather than restated, so that if upstream adds a proctype to
@@ -95,7 +95,7 @@ def _vendored_monitor_connections(paths: TorqDemoPaths) -> list[str]:
     return []
 
 
-def _monitor_connection_extras(paths: TorqDemoPaths) -> str:
+def _monitor_connection_extras(paths: UqfStackPaths) -> str:
     """`.servers.CONNECTIONS` as a command-line override for monitor1.
 
     `.proc.override[]` runs after every config layer, including the vendored
@@ -117,7 +117,7 @@ def _monitor_connection_extras(paths: TorqDemoPaths) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _base_process_rows(paths: TorqDemoPaths) -> list[dict[str, str]]:
+def _base_process_rows(paths: UqfStackPaths) -> list[dict[str, str]]:
     """The vendored process.csv rows, plus one row per PIPELINES entry
     appended (with stp1's -schemafile extras repointed and
     VENDORED_STARTWITHALL_OVERLAY applied) - the FILE is never mutated,
@@ -149,7 +149,7 @@ def _base_process_rows(paths: TorqDemoPaths) -> list[dict[str, str]]:
     return rows
 
 
-def _read_extra_processes(paths: TorqDemoPaths) -> list[dict[str, str]]:
+def _read_extra_processes(paths: UqfStackPaths) -> list[dict[str, str]]:
     """Rows appended via add_extra_process() (the `new-process` wizard, or
     anything else) - process_overrides.csv's sibling for whole new
     processes rather than field tweaks on existing ones. Tracked in git
@@ -163,7 +163,7 @@ def _read_extra_processes(paths: TorqDemoPaths) -> list[dict[str, str]]:
         return list(csv.DictReader(f))
 
 
-def next_free_port_offset(paths: TorqDemoPaths) -> int:
+def next_free_port_offset(paths: UqfStackPaths) -> int:
     """The smallest `{KDBBASEPORT}+N` offset not already used by any
     process.csv row - one past the highest one currently taken. Used by
     the `new-process` wizard so a new process never collides with an
@@ -178,14 +178,14 @@ def next_free_port_offset(paths: TorqDemoPaths) -> int:
     return max(taken) + 1
 
 
-def add_extra_process(paths: TorqDemoPaths, row: dict[str, str]) -> None:
+def add_extra_process(paths: UqfStackPaths, row: dict[str, str]) -> None:
     """Append one new process.csv row to extra_processes.csv - the
     never-edit-the-generated-file counterpart to set_process_config()'s
     field overrides, for a whole new process rather than a tweak to an
     existing one.
     """
     if row["procname"] in list_process_names(paths):
-        raise TorqDemoError(f"process {row['procname']!r} already exists")
+        raise UqfStackError(f"process {row['procname']!r} already exists")
 
     paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
     write_header = not paths.extra_processes_path.is_file()
@@ -197,7 +197,7 @@ def add_extra_process(paths: TorqDemoPaths, row: dict[str, str]) -> None:
     log.info("added process {} ({})", row["procname"], row["proctype"])
 
 
-def add_extra_table_schema(paths: TorqDemoPaths, table_def: str) -> None:
+def add_extra_table_schema(paths: UqfStackPaths, table_def: str) -> None:
     """Append one q table definition line (e.g. 'mytable:([]time:...;
     sym:...)') to extra_schema.q - _generated_schema_content()'s
     extension point for the `new-process` wizard, the same
@@ -208,7 +208,7 @@ def add_extra_table_schema(paths: TorqDemoPaths, table_def: str) -> None:
         f.write(table_def.rstrip("\n") + "\n")
 
 
-def _generated_schema_content(paths: TorqDemoPaths) -> str:
+def _generated_schema_content(paths: UqfStackPaths) -> str:
     """The vendored database.q's tables, plus uqf's own `quotes`/`wide_book`/
     `mkt_orderbook`/`crypto_book` tables and any add_extra_table_schema()
     additions (extra_schema.q) appended - never edited in place, always
@@ -233,7 +233,7 @@ def _generated_schema_content(paths: TorqDemoPaths) -> str:
     return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions) + extra
 
 
-def _read_overrides(paths: TorqDemoPaths) -> dict[str, dict[str, str]]:
+def _read_overrides(paths: UqfStackPaths) -> dict[str, dict[str, str]]:
     """{procname: {field: value}} from process_overrides.csv, or {} if it
     doesn't exist yet (nothing has been set())."""
     if not paths.overrides_path.is_file():
@@ -245,7 +245,7 @@ def _read_overrides(paths: TorqDemoPaths) -> dict[str, dict[str, str]]:
     return overrides
 
 
-def _write_overrides(paths: TorqDemoPaths, overrides: dict[str, dict[str, str]]) -> None:
+def _write_overrides(paths: UqfStackPaths, overrides: dict[str, dict[str, str]]) -> None:
     paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
     with paths.overrides_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["procname", "field", "value"], lineterminator="\n")
@@ -255,7 +255,7 @@ def _write_overrides(paths: TorqDemoPaths, overrides: dict[str, dict[str, str]])
                 writer.writerow({"procname": procname, "field": field, "value": value})
 
 
-def list_process_names(paths: TorqDemoPaths) -> list[str]:
+def list_process_names(paths: UqfStackPaths) -> list[str]:
     return [row["procname"] for row in _base_process_rows(paths)]
 
 
@@ -283,7 +283,7 @@ def resolve_process_config(row: dict[str, str], env: dict[str, str]) -> dict[str
 
 
 def get_process_config(
-    paths: TorqDemoPaths,
+    paths: UqfStackPaths,
     procname: str,
     base_port: int = DEFAULT_BASE_PORT,
     resolve: bool = True,
@@ -297,7 +297,7 @@ def get_process_config(
     """
     rows = {row["procname"]: row for row in _base_process_rows(paths)}
     if procname not in rows:
-        raise TorqDemoError(f"unknown process {procname!r} - {sorted(rows)}")
+        raise UqfStackError(f"unknown process {procname!r} - {sorted(rows)}")
     row = dict(rows[procname])
     row.update(_read_overrides(paths).get(procname, {}))
     if resolve:
@@ -305,16 +305,16 @@ def get_process_config(
     return row
 
 
-def set_process_config(paths: TorqDemoPaths, procname: str, field: str, value: str) -> None:
+def set_process_config(paths: UqfStackPaths, procname: str, field: str, value: str) -> None:
     """Persist a process.csv field override for *procname*, applied by every
     later bootstrap() (i.e. every start/stop/summary/... call) until
     changed again. Read-modify-write against process_overrides.csv - the
     only file this touches; the vendored process.csv is never edited.
     """
     if field not in PROCESS_CSV_FIELDS:
-        raise TorqDemoError(f"unknown process.csv field {field!r} - {PROCESS_CSV_FIELDS}")
+        raise UqfStackError(f"unknown process.csv field {field!r} - {PROCESS_CSV_FIELDS}")
     if procname not in list_process_names(paths):
-        raise TorqDemoError(f"unknown process {procname!r} - {list_process_names(paths)}")
+        raise UqfStackError(f"unknown process {procname!r} - {list_process_names(paths)}")
 
     overrides = _read_overrides(paths)
     overrides.setdefault(procname, {})[field] = value

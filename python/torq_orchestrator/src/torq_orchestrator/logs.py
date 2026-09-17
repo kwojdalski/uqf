@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from torq_orchestrator.logger import get_logger
-from torq_orchestrator.paths import TorqDemoError, TorqDemoPaths
+from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 from torq_orchestrator.procs import list_process_names
 
 log = get_logger(__name__)
@@ -59,7 +59,7 @@ def _format_kdb_time(t: str) -> str:
 def _configure_kdb_log_sink() -> Any:
     """(Re)configure the shared loguru logger with _KDB_LOG_FMT for the
     duration of a `logs` command, overriding whatever format main()'s
-    configure_logging(component="torq_demo") set up for the rest of the
+    configure_logging(component="uqf_stack") set up for the rest of the
     CLI - `logs` is always a leaf command, so clobbering the global sink
     here is safe.
     """
@@ -68,7 +68,7 @@ def _configure_kdb_log_sink() -> Any:
     return setup_logging(level="DEBUG", format_string=_KDB_LOG_FMT)
 
 
-def resolve_procnames(paths: TorqDemoPaths, procs: str) -> list[str]:
+def resolve_procnames(paths: UqfStackPaths, procs: str) -> list[str]:
     """'all' -> every process.csv row (not just startwithall=1 - a stopped
     process's last-run log is still worth reading); otherwise the given
     space-separated names, each of which must name a real process.
@@ -96,7 +96,7 @@ def resolve_procnames(paths: TorqDemoPaths, procs: str) -> list[str]:
     known = list_process_names(paths)
     unknown = [name for name in requested if name not in known]
     if unknown:
-        raise TorqDemoError(
+        raise UqfStackError(
             f"unknown process(es) {unknown} - known processes are {known}. "
             "A process that exists but has never started has no log file yet; "
             "that case is skipped silently rather than reported here."
@@ -115,7 +115,7 @@ def parse_log_line(line: str) -> dict[str, str] | None:
     return dict(zip(_LOG_FIELDS, parts, strict=True))
 
 
-def _log_files(paths: TorqDemoPaths, procnames: list[str]) -> list[Path]:
+def _log_files(paths: UqfStackPaths, procnames: list[str]) -> list[Path]:
     log_dir = paths.torqdata / "logs"
     files = [log_dir / f"{stream}_{name}.log" for name in procnames for stream in ("out", "err")]
     return [f for f in files if f.is_file()]
@@ -137,18 +137,18 @@ def _emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
 
 
 def get_recent_logs(
-    paths: TorqDemoPaths, procs: str = "all", lines: int = 20, min_level: str | None = None
+    paths: UqfStackPaths, procs: str = "all", lines: int = 20, min_level: str | None = None
 ) -> list[dict[str, str]]:
     """The last *lines* lines of each matching process's out_/err_ log,
     merged, sorted by timestamp, and filtered to min_level - the data
     print_recent_logs formats and prints through the shared loguru
-    logger, and torq_demo_mcp.py's torq_demo_logs tool returns as-is for
+    logger, and uqf_stack_mcp.py's uqf_stack_logs tool returns as-is for
     an MCP client to read directly.
     """
     procnames = resolve_procnames(paths, procs)
     files = _log_files(paths, procnames)
     if not files:
-        raise TorqDemoError(
+        raise UqfStackError(
             f"no log files found for {procnames} under {paths.torqdata / 'logs'} "
             "- has the demo been started at least once?"
         )
@@ -167,7 +167,7 @@ def get_recent_logs(
 
 
 def print_recent_logs(
-    paths: TorqDemoPaths, procs: str = "all", lines: int = 20, min_level: str | None = None
+    paths: UqfStackPaths, procs: str = "all", lines: int = 20, min_level: str | None = None
 ) -> None:
     """Print the last *lines* lines of each matching process's out_/err_
     log, merged and sorted by timestamp, through the shared loguru logger.
@@ -183,7 +183,7 @@ def _pump(stream: Any, out_queue: Any) -> None:
         out_queue.put(line)
 
 
-def follow_logs(paths: TorqDemoPaths, procs: str = "all", min_level: str | None = None) -> None:
+def follow_logs(paths: UqfStackPaths, procs: str = "all", min_level: str | None = None) -> None:
     """Stream new lines appended to each matching process's out_/err_ log,
     live, through the shared loguru logger - Ctrl-C to stop. One `tail -F`
     subprocess per file (follows the stable alias across TorQ's own log
@@ -196,7 +196,7 @@ def follow_logs(paths: TorqDemoPaths, procs: str = "all", min_level: str | None 
     procnames = resolve_procnames(paths, procs)
     files = _log_files(paths, procnames)
     if not files:
-        raise TorqDemoError(
+        raise UqfStackError(
             f"no log files found for {procnames} under {paths.torqdata / 'logs'} "
             "- has the demo been started at least once?"
         )

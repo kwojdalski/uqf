@@ -1,4 +1,4 @@
-/ torq_cross_etl.q - proof-of-concept "ETL" process for the TorQ demo,
+/ torq_cross_etl.q - proof-of-concept "ETL" process for the uqf stack,
 / alongside torq_fx_feed.q/torq_quotes_feed.q's own new rows: subscribes to
 / the tickerplant's `quotes` table (torq_quotes_feed.q's depth-aware FX
 / quotes) and, on every batch, re-prices a handful of synthetic cross pairs
@@ -24,7 +24,7 @@
 / only in the process.csv torq_orchestrator.core.bootstrap() generates on
 / the fly, port {KDBBASEPORT}+25. Query it directly (not through the
 / gateway) with e.g.
-/ `torq-demo query "select from cross_quotes" --port <base+25>`.
+/ `uqf-stack query "select from cross_quotes" --port <base+25>`.
 
 \d .cross
 

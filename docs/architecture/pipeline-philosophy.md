@@ -44,7 +44,7 @@ the framework falls out of preferring the second:
   identity. Absent attribution is visibly absent; wrong attribution reads as
   correct.
 
-The same instinct governs reporting outside the ledger. `torq-demo summary`
+The same instinct governs reporting outside the ledger. `uqf-stack summary`
 distinguishes three heartbeat states — a value, `-` (the collector is up and
 has no row for this process), and `not collected` (nothing is collecting at
 all) — because rendering the last two identically would turn a monitoring gap

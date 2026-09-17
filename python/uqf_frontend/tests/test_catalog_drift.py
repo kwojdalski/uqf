@@ -39,7 +39,7 @@ REPO = Path(__file__).resolve().parents[3]
 #: why `test_the_schema_source_is_where_this_test_expects_it` exists below: a
 #: stale path here would make every parametrised case fail loudly, which is
 #: the behaviour to keep.
-TABLES_Q = REPO / "scripts" / "torq_demo_tables.q"
+TABLES_Q = REPO / "scripts" / "uqf_stack_tables.q"
 
 #: q type characters, as they appear in a source contract's `types` string.
 _CHAR_TO_CATALOG = {

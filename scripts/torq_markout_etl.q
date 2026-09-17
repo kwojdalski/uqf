@@ -1,4 +1,4 @@
-/ torq_markout_etl.q - proof-of-concept "ETL" process for the TorQ demo,
+/ torq_markout_etl.q - proof-of-concept "ETL" process for the uqf stack,
 / alongside torq_posbook_etl.q's own new row: subscribes to both
 / torq_fx_trades_feed.q's `trades` and the vendored `quote` table (which
 / torq_fx_feed.q also writes FX top-of-book into - see torq_fx_feed.q's
@@ -43,7 +43,7 @@
 / Not loaded by src/init.q or anything else uqf itself runs - registered
 / only in the process.csv torq_orchestrator.core.bootstrap() generates on
 / the fly (port {KDBBASEPORT}+31 - see MARKOUT_PORT_OFFSET in core.py).
-/ e.g. `torq-demo query "select from execution_quality" --port <base+2>`
+/ e.g. `uqf-stack query "select from execution_quality" --port <base+2>`
 / (rdb1).
 
 / SOURCE: pull in uqf's own src/init.q (loads .qexec/...) before anything

@@ -1,4 +1,4 @@
-/ torq_demo_tables.q - the tickerplant tables the TorQ demo publishes into.
+/ uqf_stack_tables.q - the tickerplant tables the uqf stack publishes into.
 / .
 / THESE ARE q TABLES, AND THIS IS WHERE THEY LIVE. They used to be Python
 / string literals in torq_orchestrator/schemas.py, which meant q source that

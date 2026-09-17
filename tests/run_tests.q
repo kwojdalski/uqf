@@ -54,7 +54,7 @@
 \l tests/q/test_backfill_state.q
 \l tests/q/test_coverage.q
 \l tests/q/test_run.q
-\l tests/q/test_demo_tables.q
+\l tests/q/test_stack_tables.q
 \l tests/q/test_log.q
 \l tests/q/test_coercion.q
 \l tests/q/test_worker_config.q

@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-torq-demo = "torq_orchestrator.cli:main"
+uqf-stack = "torq_orchestrator.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.19,<0.12.0"]

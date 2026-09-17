@@ -48,7 +48,7 @@ _ETL_ACCESS_LIST = "${TORQAPPHOME}/appconfig/passwords/accesslist.txt"
 
 @dataclass(frozen=True)
 class Pipeline:
-    """One uqf-authored TorQ demo process, declared once.
+    """One uqf-authored uqf stack process, declared once.
 
     Everything a pipeline needs in three generated places - its
     `{KDBBASEPORT}+N` port offset, its process.csv row, and its `database.q`

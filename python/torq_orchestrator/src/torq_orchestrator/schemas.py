@@ -1,4 +1,4 @@
-"""Reads the tickerplant table definitions out of `scripts/torq_demo_tables.q`.
+"""Reads the tickerplant table definitions out of `scripts/uqf_stack_tables.q`.
 
 **The definitions themselves live in q, not here.** This module used to hold
 them as Python string literals, which meant q source that no q parser read
@@ -28,7 +28,7 @@ log = get_logger(__name__)
 
 #: The q file that owns these definitions. Resolved from this module rather
 #: than a working directory, so the reader works from anywhere.
-TABLES_Q = Path(__file__).resolve().parents[4] / "scripts" / "torq_demo_tables.q"
+TABLES_Q = Path(__file__).resolve().parents[4] / "scripts" / "uqf_stack_tables.q"
 
 #: `name:([]...)` at the start of a line, to the end of that line. Comments in
 #: the q file start with `/` and never begin a definition, so a line-anchored
@@ -41,7 +41,7 @@ def _definitions() -> dict[str, str]:
 
     Read at import and cached in the constants below rather than on every
     call: these are consulted while generating `database.q`, which
-    `bootstrap()` does on *every* torq-demo command.
+    `bootstrap()` does on *every* uqf-stack command.
     """
     if not TABLES_Q.is_file():  # pragma: no cover - a broken checkout
         raise FileNotFoundError(f"table definitions not found at {TABLES_Q}")

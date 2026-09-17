@@ -89,8 +89,8 @@ the seven vendored dependencies below:
   only, at the repo owner's explicit choice. `env/`'s own table schemas
   cover some of the same shapes (quotes/trades) at a much lighter weight,
   without the process/feed-handler layer this pulls in. It can still be
-  started up and queried, though - `python/torq_orchestrator/torq_demo.py`
-  (a Typer CLI) and `torq_demo_mcp.py` (a FastMCP server exposing the same
-  controls as MCP tools) bridge it with `lib/torq` (see [docs/guides/torq-demo.md](docs/guides/torq-demo.md))
+  started up and queried, though - `python/torq_orchestrator/uqf_stack.py`
+  (a Typer CLI) and `uqf_stack_mcp.py` (a FastMCP server exposing the same
+  controls as MCP tools) bridge it with `lib/torq` (see [docs/guides/uqf-stack.md](docs/guides/uqf-stack.md))
   so the two vendored trees can run as one demo without either being
   modified.
