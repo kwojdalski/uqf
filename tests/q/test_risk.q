@@ -50,6 +50,16 @@ test_var_historical95:{[t]
     pnl_series:-100+til 200;
     .testutil.assertApprox[.qrisk.var_historical[pnl_series;0.95];90f;1e-9;"5th percentile of a known series"]};
 
+/ The documented sign behaviour, pinned. The docstring used to promise "a
+/ positive loss estimate" while the function returns the negation of the
+/ percentile outcome, so an all-profitable series yields a negative "loss"
+/ (bugfinder, #182). The docstring was corrected rather than the arithmetic,
+/ which makes this the test that holds the two together.
+test_var_historical_is_negative_when_the_percentile_is_a_gain:{[t]
+    pnl_series:100+til 200;
+    .testutil.assertApprox[.qrisk.var_historical[pnl_series;0.95];-110f;1e-9;
+        "a series that never loses at the 5th percentile reports a negative loss, not zero"]};
+
 test_var_historical99:{[t]
     pnl_series:-100+til 200;
     .testutil.assertApprox[.qrisk.var_historical[pnl_series;0.99];98f;1e-9;"1st percentile of a known series"]};
