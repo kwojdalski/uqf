@@ -20,10 +20,13 @@ found, CI emits a warning and writes the limitation in the job summary:
 q. Static q checks and all other Python tests still run. A green hosted run
 therefore does not mean the q runtime tests passed.
 
-Run `QHOME="$HOME/.kx" "$HOME/.kx/bin/q" tests/run_tests.q` locally before
-merging q changes. If the runner later supplies an interpreter through PATH,
-`~/.kx/bin/q`, CI automatically runs the existing q hook;
-a failing interpreter/test is a failure, not a reason to skip it.
+Run `scripts/test.py q-unit` and `scripts/test.py q-examples` locally before
+merging q changes. The hook, CI and the Python IPC fixtures all find q by the
+same rule `scripts/test.py` applies: `$Q` if set, otherwise `~/.kx/bin/q`,
+and nothing else - no PATH lookup and no PeachQ fallback, because an
+interpreter chosen for you is one the result was not verified on. If the
+runner later supplies one at that path, CI runs the hook automatically; a
+failing interpreter or test is a failure, not a reason to skip it.
 
 The local branch-name and protected-branch hooks are excluded in CI because
 PR checkout can be detached and pushes to `master` are expected. Every other
