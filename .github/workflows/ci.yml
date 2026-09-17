@@ -40,12 +40,12 @@ jobs:
           # The same rule scripts/test.py applies, so CI skips exactly when
           # the hook would have nothing to run: $Q, else ~/.kx/bin/q.
           if [ -x "${Q:-$HOME/.kx/bin/q}" ]; then
-            echo "A q interpreter is available; the q-tests hook will run." >> "$GITHUB_STEP_SUMMARY"
+            echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "SKIP=$SKIP,q-tests" >> "$GITHUB_ENV"
-            echo "::warning::No q interpreter on this runner. qUnit and q-dependent Python IPC tests are not exercised; static q checks still run."
+            echo "SKIP=$SKIP,q-tests,q-coverage" >> "$GITHUB_ENV"
+            echo "::warning::No q interpreter on this runner. qUnit, the coverage gate and q-dependent Python IPC tests are not exercised; static q checks still run."
             echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
-            echo "No q interpreter is installed on this hosted runner. The qUnit hook is skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
+            echo "No q interpreter is installed on this hosted runner. The qUnit and coverage hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q and scripts/test.py q-coverage locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
