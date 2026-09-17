@@ -109,4 +109,75 @@ test_functional_is_a_subset_of_owned:{[t]
     .qunit.assertEquals[all .qns.functional[] in .qns.owned[];1b;
         "functional narrows owned rather than finding something else"]};
 
+/ --- every shipped namespace is inside the prefix --------------------------
+
+/ The `.q` prefix is not decoration: it is the whole of `owned`'s definition,
+/ so a namespace declared without it cannot be seen by the contract surface,
+/ the coverage report or the documentation ratchet even in a process that
+/ HAS loaded it - and not seen in the way that reports success, because each
+/ of those tools keeps printing a passing line over the smaller set.
+/ .
+/ Three namespaces in scripts/ were outside it until this test existed:
+/ .cross, .markout and .posbook, the tickerplant subscriber processes, now
+/ .qsub.cross and friends. The prefix is a necessary condition, not a
+/ sufficient one - those three also subscribe to a tickerplant as they load,
+/ so no plain q process can load them and man.q's generator scans src/ only.
+/ What the prefix buys is that the moment a tool DOES have them in
+/ process - a coverage run inside the live process, `.qns.owned` there -
+/ they are part of this tree rather than indistinguishable from q's own
+/ globals.
+
+/ Namespaces that are deliberately outside the prefix, each with the reason
+/ it cannot simply be renamed. Written as a dictionary rather than a list so
+/ the reason lives beside the name and a future reader does not have to
+/ guess whether an entry is a decision or an oversight.
+outside_the_prefix:(`symbol$())!();
+outside_the_prefix[`.dqe]:"TorQ's OWN namespace - torq_metatables.q adds uqf_metatable INTO it so DQE's runquery can transport it. Renaming would break the integration, not tidy it.";
+outside_the_prefix[`.cov]:"the coverage tool, in KX's published .cov API shape. .qcov is already the ETL coverage LEDGER, so the obvious rename collides with an unrelated namespace.";
+outside_the_prefix[`.surface]:"the contract-surface exporter, which enumerates this tree's namespaces. Inside the prefix it would export itself - a tool appearing in the artifact it produces.";
+
+/ Private: every namespace declared by a file under src/ or scripts/.
+declared_namespaces:{[]
+    files:system"find src scripts -name '*.q'";
+    raze {[f]
+        lines:read0 hsym `$f;
+        decls:lines where lines like "\\d .*";
+        decls:decls where not decls like "\\d .";
+        `$3_/:decls} each files}
+
+test_every_shipped_namespace_is_inside_the_prefix_or_listed:{[t]
+    / The ratchet. A new `\d .something` in src/ or scripts/ either carries
+    / the prefix or is added to outside_the_prefix WITH its reason, which
+    / makes the exception a decision someone wrote down rather than a file
+    / nobody noticed.
+    all_ns:distinct declared_namespaces[];
+    stray:all_ns where not (all_ns like ".q*") or all_ns in key outside_the_prefix;
+    .qunit.assertEquals[stray;`symbol$();
+        "every namespace in src/ and scripts/ is .q-prefixed, or listed in outside_the_prefix with its reason"]};
+
+test_the_scan_actually_found_the_declarations:{[t]
+    / Without this the test above passes over an empty list the day the
+    / directory layout changes - reporting success for having looked nowhere.
+    .qunit.assertTrue[30<count distinct declared_namespaces[];
+        "the file scan found this tree's namespace declarations"]};
+
+test_the_subscriber_processes_are_inside_the_prefix:{[t]
+    / Named specifically, because these three are what the general rule above
+    / was written for and a regression here would otherwise read as a count.
+    declared:distinct declared_namespaces[];
+    .qunit.assertEquals[all `.qsub.cross`.qsub.markout`.qsub.posbook in declared;1b;
+        "the tickerplant subscriber processes declare their namespaces under .qsub"]};
+
+test_every_listed_exception_carries_a_reason:{[t]
+    / An exception list whose entries may be empty strings is a list of
+    / names, which is the thing this deliberately is not.
+    empty:(key outside_the_prefix) where 0=count each value outside_the_prefix;
+    .qunit.assertEquals[empty;`symbol$();"each exception says why it is one"]};
+
+test_the_exception_list_has_not_become_the_rule:{[t]
+    / A floor on the prefix's meaning: if half the tree ends up excepted,
+    / the tools built on the prefix are measuring a minority of the code.
+    .qunit.assertTrue[5>count key outside_the_prefix;
+        "the exceptions stay a handful - each one is code no tool can see"]};
+
 \d .

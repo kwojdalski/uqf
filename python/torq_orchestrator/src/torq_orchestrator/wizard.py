@@ -129,7 +129,7 @@ _SUBSCRIBER_TEMPLATE = """\
 / only in process_overrides-style extra_processes.csv (see core.py's
 / add_extra_process()), port {{KDBBASEPORT}}+{port_offset}.
 
-\\d .{procname}
+\\d .qsub.{procname}
 
 tickerplanttypes:`segmentedtickerplant
 requiredprocs:tickerplanttypes
@@ -156,9 +156,9 @@ upd:{{[t;x]
     .lg.o[`upd;"received batch for ",string[t]," - ",n," rows (stub, not processed yet)"]];
  }}
 
-.servers.CONNECTIONS:.{procname}.requiredprocs;
+.servers.CONNECTIONS:.qsub.{procname}.requiredprocs;
 .servers.startup[];
-.{procname}.init[];
+.qsub.{procname}.init[];
 """
 
 # Fully working (not a stub) - a parametrized copy of
@@ -237,7 +237,7 @@ _CROSS_ETL_TEMPLATE = """\
 / only in process_overrides-style extra_processes.csv (see core.py's
 / add_extra_process()), port {{KDBBASEPORT}}+{port_offset}.
 
-\\d .{procname}
+\\d .qsub.{procname}
 
 / mirror of {source_table}'s own schema - what this process actually
 / receives via its subscription. A fixed name (not {source_table} itself)
@@ -265,7 +265,7 @@ reprice:{{[]
     r:first r;
     enlist `time`sym`bid`ask`mid!(.z.p;sym;r`bid;r`ask;r`mid)
    }}[q;] each cross_pairs;
-  if[count rows; `.{procname}.crossed insert rows];
+  if[count rows; `.qsub.{procname}.crossed insert rows];
  }}
 
 \\d .
@@ -273,10 +273,10 @@ reprice:{{[]
 / receive quotes ticks from the tickerplant subscription and route them
 / into the local mirror, then recompute every cross pair.
 upd:{{[t;x]
-  if[t=`{source_table}; `.{procname}.mirror insert x; .{procname}.reprice[]];
+  if[t=`{source_table}; `.qsub.{procname}.mirror insert x; .qsub.{procname}.reprice[]];
  }}
 
-\\d .{procname}
+\\d .qsub.{procname}
 
 tickerplanttypes:`segmentedtickerplant
 requiredprocs:tickerplanttypes
@@ -314,9 +314,9 @@ init:{{
 / to stp1 - .servers.startup[] is what actually opens and registers that,
 / using this process's own accesslist.txt credentials (see process.csv's
 / `U` field in core.py) to authenticate with discovery1.
-.servers.CONNECTIONS:.{procname}.requiredprocs;
+.servers.CONNECTIONS:.qsub.{procname}.requiredprocs;
 .servers.startup[];
-.{procname}.init[];
+.qsub.{procname}.init[];
 """
 
 

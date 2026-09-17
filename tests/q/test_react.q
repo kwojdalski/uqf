@@ -170,7 +170,7 @@ test_a_worker_run_fires_the_event_for_every_window:{[t]
     .testutil.reset_coverage_ledger[];
     .qbfstate.release_lock `demo_deals_backfill;
     .qbfstate.clear_checkpoint `demo_deals_backfill;
-    `demo_deals set 0#.qsdemo.fixture[];
+    `demo_deals set 0#.qfeed.demo_deals.fixture[];
     .qreact.on[`demo_deals;`watcher;.rxtest.recorder`watcher];
     .qwrk.demo_deals_backfill.init[`source_version`range_from`range_to!(`rx1;.rxtest.d 1;.rxtest.d 4)];
     .qwrk.demo_deals_backfill.run[];
@@ -198,7 +198,7 @@ test_a_failing_reaction_leaves_the_window_published_and_covered:{[t]
     .testutil.reset_coverage_ledger[];
     .qbfstate.release_lock `demo_deals_backfill;
     .qbfstate.clear_checkpoint `demo_deals_backfill;
-    `demo_deals set 0#.qsdemo.fixture[];
+    `demo_deals set 0#.qfeed.demo_deals.fixture[];
     .qreact.on[`demo_deals;`bad;{[ds;f;t] '"downstream is broken"}];
     .qwrk.demo_deals_backfill.init[`source_version`range_from`range_to!(`rx3;.rxtest.d 1;.rxtest.d 4)];
     r:.qwrk.demo_deals_backfill.run[];

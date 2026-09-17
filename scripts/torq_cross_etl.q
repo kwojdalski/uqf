@@ -14,7 +14,7 @@
 / .sub.subscribe to one table, override the top-level `upd` to route
 / matching rows into a local mirror, recompute derived state on every
 / batch. No RDB-recovery-on-startup step, unlike metrics1 - this is a demo
-/ of the transform step, not a production-grade subscriber; `.cross.quotes`
+/ of the transform step, not a production-grade subscriber; `.qsub.cross.quotes`
 / (the mirror) and `cross_quotes` (the output) both just grow for as long
 / as the process runs, there's no wdb-style writedown for either since
 / they're private to this process, never part of the tickerplant's own
@@ -26,11 +26,11 @@
 / gateway) with e.g.
 / `uqf-stack query "select from cross_quotes" --port <base+25>`.
 
-/ pull in uqf's own src/init.q and the stream transforms - .cross.quotes
+/ pull in uqf's own src/init.q and the stream transforms - .qsub.cross.quotes
 / below is the transform's declared input table, so .qstream has to exist.
 .qpipe.load_uqf[];
 
-\d .cross
+\d .qsub.cross
 
 / mirror of torq_quotes_feed.q's `quotes` schema - what this process
 / actually receives via its subscription, and exactly what the
@@ -45,7 +45,7 @@ cross_quotes:.qstream.cross_quotes;
 
 \d .
 
-/ Recompute every cross pair from the current `.cross.quotes` mirror and
+/ Recompute every cross pair from the current `.qsub.cross.quotes` mirror and
 / append the results to cross_quotes - called after every upd[`quotes;...]
 / batch. The repricing is the `cross_quotes` transform
 / (src/etl/transforms/stream.q), as of ONE instant read here: it used to read
@@ -56,19 +56,19 @@ cross_quotes:.qstream.cross_quotes;
 / in the line - the transform has no logger - so check that pair's legs are
 / quoted when one keeps appearing.
 reprice:{[]
-  if[0=count .cross.quotes; :()];
-  out:.qxf.apply_as_of[`cross_quotes;enlist[`quotes]!enlist .cross.quotes;.z.p];
+  if[0=count .qsub.cross.quotes; :()];
+  out:.qxf.apply_as_of[`cross_quotes;enlist[`quotes]!enlist .qsub.cross.quotes;.z.p];
   missing:.qstream.cross_pairs except out`sym;
   if[count missing; .lg.o[`reprice;"no price for ",", " sv string missing]];
-  if[count out; `.cross.cross_quotes insert out];
+  if[count out; `.qsub.cross.cross_quotes insert out];
  }
 
 / receive quotes ticks from the tickerplant subscription (x already
-/ includes `time`, matching .cross.quotes' column order - the same
+/ includes `time`, matching .qsub.cross.quotes' column order - the same
 / contract the default tick.q upd:{[t;x]t insert x} relies on) and route
 / them into the local mirror, then recompute every cross pair.
 upd:{[t;x]
-  if[t=`quotes; `.cross.quotes insert x; reprice[]];
+  if[t=`quotes; `.qsub.cross.quotes insert x; reprice[]];
  }
 
 / SOURCE: subscribe as a credentialed tickerplant subscriber.

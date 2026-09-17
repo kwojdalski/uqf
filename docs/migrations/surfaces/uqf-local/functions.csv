@@ -403,6 +403,30 @@ qrates,df_simple,function,2,r t
 qrates,growth_cont,function,2,r t
 qrates,growth_simple,function,2,r t
 qrates,simple_to_cont,function,2,r t
+qreact,audit,function,1,
+qreact,dag_consumers,function,1,dataset
+qreact,depth_now,value,,
+qreact,dispatch,function,1,item
+qreact,drain,function,1,
+qreact,draining,value,,
+qreact,empty_history,function,1,
+qreact,empty_queue,function,1,
+qreact,enqueue,function,4,dataset range_from range_to depth
+qreact,for_dataset,function,1,dataset
+qreact,history,table,,
+qreact,history_limit,value,,
+qreact,log_failure,function,3,item nm e
+qreact,max_depth,value,,
+qreact,no_reactions,function,1,
+qreact,notify,function,3,dataset range_from range_to
+qreact,notify_from_here,function,3,dataset range_from range_to
+qreact,off,function,2,dataset nm
+qreact,on,function,3,dataset nm handler
+qreact,queue,table,,
+qreact,reactions,dict,,
+qreact,record,function,7,dataset name depth range_from range_to outcome detail
+qreact,reset,function,1,
+qreact,run_one,function,3,item nm h
 qrisk,carry_pnl,function,3,notional spot fwd
 qrisk,carry_return,function,2,spot fwd
 qrisk,pip_value,function,2,notional pip_factor

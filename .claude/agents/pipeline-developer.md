@@ -115,9 +115,12 @@ pricing or execution function, say so and stop rather than adding it here.
   instances: every bounded worker is `\d .qwrk.<worker name>`, derived by
   `.qbw.define` from the registered name and refused if a `cfg` supplies its
   own `ns`; every source is `\d .qfeed.<source name>`, which
-  `test_source_contract.q` checks against the file's own `source_name`. Anything listing namespaces uses `.qns.owned`/`.qns.functional`
+  `test_source_contract.q` checks against the file's own `source_name`; a
+  tickerplant subscriber process is `\d .qsub.<procname>`.
+  Anything listing namespaces uses `.qns.owned`/`.qns.functional`
   (`src/namespaces.q`), never a root scan for a `q` prefix, which stops at
-  `.qwrk`/`.qfeed` and silently drops every worker and source.
+  `.qwrk`/`.qfeed`/`.qsub` and silently drops every worker, source and
+  subscriber process.
 - Prefer a named intermediate to a bare mixed `*`/`+`/`-` chain: q has no
   operator precedence and evaluates right to left.
 - A schema constant lives in exactly one place (see `.qcov.schema`). Changing
