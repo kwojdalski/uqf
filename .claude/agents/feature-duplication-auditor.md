@@ -189,8 +189,8 @@ If the maintainer unifies two implementations, rerun the gates that notice —
 a removed or moved function breaks three generated artefacts:
 
 ```bash
-scripts/test.sh q-unit
-scripts/test.sh python
+scripts/test.py q-unit
+scripts/test.py python
 uv run python scripts/generate_man_registry.py     # man.q records every name
 uv run python scripts/contract_surface.py export
 ```

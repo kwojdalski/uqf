@@ -66,6 +66,10 @@ uqf-airflow-provider = { workspace = true }
 # lives here because the dev group is shared across the workspace.
 dev = [
     "pytest>=9.1.1",
+    # `scripts/test.py coverage`. A dev dependency rather than something
+    # fetched on demand, so the coverage number is reproducible from the
+    # lockfile like every other result here.
+    "pytest-cov>=7.0",
     "ruff==0.16.2",
     # Pinned exactly, like ruff: a type checker that changes its mind between
     # machines turns a clean gate into an argument about whose version is

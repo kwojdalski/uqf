@@ -6,7 +6,7 @@
 //   > The deterministic suite proves local behaviour, NOT that a configured
 //   > external service is reachable or compatible.
 //
-// Deliberately NOT part of q-unit or `test.sh all`. Folding it in would make
+// Deliberately NOT part of q-unit or `test.py all`. Folding it in would make
 // every local run depend on a remote host being up, and - worse - would
 // train everyone to treat a red suite as "the network again", which is how a
 // real schema change gets ignored.

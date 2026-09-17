@@ -11,7 +11,7 @@
 //     same-process resume never discards its own in-memory state, so it
 //     cannot show that the state on disk was sufficient.
 //
-// Run via `scripts/test.sh q-backfill-process`, which gives each run a fresh
+// Run via `scripts/test.py q-backfill-process`, which gives each run a fresh
 // UQFSTATUSDIR - a stale directory would make a leftover lock look like a
 // passing exclusion test.
 

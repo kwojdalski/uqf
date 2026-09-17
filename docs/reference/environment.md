@@ -30,6 +30,7 @@ without it:
 | `UQF_BACKFILL_FROM` | as above | yes | as above. Deliberately no default: a backfill that guessed a range would publish the wrong window and record it as covered |
 | `UQF_BACKFILL_TO` | as above | yes | as above |
 | `UQF_SOURCE_CRED_<SOURCE>` | `.qsrc.require_credentials` (`src/etl/core/source_contract.q`) | per live source | `require_credentials` refuses and names the variable. There is deliberately no file and no vault fallback (ETL-07) |
+| `Q` | `scripts/test.py` | no | `~/.kx/bin/q`. The interpreter every q lane runs. Together with `QHOME` this is the deliberate, explicit way to point the suite at another q — there is no automatic fallback, see [the README](../../README.md#requirements). It was invisible to this list until the runner became Python: `check_env_reference.py` reads `.py` and `.q`, never `.sh` |
 | `UQFROOT` | `scripts/torq_*.q`, `wizard.py`'s generated q | yes | the `\l` of every repository script fails. Set by `build_env`, not by hand |
 | `UQFSTATUSDIR` | `.qpipe.status_dir` (`scripts/torq_pipeline.q`) | no | falls back to `$TORQDATA/status`. Pairs with `UQF_FRONTEND_STATUS_DIR` on the reading side |
 | `DATABENTO_DATA_DIR` | `.qdata.databentoDir` (`src/integrations/data.q`) | for that path only | `.qdata.cfg` also accepts it from a `.env` file, then throws naming the key. Note this is a *data directory*, not a credential — ETL-07's no-file rule is about secrets |
