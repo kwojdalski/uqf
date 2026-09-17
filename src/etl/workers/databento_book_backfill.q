@@ -13,34 +13,6 @@
 
 \d .qwrk.databento_book_backfill
 
-worker_name:`databento_book_backfill
-
-/ --- the contract's required globals (ETL-01, ETL-02) --------------------
-
-source_version:`;
-range_from:0Np;
-range_to:0Np;
-
-/ An ODBC handle is a long, not an int; null either way until init.
-handle:0Ni;
-
-progress:`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);
-last_batch:();
-
-/ --- the contract's required methods, delegated -------------------------
-
-/ Ordinary names in this namespace that happen to delegate. A worker needing
-/ a genuinely different publish path defines its own here and the shell does
-/ not object - .qbw is a default, not an owner.
-spec:{[] .qbw.spec worker_name}
-init:{[run_spec] .qbw.init[worker_name;run_spec]}
-plan:{[cursor] .qbw.plan[worker_name;cursor]}
-fetch:{[from_ts;to_ts] .qbw.fetch[worker_name;from_ts;to_ts]}
-publish:{[batch] .qbw.publish[worker_name;batch]}
-checkpoint:{[cursor] .qbw.checkpoint[worker_name;cursor]}
-run:{[] .qbw.run worker_name}
-cleanup:{[] .qbw.cleanup worker_name}
-
 / --- the transform ---------------------------------------------------------
 
 / The source contract, as the empty table the transform reads.
