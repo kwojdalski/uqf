@@ -73,6 +73,7 @@ paths relative to it (e.g. `src/foundation/stats.q`).
 | **`qcon`** | attaching a console to a running process: `uqf-stack raw -- qcon gateway1 admin:admin` | no - only that command |
 | **`rlwrap`** | line editing and history inside `qcon` | no - `qcon` runs without it |
 | **Node** | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares | no - only for `web/` |
+| **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor | no - suggested when writing or debugging q |
 
 `qcon` is kdb's console client. It ships with some kdb+ distributions and
 **not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q`
@@ -84,6 +85,31 @@ through IPC instead: `uqf-stack query`, `uqf-stack summary` and
 `torq.sh` resolves both through `$QCON` and `$RLWRAP`, which
 `torq_orchestrator`'s `build_env()` sets, so a differently-named or
 differently-located binary is a variable to set rather than a patch.
+
+### `qlinter`, suggested
+
+[q-lint](https://github.com/kwojdalski/q-lint) is a separate project - a q
+linter in Rust that **never executes the source it reads**, which is what
+makes it safe to point at a file mid-debug and to run on every keystroke in an
+editor. It is not needed to build, test or run anything here; it is suggested
+because reading a diagnostic is faster than tracing a q bug by hand, and
+because several of this tree's recurring traps are among the things it checks
+for - a builtin used as a parameter name, a bare `/` opening a comment block,
+a legacy `datetime`.
+
+```
+cargo install --git https://github.com/kwojdalski/q-lint --locked
+qlinter src/ tests/q/
+qlinter --explain QF001
+```
+
+It reads this repository's `[tool.q-lint]` section in `pyproject.toml` for
+exclusions, so the vendored TorQ tree and nested agent worktrees are skipped
+without anyone passing `--exclude`.
+
+For diagnostics in an editor rather than a terminal, `qlinter --lsp` is a
+language server; its repository has the VS Code extension and the Neovim and
+Helix configuration.
 
 ## Quick start
 
