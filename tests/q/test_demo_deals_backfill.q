@@ -126,10 +126,16 @@ test_a_middle_gap_does_not_bridge_covered_coverage:{[t]
 / --- resumption (ETL-06) --------------------------------------------------
 
 test_a_matching_checkpoint_resumes:{[t]
+    / Days 1-2 were published by the run being resumed; its checkpoint is at
+    / day 3. Resuming does day 3 only. The coverage rows are what an
+    / interrupted run leaves behind - finish_window stages coverage before it
+    / saves the checkpoint - so a checkpoint at day 3 with days 1-2 uncovered
+    / is not a resume, it is a gap, and plan now treats it as one.
+    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 3;2];
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
     .qbfstate.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4];.ddbftest.d 3];
     r:.qddbf.run[];
-    .qunit.assertEquals[r`windows_completed;1;"resuming at day 3 leaves one window"]};
+    .qunit.assertEquals[r`windows_completed;1;"resuming at day 3, with days 1-2 covered, leaves one window"]};
 
 / The dangerous direction: a cursor from a narrower run must not be used to
 / resume a wider one, which would skip everything before it.
@@ -213,12 +219,36 @@ test_spec_delegates_to_the_shell:{[t]
         "the worker's spec is the shell's spec for it, not a second copy"]};
 
 test_plan_delegates_and_passes_the_cursor:{[t]
+    / Day 1 is published; the cursor stands at day 2. The plan is the two
+    / remaining days. This is the wiring check it always was - a delegator
+    / that dropped the cursor would still give 2 here, so the day-1 coverage
+    / is what makes the count mean something: without it, coverage alone
+    / would plan all three days whatever the cursor said, since a gap behind
+    / the cursor is planned (see .qbw.plan).
+    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    / A cursor two days in leaves two of the three daily windows. If `plan`
-    / dropped the cursor it would return all three, which is the shape of
-    / bug a delegator can have.
     .qunit.assertEquals[count .qddbf.plan[.ddbftest.d 2];2;
-        "the cursor reaches the shell - a dropped one replans the whole range"]};
+        "with day 1 covered, a cursor at day 2 plans the two days after it"]};
+
+/ A gap BEHIND the cursor is planned. This is the restatement case (D-11):
+/ a finished run's cursor is range_to, and a supersede then withdraws a
+/ window's coverage. The old plan took the cursor as a hard lower bound and
+/ reported idle over a range the ledger said was missing - so a restatement
+/ withdrew coverage that nothing would ever refill. Found live, in
+/ tests/q/run_two_instances.q.
+test_a_gap_behind_the_cursor_is_still_planned:{[t]
+    / One claim PER WINDOW, as a real run stages them. supersede withdraws
+    / by overlap, so a single three-day claim would be withdrawn whole by a
+    / one-day restatement and three windows would be planned - correct, but
+    / not the case this test is about.
+    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
+    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
+    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 3;.ddbftest.d 4;1];
+    .qcov.supersede[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3];
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    w:.qddbf.plan[.ddbftest.d 4];
+    .qunit.assertEquals[count w;1;"the withdrawn day is planned although the cursor is past it"];
+    .qunit.assertEquals[(first w)`range_from;.ddbftest.d 2;"and it is exactly the withdrawn day"]};
 
 test_plan_with_a_null_cursor_plans_the_whole_range:{[t]
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];

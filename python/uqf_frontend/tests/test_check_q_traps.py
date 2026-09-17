@@ -524,3 +524,54 @@ def test_unparseable_python_is_not_this_rule_s_problem():
     # ruff already reports a syntax error; this rule returning findings for
     # one would be noise attached to the wrong tool.
     assert _py_rule("def (\n") == []
+
+
+# --------------------------------------------- bare remote table
+
+
+_SOURCE = "src/etl/sources/t.q"
+
+_BARE = """\\d .qx
+query:{[h;range_from;range_to]
+    h({[f;t] select time, sym from trade where time>=f, time<t};range_from;range_to)}
+fixture:{[] ([] time:`timestamp$(); sym:`symbol$())}
+"""
+
+
+def test_a_bare_table_in_a_source_query_is_flagged():
+    """The live shape: `from trade` threw 'trade on the remote because the
+    lambda carried \\d .qsup across the wire. Three sources had it."""
+    (finding,) = cqt.rule_bare_remote_table(_SOURCE, _BARE)
+    assert finding.rule == "bare-remote-table"
+    assert finding.detail == "from trade"
+    assert "`trade" in finding.why
+
+
+def test_the_symbol_form_is_not_flagged():
+    fixed = _BARE.replace("from trade", "from `trade")
+    assert cqt.rule_bare_remote_table(_SOURCE, fixed) == []
+
+
+def test_a_select_outside_the_query_block_is_not_flagged():
+    # A fixture builder selecting from its own local is not sent anywhere.
+    src = _BARE.replace("from trade", "from `trade")
+    src += "\nfixture2:{[] t:fixture[]; select from t}\n"
+    assert cqt.rule_bare_remote_table(_SOURCE, src) == []
+
+
+def test_a_from_inside_a_comment_or_string_is_not_flagged():
+    src = _BARE.replace("from trade", "from `trade")
+    src += '/ copied from trade on the upstream\nnote:"rows from trade";\n'
+    assert cqt.rule_bare_remote_table(_SOURCE, src) == []
+
+
+def test_a_file_outside_the_sources_tree_is_not_the_rule_s_concern():
+    # Ordinary library code selects from bare names all day and sends none
+    # of them over a handle.
+    assert cqt.rule_bare_remote_table("src/execution/execution.q", _BARE) == []
+
+
+def test_the_shipped_sources_all_use_the_symbol_form():
+    for path in cqt._tracked_q_files():
+        rel = str(path.relative_to(cqt.REPO))
+        assert not cqt.rule_bare_remote_table(rel, path.read_text(errors="replace")), rel

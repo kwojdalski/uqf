@@ -55,7 +55,7 @@ tz:`UTC
 query:{[h;range_from;range_to]
     h({[from_ts;to_ts]
         select time, sym, action, side, size, price, order_id, pip_factor
-            from event_tape
+            from `event_tape
             where time>=from_ts, time<to_ts
       };range_from;range_to)}
 
