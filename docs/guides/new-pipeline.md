@@ -337,6 +337,76 @@ shows up there: write `` from `trade ``, never `from trade`. The lambda
 carries your `\d .qsfx` across the wire, so a bare name resolves
 in that namespace on the remote and throws; `check_q_traps` refuses it.
 
+## Recomputing a table when the one it reads is published
+
+A published window announces itself. Register a reaction and it runs, with the
+range that was just published, as soon as the window is recorded:
+
+```q
+`positions set ([sym:`symbol$(); window:`timestamp$()] notional:`float$());
+
+.qreact.on[`demo_deals;`rebuild_positions;{[ds;range_from;range_to]
+    / recompute exactly what changed - the range is handed to you
+    `positions upsert select sum notional by sym, window:range_from from
+        select from demo_deals where deal_time within (range_from;range_to-1)
+    }];
+```
+
+Run against the five-day demo range, that fills itself as each window
+publishes, with nothing calling it by hand:
+
+```
+run:  `state`windows_completed`rows_published!(`completed;5;5)
+
+sym    window                       | notional
+------------------------------------| --------
+EURUSD 2026.09.11D00:00:00.000000000| 1000000
+GBPUSD 2026.09.12D00:00:00.000000000| 2500000
+EURUSD 2026.09.13D00:00:00.000000000| 750000
+USDJPY 2026.09.14D00:00:00.000000000| 3000000
+EURUSD 2026.09.15D00:00:00.000000000| 1250000
+```
+
+**Key the derived rows by the window, not only by `sym`.** The handler is
+called once per window with that window's range, so a derived row keyed on
+`sym` alone is overwritten by the next window rather than added to -
+EURUSD's three deals would read as its last one. Keyed by the window each
+contribution is stored once, the total is `select sum notional by sym from
+positions`, and re-publishing a window replaces its own row instead of
+double counting. That last property is what makes a restatement safe.
+
+Nothing polls, and nothing is missed: `.qbw.do_window` fires the event after
+`finish_window` records the materialisation, so the reaction sees a ledger
+that already includes the window it is being told about. A dry run publishes
+nothing and therefore announces nothing.
+
+**Who should react is derivable; what they should do is not.** `.qdag` already
+knows which jobs read a dataset — `.qreact.dag_consumers[`demo_deals]` names
+them — but running a downstream worker needs a `source_version`, which is a
+decision about which release of the upstream data the run claims (ETL-09).
+No framework can invent one, so the graph tells you who to wire and the
+handler says what running means. `.qreact.audit[]` lists graph edges with no
+reaction behind them, and reactions on datasets the graph does not know.
+
+**Three things the dispatcher guarantees**, each because the alternative fails
+quietly rather than loudly:
+
+- **A cascade is a loop, not recursion.** A handler that publishes notifies
+  from inside the first notification; that work is queued and drained by the
+  call already draining. A chain cannot grow the stack.
+- **A failing reaction never fails the publication.** The rows are written and
+  the coverage staged before any handler runs, so a downstream bug cannot turn
+  a successful materialisation into a failed one. Failures land in
+  `.qreact.history` and the log.
+- **A cascade terminates.** The same `(dataset, range)` is dispatched at most
+  once per drain, so `a -> b -> a` settles; `.qreact.max_depth` bounds a chain
+  that keeps inventing new ranges.
+
+**When a timer is still right.** This answers "recompute because data
+arrived". It cannot answer "recompute because time passed" — `markout1` scores
+a fill once a quote at its horizon should exist, and no publication event can
+tell it that. `.qpipe.safe_timer` remains the tool for that question.
+
 ## Filling one dataset with several workers
 
 One worker per `(dataset, partition)` pair. Declare a `partition` and two
