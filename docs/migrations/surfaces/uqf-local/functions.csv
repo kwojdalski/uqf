@@ -52,10 +52,12 @@ qbw,publish_last_batch,function,2,worker unused
 qbw,publish_pending,function,1,worker
 qbw,read_state,function,2,worker nm
 qbw,record_facts,function,5,worker cfg w batch r
+qbw,require_transform,function,2,worker cfg
 qbw,required_cfg,value,,
 qbw,run,function,1,worker
 qbw,run_check,function,2,worker batch
 qbw,spec,function,1,worker
+qbw,transform_batch,function,2,worker batch
 qbw,unpartitioned,value,,
 qbw,write_state,function,3,worker nm v
 qccy,ccy_pair_legs,function,1,pair
@@ -476,6 +478,28 @@ qstats,horner_eval,function,2,coeffs x
 qstats,inv_ncdf,function,1,p
 qstats,ncdf,function,1,x
 qstats,npdf,function,1,x
+qstream,cross_pairs,value,,
+qstream,cross_quotes,table,,
+qstream,cross_quotes_in,table,,
+qstream,cross_size,value,,
+qstream,execution_quality,table,,
+qstream,fold_wide_book,function,1,book
+qstream,mark_positions,function,3,book trades marks
+qstream,markout_horizons,value,,
+qstream,markout_max_horizon,value,,
+qstream,markout_quotes,table,,
+qstream,markout_trades,table,,
+qstream,mkt_orderbook,table,,
+qstream,next_book,function,2,book positions
+qstream,position,table,,
+qstream,position_book,table,,
+qstream,position_marks,table,,
+qstream,position_trades,table,,
+qstream,reprice_crosses,function,2,quotes as_of
+qstream,score_markouts,function,2,trades quotes
+qstream,wide_book,table,,
+qstream,wide_level_groups,dict,,
+qstream,wide_level_names,value,,
 qwcfg,default_values,dict,,
 qwcfg,env_name,function,1,k
 qwcfg,env_values,dict,,
@@ -522,3 +546,24 @@ qwrt,suppressed_in_dry_run,value,,
 qwrt,transport_patterns,value,,
 qwrt,windows,function,3,from_ts to_ts width
 qwrt,with_retry,function,2,pol f
+qxf,apply,function,2,name given
+qxf,apply_as_of,function,3,name given as_of
+qxf,check_example,function,5,name ins output clock ex
+qxf,col_equal,function,3,typ e a
+qxf,col_types,function,1,tbl
+qxf,declaration,function,1,name
+qxf,define,function,2,name decl
+qxf,differences,function,2,expected actual
+qxf,float_tolerance,value,,
+qxf,input_names,function,1,name
+qxf,output_schema,function,1,name
+qxf,passthrough,function,4,name input_name schema rows
+qxf,problems,function,3,schema tbl ordered
+qxf,registry,dict,,
+qxf,require_verified,function,1,name
+qxf,required_keys,value,,
+qxf,run,function,4,name d given extra
+qxf,type_ok,function,3,declared actual n
+qxf,verify,function,1,name
+qxf,verify_all,function,1,
+qxf,verify_example,function,3,name d ex

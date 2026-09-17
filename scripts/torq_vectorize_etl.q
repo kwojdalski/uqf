@@ -24,60 +24,22 @@
 / core.py). e.g. `uqf-stack query "select from mkt_orderbook" --port
 / <base+2>` (rdb1).
 
-/ pull in uqf's own src/init.q (loads .qbook/.qfwd/... - see UQFROOT in
-/ core.py's build_env) FIRST - level_groups below calls .qbook.
-/ derive_level_groups at load time, so .qbook has to already exist.
-/ init.q's own \l lines are repo-root-relative (`\l src/foundation/stats.q`, ...),
-/ and torq.sh doesn't launch us from the repo root, so cd there for the
-/ load and back again immediately after - system"cd ..." is q's own
-/ builtin chdir, not a subshell, so it sticks across the two calls. Same
-/ trick as torq_cross_etl.q.
-{[uqfroot]
-  cwd:first system"pwd";
-  system"cd ",uqfroot;
-  system"l src/init.q";
-  system"cd ",cwd;
- }[getenv[`UQFROOT]];
-
-\d .vec
-
-/ mirror of torq_wide_book_feed.q's `wide_book` schema (see
-/ WIDE_BOOK_TABLE_SCHEMA in python/torq_orchestrator/src/torq_orchestrator/
-/ core.py) - used only to derive level_groups below (upd receives the
-/ real table straight off the subscription, not built from this). Built
-/ from til/flip rather than 24 hand-written column defs, same level-0-
-/ first bids0..bids10/asks0..asks10 naming .qbook.derive_level_groups
-/ expects.
-level_names:(`$("bids",/:string til 11)),(`$("asks",/:string til 11));
-wide_book:flip (`time`sym,level_names)!(`timestamp$();`g#`symbol$()),(count[level_names]#enlist `float$());
-
-/ target_col!ordered_source_cols for .qbook.fold_level_columns, derived
-/ once from wide_book's own column names rather than hand-listed.
-level_groups:.qbook.derive_level_groups[cols wide_book;(("bids";`bid_prices);("asks";`ask_prices))];
-
-\d .
+/ pull in uqf's own src/init.q and the stream transforms. The wide_book
+/ schema and its level groups now live with the `mkt_orderbook` transform,
+/ in .qstream.wide_book and .qstream.wide_level_groups.
+.qpipe.load_uqf[];
 
 / receive wide_book ticks from the tickerplant subscription - x arrives
-/ here as an actual table already matching .vec.wide_book's schema (not a
-/ bare list-of-columns the way cross1's upd assumed; confirmed live via
-/ `type x` = 98h) - so it's fed into book_from_wide_levels directly, no
-/ reconstruction needed. Fold each batch, then republish it onto the
-/ tickerplant as mkt_orderbook (h, set up at the bottom) rather than
-/ keeping it in a private local table - .u.upd stamps its own time
-/ (`.z.p`) on receipt, same as every other feed here, so the folded
-/ table's own `time` column is dropped before publishing.
+/ here as an actual table already matching wide_book's schema (confirmed
+/ live via `type x` = 98h) - fold each batch with the `mkt_orderbook`
+/ transform (src/etl/transforms/stream.q), then republish it onto the
+/ tickerplant as mkt_orderbook (h, set up at the bottom) rather than keeping
+/ it in a private local table. The transform's output carries no `time`;
+/ .u.upd stamps its own on receipt, same as every other feed here.
 upd:{[t;x]
   if[t=`wide_book;
-    folded:.qbook.book_from_wide_levels[x;.vec.level_groups;`sym];
-    h (`.u.upd;`mkt_orderbook;folded`sym`bid_prices`ask_prices);
-  ];
+    .qpipe.publish[h;`mkt_orderbook;.qxf.apply[`mkt_orderbook;enlist[`book]!enlist x]]];
  }
-
-\d .vec
-
-
-
-\d .
 
 / SOURCE + SINK in one call.
 / .

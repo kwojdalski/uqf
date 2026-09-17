@@ -61,6 +61,7 @@
 \l src/etl/core/worker_config.q
 \l src/etl/core/worker_runtime.q
 \l src/etl/core/continuous_state.q
+\l src/etl/core/transform.q
 \l src/etl/core/source_contract.q
 \l src/etl/core/bounded_worker.q
 
@@ -71,3 +72,7 @@
 \l src/etl/sources/demo_events.q
 \l src/etl/workers/demo_deals_backfill.q
 \l src/etl/workers/demo_events_backfill.q
+
+/ Transforms of the tickerplant subscriber jobs. Last, because they register
+/ into .qxf on load and call the library through src/init.q.
+\l src/etl/transforms/stream.q

@@ -37,10 +37,16 @@
 
 / worker -> its configuration. `ns` is the worker's namespace symbol,
 / `source` its registered .qsrc source, `dataset` the name coverage is
-/ recorded under, `width` its window size.
+/ recorded under, `width` its window size, `transform` the registered .qxf
+/ transform its rows go through between fetch and publish.
 cfgs:(`symbol$())!();
 
-required_cfg:`ns`source`dataset`width
+/ `transform` is REQUIRED, not optional like `check`. A check is a guard a
+/ worker may honestly have no use for; a transform is the job itself. A
+/ worker that publishes what it fetched says so by declaring a pass-through
+/ transform, with examples - which makes "this job changes nothing" a tested
+/ claim rather than an absence nobody decided.
+required_cfg:`ns`source`dataset`width`transform
 
 / The partition every worker fills when it does not declare one.
 / .
@@ -100,6 +106,7 @@ define:{[worker;cfg]
     / backfill having already fetched a window it is now unable to store.
     .qio.for_cfg cfg;
     .qsrc.declaration cfg`source;
+    require_transform[worker;cfg];
 
     / Refuse two workers filling one dataset AND PARTITION (#60, #185).
     / .
@@ -148,6 +155,31 @@ define:{[worker;cfg]
     / Normalise to the full key set before storing - see optional_cfg.
     cfgs[worker]:normalised cfg;
     worker}
+
+/ Private: the declared transform exists and reads exactly this worker's
+/ source.
+/ .
+/ One input, and its schema must be the source contract's fields and types.
+/ Checked at declaration so a transform written against a different shape
+/ than the source delivers fails when the worker is defined, not on the
+/ first window of a backfill. A transform taking as_of is refused: a window
+/ has no single instant it is "as of", and choosing one here would be
+/ guessing at what the transform means by it.
+require_transform:{[worker;cfg]
+    who:"define: ",string[worker];
+    if[not -11h=type cfg`transform;
+        'who,"'s transform must be the name of a .qxf transform"];
+    d:.qxf.declaration cfg`transform;
+    if[not 1=count d`inputs;
+        'who,"'s transform ",string[cfg`transform]," must read exactly one input, the fetched batch"];
+    if[d`as_of;
+        'who,"'s transform ",string[cfg`transform]," takes as_of, which a bounded window cannot supply"];
+    src:.qsrc.declaration cfg`source;
+    contract:flip (src`fields)!{[c] $[c within "AZ"; (); c$()]} each src`types;
+    p:.qxf.problems[contract;first value d`inputs;0b];
+    if[count p;
+        'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contract: ","; " sv p];
+    }
 
 / Private: a config carrying every optional key, absent ones as (::).
 normalised:{[cfg]
@@ -428,7 +460,21 @@ run_check:{[worker;batch]
 / Private: the empty failure table, so every path returns one shape.
 no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 
-/ Private: one window, end to end - fetch, check, publish, record.
+/ Private: run the worker's transform over one fetched batch.
+/ .
+/ Narrowed to the contract's declared fields first. .qsrc.validate accepts a
+/ source returning MORE columns than it declares, and the transform declares
+/ exactly the contract - so the extra columns are dropped here, where the
+/ contract says what the job reads, rather than refused.
+/ @return the transformed batch
+/ @throws whatever the transform throws, or a schema refusal from .qxf
+transform_batch:{[worker;batch]
+    cfg:declaration worker;
+    fields:(.qsrc.declaration cfg`source)`fields;
+    nm:cfg`transform;
+    .qxf.apply[nm;(.qxf.input_names nm)!enlist fields#batch]}
+
+/ Private: one window, end to end - fetch, transform, check, publish, record.
 / .
 / Accumulates into the worker's own `progress` rather than returning, because
 / a q lambda does not close over an enclosing local and `each` over windows
@@ -451,7 +497,18 @@ do_window:{[worker;w]
             (w`range_from;w`range_to;f`kind;f`attempts;f`error)];
         write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
         :0b];
-    / DATA QUALITY GATE, between fetch and publish.
+    / TRANSFORM, between fetch and the quality gate, so the gate judges the
+    / rows that will actually be published. A throwing transform takes the
+    / same terminal-window path as a failed fetch (M-05): nothing published,
+    / no coverage staged, the window planned again next run.
+    out:@[transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
+    if[(0h=type out) and `transform_failed~first out;
+        .qlog.err[worker;"window failed transform";
+            `range_from`range_to`transform`error!
+            (w`range_from;w`range_to;cfg`transform;last out)];
+        write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
+        :0b];
+    / DATA QUALITY GATE, between transform and publish.
     / .
     / Before this existed the sequence was fetch, publish, record coverage as
     / complete - so a window of nulls, or one with every price at zero, was
@@ -464,14 +521,14 @@ do_window:{[worker;w]
     / never claimed it. That is the behaviour that makes a check safe to add
     / to an existing worker - the worst case is work redone, never data lost
     / and never a gap silently marked complete.
-    bad:run_check[worker;f`result];
+    bad:run_check[worker;out];
     if[count bad;
         .qlog.err[worker;"window failed data quality";
             `range_from`range_to`failures`detail!
             (w`range_from;w`range_to;count bad;.Q.s1 bad)];
         write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
         :0b];
-    write_state[worker;`last_batch;f`result];
+    write_state[worker;`last_batch;out];
     / The publish function is NILADIC by finish_window's contract, and a
     / fully-applied projection in q is a CALL rather than a deferred one -
     / so the batch goes through the worker's own `last_batch` global and the
@@ -484,7 +541,7 @@ do_window:{[worker;w]
     / Materialisation metadata (gap 2.3), recorded HERE rather than in
     / finish_window because this is the only place the batch itself is in
     / hand - finish_window receives a niladic publisher, not rows.
-    record_facts[worker;cfg;w;f`result;r];
+    record_facts[worker;cfg;w;out;r];
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];
           `cursor;advanced_to[worker];w`range_to]];

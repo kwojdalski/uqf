@@ -58,14 +58,11 @@
 / score time rather than stored. quote_hist has no eviction and grows for
 / as long as markout1 runs - the same proof-of-concept tradeoff
 / torq_cross_etl.q's header documents for its own mirror table.
-pending_trades:([]time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$());
-quote_hist:([]time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$());
-
-/ score a trade at 1s and 10s after execution - short enough to keep
-/ pending_trades/quote_hist small in a demo, long enough to be a
-/ meaningful post-trade window.
-horizons:0D00:00:01 0D00:00:10
-max_horizon:max horizons
+/ .
+/ Both are the transform's declared input tables, so the buffers cannot
+/ drift from what the transform reads.
+pending_trades:.qstream.markout_trades;
+quote_hist:.qstream.markout_quotes;
 
 \d .
 
@@ -86,11 +83,12 @@ upd:{[t;x]
 / TRIGGER body, run every timer tick: score every trade old enough that a
 / quote at its furthest horizon (trade_time+max_horizon) should already
 / have arrived, publish the result, then evict those trades so the buffer
-/ doesn't grow unbounded. A trade whose horizon quote never arrives (e.g.
-/ markout1 started after the quote feed) gets a null ref_price/
-/ markout_pips from markout_at_horizons itself - still published, not
-/ filtered out, so a gap is visible in execution_quality rather than
-/ silently dropped.
+/ doesn't grow unbounded. The scoring itself is the `execution_quality`
+/ transform (src/etl/transforms/stream.q), which carries hand-written
+/ examples; this body only decides WHICH trades are ready. A trade whose
+/ horizon quote never arrived (e.g. markout1 started after the quote feed)
+/ still comes out, with a null ref_price/markout_pips, so a gap is visible
+/ in execution_quality rather than silently dropped.
 / .
 / `mask` is computed once and used for both the read and the evict:
 / recomputing the cutoff in the evict step would drop any trade that
@@ -100,17 +98,11 @@ upd:{[t;x]
 / ordering would lose the batch silently. See .qpipe.drain vs .qpipe.evict.
 process_ready:{[]
   if[0=count .markout.pending_trades; :()];
-  cutoff:.proc.cp[]-.markout.max_horizon;
+  cutoff:.proc.cp[]-.qstream.markout_max_horizon;
   mask:.markout.pending_trades[`time]<=cutoff;
   ready:.markout.pending_trades where mask;
   if[0=count ready; :()];
-  quotes_mid:select sym,time,mid:(bid+ask)%2 from .markout.quote_hist;
-  scored:.qexec.markout_at_horizons[ready;quotes_mid;.markout.horizons];
-  / markout_at_horizons's own target-time column (`ts`, per .qfwd.ts_col)
-  / is not published - execution_quality's schema doesn't carry it.
-  / .qpipe.publish additionally drops any `time` column, which is what
-  / kept biting hand-written publishers here (invariant 1).
-  out:select sym,trade_time,horizon,trade_price,ref_price,markout_pips from scored;
+  out:.qxf.apply[`execution_quality;`trades`quotes!(ready;.markout.quote_hist)];
   .qpipe.publish[h;`execution_quality;out];
   .qpipe.evict[`.markout.pending_trades;mask];
  }

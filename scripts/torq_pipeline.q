@@ -93,17 +93,20 @@ check_cycles:0W
 
 / ---------------------------------------------------------------- SOURCE
 
-/ Load uqf's own src/init.q (invariant 6). Restores the cwd even if the
-/ load throws, unlike the hand-rolled copies this replaces.
-/ @throws error if UQFROOT is unset, or if src/init.q fails to load
+/ Load uqf's own src/init.q (invariant 6), and the transform block with the
+/ stream jobs' transforms (src/etl/core/transform.q, src/etl/transforms/
+/ stream.q) - every pipeline's computation is a declared .qxf transform, so a
+/ pipeline process without them has nothing to call. Restores the cwd even
+/ if the load throws, unlike the hand-rolled copies this replaces.
+/ @throws error if UQFROOT is unset, or if any of the three files fails to load
 load_uqf:{[]
     root:getenv`UQFROOT;
     if[0=count root; '"qpipe.load_uqf: UQFROOT is not set"];
     cwd:first system"pwd";
     system"cd ",root;
-    outcome:@[{system"l src/init.q"; `ok};::;{x}];
+    outcome:@[{system"l src/init.q"; system"l src/etl/core/transform.q"; system"l src/etl/transforms/stream.q"; `ok};::;{x}];
     system"cd ",cwd;
-    if[not outcome~`ok; '"qpipe.load_uqf: could not load src/init.q: ",outcome];
+    if[not outcome~`ok; '"qpipe.load_uqf: could not load uqf and its transforms: ",outcome];
     }
 
 / Bring this process up as a tickerplant subscriber and hand back a publish
