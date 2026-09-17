@@ -119,6 +119,7 @@ qcov,with_lock,function,2,f args
 qdag,adopt_all,function,1,
 qdag,adopt_feeders,function,1,
 qdag,adopt_pipelines,function,1,
+qdag,adopt_reactions,function,1,
 qdag,adopt_workers,function,1,
 qdag,consumers,function,1,tbl
 qdag,declaration,function,1,job
@@ -133,6 +134,8 @@ qdag,layers,function,1,
 qdag,mermaid,function,1,
 qdag,no_edges,function,1,
 qdag,producers,function,1,tbl
+qdag,reaction_edges,function,1,
+qdag,reaction_job,function,2,dataset nm
 qdag,register,function,2,job spec
 qdag,register_pipelines,function,1,
 qdag,registry,function,1,
@@ -422,9 +425,13 @@ qreact,notify,function,3,dataset range_from range_to
 qreact,notify_from_here,function,3,dataset range_from range_to
 qreact,off,function,2,dataset nm
 qreact,on,function,3,dataset nm handler
+qreact,on_worker,function,3,dataset worker spec_fn
+qreact,on_writing,function,4,dataset nm outputs handler
 qreact,queue,table,,
 qreact,reactions,dict,,
 qreact,record,function,7,dataset name depth range_from range_to outcome detail
+qreact,register,function,5,dataset nm handler outputs derived
+qreact,require_handler,function,3,dataset nm handler
 qreact,reset,function,1,
 qreact,run_one,function,3,item nm h
 qrisk,carry_pnl,function,3,notional spot fwd

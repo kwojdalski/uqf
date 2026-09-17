@@ -410,6 +410,43 @@ quietly rather than loudly:
   once per drain, so `a -> b -> a` settles; `.qreact.max_depth` bounds a chain
   that keeps inventing new ranges.
 
+### Reactions are nodes in the job graph
+
+`.qdag.adopt_all[]` picks up reactions alongside workers, feeders and the
+streaming processes, so one graph covers the whole system. A reaction's
+**input** is the dataset it watches — that is a fact, it is what fires it.
+Its **output** is whatever it declared, and the three ways of registering one
+differ in exactly that:
+
+| | Output | In the graph as |
+|---|---|---|
+| `.qreact.on` | none | a terminal node — reads the dataset, says nothing about what it writes |
+| `.qreact.on_writing` | **asserted** by you | a full node, listed in `audit[]``asserted` |
+| `.qreact.on_worker` | **derived** from the worker's own declaration | a full node that cannot disagree with what the worker does |
+
+Prefer `on_worker` where it applies: the worker already declares its target
+through its source, so nothing is restated and `dag.q`'s "derive, never
+re-declare" rule survives. `on_writing` is for a handler that writes
+something no worker owns — worth having, because it puts the edge in the
+graph, but it is a claim about an opaque lambda rather than a checked fact,
+and `.qreact.audit[]` lists those separately so a drawing can mark them.
+
+**The payoff is that a reactive cycle is refused when you wire it**, not when
+it runs. Before reactions were in the graph, `a → b → a` survived until the
+per-drain guard and `max_depth` stopped it mid-cascade; now:
+
+```
+q).qdag.topological[]
+'topological: cycle among a~to_b, b~to_a
+```
+
+A reaction node is named `<dataset>~<reaction>`, because a reaction name is
+unique per dataset rather than globally. Build that name with
+`.qdag.reaction_job[dataset;name]` rather than typing it: `~` cannot appear
+in a q symbol literal, so `` `demo_deals~rebuild `` parses as a *match*
+against a variable called `rebuild` and fails with a value error naming that
+variable instead of anything about the graph.
+
 **When a timer is still right.** This answers "recompute because data
 arrived". It cannot answer "recompute because time passed" — `markout1` scores
 a fill once a quote at its horizon should exist, and no publication event can
