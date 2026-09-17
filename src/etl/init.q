@@ -87,6 +87,11 @@
 / and itself into .qstream on load, and calls the library through
 / src/init.q. One file per job, holding every step of it; scripts/
 / torq_stream.q runs whichever one its environment names.
+/ The feeds first: they invent the rows the rest consume.
+\l src/etl/streaming/fx_feed.q
+\l src/etl/streaming/quotes_feed.q
+\l src/etl/streaming/wide_book_feed.q
+\l src/etl/streaming/fx_trades_feed.q
 \l src/etl/streaming/markout.q
 \l src/etl/streaming/cross.q
 \l src/etl/streaming/posbook.q

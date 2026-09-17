@@ -17,19 +17,12 @@
 / `uqf-stack logs -f tap1 | grep quotes`-style filtering works even
 / without narrowing the subscription itself.
 
+\d .qproc.tap
+
 opts:.Q.opt[.z.x];
 / blank symbol = subscribe to every table - same "no filter" convention
 / .sub.subscribe/RDB's own default subtabs already use.
 tap_tables:$[`tables in key opts; `$opts[`tables]; `];
-
-/ receive every tapped table's ticks and log the table name (as the log
-/ line's `id` field) plus the raw batch, unmodified - .Q.s1 handles
-/ whatever shape x happens to arrive in (a table, or a list of columns;
-/ see torq_vectorize_etl.q's own comment on this ambiguity) without
-/ needing to know which.
-upd:{[t;x]
-  .lg.o[t; .Q.s1 x];
- }
 
 tickerplanttypes:`segmentedtickerplant;
 requiredprocs:tickerplanttypes;
@@ -37,14 +30,14 @@ tpconsleep:10;
 tpcheckcycles:0W;
 
 subscribe:{
-  if[0=count s:.sub.getsubscriptionhandles[tickerplanttypes;();()!()];:()];
+  if[0=count s:.sub.getsubscriptionhandles[.qproc.tap.tickerplanttypes;();()!()];:()];
   subproc:first s;
   / tap_tables is either the blank atom `` (subscribe to everything) or a
   / symbol vector (from -tables t1 t2 ...) - string of an atom is already
   / flat, string of a vector needs an explicit join, or "," ends up
   / splicing individual characters in among the table names instead of
   / joining them (threw a 'type error the first time this shipped).
-  .lg.o[`subscribe;"tapping ",$[tap_tables~`;"all tables";", " sv string tap_tables]," on ",string subproc`procname];
+  .lg.o[`subscribe;"tapping ",$[.qproc.tap.tap_tables~`;"all tables";", " sv string .qproc.tap.tap_tables]," on ",string subproc`procname];
   / setschema=1b (unlike cross1/vectorize1, which pre-define their own
   / namespaced mirror table): tap1 has no local table of its own for any
   / of this - .sub.subscribe's createtables auto-creates a matching empty
@@ -53,18 +46,31 @@ subscribe:{
   / without this, subscription "succeeds" and upd works fine when called
   / manually, but never fires for real ticks - no error, just silently
   / dropped).
-  .sub.subscribe[tap_tables;`;1b;0b;subproc]
+  .sub.subscribe[.qproc.tap.tap_tables;`;1b;0b;subproc]
  };
 
 init:{
-  .servers.startupdepcycles[requiredprocs;tpconsleep;tpcheckcycles];
-  subscribe[];
+  .servers.startupdepcycles[.qproc.tap.requiredprocs;.qproc.tap.tpconsleep;.qproc.tap.tpcheckcycles];
+  .qproc.tap.subscribe[];
  };
+
+\d .
+
+/ Receive every tapped table's ticks and log the table name (as the log
+/ line's `id` field) plus the raw batch, unmodified - .Q.s1 handles whatever
+/ shape x happens to arrive in (a table, or a list of columns) without
+/ needing to know which.
+/ .
+/ At ROOT, where the tickerplant calls it (scripts/torq_pipeline.q,
+/ invariant 5). Everything else this process owns is in .qproc.tap.
+upd:{[t;x]
+  .lg.o[t; .Q.s1 x];
+ }
 
 / same reasoning as torq_cross_etl.q/torq_vectorize_etl.q: a real
 / .sub.subscribe subscriber needs .servers.startup[] to open a live,
 / access-listed handle to stp1 - tap1's proctype "metrics" in process.csv
 / (core.py) borrows an already-credentialed type for that.
-.servers.CONNECTIONS:requiredprocs;
+.servers.CONNECTIONS:.qproc.tap.requiredprocs;
 .servers.startup[];
-init[];
+.qproc.tap.init[];

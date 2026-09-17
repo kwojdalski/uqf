@@ -187,7 +187,7 @@ assertions:{[] e:examples[]; e where 0<count each e[;3]}
 needs_live:([] expr:(
         ".qpipe.publish[h;`execution_quality;out]";
         ".qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
-        ".qpipe.safe_timer[`markout;0D00:00:01.000;`.qsubproc.tick;\"Run the markout streaming job\"]";
+        ".qpipe.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
         ".qodbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]");
     reason:(

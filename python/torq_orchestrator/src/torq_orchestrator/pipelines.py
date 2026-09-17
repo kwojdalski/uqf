@@ -40,10 +40,11 @@ PIPELINE_BLOCK_START = 24
 
 PIPELINE_LIB_SCRIPT = "torq_pipeline.q"
 
-#: The one process script every streaming job runs under. Which job a process
+#: The one process script every streaming job runs under - the feeds that
+#: publish on a timer as well as the jobs that subscribe. Which job a process
 #: runs is decided in q, by its procname: each job under src/etl/streaming/
 #: declares the process that runs it, and the runner looks itself up. There
-#: were four near-identical scripts here before, one per job.
+#: were EIGHT near-identical scripts here before, one per job.
 STREAM_RUNNER_SCRIPT = "torq_stream.q"
 
 # The access list a real .sub.subscribe subscriber needs: an ETL process
@@ -155,7 +156,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
         procname="fxfeed1",
         loads_qpipe=True,
-        script="torq_fx_feed.q",
+        script=STREAM_RUNNER_SCRIPT,
         kind="feed",
         publishes=("quote",),
         offset=FXFEED_PINNED_OFFSET,
@@ -164,7 +165,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
         procname="quotesfeed1",
         loads_qpipe=True,
-        script="torq_quotes_feed.q",
+        script=STREAM_RUNNER_SCRIPT,
         kind="feed",
         table="quotes",
         schema=QUOTES_TABLE_SCHEMA,
@@ -180,7 +181,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
         procname="widefeed1",
         loads_qpipe=True,
-        script="torq_wide_book_feed.q",
+        script=STREAM_RUNNER_SCRIPT,
         kind="feed",
         table="wide_book",
         schema=WIDE_BOOK_TABLE_SCHEMA,
@@ -205,7 +206,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
         procname="fxtradesfeed1",
         loads_qpipe=True,
-        script="torq_fx_trades_feed.q",
+        script=STREAM_RUNNER_SCRIPT,
         kind="feed",
         table="trades",
         schema=TRADES_TABLE_SCHEMA,

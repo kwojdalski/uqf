@@ -15,13 +15,13 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 
 | process | port | kind | script | owns table | subscribes to | publishes |
 |---|---|---|---|---|---|---|
-| `fxfeed1` | 6069 | feed | `torq_fx_feed.q` | — | — | `quote` |
-| `quotesfeed1` | 6074 | feed | `torq_quotes_feed.q` | `quotes` | — | `quotes` |
+| `fxfeed1` | 6069 | feed | `torq_stream.q` | — | — | `quote` |
+| `quotesfeed1` | 6074 | feed | `torq_stream.q` | `quotes` | — | `quotes` |
 | `cross1` | 6075 | etl | `torq_stream.q` | — | `quotes` | — |
-| `widefeed1` | 6076 | feed | `torq_wide_book_feed.q` | `wide_book` | — | `wide_book` |
+| `widefeed1` | 6076 | feed | `torq_stream.q` | `wide_book` | — | `wide_book` |
 | `vectorize1` | 6077 | etl | `torq_stream.q` | `mkt_orderbook` | `wide_book` | `mkt_orderbook` |
 | `tap1` | 6078 | etl | `torq_tap.q` | — | _chosen at runtime_ | — |
-| `fxtradesfeed1` | 6079 | feed | `torq_fx_trades_feed.q` | `trades` | — | `trades` |
+| `fxtradesfeed1` | 6079 | feed | `torq_stream.q` | `trades` | — | `trades` |
 | `posbook1` | 6080 | etl | `torq_stream.q` | `position` | `trades`, `quote` | `position` |
 | `markout1` | 6081 | etl | `torq_stream.q` | `execution_quality` | `trades`, `quote` | `execution_quality` |
 | `deals_backfill1` | 6082 | backfill | `torq_backfill.q` | — | — | — |

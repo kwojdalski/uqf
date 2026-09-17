@@ -517,6 +517,7 @@ qstream,is_callable,function,1,v
 qstream,job_root,value,,
 qstream,jobs,dict,,
 qstream,namespace,function,1,job
+qstream,procnames,dict,,
 qstream,register,function,2,job decl
 qstream,registered,function,1,
 qstream,required_declarations,value,,
@@ -532,6 +533,16 @@ qsub.cross,quotes,table,,
 qsub.cross,quotes_in,table,,
 qsub.cross,reprice,function,1,now
 qsub.cross,reprice_crosses,function,2,quotes as_of
+qsub.fx_feed,on_timer,function,1,
+qsub.fx_feed,publish,value,,
+qsub.fx_feed,spot,value,,
+qsub.fx_feed,tick_rows,function,1,levels
+qsub.fx_trades_feed,fill_rows,function,4,i side size slip_pips
+qsub.fx_trades_feed,on_timer,function,1,
+qsub.fx_trades_feed,pip_factor,value,,
+qsub.fx_trades_feed,publish,value,,
+qsub.fx_trades_feed,sizes,value,,
+qsub.fx_trades_feed,spot,value,,
 qsub.markout,execution_quality,table,,
 qsub.markout,horizons,value,,
 qsub.markout,max_horizon,value,,
@@ -555,6 +566,11 @@ qsub.posbook,position_book,table,,
 qsub.posbook,position_marks,table,,
 qsub.posbook,position_trades,table,,
 qsub.posbook,publish,value,,
+qsub.quotes_feed,n_levels,value,,
+qsub.quotes_feed,on_timer,function,1,
+qsub.quotes_feed,publish,value,,
+qsub.quotes_feed,spot,value,,
+qsub.quotes_feed,tick_rows,function,1,mids
 qsub.vectorize,fold_wide_book,function,1,book
 qsub.vectorize,mkt_orderbook,table,,
 qsub.vectorize,on_batch,function,2,tbl batch
@@ -562,6 +578,11 @@ qsub.vectorize,publish,value,,
 qsub.vectorize,wide_book,table,,
 qsub.vectorize,wide_level_groups,dict,,
 qsub.vectorize,wide_level_names,value,,
+qsub.wide_book_feed,n_levels,value,,
+qsub.wide_book_feed,on_timer,function,1,
+qsub.wide_book_feed,publish,value,,
+qsub.wide_book_feed,spot,value,,
+qsub.wide_book_feed,tick_rows,function,1,mids
 qsynth,drift_one,function,1,s
 qsynth,levels_one,function,4,mid step dir levels
 qsynth,levels_size,function,1,levels
