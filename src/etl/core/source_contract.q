@@ -117,7 +117,7 @@ required_declarations:`source`table`target`time_field`row_key`fields`types`query
 /         because every source before ODBC was one.
 /   odbc  anything with an ODBC driver: the credential is the connection
 /         string, opened with .qodbc.open, and the query callback builds SQL
-/         through .qodbc's one escape function (E-08).
+/         through .qodbc's one escape function (bank E-08).
 / .
 / A source's transport decides how .qbw.connect opens a handle and how
 / cleanup closes one, so it belongs to the source rather than the worker: two
