@@ -80,7 +80,7 @@ test_define_refuses_a_malformed_manager:{[t]
     / At DEFINE time, not at first write. A worker with a broken manager
     / should fail before it has fetched a window it cannot store.
     .qunit.assertError[{.qbw.define[`io_broken;x]};
-        `ns`source`dataset`width`io!(`.qddbf;`demo_deals;`io_broken_ds;1D;42);
+        `ns`source`dataset`width`transform`io!(`.qddbf;`demo_deals;`io_broken_ds;1D;`demo_deals_passthrough;42);
         "a malformed io manager stops the worker at declaration"]};
 
 test_a_custom_manager_receives_the_target_and_batch:{[t]
@@ -112,7 +112,7 @@ test_a_worker_declaring_a_new_optional_key_can_register:{[t]
     / had could not be registered at all. Registration order silently decided
     / which declarations were legal.
     .qunit.assertEquals[.qbw.define[`io_newkey;
-        `ns`source`dataset`width`io!(`.qddbf;`demo_deals;`io_newkey_ds;1D;.qio.discard)];
+        `ns`source`dataset`width`transform`io!(`.qddbf;`demo_deals;`io_newkey_ds;1D;`demo_deals_passthrough;.qio.discard)];
         `io_newkey;
         "a worker declaring an optional key registers regardless of order"]};
 

@@ -94,11 +94,16 @@ quality_check:{[batch]
 
 \d .
 
+/ The transform. Pass-through: this job copies deals into their target
+/ unchanged, and declaring that is what makes it a tested claim. The example
+/ is the source's own hand-written fixture.
+.qxf.passthrough[`demo_deals_passthrough;`batch;0#.qsdemo.fixture[];.qsdemo.fixture[]];
+
 / Window width is this worker's own business rather than part of the
 / contract, but it is what makes the bound observable window by window.
 / .
 / `check` is optional on the declaration; this worker declares one, which
 / makes it unskippable for every window this worker ever fetches.
 .qbw.define[`demo_deals_backfill;
-    `ns`source`dataset`width`check!
-    (`.qddbf;`demo_deals;`demo_deals;1D;.qddbf.quality_check)];
+    `ns`source`dataset`width`transform`check!
+    (`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qddbf.quality_check)];

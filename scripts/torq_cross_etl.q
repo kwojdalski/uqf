@@ -26,68 +26,50 @@
 / gateway) with e.g.
 / `uqf-stack query "select from cross_quotes" --port <base+25>`.
 
+/ pull in uqf's own src/init.q and the stream transforms - .cross.quotes
+/ below is the transform's declared input table, so .qstream has to exist.
+.qpipe.load_uqf[];
+
 \d .cross
 
-/ mirror of torq_quotes_feed.q's `quotes` schema (see QUOTES_TABLE_SCHEMA
-/ in python/torq_orchestrator/src/torq_orchestrator/core.py) - what this
-/ process actually receives via its subscription.
-quotes:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+/ mirror of torq_quotes_feed.q's `quotes` schema - what this process
+/ actually receives via its subscription, and exactly what the
+/ `cross_quotes` transform reads.
+quotes:.qstream.cross_quotes_in;
+quotes:update `g#sym from quotes;
 
-/ this ETL's output: one row per (pair, reprice) - the whole point of the
-/ process. size is fixed at 1,000,000 (torq_quotes_feed.q's own size_unit)
-/ for this proof of concept rather than sweeping multiple sizes.
-cross_quotes:([]time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(); mid:`float$())
-
-/ synthetic pairs to reprice every tick - deliberately none of
-/ torq_quotes_feed.q's own EURUSD/GBPUSD/USDJPY/AUDUSD, so cross_book_at
-/ always has to chain 2 legs through USD rather than finding a direct quote.
-cross_pairs:`EURJPY`GBPJPY`EURGBP`AUDJPY
-cross_size:1000000
-
-/ recompute every pair in cross_pairs from the current `.cross.quotes`
-/ mirror and append the results to cross_quotes - called after every
-/ upd[`quotes;...] batch.
-reprice:{[]
-  if[0=count quotes;:()];
-  / cross_book_at's required shape: `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, `sym`ts xasc
-  q:`sym`ts xasc select ts:time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from quotes;
-  rows:raze {[q;sym]
-    r:.[.qfwd.cross_book_at;(q;sym;.z.p;enlist cross_size;`bid`ask`mid);{[sym;e] .lg.o[`reprice;"skipping ",string[sym],": ",e]; ()}[sym;]];
-    if[0=count r;:()];
-    r:first r;
-    enlist `time`sym`bid`ask`mid!(.z.p;sym;r`bid;r`ask;r`mid)
-   }[q;] each cross_pairs;
-  if[count rows; `.cross.cross_quotes insert rows];
- }
+/ this ETL's output: one row per (pair, reprice). The pairs and the
+/ 1,000,000 size (torq_quotes_feed.q's own size_unit) belong to the
+/ transform, in .qstream.cross_pairs and .qstream.cross_size.
+cross_quotes:.qstream.cross_quotes;
 
 \d .
+
+/ Recompute every cross pair from the current `.cross.quotes` mirror and
+/ append the results to cross_quotes - called after every upd[`quotes;...]
+/ batch. The repricing is the `cross_quotes` transform
+/ (src/etl/transforms/stream.q), as of ONE instant read here: it used to read
+/ .z.p inside the computation, per pair, so one reprice could price pairs at
+/ different instants.
+/ .
+/ A pair with no price is logged by name, as before. The reason is no longer
+/ in the line - the transform has no logger - so check that pair's legs are
+/ quoted when one keeps appearing.
+reprice:{[]
+  if[0=count .cross.quotes; :()];
+  out:.qxf.apply_as_of[`cross_quotes;enlist[`quotes]!enlist .cross.quotes;.z.p];
+  missing:.qstream.cross_pairs except out`sym;
+  if[count missing; .lg.o[`reprice;"no price for ",", " sv string missing]];
+  if[count out; `.cross.cross_quotes insert out];
+ }
 
 / receive quotes ticks from the tickerplant subscription (x already
 / includes `time`, matching .cross.quotes' column order - the same
 / contract the default tick.q upd:{[t;x]t insert x} relies on) and route
 / them into the local mirror, then recompute every cross pair.
 upd:{[t;x]
-  if[t=`quotes; `.cross.quotes insert x; .cross.reprice[]];
+  if[t=`quotes; `.cross.quotes insert x; reprice[]];
  }
-
-\d .cross
-
-
-
-\d .
-
-/ pull in uqf's own src/init.q (loads .qfwd/.qccy/... - see UQFROOT in
-/ core.py's build_env). init.q's own \l lines are repo-root-relative
-/ (`\l src/foundation/stats.q`, ...), and torq.sh doesn't launch us from the repo
-/ root, so cd there for the load and back again immediately after -
-/ system"cd ..." is q's own builtin chdir, not a subshell, so it sticks
-/ across the two calls.
-{[uqfroot]
-  cwd:first system"pwd";
-  system"cd ",uqfroot;
-  system"l src/init.q";
-  system"cd ",cwd;
- }[getenv[`UQFROOT]];
 
 / SOURCE: subscribe as a credentialed tickerplant subscriber.
 / .

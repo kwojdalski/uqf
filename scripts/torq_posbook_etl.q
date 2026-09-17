@@ -32,26 +32,17 @@
 / the fly (port {KDBBASEPORT}+30 - see POSBOOK_PORT_OFFSET in core.py).
 / e.g. `uqf-stack query "select from position" --port <base+2>` (rdb1).
 
-/ pull in uqf's own src/init.q (loads .qpos/.qrisk/... - see UQFROOT in
-/ core.py's build_env) FIRST - .posbook.book below calls
-/ .qpos.empty_book[] at load time, so .qpos has to already exist. Same
-/ cd-there-and-back trick as torq_cross_etl.q/torq_vectorize_etl.q -
-/ init.q's own \l lines are repo-root-relative and torq.sh doesn't launch
-/ us from the repo root.
-{[uqfroot]
-  cwd:first system"pwd";
-  system"cd ",uqfroot;
-  system"l src/init.q";
-  system"cd ",cwd;
- }[getenv[`UQFROOT]];
+/ pull in uqf's own src/init.q and the stream transforms FIRST -
+/ .posbook.book below is built from the transform's declared book table.
+.qpipe.load_uqf[];
 
 \d .posbook
 
 / the running position book - .qpos's own keyed shape (sym -> qty/
-/ avg_price/realized_pnl), threaded through apply_fill on every incoming
-/ fill. Local, mutable state wrapping uqf's pure function, same pattern
-/ torq_cross_etl.q's `.cross.quotes` mirror uses.
-book:.qpos.empty_book[];
+/ avg_price/realized_pnl). The `position` transform takes it as an input
+/ and upd rebuilds it from the transform's output, so the book only ever
+/ changes through a computation that has expected tables.
+book:1!.qstream.position_book;
 
 / last-seen mid per sym, off the `quote` subscription - updated on every
 / quote tick, read (with a trade_price fallback for a sym never quoted
@@ -62,32 +53,26 @@ last_mid:(`symbol$())!`float$();
 \d .
 
 / receive trades/quote ticks from the tickerplant subscription - x
-/ arrives as an actual table (confirmed live via `type x` on
-/ torq_vectorize_etl.q's own wide_book subscription; same tickerplant/
-/ .sub.subscribe mechanism here). Trades: apply every fill in the batch,
-/ oldest-first behavior isn't needed here (apply_fill is called once per
-/ row, in the order rows arrive in the batch, which is already time order
-/ off the tickerplant), mark to the current last_mid, then republish one
-/ position snapshot row per fill. Quotes: just refresh last_mid.
+/ arrives as an actual table. Trades: the `position` transform
+/ (src/etl/transforms/stream.q) applies every fill in the batch in arrival
+/ order - already time order off the tickerplant - marks each to the
+/ current last_mid, and returns one position row per fill. The book is
+/ rebuilt from those rows BEFORE publishing, as it was updated before
+/ publishing when this was inline: the fills will not be redelivered, so a
+/ failed publish must not also lose them from the book. Quotes: just
+/ refresh last_mid.
 upd:{[t;x]
   $[t=`trades;
-    {[sym;side;trade_price;size]
-      .posbook.book::.qpos.apply_fill[.posbook.book;sym;size;trade_price;side];
-      row:.posbook.book sym;
-      mark_price:$[sym in key .posbook.last_mid; .posbook.last_mid sym; trade_price];
-      unrealized:.qrisk.pnl[abs row`qty;row`avg_price;mark_price;signum row`qty];
-      h (`.u.upd;`position;(enlist sym;enlist row`qty;enlist row`avg_price;enlist row`realized_pnl;enlist mark_price;enlist unrealized;enlist row[`realized_pnl]+unrealized))
-     }'[x`sym;x`side;x`trade_price;x`size];
+    [out:.qxf.apply[`position;`book`trades`marks!(
+        0!.posbook.book;
+        select time,sym,side,trade_price,size,pip_factor from x;
+        ([] sym:key .posbook.last_mid; mid:value .posbook.last_mid))];
+     `.posbook.book set 1!.qstream.next_book[0!.posbook.book;out];
+     .qpipe.publish[h;`position;out]];
    t=`quote;
     .posbook.last_mid[x`sym]:((x`bid)+x`ask)%2;
    ()];
  }
-
-\d .posbook
-
-
-
-\d .
 
 / SOURCE + SINK in one call.
 / .

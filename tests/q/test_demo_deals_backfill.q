@@ -265,12 +265,12 @@ test_every_contract_method_is_callable_not_merely_present:{[t]
 / #185 is that the pair, not the dataset alone, is what has to be unique.
 test_two_workers_may_not_claim_one_dataset_and_partition:{[t]
     .qunit.assertError[{.qbw.define[`clashing_worker;x]};
-        `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);
+        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough);
         "a second worker on one dataset and partition would produce coverage rows nothing can tell apart (#60)"]};
 
 test_the_clash_error_names_the_existing_claimant:{[t]
     err:@[{.qbw.define[`clashing_worker;x]; ""};
-        `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);{x}];
+        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough);{x}];
     .qunit.assertEquals[err like "*demo_deals_backfill*";1b;"the refusal names who already owns the dataset"]};
 
 / The name appearing is not enough. q evaluates right to left, so
@@ -280,7 +280,7 @@ test_the_clash_error_names_the_existing_claimant:{[t]
 / because the name was still there immediately before the wreckage.
 test_the_clash_error_reads_as_a_sentence:{[t]
     err:@[{.qbw.define[`clashing_worker;x]; ""};
-        `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);{x}];
+        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough);{x}];
     .qunit.assertTrue[err like "*produce coverage rows nothing can tell apart";
         "the explanation survives intact to the end of the message"]};
 
@@ -292,10 +292,10 @@ test_the_clash_error_reads_as_a_sentence:{[t]
 / distinguishable and no read composes them.
 test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
     .qbw.define[`eurusd_slice;
-        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`EURUSD)];
+        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     .qunit.assertEquals[
         .qbw.define[`usdjpy_slice;
-            `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`USDJPY)];
+            `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`USDJPY)];
         `usdjpy_slice;
         "two partitions of one dataset are two distinguishable claims, so both register"];
     .qbw.cfgs:(`eurusd_slice`usdjpy_slice) _ .qbw.cfgs;};
@@ -304,9 +304,9 @@ test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
 / different worker is the case that was always wrong and still is.
 test_two_workers_may_not_claim_one_partition_of_a_dataset:{[t]
     .qbw.define[`eurusd_slice;
-        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`EURUSD)];
+        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     err:@[{.qbw.define[`another_eurusd_slice;x]; ""};
-        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`EURUSD);{x}];
+        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD);{x}];
     .qbw.cfgs:(enlist `eurusd_slice) _ .qbw.cfgs;
     .qunit.assertEquals[err like "*eurusd_slice*";1b;
         "the second claim on one dataset AND partition is refused, naming the holder"]};
@@ -320,21 +320,21 @@ test_a_worker_declaring_no_partition_gets_the_sentinel:{[t]
 
 test_a_declared_partition_is_stored_as_given:{[t]
     .qbw.define[`eurusd_slice;
-        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`EURUSD)];
+        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     r:.qbw.partition_of `eurusd_slice;
     .qbw.cfgs:(enlist `eurusd_slice) _ .qbw.cfgs;
     .qunit.assertEquals[r;`EURUSD;"the declared partition is what coverage will be recorded under"]};
 
 test_a_non_symbol_partition_is_refused:{[t]
     .qunit.assertError[{.qbw.define[`bad_slice;x]};
-        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;"EURUSD");
+        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;"EURUSD");
         "a string partition would be recorded as a char vector and match no read"]};
 
 / Redefining the SAME worker must stay legal - the shell's define is called
 / at load, and reloading a worker file is ordinary.
 test_a_worker_may_redeclare_itself:{[t]
     .qunit.assertEquals[
-        .qbw.define[`demo_deals_backfill;`ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D)];
+        .qbw.define[`demo_deals_backfill;`ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough)];
         `demo_deals_backfill;
         "reloading a worker file re-runs its own define, which must not trip the clash guard"]};
 
@@ -409,6 +409,63 @@ test_an_idle_run_still_beats:{[t]
     .qunit.assertEquals[first exec state from .qhb.report[] where worker=`demo_deals_backfill;
         `idle;"an idle second run beats idle rather than going quiet"]};
 
+/ --- the transform ---------------------------------------------------------
+
+/ Registered for one test and removed after it, so .xftest's "every
+/ registered transform passes its examples" sees only shipped transforms.
+double_notional:{[]
+    .qxf.define[`ddbftest_double;`inputs`output`fn`examples!(
+        enlist[`batch]!enlist 0#.qsdemo.fixture[];
+        0#.qsdemo.fixture[];
+        {[batch] update notional:2*notional from batch};
+        enlist `inputs`expected!(enlist[`batch]!enlist .qsdemo.fixture[];update notional:2*notional from .qsdemo.fixture[]))]};
+
+with_transform:{[nm;f]
+    orig:.qbw.declaration[`demo_deals_backfill]`transform;
+    .qbw.cfgs[`demo_deals_backfill;`transform]:nm;
+    r:@[f;::;{(`threw;x)}];
+    .qbw.cfgs[`demo_deals_backfill;`transform]:orig;
+    .qxf.registry:(`ddbftest_double`ddbftest_throws) _ .qxf.registry;
+    r};
+
+test_the_published_rows_are_the_transform_output:{[t]
+    / Proves the transform runs INSIDE do_window, between fetch and publish,
+    / rather than only being declared.
+    .ddbftest.double_notional[];
+    .qddbf.init[.ddbftest.spec_for[`xf1;1;4]];
+    .ddbftest.with_transform[`ddbftest_double;{.qddbf.run[]}];
+    want:exec 2*notional from .qsdemo.fixture[] where deal_id in exec deal_id from value `demo_deals;
+    .qunit.assertEquals[exec notional from value `demo_deals;want;
+        "what reaches the target is the transform's output, not the fetched batch"]};
+
+test_a_throwing_transform_fails_the_window_and_publishes_nothing:{[t]
+    .qxf.registry[`ddbftest_throws]:.qxf.registry`demo_deals_passthrough;
+    .qxf.registry[`ddbftest_throws;`fn]:{[batch] '"boom"};
+    .qddbf.init[.ddbftest.spec_for[`xf2;1;4]];
+    r:.ddbftest.with_transform[`ddbftest_throws;{.qddbf.run[]}];
+    .qunit.assertEquals[(r`windows_failed;count value `demo_deals;
+                         .qcov.is_covered[`demo_deals;`;`xf2;.z.p;.ddbftest.d 1;.ddbftest.d 4]);
+        (3;0;0b);
+        "a transform that throws takes the failed-fetch path: nothing published, nothing covered, the run continues"]};
+
+test_a_worker_without_a_transform_is_refused:{[t]
+    err:@[{.qbw.define[`no_transform;x]; ""};
+        `ns`source`dataset`width!(`.qddbf;`demo_deals;`no_transform_ds;1D);{x}];
+    .qunit.assertEquals[err like "*transform*";1b;"every job has a transform, even one that changes nothing"]};
+
+test_a_transform_that_does_not_read_the_source_contract_is_refused:{[t]
+    .qxf.passthrough[`ddbftest_wrong_shape;`batch;([] sym:`symbol$(); px:`float$());([] sym:enlist `EURUSD; px:enlist 1.1)];
+    err:@[{.qbw.define[`wrong_shape;x]; ""};
+        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`wrong_shape_ds;1D;`ddbftest_wrong_shape);{x}];
+    .qxf.registry:(enlist `ddbftest_wrong_shape) _ .qxf.registry;
+    .qunit.assertEquals[err like "*does not read source demo_deals*";1b;
+        "a transform written against another shape fails at declaration, not on the first window"]};
+
+test_a_clocked_transform_is_refused_for_a_bounded_worker:{[t]
+    err:@[{.qbw.define[`clocked;x]; ""};
+        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`clocked_ds;1D;`cross_quotes);{x}];
+    .qunit.assertEquals[err like "*takes as_of*";1b;"a window has no single instant to hand a transform, so one that needs it is refused by name"]};
+
 / --- the data-quality gate -----------------------------------------------
 
 / A fixture with one arithmetically impossible row. Swapped in as the
@@ -480,7 +537,7 @@ test_a_non_function_check_is_refused:{[t]
 
 test_a_zero_width_is_refused:{[t]
     .qunit.assertError[{.qbw.define[`zero_width;x]};
-        `ns`source`dataset`width!(`.qddbf;`demo_deals;`something_else;0D00:00);
+        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`something_else;0D00:00;`demo_deals_passthrough);
         "a zero width plans infinitely many empty windows"]};
 
 \d .

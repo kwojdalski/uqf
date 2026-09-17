@@ -5,7 +5,7 @@ completeness you can query and a bound you can see. The worked example below
 is a real one: every command was run against this tree, and the output shown
 is what it printed.
 
-A pipeline here is **two declarations and one line in a loader**. The
+A pipeline here is **three declarations and one line in a loader**. The
 lifecycle — windowing, retries, coverage, checkpoints, dry-run, the job graph
 — is the shell's, and you do not write any of it. If you find yourself
 writing a loop over days, you are rebuilding `.qbw`.
@@ -13,7 +13,8 @@ writing a loop over days, you are rebuilding `.qbw`.
 | You write | It says |
 |---|---|
 | a **source** in `src/etl/sources/` | what the rows are, where they come from, how to window them |
-| a **worker** in `src/etl/workers/` | which source, which target dataset, how wide a window |
+| a **transform**, beside the worker | what a fetched batch becomes before it is published, with example tables |
+| a **worker** in `src/etl/workers/` | which source, which transform, which target dataset, how wide a window |
 | one `\l` line in [`src/etl/init.q`](../../src/etl/init.q) | load them, in order |
 
 Everything else follows from those. Why it is shaped this way is
@@ -32,6 +33,11 @@ of this guide.
 **Continuous** — it subscribes and never finishes: a tickerplant feed, a
 poller. `.qcont` in [`src/etl/core/continuous_state.q`](../../src/etl/core/continuous_state.q),
 whose state is a cursor rather than a range.
+
+Both have a transform. The tickerplant subscribers in `scripts/torq_*_etl.q`
+call `.qxf.apply` on transforms declared in
+[`src/etl/transforms/stream.q`](../../src/etl/transforms/stream.q); the
+subscription, buffers, timer and publish stay in the script.
 
 The rest of this guide is the bounded case.
 
@@ -149,9 +155,18 @@ quality_check:{[batch]
 
 \d .
 
+/ The transform: fetched rows in, published rows out, and an example of each.
+.qxf.define[`fx_rates_pips;`inputs`output`fn`examples!(
+    enlist[`batch]!enlist ([] rate_time:`timestamp$(); sym:`symbol$(); mid:`float$());
+    ([] rate_time:`timestamp$(); sym:`symbol$(); mid:`float$(); pip_factor:`long$());
+    {[batch] update pip_factor:?[sym like "*JPY";100;10000] from batch};
+    enlist `inputs`expected!(
+        enlist[`batch]!enlist ([] rate_time:2026.09.11D09:00 2026.09.12D09:00; sym:`EURUSD`USDJPY; mid:1.0842 149.82);
+        ([] rate_time:2026.09.11D09:00 2026.09.12D09:00; sym:`EURUSD`USDJPY; mid:1.0842 149.82; pip_factor:10000 100)))];
+
 .qbw.define[`fx_rates_backfill;
-    `ns`source`dataset`width`check!
-    (`.qfxbf;`fx_rates;`fx_rates;1D;.qfxbf.quality_check)];
+    `ns`source`dataset`width`transform`check!
+    (`.qfxbf;`fx_rates;`fx_rates;1D;`fx_rates_pips;.qfxbf.quality_check)];
 ```
 
 **The globals stay in the worker's namespace deliberately.** ETL-01 requires
@@ -166,7 +181,16 @@ are wired correctly. A delegator with its arguments swapped —
 `.qbw.fetch[worker;to_ts;from_ts]` — fetches a backwards window and passes
 every test that never calls it.
 
-**`check` is optional, and it runs between fetch and publish.** A batch that
+**`transform` is required, because it is the job.** It runs between fetch and
+the check, so the check and the target both see its output. Its one input
+must be the source's `fields` and `types` exactly, and `define` refuses a
+transform written against any other shape. The expected table is written by
+hand: `tests/q/test_transform.q` runs every registered transform's examples on
+every build, calls each twice to catch a clock or a random draw in the
+output, and feeds each an empty batch. A job that publishes what it fetched
+declares `.qxf.passthrough` rather than leaving the step out.
+
+**`check` is optional, and it runs between the transform and publish.** A batch that
 fails is never published and its window is never recorded as covered, so the
 next run plans it again. Make the conditions ones no correct row could meet —
 a non-positive rate, a null key — rather than statistical outliers. A check
@@ -175,7 +199,7 @@ ignored check is worse than none because it still reads as protection.
 
 `io` and `facts` are the other optional keys: an
 [IO manager](../../src/etl/core/io_manager.q) to write somewhere other than
-an in-memory table, and a function from the fetched batch to a dictionary of
+an in-memory table, and a function from the transformed batch to a dictionary of
 labels recorded as materialisation metadata.
 
 ## 3. Register it
@@ -301,7 +325,7 @@ workers can fill one dataset at once:
 
 ```q
 .qbw.define[`fx_rates_eurusd;
-    `ns`source`dataset`width`partition!(`.qfxeur;`fx_rates;`fx_rates;1D;`EURUSD)];
+    `ns`source`dataset`width`transform`partition!(`.qfxeur;`fx_rates;`fx_rates;1D;`fx_rates_pips;`EURUSD)];
 ```
 
 Coverage is then recorded and read under that partition, and **no read unions

@@ -70,16 +70,11 @@ class Pipeline:
     kind: str
     table: str | None = None  # the table it publishes onto the tickerplant, if any
     schema: str | None = None  # that table's database.q definition
-    # Two facts, deliberately separate, because they were one flag and that
-    # conflation would have silently disabled a gate. `uses_qpipe` meant both
-    # "load the library" AND "skip publish-edge verification, because the
-    # publish goes through .qpipe.publish whose table is a parameter". The
-    # moment a pipeline needed the library for SUBSCRIBING while still
-    # publishing directly with `h (`.u.upd;`position;...)`, setting one flag
-    # would have switched off the check that its declared publishes match
-    # its code.
+    # Only whether to LOAD the library. There was once a second flag to skip
+    # publish-edge verification for a pipeline publishing through
+    # .qpipe.publish; the check now reads the table at that call site, so
+    # every pipeline's declared publishes are verified the same way.
     loads_qpipe: bool = False  # load scripts/torq_pipeline.q ahead of its own script
-    publishes_via_qpipe: bool = False  # publishes through .qpipe.publish, so no table name to read
     offset: int | None = None  # None = allocate from PIPELINE_BLOCK_START in list order
     localtime: str = "1"
     startwithall: str = "1"
@@ -222,7 +217,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         table="execution_quality",
         schema=EXECUTION_QUALITY_TABLE_SCHEMA,
         loads_qpipe=True,
-        publishes_via_qpipe=True,
         localtime="0",
         note=(
             "localtime:0, unlike every other process here - markout1 is the only "

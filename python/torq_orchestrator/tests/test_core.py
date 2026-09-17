@@ -708,7 +708,7 @@ def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
     .proc.reloadf each loads -load's files in the order given.
     """
     markout = core.PIPELINE_BY_NAME["markout1"]
-    assert markout.loads_qpipe and markout.publishes_via_qpipe
+    assert markout.loads_qpipe
     loaded = markout.load_column().split()
     assert loaded[0].endswith(core.PIPELINE_LIB_SCRIPT)
     assert loaded[1].endswith("torq_markout_etl.q")
