@@ -18,7 +18,7 @@ framework - see [Testing](#testing).
 
 ## Contents
 
-- [Requirements](#requirements) — KDB-X, and why there is no fallback interpreter
+- [Requirements](#requirements) — KDB-X preferred, what else might work, and why nothing falls back automatically
 - [Quick start](#quick-start) — load it and price something
 - [Components](#components) — what this tree contains, and which part owns what
 - [Quant modules](#quant-modules) — each `src/` pricing file, its namespace and tests
@@ -31,18 +31,35 @@ framework - see [Testing](#testing).
 
 ## Requirements
 
-You need **KDB-X**, KX's own interpreter. The personal edition is free for
-non-commercial use; it requires registering for a license at
+**KDB-X is preferred** — KX's own interpreter, and the one everything here is
+verified against. The personal edition is free for non-commercial use; it
+requires registering for a license at
 [kx.com](https://kx.com/kdb-personal-edition-download/).
 
 ```
 q tests/run_tests.q
 ```
 
-This tree targets KDB-X alone. There is deliberately no fallback interpreter
-anywhere in the tooling: a suite that passed against something the code is not
-verified on is worse than one that does not run, so every entry point skips
-rather than substituting.
+**Other free q implementations may work for part of the tree.** Nothing in
+`src/` reaches for a KDB-X-only feature, and the quant library loads cleanly
+on a third-party q; KX's own kdb+ personal edition, being the predecessor
+KDB-X is compatible with, should be the closest fit of all. None of them is
+verified here, though, and a third-party q tried against this tree got
+partway through `tests/run_tests.q` before failing — so treat another
+interpreter as worth trying for the pure-q modules in `src/`, not as a
+substitute for a green suite. The fleet is a separate question again: the
+stack under `scripts/` runs on vendored TorQ, which has its own
+compatibility surface.
+
+The tooling will not pick one for you. There is deliberately no *automatic*
+fallback anywhere in it: a suite that passed against something the code is
+not verified on is worse than one that does not run, so every entry point
+skips rather than substituting. Choosing another interpreter is therefore
+explicit — `scripts/test.sh` reads `$Q` and `$QHOME`:
+
+```
+Q=/path/to/q QHOME=/path/to/qhome scripts/test.sh q-unit
+```
 
 Run everything from the repository root - the load scripts use
 paths relative to it (e.g. `src/foundation/stats.q`).
@@ -51,7 +68,7 @@ paths relative to it (e.g. `src/foundation/stats.q`).
 
 | Tool | For | Required? |
 |---|---|---|
-| **KDB-X** | everything in `src/`, `scripts/` and `tests/` | yes |
+| **KDB-X** | everything in `src/`, `scripts/` and `tests/` | preferred — see [above](#requirements) for what else may work |
 | **[uv](https://docs.astral.sh/uv/)** | the Python packages and every `uqf-stack` command | yes, for the fleet |
 | **`qcon`** | attaching a console to a running process: `uqf-stack raw -- qcon gateway1 admin:admin` | no - only that command |
 | **`rlwrap`** | line editing and history inside `qcon` | no - `qcon` runs without it |

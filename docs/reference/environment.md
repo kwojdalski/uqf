@@ -95,8 +95,11 @@ spend an afternoon.
 
 ## Prerequisites, not configuration
 
-`QHOME` must point at a real KDB-X installation (`~/.kx` on this machine).
-This tree targets KDB-X alone; there is no fallback interpreter. `HOME` is read only to locate that default.
+`QHOME` must point at a real q installation (`~/.kx` for KDB-X, the preferred
+and only verified interpreter — see the [README](../../README.md#requirements)
+for what else may work). Nothing falls back automatically: if `QHOME` and `$Q`
+point somewhere the tree is not verified against, that is the operator's
+deliberate choice, not a default. `HOME` is read only to locate `~/.kx`.
 
 ## How this page is kept honest
 
