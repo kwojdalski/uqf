@@ -4,6 +4,20 @@
 
 \d .forwardstest
 
+/ The three two-level books the cross-book tests share.
+/ .
+/ These were written out in full inside every test that used them - eleven
+/ copies of EURUSD and USDJPY, two of JPYCHF. One builder means the tests and
+/ the documented @eg examples in src/pricing/forwards.q, which bind these
+/ same books, read one definition rather than a copy that can quietly differ.
+/ A test that needs DIFFERENT depth (a thin bridge leg, a deeper EURUSD)
+/ still writes its own literal, deliberately - it is saying something.
+mk_books:{[]
+    `eurusd`usdjpy`jpychf!(
+        `bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+        `bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+        `bid_prices`bid_sizes`ask_prices`ask_sizes!(0.0065 0.0064;5000000 5000000;0.0066 0.0067;5000000 5000000))}
+
 test_fwd_simple_no_differential_is_spot:{[t]
     rs:0.01 0.03 0.07;
     .testutil.assertApprox[.qfwd.fwd_simple[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (simple)"]};
@@ -165,8 +179,8 @@ test_cross_book_at_sizes_matches_cross_book_at_negligible_size:{[t]
     / a size far smaller than any level's depth should reduce to exactly
     / cross_book's top-of-book result - a self-consistency check that
     / needs no hand-computed magic numbers.
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
     r:.qfwd.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 100;`bid`ask];
     tob:.qfwd.cross_book[`EURUSD;`bid`ask!(1.0998;1.1000);`USDJPY;`bid`ask!(149.98;150.00)];
     .qunit.assertEquals[first r`sym;tob`sym;"cross symbol matches cross_book"];
@@ -184,8 +198,8 @@ test_cross_book_at_sizes_shared_corner_matches_cross_book_at_negligible_size:{[t
     .testutil.assertApprox[first r`ask;tob`ask;1e-6;"negligible-size ask matches cross_book's top-of-book ask"]};
 
 test_cross_book_at_sizes_walks_multiple_levels:{[t]
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
     r:.qfwd.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 1500000;`bid`ask`mid];
     .testutil.assertApprox[first r`bid;164.9293;1e-3;"blended bid after walking depth on both legs"];
     .testutil.assertApprox[first r`ask;165.0187;1e-3;"blended ask after walking depth on both legs"];
@@ -195,8 +209,8 @@ test_cross_book_at_sizes_walks_multiple_levels:{[t]
 
 test_cross_book_at_sizes_insufficient_depth:{[t]
     / total depth per side is 2mm; asking for 3mm can't be fully filled
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
     r:.qfwd.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 3000000;`bid`ask];
     .testutil.assertApprox[first r`bid_filled_size;2000000f;1e-6;"bid caps at leg1's total depth"];
     .testutil.assertApprox[first r`ask_filled_size;2000000f;1e-6;"ask caps at leg1's total depth"];
@@ -207,13 +221,13 @@ test_cross_book_at_sizes_mid_varies_with_asymmetric_depth:{[t]
     / an asymmetric book (thin ask, deep bid) should make mid genuinely
     / size-dependent, not coincidentally constant
     thin_ask_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996 1.0994;3000000 3000000 3000000;1.1000 1.1010;200000 5000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    usdjpy_book:mk_books[][`usdjpy];
     r:.qfwd.cross_book_at_sizes[`EURUSD;thin_ask_book;`USDJPY;usdjpy_book;500000 3000000;enlist `mid];
     .qunit.assertTrue[(r[`mid] 0)<(r[`mid] 1);"mid increases with size once the thin ask level is exhausted"]};
 
 test_cross_book_at_sizes_sides_filtering:{[t]
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
     r:.qfwd.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 1000000;enlist `mid];
     .qunit.assertEquals[cols r;`size`sym`mid;"requesting just mid returns only size, sym and mid columns"]};
 
@@ -222,13 +236,13 @@ test_cross_book_at_sizes_rejects_invalid_side:{[t]
     / argument rather than closing over local variables - nested q
     / lambdas do NOT see an enclosing function's locals, only globals.
     wrapper:{[books] .qfwd.cross_book_at_sizes[`EURUSD;books 0;`USDJPY;books 1;enlist 1000000;enlist `close]};
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
     .qunit.assertError[wrapper;(eurusd_book;usdjpy_book);"an unrecognised side symbol is rejected"]};
 
 test_cross_book_at_sizes_rejects_no_shared_currency:{[t]
     wrapper:{[books] .qfwd.cross_book_at_sizes[`EURUSD;books 0;`GBPCHF;books 1;enlist 1000000;`bid`ask]};
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
+    eurusd_book:mk_books[][`eurusd];
     gbpchf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.20 1.19;1000000 1000000;1.21 1.22;1000000 1000000);
     .qunit.assertError[wrapper;(eurusd_book;gbpchf_book);"EURUSD and GBPCHF share no currency"]};
 
@@ -266,8 +280,8 @@ test_cross_book_chain_at_sizes_matches_cross_book_at_sizes_for_two_legs:{[t]
     / a 2-leg call through the chain function must exactly reproduce the
     / existing 2-leg cross_book_at_sizes - the chain function should be a
     / strict generalization, not a different implementation.
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
     r_chain:.qfwd.cross_book_chain_at_sizes[`EURUSD`USDJPY;(eurusd_book;usdjpy_book);enlist 1500000;`bid`ask`mid];
     r_pair:.qfwd.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;enlist 1500000;`bid`ask`mid];
     .qunit.assertEquals[first r_chain`sym;first r_pair`sym;"2-leg chain symbol matches cross_book_at_sizes"];
@@ -280,9 +294,9 @@ test_cross_book_chain_at_sizes_matches_cross_book_at_negligible_size_three_legs:
     / reduce to exactly triangulating the top-of-book rates by hand via
     / two chained cross_book calls - a self-consistency check that needs
     / no hand-computed magic numbers.
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
-    jpychf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(0.0065 0.0064;5000000 5000000;0.0066 0.0067;5000000 5000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
+    jpychf_book:mk_books[][`jpychf];
     r:.qfwd.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(eurusd_book;usdjpy_book;jpychf_book);enlist 100;`bid`ask];
     eurjpy_tob:.qfwd.cross_book[`EURUSD;`bid`ask!(1.0998;1.1000);`USDJPY;`bid`ask!(149.98;150.00)];
     eurchf_tob:.qfwd.cross_book[`EURJPY;eurjpy_tob;`JPYCHF;`bid`ask!(0.0065;0.0066)];
@@ -323,22 +337,22 @@ test_cross_book_chain_at_sizes_recovers_via_deeper_levels_on_thin_bridge_leg:{[t
     .qunit.assertTrue[first r`ask_fully_filled;"same recovery on the ask side"]};
 
 test_cross_book_chain_at_sizes_sides_filtering:{[t]
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
-    jpychf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(0.0065 0.0064;5000000 5000000;0.0066 0.0067;5000000 5000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
+    jpychf_book:mk_books[][`jpychf];
     r:.qfwd.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;(eurusd_book;usdjpy_book;jpychf_book);enlist 1000000;enlist `mid];
     .qunit.assertEquals[cols r;`size`sym`mid;"requesting just mid returns only size, sym and mid columns"]};
 
 test_cross_book_chain_at_sizes_rejects_mismatched_syms_and_books:{[t]
     wrapper:{[books] .qfwd.cross_book_chain_at_sizes[`EURUSD`USDJPY`JPYCHF;books;enlist 1000000;`bid`ask]};
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
     .qunit.assertError[wrapper;enlist (eurusd_book;usdjpy_book) 0;"fewer books than syms is rejected"]};
 
 test_cross_book_chain_at_sizes_rejects_no_shared_currency:{[t]
     wrapper:{[books] .qfwd.cross_book_chain_at_sizes[`EURUSD`USDJPY`GBPCHF;books;enlist 1000000;`bid`ask]};
-    eurusd_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.0998 1.0996;1000000 1000000;1.1000 1.1002;1000000 1000000);
-    usdjpy_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(149.98 149.96;1000000 2000000;150.00 150.02;1000000 2000000);
+    eurusd_book:mk_books[][`eurusd];
+    usdjpy_book:mk_books[][`usdjpy];
     gbpchf_book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.20 1.19;1000000 1000000;1.21 1.22;1000000 1000000);
     .qunit.assertError[wrapper;(eurusd_book;usdjpy_book;gbpchf_book);"a break at leg 2 is rejected"]};
 

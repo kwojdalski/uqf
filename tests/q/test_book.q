@@ -50,6 +50,21 @@ test_symbolize_columns_casts_string_to_symbol:{[t]
     .qunit.assertEquals[out`sym;`EURUSD`GBPUSD;"symbol values match the original strings"];
     .qunit.assertEquals[out`side;`buy`sell;"side values match the original strings"]};
 
+/ An absent column is refused by name. Before, the same mistake gave a bare
+/ 'type here and NOTHING AT ALL through book_from_wide_levels - q returns a
+/ different placeholder for a missing column depending on the table's shape,
+/ and on the folded table the cast assignment silently did nothing.
+test_symbolize_columns_refuses_an_absent_column_by_name:{[t]
+    r:@[{.qbook.symbolize_columns[x;`sym`side]; ""};wide_book_table[::];{x}];
+    .qunit.assertTrue[r like "*side*";"the refusal names the missing column rather than saying 'type"]};
+
+test_book_from_wide_levels_no_longer_ignores_an_absent_column:{[t]
+    src:wide_book_table[::];
+    lg:.qbook.derive_level_groups[cols src;level_prefix_targets];
+    r:@[{.qbook.book_from_wide_levels[x;y;`sym`side]; ""}[src];lg;{x}];
+    .qunit.assertTrue[r like "*no such column*";
+        "a requested cast on a column that is not there is an error, not a table quietly missing it"]};
+
 test_symbolize_columns_is_idempotent_on_already_symbol_column:{[t]
     src:([] sym:("EURUSD";"GBPUSD"));
     once:.qbook.symbolize_columns[src;enlist `sym];

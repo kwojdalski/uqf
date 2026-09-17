@@ -4,6 +4,15 @@
 
 \d .positionstest
 
+/ A two-sym trades table: one buy, one sell, a millisecond apart.
+/ .
+/ Shared with the @eg examples for apply_fills and reconcile_trades, which
+/ bind it as `trades`, so the documented calls run against the same rows the
+/ reconciliation test proves balance.
+mk_trades:{[]
+    ([] sym:`EURUSD`GBPUSD; size:1000000 500000f; trade_price:1.1000 1.2500; side:1 -1;
+        time:2026.01.01D09:00:00.000000000+0D 0D00:00:00.001)}
+
 test_empty_book_is_empty:{[t] .qunit.assertEmpty[.qpos.empty_book[];"empty_book starts with no rows"]};
 
 test_apply_fill_opens_from_flat:{[t]
@@ -116,7 +125,7 @@ test_apply_fills_on_an_empty_trades_table_is_a_noop:{[t]
     .qunit.assertEmpty[b;"no trades -> book stays empty"]};
 
 test_reconcile_trades_flags_no_breaks_when_book_matches_trades:{[t]
-    trades:([] sym:`EURUSD`GBPUSD; size:1000000 500000f; trade_price:1.1000 1.2500; side:1 -1; time:2026.01.01D09:00:00.000000000+0D 0D00:00:00.001);
+    trades:mk_trades[];
     reference:.qpos.apply_fills[.qpos.empty_book[];trades];
     r:.qpos.reconcile_trades[reference;trades;0f;1e-9];
     .qunit.assertEquals[exec status from r;`match`match;"reference book built from the same trades matches exactly, no breaks"]};

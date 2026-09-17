@@ -250,7 +250,7 @@ is_running:{[] not null current_run}
 / null because coverage genuinely can be staged outside a run.
 / @return the current run id
 / @throws error when no run is in flight
-/ @eg .qrun.require_current[]
+/ @eg .qrun.begin[`demo_deals_backfill]; id:.qrun.require_current[]; .qrun.release[]; id
 require_current:{[]
     if[not is_running[];
         '"require_current: no run in flight - begin[] one before recording against it"];
@@ -380,7 +380,7 @@ as_text:{[v] $[10h=type v; v; -11h=type v; string v; -3!v]}
 / @return the number of facts recorded
 / @throws error when no run is in flight, facts is not a symbol-keyed dict,
 /   or the interval is empty/reversed
-/ @eg .qrun.record[`demo_deals;2026.09.13D00:00;2026.09.14D00:00;(enlist `rows)!enlist 42]
+/ @eg .qrun.begin[`demo_deals_backfill]; .qrun.record[`demo_deals;2026.09.13D00:00;2026.09.14D00:00;(enlist `rows)!enlist 42]; .qrun.release[]
 record:{[dataset;range_from;range_to;facts]
     id:require_current[];
     if[not 99h=type facts;

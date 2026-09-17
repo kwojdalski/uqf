@@ -116,7 +116,7 @@ for_cfg:{[cfg]
 / @param target the table symbol the source declaration names
 / @param batch the rows to store
 / @return the number of rows written, as the manager reports them
-/ @eg .qio.write[.qio.memory;`demo_deals;batch]
+/ @eg .qio.write[.qio.memory;`demo_deals;.qsdemo.fixture[]]
 write:{[mgr;target;batch] (mgr`write)[target;batch]}
 
 \d .

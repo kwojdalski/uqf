@@ -92,7 +92,7 @@ apply_fill:{[pos;sym;qty;price;side]
 /   -1 sell), and time (sorted into time order before folding - the table
 /   need not already be sorted)
 / @return pos with every trade in trades applied, oldest first
-/ @eg .qpos.apply_fills[.qpos.empty_book[];trades] (trades: .envschema.trades-shaped)
+/ @eg .qpos.apply_fills[.qpos.empty_book[];trades]
 apply_fills:{[pos;trades]
     {[pos;row] apply_fill[pos;row`sym;row`size;row`trade_price;row`side]}/[pos;`time xasc trades]};
 

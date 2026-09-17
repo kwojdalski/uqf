@@ -249,6 +249,7 @@ served by the API under `/ui/`.
 ```
 scripts/test.py q-unit              # deterministic qUnit suite
 scripts/test.py q-metatables-hdb    # metatable queries against a temporary HDB
+scripts/test.py q-examples          # every documented @eg runs, in its own process
 scripts/test.py q-backfill-process  # bounded lifecycle, real filesystem, child processes
 scripts/test.py python              # orchestrator and frontend
 scripts/test.py coverage            # what the suites execute, q and Python
