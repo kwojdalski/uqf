@@ -1,5 +1,5 @@
 / torq_fx_trades_feed.q - a synthetic fills generator for the TorQ-
-/ Finance-Starter-Pack demo (see docs/guides/torq-demo.md), alongside
+/ Finance-Starter-Pack demo (see docs/guides/uqf-stack.md), alongside
 / torq_fx_feed.q's synthetic quotes. Publishes one random client fill per
 / tick into a new `trades` table - independent of torq_fx_feed.q's own
 / spot walk (same reasoning torq_fx_feed.q gives for not reading real
@@ -16,7 +16,7 @@
 / straight into .qpos.apply_fill with no reshaping.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - this is a
-/ TorQ demo process, registered only in the process.csv
+/ uqf stack process, registered only in the process.csv
 / torq_orchestrator.core.bootstrap() generates on the fly, port
 / {KDBBASEPORT}+29 (FX_TRADES_FEED_PORT_OFFSET). Mirrors torq_fx_feed.q's
 / own discover-tickerplant-then-timer pattern exactly.

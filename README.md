@@ -52,17 +52,17 @@ paths relative to it (e.g. `src/foundation/stats.q`).
 | Tool | For | Required? |
 |---|---|---|
 | **KDB-X** | everything in `src/`, `scripts/` and `tests/` | yes |
-| **[uv](https://docs.astral.sh/uv/)** | the Python packages and every `torq-demo` command | yes, for the fleet |
-| **`qcon`** | attaching a console to a running process: `torq-demo raw -- qcon gateway1 admin:admin` | no - only that command |
+| **[uv](https://docs.astral.sh/uv/)** | the Python packages and every `uqf-stack` command | yes, for the fleet |
+| **`qcon`** | attaching a console to a running process: `uqf-stack raw -- qcon gateway1 admin:admin` | no - only that command |
 | **`rlwrap`** | line editing and history inside `qcon` | no - `qcon` runs without it |
 | **Node** | building and running the [browser application](#browser-application) | no - only for `web/` |
 
 `qcon` is kdb's console client. It ships with some kdb+ distributions and
 **not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q`
-and `pg` - so `torq-demo raw -- qcon ...` is the one documented command that
+and `pg` - so `uqf-stack raw -- qcon ...` is the one documented command that
 may not work out of the box. Everything else reaches a running process
-through IPC instead: `torq-demo query`, `torq-demo summary` and
-`torq-demo logs` need nothing beyond what is already installed.
+through IPC instead: `uqf-stack query`, `uqf-stack summary` and
+`uqf-stack logs` need nothing beyond what is already installed.
 
 `torq.sh` resolves both through `$QCON` and `$RLWRAP`, which
 `torq_orchestrator`'s `build_env()` sets, so a differently-named or
@@ -89,9 +89,9 @@ feeds and the ETL processes - with generated configuration:
 
 ```
 uv sync
-uv run torq-demo start all
-uv run torq-demo summary            # up/down, pid, port and heartbeat per process
-uv run torq-demo query "count quotes" --port 6052   # 6052 = base port + 2 = rdb1
+uv run uqf-stack start all
+uv run uqf-stack summary            # up/down, pid, port and heartbeat per process
+uv run uqf-stack query "count quotes" --port 6052   # 6052 = base port + 2 = rdb1
 ```
 
 **Run a backfill.** A bounded worker takes its range from the environment
@@ -104,7 +104,7 @@ UQF_BACKFILL_WORKER=demo_deals_backfill \
 UQF_BACKFILL_VERSION=v1 \
 UQF_BACKFILL_FROM=2026.09.13D00:00 \
 UQF_BACKFILL_TO=2026.09.15D00:00 \
-  uv run torq-demo start deals_backfill1
+  uv run uqf-stack start deals_backfill1
 ```
 
 All four variables are required together: the process refuses to start and
@@ -133,7 +133,7 @@ change usually belongs to exactly one.
 | **Data engineering** | [`src/etl/`](src/etl) | The pipeline framework: bounded and continuous workers, a bitemporal coverage ledger, run identity, IO managers, source contracts, and a job graph derived from declared inputs and outputs. Asset-oriented, in the sense [the philosophy note](docs/architecture/pipeline-philosophy.md) sets out |
 | **Quant library** | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. [Detailed below](#quant-modules) |
 | **Data processing** | [`src/market_data/`](src/market_data) | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw |
-| **Fleet and orchestration** | [`scripts/`](scripts), [`python/torq_orchestrator/`](python/torq_orchestrator) | The TorQ demo stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
+| **Fleet and orchestration** | [`scripts/`](scripts), [`python/torq_orchestrator/`](python/torq_orchestrator) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
 | **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`python/uqf_client/`](python/uqf_client), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, a q client, and the React desk and operations app |
 | **Reference data model** | [`env/`](env/README.md) | Typed table shapes for a broader eFX system — market data, positions, predictions, orders, routing, an economic calendar — as scaffolding this library's functions could sit inside |
 
@@ -197,7 +197,7 @@ this code is written.
 each, and the rule for which a new page belongs in.
 
 - **How do I do this?** → [`docs/guides/`](docs/guides/):
-  [torq-demo.md](docs/guides/torq-demo.md) (running the stack),
+  [uqf-stack.md](docs/guides/uqf-stack.md) (running the stack),
   [ci.md](docs/guides/ci.md) (the gates, and running them locally).
 - **Why is it shaped this way?** → [`docs/architecture/`](docs/architecture/):
   [restatement-design.md](docs/architecture/restatement-design.md),

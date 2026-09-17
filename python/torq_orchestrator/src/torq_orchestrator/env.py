@@ -14,13 +14,13 @@ else calls it and only reads.
 from __future__ import annotations
 
 from torq_orchestrator.logger import get_logger
-from torq_orchestrator.paths import TorqDemoPaths
+from torq_orchestrator.paths import UqfStackPaths
 from torq_orchestrator.pipelines import DEFAULT_BASE_PORT
 
 log = get_logger(__name__)
 
 
-def build_env(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
+def build_env(paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
     """The env vars torq.sh (and process.csv's ${VAR}/{VAR}+N placeholders)
     resolve against - pure, no filesystem writes. bootstrap() calls this and
     also writes it out as setenv.sh; get_process_config() calls this to

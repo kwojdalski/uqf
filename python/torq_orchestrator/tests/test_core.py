@@ -9,7 +9,7 @@ from torq_orchestrator import core, pipelines
 
 
 @pytest.fixture
-def fake_paths(tmp_path: Path) -> core.TorqDemoPaths:
+def fake_paths(tmp_path: Path) -> core.UqfStackPaths:
     """A minimal stand-in for lib/torq + lib/torq-finance-starter-pack, so
     bootstrap()'s process.csv/env generation can be tested without touching
     the real vendored trees or needing envsubst/rlwrap on PATH.
@@ -32,18 +32,18 @@ def fake_paths(tmp_path: Path) -> core.TorqDemoPaths:
     (torqapphome / "hdb").mkdir()
     (torqapphome / "dqe").mkdir()
 
-    return core.TorqDemoPaths(
+    return core.UqfStackPaths(
         repo_root=tmp_path,
         torqhome=torqhome,
         torqapphome=torqapphome,
-        torqdata=tmp_path / "scripts" / "output" / "torq-demo",
+        torqdata=tmp_path / "scripts" / "output" / "uqf-stack",
         scripts_dir=tmp_path / "scripts",
         orchestrator_dir=tmp_path / "python" / "torq_orchestrator",
     )
 
 
 def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(
-    fake_paths: core.TorqDemoPaths, monkeypatch
+    fake_paths: core.UqfStackPaths, monkeypatch
 ):
     monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
 
@@ -64,7 +64,7 @@ def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(
     assert (fake_paths.torqdata / "logs").is_dir()
 
 
-def test_bootstrap_is_idempotent(fake_paths: core.TorqDemoPaths, monkeypatch):
+def test_bootstrap_is_idempotent(fake_paths: core.UqfStackPaths, monkeypatch):
     monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
 
     core.bootstrap(fake_paths, base_port=7000)
@@ -74,7 +74,7 @@ def test_bootstrap_is_idempotent(fake_paths: core.TorqDemoPaths, monkeypatch):
     assert generated.count("fxfeed1") == 1
 
 
-def test_clean_removes_generated_data_dir(fake_paths: core.TorqDemoPaths, monkeypatch):
+def test_clean_removes_generated_data_dir(fake_paths: core.UqfStackPaths, monkeypatch):
     monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
 
     core.bootstrap(fake_paths, base_port=7000)
@@ -84,29 +84,29 @@ def test_clean_removes_generated_data_dir(fake_paths: core.TorqDemoPaths, monkey
     assert not fake_paths.torqdata.exists()
 
 
-def test_get_process_config_returns_vendored_row(fake_paths: core.TorqDemoPaths):
+def test_get_process_config_returns_vendored_row(fake_paths: core.UqfStackPaths):
     row = core.get_process_config(fake_paths, "discovery1", resolve=False)
     assert row["proctype"] == "discovery"
     assert row["port"] == "{KDBBASEPORT}"
 
 
-def test_get_process_config_unknown_process_raises(fake_paths: core.TorqDemoPaths):
-    with pytest.raises(core.TorqDemoError):
+def test_get_process_config_unknown_process_raises(fake_paths: core.UqfStackPaths):
+    with pytest.raises(core.UqfStackError):
         core.get_process_config(fake_paths, "nope1")
 
 
-def test_get_process_config_resolves_brace_arith_placeholder(fake_paths: core.TorqDemoPaths):
+def test_get_process_config_resolves_brace_arith_placeholder(fake_paths: core.UqfStackPaths):
     row = core.get_process_config(fake_paths, "fxfeed1", base_port=7000)
     assert row["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
 
 
-def test_get_process_config_resolves_dollar_brace_placeholder(fake_paths: core.TorqDemoPaths):
+def test_get_process_config_resolves_dollar_brace_placeholder(fake_paths: core.UqfStackPaths):
     row = core.get_process_config(fake_paths, "discovery1")
     assert row["load"] == str(fake_paths.torqhome / "code" / "processes" / "discovery.q")
 
 
 def test_get_process_config_resolve_false_leaves_placeholders_literal(
-    fake_paths: core.TorqDemoPaths,
+    fake_paths: core.UqfStackPaths,
 ):
     row = core.get_process_config(fake_paths, "discovery1", resolve=False)
     assert row["load"] == "${KDBCODE}/processes/discovery.q"
@@ -120,12 +120,12 @@ def test_resolve_process_config_leaves_unknown_var_literal():
     assert resolved["load"] == "${ALSO_NOT_REAL}/x.q"
 
 
-def test_set_process_config_unknown_field_raises(fake_paths: core.TorqDemoPaths):
-    with pytest.raises(core.TorqDemoError):
+def test_set_process_config_unknown_field_raises(fake_paths: core.UqfStackPaths):
+    with pytest.raises(core.UqfStackError):
         core.set_process_config(fake_paths, "discovery1", "not_a_field", "x")
 
 
-def test_set_process_config_persists_and_is_read_back(fake_paths: core.TorqDemoPaths):
+def test_set_process_config_persists_and_is_read_back(fake_paths: core.UqfStackPaths):
     core.set_process_config(fake_paths, "discovery1", "port", "9999")
 
     assert fake_paths.overrides_path.is_file()
@@ -137,7 +137,7 @@ def test_set_process_config_persists_and_is_read_back(fake_paths: core.TorqDemoP
 
 
 def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
-    fake_paths: core.TorqDemoPaths, monkeypatch
+    fake_paths: core.UqfStackPaths, monkeypatch
 ):
     import csv
 
@@ -154,7 +154,7 @@ def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
     assert generated_rows["fxfeed1"]["startwithall"] == "0"
 
 
-def test_bootstrap_generates_schema_with_quotes_table(fake_paths: core.TorqDemoPaths, monkeypatch):
+def test_bootstrap_generates_schema_with_quotes_table(fake_paths: core.UqfStackPaths, monkeypatch):
     monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
 
     core.bootstrap(fake_paths, base_port=7000)
@@ -171,7 +171,7 @@ def test_bootstrap_generates_schema_with_quotes_table(fake_paths: core.TorqDemoP
 
 
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
-    fake_paths: core.TorqDemoPaths, monkeypatch
+    fake_paths: core.UqfStackPaths, monkeypatch
 ):
     monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
 
@@ -182,7 +182,7 @@ def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
     assert "${TORQAPPHOME}/database.q" not in generated_procs
 
 
-def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.TorqDemoPaths):
+def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPaths):
     # fixture's vendored csv: discovery1 (bare {KDBBASEPORT}), stp1 (+1);
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
     # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
@@ -195,7 +195,7 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.TorqDemoPath
     assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 3
 
 
-def test_add_extra_process_appears_in_base_rows(fake_paths: core.TorqDemoPaths):
+def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
     offset = core.next_free_port_offset(fake_paths)
     core.add_extra_process(
         fake_paths,
@@ -225,12 +225,12 @@ def test_add_extra_process_appears_in_base_rows(fake_paths: core.TorqDemoPaths):
     assert "wizardfeed1" not in vendored
 
 
-def test_add_extra_process_rejects_duplicate_procname(fake_paths: core.TorqDemoPaths):
-    with pytest.raises(core.TorqDemoError):
+def test_add_extra_process_rejects_duplicate_procname(fake_paths: core.UqfStackPaths):
+    with pytest.raises(core.UqfStackError):
         core.add_extra_process(fake_paths, {"procname": "stp1", "proctype": "x"})
 
 
-def test_add_extra_table_schema_appears_in_generated_schema(fake_paths: core.TorqDemoPaths):
+def test_add_extra_table_schema_appears_in_generated_schema(fake_paths: core.UqfStackPaths):
     core.add_extra_table_schema(fake_paths, "mytable:([]time:`timestamp$(); sym:`g#`symbol$())")
 
     generated = core._generated_schema_content(fake_paths)
@@ -238,12 +238,12 @@ def test_add_extra_table_schema_appears_in_generated_schema(fake_paths: core.Tor
     assert "quotes:" in generated  # existing extension point untouched
 
 
-def test_list_items_unknown_kind_raises(fake_paths: core.TorqDemoPaths):
-    with pytest.raises(core.TorqDemoError):
+def test_list_items_unknown_kind_raises(fake_paths: core.UqfStackPaths):
+    with pytest.raises(core.UqfStackError):
         core.list_items(fake_paths, "not_a_kind")
 
 
-def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.TorqDemoPaths):
+def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.UqfStackPaths):
     items = core.list_items(fake_paths, "processes", base_port=7000)
     by_name = {item["procname"]: item for item in items}
     assert set(by_name) == {
@@ -274,19 +274,19 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
     assert by_name["markout1"]["port"] == str(7000 + core.MARKOUT_PORT_OFFSET)
 
 
-def test_list_processes_reflects_overrides(fake_paths: core.TorqDemoPaths):
+def test_list_processes_reflects_overrides(fake_paths: core.UqfStackPaths):
     core.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
     items = core.list_items(fake_paths, "processes")
     by_name = {item["procname"]: item for item in items}
     assert by_name["fxfeed1"]["startwithall"] == "0"
 
 
-def test_list_fields_matches_process_csv_fields(fake_paths: core.TorqDemoPaths):
+def test_list_fields_matches_process_csv_fields(fake_paths: core.UqfStackPaths):
     items = core.list_items(fake_paths, "fields")
     assert [item["field"] for item in items] == list(core.PROCESS_CSV_FIELDS)
 
 
-def test_list_overrides_empty_then_populated(fake_paths: core.TorqDemoPaths):
+def test_list_overrides_empty_then_populated(fake_paths: core.UqfStackPaths):
     assert core.list_items(fake_paths, "overrides") == []
 
     core.set_process_config(fake_paths, "discovery1", "port", "9999")
@@ -316,7 +316,7 @@ def test_parse_log_line_returns_none_for_non_matching_line():
     assert core.parse_log_line("a|b|c") is None
 
 
-def test_resolve_procnames_all_returns_every_process(fake_paths: core.TorqDemoPaths):
+def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPaths):
     assert set(core.resolve_procnames(fake_paths, "all")) == {
         "discovery1",
         "stp1",
@@ -334,11 +334,11 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.TorqDemoPa
     }
 
 
-def test_resolve_procnames_specific_splits_on_space(fake_paths: core.TorqDemoPaths):
+def test_resolve_procnames_specific_splits_on_space(fake_paths: core.UqfStackPaths):
     assert core.resolve_procnames(fake_paths, "stp1 fxfeed1") == ["stp1", "fxfeed1"]
 
 
-def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.TorqDemoPaths):
+def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.UqfStackPaths):
     """H-03: an unknown name used to be returned as given.
 
     This test previously asserted exactly that, using `"stp1 rdb1"` - and
@@ -348,7 +348,7 @@ def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.TorqDe
     had been asked for, and a reader diagnosing a quiet process saw an empty
     section and concluded it was idle.
     """
-    with pytest.raises(core.TorqDemoError) as excinfo:
+    with pytest.raises(core.UqfStackError) as excinfo:
         core.resolve_procnames(fake_paths, "stp1 rdb1")
     message = str(excinfo.value)
     assert "rdb1" in message, "the refusal must name the offending process"
@@ -356,7 +356,7 @@ def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.TorqDe
 
 
 def test_resolve_procnames_still_allows_a_process_with_no_log_file(
-    fake_paths: core.TorqDemoPaths,
+    fake_paths: core.UqfStackPaths,
 ):
     """The distinction that makes H-03 fixable rather than a trade-off.
 
@@ -492,7 +492,7 @@ def test_summary_skips_the_header_and_blank_lines():
     assert [r["Process"] for r in rows] == ["markout1", "tap1", "dqc1"]
 
 
-def test_every_process_has_a_configured_port(fake_paths: core.TorqDemoPaths):
+def test_every_process_has_a_configured_port(fake_paths: core.UqfStackPaths):
     """The fill can only work if every process declares a port.
 
     process.csv carries `{KDBBASEPORT}+N` and `resolve_process_config`
@@ -506,12 +506,12 @@ def test_every_process_has_a_configured_port(fake_paths: core.TorqDemoPaths):
     assert not missing, f"no configured port for {missing}"
 
 
-def test_print_recent_logs_raises_when_no_log_files(fake_paths: core.TorqDemoPaths):
-    with pytest.raises(core.TorqDemoError):
+def test_print_recent_logs_raises_when_no_log_files(fake_paths: core.UqfStackPaths):
+    with pytest.raises(core.UqfStackError):
         core.print_recent_logs(fake_paths, "discovery1")
 
 
-def test_print_recent_logs_emits_sorted_by_time(fake_paths: core.TorqDemoPaths, capsys):
+def test_print_recent_logs_emits_sorted_by_time(fake_paths: core.UqfStackPaths, capsys):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
@@ -529,7 +529,7 @@ def test_print_recent_logs_emits_sorted_by_time(fake_paths: core.TorqDemoPaths, 
     assert out.index("first") < out.index("second")
 
 
-def test_print_recent_logs_filters_by_min_level(fake_paths: core.TorqDemoPaths, capsys):
+def test_print_recent_logs_filters_by_min_level(fake_paths: core.UqfStackPaths, capsys):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
@@ -544,8 +544,8 @@ def test_print_recent_logs_filters_by_min_level(fake_paths: core.TorqDemoPaths, 
     assert "quiet info" not in out
 
 
-def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: core.TorqDemoPaths):
-    # the data source torq_demo_mcp.py's torq_demo_logs tool returns
+def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: core.UqfStackPaths):
+    # the data source uqf_stack_mcp.py's uqf_stack_logs tool returns
     # directly - print_recent_logs just formats/prints this same data.
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
@@ -559,7 +559,7 @@ def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: core.TorqDemoPat
     assert [r["message"] for r in records] == ["first", "second"]
 
 
-def test_get_recent_logs_filters_by_min_level(fake_paths: core.TorqDemoPaths):
+def test_get_recent_logs_filters_by_min_level(fake_paths: core.UqfStackPaths):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
@@ -572,25 +572,25 @@ def test_get_recent_logs_filters_by_min_level(fake_paths: core.TorqDemoPaths):
     assert [r["message"] for r in records] == ["loud error"]
 
 
-def test_get_recent_logs_raises_when_no_log_files(fake_paths: core.TorqDemoPaths):
-    with pytest.raises(core.TorqDemoError):
+def test_get_recent_logs_raises_when_no_log_files(fake_paths: core.UqfStackPaths):
+    with pytest.raises(core.UqfStackError):
         core.get_recent_logs(fake_paths, "discovery1")
 
 
-def test_list_env_includes_kdbbaseport(fake_paths: core.TorqDemoPaths):
+def test_list_env_includes_kdbbaseport(fake_paths: core.UqfStackPaths):
     items = core.list_items(fake_paths, "env", base_port=7000)
     by_name = {item["name"]: item["value"] for item in items}
     assert by_name["KDBBASEPORT"] == "7000"
     assert by_name["KDBHDB"] == str(fake_paths.torqdata / "hdb")
 
 
-def test_cryptorust_root_defaults_to_sibling_dir(fake_paths: core.TorqDemoPaths, monkeypatch):
+def test_cryptorust_root_defaults_to_sibling_dir(fake_paths: core.UqfStackPaths, monkeypatch):
     monkeypatch.delenv(core.CRYPTORUST_ROOT_ENV, raising=False)
     assert core.cryptorust_root(fake_paths) == fake_paths.repo_root.parent / "cryptorust"
 
 
 def test_cryptorust_root_respects_env_override(
-    fake_paths: core.TorqDemoPaths, monkeypatch, tmp_path
+    fake_paths: core.UqfStackPaths, monkeypatch, tmp_path
 ):
     override = tmp_path / "elsewhere"
     monkeypatch.setenv(core.CRYPTORUST_ROOT_ENV, str(override))
@@ -615,34 +615,34 @@ def test_crypto_recorder_config_yaml_contains_overrides():
 
 
 def test_start_crypto_recorder_rejects_non_cryptorust_dir(
-    fake_paths: core.TorqDemoPaths, monkeypatch, tmp_path
+    fake_paths: core.UqfStackPaths, monkeypatch, tmp_path
 ):
     monkeypatch.setenv(core.CRYPTORUST_ROOT_ENV, str(tmp_path / "not-a-checkout"))
-    with pytest.raises(core.TorqDemoError):
+    with pytest.raises(core.UqfStackError):
         core.start_crypto_recorder(fake_paths)
 
 
-def test_crypto_recorder_status_when_never_started(fake_paths: core.TorqDemoPaths):
+def test_crypto_recorder_status_when_never_started(fake_paths: core.UqfStackPaths):
     status = core.crypto_recorder_status(fake_paths)
     assert status["running"] == "False"
     assert status["pid"] == ""
 
 
-def test_is_crypto_recorder_running_reflects_live_pid(fake_paths: core.TorqDemoPaths):
+def test_is_crypto_recorder_running_reflects_live_pid(fake_paths: core.UqfStackPaths):
     fake_paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
     fake_paths.crypto_recorder_pid_path.write_text(str(os.getpid()))
     assert core.is_crypto_recorder_running(fake_paths) is True
 
 
-def test_is_crypto_recorder_running_false_for_dead_pid(fake_paths: core.TorqDemoPaths):
+def test_is_crypto_recorder_running_false_for_dead_pid(fake_paths: core.UqfStackPaths):
     fake_paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
     # a pid essentially guaranteed not to be a running process
     fake_paths.crypto_recorder_pid_path.write_text("999999")
     assert core.is_crypto_recorder_running(fake_paths) is False
 
 
-def test_stop_crypto_recorder_raises_without_pidfile(fake_paths: core.TorqDemoPaths):
-    with pytest.raises(core.TorqDemoError):
+def test_stop_crypto_recorder_raises_without_pidfile(fake_paths: core.UqfStackPaths):
+    with pytest.raises(core.UqfStackError):
         core.stop_crypto_recorder(fake_paths)
 
 
@@ -748,7 +748,7 @@ def test_table_and_schema_are_declared_together():
             assert pipeline.schema.startswith(f"{pipeline.table}:(["), pipeline.procname
 
 
-def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: core.TorqDemoPaths):
+def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: core.UqfStackPaths):
     rows = {r["procname"]: r for r in core._base_process_rows(fake_paths)}
     for pipeline in core.PIPELINES:
         row = rows[pipeline.procname]
@@ -771,13 +771,13 @@ def test_markout_runs_on_utc_and_tap_does_not_autostart():
     assert core.PIPELINE_BY_NAME["markout1"].localtime == "0"
     assert all(p.localtime == "1" for p in core.PIPELINES if p.procname != "markout1")
     # tap1 is a diagnostic subscriber; the two backfills are bounded jobs
-    # triggered with a range. Neither belongs in `torq-demo start`.
+    # triggered with a range. Neither belongs in `uqf-stack start`.
     on_demand = {"tap1", "deals_backfill1", "events_backfill1"}
     assert all(core.PIPELINE_BY_NAME[n].startwithall == "0" for n in on_demand)
     assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname not in on_demand)
 
 
-def test_generated_schema_covers_every_published_table(fake_paths: core.TorqDemoPaths):
+def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStackPaths):
     generated = core._generated_schema_content(fake_paths)
     for pipeline in core.PIPELINES:
         if pipeline.schema:
@@ -888,7 +888,7 @@ def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
     """Every process publishes a heartbeat; only monitor1 collects them.
 
     TorQ ships monitor1 `startwithall=0`, which made `.hb.hb` empty on a
-    fully healthy stack and `torq-demo summary`'s Heartbeat column read
+    fully healthy stack and `uqf-stack summary`'s Heartbeat column read
     "not collected" unless an operator knew to start one more process by
     hand. VENDORED_STARTWITHALL_OVERLAY fixes that without editing the
     vendored file (H-01).
@@ -923,7 +923,7 @@ def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
 
 
 def test_an_operator_can_put_monitor1_back_to_the_upstream_default(
-    fake_paths: core.TorqDemoPaths,
+    fake_paths: core.UqfStackPaths,
 ):
     """The overlay is a default, not a decree.
 
@@ -942,7 +942,7 @@ def test_an_operator_can_put_monitor1_back_to_the_upstream_default(
     assert core.get_process_config(fake_paths, "monitor1", base_port=7000)["startwithall"] == "0"
 
 
-def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core.TorqDemoPaths):
+def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core.UqfStackPaths):
     """H-01: what is the precedence between the vendored `process.csv`,
     `extra_processes.csv` and `process_overrides.csv`?
 

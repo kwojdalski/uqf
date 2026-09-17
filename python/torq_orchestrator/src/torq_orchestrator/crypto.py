@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 from torq_orchestrator.logger import get_logger
-from torq_orchestrator.paths import TorqDemoError, TorqDemoPaths
+from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 from torq_orchestrator.pipelines import DEFAULT_BASE_PORT
 from torq_orchestrator.procs import get_process_config
 
@@ -44,7 +44,7 @@ CRYPTO_RECORDER_DEFAULT_VENUES = ("binance_spot",)
 CRYPTO_RECORDER_DEFAULT_SYMBOLS = ("BTC-USDT", "ETH-USDT")
 
 
-def cryptorust_root(paths: TorqDemoPaths) -> Path:
+def cryptorust_root(paths: UqfStackPaths) -> Path:
     """Where the sibling cryptorust checkout lives - override via
     $CRYPTORUST_ROOT; defaults to a sibling of this repo
     (~/github_projects/cryptorust), matching how both are normally checked
@@ -87,7 +87,7 @@ def _crypto_recorder_config_yaml(
     )
 
 
-def _read_crypto_recorder_pid(paths: TorqDemoPaths) -> int | None:
+def _read_crypto_recorder_pid(paths: UqfStackPaths) -> int | None:
     if not paths.crypto_recorder_pid_path.is_file():
         return None
     try:
@@ -96,7 +96,7 @@ def _read_crypto_recorder_pid(paths: TorqDemoPaths) -> int | None:
         return None
 
 
-def is_crypto_recorder_running(paths: TorqDemoPaths) -> bool:
+def is_crypto_recorder_running(paths: UqfStackPaths) -> bool:
     pid = _read_crypto_recorder_pid(paths)
     if pid is None:
         return False
@@ -108,7 +108,7 @@ def is_crypto_recorder_running(paths: TorqDemoPaths) -> bool:
 
 
 def start_crypto_recorder(
-    paths: TorqDemoPaths,
+    paths: UqfStackPaths,
     base_port: int = DEFAULT_BASE_PORT,
     venues: tuple[str, ...] = CRYPTO_RECORDER_DEFAULT_VENUES,
     symbols: tuple[str, ...] = CRYPTO_RECORDER_DEFAULT_SYMBOLS,
@@ -121,12 +121,12 @@ def start_crypto_recorder(
     """
     root = cryptorust_root(paths)
     if not (root / "Cargo.toml").is_file():
-        raise TorqDemoError(
+        raise UqfStackError(
             f"{root} doesn't look like a cryptorust checkout (no Cargo.toml) - "
             f"set ${CRYPTORUST_ROOT_ENV} if it's checked out somewhere else"
         )
     if is_crypto_recorder_running(paths):
-        raise TorqDemoError("crypto recorder is already running - stop it first")
+        raise UqfStackError("crypto recorder is already running - stop it first")
 
     stp1 = get_process_config(paths, "stp1", base_port=base_port)
 
@@ -166,7 +166,7 @@ def start_crypto_recorder(
         check=False,
     )
     if build.returncode != 0:
-        raise TorqDemoError(f"cargo build failed:\n{build.stderr}")
+        raise UqfStackError(f"cargo build failed:\n{build.stderr}")
 
     binary = root / "target" / "debug" / "kdb-market-data-recorder"
     (paths.torqdata / "logs").mkdir(parents=True, exist_ok=True)
@@ -192,10 +192,10 @@ def start_crypto_recorder(
     return process.pid
 
 
-def stop_crypto_recorder(paths: TorqDemoPaths) -> None:
+def stop_crypto_recorder(paths: UqfStackPaths) -> None:
     pid = _read_crypto_recorder_pid(paths)
     if pid is None:
-        raise TorqDemoError("crypto recorder is not running (no pid file)")
+        raise UqfStackError("crypto recorder is not running (no pid file)")
     try:
         # SIGTERM, not the ManagedService graceful-shutdown path (that only
         # fires on SIGINT/ctrl_c) - fine here: on_stop is a no-op, and an
@@ -208,7 +208,7 @@ def stop_crypto_recorder(paths: TorqDemoPaths) -> None:
     log.info("stopped cryptorust kdb-market-data-recorder (pid {})", pid)
 
 
-def crypto_recorder_status(paths: TorqDemoPaths) -> dict[str, str]:
+def crypto_recorder_status(paths: UqfStackPaths) -> dict[str, str]:
     pid = _read_crypto_recorder_pid(paths)
     return {
         "running": str(is_crypto_recorder_running(paths)),
@@ -238,7 +238,7 @@ CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL = "BTC-USDT"
 CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS = 1000
 
 
-def _read_crypto_fills_recorder_pid(paths: TorqDemoPaths) -> int | None:
+def _read_crypto_fills_recorder_pid(paths: UqfStackPaths) -> int | None:
     if not paths.crypto_fills_recorder_pid_path.is_file():
         return None
     try:
@@ -247,7 +247,7 @@ def _read_crypto_fills_recorder_pid(paths: TorqDemoPaths) -> int | None:
         return None
 
 
-def is_crypto_fills_recorder_running(paths: TorqDemoPaths) -> bool:
+def is_crypto_fills_recorder_running(paths: UqfStackPaths) -> bool:
     pid = _read_crypto_fills_recorder_pid(paths)
     if pid is None:
         return False
@@ -259,7 +259,7 @@ def is_crypto_fills_recorder_running(paths: TorqDemoPaths) -> bool:
 
 
 def start_crypto_fills_recorder(
-    paths: TorqDemoPaths,
+    paths: UqfStackPaths,
     base_port: int = DEFAULT_BASE_PORT,
     oms_socket_path: str = DEFAULT_OMS_SOCKET_PATH,
     symbol: str = CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
@@ -277,12 +277,12 @@ def start_crypto_fills_recorder(
     """
     root = cryptorust_root(paths)
     if not (root / "Cargo.toml").is_file():
-        raise TorqDemoError(
+        raise UqfStackError(
             f"{root} doesn't look like a cryptorust checkout (no Cargo.toml) - "
             f"set ${CRYPTORUST_ROOT_ENV} if it's checked out somewhere else"
         )
     if is_crypto_fills_recorder_running(paths):
-        raise TorqDemoError("crypto fills recorder is already running - stop it first")
+        raise UqfStackError("crypto fills recorder is already running - stop it first")
 
     stp1 = get_process_config(paths, "stp1", base_port=base_port)
 
@@ -298,7 +298,7 @@ def start_crypto_fills_recorder(
         check=False,
     )
     if build.returncode != 0:
-        raise TorqDemoError(f"cargo build failed:\n{build.stderr}")
+        raise UqfStackError(f"cargo build failed:\n{build.stderr}")
 
     binary = root / "target" / "debug" / "kdb-fills-recorder"
     (paths.torqdata / "logs").mkdir(parents=True, exist_ok=True)
@@ -344,10 +344,10 @@ def start_crypto_fills_recorder(
     return process.pid
 
 
-def stop_crypto_fills_recorder(paths: TorqDemoPaths) -> None:
+def stop_crypto_fills_recorder(paths: UqfStackPaths) -> None:
     pid = _read_crypto_fills_recorder_pid(paths)
     if pid is None:
-        raise TorqDemoError("crypto fills recorder is not running (no pid file)")
+        raise UqfStackError("crypto fills recorder is not running (no pid file)")
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -356,7 +356,7 @@ def stop_crypto_fills_recorder(paths: TorqDemoPaths) -> None:
     log.info("stopped cryptorust kdb-fills-recorder (pid {})", pid)
 
 
-def crypto_fills_recorder_status(paths: TorqDemoPaths) -> dict[str, str]:
+def crypto_fills_recorder_status(paths: UqfStackPaths) -> dict[str, str]:
     pid = _read_crypto_fills_recorder_pid(paths)
     return {
         "running": str(is_crypto_fills_recorder_running(paths)),

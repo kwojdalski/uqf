@@ -1,5 +1,5 @@
 / torq_quotes_feed.q - a third row-generating process for the
-/ TorQ-Finance-Starter-Pack demo (see docs/guides/torq-demo.md), alongside the
+/ TorQ-Finance-Starter-Pack demo (see docs/guides/uqf-stack.md), alongside the
 / vendored pack's own code/tick/feed.q and this repo's own torq_fx_feed.q.
 / Publishes synthetic depth-aware FX quotes into a new `quotes` table -
 / schema `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, matching
@@ -18,7 +18,7 @@
 / schema", so a new table just needs a feed and a schema entry.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - this is a
-/ TorQ demo process, registered only in the process.csv
+/ uqf stack process, registered only in the process.csv
 / torq_orchestrator.core.bootstrap() generates on the fly, port
 / {KDBBASEPORT}+24. Mirrors torq_fx_feed.q's own
 / discover-tickerplant-then-timer pattern exactly.

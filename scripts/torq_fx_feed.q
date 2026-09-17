@@ -1,5 +1,5 @@
 / torq_fx_feed.q - a second, independent row-generating process for the
-/ TorQ-Finance-Starter-Pack demo (see docs/guides/torq-demo.md), alongside the
+/ TorQ-Finance-Starter-Pack demo (see docs/guides/uqf-stack.md), alongside the
 / vendored pack's own code/tick/feed.q. Publishes synthetic top-of-book FX
 / quotes for a handful of currency pairs into the same generic `quote`
 / table feed.q already writes equity quotes into (schema: time, sym, bid,
@@ -9,10 +9,10 @@
 / change needed.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - this is a
-/ TorQ demo process, registered only in the process.csv
+/ uqf stack process, registered only in the process.csv
 / torq_orchestrator.core.bootstrap() (python/torq_orchestrator/src/
 / torq_orchestrator/core.py, driven by python/torq_orchestrator/
-/ torq_demo.py and torq_demo_mcp.py) generates on the fly, appending one
+/ uqf_stack.py and uqf_stack_mcp.py) generates on the fly, appending one
 / row to a copy of the vendored csv - never editing
 / lib/torq-finance-starter-pack/appconfig/process.csv itself - port
 / {KDBBASEPORT}+19. Mirrors feed.q's own

@@ -21,7 +21,7 @@
 / Not loaded by src/init.q or anything else uqf itself runs - registered
 / only in the process.csv torq_orchestrator.core.bootstrap() generates on
 / the fly (port {KDBBASEPORT}+27 - see VECTORIZE_ETL_PORT_OFFSET in
-/ core.py). e.g. `torq-demo query "select from mkt_orderbook" --port
+/ core.py). e.g. `uqf-stack query "select from mkt_orderbook" --port
 / <base+2>` (rdb1).
 
 / pull in uqf's own src/init.q (loads .qbook/.qfwd/... - see UQFROOT in

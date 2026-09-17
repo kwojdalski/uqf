@@ -2,11 +2,11 @@
 <!-- Run `python3 scripts/generate_operational_docs.py` to regenerate.    -->
 <!-- CI runs it with --check; an edit here fails the build (J-01/J-02).   -->
 
-# TorQ demo processes
+# uqf stack processes
 
 Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 `process.csv`. For how to start, stop and query the stack see
-[docs/guides/torq-demo.md](../torq-demo.md); for the topology diagrams see
+[docs/guides/uqf-stack.md](../uqf-stack.md); for the topology diagrams see
 [README.md](README.md).
 
 **23 vendored processes** plus **11 uqf processes** — 34 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.

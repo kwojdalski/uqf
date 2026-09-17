@@ -6,7 +6,7 @@ from torq_orchestrator import core, wizard
 
 
 @pytest.fixture
-def fake_paths(tmp_path: Path) -> core.TorqDemoPaths:
+def fake_paths(tmp_path: Path) -> core.UqfStackPaths:
     """Minimal paths for wizard tests - only scripts_dir/orchestrator_dir
     are actually touched by the pure-logic pieces under test here (skeleton
     writers, template formatting); unlike test_core.py's own fake_paths,
@@ -15,11 +15,11 @@ def fake_paths(tmp_path: Path) -> core.TorqDemoPaths:
     """
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
-    return core.TorqDemoPaths(
+    return core.UqfStackPaths(
         repo_root=tmp_path,
         torqhome=tmp_path / "lib" / "torq",
         torqapphome=tmp_path / "lib" / "torq-finance-starter-pack",
-        torqdata=tmp_path / "scripts" / "output" / "torq-demo",
+        torqdata=tmp_path / "scripts" / "output" / "uqf-stack",
         scripts_dir=scripts_dir,
         orchestrator_dir=tmp_path / "python" / "torq_orchestrator",
     )
@@ -67,7 +67,7 @@ def test_quotes_table_schema_matches_the_shape_forwards_q_requires():
     )
 
 
-def test_write_quotes_feed_skeleton_produces_valid_q_literals(fake_paths: core.TorqDemoPaths):
+def test_write_quotes_feed_skeleton_produces_valid_q_literals(fake_paths: core.UqfStackPaths):
     dest = wizard._write_quotes_feed_skeleton(
         fake_paths,
         procname="myfeed1",
@@ -89,7 +89,7 @@ def test_write_quotes_feed_skeleton_produces_valid_q_literals(fake_paths: core.T
     assert content.count("{") == content.count("}")
 
 
-def test_write_cross_etl_skeleton_produces_valid_q_literals(fake_paths: core.TorqDemoPaths):
+def test_write_cross_etl_skeleton_produces_valid_q_literals(fake_paths: core.UqfStackPaths):
     dest = wizard._write_cross_etl_skeleton(
         fake_paths,
         procname="myetl1",

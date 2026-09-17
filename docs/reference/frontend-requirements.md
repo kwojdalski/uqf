@@ -34,7 +34,7 @@ assumed.
 
 - **FE-01** `[Ops]` — **Process fleet health**: up or down, pid, port and group
   membership for every process in `process.csv`. Today this exists *only* as
-  the `torq-demo summary` CLI, which shells out to `torq.sh` and inspects
+  the `uqf-stack summary` CLI, which shells out to `torq.sh` and inspects
   local OS processes. Exposing it to a browser is **new backend work**.
 
 - **FE-02** `[Ops]` — **Gateway query queue**: pending and running queries with
@@ -71,7 +71,7 @@ assumed.
 
 - **FE-08** `[Desk]` — **Historical versus current-session split**: HDB
   completed partitions and RDB today's session, both reachable through the
-  gateway, matching the existing `torq-demo query` endpoint.
+  gateway, matching the existing `uqf-stack query` endpoint.
 
 - **FE-09** `[Desk]` — **Coverage-aware querying**: before querying a bounded
   dataset, confirm the required inputs are covered — matching
@@ -135,7 +135,7 @@ requiring new backend work.
 | ETL coverage | Same gateway path, against `etl_coverage` | Exists today |
 | Gateway queue / backend connections | Direct connection to the gateway, reading its own `.gw.getqueue[]`, `.gw.servers`, `.gw.clients` | Exists today |
 | Per-process query and error log | Direct connection to each process's own `.usage.usage` | Exists per-process; no fleet-wide rollup |
-| Process fleet up/down | `torq-demo summary`, which shells to `torq.sh` and inspects local OS processes | CLI-only; **new backend work** |
+| Process fleet up/down | `uqf-stack summary`, which shells to `torq.sh` and inspects local OS processes | CLI-only; **new backend work** |
 | Airflow / backfill task status | Status file on disk, or Airflow's own REST API for task-instance state | File-based only; **new work either way** |
 
 ## Decisions
@@ -169,7 +169,7 @@ Machine-derived index: [`docs/decisions/README.md`](decisions.md).
   (FE-04) — and per ETL-15 the files carry only q's own facts.
 
 - **FE-22 — target deployment?** → **local demo, single host** ([#56]). The API
-  layer runs beside the `torq-demo` stack on one machine, which is what makes
+  layer runs beside the `uqf-stack` stack on one machine, which is what makes
   FE-21's plain local path work with no shared volume. B3's fleet health was
   unconstrained by this (liveness is an IPC probe either way), and the existing
   10k row cap and 30s gateway timeout were sized for it.
@@ -238,7 +238,7 @@ undecided answer. Each phase ends at a gate that can actually be run.
 ### B3 — Process fleet health · gated on FE-22
 
 - **Delivers** FE-01.
-- **Work**: an HTTP surface over what `torq-demo summary` does today, without
+- **Work**: an HTTP surface over what `uqf-stack summary` does today, without
   shelling out per request.
 - **Gate**: killing one process is reflected in the fleet view within one poll
   interval.

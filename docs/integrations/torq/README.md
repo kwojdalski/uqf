@@ -1,8 +1,8 @@
-# TorQ demo architecture
+# uqf stack architecture
 
-Diagrams for the running state of the TorQ Finance Starter Pack demo (see
-[docs/guides/torq-demo.md](../torq-demo.md) for how to actually start/stop/query
-it). Reflects what `torq-demo list processes` shows today: the vendored
+Diagrams for the running state of the uqf stack (see
+[docs/guides/uqf-stack.md](../uqf-stack.md) for how to actually start/stop/query
+it). Reflects what `uqf-stack list processes` shows today: the vendored
 14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
 `markout1`), and two bounded backfill processes (`deals_backfill1`,
@@ -11,7 +11,7 @@ it). Reflects what `torq-demo list processes` shows today: the vendored
 **The backfills are not in the diagrams below, deliberately.** Those draw the
 streaming dataflow — who publishes to the tickerplant and who subscribes — and
 a backfill does neither: it reads an external source and writes its target
-table directly. It appears in `torq-demo list processes` and, once started, in
+table directly. It appears in `uqf-stack list processes` and, once started, in
 discovery, but drawing it on a tickerplant diagram would put an edge where
 there is none.
 
@@ -20,7 +20,7 @@ TorQ registers a declared process at startup, so a running backfill is visible
 in `.servers.SERVERS` and can be found by proctype `backfill`. Before that they
 were spawned ad hoc and were invisible to the fleet. `startwithall=0` on both —
 a backfill is a bounded job triggered with a window range (ETL-15 gives that
-trigger to Airflow), not part of the stack `torq-demo start` brings up.
+trigger to Airflow), not part of the stack `uqf-stack start` brings up.
 
 For the authoritative per-process table - ports, scripts, the table each
 owns, and its subscribe/publish edges - see
@@ -185,7 +185,7 @@ persisted tables (round-trip through `rdb1`/`wdb1`/`hdb`, same as
 `cross_quotes` is drawn dashed because it never becomes a real database
 table - it's `.cross.cross_quotes`, a plain in-memory table inside
 `cross1`'s own process, queryable only by connecting to `cross1` directly
-(`torq-demo query "select from cross_quotes" --port 6075`). `mkt_orderbook`
+(`uqf-stack query "select from cross_quotes" --port 6075`). `mkt_orderbook`
 is a full round trip instead: `vectorize1` folds `wide_book` and republishes
 onto `stp1`, so it flows through `rdb1`/`wdb1`/`hdb` exactly like any
 vendored table and survives past `vectorize1` restarting.
@@ -209,9 +209,9 @@ flowchart LR
     vendored_csv --> base["_base_process_rows()<br/>+ fxfeed1/quotesfeed1/<br/>cross1/widefeed1/vectorize1"]
     extra_procs --> base
     overrides -->|"field overrides<br/>applied on top"| gen_csv
-    base --> gen_csv["generated<br/>scripts/output/torq-demo/<br/>process.csv"]
+    base --> gen_csv["generated<br/>scripts/output/uqf-stack/<br/>process.csv"]
 
-    vendored_schema --> gen_schema["generated<br/>scripts/output/torq-demo/<br/>database.q"]
+    vendored_schema --> gen_schema["generated<br/>scripts/output/uqf-stack/<br/>database.q"]
     extra_schema --> gen_schema
 
     gen_csv -->|"stp1's -schemafile<br/>repointed at"| gen_schema

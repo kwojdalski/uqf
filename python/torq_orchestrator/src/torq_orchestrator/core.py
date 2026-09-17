@@ -16,7 +16,7 @@ its own module:
     crypto.py     the two external cryptorust recorders
 
 Everything is re-exported here because `from torq_orchestrator import core`
-followed by `core.thing` is how cli.py, wizard.py, torq_demo_mcp.py and
+followed by `core.thing` is how cli.py, wizard.py, uqf_stack_mcp.py and
 test_core.py all reach this code - about seventy distinct names between
 them. Keeping the facade meant the split changed no call site, which is
 what makes the existing test suite a proof that it preserved behaviour
@@ -71,8 +71,8 @@ from torq_orchestrator.logs import (  # noqa: F401
     resolve_procnames,
 )
 from torq_orchestrator.paths import (  # noqa: F401
-    TorqDemoError,
-    TorqDemoPaths,
+    UqfStackError,
+    UqfStackPaths,
     check_prerequisites,
     clean,
     default_paths,
@@ -164,8 +164,8 @@ __all__ = [
     "QUOTES_TABLE_SCHEMA",
     "TAP_PORT_OFFSET",
     "TRADES_TABLE_SCHEMA",
-    "TorqDemoError",
-    "TorqDemoPaths",
+    "UqfStackError",
+    "UqfStackPaths",
     "VECTORIZE_ETL_PORT_OFFSET",
     "WIDE_BOOK_FEED_PORT_OFFSET",
     "WIDE_BOOK_LEVELS",

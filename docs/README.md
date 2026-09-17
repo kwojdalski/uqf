@@ -14,7 +14,7 @@ reference or an architecture note, and only its purpose decides where it goes.
 
 ## What is where
 
-**`guides/`** — [`torq-demo.md`](guides/torq-demo.md) (running the stack),
+**`guides/`** — [`uqf-stack.md`](guides/uqf-stack.md) (running the stack),
 [`ci.md`](guides/ci.md) (what the gates do and how to run them locally).
 
 **`architecture/`** — [`pipeline-philosophy.md`](architecture/pipeline-philosophy.md)

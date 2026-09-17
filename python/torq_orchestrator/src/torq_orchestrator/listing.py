@@ -9,7 +9,7 @@ from typing import Any
 
 from torq_orchestrator.env import build_env
 from torq_orchestrator.logger import get_logger
-from torq_orchestrator.paths import TorqDemoError, TorqDemoPaths
+from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 from torq_orchestrator.pipelines import DEFAULT_BASE_PORT, PROCESS_CSV_FIELDS
 from torq_orchestrator.procs import (
     _base_process_rows,
@@ -29,7 +29,7 @@ log = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _list_processes(paths: TorqDemoPaths, base_port: int) -> list[dict[str, str]]:
+def _list_processes(paths: UqfStackPaths, base_port: int) -> list[dict[str, str]]:
     env = build_env(paths, base_port=base_port)
     overrides = _read_overrides(paths)
     items = []
@@ -48,11 +48,11 @@ def _list_processes(paths: TorqDemoPaths, base_port: int) -> list[dict[str, str]
     return items
 
 
-def _list_fields(paths: TorqDemoPaths, base_port: int) -> list[dict[str, str]]:
+def _list_fields(paths: UqfStackPaths, base_port: int) -> list[dict[str, str]]:
     return [{"field": f} for f in PROCESS_CSV_FIELDS]
 
 
-def _list_overrides(paths: TorqDemoPaths, base_port: int) -> list[dict[str, str]]:
+def _list_overrides(paths: UqfStackPaths, base_port: int) -> list[dict[str, str]]:
     return [
         {"procname": procname, "field": field, "value": value}
         for procname, fields in _read_overrides(paths).items()
@@ -60,7 +60,7 @@ def _list_overrides(paths: TorqDemoPaths, base_port: int) -> list[dict[str, str]
     ]
 
 
-def _list_env(paths: TorqDemoPaths, base_port: int) -> list[dict[str, str]]:
+def _list_env(paths: UqfStackPaths, base_port: int) -> list[dict[str, str]]:
     env = build_env(paths, base_port=base_port)
     return [{"name": name, "value": value} for name, value in env.items()]
 
@@ -74,7 +74,7 @@ LISTABLE_KINDS: dict[str, Any] = {
 
 
 def list_items(
-    paths: TorqDemoPaths, kind: str, base_port: int = DEFAULT_BASE_PORT
+    paths: UqfStackPaths, kind: str, base_port: int = DEFAULT_BASE_PORT
 ) -> list[dict[str, str]]:
     """List every item of *kind* - 'processes' (procname/proctype/port/
     startwithall, resolved+overridden), 'fields' (process.csv's valid
@@ -83,7 +83,7 @@ def list_items(
     KDBHDB/... values). See LISTABLE_KINDS for the full, extensible set.
     """
     if kind not in LISTABLE_KINDS:
-        raise TorqDemoError(f"unknown list kind {kind!r} - {sorted(LISTABLE_KINDS)}")
+        raise UqfStackError(f"unknown list kind {kind!r} - {sorted(LISTABLE_KINDS)}")
     return LISTABLE_KINDS[kind](paths, base_port)
 
 
@@ -91,7 +91,7 @@ def list_items(
 # summary parsing - TorQ's own `summary` output, with the ports it leaves out
 # ---------------------------------------------------------------------------
 
-#: The columns `torq-demo summary` shows, in order.
+#: The columns `uqf-stack summary` shows, in order.
 SUMMARY_COLUMNS = ("Time", "Process", "Status", "PID", "Port", "Heartbeat")
 
 #: The process that aggregates heartbeats. TorQ's `monitor.q` is the only
@@ -107,7 +107,7 @@ MONITOR_PROCNAME = "monitor1"
 HEARTBEAT_QUERY = "0!.hb.hb"
 
 
-def configured_ports(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
+def configured_ports(paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
     """procname -> the port that process is configured to listen on.
 
     The same resolution `_list_processes` does, keyed for lookup. Every
@@ -119,7 +119,7 @@ def configured_ports(paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT) -
 
 
 def heartbeat_states(
-    paths: TorqDemoPaths, base_port: int = DEFAULT_BASE_PORT
+    paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT
 ) -> dict[str, str] | None:
     """procname -> heartbeat state, or None when monitor1 cannot be reached.
 
@@ -148,12 +148,12 @@ def heartbeat_states(
     return _heartbeat_by_procname(rows)
 
 
-def _monitor_port(paths: TorqDemoPaths, base_port: int) -> int:
+def _monitor_port(paths: UqfStackPaths, base_port: int) -> int:
     """monitor1's resolved port, from the registry rather than an assumption."""
     for row in _list_processes(paths, base_port):
         if row["procname"] == MONITOR_PROCNAME:
             return int(row["port"])
-    raise TorqDemoError(f"{MONITOR_PROCNAME} is not a declared process")
+    raise UqfStackError(f"{MONITOR_PROCNAME} is not a declared process")
 
 
 def _heartbeat_by_procname(rows: Any) -> dict[str, str]:

@@ -1,5 +1,5 @@
 // test_demo_tables.q - the tickerplant table declarations in
-// scripts/torq_demo_tables.q (.tabletest).
+// scripts/uqf_stack_tables.q (.tabletest).
 //
 // These definitions used to be Python string literals. Nothing parsed them
 // as q until stp1 started, so a typo was a failed tickerplant rather than a
@@ -17,7 +17,7 @@
 / needs these tables in scope, and defining nine top-level tables for every
 / other suite would put names in the root namespace that nothing else wants.
 beforeNamespace_load:{[]
-    system"l scripts/torq_demo_tables.q";
+    system"l scripts/uqf_stack_tables.q";
     }
 
 / Every table the orchestrator's generated database.q is expected to carry.
@@ -36,7 +36,7 @@ expected:`quotes`wide_book`mkt_orderbook`crypto_book`crypto_sim_fills`crypto_tra
 / a CHARACTER CLASS, so the obvious "*:([]*" is an empty class and throws
 / rather than matching the literal text it looks like it matches.
 declared:{[]
-    ls:read0 `$":scripts/torq_demo_tables.q";
+    ls:read0 `$":scripts/uqf_stack_tables.q";
     ls:ls where (not ls like "/*") and ls like "*:(*";
     asc `$ {x til x?":"} each ls}
 

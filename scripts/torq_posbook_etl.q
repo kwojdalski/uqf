@@ -1,11 +1,11 @@
-/ torq_posbook_etl.q - proof-of-concept "ETL" process for the TorQ demo,
+/ torq_posbook_etl.q - proof-of-concept "ETL" process for the uqf stack,
 / alongside torq_cross_etl.q/torq_vectorize_etl.q's own new rows:
 / subscribes to torq_fx_trades_feed.q's `trades` table and, per fill,
 / folds it through uqf's own .qpos.apply_fill (src/portfolio/positions.q) to
 / maintain a running position book, then marks it to the prevailing mid
 / (from the vendored `quote` table, which torq_fx_feed.q also writes FX
 / top-of-book into) via .qrisk.pnl (src/portfolio/risk.q) for a live unrealized
-/ P&L - this is the process that closes the gap the TorQ demo previously
+/ P&L - this is the process that closes the gap the uqf stack previously
 / had: every other feed/ETL here moves market-data shapes around, none of
 / them ran uqf's actual position/risk logic against live data.
 / .
@@ -30,7 +30,7 @@
 / Not loaded by src/init.q or anything else uqf itself runs - registered
 / only in the process.csv torq_orchestrator.core.bootstrap() generates on
 / the fly (port {KDBBASEPORT}+30 - see POSBOOK_PORT_OFFSET in core.py).
-/ e.g. `torq-demo query "select from position" --port <base+2>` (rdb1).
+/ e.g. `uqf-stack query "select from position" --port <base+2>` (rdb1).
 
 / pull in uqf's own src/init.q (loads .qpos/.qrisk/... - see UQFROOT in
 / core.py's build_env) FIRST - .posbook.book below calls
