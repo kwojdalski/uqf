@@ -1,5 +1,5 @@
 / databento_mbp10.q - Databento MBP-10 order-book records over ODBC
-/ (.qsdbn).
+/ (.qfeed.databento_mbp10).
 / .
 / The first source in this tree reached through ODBC and carrying real market
 / data: Databento's MBP-10 schema (market by price, ten levels) for US
@@ -29,7 +29,7 @@
 / applying epoch_ns() to the column: a function on the column stops DuckDB
 / skipping row groups by their min/max, so every window would scan every row.
 
-\d .qsdbn
+\d .qfeed.databento_mbp10
 
 source_name:`databento_mbp10
 
@@ -65,7 +65,7 @@ select_list:{[]
         s:string f;
         $[f=`ts_event; "epoch_ns(ts_event) AS ts_event";
           (f in `size`sequence) or s like "*_sz_*"; "CAST(",s," AS BIGINT) AS ",s;
-          s]} each .qsdbn.fields;
+          s]} each .qfeed.databento_mbp10.fields;
     ", " sv exprs}
 
 / Private: a timestamp as DuckDB epoch nanoseconds, through .qodbc.literal.

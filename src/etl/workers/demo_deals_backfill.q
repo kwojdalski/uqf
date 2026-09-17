@@ -80,7 +80,7 @@ cleanup:{[] .qbw.cleanup worker_name}
 / .qdqc.summarize_checks already uses.
 / @param batch the fetched rows, before publication
 / @return a table check/status/detail, one row per offending row
-/ @eg .qwrk.demo_deals_backfill.quality_check[.qsdemo.fixture[]]  ->  an empty table
+/ @eg .qwrk.demo_deals_backfill.quality_check[.qfeed.demo_deals.fixture[]]  ->  an empty table
 quality_check:{[batch]
     if[0=count batch; :.qbw.no_failures[]];
     bad_rate:select from batch where not rate>0;
@@ -97,7 +97,7 @@ quality_check:{[batch]
 / The transform. Pass-through: this job copies deals into their target
 / unchanged, and declaring that is what makes it a tested claim. The example
 / is the source's own hand-written fixture.
-.qxf.passthrough[`demo_deals_passthrough;`batch;0#.qsdemo.fixture[];.qsdemo.fixture[]];
+.qxf.passthrough[`demo_deals_passthrough;`batch;0#.qfeed.demo_deals.fixture[];.qfeed.demo_deals.fixture[]];
 
 / Window width is this worker's own business rather than part of the
 / contract, but it is what makes the bound observable window by window.

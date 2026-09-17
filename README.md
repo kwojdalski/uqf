@@ -171,12 +171,13 @@ throughout rather than nested under a shared parent (e.g. not
 convention the tree keeps: the filename-to-namespace tie is what the naming
 auditor checks and what `docs/man.q`'s registry is generated against.
 
-The one exception, added deliberately: **bounded-worker instances nest under
-one `.qwrk` root** — `.qwrk.demo_deals_backfill`, `.qwrk.upstream_trades_backfill`.
-A worker is an instance of a shape the framework defines, not a module of
-its own, and `.qbw.define` derives the namespace from the worker's
-registered name, so there is no second name to invent or keep in step.
-Library modules stay flat. `src/namespaces.q` (`.qns`) is the one
+The exceptions, added deliberately, are the ETL tree's **instances**:
+bounded workers under one `.qwrk` root (`.qwrk.demo_deals_backfill`) and
+source declarations under one `.qfeed` root (`.qfeed.demo_deals`). Neither
+is a module — each is one instance of a shape the framework defines — and
+in both the namespace is the registered name rather than an abbreviation of
+it: `.qbw.define` derives a worker's, and a test asserts every source file's
+`\d` matches its own `source_name`. Library modules stay flat. `src/namespaces.q` (`.qns`) is the one
 enumeration that knows about the nesting; any tool listing namespaces goes
 through it rather than scanning the root for a `q` prefix.
 

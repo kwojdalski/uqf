@@ -37,7 +37,7 @@ test_the_row_key_is_composite:{[t]
 
 test_the_tape_is_a_superset_of_the_trades_shape:{[t]
     trades_cols:`time`sym`side`size`pip_factor;
-    .qunit.assertEquals[all trades_cols in .qsevt.fields;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
+    .qunit.assertEquals[all trades_cols in .qfeed.demo_events.fields;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
 
 test_the_window_is_taken_on_event_time:{[t]
     one:last .qsrc.fetch_window[`demo_events;0Ni;.evttest.d 0;.evttest.d 1];
@@ -95,7 +95,7 @@ test_a_tape_with_no_trades_has_zero_flow:{[t]
 / Size is unsigned in the tape and signed by multiplying, per the shape
 / contract. A signed size column would make `sum size` meaningless.
 test_the_fixture_flow_matches_its_trades:{[t]
-    .qunit.assertEquals[.qmicro.signed_trade_flow .qsevt.fixture[];-500000f;"the fixture buys 1M and sells 1.5M aggressively"]};
+    .qunit.assertEquals[.qmicro.signed_trade_flow .qfeed.demo_events.fixture[];-500000f;"the fixture buys 1M and sells 1.5M aggressively"]};
 
 / --- cumulative_trade_flow ----------------------------------------------
 
@@ -111,7 +111,7 @@ test_cumulative_flow_is_a_running_total:{[t]
     .qunit.assertEquals[exec cum_flow from .qmicro.cumulative_trade_flow tp;100 300 250f;"each row is the net flow up to and including that trade"]};
 
 test_cumulative_flow_ends_at_the_scalar_flow:{[t]
-    tp:.qsevt.fixture[];
+    tp:.qfeed.demo_events.fixture[];
     .qunit.assertEquals[last exec cum_flow from .qmicro.cumulative_trade_flow tp;.qmicro.signed_trade_flow tp;"the last cumulative value is the total, or one of the two is wrong"]};
 
 / --- cancel_to_trade_ratio (ROADMAP #23) --------------------------------
@@ -133,7 +133,7 @@ test_no_trades_gives_null_not_zero_or_infinity:{[t]
     .qunit.assertEquals[(null r;r=0f;r=0w);(1b;0b;0b);"an empty denominator is undefined, not zero and not infinite"]};
 
 test_the_fixture_ratio_matches_its_counts:{[t]
-    .qunit.assertEquals[.qmicro.cancel_to_trade_ratio .qsevt.fixture[];1.5;"three cancels, two trades"]};
+    .qunit.assertEquals[.qmicro.cancel_to_trade_ratio .qfeed.demo_events.fixture[];1.5;"three cancels, two trades"]};
 
 / --- cancel_to_trade_ratio_by: the hit_ratio_by shape -------------------
 
@@ -154,7 +154,7 @@ test_bucketing_puts_the_time_back:{[t]
     .qunit.assertEquals[`time in cols 0!r;1b;"an hourly bucket groups by the floored time as well as the group columns"]};
 
 test_grouped_ratios_match_the_ungrouped_one_for_a_single_group:{[t]
-    tp:.qsevt.fixture[];
+    tp:.qfeed.demo_events.fixture[];
     r:.qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
     .qunit.assertEquals[first exec ratio from r;.qmicro.cancel_to_trade_ratio tp;"one sym grouped must equal the whole-tape ratio"]};
 
@@ -180,7 +180,7 @@ setUp_worker:{[]
     setenv[`UQF_SOURCE_CRED_DEMO_EVENTS;""];
     .qbfstate.release_lock `demo_events_backfill;
     .qbfstate.clear_checkpoint `demo_events_backfill;
-    `event_tape set 0#.qsevt.fixture[];
+    `event_tape set 0#.qfeed.demo_events.fixture[];
     }
 
 tearDown_worker:{[] .qwrk.demo_events_backfill.cleanup[];}
@@ -308,7 +308,7 @@ test_a_perfectly_balanced_tape_gives_vpin_zero:{[t]
     .qunit.assertEquals[exec vpin from v;enlist 0f;"buys exactly offsetting sells is zero imbalance"]};
 
 test_vpin_is_bounded_by_zero_and_one:{[t]
-    v:exec vpin from .qmicro.vpin[.qsevt.fixture[];1000000f;1];
+    v:exec vpin from .qmicro.vpin[.qfeed.demo_events.fixture[];1000000f;1];
     defined:v where not null v;
     .qunit.assertEquals[all (defined>=0f) and defined<=1f;1b;"a fraction of bucket volume cannot leave 0..1"]};
 
@@ -339,7 +339,7 @@ test_a_tape_with_no_trades_has_no_rate:{[t]
     .qunit.assertEquals[null .qmicro.trade_arrival_rate .evttest.tape[`add`cancel;1 1;100 100f];1b;"undefined, not zero"]};
 
 test_the_grouped_form_counts_trades_per_bucket:{[t]
-    r:.qmicro.trade_arrival_rate_by[.qsevt.fixture[];0D01:00:00;enlist `sym];
+    r:.qmicro.trade_arrival_rate_by[.qfeed.demo_events.fixture[];0D01:00:00;enlist `sym];
     .qunit.assertEquals[first exec trades from r;2;"the fixture's two trades fall in one hourly bucket"]};
 
 test_the_grouped_form_validates_its_tape:{[t]
@@ -390,11 +390,11 @@ test_facts_on_an_empty_window_says_so_rather_than_computing_infinities:{[t]
     / ETL-07 records a zero-row window deliberately, so `facts` receives one.
     / min/max over an empty column yields infinities, which would be recorded
     / as though they were observations of the data.
-    r:.qwrk.demo_events_backfill.facts[0#.qsevt.fixture[]];
+    r:.qwrk.demo_events_backfill.facts[0#.qfeed.demo_events.fixture[]];
     .qunit.assertEquals[r`event_span;"empty window";"an empty window is reported as empty, not as a span"]};
 
 test_facts_reports_the_span_and_the_trade_count:{[t]
-    tape:.qsevt.fixture[];
+    tape:.qfeed.demo_events.fixture[];
     r:.qwrk.demo_events_backfill.facts[tape];
     .qunit.assertEquals[r`distinct_syms;count distinct tape`sym;"one count per distinct symbol"];
     .qunit.assertEquals[r`trade_events;sum `trade=tape`action;"only trades are counted as trade events"];

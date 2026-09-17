@@ -63,7 +63,7 @@ check["no failed window";0=r`windows_failed;string r`windows_failed];
 / --- reconcile against DuckDB -------------------------------------------------
 
 h:.qodbc.open .qsrc.require_credentials `databento_mbp10;
-between_sql:" WHERE ts_event >= ",.qsdbn.epoch_ns_literal[range_from]," AND ts_event < ",.qsdbn.epoch_ns_literal[range_to];
+between_sql:" WHERE ts_event >= ",.qfeed.databento_mbp10.epoch_ns_literal[range_from]," AND ts_event < ",.qfeed.databento_mbp10.epoch_ns_literal[range_to];
 
 source_rows:first exec n from .qodbc.run_sql[h;"SELECT count(*) AS n FROM mbp10",between_sql];
 check["every source row published";source_rows=r`rows_published;
@@ -88,9 +88,9 @@ check["row count per symbol matches";
 / the range, re-read its ten levels straight from DuckDB and compare.
 sample:select from databento_book where i=(last;i) fby sym;
 level_sql:{[h;row]
-    sql:"SELECT ",(", " sv string .qsdbn.level_fields)," FROM mbp10",
+    sql:"SELECT ",(", " sv string .qfeed.databento_mbp10.level_fields)," FROM mbp10",
         " WHERE symbol = ",.qodbc.literal[string row`sym],
-        " AND ts_event = ",.qsdbn.epoch_ns_literal[row`time],
+        " AND ts_event = ",.qfeed.databento_mbp10.epoch_ns_literal[row`time],
         " AND sequence = ",.qodbc.literal[row`sequence],
         " AND action = ",.qodbc.literal[string row`action],
         " AND side = ",.qodbc.literal[string row`side],
@@ -98,7 +98,7 @@ level_sql:{[h;row]
         " AND size = ",.qodbc.literal[row`size];
     src:.qodbc.run_sql[h;sql];
     if[not 1=count src; :0b];
-    lv:{[src;p] "f"$raze src `$p,/:.qsdbn.levels}[src];
+    lv:{[src;p] "f"$raze src `$p,/:.qfeed.databento_mbp10.levels}[src];
     (row[`bid_prices]~lv "bid_px_") and (row[`ask_prices]~lv "ask_px_") and
         (("f"$row`bid_sizes)~lv "bid_sz_") and ("f"$row`ask_sizes)~lv "ask_sz_"}[h];
 matches:level_sql each sample;

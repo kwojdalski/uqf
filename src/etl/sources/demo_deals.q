@@ -1,5 +1,5 @@
 / demo_deals.q - a generic analogue of an external relational deal source
-/ (.qsdemo).
+/ (.qfeed.demo_deals).
 / .
 / WHY THIS IS AN ANALOGUE AND NOT A PORT (bank question E-09, answered via A-04)
 / .
@@ -29,7 +29,7 @@
 /      demo of a worker. The lifecycle, coverage and retry behaviour it
 /      exercises are the production ones.
 
-\d .qsdemo
+\d .qfeed.demo_deals
 
 source_name:`demo_deals
 

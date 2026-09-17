@@ -62,7 +62,7 @@ quality_check:{[batch]
 / hand to facts. Stated so nobody reads "facts" as a drop count.
 / @param batch the transformed rows of one window
 / @return a dict of symbol labels to values, recorded against the window
-/ @eg .qwrk.upstream_trades_backfill.facts[0#.qsup.fixture[]]  ->  (enlist `span)!enlist "empty window"
+/ @eg .qwrk.upstream_trades_backfill.facts[0#.qfeed.upstream_trades.fixture[]]  ->  (enlist `span)!enlist "empty window"
 facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
     `span`symbols!((string min batch`time),"/",string max batch`time; count distinct batch`sym)}
@@ -101,11 +101,11 @@ facts:{[batch]
         select time, sym, venue:`$string ex, price, size:`long$size,
                side:?[side=`buy;1;-1] from batch where size>0};
     enlist `inputs`expected!(
-        enlist[`batch]!enlist .qsup.fixture[],
+        enlist[`batch]!enlist .qfeed.upstream_trades.fixture[],
             ([] time:enlist 2015.01.07D00:00:09.000000000; sym:enlist `MSFT; ex:enlist "N";
                 price:enlist 20.33; size:enlist 0i; side:enlist `buy);
         select time, sym, venue:`$string ex, price, size:`long$size,
-               side:?[side=`buy;1;-1] from .qsup.fixture[]))];
+               side:?[side=`buy;1;-1] from .qfeed.upstream_trades.fixture[]))];
 
 / One-hour windows: the sample data spans about eleven hours a day, so a
 / day is a dozen windows and a partial run leaves something visible to

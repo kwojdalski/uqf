@@ -1,4 +1,4 @@
-/ upstream_trades.q - a trade table in ANOTHER kdb+ process (.qsup).
+/ upstream_trades.q - a trade table in ANOTHER kdb+ process (.qfeed.upstream_trades).
 / .
 / The other two sources in this directory are analogues of external
 / relational systems, and their live path has never run here because no such
@@ -15,7 +15,7 @@
 / declaration describes what the OTHER side has, and the transform is where
 / it becomes ours.
 
-\d .qsup
+\d .qfeed.upstream_trades
 
 source_name:`upstream_trades
 
@@ -56,8 +56,8 @@ tz:`UTC
 / partition on disk before the time filter saw a row.
 / .
 / `trade WITH A BACKTICK, never bare. A lambda carries its defining
-/ namespace across the wire, and this one is defined under \d .qsup - so on
-/ the remote, a bare `trade` resolves as `.qsup.trade`, which does not exist
+/ namespace across the wire, and this one is defined under \d .qfeed.upstream_trades - so on
+/ the remote, a bare `trade` resolves as `.qfeed.upstream_trades.trade`, which does not exist
 / there, and the query throws 'trade. The symbol form is resolved by the
 / remote's own select at ITS root, which is where the table is. Found the
 / first time any source in this tree ran live; both older sources have the
@@ -82,7 +82,7 @@ query:{[h;range_from;range_to]
 / second), and `ex` is a one-character exchange code. Sorted by time, as
 / the window logic requires.
 / @return ten real upstream rows, sorted by time
-/ @eg .qsup.fixture[]
+/ @eg .qfeed.upstream_trades.fixture[]
 fixture:{[]
     `time xasc ([]
         time:2015.01.07D00:00:02.038247000 2015.01.07D00:00:02.838234000 2015.01.07D00:00:01.638238000

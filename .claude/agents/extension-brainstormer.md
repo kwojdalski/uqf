@@ -114,7 +114,7 @@ Close with: how many candidates you generated and how many cleared the five-poin
 - Never re-file an implemented ROADMAP item, and never re-file something closed as `wontfix`/`invalid` without saying which issue it was and why the situation changed.
 - Never file the seven event-tape features individually. File the ingestion path or nothing.
 - Never widen the eFX scope to admit a good idea. Report it as out of scope instead.
-- Don't propose a new namespace nested more than one level (`` \d .qfwd.sub ``) — every namespace in this library is deliberately flat. (Nesting resolves fine in q; the ETL tree uses it for worker instances under `.qwrk`. It is the quant library that stays flat.)
+- Don't propose a new namespace nested more than one level (`` \d .qfwd.sub ``) — every namespace in this library is deliberately flat. (Nesting resolves fine in q; the ETL tree uses it for its instances — workers under `.qwrk`, sources under `.qfeed`. It is the quant library that stays flat.)
 - Don't propose work on `src/integrations/data.q` or inside `lib/torq`/`lib/torq-finance-starter-pack` (vendored; extend via the orchestrator overlay instead).
 - Don't use `WebSearch` to source ideas wholesale — only to verify one you already have.
 - Assume KDB-X (`~/.kx/bin/q`, `QHOME=~/.kx`) as the interpreter in any acceptance test you write.

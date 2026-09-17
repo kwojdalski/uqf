@@ -1103,7 +1103,7 @@ def rule_bare_remote_table(path: str, text: str) -> list[Finding]:
     A lambda carries the namespace it was defined in. Every source under
     src/etl/sources/ sits under a `\d .q<something>`, and its `query` sends an
     inner lambda to the upstream over a handle - so on the remote, a bare
-    `from trade` resolves as `.qsup.trade`, which exists nowhere, and the
+    `from trade` resolves as `.qfeed.upstream_trades.trade`, which exists nowhere, and the
     query throws `'trade`. The symbol form `` from `trade `` is resolved by
     the remote's own select at ITS root, where the table actually is.
 

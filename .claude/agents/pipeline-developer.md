@@ -111,12 +111,13 @@ pricing or execution function, say so and stop rather than adding it here.
   `scripts/generate_man_registry.py`; run it (without `--check`) after adding
   or changing one, and commit the result.
 - `lower_snake_case` throughout. Framework namespaces are flat and one level
-  deep (N-01) — never `\d .qcov.sub`. The one nested family is the workers:
-  every bounded-worker instance is `\d .qwrk.<worker name>`, derived by
+  deep (N-01) — never `\d .qcov.sub`. The nested families are the ETL
+  instances: every bounded worker is `\d .qwrk.<worker name>`, derived by
   `.qbw.define` from the registered name and refused if a `cfg` supplies its
-  own `ns`. Anything listing namespaces uses `.qns.owned`/`.qns.functional`
+  own `ns`; every source is `\d .qfeed.<source name>`, which
+  `test_source_contract.q` checks against the file's own `source_name`. Anything listing namespaces uses `.qns.owned`/`.qns.functional`
   (`src/namespaces.q`), never a root scan for a `q` prefix, which stops at
-  `.qwrk` and silently drops every worker.
+  `.qwrk`/`.qfeed` and silently drops every worker and source.
 - Prefer a named intermediate to a bare mixed `*`/`+`/`-` chain: q has no
   operator precedence and evaluates right to left.
 - A schema constant lives in exactly one place (see `.qcov.schema`). Changing

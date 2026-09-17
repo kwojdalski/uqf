@@ -174,6 +174,50 @@ qexec,slippage,function,4,side arrival_price exec_price pip_factor
 qexec,sweep_price,function,3,prices sizes target_size
 qexec,vwap,function,2,prices sizes
 qexec,vwap_expanding,function,2,prices sizes
+qfeed.databento_mbp10,adapt,function,1,raw
+qfeed.databento_mbp10,epoch_ns_literal,function,1,ts
+qfeed.databento_mbp10,fields,value,,
+qfeed.databento_mbp10,fixture,function,1,
+qfeed.databento_mbp10,fixture_levels,function,3,bid ask sz
+qfeed.databento_mbp10,level_fields,value,,
+qfeed.databento_mbp10,levels,value,,
+qfeed.databento_mbp10,query,function,3,h range_from range_to
+qfeed.databento_mbp10,row_key,value,,
+qfeed.databento_mbp10,select_list,function,1,
+qfeed.databento_mbp10,source_name,value,,
+qfeed.databento_mbp10,table,value,,
+qfeed.databento_mbp10,target,value,,
+qfeed.databento_mbp10,time_field,value,,
+qfeed.databento_mbp10,transport,value,,
+qfeed.databento_mbp10,types,value,,
+qfeed.databento_mbp10,tz,value,,
+qfeed.demo_deals,fields,value,,
+qfeed.demo_deals,fixture,function,1,
+qfeed.demo_deals,query,function,3,h range_from range_to
+qfeed.demo_deals,row_key,value,,
+qfeed.demo_deals,source_name,value,,
+qfeed.demo_deals,target,value,,
+qfeed.demo_deals,time_field,value,,
+qfeed.demo_deals,types,value,,
+qfeed.demo_deals,tz,value,,
+qfeed.demo_events,fields,value,,
+qfeed.demo_events,fixture,function,1,
+qfeed.demo_events,query,function,3,h range_from range_to
+qfeed.demo_events,row_key,value,,
+qfeed.demo_events,source_name,value,,
+qfeed.demo_events,target,value,,
+qfeed.demo_events,time_field,value,,
+qfeed.demo_events,types,value,,
+qfeed.demo_events,tz,value,,
+qfeed.upstream_trades,fields,value,,
+qfeed.upstream_trades,fixture,function,1,
+qfeed.upstream_trades,query,function,3,h range_from range_to
+qfeed.upstream_trades,row_key,value,,
+qfeed.upstream_trades,source_name,value,,
+qfeed.upstream_trades,target,value,,
+qfeed.upstream_trades,time_field,value,,
+qfeed.upstream_trades,types,value,,
+qfeed.upstream_trades,tz,value,,
 qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
 qfwd,CROSS_SIZE_MAX_HALVINGS,value,,
 qfwd,CROSS_SIZE_REL_TOL,value,,
@@ -395,41 +439,6 @@ qrun,runs,function,1,
 qrun,table_path,function,1,name
 qrun,under_lock,function,2,f args
 qrun,unfinished,function,1,
-qsdbn,adapt,function,1,raw
-qsdbn,epoch_ns_literal,function,1,ts
-qsdbn,fields,value,,
-qsdbn,fixture,function,1,
-qsdbn,fixture_levels,function,3,bid ask sz
-qsdbn,level_fields,value,,
-qsdbn,levels,value,,
-qsdbn,query,function,3,h range_from range_to
-qsdbn,row_key,value,,
-qsdbn,select_list,function,1,
-qsdbn,source_name,value,,
-qsdbn,table,value,,
-qsdbn,target,value,,
-qsdbn,time_field,value,,
-qsdbn,transport,value,,
-qsdbn,types,value,,
-qsdbn,tz,value,,
-qsdemo,fields,value,,
-qsdemo,fixture,function,1,
-qsdemo,query,function,3,h range_from range_to
-qsdemo,row_key,value,,
-qsdemo,source_name,value,,
-qsdemo,target,value,,
-qsdemo,time_field,value,,
-qsdemo,types,value,,
-qsdemo,tz,value,,
-qsevt,fields,value,,
-qsevt,fixture,function,1,
-qsevt,query,function,3,h range_from range_to
-qsevt,row_key,value,,
-qsevt,source_name,value,,
-qsevt,target,value,,
-qsevt,time_field,value,,
-qsevt,types,value,,
-qsevt,tz,value,,
 qsrc,ambiguous_message,function,3,zone bad cs
 qsrc,bound_padding,value,,
 qsrc,coerce,function,2,source tbl
@@ -491,15 +500,6 @@ qstream,score_markouts,function,2,trades quotes
 qstream,wide_book,table,,
 qstream,wide_level_groups,dict,,
 qstream,wide_level_names,value,,
-qsup,fields,value,,
-qsup,fixture,function,1,
-qsup,query,function,3,h range_from range_to
-qsup,row_key,value,,
-qsup,source_name,value,,
-qsup,target,value,,
-qsup,time_field,value,,
-qsup,types,value,,
-qsup,tz,value,,
 qwcfg,default_values,dict,,
 qwcfg,env_name,function,1,k
 qwcfg,env_values,dict,,

@@ -147,7 +147,7 @@ test_the_demo_source_is_registered_on_load:{[t]
 / row counts merely lie.
 test_the_fixture_is_windowed_not_returned_whole:{[t]
     one:last .qsrc.fetch_window[`demo_deals;0Ni;.srctest.d 1;.srctest.d 2];
-    .qunit.assertEquals[(count one;count .qsdemo.fixture[]);(1;5);"one day of a five-day fixture is one row, not five"]};
+    .qunit.assertEquals[(count one;count .qfeed.demo_deals.fixture[]);(1;5);"one day of a five-day fixture is one row, not five"]};
 
 test_the_fixture_window_is_half_open:{[t]
     / the fixture's rows sit at 09:00 on consecutive days, so a window ending
@@ -272,5 +272,53 @@ test_a_configured_credential_is_returned:{[t]
 
 test_has_credentials_does_not_throw:{[t]
     .qunit.assertEquals[.qsrc.has_credentials `demo_deals;0b;"choosing between the live and fixture paths must not require catching"]};
+
+/ --- where a source's declaration lives (.qfeed) --------------------------
+
+/ Private: (namespace; registered name) for one file under src/etl/sources/.
+/ Read from the TEXT rather than from the loaded process, because what this
+/ section checks is that the two agree - and in a loaded process they cannot
+/ disagree, since only one of them is left.
+source_file_names:{[file]
+    lines:read0 ` sv `:src/etl/sources,file;
+    ns:first lines where lines like "\\d .*";
+    nm:first lines where lines like "source_name:*";
+    (`$3_ns; `$1_(1+first ss[nm;":"])_nm)}
+
+source_files:{[] key `:src/etl/sources}
+
+test_every_source_file_declares_the_namespace_its_name_implies:{[t]
+    / The rule this whole section exists for: a source's namespace is
+    / .qfeed.<registered name>, so the file's `\d` and its `source_name`
+    / are one fact written twice and must agree. Before .qfeed they could
+    / not: the namespace was an abbreviation (.qsdemo for demo_deals) that
+    / no check compared with anything.
+    pairs:source_file_names each source_files[];
+    wrong:pairs where not {[p] p[0]=` sv `.qfeed,p 1} each pairs;
+    .qunit.assertEquals[wrong;();
+        "every source declares \\d .qfeed.<source_name> - the namespace and the registered name are the same word"]};
+
+test_the_scan_actually_found_the_source_files:{[t]
+    / Without this, a renamed directory would make every test above pass
+    / over an empty list - the failure mode that makes a gate worse than no
+    / gate, because it reports success.
+    .qunit.assertTrue[3<count source_files[];
+        "the source directory was found and holds the sources this suite checks"]};
+
+test_the_namespace_reader_rejects_a_mismatch:{[t]
+    / The comparison above only means something if it can say no. A file
+    / whose `\d` and `source_name` disagree is the shape it must reject.
+    pair:(`.qfeed.something_else;`demo_deals);
+    .qunit.assertEquals[pair[0]=` sv `.qfeed,pair 1;0b;
+        "a namespace that does not match the registered name fails the comparison"]};
+
+test_a_registered_source_resolves_under_the_feed_root:{[t]
+    / The loaded half: every name .qsrc has been told about has a namespace
+    / under .qfeed holding it. Stated against the registry so a source added
+    / later is covered without editing this file.
+    names:.qsrc.registered[];
+    missing:names where not {[n] (` sv `.qfeed,n) in .qns.owned[]} each names;
+    .qunit.assertEquals[missing;`symbol$();
+        "every registered source has its own namespace under .qfeed"]};
 
 \d .

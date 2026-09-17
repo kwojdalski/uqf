@@ -31,7 +31,7 @@ Scan for the following, in order of severity:
 - A local variable name that shadows a q builtin (`ss`, `cols`, `inv` are all confirmed live traps in this repo/interpreter combination) — causes confusing `assign`/`type` errors far from the actual mistake
 - A nested lambda referencing an *outer function's local* variable rather than a global — q closures only capture globals, so this fails at call time, not definition time
 - Single-key dict construction via `` `key!value `` on an atom key — collides with q's enum overload (type 20h); must be `(enlist key)!(enlist value)`
-- A new namespace nested more than one level deep (`` \d .qfwd.sub ``) — library namespaces are flat by convention (N-01), and the filename-to-namespace tie depends on it. The single exception is a bounded-worker instance (`` \d .qwrk.<worker name> ``), whose namespace `.qbw.define` derives from the worker's registered name
+- A new namespace nested more than one level deep (`` \d .qfwd.sub ``) — library namespaces are flat by convention (N-01), and the filename-to-namespace tie depends on it. The exceptions are the ETL tree's instances: a bounded worker (`` \d .qwrk.<worker name> ``), whose namespace `.qbw.define` derives from the registered name, and a source (`` \d .qfeed.<source name> ``), checked against the file's own `source_name`
 
 ### 4. Cross-Interpreter Portability Gaps
 - Code relying on an undocumented q subtlety — check `kdb-q-conventions`'s gotcha list first

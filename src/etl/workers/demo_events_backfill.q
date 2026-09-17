@@ -77,7 +77,7 @@ cleanup:{[] .qbw.cleanup worker_name}
 
 / Pass-through, like demo_deals_backfill: the tape is published as fetched,
 / and the example is the source's own hand-written fixture.
-.qxf.passthrough[`demo_events_passthrough;`batch;0#.qsevt.fixture[];.qsevt.fixture[]];
+.qxf.passthrough[`demo_events_passthrough;`batch;0#.qfeed.demo_events.fixture[];.qfeed.demo_events.fixture[]];
 
 .qbw.define[`demo_events_backfill;
     `source`dataset`width`transform`facts!

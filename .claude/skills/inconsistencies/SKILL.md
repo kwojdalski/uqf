@@ -34,7 +34,7 @@ Commands: ok — fix it | s/skip — skip | done — stop
 - Functions that can return a null result not documented as such in their qDoc `@return`/`@throws`
 
 ### 4. Module and Namespace Structure
-- A new module (`src/*.q`) that doesn't follow the established `\d .qmodule` ... `\d .` wrapping pattern, or that nests namespaces more than one level deep (N-01) — except a bounded-worker instance, which is deliberately `\d .qwrk.<worker name>` and derived by `.qbw.define`
+- A new module (`src/*.q`) that doesn't follow the established `\d .qmodule` ... `\d .` wrapping pattern, or that nests namespaces more than one level deep (N-01) — except the ETL tree's instances, which are deliberately `\d .qwrk.<worker name>` (derived by `.qbw.define`) and `\d .qfeed.<source name>`
 - A module not added to `src/init.q`'s load order, or added in a position that doesn't respect its actual dependencies (e.g. a module using `ccy.q` functions loaded before `ccy.q`)
 - Test file naming or namespace suffix that doesn't follow the established `tests/test_<module>.q` / `.{module}test` pattern qUnit auto-discovers
 

@@ -1,5 +1,5 @@
 / demo_events.q - a generic analogue of a venue order/trade event tape
-/ (.qsevt).
+/ (.qfeed.demo_events).
 / .
 / The ingestion half of issue #46. Shape and rationale in docs/architecture/event-tape.md;
 / this file is the ETL-12 source declaration for it.
@@ -20,7 +20,7 @@
 / largely already served by hit_ratio_by and markout_at_horizons. See
 / docs/architecture/event-tape.md for the comparison.
 
-\d .qsevt
+\d .qfeed.demo_events
 
 source_name:`demo_events
 

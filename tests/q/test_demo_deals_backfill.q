@@ -31,7 +31,7 @@ setUp_fresh:{[]
     setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];
     .qbfstate.release_lock `demo_deals_backfill;
     .qbfstate.clear_checkpoint `demo_deals_backfill;
-    `demo_deals set 0#.qsdemo.fixture[];
+    `demo_deals set 0#.qfeed.demo_deals.fixture[];
     }
 
 tearDown_release:{[] .qwrk.demo_deals_backfill.cleanup[];}
@@ -197,7 +197,7 @@ test_a_contract_breaking_source_fails_the_window:{[t]
 / empty table and would report no failures anyway - but only by accident of
 / how `select` behaves, not by intent, and an accident is not a contract.
 test_the_quality_gate_passes_an_empty_batch:{[t]
-    .qunit.assertEquals[count .qwrk.demo_deals_backfill.quality_check[0#.qsdemo.fixture[]];0;
+    .qunit.assertEquals[count .qwrk.demo_deals_backfill.quality_check[0#.qfeed.demo_deals.fixture[]];0;
         "an empty window has nothing to fail, and must not be reported as failing"]};
 
 / --- the contract methods themselves (#185 coverage) ---------------------
@@ -478,10 +478,10 @@ test_an_idle_run_still_beats:{[t]
 / registered transform passes its examples" sees only shipped transforms.
 double_notional:{[]
     .qxf.define[`ddbftest_double;`inputs`output`fn`examples!(
-        enlist[`batch]!enlist 0#.qsdemo.fixture[];
-        0#.qsdemo.fixture[];
+        enlist[`batch]!enlist 0#.qfeed.demo_deals.fixture[];
+        0#.qfeed.demo_deals.fixture[];
         {[batch] update notional:2*notional from batch};
-        enlist `inputs`expected!(enlist[`batch]!enlist .qsdemo.fixture[];update notional:2*notional from .qsdemo.fixture[]))]};
+        enlist `inputs`expected!(enlist[`batch]!enlist .qfeed.demo_deals.fixture[];update notional:2*notional from .qfeed.demo_deals.fixture[]))]};
 
 with_transform:{[nm;f]
     orig:.qbw.declaration[`demo_deals_backfill]`transform;
@@ -497,7 +497,7 @@ test_the_published_rows_are_the_transform_output:{[t]
     .ddbftest.double_notional[];
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`xf1;1;4]];
     .ddbftest.with_transform[`ddbftest_double;{.qwrk.demo_deals_backfill.run[]}];
-    want:exec 2*notional from .qsdemo.fixture[] where deal_id in exec deal_id from value `demo_deals;
+    want:exec 2*notional from .qfeed.demo_deals.fixture[] where deal_id in exec deal_id from value `demo_deals;
     .qunit.assertEquals[exec notional from value `demo_deals;want;
         "what reaches the target is the transform's output, not the fetched batch"]};
 
@@ -536,7 +536,7 @@ test_a_clocked_transform_is_refused_for_a_bounded_worker:{[t]
 / than being handed a batch directly - the point is to prove the GATE runs
 / inside do_window, not that the check function works in isolation.
 bad_fixture:{[]
-    update rate:0f from .qsdemo.fixture[] where deal_id=3};
+    update rate:0f from .qfeed.demo_deals.fixture[] where deal_id=3};
 
 with_bad_fixture:{[f]
     orig:(.qsrc.declaration[`demo_deals])`fixture;
@@ -547,7 +547,7 @@ with_bad_fixture:{[f]
 
 test_the_check_passes_the_real_fixture:{[t]
     / The gate must not fire on good data, or it would be turned off.
-    .qunit.assertEquals[count .qwrk.demo_deals_backfill.quality_check[.qsdemo.fixture[]];0;
+    .qunit.assertEquals[count .qwrk.demo_deals_backfill.quality_check[.qfeed.demo_deals.fixture[]];0;
         "the shipped fixture is acceptable, so the gate is not simply always-on"]};
 
 test_the_check_catches_a_nonpositive_rate:{[t]
@@ -588,7 +588,7 @@ test_a_worker_without_a_check_still_runs:{[t]
     / The gate is optional. demo_events_backfill declares none, and must be
     / unaffected - otherwise adding the feature would have broken every
     / worker that had not yet adopted it.
-    .qunit.assertEquals[count .qbw.run_check[`demo_events_backfill;.qsdemo.fixture[]];0;
+    .qunit.assertEquals[count .qbw.run_check[`demo_events_backfill;.qfeed.demo_deals.fixture[]];0;
         "a worker that declares no check reports no failures"]};
 
 test_a_non_function_check_is_refused:{[t]
