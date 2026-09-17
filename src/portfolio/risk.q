@@ -51,11 +51,28 @@ var_parametric:{[notional;vol;t;confidence]
     z_score:.qstats.inv_ncdf[confidence];
     (abs notional)*vol*sqrt[t]*z_score};
 
-/ Historical simulation VaR: the magnitude of the (1-confidence) empirical
+/ Historical simulation VaR: the loss at the (1-confidence) empirical
 / percentile of a series of historical P&L outcomes.
+/ .
+/ THE RETURN IS NOT ALWAYS POSITIVE, and that is deliberate. It is the
+/ negation of the percentile outcome, so a series whose (1-confidence)
+/ percentile is a GAIN yields a negative "loss":
+/ .
+/   .qrisk.var_historical[100+til 200;0.95]  ->  -110
+/ .
+/ That series never loses money at the 5th percentile, and saying so is more
+/ useful than clamping to zero, which would erase the difference between
+/ "breaks even this deep in the tail" and "still makes 110". Callers
+/ comparing against a risk limit get the right answer either way; callers
+/ formatting it for display should expect a sign.
+/ .
+/ This docstring previously promised "a positive loss estimate", which the
+/ function has never guaranteed (bugfinder, #182). The sentence was wrong,
+/ not the arithmetic.
 / @param pnl_series a list of historical P&L outcomes
 / @param confidence one-tailed confidence level, e.g. 0.95 or 0.99
-/ @return a positive loss estimate, in the same units as pnl_series
+/ @return the loss at that percentile, in the same units as pnl_series -
+/   negative when the percentile outcome is a gain
 / @eg .qrisk.var_historical[-100+til 200;0.95]  -> 90 (5th percentile of a 200-outcome series)
 var_historical:{[pnl_series;confidence]
     n:count pnl_series;
