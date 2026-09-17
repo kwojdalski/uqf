@@ -169,11 +169,14 @@ is what makes a materialisation *auditable* rather than merely *recorded*.
 - **Resources are source-shaped.** `.qsrc` is a resource in all but name, but
   a worker cannot declare "I need a clock", "I need a second connection", "I
   need a cache". Generalising it is mostly renaming.
-- **Partitions are time-only.** Coverage indexes on `[range_from, range_to)`.
-  A categorical partition (per-`sym`, per-region) has no expression, and
-  `.qbw.define` actively refuses two workers sharing a dataset *because*
-  coverage has no partition dimension. That refusal is correct today and is
-  exactly what a partition key would relax.
+- ~~**Partitions are time-only.**~~ **Done** (#185). Coverage carried only
+  `[range_from, range_to)`, so a categorical partition (per-`sym`,
+  per-region) had no expression and `.qbw.define` refused two workers sharing
+  a dataset *because* their coverage rows would be indistinguishable. That
+  refusal was correct given the schema, and it was the ceiling on
+  parallelism. `etl_coverage` now carries `partition`, required on write and
+  on read; the refusal keys on the (dataset, partition) pair, so one dataset
+  can be filled by several workers at once.
 - **Config is global.** `.qwcfg` has precedence, typed getters and accumulated
   errors — genuinely good — but a worker does not *declare* its config schema,
   so a missing key is found at first read rather than at startup.
@@ -243,8 +246,9 @@ discovered later:
 1. ~~**Asset checks in the publish path.**~~ **Done** — see §2.2.
 2. ~~**IO manager.**~~ **Done** — see §2.1.
 3. ~~**Run identity and materialisation metadata.**~~ **Done** — see §2.3.
-4. **Generalise resources**, then **categorical partitions**, then
-   **per-op config schemas**. Each is worth doing and none blocks the others.
+4. ~~**Categorical partitions.**~~ **Done** — see the partition bullet in §3.
+5. **Generalise resources**, then **per-op config schemas**. Each is worth
+   doing and neither blocks the other.
 
 Scheduling stays out, deliberately: ETL-15 gives ordering, retries and
 alerting to Airflow, and re-implementing them here would create the second

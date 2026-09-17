@@ -7,12 +7,16 @@
 / schema and there is nothing else to compare it to.
 / .
 / What the script is still for is DRIFT: a ledger some other process built
-/ to a different shape. Every read in coverage.q filters on dataset and
-/ source_version, so an extra column that distinguishes rows - a partition
-/ key is the obvious one - makes those reads aggregate across it, and a
-/ range covered for one value of it reports as COMPLETE for all of them.
-/ Nothing errors, because every row found is valid. That is the failure this
-/ catches.
+/ to a different shape. Every read in coverage.q filters on dataset,
+/ partition and source_version, so an extra column that distinguishes rows
+/ BEYOND those makes those reads aggregate across it, and a range covered for
+/ one value of it reports as COMPLETE for all of them. Nothing errors,
+/ because every row found is valid. That is the failure this catches.
+/ .
+/ `partition` itself was once the column this script warned about. It is
+/ declared and filtered on now (#185), so it can no longer appear as an extra
+/ - what the check below still catches is a SECOND partitioning dimension,
+/ one this tree does not know it should be slicing on.
 / .
 / .qcov.require_schema is the same check inside a worker's init, reached via
 / .qcov.attach. This is the standalone form, for looking at a ledger without
@@ -89,18 +93,19 @@ if[count missing;
 
 if[count partition_like;
     -1 "PARTITION ",", " sv string partition_like;
-    -1 "          This is the SILENT failure #60 was filed for. The live";
-    -1 "          table is partitioned and coverage.q does not filter on it,";
-    -1 "          so intervals from different partitions compose together";
-    -1 "          and a range covered in one partition but empty in the";
-    -1 "          others is reported COMPLETE. Fix before any consumer";
-    -1 "          trusts is_covered:";
+    -1 "          This is the SILENT failure #60 was filed for, in its";
+    -1 "          remaining form: a SECOND partitioning dimension, beyond the";
+    -1 "          `partition` column this tree already filters on. Intervals";
+    -1 "          from different values of it compose together, so a range";
+    -1 "          covered for one but empty for the others is reported";
+    -1 "          COMPLETE. Fix before any consumer trusts is_covered - the";
+    -1 "          same four steps #185 followed for `partition` itself:";
     -1 "            1. add the column to .qcov.schema and init_ledger";
     -1 "            2. add it as a REQUIRED parameter to intervals/";
     -1 "               is_covered/missing/require_covered - required, not";
     -1 "               optional, for the same reason source_version is (ETL-09)";
     -1 "            3. add it to uqf_frontend/queries.py's COVERAGE program";
-    -1 "            4. add a test that coverage in one partition does not";
+    -1 "            4. add a test that coverage under one value does not";
     -1 "               satisfy a query for another";
     -1 "";
     `problems set problems+1];

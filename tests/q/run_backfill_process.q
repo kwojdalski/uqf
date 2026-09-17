@@ -109,7 +109,7 @@ check["a cleared checkpoint gives a fresh process nothing to resume from";any co
 / shares nothing with this one but the directory.
 
 .qcov.attach[];
-.qcov.stage_completion[`durable_ds;`v1;d 1;d 2;7];
+.qcov.stage_completion[`durable_ds;`;`v1;d 1;d 2;7];
 
 cchild:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
        " tests/q/read_coverage.q < /dev/null 2>/dev/null";
@@ -120,7 +120,7 @@ check["and can answer is_covered from it";any covout like\: "COVERED:yes*"];
 / A withdrawn claim must stay withdrawn across a restart - a supersession
 / that did not persist would let a claim come back from the dead, which is
 / the worst failure this ledger has.
-.qcov.supersede[`durable_ds;`v1;d 1;d 2];
+.qcov.supersede[`durable_ds;`;`v1;d 1;d 2];
 supout:@[{system x};cchild;{enlist "SPAWN-FAILED: ",x}];
 check["a supersession survives the process too";any supout like\: "COVERED:no*"];
 
@@ -139,7 +139,7 @@ runid:.qrun.begin[`durable_worker];
 / A DIFFERENT dataset from the coverage checks above, which staged
 / durable_ds before any run existed - so its row carries a null run_id,
 / and `first` over durable_ds would pick that one and resolve nothing.
-.qcov.stage_completion[`run_ds;`v1;d 2;d 3;11];
+.qcov.stage_completion[`run_ds;`;`v1;d 2;d 3;11];
 .qrun.record[`run_ds;d 2;d 3;(enlist `rows)!enlist 11];
 / Released, not finished: this is what a process that died mid-run leaves.
 .qrun.release[];

@@ -263,14 +263,20 @@ def create_app(
     @app.get("/coverage", response_model=CoverageResponse)
     def get_coverage(
         dataset: str,
+        partition: str,
         source_version: str,
         range_from: str | None = None,
         range_to: str | None = None,
     ) -> CoverageResponse:
-        """Composed coverage for one dataset at one source release, plus the
-        gaps in a requested range if one is given (FE-09).
+        """Composed coverage for one dataset, partition and source release,
+        plus the gaps in a requested range if one is given (FE-09).
+
+        `partition` has no default on purpose. FastAPI makes a parameter with
+        no default REQUIRED, so omitting it is a 422 naming the field rather
+        than a plausible answer computed across every partition (#185). Pass
+        `""` for a dataset with no partition dimension.
         """
-        return _coverage(gateway, dataset, source_version, range_from, range_to)
+        return _coverage(gateway, dataset, partition, source_version, range_from, range_to)
 
     @app.post("/query", response_model=QueryResponse)
     def run_query(req: QueryRequest, request: Request) -> QueryResponse:
@@ -344,6 +350,7 @@ def _iso(interval: coverage.Interval) -> IntervalOut:
 def _coverage(
     gateway: Gateway,
     dataset: str,
+    partition: str,
     source_version: str,
     range_from: str | None,
     range_to: str | None,
@@ -354,7 +361,9 @@ def _coverage(
     # reproducible and the test doubles can pin it, and a caller asking twice
     # in one request gets one consistent belief rather than two.
     as_of = dt.datetime.now(dt.UTC)
-    raw = gateway.route(queries.COVERAGE, (dataset, source_version, as_of), TIERS["both"])
+    raw = gateway.route(
+        queries.COVERAGE, (dataset, partition, source_version, as_of), TIERS["both"]
+    )
     covered = coverage.compose(coverage.from_rows(_rows(raw)))
 
     requested = None
@@ -387,7 +396,9 @@ def _enforce_coverage(gateway: Gateway, req: CoverageRequirement) -> None:
     Returning the gaps rather than a bare refusal is the point: the caller can
     say *which* days are missing, or narrow its range to what exists.
     """
-    result = _coverage(gateway, req.dataset, req.source_version, req.range_from, req.range_to)
+    result = _coverage(
+        gateway, req.dataset, req.partition, req.source_version, req.range_from, req.range_to
+    )
     if not result.complete:
         gaps = ", ".join(f"[{g.range_from}, {g.range_to})" for g in result.gaps)
         raise CoverageIncomplete(

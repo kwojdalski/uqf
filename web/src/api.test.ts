@@ -19,6 +19,10 @@ it("sends typed numbers, booleans and lists; preserves symbol text without query
 it("rejects naive and reversed time ranges before requesting coverage", () => {
   const range = {
     dataset: "trades",
+    // The sentinel, not an omission: "" means the dataset has no partition
+    // dimension. validateRange must accept it, or every unpartitioned
+    // dataset becomes unqueryable (#185).
+    partition: "",
     source_version: "v1",
     range_from: "2026-09-16T00:00:00Z",
     range_to: "2026-09-17T00:00:00Z",

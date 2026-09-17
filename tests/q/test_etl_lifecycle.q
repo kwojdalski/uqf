@@ -93,7 +93,7 @@ test_a_cursor_at_the_end_plans_nothing:{[t]
 test_the_cursor_advances_to_the_window_end:{[t]
     spec:.lifecycletest.spec_for[`v1;1;2];
     .qrefw.init spec;
-    .qwrt.finish_window[`reference;`refdata;spec;.lifecycletest.d 1;.lifecycletest.d 2;{1}];
+    .qwrt.finish_window[`reference;`refdata;`;spec;.lifecycletest.d 1;.lifecycletest.d 2;{1}];
     .qunit.assertEquals[.qbfstate.load_checkpoint[`reference;spec];.lifecycletest.d 2;"the cursor lands on the window's exclusive end, so the next plan starts there"]};
 
 / --- 3. run-spec invalidation -------------------------------------------
@@ -159,7 +159,7 @@ test_a_zero_width_window_is_rejected:{[t]
 
 test_a_completed_window_stages_coverage:{[t]
     spec:.lifecycletest.spec_for[`v1;1;2];
-    .qwrt.finish_window[`reference;`refdata;spec;.lifecycletest.d 1;.lifecycletest.d 2;{5}];
+    .qwrt.finish_window[`reference;`refdata;`;spec;.lifecycletest.d 1;.lifecycletest.d 2;{5}];
     .qunit.assertEquals[count value `etl_coverage;1;"one completed window, one coverage row"]};
 
 / The ORDER is the requirement, not an implementation detail: coverage is
@@ -170,7 +170,7 @@ test_a_completed_window_stages_coverage:{[t]
 test_publication_precedes_coverage_which_precedes_the_checkpoint:{[t]
     spec:.lifecycletest.spec_for[`v1;1;2];
     .qrefw.init spec;
-    .qwrt.finish_window[`reference;`refdata;spec;.lifecycletest.d 1;.lifecycletest.d 2;
+    .qwrt.finish_window[`reference;`refdata;`;spec;.lifecycletest.d 1;.lifecycletest.d 2;
         {.qrefw.publish ([] px:enlist 1.5)}];
     / coverage and the checkpoint are observable as state; publish is
     / observable only through the double's call log, which is exactly why
@@ -192,7 +192,7 @@ test_a_full_run_stages_one_coverage_row_per_window:{[t]
     .qrefw.init spec;
     {[spec;w]
         `.lifecycletest.win set w;
-        .qwrt.finish_window[`reference;`refdata;spec;w`range_from;w`range_to;
+        .qwrt.finish_window[`reference;`refdata;`;spec;w`range_from;w`range_to;
             {.qrefw.publish .qrefw.fetch[.lifecycletest.win`range_from;.lifecycletest.win`range_to]}]
     }[spec] each .qrefw.plan 0Np;
     .qunit.assertEquals[
@@ -204,9 +204,9 @@ test_a_full_run_leaves_the_range_covered:{[t]
     spec:.lifecycletest.spec_for[`v1;1;4];
     .qrefw.init spec;
     {[spec;w]
-        .qwrt.finish_window[`reference;`refdata;spec;w`range_from;w`range_to;{1}]
+        .qwrt.finish_window[`reference;`refdata;`;spec;w`range_from;w`range_to;{1}]
     }[spec] each .qrefw.plan 0Np;
-    .qunit.assertEquals[.qcov.is_covered[`refdata;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
+    .qunit.assertEquals[.qcov.is_covered[`refdata;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
 
 / A run that fails part-way must leave the DONE windows covered and the rest
 / not. Claiming the whole range would be the serious bug; claiming none of it
@@ -214,26 +214,26 @@ test_a_full_run_leaves_the_range_covered:{[t]
 test_a_partially_failed_run_covers_only_what_completed:{[t]
     spec:.lifecycletest.spec_for[`v1;1;4];
     .qrefw.init spec;
-    .qwrt.finish_window[`reference;`refdata;spec;.lifecycletest.d 1;.lifecycletest.d 2;{1}];
-    gap:.qcov.missing[`refdata;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];
+    .qwrt.finish_window[`reference;`refdata;`;spec;.lifecycletest.d 1;.lifecycletest.d 2;{1}];
+    gap:.qcov.missing[`refdata;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];
     .qunit.assertEquals[(count gap;first[gap]`range_from);(1;.lifecycletest.d 2);"one window done, the remaining two days still reported missing"]};
 
 / --- 6. version-specific coverage admission ------------------------------
 
 test_a_version_bump_is_not_admitted_by_old_coverage:{[t]
-    .qcov.stage_completion[`refdata;`v1;.lifecycletest.d 1;.lifecycletest.d 4;100];
-    .qunit.assertEquals[.qcov.is_covered[`refdata;`v2;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];0b;"a v2 run is not satisfied by v1 coverage"]};
+    .qcov.stage_completion[`refdata;`;`v1;.lifecycletest.d 1;.lifecycletest.d 4;100];
+    .qunit.assertEquals[.qcov.is_covered[`refdata;`;`v2;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];0b;"a v2 run is not satisfied by v1 coverage"]};
 
 test_an_upstream_precondition_blocks_before_any_work:{[t]
-    .qunit.assertError[{.qwrt.require_upstream[`upstream;`v1;.z.p;x 0;x 1]};(.lifecycletest.d 1;.lifecycletest.d 4);"an unpublished upstream stops the run at init, before a window is fetched"]};
+    .qunit.assertError[{.qwrt.require_upstream[`upstream;`;`v1;.z.p;x 0;x 1]};(.lifecycletest.d 1;.lifecycletest.d 4);"an unpublished upstream stops the run at init, before a window is fetched"]};
 
 test_partial_upstream_coverage_is_not_enough:{[t]
-    .qcov.stage_completion[`upstream;`v1;.lifecycletest.d 1;.lifecycletest.d 2;10];
-    .qunit.assertError[{.qwrt.require_upstream[`upstream;`v1;.z.p;x 0;x 1]};(.lifecycletest.d 1;.lifecycletest.d 4);"one covered day out of three does not admit a three-day run"]};
+    .qcov.stage_completion[`upstream;`;`v1;.lifecycletest.d 1;.lifecycletest.d 2;10];
+    .qunit.assertError[{.qwrt.require_upstream[`upstream;`;`v1;.z.p;x 0;x 1]};(.lifecycletest.d 1;.lifecycletest.d 4);"one covered day out of three does not admit a three-day run"]};
 
 test_full_upstream_coverage_admits_the_run:{[t]
-    .qcov.stage_completion[`upstream;`v1;.lifecycletest.d 1;.lifecycletest.d 4;30];
-    .qunit.assertEquals[.qwrt.require_upstream[`upstream;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];1b;"a fully published upstream admits the run"]};
+    .qcov.stage_completion[`upstream;`;`v1;.lifecycletest.d 1;.lifecycletest.d 4;30];
+    .qunit.assertEquals[.qwrt.require_upstream[`upstream;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];1b;"a fully published upstream admits the run"]};
 
 / --- ETL-19: the doubles discipline ---------------------------------------
 
@@ -298,7 +298,7 @@ test_a_failing_fetch_leaves_earlier_windows_covered:{[t]
     / missing, which @ then supplies.
     {[spec;w]
         `.lifecycletest.win set w;
-        @[{[spec;w] .qwrt.finish_window[`reference;`refdata;spec;w`range_from;w`range_to;
+        @[{[spec;w] .qwrt.finish_window[`reference;`refdata;`;spec;w`range_from;w`range_to;
             {.qrefw.fetch[.lifecycletest.win`range_from;.lifecycletest.win`range_to]; 1}]}[spec];
           w;{x}]
     }[spec] each .qrefw.plan 0Np;

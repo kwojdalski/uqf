@@ -38,7 +38,8 @@ assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];exp
 // again. test_coverage's test_the_foreign_fixture_tracks_the_declared_schema
 // now fails FIRST, and by name, so the next one is a one-line fix here.
 foreign_coverage_ledger:{[]
-    ([] dataset:`symbol$(); source_version:`symbol$(); range_from:`timestamp$();
+    ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
+        range_from:`timestamp$();
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$();
         superseded_at:`timestamp$(); run_id:`guid$())};
 

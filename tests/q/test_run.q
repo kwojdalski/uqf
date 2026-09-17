@@ -197,7 +197,7 @@ test_facts_of_isolates_one_run:{[t]
 
 test_coverage_carries_the_current_run:{[t]
     id:.qrun.begin[`w1];
-    .qcov.stage_completion[`ds1;`v1;.runtest.d 1;.runtest.d 2;10];
+    .qcov.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
     .qunit.assertEquals[first exec run_id from .qcov.ledger[];id;
         "a materialisation is stamped with the run that produced it"]};
 
@@ -205,17 +205,17 @@ test_coverage_outside_a_run_records_a_null_run:{[t]
     / An honest null, not an invented identity. A materialisation staged by
     / hand or by a test genuinely belongs to no run, and saying so is better
     / than attributing it to one that did not happen.
-    .qcov.stage_completion[`ds1;`v1;.runtest.d 1;.runtest.d 2;10];
+    .qcov.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
     .qunit.assertEquals[null first exec run_id from .qcov.ledger[];1b;
         "coverage staged outside a run is recorded as unattributed"]};
 
 test_materialisations_of_groups_one_execution:{[t]
     id:.qrun.begin[`w1];
-    .qcov.stage_completion[`ds1;`v1;.runtest.d 1;.runtest.d 2;10];
-    .qcov.stage_completion[`ds2;`v1;.runtest.d 1;.runtest.d 2;20];
+    .qcov.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
+    .qcov.stage_completion[`ds2;`;`v1;.runtest.d 1;.runtest.d 2;20];
     .qrun.finish[`completed];
     .qrun.begin[`w2];
-    .qcov.stage_completion[`ds3;`v1;.runtest.d 1;.runtest.d 2;30];
+    .qcov.stage_completion[`ds3;`;`v1;.runtest.d 1;.runtest.d 2;30];
     .qunit.assertEquals[asc exec dataset from .qcov.materialisations_of[id];
         `s#`ds1`ds2;"one run's materialisations exclude a later run's"]};
 
@@ -224,31 +224,31 @@ test_materialisations_of_includes_superseded_rows:{[t]
     / Hiding withdrawn rows would make a fully-restated run look like a run
     / that did nothing.
     id:.qrun.begin[`w1];
-    .qcov.stage_completion[`ds1;`v1;.runtest.d 1;.runtest.d 2;10];
+    .qcov.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
     .qrun.finish[`completed];
-    .qcov.supersede[`ds1;`v1;.runtest.d 1;.runtest.d 2];
+    .qcov.supersede[`ds1;`;`v1;.runtest.d 1;.runtest.d 2];
     .qunit.assertEquals[count .qcov.materialisations_of[id];1;
         "a superseded materialisation is still something that run produced"]};
 
 test_contributing_runs_lists_every_execution_behind_a_dataset:{[t]
     a:.qrun.begin[`w1];
-    .qcov.stage_completion[`ds1;`v1;.runtest.d 1;.runtest.d 2;10];
+    .qcov.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
     .qrun.finish[`completed];
     b:.qrun.begin[`w1];
-    .qcov.stage_completion[`ds1;`v1;.runtest.d 2;.runtest.d 3;10];
+    .qcov.stage_completion[`ds1;`;`v1;.runtest.d 2;.runtest.d 3;10];
     .qrun.finish[`completed];
-    .qunit.assertEquals[.qcov.contributing_runs[`ds1;`v1];(a;b);
+    .qunit.assertEquals[.qcov.contributing_runs[`ds1;`;`v1];(a;b);
         "a backfill run in slices shows every run that contributed, in order"]};
 
 test_contributing_runs_is_version_specific:{[t]
     / Same reasoning as ETL-10 everywhere else in the ledger: attribution
     / under one release says nothing about another.
     .qrun.begin[`w1];
-    .qcov.stage_completion[`ds1;`v1;.runtest.d 1;.runtest.d 2;10];
+    .qcov.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
     .qrun.finish[`completed];
     b:.qrun.begin[`w1];
-    .qcov.stage_completion[`ds1;`v2;.runtest.d 1;.runtest.d 2;10];
-    .qunit.assertEquals[.qcov.contributing_runs[`ds1;`v2];enlist b;
+    .qcov.stage_completion[`ds1;`;`v2;.runtest.d 1;.runtest.d 2;10];
+    .qunit.assertEquals[.qcov.contributing_runs[`ds1;`;`v2];enlist b;
         "runs under v1 do not appear in v2's attribution"]};
 
 / --- the schema guard -------------------------------------------------------

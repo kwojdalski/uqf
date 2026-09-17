@@ -253,9 +253,16 @@ windows:{[from_ts;to_ts;width]
 / required parameter, so a window covered at v1 does NOT suppress a fetch at
 / v2. That is ETL-10, and it is the direction that matters - the alternative
 / skips a re-extraction the version bump exists to force.
+/ .
+/ Partition-specific for the same reason and in the same direction: a window
+/ covered for `EURUSD does not suppress the fetch for `USDJPY. That is what
+/ lets one dataset be backfilled by several workers at once (#185) - without
+/ it, the first partition to finish would tell every other partition its work
+/ was already done.
+/ @param part this worker's partition, or ` when its dataset has none
 / @return 1b when the window still needs fetching
-needs_fetch:{[ds;version;as_of;from_ts;to_ts]
-    not .qcov.is_covered[ds;version;as_of;from_ts;to_ts]}
+needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
+    not .qcov.is_covered[ds;part;version;as_of;from_ts;to_ts]}
 
 / Narrow a requested range to the parts not yet published (ETL-13).
 / .
@@ -263,8 +270,8 @@ needs_fetch:{[ds;version;as_of;from_ts;to_ts]
 / re-fetches only what is missing instead of the whole range. An empty result
 / means there is nothing to do - which under C-07 is an `idle success, not a
 / failure.
-remaining:{[ds;version;as_of;from_ts;to_ts]
-    .qcov.missing[ds;version;as_of;from_ts;to_ts]}
+remaining:{[ds;part;version;as_of;from_ts;to_ts]
+    .qcov.missing[ds;part;version;as_of;from_ts;to_ts]}
 
 / Complete one window: publish rows, record coverage, save the checkpoint -
 / in that order, and all three behind the dry-run gate.
@@ -277,18 +284,20 @@ remaining:{[ds;version;as_of;from_ts;to_ts]
 / wrongly believes is done.
 / @param worker the worker's name
 / @param ds the dataset
+/ @param part the partition this worker fills, or ` when its dataset has no
+/   partition dimension
 / @param spec the run specification (source_version, range_from, range_to)
 / @param from_ts window start
 / @param to_ts window end, exclusive
 / @param publish a niladic function publishing the window, returning a row
 /   count
 / @return dict of the three effects' outcomes plus the row count
-finish_window:{[worker;ds;spec;from_ts;to_ts;publish]
+finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
     dry:is_dry_run[];
     published:commit[dry;`publish_rows;publish;()];
     rows:$[`done~first published; last published; 0];
     covered:commit[dry;`publish_coverage;.qcov.stage_completion;
-        (ds;spec`source_version;from_ts;to_ts;rows)];
+        (ds;part;spec`source_version;from_ts;to_ts;rows)];
     checkpointed:commit[dry;`write_checkpoint;.qbfstate.save_checkpoint;
         (worker;spec;to_ts)];
     `dry_run`rows_published`published`covered`checkpointed!
@@ -353,8 +362,15 @@ require_dependencies:{[worker]
 / This asks about its INPUT: a markout backfill over a range whose trades are
 / not yet published would compute markouts against missing trades and record
 / coverage saying it had done so.
+/ .
+/ The upstream's partition is a SEPARATE parameter from this worker's own,
+/ and deliberately so: a per-symbol markout worker may depend on a trades
+/ dataset that is unpartitioned, or partitioned differently. Assuming the two
+/ share a partitioning would check the wrong slice and admit a run whose
+/ input is missing.
+/ @param upstream_part the upstream's partition, or ` when it has none
 / @throws error naming the missing upstream ranges
-require_upstream:{[upstream;version;as_of;from_ts;to_ts]
-    .qcov.require_covered[upstream;version;as_of;from_ts;to_ts]}
+require_upstream:{[upstream;upstream_part;version;as_of;from_ts;to_ts]
+    .qcov.require_covered[upstream;upstream_part;version;as_of;from_ts;to_ts]}
 
 \d .

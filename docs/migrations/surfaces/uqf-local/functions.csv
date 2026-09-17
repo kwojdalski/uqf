@@ -45,6 +45,7 @@ qbw,init,function,2,worker run_spec
 qbw,no_failures,function,1,
 qbw,normalised,function,1,cfg
 qbw,optional_cfg,value,,
+qbw,partition_of,function,1,worker
 qbw,plan,function,2,worker cursor
 qbw,publish,function,2,worker batch
 qbw,publish_last_batch,function,2,worker unused
@@ -55,6 +56,7 @@ qbw,required_cfg,value,,
 qbw,run,function,1,worker
 qbw,run_check,function,2,worker batch
 qbw,spec,function,1,worker
+qbw,unpartitioned,value,,
 qbw,write_state,function,3,worker nm v
 qccy,ccy_pair_legs,function,1,pair
 qccy,ccy_pair_symbol,function,2,base quote
@@ -86,29 +88,29 @@ qcont,register_feeder,function,2,worker dataset
 qcont,save_cursor,function,2,worker cursor
 qcov,attach,function,1,
 qcov,compose,function,1,intervals
-qcov,contributing_runs,function,2,ds version
+qcov,contributing_runs,function,3,ds part version
 qcov,current_run,function,1,
 qcov,gaps,function,3,from_ts to_ts covered
-qcov,history,function,2,ds version
+qcov,history,function,3,ds part version
 qcov,init_ledger,function,1,
-qcov,intervals,function,3,ds version as_of
-qcov,is_covered,function,5,ds version as_of from_ts to_ts
+qcov,intervals,function,4,ds part version as_of
+qcov,is_covered,function,6,ds part version as_of from_ts to_ts
 qcov,ledger,function,1,
 qcov,ledger_path,function,1,
 qcov,lock_path,function,1,
 qcov,materialisations_of,function,1,id
-qcov,missing,function,5,ds version as_of from_ts to_ts
+qcov,missing,function,6,ds part version as_of from_ts to_ts
 qcov,persist,function,1,
 qcov,reload,function,1,
-qcov,require_covered,function,5,ds version as_of from_ts to_ts
+qcov,require_covered,function,6,ds part version as_of from_ts to_ts
 qcov,require_interval,function,2,range_from range_to
 qcov,require_schema,function,1,
 qcov,schema,value,,
-qcov,stage_completion,function,5,dataset source_version range_from range_to rows_published
+qcov,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
 qcov,still_current,value,,
-qcov,supersede,function,4,ds version from_ts to_ts
-qcov,supersede_locked,function,4,ds version from_ts to_ts
-qcov,valid_at,function,3,ds version as_of
+qcov,supersede,function,5,ds part version from_ts to_ts
+qcov,supersede_locked,function,5,ds part version from_ts to_ts
+qcov,valid_at,function,4,ds part version as_of
 qcov,with_lock,function,2,f args
 qdag,adopt_all,function,1,
 qdag,adopt_feeders,function,1,
@@ -504,15 +506,15 @@ qwrt,data_patterns,value,,
 qwrt,declare_dependencies,function,2,worker procs
 qwrt,declared_dependencies,dict,,
 qwrt,default_policy,dict,,
-qwrt,finish_window,function,6,worker ds spec from_ts to_ts publish
+qwrt,finish_window,function,7,worker ds part spec from_ts to_ts publish
 qwrt,is_dry_run,function,1,
-qwrt,needs_fetch,function,5,ds version as_of from_ts to_ts
+qwrt,needs_fetch,function,6,ds part version as_of from_ts to_ts
 qwrt,owner,function,1,concern
 qwrt,policy,function,1,
 qwrt,q_owned,value,,
-qwrt,remaining,function,5,ds version as_of from_ts to_ts
+qwrt,remaining,function,6,ds part version as_of from_ts to_ts
 qwrt,require_dependencies,function,1,worker
-qwrt,require_upstream,function,5,upstream version as_of from_ts to_ts
+qwrt,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts
 qwrt,retry_boundary,value,,
 qwrt,retryable,function,1,err
 qwrt,sleep_ms,function,1,ms

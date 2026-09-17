@@ -87,9 +87,16 @@ SELECT = """{[t;fc;fo;fv;lim]
 #: CALLED - not when it is defined, and whether or not the body references it.
 #: `test_q_programs.py` caught this before it shipped, which is the fourth
 #: name this repository has lost to that trap.
-COVERAGE = """{[ds;release;at]
+#: `partition` is required for the same reason again, one dimension further
+#: out (#185). A coverage read that names a dataset but not a partition
+#: aggregates across every partition, so a range published for EURUSD alone
+#: reports as covered for every symbol - the exact failure the column was
+#: added to prevent, rebuilt on the HTTP side. The empty string maps to the
+#: q null symbol `, which is .qcov's "this dataset has no partition
+#: dimension" sentinel and matches only rows recorded under it.
+COVERAGE = """{[ds;part;release;at]
   select range_from, range_to from etl_coverage
-    where dataset=ds, source_version=release,
+    where dataset=ds, partition=part, source_version=release,
           recorded_at<=at, at<superseded_at}"""
 
 #: Row count for a whitelisted table, so a UI can page without pulling rows.

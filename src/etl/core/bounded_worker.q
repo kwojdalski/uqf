@@ -42,6 +42,15 @@ cfgs:(`symbol$())!();
 
 required_cfg:`ns`source`dataset`width
 
+/ The partition every worker fills when it does not declare one.
+/ .
+/ ` is .qcov's "this dataset has no partition dimension" sentinel, so an
+/ existing worker that names no partition keeps recording and reading exactly
+/ the rows it always did. Declaring `partition` is what opts a dataset into
+/ being filled by several workers at once (#185); not declaring it leaves the
+/ old one-worker-per-dataset behaviour in place, refusal and all.
+unpartitioned:`
+
 / The keys a worker MAY declare. Absent ones are filled with (::) at
 / registration, which is not tidiness - it is load-bearing.
 / .
@@ -65,7 +74,7 @@ required_cfg:`ns`source`dataset`width
 / the time column, a null fraction on the column that matters, a checksum.
 / Optional, for the same reason `check` is: metadata written to satisfy a
 / requirement rather than to be read is worse than none.
-optional_cfg:`check`io`facts
+optional_cfg:`check`io`facts`partition
 
 / Declare a worker's configuration.
 / .
@@ -92,26 +101,43 @@ define:{[worker;cfg]
     .qio.for_cfg cfg;
     .qsrc.declaration cfg`source;
 
-    / Refuse two workers filling one dataset (#60).
+    / Refuse two workers filling one dataset AND PARTITION (#60, #185).
     / .
-    / Coverage has no partition dimension: stage_completion records
-    / (dataset; source_version; range; rows), so two workers writing the
-    / same dataset produce coverage rows nothing can tell apart. If they
-    / cover different RANGES that composes correctly and is the intended
-    / design; if they cover different PARTITIONS of the same range - per
-    / sym, per venue, per region - their coverage wrongly composes and a
-    / range covered for one partition reads as covered for all.
+    / This used to refuse on the dataset alone, because coverage had no
+    / partition dimension: stage_completion recorded (dataset; version;
+    / range; rows), so two workers writing one dataset produced rows nothing
+    / could tell apart. That refusal was correct given the schema and it was
+    / also the ceiling on parallelism - one worker per dataset, however large
+    / the range.
     / .
-    / Nothing distinguishes those two cases at registration, so the
-    / conservative refusal is the right one: it forces the second case to be
-    / a deliberate decision (add the partition dimension to .qcov, as a
-    / REQUIRED parameter per ETL-09) rather than an accident nobody notices.
-    clash:(key cfgs) where (value cfgs)[;`dataset]=cfg`dataset;
+    / Coverage now carries `partition`, so the pair is what has to be unique.
+    / Two workers on one dataset filling `EURUSD and `USDJPY record rows that
+    / no read composes, because every read filters partition= with equality.
+    / Two workers on the SAME pair are still refused, and for the unchanged
+    / reason: their coverage would compose and a gap-ridden range would read
+    / as complete.
+    / .
+    / The unpartitioned sentinel is a partition like any other here, so two
+    / workers that both decline to declare one still clash - which keeps every
+    / existing worker's guarantee exactly as it was.
+    part:$[`partition in key cfg; cfg`partition; unpartitioned];
+    if[not -11h=type part;
+        '"define: ",string[worker],"'s partition must be a symbol, or ` for a dataset with no partition dimension"];
+    / Resolved before storage, so `cfgs` never holds (::) here and the clash
+    / comparison below is symbol against symbol. Every other optional key can
+    / be absent because nothing compares them; this one is compared.
+    cfg[`partition]:part;
+    / Mask over ALL cfgs first, then drop this worker - filtering the key
+    / list before applying the mask pairs a shortened list with a full-length
+    / boolean, which q indexes without complaint and which reports the wrong
+    / worker as the claimant.
+    clash:(key cfgs) where ((value cfgs)[;`dataset]=cfg`dataset)
+                           and (value cfgs)[;`partition]=part;
     clash:clash except worker;
     if[count clash;
         '"define: ",string[worker]," declares dataset ",string[cfg`dataset],
-         ", already claimed by ",", " sv string clash,
-         " - coverage has no partition dimension, so two workers writing one dataset produce rows nothing can tell apart"];
+         "[",string[part],"], already claimed by ",", " sv string clash,
+         " - two workers on one dataset and partition produce coverage rows nothing can tell apart"];
 
     / Normalise to the full key set before storing - see optional_cfg.
     cfgs[worker]:normalised cfg;
@@ -135,6 +161,17 @@ declaration:{[worker]
     if[not worker in key cfgs;
         '"declaration: ",string[worker]," has no configuration - call .qbw.define first"];
     cfgs worker}
+
+/ One worker's partition, resolved.
+/ .
+/ Exists so no call site repeats `$[`partition in key cfg;...;`]`. define
+/ stores the resolved value, so this is a plain lookup - but going through a
+/ named function means a worker's partition has exactly one spelling wherever
+/ it is needed, which is what the coverage reads depend on.
+/ @param worker the defined worker's name
+/ @return its partition symbol, ` when it declared none
+/ @eg .qbw.partition_of `demo_deals_backfill
+partition_of:{[worker] (declaration worker)`partition}
 
 / ------------------------------------------------------- WORKER STATE
 
@@ -242,7 +279,7 @@ plan:{[worker;cursor]
     / resulting window list would correspond to no coherent belief about the
     / data at any instant.
     as_of:.z.p;
-    todo:.qwrt.remaining[cfg`dataset;s`source_version;as_of;start;s`range_to];
+    todo:.qwrt.remaining[cfg`dataset;cfg`partition;s`source_version;as_of;start;s`range_to];
     if[0=count todo; :empty_windows[]];
     / one set of windows per uncovered sub-range, then flattened - a gap in
     / the middle must not be bridged by a window spanning it.
@@ -434,8 +471,8 @@ do_window:{[worker;w]
     / so the batch goes through the worker's own `last_batch` global and the
     / niladic reads it. Building the argument any other way would publish
     / before the dry-run gate could suppress it.
-    r:.qwrt.finish_window[worker;cfg`dataset;spec worker;w`range_from;w`range_to;
-        publish_pending[worker]];
+    r:.qwrt.finish_window[worker;cfg`dataset;cfg`partition;spec worker;
+        w`range_from;w`range_to;publish_pending[worker]];
     .qlog.dbg[worker;"window published";
         `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
     / Materialisation metadata (gap 2.3), recorded HERE rather than in

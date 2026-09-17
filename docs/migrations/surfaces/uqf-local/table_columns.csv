@@ -22,6 +22,7 @@
 "crypto_trades","fee_currency","s"
 "crypto_trades","exchange_fill_id","s"
 "etl_coverage","dataset","s"
+"etl_coverage","partition","s"
 "etl_coverage","source_version","s"
 "etl_coverage","range_from","p"
 "etl_coverage","range_to","p"
