@@ -259,22 +259,41 @@ scripts/test.py all                 # everything except smoke and coverage
 ### Coverage
 
 `scripts/test.py coverage` measures what the suites actually **execute** —
-line coverage for Python, and call coverage for q, which has no coverage tool
-and so is instrumented by
-[wrapping every declared function](tests/q/coverage_instrument.q) before the
-test files load.
+line coverage for Python, and **statement coverage for q** via
+[`scripts/qcov.py`](scripts/qcov.py).
 
-**Read the q figure as a lower bound.** A function whose *value* was captured
-into a registry before instrumentation — `.qio.memory` holds `write_memory`,
-`.qsrc.register` holds a source's `query` — is called through that copy,
-which no wrapper installed afterwards can see, so it reports as uncalled
-while being thoroughly exercised. An uncalled result is evidence to check,
-not a verdict; a called result is conclusive.
+q has no coverage tool, so `qcov` is one: it tokenises each `.q` file,
+injects a probe before every statement inside every lambda, runs the suite
+against a throwaway instrumented copy of the tree, and reports the probes
+that never fired. Same shape as coverage.py — a `term-missing` table, plus
+`--format lcov` for a CI coverage service and `--format json`, and
+`--fail-under` to gate on it.
 
-Two further reasons a name can appear uncalled without being untested: it
-runs in one of the child processes `q-backfill-process` spawns, or it belongs
-to a lane that is excluded on purpose (`.qodbc` needs a driver this tree
-deliberately does not require; `.qsrc.validate_live` is the smoke lane's).
+```
+uv run python scripts/qcov.py                          # term-missing table
+uv run python scripts/qcov.py --format lcov -o cov.lcov
+uv run python scripts/qcov.py --fail-under 90
+```
+
+Two things it is careful about, because getting either wrong makes the
+number worse than none:
+
+- **It instruments statement positions only.** `if[c;a;b]` is a control
+  statement and its arms take probes; `$[c;a;b]` is a conditional
+  *expression* and its arms must not, or the value changes. Function
+  arguments, lists and indexes are expressions too.
+- **It never writes to your tree.** Everything it does not instrument is
+  symlinked into the shadow copy, so instrumented sources are real files and
+  the originals cannot be reached. (They were, once, for exactly one run —
+  hence the test that pins it.)
+
+This replaced a function-level counter that wrapped each declared function
+and asked which were never called. Statement coverage subsumes it and fixes
+its two faults: it can see an untaken branch inside a function that *is*
+called, and it has no blind spot for a function whose value was captured
+into a registry before instrumentation — `.qio.memory` holds
+`write_memory`, which the old tool reported as never called while every
+bounded worker ran through it.
 
 The Python side is gated three ways on every commit, all scoped by *intent*
 (every `.py` file except vendored) rather than by directory:

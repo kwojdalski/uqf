@@ -42,7 +42,6 @@ shell quoting nobody should have to review.
 from __future__ import annotations
 
 import argparse
-import csv
 import os
 import shutil
 import subprocess
@@ -129,59 +128,29 @@ def lane_smoke() -> None:
 # ---------------------------------------------------------------- coverage
 
 
-def _q_function_names() -> list[str]:
-    """Every function this tree declares, from the contract surface.
-
-    The surface rather than a scan of the live namespaces, because the live
-    set also holds `.qunit` (the vendored test framework), `.Q`, `.z` and the
-    test namespaces, and excluding those by pattern is a guess that rots. The
-    surface is exactly this tree's own declared names, and
-    `contract_surface.py check` is a gate, so it cannot go stale silently.
-    """
-    surface = REPO / "docs" / "migrations" / "surfaces" / "uqf-local" / "functions.csv"
-    with surface.open(newline="") as fh:
-        return [
-            f".{row['namespace']}.{row['name']}"
-            for row in csv.DictReader(fh)
-            if row["kind"] == "function"
-        ]
-
-
 def lane_coverage() -> None:
     """What the suites actually EXECUTE - not what they mention.
 
-    Two different measurements, because the two languages afford different
-    things:
+    Python is pytest-cov. q is `scripts/qcov.py`, which instruments a
+    throwaway copy of the tree and counts STATEMENTS.
 
-      Python  real line coverage, via pytest-cov.
-      q       real CALL coverage, by wrapping every declared function with a
-              counter before the test files load. q has no coverage tool, and
-              a grep for the name in tests/ would count a function named in a
-              comment as tested.
+    This lane used to run a function-level counter instead: wrap each
+    declared function, ask which were never called. Two things were wrong
+    with it and both are fixed by measuring statements.
 
-    READ THE q NUMBER AS A LOWER BOUND. A function whose VALUE was captured
-    into a registry at load time - `.qio.memory` holds `write_memory`,
-    `.qsrc.register` holds a source's `query` - is called through that copy,
-    which no wrapper installed afterwards can see. Such a function reports as
-    uncalled while being thoroughly exercised. The lane says so rather than
-    letting the reader assume otherwise.
+    It could not see a branch. A function whose error path had never run
+    reported as covered, which is where most real gaps are.
+
+    And it under-reported, in a way that needed explaining every time. A
+    function whose VALUE was captured into a registry before the wrapper was
+    installed - `.qio.memory` holds `write_memory` - was called through that
+    copy, so it reported as uncalled while being thoroughly exercised.
+    qcov instruments the SOURCE, so the captured copy is the instrumented
+    one and its probes fire. `io_manager.q` went from "two functions never
+    called" to 100%, which was the truth all along.
     """
-    _banner("coverage: q call coverage")
-    names = _q_function_names()
-    targets = ";".join(f'`$"{n}"' for n in names)
-    instrument = (REPO / "tests" / "q" / "coverage_instrument.q").read_text()
-
-    with tempfile.TemporaryDirectory() as tmp:
-        report = Path(tmp) / "uncalled.txt"
-        gen = Path(tmp) / "instrument.q"
-        gen.write_text(
-            instrument
-            + f"\n.qqc.targets:({targets});\n"
-            + f'.qqc.report_path:"{report}";\n'
-            + ".qqc.install[];\n"
-        )
-        _q("coverage", "tests/run_tests.q", env={"UQF_COVERAGE": str(gen)})
-        uncalled = report.read_text().split() if report.exists() else []
+    _banner("coverage: q statement coverage")
+    _run("coverage", ["uv", "run", "python", str(REPO / "scripts" / "qcov.py")])
 
     print()
     _banner("coverage: python line coverage")
@@ -194,19 +163,6 @@ def lane_coverage() -> None:
     if not cov:
         raise LaneFailed("coverage", 1)
     _run("coverage", ["uv", "run", "pytest", "-q", *cov, "--cov-report=term"])
-
-    if uncalled:
-        print()
-        print(f"q functions never called by the q-unit lane ({len(uncalled)}):")
-        for name in sorted(uncalled):
-            print(f"  {name}")
-        print(
-            "\nBefore treating any of these as untested, check whether it is\n"
-            "reached through a captured value (see this lane's docstring), run\n"
-            "in a child process by q-backfill-process, or excluded from the\n"
-            "default lanes on purpose - .qodbc needs a driver this tree does\n"
-            "not require, and .qsrc.validate_live is the smoke lane's."
-        )
 
 
 # ------------------------------------------------------------------ dispatch

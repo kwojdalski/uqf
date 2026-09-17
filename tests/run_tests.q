@@ -31,17 +31,6 @@
 \l tests/lib/etl_test_doubles.q
 \l tests/q/reference_worker.q
 
-/ Optional call-coverage instrumentation, for `scripts/test.py coverage`.
-/ .
-/ HERE and nowhere else: every source file above has loaded, so there is
-/ something to wrap, and no test file below has loaded, so nothing a test
-/ defines is counted as tree code. A wrapper installed before the load that
-/ defines its function would simply be overwritten.
-/ .
-/ Absent the variable this is one getenv and a branch, so the ordinary lanes
-/ pay nothing for it.
-if[count getenv `UQF_COVERAGE; system"l ",getenv `UQF_COVERAGE];
-
 \l tests/q/test_metatables.q
 \l tests/q/test_seed.q
 \l tests/q/test_stats.q
@@ -95,12 +84,6 @@ nErr:sum res[`status]=`error;
 -1 "==================== uqf test summary ====================";
 -1 (string nTotal)," tests: ",(string nPass)," passed, ",(string nFail)," failed, ",(string nErr)," errored";
 -1 "============================================================";
-
-/ The coverage report is written BEFORE the failure exit, so a run that
-/ found a failing test still reports what it executed. The two questions are
-/ independent, and having to fix the suite before you can measure it is the
-/ kind of ordering that stops people measuring.
-if[count getenv `UQF_COVERAGE; .qqc.report[]];
 
 if[(nFail+nErr)>0;
     -1 "";
