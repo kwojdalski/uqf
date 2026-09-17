@@ -93,7 +93,7 @@ it("builds filters from the catalog and renders a 409 with its missing range", a
   );
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Desk/ }));
-  await screen.findByText("Client fills");
+  await screen.findByRole("button", { name: "trades" });
   fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
   expect(
     screen.queryByRole("option", { name: /levels/ }),
@@ -104,17 +104,62 @@ it("builds filters from the catalog and renders a 409 with its missing range", a
   fireEvent.change(screen.getByLabelText("Storage tier"), {
     target: { value: "hdb" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+  fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
   await waitFor(() =>
     expect(screen.getByRole("alert")).toHaveTextContent(
       "missing: [2026-09-16, 2026-09-17)",
     ),
   );
-  const call = fetcher.mock.calls.find(([path]) => path === "/query");
+  // the LAST query: the glimpse ran unfiltered as soon as the table showed
+  const call = fetcher.mock.calls.filter(([path]) => path === "/query").at(-1);
   expect(JSON.parse(call![1].body as string)).toMatchObject({
     tier: "hdb",
     filters: [{ column: "sym", op: "eq", value: "EURUSD" }],
   });
+});
+it("shows a table's first rows as soon as it is chosen, with nothing to submit", async () => {
+  // A glimpse, not a form. The catalog's tables are a panel of choices;
+  // choosing one queries it - 100 rows, current session, no filters - and
+  // there is no Run button to find.
+  const fetcher = mockApi((path, options) =>
+    path === "/catalog"
+      ? ok({
+          tables: [
+            { name: "trades", description: "Client fills", columns: [] },
+            { name: "quotes", description: "Top of book", columns: [] },
+          ],
+          operators: ["eq"],
+        })
+      : ok({
+          table: JSON.parse(options.body as string).table,
+          tier: "rdb",
+          row_count: 1,
+          truncated: false,
+          rows: [{ sym: "EURUSD" }],
+          poll_seconds: 10,
+        }),
+  );
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Desk/ }));
+  expect(await screen.findByText("EURUSD")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Run query" })).toBeNull();
+  expect(
+    JSON.parse(
+      fetcher.mock.calls.find(([path]) => path === "/query")![1].body as string,
+    ),
+  ).toEqual({ table: "trades", tier: "rdb", limit: 100, filters: [] });
+
+  fireEvent.click(screen.getByRole("button", { name: "quotes" }));
+  await waitFor(() => {
+    const last = fetcher.mock.calls
+      .filter(([path]) => path === "/query")
+      .at(-1);
+    expect(JSON.parse(last![1].body as string).table).toBe("quotes");
+  });
+  expect(screen.getByRole("button", { name: "quotes" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });
 it("shows reloads as temporary status rather than a permanent failure", async () => {
   mockApi(() => ({
