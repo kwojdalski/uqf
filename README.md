@@ -55,10 +55,10 @@ The tooling will not pick one for you. There is deliberately no *automatic*
 fallback anywhere in it: a suite that passed against something the code is
 not verified on is worse than one that does not run, so every entry point
 skips rather than substituting. Choosing another interpreter is therefore
-explicit — `scripts/test.sh` reads `$Q` and `$QHOME`:
+explicit — `scripts/test.py` reads `$Q` and `$QHOME`:
 
 ```
-Q=/path/to/q QHOME=/path/to/qhome scripts/test.sh q-unit
+Q=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
 ```
 
 Run everything from the repository root - the load scripts use
@@ -132,7 +132,7 @@ its range would publish the wrong window and record coverage for it.
 [Testing](#testing):
 
 ```
-./scripts/test.sh all
+./scripts/test.py all
 ```
 
 `all` runs three of them - the q suite, the bounded-worker lifecycle against
@@ -247,12 +247,34 @@ served by the API under `/ui/`.
 ## Testing
 
 ```
-scripts/test.sh q-unit              # deterministic qUnit suite
-scripts/test.sh q-backfill-process  # bounded lifecycle, real filesystem, second process
-scripts/test.sh python              # orchestrator and frontend
-scripts/test.sh smoke               # live external metadata check
-scripts/test.sh all                 # everything except smoke
+scripts/test.py q-unit              # deterministic qUnit suite
+scripts/test.py q-metatables-hdb    # metatable queries against a temporary HDB
+scripts/test.py q-backfill-process  # bounded lifecycle, real filesystem, child processes
+scripts/test.py python              # orchestrator and frontend
+scripts/test.py coverage            # what the suites execute, q and Python
+scripts/test.py smoke               # live external metadata check
+scripts/test.py all                 # everything except smoke and coverage
 ```
+
+### Coverage
+
+`scripts/test.py coverage` measures what the suites actually **execute** —
+line coverage for Python, and call coverage for q, which has no coverage tool
+and so is instrumented by
+[wrapping every declared function](tests/q/coverage_instrument.q) before the
+test files load.
+
+**Read the q figure as a lower bound.** A function whose *value* was captured
+into a registry before instrumentation — `.qio.memory` holds `write_memory`,
+`.qsrc.register` holds a source's `query` — is called through that copy,
+which no wrapper installed afterwards can see, so it reports as uncalled
+while being thoroughly exercised. An uncalled result is evidence to check,
+not a verdict; a called result is conclusive.
+
+Two further reasons a name can appear uncalled without being untested: it
+runs in one of the child processes `q-backfill-process` spawns, or it belongs
+to a lane that is excluded on purpose (`.qodbc` needs a driver this tree
+deliberately does not require; `.qsrc.validate_live` is the smoke lane's).
 
 The Python side is gated three ways on every commit, all scoped by *intent*
 (every `.py` file except vendored) rather than by directory:

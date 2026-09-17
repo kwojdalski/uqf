@@ -177,8 +177,8 @@ DQEDB or change DQE's retention policy. No TorQ files are patched.
 ## Verification
 
 ```sh
-scripts/test.sh q-unit
-scripts/test.sh q-metatables-hdb
+scripts/test.py q-unit
+scripts/test.py q-metatables-hdb
 ```
 
 The second command creates and cleans up a disposable two-date, enumerated

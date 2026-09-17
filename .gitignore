@@ -51,3 +51,6 @@ build/
 # is a stub carrying an ABSOLUTE path into one developer's home directory, so
 # a clone would get twenty broken pointers. Machine-managed, never committed.
 .agents/
+
+# pytest-cov's data file, written by `scripts/test.py coverage`.
+.coverage

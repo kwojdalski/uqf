@@ -132,7 +132,7 @@ If the maintainer acts on a finding, these must all be rerun — a rename
 breaks three generated artefacts and two gates notice:
 
 ```bash
-scripts/test.sh q-unit
+scripts/test.py q-unit
 uv run python scripts/generate_man_registry.py     # man.q records every name
 uv run python scripts/contract_surface.py export
 ```

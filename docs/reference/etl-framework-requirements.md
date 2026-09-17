@@ -210,8 +210,8 @@ settled here.
   behaviour, **not** that a configured external service is reachable or
   compatible. *Grounded in `tests/integration/external_source_meta_smoke.q`.*
 
-- **ETL-21** — Use the suite matching the changed layer: `scripts/test.sh q-unit`
-  for q behaviour, `scripts/test.sh q-backfill-process` for bounded process
+- **ETL-21** — Use the suite matching the changed layer: `scripts/test.py q-unit`
+  for q behaviour, `scripts/test.py q-backfill-process` for bounded process
   behaviour, and the focused Python suites for orchestration changes.
 
 ## Open questions (undecided in the canonical document)
