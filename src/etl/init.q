@@ -57,6 +57,7 @@
 \l src/etl/core/singlestore_odbc.q
 \l src/etl/core/heartbeat.q
 \l src/etl/core/dag.q
+\l src/etl/core/react.q
 \l src/etl/generated/pipeline_dag.q
 \l src/etl/core/worker_config.q
 \l src/etl/core/worker_runtime.q

@@ -612,6 +612,20 @@ do_window:{[worker;w]
     / finish_window because this is the only place the batch itself is in
     / hand - finish_window receives a niladic publisher, not rows.
     record_facts[worker;cfg;w;out;r];
+    / THE PUBLICATION EVENT (.qreact). One place rows enter a dataset on this
+    / path, so this is where downstream work hears about it - with the range
+    / in hand, rather than a timer discovering it later by diffing coverage.
+    / .
+    / After record_facts, so a reaction reading the materialisation sees it.
+    / Suppressed on a dry run, which published nothing: firing there would
+    / make a rehearsal trigger real downstream work.
+    / .
+    / Protected like begin_run for the same reason - react.q is not a load
+    / time dependency and a minimal loader must still run a worker.
+    if[not r`dry_run;
+        @[{[a] .qreact.notify_from_here . a};
+          (cfg`dataset;w`range_from;w`range_to);
+          {[e] (::)}]];
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];
           `cursor;advanced_to[worker];w`range_to]];
