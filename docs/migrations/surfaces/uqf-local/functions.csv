@@ -509,6 +509,12 @@ qstats,horner_eval,function,2,coeffs x
 qstats,inv_ncdf,function,1,p
 qstats,ncdf,function,1,x
 qstats,npdf,function,1,x
+qstatus,legal_transitions,dict,,
+qstatus,previous_state,function,1,instance_id
+qstatus,require_transition,function,2,from to
+qstatus,status_dir,function,1,
+qstatus,status_states,value,,
+qstatus,write_status,function,6,worker instance_id state spec progress err
 qstream,declaration,function,1,job
 qstream,drain,function,2,tblname mask
 qstream,evict,function,2,tblname mask

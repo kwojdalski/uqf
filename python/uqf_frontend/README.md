@@ -305,12 +305,12 @@ strictly greater, a successful pass captures each row exactly once.
 `GET /ops/backfill` reads the status files q writes, rather than calling
 Airflow's REST API. That keeps q authoritative for the facts **ETL-15** says it
 owns and adds no Airflow dependency to a frontend that should work without
-one. Set `UQF_FRONTEND_STATUS_DIR` to the directory `.qpipe.status_dir`
+one. Set `UQF_FRONTEND_STATUS_DIR` to the directory `.qstatus.status_dir`
 writes into.
 
 **The format is defined here, not inherited.** This tree has no Airflow
-provider to be compatible with, so `.qpipe.write_status` in
-`scripts/torq_pipeline.q` defines it and `status.py` consumes it.
+provider to be compatible with, so `.qstatus.write_status` in
+`src/etl/core/status.q` defines it and `status.py` consumes it.
 `test_status.py` parses the q source to assert the two field sets and state
 sets match — without that, adding a field on one side would silently drop
 data on the other.

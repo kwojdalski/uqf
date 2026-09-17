@@ -4,7 +4,7 @@
 / table.
 / .
 / WHAT IT ADDS OVER THE STATUS FILES. A status file records what a run is
-/ doing, and .qpipe writes one per lifecycle transition. That is enough to see
+/ doing, and .qstatus writes one per lifecycle transition. That is enough to see
 / a run that finished or failed, and it is what /ops/backfill and the Airflow
 / sensor read. It is NOT enough to see a run that stopped making progress: a
 / worker wedged inside a window - a source that accepted the connection and

@@ -7,7 +7,7 @@
 // here is complete" - so several tests below assert the ABSENCE of a
 // coverage claim, which is the only way to test that distinction.
 //
-// Load scripts/torq_pipeline.q, src/etl/core/backfill_state.q,
+// Load src/etl/core/status.q, src/etl/core/backfill_state.q,
 // src/etl/core/coverage.q, src/etl/core/continuous_state.q,
 // tests/lib/qunit.q and tests/lib/testutil.q before this file.
 

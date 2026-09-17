@@ -1,7 +1,7 @@
 """Reading q's backfill status files (FE-06, phase B4).
 
 The load-bearing test here is test_reader_field_set_matches_the_q_writer: the
-format is defined in scripts/torq_pipeline.q and consumed here, and nothing
+format is defined in src/etl/core/status.q and consumed here, and nothing
 but a test keeps the two in step.
 """
 
@@ -21,11 +21,11 @@ from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.fleet import FakeFleet
 from uqf_frontend.gateway import FakeGateway
 
-PIPELINE_Q = Path(__file__).resolve().parents[3] / "scripts" / "torq_pipeline.q"
+STATUS_Q = Path(__file__).resolve().parents[3] / "src" / "etl" / "core" / "status.q"
 
 
 def write_status_file(directory: Path, instance: str, **overrides) -> Path:
-    """Build a file in exactly the shape .qpipe.write_status emits."""
+    """Build a file in exactly the shape .qstatus.write_status emits."""
     payload = {
         "worker": "markout_backfill",
         "instance_id": instance,
@@ -50,12 +50,12 @@ def write_status_file(directory: Path, instance: str, **overrides) -> Path:
 
 
 def test_reader_field_set_matches_the_q_writer():
-    """The format lives in scripts/torq_pipeline.q. If a field is added on
+    """The format lives in src/etl/core/status.q. If a field is added on
     one side only, the two silently disagree - q writes something the reader
     drops, or the reader demands something q never sends. This parses the q
     source so that cannot happen quietly.
     """
-    src = PIPELINE_Q.read_text()
+    src = STATUS_Q.read_text()
     block = src[src.index("write_status:{") :]
     payload = block[block.index("payload:") : block.index("values_:")]
     q_fields = re.findall(r"`(\w+)", payload)
@@ -67,7 +67,7 @@ def test_reader_field_set_matches_the_q_writer():
 
 
 def test_reader_states_match_the_q_writer():
-    src = PIPELINE_Q.read_text()
+    src = STATUS_Q.read_text()
     line = next(ln for ln in src.splitlines() if ln.startswith("status_states:"))
     assert set(re.findall(r"`(\w+)", line)) == set(status.STATES)
 
