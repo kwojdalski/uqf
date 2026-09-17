@@ -181,6 +181,61 @@ test_a_function_in_a_namespace_still_resolves_its_own_names:{[t]
     .qunit.assertEquals[first r`iterations;1;"a namespaced function runs under instrumentation"];
     .qunit.assertEquals[.covfix.caller 1;2;"and still resolves its neighbours afterwards"]};
 
+/ --- captured copies, and nesting ----------------------------------------
+
+/ THE BLIND SPOT .cov.reseed CLOSES. Instrumenting a NAME does nothing for a
+/ copy of the function taken before instrumentation. `.qio.memory` is
+/ `(enlist `write)!enlist write_memory`, so every bounded worker writes
+/ through a captured copy - and `.qio.write_memory` reported as never called
+/ while being exercised on every window. A number that says "never called"
+/ about code the suite runs constantly is worse than no number: the obvious
+/ response is to write a test that already exists.
+test_a_captured_copy_is_counted:{[t]
+    `.covfix.holder set (enlist `f)!enlist .covfix.add;
+    r:.cov.run[{[] .covfix.holder[`f][1;2]};enlist (::);.covtest.only `.covfix.add];
+    .qunit.assertEquals[first r`iterations;1;
+        "a call through a dictionary that captured the function is counted"]};
+
+test_a_captured_copy_is_put_back:{[t]
+    `.covfix.holder set (enlist `f)!enlist .covfix.add;
+    .cov.run[{[] .covfix.holder[`f][1;2]};enlist (::);.covtest.only `.covfix.add];
+    .qunit.assertEquals[.covfix.holder[`f]~.covfix.add;1b;
+        "the registry holds the original again afterwards"]};
+
+test_a_copy_nested_two_dictionaries_deep_is_counted:{[t]
+    / .qsrc.sources is source -> declaration -> query, which is this shape.
+    `.covfix.deep set (enlist `decl)!enlist (enlist `f)!enlist .covfix.add;
+    r:.cov.run[{[] .covfix.deep[`decl][`f][1;2]};enlist (::);.covtest.only `.covfix.add];
+    .qunit.assertEquals[first r`iterations;1;"the walk reaches a nested capture"]};
+
+test_an_unrelated_global_is_left_alone:{[t]
+    `.covfix.untouched_dict set (enlist `g)!enlist .covfix.branch;
+    .cov.run[{[] 1+1};enlist (::);.covtest.only `.covfix.add];
+    .qunit.assertEquals[.covfix.untouched_dict[`g]~.covfix.branch;1b;
+        "a dictionary holding a function nobody instrumented is not rewritten"]};
+
+/ A suite being MEASURED can contain tests that call .cov.run - this file is
+/ proof - and an inner run that simply reallocated the counters left every
+/ outer probe indexing past the end of a shorter vector. The whole suite then
+/ died in a beforeNamespace with a bare 'length that named nothing.
+test_a_nested_run_does_not_destroy_the_outer_counters:{[t]
+    outer:.cov.run[{[]
+        .cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+        .covfix.branch 1}
+      ;enlist (::);.covtest.only `.covfix.branch];
+    .qunit.assertEquals[first outer`iterations;1;
+        "the outer measurement survives a run nested inside it"]};
+
+test_a_nested_run_reports_its_own_numbers:{[t]
+    / `::` assigns the GLOBAL `.covtest.inner`, so the result is read back
+    / through that name rather than through a local of the same spelling.
+    `.covtest.inner set (::);
+    .cov.run[{[]
+        `.covtest.inner set .cov.run[.covfix.add;1 2;.covtest.only `.covfix.add];
+        .covfix.branch 1}
+      ;enlist (::);.covtest.only `.covfix.branch];
+    .qunit.assertEquals[first .covtest.inner`iterations;1;"and the inner one is still measured"]};
+
 / --- the report -------------------------------------------------------------
 
 / Two single-wildcard patterns rather than one "*<<<*>>>*": q's `like`

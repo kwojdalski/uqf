@@ -259,44 +259,16 @@ scripts/test.py all                 # everything except smoke and coverage
 ### Coverage
 
 `scripts/test.py coverage` measures what the suites actually **execute** —
-line coverage for Python, and **statement coverage for q** via
-[`scripts/qcov.py`](scripts/qcov.py).
+line coverage for Python, and **statement and branch coverage for q** through
+the [`.cov` library](scripts/coverage.q).
 
-q has no coverage tool, so `qcov` is one: it tokenises each `.q` file,
-injects a probe before every statement inside every lambda, runs the suite
-against a throwaway instrumented copy of the tree, and reports the probes
-that never fired. Same shape as coverage.py — a `term-missing` table, plus
-`--format lcov` for a CI coverage service and `--format json`, and
-`--fail-under` to gate on it.
-
-```
-uv run python scripts/qcov.py                          # term-missing table
-uv run python scripts/qcov.py --format lcov -o cov.lcov
-uv run python scripts/qcov.py --fail-under 90
-```
-
-Two things it is careful about, because getting either wrong makes the
-number worse than none:
-
-- **It instruments statement positions only.** `if[c;a;b]` is a control
-  statement and its arms take probes; `$[c;a;b]` is a conditional
-  *expression* and its arms must not, or the value changes. Function
-  arguments, lists and indexes are expressions too.
-- **It never writes to your tree.** Everything it does not instrument is
-  symlinked into the shadow copy, so instrumented sources are real files and
-  the originals cannot be reached. (They were, once, for exactly one run —
-  hence the test that pins it.)
-
-#### `.cov` — the KX-shaped q API
-
-`scripts/coverage.q` is the same idea at a different granularity, with
+q has no coverage tool, so `.cov` is one, with
 [KX's own coverage API](https://code.kx.com/developer/libraries/code-coverage/):
 
 ```q
 \l scripts/coverage.q
 .cov.format.display .cov.run[.qfwd.fwd_cont; 1.10 0.02 0.01 0.5; (enlist `namespaces)!enlist `.qfwd]
 ```
-
 ```
 Coverage: 0.3% of 10913 tracked character(s) in 39 function(s)
 38 function(s) with incomplete coverage
@@ -308,30 +280,37 @@ X  {[spot;rd;rf;t] <<<spot*.qrates.growth_simple[rd;t]%.qrates.growth_simple[rf;
    {[spot;rd;rf;t] spot*.qrates.growth_cont[rd-rf;t]}
 ```
 
-One call into `.qfwd`, so one function ran and thirty-eight did not — which
-is the question this API answers.
+Same three entry points (`.cov.run`, `.cov.format.go`,
+`.cov.format.display`), same settings keys (`context`, `functions`,
+`ignoreFunctions`, `namespaces`, `ignoreNamespaces`), same results columns
+and the same `<<<>>>` / `X` marks.
 
-Same three entry points (`.cov.run`, `.cov.format.go`, `.cov.format.display`),
-same settings keys (`context`, `functions`, `ignoreFunctions`, `namespaces`,
-`ignoreNamespaces`), same results columns and the same `<<<>>>` / `X` marks.
 It counts **lines and branches separately**, so an untaken `$` arm shows up
-even though the statement containing it ran — and it counts loop
-*iterations*, not just whether a loop ran.
+even though the statement containing it ran, and a loop reports *iterations*
+rather than merely whether it ran. Coverage is the share of *characters* in
+tracked ranges — KX's definition, which weights a long branch more than a
+short one, so a report cannot look green because the untaken paths happen to
+be the terse ones.
 
-**The two tools answer different questions, and neither subsumes the other.**
-`.cov` instruments functions already loaded in a session, which is what makes
-`run this call, show me what it missed` possible — and means a function whose
-value was captured into a registry beforehand is called through that copy and
-not seen. `qcov` instruments the source files *before* they load, so it has no
-such blind spot, but it can only measure a whole suite.
+Three things it is careful about, each of which would otherwise make the
+number worse than none:
 
-This replaced a function-level counter that wrapped each declared function
-and asked which were never called. Statement coverage subsumes it and fixes
-its two faults: it can see an untaken branch inside a function that *is*
-called, and it has no blind spot for a function whose value was captured
-into a registry before instrumentation — `.qio.memory` holds
-`write_memory`, which the old tool reported as never called while every
-bounded worker ran through it.
+- **It instruments statement positions only.** `if[c;a;b]` is a control
+  statement and its arms take probes; `$[c;a;b]` is a conditional
+  *expression* whose arms must not, or the value changes. A `$` arm is
+  *wrapped* — `.cov.b[i;arm]` returns the arm — so laziness is preserved and
+  an untaken arm is still not evaluated.
+- **It follows captured copies.** `.qio.memory` holds `write_memory`, so
+  every bounded worker writes through a copy taken before instrumentation.
+  Without `.cov.reseed` that function reports as never called while being
+  exercised on every window — and the obvious response to such a number is
+  to write a test that already exists.
+- **It nests.** A suite being measured can contain tests that call
+  `.cov.run`; this one does. Probe ids are allocated monotonically and never
+  reset, so an inner run cannot land on an outer run's counters.
+
+`tests/q/run_coverage.q` drives it over the whole suite, which is what the
+lane runs.
 
 The Python side is gated three ways on every commit, all scoped by *intent*
 (every `.py` file except vendored) rather than by directory:

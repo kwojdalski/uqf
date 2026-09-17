@@ -131,26 +131,25 @@ def lane_smoke() -> None:
 def lane_coverage() -> None:
     """What the suites actually EXECUTE - not what they mention.
 
-    Python is pytest-cov. q is `scripts/qcov.py`, which instruments a
-    throwaway copy of the tree and counts STATEMENTS.
+    Python is pytest-cov. q is the `.cov` library
+    (`scripts/coverage.q`), driven over the whole suite by
+    `tests/q/run_coverage.q`.
 
-    This lane used to run a function-level counter instead: wrap each
-    declared function, ask which were never called. Two things were wrong
-    with it and both are fixed by measuring statements.
+    ONE INSTRUMENTER, not two. This lane briefly had a second - a Python
+    tool that rewrote the source files before they loaded - and two
+    instrumenters for one language is the duplication this repository has an
+    auditor for. `.cov` is the one that stays, because it is also the API a
+    person uses interactively: `run this call, show me what it missed`.
 
-    It could not see a branch. A function whose error path had never run
-    reported as covered, which is where most real gaps are.
-
-    And it under-reported, in a way that needed explaining every time. A
-    function whose VALUE was captured into a registry before the wrapper was
-    installed - `.qio.memory` holds `write_memory` - was called through that
-    copy, so it reported as uncalled while being thoroughly exercised.
-    qcov instruments the SOURCE, so the captured copy is the instrumented
-    one and its probes fire. `io_manager.q` went from "two functions never
-    called" to 100%, which was the truth all along.
+    What made that possible was closing in-memory instrumentation's one real
+    hole. A function whose VALUE was captured into a registry beforehand is
+    called through that copy and never counted - `.qio.memory` holds
+    `write_memory`, so every bounded worker wrote through a captured copy
+    and it reported as never called while being exercised on every window.
+    `.cov.reseed` swaps those copies too.
     """
-    _banner("coverage: q statement coverage")
-    _run("coverage", ["uv", "run", "python", str(REPO / "scripts" / "qcov.py")])
+    _banner("coverage: q statement and branch coverage")
+    _q("coverage", "tests/q/run_coverage.q")
 
     print()
     _banner("coverage: python line coverage")

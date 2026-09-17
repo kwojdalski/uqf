@@ -185,10 +185,14 @@ analyse:{[src;lbase;bbase]
     n:count t; ns:count src;
     out:""; cursor:0;
     lines:(); blocks:();
-    skind:(); sarm:();            / one entry per open bracket
+    skind:(); sarm:(); swrap:();   / one entry per open bracket
     pending:0b;                   / next meaningful token begins a statement
     markBlock:0b;                 / ...and that statement is also a branch arm
-    wrapOpen:0b;                  / a `$` arm wrapper is waiting to be closed
+    / `swrap` is PER FRAME, not one flag for the walk. Conditionals nest -
+    / `$[a; $[b;c;d]; e]` is ordinary q - and a single flag let an inner `$`
+    / see the outer arm's open wrapper and close it against the inner's
+    / first `;`, producing `$[cond]` and a stray `]`. Found by instrumenting
+    / the whole tree; none of the hand-written samples nested.
     i:0;
     while[i<n;
         k:t[i]`kind; s:t[i]`start;
@@ -231,22 +235,22 @@ analyse:{[src;lbase;bbase]
                        / body syntax, which corrupted the stack and drove
                        / the cursor past the tokens it was emitting.
                        i:jt]];
-                  skind,:`body; sarm,:0; pending:1b];
+                  skind,:`body; sarm,:0; swrap,:0b; pending:1b];
                c="[";
                  [pv:prev_meaningful[t;i];
                   pk:$[null pv; `none; t[pv]`kind];
                   ptxt:$[null pv; ""; src (t[pv]`start)+til t[pv]`len];
                   isCtrl:(pk=`name) and (`$ptxt) in control;
                   isCond:(pk=`other) and ptxt~enlist "$";
-                  skind,:$[isCtrl;`ctrl;isCond;`cond;`expr]; sarm,:0;
+                  skind,:$[isCtrl;`ctrl;isCond;`cond;`expr]; sarm,:0; swrap,:0b;
                   out,:src cursor+til 1+s-cursor; cursor:s+1];
-               [skind,:`expr; sarm,:0;
+               [skind,:`expr; sarm,:0; swrap,:0b;
                 out,:src cursor+til 1+s-cursor; cursor:s+1]]];
           k=`close;
-            [if[wrapOpen and top=`cond;
+            [if[$[0=count swrap; 0b; (last swrap) and top=`cond];
                 out,:src cursor+til s-cursor; cursor:s;
-                out,:"]"; wrapOpen:0b];
-             if[0<count skind; [skind:-1_skind; sarm:-1_sarm]];
+                out,:"]"];
+             if[0<count skind; [skind:-1_skind; sarm:-1_sarm; swrap:-1_swrap]];
              out,:src cursor+til 1+s-cursor; cursor:s+1];
           k=`semi;
             [$[top=`body;
@@ -255,9 +259,9 @@ analyse:{[src;lbase;bbase]
                  [out,:src cursor+til 1+s-cursor; cursor:s+1;
                   pending:1b; markBlock:1b];
                top=`cond;
-                 [if[wrapOpen;
+                 [if[last swrap;
                      out,:src cursor+til s-cursor; cursor:s;
-                     out,:"]"; wrapOpen:0b];
+                     out,:"]"; swrap[count[swrap]-1]:0b];
                   out,:src cursor+til 1+s-cursor; cursor:s+1;
                   nx:next_meaningful[t;i+1];
                   if[(not null nx) and not t[nx][`kind]=`close;
@@ -265,9 +269,9 @@ analyse:{[src;lbase;bbase]
                       out,:src cursor+til st-cursor; cursor:st;
                       blocks,:enlist (st;span_end[t;nx;ns]);
                       out,:".cov.b[",string[bbase+count[blocks]-1],";";
-                      wrapOpen:1b]];
+                      swrap[count[swrap]-1]:1b]];
                  [out,:src cursor+til 1+s-cursor; cursor:s+1]];
-             sarm[count[sarm]-1]+:1];
+             if[0<count sarm; sarm[count[sarm]-1]+:1]];
           ::];
         i+:1];
     out,:cursor _ src;
@@ -284,6 +288,16 @@ analyse:{[src;lbase;bbase]
 / documentation warns that the overhead is proportional to code volume.
 lineHits:0#0;
 blockHits:0#0;
+
+/ Probe ids are allocated from here and NEVER reset, so no two runs - nested
+/ or merely consecutive - can share one. An earlier version restarted them at
+/ zero per run and merged the counters afterwards, which had the inner run's
+/ probes landing on the outer run's indices: a nested measurement reported
+/ two iterations of a function called once. Monotonic ids remove the problem
+/ rather than compensating for it, and the arrays only ever grow, by one long
+/ per statement.
+nextLine:0;
+nextBlock:0;
 
 / Probe: a statement ran. Returns nothing, so a function's own return value
 / is untouched.
@@ -342,6 +356,68 @@ set_in:{[nm;txt]
         '"cov: could not instrument ",string[nm],": ",r`msg];
     nm set r}
 
+/ How deep to look for a captured function. Four levels reaches a
+/ dictionary of dictionaries of dictionaries, which is further than
+/ anything in this tree and far enough that a pathological structure cannot
+/ make the walk expensive.
+reseed_depth:4
+
+/ Namespaces never walked: kdb's own, the vendored test framework, and this
+/ library, whose `orig` dictionary holds every original by definition and
+/ would be rewritten into nonsense.
+reseed_skip:`q`Q`h`j`o`s`z`cov`qunit
+
+/ Private: one value, with any captured function swapped for its replacement.
+swap_value:{[from_;to_;v;d]
+    $[d>reseed_depth; v;
+      100h=type v;
+        [i:first where {[a;b] a~b}[v] each from_; $[null i; v; to_ i]];
+      99h=type v; (key v)!swap_value[from_;to_;;d+1] each value v;
+      / A table, because q COERCES a dictionary of same-keyed dictionaries
+      / into one - which is how `.qbw.cfgs` can arrive here as 98h rather
+      / than the 99h it was written as. Missing this case would silently
+      / leave every worker's captured `check` unreseeded.
+      98h=type v; flip (cols v)!swap_value[from_;to_;;d+1] each value flip v;
+      0h=type v;  swap_value[from_;to_;;d+1] each v;
+      v]}
+
+/ Swap every CAPTURED copy of a function for its counterpart.
+/ .
+/ THE BLIND SPOT THIS CLOSES, and the reason the tool is worth more with it
+/ than without. Instrumenting a NAME does nothing for a copy of the function
+/ taken before instrumentation: `.qio.memory` is
+/ `(enlist `write)!enlist write_memory`, so every bounded worker in this
+/ repository writes through that captured copy and `.qio.write_memory`
+/ reported as never called while being exercised constantly. Same for a
+/ source's `query` and `fixture`, held in `.qsrc.sources`, and for a
+/ worker's `check`, held in `.qbw.cfgs`.
+/ .
+/ A coverage number that says "never called" about code the suite runs on
+/ every window is worse than no number, because the obvious response is to
+/ go and write a test that already exists.
+/ .
+/ Called with (originals;instrumented) on the way in and the two reversed on
+/ the way out, so it is its own undo.
+/ @param from_ the function values to look for
+/ @param to_ what to put in their place, positionally
+/ @return the number of globals rewritten
+reseed:{[from_;to_]
+    n:0;
+    nss:(key `) except reseed_skip;
+    {[from_;to_;nm]
+        ns:`$".",string nm;
+        d:@[value;ns;{[e] (::)}];
+        if[not 99h=type d; :(::)];
+        {[from_;to_;ns;g]
+            full:` sv ns,g;
+            v:@[value;full;{[e] (::)}];
+            if[not (type v) in 0 99h; :(::)];
+            nv:swap_value[from_;to_;v;0];
+            if[not nv~v; [full set nv; n+::1]];
+         }[from_;to_;ns] each key d;
+     }[from_;to_] each nss;
+    n}
+
 / ----------------------------------------------------------------- RUNNING
 
 / Instrument, execute, restore, report - the library's entry point.
@@ -353,7 +429,7 @@ set_in:{[nm;txt]
 / @return a table name/iterations/lineIterations/blockIterations/lines/
 /   blocks/text, one row per instrumented function
 / @throws error if a setting names something that is not a symbol
-/ @eg .cov.run[{[x] x*2};enlist 3;(enlist `functions)!enlist `myFunc]
+/ @eg .cov.run[.cov.pct1;enlist 50f;(enlist `functions)!enlist `.cov.pct1]
 run:{[fn;params;settings]
     if[not 99h=type settings; '"cov.run: settings must be a dictionary"];
     names:targets settings;
@@ -361,7 +437,7 @@ run:{[fn;params;settings]
 
     originals:names!value each names;
     lstart:(); bstart:(); texts:();
-    nl:0; nb:0;
+    nl:nextLine; nb:nextBlock;
     info:();
     i:0;
     while[i<count names;
@@ -378,7 +454,14 @@ run:{[fn;params;settings]
         texts,:enlist src;
         i+:1];
 
-    lineHits::nl#0; blockHits::nb#0;
+    / GROW, never reallocate. A suite being measured can itself contain tests
+    / that call .cov.run - this repository's do - and an inner run that
+    / reallocated these left every outer probe indexing past the end of a
+    / shorter vector, killing the whole suite in a `beforeNamespace` with a
+    / bare 'length that named nothing.
+    nextLine::nl; nextBlock::nb;
+    lineHits::lineHits,(0|nl-count lineHits)#0;
+    blockHits::blockHits,(0|nb-count blockHits)#0;
 
     / Install, run under protection, and restore whatever happened. A run
     / that threw and left the tree instrumented would poison every later
@@ -390,6 +473,9 @@ run:{[fn;params;settings]
     / exist. The function would then fail with 'a the moment it ran - a
     / coverage tool breaking the code it measures.
     {[nm;a] set_in[nm;a`text]}'[names;info];
+    / And every copy of them that a registry took before now.
+    instrumented:value each names;
+    reseed[value originals;instrumented];
     ctx:$[`context in key settings; settings`context; `.];
     / THE ENTRY POINT NEEDS SUBSTITUTING, and missing this makes the whole
     / report read zero. `fn` is a VALUE, captured by the caller before
@@ -404,16 +490,21 @@ run:{[fn;params;settings]
     / dictionary's values (the functions), the second applies `value` to each
     / FUNCTION and hands back q's introspection list. Restoring those left
     / every instrumented name bound to a list instead of a function.
+    reseed[instrumented;value originals];
     {[nm;v] nm set v}'[names;value originals];
     / `$` rather than `and`: q's `and` is `min` and evaluates BOTH sides, so
     / `key r` runs even when r is not a dictionary. Second time in this file.
     if[$[99h=type r; `cov_error in key r; 0b];
         '"cov.run: the call failed: ",r`msg];
 
+    / Each run reads its OWN slice of the shared arrays. Nothing to restore:
+    / the ids it was given belong to it alone.
+    mine:lineHits; mineBlock:blockHits;
+
     ([] name:names;
-        iterations:{[lh;s;a] $[0=count a`lines; 0; lh s]}[lineHits]'[lstart;info];
-        lineIterations:{[lh;s;a] lh s+til count a`lines}[lineHits]'[lstart;info];
-        blockIterations:{[bh;s;a] bh s+til count a`blocks}[blockHits]'[bstart;info];
+        iterations:{[lh;s;a] $[0=count a`lines; 0; lh s]}[mine]'[lstart;info];
+        lineIterations:{[lh;s;a] lh s+til count a`lines}[mine]'[lstart;info];
+        blockIterations:{[bh;s;a] bh s+til count a`blocks}[mineBlock]'[bstart;info];
         lines:info@\:`lines;
         blocks:info@\:`blocks;
         text:texts)}
@@ -462,7 +553,7 @@ run:{[fn;params;settings]
 / reader's eye lands on, and the percentage is the summary they quote.
 / @param results a table from .cov.run
 / @return a list of strings
-/ @eg .cov.format.go .cov.run[f;enlist 1;(enlist `functions)!enlist `f]
+/ @eg .cov.format.go .cov.run[.cov.pct1;enlist 50f;(enlist `functions)!enlist `.cov.pct1]
 .cov.format.go:{[results]
     if[0=count results; :enlist "cov: nothing was instrumented"];
     pcts:.cov.percent each results;
@@ -503,8 +594,33 @@ run:{[fn;params;settings]
     lines:"\n" vs marked;
     {[ln] $[ln like "*<<<*"; "X  ",ln; "   ",ln]} each lines}
 
+/ A one-screen summary: the total, and the functions worth looking at.
+/ .
+/ Separate from `format.go`, which renders every function's annotated source
+/ - right for one call, unreadable for a suite of four hundred.
+/ @param results a table from .cov.run
+/ @return a list of strings
+/ @eg .cov.format.summary .cov.run[.cov.pct1;enlist 50f;(enlist `functions)!enlist `.cov.pct1]
+.cov.format.summary:{[results]
+    if[0=count results; :enlist "cov: nothing was instrumented"];
+    marks:.cov.marks each results;
+    total:sum {[m] sum m`tracked} each marks;
+    hit:sum {[m] sum m[`tracked] and m`covered} each marks;
+    pcts:.cov.percent each results;
+    out:enlist "Coverage: ",(.cov.pct1 $[0=total; 100f; 100f*hit%total]),
+        "% of ",string[total]," tracked character(s) in ",
+        string[count results]," function(s)";
+    out,:enlist "  fully covered: ",string sum pcts=100f;
+    out,:enlist "  partial:       ",string sum (pcts>0f) and pcts<100f;
+    out,:enlist "  never entered: ",string sum 0=results`iterations;
+    worst:10#`percent xasc update percent:pcts from select name, iterations from results;
+    out,:enlist "";
+    out,:enlist "Least covered:";
+    out,:{[r] "  ",(string r`name),"  ",(.cov.pct1 r`percent),"%"} each worst;
+    out}
+
 / Print a coverage result.
 / @param results a table from .cov.run
 / @return null - the report goes to standard output
-/ @eg .cov.format.display .cov.run[f;enlist 1;(enlist `functions)!enlist `f]
+/ @eg .cov.format.display .cov.run[.cov.pct1;enlist 50f;(enlist `functions)!enlist `.cov.pct1]
 .cov.format.display:{[results] -1 each .cov.format.go results; }
