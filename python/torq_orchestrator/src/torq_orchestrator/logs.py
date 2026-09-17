@@ -52,8 +52,15 @@ def _format_kdb_time(t: str) -> str:
     """Trim .lg.format's nanosecond timestamp to millisecond precision for
     display, e.g. '2026.08.22D14:21:10.644413000' -> '2026.08.22D14:21:10.644'.
     """
-    head, sep, frac = t.rpartition(".")
-    return f"{head}.{frac[:3]}" if sep else t
+    # Only a dot AFTER the D separator is a seconds fraction. Partitioning on
+    # the last dot in the whole string found the date's dot whenever the
+    # seconds had no fraction, and "2026.08.22D14:21:10" displayed as
+    # "2026.08.22D" - the time of day silently discarded.
+    date, d, clock = t.partition("D")
+    if not d:
+        return t
+    whole, dot, frac = clock.partition(".")
+    return f"{date}D{whole}.{frac[:3]}" if dot else t
 
 
 def _configure_kdb_log_sink() -> Any:
