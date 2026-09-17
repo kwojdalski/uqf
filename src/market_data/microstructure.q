@@ -505,7 +505,7 @@ require_tape:{[tape]
 / shape contract - a signed size column would make `sum size` meaningless.
 / @param tape an event tape table
 / @return the net signed volume: positive when buyers were the aggressors
-/ @eg .qmicro.signed_trade_flow[tape]  ->  -1000000f
+/ @eg .qmicro.signed_trade_flow[tape]  ->  -500000f
 signed_trade_flow:{[tape]
     require_tape tape;
     sum exec side*size from tape where action=`trade}

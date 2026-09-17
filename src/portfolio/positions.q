@@ -42,7 +42,7 @@ empty_book:{[] ([sym:`symbol$()] qty:`float$(); avg_price:`float$(); realized_pn
 / @param side 1 for a buy, -1 for a sell
 / @return pos with sym's row updated (or added, if new)
 / @eg .qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1] -> qty 1000000, avg_price 1.1, realized_pnl 0
-/ @eg .qpos.apply_fill[b;`EURUSD;400000;1.1050;-1] (b = book from the previous example) -> qty 600000, avg_price 1.1 (unchanged), realized_pnl 2000 (400000 closed at a 50-pip gain)
+/ @eg .qpos.apply_fill[.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1000000;1.1000;1];`EURUSD;400000;1.1050;-1] -> qty 600000, avg_price 1.1 (unchanged), realized_pnl 2000 (400000 closed at a 50-pip gain)
 apply_fill:{[pos;sym;qty;price;side]
     / exec sym from pos, not key pos: `key` on a single-key-column keyed
     / table does not always give a plain symbol vector, and `in` against
@@ -146,7 +146,7 @@ reconcile_trades:{[reference_book;trades;qty_tol;price_tol]
 / @param sym the symbol to mark
 / @param mkt_price the current market price to mark against
 / @return unrealized P&L, in quote currency (0 if sym isn't in pos or is flat)
-/ @eg .qpos.unrealized_pnl[b;`EURUSD;1.1100] (b: 600000 EURUSD @ 1.1000) -> 6000
+/ @eg .qpos.unrealized_pnl[.qpos.apply_fill[.qpos.empty_book[];`EURUSD;600000;1.1000;1];`EURUSD;1.1100] -> 6000f
 unrealized_pnl:{[pos;sym;mkt_price]
     if[not sym in exec sym from pos; :0f];
     row:pos sym;
@@ -186,7 +186,10 @@ ccy_legs:{[sym;qty;avg_price]
 / revalue everything into one reporting currency.
 / @param pos a position book (see empty_book)
 / @return a table `ccy`amount, one row per currency touched by the book
-/ @eg .qpos.ccy_exposure[b] (b: long 1mm EURAUD @ 1.60, long 500k AUDUSD @ 0.65) -> AUD: -1,600,000+500,000 = -1,100,000; EUR: 1,000,000; USD: -325,000
+/ For a book long 1mm EURAUD @ 1.60 and long 500k AUDUSD @ 0.65, AUD nets
+/ across both pairs: -1,600,000 from the EURAUD leg plus +500,000 from the
+/ AUDUSD leg is -1,100,000.
+/ @eg .qpos.ccy_exposure[.qpos.apply_fill[.qpos.apply_fill[.qpos.empty_book[];`EURAUD;1000000;1.6000;1];`AUDUSD;500000;0.6500;1]] -> +`ccy`amount!(`s#`AUD`EUR`USD;-1100000 1000000 -325000f)
 ccy_exposure:{[pos]
     legs:raze {[row] ccy_legs[row`sym;row`qty;row`avg_price]} each 0!pos;
     / 0! - a plain table, not the keyed-by-ccy table `by` naturally

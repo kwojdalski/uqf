@@ -178,8 +178,8 @@ hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
 /   single row if bucket_size is null and group_cols is empty
 / @throws error if requests is missing a required column (ts, reject, size,
 /   or any column named in group_cols), or if mode isn't `count or `amount
-/ @eg .qexec.reject_ratio_by[requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
-/ @eg .qexec.reject_ratio_by[requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio
+/ @eg .qexec.reject_ratio_by[reject_requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
+/ @eg .qexec.reject_ratio_by[reject_requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio
 reject_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
     group_cols:group_cols,();
     req_cols:distinct `ts`reject`size,group_cols;
