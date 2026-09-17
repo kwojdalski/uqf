@@ -34,10 +34,18 @@ of this guide.
 poller. `.qcont` in [`src/etl/core/continuous_state.q`](../../src/etl/core/continuous_state.q),
 whose state is a cursor rather than a range.
 
-Both have a transform. The tickerplant subscribers in `scripts/torq_*_etl.q`
-call `.qxf.apply` on transforms declared in
-[`src/etl/transforms/stream.q`](../../src/etl/transforms/stream.q); the
-subscription, buffers, timer and publish stay in the script.
+Both have a transform, and both are **one file per job**. A continuous job
+is a file under [`src/etl/streaming/`](../../src/etl/streaming) holding every
+step — schemas, transform, batch handler, timer body, its own buffers — and a
+`.qstream.register` call naming the tables it subscribes to, the tables it
+publishes and the TorQ process that runs it. One generic process script,
+[`scripts/torq_stream.q`](../../scripts/torq_stream.q), runs whichever job
+the process it was started as claims.
+
+A job never calls TorQ: it calls `publish` in its own namespace, which the
+runner wires to the tickerplant and a test wires to a recorder
+(`tests/q/test_stream_job.q`). That seam is what lets the whole job — not
+just its transform — be loaded and driven in a plain q process.
 
 The rest of this guide is the bounded case.
 

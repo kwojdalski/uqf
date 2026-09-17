@@ -23,40 +23,30 @@
 / {KDBBASEPORT}+24. Mirrors torq_fx_feed.q's own
 / discover-tickerplant-then-timer pattern exactly.
 
-/ pairs/spot/pip are parallel plain vectors, same reasoning as
-/ torq_fx_feed.q: a dict here would silently turn the level columns into
-/ dicts too, which .u.upd rejects with a length error on insert.
-pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD
-spot:1.0850 1.2650 149.50 0.6550
-pip:0.0001 0.0001 0.01 0.0001
-size_unit:1000000
+/ SOURCE: pull in uqf's own src/init.q and the ETL tree, for .qsynth - the
+/ invented market every feed in this demo publishes. It used to be four
+/ copies of the same constants and the same random walk, one per feed
+/ process, none of them tested.
+.qpipe.load_uqf[];
+
+/ This process's own moving level per pair. spot/pip stay parallel plain
+/ VECTORS (.qsynth keeps them that way): a dict here would silently turn the
+/ level columns into dicts too, which .u.upd rejects with a length error on
+/ insert.
+spot:.qsynth.spot
+
+/ How deep this feed quotes. The ladder's shape - prices one step apart from
+/ mid outwards, sizes growing with depth - is .qsynth's, shared with the
+/ wide-book feed and tested there.
 n_levels:3
 
-/ small symmetric random walk per tick, +/-5bp of current spot
-drift_one:{[s] s*1+0.0005*-1+2*rand 1f}
-
-/ Level-0-first price vector for one pair: n_levels prices, `step` apart,
-/ starting one step away from mid (so level 0 is never exactly mid).
-/ @param mid current mid price for the pair
-/ @param step per-level spacing (the pair's pip size)
-/ @param dir -1 for the bid side (descending from mid), 1 for ask (ascending)
-/ @return a float vector, n_levels long, level-0-first
-levels_one:{[mid;step;dir] mid+dir*step*1+til n_levels}
-
-/ Level-0-first size vector for one pair: size_unit, 2*size_unit, ...,
-/ i.e. thinner at the top of book and deeper further away - a fixed shape,
-/ same for every pair/tick, which is enough depth realism for this proof of
-/ concept.
-levels_size:size_unit*1+til n_levels
-
 publish_quotes:{[]
- spot::drift_one each spot;
- n:count pairs;
- bid_prices:levels_one[;;-1] .' flip (spot;pip);
- ask_prices:levels_one[;;1] .' flip (spot;pip);
- bid_sizes:n#enlist levels_size;
- ask_sizes:n#enlist levels_size;
- h (`.u.upd;`quotes;(pairs;bid_prices;bid_sizes;ask_prices;ask_sizes))
+ spot::.qsynth.drift_one each spot;
+ n:count .qsynth.pairs;
+ bid_prices:.qsynth.levels_one[;;-1;n_levels] .' flip (spot;.qsynth.pip);
+ ask_prices:.qsynth.levels_one[;;1;n_levels] .' flip (spot;.qsynth.pip);
+ sizes:.qsynth.levels_size n_levels;
+ h (`.u.upd;`quotes;(.qsynth.pairs;bid_prices;n#enlist sizes;ask_prices;n#enlist sizes))
  }
 
 /- use the discovery service to find the tickerplant to publish data to,

@@ -40,6 +40,12 @@ PIPELINE_BLOCK_START = 24
 
 PIPELINE_LIB_SCRIPT = "torq_pipeline.q"
 
+#: The one process script every streaming job runs under. Which job a process
+#: runs is decided in q, by its procname: each job under src/etl/streaming/
+#: declares the process that runs it, and the runner looks itself up. There
+#: were four near-identical scripts here before, one per job.
+STREAM_RUNNER_SCRIPT = "torq_stream.q"
+
 # The access list a real .sub.subscribe subscriber needs: an ETL process
 # borrows an already-credentialed proctype so .servers.startup[] can open an
 # access-listed handle to stp1. Feeds only publish and need no credentials.
@@ -148,6 +154,7 @@ class Pipeline:
 PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
         procname="fxfeed1",
+        loads_qpipe=True,
         script="torq_fx_feed.q",
         kind="feed",
         publishes=("quote",),
@@ -156,6 +163,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     ),
     Pipeline(
         procname="quotesfeed1",
+        loads_qpipe=True,
         script="torq_quotes_feed.q",
         kind="feed",
         table="quotes",
@@ -163,7 +171,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     ),
     Pipeline(
         procname="cross1",
-        script="torq_cross_etl.q",
+        script=STREAM_RUNNER_SCRIPT,
         loads_qpipe=True,
         kind="etl",
         subscribes=("quotes",),
@@ -171,6 +179,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     ),
     Pipeline(
         procname="widefeed1",
+        loads_qpipe=True,
         script="torq_wide_book_feed.q",
         kind="feed",
         table="wide_book",
@@ -178,7 +187,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     ),
     Pipeline(
         procname="vectorize1",
-        script="torq_vectorize_etl.q",
+        script=STREAM_RUNNER_SCRIPT,
         loads_qpipe=True,
         kind="etl",
         subscribes=("wide_book",),
@@ -195,6 +204,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     ),
     Pipeline(
         procname="fxtradesfeed1",
+        loads_qpipe=True,
         script="torq_fx_trades_feed.q",
         kind="feed",
         table="trades",
@@ -202,7 +212,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     ),
     Pipeline(
         procname="posbook1",
-        script="torq_posbook_etl.q",
+        script=STREAM_RUNNER_SCRIPT,
         loads_qpipe=True,
         kind="etl",
         subscribes=("trades", "quote"),
@@ -211,7 +221,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     ),
     Pipeline(
         procname="markout1",
-        script="torq_markout_etl.q",
+        script=STREAM_RUNNER_SCRIPT,
         kind="etl",
         subscribes=("trades", "quote"),
         table="execution_quality",

@@ -14,30 +14,29 @@
 / core.py). Mirrors torq_fx_feed.q/torq_quotes_feed.q's own
 / discover-tickerplant-then-timer pattern exactly.
 
+/ SOURCE: pull in uqf's own src/init.q and the ETL tree, for .qsynth - the
+/ invented market every feed in this demo publishes. It used to be four
+/ copies of the same constants and the same random walk, one per feed
+/ process, none of them tested.
+.qpipe.load_uqf[];
+
+/ Eleven levels a side, which is what wide_book's bids0..bids10 columns
+/ hold. The pairs, the starting levels, the pip sizes and the walk are
+/ .qsynth's (src/etl/synthetic_market.q), shared with every other feed.
 n_levels:11
-pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD
-spot:1.0850 1.2650 149.50 0.6550
-pip:0.0001 0.0001 0.01 0.0001
-
-/ small symmetric random walk per tick, +/-5bp of current spot - same
-/ reasoning as torq_fx_feed.q/torq_quotes_feed.q.
-drift_one:{[s] s*1+0.0005*-1+2*rand 1f}
-
-/ Level-0-first price vector for one pair, n_levels long - same shape as
-/ torq_quotes_feed.q's levels_one, just deeper (11 vs 3 levels).
-levels_one:{[mid;step;dir] mid+dir*step*1+til n_levels}
+spot:.qsynth.spot
 
 publish_wide_book:{[]
- spot::drift_one each spot;
+ spot::.qsynth.drift_one each spot;
  / levels_one[;;-1] .' flip (spot;pip) gives one n_levels-long vector per
  / pair (a `count pairs`-row, n_levels-col shape); flip transposes that
  / into n_levels columns each `count pairs` long, level-0-first - exactly
  / bids0..bids10/asks0..asks10's column shape, one column per level.
- bid_cols:flip levels_one[;;-1] .' flip (spot;pip);
- ask_cols:flip levels_one[;;1] .' flip (spot;pip);
+ bid_cols:flip .qsynth.levels_one[;;-1;n_levels] .' flip (spot;.qsynth.pip);
+ ask_cols:flip .qsynth.levels_one[;;1;n_levels] .' flip (spot;.qsynth.pip);
  / (enlist pairs),bid_cols,ask_cols: 1 (sym) + 11 (bids) + 11 (asks) = 23
  / columns, matching wide_book's shape after `time` (which .u.upd adds).
- h (`.u.upd;`wide_book;(enlist pairs),bid_cols,ask_cols)
+ h (`.u.upd;`wide_book;(enlist .qsynth.pairs),bid_cols,ask_cols)
  }
 
 /- use the discovery service to find the tickerplant to publish data to,

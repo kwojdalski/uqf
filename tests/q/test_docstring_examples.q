@@ -120,13 +120,11 @@ bind_fixtures:{[]
     `trade set .metatest.source;
     `spec set .qmeta.definition[`trade;`date;enlist `sym;()!()];
     `stored set .qmeta.collect[value `spec;2026.09.01 2026.09.02];
-    / The markout pipeline's buffer, built from its OWN declaration in
-    / scripts/torq_markout_etl.q rather than a copy of it. That file cannot be
-    / loaded outside TorQ, so the one line declaring the table is read and
-    / evaluated - if the pipeline's schema changes, the examples follow it.
-    decl:first l where (l:read0 `:scripts/torq_markout_etl.q) like "pending_trades:*";
-    buffer:value -1_(1+decl?":")_decl;
-    `.qsub.markout.pending_trades set buffer upsert
+    / The markout job's own buffer, with two rows in it. It used to be read
+    / out of scripts/torq_markout_etl.q as TEXT and re-evaluated, because
+    / that file could not be loaded outside TorQ; the job is a src/ file now,
+    / so the real table is simply here.
+    `.qsub.markout.pending set .qsub.markout.pending upsert
         ([] time:2026.01.01D00:00:00.000000000 2026.01.01D00:00:01.000000000;
             sym:`EURUSD`GBPUSD; side:1 -1; trade_price:1.1 1.25;
             size:1000000 500000f; pip_factor:10000 10000);
@@ -189,7 +187,7 @@ assertions:{[] e:examples[]; e where 0<count each e[;3]}
 needs_live:([] expr:(
         ".qpipe.publish[h;`execution_quality;out]";
         ".qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
-        ".qpipe.safe_timer[`markout;0D00:00:01.000;`process_ready;\"Score markouts\"]";
+        ".qpipe.safe_timer[`markout;0D00:00:01.000;`.qsubproc.tick;\"Run the markout streaming job\"]";
         ".qodbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]");
     reason:(

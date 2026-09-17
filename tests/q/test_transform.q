@@ -1,5 +1,5 @@
 // test_transform.q - tests for src/etl/core/transform.q (.qxf) and every
-// transform registered with it, including src/etl/transforms/stream.q.
+// transform registered with it, including the streaming jobs under src/etl/streaming/.
 //
 // The first test is the one that matters: it runs every registered
 // transform's hand-written examples, so a job whose transform no longer
@@ -200,7 +200,7 @@ test_next_book_matches_folding_the_fills_through_qpos:{[t]
     ex:first .qxf.registry[`position;`examples];
     i:ex`inputs;
     out:.qxf.apply[`position;i];
-    book:.qstream.next_book[i`book;out];
+    book:.qsub.posbook.next_book[i`book;out];
     direct:0!.qpos.apply_fills[1!i`book;i`trades];
     .qunit.assertEquals[`sym xasc book;`sym xasc direct;"the book rebuilt from positions is the book .qpos folds to"]};
 

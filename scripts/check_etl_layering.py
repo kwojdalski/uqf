@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep `src/etl/core/` from depending on `sources/` or `workers/`.
+"""Keep `src/etl/core/` from depending on `sources/`, `workers/` or `streaming/`.
 
 Question bank F-08 settled the split: `core/` is framework, `sources/` and
 `workers/` are declarations, and bank question E-02 names the property that
@@ -33,7 +33,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CORE = REPO / "src" / "etl" / "core"
-DECLARING_DIRS = ("sources", "workers")
+DECLARING_DIRS = ("sources", "workers", "streaming")
 
 #: A namespace declaration, e.g. `\d .qwrk.demo_deals_backfill`.
 NAMESPACE_RE = re.compile(
@@ -139,7 +139,7 @@ def main() -> int:
 
     print(
         f"check_etl_layering: {len(list(CORE.glob('*.q')))} core file(s) depend on none "
-        f"of the {len(declared)} sources/workers namespace(s)"
+        f"of the {len(declared)} declaring namespace(s)"
     )
     return 0
 

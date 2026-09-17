@@ -38,6 +38,80 @@ _PUB_RE = re.compile(
     r"(?:h\s*\(\s*`\.u\.upd|\.qpipe\.publish\[\s*h)\s*;\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;"
 )
 
+#: A streaming job declares its own edges rather than spelling out the calls:
+#: the subscribe, the publish and the timer all happen in the one runner
+#: (scripts/torq_stream.q), which is generic, so reading THAT file back tells
+#: you nothing about any particular job. The declaration is read instead -
+#: from src/etl/streaming/<job>.q, found by the procname it claims.
+#:
+#:     .qstream.register[`markout;`procname`subscribes`publishes`on_batch...!(
+#:         `markout1;
+#:         `trades`quote;
+#:         enlist `execution_quality;
+#:
+#: `enlist `x` and an empty `symbol$()` are both spelled here, because a job
+#: that publishes exactly one table and a job that publishes none are the two
+#: cases this registry most needs to tell apart.
+_REGISTER_RE = re.compile(
+    r"\.qstream\.register\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S
+)
+_STREAM_DIR = Path("src") / "etl" / "streaming"
+
+#: The one process script every streaming job runs under. Spelled here rather
+#: than imported from `pipelines`, which imports this module.
+STREAM_RUNNER = "torq_stream.q"
+
+
+def _symbol_field(text: str) -> tuple[str, ...]:
+    """The symbols in one field of a register call: a backtick list, an
+    `enlist `x`, or an empty `symbol$()`."""
+    text = text.strip().rstrip(";").strip()
+    if text.startswith("enlist"):
+        text = text[len("enlist") :].strip()
+    if "symbol$()" in text:
+        return ()
+    return _symbol_list(text)
+
+
+def _register_fields(body: str) -> dict[str, str]:
+    """The `key!(value; value; ...)` of one register call, as {key: value}.
+
+    Read by NAME rather than by position: a job that declares a timer has two
+    more values than one that does not, and the whole point of this function
+    is to be indifferent to that.
+    """
+    if "!(" not in body:
+        return {}
+    keys_text, values_text = body.split("!(", 1)
+    keys = [key for key in keys_text.strip().strip("`").split("`") if key]
+    values = [value.strip() for value in values_text.split(";")]
+    return dict(zip(keys, values, strict=False))
+
+
+def _declared_stream_edges(repo_root: Path) -> dict[str, tuple[tuple[str, ...], tuple[str, ...]]]:
+    """procname -> (subscribes, publishes), read from the job files.
+
+    Every job under src/etl/streaming/ is read, so a job whose file exists but
+    whose registry entry was forgotten is absent here and reported as a
+    mismatch rather than silently agreeing.
+    """
+    edges: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
+    directory = repo_root / _STREAM_DIR
+    if not directory.is_dir():
+        return edges
+    for path in sorted(directory.glob("*.q")):
+        source = _strip_q_comments(path.read_text())
+        for match in _REGISTER_RE.finditer(source):
+            fields = _register_fields(match.group(2))
+            procname = _symbol_field(fields.get("procname", ""))
+            if not procname:
+                continue
+            edges[procname[0]] = (
+                _symbol_field(fields.get("subscribes", "")),
+                _symbol_field(fields.get("publishes", "")),
+            )
+    return edges
+
 
 def _symbol_list(match_text: str) -> tuple[str, ...]:
     """A q symbol vector, e.g. trades+quote, split into ("trades", "quote")."""
@@ -95,11 +169,38 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
         else:
             seen[pipeline.procname] = index
 
+    # A streaming job's edges are in its own file, not in the runner that
+    # starts it - the runner is generic and mentions no table at all.
+    stream_edges = _declared_stream_edges(scripts_dir.parent)
+
     for pipeline in pipelines:
         script = scripts_dir / pipeline.script
         if not script.is_file():
             problems.append(f"{pipeline.procname}: script {script} does not exist")
             continue
+
+        if pipeline.script == STREAM_RUNNER:
+            if pipeline.procname not in stream_edges:
+                problems.append(
+                    f"{pipeline.procname}: runs {STREAM_RUNNER} but no job under "
+                    f"{_STREAM_DIR} claims that process - .qstream.register's "
+                    "procname is how the runner finds out which job it is, so this "
+                    "process would refuse to start"
+                )
+                continue
+            subscribes, publishes = stream_edges[pipeline.procname]
+            if subscribes != tuple(pipeline.subscribes):
+                problems.append(
+                    f"{pipeline.procname}: declares subscribes={pipeline.subscribes!r} "
+                    f"but its streaming job subscribes to {subscribes!r}"
+                )
+            if publishes != tuple(pipeline.published_tables):
+                problems.append(
+                    f"{pipeline.procname}: declares publishes={pipeline.published_tables!r} "
+                    f"but its streaming job publishes {publishes!r}"
+                )
+            continue
+
         source = _strip_q_comments(script.read_text())
 
         if not pipeline.subscribes_dynamic:
