@@ -75,7 +75,7 @@ scalar-from-vector. This has cost this repository three debugging sessions
 
 | | |
 |---|---|
-| `GET /control` | Whether writes are on, and what can be set. Not itself gated: a UI needs this to decide whether to render controls, and finding out by provoking a 403 on a lifecycle route means having already stopped the fleet |
+| `GET /control` | Whether writes are on, what can be set, and (with writes on) every process a selector may name — `procname`, `proctype`, and whether `all` starts it — from the orchestrator's effective `process.csv`. Not itself gated: a UI needs this to decide whether to render controls, and finding out by provoking a 403 on a lifecycle route means having already stopped the fleet |
 | `POST /control/process/{start\|stop\|restart}` | Lifecycle for a process selector — a name, several separated by spaces, or `all`, passed to `torq.sh` unreinterpreted |
 | `PUT /control/process/{procname}/config` | One `process.csv` field override, persisted to `process_overrides.csv` and applied on the next start. Returns the effective row |
 | `PUT /control/worker-config` | One `.qwcfg` override in the live process the gateway addresses. Returns `.qwcfg.explain`, which names the layer that actually answered |

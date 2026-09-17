@@ -61,6 +61,13 @@ does not exist. The API continues to run without the web directory configured.
   is explained. An optional coverage requirement refuses incomplete queries
   and shows the API's 409 missing-range message. Results are bounded by the
   requested row limit and server cap, with no pagination claim.
+- **Control:** the write surface, rendered only when the API reports writes
+  enabled. Processes are picked from the list the API serves, grouped by
+  proctype, with `all` meaning torq.sh's own `all` (startwithall=1) rather
+  than every name spelled out; processes `all` would not start are marked
+  `manual`, and each shows up/down when the Fleet view has a process.csv.
+  Then start/stop/restart, a process.csv field override, a live worker-config
+  value, or a backfill run.
 - **Fleet, Queue, Connections, Usage:** the existing operational endpoints,
   including partial failures, identity mismatches, unresolved ports, optional
   processes and unconfigured usage collection.

@@ -4,6 +4,21 @@ import App from "./App";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 
+/** What the API reads from the effective process.csv: two rdbs, a feed, and
+ * one process "all" does not start. */
+const PROCESSES = [
+  { procname: "rdb1", proctype: "rdb", start_with_all: true },
+  { procname: "rdb2", proctype: "rdb", start_with_all: true },
+  { procname: "feed1", proctype: "feed", start_with_all: true },
+  { procname: "tap1", proctype: "metrics", start_with_all: false },
+];
+const FLEET = [
+  { procname: "rdb1", up: true },
+  { procname: "rdb2", up: false },
+  { procname: "feed1", up: true },
+  { procname: "tap1", up: false },
+];
+
 /** The control status the app asks for on mount, plus whatever else a test
  * needs. `/health` is answered here too, because App renders it regardless
  * and an unhandled path would make every test fail for the wrong reason. */
@@ -19,9 +34,12 @@ function mockApi(
             writes_enabled: writesEnabled,
             lifecycle_actions: ["start", "stop", "restart"],
             settable_fields: ["startwithall", "port"],
+            processes: PROCESSES,
             poll_seconds: 5,
           })
-        : handler(path, options),
+        : path === "/ops/processes"
+          ? ok({ processes: FLEET, poll_seconds: 5 })
+          : handler(path, options),
   );
   vi.stubGlobal("fetch", fetcher);
   return fetcher;
@@ -55,31 +73,73 @@ it("renders the lifecycle buttons the server declares, not a hardcoded list", as
   }
 });
 
-it("sends the process selector unreinterpreted", async () => {
-  const fetcher = mockApi(true, () =>
-    ok({
-      action: "stop",
-      target: "rdb1 hdb1",
-      exit_code: 0,
-      ok: true,
-      output: "stopped",
-    }),
-  );
-  await openControl();
-  fireEvent.change(await screen.findByLabelText(/Selector/), {
-    target: { value: "rdb1 hdb1" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "stop" }));
-
+async function lifecycleBody(
+  fetcher: ReturnType<typeof mockApi>,
+  action: string,
+): Promise<unknown> {
+  let body: unknown;
   await waitFor(() => {
     const call = fetcher.mock.calls.find(([path]) =>
-      path.startsWith("/control/process/stop"),
+      path.startsWith(`/control/process/${action}`),
     );
     expect(call).toBeTruthy();
-    expect(JSON.parse(call![1].body as string)).toEqual({
-      procs: "rdb1 hdb1",
-    });
+    body = JSON.parse(call![1].body as string);
   });
+  return body;
+}
+
+const command = (action: string, target: string) =>
+  ok({ action, target, exit_code: 0, ok: true, output: "done" });
+
+it("defaults to torq.sh's own “all”, sent as the word and not spelled out", async () => {
+  // "all" means startwithall=1 to torq.sh. Sending every name instead would
+  // make the UI's idea of "all" a second definition that can drift from
+  // `uqf-stack start all`.
+  const fetcher = mockApi(true, () => command("start", "all"));
+  await openControl();
+  // three of the four: tap1 has startwithall=0, so "all" does not start it
+  expect(await screen.findByText(/3 selected/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "start" }));
+  expect(await lifecycleBody(fetcher, "start")).toEqual({ procs: "all" });
+});
+
+it("lists every process the server declares, grouped by type, and sends the picked names", async () => {
+  const fetcher = mockApi(true, () => command("stop", "rdb1 rdb2"));
+  await openControl();
+  await screen.findByText("rdb1");
+  for (const name of ["rdb1", "rdb2", "feed1", "tap1"])
+    expect(screen.getByText(name)).toBeInTheDocument();
+  // the group checkbox picks the whole proctype in one go
+  fireEvent.click(screen.getByLabelText("every rdb"));
+  expect(screen.getByText(/2 selected/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "stop" }));
+  expect(await lifecycleBody(fetcher, "stop")).toEqual({ procs: "rdb1 rdb2" });
+});
+
+it("marks a process “all” would not start, and shows liveness when the fleet is known", async () => {
+  mockApi(true);
+  await openControl();
+  const tap = (await screen.findByText("tap1")).closest("label")!;
+  expect(tap).toHaveTextContent("manual");
+  expect(tap).toHaveTextContent("down");
+  expect(screen.getByText("rdb1").closest("label")).toHaveTextContent("up");
+});
+
+it("can pick exactly the processes that are down", async () => {
+  const fetcher = mockApi(true, () => command("start", "rdb2 tap1"));
+  await openControl();
+  fireEvent.click(await screen.findByRole("button", { name: "down only" }));
+  fireEvent.click(screen.getByRole("button", { name: "start" }));
+  expect(await lifecycleBody(fetcher, "start")).toEqual({ procs: "rdb2 tap1" });
+});
+
+it("refuses to run an action on an empty selection", async () => {
+  // torq.sh with no selector would be an error at best and "all" at worst;
+  // neither is what an operator who deselected everything meant.
+  mockApi(true);
+  await openControl();
+  fireEvent.click(await screen.findByRole("button", { name: "none" }));
+  expect(screen.getByRole("button", { name: "start" })).toBeDisabled();
 });
 
 it("reports a non-zero exit rather than showing success", async () => {

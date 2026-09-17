@@ -219,6 +219,17 @@ class BackfillStatusResponse(BaseModel):
 # ------------------------------------------------------------ control (writes)
 
 
+class ControlProcessOut(BaseModel):
+    """One process a lifecycle selector may name."""
+
+    procname: str
+    proctype: str
+    start_with_all: bool = Field(
+        description='whether torq.sh\'s "all" selector includes it - the effective value, '
+        "with process_overrides.csv applied"
+    )
+
+
 class ControlStatusResponse(BaseModel):
     """Whether the control surface is live, and what it accepts.
 
@@ -230,6 +241,11 @@ class ControlStatusResponse(BaseModel):
     writes_enabled: bool
     lifecycle_actions: list[str]
     settable_fields: list[str]
+    processes: list[ControlProcessOut] = Field(
+        default_factory=list,
+        description="what a lifecycle selector may name, from the effective process.csv; "
+        "empty while writes are off, like settable_fields",
+    )
     poll_seconds: int
 
 
