@@ -65,6 +65,11 @@
 \l src/etl/core/transform.q
 \l src/etl/core/source_contract.q
 \l src/etl/core/bounded_worker.q
+\l src/etl/core/stream_job.q
+
+/ The invented market the demo's feeds publish and its jobs consume. Before
+/ the core declarations, because a job filters on .qsynth.pairs.
+\l src/etl/synthetic_market.q
 
 / Declarations last. Each registers itself on load, so that a declaration and
 / its implementation cannot drift - there is no way to have one without the
@@ -78,6 +83,11 @@
 \l src/etl/workers/databento_book_backfill.q
 \l src/etl/workers/upstream_trades_backfill.q
 
-/ Transforms of the tickerplant subscriber jobs. Last, because they register
-/ into .qxf on load and call the library through src/init.q.
-\l src/etl/transforms/stream.q
+/ The continuous jobs. Last, because each registers its transform into .qxf
+/ and itself into .qstream on load, and calls the library through
+/ src/init.q. One file per job, holding every step of it; scripts/
+/ torq_stream.q runs whichever one its environment names.
+\l src/etl/streaming/markout.q
+\l src/etl/streaming/cross.q
+\l src/etl/streaming/posbook.q
+\l src/etl/streaming/vectorize.q

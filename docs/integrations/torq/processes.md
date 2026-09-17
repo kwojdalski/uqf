@@ -17,13 +17,13 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 |---|---|---|---|---|---|---|
 | `fxfeed1` | 6069 | feed | `torq_fx_feed.q` | — | — | `quote` |
 | `quotesfeed1` | 6074 | feed | `torq_quotes_feed.q` | `quotes` | — | `quotes` |
-| `cross1` | 6075 | etl | `torq_cross_etl.q` | — | `quotes` | — |
+| `cross1` | 6075 | etl | `torq_stream.q` | — | `quotes` | — |
 | `widefeed1` | 6076 | feed | `torq_wide_book_feed.q` | `wide_book` | — | `wide_book` |
-| `vectorize1` | 6077 | etl | `torq_vectorize_etl.q` | `mkt_orderbook` | `wide_book` | `mkt_orderbook` |
+| `vectorize1` | 6077 | etl | `torq_stream.q` | `mkt_orderbook` | `wide_book` | `mkt_orderbook` |
 | `tap1` | 6078 | etl | `torq_tap.q` | — | _chosen at runtime_ | — |
 | `fxtradesfeed1` | 6079 | feed | `torq_fx_trades_feed.q` | `trades` | — | `trades` |
-| `posbook1` | 6080 | etl | `torq_posbook_etl.q` | `position` | `trades`, `quote` | `position` |
-| `markout1` | 6081 | etl | `torq_markout_etl.q` | `execution_quality` | `trades`, `quote` | `execution_quality` |
+| `posbook1` | 6080 | etl | `torq_stream.q` | `position` | `trades`, `quote` | `position` |
+| `markout1` | 6081 | etl | `torq_stream.q` | `execution_quality` | `trades`, `quote` | `execution_quality` |
 | `deals_backfill1` | 6082 | backfill | `torq_backfill.q` | — | — | — |
 | `events_backfill1` | 6083 | backfill | `torq_backfill.q` | — | — | — |
 

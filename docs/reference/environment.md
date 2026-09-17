@@ -35,6 +35,7 @@ without it:
 | Variable | Read by | Required | Unset behaviour |
 |---|---|---|---|
 | `UQF_DRY_RUN` | `.qwrt.is_dry_run` (`src/etl/core/worker_runtime.q`) | no | false — the worker publishes for real. Opt-in on purpose: defaulting to true would make a worker silently do nothing and report success |
+| `UQF_STREAM_JOB` | `scripts/torq_stream.q` | no | the process falls back to its own procname, which is how the stack starts it; set this only to run a job by hand |
 | `UQF_BACKFILL_WORKER` | `scripts/torq_backfill.q` | yes, for a backfill process | the process refuses to start and names every missing variable at once |
 | `UQF_BACKFILL_VERSION` | as above | yes | as above — a run that cannot name its source release cannot record coverage (ETL-09) |
 | `UQF_BACKFILL_FROM` | as above | yes | as above. Deliberately no default: a backfill that guessed a range would publish the wrong window and record it as covered |

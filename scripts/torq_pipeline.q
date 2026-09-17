@@ -2,7 +2,8 @@
 / feed and ETL process builds on. Created to close the gap those scripts'
 / own header comments kept documenting: "no shared-constant infra exists
 / across scripts/torq_*.q, each defines its own" (torq_markout_etl.q) - so
-/ `fx_pairs` was duplicated in four files, the ~25-line subscribe/init/
+/ `fx_pairs` was duplicated in four files (it now lives once, as
+/ .qsynth.pairs in src/etl/synthetic_market.q), the ~25-line subscribe/init/
 / .servers.startup closing block was duplicated in four more, and each of
 / the seven hard-won TorQ invariants below survived only as a prose comment
 / that the next author had to remember to copy.
@@ -78,11 +79,6 @@
 / `sub_tables`. Both bugs were latent - they would have surfaced only on the
 / first live call inside TorQ.
 
-/ The four pairs every FX feed/ETL in this demo actually produces - was a
-/ duplicated literal in torq_fx_feed.q, torq_fx_trades_feed.q,
-/ torq_markout_etl.q and torq_posbook_etl.q.
-fx_pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD
-
 / The tickerplant proctype every pipeline here talks to.
 tp_type:`segmentedtickerplant
 
@@ -104,9 +100,9 @@ load_uqf:{[]
     if[0=count root; '"qpipe.load_uqf: UQFROOT is not set"];
     cwd:first system"pwd";
     system"cd ",root;
-    outcome:@[{system"l src/init.q"; system"l src/etl/core/transform.q"; system"l src/etl/transforms/stream.q"; `ok};::;{x}];
+    outcome:@[{system"l src/init.q"; system"l src/etl/init.q"; `ok};::;{x}];
     system"cd ",cwd;
-    if[not outcome~`ok; '"qpipe.load_uqf: could not load uqf and its transforms: ",outcome];
+    if[not outcome~`ok; '"qpipe.load_uqf: could not load uqf and its ETL tree: ",outcome];
     }
 
 / Bring this process up as a tickerplant subscriber and hand back a publish
@@ -141,48 +137,10 @@ feed_handle:{[]
 
 / ----------------------------------------------------------------- STATE
 
-/ Take every row matching mask out of a buffer table and return it, leaving
-/ the rest behind - the queue block's drain step (markout1's pending_trades
-/ pattern). mask is evaluated ONCE by the caller and used for both the read
-/ and the delete, so a row arriving between the two can't be dropped
-/ unscored; hand-written drain code that recomputes its cutoff in the delete
-/ clause has exactly that race.
-/ @param tblname the buffer table's fully-qualified name, e.g. `.qsub.markout.pending_trades
-/ @param mask a boolean vector over that table, as long as it is
-/ @return the drained rows, in their original order
-/ @eg .qpipe.drain[`.qsub.markout.pending_trades; .qsub.markout.pending_trades[`time]<=cutoff]
-/ @see .qpipe.evict - use that instead when a failed publish should retry
-/   the batch rather than lose it (drain is at-most-once, evict at-least-once)
-drain:{[tblname;mask]
-    buffer:get tblname;
-    if[0=count buffer; :buffer];
-    ready:buffer where mask;
-    tblname set buffer where not mask;
-    ready}
-
-/ Remove every row matching mask from a buffer table, keeping the rest, and
-/ return how many went - the queue block's eviction step for a
-/ read-then-confirm flow: compute the mask once, read the rows, publish
-/ them, and only then evict. Use this rather than `drain` whenever losing a
-/ batch matters, because `safe_timer` swallows a publish failure: with
-/ `drain` the rows are already gone and the batch is lost (at-most-once),
-/ with `evict` they are still buffered and the next tick retries them
-/ (at-least-once). Pass the SAME mask value to the read and to evict - a
-/ recomputed cutoff between the two is the race both helpers exist to
-/ prevent.
-/ @param tblname the buffer table's fully-qualified name
-/ @param mask the boolean vector already used to read the batch
-/ @return the number of rows removed
-/ The pattern: compute the mask once, read the batch with it, publish the
-/ batch, and only then evict with that same mask.
-/ @eg mask:.qsub.markout.pending_trades[`time]<=cutoff;
-/   ready:.qsub.markout.pending_trades where mask;
-/   .qpipe.evict[`.qsub.markout.pending_trades;mask]
-evict:{[tblname;mask]
-    buffer:get tblname;
-    if[0=count buffer; :0];
-    tblname set buffer where not mask;
-    sum mask}
+/ The buffer helpers that used to live here - drain and evict - are now
+/ .qstream.drain and .qstream.evict (src/etl/core/stream_job.q). They moved
+/ with the jobs that use them: a job is a src/ file now, and nothing in src/
+/ may call .qpipe (B-09).
 
 / ------------------------------------------------------------------ SINK
 
@@ -412,7 +370,7 @@ write_status:{[worker;instance_id;state;spec;progress;err]
 / @param fn the fully-qualified name of the niladic function to run
 / @param timer_desc the description .timer.repeat shows
 / @return the generated wrapper's name
-/ @eg .qpipe.safe_timer[`markout;0D00:00:01.000;`process_ready;"Score markouts"]
+/ @eg .qpipe.safe_timer[`markout;0D00:00:01.000;`.qsubproc.tick;"Run the markout streaming job"]
 safe_timer:{[nm;interval;fn;timer_desc]
     wrapper:`$".qpipe.tick_",string nm;
     / `value` the lambda EXPRESSION only, then `set` the name - not

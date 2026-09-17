@@ -502,28 +502,66 @@ qstats,horner_eval,function,2,coeffs x
 qstats,inv_ncdf,function,1,p
 qstats,ncdf,function,1,x
 qstats,npdf,function,1,x
-qstream,cross_pairs,value,,
-qstream,cross_quotes,table,,
-qstream,cross_quotes_in,table,,
-qstream,cross_size,value,,
-qstream,execution_quality,table,,
-qstream,fold_wide_book,function,1,book
-qstream,mark_positions,function,3,book trades marks
-qstream,markout_horizons,value,,
-qstream,markout_max_horizon,value,,
-qstream,markout_quotes,table,,
-qstream,markout_trades,table,,
-qstream,mkt_orderbook,table,,
-qstream,next_book,function,2,book positions
-qstream,position,table,,
-qstream,position_book,table,,
-qstream,position_marks,table,,
-qstream,position_trades,table,,
-qstream,reprice_crosses,function,2,quotes as_of
-qstream,score_markouts,function,2,trades quotes
-qstream,wide_book,table,,
-qstream,wide_level_groups,dict,,
-qstream,wide_level_names,value,,
+qstream,declaration,function,1,job
+qstream,drain,function,2,tblname mask
+qstream,evict,function,2,tblname mask
+qstream,for_procname,function,1,procname
+qstream,is_callable,function,1,v
+qstream,job_root,value,,
+qstream,jobs,dict,,
+qstream,namespace,function,1,job
+qstream,register,function,2,job decl
+qstream,registered,function,1,
+qstream,required_declarations,value,,
+qstream,unwired,function,1,job
+qstream,wire,function,2,job publisher
+qsub.cross,cross_pairs,value,,
+qsub.cross,cross_quotes,table,,
+qsub.cross,crosses,table,,
+qsub.cross,now,function,1,
+qsub.cross,on_batch,function,2,tbl batch
+qsub.cross,publish,value,,
+qsub.cross,quotes,table,,
+qsub.cross,quotes_in,table,,
+qsub.cross,reprice,function,1,now
+qsub.cross,reprice_crosses,function,2,quotes as_of
+qsub.markout,execution_quality,table,,
+qsub.markout,horizons,value,,
+qsub.markout,max_horizon,value,,
+qsub.markout,now,function,1,
+qsub.markout,on_batch,function,2,tbl batch
+qsub.markout,on_timer,function,1,
+qsub.markout,pending,table,,
+qsub.markout,publish,value,,
+qsub.markout,quote_hist,table,,
+qsub.markout,quotes,table,,
+qsub.markout,score_markouts,function,2,trades quotes
+qsub.markout,score_ready,function,1,now
+qsub.markout,trades,table,,
+qsub.posbook,book,dict,,
+qsub.posbook,last_mid,dict,,
+qsub.posbook,mark_positions,function,3,book trades marks
+qsub.posbook,next_book,function,2,book positions
+qsub.posbook,on_batch,function,2,tbl batch
+qsub.posbook,position,table,,
+qsub.posbook,position_book,table,,
+qsub.posbook,position_marks,table,,
+qsub.posbook,position_trades,table,,
+qsub.posbook,publish,value,,
+qsub.vectorize,fold_wide_book,function,1,book
+qsub.vectorize,mkt_orderbook,table,,
+qsub.vectorize,on_batch,function,2,tbl batch
+qsub.vectorize,publish,value,,
+qsub.vectorize,wide_book,table,,
+qsub.vectorize,wide_level_groups,dict,,
+qsub.vectorize,wide_level_names,value,,
+qsynth,drift_one,function,1,s
+qsynth,levels_one,function,4,mid step dir levels
+qsynth,levels_size,function,1,levels
+qsynth,pairs,value,,
+qsynth,pip,value,,
+qsynth,size_unit,value,,
+qsynth,spot,value,,
 qwcfg,default_values,dict,,
 qwcfg,env_name,function,1,k
 qwcfg,env_values,dict,,

@@ -21,13 +21,22 @@
 / {KDBBASEPORT}+29 (FX_TRADES_FEED_PORT_OFFSET). Mirrors torq_fx_feed.q's
 / own discover-tickerplant-then-timer pattern exactly.
 
-/ pairs/spot/pip mirror torq_fx_feed.q's own starting levels (kept as
-/ parallel plain vectors for the same reason torq_fx_feed.q gives: a dict
-/ here would turn size/side into dicts too, which .u.upd rejects with a
-/ length error).
-pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD
-spot:1.0850 1.2650 149.50 0.6550
-pip_factor:10000 10000 100 10000
+/ SOURCE: pull in uqf's own src/init.q and the ETL tree, for .qsynth - the
+/ invented market every feed in this demo publishes. It used to be four
+/ copies of the same constants and the same random walk, one per feed
+/ process, none of them tested.
+.qpipe.load_uqf[];
+
+/ The pairs and their levels are .qsynth's (src/etl/synthetic_market.q),
+/ shared with every quote feed so a fill is priced around the same level the
+/ quotes show. pip_factor is the reciprocal of .qsynth.pip - pips per unit
+/ rather than the size of one - which is the form .qexec and the trades
+/ schema take.
+/ .
+/ Parallel plain vectors, not a dict: a dict here would turn size/side into
+/ dicts too, which .u.upd rejects with a length error.
+spot:.qsynth.spot
+pip_factor:"j"$1%.qsynth.pip
 sizes:500000 1000000 2000000 5000000f  / float, matching TRADES_TABLE_SCHEMA's size:`float$() (not `long$())
 
 / one fill per tick: pick a random pair/side/size, price a few pips
@@ -38,10 +47,10 @@ sizes:500000 1000000 2000000 5000000f  / float, matching TRADES_TABLE_SCHEMA's s
 / vectors, n>=1, never atoms) that .u.upd's row-count-from-column-length
 / machinery expects.
 publish_trade:{[]
-  i:rand count pairs;
+  i:rand count .qsynth.pairs;
   slip:(-3+rand 7)%pip_factor[i];  / -3..+3 pips
   side:1-2*rand 2;  / 1 or -1, always an atom (unlike indexing `1 -1` with a possibly-empty vector)
-  h (`.u.upd;`trades;(enlist pairs i;enlist side;enlist spot[i]+slip;enlist sizes rand count sizes;enlist pip_factor i))
+  h (`.u.upd;`trades;(enlist .qsynth.pairs i;enlist side;enlist spot[i]+slip;enlist sizes rand count sizes;enlist pip_factor i))
  }
 
 /- use the discovery service to find the tickerplant to publish data to,

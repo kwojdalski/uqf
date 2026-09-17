@@ -20,25 +20,29 @@
 / worked example for "how do I add a process that publishes rows" - copy
 / this file's shape for a new one.
 
+/ SOURCE: pull in uqf's own src/init.q and the ETL tree, for .qsynth - the
+/ invented market every feed in this demo publishes. It used to be four
+/ copies of the same constants and the same random walk, one per feed
+/ process, none of them tested.
+.qpipe.load_uqf[];
+
 / pairs/spot/pip are parallel plain vectors (not dicts keyed by pairs) so
 / that bid/ask stay plain float vectors too - a dict here would silently
 / turn bid/ask into dicts as well, which .u.upd rejects with a length
 / error when inserting into the plain quote table (caught the hard way -
 / see git history for this file).
-pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD
-spot:1.0850 1.2650 149.50 0.6550
-pip:0.0001 0.0001 0.01 0.0001
-size_unit:1000000
-
-/ small symmetric random walk per tick, +/-5bp of current spot
-drift_one:{[s] s*1+0.0005*-1+2*rand 1f}
+/ This process's own moving level per pair, walked on every tick. The
+/ starting levels, the pairs, the pip sizes and the walk itself are
+/ .qsynth's (src/etl/synthetic_market.q) - shared with every other feed and
+/ tested there.
+spot:.qsynth.spot
 
 publish_quote:{[]
- spot::drift_one each spot;
- n:count pairs;
- bid:spot-pip;
- ask:spot+pip;
- h (`.u.upd;`quote;(pairs;bid;ask;n#size_unit;n#size_unit;n#" ";n#"N";n#`UQFFX))
+ spot::.qsynth.drift_one each spot;
+ n:count .qsynth.pairs;
+ bid:spot-.qsynth.pip;
+ ask:spot+.qsynth.pip;
+ h (`.u.upd;`quote;(.qsynth.pairs;bid;ask;n#.qsynth.size_unit;n#.qsynth.size_unit;n#" ";n#"N";n#`UQFFX))
  }
 
 /- use the discovery service to find the tickerplant to publish data to,

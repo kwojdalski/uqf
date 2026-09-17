@@ -116,7 +116,12 @@ pricing or execution function, say so and stop rather than adding it here.
   `.qbw.define` from the registered name and refused if a `cfg` supplies its
   own `ns`; every source is `\d .qfeed.<source name>`, which
   `test_source_contract.q` checks against the file's own `source_name`; a
-  tickerplant subscriber process is `\d .qsub.<procname>`.
+  continuous job is `\d .qsub.<job>` - one file under `src/etl/streaming/`
+  holding its schemas, transform, batch handler, timer body and state, plus
+  a `.qstream.register` call; `scripts/torq_stream.q` runs whichever job the
+  process it started as claims. A job publishes through `publish` in its own
+  namespace (wired by the runner, or by a test to a recorder), never through
+  `.qpipe` - nothing in `src/` may depend on TorQ (B-09).
   Anything listing namespaces uses `.qns.owned`/`.qns.functional`
   (`src/namespaces.q`), never a root scan for a `q` prefix, which stops at
   `.qwrk`/`.qfeed`/`.qsub` and silently drops every worker, source and

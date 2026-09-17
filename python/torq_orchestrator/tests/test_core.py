@@ -727,7 +727,9 @@ def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
     assert markout.loads_qpipe
     loaded = markout.load_column().split()
     assert loaded[0].endswith(core.PIPELINE_LIB_SCRIPT)
-    assert loaded[1].endswith("torq_markout_etl.q")
+    # The streaming jobs all run under one generic runner now; which job a
+    # process runs is decided in q, from its own procname.
+    assert loaded[1].endswith(core.STREAM_RUNNER_SCRIPT)
 
 
 def test_pipelines_not_loading_qpipe_load_only_their_own_script():
@@ -825,43 +827,65 @@ def test_declared_dataflow_edges_match_the_q_scripts():
 def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     """A verifier nobody has seen fail might match nothing.
 
-    Write a script whose subscription disagrees with what the registry
-    declares for it, point the verifier at that directory, and require that
-    the mismatch is reported by pipeline name. Only the pipelines with a
-    static subscription can be checked this way, so this picks the first such
-    one rather than hard-coding a name that a later registry edit would
-    silently invalidate. Both spellings are readable - verify_pipeline_edges
-    greps for `.sub.subscribe` AND `.qpipe.subscribe_etl` - so only a
-    RUNTIME-chosen subscription (tap1) is excluded.
-    """
-    target = next(p for p in core.PIPELINES if p.subscribes and not p.subscribes_dynamic)
-    real = core.default_paths().scripts_dir
-    for p in core.PIPELINES:
-        (tmp_path / p.script).write_text((real / p.script).read_text())
-    (tmp_path / core.PIPELINE_LIB_SCRIPT).write_text((real / core.PIPELINE_LIB_SCRIPT).read_text())
-    # Flip the subscription to a table the registry does not declare - at the
-    # actual `.sub.subscribe[` call, not the first bare backtick-name in the
-    # file. The first draft replaced the first occurrence anywhere, which
-    # landed in a comment, left the real call intact, and the "negative"
-    # test passed the unmodified script as if drift had been detected.
-    # BOTH spellings, because a pipeline may subscribe directly or through
-    # the library, and this test picks its target from the registry rather
-    # than by name - so it must not assume which one that target uses. It
-    # asserted `.sub.subscribe` alone until three ETLs moved to
-    # `.qpipe.subscribe_etl` and the first static subscriber became one of
-    # them.
-    original = (tmp_path / target.script).read_text()
-    first = target.subscribes[0]
-    for prefix in (".sub.subscribe[`", f".qpipe.subscribe_etl[`{target.procname[:-1]};`"):
-        call = f"{prefix}{first}"
-        if call in original:
-            break
-    else:
-        raise AssertionError(f"no readable subscribe call for {first!r} in {target.script}")
-    drifted = original.replace(call, f"{prefix}not_a_declared_table", 1)
-    (tmp_path / target.script).write_text(drifted)
+    Make a copy of the tree in which one pipeline subscribes to a table the
+    registry does not declare for it, point the verifier at that copy, and
+    require the mismatch to be reported by pipeline name.
 
-    problems = core.verify_pipeline_edges(tmp_path)
+    Where the drift is INTRODUCED depends on the pipeline: a streaming job
+    declares its edges in its own file under src/etl/streaming/, because the
+    process script it runs under is generic and names no table at all.
+    Anything else spells the subscribe out in its own script. Both paths are
+    exercised here rather than assumed, so a pipeline moving from one to the
+    other fails this test rather than quietly skipping the check.
+    """
+    real = core.default_paths().scripts_dir
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for pipeline in core.PIPELINES:
+        (scripts / pipeline.script).write_text((real / pipeline.script).read_text())
+    (scripts / core.PIPELINE_LIB_SCRIPT).write_text((real / core.PIPELINE_LIB_SCRIPT).read_text())
+    real_jobs = real.parent / "src" / "etl" / "streaming"
+    jobs = tmp_path / "src" / "etl" / "streaming"
+    jobs.mkdir(parents=True)
+    for path in real_jobs.glob("*.q"):
+        (jobs / path.name).write_text(path.read_text())
+
+    target = next(p for p in core.PIPELINES if p.subscribes and not p.subscribes_dynamic)
+    first = target.subscribes[0]
+
+    if target.script == core.STREAM_RUNNER_SCRIPT:
+        # The job file that claims this process - found the same way the
+        # runner finds it, by procname, rather than by guessing the filename.
+        job_file = next(
+            path for path in jobs.glob("*.q") if f"`{target.procname};" in path.read_text()
+        )
+        original = job_file.read_text()
+        # Inside the register call, not the first backtick-name in the file:
+        # a job's own schemas and comments mention its tables by name long
+        # before it declares them, and drifting one of those would leave the
+        # declaration intact and this "negative" test passing over an
+        # unmodified file.
+        head, _, tail = original.partition(".qstream.register[")
+        assert tail, f"no .qstream.register call in {job_file.name}"
+        drifted_tail = tail.replace(f"`{first}", "`not_a_declared_table", 1)
+        assert drifted_tail != tail
+        job_file.write_text(head + ".qstream.register[" + drifted_tail)
+    else:
+        original = (scripts / target.script).read_text()
+        for prefix in (
+            ".sub.subscribe[`",
+            f".qpipe.subscribe_etl[`{target.procname[:-1]};`",
+        ):
+            call = f"{prefix}{first}"
+            if call in original:
+                break
+        else:
+            raise AssertionError(f"no readable subscribe call for {first!r} in {target.script}")
+        (scripts / target.script).write_text(
+            original.replace(call, f"{prefix}not_a_declared_table", 1)
+        )
+
+    problems = core.verify_pipeline_edges(scripts)
     assert any(target.procname in problem for problem in problems), problems
 
 
