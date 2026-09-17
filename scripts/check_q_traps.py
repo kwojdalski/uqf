@@ -993,6 +993,57 @@ def rule_reserved_name_in_embedded_q(path: str, text: str) -> list[Finding]:
     return findings
 
 
+def rule_interior_like_wildcard(path: str, lines: list[str]) -> list[Finding]:
+    r"""A `like` pattern with a wildcard in the MIDDLE, which q refuses.
+
+    q's `like` supports a leading `*`, a trailing `*`, or both. A `*` with
+    literal text on either side of it - `"*a*b*"`, `"*a*d"` - is not
+    implemented, and q's answer is a bare `'nyi`.
+
+    `'nyi` says "not yet implemented" and names nothing. It arrives from a
+    line that reads like ordinary pattern matching, so the first guess is
+    that the tool is broken rather than the pattern, which is exactly how
+    this cost an afternoon: a test asserting `out like "*<<<*>>>*"` on a
+    coverage report ERRORED where it should have simply failed, and the
+    error was read as a fault in the thing being tested.
+
+    The fix is always the same and is never worse: two `like` tests joined
+    with `and`, each with at most one interior region.
+
+    Character classes are left alone. `"*[abc]*"` is a class, not a
+    wildcard, and `?` is a single-character wildcard q handles fine.
+
+    False positives in this repo: 0 - nothing in src/, scripts/, tests/ or
+    either vendored TorQ tree uses the form.
+    """
+    findings = []
+    for n, raw in enumerate(lines, 1):
+        code = _strip_comments(raw)
+        for match in re.finditer(r'\blike\s*"([^"]*)"', code):
+            pattern = match.group(1)
+            core = pattern
+            if core.startswith("*"):
+                core = core[1:]
+            if core.endswith("*"):
+                core = core[:-1]
+            if "*" not in core:
+                continue
+            findings.append(
+                Finding(
+                    path=path,
+                    line=n,
+                    rule="interior-like-wildcard",
+                    detail=f'like "{pattern}"',
+                    why=(
+                        "q's like takes a leading and/or trailing * only; an interior one "
+                        "throws a bare 'nyi that names nothing. Split it into two like "
+                        "tests joined with `and`."
+                    ),
+                )
+            )
+    return findings
+
+
 LINE_RULES = (
     rule_bare_slash_comment_block,
     rule_reserved_parameter_names,
@@ -1002,6 +1053,7 @@ LINE_RULES = (
     rule_datetime_type,
     rule_invalid_string_escape,
     rule_reserved_toplevel_definition,
+    rule_interior_like_wildcard,
 )
 TEXT_RULES = (
     rule_multiparam_lambda_under_at,
