@@ -486,7 +486,7 @@ require_tape:{[tape]
     unknown:distinct (exec action from tape) except tape_actions;
     if[count unknown;
         '"require_tape: unknown action(s) ",(", " sv string unknown),
-         " - expected one of ",", " sv string tape_actions,
+         " - expected one of ",(", " sv string tape_actions),
          ". An unmatched action makes every trade-based ratio report on an empty set rather than erroring"];
     ts:exec time from tape;
     if[not ts~asc ts;

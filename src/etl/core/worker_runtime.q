@@ -189,7 +189,7 @@ is_dry_run:{[] @[{.qwcfg.get_flag `dry_run};::;{0b}]}
 commit:{[dry;effect;action;args]
     if[not effect in suppressed_in_dry_run;
         '"commit: ",string[effect]," is not one of the effects ETL-14 suppresses (",
-         ", " sv string suppressed_in_dry_run,") - add it there deliberately rather than bypassing the gate"];
+         (", " sv string suppressed_in_dry_run),") - add it there deliberately rather than bypassing the gate"];
     / `f . ()` is a TYPE error rather than a niladic call; the unary-null
     / argument list is what actually applies a niladic function.
     applied:$[0=count args; enlist(::); args];
@@ -351,7 +351,7 @@ require_dependencies:{[worker]
     missing:needed where not needed in live;
     if[count missing;
         '"require_dependencies: ",string[worker]," cannot start - no connection to ",
-         ", " sv string missing,
+         (", " sv string missing),
          " (declared dependencies must resolve through .servers at init, ETL-16)"];
     worker}
 
