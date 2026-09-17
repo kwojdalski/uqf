@@ -22,7 +22,7 @@ from typing import Any
 import polars as pl
 import pytest
 
-from torq_orchestrator import runtime, schema_view
+from torq_orchestrator import listing, runtime, schema_view
 from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 
 #: Tables whose `meta` exercises each translation schema_view makes.
@@ -230,3 +230,65 @@ def test_a_meta_cell_decodes_bytes_and_none(raw, text):
     """kola hands back bytes for q char columns and str for symbols, which
     are the same thing to a reader."""
     assert schema_view._decode(raw) == text
+
+
+# ------------------------------------------------ heartbeat states (listing)
+
+
+def test_an_unreachable_monitor_is_none_not_an_empty_all_clear(monkeypatch):
+    """None means "monitoring could not be reached"; {} would mean "heard
+    from nobody". Rendering one as the other turns a monitoring gap into an
+    all-clear, or an all-clear into a panic."""
+    monkeypatch.setattr(listing, "_monitor_port", lambda paths, base_port: 1)
+
+    def unreachable(expr, port):
+        raise ConnectionRefusedError("nothing listening")
+
+    monkeypatch.setattr(listing, "query", unreachable)
+    assert listing.heartbeat_states(_paths()) is None
+
+
+def test_heartbeat_states_reads_monitor1_s_table(monkeypatch):
+    monkeypatch.setattr(listing, "_monitor_port", lambda paths, base_port: 6059)
+    seen: dict[str, Any] = {}
+
+    def answer(expr, port):
+        seen["port"] = port
+        return pl.DataFrame({"procname": ["rdb1"], "warning": [False], "error": [False]})
+
+    monkeypatch.setattr(listing, "query", answer)
+    assert listing.heartbeat_states(_paths(), base_port=6050) == {"rdb1": "ok"}
+    assert seen["port"] == 6059, "the monitor's port comes from the registry"
+
+
+def test_the_monitor_port_is_refused_when_monitor1_is_not_declared(monkeypatch):
+    monkeypatch.setattr(
+        listing, "_list_processes", lambda paths, base_port: [{"procname": "rdb1", "port": "6052"}]
+    )
+    with pytest.raises(UqfStackError, match="not a declared process"):
+        listing._monitor_port(_paths(), 6050)
+
+
+def test_the_monitor_port_is_resolved_from_the_registry(monkeypatch):
+    monkeypatch.setattr(
+        listing,
+        "_list_processes",
+        lambda paths, base_port: [{"procname": listing.MONITOR_PROCNAME, "port": "6061"}],
+    )
+    assert listing._monitor_port(_paths(), 6050) == 6061
+
+
+def test_error_outranks_warning_and_nameless_rows_are_skipped():
+    """A process past the error tolerance is past the warning one too;
+    reporting the lesser would understate it."""
+    rows = [
+        {"procname": "rdb1", "warning": True, "error": True},
+        {"procname": "hdb1", "warning": True, "error": False},
+        {"procname": "gw1", "warning": False, "error": False},
+        {"procname": "", "warning": True, "error": True},
+    ]
+    assert listing._heartbeat_by_procname(rows) == {"rdb1": "error", "hdb1": "warning", "gw1": "ok"}
+
+
+def test_no_rows_is_an_empty_mapping():
+    assert listing._heartbeat_by_procname(None) == {}
