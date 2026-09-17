@@ -96,7 +96,7 @@ If the issue is already claimed by another session, skip it and try the next one
   1. Check if already claimed with `/claim`
   2. If available, claim it and add to work queue
   3. If unavailable, skip and try next
-- Create dedicated branch per issue if needed
+- Every claimed issue gets its own git worktree on its own branch (see CLAUDE.md) - never a branch switch in the main checkout
 - Link related issues (dependencies, blockers)
 
 ### 7. Automatic Updates
@@ -123,10 +123,11 @@ For each issue, the skill generates:
 
 **Next Steps:**
 1. /claim <number>  # Claim the issue before starting work
-2. git checkout -b fix/issue-<number>
-3. Implement fix and run `./q tests/run_tests.q` (both interpreters if available)
-4. git push origin fix/issue-<number>
+2. git worktree add .claude/worktrees/issue-<number> -b kwojdalski/issue-<number>-<slug> origin/master
+3. Implement fix inside that worktree and run `./q tests/run_tests.q` (both interpreters if available)
+4. git push origin kwojdalski/issue-<number>-<slug>
 5. /release <number> --status resolved
+6. git worktree remove .claude/worktrees/issue-<number>
 ```
 
 ## Integration
