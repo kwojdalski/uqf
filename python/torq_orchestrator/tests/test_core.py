@@ -506,6 +506,22 @@ def test_every_process_has_a_configured_port(fake_paths: core.UqfStackPaths):
     assert not missing, f"no configured port for {missing}"
 
 
+def test_process_choices_cover_every_process_and_apply_overrides(fake_paths: core.UqfStackPaths):
+    """The list a picker offers is the list `start all` acts on, overrides
+    included: a startwithall set through config-set must be the value
+    reported, or the picker's "started by all" hint lies about exactly the
+    processes someone deliberately changed."""
+    core.set_process_config(fake_paths, "discovery1", "startwithall", "0")
+    choices = {row["procname"]: row for row in core.list_process_choices(fake_paths)}
+    assert set(choices) == set(core.list_process_names(fake_paths))
+    assert choices["discovery1"] == {
+        "procname": "discovery1",
+        "proctype": "discovery",
+        "startwithall": "0",
+    }
+    assert all(row["startwithall"] in ("0", "1") for row in choices.values())
+
+
 def test_print_recent_logs_raises_when_no_log_files(fake_paths: core.UqfStackPaths):
     with pytest.raises(core.UqfStackError):
         core.print_recent_logs(fake_paths, "discovery1")

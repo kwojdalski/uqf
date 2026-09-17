@@ -5,6 +5,7 @@ import {
   type Coverage,
   type BackfillStarted,
   type CommandResult,
+  type ControlProcess,
   type ControlStatus,
   type CoverageRequest,
   type ProcessConfigResult,
@@ -644,6 +645,189 @@ function OpsView({
     </>
   );
 }
+/** torq.sh's selector for a chosen set: "all", or the names joined by
+ * spaces. "all" is sent as the literal word rather than every name spelled
+ * out, so what torq.sh does with it - startwithall=1 only - stays torq.sh's
+ * decision and matches `uqf-stack start all`.
+ */
+export function selectorFor(
+  mode: "all" | "pick",
+  picked: ReadonlySet<string>,
+): string {
+  return mode === "all" ? "all" : [...picked].join(" ");
+}
+
+/** Choose which processes a lifecycle action applies to.
+ *
+ * A closed list rather than a free-text selector: the names come from the
+ * API, which reads the orchestrator's own effective process.csv, so a name
+ * cannot be mistyped and learned about from torq.sh's exit code. Grouped by
+ * proctype, because "restart every feed" is a thing an operator does and a
+ * flat list of thirty names is not how they think of it.
+ *
+ * Liveness comes from /ops/processes when the API has it configured. It is
+ * a hint, not a precondition - the picker works without it.
+ */
+function ProcessPicker({
+  processes,
+  mode,
+  picked,
+  onChange,
+  liveness,
+}: {
+  processes: ControlProcess[];
+  mode: "all" | "pick";
+  picked: ReadonlySet<string>;
+  onChange: (mode: "all" | "pick", picked: ReadonlySet<string>) => void;
+  liveness: Map<string, boolean> | null;
+}) {
+  const groups = new Map<string, ControlProcess[]>();
+  for (const p of processes) {
+    const list = groups.get(p.proctype) ?? [];
+    list.push(p);
+    groups.set(p.proctype, list);
+  }
+  const pick = (names: string[], on: boolean) => {
+    const next = new Set(picked);
+    for (const n of names)
+      if (on) next.add(n);
+      else next.delete(n);
+    onChange("pick", next);
+  };
+  const startedByAll = processes
+    .filter((p) => p.start_with_all)
+    .map((p) => p.procname);
+  const count = mode === "all" ? startedByAll.length : picked.size;
+
+  return (
+    <fieldset className="picker">
+      <legend>
+        Processes
+        <span className="muted">
+          {" "}
+          {count} selected
+          {mode === "all" ? " (torq.sh “all”: startwithall=1)" : ""}
+        </span>
+      </legend>
+      <div className="picker-quick">
+        <button
+          type="button"
+          className={mode === "all" ? "chip active" : "chip"}
+          onClick={() => onChange("all", picked)}
+        >
+          all
+        </button>
+        <button
+          type="button"
+          className="chip"
+          onClick={() => onChange("pick", new Set(startedByAll))}
+        >
+          startwithall only
+        </button>
+        {liveness && (
+          <>
+            <button
+              type="button"
+              className="chip"
+              onClick={() =>
+                onChange(
+                  "pick",
+                  new Set(
+                    processes
+                      .filter((p) => liveness.get(p.procname) === false)
+                      .map((p) => p.procname),
+                  ),
+                )
+              }
+            >
+              down only
+            </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={() =>
+                onChange(
+                  "pick",
+                  new Set(
+                    processes
+                      .filter((p) => liveness.get(p.procname) === true)
+                      .map((p) => p.procname),
+                  ),
+                )
+              }
+            >
+              up only
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          className="chip"
+          onClick={() => onChange("pick", new Set())}
+        >
+          none
+        </button>
+      </div>
+      <div className="picker-groups">
+        {[...groups.entries()].map(([proctype, list]) => {
+          const names = list.map((p) => p.procname);
+          const chosen = names.filter((n) => picked.has(n)).length;
+          return (
+            <div key={proctype} className="picker-group">
+              <label className="picker-row picker-head">
+                <input
+                  type="checkbox"
+                  aria-label={`every ${proctype}`}
+                  checked={mode === "pick" && chosen === names.length}
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate =
+                        mode === "pick" && chosen > 0 && chosen < names.length;
+                  }}
+                  onChange={(e) => pick(names, e.target.checked)}
+                />
+                <span className="picker-type">{proctype}</span>
+                <span className="muted">{names.length}</span>
+              </label>
+              {list.map((p) => {
+                const up = liveness?.get(p.procname);
+                return (
+                  <label key={p.procname} className="picker-row">
+                    <input
+                      type="checkbox"
+                      checked={
+                        mode === "all"
+                          ? p.start_with_all
+                          : picked.has(p.procname)
+                      }
+                      disabled={mode === "all"}
+                      onChange={(e) => pick([p.procname], e.target.checked)}
+                    />
+                    <code>{p.procname}</code>
+                    {up !== undefined && (
+                      <span className={up ? "badge up" : "badge down"}>
+                        {up ? "up" : "down"}
+                      </span>
+                    )}
+                    {!p.start_with_all && (
+                      <span
+                        className="muted"
+                        title="startwithall=0: not part of “all”"
+                      >
+                        manual
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 /** The only view that CHANGES anything.
  *
  * It asks `/control` first and renders nothing actionable when writes are
@@ -656,7 +840,22 @@ function ControlView() {
   const [result, setResult] = useState<string>("");
   const [error, setError] = useState("");
 
-  const [procs, setProcs] = useState("all");
+  const [mode, setMode] = useState<"all" | "pick">("all");
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  // Liveness for the picker, when the API has the fleet configured. The
+  // error is deliberately not rendered here: a missing
+  // UQF_FRONTEND_PROCESS_CSV is the Fleet view's problem to report, and the
+  // picker is complete without it.
+  const fleet = useResource<OpsData>("/ops/processes");
+  const liveness = fleet.data?.processes
+    ? new Map(
+        fleet.data.processes.map((row) => [
+          String(row.procname),
+          Boolean(row.up),
+        ]),
+      )
+    : null;
+  const procs = selectorFor(mode, picked);
   const [cfg, setCfg] = useState({ procname: "", field: "", value: "" });
   const [wcfg, setWcfg] = useState({ key: "", value: "" });
   const [bf, setBf] = useState({
@@ -720,23 +919,28 @@ function ControlView() {
         }}
       >
         <h2>Processes</h2>
-        <label>
-          Selector (a name, several separated by spaces, or “all”)
-          <input
-            value={procs}
-            onChange={(e) => setProcs(e.target.value)}
-            required
-          />
-        </label>
+        <ProcessPicker
+          processes={status.data.processes}
+          mode={mode}
+          picked={picked}
+          onChange={(m, p) => {
+            setMode(m);
+            setPicked(p);
+          }}
+          liveness={liveness}
+        />
         <div className="form-footer">
-          <span>Runs torq.sh. “clean” is deliberately not offered here.</span>
+          <span>
+            Runs torq.sh on <code>{procs || "nothing"}</code>. “clean” is
+            deliberately not offered here.
+          </span>
           <span>
             {status.data.lifecycle_actions.map((action) => (
               <button
                 key={action}
                 type="button"
                 className={action === "stop" ? "danger" : "primary"}
-                disabled={busy !== ""}
+                disabled={busy !== "" || procs === ""}
                 onClick={() =>
                   run(action, async () => {
                     const r = await mutate<CommandResult>(

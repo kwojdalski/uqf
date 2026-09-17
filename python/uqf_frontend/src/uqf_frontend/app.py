@@ -334,10 +334,12 @@ def create_app(
         403 on a real action is a poor way to find out.
         """
         authorise(request)
+        enabled = settings.enable_writes
         return ControlStatusResponse(
-            writes_enabled=settings.enable_writes,
+            writes_enabled=enabled,
             lifecycle_actions=list(control.LIFECYCLE_ACTIONS),
-            settable_fields=control.settable_fields(settings) if settings.enable_writes else [],
+            settable_fields=control.settable_fields(settings) if enabled else [],
+            processes=control.process_choices(settings) if enabled else [],
             poll_seconds=ops.POLL_SECONDS["processes"],
         )
 

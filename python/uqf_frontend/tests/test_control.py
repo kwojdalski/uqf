@@ -96,11 +96,37 @@ def test_the_control_status_route_works_with_writes_off(client):
     assert body["settable_fields"] == []
 
 
-def test_the_control_status_route_lists_fields_when_enabled(writeable):
+def test_the_control_status_route_lists_fields_when_enabled(writeable, monkeypatch):
+    _patch_core(monkeypatch, list_process_choices=lambda paths: [])
     body = writeable.get("/control").json()
     assert body["writes_enabled"] is True
     assert "startwithall" in body["settable_fields"]
     assert body["lifecycle_actions"] == ["start", "stop", "restart"]
+
+
+def test_the_control_status_route_lists_the_processes_a_selector_may_name(writeable, monkeypatch):
+    """A picker over a closed list, like settable_fields: the rows are the
+    orchestrator's own effective process.csv, so what the UI offers and what
+    `start all` acts on cannot differ. startwithall arrives as the string
+    process.csv carries and leaves as a boolean."""
+    _patch_core(
+        monkeypatch,
+        list_process_choices=lambda paths: [
+            {"procname": "rdb1", "proctype": "rdb", "startwithall": "1"},
+            {"procname": "cross1", "proctype": "metrics", "startwithall": "0"},
+        ],
+    )
+    body = writeable.get("/control").json()
+    assert body["processes"] == [
+        {"procname": "rdb1", "proctype": "rdb", "start_with_all": True},
+        {"procname": "cross1", "proctype": "metrics", "start_with_all": False},
+    ]
+
+
+def test_the_process_list_is_empty_while_writes_are_off(client):
+    """Nothing is read from the stack tree for a read-only deployment - the
+    same posture as settable_fields."""
+    assert client.get("/control").json()["processes"] == []
 
 
 # ---------------------------------------------------------- lifecycle

@@ -166,6 +166,27 @@ def settable_fields(settings: Settings) -> list[str]:
     return sorted(core.PROCESS_CSV_FIELDS)
 
 
+def process_choices(settings: Settings) -> list[dict[str, Any]]:
+    """Which processes a lifecycle selector may name.
+
+    Served for the same reason settable_fields is: a picker over a closed
+    list rather than a free-text selector a caller mistypes and learns about
+    from torq.sh's exit code. The rows are the orchestrator's effective
+    process.csv - vendored, pipelines, extras, overrides - so the list here
+    and the list `uqf-stack start all` acts on cannot differ.
+    """
+    from torq_orchestrator import core
+
+    return [
+        {
+            "procname": row["procname"],
+            "proctype": row["proctype"],
+            "start_with_all": row["startwithall"] == "1",
+        }
+        for row in core.list_process_choices(_paths(settings))
+    ]
+
+
 #: Set one `.qwcfg` override in a live process.
 #:
 #: `.qwcfg.set_layers[overrides;yaml;defaults]` replaces all three layers, so

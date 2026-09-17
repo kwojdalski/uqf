@@ -197,10 +197,16 @@ export function validateRange(value: CoverageRequest) {
 
 // --- control (writes) ------------------------------------------------------
 
+export interface ControlProcess {
+  procname: string;
+  proctype: string;
+  start_with_all: boolean;
+}
 export interface ControlStatus extends Pollable {
   writes_enabled: boolean;
   lifecycle_actions: string[];
   settable_fields: string[];
+  processes: ControlProcess[];
 }
 export interface CommandResult {
   action: string;

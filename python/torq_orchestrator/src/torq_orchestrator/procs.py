@@ -259,6 +259,30 @@ def list_process_names(paths: UqfStackPaths) -> list[str]:
     return [row["procname"] for row in _base_process_rows(paths)]
 
 
+def list_process_choices(paths: UqfStackPaths) -> list[dict[str, str]]:
+    """Every process a lifecycle selector may name, with what a picker shows.
+
+    procname, proctype and startwithall, from the same effective rows torq.sh
+    starts from - vendored process.csv, the pipelines, extra_processes.csv -
+    with process_overrides.csv applied, so a startwithall a user set through
+    config-set is the one reported. Nothing is resolved beyond that: a picker
+    needs to know what CAN be started and which are started by "all", not
+    what port each would take.
+    """
+    overrides = _read_overrides(paths)
+    out: list[dict[str, str]] = []
+    for row in _base_process_rows(paths):
+        merged = {**row, **overrides.get(row["procname"], {})}
+        out.append(
+            {
+                "procname": merged["procname"],
+                "proctype": merged["proctype"],
+                "startwithall": merged.get("startwithall", ""),
+            }
+        )
+    return out
+
+
 # process.csv's two placeholder styles: `${VAR}` / `$VAR` (shell parameter
 # expansion, resolved via envsubst at runtime - handled here by
 # string.Template, which uses the same syntax) inside e.g. `load`/`U`/
