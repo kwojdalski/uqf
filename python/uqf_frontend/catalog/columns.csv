@@ -15,6 +15,7 @@ demo_deals,side,symbol
 demo_deals,notional,float
 demo_deals,rate,float
 etl_coverage,dataset,symbol
+etl_coverage,partition,symbol
 etl_coverage,source_version,symbol
 etl_coverage,range_from,timestamp
 etl_coverage,range_to,timestamp

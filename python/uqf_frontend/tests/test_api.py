@@ -148,7 +148,9 @@ def test_coverage_composes_adjacent_intervals(client_for):
             {"range_from": dt.datetime(2026, 9, 14), "range_to": dt.datetime(2026, 9, 15)},
         ]
     )
-    resp = client_for(gw).get("/coverage", params={"dataset": "trades", "source_version": "v1"})
+    resp = client_for(gw).get(
+        "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v1"}
+    )
     body = resp.json()
     assert len(body["covered"]) == 1, "boundary-adjacent intervals must compose"
 
@@ -163,6 +165,7 @@ def test_coverage_reports_gaps_for_a_requested_range(client_for):
             "/coverage",
             params={
                 "dataset": "trades",
+                "partition": "",
                 "source_version": "v1",
                 "range_from": "2026-09-13T00:00:00Z",
                 "range_to": "2026-09-15T00:00:00Z",
@@ -178,16 +181,18 @@ def test_coverage_reports_gaps_for_a_requested_range(client_for):
 def test_coverage_filters_on_source_version(client_for):
     """ETL-09: the version is passed to q, not applied afterwards in Python."""
     gw = _cov([])
-    client_for(gw).get("/coverage", params={"dataset": "trades", "source_version": "v7"})
+    client_for(gw).get(
+        "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v7"}
+    )
     program, args, _ = gw.routed[-1]
-    assert args[:2] == ("trades", "v7")
+    assert args[:3] == ("trades", "", "v7")
 
 
 def test_coverage_passes_an_as_of_to_q(client_for):
     """D-11: a coverage row is true until superseded, so the read needs an
     as-of.
 
-    Asserted as a third argument rather than by exact tuple, because the
+    Asserted as the LAST argument rather than by exact tuple, because the
     value is a timestamp taken at request time. What matters is that one is
     sent at all: without it the q program would report withdrawn claims as
     current, and would do so silently.
@@ -195,11 +200,13 @@ def test_coverage_passes_an_as_of_to_q(client_for):
     import datetime as dt
 
     gw = _cov([])
-    client_for(gw).get("/coverage", params={"dataset": "trades", "source_version": "v7"})
+    client_for(gw).get(
+        "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v7"}
+    )
     _program, args, _tier = gw.routed[-1]
-    assert len(args) == 3, f"expected (dataset, version, as_of), got {args}"
-    assert isinstance(args[2], dt.datetime)
-    assert args[2].tzinfo is not None, "the as-of must be timezone-aware, not naive"
+    assert len(args) == 4, f"expected (dataset, partition, version, as_of), got {args}"
+    assert isinstance(args[-1], dt.datetime)
+    assert args[-1].tzinfo is not None, "the as-of must be timezone-aware, not naive"
 
 
 def test_query_is_refused_when_required_coverage_has_gaps(client_for):
@@ -213,6 +220,7 @@ def test_query_is_refused_when_required_coverage_has_gaps(client_for):
             "filters": [],
             "require_coverage": {
                 "dataset": "trades",
+                "partition": "",
                 "source_version": "v1",
                 "range_from": "2026-09-13T00:00:00Z",
                 "range_to": "2026-09-16T00:00:00Z",
@@ -238,6 +246,7 @@ def test_query_proceeds_when_required_coverage_is_complete(client_for):
             "filters": [],
             "require_coverage": {
                 "dataset": "trades",
+                "partition": "",
                 "source_version": "v1",
                 "range_from": "2026-09-13T00:00:00Z",
                 "range_to": "2026-09-16T00:00:00Z",
@@ -258,6 +267,7 @@ def test_coverage_precheck_runs_before_the_select(client_for):
             "filters": [],
             "require_coverage": {
                 "dataset": "trades",
+                "partition": "",
                 "source_version": "v1",
                 "range_from": "2026-09-13T00:00:00Z",
                 "range_to": "2026-09-14T00:00:00Z",
@@ -268,6 +278,89 @@ def test_coverage_precheck_runs_before_the_select(client_for):
 
     programs = [p for p, _, _ in gw.routed]
     assert queries.SELECT not in programs
+
+
+def test_coverage_requires_a_partition(client):
+    """#185, the HTTP half.
+
+    A coverage read that names a dataset but not a partition aggregates
+    across every partition, so a range published for EURUSD alone reports as
+    covered for every symbol. Omitting it is a 422 naming the field, not a
+    plausible answer - the same reasoning that makes source_version required.
+    """
+    resp = client.get("/coverage", params={"dataset": "trades", "source_version": "v1"})
+    assert resp.status_code == 422
+    assert any(d["loc"][-1] == "partition" for d in resp.json()["detail"])
+
+
+def test_the_empty_partition_is_the_sentinel_not_a_wildcard(client_for):
+    """ "" is a VALUE, and it reaches q as one.
+
+    It must not be dropped or turned into a match-anything filter on the way:
+    q maps it to the null symbol, which is .qcov's "no partition dimension"
+    sentinel and matches only rows recorded under it.
+    """
+    gw = _cov([])
+    client_for(gw).get(
+        "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v1"}
+    )
+    _program, args, _tier = gw.routed[-1]
+    assert args[1] == "", "the sentinel is passed through, not elided"
+
+
+def test_a_named_partition_reaches_q(client_for):
+    gw = _cov([])
+    client_for(gw).get(
+        "/coverage", params={"dataset": "trades", "partition": "EURUSD", "source_version": "v1"}
+    )
+    _program, args, _tier = gw.routed[-1]
+    assert args[:3] == ("trades", "EURUSD", "v1")
+
+
+def test_the_coverage_precheck_carries_its_partition(client_for):
+    """The /query pre-check reads coverage too, so it needs the dimension for
+    the same reason - otherwise a query could be admitted on the strength of
+    a different partition's coverage."""
+    import datetime as dt
+
+    from uqf_frontend import queries
+
+    gw = _cov([{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 16)}])
+    gw._responses[queries.SELECT] = [{"sym": "EURUSD"}]
+    client_for(gw).post(
+        "/query",
+        json={
+            "table": "trades",
+            "filters": [],
+            "require_coverage": {
+                "dataset": "trades",
+                "partition": "EURUSD",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00Z",
+                "range_to": "2026-09-16T00:00:00Z",
+            },
+        },
+    )
+    cov_args = [a for prog, a, _ in gw.routed if prog == queries.COVERAGE][-1]
+    assert cov_args[1] == "EURUSD"
+
+
+def test_the_coverage_precheck_requires_a_partition(client):
+    """A body omitting it is refused by the model, not defaulted."""
+    resp = client.post(
+        "/query",
+        json={
+            "table": "trades",
+            "filters": [],
+            "require_coverage": {
+                "dataset": "trades",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00Z",
+                "range_to": "2026-09-16T00:00:00Z",
+            },
+        },
+    )
+    assert resp.status_code == 422
 
 
 def test_coverage_requires_a_source_version(client):
@@ -281,6 +374,7 @@ def test_coverage_rejects_a_naive_requested_range(client_for):
         "/coverage",
         params={
             "dataset": "trades",
+            "partition": "",
             "source_version": "v1",
             "range_from": "2026-09-13T00:00:00",
             "range_to": "2026-09-14T00:00:00",

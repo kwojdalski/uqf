@@ -73,7 +73,7 @@ test_a_full_run_publishes_the_windowed_rows:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
     .qddbf.run[];
-    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`v1;.z.p;.ddbftest.d 1;.ddbftest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
+    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`;`v1;.z.p;.ddbftest.d 1;.ddbftest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
 
 test_the_cursor_lands_on_the_range_end:{[t]
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
@@ -109,7 +109,7 @@ test_a_version_bump_re_runs_the_whole_range:{[t]
 / A retry after a partial run redoes only the gap. This is the case ETL-13
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]
-    .qcov.stage_completion[`demo_deals;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
+    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qddbf.run[];
     .qunit.assertEquals[r`windows_completed;2;"one day already published, two left to do"]};
@@ -118,7 +118,7 @@ test_a_partial_range_is_narrowed_to_the_gap:{[t]
 / covered day sits between two uncovered ones, so the plan must produce two
 / separate runs of windows rather than one 3-day sweep.
 test_a_middle_gap_does_not_bridge_covered_coverage:{[t]
-    .qcov.stage_completion[`demo_deals;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
+    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
     .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qddbf.run[];
     .qunit.assertEquals[r`windows_completed;2;"day 1 and day 3 are planned; day 2 is skipped, not spanned"]};
@@ -188,22 +188,64 @@ test_a_contract_breaking_source_fails_the_window:{[t]
 
 / --- the shell's own guards (#124, #60) ---------------------------------
 
-/ Coverage has no partition dimension, so two workers writing one dataset
-/ produce rows nothing can tell apart. If they cover different RANGES that
-/ composes correctly and is the design; if they cover different PARTITIONS
-/ of one range their coverage wrongly composes and a range covered for one
-/ partition reads as covered for all. Nothing distinguishes those at
-/ registration, so the conservative refusal forces the second case to be a
-/ deliberate decision.
-test_two_workers_may_not_claim_one_dataset:{[t]
+/ Two workers on one dataset AND one partition still produce coverage rows
+/ nothing can tell apart, so that pair is still refused. What changed with
+/ #185 is that the pair, not the dataset alone, is what has to be unique.
+test_two_workers_may_not_claim_one_dataset_and_partition:{[t]
     .qunit.assertError[{.qbw.define[`clashing_worker;x]};
         `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);
-        "a second worker on one dataset would produce coverage rows nothing can tell apart (#60)"]};
+        "a second worker on one dataset and partition would produce coverage rows nothing can tell apart (#60)"]};
 
 test_the_clash_error_names_the_existing_claimant:{[t]
     err:@[{.qbw.define[`clashing_worker;x]; ""};
         `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);{x}];
     .qunit.assertEquals[err like "*demo_deals_backfill*";1b;"the refusal names who already owns the dataset"]};
+
+/ --- what the partition dimension unlocks (#185) --------------------------
+
+/ THE POINT OF THE CHANGE. A backfill could not be parallelised: one worker
+/ per dataset, however large the range. Two workers filling different
+/ partitions of one dataset now register, because their coverage rows are
+/ distinguishable and no read composes them.
+test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
+    .qbw.define[`eurusd_slice;
+        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`EURUSD)];
+    .qunit.assertEquals[
+        .qbw.define[`usdjpy_slice;
+            `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`USDJPY)];
+        `usdjpy_slice;
+        "two partitions of one dataset are two distinguishable claims, so both register"];
+    .qbw.cfgs:(`eurusd_slice`usdjpy_slice) _ .qbw.cfgs;};
+
+/ The refusal has to survive the new dimension: same dataset, same partition,
+/ different worker is the case that was always wrong and still is.
+test_two_workers_may_not_claim_one_partition_of_a_dataset:{[t]
+    .qbw.define[`eurusd_slice;
+        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`EURUSD)];
+    err:@[{.qbw.define[`another_eurusd_slice;x]; ""};
+        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`EURUSD);{x}];
+    .qbw.cfgs:(enlist `eurusd_slice) _ .qbw.cfgs;
+    .qunit.assertEquals[err like "*eurusd_slice*";1b;
+        "the second claim on one dataset AND partition is refused, naming the holder"]};
+
+/ A worker that declares no partition gets the ` sentinel, so it keeps
+/ exactly the guarantee it had before the column existed - including being
+/ refused a second claimant.
+test_a_worker_declaring_no_partition_gets_the_sentinel:{[t]
+    .qunit.assertEquals[.qbw.partition_of `demo_deals_backfill;`;
+        "an undeclared partition resolves to `, not to (::)"]};
+
+test_a_declared_partition_is_stored_as_given:{[t]
+    .qbw.define[`eurusd_slice;
+        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`EURUSD)];
+    r:.qbw.partition_of `eurusd_slice;
+    .qbw.cfgs:(enlist `eurusd_slice) _ .qbw.cfgs;
+    .qunit.assertEquals[r;`EURUSD;"the declared partition is what coverage will be recorded under"]};
+
+test_a_non_symbol_partition_is_refused:{[t]
+    .qunit.assertError[{.qbw.define[`bad_slice;x]};
+        `ns`source`dataset`width`partition!(`.qddbf;`demo_deals;`demo_deals;1D;"EURUSD");
+        "a string partition would be recorded as a char vector and match no read"]};
 
 / Redefining the SAME worker must stay legal - the shell's define is called
 / at load, and reloading a worker file is ordinary.
@@ -213,11 +255,15 @@ test_a_worker_may_redeclare_itself:{[t]
         `demo_deals_backfill;
         "reloading a worker file re-runs its own define, which must not trip the clash guard"]};
 
-/ The two real workers declare distinct datasets, so the guard is satisfied
-/ by the tree as it stands rather than by luck.
-test_the_two_shipped_workers_claim_distinct_datasets:{[t]
-    ds:(value .qbw.cfgs)[;`dataset];
-    .qunit.assertEquals[count[ds];count distinct ds;"every registered worker owns its dataset alone"]};
+/ The two real workers declare distinct (dataset;partition) pairs, so the
+/ guard is satisfied by the tree as it stands rather than by luck. Keyed on
+/ the PAIR now: checking datasets alone would fail the day a dataset is
+/ deliberately split across workers, which is the thing #185 set out to allow.
+test_the_two_shipped_workers_claim_distinct_dataset_partitions:{[t]
+    c:value .qbw.cfgs;
+    claims:flip (c[;`dataset];c[;`partition]);
+    .qunit.assertEquals[count[claims];count distinct claims;
+        "every registered worker owns its dataset and partition alone"]};
 
 / --- the cursor is forward-only (D-09) ------------------------------------
 
@@ -324,7 +370,7 @@ test_a_failing_check_leaves_the_window_uncovered:{[t]
     / without it, is_covered would report the window published forever.
     .qddbf.init[.ddbftest.spec_for[`chk2;1;4]];
     .ddbftest.with_bad_fixture[{.qddbf.run[]}];
-    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`chk2;.z.p;.ddbftest.d 1;.ddbftest.d 4];0b;
+    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`;`chk2;.z.p;.ddbftest.d 1;.ddbftest.d 4];0b;
         "a window that failed its check is not recorded as covered"]};
 
 test_a_failing_check_counts_as_a_failed_window:{[t]

@@ -13,6 +13,12 @@ export interface Catalog {
 }
 export interface CoverageRequest {
   dataset: string;
+  // The slice to ask about. "" is the sentinel for a dataset with no
+  // partition dimension - not "any partition". The gateway requires the
+  // field, because a coverage read that omits it aggregates across every
+  // partition and reports a range published for one symbol as covered for
+  // all of them (#185).
+  partition: string;
   source_version: string;
   range_from: string;
   range_to: string;

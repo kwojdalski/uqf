@@ -24,9 +24,19 @@ class CoverageRequirement(BaseModel):
     FE-09. ``source_version`` is mandatory, not optional, because ETL-09 requires
     coverage consumers to filter on it - coverage under one source release
     says nothing about another.
+
+    ``partition`` is mandatory for the same reason and is NOT ``min_length=1``:
+    the empty string is the legitimate "this dataset has no partition
+    dimension" sentinel, which q records as the null symbol. Requiring the
+    field while allowing it to be empty is the distinction that matters - the
+    caller must say which slice they mean, and "the whole dataset" is one of
+    the things they can say, but silence is not (#185).
     """
 
     dataset: str = Field(min_length=1)
+    partition: str = Field(
+        description='the slice to check; "" for a dataset with no partition dimension'
+    )
     source_version: str = Field(min_length=1)
     range_from: str = Field(description="ISO-8601 with an explicit offset")
     range_to: str = Field(description="ISO-8601 with an explicit offset, exclusive")

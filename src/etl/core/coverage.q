@@ -35,41 +35,48 @@
 / .
 / ON THE PARTITION KEY, WHICH IS THE PART WORTH READING
 / .
-/ The frontend requirements describe coverage "by dataset, partition key, and
-/ time range", and there is no partition key here. That was the open worry on
-/ #60 - if a real ledger carried one, a query filtering on dataset and
-/ version alone would aggregate ACROSS partitions and report a range covered
-/ in one partition as covered everywhere.
+/ This column used to be absent, and the block here argued for its absence:
+/ nothing backfilled one partition at a time, so a partition column would
+/ hold one value per dataset and widen every signature for nothing. The
+/ argument named the condition that would overturn it - "a worker that
+/ backfills per partition, per sym, per venue, per region" - and that is the
+/ condition issue #185 raised. A backfill could not be PARALLELISED, because
+/ .qbw.define had to refuse two workers on one dataset, because their
+/ coverage would wrongly compose. For a framework whose principal job is
+/ backfill, that was the ceiling worth lifting.
 / .
-/ It is deliberately absent, because coverage in this tree has no partition
-/ dimension to record. There is exactly one caller of stage_completion -
-/ .qwrt.finish_window - and it takes (dataset; source_version; range_from;
-/ range_to; rows). A bounded worker covers a WHOLE dataset for a window;
-/ nothing backfills one partition at a time. A partition-key column would
-/ hold one value per dataset and widen every signature below for nothing.
+/ So `partition` is now the fourth dimension of the coverage key, and it is a
+/ REQUIRED parameter on write AND on read, for the reason source_version is
+/ (ETL-09): an optional filter is one a caller forgets, and forgetting THIS
+/ one reports a gap-ridden range as complete. It is required by ARITY - every
+/ signature below takes it positionally - so omitting it is an arity error at
+/ the call site, never a silent default.
 / .
-/ WHAT WOULD CHANGE THAT ANSWER
+/ NO READ UNIONS ACROSS PARTITIONS. Every read filters `partition=part` with
+/ equality, so coverage of `EURUSD says nothing about `USDJPY and cannot be
+/ composed into it. That is not a convention to remember; it is what equality
+/ does, and it is the whole reason the column exists rather than being
+/ recovered from the dataset name by string surgery.
 / .
-/ A worker that backfills per partition - per sym, per venue, per region.
-/ Then coverage genuinely needs the fourth dimension, and it must be a
-/ REQUIRED parameter for the same reason source_version is (ETL-09): an
-/ optional filter is one a caller forgets, and forgetting this one reports a
-/ gap-ridden range as complete.
+/ THE UNPARTITIONED SENTINEL is the null symbol, `. A dataset with no
+/ partition dimension records ` and reads `, and because the filter is
+/ equality, a read for ` does NOT match partitioned rows and a read for a
+/ partition does not match ` rows. The two populations cannot bleed into one
+/ another in either direction.
 / .
-/ That is not left to memory. .qbw.define refuses two workers declaring the
-/ same dataset, which is the concrete shape the problem takes - two things
-/ filling one dataset with no way to tell their coverage apart. A future
-/ per-partition worker trips that guard and has to make the decision
-/ deliberately.
+/ The sentinel is deliberately NOT refused the way a null source_version is.
+/ For source_version a null means "the caller forgot"; here it is a legitimate
+/ value meaning "this dataset has no partition dimension", and the protection
+/ against forgetting is arity, not a null check.
 / .
 / ON run_id, WHICH IS THE COLUMN THAT DID GET ADDED
 / .
 / Gap 2.3 of the pipeline-framework assessment: every column above describes
 / the WINDOW, and none described the EXECUTION, so "which materialisations
 / came from one run" and "were these two datasets built together" had no
-/ answer. run_id is that column. It differs from the partition key above in
-/ exactly the way that matters - it does NOT partition the data, so no read
-/ here filters on it and no existing query can aggregate across it wrongly.
+/ answer. run_id is that column. It differs from `partition` above in exactly
+/ the way that matters - it does NOT partition the data, so no read here
+/ filters on it and no existing query can aggregate across it wrongly.
 / Adding it cannot make a gap-ridden range report as complete; it can only
 / add attribution that was absent.
 / .
@@ -83,7 +90,7 @@
 / .
 / Deliberately one constant in one place: changing it should be an edit here
 / plus the writer's column list, not a hunt through the file.
-schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at`superseded_at`run_id
+schema:`dataset`partition`source_version`range_from`range_to`rows_published`recorded_at`superseded_at`run_id
 
 / Create the ledger if absent.
 / .
@@ -126,7 +133,8 @@ still_current:0Wp
 / @eg .qcov.init_ledger[]
 init_ledger:{[]
     if[not `etl_coverage in tables `.;
-        `etl_coverage set ([] dataset:`symbol$(); source_version:`symbol$();
+        `etl_coverage set ([] dataset:`symbol$(); partition:`symbol$();
+            source_version:`symbol$();
             range_from:`timestamp$(); range_to:`timestamp$();
             rows_published:`long$(); recorded_at:`timestamp$();
             superseded_at:`timestamp$(); run_id:`guid$())];
@@ -155,7 +163,8 @@ ledger:{[] value `etl_coverage}
 /                      before a single read is trusted.
 / .
 / That second case is why this exists. A ledger another process created may
-/ have a shape this file does not expect - a partition key, say - and then
+/ have a shape this file does not expect - a SECOND partitioning dimension,
+/ say - and then
 / every read here aggregates across whatever that column distinguishes, so a
 / range covered for one value of it reports as COMPLETE for all of them,
 / with no error, because every row found is valid.
@@ -180,10 +189,13 @@ attach:{[]
 / Refuse to trust a ledger whose shape is not the one this file declares.
 / .
 / Converts a SILENT wrong answer into a loud refusal. A ledger carrying an
-/ extra column that distinguishes rows - a partition key is the obvious one -
-/ makes every read here aggregate across it, so a range covered for one value
-/ reports as COMPLETE for all of them, and nothing errors because every row
-/ found is valid. A consumer then reads a gap-ridden range believing it whole.
+/ extra column that distinguishes rows - a venue, a region, a tier this tree
+/ does not know about - makes every read here aggregate across it, so a range
+/ covered for one value reports as COMPLETE for all of them, and nothing
+/ errors because every row found is valid. A consumer then reads a gap-ridden
+/ range believing it whole. `partition` is the one such column this tree DOES
+/ know about, which is exactly why it is declared and filtered on rather than
+/ tolerated.
 / .
 / With #60 closed this is no longer a guard against an unknown canonical
 / shape; it is a drift guard. The shape is decided (see the header), and this
@@ -381,6 +393,10 @@ current_run:{[] @[{.qrun.current[]};::;0Ng]}
 / Only ever called AFTER the underlying work is complete (ETL-07), which is
 / the same publish-before-acknowledge ordering ETL-05 requires of cursors.
 / @param dataset the dataset completed, e.g. `markouts
+/ @param partition the slice of that dataset this window covers - `EURUSD, a
+/   venue, a region - or ` when the dataset has no partition dimension.
+/   Required, and required positionally: see the header on why arity rather
+/   than a null check is what stops a caller forgetting it
 / @param source_version the immutable source-release label (ETL-09)
 / @param range_from window start
 / @param range_to window end, exclusive
@@ -388,8 +404,8 @@ current_run:{[] @[{.qrun.current[]};::;0Ng]}
 /   meaningful
 / @return the number of rows now in the ledger
 / @throws error if source_version is null, or the interval is empty/reversed
-/ @eg .qcov.stage_completion[`markouts;`v1;2026.09.13D00:00;2026.09.14D00:00;1234]
-stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
+/ @eg .qcov.stage_completion[`markouts;`EURUSD;`v1;2026.09.13D00:00;2026.09.14D00:00;1234]
+stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_published]
     if[null source_version;
         '"stage_completion: source_version must be set - coverage under one source release says nothing about another (ETL-09)"];
     require_interval[range_from;range_to];
@@ -401,7 +417,7 @@ stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
         reload[];
         `etl_coverage insert row;
         persist[]};
-        enlist (dataset;source_version;range_from;range_to;
+        enlist (dataset;partition;source_version;range_from;range_to;
                 "j"$rows_published;.z.p;still_current;current_run[])];
     count ledger[]}
 
@@ -431,28 +447,41 @@ stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
 / instant, so adjacency means what it meant before supersession existed.
 / Filtering after composing would merge a live interval with one that had
 / already been withdrawn.
-valid_at:{[ds;version;as_of]
+/ .
+/ `partition=part` is equality, never `in` and never omitted, so a read for
+/ one partition can see no other partition's rows and a read for the
+/ unpartitioned sentinel ` sees only unpartitioned rows. That is what makes
+/ "no read unions across partitions" a property of the code rather than a
+/ rule someone has to keep.
+valid_at:{[ds;part;version;as_of]
     init_ledger[];
     select range_from, range_to from ledger[]
-        where dataset=ds, source_version=version,
+        where dataset=ds, partition=part, source_version=version,
               recorded_at<=as_of, as_of<superseded_at}
 
 / The composed intervals covered for a dataset and source_version, as
 / understood at `as_of` (D-11).
 / @param as_of the instant to answer as of; .z.p for "now"
-/ @eg .qcov.intervals[`demo_deals;`v1;.z.p]
-intervals:{[ds;version;as_of]
-    compose valid_at[ds;version;as_of]}
+/ @param partition the slice to report on, or ` for an unpartitioned dataset
+/ @eg .qcov.intervals[`demo_deals;`;`v1;.z.p]
+intervals:{[ds;part;version;as_of]
+    compose valid_at[ds;part;version;as_of]}
 
-/ Is [range_from;range_to) fully covered for this dataset and release?
+/ Is [range_from;range_to) fully covered for this dataset, partition and
+/ release?
+/ .
+/ ONE PARTITION'S ANSWER, never several composed. A range covered for
+/ `EURUSD is not covered for `USDJPY, and asking this question without
+/ naming a partition would rebuild exactly the bug the column exists to
+/ prevent - which is why there is no such overload.
 / @return 1b when there are no gaps
-is_covered:{[ds;version;as_of;from_ts;to_ts]
-    0=count gaps[from_ts;to_ts;intervals[ds;version;as_of]]}
+is_covered:{[ds;part;version;as_of;from_ts;to_ts]
+    0=count gaps[from_ts;to_ts;intervals[ds;part;version;as_of]]}
 
 / The uncovered sub-ranges of a requested range, for a caller that wants to
 / narrow its request rather than be refused outright.
-missing:{[ds;version;as_of;from_ts;to_ts]
-    gaps[from_ts;to_ts;intervals[ds;version;as_of]]}
+missing:{[ds;part;version;as_of;from_ts;to_ts]
+    gaps[from_ts;to_ts;intervals[ds;part;version;as_of]]}
 
 / Admission check: refuse the caller unless the range is fully covered.
 / .
@@ -463,10 +492,10 @@ missing:{[ds;version;as_of;from_ts;to_ts]
 / and simply no longer in memory. Callers must therefore route this read,
 / not run it against a single tier.
 / @throws error naming the missing ranges when not fully covered
-require_covered:{[ds;version;as_of;from_ts;to_ts]
-    m:missing[ds;version;as_of;from_ts;to_ts];
+require_covered:{[ds;part;version;as_of;from_ts;to_ts]
+    m:missing[ds;part;version;as_of;from_ts;to_ts];
     if[count m;
-        '"require_covered: ",string[ds]," at source_version ",
+        '"require_covered: ",string[ds],"[",string[part],"] at source_version ",
          string[version]," is not fully published for [",
          string[from_ts],"; ",string[to_ts],") - missing: ",
          ", " sv {"[",string[x`range_from],"; ",string[x`range_to],")"} each m];
@@ -499,14 +528,20 @@ materialisations_of:{[id]
 / Distinct run ids on one dataset and version mean the coverage was assembled
 / across several executions, which is normal for a backfill run in slices and
 / is worth being able to see.
+/ .
+/ Partitioned, like every other read here: "which runs built EURUSD" and
+/ "which runs built this dataset" are different questions once a dataset is
+/ filled by several workers in parallel, and the second one is the sum of
+/ the first over every partition rather than a query of its own.
 / @param ds the dataset
+/ @param part the partition, or ` for an unpartitioned dataset
 / @param version the source release
 / @return the distinct run ids, in first-recorded order
-/ @eg .qcov.contributing_runs[`demo_deals;`v1]
-contributing_runs:{[ds;version]
+/ @eg .qcov.contributing_runs[`demo_deals;`;`v1]
+contributing_runs:{[ds;part;version]
     init_ledger[];
     distinct exec run_id from `recorded_at xasc ledger[]
-        where dataset=ds, source_version=version}
+        where dataset=ds, partition=part, source_version=version}
 
 / Withdraw the coverage claims overlapping [from_ts;to_ts), as of now.
 / .
@@ -525,31 +560,38 @@ contributing_runs:{[ds;version]
 / claim is no longer wholly true and leaving it standing would report the
 / restated days as still covered by the old belief. The caller republishes
 / whatever is still correct; this only withdraws.
+/ .
+/ WITHDRAWS ONE PARTITION'S CLAIMS, not the dataset's. Restating EURUSD must
+/ not withdraw USDJPY's coverage, which is what an unpartitioned supersede
+/ would do the moment a dataset is filled by more than one worker - and it
+/ would do it silently, leaving the other partitions reading as uncovered
+/ until someone republished them.
 / @param ds the dataset
+/ @param part the partition being restated, or ` for an unpartitioned dataset
 / @param version the source_version whose claims are being withdrawn
 / @param from_ts inclusive lower bound of the restated range
 / @param to_ts exclusive upper bound
 / @return the number of claims withdrawn
 / @throws error when the interval is not a proper half-open range
-/ @eg .qcov.supersede[`demo_deals;`v1;2026.09.12D00:00;2026.09.13D00:00]
-supersede:{[ds;version;from_ts;to_ts]
+/ @eg .qcov.supersede[`demo_deals;`;`v1;2026.09.12D00:00;2026.09.13D00:00]
+supersede:{[ds;part;version;from_ts;to_ts]
     require_interval[from_ts;to_ts];
     init_ledger[];
     / Read-modify-write under the lock, like stage_completion. A supersession
     / applied to a stale copy of the ledger would be lost by the next writer,
     / and a withdrawn claim silently coming back is the worst failure this
     / file has.
-    with_lock[{[ds;version;from_ts;to_ts]
+    with_lock[{[ds;part;version;from_ts;to_ts]
         reload[];
-        n:supersede_locked[ds;version;from_ts;to_ts];
+        n:supersede_locked[ds;part;version;from_ts;to_ts];
         persist[];
         n};
-        (ds;version;from_ts;to_ts)]}
+        (ds;part;version;from_ts;to_ts)]}
 
 / Private: the supersession itself, with the lock already held and the ledger
 / already reloaded. Split out so the locked wrapper above reads as what it is
 / rather than burying the interval algebra inside a lambda.
-supersede_locked:{[ds;version;from_ts;to_ts]
+supersede_locked:{[ds;part;version;from_ts;to_ts]
     now:.z.p;
     / `cur` is a LOCAL copy of still_current, not the namespace global.
     / Inside \d .qcov a bare name in a qSQL where-clause does not resolve to
@@ -561,7 +603,7 @@ supersede_locked:{[ds;version;from_ts;to_ts]
     / other ends. Both bounds are strict for that reason - [1;2) and [2;3)
     / share an endpoint and do NOT overlap.
     idx:exec i from ledger[]
-        where dataset=ds, source_version=version,
+        where dataset=ds, partition=part, source_version=version,
               superseded_at=cur,
               range_from<to_ts, from_ts<range_to;
     if[0=count idx; :0];
@@ -572,10 +614,14 @@ supersede_locked:{[ds;version;from_ts;to_ts]
 / .
 / The audit view. `intervals` answers "what is true", this answers "what was
 / ever said", which is the question a restatement makes worth asking.
-/ @return the ledger rows for this dataset/version, in record order
-/ @eg .qcov.history[`demo_deals;`v1]
-history:{[ds;version]
+/ @param ds the dataset
+/ @param part the partition, or ` for an unpartitioned dataset
+/ @param version the source release
+/ @return the ledger rows for this dataset/partition/version, in record order
+/ @eg .qcov.history[`demo_deals;`;`v1]
+history:{[ds;part;version]
     init_ledger[];
-    select from ledger[] where dataset=ds, source_version=version}
+    select from ledger[]
+        where dataset=ds, partition=part, source_version=version}
 
 \d .

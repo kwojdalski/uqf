@@ -152,11 +152,14 @@ pricing or execution function, say so and stop rather than adding it here.
   functions wired to nothing, which meant the coverage ledger could record a
   window as complete that had failed its own checks. A check that is not on
   the publish path is decoration.
-- **Don't widen a signature to carry a value that is always the same.** The
-  partition key was left out of `etl_coverage` for exactly this reason, and
-  `.qcov.schema`'s comment records the condition under which that answer
-  changes — a worker that backfills per partition. Read it before adding a
-  dimension.
+- **Don't widen a signature to carry a value that is always the same** —
+  but do widen it the moment the value stops being the same. The partition
+  key was left out of `etl_coverage` on that reasoning, and `.qcov.schema`'s
+  comment named the condition that would overturn it: a worker backfilling
+  per partition. #185 was that condition, and the column was added. Both
+  halves are the lesson — the comment is what made the reversal a decision
+  rather than a rediscovery, so when you leave a dimension out, write down
+  what would bring it back.
 - **Don't swallow a structural error** in a protected eval meant only for a
   legitimate "no data yet" case. A malformed table producing nulls with no
   error has bitten this tree before.

@@ -148,6 +148,7 @@ function initialRange(): CoverageRequest {
   start.setUTCDate(start.getUTCDate() - 1);
   return {
     dataset: "trades",
+    partition: "",
     source_version: "",
     range_from: start.toISOString(),
     range_to: end.toISOString(),
@@ -165,6 +166,7 @@ function RangeFields({
       {(
         [
           ["dataset", "Dataset"],
+          ["partition", "Partition (blank = whole dataset)"],
           ["source_version", "Source version"],
           ["range_from", "From (inclusive, timezone required)"],
           ["range_to", "To (exclusive, timezone required)"],
@@ -173,9 +175,19 @@ function RangeFields({
         <label key={key}>
           {label}
           <input
-            required
+            // Every field but `partition` must be non-empty. Blank IS the
+            // partition's meaningful value - the sentinel for a dataset with
+            // no partition dimension - so marking it required would make the
+            // commonest case unsubmittable.
+            required={key !== "partition"}
             value={value[key]}
-            placeholder={key === "source_version" ? "e.g. v1" : undefined}
+            placeholder={
+              key === "source_version"
+                ? "e.g. v1"
+                : key === "partition"
+                  ? "e.g. EURUSD"
+                  : undefined
+            }
             onChange={(event) =>
               onChange({ ...value, [key]: event.target.value })
             }
