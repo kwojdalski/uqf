@@ -306,6 +306,76 @@ def test_a_self_comparison_outside_qsql_is_not_flagged():
 # ---------------------------------------------------------------- wiring
 
 
+# ------------------------------------------- interior `like` wildcard
+
+
+def _like(src: str):
+    return cqt.rule_interior_like_wildcard("f.q", src.splitlines())
+
+
+def test_an_interior_wildcard_is_flagged():
+    """q throws a bare 'nyi on this, naming nothing - so it reads as a
+    broken tool rather than a broken pattern."""
+    assert _like('x:s like "*a*b*";')
+
+
+def test_a_wildcard_with_text_on_both_sides_is_flagged_without_a_trailing_star():
+    assert _like('x:s like "*a*d";')
+
+
+def test_the_finding_quotes_the_pattern():
+    # "an interior wildcard exists somewhere on this line" is not actionable
+    # when the line holds two like tests.
+    (finding,) = _like('x:s like "*a*b*";')
+    assert '"*a*b*"' in finding.detail
+
+
+def test_a_leading_and_trailing_star_is_fine():
+    """The form the whole repository uses. Flagging it would make the rule
+    fire on 30-odd correct lines and get the checker switched off."""
+    assert not _like('x:s like "*abc*";')
+
+
+def test_a_leading_star_alone_is_fine():
+    assert not _like('x:s like "*abc";')
+
+
+def test_a_trailing_star_alone_is_fine():
+    assert not _like('x:s like "abc*";')
+
+
+def test_no_wildcard_at_all_is_fine():
+    assert not _like('x:s like "abc";')
+
+
+def test_a_character_class_is_not_a_wildcard():
+    """`[abc]` is a class and `?` is a single-character wildcard; q handles
+    both. Only `*` has the restriction."""
+    assert not _like('x:s like "*[abc]*";')
+    assert not _like('x:s like "*a?c*";')
+
+
+def test_a_pattern_in_a_comment_is_ignored():
+    assert not _like('/ s like "*a*b*" would throw')
+
+
+def test_the_real_repository_has_none():
+    """Asserted against the tree rather than a sample: the rule was written
+    after the trap was hit, so it has to be true of the code that exists."""
+    import subprocess
+
+    repo = Path(__file__).resolve().parents[3]
+    tracked = subprocess.run(
+        ["git", "ls-files", "*.q"], capture_output=True, text=True, check=True, cwd=repo
+    ).stdout.split()
+    for name in tracked:
+        path = repo / name
+        if not path.is_file():
+            continue
+        found = cqt.rule_interior_like_wildcard(name, path.read_text(errors="replace").splitlines())
+        assert not found, f"{name}: {found}"
+
+
 def test_every_rule_is_registered():
     """A rule defined but never called would pass silently - which is this
     checker's own version of the bug it exists to catch.

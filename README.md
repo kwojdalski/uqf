@@ -287,6 +287,44 @@ number worse than none:
   the originals cannot be reached. (They were, once, for exactly one run —
   hence the test that pins it.)
 
+#### `.cov` — the KX-shaped q API
+
+`scripts/coverage.q` is the same idea at a different granularity, with
+[KX's own coverage API](https://code.kx.com/developer/libraries/code-coverage/):
+
+```q
+\l scripts/coverage.q
+.cov.format.display .cov.run[.qfwd.fwd_cont; 1.10 0.02 0.01 0.5; (enlist `namespaces)!enlist `.qfwd]
+```
+
+```
+Coverage: 0.3% of 10913 tracked character(s) in 39 function(s)
+38 function(s) with incomplete coverage
+
+.qfwd.fwd_simple  0%
+X  {[spot;rd;rf;t] <<<spot*.qrates.growth_simple[rd;t]%.qrates.growth_simple[rf;t]>>>}
+
+.qfwd.fwd_cont  100%
+   {[spot;rd;rf;t] spot*.qrates.growth_cont[rd-rf;t]}
+```
+
+One call into `.qfwd`, so one function ran and thirty-eight did not — which
+is the question this API answers.
+
+Same three entry points (`.cov.run`, `.cov.format.go`, `.cov.format.display`),
+same settings keys (`context`, `functions`, `ignoreFunctions`, `namespaces`,
+`ignoreNamespaces`), same results columns and the same `<<<>>>` / `X` marks.
+It counts **lines and branches separately**, so an untaken `$` arm shows up
+even though the statement containing it ran — and it counts loop
+*iterations*, not just whether a loop ran.
+
+**The two tools answer different questions, and neither subsumes the other.**
+`.cov` instruments functions already loaded in a session, which is what makes
+`run this call, show me what it missed` possible — and means a function whose
+value was captured into a registry beforehand is called through that copy and
+not seen. `qcov` instruments the source files *before* they load, so it has no
+such blind spot, but it can only measure a whole suite.
+
 This replaced a function-level counter that wrapped each declared function
 and asked which were never called. Statement coverage subsumes it and fixes
 its two faults: it can see an untaken branch inside a function that *is*

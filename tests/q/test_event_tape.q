@@ -345,4 +345,59 @@ test_the_grouped_form_counts_trades_per_bucket:{[t]
 test_the_grouped_form_validates_its_tape:{[t]
     .qunit.assertError[{.qmicro.trade_arrival_rate_by[x;0Nn;enlist `sym]};`time xdesc .evttest.tape[`trade`trade`add;1 1 1;3#100f];"every entry point checks the precondition"]};
 
+
+/ --- the events worker's contract methods (#185 coverage) ----------------
+
+/ Same gap the demo_deals worker had: five delegators that
+/ require_contract checks EXIST and nothing calls. qcov reported each as an
+/ uncovered statement. The one that matters most here is `facts`, which is
+/ this worker's own code rather than a delegation - it is the hook that
+/ attaches materialisation metadata, and an empty window must not make it
+/ take min/max over nothing.
+
+test_the_events_worker_declares_a_callable_contract:{[t]
+    ok:all {[nm] 100h=type value ` sv `.qevbf,nm} each .qbfstate.bounded_worker_methods;
+    .qunit.assertEquals[ok;1b;"every required method is a function, not merely a name"]};
+
+/ Called, not just declared. Existence is what require_contract checks; that
+/ each one reaches the shell with its arguments intact is what nothing did.
+test_the_events_worker_spec_delegates:{[t]
+    .qevbf.init .evttest.espec[0;10];
+    .qunit.assertEquals[.qevbf.spec[];.qbw.spec `demo_events_backfill;
+        "the worker's spec is the shell's, not a second copy"]};
+
+test_the_events_worker_fetch_delegates_with_its_window_in_order:{[t]
+    .qevbf.init .evttest.espec[0;10];
+    r:.qevbf.fetch[.evttest.d 0;.evttest.d 1];
+    .qunit.assertEquals[r`state;`ok;"one second of the tape fetches cleanly"];
+    .qunit.assertEquals[count r`result;1;
+        "one second of a ten-second tape is one event - a swapped window gives none or ten"]};
+
+test_the_events_worker_publish_delegates:{[t]
+    .qevbf.init .evttest.espec[0;10];
+    batch:(.qevbf.fetch[.evttest.d 0;.evttest.d 1])`result;
+    .qunit.assertEquals[.qevbf.publish batch;1;"publish reports what it wrote"];
+    .qunit.assertEquals[count value `event_tape;1;"and the row reached the target"]};
+
+test_the_events_worker_checkpoint_delegates:{[t]
+    .qevbf.init .evttest.espec[0;10];
+    .qevbf.checkpoint[.evttest.d 2];
+    .qunit.assertEquals[.qbfstate.load_checkpoint[`demo_events_backfill;.evttest.espec[0;10]];
+        .evttest.d 2;
+        "the cursor written through the delegator is the one the shell stores"]};
+
+test_facts_on_an_empty_window_says_so_rather_than_computing_infinities:{[t]
+    / ETL-07 records a zero-row window deliberately, so `facts` receives one.
+    / min/max over an empty column yields infinities, which would be recorded
+    / as though they were observations of the data.
+    r:.qevbf.facts[0#.qsevt.fixture[]];
+    .qunit.assertEquals[r`event_span;"empty window";"an empty window is reported as empty, not as a span"]};
+
+test_facts_reports_the_span_and_the_trade_count:{[t]
+    tape:.qsevt.fixture[];
+    r:.qevbf.facts[tape];
+    .qunit.assertEquals[r`distinct_syms;count distinct tape`sym;"one count per distinct symbol"];
+    .qunit.assertEquals[r`trade_events;sum `trade=tape`action;"only trades are counted as trade events"];
+    .qunit.assertTrue[(r[`event_span]) like "*/*";"the span is from/to, not a single instant"]};
+
 \d .
