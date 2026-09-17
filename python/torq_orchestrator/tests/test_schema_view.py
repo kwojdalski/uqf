@@ -84,3 +84,63 @@ def test_the_default_process_is_one_that_exists():
     # stale if the registry renamed the process.
     paths = core.default_paths()
     assert core.resolve_port(paths, core.DEFAULT_SCHEMA_PROC, 6050) > 0
+
+
+def test_an_exact_name_is_a_pattern_that_matches_itself(monkeypatch):
+    # One code path, not two: `schema quotes` and `schema 'quot*'` go through
+    # the same matcher, so an exact name cannot behave differently from a
+    # pattern that happens to select one table.
+    from torq_orchestrator import schema_view
+
+    monkeypatch.setattr(schema_view, "table_names", lambda *a, **k: ["quotes", "trades", "quote"])
+    assert schema_view.match_tables("quotes", 0) == ["quotes"]
+
+
+def test_a_prefix_pattern_selects_the_group(monkeypatch):
+    from torq_orchestrator import schema_view
+
+    monkeypatch.setattr(
+        schema_view,
+        "table_names",
+        lambda *a, **k: ["crypto_book", "crypto_trades", "quotes", "trades"],
+    )
+    assert schema_view.match_tables("crypto*", 0) == ["crypto_book", "crypto_trades"]
+
+
+def test_an_infix_pattern_matches_anywhere_in_the_name(monkeypatch):
+    from torq_orchestrator import schema_view
+
+    monkeypatch.setattr(
+        schema_view,
+        "table_names",
+        lambda *a, **k: ["crypto_trades", "trades", "trade", "quotes"],
+    )
+    assert schema_view.match_tables("*trade*", 0) == ["crypto_trades", "trades", "trade"]
+
+
+def test_matching_is_case_sensitive(monkeypatch):
+    # fnmatchcase, not fnmatch: q table names are case-sensitive, and
+    # fnmatch's default normalises case on some platforms, which would make
+    # this command behave differently on macOS than on Linux.
+    from torq_orchestrator import schema_view
+
+    monkeypatch.setattr(schema_view, "table_names", lambda *a, **k: ["Trades", "trades"])
+    assert schema_view.match_tables("trades", 0) == ["trades"]
+
+
+def test_no_match_returns_empty_rather_than_raising(monkeypatch):
+    # The CLI turns this into a message naming the available tables; the
+    # matcher itself has nothing to say about it.
+    from torq_orchestrator import schema_view
+
+    monkeypatch.setattr(schema_view, "table_names", lambda *a, **k: ["quotes"])
+    assert schema_view.match_tables("nope*", 0) == []
+
+
+def test_order_follows_the_process_not_the_pattern(monkeypatch):
+    # Whatever order q reported the tables in is preserved, so two runs
+    # against the same process render in the same order.
+    from torq_orchestrator import schema_view
+
+    monkeypatch.setattr(schema_view, "table_names", lambda *a, **k: ["z_tbl", "a_tbl"])
+    assert schema_view.match_tables("*_tbl", 0) == ["z_tbl", "a_tbl"]

@@ -233,7 +233,9 @@ def query(
 def schema(
     table: Annotated[
         str | None,
-        typer.Argument(help="one table to describe; omit to list every table"),
+        typer.Argument(
+            help="a table to describe, or a pattern like 'crypto*'; omit to list every table"
+        ),
     ] = None,
     proc: Annotated[
         str, typer.Option(help="process to read from, e.g. rdb1 (today) or hdb1 (history)")
@@ -265,12 +267,27 @@ def schema(
     where = f"{proc}" if port is None else f"port {target}"
     creds = {"user": user, "passwd": passwd}
 
+    # A pattern describes EVERY match, one table per rendered block. An exact
+    # name is just a pattern that matches itself, so there is one code path
+    # rather than two - and `schema quotes` behaves identically either way.
     try:
+        matched = core.match_tables(table, target, host=host, **creds) if table else []
+        if table and not matched:
+            available = core.schema_table_names(target, host=host, **creds)
+            log.error(
+                "nothing matches {!r} on {} - it has: {}",
+                table,
+                where,
+                ", ".join(sorted(available)),
+            )
+            raise typer.Exit(code=1)
         rows = (
-            core.schema_columns(table, target, host=host, **creds)
+            [r for name in matched for r in core.schema_columns(name, target, host=host, **creds)]
             if table
             else core.schema_overview(target, host=host, **creds)
         )
+    except typer.Exit:
+        raise
     except core.UqfStackError as exc:
         log.error("{}", exc)
         raise typer.Exit(code=1) from exc
@@ -279,22 +296,25 @@ def schema(
         raise typer.Exit(code=1) from exc
 
     if table:
-        rendered = Table(title=f"{table} on {where}")
-        rendered.add_column("column")
-        rendered.add_column("type")
-        rendered.add_column("q", justify="center")
-        rendered.add_column("attribute")
-        for row in rows:
-            # A general column carries no type information at all, so it is
-            # dimmed rather than presented alongside the ones that do.
-            style = "dim" if row["type"] == "general" else ""
-            rendered.add_row(
-                row["column"],
-                f"[{style}]{row['type']}[/]" if style else row["type"],
-                row["q"],
-                f"[green]{row['attribute']}[/]" if row["attribute"] else "",
-            )
-        console.print(rendered)
+        for name in matched:
+            rendered = Table(title=f"{name} on {where}")
+            rendered.add_column("column")
+            rendered.add_column("type")
+            rendered.add_column("q", justify="center")
+            rendered.add_column("attribute")
+            for row in core.schema_columns(name, target, host=host, **creds):
+                # A general column carries no type information at all, so it
+                # is dimmed rather than presented alongside the ones that do.
+                style = "dim" if row["type"] == "general" else ""
+                rendered.add_row(
+                    row["column"],
+                    f"[{style}]{row['type']}[/]" if style else row["type"],
+                    row["q"],
+                    f"[green]{row['attribute']}[/]" if row["attribute"] else "",
+                )
+            console.print(rendered)
+        if len(matched) > 1:
+            console.print(f"[dim]{len(matched)} tables matched {table!r}.[/]")
     else:
         rendered = Table(title=f"tables on {where} (port {target})")
         rendered.add_column("table")

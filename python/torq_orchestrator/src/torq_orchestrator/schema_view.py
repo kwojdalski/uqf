@@ -176,6 +176,25 @@ def overview(port: int, host: str = "localhost", **creds: str) -> list[dict[str,
     ]
 
 
+def match_tables(pattern: str, port: int, host: str = "localhost", **creds: str) -> list[str]:
+    """Live table names matching a shell-style pattern.
+
+    `fnmatch`, not a regex: `crypto*` is what someone types, and the whole
+    point is to avoid making them escape anything. Matching is done in
+    Python against the names the process reported rather than by sending a
+    `like` to q - the names have already crossed the wire by then, so there
+    is nothing to gain from a second round trip and one fewer place for a
+    caller's string to reach an expression.
+
+    An exact name with no metacharacters matches itself, so callers do not
+    need to know whether what they were handed is a pattern.
+    """
+    import fnmatch
+
+    names = table_names(port, host=host, **creds)
+    return [name for name in names if fnmatch.fnmatchcase(name, pattern)]
+
+
 def columns(table: str, port: int, host: str = "localhost", **creds: str) -> list[dict[str, str]]:
     """One table's columns, as `meta` reports them.
 
@@ -191,6 +210,7 @@ def columns(table: str, port: int, host: str = "localhost", **creds: str) -> lis
         raise UqfStackError(
             f"{table!r} is not a table on this process - it has: {', '.join(sorted(available))}"
         )
+
     rows = _rows(query(f"0!meta `{table}", port, host=host, **creds))
     out = []
     for row in rows:
