@@ -110,6 +110,39 @@ test_the_selected_columns_come_from_the_declaration:{[t]
     .qunit.assertTrue[sql like "SELECT deal_id, rate FROM*";
         "columns are the declared symbols, which is why they need no escaping"]};
 
+/ --- the connection string, which needs no driver to build ---------------
+
+/ qcov reported build_connection_string as never executed. It is pure string
+/ assembly, so being untestable was never the reason - it simply had no
+/ test. What it assembles is a credential-bearing string, which is worth
+/ pinning: a field in the wrong order or a missing separator produces a
+/ string the driver rejects with a message about syntax, not about the field
+/ that is wrong.
+
+test_the_connection_string_carries_every_field:{[t]
+    conn:.qodbc.build_connection_string["db.example";3306;"deals";"svc";"s3cret"];
+    parts:";" vs conn;
+    .qunit.assertTrue[any parts like "SERVER=db.example";"the host"];
+    .qunit.assertTrue[any parts like "PORT=3306";"the port, rendered as text"];
+    .qunit.assertTrue[any parts like "DATABASE=deals";"the database"];
+    .qunit.assertTrue[any parts like "UID=svc";"the user"];
+    .qunit.assertTrue[any parts like "PWD=s3cret";"the password"]};
+
+test_the_driver_is_named_first:{[t]
+    / ODBC reads DRIVER first; a connection string that names it later is
+    / accepted by some drivers and rejected by others, which is the worst
+    / kind of portability bug to debug.
+    conn:.qodbc.build_connection_string["h";1;"d";"u";"p"];
+    .qunit.assertTrue[conn like "DRIVER=*";"DRIVER leads the string"]};
+
+test_the_password_is_a_parameter_not_a_literal:{[t]
+    / bank E-07: the credential comes from the environment, so this function
+    / must never carry a default. Two different passwords must produce two
+    / different strings - a hardcoded one would make them identical.
+    a:.qodbc.build_connection_string["h";1;"d";"u";"one"];
+    b:.qodbc.build_connection_string["h";1;"d";"u";"two"];
+    .qunit.assertTrue[not a~b;"the password reaches the string it is passed to"]};
+
 / Build the statement without a connection, by calling the renderer the query
 / uses. Keeps every assertion above driver-free.
 built_sql:{[]

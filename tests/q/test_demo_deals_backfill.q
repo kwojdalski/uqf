@@ -186,6 +186,78 @@ test_a_contract_breaking_source_fails_the_window:{[t]
     .qsrc.sources[`demo_deals]:@[.qsrc.sources`demo_deals;`fixture;:;orig];
     .qunit.assertEquals[0=count value `etl_coverage;1b;"a source missing declared columns records no coverage, rather than publishing nulls as complete"]};
 
+/ ETL-07 records an empty window deliberately, so the quality gate receives
+/ one. The guard exists because the three checks below it select from an
+/ empty table and would report no failures anyway - but only by accident of
+/ how `select` behaves, not by intent, and an accident is not a contract.
+test_the_quality_gate_passes_an_empty_batch:{[t]
+    .qunit.assertEquals[count .qddbf.quality_check[0#.qsdemo.fixture[]];0;
+        "an empty window has nothing to fail, and must not be reported as failing"]};
+
+/ --- the contract methods themselves (#185 coverage) ---------------------
+
+/ THE GAP THESE CLOSE. .qbfstate.require_contract checks the five methods
+/ EXIST by name; the suite drives .qbw.* directly. So the delegators were
+/ declared, existence-checked, and never executed - qcov reported every one
+/ of them as an uncovered statement. A delegator with its arguments swapped,
+/ .qbw.fetch[worker;to_ts;from_ts], would have passed every test in this
+/ file while fetching a backwards window.
+/ .
+/ They are one line each and that is the point: the only thing that can be
+/ wrong with them is the wiring, and the wiring is exactly what nothing
+/ checked.
+
+test_spec_delegates_to_the_shell:{[t]
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertEquals[.qddbf.spec[];.qbw.spec `demo_deals_backfill;
+        "the worker's spec is the shell's spec for it, not a second copy"]};
+
+test_plan_delegates_and_passes_the_cursor:{[t]
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    / A cursor two days in leaves two of the three daily windows. If `plan`
+    / dropped the cursor it would return all three, which is the shape of
+    / bug a delegator can have.
+    .qunit.assertEquals[count .qddbf.plan[.ddbftest.d 2];2;
+        "the cursor reaches the shell - a dropped one replans the whole range"]};
+
+test_plan_with_a_null_cursor_plans_the_whole_range:{[t]
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertEquals[count .qddbf.plan[0Np];3;"no cursor means nothing is done yet"]};
+
+test_fetch_delegates_with_its_window_the_right_way_round:{[t]
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qddbf.fetch[.ddbftest.d 1;.ddbftest.d 2];
+    .qunit.assertEquals[r`state;`ok;"one day of the fixture fetches cleanly"];
+    .qunit.assertEquals[count r`result;1;
+        "one day of a five-day fixture is one row - a swapped window would be empty or five"]};
+
+test_publish_delegates_and_returns_the_row_count:{[t]
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    batch:(.qddbf.fetch[.ddbftest.d 1;.ddbftest.d 2])`result;
+    .qunit.assertEquals[.qddbf.publish batch;1;"publish reports what it wrote"];
+    .qunit.assertEquals[count value `demo_deals;1;"and the row is actually in the target"]};
+
+test_checkpoint_delegates_and_the_cursor_can_be_read_back:{[t]
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    .qddbf.checkpoint[.ddbftest.d 2];
+    .qunit.assertEquals[.qbfstate.load_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4]];
+        .ddbftest.d 2;
+        "the cursor written through the delegator is the cursor the shell stores"]};
+
+test_cleanup_delegates:{[t]
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    .qddbf.cleanup[];
+    .qunit.assertEquals[.qbfstate.lock_held `demo_deals_backfill;0b;
+        "cleanup releases the single-instance lock"]};
+
+/ The five names ETL-01 requires, called through the worker's OWN namespace
+/ rather than the shell's - which is what an orchestrator does.
+test_every_contract_method_is_callable_not_merely_present:{[t]
+    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    ok:all {[nm] 100h=type value ` sv `.qddbf,nm} each .qbfstate.bounded_worker_methods;
+    .qunit.assertEquals[ok;1b;
+        "require_contract checks these names exist; this checks they are functions"]};
+
 / --- the shell's own guards (#124, #60) ---------------------------------
 
 / Two workers on one dataset AND one partition still produce coverage rows

@@ -85,7 +85,18 @@ def read_status_file(path: Path) -> WorkerStatus:
             f"{path}: unrecognised state {state!r}; known states are {', '.join(STATES)}"
         )
 
-    error = str(raw["error"]).strip() or None
+    # `str(None)` is the four-character string "None", so a JSON null here
+    # would become an error message reading `state=failed: None` - and would
+    # make `failure_reason`'s "no error string was recorded" fallback
+    # unreachable, since the field would never be None again after parsing.
+    #
+    # `.qpipe.write_status` cannot produce that today: it refuses a `failed`
+    # state with an empty error, and writes "" rather than null otherwise.
+    # This is about a file that did not come from it - hand-edited, or
+    # written by a future producer - where the right reading of "no error" is
+    # no error, not the word None.
+    raw_error = raw["error"]
+    error = None if raw_error is None else (str(raw_error).strip() or None)
     return WorkerStatus(
         worker=str(raw["worker"]),
         instance_id=str(raw["instance_id"]),
