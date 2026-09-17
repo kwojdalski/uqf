@@ -229,6 +229,93 @@ def query(
     _export(result, export)
 
 
+@app.command()
+def schema(
+    table: Annotated[
+        str | None,
+        typer.Argument(help="one table to describe; omit to list every table"),
+    ] = None,
+    proc: Annotated[
+        str, typer.Option(help="process to read from, e.g. rdb1 (today) or hdb1 (history)")
+    ] = core.DEFAULT_SCHEMA_PROC,
+    port: Annotated[
+        int | None,
+        typer.Option(help="read this port directly, instead of resolving --proc"),
+    ] = None,
+    base_port: Annotated[int, typer.Option(help="stack base port")] = core.DEFAULT_BASE_PORT,
+    host: str = "localhost",
+    user: str = "admin",
+    passwd: str = "admin",
+    export: ExportOpt = None,
+) -> None:
+    """Show the tables in a running process, or one table's columns and types.
+
+    Reads the LIVE database over IPC, not the declarations in
+    scripts/uqf_stack_tables.q - a table can be declared and still absent
+    from a process that failed to load its schema file, and that is exactly
+    when someone runs this.
+    """
+    paths = core.default_paths()
+    try:
+        target = port if port is not None else core.resolve_port(paths, proc, base_port)
+    except core.UqfStackError as exc:
+        log.error("{}", exc)
+        raise typer.Exit(code=1) from exc
+
+    where = f"{proc}" if port is None else f"port {target}"
+    creds = {"user": user, "passwd": passwd}
+
+    try:
+        rows = (
+            core.schema_columns(table, target, host=host, **creds)
+            if table
+            else core.schema_overview(target, host=host, **creds)
+        )
+    except core.UqfStackError as exc:
+        log.error("{}", exc)
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:  # kola raises its own connect/query errors
+        log.error("could not read the schema from {} ({}): {}", where, target, exc)
+        raise typer.Exit(code=1) from exc
+
+    if table:
+        rendered = Table(title=f"{table} on {where}")
+        rendered.add_column("column")
+        rendered.add_column("type")
+        rendered.add_column("q", justify="center")
+        rendered.add_column("attribute")
+        for row in rows:
+            # A general column carries no type information at all, so it is
+            # dimmed rather than presented alongside the ones that do.
+            style = "dim" if row["type"] == "general" else ""
+            rendered.add_row(
+                row["column"],
+                f"[{style}]{row['type']}[/]" if style else row["type"],
+                row["q"],
+                f"[green]{row['attribute']}[/]" if row["attribute"] else "",
+            )
+        console.print(rendered)
+    else:
+        rendered = Table(title=f"tables on {where} (port {target})")
+        rendered.add_column("table")
+        rendered.add_column("rows", justify="right")
+        rendered.add_column("columns", justify="right")
+        for row in rows:
+            # Zero rows is not an error - an empty table is the normal state
+            # for one nothing has published into yet - but it is the thing a
+            # reader is usually looking for, so it is not left to be counted.
+            count = "[dim]0[/]" if row["rows"] == 0 else f"{row['rows']:,}"
+            rendered.add_row(row["table"], count, str(row["columns"]))
+        console.print(rendered)
+        empty = [r["table"] for r in rows if r["rows"] == 0]
+        if empty:
+            console.print(
+                f"[dim]{len(empty)} empty: {', '.join(empty)}. Declared and carrying "
+                "nothing - normal before a feed publishes, a gap afterwards.[/]"
+            )
+    _export(rows, export)
+
+
 @app.command("config-get")
 def config_get(
     procname: str,
