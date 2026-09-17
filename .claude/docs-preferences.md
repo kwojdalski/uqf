@@ -41,6 +41,18 @@ that it does not exist.
 > *2026-09-17.* Quick start was three `.qopt`/`.qfwd`/`.qexec` calls. Now four
 > entry points: price something, run the fleet, run a backfill, run the tests.
 
+**Say what is verified, not that it is the only possibility.** A requirement
+stated as "you need X" and "this tree targets X alone" claims two things and
+establishes one. Separate them: what the tree is verified against, and what it
+could plausibly run on, with the evidence for each.
+
+> *2026-09-17.* Asked: "suggest that kdb-x is preferred but there are also
+> other free implementation that could possibly work". `## Requirements` said
+> "You need KDB-X". Checking found the quant library loads on a third-party q
+> while the full suite does not complete, and that `scripts/test.sh` had read
+> `$Q`/`$QHOME` all along — so the override existed and was simply
+> undocumented.
+
 ## Structure
 
 **A heading names a section; it does not restate its content.** If the first
