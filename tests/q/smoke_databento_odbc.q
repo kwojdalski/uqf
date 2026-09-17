@@ -53,9 +53,9 @@ check:{[name;ok;detail]
 / --- run ---------------------------------------------------------------------
 
 -1 "range ",string[range_from]," .. ",string range_to;
-.qdbnbf.init[`source_version`range_from`range_to!(`smoke;range_from;range_to)];
+.qwrk.databento_book_backfill.init[`source_version`range_from`range_to!(`smoke;range_from;range_to)];
 t0:.z.p;
-r:.qdbnbf.run[];
+r:.qwrk.databento_book_backfill.run[];
 -1 "run took ",string .z.p-t0;
 check["run completed";`completed~r`state;.Q.s1 r];
 check["no failed window";0=r`windows_failed;string r`windows_failed];
@@ -109,11 +109,11 @@ check["folded levels match the source";all matches;
 
 / --- idempotence ---------------------------------------------------------------
 
-r2:.qdbnbf.run[];
+r2:.qwrk.databento_book_backfill.run[];
 check["second run is idle";`idle~r2`state;.Q.s1 r2];
 check["second run published nothing";(count databento_book)=r`rows_published;string count databento_book];
 
-.qdbnbf.cleanup[];
+.qwrk.databento_book_backfill.cleanup[];
 
 -1 "";
 -1 $[failures=0;"PASS  ";"FAIL  "],string[failures]," check(s) failed; ",string[count databento_book]," rows in databento_book";

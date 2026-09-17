@@ -40,12 +40,14 @@ run_tests_src:read0 `:tests/run_tests.q;
 {[l] if[l like "\\l tests/q/test_*"; system 1_l]} each run_tests_src;
 value first run_tests_src where run_tests_src like "nsList:*";
 
-/ Every namespace this tree declares. They appear at root WITHOUT their
-/ leading dot, so `.qfwd` is `qfwd`; `q` is kdb's own and `qunit` the
-/ vendored test framework.
-namespaces:(key `) where (key `) like "q*";
-namespaces:namespaces except `q`qunit;
-namespaces:{[n] `$".",string n} each namespaces;
+/ Every namespace this tree declares, from the one enumeration in
+/ src/namespaces.q - fully qualified already, and INCLUDING the nested
+/ worker namespaces under .qwrk, which a root-level `like "q*"` scan
+/ reported as the single name `qwrk` holding no functions. Four workers
+/ vanished from this report the day they nested, silently, which is exactly
+/ the failure this tool exists to reveal. `qunit` is the vendored test
+/ framework, not this library's code.
+namespaces:.qns.functional[] except `.qunit;
 
 -1 "== coverage: instrumenting ",string[count namespaces]," namespace(s) ==";
 

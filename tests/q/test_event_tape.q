@@ -183,37 +183,37 @@ setUp_worker:{[]
     `event_tape set 0#.qsevt.fixture[];
     }
 
-tearDown_worker:{[] .qevbf.cleanup[];}
+tearDown_worker:{[] .qwrk.demo_events_backfill.cleanup[];}
 
 espec:{[from_n;to_n] `source_version`range_from`range_to!(`v1;.evttest.d from_n;.evttest.d to_n)}
 
 test_the_worker_satisfies_the_bounded_contract:{[t]
-    .qunit.assertEquals[.qevbf.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies ETL-01 in full"]};
+    .qunit.assertEquals[.qwrk.demo_events_backfill.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies ETL-01 in full"]};
 
 test_the_worker_publishes_the_windowed_events:{[t]
-    .qevbf.init .evttest.espec[0;10];
-    r:.qevbf.run[];
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    r:.qwrk.demo_events_backfill.run[];
     .qunit.assertEquals[(r`state;r`rows_published;count value `event_tape);(`completed;10;10);"ten seconds of a ten-event tape, published once each"]};
 
 / Inherited from the shell, not restated in the worker: an already-covered
 / range is idle, and idle is a success (C-07).
 test_a_second_run_is_idle:{[t]
-    .qevbf.init .evttest.espec[0;10];
-    .qevbf.run[];
-    .qunit.assertEquals[(.qevbf.run[])`state;`idle;"coverage skipping comes free with the shell"]};
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    .qwrk.demo_events_backfill.run[];
+    .qunit.assertEquals[(.qwrk.demo_events_backfill.run[])`state;`idle;"coverage skipping comes free with the shell"]};
 
 test_the_worker_honours_dry_run:{[t]
     setenv[`UQF_DRY_RUN;"true"];
-    .qevbf.init .evttest.espec[0;10];
-    .qevbf.run[];
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    .qwrk.demo_events_backfill.run[];
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[(count value `event_tape;count value `etl_coverage);(0;0);"ETL-14 comes free too - nothing published, no coverage staged"]};
 
 / The two workers must not share state. They have separate namespaces and
 / separate `progress` globals for exactly this reason.
 test_the_two_workers_have_separate_state:{[t]
-    .qevbf.init .evttest.espec[0;10];
-    .qunit.assertEquals[(.qevbf.worker_name;.qddbf.worker_name);(`demo_events_backfill;`demo_deals_backfill);"two workers in one process, two sets of accumulators"]};
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    .qunit.assertEquals[(.qwrk.demo_events_backfill.worker_name;.qwrk.demo_deals_backfill.worker_name);(`demo_events_backfill;`demo_deals_backfill);"two workers in one process, two sets of accumulators"]};
 
 / The declared width is hourly, but the fixture's range is ten SECONDS, so
 / the single window is clipped to the range - the final window is never
@@ -225,13 +225,13 @@ test_the_worker_uses_its_own_window_width:{[t]
     .qunit.assertEquals[.qbw.declaration[`demo_events_backfill]`width;0D01:00:00;"an event tape is denser than a deal feed, so its windows are hourly, not daily"]};
 
 test_a_short_range_gives_one_clipped_window:{[t]
-    .qevbf.init .evttest.espec[0;10];
-    w:first .qevbf.plan 0Np;
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    w:first .qwrk.demo_events_backfill.plan 0Np;
     .qunit.assertEquals[w`range_to;.evttest.d 10;"the final window is clipped to the range, never extended past it"]};
 
 test_a_long_range_is_split_at_the_declared_width:{[t]
-    .qevbf.init `source_version`range_from`range_to!(`v1;.evttest.d 0;(.evttest.d 0)+0D03:00:00);
-    .qunit.assertEquals[count .qevbf.plan 0Np;3;"three hours at one hour each"]};
+    .qwrk.demo_events_backfill.init `source_version`range_from`range_to!(`v1;.evttest.d 0;(.evttest.d 0)+0D03:00:00);
+    .qunit.assertEquals[count .qwrk.demo_events_backfill.plan 0Np;3;"three hours at one hour each"]};
 
 / --- volume bucketing (ROADMAP #25's primitive) -------------------------
 
@@ -356,32 +356,32 @@ test_the_grouped_form_validates_its_tape:{[t]
 / take min/max over nothing.
 
 test_the_events_worker_declares_a_callable_contract:{[t]
-    ok:all {[nm] 100h=type value ` sv `.qevbf,nm} each .qbfstate.bounded_worker_methods;
+    ok:all {[nm] 100h=type value ` sv `.qwrk.demo_events_backfill,nm} each .qbfstate.bounded_worker_methods;
     .qunit.assertEquals[ok;1b;"every required method is a function, not merely a name"]};
 
 / Called, not just declared. Existence is what require_contract checks; that
 / each one reaches the shell with its arguments intact is what nothing did.
 test_the_events_worker_spec_delegates:{[t]
-    .qevbf.init .evttest.espec[0;10];
-    .qunit.assertEquals[.qevbf.spec[];.qbw.spec `demo_events_backfill;
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    .qunit.assertEquals[.qwrk.demo_events_backfill.spec[];.qbw.spec `demo_events_backfill;
         "the worker's spec is the shell's, not a second copy"]};
 
 test_the_events_worker_fetch_delegates_with_its_window_in_order:{[t]
-    .qevbf.init .evttest.espec[0;10];
-    r:.qevbf.fetch[.evttest.d 0;.evttest.d 1];
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    r:.qwrk.demo_events_backfill.fetch[.evttest.d 0;.evttest.d 1];
     .qunit.assertEquals[r`state;`ok;"one second of the tape fetches cleanly"];
     .qunit.assertEquals[count r`result;1;
         "one second of a ten-second tape is one event - a swapped window gives none or ten"]};
 
 test_the_events_worker_publish_delegates:{[t]
-    .qevbf.init .evttest.espec[0;10];
-    batch:(.qevbf.fetch[.evttest.d 0;.evttest.d 1])`result;
-    .qunit.assertEquals[.qevbf.publish batch;1;"publish reports what it wrote"];
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    batch:(.qwrk.demo_events_backfill.fetch[.evttest.d 0;.evttest.d 1])`result;
+    .qunit.assertEquals[.qwrk.demo_events_backfill.publish batch;1;"publish reports what it wrote"];
     .qunit.assertEquals[count value `event_tape;1;"and the row reached the target"]};
 
 test_the_events_worker_checkpoint_delegates:{[t]
-    .qevbf.init .evttest.espec[0;10];
-    .qevbf.checkpoint[.evttest.d 2];
+    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
+    .qwrk.demo_events_backfill.checkpoint[.evttest.d 2];
     .qunit.assertEquals[.qbfstate.load_checkpoint[`demo_events_backfill;.evttest.espec[0;10]];
         .evttest.d 2;
         "the cursor written through the delegator is the one the shell stores"]};
@@ -390,12 +390,12 @@ test_facts_on_an_empty_window_says_so_rather_than_computing_infinities:{[t]
     / ETL-07 records a zero-row window deliberately, so `facts` receives one.
     / min/max over an empty column yields infinities, which would be recorded
     / as though they were observations of the data.
-    r:.qevbf.facts[0#.qsevt.fixture[]];
+    r:.qwrk.demo_events_backfill.facts[0#.qsevt.fixture[]];
     .qunit.assertEquals[r`event_span;"empty window";"an empty window is reported as empty, not as a span"]};
 
 test_facts_reports_the_span_and_the_trade_count:{[t]
     tape:.qsevt.fixture[];
-    r:.qevbf.facts[tape];
+    r:.qwrk.demo_events_backfill.facts[tape];
     .qunit.assertEquals[r`distinct_syms;count distinct tape`sym;"one count per distinct symbol"];
     .qunit.assertEquals[r`trade_events;sum `trade=tape`action;"only trades are counted as trade events"];
     .qunit.assertTrue[(r[`event_span]) like "*/*";"the span is from/to, not a single instant"]};

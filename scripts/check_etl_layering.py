@@ -18,8 +18,8 @@ into `core/` - that is what a declaration over a generic shell means - so
 this checks only that the arrow never points back.
 
 STRING AND COMMENT AWARE, and it has to be. `bounded_worker.q` names
-`.qddbf` inside an error message ("ns must be a namespace symbol such as
-`.qddbf"), which is documentation, not a dependency. A naive search reports
+`.qwrk.demo_deals_backfill` inside an error message ("ns must be a namespace symbol such as
+`.qwrk.demo_deals_backfill"), which is documentation, not a dependency. A naive search reports
 it on the first run, and a checker that is wrong the day it lands gets
 suppressed rather than fixed - after which it protects nothing.
 """
@@ -35,8 +35,10 @@ REPO = Path(__file__).resolve().parent.parent
 CORE = REPO / "src" / "etl" / "core"
 DECLARING_DIRS = ("sources", "workers")
 
-#: A namespace declaration, e.g. `\d .qddbf`.
-NAMESPACE_RE = re.compile(r"^\\d\s+(\.[a-zA-Z][a-zA-Z0-9_]*)\s*$", re.MULTILINE)
+#: A namespace declaration, e.g. `\d .qwrk.demo_deals_backfill`.
+NAMESPACE_RE = re.compile(
+    r"^\\d\s+(\.[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*)\s*$", re.MULTILINE
+)
 
 
 def declaring_namespaces() -> dict[str, str]:

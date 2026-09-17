@@ -1,4 +1,4 @@
-/ demo_deals_backfill.q - the demo deals bounded worker (.qddbf).
+/ demo_deals_backfill.q - the demo deals bounded worker (.qwrk.demo_deals_backfill).
 / .
 / A declaration over the generic shell in src/etl/core/bounded_worker.q
 / (#124). This file was 238 lines of which four were worker-specific; the
@@ -19,7 +19,7 @@
 / than the worker, and every worker would pass it vacuously. So the shell
 / reads and writes them here - see bounded_worker.q's header.
 
-\d .qddbf
+\d .qwrk.demo_deals_backfill
 
 worker_name:`demo_deals_backfill
 
@@ -60,7 +60,7 @@ cleanup:{[] .qbw.cleanup worker_name}
 
 / --- the data-quality gate ------------------------------------------------
 
-\d .qddbf
+\d .qwrk.demo_deals_backfill
 
 / Refuse a batch that is shaped correctly but cannot be true.
 / .
@@ -80,7 +80,7 @@ cleanup:{[] .qbw.cleanup worker_name}
 / .qdqc.summarize_checks already uses.
 / @param batch the fetched rows, before publication
 / @return a table check/status/detail, one row per offending row
-/ @eg .qddbf.quality_check[.qsdemo.fixture[]]  ->  an empty table
+/ @eg .qwrk.demo_deals_backfill.quality_check[.qsdemo.fixture[]]  ->  an empty table
 quality_check:{[batch]
     if[0=count batch; :.qbw.no_failures[]];
     bad_rate:select from batch where not rate>0;
@@ -105,5 +105,5 @@ quality_check:{[batch]
 / `check` is optional on the declaration; this worker declares one, which
 / makes it unskippable for every window this worker ever fetches.
 .qbw.define[`demo_deals_backfill;
-    `ns`source`dataset`width`transform`check!
-    (`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qddbf.quality_check)];
+    `source`dataset`width`transform`check!
+    (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qwrk.demo_deals_backfill.quality_check)];

@@ -62,16 +62,16 @@ test_a_config_without_io_gets_memory:{[t]
     / The property that makes this seam safe to introduce: a declaration
     / saying nothing about io behaves exactly as it did before the seam
     / existed.
-    .qunit.assertEquals[.qio.for_cfg[`ns`source`dataset`width!(`.x;`s;`d;1D)];.qio.memory;
+    .qunit.assertEquals[.qio.for_cfg[`source`dataset`width!(`s;`d;1D)];.qio.memory;
         "a worker that declares no manager gets the in-memory default"]};
 
 test_a_declared_manager_is_used:{[t]
-    cfg:`ns`source`dataset`width`io!(`.x;`s;`d;1D;.qio.discard);
+    cfg:`source`dataset`width`io!(`s;`d;1D;.qio.discard);
     .qunit.assertEquals[.qio.for_cfg cfg;.qio.discard;
         "a declared manager is returned rather than the default"]};
 
 test_a_malformed_declared_manager_is_refused:{[t]
-    .qunit.assertError[{.qio.for_cfg x};`ns`source`dataset`width`io!(`.x;`s;`d;1D;42);
+    .qunit.assertError[{.qio.for_cfg x};`source`dataset`width`io!(`s;`d;1D;42);
         "a malformed manager is refused when resolved, not when first written through"]};
 
 / --- the wiring ----------------------------------------------------------
@@ -80,7 +80,7 @@ test_define_refuses_a_malformed_manager:{[t]
     / At DEFINE time, not at first write. A worker with a broken manager
     / should fail before it has fetched a window it cannot store.
     .qunit.assertError[{.qbw.define[`io_broken;x]};
-        `ns`source`dataset`width`transform`io!(`.qddbf;`demo_deals;`io_broken_ds;1D;`demo_deals_passthrough;42);
+        `source`dataset`width`transform`io!(`demo_deals;`io_broken_ds;1D;`demo_deals_passthrough;42);
         "a malformed io manager stops the worker at declaration"]};
 
 test_a_custom_manager_receives_the_target_and_batch:{[t]
@@ -112,7 +112,7 @@ test_a_worker_declaring_a_new_optional_key_can_register:{[t]
     / had could not be registered at all. Registration order silently decided
     / which declarations were legal.
     .qunit.assertEquals[.qbw.define[`io_newkey;
-        `ns`source`dataset`width`transform`io!(`.qddbf;`demo_deals;`io_newkey_ds;1D;`demo_deals_passthrough;.qio.discard)];
+        `source`dataset`width`transform`io!(`demo_deals;`io_newkey_ds;1D;`demo_deals_passthrough;.qio.discard)];
         `io_newkey;
         "a worker declaring an optional key registers regardless of order"]};
 

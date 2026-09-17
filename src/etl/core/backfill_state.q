@@ -47,9 +47,11 @@ ns_names:{[ns] @[{key x};ns;`symbol$()]}
 / checking late is deliberate: a worker's methods are defined as its file
 / loads, so validating at registration would force declaration order.
 / @param worker the worker's name, e.g. `markout_backfill
-/ @param ns the namespace symbol holding its implementation, e.g. `.qmarkbf
+/ @param ns the namespace symbol holding its implementation, e.g.
+/   `.qwrk.markout_backfill - .qbw.define derives it, so only a worker
+/   built without the shell passes one by hand
 / @return the worker name
-/ @eg .qbfstate.register[`demo_deals_backfill;`.qddbf]
+/ @eg .qbfstate.register[`demo_deals_backfill;`.qwrk.demo_deals_backfill]
 register:{[worker;ns]
     bounded_workers[worker]:ns;
     worker}

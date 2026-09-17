@@ -135,15 +135,21 @@ ALLOWED_MISSING = {
 }
 
 #: A reference to this tree's own namespaces: a lowercase `.q` prefix, then a
-#: name. The NAMESPACE must be lowercase - `.Q.` is kdb's own and not ours to
+#: name. The namespace part may itself be dotted, because worker instances
+#: nest (`.qwrk.demo_deals_backfill.run`); without that, the middle segment
+#: was read as the FUNCTION and every worker reference in every document
+#: landed in the unverifiable bucket rather than being checked.
+#: The NAMESPACE must be lowercase - `.Q.` is kdb's own and not ours to
 #: verify - but the NAME may carry uppercase, because `src/integrations/data.q`
 #: is deliberately left in its original camelCase (`.qdata.databentoDir`) and
 #: a lowercase-only name pattern silently truncated it to `.qdata.databento`,
 #: reporting a function that does exist as missing.
-_REF = re.compile(r"\.q([a-z][a-z0-9]*)\.([a-zA-Z_][a-zA-Z0-9_]*)")
+_REF = re.compile(r"\.q([a-z][a-z0-9]*(?:\.[a-z][a-z0-9_]*)*)\.([a-zA-Z_][a-zA-Z0-9_]*)")
 
 #: The same, followed by a bracketed argument list, for the arity check.
-_CALL = re.compile(r"\.q([a-z][a-z0-9]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\[([^\[\]]*)\]")
+_CALL = re.compile(
+    r"\.q([a-z][a-z0-9]*(?:\.[a-z][a-z0-9_]*)*)\.([a-zA-Z_][a-zA-Z0-9_]*)\[([^\[\]]*)\]"
+)
 
 
 def load_surface() -> dict[str, dict[str, dict]]:

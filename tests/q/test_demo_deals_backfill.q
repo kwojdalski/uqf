@@ -1,5 +1,5 @@
 // test_demo_deals_backfill.q - tests for src/etl/workers/demo_deals_backfill.q
-// (.qddbf), the first real bounded worker.
+// (.qwrk.demo_deals_backfill), the first real bounded worker.
 //
 // What these prove and what they do not. They prove the FRAMEWORK works end
 // to end: contract, windowing, coverage, retry, dry-run, resumption. They say
@@ -34,50 +34,50 @@ setUp_fresh:{[]
     `demo_deals set 0#.qsdemo.fixture[];
     }
 
-tearDown_release:{[] .qddbf.cleanup[];}
+tearDown_release:{[] .qwrk.demo_deals_backfill.cleanup[];}
 
 / --- initialisation (ETL-01, ETL-16) ----------------------------------------
 
 test_init_satisfies_the_contract:{[t]
-    .qunit.assertEquals[.qddbf.init[.ddbftest.spec_for[`v1;1;4]];.ddbftest.spec_for[`v1;1;4];"the worker implements every contract method and global"]};
+    .qunit.assertEquals[.qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];.ddbftest.spec_for[`v1;1;4];"the worker implements every contract method and global"]};
 
 test_a_null_source_version_is_refused_at_init:{[t]
-    .qunit.assertError[{.qddbf.init x};.ddbftest.spec_for[`;1;4];"a run that cannot name its release cannot record coverage (ETL-09)"]};
+    .qunit.assertError[{.qwrk.demo_deals_backfill.init x};.ddbftest.spec_for[`;1;4];"a run that cannot name its release cannot record coverage (ETL-09)"]};
 
 test_a_reversed_range_is_refused_at_init:{[t]
-    .qunit.assertError[{.qddbf.init x};.ddbftest.spec_for[`v1;4;1];"a bad bound fails before any work happens, not part-way through"]};
+    .qunit.assertError[{.qwrk.demo_deals_backfill.init x};.ddbftest.spec_for[`v1;4;1];"a bad bound fails before any work happens, not part-way through"]};
 
 / Without a credential the worker takes the FIXTURE path. That is an explicit
 / statement that this is a demo - not a fallback for a failed connection,
 / which would turn an outage into synthetic data recorded as covered.
 test_no_credential_means_the_fixture_path:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qunit.assertEquals[null .qddbf.handle;1b;"an unconfigured credential selects the fixture, deliberately and visibly"]};
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertEquals[null .qwrk.demo_deals_backfill.handle;1b;"an unconfigured credential selects the fixture, deliberately and visibly"]};
 
 test_init_takes_the_single_instance_lock:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qunit.assertEquals[.qbfstate.lock_held `demo_deals_backfill;1b;"one instance per worker is what keeps the checkpoint private (ETL-06)"]};
 
 / --- a full pass --------------------------------------------------------
 
 test_a_full_run_completes_every_window:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[(r`state;r`windows_completed;r`windows_failed);(`completed;3;0);"three days, three windows, none failed"]};
 
 test_a_full_run_publishes_the_windowed_rows:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[(r`rows_published;count value `demo_deals);(3;3);"three rows for three days of a five-row fixture - not the fixture three times"]};
 
 test_a_full_run_leaves_the_range_covered:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[.qcov.is_covered[`demo_deals;`;`v1;.z.p;.ddbftest.d 1;.ddbftest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
 
 test_the_cursor_lands_on_the_range_end:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`cursor;.ddbftest.d 4;"a completed run's cursor is the range's exclusive end"]};
 
 / --- coverage skipping (ETL-13) -------------------------------------------
@@ -85,33 +85,33 @@ test_the_cursor_lands_on_the_range_end:{[t]
 / "Ran, found no work" is a SUCCESS, not a failure (C-07). An orchestrator
 / that cannot tell them apart retries a successful no-op forever.
 test_a_second_run_is_idle_not_failed:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.run[];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.run[];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[(r`state;r`windows_completed);(`idle;0);"an already-published range is idle, and idle is a success"]};
 
 test_a_second_run_publishes_nothing_further:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.run[];
-    .qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.run[];
+    .qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[count value `demo_deals;3;"a retry does not duplicate published rows"]};
 
 / ETL-10, in the direction that matters: a version bump exists to force
 / re-extraction, so v1 coverage must not suppress a v2 run.
 test_a_version_bump_re_runs_the_whole_range:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.run[];
-    .qddbf.cleanup[];
-    .qddbf.init[.ddbftest.spec_for[`v2;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.run[];
+    .qwrk.demo_deals_backfill.cleanup[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v2;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[(r`state;r`windows_completed);(`completed;3);"a new source release re-fetches everything"]};
 
 / A retry after a partial run redoes only the gap. This is the case ETL-13
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]
     .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"one day already published, two left to do"]};
 
 / A gap in the MIDDLE must not be bridged by a window spanning it: the
@@ -119,8 +119,8 @@ test_a_partial_range_is_narrowed_to_the_gap:{[t]
 / separate runs of windows rather than one 3-day sweep.
 test_a_middle_gap_does_not_bridge_covered_coverage:{[t]
     .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"day 1 and day 3 are planned; day 2 is skipped, not spanned"]};
 
 / --- resumption (ETL-06) --------------------------------------------------
@@ -132,39 +132,39 @@ test_a_matching_checkpoint_resumes:{[t]
     / saves the checkpoint - so a checkpoint at day 3 with days 1-2 uncovered
     / is not a resume, it is a gap, and plan now treats it as one.
     .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 3;2];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qbfstate.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4];.ddbftest.d 3];
-    r:.qddbf.run[];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;1;"resuming at day 3, with days 1-2 covered, leaves one window"]};
 
 / The dangerous direction: a cursor from a narrower run must not be used to
 / resume a wider one, which would skip everything before it.
 test_a_foreign_checkpoint_is_discarded:{[t]
     .qbfstate.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;2];.ddbftest.d 2];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;3;"a cursor from a different run specification is dropped, and the range is done in full"]};
 
 / --- dry run (ETL-14) ----------------------------------------------------
 
 test_a_dry_run_publishes_no_coverage:{[t]
     setenv[`UQF_DRY_RUN;"true"];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.run[];
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[count value `etl_coverage;0;"a diagnostic run leaves the ledger untouched"]};
 
 test_a_dry_run_publishes_no_rows:{[t]
     setenv[`UQF_DRY_RUN;"true"];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.run[];
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[count value `demo_deals;0;"fetch and transform happen; publication does not"]};
 
 test_a_dry_run_writes_no_checkpoint:{[t]
     setenv[`UQF_DRY_RUN;"true"];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.run[];
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[null .qbfstate.load_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4]];1b;"no resumable state survives a diagnostic run"]};
 
@@ -172,10 +172,10 @@ test_a_dry_run_writes_no_checkpoint:{[t]
 / work was done.
 test_a_real_run_after_a_dry_run_does_everything:{[t]
     setenv[`UQF_DRY_RUN;"true"];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.run[];
     setenv[`UQF_DRY_RUN;""];
-    r:.qddbf.run[];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[(r`state;r`windows_completed);(`completed;3);"a dry run leaves nothing behind that suppresses the real one"]};
 
 / --- contract validation on the fetched rows (ETL-12) ---------------------
@@ -184,11 +184,11 @@ test_a_real_run_after_a_dry_run_does_everything:{[t]
 / the missing column reads as a NULL in most q code, so without this the
 / worker publishes nulls and records the window as covered.
 test_a_contract_breaking_source_fails_the_window:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     orig:.qsrc.sources[`demo_deals]`fixture;
     .qsrc.sources[`demo_deals]:@[.qsrc.sources`demo_deals;`fixture;:;
         {([] deal_time:enlist .ddbftest.d 1; sym:enlist `EURUSD)}];
-    r:@[{.qddbf.run[]};::;{`state`err!(`threw;x)}];
+    r:@[{.qwrk.demo_deals_backfill.run[]};::;{`state`err!(`threw;x)}];
     .qsrc.sources[`demo_deals]:@[.qsrc.sources`demo_deals;`fixture;:;orig];
     .qunit.assertEquals[0=count value `etl_coverage;1b;"a source missing declared columns records no coverage, rather than publishing nulls as complete"]};
 
@@ -197,7 +197,7 @@ test_a_contract_breaking_source_fails_the_window:{[t]
 / empty table and would report no failures anyway - but only by accident of
 / how `select` behaves, not by intent, and an accident is not a contract.
 test_the_quality_gate_passes_an_empty_batch:{[t]
-    .qunit.assertEquals[count .qddbf.quality_check[0#.qsdemo.fixture[]];0;
+    .qunit.assertEquals[count .qwrk.demo_deals_backfill.quality_check[0#.qsdemo.fixture[]];0;
         "an empty window has nothing to fail, and must not be reported as failing"]};
 
 / --- the contract methods themselves (#185 coverage) ---------------------
@@ -214,8 +214,8 @@ test_the_quality_gate_passes_an_empty_batch:{[t]
 / checked.
 
 test_spec_delegates_to_the_shell:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qunit.assertEquals[.qddbf.spec[];.qbw.spec `demo_deals_backfill;
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertEquals[.qwrk.demo_deals_backfill.spec[];.qbw.spec `demo_deals_backfill;
         "the worker's spec is the shell's spec for it, not a second copy"]};
 
 test_plan_delegates_and_passes_the_cursor:{[t]
@@ -226,8 +226,8 @@ test_plan_delegates_and_passes_the_cursor:{[t]
     / would plan all three days whatever the cursor said, since a gap behind
     / the cursor is planned (see .qbw.plan).
     .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qunit.assertEquals[count .qddbf.plan[.ddbftest.d 2];2;
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertEquals[count .qwrk.demo_deals_backfill.plan[.ddbftest.d 2];2;
         "with day 1 covered, a cursor at day 2 plans the two days after it"]};
 
 / A gap BEHIND the cursor is planned. This is the restatement case (D-11):
@@ -245,62 +245,95 @@ test_a_gap_behind_the_cursor_is_still_planned:{[t]
     .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
     .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 3;.ddbftest.d 4;1];
     .qcov.supersede[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3];
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    w:.qddbf.plan[.ddbftest.d 4];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    w:.qwrk.demo_deals_backfill.plan[.ddbftest.d 4];
     .qunit.assertEquals[count w;1;"the withdrawn day is planned although the cursor is past it"];
     .qunit.assertEquals[(first w)`range_from;.ddbftest.d 2;"and it is exactly the withdrawn day"]};
 
 test_plan_with_a_null_cursor_plans_the_whole_range:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qunit.assertEquals[count .qddbf.plan[0Np];3;"no cursor means nothing is done yet"]};
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertEquals[count .qwrk.demo_deals_backfill.plan[0Np];3;"no cursor means nothing is done yet"]};
 
 test_fetch_delegates_with_its_window_the_right_way_round:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    r:.qddbf.fetch[.ddbftest.d 1;.ddbftest.d 2];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qwrk.demo_deals_backfill.fetch[.ddbftest.d 1;.ddbftest.d 2];
     .qunit.assertEquals[r`state;`ok;"one day of the fixture fetches cleanly"];
     .qunit.assertEquals[count r`result;1;
         "one day of a five-day fixture is one row - a swapped window would be empty or five"]};
 
 test_publish_delegates_and_returns_the_row_count:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    batch:(.qddbf.fetch[.ddbftest.d 1;.ddbftest.d 2])`result;
-    .qunit.assertEquals[.qddbf.publish batch;1;"publish reports what it wrote"];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    batch:(.qwrk.demo_deals_backfill.fetch[.ddbftest.d 1;.ddbftest.d 2])`result;
+    .qunit.assertEquals[.qwrk.demo_deals_backfill.publish batch;1;"publish reports what it wrote"];
     .qunit.assertEquals[count value `demo_deals;1;"and the row is actually in the target"]};
 
 test_checkpoint_delegates_and_the_cursor_can_be_read_back:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.checkpoint[.ddbftest.d 2];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.checkpoint[.ddbftest.d 2];
     .qunit.assertEquals[.qbfstate.load_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4]];
         .ddbftest.d 2;
         "the cursor written through the delegator is the cursor the shell stores"]};
 
 test_cleanup_delegates:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    .qddbf.cleanup[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qwrk.demo_deals_backfill.cleanup[];
     .qunit.assertEquals[.qbfstate.lock_held `demo_deals_backfill;0b;
         "cleanup releases the single-instance lock"]};
 
 / The five names ETL-01 requires, called through the worker's OWN namespace
 / rather than the shell's - which is what an orchestrator does.
 test_every_contract_method_is_callable_not_merely_present:{[t]
-    .qddbf.init[.ddbftest.spec_for[`v1;1;4]];
-    ok:all {[nm] 100h=type value ` sv `.qddbf,nm} each .qbfstate.bounded_worker_methods;
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    ok:all {[nm] 100h=type value ` sv `.qwrk.demo_deals_backfill,nm} each .qbfstate.bounded_worker_methods;
     .qunit.assertEquals[ok;1b;
         "require_contract checks these names exist; this checks they are functions"]};
 
 / --- the shell's own guards (#124, #60) ---------------------------------
+
+/ --- the derived namespace (.qwrk) --------------------------------------
+
+test_define_derives_the_workers_namespace:{[t]
+    / The worker's name is its only name. Before this, a worker carried two -
+    / `demo_deals_backfill` and `.qddbf` - and keeping them in step was a
+    / convention nothing checked.
+    .qunit.assertEquals[(.qbw.declaration `demo_deals_backfill)`ns;`.qwrk.demo_deals_backfill;
+        "the namespace is .qwrk.<worker>, derived rather than declared"]};
+
+test_the_derived_namespace_is_where_the_implementation_actually_is:{[t]
+    / Not a tautology with the test above: that one reads what define stored,
+    / this one checks the stored value names the namespace holding the
+    / worker's own methods. A derivation that agreed with itself and with
+    / nothing else would pass the first and fail here.
+    .qunit.assertEquals[`quality_check in key .qbw.namespace `demo_deals_backfill;1b;
+        "the derived namespace is the one the worker's file declared"]};
+
+test_a_supplied_namespace_is_refused:{[t]
+    / Refused, not silently overwritten. A worker declared with its own `ns`
+    / would run under the derived namespace regardless, and the author would
+    / meet that as a contract failure at init naming every missing method
+    / rather than as a sentence naming the key they passed.
+    .qunit.assertError[{.qbw.define[`ns_supplying_worker;x]};
+        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`some_other_ds;1D;`demo_deals_passthrough);
+        "a worker may not choose its own namespace"]};
+
+test_the_refusal_names_the_namespace_it_would_have_used:{[t]
+    err:@[{.qbw.define[`ns_supplying_worker;x]; ""};
+        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`some_other_ds;1D;`demo_deals_passthrough);{x}];
+    .qunit.assertTrue[err like "*.qwrk.ns_supplying_worker*";
+        "the refusal says which namespace the worker will actually live in"]};
+
 
 / Two workers on one dataset AND one partition still produce coverage rows
 / nothing can tell apart, so that pair is still refused. What changed with
 / #185 is that the pair, not the dataset alone, is what has to be unique.
 test_two_workers_may_not_claim_one_dataset_and_partition:{[t]
     .qunit.assertError[{.qbw.define[`clashing_worker;x]};
-        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough);
+        `source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough);
         "a second worker on one dataset and partition would produce coverage rows nothing can tell apart (#60)"]};
 
 test_the_clash_error_names_the_existing_claimant:{[t]
     err:@[{.qbw.define[`clashing_worker;x]; ""};
-        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough);{x}];
+        `source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough);{x}];
     .qunit.assertEquals[err like "*demo_deals_backfill*";1b;"the refusal names who already owns the dataset"]};
 
 / The name appearing is not enough. q evaluates right to left, so
@@ -310,7 +343,7 @@ test_the_clash_error_names_the_existing_claimant:{[t]
 / because the name was still there immediately before the wreckage.
 test_the_clash_error_reads_as_a_sentence:{[t]
     err:@[{.qbw.define[`clashing_worker;x]; ""};
-        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough);{x}];
+        `source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough);{x}];
     .qunit.assertTrue[err like "*produce coverage rows nothing can tell apart";
         "the explanation survives intact to the end of the message"]};
 
@@ -322,10 +355,10 @@ test_the_clash_error_reads_as_a_sentence:{[t]
 / distinguishable and no read composes them.
 test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
     .qbw.define[`eurusd_slice;
-        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
+        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     .qunit.assertEquals[
         .qbw.define[`usdjpy_slice;
-            `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`USDJPY)];
+            `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`USDJPY)];
         `usdjpy_slice;
         "two partitions of one dataset are two distinguishable claims, so both register"];
     .qbw.worker_cfg:(`eurusd_slice`usdjpy_slice) _ .qbw.worker_cfg;};
@@ -334,9 +367,9 @@ test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
 / different worker is the case that was always wrong and still is.
 test_two_workers_may_not_claim_one_partition_of_a_dataset:{[t]
     .qbw.define[`eurusd_slice;
-        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
+        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     err:@[{.qbw.define[`another_eurusd_slice;x]; ""};
-        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD);{x}];
+        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD);{x}];
     .qbw.worker_cfg:(enlist `eurusd_slice) _ .qbw.worker_cfg;
     .qunit.assertEquals[err like "*eurusd_slice*";1b;
         "the second claim on one dataset AND partition is refused, naming the holder"]};
@@ -350,21 +383,21 @@ test_a_worker_declaring_no_partition_gets_the_sentinel:{[t]
 
 test_a_declared_partition_is_stored_as_given:{[t]
     .qbw.define[`eurusd_slice;
-        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
+        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     r:.qbw.partition_of `eurusd_slice;
     .qbw.worker_cfg:(enlist `eurusd_slice) _ .qbw.worker_cfg;
     .qunit.assertEquals[r;`EURUSD;"the declared partition is what coverage will be recorded under"]};
 
 test_a_non_symbol_partition_is_refused:{[t]
     .qunit.assertError[{.qbw.define[`bad_slice;x]};
-        `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;"EURUSD");
+        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;"EURUSD");
         "a string partition would be recorded as a char vector and match no read"]};
 
 / Redefining the SAME worker must stay legal - the shell's define is called
 / at load, and reloading a worker file is ordinary.
 test_a_worker_may_redeclare_itself:{[t]
     .qunit.assertEquals[
-        .qbw.define[`demo_deals_backfill;`ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough)];
+        .qbw.define[`demo_deals_backfill;`source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough)];
         `demo_deals_backfill;
         "reloading a worker file re-runs its own define, which must not trip the clash guard"]};
 
@@ -414,8 +447,8 @@ test_a_forward_cursor_is_returned_unchanged:{[t]
 / loop CALLS it - which every one of those tests would pass without.
 test_a_real_run_beats_once_per_window:{[t]
     `worker_heartbeat set 0#value .qhb.attach[];
-    .qddbf.init[.ddbftest.spec_for[`hb1;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`hb1;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     beats:first exec windows from .qhb.report[] where worker=`demo_deals_backfill;
     .qunit.assertEquals[beats;"j"$r`windows_completed;
         "the heartbeat's window count matches the run's own completed count"]};
@@ -425,17 +458,17 @@ test_a_finished_run_does_not_read_as_wedged:{[t]
     / state and ages into looking stuck - which is the exact failure the
     / status file already has and this table exists to avoid.
     `worker_heartbeat set 0#value .qhb.attach[];
-    .qddbf.init[.ddbftest.spec_for[`hb2;1;4]];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`hb2;1;4]];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[first exec state from .qhb.report[] where worker=`demo_deals_backfill;
         r`state;"the last beat carries the run's terminal state"]};
 
 test_an_idle_run_still_beats:{[t]
     / "Ran, found no work" must not look like a worker that stopped beating.
     `worker_heartbeat set 0#value .qhb.attach[];
-    .qddbf.init[.ddbftest.spec_for[`hb3;1;4]];
-    .qddbf.run[];
-    r:.qddbf.run[];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`hb3;1;4]];
+    .qwrk.demo_deals_backfill.run[];
+    r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[first exec state from .qhb.report[] where worker=`demo_deals_backfill;
         `idle;"an idle second run beats idle rather than going quiet"]};
 
@@ -462,8 +495,8 @@ test_the_published_rows_are_the_transform_output:{[t]
     / Proves the transform runs INSIDE do_window, between fetch and publish,
     / rather than only being declared.
     .ddbftest.double_notional[];
-    .qddbf.init[.ddbftest.spec_for[`xf1;1;4]];
-    .ddbftest.with_transform[`ddbftest_double;{.qddbf.run[]}];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`xf1;1;4]];
+    .ddbftest.with_transform[`ddbftest_double;{.qwrk.demo_deals_backfill.run[]}];
     want:exec 2*notional from .qsdemo.fixture[] where deal_id in exec deal_id from value `demo_deals;
     .qunit.assertEquals[exec notional from value `demo_deals;want;
         "what reaches the target is the transform's output, not the fetched batch"]};
@@ -471,8 +504,8 @@ test_the_published_rows_are_the_transform_output:{[t]
 test_a_throwing_transform_fails_the_window_and_publishes_nothing:{[t]
     .qxf.registry[`ddbftest_throws]:.qxf.registry`demo_deals_passthrough;
     .qxf.registry[`ddbftest_throws;`fn]:{[batch] '"boom"};
-    .qddbf.init[.ddbftest.spec_for[`xf2;1;4]];
-    r:.ddbftest.with_transform[`ddbftest_throws;{.qddbf.run[]}];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`xf2;1;4]];
+    r:.ddbftest.with_transform[`ddbftest_throws;{.qwrk.demo_deals_backfill.run[]}];
     .qunit.assertEquals[(r`windows_failed;count value `demo_deals;
                          .qcov.is_covered[`demo_deals;`;`xf2;.z.p;.ddbftest.d 1;.ddbftest.d 4]);
         (3;0;0b);
@@ -480,20 +513,20 @@ test_a_throwing_transform_fails_the_window_and_publishes_nothing:{[t]
 
 test_a_worker_without_a_transform_is_refused:{[t]
     err:@[{.qbw.define[`no_transform;x]; ""};
-        `ns`source`dataset`width!(`.qddbf;`demo_deals;`no_transform_ds;1D);{x}];
+        `source`dataset`width!(`demo_deals;`no_transform_ds;1D);{x}];
     .qunit.assertEquals[err like "*transform*";1b;"every job has a transform, even one that changes nothing"]};
 
 test_a_transform_that_does_not_read_the_source_contract_is_refused:{[t]
     .qxf.passthrough[`ddbftest_wrong_shape;`batch;([] sym:`symbol$(); px:`float$());([] sym:enlist `EURUSD; px:enlist 1.1)];
     err:@[{.qbw.define[`wrong_shape;x]; ""};
-        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`wrong_shape_ds;1D;`ddbftest_wrong_shape);{x}];
+        `source`dataset`width`transform!(`demo_deals;`wrong_shape_ds;1D;`ddbftest_wrong_shape);{x}];
     .qxf.registry:(enlist `ddbftest_wrong_shape) _ .qxf.registry;
     .qunit.assertEquals[err like "*does not read source demo_deals*";1b;
         "a transform written against another shape fails at declaration, not on the first window"]};
 
 test_a_clocked_transform_is_refused_for_a_bounded_worker:{[t]
     err:@[{.qbw.define[`clocked;x]; ""};
-        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`clocked_ds;1D;`cross_quotes);{x}];
+        `source`dataset`width`transform!(`demo_deals;`clocked_ds;1D;`cross_quotes);{x}];
     .qunit.assertEquals[err like "*takes as_of*";1b;"a window has no single instant to hand a transform, so one that needs it is refused by name"]};
 
 / --- the data-quality gate -----------------------------------------------
@@ -514,11 +547,11 @@ with_bad_fixture:{[f]
 
 test_the_check_passes_the_real_fixture:{[t]
     / The gate must not fire on good data, or it would be turned off.
-    .qunit.assertEquals[count .qddbf.quality_check[.qsdemo.fixture[]];0;
+    .qunit.assertEquals[count .qwrk.demo_deals_backfill.quality_check[.qsdemo.fixture[]];0;
         "the shipped fixture is acceptable, so the gate is not simply always-on"]};
 
 test_the_check_catches_a_nonpositive_rate:{[t]
-    .qunit.assertEquals[count .qddbf.quality_check[.ddbftest.bad_fixture[]];1;
+    .qunit.assertEquals[count .qwrk.demo_deals_backfill.quality_check[.ddbftest.bad_fixture[]];1;
         "a zero rate is arithmetically impossible for a deal and is reported"]};
 
 test_a_failing_check_is_not_published:{[t]
@@ -530,24 +563,24 @@ test_a_failing_check_is_not_published:{[t]
     / publish. That per-window granularity is the desired behaviour - one
     / bad day must not block the good ones - and my first version of this
     / test asserted zero rows and failed against correct code.
-    .qddbf.init[.ddbftest.spec_for[`chk1;1;4]];
-    .ddbftest.with_bad_fixture[{.qddbf.run[]}];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`chk1;1;4]];
+    .ddbftest.with_bad_fixture[{.qwrk.demo_deals_backfill.run[]}];
     .qunit.assertEquals[count select from value `demo_deals where deal_id=3;0;
         "the row that failed its check is absent, while clean windows publish"]};
 
 test_a_failing_check_leaves_the_window_uncovered:{[t]
     / And the ledger does not claim it. This is the lie the gate removes:
     / without it, is_covered would report the window published forever.
-    .qddbf.init[.ddbftest.spec_for[`chk2;1;4]];
-    .ddbftest.with_bad_fixture[{.qddbf.run[]}];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`chk2;1;4]];
+    .ddbftest.with_bad_fixture[{.qwrk.demo_deals_backfill.run[]}];
     .qunit.assertEquals[.qcov.is_covered[`demo_deals;`;`chk2;.z.p;.ddbftest.d 1;.ddbftest.d 4];0b;
         "a window that failed its check is not recorded as covered"]};
 
 test_a_failing_check_counts_as_a_failed_window:{[t]
     / M-05: terminal for that window, and the run continues rather than
     / throwing - the same treatment a failed fetch gets.
-    .qddbf.init[.ddbftest.spec_for[`chk3;1;4]];
-    r:.ddbftest.with_bad_fixture[{.qddbf.run[]}];
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`chk3;1;4]];
+    r:.ddbftest.with_bad_fixture[{.qwrk.demo_deals_backfill.run[]}];
     .qunit.assertTrue[0<r`windows_failed;
         "a check failure is a failed window, not a crash and not a silent skip"]};
 
@@ -567,7 +600,7 @@ test_a_non_function_check_is_refused:{[t]
 
 test_a_zero_width_is_refused:{[t]
     .qunit.assertError[{.qbw.define[`zero_width;x]};
-        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`something_else;0D00:00;`demo_deals_passthrough);
+        `source`dataset`width`transform!(`demo_deals;`something_else;0D00:00;`demo_deals_passthrough);
         "a zero width plans infinitely many empty windows"]};
 
 \d .

@@ -24,14 +24,20 @@
 
 \d .surface
 
-/ Namespaces this tree owns. Derived from the `.q`-prefix convention N-01
-/ ties to filenames, minus q's own `.q` namespace - which is KX's, not ours,
-/ and whose 182 names would swamp the output.
+/ Namespaces this tree owns, from the one enumeration in src/namespaces.q.
+/ .
+/ It used to scan the root for a `q` prefix here. That is right only while
+/ every namespace is single-level: worker instances nest under .qwrk, and a
+/ root scan reports `qwrk` - a namespace holding no functions - while every
+/ worker's surface silently disappears from the export the gates diff
+/ against. .qns.functional drops the containers and keeps the leaves.
+/ .
+/ The names come back fully qualified (`.qbw`); the rest of this file works
+/ in the undotted form the root scan produced, so the dot is trimmed here.
 own_namespaces:{[]
-    ns:key `;
-    ns:ns where (string ns) like "q*";
-    ns:ns except `q;
-    asc ns}
+    ns:.qns.functional[];
+    ns:ns except `.qunit;
+    asc {[n] `$1_string n} each ns}
 
 / Private: is this value a lambda? 100h is a q lambda; anything else (a
 / projection, a primitive, a table, a constant) has no parameter list to read.

@@ -119,9 +119,9 @@ recorded as covered.
 Mostly a declaration. Create `src/etl/workers/fx_rates_backfill.q`:
 
 ```q
-/ fx_rates_backfill.q - the fx_rates bounded worker (.qfxbf).
+/ fx_rates_backfill.q - the fx_rates bounded worker (.qwrk.fx_rates_backfill).
 
-\d .qfxbf
+\d .qwrk.fx_rates_backfill
 
 worker_name:`fx_rates_backfill
 
@@ -165,9 +165,17 @@ quality_check:{[batch]
         ([] rate_time:2026.09.11D09:00 2026.09.12D09:00; sym:`EURUSD`USDJPY; mid:1.0842 149.82; pip_factor:10000 100)))];
 
 .qbw.define[`fx_rates_backfill;
-    `ns`source`dataset`width`transform`check!
-    (`.qfxbf;`fx_rates;`fx_rates;1D;`fx_rates_pips;.qfxbf.quality_check)];
+    `source`dataset`width`transform`check!
+    (`fx_rates;`fx_rates;1D;`fx_rates_pips;.qwrk.fx_rates_backfill.quality_check)];
 ```
+
+**The namespace is `.qwrk.<worker name>`, and you do not choose it.** Every
+worker instance lives under the one `.qwrk` root, named exactly as it is
+registered, and `.qbw.define` derives the namespace from the worker name —
+a supplied `ns` key is refused. So `key `.qwrk` lists every loaded worker,
+and a worker has one name rather than a name and an abbreviation to keep in
+step. The library's own modules stay flat (`.qbw`, `.qcov`, `.qsrc`); the
+nesting marks the line between the framework and what runs on it.
 
 **The globals stay in the worker's namespace deliberately.** ETL-01 requires
 `source_version`, `range_from` and `range_to` to be names in *this*
@@ -236,8 +244,8 @@ In a q session from the repository root:
 \l scripts/torq_pipeline.q
 \l src/etl/init.q
 
-.qfxbf.init[`source_version`range_from`range_to!(`v1;2026.09.11D00:00;2026.09.16D00:00)];
-.qfxbf.run[]
+.qwrk.fx_rates_backfill.init[`source_version`range_from`range_to!(`v1;2026.09.11D00:00;2026.09.16D00:00)];
+.qwrk.fx_rates_backfill.run[]
 ```
 
 `scripts/torq_pipeline.q` is easy to forget and the failure is obscure: it
@@ -288,7 +296,7 @@ forgetting this one reports a gap-ridden range as complete. `` ` `` means
 Run it a second time and it is **idle**, not failed:
 
 ```q
-q).qfxbf.run[][`state]
+q).qwrk.fx_rates_backfill.run[][`state]
 `idle
 ```
 
@@ -336,7 +344,7 @@ workers can fill one dataset at once:
 
 ```q
 .qbw.define[`fx_rates_eurusd;
-    `ns`source`dataset`width`transform`partition!(`.qfxeur;`fx_rates;`fx_rates;1D;`fx_rates_pips;`EURUSD)];
+    `source`dataset`width`transform`partition!(`fx_rates;`fx_rates;1D;`fx_rates_pips;`EURUSD)];
 ```
 
 Coverage is then recorded and read under that partition, and **no read unions
