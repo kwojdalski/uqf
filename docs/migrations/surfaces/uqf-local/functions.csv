@@ -31,7 +31,6 @@ qbook,starts_with,function,2,prefix s
 qbook,symbolize_columns,function,2,tbl sym_cols
 qbw,advanced_to,function,3,worker current next_cursor
 qbw,begin_run,function,1,worker
-qbw,cfgs,dict,,
 qbw,checkpoint,function,2,worker cursor
 qbw,cleanup,function,1,worker
 qbw,connect,function,1,worker
@@ -59,6 +58,7 @@ qbw,run_check,function,2,worker batch
 qbw,spec,function,1,worker
 qbw,transform_batch,function,2,worker batch
 qbw,unpartitioned,value,,
+qbw,worker_cfg,dict,,
 qbw,write_state,function,3,worker nm v
 qccy,ccy_pair_legs,function,1,pair
 qccy,ccy_pair_symbol,function,2,base quote

@@ -298,7 +298,7 @@ test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
             `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`USDJPY)];
         `usdjpy_slice;
         "two partitions of one dataset are two distinguishable claims, so both register"];
-    .qbw.cfgs:(`eurusd_slice`usdjpy_slice) _ .qbw.cfgs;};
+    .qbw.worker_cfg:(`eurusd_slice`usdjpy_slice) _ .qbw.worker_cfg;};
 
 / The refusal has to survive the new dimension: same dataset, same partition,
 / different worker is the case that was always wrong and still is.
@@ -307,7 +307,7 @@ test_two_workers_may_not_claim_one_partition_of_a_dataset:{[t]
         `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     err:@[{.qbw.define[`another_eurusd_slice;x]; ""};
         `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD);{x}];
-    .qbw.cfgs:(enlist `eurusd_slice) _ .qbw.cfgs;
+    .qbw.worker_cfg:(enlist `eurusd_slice) _ .qbw.worker_cfg;
     .qunit.assertEquals[err like "*eurusd_slice*";1b;
         "the second claim on one dataset AND partition is refused, naming the holder"]};
 
@@ -322,7 +322,7 @@ test_a_declared_partition_is_stored_as_given:{[t]
     .qbw.define[`eurusd_slice;
         `ns`source`dataset`width`transform`partition!(`.qddbf;`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD)];
     r:.qbw.partition_of `eurusd_slice;
-    .qbw.cfgs:(enlist `eurusd_slice) _ .qbw.cfgs;
+    .qbw.worker_cfg:(enlist `eurusd_slice) _ .qbw.worker_cfg;
     .qunit.assertEquals[r;`EURUSD;"the declared partition is what coverage will be recorded under"]};
 
 test_a_non_symbol_partition_is_refused:{[t]
@@ -343,7 +343,7 @@ test_a_worker_may_redeclare_itself:{[t]
 / the PAIR now: checking datasets alone would fail the day a dataset is
 / deliberately split across workers, which is the thing #185 set out to allow.
 test_the_two_shipped_workers_claim_distinct_dataset_partitions:{[t]
-    c:value .qbw.cfgs;
+    c:value .qbw.worker_cfg;
     claims:flip (c[;`dataset];c[;`partition]);
     .qunit.assertEquals[count[claims];count distinct claims;
         "every registered worker owns its dataset and partition alone"]};
@@ -422,9 +422,9 @@ double_notional:{[]
 
 with_transform:{[nm;f]
     orig:.qbw.declaration[`demo_deals_backfill]`transform;
-    .qbw.cfgs[`demo_deals_backfill;`transform]:nm;
+    .qbw.worker_cfg[`demo_deals_backfill;`transform]:nm;
     r:@[f;::;{(`threw;x)}];
-    .qbw.cfgs[`demo_deals_backfill;`transform]:orig;
+    .qbw.worker_cfg[`demo_deals_backfill;`transform]:orig;
     .qxf.registry:(`ddbftest_double`ddbftest_throws) _ .qxf.registry;
     r};
 

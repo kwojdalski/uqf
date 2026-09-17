@@ -100,7 +100,9 @@ Never propose any of these, and say why if asked:
   function, not by assuming. Renaming the `.qbw` config registry to `cfg`
   would have shadowed `define`'s own `cfg` parameter — it throws `'type`, and
   in a less lucky arrangement would have written to the local and left the
-  registry silently empty. The registry is `cfgs`, plural, for that reason.
+  registry silently empty. It was called `cfgs` for that reason - a plural
+  of a contraction, which is not a word - and is now `worker_cfg`: singular,
+  says what it is keyed by, and cannot collide with a local named `cfg`.
 
 ## Output
 

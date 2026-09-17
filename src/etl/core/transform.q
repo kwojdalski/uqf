@@ -231,7 +231,8 @@ output_schema:{[name] (declaration name)`output}
 / @param given dict input name -> table
 / @return the output table
 / @throws error when an input or the output does not match the declaration
-/ @eg .qxf.apply[`mid_quotes;enlist[`quotes]!enlist quotes]
+/ @eg .qxf.define[`eg_mid;`inputs`output`fn`examples!(enlist[`q]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`q]!enlist ([] sym:enlist `EURUSD; bid:1.1; ask:1.2); ([] sym:enlist `EURUSD; mid:1.15)))];
+/   .qxf.apply[`eg_mid;enlist[`q]!enlist ([] sym:`EURUSD`GBPUSD; bid:1.10 1.25; ask:1.12 1.27)]  ->  ([] sym:`EURUSD`GBPUSD; mid:1.11 1.26)
 apply:{[name;given]
     d:declaration name;
     if[d`as_of; '"apply: transform ",string[name]," takes as_of - use .qxf.apply_as_of"];
