@@ -110,6 +110,21 @@
 / somebody wrote, which validate_live can then be run against.
 required_declarations:`source`table`target`time_field`row_key`fields`types`query`fixture`tz
 
+/ How a source is reached - the one OPTIONAL declaration.
+/ .
+/   ipc   a q process: the credential is host:port, opened with hopen, and
+/         the query callback calls the handle with a lambda. The default,
+/         because every source before ODBC was one.
+/   odbc  anything with an ODBC driver: the credential is the connection
+/         string, opened with .qodbc.open, and the query callback builds SQL
+/         through .qodbc's one escape function (bank E-08).
+/ .
+/ A source's transport decides how .qbw.connect opens a handle and how
+/ cleanup closes one, so it belongs to the source rather than the worker: two
+/ workers over one source cannot disagree about how to reach it.
+transports:`ipc`odbc
+default_transport:`ipc
+
 / source -> its declaration dict.
 sources:(`symbol$())!();
 
@@ -133,6 +148,8 @@ sources:(`symbol$())!();
 /   fixture - a niladic lambda returning a synthetic table of the same shape
 /   tz - the zone the source's time_field is expressed in, as a
 /     symbol: `UTC, or a tz-database name such as `$"Europe/London" (L-06)
+/ and optionally:
+/   transport - `ipc (the default) or `odbc, see `transports`
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 register:{[source;decl]
@@ -202,6 +219,13 @@ register:{[source;decl]
         / long form lives in the comment above rather than in the message.
         '"register: ",string[source],"'s time_field ",string[decl`time_field],
          " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently (L-03)"];
+    tr:$[`transport in key decl; decl`transport; default_transport];
+    if[not tr in transports;
+        '"register: ",string[source],"'s transport must be one of ",(", " sv string transports)];
+    / Stored on EVERY declaration, declared or not: `sources` holds dicts, and
+    / a key present on one and absent on another stops later assignments
+    / fitting - the shape .qbw's optional_cfg normalisation exists for.
+    decl[`transport]:tr;
     / Store row_key NORMALISED to a vector, always.
     / .
     / Two reasons, and the second is not obvious. Semantically it means no

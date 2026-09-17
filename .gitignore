@@ -27,6 +27,10 @@ actual/
 # don't commit it
 /scripts/output/
 
+# test databases built from external data by scripts/dump_databento_duckdb.py -
+# large, derived, and rebuilt on demand
+/output/
+
 # Python bytecode cache (python/*/'s own .gitignore covers .venv/dist/etc
 # within each package; this is the general fallback)
 __pycache__/
