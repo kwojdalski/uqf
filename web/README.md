@@ -6,7 +6,16 @@ on the server. No authentication service or remote hosting is introduced.
 
 ## Run locally
 
-Requires Node 22.12+ (CI uses Node 24) and the repository's uv environment.
+Requires Node **`^22.13 || ^24 || >=26`** (CI uses Node 24) and the
+repository's uv environment. That is the intersection of what the toolchain
+declares, not a round number: `jsdom` sets the 22.x floor at 22.13, and
+`vitest` supports no 23.x at all.
+
+`npm ci` warns rather than fails on an unsupported Node, and CI only ever
+runs one version — so a dependency quietly raising its floor above the range
+above is invisible from here. `src/engines.test.ts` asserts the range we
+advertise is one every installed dependency actually accepts, which is the
+check npm does not do.
 From the repository root, start the API:
 
 ```sh
