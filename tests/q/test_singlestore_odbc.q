@@ -143,6 +143,35 @@ test_the_password_is_a_parameter_not_a_literal:{[t]
     b:.qodbc.build_connection_string["h";1;"d";"u";"two"];
     .qunit.assertTrue[not a~b;"the password reaches the string it is passed to"]};
 
+/ --- run_sql, against a stubbed driver --------------------------------------
+
+/ A fake .odbc: what the KX client populates, minus the driver. Installed for
+/ one test and removed after, so every other test still sees "no driver".
+with_fake_driver:{[f]
+    `.odbc.open set {[c] 7};
+    `.odbc.eval set {[h;sql] ([] h:enlist h; sql:enlist sql)};
+    r:@[f;::;{(`threw;x)}];
+    ![`.odbc;();0b;`open`eval];
+    r}
+
+test_run_sql_returns_the_drivers_table:{[t]
+    / The first live run of this file returned a PROJECTION here, not a table:
+    / `@[{.odbc.eval x};(h;sql);...]` hands the pair to a 2-ary eval as ONE
+    / argument, nothing throws, and the caller fails later on `meta`.
+    r:.odbctest.with_fake_driver[{.qodbc.run_sql[7;"select 1"]}];
+    .qunit.assertTrue[98h=type r;"run_sql hands back the table .odbc.eval returns, not a projection of it"]};
+
+test_run_sql_passes_handle_and_statement_separately:{[t]
+    r:.odbctest.with_fake_driver[{.qodbc.run_sql[7;"select 1"]}];
+    .qunit.assertEquals[(first r`h;first r`sql);(7;"select 1");"the handle and the statement reach the driver as two arguments"]};
+
+test_run_sql_names_the_statement_on_failure:{[t]
+    err:.odbctest.with_fake_driver[{
+        `.odbc.eval set {[h;sql] '"syntax"};
+        @[.qodbc.run_sql[7;];"select nope";{x}]}];
+    / two likes: a pattern with more than one inner `*` throws 'nyi here
+    .qunit.assertTrue[(err like "*syntax*") and err like "*select nope";"a failing statement is named in the error, with the driver's reason"]};
+
 / Build the statement without a connection, by calling the renderer the query
 / uses. Keeps every assertion above driver-free.
 built_sql:{[]

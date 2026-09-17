@@ -290,10 +290,16 @@ init:{[worker;run_spec]
 
 / Private: open the live connection. Separate from init so the failure is
 / attributable, and so a test can exercise init without one.
+/ .
+/ The source's transport picks the opener: an ipc credential is host:port,
+/ an odbc credential is a connection string.
 connect:{[worker]
     source:(declaration worker)`source;
     cred:.qsrc.require_credentials source;
-    @[{hopen (hsym `$":",x;5000j)};cred;
+    opener:$[`odbc~(.qsrc.declaration source)`transport;
+        {.qodbc.open x};
+        {hopen (hsym `$":",x;5000j)}];
+    @[opener;cred;
         {[source;e] '"connect: cannot reach the ",string[source]," source (",e,") - refusing to start rather than falling back to the fixture, which would record synthetic data as covered"}[source]]}
 
 / ------------------------------------------------------------------ PLAN
@@ -635,7 +641,10 @@ publish_last_batch:{[worker;unused] publish[worker;read_state[worker;`last_batch
 / release_lock is a no-op when not held.
 cleanup:{[worker]
     h:read_state[worker;`handle];
-    if[not null h; @[hclose;h;::]; write_state[worker;`handle;0Ni]];
+    closer:$[`odbc~(.qsrc.declaration (declaration worker)`source)`transport;
+        .qodbc.close;
+        {[h] @[hclose;h;::]}];
+    if[not null h; closer h; write_state[worker;`handle;0Ni]];
     .qbfstate.release_lock worker}
 
 \d .

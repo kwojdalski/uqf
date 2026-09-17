@@ -176,9 +176,15 @@ with_connection:{[conn;f]
 / @param sql the statement
 / @return a table
 / @throws error naming the statement when it fails
+/ .
+/ `.` with the argument list, not `@[{.odbc.eval x};(h;sql);...]`: @ is UNARY
+/ apply, so that form handed the pair to .odbc.eval as one argument and, eval
+/ being 2-ary, returned a PROJECTION rather than a table. Nothing threw, the
+/ handler never fired, and the first live caller found out when `meta` on
+/ the "table" failed. Found the first time this file ran against a driver.
 run_sql:{[h;sql]
     require_available[];
-    @[{.odbc.eval x};(h;sql);
+    .[{[hd;st] .odbc.eval[hd;st]};(h;sql);
       {[sql;e] '"qodbc.run_sql: ",e," - statement: ",sql}[sql]]}
 
 / The tables visible on a connection.
