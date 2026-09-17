@@ -51,7 +51,7 @@ types:"psf"                    / one q type character per field
 target:`fx_rates               / the local table they land in
 time_field:`rate_time          / the column the window is taken on
 row_key:`rate_time`sym         / what identifies a row uniquely (D-11)
-time_zone:`UTC                 / what time_field is expressed in (L-06)
+tz:`UTC                        / what time_field is expressed in (L-06)
 
 query:{[h;range_from;range_to]
     h({[from_ts;to_ts]
@@ -65,8 +65,8 @@ fixture:{[]
         mid:1.0842 1.2631 1.0847 149.82 1.0851)}
 
 .qsrc.register[source_name;
-    `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
-    (source_name;`fx_rates;target;time_field;row_key;fields;types;query;fixture;time_zone)];
+    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
+    (source_name;`fx_rates;target;time_field;row_key;fields;types;query;fixture;tz)];
 
 \d .
 ```
@@ -95,7 +95,7 @@ that reuses ids after a purge silently merges unrelated rows. It is declared
 per source for that reason; see
 [the restatement design](../architecture/restatement-design.md).
 
-**`time_zone` is a claim, not a default.** An unstated zone is the shape of
+**`tz` is a claim, not a default.** An unstated zone is the shape of
 the bug: every later reader assumes UTC while the source hands over local
 wall-clock time, and the two differ by an offset that changes twice a year.
 `UTC` is the only value needing no zone table — push the conversion upstream

@@ -44,13 +44,13 @@ beforeNamespace_zones:{[]
 setUp_sources:{[]
     .tztest.drop_sources[];
     .qsrc.register[`tz_london;
-        `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+        `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
         (`tz_london;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:2026.10.25D00:30:00.000000000+0D00:30*til 8; px:8#1.5)};
          .tztest.london)];
     .qsrc.register[`tz_summer;
-        `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+        `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
         (`tz_summer;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:enlist 2026.07.15D09:00:00.000000000; px:enlist 1.5)};
@@ -204,7 +204,7 @@ test_the_over_fetch_does_not_publish_neighbouring_rows:{[t]
 
 / The zone is a per-source declaration, because only the source knows it.
 test_the_demo_source_declares_its_zone:{[t]
-    .qunit.assertEquals[(.qsrc.declaration `demo_deals)`time_zone;`UTC;"the zone is a claim the source makes, which validate_live can be run against"]};
+    .qunit.assertEquals[(.qsrc.declaration `demo_deals)`tz;`UTC;"the zone is a claim the source makes, which validate_live can be run against"]};
 
 / A UTC source takes the identity path: no table, no lookup, no conversion.
 / That matters because it is the path every source in this tree takes, so a
