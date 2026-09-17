@@ -119,6 +119,19 @@ from torq_orchestrator.runtime import (  # noqa: F401
     stop,
     summary,
 )
+from torq_orchestrator.schema_view import (  # noqa: F401
+    DEFAULT_PROC as DEFAULT_SCHEMA_PROC,
+)
+from torq_orchestrator.schema_view import (  # noqa: F401
+    columns as schema_columns,
+)
+from torq_orchestrator.schema_view import (  # noqa: F401
+    overview as schema_overview,
+)
+from torq_orchestrator.schema_view import (  # noqa: F401
+    resolve_port,
+    table_names,
+)
 from torq_orchestrator.schemas import (  # noqa: F401
     CRYPTO_BOOK_TABLE_SCHEMA,
     CRYPTO_SIM_FILLS_TABLE_SCHEMA,
@@ -171,6 +184,11 @@ __all__ = [
     "WIDE_BOOK_LEVELS",
     "WIDE_BOOK_TABLE_SCHEMA",
     "VENDORED_STARTWITHALL_OVERLAY",
+    "DEFAULT_SCHEMA_PROC",
+    "schema_columns",
+    "schema_overview",
+    "resolve_port",
+    "table_names",
     "_base_process_rows",
     "_crypto_recorder_config_yaml",
     "_generated_schema_content",

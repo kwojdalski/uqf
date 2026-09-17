@@ -75,6 +75,41 @@ elsewhere in this repo for `src/`/`tests/` - plus `envsubst` and `rlwrap`
 (TorQ's own `torq.sh`, which this still drives under the hood, needs both;
 on macOS: `brew install gettext rlwrap`).
 
+## Reading the database's shape
+
+`schema` answers "what tables are there, and what shape are they" without
+anyone typing `meta` at a q prompt:
+
+```
+uqf-stack schema                  # every table on rdb1, with row and column counts
+uqf-stack schema quotes           # one table's columns, types and attributes
+uqf-stack schema --proc hdb1      # the history instead of today
+uqf-stack schema --port 6052      # a port directly, skipping --proc resolution
+```
+
+**It reads the live process, not the declarations.**
+`scripts/uqf_stack_tables.q` says what the tickerplant is *configured* to
+carry; that is not evidence a table exists in the process you are about to
+query. A tickerplant that failed to load its schema file, or an RDB that has
+not replayed, looks identical in every other view - so reporting the
+declarations here would be confidently wrong exactly when it mattered.
+
+Two things the output says that `meta` alone does not:
+
+- **Case is the vector/atom distinction.** `f` is a float column; `F` is a
+  float *vector* column, one list per row - the shape `quotes` and
+  `mkt_orderbook` are built around and that every pricing function in `src/`
+  expects. They render as `float` and `float vector`.
+- **A column's type can change with its contents.** An empty vector column
+  reports as `general`, because q cannot know the element type until a row
+  exists. The same table reads `general` before its first publish and
+  `float vector` after. Not a bug, but worth knowing before treating one
+  reading as the schema.
+
+Row counts are shown because "declared but empty" and "carrying data" is
+usually the thing being looked for, and empty tables are named explicitly
+rather than left to be spotted.
+
 ## Commands
 
 ```
@@ -85,6 +120,7 @@ summary [--port N] [--export FILE]    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/uqf-stack/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
+schema [TABLE] [--proc P] [--export FILE]  tables in a running process, or one table's columns
 list [KIND] [--port N] [--export FILE]  list every item of KIND ('processes', 'fields',
                                        'overrides', 'env') - no argument shows the kinds
 config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective

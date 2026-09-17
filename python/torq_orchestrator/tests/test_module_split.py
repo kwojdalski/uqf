@@ -36,6 +36,7 @@ MODULES = (
     "runtime",
     "logs",
     "crypto",
+    "schema_view",
 )
 
 #: Files that reach this code as `core.thing`.
