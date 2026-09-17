@@ -748,9 +748,9 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 / price drift after its own trade), this measures a sibling pair's price
 / drift instead - signed using the traded pair's own side, so a positive
 / markout_pips means impact_sym moved the way you'd expect if the traded
-/ pair's flow spilled over into it (e.g. buying EURPLN weakens PLN; a
-/ positive number here means CZKPLN moved the same way, i.e. PLN
-/ weakened against CZK too). There's no real trade in impact_sym, so
+/ pair's flow spilled over into it (e.g. buying EURPLN lifts EUR; a
+/ positive number here means EURUSD moved the same way, i.e. EUR
+/ strengthened against USD too). There's no real trade in impact_sym, so
 / its "trade_price" is its own reference price at trade_time
 / (cross_ref_price_at), not a supplied execution price - this is a thin
 / wrapper around cross_markout_at_horizons using that as the baseline.
@@ -772,8 +772,8 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 /   traded_sym) - impact_sym's own price drift, signed by traded_sym's side
 / @throws error if impact_sym normalizes to the same pair as traded_sym
 /   (nothing to compare against), or anything cross_ref_price_at/cross_book_at themselves throw
-/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`CZKPLN;trade_time;1;10000;-500 -300 0 100 300;1]
-/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`CZKPLN;trade_time;-1;10000;enlist 300;1]  -> a sell reports the impact pair's own drift with the opposite sign
+/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;-500 -300 0 100 300;1]
+/ @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;-1;10000;enlist 300;1]  -> a sell reports the impact pair's own drift with the opposite sign
 cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons_ms;ref_size]
     if[(.qccy.normalize_ccy_pair traded_sym)~.qccy.normalize_ccy_pair impact_sym;
         '"cross_impact_at_horizons: impact_sym must be different from traded_sym"];
