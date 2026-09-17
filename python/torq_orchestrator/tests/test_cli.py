@@ -1,0 +1,579 @@
+"""Tests for the `uqf-stack` command surface (cli.py).
+
+WHY THIS FILE EXISTS. `scripts/test.py coverage` reported cli.py at 0% of
+275 statements - the entire user-facing CLI, executed by nothing. The one
+test that named it, test_module_split.py, reads it as TEXT to scan for
+facade references. (Naming that pattern literally here would make this
+file fail that scan - it cannot tell an example from a call, which is why
+it excludes itself.) So every command's wiring was unverified: a
+dropped `--port`, a swallowed exit code, an argument passed in the wrong
+order would all have shipped green.
+
+WHAT IS AND IS NOT TESTED HERE. `core` is separately and thoroughly tested,
+so re-testing its behaviour through the CLI would only make those tests
+slower and more brittle. What is untested without this file is the WIRING:
+
+  * does each command call the core function it claims to,
+  * with the options the user typed actually reaching it,
+  * does a failure become a non-zero exit rather than a traceback,
+  * and does a subprocess's exit code survive to the caller.
+
+That last one is the reason to care. `start`, `stop`, `restart`, `print` and
+`summary` all end in `raise typer.Exit(code=result.returncode)`. If any of
+them returned 0 while torq.sh failed, CI would go green on a stack that
+never came up, and nothing else in this repository would notice.
+
+Every test monkeypatches `cli.core`, so nothing here starts a process,
+opens a socket or touches scripts/output/.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+import pytest
+from typer.testing import CliRunner
+
+from torq_orchestrator import cli, core
+
+runner = CliRunner()
+
+
+@dataclass
+class Completed:
+    """Stands in for subprocess.CompletedProcess, which is all the streaming
+    commands use of it."""
+
+    returncode: int = 0
+    stdout: str = ""
+
+
+@dataclass
+class Recorder:
+    """Records one call so a test can assert on the arguments, not just that
+    something was called."""
+
+    calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = field(default_factory=list)
+    result: Any = None
+    raises: Exception | None = None
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append((args, kwargs))
+        if self.raises is not None:
+            raise self.raises
+        return self.result
+
+    @property
+    def kwargs(self) -> dict[str, Any]:
+        return self.calls[-1][1]
+
+    @property
+    def args(self) -> tuple[Any, ...]:
+        return self.calls[-1][0]
+
+
+@pytest.fixture(autouse=True)
+def _no_real_paths(monkeypatch):
+    """`_paths()` reads the filesystem and the vendored tree. Every command
+    calls it, and no test here cares what it returns."""
+    monkeypatch.setattr(cli.core, "default_paths", lambda: "PATHS")
+
+
+def _patch(monkeypatch, name: str, **kw) -> Recorder:
+    rec = Recorder(**kw)
+    monkeypatch.setattr(cli.core, name, rec)
+    return rec
+
+
+# ------------------------------------------------- the streaming commands
+
+
+@pytest.mark.parametrize(
+    ("command", "fn"), [("start", "start"), ("stop", "stop"), ("restart", "restart")]
+)
+def test_a_lifecycle_command_calls_its_core_function(monkeypatch, command, fn):
+    rec = _patch(monkeypatch, fn, result=Completed())
+    result = runner.invoke(cli.app, [command])
+    assert result.exit_code == 0
+    assert rec.args[1] == "all", "the default process selector is 'all'"
+
+
+@pytest.mark.parametrize("command", ["start", "stop", "restart"])
+def test_a_lifecycle_command_passes_the_process_names_through(monkeypatch, command):
+    rec = _patch(monkeypatch, command, result=Completed())
+    runner.invoke(cli.app, [command, "rdb1 hdb1"])
+    assert rec.args[1] == "rdb1 hdb1"
+
+
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "print"])
+def test_the_port_option_reaches_core(monkeypatch, command):
+    """A dropped --port silently drives the DEFAULT stack.
+
+    That is the worst shape of wiring bug available here: every command
+    succeeds, against the wrong fleet.
+    """
+    fn = "print_procs" if command == "print" else command
+    rec = _patch(monkeypatch, fn, result=Completed())
+    runner.invoke(cli.app, [command, "--port", "7000"])
+    assert rec.kwargs["base_port"] == 7000
+
+
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "print"])
+def test_a_failing_subprocess_exit_code_survives(monkeypatch, command):
+    """The property CI depends on. A non-zero torq.sh must not become a
+    zero `uqf-stack`."""
+    fn = "print_procs" if command == "print" else command
+    _patch(monkeypatch, fn, result=Completed(returncode=3))
+    result = runner.invoke(cli.app, [command])
+    assert result.exit_code == 3
+
+
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "print"])
+def test_a_refusal_exits_one_rather_than_raising(monkeypatch, command):
+    fn = "print_procs" if command == "print" else command
+    _patch(monkeypatch, fn, raises=core.UqfStackError("no such process"))
+    result = runner.invoke(cli.app, [command])
+    assert result.exit_code == 1
+    assert not isinstance(result.exception, core.UqfStackError), "the error is handled, not raised"
+
+
+# ---------------------------------------------------------------- summary
+
+
+def _summary_ok(monkeypatch, *, rows=None, returncode=0):
+    _patch(monkeypatch, "summary", result=Completed(returncode=returncode, stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    _patch(monkeypatch, "heartbeat_states", result={})
+    rows = rows if rows is not None else []
+    _patch(monkeypatch, "summary_rows", result=rows)
+
+
+def test_summary_renders_and_propagates_the_exit_code(monkeypatch):
+    _summary_ok(monkeypatch, returncode=2)
+    result = runner.invoke(cli.app, ["summary"])
+    assert result.exit_code == 2
+
+
+def test_summary_survives_a_port_map_it_cannot_build(monkeypatch):
+    """Documented behaviour: a summary that still prints beats one that dies
+    because the port map failed - the reported ports are unaffected."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", raises=core.UqfStackError("no process.csv"))
+    _patch(monkeypatch, "heartbeat_states", result={})
+    rec = _patch(monkeypatch, "summary_rows", result=[])
+    result = runner.invoke(cli.app, ["summary"])
+    assert result.exit_code == 0
+    assert rec.args[1] == {}, "an unbuildable port map becomes empty, not fatal"
+
+
+def test_summary_distinguishes_unreachable_monitoring_from_a_healthy_fleet(monkeypatch):
+    """`None` heartbeats means monitor1 could not be reached - a gap in
+    MONITORING, not a verdict on the fleet. The distinction is the whole
+    point of the message, so it is pinned."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    _patch(monkeypatch, "heartbeat_states", raises=core.UqfStackError("monitor1 down"))
+    rec = _patch(monkeypatch, "summary_rows", result=[])
+    result = runner.invoke(cli.app, ["summary"])
+    assert rec.args[2] is None, "unreachable monitoring is None, not an empty dict"
+    assert "monitor1 is not running" in result.stdout
+
+
+def test_summary_refusal_exits_one(monkeypatch):
+    _patch(monkeypatch, "summary", raises=core.UqfStackError("no stack"))
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 1
+
+
+def _row(**kw):
+    base = {
+        "Time": "10:00",
+        "Process": "rdb1",
+        "Status": "up",
+        "PID": "42",
+        "Port": "6052",
+        "PortSource": "reported",
+        "Heartbeat": "ok",
+    }
+    return {**base, **kw}
+
+
+def test_a_configured_port_is_marked_as_a_different_claim(monkeypatch):
+    """ "will listen here" is not "is listening here". The dim markup is the
+    only thing carrying that distinction to the reader, and a table that
+    printed both identically would be quietly misleading."""
+    _summary_ok(monkeypatch, rows=[_row(Status="down", PID="-", PortSource="configured")])
+    result = runner.invoke(cli.app, ["summary"])
+    assert "come from process.csv" in result.stdout
+
+
+def test_a_running_process_with_no_heartbeat_is_explained_not_left_blank(monkeypatch):
+    """A "-" on an `up` process is neither an all-clear nor a fault: on the
+    community edition monitor1's connection count is licence-capped, so it
+    simply never subscribed. Saying so beats a dash the reader has to guess
+    at."""
+    _summary_ok(monkeypatch, rows=[_row(Heartbeat="-"), _row(Process="hdb1", Heartbeat="ok")])
+    result = runner.invoke(cli.app, ["summary"])
+    assert "No heartbeat collected for 1 running" in result.stdout
+    assert "rdb1" in result.stdout
+
+
+def test_a_down_process_with_no_heartbeat_is_not_reported_as_unheard(monkeypatch):
+    """The message is about processes that ARE running and unheard. Counting
+    a stopped one would send the reader looking for a monitoring fault that
+    is really just a stopped process."""
+    _summary_ok(monkeypatch, rows=[_row(Status="down", Heartbeat="-")])
+    result = runner.invoke(cli.app, ["summary"])
+    assert "No heartbeat collected" not in result.stdout
+
+
+@pytest.mark.parametrize("state", ["ok", "warning", "error", "not collected"])
+def test_every_heartbeat_state_renders(monkeypatch, state):
+    _summary_ok(monkeypatch, rows=[_row(Heartbeat=state)])
+    result = runner.invoke(cli.app, ["summary"])
+    assert result.exit_code == 0
+
+
+# ----------------------------------------------------------------- export
+
+
+def test_export_writes_when_a_path_is_given(monkeypatch, tmp_path):
+    _patch(monkeypatch, "list_items", result=[{"procname": "rdb1"}])
+    rec = _patch(monkeypatch, "export_table")
+    target = tmp_path / "out.csv"
+    result = runner.invoke(cli.app, ["list", "processes", "--export", str(target)])
+    assert result.exit_code == 0
+    assert rec.args[1] == target
+    assert "exported to" in result.stdout
+
+
+def test_nothing_is_exported_without_the_option(monkeypatch):
+    _patch(monkeypatch, "list_items", result=[{"procname": "rdb1"}])
+    rec = _patch(monkeypatch, "export_table")
+    runner.invoke(cli.app, ["list", "processes"])
+    assert rec.calls == []
+
+
+def test_a_failed_export_reports_rather_than_losing_the_output(monkeypatch, tmp_path):
+    """The rows were already printed by the time the export runs. An
+    unwritable path must say so, not take the whole command down with a
+    traceback."""
+    _patch(monkeypatch, "list_items", result=[{"procname": "rdb1"}])
+    _patch(monkeypatch, "export_table", raises=core.UqfStackError("unsupported suffix"))
+    result = runner.invoke(cli.app, ["list", "processes", "--export", str(tmp_path / "x.txt")])
+    assert result.exit_code == 1
+
+
+# ------------------------------------------------------------------ query
+
+
+def test_query_passes_the_expression_and_connection_through(monkeypatch):
+    rec = _patch(monkeypatch, "query", result="RESULT")
+    result = runner.invoke(
+        cli.app, ["query", "select from t", "--port", "6052", "--user", "u", "--passwd", "p"]
+    )
+    assert result.exit_code == 0
+    assert rec.args[:2] == ("select from t", 6052)
+    assert rec.kwargs["user"] == "u"
+    assert rec.kwargs["passwd"] == "p"
+
+
+def test_query_turns_a_driver_error_into_an_exit_code(monkeypatch):
+    """kola raises its own exception types, which are NOT UqfStackError. The
+    command catches Exception for that reason, and this pins it: a connect
+    failure must be an exit code, not a traceback in the user's face."""
+    _patch(monkeypatch, "query", raises=RuntimeError("connection refused"))
+    result = runner.invoke(cli.app, ["query", "1+1", "--port", "6052"])
+    assert result.exit_code == 1
+
+
+# ----------------------------------------------------------------- schema
+
+
+def test_schema_resolves_a_named_process_to_a_port(monkeypatch):
+    resolve = _patch(monkeypatch, "resolve_port", result=6052)
+    overview = _patch(monkeypatch, "schema_overview", result=[])
+    runner.invoke(cli.app, ["schema", "--proc", "hdb1"])
+    assert resolve.args[1] == "hdb1"
+    assert overview.args[0] == 6052, "the resolved port is what gets queried"
+
+
+def test_an_explicit_port_skips_resolution_entirely(monkeypatch):
+    """--port is documented as reading that port DIRECTLY instead of
+    resolving --proc, so resolution must not happen at all."""
+    resolve = _patch(monkeypatch, "resolve_port", result=9999)
+    overview = _patch(monkeypatch, "schema_overview", result=[])
+    runner.invoke(cli.app, ["schema", "--port", "1234"])
+    assert resolve.calls == []
+    assert overview.args[0] == 1234
+
+
+def test_schema_with_a_table_describes_its_columns(monkeypatch):
+    _patch(monkeypatch, "resolve_port", result=6052)
+    _patch(monkeypatch, "match_tables", result=["quotes"])
+    cols = _patch(
+        monkeypatch,
+        "schema_columns",
+        result=[{"column": "sym", "type": "symbol", "q": "s", "attribute": "grouped"}],
+    )
+    result = runner.invoke(cli.app, ["schema", "quotes"])
+    assert result.exit_code == 0
+    assert cols.args[0] == "quotes"
+    assert "sym" in result.stdout
+
+
+def test_a_pattern_matching_nothing_exits_one_and_names_what_exists(monkeypatch):
+    _patch(monkeypatch, "resolve_port", result=6052)
+    _patch(monkeypatch, "match_tables", result=[])
+    _patch(monkeypatch, "schema_table_names", result=["quotes", "trades"])
+    result = runner.invoke(cli.app, ["schema", "nope*"])
+    assert result.exit_code == 1
+
+
+def test_an_unknown_process_exits_one(monkeypatch):
+    _patch(monkeypatch, "resolve_port", raises=core.UqfStackError("rbd1 is not declared"))
+    assert runner.invoke(cli.app, ["schema", "--proc", "rbd1"]).exit_code == 1
+
+
+def test_schema_turns_a_driver_error_into_an_exit_code(monkeypatch):
+    _patch(monkeypatch, "resolve_port", result=6052)
+    _patch(monkeypatch, "schema_overview", raises=RuntimeError("connection refused"))
+    assert runner.invoke(cli.app, ["schema"]).exit_code == 1
+
+
+# ---------------------------------------------------------------- config
+
+
+def test_config_get_prints_one_field_when_asked(monkeypatch):
+    _patch(monkeypatch, "get_process_config", result={"procname": "rdb1", "port": "6052"})
+    result = runner.invoke(cli.app, ["config-get", "rdb1", "port"])
+    assert result.exit_code == 0
+    assert "6052" in result.stdout
+
+
+def test_config_get_resolves_placeholders_unless_raw_is_given(monkeypatch):
+    """--raw is the difference between "will listen on 6052" and
+    "{KDBBASEPORT}+2". Wiring it backwards would show the wrong one with no
+    other symptom."""
+    rec = _patch(monkeypatch, "get_process_config", result={})
+    runner.invoke(cli.app, ["config-get", "rdb1"])
+    assert rec.kwargs["resolve"] is True
+    runner.invoke(cli.app, ["config-get", "rdb1", "--raw"])
+    assert rec.kwargs["resolve"] is False
+
+
+def test_config_set_reports_what_it_wrote(monkeypatch):
+    rec = _patch(monkeypatch, "set_process_config")
+    result = runner.invoke(cli.app, ["config-set", "rdb1", "startwithall", "1"])
+    assert result.exit_code == 0
+    assert rec.args[1:] == ("rdb1", "startwithall", "1")
+
+
+def test_config_set_refusal_exits_one(monkeypatch):
+    _patch(monkeypatch, "set_process_config", raises=core.UqfStackError("unknown field"))
+    assert runner.invoke(cli.app, ["config-set", "rdb1", "nope", "1"]).exit_code == 1
+
+
+def test_list_with_no_kind_shows_the_kinds_rather_than_failing(monkeypatch):
+    result = runner.invoke(cli.app, ["list"])
+    assert result.exit_code == 0
+    for kind in core.LISTABLE_KINDS:
+        assert kind in result.stdout
+
+
+def test_list_renders_the_items_of_a_kind(monkeypatch):
+    _patch(monkeypatch, "list_items", result=[{"procname": "rdb1", "port": "6052"}])
+    result = runner.invoke(cli.app, ["list", "processes"])
+    assert result.exit_code == 0
+    assert "rdb1" in result.stdout
+
+
+def test_an_unknown_kind_exits_one(monkeypatch):
+    _patch(monkeypatch, "list_items", raises=core.UqfStackError("unknown kind"))
+    assert runner.invoke(cli.app, ["list", "bogus"]).exit_code == 1
+
+
+# ------------------------------------------------------------------- logs
+
+
+def test_logs_defaults_to_a_bounded_tail_not_a_follow(monkeypatch):
+    """`follow` blocks until Ctrl-C. Defaulting to it would hang any script
+    that ran `uqf-stack logs`."""
+    recent = _patch(monkeypatch, "print_recent_logs")
+    follow = _patch(monkeypatch, "follow_logs")
+    result = runner.invoke(cli.app, ["logs"])
+    assert result.exit_code == 0
+    assert follow.calls == []
+    assert recent.kwargs["lines"] == 20
+
+
+def test_follow_selects_the_streaming_path(monkeypatch):
+    recent = _patch(monkeypatch, "print_recent_logs")
+    follow = _patch(monkeypatch, "follow_logs")
+    runner.invoke(cli.app, ["logs", "--follow"])
+    assert recent.calls == []
+    assert len(follow.calls) == 1
+
+
+def test_the_level_filter_reaches_core(monkeypatch):
+    rec = _patch(monkeypatch, "print_recent_logs")
+    runner.invoke(cli.app, ["logs", "--level", "WARNING", "--lines", "5"])
+    assert rec.kwargs["min_level"] == "WARNING"
+    assert rec.kwargs["lines"] == 5
+
+
+# -------------------------------------------------------------------- raw
+
+
+def test_raw_passes_every_extra_argument_through_verbatim(monkeypatch):
+    """`raw` exists to reach torq.sh verbs this CLI does not model. Dropping
+    or reordering the arguments would make it useless in a way no other
+    command's failure resembles."""
+    rec = _patch(monkeypatch, "run_torq_sh", result=Completed())
+    runner.invoke(cli.app, ["raw", "--", "qcon", "gateway1", "admin:admin"])
+    assert rec.args[1] == ["qcon", "gateway1", "admin:admin"]
+
+
+def test_raw_propagates_the_exit_code(monkeypatch):
+    _patch(monkeypatch, "run_torq_sh", result=Completed(returncode=7))
+    assert runner.invoke(cli.app, ["raw", "--", "debug", "rdb1"]).exit_code == 7
+
+
+# ------------------------------------------------------------------ clean
+
+
+def test_clean_delegates(monkeypatch):
+    rec = _patch(monkeypatch, "clean")
+    assert runner.invoke(cli.app, ["clean"]).exit_code == 0
+    assert len(rec.calls) == 1
+
+
+# ----------------------------------------------------------- new-process
+
+
+def test_new_process_runs_the_wizard(monkeypatch):
+    rec = Recorder()
+    monkeypatch.setattr(cli.wizard, "run", rec)
+    result = runner.invoke(cli.app, ["new-process", "--port", "7000"])
+    assert result.exit_code == 0
+    assert rec.kwargs["base_port"] == 7000
+
+
+def test_a_wizard_refusal_exits_one(monkeypatch):
+    monkeypatch.setattr(
+        cli.wizard, "run", Recorder(raises=core.UqfStackError("no recipe")).__call__
+    )
+    assert runner.invoke(cli.app, ["new-process"]).exit_code == 1
+
+
+# ----------------------------------------------------------------- crypto
+
+
+def test_crypto_start_splits_the_comma_separated_lists(monkeypatch):
+    """The CLI takes comma-separated strings and core takes tuples, so the
+    split happens here - the one piece of real logic in this file."""
+    rec = _patch(monkeypatch, "start_crypto_recorder", result=4242)
+    result = runner.invoke(cli.app, ["crypto", "start", "--venues", "a, b ,c", "--symbols", "X,Y"])
+    assert result.exit_code == 0
+    assert rec.kwargs["venues"] == ("a", "b", "c"), "whitespace around a name is trimmed"
+    assert rec.kwargs["symbols"] == ("X", "Y")
+    assert "4242" in result.stdout
+
+
+def test_crypto_start_drops_empty_entries_rather_than_passing_blanks(monkeypatch):
+    """A trailing comma is an ordinary typo, and a blank venue name reaches
+    the recorder as a connection attempt to nothing."""
+    rec = _patch(monkeypatch, "start_crypto_recorder", result=1)
+    runner.invoke(cli.app, ["crypto", "start", "--venues", "a,,b,"])
+    assert rec.kwargs["venues"] == ("a", "b")
+
+
+def test_crypto_stop_and_status_render(monkeypatch):
+    _patch(monkeypatch, "stop_crypto_recorder")
+    assert runner.invoke(cli.app, ["crypto", "stop"]).exit_code == 0
+    _patch(monkeypatch, "crypto_recorder_status", result={"running": "yes", "pid": "42"})
+    result = runner.invoke(cli.app, ["crypto", "status"])
+    assert result.exit_code == 0
+    assert "42" in result.stdout
+
+
+def test_a_crypto_refusal_exits_one(monkeypatch):
+    _patch(monkeypatch, "start_crypto_recorder", raises=core.UqfStackError("no checkout"))
+    assert runner.invoke(cli.app, ["crypto", "start"]).exit_code == 1
+
+
+def test_crypto_fills_start_passes_the_oms_socket_and_poll_interval(monkeypatch):
+    rec = _patch(monkeypatch, "start_crypto_fills_recorder", result=99)
+    result = runner.invoke(
+        cli.app,
+        ["crypto", "fills-start", "--oms-socket-path", "/tmp/x.sock", "--poll-interval-ms", "250"],
+    )
+    assert result.exit_code == 0
+    assert rec.kwargs["oms_socket_path"] == "/tmp/x.sock"
+    assert rec.kwargs["poll_interval_ms"] == 250
+
+
+def test_crypto_fills_start_names_which_table_is_simulated(monkeypatch):
+    """The two tables this recorder writes mean different things - one is
+    paper, one is confirmed exchange executions - and confusing them is a
+    trading-decision error, not a cosmetic one. The message says which is
+    which, so it is asserted."""
+    _patch(monkeypatch, "start_crypto_fills_recorder", result=1)
+    result = runner.invoke(cli.app, ["crypto", "fills-start"])
+    assert core.CRYPTO_FILLS_RECORDER_TABLE in result.stdout
+    assert core.CRYPTO_REAL_FILLS_RECORDER_TABLE in result.stdout
+    assert "SIMULATED" in result.stdout
+
+
+def test_crypto_fills_stop_and_status_render(monkeypatch):
+    _patch(monkeypatch, "stop_crypto_fills_recorder")
+    assert runner.invoke(cli.app, ["crypto", "fills-stop"]).exit_code == 0
+    _patch(monkeypatch, "crypto_fills_recorder_status", result={"running": "no"})
+    result = runner.invoke(cli.app, ["crypto", "fills-status"])
+    assert result.exit_code == 0
+    assert "running" in result.stdout
+
+
+def test_a_crypto_fills_refusal_exits_one(monkeypatch):
+    _patch(monkeypatch, "start_crypto_fills_recorder", raises=core.UqfStackError("no socket"))
+    assert runner.invoke(cli.app, ["crypto", "fills-start"]).exit_code == 1
+    _patch(monkeypatch, "stop_crypto_fills_recorder", raises=core.UqfStackError("not running"))
+    assert runner.invoke(cli.app, ["crypto", "fills-stop"]).exit_code == 1
+
+
+def test_a_crypto_stop_refusal_exits_one(monkeypatch):
+    _patch(monkeypatch, "stop_crypto_recorder", raises=core.UqfStackError("not running"))
+    assert runner.invoke(cli.app, ["crypto", "stop"]).exit_code == 1
+
+
+def test_a_logs_refusal_exits_one(monkeypatch):
+    _patch(monkeypatch, "print_recent_logs", raises=core.UqfStackError("no such process"))
+    assert runner.invoke(cli.app, ["logs", "nope"]).exit_code == 1
+
+
+def test_a_config_get_refusal_exits_one(monkeypatch):
+    _patch(monkeypatch, "get_process_config", raises=core.UqfStackError("no such process"))
+    assert runner.invoke(cli.app, ["config-get", "nope"]).exit_code == 1
+
+
+# ------------------------------------------------------------------- app
+
+
+def test_every_command_is_reachable_and_documented():
+    """A command with no help text is one nobody can discover. `--help` also
+    exercises every command's signature, so a malformed Annotated default
+    fails here rather than the first time someone runs it."""
+    result = runner.invoke(cli.app, ["--help"])
+    assert result.exit_code == 0
+    for command in ("start", "stop", "restart", "summary", "query", "schema", "logs", "raw"):
+        assert command in result.stdout
+
+
+def test_main_configures_logging_before_running(monkeypatch):
+    """Ordering, not decoration: a command that logged before logging was
+    configured would write through a default handler nobody sees."""
+    order: list[str] = []
+    monkeypatch.setattr(cli, "configure_logging", lambda **kw: order.append("configure"))
+    monkeypatch.setattr(cli, "app", lambda: order.append("app"))
+    cli.main()
+    assert order == ["configure", "app"]
