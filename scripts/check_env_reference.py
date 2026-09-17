@@ -84,6 +84,14 @@ LITERAL_READS = (
     re.compile(r"(?:\.qdata\.)?cfg\s*\[\s*`([A-Z][A-Z0-9_]*)"),
 )
 
+#: The ONE read that consults a .env file. `.qdata.cfg` is the only reader in
+#: this repository with a file fallback; everything else reads the OS
+#: environment directly. So this pattern, alone, decides what may appear in
+#: .env.example: a key read any other way is ignored there, not set.
+DOTENV_READ = LITERAL_READS[-1]
+
+ENV_EXAMPLE = REPO / ".env.example"
+
 #: A whole-line q comment. `worker_config.q`'s own `@eg` line reads
 #: `.qwcfg.explain[`backfill_from]`, which made the first run of this gate
 #: demand a row for UQF_BACKFILL_FROM - a variable nothing sets, illustrating
@@ -186,6 +194,30 @@ def documented() -> tuple[set[str], set[str]]:
     return exact, prefixes
 
 
+def dotenv_read_names() -> set[str]:
+    """Every variable that `.qdata.cfg` reads - the only way .env is read."""
+    names: set[str] = set()
+    for path in scanned_files():
+        if path.suffix != ".q":
+            continue
+        text = Q_COMMENT_LINE.sub("", path.read_text(encoding="utf-8", errors="replace"))
+        names.update(DOTENV_READ.findall(text))
+    return names
+
+
+def env_example_keys() -> set[str]:
+    """The KEY=VALUE keys in .env.example, ignoring comments and blanks."""
+    if not ENV_EXAMPLE.is_file():
+        return set()
+    keys: set[str] = set()
+    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        keys.add(line.split("=", 1)[0].strip())
+    return keys
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -239,6 +271,26 @@ def main() -> int:
             print(f"  {name}", file=sys.stderr)
         print(
             "\nEither the variable came back under a new name, or the row should go.",
+            file=sys.stderr,
+        )
+
+    # .env.example may list only what is READ FROM .env. A key that the code
+    # reads some other way - from the OS environment, as every Python and
+    # TorQ component does - looks set in the file and is not, and the code
+    # then reports it missing while the file plainly contains it. The four
+    # themes that must stay out (secrets, per-run arguments, deployment
+    # wiring, developer knobs) are explained in the file's own header.
+    dotenv_only = dotenv_read_names()
+    wrong_file = sorted(k for k in env_example_keys() if k not in dotenv_only)
+    if wrong_file:
+        problems += len(wrong_file)
+        print("\nIn .env.example, but not read from .env by anything:", file=sys.stderr)
+        for name in wrong_file:
+            how = ", ".join(sorted(set(reads.get(name, [])))[:3]) or "nothing reads it at all"
+            print(f"  {name}  (read from the OS environment only, by: {how})", file=sys.stderr)
+        print(
+            "\nOnly .qdata.cfg reads .env. Set these in the shell instead - see the header of "
+            ".env.example for which theme each belongs to.",
             file=sys.stderr,
         )
 

@@ -20,6 +20,16 @@ without it:
   is wrong; picking one and renaming the other would mean editing
   `lib/torq`, which H-01 forbids.
 
+- **Almost none of this is read from `.env`.** Exactly one reader consults
+  that file: `.qdata.cfg` in `src/integrations/data.q`, for
+  `DATABENTO_DATA_DIR`. Every Python package, every TorQ script and the
+  browser app read the OS environment only, so a variable placed in `.env`
+  for any of them is not set, it is ignored — and the code reports it
+  missing while the file plainly contains it. `.env.example` lists what
+  belongs there and sorts the rest by theme (secrets, per-run arguments,
+  deployment wiring, developer knobs); `check_env_reference.py` refuses a
+  key in it that nothing reads from `.env`.
+
 ## Read by this repository
 
 | Variable | Read by | Required | Unset behaviour |
