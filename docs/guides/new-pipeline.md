@@ -353,7 +353,8 @@ plain q process holding the upstream table, set
 q-two-instances` does exactly this for `upstream_trades`). One trap that only
 shows up there: write `` from `trade ``, never `from trade`. The lambda
 carries your `\d .qfeed.fx_rates` across the wire, so a bare name resolves
-in that namespace on the remote and throws; `check_q_traps` refuses it.
+in that namespace on the remote and throws; `test_source_contract.q`
+refuses it.
 
 ## Recomputing a table when the one it reads is published
 

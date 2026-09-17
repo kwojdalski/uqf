@@ -1097,56 +1097,6 @@ def rule_unparenthesised_sv(path: str, lines: list[str]) -> list[Finding]:
     return findings
 
 
-def rule_bare_remote_table(path: str, text: str) -> list[Finding]:
-    r"""A source's `query` lambda selecting `from` a bare table name.
-
-    A lambda carries the namespace it was defined in. Every source under
-    src/etl/sources/ sits under a `\d .q<something>`, and its `query` sends an
-    inner lambda to the upstream over a handle - so on the remote, a bare
-    `from trade` resolves as `.qfeed.upstream_trades.trade`, which exists nowhere, and the
-    query throws `'trade`. The symbol form `` from `trade `` is resolved by
-    the remote's own select at ITS root, where the table actually is.
-
-    This passed every test in the tree because no test had ever sent a
-    source query to a second process: the fixture path never runs `query`.
-    It surfaced the first time a source ran live, and two older sources
-    had the identical latent fault.
-
-    Scope is deliberately narrow: only files under src/etl/sources/, and only
-    the `query:` definition - a `from t` on a local in a fixture builder is
-    fine, and a select in ordinary library code is not sent anywhere.
-    """
-    if not path.startswith("src/etl/sources/"):
-        return []
-    findings = []
-    lines = text.splitlines()
-    in_query = False
-    for n, raw in enumerate(lines, 1):
-        code = _strip_strings(_strip_comments(raw))
-        if re.match(r"query\s*:", code):
-            in_query = True
-        elif in_query and re.match(r"[A-Za-z_.]", code):
-            # The next top-level definition ends the block.
-            in_query = False
-        if not in_query:
-            continue
-        for match in re.finditer(r"\bfrom\s+([A-Za-z_]\w*)\b", code):
-            findings.append(
-                Finding(
-                    path=path,
-                    line=n,
-                    rule="bare-remote-table",
-                    detail=f"from {match.group(1)}",
-                    why=(
-                        "a lambda sent over a handle carries this file's \\d namespace, "
-                        "so a bare table name resolves there on the remote and throws. "
-                        "Write the symbol form: from `" + match.group(1) + "."
-                    ),
-                )
-            )
-    return findings
-
-
 LINE_RULES = (
     rule_bare_slash_comment_block,
     rule_reserved_parameter_names,
@@ -1163,7 +1113,6 @@ TEXT_RULES = (
     rule_multiparam_lambda_under_at,
     rule_reserved_local_assignment,
     rule_overlong_throw,
-    rule_bare_remote_table,
 )
 
 #: Rules that read PYTHON files, because q does not only live in .q files.

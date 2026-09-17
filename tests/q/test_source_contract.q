@@ -321,4 +321,90 @@ test_a_registered_source_resolves_under_the_feed_root:{[t]
     .qunit.assertEquals[missing;`symbol$();
         "every registered source has its own namespace under .qfeed"]};
 
+/ --- how a query names the tables it reads ---------------------------------
+
+/ Private: the lines of a source file that belong to its `query` definition -
+/ from `query:` up to the next definition at the left margin.
+/ .
+/ Takes LINES rather than a filename so the reader below can be fed a literal
+/ four-line source in a test. An earlier version took a path and the probes
+/ wrote files into src/etl/sources/ to exercise it, which left a stray file
+/ behind on any failure - and the other tests in this section walk exactly
+/ that directory.
+query_block:{[lines]
+    hits:where lines like "query:*";
+    if[0=count hits; :()];
+    start:first hits;
+    rest:(start+1)_lines;
+    ends:where rest like "[a-zA-Z_.]*";
+    enlist[lines start],$[count ends; (first ends)#rest; rest]}
+
+/ Private: the first word of a fragment - everything up to the first
+/ delimiter. `x?c` is the index of c, or count x when it is absent, so the
+/ minimum over the delimiters is the end of the word whether the fragment
+/ ends in a space, a brace or nothing at all.
+first_word:{[fragment] `$(min fragment?/:" ,;)}")#fragment}
+
+/ Private: the first word after each `from` in one line of code, dropped if
+/ it starts with a backtick. `` from `trade `` is the correct form and
+/ yields nothing; `from trade` yields `trade.
+from_names:{[line]
+    code:$[count i:ss[line;"/ "]; (first i)#line; line];
+    rest:{[l;i] trim (i+5)_l}[code] each ss[code;"from "];
+    rest:rest where not (0=count each rest) or "`"=first each rest;
+    first_word each rest}
+
+/ Private: every bare table name the `query` block of these lines reads.
+bare_from_in:{[lines] raze from_names each query_block lines}
+
+/ Private: the same, for one file under src/etl/sources/.
+bare_from_names:{[file] bare_from_in read0 ` sv `:src/etl/sources,file}
+
+/ A source written the way the live path needs, and the same source written
+/ the way that fails - as literal text, so the reader is exercised without a
+/ file existing anywhere.
+ok_source:("\\d .qfeed.probe";"query:{[h;a;b]";
+    "    h({[f;t] select time from `trade where time>=f};a;b)}";
+    "fixture:{[] ([] time:`timestamp$())}")
+bare_source:("\\d .qfeed.probe";"query:{[h;a;b]";
+    "    h({[f;t] select time from trade where time>=f};a;b)}";
+    "fixture:{[] ([] time:`timestamp$())}")
+
+test_no_source_query_names_a_table_without_a_backtick:{[t]
+    / THE fault this section exists for, found the first time any source in
+    / this tree ran against a second process (#211). A query lambda is sent
+    / over a handle, and a lambda carries the namespace it was defined in -
+    / so a bare `from trade` is looked up as .qfeed.<source>.trade on the
+    / REMOTE, where nothing of that name exists, and the query throws
+    / 'trade. The symbol form is resolved by the remote's own select, at its
+    / own root, which is where the table is.
+    / .
+    / All three sources then in the tree had it, and every test passed:
+    / nothing had ever executed a source's query, because the fixture path
+    / never calls it. That is why this reads the files rather than runs them.
+    bare:raze {[f] {[f;nm] (f;nm)}[f] each bare_from_names f} each source_files[];
+    .qunit.assertEquals[bare;();
+        "every source query names its tables with a backtick - a bare name resolves in the sender's namespace on the remote"]};
+
+test_the_reader_finds_a_bare_name:{[t]
+    / A reader nobody has seen say yes may be matching nothing at all, and
+    / this one is string surgery - the kind of check that silently stops
+    / working after an unrelated edit.
+    .qunit.assertEquals[bare_from_in bare_source;enlist `trade;
+        "a bare table name in a query block is reported"]};
+
+test_the_reader_passes_the_backtick_form:{[t]
+    .qunit.assertEquals[bare_from_in ok_source;();
+        "the symbol form every source uses is not reported"]};
+
+test_a_select_after_the_query_block_is_out_of_scope:{[t]
+    / A fixture builder selecting from its own local is not sent anywhere,
+    / so the scan stops at the end of the query definition.
+    .qunit.assertEquals[bare_from_in ok_source,enlist "helper:{[] t:([] a:1); select from t}";();
+        "a select below the query block is not read"]};
+
+test_a_from_inside_a_comment_is_not_read:{[t]
+    .qunit.assertEquals[bare_from_in ok_source,enlist "  / copied from trade upstream";();
+        "prose after a comment marker is not code"]};
+
 \d .
