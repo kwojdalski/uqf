@@ -24,11 +24,30 @@
 
 \d .qstream
 
-/ job -> its declaration. Keyed by the job's own name, which is also the
-/ segment of its namespace: `markout` is `.qsub.markout`.
+/ job -> its declaration, ENLISTED. Keyed by the job's own name, which is
+/ also the segment of its namespace: `markout` is `.qsub.markout`.
+/ .
+/ The enlist is load-bearing, and the reason is a q trap worth knowing: a
+/ dictionary whose values are dictionaries with the SAME keys is a table, and
+/ q makes it one silently. The four feeds register first and declare exactly
+/ the same fields, so by the fifth registration `jobs` had become a keyed
+/ table - and markout's declaration, which carries an on_batch the feeds do
+/ not, was refused with a bare 'mismatch naming nothing. Enlisting each
+/ declaration keeps the values a general list, so a job may declare whatever
+/ its shape needs.
 jobs:(`symbol$())!();
 
+/ procname -> the job that runs there. A second index rather than a scan:
+/ the runner looks itself up by procname on every start, and a scan over
+/ declarations to answer it would have to reach inside each one.
+procnames:(`symbol$())!`symbol$();
+
 / What every job must declare.
+/ .
+/ `on_batch` is required of a job that SUBSCRIBES and `on_timer` of one that
+/ only produces - a feed subscribes to nothing and publishes on a timer, and
+/ demanding a batch handler of it would mean writing an empty one. A job
+/ with neither is declared but does nothing, which is refused.
 / .
 / `subscribes` and `publishes` are the wiring the runner performs on the
 / job's behalf, and they are also what torq_orchestrator's pipeline_edges
@@ -36,7 +55,7 @@ jobs:(`symbol$())!();
 / drift. `procname` is the TorQ process that runs this job, and is how the
 / runner knows which job it is: one generic process script, and the name it
 / was started under decides. `on_batch` is the job itself.
-required_declarations:`ns`procname`subscribes`publishes`on_batch
+required_declarations:`ns`procname`subscribes`publishes
 
 / Private: can this value be called?
 / .
@@ -65,8 +84,8 @@ namespace:{[job] ` sv job_root,job}
 / declaration and its implementation cannot drift - there is no way to have
 / one without the other.
 / @param job the job's name, e.g. `markout
-/ @param decl dict of subscribes, publishes, on_batch, and optionally
-/   timer_period and on_timer
+/ @param decl dict of procname, subscribes, publishes, and then on_batch
+/   (required when it subscribes), timer_period and on_timer (a pair)
 / @return the job name
 / @throws error naming every missing or malformed field at once
 register:{[job;decl]
@@ -77,15 +96,21 @@ register:{[job;decl]
         '"register: ",string[job]," is missing ",", " sv string missing];
     if[not -11h=type decl`procname;
         '"register: ",string[job],"'s procname must be a symbol naming the TorQ process that runs it, e.g. `markout1"];
-    clash:(key jobs) where decl[`procname]=(jobs@/:key jobs)@\:`procname;
-    if[count clash;
-        '"register: ",string[job]," claims procname ",string[decl`procname]," which ",(string first clash)," already runs - one process runs one job"];
+    if[(decl`procname) in key procnames;
+        '"register: ",string[job]," claims procname ",string[decl`procname]," which ",(string procnames decl`procname)," already runs - one process runs one job"];
     if[not 11h=abs type decl`subscribes;
         '"register: ",string[job],"'s subscribes must be a symbol list of table names"];
     if[not 11h=abs type decl`publishes;
         '"register: ",string[job],"'s publishes must be a symbol list, empty for a job that keeps its output local"];
-    if[not is_callable decl`on_batch;
+    if[(`on_batch in key decl) and not is_callable decl`on_batch;
         '"register: ",string[job],"'s on_batch must be a function taking (table name; batch)"];
+    / A subscriber with no handler receives every batch and drops it, and a
+    / job with neither handler nor timer runs nothing at all - both look
+    / healthy from outside, which is why each is refused by name here.
+    if[(count decl`subscribes) and not `on_batch in key decl;
+        '"register: ",string[job]," subscribes to ",(", " sv string decl`subscribes)," but declares no on_batch - every batch would arrive and be dropped"];
+    if[not any (`on_batch;`on_timer) in \:key decl;
+        '"register: ",string[job]," declares neither on_batch nor on_timer - it would subscribe to nothing, publish nothing and run nothing"];
     / A timer is optional, but half a timer is a job whose scoring never runs
     / while every test still passes - so the pair is checked together.
     has_period:`timer_period in key decl;
@@ -99,7 +124,8 @@ register:{[job;decl]
             '"register: ",string[job],"'s timer_period must be positive"];
         if[not is_callable decl`on_timer;
             '"register: ",string[job],"'s on_timer must be a niladic function"]];
-    jobs[job]:decl;
+    jobs[job]:enlist decl;
+    procnames[decl`procname]:job;
     job}
 
 / One job's declaration, or a refusal naming it.
@@ -110,7 +136,7 @@ register:{[job;decl]
 declaration:{[job]
     if[not job in key jobs;
         '"declaration: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];
-    jobs job}
+    first jobs job}
 
 / The job a TorQ process runs, by the name the process was started under.
 / .
@@ -123,10 +149,9 @@ declaration:{[job]
 / @throws error when no registered job claims that process
 / @eg .qstream.for_procname `markout1  ->  `markout
 for_procname:{[procname]
-    match:(key jobs) where procname=(jobs@/:key jobs)@\:`procname;
-    if[0=count match;
-        '"for_procname: no streaming job runs as ",string[procname]," - registered processes: ",", " sv string (jobs@/:key jobs)@\:`procname];
-    first match}
+    if[not procname in key procnames;
+        '"for_procname: no streaming job runs as ",string[procname]," - registered processes: ",", " sv string key procnames];
+    procnames procname}
 
 / Every registered job, for the runner and for tests.
 / @return symbol list of job names

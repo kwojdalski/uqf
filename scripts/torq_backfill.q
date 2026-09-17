@@ -37,7 +37,7 @@
 / range would publish the wrong window and record it as covered, which is the
 / failure coverage exists to make impossible.
 
-\d .qbfproc
+\d .qproc.backfill
 
 / The environment names this process reads. Listed so the refusal below can
 / report every missing one at once rather than over four restarts (ETL-16).
@@ -112,5 +112,5 @@ run:{[]
 / Run, then leave. exit 0 on a completed run, 1 otherwise - Airflow reads the
 / code, and `partial` is not success: some windows failed and a retry should
 / pick them up, which it can because coverage never claimed them.
-result:@[{.qbfproc.run[]};::;{[e] .lg.e[`backfill;"backfill process failed: ",e]; `state`error!(`failed;e)}];
+result:@[{.qproc.backfill.run[]};::;{[e] .lg.e[`backfill;"backfill process failed: ",e]; `state`error!(`failed;e)}];
 exit $[`completed~result`state; 0; 1];

@@ -1,5 +1,5 @@
 / torq_stream.q - run one streaming job as a discoverable TorQ process
-/ (.qsubproc).
+/ (.qproc.stream).
 / .
 / WHAT THIS REPLACES. There were four of these: torq_cross_etl.q,
 / torq_markout_etl.q, torq_posbook_etl.q and torq_vectorize_etl.q, each
@@ -25,7 +25,7 @@
 / job declarations live.
 .qpipe.load_uqf[];
 
-\d .qsubproc
+\d .qproc.stream
 
 / The job this process runs: UQF_STREAM_JOB when set, otherwise whichever
 / job claims this process's own name.
@@ -52,21 +52,24 @@ which_job:{[]
 / @return the job name
 run:{[job]
     decl:.qstream.declaration job;
-    h:.qpipe.subscribe_etl[job;decl`subscribes];
+    / A feed subscribes to nothing: it takes a publish handle and nothing
+    / else. Asking subscribe_etl for one would make it wait for a
+    / subscription it never wanted, and then subscribe to an empty list.
+    h:$[count decl`subscribes; .qpipe.subscribe_etl[job;decl`subscribes]; .qpipe.feed_handle[]];
     / A job that publishes nothing keeps its unwired stub, so a later edit
     / that starts publishing without declaring it fails loudly instead of
     / sending rows nowhere.
     if[count decl`publishes; .qstream.wire[job;.qpipe.publish[h;;]]];
-    `upd set decl`on_batch;
+    if[`on_batch in key decl; `upd set decl`on_batch];
     if[`timer_period in key decl;
-        `.qsubproc.tick set decl`on_timer;
-        .qpipe.safe_timer[job;decl`timer_period;`.qsubproc.tick;
+        `.qproc.stream.tick set decl`on_timer;
+        .qpipe.safe_timer[job;decl`timer_period;`.qproc.stream.tick;
             "Run the ",(string job)," streaming job"]];
-    .lg.o[`qsubproc;"streaming job ",(string job)," subscribed to ",
-        (", " sv string decl`subscribes),
+    .lg.o[`qproc;"streaming job ",(string job),
+        $[count decl`subscribes; " subscribed to ",", " sv string decl`subscribes; " producing"],
         $[count decl`publishes; ", publishing ",", " sv string decl`publishes; ", publishing nothing"]];
     job}
 
 \d .
 
-.qsubproc.run .qsubproc.which_job[];
+.qproc.stream.run .qproc.stream.which_job[];

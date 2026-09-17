@@ -370,7 +370,7 @@ write_status:{[worker;instance_id;state;spec;progress;err]
 / @param fn the fully-qualified name of the niladic function to run
 / @param timer_desc the description .timer.repeat shows
 / @return the generated wrapper's name
-/ @eg .qpipe.safe_timer[`markout;0D00:00:01.000;`.qsubproc.tick;"Run the markout streaming job"]
+/ @eg .qpipe.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;"Run the markout streaming job"]
 safe_timer:{[nm;interval;fn;timer_desc]
     wrapper:`$".qpipe.tick_",string nm;
     / `value` the lambda EXPRESSION only, then `set` the name - not

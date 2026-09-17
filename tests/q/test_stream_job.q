@@ -47,8 +47,27 @@ d:{[n] 2026.09.17D10:00:00.000000000+n*0D00:00:01}
 / --- the contract ---------------------------------------------------------
 
 test_every_job_is_registered:{[t]
-    .qunit.assertEquals[asc .qstream.registered[];`cross`markout`posbook`vectorize;
+    / The four feeds publish on a timer and subscribe to nothing; the four
+    / subscribers are the other half. One contract covers both.
+    .qunit.assertEquals[asc .qstream.registered[];
+        `cross`fx_feed`fx_trades_feed`markout`posbook`quotes_feed`vectorize`wide_book_feed;
         "each job file registers itself as it loads"]};
+
+test_a_feed_declares_no_subscription:{[t]
+    .qunit.assertEquals[count .qstream.declaration[`fx_feed]`subscribes;0;
+        "a feed produces rows on a timer rather than reacting to a table"]};
+
+test_a_subscriber_with_no_handler_is_refused:{[t]
+    / It would receive every batch and drop it, and look healthy doing so.
+    .qunit.assertError[{.qstream.register[`handlerless;x]};
+        `procname`subscribes`publishes`timer_period`on_timer!(
+            `handlerless1;enlist `trades;`symbol$();0D00:00:01;{[] ()});
+        "a job that subscribes must say what to do with a batch"]};
+
+test_a_job_that_does_nothing_is_refused:{[t]
+    .qunit.assertError[{.qstream.register[`idle;x]};
+        `procname`subscribes`publishes!(`idle1;`symbol$();`symbol$());
+        "a job with neither a handler nor a timer runs nothing at all"]};
 
 test_a_jobs_namespace_is_derived_from_its_name:{[t]
     .qunit.assertEquals[.qstream.namespace `markout;`.qsub.markout;
@@ -93,6 +112,79 @@ test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / with nothing to say.
     .qunit.assertError[{.qstream.unwired[`somejob][`t;x]};([] a:enlist 1);
         "publishing before anything wired the job is an error naming it"]};
+
+/ --- the feeds ------------------------------------------------------------
+
+test_the_fx_feed_publishes_one_quote_per_pair:{[t]
+    reset[];
+    .qsub.fx_feed.on_timer[];
+    rows:last_rows[];
+    .qunit.assertEquals[(first exec tbl from .sjtest.published;count first rows);
+        (`quote;count .qsynth.pairs);
+        "a tick quotes every pair the demo trades"]};
+
+test_the_fx_feed_quotes_a_pip_either_side:{[t]
+    / The spread is the whole content of a top-of-book tick, and it is the
+    / one thing a wrong pip vector would silently break.
+    / Compared within a tolerance, not with ~: (mid+pip)-(mid-pip) is not
+    / bit-identical to 2*pip for any of these levels, so an exact match here
+    / fails on arithmetic rather than on the spread being wrong.
+    rows:.qsub.fx_feed.tick_rows .qsynth.spot;
+    .qunit.assertEquals[all 1e-12>abs (rows[2]-rows[1])-2*.qsynth.pip;1b;
+        "ask minus bid is two pips, pair by pair"]};
+
+test_the_fx_feed_walks_its_level:{[t]
+    reset[];
+    before:.qsub.fx_feed.spot;
+    .qsub.fx_feed.on_timer[];
+    .qunit.assertTrue[not before~.qsub.fx_feed.spot;
+        "each tick moves the level rather than republishing the same one"]};
+
+test_the_depth_feed_quotes_three_levels_a_side:{[t]
+    rows:.qsub.quotes_feed.tick_rows .qsynth.spot;
+    .qunit.assertEquals[distinct count each raze rows 1 3;enlist .qsub.quotes_feed.n_levels;
+        "every pair's bid and ask ladder is n_levels deep"]};
+
+test_the_depth_feeds_ladders_are_level_zero_first:{[t]
+    / .qbook and .qfwd.cross_book_at both read level 0 as the touch, so a
+    / ladder built outwards-in prices every cross off the wrong level.
+    rows:.qsub.quotes_feed.tick_rows .qsynth.spot;
+    bids:first rows 1;
+    .qunit.assertEquals[bids~desc bids;1b;"the bid ladder descends from the touch"]};
+
+test_the_wide_feed_publishes_one_column_per_level:{[t]
+    / 1 sym + 11 bids + 11 asks. The vectorize job derives its groups from
+    / its own schema, so a mismatch here is a column-count error on insert.
+    rows:.qsub.wide_book_feed.tick_rows .qsynth.spot;
+    .qunit.assertEquals[count rows;1+2*.qsub.wide_book_feed.n_levels;
+        "the wide book is published as one column per level per side"]};
+
+test_the_wide_feed_column_is_as_long_as_the_pair_list:{[t]
+    / The transpose that makes this a wide table rather than a nested one.
+    rows:.qsub.wide_book_feed.tick_rows .qsynth.spot;
+    .qunit.assertEquals[distinct count each rows;enlist count .qsynth.pairs;
+        "every column carries one value per pair"]};
+
+test_a_fill_prices_around_its_pairs_level:{[t]
+    / Three pips either way, which is what makes some fills cross the spread
+    / and some improve.
+    rows:.qsub.fx_trades_feed.fill_rows[0;1;1e6;3];
+    .qunit.assertEquals[first rows 2;
+        (first .qsynth.spot)+3%first .qsub.fx_trades_feed.pip_factor;
+        "the fill prints its slippage in pips from the pair's own level"]};
+
+test_a_fill_is_published_as_one_element_vectors:{[t]
+    / .u.upd counts rows from column lengths, so an atom column here is a
+    / length error on insert - the vendored feed.q's own convention.
+    rows:.qsub.fx_trades_feed.fill_rows[0;1;1e6;0];
+    .qunit.assertEquals[distinct count each rows;enlist 1;
+        "every column of a fill is a one-element vector, never an atom"]};
+
+test_the_trades_feed_publishes_one_fill_a_tick:{[t]
+    reset[];
+    .qsub.fx_trades_feed.on_timer[];
+    .qunit.assertEquals[(count .sjtest.published;first exec tbl from .sjtest.published);(1;`trades);
+        "a tick publishes exactly one fill, onto trades"]};
 
 / --- markout --------------------------------------------------------------
 

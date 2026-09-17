@@ -38,7 +38,9 @@ Both have a transform, and both are **one file per job**. A continuous job
 is a file under [`src/etl/streaming/`](../../src/etl/streaming) holding every
 step — schemas, transform, batch handler, timer body, its own buffers — and a
 `.qstream.register` call naming the tables it subscribes to, the tables it
-publishes and the TorQ process that runs it. One generic process script,
+publishes and the TorQ process that runs it. A **feed** is the same thing
+with no subscription: it declares a `timer_period` and an `on_timer` that
+builds rows and publishes them. One generic process script,
 [`scripts/torq_stream.q`](../../scripts/torq_stream.q), runs whichever job
 the process it was started as claims.
 

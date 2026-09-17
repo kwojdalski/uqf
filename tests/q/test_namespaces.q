@@ -168,6 +168,29 @@ test_the_subscriber_processes_are_inside_the_prefix:{[t]
     .qunit.assertEquals[all `.qsub.cross`.qsub.markout`.qsub.posbook in declared;1b;
         "the tickerplant subscriber processes declare their namespaces under .qsub"]};
 
+/ Private: the process scripts - the files TorQ starts as a process, as
+/ opposed to the tools and worked examples that also live in scripts/.
+process_scripts:{[] system"ls scripts | grep '^torq_.*\\.q$'"}
+
+test_every_process_script_declares_a_namespace:{[t]
+    / The prefix rule above only sees files that declare a namespace at all.
+    / Four feed processes and the tap declared NOTHING - every name they
+    / owned sat at the root of their own process, which is both invisible to
+    / .qns and indistinguishable from q's own globals. A process script now
+    / has to say which namespace is its own.
+    / .
+    / Only torq_*.q: a worked example or a one-shot tool legitimately works
+    / at the root, and demanding a namespace of them would be a rule about
+    / the wrong files.
+    bare:.nstest.process_scripts[] where not {[f]
+        any (read0 hsym `$"scripts/",f) like "\\d .*"} each .nstest.process_scripts[];
+    .qunit.assertEquals[bare;();
+        "every scripts/torq_*.q declares the namespace it owns, rather than working at the root"]};
+
+test_the_process_script_scan_found_the_scripts:{[t]
+    .qunit.assertTrue[3<count process_scripts[];
+        "the scan finds this tree's process scripts rather than nothing"]};
+
 test_every_listed_exception_carries_a_reason:{[t]
     / An exception list whose entries may be empty strings is a list of
     / names, which is the thing this deliberately is not.

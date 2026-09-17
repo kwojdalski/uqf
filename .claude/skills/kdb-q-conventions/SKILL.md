@@ -184,10 +184,11 @@ library with no processes/IPC/tables).
   modules: bounded workers under a single `.qwrk` root
   (`.qwrk.demo_deals_backfill`, derived by `.qbw.define` from the registered
   worker name), source declarations under `.qfeed` (`.qfeed.demo_deals`,
-  checked against the file's own `source_name`) and the continuous jobs
-  under `.qsub` (`.qsub.cross`, `.qsub.markout`,
-  `.qsub.posbook`, `.qsub.vectorize` - one file each under
-  `src/etl/streaming/`, holding every step of the job). A namespace outside
+  checked against the file's own `source_name`) the continuous jobs under `.qsub`
+  (`.qsub.fx_feed`, `.qsub.markout` and six more - one file each under
+  `src/etl/streaming/`, holding every step of the job, feeds included), and
+  each process script's own wiring state under `.qproc` (`.qproc.stream`,
+  `.qproc.backfill`, `.qproc.tap`). A namespace outside
   the `.q` prefix entirely is a bug
   unless it is one of the three listed in `tests/q/test_namespaces.q`'s
   `outside_the_prefix` - `.dqe` (TorQ's own), `.cov` (KX's API shape) and

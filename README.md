@@ -175,10 +175,11 @@ The exceptions, added deliberately, are **instances** rather than modules:
 bounded workers under one `.qwrk` root (`.qwrk.demo_deals_backfill`, derived
 by `.qbw.define` from the registered worker name), source declarations under
 `.qfeed` (`.qfeed.demo_deals`, checked against each file's own
-`source_name`), and the continuous (streaming) jobs under `.qsub`
-(`.qsub.cross`, `.qsub.markout`, `.qsub.posbook`, `.qsub.vectorize` — each
-one file under `src/etl/streaming/` holding every step of that job, run by
-the generic `scripts/torq_stream.q`). Library modules stay flat. Every
+`source_name`), the continuous jobs under `.qsub` (`.qsub.fx_feed`, `.qsub.markout` and six
+more — each one file under `src/etl/streaming/` holding every step of that
+job, feeds included, run by the generic `scripts/torq_stream.q`), and each
+process script's own wiring state under `.qproc` (`.qproc.stream`,
+`.qproc.backfill`, `.qproc.tap`). Library modules stay flat. Every
 namespace in `src/` and `scripts/` carries the `.q` prefix or is listed in
 `tests/q/test_namespaces.q`'s `outside_the_prefix` with the reason it
 cannot: `.dqe` is TorQ's own namespace, `.cov` is KX's published coverage API
