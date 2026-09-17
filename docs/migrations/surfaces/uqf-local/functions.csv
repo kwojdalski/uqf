@@ -279,6 +279,14 @@ qlog,register,function,1,
 qlog,render,function,1,fields
 qlog,torq_loaded,function,1,
 qlog,warn,function,3,id text fields
+qmeta,collect,function,2,spec partitions
+qmeta,collect_partition,function,3,spec part observed_at
+qmeta,count_bad,function,2,violations row_count
+qmeta,definition,function,4,tab partition_col group_cols aggregates
+qmeta,profile,function,3,time_cols null_cols rules
+qmeta,refresh,function,3,current spec partitions
+qmeta,require_request,function,2,spec partitions
+qmeta,time_bound,function,2,direction values
 qmicro,book_convexity,function,2,prices side
 qmicro,book_convexity_one,function,2,prices side
 qmicro,book_pressure_at_level,function,3,bid_sizes ask_sizes level

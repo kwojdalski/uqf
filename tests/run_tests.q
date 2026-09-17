@@ -24,12 +24,14 @@
 \l src/integrations/data.q
 \l docs/man.q
 \l scripts/torq_pipeline.q
+\l scripts/torq_metatables.q
 / The ETL tree, in dependency order, from the one list that defines it -
 / see src/etl/init.q for why the order matters and is not obvious.
 \l src/etl/init.q
 \l tests/lib/etl_test_doubles.q
 \l tests/q/reference_worker.q
 
+\l tests/q/test_metatables.q
 \l tests/q/test_seed.q
 \l tests/q/test_stats.q
 \l tests/q/test_ccy.q
@@ -70,7 +72,7 @@
 / The namespace list is unchanged by the tests/q/ move: it keys on test
 / NAMESPACES, not file paths, and the move deliberately left namespaces
 / alone - the same choice made for src/ (see src/init.q).
-nsList:`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.dagtest`.egtest`.hbtest`.iotest`.odbctest`.backfillstatetest`.coveragetest`.runtest`.tabletest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest;
+nsList:`.metatest`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.dagtest`.egtest`.hbtest`.iotest`.odbctest`.backfillstatetest`.coveragetest`.runtest`.tabletest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;
