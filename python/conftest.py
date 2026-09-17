@@ -93,3 +93,13 @@ def start_q():
     importing file itself and fails as a circular import.
     """
     return q_server
+
+
+@pytest.fixture
+def unused_port() -> int:
+    """A port nothing is listening on, for testing an unreachable process.
+
+    A fixture for the same reason `start_q` is: importing from `conftest`
+    resolves to the importing package's own conftest, not this one.
+    """
+    return free_port()
