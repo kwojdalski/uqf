@@ -3,7 +3,7 @@
 `core.py` was 1578 lines covering seven unrelated concerns. It is now a
 facade over nine focused modules, and every existing call site still reaches
 it as `core.thing` — about seventy distinct names across `cli.py`,
-`wizard.py`, `torq_demo_mcp.py` and the tests.
+`wizard.py`, `uqf_stack_mcp.py` and the tests.
 
 That facade is the whole reason the split changed no call site, so these
 tests hold it in place. Without them the facade could lose a name and the
@@ -36,13 +36,14 @@ MODULES = (
     "runtime",
     "logs",
     "crypto",
+    "schema_view",
 )
 
 #: Files that reach this code as `core.thing`.
 CONSUMERS = (
     PKG / "src" / "torq_orchestrator" / "cli.py",
     PKG / "src" / "torq_orchestrator" / "wizard.py",
-    PKG / "torq_demo_mcp.py",
+    PKG / "uqf_stack_mcp.py",
     # This file is excluded from its own scan: its prose says `core.thing`
     # and `core.X` to describe the pattern, and the reference regex cannot
     # tell an example from a call. Scanning itself made it demand that the

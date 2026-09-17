@@ -1,5 +1,5 @@
 / torq_wide_book_feed.q - a "wide" (one column per depth level) FX order
-/ book feed for the TorQ demo, alongside torq_quotes_feed.q's own
+/ book feed for the uqf stack, alongside torq_quotes_feed.q's own
 / vector-column `quotes` table. Publishes the same kind of depth-aware
 / book, deliberately in the wrong shape - `bids0..bids10`/`asks0..asks10`,
 / one scalar column per level, exactly the "incorrectly-ingested wide

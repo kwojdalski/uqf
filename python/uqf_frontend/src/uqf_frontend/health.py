@@ -1,7 +1,7 @@
 """Fleet health: what process.csv declares, against what actually answers.
 
 FE-01. The requirements note that this exists today only as the
-``torq-demo summary`` CLI, which shells out to ``torq.sh`` and inspects
+``uqf-stack summary`` CLI, which shells out to ``torq.sh`` and inspects
 **local OS processes** - and that exposing it over HTTP is new backend work.
 
 The design choice worth stating: liveness is determined by an **IPC probe**,

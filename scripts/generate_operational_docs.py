@@ -101,11 +101,11 @@ def render() -> str:
 
     vendored = _vendored_procnames()
     schema_of = _schema_names()
-    lines: list[str] = [BANNER, "# TorQ demo processes", ""]
+    lines: list[str] = [BANNER, "# uqf stack processes", ""]
     lines += [
         "Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored",
         "`process.csv`. For how to start, stop and query the stack see",
-        "[docs/guides/torq-demo.md](../torq-demo.md); for the topology diagrams see",
+        "[docs/guides/uqf-stack.md](../uqf-stack.md); for the topology diagrams see",
         "[README.md](README.md).",
         "",
         f"**{len(vendored)} vendored processes** plus **{len(PIPELINES)} uqf processes**"

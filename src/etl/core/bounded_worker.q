@@ -57,7 +57,15 @@ required_cfg:`ns`source`dataset`width
 / INTENDED rather than emergent: registration order stops mattering, a new
 / optional key is one entry here, and no worker is handed a key it did not
 / ask for with a value it did not choose.
-optional_cfg:`check`io
+/ `facts` is the worker's hook into materialisation metadata (gap 2.3): a
+/ monadic function from the fetched batch to a dict of symbol labels, whose
+/ result is attached to the window's materialisation. The framework records
+/ what it can know without a schema - rows, source_version, dry_run - and
+/ this is where anything needing domain knowledge goes: the min and max of
+/ the time column, a null fraction on the column that matters, a checksum.
+/ Optional, for the same reason `check` is: metadata written to satisfy a
+/ requirement rather than to be read is worse than none.
+optional_cfg:`check`io`facts
 
 / Declare a worker's configuration.
 / .
@@ -286,6 +294,12 @@ checkpoint:{[worker;cursor] .qbfstate.save_checkpoint[worker;spec worker;cursor]
 / did succeed, and their coverage is what makes the retry cheap. Failed
 / windows stay uncovered, so the next run plans them again.
 run:{[worker]
+    / One run identity for the whole execution (gap 2.3), so every window
+    / this run materialises is attributable to it and to each other. Begun
+    / before the first window and closed with the run's own outcome, so an
+    / execution that dies mid-flight leaves a row reading `running` rather
+    / than leaving no trace - see .qrun's header.
+    begin_run[worker];
     cursor:.qbfstate.load_checkpoint[worker;spec worker];
     windows:plan[worker;cursor];
     if[0=count windows;
@@ -293,6 +307,7 @@ run:{[worker]
         / orchestrator that cannot tell them apart retries a successful
         / no-op forever.
         .qhb.beat[worker;`idle];
+        end_run[`idle];
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
     write_state[worker;`progress;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;cursor)];
@@ -310,7 +325,23 @@ run:{[worker]
     / stuck mid-window, which is the case a status file cannot show - it
     / says `running` and keeps saying it.
     .qhb.beat[worker;result`state];
+    end_run[result`state];
     result}
+
+/ Private: open this execution's run, tolerating an absent .qrun.
+/ .
+/ Wrapped for the same reason .qcov.current_run is: run.q is not a load-time
+/ dependency of this file, and a worker loaded by one of the minimal test
+/ loaders should still run. Attribution is an addition to what a run records,
+/ never a precondition for running one.
+begin_run:{[worker] @[{.qrun.begin x};worker;{[e] (::)}]}
+
+/ Private: close this execution's run with its outcome.
+/ .
+/ The run's state is the worker's own result state - `completed, `partial or
+/ `idle - rather than a separate vocabulary, so a reader of etl_runs and a
+/ reader of the worker's log see the same word for the same outcome.
+end_run:{[state] @[{.qrun.finish x};state;{[e] (::)}]}
 
 / Private: one window, end to end. Accumulates into the worker's own
 / `progress` rather than returning, because a q lambda does not close over an
@@ -407,11 +438,54 @@ do_window:{[worker;w]
         publish_pending[worker]];
     .qlog.dbg[worker;"window published";
         `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
+    / Materialisation metadata (gap 2.3), recorded HERE rather than in
+    / finish_window because this is the only place the batch itself is in
+    / hand - finish_window receives a niladic publisher, not rows.
+    record_facts[worker;cfg;w;f`result;r];
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];
           `cursor;advanced_to[worker];w`range_to]];
     .qhb.beat_window[worker];
     1b}
+
+/ Private: attach this window's metadata to the materialisation.
+/ .
+/ Two sources, deliberately separated:
+/ .
+/   framework facts   rows, source_version, dry_run - true of every
+/                     materialisation, knowable without reading a single
+/                     column, so no worker has to remember to record them.
+/   declared facts    whatever the worker's optional `facts` function
+/                     returns for this batch. Anything needing to know what
+/                     a column MEANS lives here, because the framework
+/                     cannot know it.
+/ .
+/ A failure in a worker's own facts function must not fail the window. The
+/ rows are already published and the coverage already staged at this point,
+/ so throwing here would turn a successful materialisation into a failed one
+/ over a metadata bug - exactly backwards. The failure is logged instead, so
+/ it is visible without being fatal.
+/ .
+/ The whole call is protected for the same reason begin_run is: run.q may not
+/ be loaded under a minimal loader, and metadata is an addition rather than a
+/ precondition.
+record_facts:{[worker;cfg;w;batch;r]
+    framework:`rows`source_version`dry_run!
+        (r`rows_published;(spec worker)`source_version;r`dry_run);
+    declared:$[(::)~cfg`facts;
+        ()!();
+        @[{[f;b] f b}[cfg`facts;];batch;
+          {[worker;w;e]
+            .qlog.err[worker;"facts function failed";
+                `range_from`range_to`error!(w`range_from;w`range_to;e)];
+            ()!()}[worker;w]]];
+    if[not 99h=type declared;
+        .qlog.err[worker;"facts function returned a non-dictionary";
+            `range_from`range_to!(w`range_from;w`range_to)];
+        declared:()!()];
+    @[{[a] .qrun.record . a};
+      (cfg`dataset;w`range_from;w`range_to;framework,declared);
+      {[e] (::)}]}
 
 / Private: the new cursor, refusing any move that is not strictly forward.
 / .

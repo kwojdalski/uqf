@@ -1,0 +1,9 @@
+table,description
+crypto_trades,Real confirmed exchange executions recorded from the OMS
+demo_deals,"Generic analogue of an external relational deal source, landed by the demo_deals_backfill bounded worker. Synthetic by design - the real source is bank-internal and out of scope for this repository (A-04)"
+etl_coverage,"Append-only completeness ledger: which [range_from, range_to) window of which dataset is published, at which source_version. A window with rows_published=0 still counts as covered - that is what distinguishes 'ran, found nothing' from 'never ran'"
+event_tape,"Per-event order/trade tape: add, cancel and trade events with the aggressor side on a trade. A superset of trades, so a tape filtered to action='trade' is trade-shaped. Sorted ascending by time by contract - see docs/architecture/event-tape.md"
+execution_quality,"Post-trade markout per fill per horizon; a null markout_pips means no reference quote existed at that horizon, not a zero markout"
+position,"Running position book marked to the prevailing mid, with realised and unrealised P&L"
+quotes,FX top-of-book and depth as per-row level vectors
+trades,"Client fills, shaped to match .qpos.apply_fill and .qexec.markout_at_horizons exactly"

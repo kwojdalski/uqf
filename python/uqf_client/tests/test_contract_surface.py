@@ -18,16 +18,16 @@ from __future__ import annotations
 
 import copy
 import importlib.util
-import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = UQF_ROOT / "scripts" / "contract_surface.py"
-BASELINE = UQF_ROOT / "docs" / "migrations" / "surfaces" / "uqf-local.json"
+BASELINE = UQF_ROOT / "docs" / "migrations" / "surfaces" / "uqf-local"
 
 # Loaded by path rather than imported, because `scripts/` is not a package on
 # any search root - the same approach test_generated_docs.py takes to its own
@@ -46,9 +46,9 @@ def _diff(a: dict, b: dict) -> list[str]:
 
 @pytest.fixture(scope="module")
 def baseline() -> dict:
-    if not BASELINE.is_file():
+    if not BASELINE.is_dir():
         pytest.skip(f"{BASELINE} not present")
-    return json.loads(BASELINE.read_text())
+    return contract_surface.read_surface(BASELINE)
 
 
 def test_the_committed_baseline_is_well_formed(baseline: dict) -> None:
@@ -187,3 +187,133 @@ def test_the_committed_baseline_matches_this_tree() -> None:
     assert result.returncode == 0, (
         "the committed contract surface is stale:\n" + result.stderr.decode(errors="replace")
     )
+
+
+def test_the_csv_round_trip_is_exact(baseline: dict) -> None:
+    """Write the surface out and read it back unchanged.
+
+    `check` compares the committed surface against a freshly built one, so
+    any asymmetry in the serialisation reads as a contract change that never
+    happened - and the fix would look like "re-export", which would make it
+    disappear until the next time.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "surface"
+        contract_surface.write_surface(out, baseline)
+        assert contract_surface.read_surface(out) == baseline
+
+
+def test_a_niladic_function_survives_the_round_trip(baseline: dict) -> None:
+    """`params` of `[""]` must not come back as `[]`.
+
+    q spells a niladic function's parameter list as one empty string, and a
+    non-function's as an empty list. Space-joining both yields an empty cell,
+    so the CSV distinguishes them by whether `rank` is blank. Getting this
+    wrong would silently rewrite 72 entries.
+    """
+    niladic = [
+        entry
+        for entries in baseline["functions"].values()
+        for entry in entries
+        if entry["params"] == [""]
+    ]
+    assert niladic, "no niladic functions in the surface - this test is checking nothing"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "surface"
+        contract_surface.write_surface(out, baseline)
+        back = contract_surface.read_surface(out)
+    restored = [
+        entry
+        for entries in back["functions"].values()
+        for entry in entries
+        if entry["params"] == [""]
+    ]
+    assert len(restored) == len(niladic)
+
+
+def test_no_list_value_needs_csv_quoting(baseline: dict) -> None:
+    """Lists share a cell, space-separated, which is only safe while no value
+    in one contains a space.
+
+    Asserted rather than assumed: the day a parameter or table name contains
+    one, the surface would mis-round-trip silently rather than fail.
+
+    Scoped to the LIST-valued fields on purpose. An earlier version of this
+    test claimed to cover "no value" and checked only these, which is how the
+    space-typed column below got past it.
+    """
+    offenders = []
+    for ns, entries in baseline["functions"].items():
+        for entry in entries:
+            for param in entry["params"]:
+                if " " in param or "," in param or '"' in param:
+                    offenders.append(f".{ns}.{entry['name']}({param})")
+    for process in baseline["processes"]:
+        for table in process["subscribes"] + process["publishes"]:
+            if " " in table or "," in table:
+                offenders.append(f"{process['procname']} -> {table}")
+    assert not offenders, f"values that break the space-separated encoding: {offenders}"
+
+
+def test_a_general_column_type_survives_the_round_trip(baseline: dict) -> None:
+    """q reports a GENERAL column's type as a literal space.
+
+    `crypto_book.bid_prices` is one. Written unquoted it ends a CSV line in
+    whitespace that is invisible in review and stripped by this repository's
+    own trailing-whitespace hook - which would turn the type into an empty
+    string and leave `check` failing against a file nothing could regenerate.
+    That is exactly what happened on the first export.
+    """
+    general = [
+        (table, column)
+        for table, spec in baseline["tables"].items()
+        for column, qtype in zip(spec["columns"], spec["types"], strict=True)
+        if qtype == " "
+    ]
+    assert general, "no general-typed columns - this test is checking nothing"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "surface"
+        contract_surface.write_surface(out, baseline)
+        back = contract_surface.read_surface(out)
+    for table, column in general:
+        spec = back["tables"][table]
+        assert spec["types"][spec["columns"].index(column)] == " ", (
+            f"{table}.{column} lost its general type in the round trip"
+        )
+
+
+def test_no_surface_line_ends_in_whitespace() -> None:
+    """The committed files must survive the repo's own pre-commit hooks.
+
+    A hook that rewrites a generated file leaves `check` comparing against
+    something `export` cannot reproduce, and the failure appears nowhere near
+    its cause.
+    """
+    if not BASELINE.is_dir():
+        pytest.skip(f"{BASELINE} not present")
+    offenders = [
+        f"{path.name}:{n}"
+        for path in sorted(BASELINE.glob("*.csv"))
+        for n, line in enumerate(path.read_text().splitlines(), 1)
+        if line != line.rstrip()
+    ]
+    assert not offenders, f"lines ending in whitespace: {offenders}"
+
+
+def test_rank_and_params_agree_about_emptiness(baseline: dict) -> None:
+    """The invariant the encoding leans on: `rank is None` exactly when
+    `params` is empty.
+
+    If those ever diverge, the blank-`rank` cell stops being enough to tell a
+    value from a niladic function, and the round trip breaks for whichever
+    entry broke the rule.
+    """
+    broken = [
+        f".{ns}.{entry['name']}"
+        for ns, entries in baseline["functions"].items()
+        for entry in entries
+        if (entry["rank"] is None) != (entry["params"] == [])
+    ]
+    assert not broken, f"rank/params disagree for: {broken}"

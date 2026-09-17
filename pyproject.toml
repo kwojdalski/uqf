@@ -2,7 +2,7 @@
 #
 # A workspace rather than a flat merge: each member keeps its own
 # pyproject.toml, and therefore its own distribution name and console script
-# (torq-demo), while this root owns the single lockfile, the single .venv, and
+# (uqf-stack), while this root owns the single lockfile, the single .venv, and
 # the shared ruff/pytest config that was previously duplicated verbatim in
 # all three members.
 #

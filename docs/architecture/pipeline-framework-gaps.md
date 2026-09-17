@@ -104,7 +104,52 @@ This is the repository's own recurring pattern (a capability that exists and
 is reached from no live path), and here the consequence is a coverage ledger
 that lies.
 
-### 2.3 No run identity, and materialisations carry no metadata
+### 2.3 ~~No run identity, and materialisations carry no metadata~~ — CLOSED
+
+**Fixed.** `.qrun` (`src/etl/core/run.q`) adds an execution identity and a
+place to record facts about what an execution produced.
+
+`etl_coverage` gains a `run_id` column, written from `.qrun.current[]` rather
+than passed in. That is deliberate and is the one design argument worth
+restating here: ETL-09 requires `source_version` to be a parameter because an
+optional filter is one a caller forgets, but `source_version` is a *choice*
+and a wrong one is silent corruption, whereas `run_id` is a *fact about the
+executing process* with exactly one right answer at any instant. Threading it
+through five signatures would create the chance to pass the wrong one, a
+failure mode that otherwise does not exist. Outside a run the column records
+the null guid, honestly: a materialisation staged by hand belongs to no run,
+and saying so beats inventing an identity.
+
+Three reads answer the three questions the gap named:
+`.qcov.materialisations_of[run]` (what one execution produced — including
+superseded rows, since restating a run's output later does not change what it
+produced), `.qcov.contributing_runs[dataset;version]` (which executions
+assembled a dataset), and `.qrun.unfinished[]` (executions that began and
+never reported an outcome — the state an interrupted process leaves, which
+nothing else records).
+
+Metadata is long-form in `etl_run_meta` — one row per fact, keyed by run *and*
+window — rather than a column per kind of fact, because the facts worth
+attaching are not known in advance and a wide table would need a migration per
+new one. The framework records what it can know without reading a column
+(`rows`, `source_version`, `dry_run`); anything needing to know what a column
+*means* comes from the worker's optional `facts` function, which
+`demo_events_backfill` demonstrates with event span, distinct syms and the
+terminal-event share.
+
+One measured trap is recorded in the code: `first 1?0Ng` is the obvious way to
+mint a run id and is wrong here, because q seeds its random state identically
+at every process start — three separate interpreters each returned the same
+first guid. On a *shared* ledger that stamps two executions with one identity,
+which is worse than the gap it closes: absent attribution is visibly absent,
+wrong attribution reads as correct. `.qrun.mint` derives from host, pid and
+clock instead.
+
+The original text follows.
+
+---
+
+### 2.3 (as written) No run identity, and materialisations carry no metadata
 
 A coverage row records `dataset, source_version, range, rows_published,
 recorded_at, superseded_at`. There is no `run_id`, so it is not possible to
@@ -136,6 +181,28 @@ is what makes a materialisation *auditable* rather than merely *recorded*.
   outputs, which is asset-shaped thinking. But an asset has no identity of its
   own: no description, no owner, no freshness policy attached to *the asset*
   rather than to the worker that happens to produce it.
+- **Only one of the three job roles has a shell.** `.qbw` makes a backfill a
+  declaration; `feed` and `etl` have nothing equivalent. `.qpipe.subscribe_etl`
+  is the closest thing to an ETL shell and **one of the five ETLs uses it** —
+  `torq_cross_etl.q`, `torq_posbook_etl.q`, `torq_vectorize_etl.q` and
+  `torq_tap.q` each hand-roll the same
+  `getsubscriptionhandles` → `first` → `.sub.subscribe` sequence, and
+  `torq_cross_etl.q`'s own comment says so: *"same as every ETL did by hand"*.
+
+  The copies are also weaker than the original in one specific way: each
+  returns `:()` when no tickerplant is found, where `.qpipe.subscribe_etl`
+  throws. In practice all four call `.servers.startupdepcycles[…;0W]` first,
+  which blocks until the tickerplant is up, so the silent path is reached
+  only if the tickerplant dies between that check and the subscribe. Narrow,
+  but the failure it produces — a process that subscribes to nothing and
+  still reports healthy — is the one this tree refuses everywhere else.
+
+  The question is whether `.qpipe` should become for ETLs what `.qbw` is for
+  backfills. It is a design decision rather than a defect: four scripts
+  duplicating a library function is a smell, and the same four blocking
+  correctly on startup is why nothing has broken. See the job-shape taxonomy
+  in
+  [etl-framework-requirements.md](../reference/etl-framework-requirements.md#the-job-shapes-on-two-axes).
 
 ## 4. Is this implementable in q? Yes — and q is a better fit than it looks
 
@@ -175,9 +242,7 @@ discovered later:
 
 1. ~~**Asset checks in the publish path.**~~ **Done** — see §2.2.
 2. ~~**IO manager.**~~ **Done** — see §2.1.
-3. **Run identity and materialisation metadata.** A `run_id` on the coverage
-   row plus a free-form metadata dict, and a `.qrun` table recording each
-   execution. Makes the ledger an event log.
+3. ~~**Run identity and materialisation metadata.**~~ **Done** — see §2.3.
 4. **Generalise resources**, then **categorical partitions**, then
    **per-op config schemas**. Each is worth doing and none blocks the others.
 

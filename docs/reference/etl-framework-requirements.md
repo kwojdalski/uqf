@@ -19,13 +19,67 @@
 Applies to uqf's `src/etl/` workers and the Python orchestration that starts
 and coordinates them.
 
-Preserve the distinction between two worker shapes:
+### The job shapes, on two axes
+
+Two different questions get asked about a pipeline job, and they are not the
+same question. Reading them as one taxonomy is why the fleet looks like it
+has more kinds than the requirements describe.
+
+**Axis 1 - lifecycle: does it end?** This is the axis the requirements below
+are written against, and the distinction to preserve:
 
 - A **bounded historical worker** takes an explicit `[from,to)` request, a
   resumable run specification, and a terminal completion path. This is an
-  **enforced contract**.
+  **enforced contract**: `.qbw` supplies the shell, `.qbfstate.bounded_workers`
+  the registry, and `require_contract` the check. `demo_deals_backfill` and
+  `demo_events_backfill` are the two instances.
 - A **continuous worker** runs a persistent poll-and-cursor loop. This is an
-  **established implementation pattern, not a registered shared contract.**
+  **established implementation pattern, not a registered shared contract** -
+  `.qcont` supplies cursor and freshness primitives and deliberately no
+  registry, for the reason `continuous_state.q`'s header gives. **There is no
+  instance of one in this tree.** ETL-03 grounds the pattern in
+  `src/etl/workers/marketwarehouse_deals.q`, which is bank-internal and
+  excluded under A-04, so `.qcont` is here for the shape rather than for a
+  caller. `.qdag.adopt_feeders` reads `.qcont.feeds` and finds it empty.
+
+**Axis 2 - role: what does it do in the dataflow?** This is what
+`Pipeline.kind` in `torq_orchestrator/pipelines.py` records, and what decides
+a process's proctype, port offset and whether it needs credentials:
+
+| `kind` | Does | Driven by | Shared shell |
+|---|---|---|---|
+| `feed` | publishes onto the tickerplant, subscribes to nothing | `.timer.repeat` | none - each feed wires itself |
+| `etl` | subscribes to tickerplant tables, transforms, republishes | tickerplant subscription | `.qpipe.subscribe_etl` exists; one of five uses it |
+| `backfill` | a bounded job: registers, runs a window range, exits | an operator or Airflow, per ETL-15 | `.qbw`, fully |
+
+The two axes are not parallel. Every `backfill` is bounded; `feed` and `etl`
+are both long-running but neither is a **continuous worker** in `.qcont`'s
+sense - they are timer-driven and subscription-driven respectively, not
+poll-and-cursor over an external source.
+
+**Cross-cutting: the source contract.** `.qsrc` is the vendor-facing
+generic - one registration per external source carrying its table, target
+mapping, required fields and types, row key, time zone and credential
+variable (ETL-12). It is orthogonal to both axes: a bounded worker reads
+through it today, and a continuous one would too.
+
+### What that means for the generics
+
+They are uneven, and the unevenness is worth knowing before adding a job:
+
+- **Backfill and source** have full, enforced generics. A new one of either
+  is a declaration.
+- **Continuous** has primitives but no contract, deliberately, and no
+  in-tree user.
+- **Feed and ETL** have no shell at all. A new feed is a new script that
+  wires its own timer and publish path, and a new ETL either uses
+  `.qpipe.subscribe_etl` or hand-rolls the same sequence - four of the five
+  hand-roll it today.
+
+Whether `.qpipe` should become the ETL shell that `.qbw` is for backfills is
+an open design question, recorded in
+[pipeline-framework-gaps.md](../architecture/pipeline-framework-gaps.md), not
+settled here.
 
 ## Bounded lifecycle contract
 
@@ -85,6 +139,24 @@ Preserve the distinction between two worker shapes:
   checks, through a gateway addressing both `rdb` and `hdb` targets. **Do not
   bind historical correctness to an rdb-only handle: completion data moves
   after EOD.**
+
+  > **NOT IMPLEMENTED, and deliberately so for now.** The ledger is durable
+  > and cross-process as of the persistence layer in `src/etl/core/coverage.q`
+  > — it round-trips to a file beside the checkpoints and every `attach`
+  > reloads it — but it is *not* tiered through the tickerplant into `rdb`
+  > and `hdb`, and no read here goes via a gateway.
+  >
+  > The obstacle is specific rather than effort: a tickerplant stream is
+  > append-only, and D-11's `supersede` **updates** rows to stamp
+  > `superseded_at`. Tiering therefore requires supersession to be re-modelled
+  > as an *event* that readers compose, which is a redesign of the bitemporal
+  > layer rather than a change of storage. Doing it as a side effect of a
+  > durability fix would have been the wrong trade.
+  >
+  > What this costs today: coverage is single-host, and does not migrate at
+  > EOD. What it does *not* cost: correctness within a host, which is what
+  > ETL-13's skip-what-is-covered actually depends on, and which is now
+  > verified across processes by the `q-backfill-process` lane.
 
 - **ETL-12** — Register every external source table, target mapping, required
   field and required type in the centralised source contract. Validate both

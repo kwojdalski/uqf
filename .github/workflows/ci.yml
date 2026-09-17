@@ -66,7 +66,7 @@ jobs:
         # stdlib-only and do not need the workspace.
         run: uv run python scripts/generate_operational_docs.py --check
       - name: Check the committed contract surface is current
-        # WP2 (#139): docs/migrations/surfaces/uqf-local.json is this tree's
+        # WP2 (#139): docs/migrations/surfaces/uqf-local/ is this tree's
         # half of the contract lock. A committed baseline nothing verifies
         # goes stale silently - the .qcov.require_schema shape, where a file's
         # existence reads as protection it is not providing. Reports the
@@ -97,6 +97,14 @@ jobs:
         # file reaching the wrong way would break it with every test green.
         if: ${{ !cancelled() }}
         run: python3 scripts/check_etl_layering.py --check
+      - name: Check the docs cite functions that exist
+        # The generated documentation had gates; the PROSE had none, so a
+        # guide could name a function that never existed and every check
+        # passed. Its first run found two: a design note citing
+        # .qmicro.require_sorted_tape (the function is require_tape) and an
+        # agent citing .qcoer.coerce (it is coerce_column).
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_doc_references.py
       - name: Check the environment reference lists every variable
         # C-04: docs/reference/environment.md is the one operator-facing list. It is
         # hand-written because "optional, and here is what unset does" is a

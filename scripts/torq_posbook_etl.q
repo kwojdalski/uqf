@@ -1,11 +1,11 @@
-/ torq_posbook_etl.q - proof-of-concept "ETL" process for the TorQ demo,
+/ torq_posbook_etl.q - proof-of-concept "ETL" process for the uqf stack,
 / alongside torq_cross_etl.q/torq_vectorize_etl.q's own new rows:
 / subscribes to torq_fx_trades_feed.q's `trades` table and, per fill,
 / folds it through uqf's own .qpos.apply_fill (src/portfolio/positions.q) to
 / maintain a running position book, then marks it to the prevailing mid
 / (from the vendored `quote` table, which torq_fx_feed.q also writes FX
 / top-of-book into) via .qrisk.pnl (src/portfolio/risk.q) for a live unrealized
-/ P&L - this is the process that closes the gap the TorQ demo previously
+/ P&L - this is the process that closes the gap the uqf stack previously
 / had: every other feed/ETL here moves market-data shapes around, none of
 / them ran uqf's actual position/risk logic against live data.
 / .
@@ -30,7 +30,7 @@
 / Not loaded by src/init.q or anything else uqf itself runs - registered
 / only in the process.csv torq_orchestrator.core.bootstrap() generates on
 / the fly (port {KDBBASEPORT}+30 - see POSBOOK_PORT_OFFSET in core.py).
-/ e.g. `torq-demo query "select from position" --port <base+2>` (rdb1).
+/ e.g. `uqf-stack query "select from position" --port <base+2>` (rdb1).
 
 / pull in uqf's own src/init.q (loads .qpos/.qrisk/... - see UQFROOT in
 / core.py's build_env) FIRST - .posbook.book below calls
@@ -85,36 +85,22 @@ upd:{[t;x]
 
 \d .posbook
 
-tickerplanttypes:`segmentedtickerplant
-requiredprocs:tickerplanttypes
-tpconsleep:10
-tpcheckcycles:0W
 
-subscribe:{
-  if[0=count s:.sub.getsubscriptionhandles[tickerplanttypes;();()!()];:()];
-  subproc:first s;
-  .lg.o[`subscribe;"subscribing to ",string subproc`procname];
-  .sub.subscribe[`trades`quote;`;0b;0b;subproc]
- }
-
-init:{
-  .servers.startupdepcycles[requiredprocs;tpconsleep;tpcheckcycles];
-  subscribe[];
- }
 
 \d .
 
-/ same reasoning as torq_cross_etl.q/torq_vectorize_etl.q: a real
-/ .sub.subscribe subscriber needs .servers.startup[] to open a live,
-/ access-listed handle to stp1 - posbook1's proctype "metrics" in
-/ process.csv (core.py) borrows an already-credentialed type for that.
-.servers.CONNECTIONS:.posbook.requiredprocs;
-.servers.startup[];
-.posbook.init[];
-
-/ separate, unauthenticated publish handle to stp1 for republishing
-/ `position` - same .servers.gethandlebytype pattern
-/ torq_vectorize_etl.q uses for mkt_orderbook, independent of the
-/ .servers.startup[] subscription handle above. Safe to acquire now:
-/ .posbook.init[] (just above) already blocked until stp1 was confirmed up.
-h:.servers.gethandlebytype[`segmentedtickerplant;`any];
+/ SOURCE + SINK in one call.
+/ .
+/ .qpipe.subscribe_etl does the sequence this file used to spell out: set
+/ .servers.CONNECTIONS, .servers.startup[] (which opens the live,
+/ access-listed handle to stp1 - posbook1's proctype "metrics" in process.csv (core.py) borrows an
+/ already-credentialed type for that.), block on
+/ startupdepcycles until the tickerplant is confirmed up, find it, and
+/ subscribe. It THROWS when no tickerplant is found, where the hand-rolled
+/ version returned an empty list and left this process subscribed to
+/ nothing while still reporting healthy.
+/ .
+/ The return is the publish handle this file used to acquire separately with
+/ .servers.gethandlebytype - the same unauthenticated handle, from the same
+/ call that already blocked until stp1 was up.
+h:.qpipe.subscribe_etl[`posbook;`trades`quote];

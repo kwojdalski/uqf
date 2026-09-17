@@ -108,6 +108,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: doc-references
+        name: Check the docs cite functions that exist
+        entry: python3 scripts/check_doc_references.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: q-tests
         name: Run qUnit tests for uqf
         entry: bash

@@ -62,13 +62,37 @@
 / per-partition worker trips that guard and has to make the decision
 / deliberately.
 / .
+/ ON run_id, WHICH IS THE COLUMN THAT DID GET ADDED
+/ .
+/ Gap 2.3 of the pipeline-framework assessment: every column above describes
+/ the WINDOW, and none described the EXECUTION, so "which materialisations
+/ came from one run" and "were these two datasets built together" had no
+/ answer. run_id is that column. It differs from the partition key above in
+/ exactly the way that matters - it does NOT partition the data, so no read
+/ here filters on it and no existing query can aggregate across it wrongly.
+/ Adding it cannot make a gap-ridden range report as complete; it can only
+/ add attribution that was absent.
+/ .
+/ It is written from .qrun.current[] rather than passed in - see that file's
+/ header for why an ambient fact is not the same as ETL-09's required choice.
+/ .
+/ A LEDGER WRITTEN BEFORE THIS COLUMN EXISTED will now fail require_schema
+/ with "missing run_id". That is deliberate and is the whole point of the
+/ guard: this file's reads would return nulls for a column the table does not
+/ have. `scripts/verify_coverage_schema.q` prints the remedy.
+/ .
 / Deliberately one constant in one place: changing it should be an edit here
 / plus the writer's column list, not a hunt through the file.
-schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at`superseded_at
+schema:`dataset`source_version`range_from`range_to`rows_published`recorded_at`superseded_at`run_id
 
-/ Create the ledger if absent. Append-only by contract (ETL-07) - nothing in
-/ this file updates or deletes a row, and a reader should treat any such
-/ mutation elsewhere as a bug.
+/ Create the ledger if absent.
+/ .
+/ Append-only in the sense ETL-07 means: no row is ever deleted, and no fact
+/ about a window is edited once written. `supersede` is the one writer that
+/ updates, and it only ever stamps `superseded_at` on a row whose claim has
+/ been withdrawn - the claim itself stays readable at any earlier as-of
+/ (D-11). This comment used to say "nothing in this file updates or deletes a
+/ row", which D-11 made false the moment supersede landed here.
 / .
 / The table lives at the ROOT, not in .qcov, because it is a published
 / database table like quotes/trades/position - it flows through the
@@ -105,7 +129,7 @@ init_ledger:{[]
         `etl_coverage set ([] dataset:`symbol$(); source_version:`symbol$();
             range_from:`timestamp$(); range_to:`timestamp$();
             rows_published:`long$(); recorded_at:`timestamp$();
-            superseded_at:`timestamp$())];
+            superseded_at:`timestamp$(); run_id:`guid$())];
     `etl_coverage}
 
 / The root ledger table. Exists so no read below names `etl_coverage` bare -
@@ -143,6 +167,14 @@ attach:{[]
     existed:`etl_coverage in tables `.;
     init_ledger[];
     if[existed; require_schema[]];
+    / Pick up what earlier processes recorded. THIS is what makes ETL-07's
+    / "durable cross-process completeness" true rather than aspirational: the
+    / ledger used to be an in-memory table that died with the worker, so a
+    / bounded worker - which runs a range and exits - took its own coverage
+    / with it and ETL-13's skip-what-is-covered could never fire across runs.
+    / reload validates the shape it finds, so an older file is refused by
+    / name rather than read.
+    reload[];
     `etl_coverage}
 
 / Refuse to trust a ledger whose shape is not the one this file declares.
@@ -263,6 +295,81 @@ gaps:{[from_ts;to_ts;covered]
 
 / ---------------------------------------------------------------- RECORD
 
+/ --------------------------------------------------------- PERSISTENCE
+
+/ Where the ledger lives between processes.
+/ .
+/ Beside the checkpoints, in .qbfstate.lock_dir[], and that is the whole
+/ argument for this location: save_checkpoint ALREADY requires that directory
+/ to exist and be writable, so persisting here adds no environmental
+/ dependency a worker did not already have. A process that can checkpoint can
+/ persist; a process that cannot fails the same way it already failed.
+/ @return the ledger file path
+/ @eg .qcov.ledger_path[]
+ledger_path:{[] (.qbfstate.lock_dir[]),"/etl_coverage"}
+
+/ Private: this ledger's mutex path. Distinct from .qbfstate's per-worker
+/ INSTANCE lock, which guards something else entirely (one instance of one
+/ worker) and deliberately REFUSES rather than waits. A ledger write is a
+/ short critical section several workers legitimately contend for, so that
+/ one waits - see .qbfstate.with_file_lock.
+lock_path:{[] .qbfstate.file_lock_path `etl_coverage}
+
+/ Run `f . args` holding this ledger's mutex.
+/ .
+/ A thin delegation: the mutex itself lives in .qbfstate, which already owns
+/ the lock directory and the mkdir primitive, so .qrun can guard its own
+/ tables with the same implementation rather than a second copy of it.
+/ @param f the function to run under the lock
+/ @param args its arguments, as a list
+/ @return whatever f returns
+/ @eg .qcov.with_lock[{[n] n};enlist 1]
+with_lock:{[f;args] .qbfstate.with_file_lock[`etl_coverage;f;args]}
+
+/ Write the in-memory ledger to disk.
+/ .
+/ q binary via `set`, not CSV: the ledger carries a guid, a long, four
+/ timestamps and the 0Wp sentinel, and a text format would have to re-parse
+/ every one of them on the way back. Round-tripping through `set`/`get`
+/ preserves types exactly, which matters most for still_current - a
+/ sentinel that came back as a null would silently make every superseded
+/ read wrong.
+/ .
+/ Call only under with_lock.
+/ @return the path written
+persist:{[] (hsym `$ledger_path[]) set ledger[]; ledger_path[]}
+
+/ Replace the in-memory ledger with the one on disk, if there is one.
+/ .
+/ Validated on the way in. A file written by an older version of this tree
+/ has an older shape, and require_schema is exactly the guard for that - so a
+/ ledger missing run_id is refused by name here rather than read and silently
+/ aggregated across a column it does not have.
+/ .
+/ No file is not an error: a first run has nothing to reload.
+/ @return the ledger table name
+/ @eg .qcov.reload[]
+reload:{[]
+    p:hsym `$ledger_path[];
+    if[()~key p; :init_ledger[]];
+    `etl_coverage set get p;
+    require_schema[];
+    `etl_coverage}
+
+/ Private: the run this process is executing, or the null guid.
+/ .
+/ Protected rather than a bare .qrun.current[] call, because run.q is not a
+/ load-time dependency of this file and several minimal loaders
+/ (tests/q/read_checkpoint.q and friends) pull in coverage.q alone. Without
+/ the wrapper, staging a completion in one of those would fail on a missing
+/ namespace rather than record a run-less materialisation, which is the
+/ honest outcome there.
+/ .
+/ @[f;::;e] rather than .[f;();e]: applying a niladic through the dot form
+/ passes no argument list q can match, and the error handler swallows the
+/ resulting rank error instead of the failure it was written for.
+current_run:{[] @[{.qrun.current[]};::;0Ng]}
+
 / Stage a completion event for one completed bounded window (ETL-07).
 / .
 / Called for EVERY completed window, including one that published no rows.
@@ -287,8 +394,15 @@ stage_completion:{[dataset;source_version;range_from;range_to;rows_published]
         '"stage_completion: source_version must be set - coverage under one source release says nothing about another (ETL-09)"];
     require_interval[range_from;range_to];
     init_ledger[];
-    `etl_coverage insert (dataset;source_version;range_from;range_to;
-                          "j"$rows_published;.z.p;still_current);
+    / Reload, insert, persist - all three under the lock, so a second process
+    / staging concurrently cannot lose this row by writing a copy of the
+    / ledger it read before this insert existed.
+    with_lock[{[row]
+        reload[];
+        `etl_coverage insert row;
+        persist[]};
+        enlist (dataset;source_version;range_from;range_to;
+                "j"$rows_published;.z.p;still_current;current_run[])];
     count ledger[]}
 
 / ------------------------------------------------------------------ READ
@@ -361,6 +475,39 @@ require_covered:{[ds;version;as_of;from_ts;to_ts]
 
 / ------------------------------------------------------- SUPERSESSION
 
+/ Every materialisation one execution produced (gap 2.3).
+/ .
+/ The question run_id was added to answer. A run that published three
+/ datasets has three rows here, and a reader comparing two datasets can tell
+/ whether they are consistent BECAUSE they were built together, rather than
+/ inferring it from two timestamps that happen to be close.
+/ .
+/ Includes superseded rows deliberately: what a run produced does not change
+/ when a later run supersedes it, and hiding the withdrawn rows would make a
+/ run that was entirely restated look like a run that did nothing.
+/ @param id the run id
+/ @return the coverage rows that run staged
+/ @eg .qcov.materialisations_of[.qrun.current[]]
+materialisations_of:{[id]
+    init_ledger[];
+    target:id;
+    select from ledger[] where run_id=target}
+
+/ Which runs contributed to a dataset's coverage at one release.
+/ .
+/ The reverse lookup: not "what did this run build" but "what built this".
+/ Distinct run ids on one dataset and version mean the coverage was assembled
+/ across several executions, which is normal for a backfill run in slices and
+/ is worth being able to see.
+/ @param ds the dataset
+/ @param version the source release
+/ @return the distinct run ids, in first-recorded order
+/ @eg .qcov.contributing_runs[`demo_deals;`v1]
+contributing_runs:{[ds;version]
+    init_ledger[];
+    distinct exec run_id from `recorded_at xasc ledger[]
+        where dataset=ds, source_version=version}
+
 / Withdraw the coverage claims overlapping [from_ts;to_ts), as of now.
 / .
 / D-11, option A: a restatement does not DELETE the old claim, it closes it.
@@ -388,6 +535,21 @@ require_covered:{[ds;version;as_of;from_ts;to_ts]
 supersede:{[ds;version;from_ts;to_ts]
     require_interval[from_ts;to_ts];
     init_ledger[];
+    / Read-modify-write under the lock, like stage_completion. A supersession
+    / applied to a stale copy of the ledger would be lost by the next writer,
+    / and a withdrawn claim silently coming back is the worst failure this
+    / file has.
+    with_lock[{[ds;version;from_ts;to_ts]
+        reload[];
+        n:supersede_locked[ds;version;from_ts;to_ts];
+        persist[];
+        n};
+        (ds;version;from_ts;to_ts)]}
+
+/ Private: the supersession itself, with the lock already held and the ledger
+/ already reloaded. Split out so the locked wrapper above reads as what it is
+/ rather than burying the interval algebra inside a lambda.
+supersede_locked:{[ds;version;from_ts;to_ts]
     now:.z.p;
     / `cur` is a LOCAL copy of still_current, not the namespace global.
     / Inside \d .qcov a bare name in a qSQL where-clause does not resolve to

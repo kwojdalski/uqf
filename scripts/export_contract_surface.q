@@ -94,11 +94,30 @@ materialise_tables:{[]
     {@[{value[x][]};x;{[e] (::)}]} each fns;
     count fns}
 
+/ Private: define the tickerplant tables, so the surface carries them.
+/ .
+/ They are top-level table declarations in scripts/uqf_stack_tables.q rather
+/ than the lazily-created, namespace-owned kind materialise_tables above
+/ reaches - nothing calls an `attach` for them, because the process that
+/ creates them is stp1 loading a generated database.q.
+/ .
+/ Without this the surface listed four tables while the system had thirteen,
+/ and a reconciliation would have compared the ETL ledgers while silently
+/ ignoring every table the demo actually publishes into.
+/ .
+/ Loading is idempotent and safe here for the same reason calling `attach` is:
+/ these are empty typed declarations with no side effect beyond existing.
+load_tickerplant_tables:{[]
+    f:"scripts/uqf_stack_tables.q";
+    @[{system"l ",x};f;{[e] -2 "could not load ",f,": ",e;}];
+    f}
+
 / Table schemas: column names and type characters, for every table this tree
 / defines at the root. The type CHARACTER rather than the number, because
 / "p" is readable in a diff and 12h is not.
 table_schemas:{[]
     materialise_tables[];
+    load_tickerplant_tables[];
     ts:tables `;
     if[0=count ts; :()!()];
     ts!{[t]

@@ -55,6 +55,8 @@
 \l tests/q/test_singlestore_odbc.q
 \l tests/q/test_backfill_state.q
 \l tests/q/test_coverage.q
+\l tests/q/test_run.q
+\l tests/q/test_stack_tables.q
 \l tests/q/test_log.q
 \l tests/q/test_coercion.q
 \l tests/q/test_worker_config.q
@@ -70,7 +72,7 @@
 / The namespace list is unchanged by the tests/q/ move: it keys on test
 / NAMESPACES, not file paths, and the move deliberately left namespaces
 / alone - the same choice made for src/ (see src/init.q).
-nsList:`.metatest`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.dagtest`.egtest`.hbtest`.iotest`.odbctest`.backfillstatetest`.coveragetest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest;
+nsList:`.metatest`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.dagtest`.egtest`.hbtest`.iotest`.odbctest`.backfillstatetest`.coveragetest`.runtest`.tabletest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest;
 res:.qunit.runTests[nsList];
 
 nTotal:count res;

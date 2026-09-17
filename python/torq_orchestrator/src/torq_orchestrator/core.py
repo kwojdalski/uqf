@@ -16,7 +16,7 @@ its own module:
     crypto.py     the two external cryptorust recorders
 
 Everything is re-exported here because `from torq_orchestrator import core`
-followed by `core.thing` is how cli.py, wizard.py, torq_demo_mcp.py and
+followed by `core.thing` is how cli.py, wizard.py, uqf_stack_mcp.py and
 test_core.py all reach this code - about seventy distinct names between
 them. Keeping the facade meant the split changed no call site, which is
 what makes the existing test suite a proof that it preserved behaviour
@@ -71,8 +71,8 @@ from torq_orchestrator.logs import (  # noqa: F401
     resolve_procnames,
 )
 from torq_orchestrator.paths import (  # noqa: F401
-    TorqDemoError,
-    TorqDemoPaths,
+    UqfStackError,
+    UqfStackPaths,
     check_prerequisites,
     clean,
     default_paths,
@@ -119,6 +119,22 @@ from torq_orchestrator.runtime import (  # noqa: F401
     stop,
     summary,
 )
+from torq_orchestrator.schema_view import (  # noqa: F401
+    DEFAULT_PROC as DEFAULT_SCHEMA_PROC,
+)
+from torq_orchestrator.schema_view import (  # noqa: F401
+    columns as schema_columns,
+)
+from torq_orchestrator.schema_view import (  # noqa: F401
+    match_tables,
+    resolve_port,
+)
+from torq_orchestrator.schema_view import (  # noqa: F401
+    overview as schema_overview,
+)
+from torq_orchestrator.schema_view import (  # noqa: F401
+    table_names as schema_table_names,
+)
 from torq_orchestrator.schemas import (  # noqa: F401
     CRYPTO_BOOK_TABLE_SCHEMA,
     CRYPTO_SIM_FILLS_TABLE_SCHEMA,
@@ -164,13 +180,19 @@ __all__ = [
     "QUOTES_TABLE_SCHEMA",
     "TAP_PORT_OFFSET",
     "TRADES_TABLE_SCHEMA",
-    "TorqDemoError",
-    "TorqDemoPaths",
+    "UqfStackError",
+    "UqfStackPaths",
     "VECTORIZE_ETL_PORT_OFFSET",
     "WIDE_BOOK_FEED_PORT_OFFSET",
     "WIDE_BOOK_LEVELS",
     "WIDE_BOOK_TABLE_SCHEMA",
     "VENDORED_STARTWITHALL_OVERLAY",
+    "DEFAULT_SCHEMA_PROC",
+    "schema_columns",
+    "schema_overview",
+    "resolve_port",
+    "match_tables",
+    "schema_table_names",
     "_base_process_rows",
     "_crypto_recorder_config_yaml",
     "_generated_schema_content",

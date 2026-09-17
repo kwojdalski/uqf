@@ -1,18 +1,18 @@
-"""cli.py - Typer CLI for the vendored TorQ Finance Starter Pack demo (see
-docs/guides/torq-demo.md). Bridges lib/torq + lib/torq-finance-starter-pack
+"""cli.py - Typer CLI for the vendored uqf stack (see
+docs/guides/uqf-stack.md). Bridges lib/torq + lib/torq-finance-starter-pack
 without editing either vendored tree.
 
 All the actual bootstrapping/config logic lives in core.py, shared with
-torq_demo_mcp.py's FastMCP server so the two front ends can't drift apart.
+uqf_stack_mcp.py's FastMCP server so the two front ends can't drift apart.
 
 Exposed two ways - both call main() below, so they can't drift apart either:
-  - the `torq-demo` script entry point (pyproject.toml [project.scripts]):
-        uv run --project python/torq_orchestrator torq-demo start all
+  - the `uqf-stack` script entry point (pyproject.toml [project.scripts]):
+        uv run --project python/torq_orchestrator uqf-stack start all
     or, after a one-time `uv tool install --editable python/torq_orchestrator`:
-        torq-demo start all
-  - the standalone ../../torq_demo.py shim, kept for the longer invocation
+        uqf-stack start all
+  - the standalone ../../uqf_stack.py shim, kept for the longer invocation
     some docs/scripts still use:
-        uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo.py start all
+        uv run --project python/torq_orchestrator python/torq_orchestrator/uqf_stack.py start all
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def _export(rows, export: Path | None) -> None:
         return
     try:
         core.export_table(rows, export)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     console.print(f"[green]exported to {export}[/]")
@@ -58,7 +58,7 @@ def _paths():
     return core.default_paths()
 
 
-def _die(exc: core.TorqDemoError) -> None:
+def _die(exc: core.UqfStackError) -> None:
     log.error("{}", exc)
     raise typer.Exit(code=1)
 
@@ -66,7 +66,7 @@ def _die(exc: core.TorqDemoError) -> None:
 def _run_streaming(result_fn, *args, **kwargs) -> None:
     try:
         result = result_fn(_paths(), *args, capture=False, **kwargs)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
@@ -98,7 +98,7 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
     """Status table (up/down, pid, port) for every process in process.csv."""
     try:
         result = core.summary(_paths(), base_port=port)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
 
@@ -108,7 +108,7 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
     # so fill it from there and mark where it came from.
     try:
         ports = core.configured_ports(_paths(), base_port=port)
-    except core.TorqDemoError:
+    except core.UqfStackError:
         # A summary that still prints beats one that dies because the port
         # map could not be built - the reported ports are unaffected.
         ports = {}
@@ -119,12 +119,12 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
     # MONITORING rather than a verdict on the fleet - rendered as such below.
     try:
         heartbeats = core.heartbeat_states(_paths(), base_port=port)
-    except core.TorqDemoError:
+    except core.UqfStackError:
         heartbeats = None
 
     rows = core.summary_rows(result.stdout, ports, heartbeats)
 
-    table = Table(title=f"torq_demo summary (base port {port})")
+    table = Table(title=f"uqf_stack summary (base port {port})")
     for col in core.SUMMARY_COLUMNS:
         table.add_column(col)
 
@@ -159,7 +159,7 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
         console.print(
             "[dim]Heartbeats not collected: monitor1 is not running. It starts "
             "with the stack, so this means it died or was stopped - run "
-            "`torq-demo start monitor1`. Status above is a PID check, which "
+            "`uqf-stack start monitor1`. Status above is a PID check, which "
             "cannot tell a hung process from a working one.[/]"
         )
     else:
@@ -193,7 +193,7 @@ def print_startlines(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_
     """Show the exact startup command line(s) without starting anything."""
     try:
         result = core.print_procs(_paths(), procs, base_port=port)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     console.print(result.stdout)
@@ -202,7 +202,7 @@ def print_startlines(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_
 
 @app.command()
 def clean() -> None:
-    """Wipe scripts/output/torq-demo/ (logs, tplogs, wdb, the copied sample data)."""
+    """Wipe scripts/output/uqf-stack/ (logs, tplogs, wdb, the copied sample data)."""
     core.clean(_paths())
 
 
@@ -229,6 +229,113 @@ def query(
     _export(result, export)
 
 
+@app.command()
+def schema(
+    table: Annotated[
+        str | None,
+        typer.Argument(
+            help="a table to describe, or a pattern like 'crypto*'; omit to list every table"
+        ),
+    ] = None,
+    proc: Annotated[
+        str, typer.Option(help="process to read from, e.g. rdb1 (today) or hdb1 (history)")
+    ] = core.DEFAULT_SCHEMA_PROC,
+    port: Annotated[
+        int | None,
+        typer.Option(help="read this port directly, instead of resolving --proc"),
+    ] = None,
+    base_port: Annotated[int, typer.Option(help="stack base port")] = core.DEFAULT_BASE_PORT,
+    host: str = "localhost",
+    user: str = "admin",
+    passwd: str = "admin",
+    export: ExportOpt = None,
+) -> None:
+    """Show the tables in a running process, or one table's columns and types.
+
+    Reads the LIVE database over IPC, not the declarations in
+    scripts/uqf_stack_tables.q - a table can be declared and still absent
+    from a process that failed to load its schema file, and that is exactly
+    when someone runs this.
+    """
+    paths = core.default_paths()
+    try:
+        target = port if port is not None else core.resolve_port(paths, proc, base_port)
+    except core.UqfStackError as exc:
+        log.error("{}", exc)
+        raise typer.Exit(code=1) from exc
+
+    where = f"{proc}" if port is None else f"port {target}"
+    creds = {"user": user, "passwd": passwd}
+
+    # A pattern describes EVERY match, one table per rendered block. An exact
+    # name is just a pattern that matches itself, so there is one code path
+    # rather than two - and `schema quotes` behaves identically either way.
+    try:
+        matched = core.match_tables(table, target, host=host, **creds) if table else []
+        if table and not matched:
+            available = core.schema_table_names(target, host=host, **creds)
+            log.error(
+                "nothing matches {!r} on {} - it has: {}",
+                table,
+                where,
+                ", ".join(sorted(available)),
+            )
+            raise typer.Exit(code=1)
+        rows = (
+            [r for name in matched for r in core.schema_columns(name, target, host=host, **creds)]
+            if table
+            else core.schema_overview(target, host=host, **creds)
+        )
+    except typer.Exit:
+        raise
+    except core.UqfStackError as exc:
+        log.error("{}", exc)
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:  # kola raises its own connect/query errors
+        log.error("could not read the schema from {} ({}): {}", where, target, exc)
+        raise typer.Exit(code=1) from exc
+
+    if table:
+        for name in matched:
+            rendered = Table(title=f"{name} on {where}")
+            rendered.add_column("column")
+            rendered.add_column("type")
+            rendered.add_column("q", justify="center")
+            rendered.add_column("attribute")
+            for row in core.schema_columns(name, target, host=host, **creds):
+                # A general column carries no type information at all, so it
+                # is dimmed rather than presented alongside the ones that do.
+                style = "dim" if row["type"] == "general" else ""
+                rendered.add_row(
+                    row["column"],
+                    f"[{style}]{row['type']}[/]" if style else row["type"],
+                    row["q"],
+                    f"[green]{row['attribute']}[/]" if row["attribute"] else "",
+                )
+            console.print(rendered)
+        if len(matched) > 1:
+            console.print(f"[dim]{len(matched)} tables matched {table!r}.[/]")
+    else:
+        rendered = Table(title=f"tables on {where} (port {target})")
+        rendered.add_column("table")
+        rendered.add_column("rows", justify="right")
+        rendered.add_column("columns", justify="right")
+        for row in rows:
+            # Zero rows is not an error - an empty table is the normal state
+            # for one nothing has published into yet - but it is the thing a
+            # reader is usually looking for, so it is not left to be counted.
+            count = "[dim]0[/]" if row["rows"] == 0 else f"{row['rows']:,}"
+            rendered.add_row(row["table"], count, str(row["columns"]))
+        console.print(rendered)
+        empty = [r["table"] for r in rows if r["rows"] == 0]
+        if empty:
+            console.print(
+                f"[dim]{len(empty)} empty: {', '.join(empty)}. Declared and carrying "
+                "nothing - normal before a feed publishes, a gap afterwards.[/]"
+            )
+    _export(rows, export)
+
+
 @app.command("config-get")
 def config_get(
     procname: str,
@@ -245,7 +352,7 @@ def config_get(
     """
     try:
         row = core.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     if field is not None:
@@ -278,7 +385,7 @@ def list_items(
         return
     try:
         items = core.list_items(_paths(), kind, base_port=port)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     table = Table(title=f"{kind} ({len(items)})")
@@ -298,7 +405,7 @@ def config_set(procname: str, field: str, value: str) -> None:
     """
     try:
         core.set_process_config(_paths(), procname, field, value)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     console.print(f"{procname}.{field} = {value}")
@@ -326,27 +433,27 @@ def logs(
             core.follow_logs(_paths(), procs, min_level=level)
         else:
             core.print_recent_logs(_paths(), procs, lines=lines, min_level=level)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
 
 
 @app.command("new-process")
 def new_process(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
-    """Interactive wizard: add a new TorQ demo process. Opens with a menu of
+    """Interactive wizard: add a new uqf stack process. Opens with a menu of
     recipes - "FX quotes feed" and "cross-rate reprice ETL" are fully
     working (answer a few prompts, no q editing needed), "blank
     publisher"/"blank subscriber" write a Stage-1-only skeleton .q file for
-    q/kdb+ users to finish by hand (see docs/guides/torq-demo.md). Registers
+    q/kdb+ users to finish by hand (see docs/guides/uqf-stack.md). Registers
     whatever gets built and optionally starts it to verify it's alive.
     """
     try:
         wizard.run(_paths(), base_port=port)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
 
 
 # Proof of concept: cryptorust (Rust, no TorQ/q involved) publishing live
-# venue order books onto stp1 over kdb+ IPC - a separate sub-app (`torq-demo
+# venue order books onto stp1 over kdb+ IPC - a separate sub-app (`uqf-stack
 # crypto start/stop/status`) rather than flat crypto-* commands, since these
 # don't drive torq.sh/process.csv at all (see core.py's start_crypto_recorder
 # docstring) - a distinct enough concern to read as its own namespace.
@@ -388,7 +495,7 @@ def crypto_start(
             top_n_levels=top_n_levels,
             interval_ms=interval_ms,
         )
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     console.print(f"crypto recorder started (pid {pid})")
@@ -399,7 +506,7 @@ def crypto_stop() -> None:
     """Stop the cryptorust recorder started by `crypto start`."""
     try:
         core.stop_crypto_recorder(_paths())
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     console.print("crypto recorder stopped")
@@ -449,7 +556,7 @@ def crypto_fills_start(
             symbol=symbol,
             poll_interval_ms=poll_interval_ms,
         )
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     console.print(
@@ -464,7 +571,7 @@ def crypto_fills_stop() -> None:
     """Stop the cryptorust fills recorder started by `crypto fills-start`."""
     try:
         core.stop_crypto_fills_recorder(_paths())
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     console.print("crypto fills recorder stopped")
@@ -493,15 +600,15 @@ def raw(ctx: typer.Context, port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """
     try:
         result = core.run_torq_sh(_paths(), ctx.args, base_port=port, capture=False)
-    except core.TorqDemoError as exc:
+    except core.UqfStackError as exc:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
 
 
 def main() -> None:
-    """Entry point for both the `torq-demo` script and the torq_demo.py shim."""
-    configure_logging(component="torq_demo")
+    """Entry point for both the `uqf-stack` script and the uqf_stack.py shim."""
+    configure_logging(component="uqf_stack")
     app()
 
 

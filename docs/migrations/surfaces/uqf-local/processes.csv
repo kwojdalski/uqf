@@ -1,0 +1,12 @@
+procname,proctype,offset,subscribes,publishes
+cross1,metrics,25,quotes,
+deals_backfill1,backfill,32,,
+events_backfill1,backfill,33,,
+fxfeed1,feed,19,,quote
+fxtradesfeed1,feed,29,,trades
+markout1,metrics,31,quote trades,execution_quality
+posbook1,metrics,30,quote trades,position
+quotesfeed1,feed,24,,quotes
+tap1,metrics,28,,
+vectorize1,metrics,27,wide_book,mkt_orderbook
+widefeed1,feed,26,,wide_book

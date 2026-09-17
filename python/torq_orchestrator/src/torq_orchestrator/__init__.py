@@ -1,3 +1,3 @@
-"""Shared bootstrapping/config logic for the TorQ Finance Starter Pack demo.
-See ../../torq_demo.py (CLI) and ../../torq_demo_mcp.py (MCP server).
+"""Shared bootstrapping/config logic for the uqf stack.
+See ../../uqf_stack.py (CLI) and ../../uqf_stack_mcp.py (MCP server).
 """

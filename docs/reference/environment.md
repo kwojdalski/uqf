@@ -61,10 +61,10 @@ listing them would bury the twenty-three above that are.
 
 ## Produced by the orchestrator — do not set these by hand
 
-`torq_orchestrator.env.build_env` computes these from `TorqDemoPaths` and
+`torq_orchestrator.env.build_env` computes these from `UqfStackPaths` and
 hands them to `torq.sh`; `process.csv`'s `${VAR}` and `{VAR}+N` placeholders
 resolve against the same dict. Setting one in your shell does not override
-anything — `build_env` wins — but it will make `torq-demo list` and the
+anything — `build_env` wins — but it will make `uqf-stack list` and the
 running stack disagree about where data lives, which is a confusing way to
 spend an afternoon.
 

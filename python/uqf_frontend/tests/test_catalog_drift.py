@@ -23,26 +23,23 @@ _Q_TO_CATALOG = {
     "long": QType.LONG,
     "symbol": QType.SYMBOL,
     "boolean": QType.BOOLEAN,
+    "guid": QType.GUID,
 }
 
-#: The generated table schemas, read as TEXT - no import, so this gate cannot
-#: silently skip itself if torq_orchestrator's environment is broken.
-#:
-#: They lived in core.py until it was split by concern; this path moved with
-#: them, and the move is why `test_the_schema_module_is_where_this_test_expects_it`
-#: exists below. A stale path here would make every parametrised case fail
-#: loudly, which is what happened during the split and is the behaviour to
-#: keep - a silent skip would have been far worse.
-SCHEMAS_PY = (
-    Path(__file__).resolve().parents[2]
-    / "torq_orchestrator"
-    / "src"
-    / "torq_orchestrator"
-    / "schemas.py"
-)
-
-#: Repository root, for the q files that own the ETL-side schemas.
+#: Repository root, for the q files that own every schema this test reads.
 REPO = Path(__file__).resolve().parents[3]
+
+#: The tickerplant table definitions, read as TEXT - no import and no q
+#: process, so this gate cannot silently skip itself because an environment
+#: was broken.
+#:
+#: They lived in core.py, then in schemas.py when core.py was split, and now
+#: in q - which is where q table definitions belong, and which turns this
+#: check from Python-against-Python into catalog-against-q. That history is
+#: why `test_the_schema_source_is_where_this_test_expects_it` exists below: a
+#: stale path here would make every parametrised case fail loudly, which is
+#: the behaviour to keep.
+TABLES_Q = REPO / "scripts" / "uqf_stack_tables.q"
 
 #: q type characters, as they appear in a source contract's `types` string.
 _CHAR_TO_CATALOG = {
@@ -55,17 +52,16 @@ _CHAR_TO_CATALOG = {
 }
 
 
-def _schema_text(const: str) -> str:
-    """Pull one `NAME = (...)` schema constant out of core.py and splice its
-    string fragments together, the way Python would.
+def _tickerplant_schema(table: str) -> str:
+    """Pull one `name:([]...)` definition out of the q file, by table name.
+
+    Line-anchored: every comment in that file starts with `/`, so a definition
+    is the only thing that can begin a line with `name:([]`.
     """
-    source = SCHEMAS_PY.read_text()
-    m = re.search(rf"^{const} = \((.*?)\n\)", source, re.S | re.M)
-    if m is None:
-        m = re.search(rf'^{const} = ("(?:[^"\\]|\\.)*")', source, re.M)
-        assert m, f"{const} not found in {SCHEMAS_PY}"
-        return m.group(1).strip('"')
-    return "".join(re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1)))
+    source = TABLES_Q.read_text()
+    m = re.search(rf"^{table}:\(\[\].*$", source, re.M)
+    assert m, f"{table} is not defined in {TABLES_Q}"
+    return m.group(0)
 
 
 def _parse(schema: str) -> dict[str, QType]:
@@ -112,31 +108,27 @@ def _q_contract_columns(path: Path, fields_const: str, types_const: str) -> dict
     return {n: _CHAR_TO_CATALOG[c] for n, c in zip(names, chars, strict=True)}
 
 
-def test_the_schema_module_is_where_this_test_expects_it():
+def test_the_schema_source_is_where_this_test_expects_it():
     """If the schemas move again, this gate must fail loudly rather than skip.
 
-    They already moved once, from core.py to schemas.py when core.py was split
-    by concern. This assertion is what turns that into one clear failure
-    instead of five confusing ones.
+    They have moved twice: core.py to schemas.py when core.py was split, and
+    schemas.py to q when it became clear that q table definitions living as
+    Python string literals were read by no q parser until stp1 started. This
+    assertion is what turns the next move into one clear failure instead of
+    five confusing ones.
     """
-    assert SCHEMAS_PY.is_file(), f"expected the generated schemas at {SCHEMAS_PY}"
+    assert TABLES_Q.is_file(), f"expected the tickerplant table definitions at {TABLES_Q}"
 
 
 @pytest.mark.parametrize(
-    ("table_name", "const"),
-    [
-        ("trades", "TRADES_TABLE_SCHEMA"),
-        ("position", "POSITION_TABLE_SCHEMA"),
-        ("execution_quality", "EXECUTION_QUALITY_TABLE_SCHEMA"),
-        ("quotes", "QUOTES_TABLE_SCHEMA"),
-        ("crypto_trades", "CRYPTO_TRADES_TABLE_SCHEMA"),
-    ],
+    "table_name",
+    ["trades", "position", "execution_quality", "quotes", "crypto_trades"],
 )
-def test_catalog_matches_the_generated_schema(table_name, const):
-    expected = _parse(_schema_text(const))
+def test_catalog_matches_the_generated_schema(table_name):
+    expected = _parse(_tickerplant_schema(table_name))
     actual = TABLES[table_name].columns
     assert actual == expected, (
-        f"{table_name} catalog has drifted from {const}; "
+        f"{table_name} catalog has drifted from {TABLES_Q.name}; "
         f"missing={set(expected) - set(actual)} extra={set(actual) - set(expected)}"
     )
 

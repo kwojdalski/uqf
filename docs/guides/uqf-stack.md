@@ -1,4 +1,4 @@
-# Running the TorQ Finance Starter Pack demo
+# Running the uqf stack
 
 `lib/torq/` (the TorQ production framework) and `lib/torq-finance-starter-pack/`
 (a layered reference application built on top of it - feed handlers,
@@ -8,11 +8,11 @@ Licensing section) but neither is wired into `src/init.q` or anything else
 uqf itself runs - this library has no long-running processes for TorQ's
 machinery to manage.
 
-`python/torq_orchestrator/torq_demo.py` bridges the two vendored trees so
+`python/torq_orchestrator/uqf_stack.py` bridges the two vendored trees so
 you can actually start the demo up and poke at it, without editing or
 writing into either `lib/` directory. The actual bootstrapping/config logic
 lives in `python/torq_orchestrator/src/torq_orchestrator/core.py`, shared
-with `torq_demo_mcp.py`'s FastMCP server (see "MCP server" below) so the
+with `uqf_stack_mcp.py`'s FastMCP server (see "MCP server" below) so the
 CLI and the MCP tools can't drift apart. It's a standalone package
 (`python/torq_orchestrator/`), separate from `python/uqf_client/` (the
 pricing library's q-IPC client) - this has nothing to do with pricing, and
@@ -24,56 +24,98 @@ process topology, table-level data pipeline, and config-generation flow.
 
 ## Quick start
 
-The CLI is also a `torq-demo` script entry point
+The CLI is also a `uqf-stack` script entry point
 (`pyproject.toml`'s `[project.scripts]`), which shortens every command
-below - `uv run --project python/torq_orchestrator torq-demo start all`
-instead of spelling out `torq_demo.py`'s path. Shorter still, one-time
+below - `uv run --project python/torq_orchestrator uqf-stack start all`
+instead of spelling out `uqf_stack.py`'s path. Shorter still, one-time
 setup:
 
 ```
 uv tool install --editable python/torq_orchestrator
 ```
 
-installs `torq-demo` onto your `PATH` as an editable link back to this
+installs `uqf-stack` onto your `PATH` as an editable link back to this
 repo's source (edits are picked up immediately, no reinstall), so from then
 on, from anywhere:
 
 ```
-torq-demo start all      # start every startwithall=1 process
-torq-demo summary        # status table
-torq-demo stop all       # stop everything
+uqf-stack start all      # start every startwithall=1 process
+uqf-stack summary        # status table
+uqf-stack stop all       # stop everything
 ```
 
 Without that one-time step, or in CI/a fresh checkout, fall back to `uv
 run`:
 
 ```
-uv run --project python/torq_orchestrator torq-demo start all
-uv run --project python/torq_orchestrator torq-demo summary
-uv run --project python/torq_orchestrator torq-demo stop all
+uv run --project python/torq_orchestrator uqf-stack start all
+uv run --project python/torq_orchestrator uqf-stack summary
+uv run --project python/torq_orchestrator uqf-stack stop all
 ```
 
 The longer `uv run --project python/torq_orchestrator
-python/torq_orchestrator/torq_demo.py ...` form (a thin shim over the same
+python/torq_orchestrator/uqf_stack.py ...` form (a thin shim over the same
 CLI) still works too, for anything that already invokes it by path.
 
 Run from anywhere - the command resolves its own location and works out
 `lib/torq`/`lib/torq-finance-starter-pack`'s absolute paths itself; `uv run
---project python/torq_orchestrator` (or the installed `torq-demo`)
+--project python/torq_orchestrator` (or the installed `uqf-stack`)
 resolves that package's dependencies (typer, loguru, rich, kola, fastmcp)
 on demand, no separate `uv sync` step needed. First `start` bootstraps a
 data directory at
-`scripts/output/torq-demo/` (already gitignored, matching
+`scripts/output/uqf-stack/` (already gitignored, matching
 `scripts/output/`'s existing use for `timer_replay_example.q`'s run
 artifacts) by copying the app's sample `hdb/`/`dqe/` data there - `logs/`,
 `tplogs/`, `wdbhdb/`, and every process's actual read/write activity all
-happen inside that directory, never inside `lib/`. Run `torq-demo clean`
+happen inside that directory, never inside `lib/`. Run `uqf-stack clean`
 to wipe it and start fresh next time.
 
 Requires KDB-X (`q` on `PATH`)
 elsewhere in this repo for `src/`/`tests/` - plus `envsubst` and `rlwrap`
 (TorQ's own `torq.sh`, which this still drives under the hood, needs both;
 on macOS: `brew install gettext rlwrap`).
+
+## Reading the database's shape
+
+`schema` answers "what tables are there, and what shape are they" without
+anyone typing `meta` at a q prompt:
+
+```
+uqf-stack schema                  # every table on rdb1, with row and column counts
+uqf-stack schema quotes           # one table's columns, types and attributes
+uqf-stack schema 'crypto*'        # every table matching a pattern, one block each
+uqf-stack schema --proc hdb1      # the history instead of today
+uqf-stack schema --port 6052      # a port directly, skipping --proc resolution
+```
+
+**It reads the live process, not the declarations.**
+`scripts/uqf_stack_tables.q` says what the tickerplant is *configured* to
+carry; that is not evidence a table exists in the process you are about to
+query. A tickerplant that failed to load its schema file, or an RDB that has
+not replayed, looks identical in every other view - so reporting the
+declarations here would be confidently wrong exactly when it mattered.
+
+Two things the output says that `meta` alone does not:
+
+- **Case is the vector/atom distinction.** `f` is a float column; `F` is a
+  float *vector* column, one list per row - the shape `quotes` and
+  `mkt_orderbook` are built around and that every pricing function in `src/`
+  expects. They render as `float` and `float vector`.
+- **A column's type can change with its contents.** An empty vector column
+  reports as `general`, because q cannot know the element type until a row
+  exists. The same table reads `general` before its first publish and
+  `float vector` after. Not a bug, but worth knowing before treating one
+  reading as the schema.
+
+Row counts are shown because "declared but empty" and "carrying data" is
+usually the thing being looked for, and empty tables are named explicitly
+rather than left to be spotted.
+
+The table argument is a shell-style pattern (`crypto*`, `*trade*`), matched
+case-sensitively against the names the process reported. An exact name is
+just a pattern that matches itself, so there is one behaviour rather than
+two - quote the pattern, or the shell will try to expand it against your
+filenames first.
 
 ## Commands
 
@@ -83,8 +125,10 @@ stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
 summary [--port N] [--export FILE]    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
-clean                                 wipe scripts/output/torq-demo/
+clean                                 wipe scripts/output/uqf-stack/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
+schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
+                                      columns of every table matching a pattern
 list [KIND] [--port N] [--export FILE]  list every item of KIND ('processes', 'fields',
                                        'overrides', 'env') - no argument shows the kinds
 config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective
@@ -115,8 +159,8 @@ rows to `FILE` as CSV or Parquet, format inferred from the extension - see
 every item of that kind - not just processes:
 
 ```
-torq-demo list
-torq-demo list processes
+uqf-stack list
+uqf-stack list processes
 ```
 
 - `processes` - every process's `procname`/`proctype`/`port`/`startwithall`,
@@ -149,7 +193,7 @@ processes, not part of the standing stack, so they also don't auto-start.
 Upstream ships `monitor1` with `startwithall=0`, for the licence reason
 above. That left the heartbeat unusable: every process *publishes* a
 heartbeat regardless, but `monitor1` is the only thing that *collects* them,
-so `.hb.hb` was empty and `torq-demo summary`'s Heartbeat column read
+so `.hb.hb` was empty and `uqf-stack summary`'s Heartbeat column read
 "not collected" on a perfectly healthy stack. A health signal that only ever
 appears if an operator knows to start one more process by hand is not a
 health signal, so `procs.VENDORED_STARTWITHALL_OVERLAY` turns it on.
@@ -172,7 +216,7 @@ Two consequences worth knowing:
 To get the upstream behaviour back:
 
 ```bash
-torq-demo config-set monitor1 startwithall 0
+uqf-stack config-set monitor1 startwithall 0
 ```
 
 Default ports (base `6050`, override with `--port <n>`):
@@ -198,7 +242,7 @@ Default ports (base `6050`, override with `--port <n>`):
 
 `config-get`/`config-set` read and write a *process.csv field override* -
 not the vendored `process.csv` (never edited) and not the *generated* one
-in `scripts/output/torq-demo/` either (regenerated from scratch on every
+in `scripts/output/uqf-stack/` either (regenerated from scratch on every
 `bootstrap()` call, i.e. every `start`/`stop`/`summary`/...  - anything
 written directly there would just be clobbered on the next command).
 Overrides persist instead in `python/torq_orchestrator/process_overrides.csv`
@@ -208,9 +252,9 @@ tracked in git like any other config, not gitignored), and
 it (re)generates `process.csv`.
 
 ```
-torq-demo config-get fxfeed1
-torq-demo config-get fxfeed1 startwithall
-torq-demo config-set fxfeed1 startwithall 0
+uqf-stack config-get fxfeed1
+uqf-stack config-get fxfeed1 startwithall
+uqf-stack config-set fxfeed1 startwithall 0
 ```
 
 `config-get` resolves `process.csv`'s two placeholder styles by default -
@@ -275,7 +319,7 @@ things:
 
 1. **Schema** - `torq_orchestrator.core._generated_schema_content()`
    appends the `quotes` table definition to a *copy* of the vendored
-   `database.q` (written to `scripts/output/torq-demo/database.q` on every
+   `database.q` (written to `scripts/output/uqf-stack/database.q` on every
    `bootstrap()`, same generate-never-edit approach as `process.csv`), and
    `_base_process_rows()` repoints `stp1`'s `-schemafile` extras arg at
    that copy instead of the vendored file.
@@ -283,9 +327,9 @@ things:
    exactly like `fxfeed1` (port offset `+24`).
 
 ```
-torq-demo query \
+uqf-stack query \
     "select time,sym,bid_prices,ask_prices from quotes" --port 6052        # rdb1
-torq-demo query \
+uqf-stack query \
     "select ts:time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from quotes" --port 6052
 ```
 
@@ -296,7 +340,7 @@ the demo running past midnight) `quotes` rows land in the HDB alongside
 ## Logs
 
 Every process writes its own `out_<procname>.log`/`err_<procname>.log` in
-`scripts/output/torq-demo/logs/` (stable symlink aliases TorQ itself
+`scripts/output/uqf-stack/logs/` (stable symlink aliases TorQ itself
 maintains onto the current run's timestamped file - see `torq.q`'s
 `createlog`/`fileredirect`), in a fixed pipe-delimited format:
 `time|host|proctype|procname|loglevel|id|message`. `logs` tails these
@@ -305,10 +349,10 @@ through the same colorized logger the rest of the CLI uses, instead of
 `-jsonlogs`, nothing added to `extras`):
 
 ```
-torq-demo logs                          # last 20 lines per process, all processes
-torq-demo logs "stp1 rdb1" -n 50        # last 50 lines each, merged and time-sorted
-torq-demo logs -f                       # live tail, every process, Ctrl-C to stop
-torq-demo logs quotesfeed1 -f --level WARNING   # live tail, warnings/errors only
+uqf-stack logs                          # last 20 lines per process, all processes
+uqf-stack logs "stp1 rdb1" -n 50        # last 50 lines each, merged and time-sorted
+uqf-stack logs -f                       # live tail, every process, Ctrl-C to stop
+uqf-stack logs quotesfeed1 -f --level WARNING   # live tail, warnings/errors only
 ```
 
 `-f`/`--follow` spawns one `tail -F` per file (so it follows TorQ's own log
@@ -322,14 +366,14 @@ printed sorted by the log's own timestamp - not wall-clock arrival order.
 `tap1` (`torq_tap.q`) is a generic debug tap: it subscribes to some (or,
 by default, every) table on the tickerplant and logs each incoming batch
 unmodified through the same `logs` pipeline above - the table name lands
-in the log line's `id` field, so `torq-demo logs -f tap1` shows you
-literally everything being written to kdb+, and `torq-demo logs -f tap1 |
+in the log line's `id` field, so `uqf-stack logs -f tap1` shows you
+literally everything being written to kdb+, and `uqf-stack logs -f tap1 |
 grep quotes`-style filtering works even without narrowing the subscription
 itself. `startwithall=0` (debug utility, not part of the standing stack):
 
 ```
-torq-demo start tap1
-torq-demo logs -f tap1
+uqf-stack start tap1
+uqf-stack logs -f tap1
 ```
 
 Restrict it to specific tables via the same `extras`-as-CLI-flags
@@ -337,8 +381,8 @@ mechanism `sctp1`/others already use - no orchestrator code needed for
 the filtering itself:
 
 ```
-torq-demo config-set -- tap1 extras "-tables quote wide_book"
-torq-demo restart tap1
+uqf-stack config-set -- tap1 extras "-tables quote wide_book"
+uqf-stack restart tap1
 ```
 
 (the leading `--` is needed so the CLI doesn't try to parse `-tables` as
@@ -347,11 +391,11 @@ table".
 
 ## Adding a new process interactively
 
-`torq-demo new-process` is a console wizard for adding a process, opening
+`uqf-stack new-process` is a console wizard for adding a process, opening
 with a menu of recipes:
 
 ```
-torq-demo new-process
+uqf-stack new-process
 ```
 
 ```
@@ -394,9 +438,9 @@ Every process (except the passwordless `feed1`) is protected by
 placeholder demo credentials, `admin:admin` works for everything.
 
 ```
-torq-demo query \
+uqf-stack query \
     "select count i by sym from quote" --port 6052        # rdb1
-torq-demo query \
+uqf-stack query \
     "select from quote where sym in \`EURUSD\`GBPUSD\`USDJPY\`AUDUSD" --port 6052
 ```
 
@@ -415,12 +459,12 @@ whichever port you give it).
 ## Verifying it's alive
 
 ```
-torq-demo summary
+uqf-stack summary
 ```
 
 prints a status table (`up`/`down`, pid, port, color-coded) for every
 process defined in `process.csv`, not just the ones `start all` brought up.
-Per-process stdout/stderr logs land in `scripts/output/torq-demo/logs/`
+Per-process stdout/stderr logs land in `scripts/output/uqf-stack/logs/`
 (`out_<procname>.log` / `err_<procname>.log`) - check these first if a
 process shows `down` unexpectedly.
 
@@ -455,7 +499,7 @@ there; the decision to be revisited then is #54's, not this one.
 
 ## crypto recorder (cryptorust) - a proof of concept
 
-`torq-demo crypto start`/`stop`/`status` (a nested command group, not
+`uqf-stack crypto start`/`stop`/`status` (a nested command group, not
 flat `crypto-*` commands - these don't drive `torq.sh`/`process.csv` at
 all, a distinct enough concern to read as its own namespace) are a proof
 of concept that this demo's kdb+ infra isn't TorQ/q-specific: anything
@@ -473,10 +517,10 @@ with its own reconnect-on-drop loop, so a `stp1` restart doesn't take it
 down permanently.
 
 ```
-torq-demo crypto start                    # binance_spot, BTC-USDT/ETH-USDT by default
-torq-demo crypto start --venues binance_spot,bybit_spot --symbols BTC-USDT
-torq-demo crypto status
-torq-demo crypto stop
+uqf-stack crypto start                    # binance_spot, BTC-USDT/ETH-USDT by default
+uqf-stack crypto start --venues binance_spot,bybit_spot --symbols BTC-USDT
+uqf-stack crypto status
+uqf-stack crypto stop
 ```
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
@@ -485,7 +529,7 @@ flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`quotes`/
 `wide_book`:
 
 ```
-torq-demo query "select from crypto_book" --port <rdb1's port>
+uqf-stack query "select from crypto_book" --port <rdb1's port>
 ```
 
 Requires a `~/github_projects/cryptorust` checkout (override the path via
@@ -497,13 +541,13 @@ feed process here - no separate cryptorust-side credential to set up.
 
 ### crypto fills recorder - simulated AND real fills, two tables
 
-`torq-demo crypto fills-start`/`fills-stop`/`fills-status` are a separate
+`uqf-stack crypto fills-start`/`fills-stop`/`fills-status` are a separate
 proof of concept, alongside the book recorder above: cryptorust's own
 `kdb-fills-recorder` binary (`src/bin/kdb_fills_recorder.rs`) polls an
 *already-running* cryptorust service's OMS over its own IPC unix socket
 (default `/tmp/beacon.sock`) and republishes new fills onto this demo's
 `stp1`, the bridge role `torq_posbook_etl.q`/`torq_markout_etl.q` play
-inside this repo's own TorQ demo - except this one bridges two entirely
+inside this repo's own uqf stack - except this one bridges two entirely
 different IPC protocols (cryptorust's JSON-RPC and kdb+'s wire protocol)
 rather than two kdb+ processes. It polls two independent methods each
 tick, into two separate tables:
@@ -530,10 +574,10 @@ inside the cryptorust checkout), with its OMS/trading cycle active before
 either method returns anything.
 
 ```
-torq-demo crypto fills-start                       # polls /tmp/beacon.sock, tags sim rows BTC-USDT
-torq-demo crypto fills-start --oms-socket-path /tmp/beacon.sock --symbol ETH-USDT
-torq-demo crypto fills-status
-torq-demo crypto fills-stop
+uqf-stack crypto fills-start                       # polls /tmp/beacon.sock, tags sim rows BTC-USDT
+uqf-stack crypto fills-start --oms-socket-path /tmp/beacon.sock --symbol ETH-USDT
+uqf-stack crypto fills-status
+uqf-stack crypto fills-stop
 ```
 
 Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/
@@ -542,18 +586,18 @@ and `crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
 `fee`/`fee_currency`/`exchange_fill_id` - `CRYPTO_TRADES_TABLE_SCHEMA`):
 
 ```
-torq-demo query "select from crypto_sim_fills" --port <rdb1's port>
-torq-demo query "select from crypto_trades" --port <rdb1's port>
+uqf-stack query "select from crypto_sim_fills" --port <rdb1's port>
+uqf-stack query "select from crypto_trades" --port <rdb1's port>
 ```
 
 ## MCP server
 
-`python/torq_orchestrator/torq_demo_mcp.py` exposes the same
+`python/torq_orchestrator/uqf_stack_mcp.py` exposes the same
 start/stop/restart/summary/print/clean/query/config-get/config-set/list/
-logs/crypto-lifecycle operations as MCP tools (`torq_demo_start`,
-`torq_demo_stop`, `torq_demo_get_config`, `torq_demo_set_config`,
-`torq_demo_logs`, `torq_demo_crypto_start`/`_stop`/`_status`,
-`torq_demo_crypto_fills_start`/`_stop`/`_status`, etc. - see the file
+logs/crypto-lifecycle operations as MCP tools (`uqf_stack_start`,
+`uqf_stack_stop`, `uqf_stack_get_config`, `uqf_stack_set_config`,
+`uqf_stack_logs`, `uqf_stack_crypto_start`/`_stop`/`_status`,
+`uqf_stack_crypto_fills_start`/`_stop`/`_status`, etc. - see the file
 itself for the full, current list), built with
 [FastMCP](https://gofastmcp.com/), for an MCP client (e.g. Claude) to
 drive the demo directly instead of shelling out to the CLI. Not
@@ -563,10 +607,10 @@ a stateless MCP tool as-is) and `raw` (an arbitrary passthrough to
 client's server command at:
 
 ```
-uv run --project python/torq_orchestrator python/torq_orchestrator/torq_demo_mcp.py
+uv run --project python/torq_orchestrator python/torq_orchestrator/uqf_stack_mcp.py
 ```
 
-(stdio transport, the default). `torq_demo_query` returns a list of row
+(stdio transport, the default). `uqf_stack_query` returns a list of row
 dicts for table results (via the same `kola`-backed `torq_orchestrator.core.query`
 the CLI's `query` command calls), or the raw scalar/dict result otherwise.
 

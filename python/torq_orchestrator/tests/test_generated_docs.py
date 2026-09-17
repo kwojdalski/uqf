@@ -62,7 +62,7 @@ def test_check_fails_on_a_stale_document():
     """
     original = GENERATED.read_text()
     try:
-        GENERATED.write_text(original.replace("# TorQ demo processes", "# Edited by hand", 1))
+        GENERATED.write_text(original.replace("# uqf stack processes", "# Edited by hand", 1))
         result = subprocess.run(
             [sys.executable, str(GENERATOR), "--check"],
             capture_output=True,
