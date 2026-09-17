@@ -100,10 +100,13 @@ def test_write_cross_etl_skeleton_produces_valid_q_literals(fake_paths: core.Uqf
     )
     content = dest.read_text()
     assert dest == fake_paths.scripts_dir / "torq_myetl1.q"
-    assert "\\d .myetl1" in content
+    # Under the .qsub root, like every subscriber process in scripts/ - a
+    # generated process that named itself at the root would be invisible to
+    # every tool that enumerates this tree's namespaces.
+    assert "\\d .qsub.myetl1" in content
     assert "cross_pairs:`EURJPY`GBPJPY" in content
     assert "cross_size:1000000.0" in content
-    assert "if[t=`quotes; `.myetl1.mirror insert x; .myetl1.reprice[]]" in content
+    assert "if[t=`quotes; `.qsub.myetl1.mirror insert x; .qsub.myetl1.reprice[]]" in content
     assert content.count("{") == content.count("}")
 
 

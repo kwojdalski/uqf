@@ -13,7 +13,7 @@
 / marked to whatever price the fill itself just traded at, to avoid a
 / second subscription - but that meant unrealized_pnl tracked the most
 / recent random fill rather than the market, which isn't how a real eFX
-/ book marks P&L. `.posbook.last_mid` (updated off the same `quote`
+/ book marks P&L. `.qsub.posbook.last_mid` (updated off the same `quote`
 / subscription torq_markout_etl.q also uses) fixes that; falls back to
 / the fill's own trade_price only for a sym with no quote seen yet.
 / .
@@ -22,7 +22,7 @@
 / vectorize1's `mkt_orderbook` - a normal database table, not private
 / process state like cross1's cross_quotes - so position/PnL history
 / survives past posbook1 restarting and flows through rdb1/wdb1/hdb like
-/ any vendored table. `.posbook.book` itself (the keyed running position
+/ any vendored table. `.qsub.posbook.book` itself (the keyed running position
 / book apply_fill threads through) is never published directly - it's
 / type 99h (keyed), which the tickerplant's upd/.u.upd machinery rejects
 / (Rule S7) - only the flat position snapshot below is.
@@ -33,10 +33,10 @@
 / e.g. `uqf-stack query "select from position" --port <base+2>` (rdb1).
 
 / pull in uqf's own src/init.q and the stream transforms FIRST -
-/ .posbook.book below is built from the transform's declared book table.
+/ .qsub.posbook.book below is built from the transform's declared book table.
 .qpipe.load_uqf[];
 
-\d .posbook
+\d .qsub.posbook
 
 / the running position book - .qpos's own keyed shape (sym -> qty/
 / avg_price/realized_pnl). The `position` transform takes it as an input
@@ -64,13 +64,13 @@ last_mid:(`symbol$())!`float$();
 upd:{[t;x]
   $[t=`trades;
     [out:.qxf.apply[`position;`book`trades`marks!(
-        0!.posbook.book;
+        0!.qsub.posbook.book;
         select time,sym,side,trade_price,size,pip_factor from x;
-        ([] sym:key .posbook.last_mid; mid:value .posbook.last_mid))];
-     `.posbook.book set 1!.qstream.next_book[0!.posbook.book;out];
+        ([] sym:key .qsub.posbook.last_mid; mid:value .qsub.posbook.last_mid))];
+     `.qsub.posbook.book set 1!.qstream.next_book[0!.qsub.posbook.book;out];
      .qpipe.publish[h;`position;out]];
    t=`quote;
-    .posbook.last_mid[x`sym]:((x`bid)+x`ask)%2;
+    .qsub.posbook.last_mid[x`sym]:((x`bid)+x`ask)%2;
    ()];
  }
 

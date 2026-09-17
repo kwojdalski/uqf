@@ -171,13 +171,18 @@ throughout rather than nested under a shared parent (e.g. not
 convention the tree keeps: the filename-to-namespace tie is what the naming
 auditor checks and what `docs/man.q`'s registry is generated against.
 
-The exceptions, added deliberately, are the ETL tree's **instances**:
-bounded workers under one `.qwrk` root (`.qwrk.demo_deals_backfill`) and
-source declarations under one `.qfeed` root (`.qfeed.demo_deals`). Neither
-is a module — each is one instance of a shape the framework defines — and
-in both the namespace is the registered name rather than an abbreviation of
-it: `.qbw.define` derives a worker's, and a test asserts every source file's
-`\d` matches its own `source_name`. Library modules stay flat. `src/namespaces.q` (`.qns`) is the one
+The exceptions, added deliberately, are **instances** rather than modules:
+bounded workers under one `.qwrk` root (`.qwrk.demo_deals_backfill`, derived
+by `.qbw.define` from the registered worker name), source declarations under
+`.qfeed` (`.qfeed.demo_deals`, checked against each file's own
+`source_name`), and the tickerplant subscriber processes under `.qsub`
+(`.qsub.cross`, `.qsub.markout`, `.qsub.posbook` — the wizard generates new
+ones the same way). Library modules stay flat. Every namespace in `src/` and
+`scripts/` carries the `.q` prefix or is listed in
+`tests/q/test_namespaces.q`'s `outside_the_prefix` with the reason it
+cannot: `.dqe` is TorQ's own namespace, `.cov` is KX's published coverage API
+shape (and `.qcov` is already the ETL ledger), `.surface` is the exporter
+that would otherwise export itself. `src/namespaces.q` (`.qns`) is the one
 enumeration that knows about the nesting; any tool listing namespaces goes
 through it rather than scanning the root for a `q` prefix.
 

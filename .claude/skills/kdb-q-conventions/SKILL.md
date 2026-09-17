@@ -180,15 +180,21 @@ library with no processes/IPC/tables).
   below). Every one of these is single-level (not nested under a shared
   `.q` parent) by convention (N-01) - the filename-to-namespace tie is what
   the naming auditor checks and what `docs/man.q` is generated against.
-  TWO families nest, on purpose, and both are ETL INSTANCES rather than
+  THREE families nest, on purpose, and all hold INSTANCES rather than
   modules: bounded workers under a single `.qwrk` root
   (`.qwrk.demo_deals_backfill`, derived by `.qbw.define` from the registered
-  worker name) and source declarations under `.qfeed`
-  (`.qfeed.demo_deals`, checked against the file's own `source_name`). Code that
+  worker name), source declarations under `.qfeed` (`.qfeed.demo_deals`,
+  checked against the file's own `source_name`) and the tickerplant
+  subscriber processes under `.qsub` (`.qsub.cross`, `.qsub.markout`,
+  `.qsub.posbook`). A namespace outside the `.q` prefix entirely is a bug
+  unless it is one of the three listed in `tests/q/test_namespaces.q`'s
+  `outside_the_prefix` - `.dqe` (TorQ's own), `.cov` (KX's API shape) and
+  `.surface` (the exporter) - and that test fails on a new one. Code that
   enumerates namespaces must therefore go through `.qns.owned` /
   `.qns.functional` (`src/namespaces.q`): a root-level
-  `(key `) where like "q*"` scan sees `.qwrk` and `.qfeed` as namespaces
-  holding no functions and drops every worker and source without saying so. A
+  `(key `) where like "q*"` scan sees `.qwrk`, `.qfeed` and `.qsub` as
+  namespaces holding no functions and drops every worker, source and
+  subscriber process without saying so. A
   function calling
   another module's function must qualify it explicitly (e.g. `forwards.q`'s
   `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a

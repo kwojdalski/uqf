@@ -168,14 +168,14 @@ flowchart TD
 `posbook1` and `markout1` are the two processes in this stack that run
 uqf's actual eFX business logic (position/PnL and execution quality, not
 just market-data reshaping) against live data. `posbook1`'s
-`.posbook.book` (a private, in-process `.qpos`-shaped keyed table, same
+`.qsub.posbook.book` (a private, in-process `.qpos`-shaped keyed table, same
 "wrap a pure function with local mutable state" pattern `cross1`'s
-`.cross.quotes` mirror uses) accumulates fills via `.qpos.apply_fill`,
+`.qsub.cross.quotes` mirror uses) accumulates fills via `.qpos.apply_fill`,
 marked to a live mid tracked off its own `quote` subscription; `position`
 is a snapshot republished per fill. `markout1` can't score a fill the
 instant it arrives - `.qexec.markout_at_horizons` needs a reference quote
 at trade_time+horizon, which by definition hasn't happened yet - so it
-buffers trades/quotes in `.markout.pending_trades`/`.markout.quote_hist`
+buffers trades/quotes in `.qsub.markout.pending_trades`/`.qsub.markout.quote_hist`
 and scores+drains them on a 1s repeating timer once each trade is old
 enough that its furthest horizon's quote should already exist. Unlike
 `cross_quotes`, both `position` and `execution_quality` are real,
@@ -183,7 +183,7 @@ persisted tables (round-trip through `rdb1`/`wdb1`/`hdb`, same as
 `mkt_orderbook`), since this history is worth keeping.
 
 `cross_quotes` is drawn dashed because it never becomes a real database
-table - it's `.cross.cross_quotes`, a plain in-memory table inside
+table - it's `.qsub.cross.cross_quotes`, a plain in-memory table inside
 `cross1`'s own process, queryable only by connecting to `cross1` directly
 (`uqf-stack query "select from cross_quotes" --port 6075`). `mkt_orderbook`
 is a full round trip instead: `vectorize1` folds `wide_book` and republishes

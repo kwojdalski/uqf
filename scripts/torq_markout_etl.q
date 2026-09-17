@@ -50,7 +50,7 @@
 / references it.
 .qpipe.load_uqf[];
 
-\d .markout
+\d .qsub.markout
 
 / STATE, two blocks. pending_trades is a queue: every trade not yet old
 / enough to score, drained by process_ready as it scores them. quote_hist
@@ -70,13 +70,13 @@ quote_hist:.qstream.markout_quotes;
 / as an actual table. Buffer into the matching state block, filtered to
 / .qpipe.fx_pairs only; scoring happens later, on the timer.
 / .
-/ Defined at ROOT, not inside \d .markout - see invariant 5 in
+/ Defined at ROOT, not inside \d .qsub.markout - see invariant 5 in
 / scripts/torq_pipeline.q.
 upd:{[t;x]
   $[t=`trades;
-    `.markout.pending_trades insert select time,sym,side,trade_price,size,pip_factor from x where sym in .qpipe.fx_pairs;
+    `.qsub.markout.pending_trades insert select time,sym,side,trade_price,size,pip_factor from x where sym in .qpipe.fx_pairs;
    t=`quote;
-    `.markout.quote_hist insert select time,sym,bid,ask from x where sym in .qpipe.fx_pairs;
+    `.qsub.markout.quote_hist insert select time,sym,bid,ask from x where sym in .qpipe.fx_pairs;
    ()];
  }
 
@@ -97,14 +97,14 @@ upd:{[t;x]
 / losing it - .qpipe.safe_timer swallows the error, so a drain-first
 / ordering would lose the batch silently. See .qpipe.drain vs .qpipe.evict.
 process_ready:{[]
-  if[0=count .markout.pending_trades; :()];
+  if[0=count .qsub.markout.pending_trades; :()];
   cutoff:.proc.cp[]-.qstream.markout_max_horizon;
-  mask:.markout.pending_trades[`time]<=cutoff;
-  ready:.markout.pending_trades where mask;
+  mask:.qsub.markout.pending_trades[`time]<=cutoff;
+  ready:.qsub.markout.pending_trades where mask;
   if[0=count ready; :()];
-  out:.qxf.apply[`execution_quality;`trades`quotes!(ready;.markout.quote_hist)];
+  out:.qxf.apply[`execution_quality;`trades`quotes!(ready;.qsub.markout.quote_hist)];
   .qpipe.publish[h;`execution_quality;out];
-  .qpipe.evict[`.markout.pending_trades;mask];
+  .qpipe.evict[`.qsub.markout.pending_trades;mask];
  }
 
 / SOURCE + SINK wiring: subscribe as a credentialed tickerplant subscriber

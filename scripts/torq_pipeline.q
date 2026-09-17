@@ -23,7 +23,7 @@
 /      too wide - a confirmed-live 'length error, not a silent mismatch.
 /      -> .qpipe.publish drops `time` if present.
 /   2. Keyed tables (type 99h) are rejected by the tickerplant's upd/.u.upd
-/      machinery (Rule S7) - which is why .posbook.book can never be
+/      machinery (Rule S7) - which is why .qsub.posbook.book can never be
 /      published directly, only a flat snapshot of it.
 /      -> .qpipe.publish unkeys a keyed table rather than letting it through.
 /   3. .u.upd derives its row count from column length, so every column must
@@ -147,10 +147,10 @@ feed_handle:{[]
 / and the delete, so a row arriving between the two can't be dropped
 / unscored; hand-written drain code that recomputes its cutoff in the delete
 / clause has exactly that race.
-/ @param tblname the buffer table's fully-qualified name, e.g. `.markout.pending_trades
+/ @param tblname the buffer table's fully-qualified name, e.g. `.qsub.markout.pending_trades
 / @param mask a boolean vector over that table, as long as it is
 / @return the drained rows, in their original order
-/ @eg .qpipe.drain[`.markout.pending_trades; .markout.pending_trades[`time]<=cutoff]
+/ @eg .qpipe.drain[`.qsub.markout.pending_trades; .qsub.markout.pending_trades[`time]<=cutoff]
 / @see .qpipe.evict - use that instead when a failed publish should retry
 /   the batch rather than lose it (drain is at-most-once, evict at-least-once)
 drain:{[tblname;mask]
@@ -175,9 +175,9 @@ drain:{[tblname;mask]
 / @return the number of rows removed
 / The pattern: compute the mask once, read the batch with it, publish the
 / batch, and only then evict with that same mask.
-/ @eg mask:.markout.pending_trades[`time]<=cutoff;
-/   ready:.markout.pending_trades where mask;
-/   .qpipe.evict[`.markout.pending_trades;mask]
+/ @eg mask:.qsub.markout.pending_trades[`time]<=cutoff;
+/   ready:.qsub.markout.pending_trades where mask;
+/   .qpipe.evict[`.qsub.markout.pending_trades;mask]
 evict:{[tblname;mask]
     buffer:get tblname;
     if[0=count buffer; :0];

@@ -126,7 +126,7 @@ bind_fixtures:{[]
     / evaluated - if the pipeline's schema changes, the examples follow it.
     decl:first l where (l:read0 `:scripts/torq_markout_etl.q) like "pending_trades:*";
     buffer:value -1_(1+decl?":")_decl;
-    `.markout.pending_trades set buffer upsert
+    `.qsub.markout.pending_trades set buffer upsert
         ([] time:2026.01.01D00:00:00.000000000 2026.01.01D00:00:01.000000000;
             sym:`EURUSD`GBPUSD; side:1 -1; trade_price:1.1 1.25;
             size:1000000 500000f; pip_factor:10000 10000);
