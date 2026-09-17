@@ -72,7 +72,7 @@ row_key:`deal_id
 / real integration should push the conversion upstream rather than declare a
 / zone: see .qsrc.local_to_utc for the hour of local timestamps that is
 / irrecoverable in any other arrangement.
-time_zone:`UTC
+tz:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
@@ -116,7 +116,7 @@ fixture:{[]
 / Register on load, so the declaration and the implementation cannot drift:
 / there is no way to have one without the other.
 .qsrc.register[source_name;
-    `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
-    (source_name;`demo_deals;target;time_field;row_key;fields;types;query;fixture;time_zone)];
+    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
+    (source_name;`demo_deals;target;time_field;row_key;fields;types;query;fixture;tz)];
 
 \d .

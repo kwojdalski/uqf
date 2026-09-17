@@ -104,11 +104,11 @@
 / What every registered source must declare. Named as data so a test can
 / assert the set rather than trusting a code review.
 / .
-/ `time_zone` is REQUIRED, with no default (L-06). A defaulted zone is the
+/ `tz` is REQUIRED, with no default (L-06). A defaulted zone is the
 / bug: it reads as a decision downstream while nobody ever made one. Stating
 / `UTC` costs one symbol and makes "this source hands over UTC" a claim
 / somebody wrote, which validate_live can then be run against.
-required_declarations:`source`table`target`time_field`row_key`fields`types`query`fixture`time_zone
+required_declarations:`source`table`target`time_field`row_key`fields`types`query`fixture`tz
 
 / source -> its declaration dict.
 sources:(`symbol$())!();
@@ -131,7 +131,7 @@ sources:(`symbol$())!();
 /   types   - the expected q type characters, one per field, as a string
 /   query   - a parameterised lambda taking (handle;range_from;range_to)
 /   fixture - a niladic lambda returning a synthetic table of the same shape
-/   time_zone - the zone the source's time_field is expressed in, as a
+/   tz - the zone the source's time_field is expressed in, as a
 /     symbol: `UTC, or a tz-database name such as `$"Europe/London" (L-06)
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
@@ -150,8 +150,8 @@ register:{[source;decl]
         '"register: ",string[source],"'s query must be a lambda (ETL-08: parameterised, never concatenated)"];
     if[not 100h=type decl`fixture;
         '"register: ",string[source],"'s fixture must be a niladic lambda (ETL-04: the path must be exercisable with no driver)"];
-    if[not -11h=type decl`time_zone;
-        '"register: ",string[source],"'s time_zone must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\" (L-06)"];
+    if[not -11h=type decl`tz;
+        '"register: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\" (L-06)"];
     / The window is taken on time_field, so time_field must be a field this
     / adapter actually READS. Without this check a typo registers happily and
     / surfaces two layers down: validate never checks the column (it is not
@@ -240,7 +240,7 @@ row_key:{[source] (),(declaration source)`row_key}
 / key.
 / @param source the registered source's name, as a symbol
 / @return the declaration dict (source, table, target, time_field, row_key,
-/   fields, types, query, fixture, time_zone)
+/   fields, types, query, fixture, tz)
 / @throws error naming the source when it was never registered
 / @eg .qsrc.declaration `demo_deals
 declaration:{[source]
@@ -519,7 +519,7 @@ local_candidates:{[zone;tsv]
 nonexistent_message:{[zone;bad]
     "local time ",(-3!bad)," does not exist in ",string[zone],
     " - it falls in a spring-forward gap, so no UTC instant maps to it. Either the ",
-    "declared time_zone is wrong for this source, or the source is emitting ",
+    "declared tz is wrong for this source, or the source is emitting ",
     "wall-clock readings its own calendar never had (L-05)"}
 
 ambiguous_message:{[zone;bad;cs]
@@ -654,7 +654,7 @@ bound_padding:1D
 / So: pad the bounds, fetch a superset, and narrow exactly in UTC afterwards
 / where the arithmetic is unambiguous.
 source_bounds:{[decl;range_from;range_to]
-    zone:decl`time_zone;
+    zone:decl`tz;
     if[`UTC~zone; :(range_from;range_to)];
     require_zone_table zone;
     (utc_to_local[zone;range_from-bound_padding];
@@ -687,7 +687,7 @@ source_bounds:{[decl;range_from;range_to]
 /     wall-clock time its own calendar never had means the declared zone is
 /     wrong - which is a contract breach, not a windowing question.
 narrow_to_utc:{[decl;tbl;range_from;range_to]
-    zone:decl`time_zone;
+    zone:decl`tz;
     if[`UTC~zone; :tbl];
     f:decl`time_field;
     local_ts:tbl f;

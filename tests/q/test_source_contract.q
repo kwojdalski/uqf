@@ -14,7 +14,7 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 / rather than reusing the demo source's keeps a test's failure attributable
 / to the thing it changed.
 decl:{[]
-    `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
     (`t;`ext;`loc;`ts;`ts;`ts`px;"pf";
      {[h;a;b] ()};
      {([] ts:enlist .srctest.d 1; px:enlist 1.5)};
@@ -73,10 +73,10 @@ test_a_source_without_a_fixture_is_refused:{[t]
 / is silent - every consumer assumes UTC while the source hands over local
 / wall-clock time.
 test_a_source_without_a_time_zone_is_refused:{[t]
-    .qunit.assertError[{.qsrc.register[`t;x]};((enlist `time_zone) _ .srctest.decl[]);"an unstated zone is the bug, not a default"]};
+    .qunit.assertError[{.qsrc.register[`t;x]};((enlist `tz) _ .srctest.decl[]);"an unstated zone is the bug, not a default"]};
 
 test_a_time_zone_must_be_a_single_symbol:{[t]
-    bad:@[.srctest.decl[];`time_zone;:;"Europe/London"];
+    bad:@[.srctest.decl[];`tz;:;"Europe/London"];
     .qunit.assertError[{.qsrc.register[`t;x]};bad;"a string zone would silently fail the zone-table lookup"]};
 
 / The window is taken on time_field, so a time_field outside `fields` is
@@ -248,7 +248,7 @@ test_a_clean_text_table_reports_no_failures:{[t]
 / would fail validate later with a much less useful message.
 test_an_uncoercible_declared_type_is_refused:{[t]
     .qsrc.register[`weird;
-        `source`table`target`time_field`row_key`fields`types`query`fixture`time_zone!
+        `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
         (`weird;`e;`l;`ts;`ts;`ts`blob;"px";{[h;a;b] ()};{([] ts:enlist .srctest.d 1; blob:enlist 1b)};`UTC)];
     txt:([] ts:enlist "2026-09-15T09:30:00"; blob:enlist "x");
     .qunit.assertError[{.qsrc.coerce[`weird;x]};txt;"a type with no coercer is named rather than passed through as text"]};
