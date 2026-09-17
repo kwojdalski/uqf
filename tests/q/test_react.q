@@ -162,6 +162,100 @@ test_the_audit_reports_a_reaction_no_job_declares:{[t]
     .qunit.assertTrue[`invented_dataset in .qreact.audit[]`undeclared;
         "a reaction on a dataset the graph does not know is reported, not refused"]};
 
+/ Rebuild the graph after tests that reset it, and clear the test reactions
+/ they registered: the job graph is process-wide, so a namespace that left it
+/ empty would take the next suite's ground out from under it.
+tearDown_graph:{[] .qreact.reset[]; .qdag.adopt_all[];}
+
+/ --- reactions in the job graph -------------------------------------------
+
+test_a_plain_reaction_declares_no_output_and_is_a_terminal_node:{[t]
+    / Not left OUT of the graph: a graph that omitted it would show the
+    / dataset as a sink - "nothing consumes this" - which is a stronger and
+    / wronger claim than "something consumes this and did not say what it
+    / writes".
+    .qdag.reset[];
+    .qreact.on[`a;`glance;{[ds;f;t] 1}];
+    .qdag.adopt_reactions[];
+    d:.qdag.declaration .qdag.reaction_job[`a;`glance];
+    .qunit.assertEquals[(d`kind;d`inputs;d`outputs);(`reaction;enlist `a;`$());
+        "a plain reaction reads the dataset it watches and claims to write nothing"]};
+
+test_a_declared_output_becomes_a_graph_edge:{[t]
+    .qdag.reset[];
+    .qreact.on_writing[`a;`build_b;`b;{[ds;f;t] 1}];
+    .qdag.adopt_reactions[];
+    .qunit.assertEquals[.qdag.producers `b;enlist .qdag.reaction_job[`a;`build_b];
+        "what the reaction says it writes makes it a producer of that dataset"]};
+
+test_two_reactions_of_one_name_on_different_datasets_are_two_nodes:{[t]
+    / A reaction name is unique per DATASET, not globally, so the node's
+    / identity has to carry both or two `rebuild`s collapse into one node
+    / and the graph quietly loses an edge.
+    .qdag.reset[];
+    .qreact.on_writing[`a;`rebuild;`out_a;{[ds;f;t] 1}];
+    .qreact.on_writing[`b;`rebuild;`out_b;{[ds;f;t] 1}];
+    .qdag.adopt_reactions[];
+    .qunit.assertEquals[asc exec job from .qdag.registry[] where kind=`reaction;
+        asc .qdag.reaction_job'[`a`b;`rebuild`rebuild];
+        "the dataset is part of a reaction node's identity"]};
+
+/ THE POINT OF PUTTING REACTIONS IN THE GRAPH. Without this a reactive cycle
+/ survives until max_depth stops it at RUNTIME, after it has half-run; with
+/ it, the wiring is refused when the graph is built, and the message names
+/ the reactions rather than leaving them to be traced by hand.
+test_a_reactive_cycle_is_refused_by_the_graph:{[t]
+    .qdag.reset[];
+    .qreact.on_writing[`a;`to_b;`b;{[ds;f;t] 1}];
+    .qreact.on_writing[`b;`to_a;`a;{[ds;f;t] 1}];
+    .qdag.adopt_reactions[];
+    err:@[{.qdag.topological[]; ""};::;{x}];
+    .qunit.assertTrue[(err like "*cycle*") and err like "*a~to_b*";  / two likes: >1 inner * throws 'nyi
+        "the cycle is refused at graph time and names the reactions in it"]};
+
+test_a_worker_reaction_derives_its_output_rather_than_claiming_it:{[t]
+    / The case that keeps dag.q's "derive, never re-declare" rule: the output
+    / is read from the worker's own declaration, so the graph entry cannot
+    / disagree with what the worker does.
+    .qreact.on_worker[`upstream;`demo_deals_backfill;{[f;tt] `source_version`range_from`range_to!(`v1;f;tt)}];
+    r:first select outputs, derived from .qreact.for_dataset `upstream;
+    .qunit.assertEquals[(r`outputs;r`derived);(enlist (.qbw.declaration `demo_deals_backfill)`dataset;1b);
+        "on_worker reads the target from .qbw rather than being told it"]};
+
+test_an_asserted_output_is_reported_as_such:{[t]
+    .qreact.on_writing[`a;`claims;`b;{[ds;f;t] 1}];
+    .qreact.on_worker[`upstream;`demo_deals_backfill;{[f;tt] `source_version`range_from`range_to!(`v1;f;tt)}];
+    a:.qreact.audit[]`asserted;
+    .qunit.assertEquals[(.qdag.reaction_job[`a;`claims] in a;
+                         .qdag.reaction_job[`upstream;`demo_deals_backfill] in a);(1b;0b);
+        "a claimed edge is listed and a derived one is not, so a drawing can tell them apart"]};
+
+test_a_worker_reaction_refuses_an_unregistered_worker:{[t]
+    .qunit.assertError[{.qreact.on_worker[`a;x;{[f;tt] 1}]};`never_defined;
+        "the output cannot be derived from a worker that does not exist"]};
+
+test_a_worker_reaction_refuses_a_spec_function_of_the_wrong_arity:{[t]
+    .qunit.assertError[{.qreact.on_worker[`a;`demo_deals_backfill;x]};{[f] f};
+        "spec_fn is called with the published range, so it takes exactly two arguments"]};
+
+test_on_writing_refuses_a_non_symbol_output:{[t]
+    .qunit.assertError[{.qreact.on_writing[`a;`bad;x;{[ds;f;t] 1}]};"positions";
+        "a string output would name no dataset the graph could match"]};
+
+/ A reaction registered through on_worker actually RUNS the worker - the
+/ wiring is not merely a graph entry.
+test_a_worker_reaction_runs_that_worker:{[t]
+    setenv[`UQFSTATUSDIR;"build/test-status"];
+    .testutil.reset_coverage_ledger[];
+    .qbfstate.release_lock `demo_deals_backfill;
+    .qbfstate.clear_checkpoint `demo_deals_backfill;
+    `demo_deals set 0#.qfeed.demo_deals.fixture[];
+    .qreact.on_worker[`upstream;`demo_deals_backfill;
+        {[f;tt] `source_version`range_from`range_to!(`rx_worker;f;tt)}];
+    .qreact.notify[`upstream;.rxtest.d 1;.rxtest.d 4];
+    .qunit.assertEquals[(count value `demo_deals;exec first outcome from .qreact.history);(3;`ok);
+        "publishing upstream ran the downstream worker over the published range"]};
+
 / --- the real worker path -------------------------------------------------
 
 / THE POINT OF THE FILE. A real worker run fires the event, once per window,

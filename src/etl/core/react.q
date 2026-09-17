@@ -61,7 +61,10 @@
 reactions:(`symbol$())!();
 
 / Private: the empty reaction table, so every path has one shape.
-no_reactions:{[] ([] name:`symbol$(); handler:())}
+/ .
+/ `outputs` is what this reaction writes and `derived` says where that claim
+/ came from - see `on` and `on_worker`.
+no_reactions:{[] ([] name:`symbol$(); handler:(); outputs:(); derived:`boolean$())}
 
 / How far a chain of reactions may travel before it is refused.
 / .
@@ -75,6 +78,17 @@ max_depth:8
 / Re-registering the same (dataset; name) REPLACES its handler rather than
 / adding a second, so reloading a file during development is not a failure -
 / the posture .qdag.register and .qbw.define already take.
+/ .
+/ WHAT THIS REACTION WRITES IS ASSERTED, NOT DERIVED, and the registry records
+/ that. dag.q's rule is "derive, never re-declare", and it holds because a
+/ worker's inputs and outputs come from the source declaration and therefore
+/ cannot disagree with what it does. A handler is an arbitrary lambda that
+/ could write anywhere, so `outputs` here is a CLAIM about it - which is worth
+/ having (it puts the reaction in the graph, where a cycle is refused at
+/ registration rather than surviving until max_depth stops it at runtime) but
+/ is not the same kind of fact. `derived` is 0b for these, so a reader of the
+/ graph can tell which edges were checked and which were promised. Use
+/ `on_worker` where the answer IS derivable.
 / @param dataset the dataset whose publication fires this, as a symbol
 / @param name a name for this reaction, unique per dataset
 / @param handler a function taking (dataset; range_from; range_to)
@@ -87,18 +101,75 @@ max_depth:8
 / first - measured, not theorised. A parameter that shares a column's name
 / is the trap leg_book_as_of and quotes_for_sym already name around.
 on:{[dataset;nm;handler]
+    require_handler[dataset;nm;handler];
+    register[dataset;nm;handler;`$();0b]}
+
+/ Private: what every reaction's arguments must satisfy, wherever registered.
+/ .
+/ Arity is checked HERE, not at the first publication: a reaction registered
+/ with the wrong shape would otherwise fail only when the upstream job next
+/ ran, which may be hours later and is attributed to that job rather than to
+/ this wiring.
+require_handler:{[dataset;nm;handler]
     if[not -11h=type dataset; '"on: dataset must be a symbol"];
     if[not -11h=type nm; '"on: name must be a symbol"];
     if[not (type handler) within 100 112h;
         '"on: ",string[nm]," must be a function taking (dataset;range_from;range_to)"];
-    / Arity checked HERE, not at the first publication. A reaction registered
-    / with the wrong shape would otherwise fail only when the upstream job
-    / next ran, which may be hours later and is attributed to that job.
     if[(100h=type handler) and not 3=count (value handler) 1;
         '"on: ",string[nm]," must take exactly 3 arguments (dataset;range_from;range_to)"];
+    1b}
+
+/ Register a reaction that writes a dataset it declares.
+/ .
+/ The same as `on`, plus what the handler writes, so the reaction becomes a
+/ node in the job graph rather than a terminal one. Asserted rather than
+/ derived - see `on`.
+/ @param outputs the dataset(s) this handler writes, as a symbol or vector
+/ @throws error when outputs is not a symbol or symbol vector
+/ @eg .qreact.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time within (f;t-1)}]
+on_writing:{[dataset;nm;outputs;handler]
+    require_handler[dataset;nm;handler];
+    if[not 11h=abs type outputs;
+        '"on_writing: ",string[nm],"'s outputs must be a symbol or symbol vector naming what it writes"];
+    register[dataset;nm;handler;(),outputs;0b]}
+
+/ Register a reaction that runs a REGISTERED WORKER over the published range.
+/ .
+/ The case where the graph edge is derivable, and therefore the one to prefer.
+/ A bounded worker already declares its target through its source, so what
+/ this reaction writes is read from .qbw rather than asserted: the entry in
+/ the graph cannot disagree with what the worker does, and `derived` is 1b.
+/ .
+/ `spec_fn` supplies the one thing that genuinely cannot be derived - the
+/ run specification, whose `source_version` is a DECISION about which release
+/ of the upstream data this run claims (ETL-09). It is called with the
+/ published range and must return the dict .qbw.init takes.
+/ @param dataset the upstream dataset whose publication fires this
+/ @param worker a worker registered with .qbw.define
+/ @param spec_fn a function (range_from;range_to) -> the run specification
+/ @return the reaction's name, which is the worker's name
+/ @throws error when the worker is not registered, or spec_fn is not binary
+/ @eg .qreact.on_worker[`upstream_feed;`demo_deals_backfill;{[f;t] `source_version`range_from`range_to!(`v1;f;t)}]
+on_worker:{[dataset;worker;spec_fn]
+    cfg:.qbw.declaration worker;
+    if[not (type spec_fn) within 100 112h;
+        '"on_worker: ",string[worker],"'s spec_fn must be a function taking (range_from;range_to)"];
+    if[(100h=type spec_fn) and not 2=count (value spec_fn) 1;
+        '"on_worker: ",string[worker],"'s spec_fn must take exactly 2 arguments (range_from;range_to)"];
+    ns:.qbw.namespace worker;
+    h:{[worker;ns;spec_fn;ds;range_from;range_to]
+        (` sv ns,`init)[spec_fn[range_from;range_to]];
+        (` sv ns,`run)[];
+        (` sv ns,`cleanup)[]
+      }[worker;ns;spec_fn];
+    register[dataset;worker;h;(),cfg`dataset;1b]}
+
+/ Private: store one reaction, replacing any of the same name.
+register:{[dataset;nm;handler;outputs;derived]
     existing:$[dataset in key reactions; reactions dataset; no_reactions[]];
     existing:select from existing where not name=nm;
-    reactions[dataset]:existing upsert ([] name:enlist nm; handler:enlist handler);
+    reactions[dataset]:existing upsert
+        ([] name:enlist nm; handler:enlist handler; outputs:enlist outputs; derived:enlist derived);
     nm}
 
 / Stop reacting. Unknown names are ignored: removing a reaction that is not
@@ -141,8 +212,13 @@ dag_consumers:{[dataset]
 / declares, and an edge may be filled by an orchestrator rather than here -
 / but an edge nobody reacts to is the shape of "we thought that was
 / automatic", so it is worth being able to ask.
-/ @return dict of `unwired (dataset -> consumer jobs with no reaction) and
-/   `undeclared (datasets with a reaction that no job reads)
+/ `asserted` is the third answer, and the one to read before trusting a
+/ drawing: reactions whose output was CLAIMED by the caller rather than read
+/ from a worker's declaration. Those edges are in the graph and cannot be
+/ checked against anything - see `on`.
+/ @return dict of `unwired (dataset -> consumer jobs with no reaction),
+/   `undeclared (datasets with a reaction that no job reads) and `asserted
+/   (dataset~reaction names whose output is a claim)
 audit:{[]
     reacting:key reactions;
     datasets:distinct reacting,$[`qdag in key `; raze {(.qdag.declaration x)`outputs} each key .qdag.jobs; `$()];
@@ -153,7 +229,12 @@ audit:{[]
     / is written against the keys instead, where the empty case is a plain
     / empty symbol vector.
     wired_keys:(key unwired) where 0<count each dag_consumers each key unwired;
-    `unwired`undeclared!(wired_keys#unwired;undeclared)}
+    asserted:raze {[ds]
+        rs:.qreact.for_dataset ds;
+        bad:select from rs where not derived, 0<count each outputs;
+        {[ds;nm] `$(string ds),"~",string nm}[ds] each bad`name
+      } each reacting;
+    `unwired`undeclared`asserted!(wired_keys#unwired;undeclared;asserted)}
 
 / ---------------------------------------------------------- THE QUEUE
 

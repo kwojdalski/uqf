@@ -42,7 +42,11 @@ required_spec:`kind`inputs`outputs
 / The kinds a job may declare. Closed on purpose: a typo like `streaming`
 / for `stream` would otherwise silently create a new category that every
 / consumer has to learn about.
-kinds:`bounded`continuous`stream
+/ `reaction` is a .qreact wiring: it reads the dataset it watches and writes
+/ whatever it declared. Unlike the other three it may be ASSERTED rather than
+/ derived - see .qreact.on's header and `reaction_edges` below - which is why
+/ it is a kind of its own rather than being folded into `bounded`.
+kinds:`bounded`continuous`stream`reaction
 
 / Register a job's inputs and outputs.
 / .
@@ -275,13 +279,81 @@ adopt_feeders:{[]
 adopt_pipelines:{[]
     $[`register_pipelines in key `.qdag; register_pipelines[]; `$()]}
 
+/ Register every .qreact reaction as a job.
+/ .
+/ A reaction's INPUT is the dataset it watches, which is a fact - it is what
+/ fires it. Its OUTPUT is whatever it declared: derived from the worker's own
+/ declaration for `on_worker`, asserted by the caller for `on_writing`, and
+/ empty for a plain `on`, which therefore appears as a terminal node.
+/ .
+/ WHY AN EMPTY OUTPUT IS A NODE AT ALL rather than being left out: the
+/ reaction exists and reads that dataset, and a graph that omitted it would
+/ show the dataset as a sink - "nothing consumes this" - which is a stronger
+/ and wronger claim than "something consumes this and did not say what it
+/ writes". `reaction_edges` names which is which so neither has to be guessed.
+/ .
+/ The job name is `<dataset>~<reaction>`: a reaction name is unique per
+/ dataset rather than globally, so the dataset has to be part of the node's
+/ identity or two reactions called `rebuild` would collapse into one node.
+/ @return the job names registered, empty when .qreact is not loaded
+/ @eg .qdag.adopt_reactions[]
+adopt_reactions:{[]
+    if[not `qreact in key `; :`$()];
+    raze {[ds]
+        rs:.qreact.for_dataset ds;
+        {[ds;nm;outs]
+            job:reaction_job[ds;nm];
+            register[job;`kind`inputs`outputs!(`reaction;ds;outs)];
+            job}[ds] .' flip (rs`name;rs`outputs)
+      } each key .qreact.reactions}
+
+/ The job name a reaction is registered under.
+/ .
+/ ALWAYS BUILD IT WITH THIS, never by hand: `~` cannot appear in a q symbol
+/ LITERAL, so `\`demo_deals~rebuild` parses as `\`demo_deals ~ rebuild` - a
+/ match against a variable called `rebuild` - and fails with a value error
+/ naming that variable rather than anything about the graph. Measured while
+/ writing the tests for this.
+/ .
+/ The separator is `~` and not `.` or `_` on purpose: `.` reads as a
+/ namespace path and `_` already appears inside both dataset and reaction
+/ names, so a name built with either could not be split back into its two
+/ halves. The cost is that it must be constructed rather than typed, which
+/ is what this function is for.
+/ @param dataset the dataset the reaction watches
+/ @param nm the reaction's name, unique within that dataset
+/ @return the job name, as a symbol
+/ @eg .qdag.reaction_job[`demo_deals;`rebuild_positions]
+reaction_job:{[dataset;nm] `$(string dataset),"~",string nm}
+
+/ Every reaction edge, and whether its output was derived or asserted.
+/ .
+/ The question a reader of the graph needs answered and cannot get from the
+/ edges alone: a `bounded` job's output comes from its source declaration and
+/ cannot disagree with what it does, while a reaction's may be a promise. This
+/ says which, per reaction, so a drawing can mark an asserted edge rather than
+/ presenting all of them as equally checked.
+/ @return a table of dataset, reaction, outputs, derived
+reaction_edges:{[]
+    if[not `qreact in key `; :([] dataset:`symbol$(); reaction:`symbol$(); outputs:(); derived:`boolean$())];
+    raze {[ds]
+        rs:.qreact.for_dataset ds;
+        ([] dataset:count[rs]#ds; reaction:rs`name; outputs:rs`outputs; derived:rs`derived)
+      } each key .qreact.reactions}
+
 / Rebuild the whole graph from every registry that declares one.
 / .
 / Resets first, so calling it twice gives the same graph rather than an
 / accumulation - and every registration below is reproducible from a
 / registry, so nothing is lost by clearing.
+/ .
+/ Reactions LAST, because adopt_reactions reads .qreact's registry and a
+/ reaction's output may name a dataset a worker registered above - the order
+/ does not matter to `register`, which takes what it is given, but it keeps
+/ the graph's own layering readable.
 adopt_all:{[]
     reset[];
-    `workers`feeders`pipelines!(adopt_workers[]; adopt_feeders[]; adopt_pipelines[])}
+    `workers`feeders`pipelines`reactions!
+        (adopt_workers[]; adopt_feeders[]; adopt_pipelines[]; adopt_reactions[])}
 
 \d .
