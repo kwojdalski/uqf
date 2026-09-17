@@ -9,10 +9,8 @@ per-component log file, and `follow_logs` - the live tail behind
 loguru is a process-wide singleton, so every test here restores a default
 sink afterwards rather than leaving the next test logging into a closed list.
 
-Deliberately NOT tested: `logger/decorators.py` and `logger/utils.py`. Both
-came in with a logger ported from another project, and none of their eight
-exported helpers is used anywhere in this repository. Tests for them would
-raise the coverage number without protecting anything.
+`logger/decorators.py` and `logger/utils.py` are tested separately, in
+test_logger_helpers.py.
 """
 
 from __future__ import annotations
