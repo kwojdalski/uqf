@@ -1,0 +1,92 @@
+# Functions the suite never enters, and why that is accepted for now.
+#
+# tests/q/run_coverage.q compares the whole-suite run against this list and
+# FAILS when they disagree, in either direction:
+#
+#   a function never entered that is NOT listed   a new blind spot
+#   a listed function that IS now entered         the list has gone stale
+#
+# Both are failures on purpose. A baseline that only ratchets one way rots:
+# entries stay after the gap they described is closed, the list stops
+# describing anything, and the next reader cannot tell which lines are still
+# true. Removing a line is the cheaper half of closing a coverage gap.
+#
+# A name here is a statement that nothing in the suite CALLS the function -
+# not that it is untestable, and not that it is unimportant. Several of these
+# should simply be covered; they are listed because they are not, not because
+# they should not be.
+#
+# Blank lines and lines starting with # are ignored.
+
+# --- Needs a live external system --------------------------------------
+# These reach a real database, a real ODBC driver or a real qls server. The
+# deterministic suite has no such thing by design (ETL-20), and the smoke
+# lanes that do exercise them are not part of this run.
+.qbw.connect
+.qodbc.close
+.qodbc.table_names
+.qodbc.window_query
+.qodbc.with_connection
+.qsrc.validate_live
+.qfeed.databento_mbp10.adapt
+.qfeed.databento_mbp10.epoch_ns_literal
+.qfeed.databento_mbp10.query
+.qfeed.databento_mbp10.select_list
+.qfeed.demo_deals.query
+.qfeed.demo_events.query
+.qfeed.upstream_trades.query
+
+# --- Needs a running TorQ process --------------------------------------
+# .qpipe is the TorQ block library and .qsub the subscriber processes. Both
+# assume a tickerplant, a publish handle and a timer; the transforms they
+# call are tested through .qxf instead, which is the part that computes.
+.qpipe.as_table
+.qpipe.feed_handle
+.qpipe.load_uqf
+.qpipe.publish
+.qpipe.safe_timer
+.qpipe.subscribe_etl
+.qsub.markout.now
+.qsub.markout.on_timer
+.qsub.quotes_feed.on_timer
+.qsub.wide_book_feed.on_timer
+
+# --- Genuine gaps, worth closing ---------------------------------------
+# Nothing external stands in the way of these; no test calls them.
+#
+# The two workers below are the clearest case. Every worker declares the same
+# one-line delegators, and `fetch:{[from_ts;to_ts] ...}` is the only one with
+# two same-typed arguments - so a swap there is silent. demo_deals_backfill
+# and demo_events_backfill each have a regression test for exactly that
+# (test_demo_deals_backfill.q, test_event_tape.q); these two have none, which
+# is what this list is for.
+.qwrk.databento_book_backfill.checkpoint
+.qwrk.databento_book_backfill.cleanup
+.qwrk.databento_book_backfill.example_book
+.qwrk.databento_book_backfill.fetch
+.qwrk.databento_book_backfill.init
+.qwrk.databento_book_backfill.plan
+.qwrk.databento_book_backfill.publish
+.qwrk.databento_book_backfill.quality_check
+.qwrk.databento_book_backfill.run
+.qwrk.databento_book_backfill.spec
+.qwrk.upstream_trades_backfill.checkpoint
+.qwrk.upstream_trades_backfill.cleanup
+.qwrk.upstream_trades_backfill.fetch
+.qwrk.upstream_trades_backfill.init
+.qwrk.upstream_trades_backfill.plan
+.qwrk.upstream_trades_backfill.publish
+.qwrk.upstream_trades_backfill.run
+.qwrk.upstream_trades_backfill.spec
+.qfeed.databento_mbp10.fixture
+.qfeed.databento_mbp10.fixture_levels
+.qdag.reaction_edges
+.qrun.attach
+.qrun.history
+.qdata.getBySymbolDate
+.qdata.pqModule
+
+# --- Test scaffolding ---------------------------------------------------
+# A reference worker exists to be inspected by the contract checks rather
+# than run end to end.
+.qrefw.checkpoint

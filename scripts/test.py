@@ -25,6 +25,9 @@ between them:
                        and coverage - which needs a real filesystem and real
                        child processes to be worth anything.
   python               orchestration and the BFF.
+  q-coverage           the q half of `coverage`: fails when a function no
+                       test enters is not in tests/q/coverage_baseline.txt,
+                       or when a baseline entry is covered after all
   coverage             what the suites actually execute, q and Python both.
   smoke                ETL-20's live external check. Explicitly NOT part of
                        any other lane: the deterministic suite proves local
@@ -149,6 +152,18 @@ def lane_smoke() -> None:
 # ---------------------------------------------------------------- coverage
 
 
+def lane_q_coverage() -> None:
+    """The q half of `coverage`, and the half a q change needs.
+
+    Split out so the pre-commit hook - which fires on `\.q$` - does not also
+    run pytest over the Python packages. The gate itself lives in
+    `run_coverage.q`: it compares the functions nothing entered against
+    `tests/q/coverage_baseline.txt` and fails when they disagree either way.
+    """
+    _banner("q-coverage: q statement and branch coverage")
+    _q("q-coverage", "tests/q/run_coverage.q")
+
+
 def lane_coverage() -> None:
     """What the suites actually EXECUTE - not what they mention.
 
@@ -169,8 +184,7 @@ def lane_coverage() -> None:
     and it reported as never called while being exercised on every window.
     `.cov.reseed` swaps those copies too.
     """
-    _banner("coverage: q statement and branch coverage")
-    _q("coverage", "tests/q/run_coverage.q")
+    lane_q_coverage()
 
     print()
     _banner("coverage: python line coverage")
@@ -194,6 +208,7 @@ LANES: dict[str, Callable[[], None]] = {
     "q-examples": lane_q_examples,
     "q-two-instances": lane_q_two_instances,
     "python": lane_python,
+    "q-coverage": lane_q_coverage,
     "coverage": lane_coverage,
     "smoke": lane_smoke,
 }
