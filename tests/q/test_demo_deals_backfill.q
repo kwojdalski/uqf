@@ -273,6 +273,17 @@ test_the_clash_error_names_the_existing_claimant:{[t]
         `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);{x}];
     .qunit.assertEquals[err like "*demo_deals_backfill*";1b;"the refusal names who already owns the dataset"]};
 
+/ The name appearing is not enough. q evaluates right to left, so
+/ `", " sv string clash, " - two workers..."` made `sv` join the EXPLANATION
+/ character by character: the message read "...already claimed by
+/ demo_deals_backfill,  , -,  , t, w, o, ..." and passed the test above,
+/ because the name was still there immediately before the wreckage.
+test_the_clash_error_reads_as_a_sentence:{[t]
+    err:@[{.qbw.define[`clashing_worker;x]; ""};
+        `ns`source`dataset`width!(`.qddbf;`demo_deals;`demo_deals;1D);{x}];
+    .qunit.assertTrue[err like "*produce coverage rows nothing can tell apart";
+        "the explanation survives intact to the end of the message"]};
+
 / --- what the partition dimension unlocks (#185) --------------------------
 
 / THE POINT OF THE CHANGE. A backfill could not be parallelised: one worker

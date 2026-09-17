@@ -136,7 +136,13 @@ define:{[worker;cfg]
     clash:clash except worker;
     if[count clash;
         '"define: ",string[worker]," declares dataset ",string[cfg`dataset],
-         "[",string[part],"], already claimed by ",", " sv string clash,
+         / PARENTHESISED. q evaluates right to left, so
+         / `", " sv string clash, " - two workers..."` makes `sv` join the
+         / EXPLANATION character by character - the message came out as
+         / "fx_rates_eurusd,  , -,  , t, w, o,  , w, o, r, k, e, r, s". The
+         / test only checked that the claimant's name appeared, which it
+         / did, immediately before the wreckage.
+         "[",string[part],"], already claimed by ",(", " sv string clash),
          " - two workers on one dataset and partition produce coverage rows nothing can tell apart"];
 
     / Normalise to the full key set before storing - see optional_cfg.

@@ -1044,6 +1044,59 @@ def rule_interior_like_wildcard(path: str, lines: list[str]) -> list[Finding]:
     return findings
 
 
+def rule_unparenthesised_sv(path: str, lines: list[str]) -> list[Finding]:
+    r"""`", " sv string xs` followed by more string, unparenthesised.
+
+    q evaluates right to left, so
+
+        "claimed by ",", " sv string clash," - two workers share it"
+
+    is `", " sv (string clash, " - two workers share it")`. `sv` then joins
+    the EXPLANATION character by character, and the message comes out as
+
+        claimed by worker_a,  , -,  , t, w, o,  , w, o, r, k, e, r, s
+
+    It is worse than ugly. A thrown string is truncated at 255 bytes, and
+    each character now costs three, so the explanation is not merely mangled
+    - it is cut off entirely. The reader gets the list and nothing else.
+
+    Four live instances when this rule was written, in
+    `bounded_worker.define`, `microstructure.require_tape`,
+    `worker_runtime.commit` and `worker_runtime.require_dependencies`. Every
+    one had a test, and every test passed: they asserted that the offending
+    NAME appeared, and it did, immediately before the wreckage.
+
+    The fix is a pair of parentheses and is never wrong: `(", " sv string
+    xs),` binds the join to its own argument.
+
+    Only flags a `sv` whose result is joined to something further along -
+    `'"...",(", " sv string xs)` ending the expression is correct and
+    common.
+    """
+    findings = []
+    #: A separator string, `sv`, a name, and then a COMMA - meaning something
+    #: follows that `sv` will swallow. The negative lookbehind lets the
+    #: correct parenthesised form through.
+    pattern = re.compile(r'(?<!\()\s*"[^"]*"\s+sv\s+string\s+[A-Za-z_][A-Za-z0-9_.]*\s*,')
+    for n, raw in enumerate(lines, 1):
+        code = _strip_comments(raw)
+        for match in pattern.finditer(code):
+            findings.append(
+                Finding(
+                    path=path,
+                    line=n,
+                    rule="unparenthesised-sv",
+                    detail=match.group().strip(),
+                    why=(
+                        "q evaluates right to left, so sv joins everything after it "
+                        "character by character and the 255-byte throw limit then eats "
+                        'the message. Parenthesise: (", " sv string xs),'
+                    ),
+                )
+            )
+    return findings
+
+
 LINE_RULES = (
     rule_bare_slash_comment_block,
     rule_reserved_parameter_names,
@@ -1054,6 +1107,7 @@ LINE_RULES = (
     rule_invalid_string_escape,
     rule_reserved_toplevel_definition,
     rule_interior_like_wildcard,
+    rule_unparenthesised_sv,
 )
 TEXT_RULES = (
     rule_multiparam_lambda_under_at,

@@ -361,19 +361,67 @@ def test_a_pattern_in_a_comment_is_ignored():
 
 def test_the_real_repository_has_none():
     """Asserted against the tree rather than a sample: the rule was written
-    after the trap was hit, so it has to be true of the code that exists."""
-    import subprocess
+    after the trap was hit, so it has to be true of the code that exists.
 
-    repo = Path(__file__).resolve().parents[3]
-    tracked = subprocess.run(
-        ["git", "ls-files", "*.q"], capture_output=True, text=True, check=True, cwd=repo
-    ).stdout.split()
-    for name in tracked:
-        path = repo / name
-        if not path.is_file():
-            continue
-        found = cqt.rule_interior_like_wildcard(name, path.read_text(errors="replace").splitlines())
-        assert not found, f"{name}: {found}"
+    Through the checker's own file list, which excludes the vendored trees
+    this repository must not edit (H-01).
+    """
+    for path in cqt._tracked_q_files():
+        found = cqt.rule_interior_like_wildcard(
+            str(path), path.read_text(errors="replace").splitlines()
+        )
+        assert not found, f"{path}: {found}"
+
+
+# --------------------------------------------- unparenthesised `sv`
+
+
+def _sv(src: str):
+    return cqt.rule_unparenthesised_sv("f.q", src.splitlines())
+
+
+def test_a_join_after_sv_is_flagged():
+    """The live shape: four instances of this existed, each with a passing
+    test, because the tests asserted the NAME appeared and it did - right
+    before the wreckage."""
+    assert _sv('\'"claimed by ",", " sv string clash," - two workers share it"];')
+
+
+def test_the_finding_quotes_the_offending_fragment():
+    (finding,) = _sv('\'"a ",", " sv string xs," b"];')
+    assert "sv string xs" in finding.detail
+
+
+def test_a_parenthesised_sv_is_correct_and_not_flagged():
+    assert not _sv('\'"claimed by ",(", " sv string clash)," - two workers share it"];')
+
+
+def test_an_sv_that_ends_the_expression_is_not_flagged():
+    """`...,(", " sv string xs)];` with nothing after it is the common,
+    correct form. Flagging it would fire on every correct line in the tree."""
+    assert not _sv('\'"missing: ",", " sv string missing];')
+
+
+def test_a_commented_example_is_ignored():
+    assert not _sv('/ \'"a ",", " sv string xs," b" is the trap')
+
+
+def test_the_real_repository_is_clean():
+    """Against the tree, not a sample. The rule was written after four live
+    instances were found and fixed, so it has to hold for the code that
+    exists.
+
+    Scoped through the checker's OWN file list rather than a raw
+    `git ls-files`: `lib/torq` is vendored and never edited (H-01), and it
+    does carry an instance of this trap. Holding this repository to a rule
+    it cannot act on in a tree it must not touch is how a gate gets
+    switched off.
+    """
+    for path in cqt._tracked_q_files():
+        found = cqt.rule_unparenthesised_sv(
+            str(path), path.read_text(errors="replace").splitlines()
+        )
+        assert not found, f"{path}: {found}"
 
 
 def test_every_rule_is_registered():
