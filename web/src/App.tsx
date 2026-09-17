@@ -32,12 +32,44 @@ const views = [
   "Control",
 ] as const;
 type View = (typeof views)[number];
-function text(value: unknown) {
-  return value == null
-    ? "—"
-    : typeof value === "object"
-      ? JSON.stringify(value)
-      : String(value);
+/** An ISO instant, as the server sends one: a date, a T, a time, and
+ *  optionally a fractional part. Matched rather than parsed - Date drops
+ *  everything past milliseconds, and these carry microseconds. */
+const ISO_INSTANT =
+  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/;
+function text(value: unknown, decimals?: number | null) {
+  if (value == null) return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  if (decimals == null) return String(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value.toFixed(decimals) : String(value);
+  }
+  if (typeof value === "string") {
+    const parts = ISO_INSTANT.exec(value);
+    // Cut or pad the fractional seconds rather than reformatting the whole
+    // instant: the server's own rendering of the date and zone is the one
+    // the operator sees elsewhere, and a round trip through Date would move
+    // it into the browser's timezone.
+    if (parts) {
+      const fraction = (parts[2] ?? "")
+        .padEnd(decimals, "0")
+        .slice(0, decimals);
+      return parts[1] + (decimals > 0 ? "." + fraction : "") + (parts[3] ?? "");
+    }
+  }
+  return String(value);
+}
+/** Column name -> decimal places for one queried table, from the catalog the
+ *  server published. Keyed by the table the RESULT names rather than the one
+ *  currently selected in the panel: a result on screen belongs to the query
+ *  that produced it, and picking a different table must not reformat it
+ *  before its own rows arrive. */
+function decimalsFor(catalog: Catalog | undefined, table: string) {
+  const entry = catalog?.tables.find((item) => item.name === table);
+  if (!entry) return undefined;
+  return Object.fromEntries(
+    entry.columns.map((column) => [column.name, column.decimals]),
+  );
 }
 function Badge({ value }: { value: string }) {
   return (
@@ -46,12 +78,17 @@ function Badge({ value }: { value: string }) {
     </span>
   );
 }
-function Table({
+export function Table({
   rows,
   empty = "No records returned.",
+  decimals,
 }: {
   rows: Row[];
   empty?: string;
+  /** Column name -> decimal places, from the catalog. A table with no entry
+   *  for a column shows it as it arrives, which is what every operational
+   *  table here wants: those are counts, states and process names. */
+  decimals?: Record<string, number | null>;
 }) {
   if (!rows.length) return <p className="empty">{empty}</p>;
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
@@ -73,7 +110,7 @@ function Table({
                   {column === "state" ? (
                     <Badge value={text(row[column])} />
                   ) : (
-                    text(row[column])
+                    text(row[column], decimals?.[column])
                   )}
                 </td>
               ))}
@@ -447,6 +484,7 @@ function DeskView() {
                   <Table
                     rows={resource.data.rows}
                     empty="No rows match this query."
+                    decimals={decimalsFor(catalog.data, resource.data.table)}
                   />
                 </section>
               )}

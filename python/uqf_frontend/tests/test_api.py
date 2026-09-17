@@ -53,6 +53,22 @@ def test_catalog_lists_tables_and_marks_vector_columns_unfilterable(client):
     assert quotes["bid_prices"]["type"] == "list"
 
 
+def test_catalog_publishes_the_decimal_places_each_column_is_shown_with(client):
+    """The UI formats what it renders; it must not carry its own idea of how
+    many places a rate has, because that would be a second copy of a fact the
+    catalog already holds - and this catalog is where a column's type lives.
+    """
+    tables = {t["name"]: t for t in client.get("/catalog").json()["tables"]}
+    trades = {c["name"]: c for c in tables["trades"]["columns"]}
+    assert trades["trade_price"]["decimals"] == 5
+    assert trades["time"]["decimals"] == 3
+    # A symbol and a vector get nothing rather than zero: there is no
+    # decimal point to place in either.
+    assert trades["sym"]["decimals"] is None
+    quotes = {c["name"]: c for c in tables["quotes"]["columns"]}
+    assert quotes["bid_prices"]["decimals"] is None
+
+
 def test_query_returns_rows_from_the_gateway(gw):
     gw._responses[__import__("uqf_frontend.queries", fromlist=["SELECT"]).SELECT] = [
         {"sym": "EURUSD", "trade_price": 1.085}

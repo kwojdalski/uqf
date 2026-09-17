@@ -9,8 +9,17 @@ sent. Values never enter query text at all; they travel as typed IPC
 arguments (see queries.py).
 
 **The catalog itself is data, and lives in `python/uqf_frontend/catalog/`
-as two CSVs** - `tables.csv` (name, description) and `columns.csv` (table,
-column, type). This module reads them; it does not contain them.
+as two CSVs** - `tables.csv` (name, description, decimals) and `columns.csv`
+(table, column, type, decimals). This module reads them; it does not contain
+them.
+
+`decimals` is optional in both and blank nearly everywhere: it is how many
+places a value is SHOWN with, resolved column, then table, then type (see
+DEFAULT_DECIMALS and Table.decimals_for). It lives here because this file
+already says what type each column holds, and a display width kept anywhere
+else would be a second copy of that fact - the frontend used to render
+whatever JSON carried, which meant a rate as 1.1002100000000001 beside an
+instant with nine fractional digits.
 
 They were 229 lines of Python literals until they were not. Three reasons
 they moved: `test_catalog_drift.py` holds this catalog against the q-side
@@ -45,6 +54,24 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+#: How many decimal places a value of each type is shown with, when neither
+#: the column nor its table says otherwise.
+#:
+#: A float gets five, which is enough for an FX rate quoted in pips (a JPY
+#: pair moves in the second decimal, a EURUSD pair in the fourth, and a
+#: fifth carries the fractional pip venues actually quote). A timestamp or
+#: timespan gets three - milliseconds - because q carries nanoseconds and a
+#: table of nine-digit fractions is unreadable at a glance, while seconds
+#: alone hide the ordering within a burst.
+#:
+#: Everything else is shown as it arrives: a symbol has no decimals, and a
+#: long is a count or an id, where a decimal point would be an invention.
+DEFAULT_DECIMALS: dict[str, int] = {
+    "float": 5,
+    "timestamp": 3,
+    "timespan": 3,
+}
+
 
 class QType(StrEnum):
     """The q types this layer knows how to coerce a JSON value into."""
@@ -75,6 +102,12 @@ class Table:
     name: str
     columns: dict[str, QType]
     description: str
+    #: This table's own decimal places, applied to every numeric column it
+    #: has no specific answer for. None means "use the type's default".
+    decimals: int | None = None
+    #: Per-column overrides, for the columns that differ from the rest of
+    #: their table - a size in whole units beside a rate in fractional pips.
+    column_decimals: dict[str, int] = field(default_factory=dict)
     #: Columns a caller may filter on - everything except vector-valued ones.
     filterable: frozenset[str] = field(init=False)
 
@@ -84,6 +117,25 @@ class Table:
             "filterable",
             frozenset(c for c, t in self.columns.items() if t is not QType.LIST),
         )
+
+    def decimals_for(self, column: str) -> int | None:
+        """How many decimal places `column` is shown with, or None to show
+        the value exactly as it arrives.
+
+        Column first, then the table, then the type - narrowest answer wins,
+        which is what makes a per-table default useful: set it once and name
+        only the columns that disagree.
+        """
+        if column in self.column_decimals:
+            return self.column_decimals[column]
+        qtype = self.columns.get(column)
+        if qtype is None or qtype is QType.LIST:
+            return None
+        if qtype in (QType.FLOAT, QType.TIMESTAMP, QType.TIMESPAN):
+            if self.decimals is not None:
+                return self.decimals
+            return DEFAULT_DECIMALS[qtype.value]
+        return None
 
 
 #: Where the catalog data lives. Resolved from this module rather than a
@@ -108,6 +160,31 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def _decimals(row: dict[str, str], where: str) -> int | None:
+    """The optional `decimals` field of one CSV row.
+
+    Absent or blank means "no opinion", which is how nearly every row is
+    written: the defaults are the point, and an override is the exception.
+    A value that is not a non-negative integer is refused HERE, naming the
+    row, rather than reaching a browser as a NaN in every cell of a column.
+    """
+    raw = (row.get("decimals") or "").strip()
+    if not raw:
+        return None
+    try:
+        places = int(raw)
+    except ValueError:
+        raise ValueError(f"{where}: decimals must be a whole number, not {raw!r}") from None
+    if places < 0:
+        raise ValueError(f"{where}: decimals must not be negative, got {places}")
+    if places > 9:
+        raise ValueError(
+            f"{where}: decimals is {places}, and q carries nanoseconds - nine digits - "
+            "so anything beyond that is padding rather than precision"
+        )
+    return places
+
+
 def _load() -> dict[str, Table]:
     """Build the catalog from the two CSVs.
 
@@ -116,11 +193,14 @@ def _load() -> dict[str, Table]:
     filter on it fail as "unknown column", which reads like a caller error
     rather than a missing data file.
     """
-    descriptions = {
-        row["table"]: row["description"] for row in _read_csv(CATALOG_DIR / "tables.csv")
-    }
+    descriptions: dict[str, str] = {}
+    table_decimals: dict[str, int | None] = {}
+    for row in _read_csv(CATALOG_DIR / "tables.csv"):
+        descriptions[row["table"]] = row["description"]
+        table_decimals[row["table"]] = _decimals(row, f"tables.csv: {row['table']}")
 
     columns: dict[str, dict[str, QType]] = {}
+    column_decimals: dict[str, dict[str, int]] = {}
     for row in _read_csv(CATALOG_DIR / "columns.csv"):
         qtype = _TYPE_BY_NAME.get(row["type"])
         if qtype is None:
@@ -129,6 +209,9 @@ def _load() -> dict[str, Table]:
                 f"{row['type']!r} - known types are {', '.join(sorted(_TYPE_BY_NAME))}"
             )
         columns.setdefault(row["table"], {})[row["column"]] = qtype
+        places = _decimals(row, f"columns.csv: {row['table']}.{row['column']}")
+        if places is not None:
+            column_decimals.setdefault(row["table"], {})[row["column"]] = places
 
     missing_columns = sorted(set(descriptions) - set(columns))
     if missing_columns:
@@ -138,7 +221,13 @@ def _load() -> dict[str, Table]:
         raise ValueError(f"columns.csv names tables absent from tables.csv: {missing_descriptions}")
 
     return {
-        name: Table(name=name, columns=columns[name], description=descriptions[name])
+        name: Table(
+            name=name,
+            columns=columns[name],
+            description=descriptions[name],
+            decimals=table_decimals[name],
+            column_decimals=column_decimals.get(name, {}),
+        )
         for name in sorted(descriptions)
     }
 
