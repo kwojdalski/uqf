@@ -56,8 +56,15 @@ LITERAL_READS = (
     re.compile(r"getenv\s*\[?\s*`([A-Z][A-Z0-9_]*)"),
     # Python: os.environ.get("NAME"), os.getenv("NAME"), os.environ["NAME"]
     re.compile(r"os\.(?:environ\.get|getenv|environ)\s*[(\[]\s*[\"']([A-Z][A-Z0-9_]*)[\"']"),
-    # uqf_frontend's typed helpers, which wrap os.environ.get one level down
-    re.compile(r"_(?:int|path)_env\s*\(\s*[\"']([A-Z][A-Z0-9_]*)[\"']"),
+    # uqf_frontend's typed helpers, which wrap os.environ.get one level down.
+    # ANY `_<word>_env("NAME")`, not an enumerated list of them: the list read
+    # `_(?:int|path)_env` and a third helper - `_flag_env`, for a boolean -
+    # was therefore invisible the day it was written. Its variable reported as
+    # documented-but-read-by-nothing, which points the reader at the docs
+    # when the gate is what needs changing. A gate that must be edited
+    # whenever the code grows a sibling of something it already understands
+    # is a gate that will one day not be.
+    re.compile(r"_[a-z]+_env\s*\(\s*[\"']([A-Z][A-Z0-9_]*)[\"']"),
     # A module constant naming a variable, e.g. CRYPTORUST_ROOT_ENV = "..."
     re.compile(r"^[A-Z][A-Z0-9_]*_ENV\s*=\s*[\"']([A-Z][A-Z0-9_]*)[\"']", re.MULTILINE),
     # A q process DECLARING the variables it requires as a symbol vector, then

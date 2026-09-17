@@ -71,6 +71,35 @@ scalar-from-vector. This has cost this repository three debugging sessions
 | `GET /ops/backfill` | Backfill and Airflow task status, read from the files q writes (**FE-06**) |
 | `POST /query` | Validated, parameterised table query, tier-routed (**FE-07**, **FE-08**) |
 
+### Control routes — these CHANGE things
+
+| | |
+|---|---|
+| `GET /control` | Whether writes are on, and what can be set. Not itself gated: a UI needs this to decide whether to render controls, and finding out by provoking a 403 on a lifecycle route means having already stopped the fleet |
+| `POST /control/process/{start\|stop\|restart}` | Lifecycle for a process selector — a name, several separated by spaces, or `all`, passed to `torq.sh` unreinterpreted |
+| `PUT /control/process/{procname}/config` | One `process.csv` field override, persisted to `process_overrides.csv` and applied on the next start. Returns the effective row |
+| `PUT /control/worker-config` | One `.qwcfg` override in the live process the gateway addresses. Returns `.qwcfg.explain`, which names the layer that actually answered |
+| `POST /control/backfill` | Launch a bounded worker over a range. **Detached** — watch `/ops/backfill` for the outcome |
+
+**They are off by default, and that is the security posture rather than
+caution.** `UQF_FRONTEND_ENABLE_WRITES` must be set on the server or every
+one of them returns 403 naming that variable. The reason is FE-15 and FE-20:
+this deployment has one shared credential, and the caller's identity is
+*claimed* through a header anyone can set. That is defensible while every
+route is a read. Once a route can stop the fleet, "anyone who can reach the
+port" is the whole access control.
+
+`clean` is deliberately **not** exposed. It deletes logs, tplogs, wdb and the
+copied sample data — the one orchestrator verb whose blast radius is data
+rather than process state. `uqf-stack clean` remains, where the person
+running it is at a terminal on the host.
+
+A backfill is launched detached rather than awaited: it runs for as long as
+its range takes, and a request that blocked on one would time out mid-run and
+tell the caller nothing about whether the work continued. Every bound must
+carry an explicit offset, for the same reason `/coverage` requires one.
+
+
 Errors carry a `transient` flag so a UI can tell an EOD window or a timeout
 apart from a real failure.
 

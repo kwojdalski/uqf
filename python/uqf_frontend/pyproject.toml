@@ -12,6 +12,17 @@ dependencies = [
     "fastapi>=0.115",
     "pydantic>=2.9",
     "uvicorn>=0.32",
+    # For the /control/* routes only, and imported lazily inside them so a
+    # read-only deployment never pays for it. This package deliberately did
+    # NOT depend on the orchestrator before - procfile.py records that rule
+    # and its reason, which was about not coupling a hot read path for two
+    # lines of regex. That reasoning does not survive contact with STARTING A
+    # PROCESS: core.start shells out to torq.sh under an environment built
+    # from the vendored tree, and core.set_process_config owns the field
+    # whitelist and the read-modify-write against process_overrides.csv.
+    # Reimplementing either here would make a second writer to one file,
+    # which is worse than a dependency by any measure used in this tree.
+    "torq-orchestrator",
 ]
 
 [build-system]

@@ -77,6 +77,22 @@ class CoverageIncomplete(FrontendError):
     status_code = 409
 
 
+class WritesDisabled(FrontendError):
+    """A control route was called while writes are switched off.
+
+    A DISTINCT error from Forbidden, and the distinction is the useful part:
+    Forbidden means "you may not", this means "nobody may, here, yet". The
+    operator's next step is different in each case - check the policy, versus
+    set UQF_FRONTEND_ENABLE_WRITES on the server - and a single 403 saying
+    "forbidden" would send them to the wrong one.
+
+    403 rather than 404: pretending the route does not exist would make a
+    correctly-configured client look broken.
+    """
+
+    status_code = 403
+
+
 class Forbidden(FrontendError):
     """An authorisation policy refused the request.
 

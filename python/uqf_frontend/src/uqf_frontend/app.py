@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from uqf_frontend import authz, catalog, coverage, health, ops, procfile, queries, status
+from uqf_frontend import authz, catalog, control, coverage, health, ops, procfile, queries, status
 from uqf_frontend.authz import Policy, Request_, allow_all, enforce
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
@@ -27,21 +27,30 @@ from uqf_frontend.errors import (
 from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.models import (
+    BackfillRequest,
+    BackfillStartedResponse,
     BackfillStatusResponse,
     CatalogResponse,
     ColumnInfo,
+    CommandResponse,
     ConnectionsResponse,
+    ControlStatusResponse,
     CoverageRequirement,
     CoverageResponse,
     FleetHealthResponse,
     HealthResponse,
     IntervalOut,
+    LifecycleRequest,
     OpsTableResponse,
+    ProcessConfigRequest,
+    ProcessConfigResponse,
     ProcessHealthOut,
     QueryRequest,
     QueryResponse,
     TableInfo,
     UsageResponse,
+    WorkerConfigRequest,
+    WorkerConfigResponse,
     WorkerStatusOut,
 )
 
@@ -305,6 +314,78 @@ def create_app(
             row_count=len(rows),
             truncated=len(rows) >= capped < req.limit,
         )
+
+    # ------------------------------------------------------ control (writes)
+    #
+    # Every route below CHANGES something. They are refused unless
+    # UQF_FRONTEND_ENABLE_WRITES is set, checked inside `control` so a route
+    # added later cannot forget it - a kill switch is only worth having if it
+    # cannot be bypassed by inattention.
+    #
+    # They also pass through `authorise` like every read, so a deployment
+    # that installs a real policy gets one seam rather than two.
+
+    @app.get("/control", response_model=ControlStatusResponse)
+    def control_status(request: Request) -> ControlStatusResponse:
+        """Whether writes are on, and what can be set.
+
+        A GET, and deliberately not itself gated: a UI needs to know whether
+        to render controls at all, and making it discover that by provoking a
+        403 on a real action is a poor way to find out.
+        """
+        authorise(request)
+        return ControlStatusResponse(
+            writes_enabled=settings.enable_writes,
+            lifecycle_actions=list(control.LIFECYCLE_ACTIONS),
+            settable_fields=control.settable_fields(settings) if settings.enable_writes else [],
+            poll_seconds=ops.POLL_SECONDS["processes"],
+        )
+
+    @app.post("/control/process/{action}", response_model=CommandResponse)
+    def control_lifecycle(action: str, req: LifecycleRequest, request: Request) -> CommandResponse:
+        """Start, stop or restart processes (action is start|stop|restart)."""
+        authorise(request)
+        result = control.lifecycle(settings, action, req.procs)
+        return CommandResponse(
+            action=result.action,
+            target=result.target,
+            exit_code=result.exit_code,
+            ok=result.ok,
+            output=result.output,
+        )
+
+    @app.put("/control/process/{procname}/config", response_model=ProcessConfigResponse)
+    def control_process_config(
+        procname: str, req: ProcessConfigRequest, request: Request
+    ) -> ProcessConfigResponse:
+        """Persist one process.csv field override, applied on the next start."""
+        authorise(request)
+        row = control.set_process_field(settings, procname, req.field_name, req.value)
+        return ProcessConfigResponse(
+            procname=procname,
+            config=row,
+            settable_fields=control.settable_fields(settings),
+        )
+
+    @app.put("/control/worker-config", response_model=WorkerConfigResponse)
+    def control_worker_config(req: WorkerConfigRequest, request: Request) -> WorkerConfigResponse:
+        """Set a `.qwcfg` override in the live process the gateway addresses."""
+        authorise(request)
+        out = control.set_worker_config(gateway, settings, req.key, req.value)
+        return WorkerConfigResponse(key=out["key"], value=out["value"], explain=out["explain"])
+
+    @app.post("/control/backfill", response_model=BackfillStartedResponse)
+    def control_backfill(req: BackfillRequest, request: Request) -> BackfillStartedResponse:
+        """Launch a bounded worker over a range. Detached; watch /ops/backfill."""
+        authorise(request)
+        out = control.start_backfill(
+            settings,
+            worker=req.worker,
+            source_version=req.source_version,
+            range_from=req.range_from,
+            range_to=req.range_to,
+        )
+        return BackfillStartedResponse(**out)
 
     if settings.web_dist is not None:
         app.mount("/ui", StaticFiles(directory=settings.web_dist, html=True), name="web")

@@ -214,3 +214,122 @@ class BackfillStatusResponse(BaseModel):
     )
     source: str | None = Field(default=None, description="the directory that was read")
     poll_seconds: int
+
+
+# ------------------------------------------------------------ control (writes)
+
+
+class ControlStatusResponse(BaseModel):
+    """Whether the control surface is live, and what it accepts.
+
+    A UI needs this to decide whether to render controls at all. Discovering
+    it by provoking a 403 on a real action is a poor way to find out, and on
+    a lifecycle route the "real action" would have stopped the fleet.
+    """
+
+    writes_enabled: bool
+    lifecycle_actions: list[str]
+    settable_fields: list[str]
+    poll_seconds: int
+
+
+class LifecycleRequest(BaseModel):
+    """Start, stop or restart processes.
+
+    `procs` is torq.sh's own selector - a name, several separated by spaces,
+    or "all" - and is passed through rather than reinterpreted, so the HTTP
+    surface and the CLI cannot disagree about what "all" means.
+    """
+
+    procs: str = Field(default="all", min_length=1)
+
+
+class CommandResponse(BaseModel):
+    """What a subprocess-backed control action did.
+
+    Carries the exit code rather than only a boolean: torq.sh distinguishes
+    "nothing to do" from "failed", and collapsing that to ok/not-ok loses the
+    distinction an operator acts on.
+    """
+
+    action: str
+    target: str
+    exit_code: int
+    ok: bool
+    output: str
+
+
+class ProcessConfigRequest(BaseModel):
+    """One process.csv field override."""
+
+    field_name: str = Field(min_length=1, alias="field", description="a process.csv column")
+    value: str = Field(description='the new value; "" is legal and clears nothing')
+
+    model_config = {"populate_by_name": True}
+
+
+class ProcessConfigResponse(BaseModel):
+    """The effective row after the write.
+
+    The row rather than an acknowledgement: what the process will start with
+    is the interesting part, and a caller who must issue a second request to
+    learn it will sometimes not bother.
+    """
+
+    procname: str
+    config: dict[str, str]
+    settable_fields: list[str]
+
+
+class WorkerConfigRequest(BaseModel):
+    """One `.qwcfg` override, set in a live process."""
+
+    key: str = Field(min_length=1)
+    value: str
+
+
+class WorkerConfigResponse(BaseModel):
+    """Where the value now comes from.
+
+    `explain` names the LAYER that answered, which is not always the override
+    just written - a key also set in the environment reads from there. A
+    caller told only "ok" would believe a value that is not in effect.
+    """
+
+    key: str
+    value: str
+    explain: Any
+    note: str = (
+        "this override lives in the process's memory and is lost when it restarts; "
+        "a process.csv override survives"
+    )
+
+
+class BackfillRequest(BaseModel):
+    """Run a bounded worker over a range.
+
+    Every field is required and none has a default. ETL-02 at the HTTP
+    surface: a backfill that guessed a range would publish the wrong window
+    and record it as covered.
+    """
+
+    worker: str = Field(min_length=1)
+    source_version: str = Field(min_length=1)
+    range_from: str = Field(description="ISO-8601 with an explicit offset")
+    range_to: str = Field(description="ISO-8601 with an explicit offset, exclusive")
+
+
+class BackfillStartedResponse(BaseModel):
+    """Launched, not finished.
+
+    The run is detached, so this says what was started and where to watch it
+    rather than whether it worked - `/ops/backfill` reads the status file the
+    worker writes on every transition.
+    """
+
+    worker: str
+    source_version: str
+    range_from: str
+    range_to: str
+    pid: int
+    status_path: str

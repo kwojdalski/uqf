@@ -3,7 +3,13 @@ import {
   type Backfill,
   type Catalog,
   type Coverage,
+  type BackfillStarted,
+  type CommandResult,
+  type ControlStatus,
   type CoverageRequest,
+  type ProcessConfigResult,
+  type WorkerConfigResult,
+  mutate,
   type Health,
   type OpsData,
   type QueryInput,
@@ -22,6 +28,7 @@ const views = [
   "Queue",
   "Connections",
   "Usage",
+  "Control",
 ] as const;
 type View = (typeof views)[number];
 function text(value: unknown) {
@@ -637,9 +644,259 @@ function OpsView({
     </>
   );
 }
+/** The only view that CHANGES anything.
+ *
+ * It asks `/control` first and renders nothing actionable when writes are
+ * off - discovering that by pressing "Stop all" and reading a 403 would mean
+ * having already tried to stop the fleet.
+ */
+function ControlView() {
+  const status = useResource<ControlStatus>("/control");
+  const [busy, setBusy] = useState("");
+  const [result, setResult] = useState<string>("");
+  const [error, setError] = useState("");
+
+  const [procs, setProcs] = useState("all");
+  const [cfg, setCfg] = useState({ procname: "", field: "", value: "" });
+  const [wcfg, setWcfg] = useState({ key: "", value: "" });
+  const [bf, setBf] = useState({
+    worker: "",
+    source_version: "",
+    range_from: "",
+    range_to: "",
+  });
+
+  async function run(label: string, fn: () => Promise<string>) {
+    setBusy(label);
+    setError("");
+    setResult("");
+    try {
+      setResult(await fn());
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  if (status.error)
+    return (
+      <p role="alert" className="error-text">
+        {status.error.message}
+      </p>
+    );
+  if (!status.data) return <p>Loading…</p>;
+
+  if (!status.data.writes_enabled)
+    return (
+      <div className="panel">
+        <h2>Writes are disabled</h2>
+        <p>
+          Every control route returns 403. Set{" "}
+          <code>UQF_FRONTEND_ENABLE_WRITES=true</code> on the server to enable
+          them.
+        </p>
+        <p className="sidebar-note">
+          They are off by default because this deployment has one shared
+          credential and the caller&rsquo;s identity is claimed through a header
+          anyone can set. That is safe while every route is a read.
+        </p>
+      </div>
+    );
+
+  return (
+    <>
+      {error && (
+        <p role="alert" className="error-text">
+          {error}
+        </p>
+      )}
+      {result && <pre className="result">{result}</pre>}
+
+      <form
+        className="panel"
+        onSubmit={(e) => {
+          e.preventDefault();
+        }}
+      >
+        <h2>Processes</h2>
+        <label>
+          Selector (a name, several separated by spaces, or “all”)
+          <input
+            value={procs}
+            onChange={(e) => setProcs(e.target.value)}
+            required
+          />
+        </label>
+        <div className="form-footer">
+          <span>Runs torq.sh. “clean” is deliberately not offered here.</span>
+          <span>
+            {status.data.lifecycle_actions.map((action) => (
+              <button
+                key={action}
+                type="button"
+                className={action === "stop" ? "danger" : "primary"}
+                disabled={busy !== ""}
+                onClick={() =>
+                  run(action, async () => {
+                    const r = await mutate<CommandResult>(
+                      `/control/process/${action}`,
+                      { procs },
+                    );
+                    return `${r.action} ${r.target}: exit ${r.exit_code}\n${r.output}`;
+                  })
+                }
+              >
+                {busy === action ? "…" : action}
+              </button>
+            ))}
+          </span>
+        </div>
+      </form>
+
+      <form
+        className="panel"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run("config", async () => {
+            const r = await mutate<ProcessConfigResult>(
+              `/control/process/${cfg.procname}/config`,
+              { field: cfg.field, value: cfg.value },
+              "PUT",
+            );
+            return `${r.procname} now: ${JSON.stringify(r.config, null, 2)}`;
+          });
+        }}
+      >
+        <h2>Process config</h2>
+        <div className="fields">
+          <label>
+            Process
+            <input
+              required
+              value={cfg.procname}
+              onChange={(e) => setCfg({ ...cfg, procname: e.target.value })}
+            />
+          </label>
+          <label>
+            Field
+            <select
+              required
+              value={cfg.field}
+              onChange={(e) => setCfg({ ...cfg, field: e.target.value })}
+            >
+              <option value="">Choose…</option>
+              {status.data.settable_fields.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Value
+            <input
+              value={cfg.value}
+              onChange={(e) => setCfg({ ...cfg, value: e.target.value })}
+            />
+          </label>
+        </div>
+        <div className="form-footer">
+          <span>
+            Persisted to process_overrides.csv; applied on the next start.
+          </span>
+          <button className="primary" disabled={busy !== ""}>
+            Set field
+          </button>
+        </div>
+      </form>
+
+      <form
+        className="panel"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run("worker-config", async () => {
+            const r = await mutate<WorkerConfigResult>(
+              "/control/worker-config",
+              wcfg,
+              "PUT",
+            );
+            return `${r.key} = ${r.value}\n${JSON.stringify(r.explain, null, 2)}\n\n${r.note}`;
+          });
+        }}
+      >
+        <h2>Worker config (live process)</h2>
+        <div className="fields">
+          <label>
+            Key
+            <input
+              required
+              value={wcfg.key}
+              onChange={(e) => setWcfg({ ...wcfg, key: e.target.value })}
+            />
+          </label>
+          <label>
+            Value
+            <input
+              value={wcfg.value}
+              onChange={(e) => setWcfg({ ...wcfg, value: e.target.value })}
+            />
+          </label>
+        </div>
+        <div className="form-footer">
+          <span>In memory only — lost when the process restarts.</span>
+          <button className="primary" disabled={busy !== ""}>
+            Set override
+          </button>
+        </div>
+      </form>
+
+      <form
+        className="panel"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run("backfill", async () => {
+            const r = await mutate<BackfillStarted>("/control/backfill", bf);
+            return `started ${r.worker} (pid ${r.pid})\nwatch ${r.status_path}`;
+          });
+        }}
+      >
+        <h2>Run a backfill</h2>
+        <div className="fields">
+          {(
+            [
+              ["worker", "Worker"],
+              ["source_version", "Source version"],
+              ["range_from", "From (inclusive, timezone required)"],
+              ["range_to", "To (exclusive, timezone required)"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key}>
+              {label}
+              <input
+                required
+                value={bf[key]}
+                onChange={(e) => setBf({ ...bf, [key]: e.target.value })}
+              />
+            </label>
+          ))}
+        </div>
+        <div className="form-footer">
+          <span>Detached — watch Backfill for the outcome.</span>
+          <button className="primary" disabled={busy !== ""}>
+            Start backfill
+          </button>
+        </div>
+      </form>
+    </>
+  );
+}
 export default function App() {
   const [view, setView] = useState<View>("Coverage");
   const health = useResource<Health>("/health");
+  // Asked once here so the sidebar can say what this deployment actually is,
+  // rather than asserting "read-only" on a server where it is not true.
+  const control = useResource<ControlStatus>("/control");
   const gateway = health.error
     ? "Unavailable"
     : health.data?.gateway === "reloading"
@@ -678,7 +935,9 @@ export default function App() {
           <p className="sidebar-note">
             Local session
             <br />
-            Read-only access
+            {control.data?.writes_enabled
+              ? "Writes enabled"
+              : "Read-only access"}
           </p>
         </aside>
         <main>
@@ -702,6 +961,8 @@ export default function App() {
             <BackfillView />
           ) : view === "Desk" ? (
             <DeskView />
+          ) : view === "Control" ? (
+            <ControlView />
           ) : (
             <OpsView key={view} view={view} />
           )}

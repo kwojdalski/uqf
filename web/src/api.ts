@@ -98,12 +98,16 @@ export async function request<T>(
   path: string,
   signal: AbortSignal,
   body?: string,
+  // Explicit only when it is not the obvious one. GET without a body and
+  // POST with one cover every read in this app; the control routes need PUT,
+  // and inferring that from anything would be guessing.
+  method?: "GET" | "POST" | "PUT",
 ): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]),
-      method: body ? "POST" : "GET",
+      method: method ?? (body ? "POST" : "GET"),
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body,
     });
@@ -189,4 +193,53 @@ export function validateRange(value: CoverageRequest) {
   validateTime(value.range_to);
   if (Date.parse(value.range_from) >= Date.parse(value.range_to))
     throw new Error("Range end must be after range start.");
+}
+
+// --- control (writes) ------------------------------------------------------
+
+export interface ControlStatus extends Pollable {
+  writes_enabled: boolean;
+  lifecycle_actions: string[];
+  settable_fields: string[];
+}
+export interface CommandResult {
+  action: string;
+  target: string;
+  exit_code: number;
+  ok: boolean;
+  output: string;
+}
+export interface ProcessConfigResult {
+  procname: string;
+  config: Record<string, string>;
+  settable_fields: string[];
+}
+export interface WorkerConfigResult {
+  key: string;
+  value: string;
+  explain: unknown;
+  note: string;
+}
+export interface BackfillStarted {
+  worker: string;
+  source_version: string;
+  range_from: string;
+  range_to: string;
+  pid: number;
+  status_path: string;
+}
+
+/** A one-shot write. Separate from `useResource`, which polls.
+ *
+ * Polling a control route would re-issue it, and re-issuing `stop all` on a
+ * timer is not a refresh. So writes are explicit, single, and their own
+ * abort signal.
+ */
+export async function mutate<T>(
+  path: string,
+  body: unknown,
+  method: "POST" | "PUT" = "POST",
+): Promise<T> {
+  const controller = new AbortController();
+  return request<T>(path, controller.signal, JSON.stringify(body), method);
 }

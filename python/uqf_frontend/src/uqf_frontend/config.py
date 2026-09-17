@@ -86,6 +86,18 @@ class Settings:
     processes: tuple[Process, ...] = ()
     #: Optional built React app, served under /ui/ on the same origin as the API.
     web_dist: Path | None = None
+    #: Whether the /control/* routes do anything. OFF by default, and that
+    #: default is the security posture rather than caution: FE-15 ships one
+    #: shared credential and FE-20's identity is CLAIMED through a header
+    #: anyone can set, which is defensible while every route is a read. The
+    #: moment a route can stop the fleet or rewrite process.csv, "anyone who
+    #: can reach the port" is the whole access control - so turning that on
+    #: is a deliberate act with a name, not a thing that happens by default.
+    enable_writes: bool = False
+    #: Where torq.sh and process.csv live, for the control routes. None means
+    #: they refuse and say which variable is unset, rather than guessing a
+    #: path and acting on the wrong stack.
+    stack_root: Path | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -107,6 +119,8 @@ class Settings:
             status_dir=_path_env("UQF_FRONTEND_STATUS_DIR"),
             web_dist=_path_env("UQF_FRONTEND_WEB_DIST"),
             base_port=_int_env("UQF_FRONTEND_BASE_PORT", cls.base_port),
+            enable_writes=_flag_env("UQF_FRONTEND_ENABLE_WRITES"),
+            stack_root=_path_env("UQF_FRONTEND_STACK_ROOT"),
         )
 
 
@@ -118,6 +132,25 @@ def _int_env(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from None
+
+
+def _flag_env(name: str) -> bool:
+    """A boolean environment variable, strictly.
+
+    Only "1", "true", "yes" and "on" enable it, case-insensitively. An
+    unrecognised value is an ERROR rather than a silent false: `ENABLE=fasle`
+    typed at 2am must not read as "writes are off, all is well" - it must
+    stop the server with the value quoted back.
+    """
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return False
+    lowered = raw.strip().lower()
+    if lowered in ("1", "true", "yes", "on"):
+        return True
+    if lowered in ("0", "false", "no", "off"):
+        return False
+    raise ValueError(f"{name} must be a boolean (true/false/1/0/yes/no/on/off), got {raw!r}")
 
 
 def _path_env(name: str) -> Path | None:
