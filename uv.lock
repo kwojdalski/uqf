@@ -1462,6 +1462,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "kola" },
     { name = "pydantic" },
+    { name = "torq-orchestrator" },
     { name = "uvicorn" },
 ]
 
@@ -1477,6 +1478,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "kola", specifier = ">=2.5.0" },
     { name = "pydantic", specifier = ">=2.9" },
+    { name = "torq-orchestrator", editable = "python/torq_orchestrator" },
     { name = "uvicorn", specifier = ">=0.32" },
 ]
 

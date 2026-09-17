@@ -81,3 +81,41 @@ def test_a_non_integer_process_port_fails_loudly(monkeypatch):
     monkeypatch.setenv("UQF_FRONTEND_PROCESSES", "rdb1:not-a-port")
     with pytest.raises(ValueError, match="non-integer port"):
         Settings.from_env()
+
+
+# ------------------------------------------------- the write switch
+
+
+def test_writes_are_off_when_the_variable_is_unset(monkeypatch):
+    """The security default. A deployment that was never configured cannot
+    be made to change anything."""
+    monkeypatch.delenv("UQF_FRONTEND_ENABLE_WRITES", raising=False)
+    assert Settings.from_env().enable_writes is False
+
+
+@pytest.mark.parametrize("raw", ["1", "true", "TRUE", "yes", "on", " True "])
+def test_the_recognised_truthy_spellings_enable_writes(monkeypatch, raw):
+    monkeypatch.setenv("UQF_FRONTEND_ENABLE_WRITES", raw)
+    assert Settings.from_env().enable_writes is True
+
+
+@pytest.mark.parametrize("raw", ["0", "false", "no", "off", ""])
+def test_the_recognised_falsy_spellings_leave_writes_off(monkeypatch, raw):
+    monkeypatch.setenv("UQF_FRONTEND_ENABLE_WRITES", raw)
+    assert Settings.from_env().enable_writes is False
+
+
+def test_an_unrecognised_value_refuses_to_start(monkeypatch):
+    """`ENABLE_WRITES=fasle` typed at 2am must not read as "writes are off,
+    all is well". For a security switch, silently defaulting is the wrong
+    failure - the value is quoted back and the server does not start."""
+    monkeypatch.setenv("UQF_FRONTEND_ENABLE_WRITES", "fasle")
+    with pytest.raises(ValueError, match="fasle"):
+        Settings.from_env()
+
+
+def test_the_stack_root_is_a_path_or_none(monkeypatch, tmp_path):
+    monkeypatch.delenv("UQF_FRONTEND_STACK_ROOT", raising=False)
+    assert Settings.from_env().stack_root is None
+    monkeypatch.setenv("UQF_FRONTEND_STACK_ROOT", str(tmp_path))
+    assert Settings.from_env().stack_root == tmp_path

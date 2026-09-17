@@ -39,6 +39,8 @@ without it:
 | `UQF_FRONTEND_GATEWAY_USER` | as above | no | empty |
 | `UQF_FRONTEND_GATEWAY_PASSWD` | as above | no | empty |
 | `UQF_FRONTEND_TIMEOUT` | as above | no | `30` seconds, enforced per query by kola (FE-11) |
+| `UQF_FRONTEND_ENABLE_WRITES` | as above | no | **false — every `/control/*` route refuses with 403.** Off by default as the security posture, not caution: FE-15 ships one shared credential and FE-20's identity is *claimed* through a header anyone can set, which is defensible while every route is a read. Once a route can stop the fleet or rewrite `process.csv`, "anyone who can reach the port" is the whole access control. Accepts true/false/1/0/yes/no/on/off; anything else refuses to start rather than reading as false |
+| `UQF_FRONTEND_STACK_ROOT` | as above | no | the repository the orchestrator package was installed from. Only the `/control/*` routes use it, and a path that is not a checkout (no `lib/torq/torq.sh`) is refused rather than acted on — starting the wrong stack is worse than not starting one |
 | `UQF_FRONTEND_MAX_ROWS` | as above | no | `DEFAULT_MAX_ROWS` — a hard cap, whatever the caller asks for |
 | `UQF_FRONTEND_BASE_PORT` | as above | no | `6050`. Must match the port the stack was started with, or every probe targets the wrong process |
 | `UQF_FRONTEND_PROCESS_CSV` | as above | no | fleet health reports itself *unconfigured* rather than returning an empty fleet (FE-01) |
