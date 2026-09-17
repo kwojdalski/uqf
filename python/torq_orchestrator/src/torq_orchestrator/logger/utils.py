@@ -108,8 +108,10 @@ def LogContext(
     if log_start and is_level_enabled(level.upper()):
         logger.log(level.upper(), "start operation={}", operation)
 
+    succeeded = False
     try:
         yield
+        succeeded = True
     except Exception as e:
         duration = time.time() - start_time
         log_error_with_context(
@@ -119,7 +121,12 @@ def LogContext(
     finally:
         duration = time.time() - start_time
 
-        if log_end and is_level_enabled(level.upper()):
+        # "complete" only when it did complete. This used to sit unconditionally
+        # in the finally block, so an operation that raised logged its error
+        # and then "complete operation=..." straight after - and a reader
+        # scanning for the end of an operation found a success line for a
+        # failure. The error line already marks where a failed one ended.
+        if succeeded and log_end and is_level_enabled(level.upper()):
             logger.log(level.upper(), "complete operation={}", operation)
 
         if log_performance:

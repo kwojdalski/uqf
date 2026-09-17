@@ -60,8 +60,21 @@ def trace_calls(show_return: bool = False) -> Callable:
             module_name = getattr(func, "__module__", "?").split(".")[-1]
 
             args_repr = []
+            # Only parameters that can take a positional argument BY NAME label
+            # one. Taking every parameter labelled the first variadic argument
+            # with the *args name, so `f(1, 2)` traced as `f(values=1, 2)` -
+            # which reads as `values` being 1 - and a keyword-only parameter
+            # after *args would have labelled a value it never received.
+            positional = (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
             try:
-                param_names = list(inspect.signature(func).parameters.keys())
+                param_names = [
+                    name
+                    for name, param in inspect.signature(func).parameters.items()
+                    if param.kind in positional
+                ]
             except TypeError, ValueError:
                 param_names = []
             for i, arg in enumerate(args):
