@@ -251,7 +251,7 @@ require_interval:{[range_from;range_to]
 / prevent.
 / @param intervals a table with range_from and range_to columns
 / @return a table of composed intervals, ordered by range_from
-/ @eg .qcov.compose[([] range_from:...; range_to:...)]
+/ @eg .qcov.compose[([] range_from:2026.09.11D00:00 2026.09.12D00:00; range_to:2026.09.12D00:00 2026.09.13D00:00)]
 compose:{[intervals]
     if[0=count intervals; :intervals];
     sorted:`range_from xasc 0!intervals;

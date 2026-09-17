@@ -5,6 +5,23 @@
 
 / Four requests, two per sym, one rejected each - so a count-mode ratio is
 / 0.5 per sym and 0.5 overall, and the collapse identity is checkable by eye.
+/ One buy, and the mid quotes around it at the trade and 1s and 10s after.
+/ .
+/ The MID-quote shape (sym/time/mid) that markout_at_horizons takes, which is
+/ not the book shape (ts/bid_prices/...) the forwards functions take. The @eg
+/ for markout_at_horizons binds these as `markout_trades` and `mid_quotes`
+/ rather than `trades` and `quotes` for exactly that reason: `quotes` already
+/ names the book-shaped table in the other examples, and one name for two
+/ shapes is how an example stops running.
+mk_markout_trades:{[]
+    ([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; side:enlist 1;
+        trade_price:enlist 1.1000; pip_factor:enlist 10000)}
+
+mk_mid_quotes:{[]
+    ([] sym:`EURUSD`EURUSD`EURUSD;
+        time:2024.01.01D09:00:00.000000000 2024.01.01D09:00:01.000000000 2024.01.01D09:00:10.000000000;
+        mid:1.1000 1.1010 1.1005)}
+
 mk_requests:{[]
     ([] ts:2026.09.15D10:00:00.000000000 2026.09.15D10:30:00.000000000 2026.09.15D11:00:00.000000000 2026.09.15D11:30:00.000000000;
         sym:`EURUSD`EURUSD`GBPUSD`GBPUSD;
@@ -27,8 +44,8 @@ test_markout_side_flip_is_negation:{[t]
     .testutil.assertApprox[sell_side;neg buy_side;1e-9;"flipping side negates markout for the same prices"]};
 
 test_markout_at_horizons_known_values:{[t]
-    trades:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; side:enlist 1; trade_price:enlist 1.1000; pip_factor:enlist 10000);
-    quotes:([] sym:`EURUSD`EURUSD`EURUSD; time:2024.01.01D09:00:00.000000000 2024.01.01D09:00:01.000000000 2024.01.01D09:00:10.000000000; mid:1.1000 1.1010 1.1005);
+    trades:mk_markout_trades[];
+    quotes:mk_mid_quotes[];
     r:.qexec.markout_at_horizons[trades;quotes;0D00:00:01 0D00:00:10];
     .qunit.assertEquals[count r;2;"one row per (trade,horizon) pair"];
     .testutil.assertApprox[r[`ref_price] 0;1.1010;1e-9;"1s horizon finds the quote at exactly +1s"];

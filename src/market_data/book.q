@@ -105,9 +105,22 @@ derive_level_groups:{[col_names;prefix_targets]
 / @param tbl the table (already relevelled, if applicable)
 / @param sym_cols explicit list of column names to cast to symbol
 / @return tbl with sym_cols cast to symbol
-/ @eg .qbook.symbolize_columns[tbl;`sym`side]
+/ @throws error naming any column in sym_cols that tbl does not have
+/ @eg .qbook.symbolize_columns[tbl;enlist `sym]
 symbolize_columns:{[tbl;sym_cols]
     sym_cols:sym_cols,();
+    / Refuse an absent column BY NAME. q does not agree with itself about
+    / what indexing a missing column gives: on a plain table built from a
+    / literal it is an empty float vector, so the cast threw a bare 'type
+    / that named nothing; on the table fold_level_columns returns it is a
+    / list of empty strings, so the assignment silently did NOTHING and
+    / book_from_wide_levels handed back a table without the column it had
+    / been asked to cast. Found by running this file's own @eg examples,
+    / which passed `side to a table that has none.
+    missing:sym_cols where not sym_cols in cols tbl;
+    if[count missing;
+        '"symbolize_columns: no such column(s) ",(", " sv string missing),
+         " - have ",", " sv string cols tbl];
     i:0;
     while[i<count sym_cols;
         col:sym_cols i;
@@ -156,7 +169,7 @@ candidate_symbol_columns:{[tbl;allowlist;cardinality_ratio]
 /   resolved - run derive_level_groups first, or build it by hand)
 / @param sym_cols explicit list of column names to cast string->symbol
 / @return the corrected table
-/ @eg .qbook.book_from_wide_levels[tbl;.qbook.derive_level_groups[cols tbl;prefix_targets];`sym`side]
+/ @eg .qbook.book_from_wide_levels[tbl;.qbook.derive_level_groups[cols tbl;prefix_targets];enlist `sym]
 book_from_wide_levels:{[tbl;level_groups;sym_cols]
     folded:fold_level_columns[tbl;level_groups];
     symbolize_columns[folded;sym_cols]};

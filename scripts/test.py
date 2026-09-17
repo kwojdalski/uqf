@@ -16,6 +16,8 @@ between them:
                        beyond a temp status directory. Fast, hermetic, and
                        the only lane the commit hook runs.
   q-metatables-hdb     metatable queries against a temporary partitioned HDB.
+  q-examples           every documented @eg runs, in its own process, since
+                       many examples change state.
   q-backfill-process   the bounded lifecycle end to end - locks, resumption
                        and coverage - which needs a real filesystem and real
                        child processes to be worth anything.
@@ -115,6 +117,14 @@ def lane_q_metatables_hdb() -> None:
         _q("q-metatables-hdb", "tests/q/run_metatables_hdb.q", hdb)
 
 
+def lane_q_examples() -> None:
+    _banner("q-examples: every documented @eg runs")
+    # Its own process and its own status directory: examples stage coverage,
+    # take locks and open runs, and none of that may leak into another lane.
+    with tempfile.TemporaryDirectory() as statusdir:
+        _q("q-examples", "tests/q/run_examples.q", env={"UQFSTATUSDIR": statusdir})
+
+
 def lane_python() -> None:
     _banner("python: orchestrator and frontend")
     _run("python", ["uv", "run", "pytest", "-q"])
@@ -170,6 +180,7 @@ LANES: dict[str, Callable[[], None]] = {
     "q-unit": lane_q_unit,
     "q-metatables-hdb": lane_q_metatables_hdb,
     "q-backfill-process": lane_q_backfill_process,
+    "q-examples": lane_q_examples,
     "python": lane_python,
     "coverage": lane_coverage,
     "smoke": lane_smoke,
@@ -178,7 +189,7 @@ LANES: dict[str, Callable[[], None]] = {
 #: `all` is every lane except smoke (ETL-20) and coverage - coverage runs the
 #: q suite a second time under instrumentation, which is worth asking for and
 #: not worth paying for on every release run.
-ALL = ["q-unit", "q-backfill-process", "q-metatables-hdb", "python"]
+ALL = ["q-unit", "q-examples", "q-backfill-process", "q-metatables-hdb", "python"]
 
 EPILOG = """\
 ETL-21: run the lane matching the layer you changed. `all` is for a release,

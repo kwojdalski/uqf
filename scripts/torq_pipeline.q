@@ -170,9 +170,10 @@ drain:{[tblname;mask]
 / @param tblname the buffer table's fully-qualified name
 / @param mask the boolean vector already used to read the batch
 / @return the number of rows removed
+/ The pattern: compute the mask once, read the batch with it, publish the
+/ batch, and only then evict with that same mask.
 / @eg mask:.markout.pending_trades[`time]<=cutoff;
 /   ready:.markout.pending_trades where mask;
-/   / ... publish ready ...
 /   .qpipe.evict[`.markout.pending_trades;mask]
 evict:{[tblname;mask]
     buffer:get tblname;

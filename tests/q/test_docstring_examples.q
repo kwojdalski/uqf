@@ -42,7 +42,10 @@
 / unrealized_pnl documented 6000 where it returns 6000f; `b` named three
 / different books in one file; `requests` named two different shapes in
 / another; and one example priced a currency pair no fixture in this tree
-/ carries. Of 116 assertions, 105 are now executed and compared.
+/ carries. Of 116 assertions, 105 were then executed and compared.
+/ .
+/ The examples stating NO value are run too now, by tests/q/run_examples.q in
+/ a separate process - see that file for why it cannot be a test here.
 / .
 / The remaining 11 state PROSE rather than a value ("one overall count-mode
 / ratio"). They are counted as prose rather than quietly passed, so a value
@@ -90,24 +93,111 @@ bind_fixtures:{[]
     / assert a value now build their own book inline, so this binding serves
     / only the two that assert nothing - a book with one open position.
     `b set .qpos.apply_fill[.qpos.empty_book[];`EURUSD;600000;1.1000;1];
+    / `value `b`, not `b`: inside \d .egtest a bare name resolves to
+    / .egtest.b, which does not exist. Every read of a root binding below
+    / goes through `value` for the same reason.
+    `pos set value `b;
+
+    / Every binding below serves an @eg with no `->` - one that claims no
+    / value, and so was never run by anything until tests/q/run_examples.q.
+    / Same rule as above: each comes from a builder the owning suite already
+    / uses, or from the source's own declaration. None is invented here.
+    `markout_trades set .executiontest.mk_markout_trades[];
+    `mid_quotes set .executiontest.mk_mid_quotes[];
+    `trades set .positionstest.mk_trades[];
+    `broker_book set .qpos.apply_fills[.qpos.empty_book[];value `trades];
+    books:.forwardstest.mk_books[];
+    `eurusd_book set books`eurusd;
+    `usdjpy_book set books`usdjpy;
+    `jpychf_book set books`jpychf;
+    `t0 set min exec ts from `quotes;
+    `t1 set max exec ts from `quotes;
+    `tbl set .booktest.wide_book_table[::];
+    `prefix_targets set .booktest.level_prefix_targets;
+    `rr set .dqcheckstest.mk_reject_ratios[];
+    `limits set ([] sym:enlist `EURUSD; limit:enlist 1000000f);
+    .metatest.setUp[::];
+    `trade set .metatest.source;
+    `spec set .qmeta.definition[`trade;`date;enlist `sym;()!()];
+    `stored set .qmeta.collect[value `spec;2026.09.01 2026.09.02];
+    / The markout pipeline's buffer, built from its OWN declaration in
+    / scripts/torq_markout_etl.q rather than a copy of it. That file cannot be
+    / loaded outside TorQ, so the one line declaring the table is read and
+    / evaluated - if the pipeline's schema changes, the examples follow it.
+    decl:first l where (l:read0 `:scripts/torq_markout_etl.q) like "pending_trades:*";
+    buffer:value -1_(1+decl?":")_decl;
+    `.markout.pending_trades set buffer upsert
+        ([] time:2026.01.01D00:00:00.000000000 2026.01.01D00:00:01.000000000;
+            sym:`EURUSD`GBPUSD; side:1 -1; trade_price:1.1 1.25;
+            size:1000000 500000f; pip_factor:10000 10000);
+    `cutoff set 2026.01.01D00:00:00.500000000;
     `bound}
 
 / Private: files to scan. `find` rather than a hardcoded list - a new module
 / is covered the day it is added, not the day someone remembers.
-sources:{[] system"find src -name '*.q' | sort"}
+/ .
+/ scripts/ as well as src/. Its examples document the pipeline helpers every
+/ TorQ process uses, and scanning src/ alone left thirteen of them unseen -
+/ including four, added this same month, that named functions which did not
+/ exist.
+sources:{[] system"find src scripts -name '*.q' | sort"}
 
-/ Private: (file;line;expr;expected) for every @eg carrying a `->`.
+/ Private: is this line an @eg TAG, rather than prose that mentions one?
+/ .
+/ The first version matched "*@eg*" anywhere, and so read a sentence in
+/ data.q - "...while their own @eg named `pqModule`." - as an example whose
+/ code was "named `pqModule`.", which of course threw.
+is_tag:{[l] (trim l) like "/ @eg *"}
+
+/ Private: does this line continue the example above it?
+/ .
+/ A continuation is a comment indented by two or more spaces. Examples run
+/ across lines - a status write with a spec and a progress dictionary, a log
+/ call with its fields - and reading the tag line alone cut each of them off
+/ mid-bracket, so they failed to parse and were reported as broken examples
+/ when they were only half-read ones.
+is_continuation:{[l]
+    t:trim l;
+    $[3>count t; 0b; ("/"=t 0) and ("  "~t 1 2) and 0<count trim 1_t]}
+
+/ Private: (file;line;expr;expected) for every @eg. `expected` is "" when the
+/ example states no value.
 extract:{[f]
     ls:read0 hsym `$f;
-    idx:where (ls like "*@eg*") and ls like "*->*";
     {[f;ls;i]
-        l:ls i;
-        after:(1+first[ss[l;"@eg"]]+2)_l;
-        p:first ss[after;"->"];
-        (f;i+1;trim p#after;trim (p+2)_after)
-      }[f;ls] each idx}
+        n:count ls; j:i+1; parts:enlist 5_trim ls i;
+        while[(j<n) and is_continuation ls j; parts,:enlist trim 1_trim ls j; j+:1];
+        txt:trim " " sv parts;
+        p:first ss[txt;"->"];
+        (f;i+1;trim $[null p; txt; p#txt];$[null p; ""; trim (p+2)_txt])
+      }[f;ls] each where is_tag each ls}
 
-assertions:{[] raze extract each sources[]}
+/ Every documented example, whether or not it states a value.
+examples:{[] raze extract each sources[]}
+
+/ The examples that state a value, which this suite compares.
+assertions:{[] e:examples[]; e where 0<count each e[;3]}
+
+/ Examples that cannot run in a test process, and why.
+/ .
+/ A short list on purpose, and every entry is policed from both sides by
+/ tests/q/run_examples.q: an entry whose example has gone is stale, and an
+/ entry whose example now RUNS no longer needs its excuse. So nothing lands
+/ here to make a failure go away - only something that needs a live
+/ tickerplant, a TorQ process, a licensed driver or downloaded market data,
+/ none of which a test process has.
+needs_live:([] expr:(
+        ".qpipe.publish[h;`execution_quality;out]";
+        ".qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
+        ".qpipe.safe_timer[`markout;0D00:00:01.000;`process_ready;\"Score markouts\"]";
+        ".qodbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
+        ".qdata.getBySymbolDate[`AAPL;2026.02.25]");
+    reason:(
+        "sends .u.upd over a tickerplant handle";
+        "sends .u.upd over a tickerplant handle";
+        "registers a TorQ timer, which needs .timer and .proc from a TorQ process";
+        "opens an ODBC connection, which needs a licensed driver this tree does not require (bank E-04)";
+        "opens a Databento parquet file, which exists only where that data has been downloaded"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".
 / Both forms are tried by classify below rather than only the stripped one,
@@ -130,6 +220,10 @@ matches:{[actual;txt]
 
 / Private: `pass, `mismatch, `prose or `error for one assertion.
 classify:{[r]
+    / `-> throws` documents a refusal, which passes only by refusing. Without
+    / this the text "throws" was scored as prose, so an example documenting
+    / a guard went on passing after the guard itself was deleted.
+    if[(r 3) like "throws*"; :$[first @[{(1b;value x)};r 2;{(0b;x)}]; `mismatch; `pass]];
     ev:@[{(1b;value x)};r 2;{(0b;x)}];
     if[not ev 0; :`error];
     forms:distinct (r 3; strip_gloss r 3);
@@ -198,6 +292,42 @@ test_assertions_are_found_at_all:{[t]
     / changed, every test above would pass over an empty list.
     .qunit.assertTrue[100<=count assertions[];
         "the scan finds the documented examples rather than silently nothing"]};
+
+/ --- the scanner itself --------------------------------------------------
+
+/ The first version matched "*@eg*" anywhere on a line, so this sentence in
+/ data.q - "...while their own @eg named `pqModule`." - became an example
+/ whose code was "named `pqModule`.".
+test_prose_mentioning_eg_is_not_an_example:{[t]
+    .qunit.assertEquals[is_tag "/ while their own @eg named `pqModule`.";0b;"prose is not a tag"];
+    .qunit.assertEquals[is_tag "/ @eg .qfwd.fwd_cont[1.1;0.02;0.01;0.5]";1b;"the tag is"]};
+
+/ Reading the tag line alone cut multi-line examples off mid-bracket, so
+/ they failed to parse and were reported as broken rather than half-read.
+test_a_multi_line_example_is_read_whole:{[t]
+    f:"build/test-status/eg_probe.q";
+    system"mkdir -p build/test-status";
+    (hsym `$f) 0: ("/ @eg .qlog.info[`w;\"msg\";";"/        `a`b!(1;2)]";"/ @return nothing";"f:{[] 1}");
+    r:first extract f;
+    .qunit.assertEquals[r 2;".qlog.info[`w;\"msg\"; `a`b!(1;2)]";"both lines, joined, and nothing after"]};
+
+test_a_tag_line_is_not_a_continuation:{[t]
+    .qunit.assertEquals[is_continuation "/ @return the total";0b;"a following tag ends the example"];
+    .qunit.assertEquals[is_continuation "/ .";0b;"a paragraph break ends it"];
+    .qunit.assertEquals[is_continuation "/   ready:x where mask;";1b;"an indented comment continues it"]};
+
+/ `-> throws` documents a refusal. It was scored as prose, so an example
+/ documenting a guard went on passing after the guard was deleted.
+test_a_documented_throw_passes_only_by_throwing:{[t]
+    .qunit.assertEquals[classify ("f";1;"'\"boom\"";"throws");`pass;"it threw, as documented"];
+    .qunit.assertEquals[classify ("f";1;"1+1";"throws");`mismatch;"it did not, which is now a failure"]};
+
+/ Every allowance has to name an example that exists - the full two-sided
+/ check (listed but runs) needs a separate process, in run_examples.q.
+test_every_needs_live_entry_names_a_real_example:{[t]
+    ex:examples[][;2];
+    .qunit.assertEquals[(needs_live`expr) where not (needs_live`expr) in ex;();
+        "no allowance outlives the example it excused"]};
 
 test_the_checker_rejects_a_wrong_value:{[t]
     / A checker nobody has seen say no might be saying yes to everything.

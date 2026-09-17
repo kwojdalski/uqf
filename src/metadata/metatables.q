@@ -86,7 +86,7 @@ collect:{[spec;partitions]
 / @param partitions explicit slices to recompute
 / @return replacement metatable; other partitions retain their original observations
 / @throws source/query failure or incompatible stored schema, leaving current untouched
-/ @eg refreshed:.qmeta.refresh[stored;spec;enlist 2026.09.01]
+/ @eg .qmeta.refresh[stored;spec;enlist 2026.09.01]
 refresh:{[current;spec;partitions]
     if[not 98h=type current;'"metatables: current must be an unkeyed table"];
     replacement:collect[spec;partitions];

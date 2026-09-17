@@ -49,7 +49,7 @@ ns_names:{[ns] @[{key x};ns;`symbol$()]}
 / @param worker the worker's name, e.g. `markout_backfill
 / @param ns the namespace symbol holding its implementation, e.g. `.qmarkbf
 / @return the worker name
-/ @eg .qbfstate.register[`markout_backfill;`.qmarkbf]
+/ @eg .qbfstate.register[`demo_deals_backfill;`.qddbf]
 register:{[worker;ns]
     bounded_workers[worker]:ns;
     worker}
@@ -72,7 +72,7 @@ registered:{[] key bounded_workers}
 / @return the worker name, so it can be used inline in an init chain
 / @throws error if the worker is unregistered, its namespace is absent, or
 /   any contract method or global is missing
-/ @eg .qbfstate.require_contract[`markout_backfill]
+/ @eg .qbfstate.require_contract[`demo_deals_backfill]
 require_contract:{[worker]
     if[not worker in key bounded_workers;
         '"require_contract: ",string[worker]," is not registered - call .qbfstate.register first"];

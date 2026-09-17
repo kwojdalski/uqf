@@ -142,6 +142,9 @@ repos:
               exit 1
             fi
             "$QBIN" tests/run_tests.q
+            # Every @eg, including those stating no value. Its own status
+            # directory, because examples take locks and write status files.
+            UQFSTATUSDIR="$(mktemp -d)" "$QBIN" tests/q/run_examples.q
         files: '\.q$'
         pass_filenames: false
 
