@@ -1,4 +1,4 @@
-"""Server-authored q programs, and the coercion that feeds them.
+r"""Server-authored q programs, and the coercion that feeds them.
 
 The whole point of this module: **the q text below is a constant written
 here, never assembled from client input.** A caller's table name, column

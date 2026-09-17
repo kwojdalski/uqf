@@ -311,7 +311,7 @@ def test_every_rule_is_registered():
     checker's own version of the bug it exists to catch.
     """
     defined = {n for n in dir(cqt) if n.startswith("rule_")}
-    registered = {r.__name__ for r in cqt.LINE_RULES + cqt.TEXT_RULES}
+    registered = {r.__name__ for r in cqt.LINE_RULES + cqt.TEXT_RULES + cqt.PYTHON_RULES}
     assert defined == registered, f"unregistered rule(s): {defined - registered}"
 
 
@@ -345,3 +345,64 @@ def test_the_type_gate_is_registered_in_the_scope_checker():
 def test_the_real_repo_is_clean():
     """The rules hold on every tracked .q file, so the hook is committable."""
     assert cqt.main() == 0
+
+
+# ------------------------------------------- q embedded in Python strings
+
+
+def _py_rule(source: str):
+    return cqt.rule_reserved_name_in_embedded_q("t.py", source)
+
+
+#: The offending column name, CONCATENATED rather than written whole.
+#:
+#: This file is itself scanned by the rule under test, so a fixture
+#: containing the literal `([] cols:...` would make the checker report its
+#: own tests - the same self-reference the rule already dodges for
+#: docstrings. Building the string at runtime means no `ast.Constant` here
+#: holds the pattern, so no exemption list is needed and the rule stays
+#: honest about what it finds.
+_BAD_COL = "col" + "s"
+
+
+def test_a_builtin_as_a_column_name_in_an_embedded_literal_is_flagged():
+    # The exact shape that shipped in `uqf-stack schema` and threw 'assign
+    # against a live process. `cols` was already in RISKY_PARAM_NAMES; no
+    # rule was looking in Python.
+    source = 'expr = "([] name:string tables `; ' + _BAD_COL + ':count each x)"\n'
+    found = _py_rule(source)
+    assert len(found) == 1
+    assert _BAD_COL in found[0].detail
+
+
+def test_a_builtin_READ_inside_an_expression_is_not_flagged():
+    # `count each cols each tables` uses the builtins as the functions they
+    # are, which is correct and common. Flagging it would make the rule
+    # useless, so only the column-name position counts.
+    assert _py_rule('expr = "([] n:count each cols each tables `)"\n') == []
+
+
+def test_a_docstring_is_not_scanned():
+    # A docstring is prose ABOUT code, not code that reaches q - and the
+    # rule's own docstring quotes the bad expression, so without this the
+    # checker reports itself.
+    source = '"""Example: ([] ' + _BAD_COL + ':1 2 3) is wrong."""\n'
+    assert _py_rule(source) == []
+
+
+def test_a_safe_column_name_passes():
+    safe = 'expr = "([] name:string tables `; ncols:count each cols each tables `)"\n'
+    assert _py_rule(safe) == []
+
+
+def test_a_string_without_a_table_literal_is_ignored():
+    # Deliberately conservative: only `([]` marks a string as embedded q. A
+    # broader heuristic would start firing on English prose, and a gate that
+    # cries wolf gets switched off rather than fixed.
+    assert _py_rule('msg = "the value: something, count: 3"\n') == []
+
+
+def test_unparseable_python_is_not_this_rule_s_problem():
+    # ruff already reports a syntax error; this rule returning findings for
+    # one would be noise attached to the wrong tool.
+    assert _py_rule("def (\n") == []
