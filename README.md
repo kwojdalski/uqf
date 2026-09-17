@@ -171,6 +171,15 @@ throughout rather than nested under a shared parent (e.g. not
 convention the tree keeps: the filename-to-namespace tie is what the naming
 auditor checks and what `docs/man.q`'s registry is generated against.
 
+The one exception, added deliberately: **bounded-worker instances nest under
+one `.qwrk` root** — `.qwrk.demo_deals_backfill`, `.qwrk.upstream_trades_backfill`.
+A worker is an instance of a shape the framework defines, not a module of
+its own, and `.qbw.define` derives the namespace from the worker's
+registered name, so there is no second name to invent or keep in step.
+Library modules stay flat. `src/namespaces.q` (`.qns`) is the one
+enumeration that knows about the nesting; any tool listing namespaces goes
+through it rather than scanning the root for a `q` prefix.
+
 Every module has a matching
 test file, and every function carries a [qDoc](#documentation) block with
 `@param`/`@return`/`@eg` — those are the per-function reference, so the

@@ -1,5 +1,5 @@
 / databento_book_backfill.q - Databento MBP-10 into an order-book table
-/ (.qdbnbf).
+/ (.qwrk.databento_book_backfill).
 / .
 / A declaration over the generic shell (#124), over the first ODBC source.
 / Its transform is the first in this tree that changes the shape of what it
@@ -11,7 +11,7 @@
 / under Rosetta; a wider window makes a failed window expensive to redo and
 / holds more of the book in memory at once.
 
-\d .qdbnbf
+\d .qwrk.databento_book_backfill
 
 worker_name:`databento_book_backfill
 
@@ -61,7 +61,7 @@ fold:{[batch;prefix] flip batch `$prefix,/:.qsdbn.levels}
 / @param batch MBP-10 records in the source contract's shape
 / @return one book row per record
 to_book:{[batch]
-    if[0=count batch; :.qdbnbf.book];
+    if[0=count batch; :.qwrk.databento_book_backfill.book];
     ([] time:batch`ts_event; sym:batch`symbol; action:batch`action; side:batch`side;
         price:batch`price; size:batch`size; sequence:batch`sequence;
         bid_prices:fold[batch;"bid_px_"]; bid_sizes:fold[batch;"bid_sz_"];
@@ -109,5 +109,5 @@ quality_check:{[batch]
 \d .
 
 .qbw.define[`databento_book_backfill;
-    `ns`source`dataset`width`transform`check!
-    (`.qdbnbf;`databento_mbp10;`databento_book;0D00:10:00;`databento_book;.qdbnbf.quality_check)];
+    `source`dataset`width`transform`check!
+    (`databento_mbp10;`databento_book;0D00:10:00;`databento_book;.qwrk.databento_book_backfill.quality_check)];

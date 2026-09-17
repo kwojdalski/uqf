@@ -89,9 +89,9 @@ check["and some zero-size rows for the transform to drop, or that rule is untest
 / --- move two hours of trades across --------------------------------------
 
 from_ts:2015.01.07D09:00:00; to_ts:2015.01.07D11:00:00;
-.qupbf.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
-check["init opened a live handle rather than falling back to the fixture";not null .qupbf.handle];
-r:.qupbf.run[];
+.qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
+check["init opened a live handle rather than falling back to the fixture";not null .qwrk.upstream_trades_backfill.handle];
+r:.qwrk.upstream_trades_backfill.run[];
 check["the run completed";`completed~r`state];
 check["two one-hour windows";2=r`windows_completed];
 check["no window failed";0=r`windows_failed];
@@ -103,33 +103,33 @@ check["no zero-size trade was imported";all (exec size from imported_trades)>0];
 check["no side other than 1 or -1 came through";all (exec side from imported_trades) in 1 -1];
 check["coverage records the range as complete";
     .qcov.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
-.qupbf.cleanup[];
+.qwrk.upstream_trades_backfill.cleanup[];
 
 / --- a second run is idle, and moves nothing twice -------------------------
 
-.qupbf.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
-r2:.qupbf.run[];
+.qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
+r2:.qwrk.upstream_trades_backfill.run[];
 check["a second run over a covered range is idle";`idle~r2`state];
 check["and publishes nothing further";expected_rows=count imported_trades];
-.qupbf.cleanup[];
+.qwrk.upstream_trades_backfill.cleanup[];
 
 / --- a restatement withdraws one hour, and only that hour is re-fetched ----
 
 n_withdrawn:.qcov.supersede[`imported_trades;`;`v1;2015.01.07D10:00:00;to_ts];
 -1 "  supersede withdrew ",string[n_withdrawn]," claim(s); missing now: ",.Q.s1 .qcov.missing[`imported_trades;`;`v1;.z.p;from_ts;to_ts];
-.qupbf.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
-r3:.qupbf.run[];
+.qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
+r3:.qwrk.upstream_trades_backfill.run[];
 -1 "  re-run: state ",string[r3`state],", windows ",string[r3`windows_completed],", cursor ",string r3`cursor;
 check["after superseding one window, exactly one window is re-run";1=r3`windows_completed];
 check["the range reads as covered again";.qcov.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
-.qupbf.cleanup[];
+.qwrk.upstream_trades_backfill.cleanup[];
 
 / --- an unreachable upstream is refused, not silently substituted ---------
 
 stop_upstream pid;
 system"sleep 0.3";
 setenv[`UQF_SOURCE_CRED_UPSTREAM_TRADES;"localhost:",string port];
-err:@[{[a;b] .qupbf.init[`source_version`range_from`range_to!(`v1;a;b)]; ""}[from_ts];to_ts;{x}];
+err:@[{[a;b] .qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;a;b)]; ""}[from_ts];to_ts;{x}];
 check["with the upstream gone, init refuses rather than using the fixture";err like "*cannot reach*"];
 check["the refusal says what it is refusing to do";err like "*refusing to start*"];
 / init acquired the single-instance lock before it tried to connect, so it

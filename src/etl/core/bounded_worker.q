@@ -35,10 +35,11 @@
 
 \d .qbw
 
-/ worker -> its configuration. `ns` is the worker's namespace symbol,
-/ `source` its registered .qsrc source, `dataset` the name coverage is
-/ recorded under, `width` its window size, `transform` the registered .qxf
-/ transform its rows go through between fetch and publish.
+/ worker -> its configuration. `source` is the worker's registered .qsrc
+/ source, `dataset` the name coverage is recorded under, `width` its window
+/ size, `transform` the registered .qxf transform its rows go through
+/ between fetch and publish, and `ns` its namespace - DERIVED by define,
+/ never supplied: see worker_root.
 / .
 / Named `worker_cfg`, not `cfg`: `cfg` is the LOCAL in define, init, plan,
 / fetch and publish, and a q local shadows a namespace global of the same
@@ -52,7 +53,29 @@ worker_cfg:(`symbol$())!();
 / worker that publishes what it fetched says so by declaring a pass-through
 / transform, with examples - which makes "this job changes nothing" a tested
 / claim rather than an absence nobody decided.
-required_cfg:`ns`source`dataset`width`transform
+required_cfg:`source`dataset`width`transform
+
+/ Every worker instance lives under this one namespace, as
+/ .qwrk.<worker>: .qwrk.demo_deals_backfill, .qwrk.upstream_trades_backfill.
+/ .
+/ The library's own modules are flat by convention (N-01: one file, one
+/ `\d .q<abbrev>`), and workers used to follow suit - .qddbf, .qevbf,
+/ .qupbf, .qdbnbf - which put four instances of one shape beside .qbw,
+/ .qcov and .qsrc as if they were four more frameworks, and made each
+/ instance's namespace a second name to invent, spell and keep in step with
+/ the worker's registered name. Nesting them under one root separates
+/ "the framework" from "what runs on it", lets `key `.qwrk` list every
+/ loaded worker, and means a worker has exactly ONE name: define derives
+/ the namespace from it, so there is nothing to keep in step.
+worker_root:`.qwrk
+
+/ The namespace a worker's implementation lives in. The single spelling of
+/ the `.qwrk.<worker>` rule; every caller that needs the namespace goes
+/ through here or through the `ns` key define stores from it.
+/ @param worker the worker's name
+/ @return the namespace symbol, e.g. `.qwrk.demo_deals_backfill
+/ @eg .qbw.namespace `demo_deals_backfill  ->  `.qwrk.demo_deals_backfill
+namespace:{[worker] ` sv worker_root,worker}
 
 / The partition every worker fills when it does not declare one.
 / .
@@ -95,14 +118,21 @@ optional_cfg:`check`io`facts`partition
 / and the opposite of .qbfstate.register, whose methods appear as a file
 / loads.
 / @param worker the worker's name
-/ @param cfg dict of ns, source, dataset, width
+/ @param cfg dict of source, dataset, width, transform, and optionally
+/   check, facts, partition, io
 / @throws error naming every missing or malformed field at once
 define:{[worker;cfg]
     missing:required_cfg where not required_cfg in key cfg;
     if[count missing;
         '"define: ",string[worker]," is missing ",", " sv string missing];
-    if[not -11h=type cfg`ns;
-        '"define: ",string[worker],"'s ns must be a namespace symbol such as `.qddbf"];
+    / The namespace is not configurable, and a supplied one is refused rather
+    / than overwritten: a worker declared with `ns`.qddbf would be looked
+    / for under .qwrk.demo_deals_backfill regardless, and the author would
+    / learn that from a contract failure at init naming twelve missing
+    / methods rather than from define naming the key.
+    if[`ns in key cfg;
+        '"define: ",string[worker],"'s namespace is derived - .qwrk.",string[worker]," - not configured; drop the ns key"];
+    cfg[`ns]:namespace worker;
     if[not 16h=abs type cfg`width;
         '"define: ",string[worker],"'s width must be a timespan, e.g. 1D"];
     if[not (cfg`width)>0D00:00;
@@ -198,7 +228,8 @@ normalised:{[cfg]
 / Throws rather than returning a null for the same reason .qsrc.declaration
 / does: a caller handed an empty dict fails later and somewhere else.
 / @param worker the defined worker's name, as a symbol
-/ @return the config dict (ns, source, dataset, width)
+/ @return the config dict (source, dataset, width, transform, partition,
+/   and the derived ns)
 / @throws error naming the worker when define was never called for it
 / @eg .qbw.declaration `demo_deals_backfill
 declaration:{[worker]

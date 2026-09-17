@@ -131,12 +131,14 @@ before the first read that would depend on it:
   column distinguishes, and a range covered for one value of it would report
   as covered for all.
 - `.qbw.advanced_to` refuses a cursor that would stand still or move
-  backwards, because `plan` uses the cursor as its *lower* bound — a window
-  processed out of order pushes the cursor past windows still uncovered, and
-  the next run never comes back for them.
-- `.qbw.define` refuses two workers declaring the same dataset, because
-  coverage has no partition dimension and their rows would be
-  indistinguishable.
+  backwards, because a run's progress cursor is what tells a stuck run from
+  a finished one. (It used to be `plan`'s lower bound as well, which made a
+  restatement behind the cursor unreachable; coverage decides what to plan
+  now, and the cursor tracks progress within a run.)
+- `.qbw.define` refuses two workers declaring the same dataset *and*
+  partition, because their coverage rows would then be indistinguishable,
+  and refuses a worker that supplies its own `ns`, because the namespace is
+  derived from the worker's name — `.qwrk.<worker name>`.
 - `.qcov.require_interval` refuses a zero-width or reversed window, because
   recording one claims completeness for no data.
 

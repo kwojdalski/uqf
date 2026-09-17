@@ -1,4 +1,4 @@
-/ demo_events_backfill.q - the event-tape bounded worker (.qevbf).
+/ demo_events_backfill.q - the event-tape bounded worker (.qwrk.demo_events_backfill).
 / .
 / A declaration over the generic shell (#124). This is the file that made
 / #124 worth doing: written against the old copy-the-glue pattern it would
@@ -10,7 +10,7 @@
 / work to a day of deals, and a window that takes an hour of wall-clock to
 / fetch is a window whose failure costs an hour.
 
-\d .qevbf
+\d .qwrk.demo_events_backfill
 
 worker_name:`demo_events_backfill
 
@@ -80,5 +80,5 @@ cleanup:{[] .qbw.cleanup worker_name}
 .qxf.passthrough[`demo_events_passthrough;`batch;0#.qsevt.fixture[];.qsevt.fixture[]];
 
 .qbw.define[`demo_events_backfill;
-    `ns`source`dataset`width`transform`facts!
-        (`.qevbf;`demo_events;`event_tape;0D01:00:00;`demo_events_passthrough;.qevbf.facts)];
+    `source`dataset`width`transform`facts!
+        (`demo_events;`event_tape;0D01:00:00;`demo_events_passthrough;.qwrk.demo_events_backfill.facts)];

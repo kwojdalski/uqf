@@ -20,6 +20,13 @@
 //      learns the file->namespace mapping from the list above or README's
 //      table; it is not derivable from the path.
 //
+//      The ETL tree (src/etl/, loaded separately) makes ONE deliberate
+//      exception: bounded-worker instances nest under a single .qwrk root,
+//      .qwrk.<worker name>, derived by .qbw.define. They are instances of
+//      one shape rather than modules. src/namespaces.q (.qns) is the one
+//      enumeration that knows this, and every tool that lists namespaces
+//      goes through it.
+//
 //   2. The directories do NOT imply a dependency layering, and it would be
 //      wrong to assume one. The module graph is not acyclic:
 //        pricing/forwards.q   -> .qexec.sweep_price, .qexec.markout
@@ -53,3 +60,4 @@
 \l src/examples/example_defaults.q
 
 \l src/metadata/metatables.q
+\l src/namespaces.q

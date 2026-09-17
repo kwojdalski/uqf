@@ -1,5 +1,5 @@
 / upstream_trades_backfill.q - moves trades from another kdb+ process into
-/ this one (.qupbf).
+/ this one (.qwrk.upstream_trades_backfill).
 / .
 / The first worker in this tree whose source is a kdb+ instance rather than
 / an analogue of a relational system, and therefore the first whose LIVE path
@@ -17,7 +17,7 @@
 / and .qxf runs the transform's own example on every build so the mapping
 / is a tested claim rather than a comment.
 
-\d .qupbf
+\d .qwrk.upstream_trades_backfill
 
 worker_name:`upstream_trades_backfill
 
@@ -44,7 +44,7 @@ cleanup:{[] .qbw.cleanup worker_name}
 / @param batch the transformed rows, before publication
 / @return a table check/status/detail, one row per failing condition; empty
 /   means the batch passed
-/ @eg .qupbf.quality_check[([] time:enlist .z.p; sym:enlist `AAPL; venue:enlist `N; price:enlist 28.73; size:enlist 41; side:enlist 1)]  ->  an empty table
+/ @eg .qwrk.upstream_trades_backfill.quality_check[([] time:enlist .z.p; sym:enlist `AAPL; venue:enlist `N; price:enlist 28.73; size:enlist 41; side:enlist 1)]  ->  an empty table
 quality_check:{[batch]
     if[0=count batch; :.qbw.no_failures[]];
     bad:select from batch where (not price>0) or not size>0;
@@ -62,7 +62,7 @@ quality_check:{[batch]
 / hand to facts. Stated so nobody reads "facts" as a drop count.
 / @param batch the transformed rows of one window
 / @return a dict of symbol labels to values, recorded against the window
-/ @eg .qupbf.facts[0#.qsup.fixture[]]  ->  (enlist `span)!enlist "empty window"
+/ @eg .qwrk.upstream_trades_backfill.facts[0#.qsup.fixture[]]  ->  (enlist `span)!enlist "empty window"
 facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
     `span`symbols!((string min batch`time),"/",string max batch`time; count distinct batch`sym)}
@@ -111,6 +111,6 @@ facts:{[batch]
 / day is a dozen windows and a partial run leaves something visible to
 / resume from.
 .qbw.define[`upstream_trades_backfill;
-    `ns`source`dataset`width`transform`check`facts!
-    (`.qupbf;`upstream_trades;`imported_trades;0D01:00:00;`upstream_trades_to_local;
-     .qupbf.quality_check;.qupbf.facts)];
+    `source`dataset`width`transform`check`facts!
+    (`upstream_trades;`imported_trades;0D01:00:00;`upstream_trades_to_local;
+     .qwrk.upstream_trades_backfill.quality_check;.qwrk.upstream_trades_backfill.facts)];

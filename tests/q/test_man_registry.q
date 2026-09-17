@@ -103,7 +103,12 @@ test_the_registry_covers_the_etl_tree:{[t]
 / definitions being invisible to the scan.
 test_documentation_coverage_does_not_regress:{[t]
     documented:exec fullname from .man.funcs;
-    nss:key `; nss:nss where (string nss) like "q*";
+    / .qns.functional, not a root-level `like "q*"` scan: worker instances
+    / live under .qwrk (.qwrk.demo_deals_backfill and so on), and a root
+    / scan sees one namespace holding no functions - so every worker's
+    / public surface would leave this count without lowering it, which is
+    / the opposite of a ratchet.
+    nss:.qns.functional[];
     / Only namespaces docs/man.q actually covers, which is src/. The first
     / version of this test counted every q-prefixed namespace in the suite
     / process and failed on scaffolding: .qunit is the vendored test
@@ -111,9 +116,8 @@ test_documentation_coverage_does_not_regress:{[t]
     / scripts/ rather than src/ (B-09). None is this library's public API, and
     / demanding qDoc blocks for them would have meant documenting the test
     / harness to satisfy a counter.
-    nss:nss except `q`qunit`qetldbl`qrefw`qpipe;
-    public:raze {[n]
-        full:` sv `,n;
+    nss:nss except `.q`.qunit`.qetldbl`.qrefw`.qpipe;
+    public:raze {[full]
         ks:key full;
         ks:ks where not ks in `;
         ks:ks where not (string ks) like "_*";

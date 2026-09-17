@@ -179,7 +179,15 @@ library with no processes/IPC/tables).
   `.qexdef` - `src/integrations/data.q` is `.qdata`, out of scope for this library, see
   below). Every one of these is single-level (not nested under a shared
   `.q` parent) by convention (N-01) - the filename-to-namespace tie is what
-  the naming auditor checks and what `docs/man.q` is generated against. A
+  the naming auditor checks and what `docs/man.q` is generated against.
+  ONE family nests, on purpose: bounded-worker INSTANCES live under a
+  single `.qwrk` root (`.qwrk.demo_deals_backfill`), because a worker is an
+  instance of the framework's shape rather than a module, and `.qbw.define`
+  derives its namespace from the registered worker name. Code that
+  enumerates namespaces must therefore go through `.qns.owned` /
+  `.qns.functional` (`src/namespaces.q`): a root-level
+  `(key `) where like "q*"` scan sees `.qwrk` as one namespace holding no
+  functions and drops every worker without saying so. A
   function calling
   another module's function must qualify it explicitly (e.g. `forwards.q`'s
   `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a
