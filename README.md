@@ -72,7 +72,7 @@ paths relative to it (e.g. `src/foundation/stats.q`).
 | **[uv](https://docs.astral.sh/uv/)** | the Python packages and every `uqf-stack` command | yes, for the fleet |
 | **`qcon`** | attaching a console to a running process: `uqf-stack raw -- qcon gateway1 admin:admin` | no - only that command |
 | **`rlwrap`** | line editing and history inside `qcon` | no - `qcon` runs without it |
-| **Node** | building and running the [browser application](#browser-application) | no - only for `web/` |
+| **Node** | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares | no - only for `web/` |
 
 `qcon` is kdb's console client. It ships with some kdb+ distributions and
 **not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q`
