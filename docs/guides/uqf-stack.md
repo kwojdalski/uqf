@@ -83,6 +83,7 @@ anyone typing `meta` at a q prompt:
 ```
 uqf-stack schema                  # every table on rdb1, with row and column counts
 uqf-stack schema quotes           # one table's columns, types and attributes
+uqf-stack schema 'crypto*'        # every table matching a pattern, one block each
 uqf-stack schema --proc hdb1      # the history instead of today
 uqf-stack schema --port 6052      # a port directly, skipping --proc resolution
 ```
@@ -110,6 +111,12 @@ Row counts are shown because "declared but empty" and "carrying data" is
 usually the thing being looked for, and empty tables are named explicitly
 rather than left to be spotted.
 
+The table argument is a shell-style pattern (`crypto*`, `*trade*`), matched
+case-sensitively against the names the process reported. An exact name is
+just a pattern that matches itself, so there is one behaviour rather than
+two - quote the pattern, or the shell will try to expand it against your
+filenames first.
+
 ## Commands
 
 ```
@@ -120,7 +127,8 @@ summary [--port N] [--export FILE]    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/uqf-stack/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
-schema [TABLE] [--proc P] [--export FILE]  tables in a running process, or one table's columns
+schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
+                                      columns of every table matching a pattern
 list [KIND] [--port N] [--export FILE]  list every item of KIND ('processes', 'fields',
                                        'overrides', 'env') - no argument shows the kinds
 config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective

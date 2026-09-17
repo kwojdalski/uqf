@@ -1,6 +1,6 @@
 ---
 name: docs-writer
-description: Write a new documentation file for the component or topic given in $ARGUMENTS. Classifies the topic type (pricing formula, workflow, component, or guide), reads source files, and writes structured documentation to docs/<slug>.md with appropriate templates and cross-links.
+description: Write a NEW documentation file for the component or topic given in $ARGUMENTS. Classifies the topic type (pricing formula, workflow, component, or guide), reads source files, and writes structured documentation into the directory docs/README.md's taxonomy assigns it — guides/, architecture/, reference/ or integrations/ — with appropriate templates and cross-links. For CHANGING a document that already exists, use the `docs-maintainer` agent instead: it carries the maintainer's accumulated corrections in .claude/docs-preferences.md.
 ---
 
 # Documentation Writer
@@ -35,7 +35,7 @@ Before writing any documentation:
 ## Step 1 — Determine output path
 
 - If `$ARGUMENTS` includes a subdirectory (e.g., "docs/guides/setup.md"), use that path
-- Otherwise, output to `docs/<slug>.md` where `<slug>` is a kebab-case version of the topic name
+- Otherwise, output to `the directory docs/README.md's taxonomy assigns` where `<slug>` is a kebab-case version of the topic name
 
 ## Step 2 — Write using the appropriate template
 

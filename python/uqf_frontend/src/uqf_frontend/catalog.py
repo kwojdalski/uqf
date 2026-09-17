@@ -8,9 +8,30 @@ interpolated into query text, so the only things a caller can influence are
 sent. Values never enter query text at all; they travel as typed IPC
 arguments (see queries.py).
 
-Column types come from the generated `database.q` definitions in
-torq_orchestrator.core. test_catalog.py cross-checks them against those
-schema strings so this file cannot silently drift.
+**The catalog itself is data, and lives in `python/uqf_frontend/catalog/`
+as two CSVs** - `tables.csv` (name, description) and `columns.csv` (table,
+column, type). This module reads them; it does not contain them.
+
+They were 229 lines of Python literals until they were not. Three reasons
+they moved: `test_catalog_drift.py` holds this catalog against the q-side
+table definitions and had to parse Python source with a regex to do it,
+which quietly constrained how this file could be formatted; column
+descriptions are editorial text a non-Python reader should be able to edit;
+and nothing here needs to be executable.
+
+CSV rather than YAML because the descriptions are single-line, so CSV costs
+nothing in readability - and PyYAML is present in this environment only as
+somebody else's transitive dependency, which is not a thing to build a
+security boundary on. The contract surface made the same call (JSON to CSV,
+4,911 lines to 677).
+
+`filterable` is still DERIVED here rather than stored: it is exactly "every
+column whose type is not LIST", and writing it down would create a second
+place for it to disagree with the types beside it.
+
+Column types are cross-checked against `scripts/uqf_stack_tables.q` by
+test_catalog_drift.py, so the catalog cannot silently drift from the q
+tables it describes.
 
 Vector-valued columns (`quotes.bid_prices` and friends) are deliberately
 listed as NOT filterable: a per-row list of level prices has no sensible
@@ -19,8 +40,10 @@ scalar comparison, and offering one would invite confusing results.
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 
 
 class QType(StrEnum):
@@ -63,156 +86,64 @@ class Table:
         )
 
 
-_TS = QType.TIMESTAMP
-_SYM = QType.SYMBOL
-_F = QType.FLOAT
-_L = QType.LONG
-_LIST = QType.LIST
-_G = QType.GUID
-_SPAN = QType.TIMESPAN
+#: Where the catalog data lives. Resolved from this module rather than a
+#: working directory, so the reader works from anywhere in the workspace.
+CATALOG_DIR = Path(__file__).resolve().parents[2] / "catalog"
 
-TABLES: dict[str, Table] = {
-    t.name: t
-    for t in (
-        Table(
-            name="trades",
-            description="Client fills, shaped to match .qpos.apply_fill and "
-            ".qexec.markout_at_horizons exactly",
-            columns={
-                "time": _TS,
-                "sym": _SYM,
-                "side": _L,
-                "trade_price": _F,
-                "size": _F,
-                "pip_factor": _L,
-            },
-        ),
-        Table(
-            name="position",
-            description="Running position book marked to the prevailing mid, with realised "
-            "and unrealised P&L",
-            columns={
-                "time": _TS,
-                "sym": _SYM,
-                "qty": _F,
-                "avg_price": _F,
-                "realized_pnl": _F,
-                "mark_price": _F,
-                "unrealized_pnl": _F,
-                "total_pnl": _F,
-            },
-        ),
-        Table(
-            name="execution_quality",
-            description="Post-trade markout per fill per horizon; a null markout_pips means "
-            "no reference quote existed at that horizon, not a zero markout",
-            columns={
-                "time": _TS,
-                "sym": _SYM,
-                "trade_time": _TS,
-                "horizon": _SPAN,
-                "trade_price": _F,
-                "ref_price": _F,
-                "markout_pips": _F,
-            },
-        ),
-        Table(
-            name="quotes",
-            description="FX top-of-book and depth as per-row level vectors",
-            columns={
-                "time": _TS,
-                "sym": _SYM,
-                "bid_prices": _LIST,
-                "bid_sizes": _LIST,
-                "ask_prices": _LIST,
-                "ask_sizes": _LIST,
-            },
-        ),
-        Table(
-            name="etl_coverage",
-            # The shape is DECIDED, not assumed (#60, closed 2026-09-16).
-            # This tree is the primary lineage (A-03) so there is no other
-            # schema to verify against, and there is no partition key
-            # because coverage has no partition dimension to record - see
-            # coverage.q's header for the reasoning and for what would
-            # change it.
-            #
-            # Three things keep this entry honest, and all three now run:
-            #   test_catalog_drift.py cross-checks these columns against
-            #     coverage.q on every commit;
-            #   .qcov.require_schema refuses a differently-shaped ledger,
-            #     reached from .qbw.init via .qcov.attach;
-            #   .qbw.define refuses two workers claiming one dataset, which
-            #     is the shape a missing partition dimension would take.
-            description="Append-only completeness ledger: which [range_from, range_to) "
-            "window of which dataset is published, at which source_version. A window "
-            "with rows_published=0 still counts as covered - that is what distinguishes "
-            "'ran, found nothing' from 'never ran'",
-            columns={
-                "dataset": _SYM,
-                "source_version": _SYM,
-                "range_from": _TS,
-                "range_to": _TS,
-                "rows_published": _L,
-                "recorded_at": _TS,
-                # D-11: a coverage claim is true until superseded. 0Wp while
-                # current, so an as-of read needs no null special case - see
-                # .qcov.still_current.
-                "superseded_at": _TS,
-                # Gap 2.3: which execution produced this materialisation. Null
-                # guid when the row was staged outside a run, which is a real
-                # state rather than missing data - see .qrun's header.
-                "run_id": _G,
-            },
-        ),
-        Table(
-            name="demo_deals",
-            description="Generic analogue of an external relational deal source, landed by "
-            "the demo_deals_backfill bounded worker. Synthetic by design - the real source "
-            "is bank-internal and out of scope for this repository (A-04)",
-            columns={
-                "deal_id": _L,
-                "deal_time": _TS,
-                "sym": _SYM,
-                "side": _SYM,
-                "notional": _F,
-                "rate": _F,
-            },
-        ),
-        Table(
-            name="event_tape",
-            description="Per-event order/trade tape: add, cancel and trade events with the "
-            "aggressor side on a trade. A superset of trades, so a tape filtered to "
-            "action='trade' is trade-shaped. Sorted ascending by time by contract - see "
-            "docs/architecture/event-tape.md",
-            columns={
-                "time": _TS,
-                "sym": _SYM,
-                "action": _SYM,
-                "side": _L,
-                "size": _F,
-                "price": _F,
-                "order_id": _L,
-                "pip_factor": _L,
-            },
-        ),
-        Table(
-            name="crypto_trades",
-            description="Real confirmed exchange executions recorded from the OMS",
-            columns={
-                "time": _TS,
-                "sym": _SYM,
-                "venue": _SYM,
-                "side": _L,
-                "trade_price": _F,
-                "size": _F,
-                "fee": _F,
-                "fee_currency": _SYM,
-                "exchange_fill_id": _SYM,
-            },
-        ),
-    )
-}
+#: The `type` column's values, as written in columns.csv. Spelled out rather
+#: than `QType(value)` so an unknown type is refused by name at load time
+#: instead of raising a bare ValueError deep in a comprehension - this is the
+#: security boundary, and it should fail loudly when it cannot be built.
+_TYPE_BY_NAME = {t.value: t for t in QType}
+
+
+def _read_csv(path: Path) -> list[dict[str, str]]:
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"catalog data missing at {path} - the queryable-surface whitelist "
+            "cannot be built, and serving without it would mean serving with no "
+            "whitelist at all"
+        )
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _load() -> dict[str, Table]:
+    """Build the catalog from the two CSVs.
+
+    Read once at import. A table with no column rows is refused rather than
+    published as an empty whitelist: an empty `columns` would make every
+    filter on it fail as "unknown column", which reads like a caller error
+    rather than a missing data file.
+    """
+    descriptions = {
+        row["table"]: row["description"] for row in _read_csv(CATALOG_DIR / "tables.csv")
+    }
+
+    columns: dict[str, dict[str, QType]] = {}
+    for row in _read_csv(CATALOG_DIR / "columns.csv"):
+        qtype = _TYPE_BY_NAME.get(row["type"])
+        if qtype is None:
+            raise ValueError(
+                f"columns.csv: {row['table']}.{row['column']} has unknown type "
+                f"{row['type']!r} - known types are {', '.join(sorted(_TYPE_BY_NAME))}"
+            )
+        columns.setdefault(row["table"], {})[row["column"]] = qtype
+
+    missing_columns = sorted(set(descriptions) - set(columns))
+    if missing_columns:
+        raise ValueError(f"tables.csv names tables with no columns.csv rows: {missing_columns}")
+    missing_descriptions = sorted(set(columns) - set(descriptions))
+    if missing_descriptions:
+        raise ValueError(f"columns.csv names tables absent from tables.csv: {missing_descriptions}")
+
+    return {
+        name: Table(name=name, columns=columns[name], description=descriptions[name])
+        for name in sorted(descriptions)
+    }
+
+
+TABLES: dict[str, Table] = _load()
 
 
 def table(name: str) -> Table:

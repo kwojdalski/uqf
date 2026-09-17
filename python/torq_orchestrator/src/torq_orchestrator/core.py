@@ -126,11 +126,14 @@ from torq_orchestrator.schema_view import (  # noqa: F401
     columns as schema_columns,
 )
 from torq_orchestrator.schema_view import (  # noqa: F401
+    match_tables,
+    resolve_port,
+)
+from torq_orchestrator.schema_view import (  # noqa: F401
     overview as schema_overview,
 )
 from torq_orchestrator.schema_view import (  # noqa: F401
-    resolve_port,
-    table_names,
+    table_names as schema_table_names,
 )
 from torq_orchestrator.schemas import (  # noqa: F401
     CRYPTO_BOOK_TABLE_SCHEMA,
@@ -188,7 +191,8 @@ __all__ = [
     "schema_columns",
     "schema_overview",
     "resolve_port",
-    "table_names",
+    "match_tables",
+    "schema_table_names",
     "_base_process_rows",
     "_crypto_recorder_config_yaml",
     "_generated_schema_content",
