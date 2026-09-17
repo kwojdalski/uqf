@@ -39,7 +39,13 @@
 / `source` its registered .qsrc source, `dataset` the name coverage is
 / recorded under, `width` its window size, `transform` the registered .qxf
 / transform its rows go through between fetch and publish.
-cfgs:(`symbol$())!();
+/ .
+/ Named `worker_cfg`, not `cfg`: `cfg` is the LOCAL in define, init, plan,
+/ fetch and publish, and a q local shadows a namespace global of the same
+/ name - so `cfg[worker]:...` inside define would have written to the
+/ parameter and left this registry silently empty. Not `cfgs` either, which
+/ it was: a pluralised contraction is not a word.
+worker_cfg:(`symbol$())!();
 
 / `transform` is REQUIRED, not optional like `check`. A check is a guard a
 / worker may honestly have no use for; a transform is the job itself. A
@@ -130,16 +136,16 @@ define:{[worker;cfg]
     part:$[`partition in key cfg; cfg`partition; unpartitioned];
     if[not -11h=type part;
         '"define: ",string[worker],"'s partition must be a symbol, or ` for a dataset with no partition dimension"];
-    / Resolved before storage, so `cfgs` never holds (::) here and the clash
+    / Resolved before storage, so `worker_cfg` never holds (::) here and the clash
     / comparison below is symbol against symbol. Every other optional key can
     / be absent because nothing compares them; this one is compared.
     cfg[`partition]:part;
-    / Mask over ALL cfgs first, then drop this worker - filtering the key
+    / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
     / worker as the claimant.
-    clash:(key cfgs) where ((value cfgs)[;`dataset]=cfg`dataset)
-                           and (value cfgs)[;`partition]=part;
+    clash:(key worker_cfg) where ((value worker_cfg)[;`dataset]=cfg`dataset)
+                           and (value worker_cfg)[;`partition]=part;
     clash:clash except worker;
     if[count clash;
         '"define: ",string[worker]," declares dataset ",string[cfg`dataset],
@@ -153,7 +159,7 @@ define:{[worker;cfg]
          " - two workers on one dataset and partition produce coverage rows nothing can tell apart"];
 
     / Normalise to the full key set before storing - see optional_cfg.
-    cfgs[worker]:normalised cfg;
+    worker_cfg[worker]:normalised cfg;
     worker}
 
 / Private: the declared transform exists and reads exactly this worker's
@@ -196,9 +202,9 @@ normalised:{[cfg]
 / @throws error naming the worker when define was never called for it
 / @eg .qbw.declaration `demo_deals_backfill
 declaration:{[worker]
-    if[not worker in key cfgs;
+    if[not worker in key worker_cfg;
         '"declaration: ",string[worker]," has no configuration - call .qbw.define first"];
-    cfgs worker}
+    worker_cfg worker}
 
 / One worker's partition, resolved.
 / .

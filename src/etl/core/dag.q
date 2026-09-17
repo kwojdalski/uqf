@@ -11,7 +11,7 @@
 / DERIVE, NEVER RE-DECLARE. Three registries already know their own inputs
 / and outputs, so none of them is asked to restate anything:
 / .
-/   .qbw.cfgs     bounded workers. Input is the source's remote `table`,
+/   .qbw.worker_cfg     bounded workers. Input is the source's remote `table`,
 /                   output is its `target` - both already on the .qsrc
 /                   declaration, reachable from the worker's `source`.
 /   .qcont.feeds    continuous feeders. Output is the dataset they feed;
@@ -210,7 +210,7 @@ to_json:{[]
 
 / ----------------------------------------------------- ADOPTION (derive)
 
-/ Register every bounded worker from .qbw.cfgs, deriving its inputs and
+/ Register every bounded worker from .qbw.worker_cfg, deriving its inputs and
 / outputs from the source declaration it already names.
 / .
 / A worker reads the source's remote `table` and writes its `target`, so
@@ -241,9 +241,9 @@ external_ref:{[source;tbl] `$(string tbl),"@",string source}
 / @eg .qdag.adopt_workers[]
 adopt_workers:{[]
     if[not `qbw in key `; :`$()];
-    ws:key .qbw.cfgs;
+    ws:key .qbw.worker_cfg;
     {[w]
-        cfg:.qbw.cfgs w;
+        cfg:.qbw.worker_cfg w;
         d:.qsrc.declaration cfg`source;
         register[w;`kind`inputs`outputs!
             (`bounded; external_ref[cfg`source;d`table]; d`target)]

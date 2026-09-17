@@ -118,7 +118,7 @@ test_a_worker_declaring_a_new_optional_key_can_register:{[t]
 
 test_every_registered_config_has_the_same_keys:{[t]
     / The invariant that keeps the table coercion harmless.
-    ks:key each value .qbw.cfgs;
+    ks:key each value .qbw.worker_cfg;
     .qunit.assertEquals[count distinct ks;1;
         "every config carries the same key set, so the registry's shape is stable"]};
 

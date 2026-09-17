@@ -374,7 +374,7 @@ swap_value:{[from_;to_;v;d]
         [i:first where {[a;b] a~b}[v] each from_; $[null i; v; to_ i]];
       99h=type v; (key v)!swap_value[from_;to_;;d+1] each value v;
       / A table, because q COERCES a dictionary of same-keyed dictionaries
-      / into one - which is how `.qbw.cfgs` can arrive here as 98h rather
+      / into one - which is how `.qbw.worker_cfg` can arrive here as 98h rather
       / than the 99h it was written as. Missing this case would silently
       / leave every worker's captured `check` unreseeded.
       98h=type v; flip (cols v)!swap_value[from_;to_;;d+1] each value flip v;
@@ -390,7 +390,7 @@ swap_value:{[from_;to_;v;d]
 / repository writes through that captured copy and `.qio.write_memory`
 / reported as never called while being exercised constantly. Same for a
 / source's `query` and `fixture`, held in `.qsrc.sources`, and for a
-/ worker's `check`, held in `.qbw.cfgs`.
+/ worker's `check`, held in `.qbw.worker_cfg`.
 / .
 / A coverage number that says "never called" about code the suite runs on
 / every window is worse than no number, because the obvious response is to

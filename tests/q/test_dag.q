@@ -170,9 +170,9 @@ test_workers_are_adopted_from_their_own_declarations:{[t]
 
 test_an_adopted_worker_reads_its_sources_table_and_writes_its_target:{[t]
     .qdag.adopt_workers[];
-    w:first key .qbw.cfgs;
+    w:first key .qbw.worker_cfg;
     d:.qdag.declaration w;
-    cfg:.qbw.cfgs w;
+    cfg:.qbw.worker_cfg w;
     src:.qsrc.declaration cfg`source;
     .qunit.assertEquals[(d`inputs;d`outputs);
         ((),.qdag.external_ref[cfg`source;src`table];(),src`target);

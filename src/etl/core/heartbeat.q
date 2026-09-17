@@ -154,7 +154,7 @@ has_beaten:{[worker] worker in exec worker from report[]}
 / same reason .qdag adopts rather than asking anyone to re-declare.
 never_started:{[]
     if[not `qbw in key `; :`$()];
-    ws:key .qbw.cfgs;
+    ws:key .qbw.worker_cfg;
     ws where not has_beaten each ws}
 
 \d .
