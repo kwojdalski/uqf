@@ -47,9 +47,9 @@ A source declares its **shape**, not its plumbing. Create
 `src/etl/sources/fx_rates.q`:
 
 ```q
-/ fx_rates.q - an external reference-rate source (.qsfx).
+/ fx_rates.q - an external reference-rate source (.qfeed.fx_rates).
 
-\d .qsfx
+\d .qfeed.fx_rates
 
 source_name:`fx_rates
 fields:`rate_time`sym`mid     / the columns this adapter reads
@@ -79,6 +79,14 @@ fixture:{[]
 
 Five of those deserve a sentence each, because each is a decision rather
 than a formality.
+
+**The namespace is `.qfeed.<source name>`, and it is the same word twice.**
+Sources live under one `.qfeed` root and are named exactly as they register,
+so `\d .qfeed.fx_rates` goes with `source_name:`fx_rates` and nothing else —
+`test_source_contract.q` reads every file under `src/etl/sources/` and fails
+if the two disagree. Before the root, the namespace was an abbreviation
+(`.qsdemo` for `demo_deals`) that no check compared with anything. Workers
+do the same thing under `.qwrk`.
 
 **`fields` is what you READ, not everything the source has.** Declaring a
 column the worker never touches means an upstream change to an unused column
@@ -334,7 +342,7 @@ plain q process holding the upstream table, set
 `UQF_SOURCE_CRED_<SOURCE>=host:port`, and run the worker (`scripts/test.py
 q-two-instances` does exactly this for `upstream_trades`). One trap that only
 shows up there: write `` from `trade ``, never `from trade`. The lambda
-carries your `\d .qsfx` across the wire, so a bare name resolves
+carries your `\d .qfeed.fx_rates` across the wire, so a bare name resolves
 in that namespace on the remote and throws; `check_q_traps` refuses it.
 
 ## Recomputing a table when the one it reads is published

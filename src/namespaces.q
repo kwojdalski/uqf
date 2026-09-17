@@ -4,9 +4,11 @@
 / and four tools each carried their own copy of the enumeration that rule
 / implied - `(key `) where like "q*"` - in the contract surface export, the
 / coverage driver, the documentation-coverage ratchet and the reseeder.
-/ Worker instances now nest under one root (.qwrk.demo_deals_backfill, see
-/ .qbw.worker_root), so a flat scan sees `qwrk` as one namespace holding no
-/ functions and silently drops every worker from every one of those tools.
+/ The ETL tree's instances now nest - workers under .qwrk
+/ (.qwrk.demo_deals_backfill, see .qbw.worker_root) and sources under .qfeed
+/ (.qfeed.demo_deals) - so a flat scan sees `qwrk` and `qfeed` as two
+/ namespaces holding no functions and silently drops every worker and every
+/ source from every one of those tools.
 / One enumeration here, that the tools share, is what stops that: a tool
 / that lists namespaces asks this file rather than assuming the shape.
 / .

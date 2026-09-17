@@ -44,14 +44,14 @@ cleanup:{[] .qbw.cleanup worker_name}
 / --- the transform ---------------------------------------------------------
 
 / The source contract, as the empty table the transform reads.
-contract:flip .qsdbn.fields!{[c] c$()} each .qsdbn.types
+contract:flip .qfeed.databento_mbp10.fields!{[c] c$()} each .qfeed.databento_mbp10.types
 
 book:([] time:`timestamp$(); sym:`symbol$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$();
     bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / Private: one side and quantity's ten level columns, as a vector per row.
 / `flip` over the columns rather than `each` over rows: one pass per column.
-fold:{[batch;prefix] flip batch `$prefix,/:.qsdbn.levels}
+fold:{[batch;prefix] flip batch `$prefix,/:.qfeed.databento_mbp10.levels}
 
 / Fold Databento's per-level columns into level-0-first vectors.
 / .
@@ -70,7 +70,7 @@ to_book:{[batch]
 / The example is the source's own fixture, and the expected book is written
 / out: the fixture's levels step one cent from the touch and 100 in size.
 example_book:{[]
-    f:.qsdbn.fixture[];
+    f:.qfeed.databento_mbp10.fixture[];
     px:{[touch;dir] touch+dir*0.01*til 10};
     sz:{[s] s+100*til 10};
     ([] time:f`ts_event; sym:`AAPL`AAPL`META`META; action:`A`T`A`C; side:`B`N`A`A;
@@ -84,7 +84,7 @@ example_book:{[]
     enlist[`batch]!enlist contract;
     book;
     to_book;
-    enlist `inputs`expected!(enlist[`batch]!enlist .qsdbn.fixture[];example_book[]))];
+    enlist `inputs`expected!(enlist[`batch]!enlist .qfeed.databento_mbp10.fixture[];example_book[]))];
 
 / --- the data-quality gate ------------------------------------------------
 

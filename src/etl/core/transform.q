@@ -198,7 +198,7 @@ check_example:{[name;ins;output;clock;ex]
 / @param schema the empty typed table in and out
 / @param rows a non-empty example of that table
 / @return name
-/ @eg .qxf.passthrough[`demo_deals_passthrough;`batch;0#.qsdemo.fixture[];.qsdemo.fixture[]]
+/ @eg .qxf.passthrough[`demo_deals_passthrough;`batch;0#.qfeed.demo_deals.fixture[];.qfeed.demo_deals.fixture[]]
 passthrough:{[name;input_name;schema;rows]
     define[name;`inputs`output`fn`examples!(
         (enlist input_name)!enlist schema;

@@ -85,7 +85,7 @@ bind_fixtures:{[]
     / microstructure @eg values were written against this one - binding
     / anything else would make the gate report the fixture's disagreement
     / with the docs as though the docs were wrong.
-    `tape set .qsevt.fixture[];
+    `tape set .qfeed.demo_events.fixture[];
     `quotes set .forwardstest.mk_ts_quotes_table[::];
     `trade_time set exec first ts from `quotes;
     / `b` appeared in five positions.q examples meaning THREE different
