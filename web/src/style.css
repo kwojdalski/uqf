@@ -527,3 +527,59 @@ tbody tr:hover {
 .picker-type {
   flex: 1;
 }
+
+/* --- the Desk: a table list beside the glimpse ---------------------------- */
+.desk {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .desk {
+    grid-template-columns: 1fr;
+  }
+}
+.table-list {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  position: sticky;
+  top: 1rem;
+}
+.table-list h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: #3f5067;
+}
+.table-choice {
+  text-align: left;
+  width: 100%;
+  border-color: transparent;
+  background: transparent;
+  padding: 0.45rem 0.6rem;
+}
+.table-choice:hover {
+  background: #f2f5fa;
+}
+.table-choice[aria-pressed="true"] {
+  background: #174bc9;
+  border-color: #174bc9;
+  color: #fff;
+}
+.table-choice[aria-pressed="true"] code {
+  color: inherit;
+}
+.desk-main {
+  min-width: 0;
+}
+details.panel > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #3f5067;
+}
+details.panel[open] > summary {
+  margin-bottom: 1rem;
+}

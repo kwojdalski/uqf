@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   type Backfill,
   type Catalog,
@@ -353,6 +353,23 @@ function DeskView() {
     applied ? "/query" : null,
     applied ? JSON.stringify(applied) : undefined,
   );
+  // A glimpse, not a form: choosing a table (or a tier) shows its first rows
+  // at once, unfiltered. Filters are the one input that cannot sensibly run
+  // on every keystroke, so they stay behind an explicit Apply below.
+  const selectedName = selected?.name;
+  useEffect(() => {
+    if (!selectedName) return;
+    setFilters([]);
+    setTier("rdb");
+    setLimit(100);
+    setApplied({ table: selectedName, tier: "rdb", limit: 100, filters: [] });
+    setError("");
+  }, [selectedName]); // a new table is a fresh glimpse: tier and limit reset too
+  // Tier and limit re-run what is applied, filters included: they narrow
+  // the same question, and must not throw away a filter someone typed.
+  useEffect(() => {
+    setApplied((prev) => (prev ? { ...prev, tier, limit } : prev));
+  }, [tier, limit]);
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!selected) return;
@@ -388,180 +405,196 @@ function DeskView() {
           <button onClick={catalog.refresh}>Retry catalog</button>
         </div>
       )}
-      <form className="panel" onSubmit={submit}>
-        <div className="fields">
-          <label>
-            Published table
-            <select
-              value={selected?.name ?? ""}
-              onChange={(event) => {
-                setTable(event.target.value);
-                setFilters([]);
-              }}
-            >
-              {catalog.data?.tables.map((table) => (
-                <option key={table.name}>{table.name}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Storage tier
-            <select
-              value={tier}
-              onChange={(event) => setTier(event.target.value)}
-            >
-              <option value="rdb">RDB · current session</option>
-              <option value="hdb">HDB · completed partitions</option>
-              <option value="both">Both tiers</option>
-            </select>
-          </label>
-          <label>
-            Row limit
-            <input
-              type="number"
-              min="1"
-              max="10000"
-              required
-              value={limit}
-              onChange={(event) => setLimit(Number(event.target.value))}
-            />
-          </label>
-        </div>
-        <p className="note">
-          {selected?.description ?? "Loading the query catalog…"}
-        </p>
-        {tier !== "rdb" && (
-          <p className="note">
-            Historical queries can take longer. A reload window is shown as
-            temporary unavailability.
-          </p>
-        )}
-        <div className="section-heading">
-          <h3>Filters</h3>
-          <button
-            type="button"
-            disabled={!columns.length || filters.length >= 16}
-            onClick={() =>
-              setFilters([
-                ...filters,
-                { column: columns[0].name, op: "eq", raw: "" },
-              ])
-            }
-          >
-            Add filter
-          </button>
-        </div>
-        {filters.map((filter, index) => (
-          <div className="filter" key={index}>
-            <label>
-              Column
-              <select
-                value={filter.column}
-                onChange={(event) =>
-                  setFilters(
-                    filters.map((item, i) =>
-                      i === index
-                        ? { ...item, column: event.target.value, raw: "" }
-                        : item,
-                    ),
-                  )
-                }
-              >
-                {columns.map((column) => (
-                  <option key={column.name} value={column.name}>
-                    {column.name} · {column.type}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Operator
-              <select
-                value={filter.op}
-                onChange={(event) =>
-                  setFilters(
-                    filters.map((item, i) =>
-                      i === index ? { ...item, op: event.target.value } : item,
-                    ),
-                  )
-                }
-              >
-                {catalog.data?.operators.map((op) => (
-                  <option key={op}>{op}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Value{filter.op === "in" ? " (JSON list)" : ""}
-              <input
-                required
-                value={filter.raw}
-                onChange={(event) =>
-                  setFilters(
-                    filters.map((item, i) =>
-                      i === index ? { ...item, raw: event.target.value } : item,
-                    ),
-                  )
-                }
-              />
-            </label>
+      <div className="desk">
+        <nav className="panel table-list" aria-label="Published tables">
+          <h2>Tables</h2>
+          {!catalog.data && <p className="note">Loading the query catalog…</p>}
+          {catalog.data?.tables.map((item) => (
             <button
+              key={item.name}
               type="button"
-              aria-label={`Remove filter ${index + 1}`}
-              onClick={() => setFilters(filters.filter((_, i) => i !== index))}
+              className="table-choice"
+              aria-pressed={item.name === selected?.name}
+              title={item.description}
+              onClick={() => setTable(item.name)}
             >
-              Remove
+              <code>{item.name}</code>
             </button>
-          </div>
-        ))}
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={requireCoverage}
-            onChange={(event) => setRequireCoverage(event.target.checked)}
-          />
-          Require complete publication coverage before querying
-        </label>
-        {requireCoverage && (
-          <RangeFields value={coverage} onChange={setCoverage} />
-        )}
-        <div className="form-footer">
-          <span>Read-only · filters validated by the API</span>
-          <button disabled={!selected} className="primary">
-            Run query
-          </button>
-        </div>
-        {error && (
-          <p role="alert" className="error-text">
-            {error}
-          </p>
-        )}
-      </form>
-      {applied && (
-        <>
-          <ResourceStatus resource={resource} />
-          {resource.data && (
-            <section className="panel">
-              <div className="section-heading">
-                <h2>{resource.data.table}</h2>
-                <Badge value={resource.data.tier.toUpperCase()} />
-              </div>
-              <p className="note">
-                {resource.data.row_count.toLocaleString()} rows returned
-                {resource.data.truncated
-                  ? " · Server row cap reached"
-                  : resource.data.row_count >= applied.limit
-                    ? " · Requested limit reached; more rows may exist"
-                    : ""}
-              </p>
-              <Table
-                rows={resource.data.rows}
-                empty="No rows match this query."
-              />
-            </section>
+          ))}
+        </nav>
+        <div className="desk-main">
+          {applied && (
+            <>
+              <ResourceStatus resource={resource} />
+              {resource.data && (
+                <section className="panel">
+                  <div className="section-heading">
+                    <h2>{resource.data.table}</h2>
+                    <Badge value={resource.data.tier.toUpperCase()} />
+                  </div>
+                  <p className="note">
+                    {selected?.description}
+                    {selected?.description ? " · " : ""}
+                    {resource.data.row_count.toLocaleString()} rows returned
+                    {resource.data.truncated
+                      ? " · Server row cap reached"
+                      : resource.data.row_count >= applied.limit
+                        ? " · Showing the first " +
+                          applied.limit +
+                          "; more rows may exist"
+                        : ""}
+                  </p>
+                  <Table
+                    rows={resource.data.rows}
+                    empty="No rows match this query."
+                  />
+                </section>
+              )}
+            </>
           )}
-        </>
-      )}
+          <details className="panel">
+            <summary>Refine · tier, row limit, filters, coverage</summary>
+            <form onSubmit={submit}>
+              <div className="fields">
+                <label>
+                  Storage tier
+                  <select
+                    value={tier}
+                    onChange={(event) => setTier(event.target.value)}
+                  >
+                    <option value="rdb">RDB · current session</option>
+                    <option value="hdb">HDB · completed partitions</option>
+                    <option value="both">Both tiers</option>
+                  </select>
+                </label>
+                <label>
+                  Row limit
+                  <input
+                    type="number"
+                    min="1"
+                    max="10000"
+                    required
+                    value={limit}
+                    onChange={(event) => setLimit(Number(event.target.value))}
+                  />
+                </label>
+              </div>
+              {tier !== "rdb" && (
+                <p className="note">
+                  Historical queries can take longer. A reload window is shown
+                  as temporary unavailability.
+                </p>
+              )}
+              <div className="section-heading">
+                <h3>Filters</h3>
+                <button
+                  type="button"
+                  disabled={!columns.length || filters.length >= 16}
+                  onClick={() =>
+                    setFilters([
+                      ...filters,
+                      { column: columns[0].name, op: "eq", raw: "" },
+                    ])
+                  }
+                >
+                  Add filter
+                </button>
+              </div>
+              {filters.map((filter, index) => (
+                <div className="filter" key={index}>
+                  <label>
+                    Column
+                    <select
+                      value={filter.column}
+                      onChange={(event) =>
+                        setFilters(
+                          filters.map((item, i) =>
+                            i === index
+                              ? { ...item, column: event.target.value, raw: "" }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      {columns.map((column) => (
+                        <option key={column.name} value={column.name}>
+                          {column.name} · {column.type}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Operator
+                    <select
+                      value={filter.op}
+                      onChange={(event) =>
+                        setFilters(
+                          filters.map((item, i) =>
+                            i === index
+                              ? { ...item, op: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      {catalog.data?.operators.map((op) => (
+                        <option key={op}>{op}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Value{filter.op === "in" ? " (JSON list)" : ""}
+                    <input
+                      required
+                      value={filter.raw}
+                      onChange={(event) =>
+                        setFilters(
+                          filters.map((item, i) =>
+                            i === index
+                              ? { ...item, raw: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    aria-label={`Remove filter ${index + 1}`}
+                    onClick={() =>
+                      setFilters(filters.filter((_, i) => i !== index))
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={requireCoverage}
+                  onChange={(event) => setRequireCoverage(event.target.checked)}
+                />
+                Require complete publication coverage before querying
+              </label>
+              {requireCoverage && (
+                <RangeFields value={coverage} onChange={setCoverage} />
+              )}
+              <div className="form-footer">
+                <span>Read-only · filters validated by the API</span>
+                <button disabled={!selected} className="primary">
+                  Apply filters
+                </button>
+              </div>
+              {error && (
+                <p role="alert" className="error-text">
+                  {error}
+                </p>
+              )}
+            </form>
+          </details>
+        </div>
+      </div>
     </>
   );
 }

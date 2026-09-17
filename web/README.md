@@ -55,7 +55,12 @@ does not exist. The API continues to run without the web directory configured.
   warnings and update timestamps. `idle` is success with no work; `completed`
   is success with work; `failed` remains a failure. Missing configuration and
   unreadable status files are distinguished from an empty result.
-- **Desk:** server catalog determines table, filter columns and operators.
+- **Desk:** a glimpse of published data. The catalog's tables are a panel of
+  choices; choosing one shows its first 100 rows from the RDB at once, with
+  nothing to submit. Tier, row limit, filters and a coverage requirement sit
+  behind a collapsed _Refine_ section: tier and limit re-run on change,
+  filters apply on a button because they need a typed value. The server
+  catalog determines table, filter columns and operators.
   Numeric/boolean values are typed; `in` takes a JSON list. Timestamps require
   an explicit timezone. RDB, HDB and combined results are labelled; HDB latency
   is explained. An optional coverage requirement refuses incomplete queries
