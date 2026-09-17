@@ -1,0 +1,26 @@
+         6675574 function calls (6636883 primitive calls) in 3.626 seconds
+
+   Ordered by: cumulative time
+   List reduced from 154 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       90    0.014    0.000    3.654    0.041 api.py:18(lint)
+   135342    1.341    0.000    1.874    0.000 lexical.py:13(source_views)
+   136338    0.125    0.000    1.081    0.000 rules.py:140(_strip_comments)
+       90    0.018    0.000    0.690    0.008 rules.py:650(rule_self_comparison)
+       90    0.005    0.000    0.510    0.006 rules.py:218(rule_reserved_parameter_names)
+    18566    0.309    0.000    0.470    0.000 rules.py:152(_strip_strings)
+       90    0.251    0.003    0.350    0.004 structure.py:7(check_structure)
+292073/255243    0.167    0.000    0.306    0.000 {method 'join' of 'str' objects}
+       90    0.102    0.001    0.301    0.003 rules.py:758(rule_invalid_string_escape)
+       90    0.019    0.000    0.219    0.002 rules.py:964(rule_interior_like_wildcard)
+       90    0.063    0.001    0.217    0.002 rules.py:1015(rule_unparenthesised_sv)
+       90    0.075    0.001    0.202    0.002 semantics.py:103(check_semantics)
+       90    0.000    0.000    0.201    0.002 rules.py:608(rule_overlong_throw)
+       90    0.007    0.000    0.180    0.002 rules.py:340(rule_niladic_dot_empty)
+       90    0.006    0.000    0.163    0.002 rules.py:300(rule_underscore_parameter)
+       90    0.000    0.000    0.156    0.002 rules.py:530(_strip_comments_preserving_lines)
+    18746    0.004    0.000    0.151    0.000 rules.py:537(<genexpr>)
+   462250    0.133    0.000    0.133    0.000 lexical.py:28(blank)
+       90    0.012    0.000    0.132    0.001 rules.py:819(rule_reserved_toplevel_definition)
+2203007/2201589    0.127    0.000    0.127    0.000 {built-in method builtins.len}

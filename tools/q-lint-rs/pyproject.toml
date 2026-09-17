@@ -1,0 +1,29 @@
+[project]
+name = "q-lint-rs"
+version = "0.1.0"
+description = "Native standalone q linter"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+# Install the native executable into the environment's bin directory.
+bindings = "bin"
+profile = "release"
+locked = true
+strip = true
+
+[tool.uv]
+# Rebuild the installed executable when its Rust sources or rule data change.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "README.md" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "src/**/*.rs" },
+    { file = "src/**/*.json" },
+]

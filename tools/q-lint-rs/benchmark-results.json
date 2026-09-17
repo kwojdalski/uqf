@@ -1,0 +1,362 @@
+{
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.5 (main, Jun  2 2026, 22:28:56) [Clang 22.1.3 ]",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)",
+  "runs": 7,
+  "method": "One untimed warm-up per command; alternating fresh processes; warm filesystem cache; JSON output captured; release build; no uv/cargo launch overhead",
+  "results": {
+    "single": {
+      "files": 1,
+      "bytes": 3183,
+      "hashes": {
+        "src/foundation/stats.q": "4fa0641a61ad276b9b88ed72f0d225af79f157e189589d978f9804898c0d6a1e"
+      },
+      "builtin": {
+        "python": {
+          "median_ms": 79.948,
+          "min_ms": 66.97,
+          "max_ms": 110.371,
+          "samples_seconds": [
+            0.06697012530639768,
+            0.06965404096990824,
+            0.07994816731661558,
+            0.08117566723376513,
+            0.07277941564098,
+            0.08546029077842832,
+            0.1103711249306798
+          ]
+        },
+        "rust": {
+          "median_ms": 5.773,
+          "min_ms": 5.37,
+          "max_ms": 7.675,
+          "samples_seconds": [
+            0.0060109589248895645,
+            0.005370250437408686,
+            0.006135750096291304,
+            0.005772583186626434,
+            0.005713833030313253,
+            0.005626875441521406,
+            0.0076752919703722
+          ]
+        },
+        "speedup": 13.85
+      },
+      "qls": {
+        "python": {
+          "median_ms": 287.439,
+          "min_ms": 191.471,
+          "max_ms": 533.814,
+          "samples_seconds": [
+            0.2874390408396721,
+            0.3622987912967801,
+            0.5338139999657869,
+            0.2876163749024272,
+            0.23234462505206466,
+            0.23704887507483363,
+            0.19147095829248428
+          ]
+        },
+        "rust": {
+          "median_ms": 199.504,
+          "min_ms": 141.22,
+          "max_ms": 291.713,
+          "samples_seconds": [
+            0.21532729174941778,
+            0.19950416730716825,
+            0.29171299980953336,
+            0.23420912493020296,
+            0.14122000010684133,
+            0.14181137457489967,
+            0.15791650023311377
+          ]
+        },
+        "speedup": 1.44
+      },
+      "core": {
+        "python": {
+          "median_ms": 3.745,
+          "min_ms": 3.551,
+          "max_ms": 4.039,
+          "samples_seconds": [
+            0.0035910001024603844,
+            0.0035657500848174095,
+            0.003693666309118271,
+            0.003565791994333267,
+            0.003550957888364792,
+            0.0037954580038785934,
+            0.003816000185906887,
+            0.0039350418373942375,
+            0.003844040911644697,
+            0.0040394579991698265
+          ]
+        },
+        "rust": {
+          "median_ms": 0.073,
+          "min_ms": 0.072,
+          "max_ms": 0.094,
+          "samples_seconds": [
+            9.3833e-05,
+            8.2875e-05,
+            7.8084e-05,
+            7.3167e-05,
+            7.2083e-05,
+            7.2375e-05,
+            7.2333e-05,
+            7.3083e-05,
+            7.6208e-05,
+            7.1959e-05
+          ]
+        }
+      }
+    },
+    "quant": {
+      "files": 12,
+      "bytes": 165436,
+      "hashes": {
+        "src/execution/execution.q": "fbf86f44757a89caaa6a0251f7758ed09f74b5ab3a6581873471a20fee2011af",
+        "src/foundation/ccy.q": "bb4e73de3740a80b23b7c75117be4ff2e385ecac54dfb67c5930646ebd3aedc4",
+        "src/foundation/daycount.q": "c8e6347565e8fdb5db05596d5caf209af1af18d03c235e35584329048e2c2250",
+        "src/foundation/rates.q": "23f7f9d182194da116254c0bea45c271b62b734d0ed775e58b4973fc06c8cc0f",
+        "src/foundation/stats.q": "4fa0641a61ad276b9b88ed72f0d225af79f157e189589d978f9804898c0d6a1e",
+        "src/market_data/book.q": "64d2a48b6929cdf77ccf3ea69ef607c42fb4b1de16058b8c3e8aadf0ab4f027f",
+        "src/market_data/dqchecks.q": "f2695e0036f6bdf414758386072172c2159870f05deee385c5b8676689eb809b",
+        "src/market_data/microstructure.q": "7f3c476ccae1944326c19862e86d016cc68d1c65afeab25e129cf9060fb9384f",
+        "src/portfolio/positions.q": "76f978739721b9fe1da0af3b342ecc012b087c8df76a18cc49f08a383df42596",
+        "src/portfolio/risk.q": "37737c25824b4a5e13379829ae802cd9f0198c69d23be6513dafc70d7ac9159b",
+        "src/pricing/forwards.q": "db105769c5835202efc283c8d02bf1bffceea2044d6a20bc1b36b0cc84629158",
+        "src/pricing/options.q": "324a92daa5a5363b5f48babca507128d29bfb757c6d85687c42fbc28628e3f1f"
+      },
+      "builtin": {
+        "python": {
+          "median_ms": 293.265,
+          "min_ms": 269.548,
+          "max_ms": 578.107,
+          "samples_seconds": [
+            0.26954825036227703,
+            0.3585824170149863,
+            0.27142991684377193,
+            0.2932647089473903,
+            0.3018272090703249,
+            0.27732233377173543,
+            0.5781067498028278
+          ]
+        },
+        "rust": {
+          "median_ms": 11.152,
+          "min_ms": 9.887,
+          "max_ms": 29.718,
+          "samples_seconds": [
+            0.011270499788224697,
+            0.011148749850690365,
+            0.011151750106364489,
+            0.012673332821577787,
+            0.00988708296790719,
+            0.010171083267778158,
+            0.029717582743614912
+          ]
+        },
+        "speedup": 26.3
+      },
+      "core": {
+        "python": {
+          "median_ms": 236.822,
+          "min_ms": 205.422,
+          "max_ms": 502.99,
+          "samples_seconds": [
+            0.5029900837689638,
+            0.23666174989193678,
+            0.20542191620916128,
+            0.22604608302935958,
+            0.27588237496092916,
+            0.25355949997901917,
+            0.2241811673156917,
+            0.2369820000603795,
+            0.28190125012770295,
+            0.21566824987530708
+          ]
+        },
+        "rust": {
+          "median_ms": 3.531,
+          "min_ms": 3.186,
+          "max_ms": 4.242,
+          "samples_seconds": [
+            0.003735458,
+            0.003305292,
+            0.004242166,
+            0.003528292,
+            0.003596125,
+            0.00342075,
+            0.003462584,
+            0.003544917,
+            0.003186292,
+            0.003533875
+          ]
+        }
+      }
+    },
+    "source-and-tests": {
+      "files": 90,
+      "bytes": 960990,
+      "hashes": {
+        "src/etl/core/backfill_state.q": "5aa2f85964ab001212c809749c5faa99d8cfebec42a0c31e713ab2a0eb8b81de",
+        "src/etl/core/bounded_worker.q": "c9f91f65067908e76cabfe8df7eaa019c00c57737a967cf52c239ba7e06f1891",
+        "src/etl/core/coercion.q": "3915a3ae265e13870b6f6f22b7bce022674574d3895ea56af5bd420a37bf4fcb",
+        "src/etl/core/continuous_state.q": "12f85b91bf3d2615064ba9995a5492cf2ffec79238a528d81feb5628b5c92cb8",
+        "src/etl/core/coverage.q": "ee852c9a9e04c3f66e314ea37f8e30074bc59af7d2295ad14af01993abbbda86",
+        "src/etl/core/dag.q": "7212d352df6c9f61d8f036c5278025faeeede4e0454e63eb2daa68d1cb2215d6",
+        "src/etl/core/heartbeat.q": "e3476ae2dbf1e25fd1d1f43d167ebfa74b6a7ba0d660cb8ea9dc2309207d2bbd",
+        "src/etl/core/io_manager.q": "65e181874fd5b3ca76e59ea56d6ac657353bffec48fe282d15e8034e2a72ddf7",
+        "src/etl/core/log.q": "532b64d333444e6cfd5794cc6840c648f875eda2ee69cb22d603725f52e85eb8",
+        "src/etl/core/run.q": "ac33657a4d2e121d7d470fc8fd00e61fbd20ee306416a157e3ef5e60c445886d",
+        "src/etl/core/singlestore_odbc.q": "ddd6c1e72c2f5ee4e06c1a05ad5b8096c430d89a3f34a6a7bd4e86b0d50517c0",
+        "src/etl/core/source_contract.q": "217980e8b9c826bd62da41bbff3b676c10d8a129637dc0adf1d564ced61416fc",
+        "src/etl/core/transform.q": "3ceaa02fc8d7c4e2c8f466e48e9a7edaff6986eb5625749a7473ecfbdd70c2dc",
+        "src/etl/core/worker_config.q": "1961670d3f691ff6205445da62ae41a79d2fb77cfc67ef2cdea1aa6d4eabe05f",
+        "src/etl/core/worker_runtime.q": "a85e90fb51de099a8b7ff0a61707644fa0534d43e3fbc5bd483e1c62e5aee517",
+        "src/etl/generated/pipeline_dag.q": "b1069d403770f978941c22ef8d980720e6fb87908857684df0c473a82cb2027d",
+        "src/etl/init.q": "19328db93ca0f83e35a51d6d42389a86368d414e0a08f6e08e72b984c606b091",
+        "src/etl/sources/databento_mbp10.q": "74d7694aec08bda86fffe54da63d2f6ad22d9c3236dc5d3980116694467a5824",
+        "src/etl/sources/demo_deals.q": "656ce9cdc5872987b965321c2c7cfdef777eabb939f2eb0a043c46824f7ff24b",
+        "src/etl/sources/demo_events.q": "6478e7cb6fdcda33d76f77500beda0f8d6986dbdf09453aaeec79682f5f4d6f1",
+        "src/etl/transforms/stream.q": "4d16ba546a3a81c7d66c85da34aabb489271e1ac8ab44b33f3818597461cb61e",
+        "src/etl/workers/databento_book_backfill.q": "83b51beab81837c0dd27d5f93e60767111ac91fe0872b5e24cd9ccd43bbc2473",
+        "src/etl/workers/demo_deals_backfill.q": "0669cf29e78c153c53be38b9b718037704a9ab667b4e4b839527224b70f69d2a",
+        "src/etl/workers/demo_events_backfill.q": "fa0fc87e47e68b238476c025331ada6d88ce12b907c3f2950a6d6b70c1de2d80",
+        "src/examples/example_defaults.q": "b9dd6f38e0439e94071a77079ee35659bb99f2eb953c1d0edd7b7cf215d6bfda",
+        "src/execution/execution.q": "fbf86f44757a89caaa6a0251f7758ed09f74b5ab3a6581873471a20fee2011af",
+        "src/foundation/ccy.q": "bb4e73de3740a80b23b7c75117be4ff2e385ecac54dfb67c5930646ebd3aedc4",
+        "src/foundation/daycount.q": "c8e6347565e8fdb5db05596d5caf209af1af18d03c235e35584329048e2c2250",
+        "src/foundation/rates.q": "23f7f9d182194da116254c0bea45c271b62b734d0ed775e58b4973fc06c8cc0f",
+        "src/foundation/stats.q": "4fa0641a61ad276b9b88ed72f0d225af79f157e189589d978f9804898c0d6a1e",
+        "src/init.q": "007fccf18840a308bd964417c032b9b7f1f0dc722940074efbfaddaab4779e7d",
+        "src/integrations/data.q": "4cc1d8001db18337cd6b15e17188be6e64f93e6a79b92c4969b6492710fef9b1",
+        "src/market_data/book.q": "64d2a48b6929cdf77ccf3ea69ef607c42fb4b1de16058b8c3e8aadf0ab4f027f",
+        "src/market_data/dqchecks.q": "f2695e0036f6bdf414758386072172c2159870f05deee385c5b8676689eb809b",
+        "src/market_data/microstructure.q": "7f3c476ccae1944326c19862e86d016cc68d1c65afeab25e129cf9060fb9384f",
+        "src/metadata/metatables.q": "700f4ff2dd9b3f265b2e1be5f9a909ec1aa90dd68de2b6a9107150eabe13853b",
+        "src/portfolio/positions.q": "76f978739721b9fe1da0af3b342ecc012b087c8df76a18cc49f08a383df42596",
+        "src/portfolio/risk.q": "37737c25824b4a5e13379829ae802cd9f0198c69d23be6513dafc70d7ac9159b",
+        "src/pricing/forwards.q": "db105769c5835202efc283c8d02bf1bffceea2044d6a20bc1b36b0cc84629158",
+        "src/pricing/options.q": "324a92daa5a5363b5f48babca507128d29bfb757c6d85687c42fbc28628e3f1f",
+        "tests/q/read_checkpoint.q": "614d46f0d1c9ec7fe2de9a21b44144756294e279953cccb58b917a8bed3274ff",
+        "tests/q/read_coverage.q": "c6d8fef7f54932bb5f80c68db87b360a527e5ffdb6bfabb2586c327449d8aacc",
+        "tests/q/read_runs.q": "943c705df81cdfa17b9af9c1232f9319b8788d8cf112bf5a44b7d91d7cbfa6c4",
+        "tests/q/reference_worker.q": "ac502465e3cfd17f9d2bcb5340b3238bd55785d4ef63615562a6909183119c6c",
+        "tests/q/run_backfill_process.q": "070629f4de054ac689c1aac568d80d20d1574a52e3db35869c9aebd02de9230c",
+        "tests/q/run_coverage.q": "fda89a6311e879a05b72ebe58699f655a302a6901bdcd2fe47798d023640b7c3",
+        "tests/q/run_examples.q": "683c667051eb56cc2bf537fdd8282c26103bb8363f654537a49bc2f09c682060",
+        "tests/q/run_metatables_hdb.q": "ddc2b2cb26630d7fbec7020b0e3d11fe0384ddd13674929f6482ff2c8b40f71a",
+        "tests/q/smoke_databento_odbc.q": "931481378b034a661e2d42bbf72e938c35edebbc6360c2ed42833233b1909003",
+        "tests/q/smoke_external_metadata.q": "9038ef6b961b6ab3f37cc69dbfe54ced4633856db9f169e5ecca80e731532271",
+        "tests/q/test_backfill_state.q": "f3f290fd787c7aa5a6c53614d53afae3b8b7477367bc8fa810d6a69f52b7763a",
+        "tests/q/test_book.q": "885b802e1b7feb696de5a6c06e24d0b2120b0828f54d247361875f2090b6026a",
+        "tests/q/test_ccy.q": "95ffbcf45966278d5ee2e9274de1fef37365315cba9f9e0890f9eaf472791cf3",
+        "tests/q/test_coercion.q": "c573e7789b900a049b463cfbea2fba40f4639955c7548d20dab88175c2f5c082",
+        "tests/q/test_continuous_state.q": "f6f9da51af36cc8fb1edec86b339c74b13600d9e42517bc32834edffb419dc30",
+        "tests/q/test_coverage.q": "4e34641d2309b5579c4c34ba1793a93368b95e9e49af71402776f3f9e409ba92",
+        "tests/q/test_coverage_tool.q": "a61523e691d9a453dc412304170af77313a630caa67bf3ff405cd29a33e241ef",
+        "tests/q/test_dag.q": "85dcf9465312228393f0fc730b389603544e4f77d6b4ab6118670d39c33d23c3",
+        "tests/q/test_data.q": "808b1f70a2d9066fb20676e334e4ac8adbb5aba971cdac03bda4199dfc87d29e",
+        "tests/q/test_daycount.q": "cb581c4dc700f67aa793d082aa4bfcd9fc21849d1e422df59903bb84ed6edb9a",
+        "tests/q/test_demo_deals_backfill.q": "86c4c79b7ce0ed2e3f67a6420649bf7b92b3a895f836a89f3060b479bbc69985",
+        "tests/q/test_docstring_examples.q": "6f9e047443c2c7e236ba87485d7b77d17b64f02f51f81315ecede1878a06103b",
+        "tests/q/test_dqchecks.q": "579d6fc147852e6f54b5104433bdac969804f60ff9698605e7a52183f930606c",
+        "tests/q/test_etl_lifecycle.q": "69d3181e12e22d6ca88436808e104405a65dde72f1063db0a416d056831ca8d0",
+        "tests/q/test_event_tape.q": "8120711aa70311b9db50ebb76188b839f17273e9665bf59092b323293b9027dd",
+        "tests/q/test_execution.q": "fde7fc8fe8fafcbdb6dc5e331b55fa5ec8b33f9039d221d9373043dfb3ec3332",
+        "tests/q/test_execution_scale.q": "567371315e322ef94c959a5b2d7868a90e3ddb96c952f423f743027963d7975c",
+        "tests/q/test_forwards.q": "3cdac107afd83e304831bae6955f19c02f5b976b200e7e952bcf0f3096a3e3c1",
+        "tests/q/test_heartbeat.q": "b10792c52d186d7a180947cbd6c2a7b285ed8ee7a6bfece7bf8a938f70b87882",
+        "tests/q/test_io_manager.q": "2e5c3a609502b16ccb8997ab2ce09f9a3141a821c6d2b025099b21be8d285ac3",
+        "tests/q/test_log.q": "d63ddf84c72578f41d81e02baa636039d30f9ea6121b1d1ee8b7b5ba70465b87",
+        "tests/q/test_man_registry.q": "728d9d20b5c10ee54ff174564752b365db594064a7e2c65f4eb2f0773527d8d2",
+        "tests/q/test_metatables.q": "8e47be556633a67a0151c2fca2407de044a69835c2700b59007833f315e70667",
+        "tests/q/test_microstructure.q": "f7ad4e3a9a77689755d82f2aed7cb47879f20386c66e0a2b2e663fb7a984c96b",
+        "tests/q/test_options.q": "892091c42b28eb351a377d79a744f2327f36376d2d62342998a7ac1e379e1804",
+        "tests/q/test_pipeline_status.q": "0752290eb4cac308c3e6f9ff793b23d25b0838b2465d67a24a157558a11ddc46",
+        "tests/q/test_positions.q": "8b1f3c2028ba7fa58be37ba66b5690ba4945046f60bbbe98c2033f2b7e4e6711",
+        "tests/q/test_rates.q": "a7afd97bb278e693ef58b4e2f89cdb637775467944a941c0989e4a2f8274f76e",
+        "tests/q/test_risk.q": "aba7c9124925ef844a44bbc7ba3a23adb6b272c4f5a899a9145cc45908c623c3",
+        "tests/q/test_run.q": "cff3d4085dd8a51cae91d558e1e64aa03d08326db73964147baa2330e8c7cbc7",
+        "tests/q/test_seed.q": "3656a3c35caf6ffbb37a0ed92e2f7da7a889e7d1b0d48e672bd18611bddbfa7c",
+        "tests/q/test_singlestore_odbc.q": "5ba0f406d8512c85c25b3306d4b54a7eb0054d55f33054cd92bc1ebcc8c3cfe6",
+        "tests/q/test_source_contract.q": "858e3691060132067abdc0778bbe8f257a07fc7892dd803911a1ecb06a5c32d5",
+        "tests/q/test_stack_tables.q": "49dbccb25a227ca7b20aa8f18aa83286cc7b6fcfd150718f3101337412c7e745",
+        "tests/q/test_stats.q": "77d0f70227f6595d9c94dcd0b11ed2c088831adf7b021635676ae5ca4db022cf",
+        "tests/q/test_time_zone.q": "acac27fde49ac3f63d9124286a190d3c4efe5f83650e940a4cd0c0f45ab1adb5",
+        "tests/q/test_transform.q": "1a8778cbc0d84ee09acb6252cc0397f90149ba90967e98e393636647ec46b658",
+        "tests/q/test_worker_config.q": "ae962cdb77e447f4d75fc046e42a3fa68d5061639c4664860a47488dc8aaa31b",
+        "tests/q/test_worker_runtime.q": "c28692bc3d7fa293a9ecb9fbb3d3ceb753558cc137d57af30441f42bbeb83637",
+        "tests/q/try_acquire.q": "42dba140d2f67f51c19b35d0b1dac7e3a3c9855878c1f98300549e6f713ffec1"
+      },
+      "builtin": {
+        "python": {
+          "median_ms": 1168.52,
+          "min_ms": 1120.137,
+          "max_ms": 1225.03,
+          "samples_seconds": [
+            1.1728324587456882,
+            1.1763531249016523,
+            1.1369608342647552,
+            1.2250298745930195,
+            1.1685195839963853,
+            1.1379545000381768,
+            1.120137458667159
+          ]
+        },
+        "rust": {
+          "median_ms": 30.071,
+          "min_ms": 27.961,
+          "max_ms": 33.23,
+          "samples_seconds": [
+            0.03045075014233589,
+            0.030071124900132418,
+            0.03322962485253811,
+            0.02905099978670478,
+            0.031937708146870136,
+            0.029646500013768673,
+            0.027961290907114744
+          ]
+        },
+        "speedup": 38.86
+      },
+      "core": {
+        "python": {
+          "median_ms": 1215.405,
+          "min_ms": 1001.866,
+          "max_ms": 2056.19,
+          "samples_seconds": [
+            1.0244907499291003,
+            1.0018662079237401,
+            1.0177294588647783,
+            1.022160875145346,
+            1.0399459996260703,
+            1.3908649999648333,
+            1.5614895839244127,
+            1.6436141249723732,
+            2.0561903337948024,
+            1.6397690828889608
+          ]
+        },
+        "rust": {
+          "median_ms": 18.516,
+          "min_ms": 17.858,
+          "max_ms": 19.16,
+          "samples_seconds": [
+            0.018607584,
+            0.018658667,
+            0.018424708,
+            0.017964375,
+            0.01829725,
+            0.019160167,
+            0.019074917,
+            0.019138708,
+            0.018183833,
+            0.017857625
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,149 @@
+[
+  {
+    "code": "QE001",
+    "name": "syntax-delimiter",
+    "category": "syntax",
+    "summary": "Unbalanced delimiter or unterminated string",
+    "scope": "builtin"
+  },
+  {
+    "code": "QE002",
+    "name": "invalid-string-escape",
+    "category": "syntax",
+    "summary": "Invalid q string escape",
+    "scope": "builtin"
+  },
+  {
+    "code": "QF001",
+    "name": "reserved-parameter",
+    "category": "names",
+    "summary": "Builtin name used as a parameter",
+    "scope": "builtin"
+  },
+  {
+    "code": "QF002",
+    "name": "underscore-parameter",
+    "category": "names",
+    "summary": "Drop operator used as a parameter",
+    "scope": "builtin"
+  },
+  {
+    "code": "QF003",
+    "name": "reserved-local",
+    "category": "names",
+    "summary": "Assignment to a builtin in a lambda",
+    "scope": "builtin"
+  },
+  {
+    "code": "QF004",
+    "name": "reserved-definition",
+    "category": "names",
+    "summary": "Namespace definition shadows a builtin",
+    "scope": "builtin"
+  },
+  {
+    "code": "QF005",
+    "name": "nested-local-reference",
+    "category": "names",
+    "summary": "Nested lambda expects an outer local",
+    "scope": "builtin"
+  },
+  {
+    "code": "QF006",
+    "name": "reserved-name-in-embedded-q",
+    "category": "names",
+    "summary": "Builtin column name in embedded q",
+    "scope": "python-hook"
+  },
+  {
+    "code": "QA001",
+    "name": "parameter-limit",
+    "category": "application",
+    "summary": "Lambda declares more than eight parameters",
+    "scope": "builtin"
+  },
+  {
+    "code": "QA002",
+    "name": "literal-lambda-rank",
+    "category": "application",
+    "summary": "Too many arguments for a literal lambda",
+    "scope": "builtin"
+  },
+  {
+    "code": "QA003",
+    "name": "multiparam-under-at",
+    "category": "application",
+    "summary": "Unary protected apply receives a multi-argument function",
+    "scope": "builtin"
+  },
+  {
+    "code": "QA004",
+    "name": "dot-empty-list",
+    "category": "application",
+    "summary": "Empty-list application to a niladic function",
+    "scope": "builtin"
+  },
+  {
+    "code": "QT001",
+    "name": "literal-dictionary-length",
+    "category": "types-and-shapes",
+    "summary": "Literal dictionary key/value lengths differ",
+    "scope": "builtin"
+  },
+  {
+    "code": "QT002",
+    "name": "literal-argument-type",
+    "category": "types-and-shapes",
+    "summary": "Symbol passed to a visible numeric function",
+    "scope": "builtin"
+  },
+  {
+    "code": "QB001",
+    "name": "self-comparison",
+    "category": "correctness",
+    "summary": "qSQL filter compares a name to itself",
+    "scope": "builtin"
+  },
+  {
+    "code": "QB002",
+    "name": "interior-like-wildcard",
+    "category": "correctness",
+    "summary": "Unsupported interior wildcard in like",
+    "scope": "builtin"
+  },
+  {
+    "code": "QB003",
+    "name": "unparenthesised-sv",
+    "category": "correctness",
+    "summary": "Concatenation is consumed by sv",
+    "scope": "builtin"
+  },
+  {
+    "code": "QB004",
+    "name": "overlong-throw",
+    "category": "correctness",
+    "summary": "Thrown message risks truncation",
+    "scope": "builtin"
+  },
+  {
+    "code": "QP001",
+    "name": "bare-slash-block",
+    "category": "policy",
+    "summary": "Bare slash opens a block comment",
+    "scope": "uqf"
+  },
+  {
+    "code": "QP002",
+    "name": "datetime-type",
+    "category": "policy",
+    "summary": "Legacy datetime precision",
+    "scope": "uqf"
+  },
+  {
+    "code": "QLS001",
+    "name": "qls/diagnostic",
+    "category": "external",
+    "summary": "Diagnostic from the external qls server",
+    "scope": "qls"
+  }
+]
