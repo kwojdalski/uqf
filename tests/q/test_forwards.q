@@ -559,7 +559,7 @@ test_cross_markout_decomp_rejects_unreachable_pair:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    wrapper:{[q] .qfwd.cross_markout_decomp[q;`AUDJPY;t0;t1;10000;1]};
+    wrapper:{[q;t0;t1] .qfwd.cross_markout_decomp[q;`AUDJPY;t0;t1;10000;1]}[;t0;t1];
     .qunit.assertError[wrapper;quotes;"no chain of available pairs connects AUD and JPY"]};
 
 test_cross_impact_at_horizons_reports_a_different_pairs_own_drift:{[t]
@@ -588,7 +588,7 @@ test_cross_impact_at_horizons_rejects_same_pair:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     trade_time:t0+0D00:00:00.500;
-    wrapper:{[q] .qfwd.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0;1]};
+    wrapper:{[q;trade_time] .qfwd.cross_impact_at_horizons[q;`EURPLN;`EURPLN;trade_time;1;10000;enlist 0;1]}[;trade_time];
     .qunit.assertError[wrapper;quotes;"impact_sym the same as traded_sym is rejected"]};
 
 test_cross_impact_at_horizons_sym_column_is_impact_sym_not_traded_sym:{[t]
@@ -612,7 +612,7 @@ test_cross_markout_at_horizons_rejects_quotes_missing_a_column_instead_of_nullin
     quotes:mk_ts_quotes_table[::];
     bad:delete ask_prices from quotes;
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]};
+    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]}[;trade_time];
     .qunit.assertError[wrapper;bad;"a quotes table missing a required column throws immediately, not a silent null"]};
 
 test_cross_markout_at_horizons_rejects_unsorted_quotes_instead_of_nulling:{[t]
@@ -623,8 +623,8 @@ test_cross_markout_at_horizons_rejects_unsorted_quotes_instead_of_nulling:{[t]
     / null, indistinguishable from the benign case. See issue #6.
     unsorted:reverse mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]};
-    .qunit.assertError[wrapper;unsorted;"quotes rows out of `sym`ts xasc order throws immediately, not a silent null"]};
+    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]}[;trade_time];
+    .qunit.assertThrows[wrapper;unsorted;"cross_markout_at_horizons: quotes must be sorted*";"quotes rows out of `sym`ts xasc order throws immediately, not a silent null"]};
 
 test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
     / without this check, an unbridgeable sym (mistyped, or the bridge
@@ -636,16 +636,16 @@ test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
     / (test_cross_markout_decomp_rejects_unreachable_pair). See issue #25.
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    wrapper:{[q] .qfwd.cross_markout_at_horizons[q;`AUDJPY;trade_time;1;150.0;100;enlist 0;1]};
-    .qunit.assertError[wrapper;quotes;"no chain of available pairs connects AUD and JPY"]};
+    wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDJPY;trade_time;1;150.0;100;enlist 0;1]}[;trade_time];
+    .qunit.assertThrows[wrapper;quotes;"cross_markout_at_horizons: no chain*";"no chain of available pairs connects AUD and JPY"]};
 
 test_cross_markout_decomp_rejects_quotes_missing_a_column:{[t]
     quotes:mk_ts_quotes_table[::];
     bad:delete ask_prices from quotes;
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    wrapper:{[q] .qfwd.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]};
-    .qunit.assertError[wrapper;bad;"a quotes table missing a required column is rejected immediately"]};
+    wrapper:{[q;t0;t1] .qfwd.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]}[;t0;t1];
+    .qunit.assertThrows[wrapper;bad;"cross_markout_decomp: quotes is missing required column(s) ask_prices";"a quotes table missing a required column is rejected immediately"]};
 
 test_cross_markout_decomp_rejects_unsorted_quotes_instead_of_nulling:{[t]
     / same failure mode as cross_markout_at_horizons above, for the decomp
@@ -654,8 +654,8 @@ test_cross_markout_decomp_rejects_unsorted_quotes_instead_of_nulling:{[t]
     unsorted:reverse mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    wrapper:{[q] .qfwd.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]};
-    .qunit.assertError[wrapper;unsorted;"quotes rows out of `sym`ts xasc order throws immediately, not a silent null"]};
+    wrapper:{[q;t0;t1] .qfwd.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]}[;t0;t1];
+    .qunit.assertThrows[wrapper;unsorted;"cross_markout_decomp: quotes must be sorted*";"quotes rows out of `sym`ts xasc order throws immediately, not a silent null"]};
 
 test_apply_col_precedence_leaves_table_unchanged_when_precedence_not_fully_present:{[t]
     / cross_book_chain_at_sizes-style tables (`size`sym`bid`... - no

@@ -153,7 +153,7 @@ def lane_smoke() -> None:
 
 
 def lane_q_coverage() -> None:
-    """The q half of `coverage`, and the half a q change needs.
+    r"""The q half of `coverage`, and the half a q change needs.
 
     Split out so the pre-commit hook - which fires on `\.q$` - does not also
     run pytest over the Python packages. The gate itself lives in

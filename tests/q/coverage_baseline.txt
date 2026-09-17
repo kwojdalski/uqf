@@ -27,7 +27,6 @@
 .qodbc.table_names
 .qodbc.window_query
 .qodbc.with_connection
-.qsrc.validate_live
 .qfeed.databento_mbp10.adapt
 .qfeed.databento_mbp10.epoch_ns_literal
 .qfeed.databento_mbp10.query
