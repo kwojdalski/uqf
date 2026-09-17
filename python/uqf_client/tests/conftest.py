@@ -1,18 +1,19 @@
 """Spins up a real uqf q server for integration tests.
 
-Looks for KDB-X the same way the repo's pre-commit q-tests hook does: PATH,
-then ~/.kx/bin/q.
+Finds q by the rule scripts/test.py applies: $Q if set, otherwise
+~/.kx/bin/q, and nothing else.
 
-The repo-root `./q` is no longer a fallback. This tree targets KDB-X only, and
-a second interpreter that silently satisfied the search would have run the
-suite against something the code is not verified on - a pass that means less
-than no pass at all.
+This docstring used to say it searched "the same way the pre-commit hook
+does", which had stopped being true - the hook still fell back to PeachQ at
+./q while this file said ./q was no longer a fallback. Four places each
+looked for the interpreter their own way. They now share one rule, and it is
+the README's: choosing another interpreter is explicit. A PATH lookup is not,
+because whatever `q` happens to be first on PATH is chosen for you.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 import socket
 import subprocess
 import time
@@ -26,13 +27,11 @@ UQF_ROOT = Path(__file__).resolve().parents[3]
 
 def _find_q_binary() -> tuple[str, dict[str, str]]:
     env = os.environ.copy()
-    if shutil.which("q"):
-        return "q", env
-    kdbx = Path.home() / ".kx" / "bin" / "q"
-    if kdbx.is_file():
+    q = Path(env["Q"]) if env.get("Q") else Path.home() / ".kx" / "bin" / "q"
+    if q.is_file():
         env.setdefault("QHOME", str(Path.home() / ".kx"))
-        return str(kdbx), env
-    pytest.skip("no KDB-X interpreter found (PATH, ~/.kx/bin/q)")
+        return str(q), env
+    pytest.skip(f"no q interpreter at {q} - set $Q to choose one (README#requirements)")
 
 
 def _free_port() -> int:

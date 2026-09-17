@@ -37,7 +37,9 @@ jobs:
       - name: Report q runtime coverage
         shell: bash
         run: |
-          if command -v q >/dev/null 2>&1 || [ -x "$HOME/.kx/bin/q" ]; then
+          # The same rule scripts/test.py applies, so CI skips exactly when
+          # the hook would have nothing to run: $Q, else ~/.kx/bin/q.
+          if [ -x "${Q:-$HOME/.kx/bin/q}" ]; then
             echo "A q interpreter is available; the q-tests hook will run." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "SKIP=$SKIP,q-tests" >> "$GITHUB_ENV"

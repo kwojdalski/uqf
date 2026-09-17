@@ -123,28 +123,14 @@ repos:
           - -c
           - |
             set -euo pipefail
-            # Prefer a real, fully-compatible interpreter (KDB-X/kdb+) over
-            # PeachQ, which is an early-preview reimplementation with known
-            # gaps (e.g. no `2:`). See ~/.kx (KDB-X) vs ./q (PeachQ).
-            if command -v q >/dev/null 2>&1; then
-              QBIN=q
-            elif [ -x "$HOME/.kx/bin/q" ]; then
-              QBIN="$HOME/.kx/bin/q"
-              export QHOME="${QHOME:-$HOME/.kx}"
-            elif [ -x ./q ]; then
-              QBIN=./q
-            elif [ -x ./peachq/q ]; then
-              QBIN=./peachq/q
-            else
-              echo "No q/kdb+ interpreter found (checked PATH, ~/.kx/bin/q, ./q, ./peachq/q)." >&2
-              echo "Install KDB-X/kdb+ (https://kx.com/kdb-personal-edition-download/)," >&2
-              echo "or PeachQ (https://www.timestored.com/peachq/download) at ./q or ./peachq/q (both gitignored)." >&2
-              exit 1
-            fi
-            "$QBIN" tests/run_tests.q
-            # Every @eg, including those stating no value. Its own status
-            # directory, because examples take locks and write status files.
-            UQFSTATUSDIR="$(mktemp -d)" "$QBIN" tests/q/run_examples.q
+            # Through scripts/test.py, not a lookup of its own. This hook used
+            # to find q itself - PATH, then ~/.kx/bin/q, then PeachQ at ./q and
+            # ./peachq/q - which was the third different answer in this repo
+            # to "which interpreter", and the only one that fell back to
+            # something the tree is not verified on. test.py's rule is the
+            # README's: $Q if you set it, otherwise ~/.kx/bin/q, nothing else.
+            python3 scripts/test.py q-unit
+            python3 scripts/test.py q-examples
         files: '\.q$'
         pass_filenames: false
 
