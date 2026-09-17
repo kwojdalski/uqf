@@ -148,6 +148,27 @@ qdata,getBySymbolDate,function,2,sym date
 qdata,parseEnv,function,1,file
 qdata,pqModule,function,1,
 qdata,pqm,value,,
+qdbnbf,book,table,,
+qdbnbf,checkpoint,function,1,cursor
+qdbnbf,cleanup,function,1,
+qdbnbf,contract,table,,
+qdbnbf,example_book,function,1,
+qdbnbf,fetch,function,2,from_ts to_ts
+qdbnbf,fold,function,2,batch prefix
+qdbnbf,handle,value,,
+qdbnbf,init,function,1,run_spec
+qdbnbf,last_batch,value,,
+qdbnbf,plan,function,1,cursor
+qdbnbf,progress,dict,,
+qdbnbf,publish,function,1,batch
+qdbnbf,quality_check,function,1,batch
+qdbnbf,range_from,value,,
+qdbnbf,range_to,value,,
+qdbnbf,run,function,1,
+qdbnbf,source_version,value,,
+qdbnbf,spec,function,1,
+qdbnbf,to_book,function,1,batch
+qdbnbf,worker_name,value,,
 qdcf,dcf_30e_360,function,2,d1 d2
 qdcf,dcf_act_360,function,2,d1 d2
 qdcf,dcf_act_365,function,2,d1 d2
@@ -423,6 +444,23 @@ qrun,runs,function,1,
 qrun,table_path,function,1,name
 qrun,under_lock,function,2,f args
 qrun,unfinished,function,1,
+qsdbn,adapt,function,1,raw
+qsdbn,epoch_ns_literal,function,1,ts
+qsdbn,fields,value,,
+qsdbn,fixture,function,1,
+qsdbn,fixture_levels,function,3,bid ask sz
+qsdbn,level_fields,value,,
+qsdbn,levels,value,,
+qsdbn,query,function,3,h range_from range_to
+qsdbn,row_key,value,,
+qsdbn,select_list,function,1,
+qsdbn,source_name,value,,
+qsdbn,table,value,,
+qsdbn,target,value,,
+qsdbn,time_field,value,,
+qsdbn,transport,value,,
+qsdbn,types,value,,
+qsdbn,tz,value,,
 qsdemo,fields,value,,
 qsdemo,fixture,function,1,
 qsdemo,query,function,3,h range_from range_to
@@ -448,6 +486,7 @@ qsrc,coercers,dict,,
 qsrc,column_names,function,1,tbl
 qsrc,credential_var,function,1,source
 qsrc,declaration,function,1,source
+qsrc,default_transport,value,,
 qsrc,fetch_window,function,4,source h range_from range_to
 qsrc,has_credentials,function,1,source
 qsrc,load_zone_table,function,1,path
@@ -465,6 +504,7 @@ qsrc,required_declarations,value,,
 qsrc,row_key,function,1,source
 qsrc,source_bounds,function,3,decl range_from range_to
 qsrc,sources,dict,,
+qsrc,transports,value,,
 qsrc,type_chars,function,1,tbl
 qsrc,utc_to_local,function,2,zone ts
 qsrc,validate,function,2,source tbl
@@ -500,6 +540,32 @@ qstream,score_markouts,function,2,trades quotes
 qstream,wide_book,table,,
 qstream,wide_level_groups,dict,,
 qstream,wide_level_names,value,,
+qsup,fields,value,,
+qsup,fixture,function,1,
+qsup,query,function,3,h range_from range_to
+qsup,row_key,value,,
+qsup,source_name,value,,
+qsup,target,value,,
+qsup,time_field,value,,
+qsup,types,value,,
+qsup,tz,value,,
+qupbf,checkpoint,function,1,cursor
+qupbf,cleanup,function,1,
+qupbf,facts,function,1,batch
+qupbf,fetch,function,2,from_ts to_ts
+qupbf,handle,value,,
+qupbf,init,function,1,run_spec
+qupbf,last_batch,value,,
+qupbf,plan,function,1,cursor
+qupbf,progress,dict,,
+qupbf,publish,function,1,batch
+qupbf,quality_check,function,1,batch
+qupbf,range_from,value,,
+qupbf,range_to,value,,
+qupbf,run,function,1,
+qupbf,source_version,value,,
+qupbf,spec,function,1,
+qupbf,worker_name,value,,
 qwcfg,default_values,dict,,
 qwcfg,env_name,function,1,k
 qwcfg,env_values,dict,,

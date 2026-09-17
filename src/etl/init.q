@@ -71,9 +71,11 @@
 \l src/etl/sources/demo_deals.q
 \l src/etl/sources/demo_events.q
 \l src/etl/sources/databento_mbp10.q
+\l src/etl/sources/upstream_trades.q
 \l src/etl/workers/demo_deals_backfill.q
 \l src/etl/workers/demo_events_backfill.q
 \l src/etl/workers/databento_book_backfill.q
+\l src/etl/workers/upstream_trades_backfill.q
 
 / Transforms of the tickerplant subscriber jobs. Last, because they register
 / into .qxf on load and call the library through src/init.q.

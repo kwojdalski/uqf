@@ -251,6 +251,7 @@ scripts/test.py q-unit              # deterministic qUnit suite
 scripts/test.py q-metatables-hdb    # metatable queries against a temporary HDB
 scripts/test.py q-examples          # every documented @eg runs, in its own process
 scripts/test.py q-backfill-process  # bounded lifecycle, real filesystem, child processes
+scripts/test.py q-two-instances     # a second kdb+ process, data moved across the wire
 scripts/test.py python              # orchestrator and frontend
 scripts/test.py coverage            # what the suites execute, q and Python
 scripts/test.py smoke               # live external metadata check
@@ -349,6 +350,17 @@ cannot prove what they claim if folded into the first:
   q refusing itself, not the mutual exclusion the lock exists to provide -
   and an in-process "resume" never discards its own memory, so it cannot
   show the state on disk was sufficient.
+- **`q-two-instances`** is the only lane in `all` where a source runs
+  **live**. It starts a plain q process on the starter pack's HDB
+  (`tests/q/upstream_instance.q`), sets that process as the
+  `upstream_trades` credential, and moves trades into this process through
+  the framework: connect, validate the remote `meta`, evaluate the query
+  remotely, transform, record coverage, idle on a second run, re-fetch one
+  window after a restatement, and refuse to start once the upstream is
+  gone. Every other lane runs workers on their fixtures, so this is the
+  only place `.qbw.connect`, a source's `query` and `.qsrc.validate_live`
+  execute at all - which is how a bare table name in a query lambda stayed
+  latent in three sources until this lane ran.
 - **`smoke`** also carries ETL-12's live half: every registered source is
   validated against **the same declaration** its fixture is validated
   against in the deterministic suite. That is what makes a fixture

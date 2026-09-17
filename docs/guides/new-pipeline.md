@@ -61,7 +61,7 @@ tz:`UTC                        / what time_field is expressed in (L-06)
 
 query:{[h;range_from;range_to]
     h({[from_ts;to_ts]
-        select rate_time, sym, mid from fx_rates
+        select rate_time, sym, mid from `fx_rates
             where rate_time>=from_ts, rate_time<to_ts
       };range_from;range_to)}
 
@@ -317,6 +317,17 @@ nulls; a dry run publishes nothing; and each of the five contract methods
 actually delegates.
 
 `scripts/test.py coverage` will tell you which of those you missed.
+
+None of that runs your `query`. The unit suite never sets a credential, so a
+worker there runs on its fixture, and the query lambda is never sent
+anywhere. To see it run against a real second process, follow
+[`tests/q/run_two_instances.q`](../../tests/q/run_two_instances.q): start a
+plain q process holding the upstream table, set
+`UQF_SOURCE_CRED_<SOURCE>=host:port`, and run the worker (`scripts/test.py
+q-two-instances` does exactly this for `upstream_trades`). One trap that only
+shows up there: write `` from `trade ``, never `from trade`. The lambda
+carries your `\d .qsfx` across the wire, so a bare name resolves
+in that namespace on the remote and throws; `check_q_traps` refuses it.
 
 ## Filling one dataset with several workers
 

@@ -93,7 +93,7 @@ tz:`UTC
 query:{[h;range_from;range_to]
     h({[from_ts;to_ts]
         select deal_id, deal_time, sym, side, notional, rate
-            from demo_deals
+            from `demo_deals
             where deal_time>=from_ts, deal_time<to_ts
       };range_from;range_to)}
 

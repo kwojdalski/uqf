@@ -320,8 +320,6 @@ empty_windows:{[] ([] range_from:`timestamp$(); range_to:`timestamp$())}
 plan:{[worker;cursor]
     cfg:declaration worker;
     s:spec worker;
-    start:$[null cursor; s`range_from; cursor];
-    if[not start<s`range_to; :empty_windows[]];
     / ONE as_of for the whole plan, captured here rather than read per call
     / (D-11). Calling .z.p inside each coverage read would plan against a
     / ledger that could be superseded midway, so a range could be reported
@@ -329,7 +327,27 @@ plan:{[worker;cursor]
     / resulting window list would correspond to no coherent belief about the
     / data at any instant.
     as_of:.z.p;
-    todo:.qwrt.remaining[cfg`dataset;cfg`partition;s`source_version;as_of;start;s`range_to];
+    / COVERAGE DECIDES WHAT IS LEFT. The cursor is a resumption hint and
+    / nothing more.
+    / .
+    / This used to plan from the cursor as a hard lower bound, and the
+    / cursor of a finished run is range_to. So after a restatement withdrew
+    / a window's coverage (D-11), a re-run with the same spec found its
+    / cursor at the end, consulted coverage for nothing, and reported idle
+    / over a range the ledger itself said was missing - supersede worked and
+    / nothing would ever refill what it withdrew. advanced_to's own comment
+    / had even described the shape ("they simply never get filled while
+    / that checkpoint stands") and accepted it. Found by
+    / tests/q/run_two_instances.q, the first place a supersede was followed
+    / by a same-spec re-run.
+    / .
+    / Now every gap in the whole range is planned, whatever the cursor says.
+    / The cursor still does the one thing it is for: when the range BEHIND it
+    / is fully covered - the ordinary resume after an interruption - the
+    / gaps all lie at or after it and the plan starts there, exactly as
+    / before. When a gap lies behind it, the gap wins, because a gap is a
+    / fact about the data and a cursor is a note about a previous run.
+    todo:.qwrt.remaining[cfg`dataset;cfg`partition;s`source_version;as_of;s`range_from;s`range_to];
     if[0=count todo; :empty_windows[]];
     / one set of windows per uncovered sub-range, then flattened - a gap in
     / the middle must not be bridged by a window spanning it.
@@ -397,7 +415,16 @@ run:{[worker]
         end_run[`idle];
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
-    write_state[worker;`progress;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;cursor)];
+    / The run's OWN cursor starts null, not at the loaded checkpoint. The
+    / checkpoint's job was to inform the plan, and the plan is made; from
+    / here the cursor tracks what THIS run has published, in the order it
+    / publishes it. Seeding it from the checkpoint broke restatement: a
+    / finished run's checkpoint is range_to, so the first refilled window
+    / ended at or before it and advanced_to refused a cursor that "stood
+    / still" - the strict-forward rule, correct within a run, applied
+    / across two. The run then died after doing the work but before
+    / recording it.
+    write_state[worker;`progress;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np)];
     .qhb.beat[worker;`running];
     do_window[worker] each windows;
     p:read_state[worker;`progress];
@@ -604,12 +631,15 @@ record_facts:{[worker;cfg;w;batch;r]
 / D-09 asked whether backfill is strictly oldest-first, and whether the order
 / matters to correctness or only to observability. It is oldest-first by
 / construction - windows[] builds starts as from_ts+width*til n, and remaining
-/ hands back ascending sub-ranges - and the order matters to CORRECTNESS,
-/ because plan[] uses this cursor as its LOWER bound. A window processed out
-/ of order would push the cursor past windows that are still uncovered, and
-/ the next run would plan from there and never come back for them. Coverage
-/ would still show them as gaps, so nothing gets wrongly reported complete;
-/ they simply never get filled while that checkpoint stands.
+/ hands back ascending sub-ranges. The order used to matter to CORRECTNESS:
+/ plan[] took this cursor as a hard lower bound, so a window processed out
+/ of order pushed the cursor past windows still uncovered and "they simply
+/ never got filled while that checkpoint stood". plan[] no longer does that
+/ - coverage decides what is left, and a gap behind the cursor is planned -
+/ so the consequence is gone. The invariant stays, because a cursor that
+/ moves backwards or stands still would still mean a window was processed
+/ out of the order the plan produced, which is a bug worth refusing loudly
+/ rather than one the new plan[] happens to survive.
 / .
 / So the ordering was load-bearing and unenforced. .qcont.advance already
 / refuses a non-strictly-forward continuous cursor for a closely related
