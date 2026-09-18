@@ -163,17 +163,39 @@ as_table:{[data]
             flip data];
         '"qpipe.publish: expected a table, keyed table or dict, got type ",string t]}
 
+/ Private: is this the list-of-columns form - one vector per column, no
+/ names - that .u.upd itself takes?
+/ .
+/ Every feed under src/etl/streaming/ publishes this shape (a row builder
+/ returns `(enlist sym; enlist side; ...)`), and so do cryptorust's two kdb
+/ recorders. Until this existed, as_table refused it as "type 0" - which
+/ was invisible for as long as the running stack predated #204, because the
+/ old per-feed scripts sent to .u.upd directly and never went through
+/ publish. Every element must be a LIST: a general list of atoms is
+/ invariant 3's own trap (one row that reads as one column) and is still
+/ refused, by as_table, with the message that names it.
+is_columns:{[data] (0h=type data) and (0<count data) and all 0<=type each data}
+
 / Publish rows onto the tickerplant (invariants 1, 2, 3 and 5). The one and
 / only way a pipeline in this demo should send data.
 / @param h the publish handle (passed explicitly, never read from a global -
 /   see invariant 5)
 / @param tbl the destination table name, e.g. `execution_quality
-/ @param data a table, keyed table, or dict (of atoms for one row, or of
-/   vectors for many)
+/ @param data a table, keyed table, a dict (of atoms for one row, or of
+/   vectors for many), or a list of column vectors in the table's own order
 / @return the number of rows published
 / @eg .qpipe.publish[h;`execution_quality;out]
 / @eg .qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]
+/ @eg .qpipe.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]
 publish:{[h;tbl;data]
+    if[is_columns data;
+        / Straight through: this IS .u.upd's shape, and there are no names
+        / to strip a `time` from. The count is the first column's, which
+        / is where .u.upd takes it from too.
+        n:count first data;
+        if[0=n; :0];
+        h (`.u.upd;tbl;data);
+        :n];
     out:as_table data;
     if[0=count out; :0];
     / invariant 1: .u.upd stamps its own `time` - sending ours makes the

@@ -93,8 +93,10 @@
 \l src/etl/streaming/quotes_feed.q
 \l src/etl/streaming/wide_book_feed.q
 \l src/etl/streaming/fx_trades_feed.q
+\l src/etl/streaming/crypto_mock.q
 \l src/etl/streaming/markout.q
 \l src/etl/streaming/cross.q
 \l src/etl/streaming/posbook.q
+\l src/etl/streaming/crypto_posbook.q
 \l src/etl/streaming/vectorize.q
 \l src/etl/streaming/databento_book.q

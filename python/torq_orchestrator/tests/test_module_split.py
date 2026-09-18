@@ -28,6 +28,7 @@ PKG = REPO / "python" / "torq_orchestrator"
 #: is excluded: it is the facade, not a layer.
 MODULES = (
     "schemas",
+    "pipeline",
     "pipelines",
     "paths",
     "env",

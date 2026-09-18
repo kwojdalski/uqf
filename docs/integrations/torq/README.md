@@ -5,8 +5,8 @@ Diagrams for the running state of the uqf stack (see
 it). Reflects what `uqf-stack list processes` shows today: the vendored
 14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
-`markout1`), and two bounded backfill processes (`deals_backfill1`,
-`events_backfill1`).
+`markout1`, `databento1`, `cryptomock1`, `cryptoposbook1`), and two bounded
+backfill processes (`deals_backfill1`, `events_backfill1`).
 
 **The backfills are on the topology diagram but have no edge to the
 tickerplant, and that is the point.** They were left off entirely at first,
@@ -78,6 +78,22 @@ raw MBP-10 onto `databento_mbp10`, and `databento1` folds it into
 The handler is not a process here, for the reason cryptorust is not: a q
 process cannot hold that subscription, so it is started by `uqf-stack
 databento start` rather than by `torq.sh`.
+
+The crypto half of the stack has the same shape, with one difference in who
+publishes the raw rows. `crypto_book` and `crypto_trades` are declared for
+cryptorust's two kdb recorders, which are Rust binaries connected to live
+venues. `cryptomock1` stands in for both when cryptorust is not running: it
+walks a simulated market per (venue, sym), publishes the ladder onto
+`crypto_book`, and fills the maker's own touch using cryptorust's fill
+model, publishing each fill onto `crypto_trades` in the recorder's exact wire
+shape. It is `startwithall:0` and started **instead of** cryptorust, never
+beside it - two publishers onto one fills table would interleave invented
+fills with confirmed ones. `cryptoposbook1` is the consumer either way: it
+runs the `position` transform `posbook1` declares over `crypto_trades`,
+marks to the top of the crypto book, and republishes onto the same
+`position` table, so one position view carries FX and crypto. Neither
+process reads `crypto_sim_fills`; those are the paper strategy's own fills
+and are not a position.
 
 `tap1` is the one process still running its own script
 (`scripts/processes/torq_tap.q`): it chooses its tables at runtime rather

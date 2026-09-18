@@ -18,7 +18,7 @@
 / ------------------------------------------------------------- THE SHAPES
 
 position_book:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$())
-position_trades:([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$())
+position_trades:([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$())
 position_marks:([] sym:`symbol$(); mid:`float$())
 position:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); mark_price:`float$(); unrealized_pnl:`float$(); total_pnl:`float$())
 
@@ -34,6 +34,13 @@ position:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`f
 / One output row per fill, in fill order, each marked to the sym's mid - or
 / to the fill's own price for a sym never quoted, which is this job's
 / long-standing fallback.
+/ .
+/ The declared input is exactly what this reads: time, sym, side,
+/ trade_price, size. It used to carry pip_factor too, which nothing here
+/ touched - and a transform that demands a column it does not read cannot
+/ serve a fill table that lacks it. crypto_trades lacks it (a crypto price
+/ is in quote units, there is no pip), and .qsub.crypto_posbook runs this
+/ same transform over those fills. Declare what you read.
 / @param book the current positions, unkeyed
 / @param trades the batch of fills, in arrival order
 / @param marks the last mid per sym
@@ -90,7 +97,7 @@ on_batch:{[tbl;batch]
     $[tbl=`trades;
         [out:.qxf.apply[`position;`book`trades`marks!(
             0!.qsub.posbook.book;
-            select time, sym, side, trade_price, size, pip_factor from batch;
+            select time, sym, side, trade_price, size from batch;
             ([] sym:key .qsub.posbook.last_mid; mid:value .qsub.posbook.last_mid))];
          `.qsub.posbook.book set 1!.qsub.posbook.next_book[0!.qsub.posbook.book;out];
          .qsub.posbook.publish[`position;out]];
@@ -117,8 +124,7 @@ on_batch:{[tbl;batch]
                 sym:`EURUSD`EURUSD`USDJPY;
                 side:1 -1 -1;
                 trade_price:1.1 1.105 150;
-                size:1e6 4e5 1e6;
-                pip_factor:10000 10000 100);
+                size:1e6 4e5 1e6);
             ([] sym:enlist `EURUSD; mid:enlist 1.104));
         ([] sym:`EURUSD`EURUSD`USDJPY;
             qty:1e6 6e5 -1e6;
@@ -133,7 +139,7 @@ on_batch:{[tbl;batch]
     `inputs`expected!(
         `book`trades`marks!(
             ([] sym:enlist `USDJPY; qty:enlist -1e6; avg_price:enlist 150f; realized_pnl:enlist 0f);
-            ([] time:enlist 2026.09.17D10:00:05; sym:enlist `USDJPY; side:enlist 1; trade_price:enlist 149f; size:enlist 1e6; pip_factor:enlist 100);
+            ([] time:enlist 2026.09.17D10:00:05; sym:enlist `USDJPY; side:enlist 1; trade_price:enlist 149f; size:enlist 1e6);
             ([] sym:enlist `USDJPY; mid:enlist 148.5));
         ([] sym:enlist `USDJPY; qty:enlist 0f; avg_price:enlist 0f; realized_pnl:enlist 1e6; mark_price:enlist 148.5; unrealized_pnl:enlist 0f; total_pnl:enlist 1e6))
     ))];

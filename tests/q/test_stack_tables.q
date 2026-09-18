@@ -115,4 +115,15 @@ test_every_table_is_empty_as_declared:{[t]
     .qunit.assertEquals[distinct {count .tabletest.tbl x} each expected;enlist 0;
         "every declaration is an empty typed table"]};
 
+
+test_the_crypto_posbooks_inputs_match_the_stack_tables:{[t]
+    / cryptoposbook1 reads what cryptorust's recorders - or the mock - put
+    / on the plant. The job declares the shapes it reads; this holds them
+    / to the plant's, so a column added on one side shows up here rather
+    / than as a misaligned batch.
+    .qunit.assertEquals[cols .qsub.crypto_posbook.crypto_trades;cols .tabletest.tbl `crypto_trades;
+        "the fills the job reads are the fills the plant carries"];
+    .qunit.assertEquals[cols .qsub.crypto_posbook.crypto_book;cols .tabletest.tbl `crypto_book;
+        "and the book it marks to is the book the plant carries"]};
+
 \d .

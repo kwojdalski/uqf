@@ -39,10 +39,10 @@
 # .qpipe is the TorQ block library and .qsub the subscriber processes. Both
 # assume a tickerplant, a publish handle and a timer; the transforms they
 # call are tested through .qxf instead, which is the part that computes.
-.qpipe.as_table
+# publish and as_table are not here: the handle is a seam, and
+# test_stream_job.q hands them a recording one.
 .qpipe.feed_handle
 .qpipe.load_uqf
-.qpipe.publish
 .qpipe.safe_timer
 .qpipe.subscribe_etl
 .qsub.markout.now

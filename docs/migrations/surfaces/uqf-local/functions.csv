@@ -1,4 +1,39 @@
 namespace,name,kind,rank,params
+qalloc,all_rows,function,1,t
+qalloc,allocate,function,2,trades opts
+qalloc,append_lot,function,2,lots lot
+qalloc,bucket,function,5,m bys kv seed sub
+qalloc,by_cols,function,1,d
+qalloc,by_trade,function,1,matches
+qalloc,default_opts,dict,,
+qalloc,key_table,function,2,t bys
+qalloc,merge_lot,function,2,lots lot
+qalloc,method,function,1,nm
+qalloc,methods,dict,,
+qalloc,new_lots,function,1,trades
+qalloc,new_matches,function,1,trades
+qalloc,normalised_opts,function,1,opts
+qalloc,pick_first,function,1,lots
+qalloc,pick_highest,function,1,lots
+qalloc,pick_last,function,1,lots
+qalloc,pick_lowest,function,1,lots
+qalloc,position,function,2,lots group_cols
+qalloc,position_at,function,3,trades opts ts
+qalloc,prepared,function,2,trades bys
+qalloc,prepared_opening,function,2,opening bys
+qalloc,register,function,2,nm m
+qalloc,registered,function,1,
+qalloc,require_method,function,1,m
+qalloc,required,value,,
+qalloc,required_cols,value,,
+qalloc,required_lot_cols,value,,
+qalloc,residual,function,2,trades opts
+qalloc,run,function,2,trades opts
+qalloc,seed_lots,function,3,trades opening ix
+qalloc,step,function,3,m state row
+qalloc,summary,function,2,matches group_cols
+qalloc,unrealised,function,2,lots marks
+qalloc,with_by,function,3,out kv bys
 qbfstate,acquire_lock,function,1,worker
 qbfstate,bounded_worker_globals,value,,
 qbfstate,bounded_worker_methods,value,,
@@ -544,6 +579,46 @@ qsub.cross,quotes,table,,
 qsub.cross,quotes_in,table,,
 qsub.cross,reprice,function,1,now
 qsub.cross,reprice_crosses,function,2,quotes as_of
+qsub.crypto_mock,beta_draw,function,2,a b
+qsub.crypto_mock,book_rows,function,1,mkt
+qsub.crypto_mock,decide,function,3,row horizon draws
+qsub.crypto_mock,draws,function,1,
+qsub.crypto_mock,drift_toxicity,function,1,t
+qsub.crypto_mock,fill_alpha,value,,
+qsub.crypto_mock,fill_beta,value,,
+qsub.crypto_mock,fill_rows,function,6,venue s side price size id
+qsub.crypto_mock,half_spread,value,,
+qsub.crypto_mock,hazard_per_s,value,,
+qsub.crypto_mock,hazard_to_prob,function,2,hazard horizon
+qsub.crypto_mock,last_id,dict,,
+qsub.crypto_mock,level_step,value,,
+qsub.crypto_mock,maker_fee_bps,value,,
+qsub.crypto_mock,market,table,,
+qsub.crypto_mock,max_fill_fraction,value,,
+qsub.crypto_mock,mid0,value,,
+qsub.crypto_mock,n_levels,value,,
+qsub.crypto_mock,n_market,value,,
+qsub.crypto_mock,next_id,function,1,venue
+qsub.crypto_mock,on_timer,function,1,
+qsub.crypto_mock,publish,value,,
+qsub.crypto_mock,publish_fills,function,2,horizon row
+qsub.crypto_mock,quote_ccy,function,1,s
+qsub.crypto_mock,quote_share,value,,
+qsub.crypto_mock,quote_size,value,,
+qsub.crypto_mock,skewed,function,2,p tox
+qsub.crypto_mock,syms,value,,
+qsub.crypto_mock,tick_seconds,value,,
+qsub.crypto_mock,touch,function,1,mid
+qsub.crypto_mock,toxicity_factor,value,,
+qsub.crypto_mock,venues,value,,
+qsub.crypto_mock,walk,function,1,m
+qsub.crypto_posbook,book,dict,,
+qsub.crypto_posbook,crypto_book,table,,
+qsub.crypto_posbook,crypto_trades,table,,
+qsub.crypto_posbook,last_mid,dict,,
+qsub.crypto_posbook,on_batch,function,2,tbl batch
+qsub.crypto_posbook,publish,value,,
+qsub.crypto_posbook,top_mid,function,2,bids asks
 qsub.databento_book,book,table,,
 qsub.databento_book,on_batch,function,2,tbl batch
 qsub.databento_book,publish,value,,

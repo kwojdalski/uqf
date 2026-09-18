@@ -34,4 +34,6 @@
     .qdag.register[`deals_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
     .qdag.register[`events_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
     .qdag.register[`databento1;`kind`inputs`outputs!(`stream;`databento_mbp10;`databento_book)];
-    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1}
+    .qdag.register[`cryptomock1;`kind`inputs`outputs!(`stream;`$();`crypto_book`crypto_trades)];
+    .qdag.register[`cryptoposbook1;`kind`inputs`outputs!(`stream;`crypto_trades`crypto_book;`position)];
+    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`cryptoposbook1}
