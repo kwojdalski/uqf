@@ -832,7 +832,7 @@ def test_declared_dataflow_edges_match_the_q_scripts():
     `verify_pipeline_edges` existed and passed - when someone ran it by hand.
     Nothing exercised it in the suite, so a declaration could drift from the
     script it describes and the diagrams derived from it would go stale with
-    no signal. That is the same dormant-guard shape as `.qcov.require_schema`
+    no signal. That is the same dormant-guard shape as `.qmatz.require_schema`
     before it was wired into a worker's init: a check that cannot fire
     protects nothing, and its existence reads as protection to anyone
     auditing the code.

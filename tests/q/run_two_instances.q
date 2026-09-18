@@ -102,7 +102,7 @@ check["the transform reshaped them: long size, 1/-1 side, venue symbol";
 check["no zero-size trade was imported";all (exec size from imported_trades)>0];
 check["no side other than 1 or -1 came through";all (exec side from imported_trades) in 1 -1];
 check["coverage records the range as complete";
-    .qcov.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
+    .qmatz.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
 .qwrk.upstream_trades_backfill.cleanup[];
 
 / --- a second run is idle, and moves nothing twice -------------------------
@@ -115,13 +115,13 @@ check["and publishes nothing further";expected_rows=count imported_trades];
 
 / --- a restatement withdraws one hour, and only that hour is re-fetched ----
 
-n_withdrawn:.qcov.supersede[`imported_trades;`;`v1;2015.01.07D10:00:00;to_ts];
--1 "  supersede withdrew ",string[n_withdrawn]," claim(s); missing now: ",.Q.s1 .qcov.missing[`imported_trades;`;`v1;.z.p;from_ts;to_ts];
+n_withdrawn:.qmatz.supersede[`imported_trades;`;`v1;2015.01.07D10:00:00;to_ts];
+-1 "  supersede withdrew ",string[n_withdrawn]," claim(s); missing now: ",.Q.s1 .qmatz.missing[`imported_trades;`;`v1;.z.p;from_ts;to_ts];
 .qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
 r3:.qwrk.upstream_trades_backfill.run[];
 -1 "  re-run: state ",string[r3`state],", windows ",string[r3`windows_completed],", cursor ",string r3`cursor;
 check["after superseding one window, exactly one window is re-run";1=r3`windows_completed];
-check["the range reads as covered again";.qcov.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
+check["the range reads as covered again";.qmatz.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
 .qwrk.upstream_trades_backfill.cleanup[];
 
 / --- an unreachable upstream is refused, not silently substituted ---------

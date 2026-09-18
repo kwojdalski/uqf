@@ -1,6 +1,6 @@
 // test_etl_lifecycle.q - the ETL-18 lifecycle coverage and the ETL-19 doubles
 // discipline. Load src/etl/core/status.q, src/etl/core/backfill_state.q,
-// src/etl/core/coverage.q, src/etl/core/worker_config.q,
+// src/etl/core/materialisation.q, src/etl/core/worker_config.q,
 // src/etl/core/worker_runtime.q, tests/lib/etl_test_doubles.q,
 // tests/q/reference_worker.q, tests/lib/qunit.q and tests/lib/testutil.q
 // before this file.
@@ -149,7 +149,7 @@ test_a_ragged_range_still_tiles_exactly:{[t]
 
 test_the_composed_windows_cover_exactly_the_request:{[t]
     w:.qwrt.windows[.lifecycletest.d 1;(.lifecycletest.d 3)+0D06;1D];
-    c:.qcov.compose w;
+    c:.qmatz.compose w;
     .qunit.assertEquals[(count c;first[c]`range_from;last[c]`range_to);(1;.lifecycletest.d 1;(.lifecycletest.d 3)+0D06);"the windows compose back to the original range, with nothing over or under"]};
 
 test_a_zero_width_window_is_rejected:{[t]
@@ -206,7 +206,7 @@ test_a_full_run_leaves_the_range_covered:{[t]
     {[spec;w]
         .qwrt.finish_window[`reference;`refdata;`;spec;w`range_from;w`range_to;{1}]
     }[spec] each .qrefw.plan 0Np;
-    .qunit.assertEquals[.qcov.is_covered[`refdata;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
+    .qunit.assertEquals[.qmatz.is_covered[`refdata;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
 
 / A run that fails part-way must leave the DONE windows covered and the rest
 / not. Claiming the whole range would be the serious bug; claiming none of it
@@ -215,24 +215,24 @@ test_a_partially_failed_run_covers_only_what_completed:{[t]
     spec:.lifecycletest.spec_for[`v1;1;4];
     .qrefw.init spec;
     .qwrt.finish_window[`reference;`refdata;`;spec;.lifecycletest.d 1;.lifecycletest.d 2;{1}];
-    gap:.qcov.missing[`refdata;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];
+    gap:.qmatz.missing[`refdata;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];
     .qunit.assertEquals[(count gap;first[gap]`range_from);(1;.lifecycletest.d 2);"one window done, the remaining two days still reported missing"]};
 
 / --- 6. version-specific coverage admission ------------------------------
 
 test_a_version_bump_is_not_admitted_by_old_coverage:{[t]
-    .qcov.stage_completion[`refdata;`;`v1;.lifecycletest.d 1;.lifecycletest.d 4;100];
-    .qunit.assertEquals[.qcov.is_covered[`refdata;`;`v2;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];0b;"a v2 run is not satisfied by v1 coverage"]};
+    .qmatz.stage_completion[`refdata;`;`v1;.lifecycletest.d 1;.lifecycletest.d 4;100];
+    .qunit.assertEquals[.qmatz.is_covered[`refdata;`;`v2;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];0b;"a v2 run is not satisfied by v1 coverage"]};
 
 test_an_upstream_precondition_blocks_before_any_work:{[t]
     .qunit.assertError[{.qwrt.require_upstream[`upstream;`;`v1;.z.p;x 0;x 1]};(.lifecycletest.d 1;.lifecycletest.d 4);"an unpublished upstream stops the run at init, before a window is fetched"]};
 
 test_partial_upstream_coverage_is_not_enough:{[t]
-    .qcov.stage_completion[`upstream;`;`v1;.lifecycletest.d 1;.lifecycletest.d 2;10];
+    .qmatz.stage_completion[`upstream;`;`v1;.lifecycletest.d 1;.lifecycletest.d 2;10];
     .qunit.assertError[{.qwrt.require_upstream[`upstream;`;`v1;.z.p;x 0;x 1]};(.lifecycletest.d 1;.lifecycletest.d 4);"one covered day out of three does not admit a three-day run"]};
 
 test_full_upstream_coverage_admits_the_run:{[t]
-    .qcov.stage_completion[`upstream;`;`v1;.lifecycletest.d 1;.lifecycletest.d 4;30];
+    .qmatz.stage_completion[`upstream;`;`v1;.lifecycletest.d 1;.lifecycletest.d 4;30];
     .qunit.assertEquals[.qwrt.require_upstream[`upstream;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];1b;"a fully published upstream admits the run"]};
 
 / --- ETL-19: the doubles discipline ---------------------------------------

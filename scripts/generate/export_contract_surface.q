@@ -84,7 +84,7 @@ functions:{[]
 / none" rather than "none had been created yet".
 / .
 / Discovered by convention rather than listed: a niladic `attach` in an owned
-/ namespace is this tree's create-if-absent-and-verify function (.qcov.attach,
+/ namespace is this tree's create-if-absent-and-verify function (.qmatz.attach,
 / .qhb.attach), and it is idempotent by design - that is what makes calling it
 / from an export script safe rather than a side effect.
 / .

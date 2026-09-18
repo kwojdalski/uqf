@@ -10,14 +10,14 @@
 
 system"l src/init.q";
 system"l src/etl/core/backfill_state.q";
-system"l src/etl/core/coverage.q";
+system"l src/etl/core/materialisation.q";
 system"l src/etl/core/status.q";
 
-.qcov.attach[];
--1 "ROWS:",string count .qcov.ledger[];
+.qmatz.attach[];
+-1 "ROWS:",string count .qmatz.ledger[];
 / "yes"/"no" rather than `string` of the boolean: `string 1b` is "1", not
 / "1b", so a caller matching on "1b" would never match and the check would
 / fail while the code was correct.
--1 "COVERED:",$[.qcov.is_covered[`durable_ds;`;`v1;.z.p;
+-1 "COVERED:",$[.qmatz.is_covered[`durable_ds;`;`v1;.z.p;
     2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000];"yes";"no"];
 exit 0

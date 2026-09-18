@@ -1,7 +1,7 @@
 // test_worker_runtime.q - tests for src/etl/core/worker_runtime.q (.qwrt):
 // retry classification, bounded backoff, the dry-run gate, coverage
 // skipping and init-time dependency resolution. Load src/etl/core/status.q,
-// src/etl/core/backfill_state.q, src/etl/core/coverage.q,
+// src/etl/core/backfill_state.q, src/etl/core/materialisation.q,
 // src/etl/core/worker_config.q, src/etl/core/worker_runtime.q,
 // tests/lib/qunit.q and tests/lib/testutil.q before this file.
 
@@ -182,19 +182,19 @@ test_an_uncovered_window_needs_fetching:{[t]
     .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"nothing published means there is work to do"]};
 
 test_a_covered_window_is_skipped:{[t]
-    .qcov.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
+    .qmatz.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
     .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];0b;"a retry does not re-fetch a published window"]};
 
 / ETL-10, in the direction that matters: a version bump exists precisely to
 / force re-extraction, so v1 coverage must not suppress a v2 fetch.
 test_coverage_at_one_version_does_not_skip_another:{[t]
-    .qcov.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
+    .qmatz.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
     .qunit.assertEquals[.qwrt.needs_fetch[`markouts;`;`v2;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"a source_version bump forces the re-fetch it exists to force"]};
 
 / A retry after a partial run should redo only what is missing, not the
 / whole range.
 test_a_partial_run_leaves_only_the_gap_to_redo:{[t]
-    .qcov.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
+    .qmatz.stage_completion[`markouts;`;`v1;.wrttest.d 1;.wrttest.d 2;10];
     gap:.qwrt.remaining[`markouts;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 4];
     .qunit.assertEquals[(count gap;first gap`range_from);(1;.wrttest.d 2);"the retry resumes at the boundary, not at the start"]};
 
@@ -231,7 +231,7 @@ test_an_unpublished_upstream_blocks_the_run:{[t]
     .qunit.assertError[{.qwrt.require_upstream[`trades;`;`v1;.z.p;x 0;x 1]};(.wrttest.d 1;.wrttest.d 2);"a coverage precondition is checked before the run, not assumed"]};
 
 test_a_published_upstream_admits_the_run:{[t]
-    .qcov.stage_completion[`trades;`;`v1;.wrttest.d 1;.wrttest.d 2;500];
+    .qmatz.stage_completion[`trades;`;`v1;.wrttest.d 1;.wrttest.d 2;500];
     .qunit.assertEquals[.qwrt.require_upstream[`trades;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"a fully published upstream lets the run proceed"]};
 
 \d .

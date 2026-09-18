@@ -1,5 +1,5 @@
 / verify_coverage_schema.q - check a coverage ledger against the shape
-/ src/etl/core/coverage.q declares.
+/ src/etl/core/materialisation.q declares.
 / .
 / Written to settle issue #60, which asked whether the assumed shape matched
 / a canonical one. That question is closed: this tree is the primary
@@ -18,8 +18,8 @@
 / - what the check below still catches is a SECOND partitioning dimension,
 / one this tree does not know it should be slicing on.
 / .
-/ .qcov.require_schema is the same check inside a worker's init, reached via
-/ .qcov.attach. This is the standalone form, for looking at a ledger without
+/ .qmatz.require_schema is the same check inside a worker's init, reached via
+/ .qmatz.attach. This is the standalone form, for looking at a ledger without
 / starting a worker.
 / .
 / Usage, on a machine that can reach the real ledger:
@@ -37,7 +37,7 @@
 
 \c 400 2000
 
-\l src/etl/core/coverage.q
+\l src/etl/core/materialisation.q
 
 args:.Q.opt .z.x;
 
@@ -66,7 +66,7 @@ fetch_meta:{[]
 
 m:fetch_meta[];
 present:exec c from m;
-assumed:.qcov.schema;
+assumed:.qmatz.schema;
 
 -1 "";
 -1 "=================== etl_coverage: live schema ===================";
@@ -100,7 +100,7 @@ if[count partition_like;
     -1 "          covered for one but empty for the others is reported";
     -1 "          COMPLETE. Fix before any consumer trusts is_covered - the";
     -1 "          same four steps #185 followed for `partition` itself:";
-    -1 "            1. add the column to .qcov.schema and init_ledger";
+    -1 "            1. add the column to .qmatz.schema and init_ledger";
     -1 "            2. add it as a REQUIRED parameter to intervals/";
     -1 "               is_covered/missing/require_covered - required, not";
     -1 "               optional, for the same reason source_version is (ETL-09)";

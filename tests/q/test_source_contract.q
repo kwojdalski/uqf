@@ -2,7 +2,7 @@
 // and the demo source's own declaration. Implements the deterministic half
 // of ETL-12; the live half is in the `smoke` lane (ETL-20).
 //
-// Load src/etl/core/status.q, src/etl/core/coverage.q,
+// Load src/etl/core/status.q, src/etl/core/materialisation.q,
 // src/etl/core/source_contract.q, src/etl/sources/demo_deals.q,
 // tests/lib/qunit.q and tests/lib/testutil.q before this file.
 

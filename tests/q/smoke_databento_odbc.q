@@ -76,7 +76,7 @@ check["no row published twice";(count keyed)=count databento_book;
 
 check["every row inside the range";all databento_book[`time] within (range_from;range_to-1);""];
 check["range recorded as covered";
-    .qcov.is_covered[`databento_book;`;`smoke;.z.p;range_from;range_to];""];
+    .qmatz.is_covered[`databento_book;`;`smoke;.z.p;range_from;range_to];""];
 
 per_sym_source:.qodbc.run_sql[h;"SELECT symbol, count(*) AS n FROM mbp10",between_sql," GROUP BY symbol ORDER BY symbol"];
 per_sym_book:select n:count i by sym from databento_book;

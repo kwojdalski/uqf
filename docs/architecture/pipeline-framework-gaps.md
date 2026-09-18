@@ -20,8 +20,8 @@ Dagster's abstractions, against this tree:
 |---|---|---|
 | **Op / asset compute** | `.qbw` bounded worker (`init`/`plan`/`fetch`/`publish`/`checkpoint`) and `.qstream` streaming job (`on_batch`/`on_timer`) | **yes** |
 | **Graph / job** | `.qdag` — edges *derived* from declared inputs and outputs, over four job kinds: `bounded`, `continuous`, `stream`, `reaction` | **yes** |
-| **Partitions** | `.qcov` half-open time intervals + `source_version`, plus a categorical `partition` | **yes** — §2.4 |
-| **Materialization record** | `.qcov` rows, bitemporal, with per-window metadata from `.qrun` | **yes** — §2.3 |
+| **Partitions** | `.qmatz` half-open time intervals + `source_version`, plus a categorical `partition` | **yes** — §2.4 |
+| **Materialization record** | `.qmatz` rows, bitemporal, with per-window metadata from `.qrun` | **yes** — §2.3 |
 | **Backfill** | `.qbw.plan` narrows by cursor then coverage | **yes**, and better than most |
 | **Retry policy** | `.qwrt` classification: data failures don't retry, transport does | **yes** |
 | **Logging / events** | `.qlog` four levels over TorQ's `.lg`, structured fields | **yes** |
@@ -91,8 +91,8 @@ one, a failure mode that otherwise cannot occur. Outside a run the column
 records the null guid, honestly — a materialisation staged by hand belongs
 to no run, and saying so beats inventing an identity.
 
-Three reads answer the three questions: `.qcov.materialisations_of[run]`,
-`.qcov.contributing_runs[dataset;partition;version]`, and `.qrun.unfinished[]`
+Three reads answer the three questions: `.qmatz.materialisations_of[run]`,
+`.qmatz.contributing_runs[dataset;partition;version]`, and `.qrun.unfinished[]`
 — the executions that began and never reported an outcome, which is the state an
 interrupted process leaves and which nothing else records.
 
@@ -185,7 +185,7 @@ database; here they are three lines each.
 
 **The namespace-per-module convention already gives module boundaries.**
 `.qio`, `.qrun`, `.qstream` and `.qstatus` slotted in beside
-`.qsrc`/`.qbw`/`.qcov` without disturbing anything.
+`.qsrc`/`.qbw`/`.qmatz` without disturbing anything.
 
 Two things are genuinely harder in q, and both proved manageable:
 

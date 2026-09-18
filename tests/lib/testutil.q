@@ -14,7 +14,7 @@ assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];exp
 
 // A genuinely empty etl_coverage ledger, whatever shape it currently has.
 //
-// The DELETE is the point. `.qcov.init_ledger` creates the table only when
+// The DELETE is the point. `.qmatz.init_ledger` creates the table only when
 // absent, which is the right contract - but it means a test that replaced the
 // ledger with a differently-shaped one cannot restore it by calling
 // init_ledger again: the wrong-shaped table exists, so init_ledger leaves it,
@@ -28,12 +28,12 @@ assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];exp
 // `tables` and init_ledger then re-created the table - silent, and invisible
 // until something called `meta` directly.
 // An empty coverage ledger built column by column, independently of
-// .qcov.init_ledger - so a test asserting "a foreign ledger of the right
+// .qmatz.init_ledger - so a test asserting "a foreign ledger of the right
 // shape is accepted" asserts something, rather than comparing init_ledger's
 // output against itself.
 //
 // It exists as ONE fixture because it was three hardcoded column lists, and
-// every addition to .qcov.schema broke all three at once in a way that read
+// every addition to .qmatz.schema broke all three at once in a way that read
 // like a bug in require_schema. superseded_at did it; run_id did it
 // again. test_coverage's test_the_foreign_fixture_tracks_the_declared_schema
 // now fails FIRST, and by name, so the next one is a one-line fix here.
@@ -50,8 +50,8 @@ reset_coverage_ledger:{[]
     // the last suite left on disk. Remove the file too, or tests leak rows
     // into each other in run order - which is the same silent cross-test
     // dependency this helper was written to prevent.
-    @[{system"rm -f ",x};.qcov.ledger_path[];{[e] (::)}];
-    .qcov.init_ledger[];
+    @[{system"rm -f ",x};.qmatz.ledger_path[];{[e] (::)}];
+    .qmatz.init_ledger[];
     value `etl_coverage};
 
 \d .

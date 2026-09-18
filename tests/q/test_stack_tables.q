@@ -44,7 +44,7 @@ declared:{[]
 / .
 / Exists because inside \d .tabletest a BARE `quotes` resolves to
 / .tabletest.quotes, which does not exist - the same namespace trap
-/ .qcov.ledger[] exists to avoid, and one this file hit on its first run.
+/ .qmatz.ledger[] exists to avoid, and one this file hit on its first run.
 / .
 / `value nm`, not `value ` sv `,nm`: joining an empty symbol yields `.quotes`
 / with a LEADING DOT, which is a different name again and resolves to

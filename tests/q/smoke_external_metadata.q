@@ -33,7 +33,7 @@
 \c 400 1000
 
 \l src/etl/core/worker_config.q
-\l src/etl/core/coverage.q
+\l src/etl/core/materialisation.q
 \l src/etl/core/source_contract.q
 \l src/etl/sources/demo_deals.q
 

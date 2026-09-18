@@ -223,7 +223,7 @@ commit:{[dry;effect;action;args]
 / out of a public repository. So the assumption is written down instead of
 / guessed at, and tests/q/test_time_zone.q pins it: whoever adds a venue
 / calendar has to change a failing test rather than a comment. Nothing else
-/ here has a business-date notion either - .qcov composes half-open
+/ here has a business-date notion either - .qmatz composes half-open
 / intervals and .qdcf counts actual calendar days - and the only day roll
 / this tree knows about is TorQ's EOD reload, which is an operational state
 / rather than a business date.
@@ -238,7 +238,7 @@ commit:{[dry;effect;action;args]
 / @return a table of range_from/range_to
 / @eg .qwrt.windows[2026.09.01D00:00;2026.09.04D00:00;1D]  -> 3 daily windows
 windows:{[from_ts;to_ts;width]
-    .qcov.require_interval[from_ts;to_ts];
+    .qmatz.require_interval[from_ts;to_ts];
     if[not width>0D00:00;
         '"windows: width must be positive, got ",string width];
     n:"j"$ceiling (to_ts-from_ts)%width;
@@ -262,7 +262,7 @@ windows:{[from_ts;to_ts;width]
 / @param part this worker's partition, or ` when its dataset has none
 / @return 1b when the window still needs fetching
 needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
-    not .qcov.is_covered[ds;part;version;as_of;from_ts;to_ts]}
+    not .qmatz.is_covered[ds;part;version;as_of;from_ts;to_ts]}
 
 / Narrow a requested range to the parts not yet published (ETL-13).
 / .
@@ -271,7 +271,7 @@ needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
 / means there is nothing to do - which is an `idle success, not a
 / failure.
 remaining:{[ds;part;version;as_of;from_ts;to_ts]
-    .qcov.missing[ds;part;version;as_of;from_ts;to_ts]}
+    .qmatz.missing[ds;part;version;as_of;from_ts;to_ts]}
 
 / Complete one window: publish rows, record coverage, save the checkpoint -
 / in that order, and all three behind the dry-run gate.
@@ -296,7 +296,7 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
     dry:is_dry_run[];
     published:commit[dry;`publish_rows;publish;()];
     rows:$[`done~first published; last published; 0];
-    covered:commit[dry;`publish_coverage;.qcov.stage_completion;
+    covered:commit[dry;`publish_coverage;.qmatz.stage_completion;
         (ds;part;spec`source_version;from_ts;to_ts;rows)];
     checkpointed:commit[dry;`write_checkpoint;.qbfstate.save_checkpoint;
         (worker;spec;to_ts)];
@@ -371,6 +371,6 @@ require_dependencies:{[worker]
 / @param upstream_part the upstream's partition, or ` when it has none
 / @throws error naming the missing upstream ranges
 require_upstream:{[upstream;upstream_part;version;as_of;from_ts;to_ts]
-    .qcov.require_covered[upstream;upstream_part;version;as_of;from_ts;to_ts]}
+    .qmatz.require_covered[upstream;upstream_part;version;as_of;from_ts;to_ts]}
 
 \d .

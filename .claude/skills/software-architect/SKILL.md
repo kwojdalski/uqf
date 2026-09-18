@@ -14,7 +14,7 @@ Not one codebase. Four layers with different rules, and most real architectural 
 | Layer | Where | Shape |
 |---|---|---|
 | **Quant library** | `src/foundation/`, `src/pricing/`, `src/portfolio/`, `src/execution/`, `src/market_data/` | pure functions, one flat namespace per file (`.qfwd`, `.qexec`, `.qpos`, `.qalloc`, …), no state, no I/O |
-| **Pipeline framework** | `src/etl/core/` (18 files) | shells and contracts: `.qbw` bounded workers, `.qstream` streaming jobs, `.qnorm` normalizers, `.qxf` transforms, `.qsrc` source contracts, `.qcov` coverage, `.qio`, `.qdag`, `.qwrt`, `.qrun`, `.qtick` |
+| **Pipeline framework** | `src/etl/core/` (18 files) | shells and contracts: `.qbw` bounded workers, `.qstream` streaming jobs, `.qnorm` normalizers, `.qxf` transforms, `.qsrc` source contracts, `.qmatz` coverage, `.qio`, `.qdag`, `.qwrt`, `.qrun`, `.qtick` |
 | **Declarations** | `src/etl/sources/`, `workers/`, `streaming/` | one file per instance; registers itself on load |
 | **Adapters and surfaces** | `scripts/processes/` (`.qpipe`), `python/` (orchestrator, frontend, airflow provider, client), `web/` | the only places that know TorQ, HTTP, Airflow or a browser exist |
 
@@ -58,7 +58,7 @@ The highest-value findings in a polyglot repo. Where is the same truth written t
 - **Ask of every duplication: which copy is the authority, and what fails when they disagree?** If the answer is "nothing fails, it just goes wrong", that is the finding
 
 ### 4. Coupling and cohesion
-- High fan-in *and* volatile is the highest-risk combination — find those in `.qxf`, `.qcov` and `forwards.q`'s orientation helpers
+- High fan-in *and* volatile is the highest-risk combination — find those in `.qxf`, `.qmatz` and `forwards.q`'s orientation helpers
 - Namespace-level mutable config (`.qfwd.ts_col`, `.qfwd.col_precedence`, `.qwcfg` layers) is global state: is it read at call time or captured once, and is its blast radius contained?
 - Registries (`.qsrc.sources`, `.qxf.registry`, `.qstream.jobs`, `.qnorm.registry`, `.qio`, `.qalloc.methods`) are shared mutable state too. Same shape, same trap: q collapses a dict of same-keyed dicts into a table, so a later differently-shaped entry is refused with a bare `type`. Check each registry normalises what it stores
 - Temporal coupling with no structural enforcement — "call `require_quotes_cols` first", "publish before checkpointing", "replay before subscribing"
@@ -93,7 +93,7 @@ The highest-value findings in a polyglot repo. Where is the same truth written t
    **The framework shells — is each one still generic?**
    - `src/etl/core/bounded_worker.q` (`.qbw`) and `src/etl/core/stream_job.q` (`.qstream`) — the two shells an instance plugs into. A third, `normalizer.q` (`.qnorm`), lands with PR #260; if it is present, read it too — it is the newest and cleanest example of a shell that absorbs instance knowledge
    - `src/etl/core/transform.q` (`.qxf`) — the highest fan-in file in the tree; almost everything declares one
-   - `src/etl/core/source_contract.q` (`.qsrc`), `src/etl/core/coverage.q` (`.qcov`), `src/etl/core/io_manager.q` (`.qio`) — the contracts around a worker. Note `scripts/dev/coverage.q` is a different file; the framework one is under `src/etl/core/`
+   - `src/etl/core/source_contract.q` (`.qsrc`), `src/etl/core/materialisation.q` (`.qmatz`), `src/etl/core/io_manager.q` (`.qio`) — the contracts around a worker. Note `scripts/dev/coverage.q` is a different file; the framework one is under `src/etl/core/`
 
    **A sample of declarations — do they carry only what is theirs?**
    - two or three under `src/etl/streaming/` and `src/etl/workers/`. Compare the *shortest* against the *longest*: the gap is how much instance-specific knowledge the shell failed to absorb

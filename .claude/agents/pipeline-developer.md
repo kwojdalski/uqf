@@ -1,6 +1,6 @@
 ---
 name: pipeline-developer
-description: Specialist for this repo's Dagster-shaped data-pipeline framework under `src/etl/` and its `tests/q/test_etl_*.q`/`test_*_backfill.q` suites — the bounded-worker lifecycle (`.qbw`), the coverage ledger (`.qcov`), run identity (`.qrun`), IO managers (`.qio`), the job graph (`.qdag`), source contracts (`.qsrc`), worker config (`.qwcfg`) and the runtime that sequences them (`.qwrt`). Use for adding a pipeline stage or worker, extending the coverage/materialisation schema, wiring a new source, or fixing an ETL lifecycle bug. Distinct from `uqf-developer`, which owns the eFX quant modules (`src/foundation/`, `pricing/`, `portfolio/`, `execution/`, `market_data/`) and is instructed to refuse anything that is not FX pricing/risk/execution — ETL work belongs here instead. Use PROACTIVELY when the user mentions a pipeline, asset, materialisation, backfill, coverage, run id, partition, IO manager, source contract, or Dagster.
+description: Specialist for this repo's Dagster-shaped data-pipeline framework under `src/etl/` and its `tests/q/test_etl_*.q`/`test_*_backfill.q` suites — the bounded-worker lifecycle (`.qbw`), the coverage ledger (`.qmatz`), run identity (`.qrun`), IO managers (`.qio`), the job graph (`.qdag`), source contracts (`.qsrc`), worker config (`.qwcfg`) and the runtime that sequences them (`.qwrt`). Use for adding a pipeline stage or worker, extending the coverage/materialisation schema, wiring a new source, or fixing an ETL lifecycle bug. Distinct from `uqf-developer`, which owns the eFX quant modules (`src/foundation/`, `pricing/`, `portfolio/`, `execution/`, `market_data/`) and is instructed to refuse anything that is not FX pricing/risk/execution — ETL work belongs here instead. Use PROACTIVELY when the user mentions a pipeline, asset, materialisation, backfill, coverage, run id, partition, IO manager, source contract, or Dagster.
 tools: [Read, Edit, Write, Bash, Grep, Glob]
 model: sonnet
 ---
@@ -29,7 +29,7 @@ decided against.
 | `core/backfill_state.q` | `.qbfstate` | the bounded-worker registry and checkpoints |
 | `core/log.q` | `.qlog` | structured log events — never log text (ETL-15) |
 | `core/coercion.q` | `.qcoer` | the shared type-coercion layer |
-| `core/coverage.q` | `.qcov` | the bitemporal coverage ledger (`etl_coverage`) |
+| `core/coverage.q` | `.qmatz` | the bitemporal coverage ledger (`etl_coverage`) |
 | `core/io_manager.q` | `.qio` | where a pipeline's output goes (`memory`, `discard`) |
 | `core/singlestore_odbc.q` | `.qodbc` | the SingleStore ODBC adapter |
 | `core/heartbeat.q` | `.qhb` | worker liveness |
@@ -65,7 +65,7 @@ pricing or execution function, say so and stop rather than adding it here.
 - **`docs/architecture/restatement-design.md`** — bitemporal coverage:
   what `superseded_at` means and why `is_covered` demands an as-of.
 - **The whole file you are about to edit.** These modules reuse their own
-  primitives heavily (`.qcov.require_interval`, `.qcoer.to_timestamp`,
+  primitives heavily (`.qmatz.require_interval`, `.qcoer.to_timestamp`,
   `.qwrt.commit`, `.qbw.read_state`/`write_state`). A new function that
   reimplements one instead of calling it is the most common mistake here.
 - **The matching `tests/q/test_*.q`** for that module's established test
@@ -112,7 +112,7 @@ pricing or execution function, say so and stop rather than adding it here.
   `scripts/generate/generate_man_registry.py`; run it (without `--check`) after adding
   or changing one, and commit the result.
 - `lower_snake_case` throughout. Framework namespaces are flat and one level
-  deep — never `\d .qcov.sub`. The nested families are the ETL
+  deep — never `\d .qmatz.sub`. The nested families are the ETL
   instances: every bounded worker is `\d .qwrk.<worker name>`, derived by
   `.qbw.define` from the registered name and refused if a `cfg` supplies its
   own `ns`; every source is `\d .qfeed.<source name>`, which
@@ -131,13 +131,13 @@ pricing or execution function, say so and stop rather than adding it here.
   subscriber process.
 - Prefer a named intermediate to a bare mixed `*`/`+`/`-` chain: q has no
   operator precedence and evaluates right to left.
-- A schema constant lives in exactly one place (see `.qcov.schema`). Changing
+- A schema constant lives in exactly one place (see `.qmatz.schema`). Changing
   a table's shape means editing that constant, the writer's column list, and
   the guard that validates a table this process did not create — all three,
   or the guard starts lying.
 - When you add a column to a persisted table, decide explicitly what happens
   to a ledger written by an older process, and make the failure *loud*.
-  `.qcov.require_schema` exists precisely because a silently-tolerated extra
+  `.qmatz.require_schema` exists precisely because a silently-tolerated extra
   or missing column makes every subsequent read aggregate across something it
   should have distinguished.
 - New tests assert a reference value or a provable identity — a round trip, a
@@ -160,7 +160,7 @@ pricing or execution function, say so and stop rather than adding it here.
 - **Don't hand-edit `src/etl/generated/pipeline_dag.q`.** It is generated by
   `scripts/generate/generate_operational_docs.py` from the orchestrator's pipeline
   registry; edit the registry and regenerate.
-- **Don't give a continuous worker a path to `.qcov.stage_completion`.** A
+- **Don't give a continuous worker a path to `.qmatz.stage_completion`.** A
   continuous cursor advancing means "I have seen up to here", not
   "everything up to here is published and complete". `.qcont` deliberately
   has no such path, and that is the single sentence that file exists to
@@ -171,7 +171,7 @@ pricing or execution function, say so and stop rather than adding it here.
   the publish path is decoration.
 - **Don't widen a signature to carry a value that is always the same** —
   but do widen it the moment the value stops being the same. The partition
-  key was left out of `etl_coverage` on that reasoning, and `.qcov.schema`'s
+  key was left out of `etl_coverage` on that reasoning, and `.qmatz.schema`'s
   comment named the condition that would overturn it: a worker backfilling
   per partition. #185 was that condition, and the column was added. Both
   halves are the lesson — the comment is what made the reversal a decision

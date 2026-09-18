@@ -130,32 +130,6 @@ qcont,load_cursor,function,1,worker
 qcont,poll_once,function,4,worker fetch_page publish_page next_cursor
 qcont,register_feeder,function,2,worker dataset
 qcont,save_cursor,function,2,worker cursor
-qcov,attach,function,1,
-qcov,compose,function,1,intervals
-qcov,contributing_runs,function,3,ds part version
-qcov,current_run,function,1,
-qcov,gaps,function,3,from_ts to_ts covered
-qcov,history,function,3,ds part version
-qcov,init_ledger,function,1,
-qcov,intervals,function,4,ds part version as_of
-qcov,is_covered,function,6,ds part version as_of from_ts to_ts
-qcov,ledger,function,1,
-qcov,ledger_path,function,1,
-qcov,lock_path,function,1,
-qcov,materialisations_of,function,1,id
-qcov,missing,function,6,ds part version as_of from_ts to_ts
-qcov,persist,function,1,
-qcov,reload,function,1,
-qcov,require_covered,function,6,ds part version as_of from_ts to_ts
-qcov,require_interval,function,2,range_from range_to
-qcov,require_schema,function,1,
-qcov,schema,value,,
-qcov,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
-qcov,still_current,value,,
-qcov,supersede,function,5,ds part version from_ts to_ts
-qcov,supersede_locked,function,5,ds part version from_ts to_ts
-qcov,valid_at,function,4,ds part version as_of
-qcov,with_lock,function,2,f args
 qdag,adopt_all,function,1,
 qdag,adopt_feeders,function,1,
 qdag,adopt_pipelines,function,1,
@@ -355,6 +329,32 @@ qlog,register,function,1,
 qlog,render,function,1,fields
 qlog,torq_loaded,function,1,
 qlog,warn,function,3,id text fields
+qmatz,attach,function,1,
+qmatz,compose,function,1,intervals
+qmatz,contributing_runs,function,3,ds part version
+qmatz,current_run,function,1,
+qmatz,gaps,function,3,from_ts to_ts covered
+qmatz,history,function,3,ds part version
+qmatz,init_ledger,function,1,
+qmatz,intervals,function,4,ds part version as_of
+qmatz,is_covered,function,6,ds part version as_of from_ts to_ts
+qmatz,ledger,function,1,
+qmatz,ledger_path,function,1,
+qmatz,lock_path,function,1,
+qmatz,materialisations_of,function,1,id
+qmatz,missing,function,6,ds part version as_of from_ts to_ts
+qmatz,persist,function,1,
+qmatz,reload,function,1,
+qmatz,require_covered,function,6,ds part version as_of from_ts to_ts
+qmatz,require_interval,function,2,range_from range_to
+qmatz,require_schema,function,1,
+qmatz,schema,value,,
+qmatz,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
+qmatz,still_current,value,,
+qmatz,supersede,function,5,ds part version from_ts to_ts
+qmatz,supersede_locked,function,5,ds part version from_ts to_ts
+qmatz,valid_at,function,4,ds part version as_of
+qmatz,with_lock,function,2,f args
 qmeta,collect,function,2,spec partitions
 qmeta,collect_partition,function,3,spec part observed_at
 qmeta,count_bad,function,2,violations row_count

@@ -119,7 +119,7 @@ already treats `source_version`. The cost is real and is listed in §3.
 
 ## 3. Blast radius
 
-Seven functions in `src/etl/core/coverage.q` change meaning:
+Seven functions in `src/etl/core/materialisation.q` change meaning:
 `stage_completion`, `intervals`, `is_covered`, `missing`, `require_covered`,
 and — depending on §2.2 — `compose` and `gaps`, since intervals from
 different revisions must not merge the way same-version intervals do.
@@ -127,16 +127,16 @@ different revisions must not merge the way same-version intervals do.
 Call sites needing an as-of threaded through:
 
 ```
-src/etl/core/worker_runtime.q   needs_fetch      -> .qcov.is_covered
-src/etl/core/worker_runtime.q   remaining        -> .qcov.missing
-src/etl/core/worker_runtime.q   require_upstream -> .qcov.require_covered
-src/etl/core/worker_runtime.q   finish_window    -> .qcov.stage_completion
+src/etl/core/worker_runtime.q   needs_fetch      -> .qmatz.is_covered
+src/etl/core/worker_runtime.q   remaining        -> .qmatz.missing
+src/etl/core/worker_runtime.q   require_upstream -> .qmatz.require_covered
+src/etl/core/worker_runtime.q   finish_window    -> .qmatz.stage_completion
 src/etl/core/continuous_state.q (comment only — deliberately no coverage path)
 ```
 
 Also affected:
 
-- **`.qcov.schema`** gains columns, which collides with **#60**: the shape
+- **`.qmatz.schema`** gains columns, which collides with **#60**: the shape
   is *already* unverified, and this would change it before the current one
   has ever been checked against the real ledger. See §5.
 - **`python/uqf_frontend`** — `queries.py`'s `COVERAGE` program,
@@ -219,9 +219,9 @@ would have dropped every current row from an as-of read and reported a fully
 published range as empty, which is a plausible wrong answer rather than an
 error.
 
-**What changed.** `.qcov.valid_at` filters to the claims true at an instant,
+**What changed.** `.qmatz.valid_at` filters to the claims true at an instant,
 and `intervals`/`is_covered`/`missing`/`require_covered` all take an as-of.
-`.qcov.supersede` withdraws overlapping claims; `.qcov.history` is the audit
+`.qmatz.supersede` withdraws overlapping claims; `.qmatz.history` is the audit
 view. The five call sites migrated in one change, so no site was briefly
 using the old meaning. `.qbw.plan` captures **one** `.z.p` for a whole
 planning pass rather than reading it per call — otherwise a range could be

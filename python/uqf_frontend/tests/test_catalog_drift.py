@@ -169,7 +169,7 @@ def test_catalog_matches_the_generated_schema(table_name):
 #: Catalog tables whose schema is owned by a q file rather than by core.py.
 #: (table name) -> (q file, how to read the columns out of it)
 _Q_OWNED = {
-    "etl_coverage": lambda: _q_table_schema(Path("src/etl/core/coverage.q"), "etl_coverage"),
+    "etl_coverage": lambda: _q_table_schema(Path("src/etl/core/materialisation.q"), "etl_coverage"),
     "demo_deals": lambda: _q_contract_columns(
         Path("src/etl/sources/demo_deals.q"), "fields", "types"
     ),

@@ -37,7 +37,7 @@
 \d .qhb
 
 / The table's declared shape. Named so require_schema can check it rather
-/ than assume it - the mistake .qcov.require_schema exists to prevent.
+/ than assume it - the mistake .qmatz.require_schema exists to prevent.
 columns:`worker`state`last_seen`windows
 
 / Create the root table if it is absent, and return its name.
@@ -74,7 +74,7 @@ require_schema:{[]
 
 / Create the table and verify it, returning its name.
 / .
-/ Called from a worker's init. Present because .qcov.require_schema spent a
+/ Called from a worker's init. Present because .qmatz.require_schema spent a
 / while defined, tested, and reached from no live path - a check that cannot
 / fire protects nothing, and its existence reads as protection.
 attach:{[]

@@ -133,7 +133,7 @@ test_functional_is_a_subset_of_owned:{[t]
 / guess whether an entry is a decision or an oversight.
 outside_the_prefix:(`symbol$())!();
 outside_the_prefix[`.dqe]:"TorQ's OWN namespace - torq_metatables.q adds uqf_metatable INTO it so DQE's runquery can transport it. Renaming would break the integration, not tidy it.";
-outside_the_prefix[`.cov]:"the coverage tool, in KX's published .cov API shape. .qcov is already the ETL coverage LEDGER, so the obvious rename collides with an unrelated namespace.";
+outside_the_prefix[`.cov]:"the coverage tool, in KX's published .cov API shape. .qmatz is already the ETL coverage LEDGER, so the obvious rename collides with an unrelated namespace.";
 outside_the_prefix[`.surface]:"the contract-surface exporter, which enumerates this tree's namespaces. Inside the prefix it would export itself - a tool appearing in the artifact it produces.";
 
 / Private: every namespace declared by a file under src/ or scripts/.

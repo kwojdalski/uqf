@@ -73,7 +73,7 @@ test_a_full_run_publishes_the_windowed_rows:{[t]
 test_a_full_run_leaves_the_range_covered:{[t]
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qwrk.demo_deals_backfill.run[];
-    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`;`v1;.z.p;.ddbftest.d 1;.ddbftest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
+    .qunit.assertEquals[.qmatz.is_covered[`demo_deals;`;`v1;.z.p;.ddbftest.d 1;.ddbftest.d 4];1b;"the windows' coverage composes into the whole requested range"]};
 
 test_the_cursor_lands_on_the_range_end:{[t]
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
@@ -109,7 +109,7 @@ test_a_version_bump_re_runs_the_whole_range:{[t]
 / A retry after a partial run redoes only the gap. This is the case ETL-13
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]
-    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
+    .qmatz.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"one day already published, two left to do"]};
@@ -118,7 +118,7 @@ test_a_partial_range_is_narrowed_to_the_gap:{[t]
 / covered day sits between two uncovered ones, so the plan must produce two
 / separate runs of windows rather than one 3-day sweep.
 test_a_middle_gap_does_not_bridge_covered_coverage:{[t]
-    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
+    .qmatz.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"day 1 and day 3 are planned; day 2 is skipped, not spanned"]};
@@ -131,7 +131,7 @@ test_a_matching_checkpoint_resumes:{[t]
     / interrupted run leaves behind - finish_window stages coverage before it
     / saves the checkpoint - so a checkpoint at day 3 with days 1-2 uncovered
     / is not a resume, it is a gap, and plan now treats it as one.
-    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 3;2];
+    .qmatz.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 3;2];
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qbfstate.save_checkpoint[`demo_deals_backfill;.ddbftest.spec_for[`v1;1;4];.ddbftest.d 3];
     r:.qwrk.demo_deals_backfill.run[];
@@ -225,7 +225,7 @@ test_plan_delegates_and_passes_the_cursor:{[t]
     / is what makes the count mean something: without it, coverage alone
     / would plan all three days whatever the cursor said, since a gap behind
     / the cursor is planned (see .qbw.plan).
-    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
+    .qmatz.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qunit.assertEquals[count .qwrk.demo_deals_backfill.plan[.ddbftest.d 2];2;
         "with day 1 covered, a cursor at day 2 plans the two days after it"]};
@@ -241,10 +241,10 @@ test_a_gap_behind_the_cursor_is_still_planned:{[t]
     / by overlap, so a single three-day claim would be withdrawn whole by a
     / one-day restatement and three windows would be planned - correct, but
     / not the case this test is about.
-    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
-    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
-    .qcov.stage_completion[`demo_deals;`;`v1;.ddbftest.d 3;.ddbftest.d 4;1];
-    .qcov.supersede[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3];
+    .qmatz.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
+    .qmatz.stage_completion[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3;1];
+    .qmatz.stage_completion[`demo_deals;`;`v1;.ddbftest.d 3;.ddbftest.d 4;1];
+    .qmatz.supersede[`demo_deals;`;`v1;.ddbftest.d 2;.ddbftest.d 3];
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     w:.qwrk.demo_deals_backfill.plan[.ddbftest.d 4];
     .qunit.assertEquals[count w;1;"the withdrawn day is planned although the cursor is past it"];
@@ -557,7 +557,7 @@ test_a_throwing_transform_fails_the_window_and_publishes_nothing:{[t]
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`xf2;1;4]];
     r:.ddbftest.with_transform[`ddbftest_throws;{.qwrk.demo_deals_backfill.run[]}];
     .qunit.assertEquals[(r`windows_failed;count value `demo_deals;
-                         .qcov.is_covered[`demo_deals;`;`xf2;.z.p;.ddbftest.d 1;.ddbftest.d 4]);
+                         .qmatz.is_covered[`demo_deals;`;`xf2;.z.p;.ddbftest.d 1;.ddbftest.d 4]);
         (3;0;0b);
         "a transform that throws takes the failed-fetch path: nothing published, nothing covered, the run continues"]};
 
@@ -623,7 +623,7 @@ test_a_failing_check_leaves_the_window_uncovered:{[t]
     / without it, is_covered would report the window published forever.
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`chk2;1;4]];
     .ddbftest.with_bad_fixture[{.qwrk.demo_deals_backfill.run[]}];
-    .qunit.assertEquals[.qcov.is_covered[`demo_deals;`;`chk2;.z.p;.ddbftest.d 1;.ddbftest.d 4];0b;
+    .qunit.assertEquals[.qmatz.is_covered[`demo_deals;`;`chk2;.z.p;.ddbftest.d 1;.ddbftest.d 4];0b;
         "a window that failed its check is not recorded as covered"]};
 
 test_a_failing_check_counts_as_a_failed_window:{[t]

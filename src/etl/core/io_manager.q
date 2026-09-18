@@ -25,7 +25,7 @@
 / in this framework reads a target back through an abstraction - downstream
 / workers read the q table directly, in-process - so a `read` here would be a
 / capability reached from no live path. This repository has found four of
-/ those in as many days (docs/man.q, .qcov.require_schema, .qwcfg.set_layers,
+/ those in as many days (docs/man.q, .qmatz.require_schema, .qwcfg.set_layers,
 / .qdqc), and each read as protection it was not providing. They go in when
 / something calls them.
 

@@ -3,7 +3,7 @@
 / Issue #124. demo_deals_backfill.q was 238 lines of which FOUR were
 / worker-specific - worker_name, source_name, dataset, width - and the other
 / 234 were the same glue any bounded worker needs, because that is exactly
-/ what .qbfstate / .qwrt / .qcov / .qsrc already define. A second worker
+/ what .qbfstate / .qwrt / .qmatz / .qsrc already define. A second worker
 / would have duplicated those 234 lines to change four, and then needed
 / keeping in step by hand: the framework moved four times in one day while
 / #46 was being built, and a duplicate would have fallen behind on two of
@@ -76,7 +76,7 @@ required_cfg:`source`dataset`width`transform
 / The library's own modules are flat by convention (one file, one
 / `\d .q<abbrev>`), and workers used to follow suit - .qddbf, .qevbf,
 / .qupbf, .qdbnbf - which put four instances of one shape beside .qbw,
-/ .qcov and .qsrc as if they were four more frameworks, and made each
+/ .qmatz and .qsrc as if they were four more frameworks, and made each
 / instance's namespace a second name to invent, spell and keep in step with
 / the worker's registered name. Nesting them under one root separates
 / "the framework" from "what runs on it", lets `key `.qwrk` list every
@@ -139,7 +139,7 @@ inherit:{[worker;ns]
 
 / The partition every worker fills when it does not declare one.
 / .
-/ ` is .qcov's "this dataset has no partition dimension" sentinel, so an
+/ ` is .qmatz's "this dataset has no partition dimension" sentinel, so an
 / existing worker that names no partition keeps recording and reading exactly
 / the rows it always did. Declaring `partition` is what opts a dataset into
 / being filled by several workers at once (#185); not declaring it leaves the
@@ -354,7 +354,7 @@ init:{[worker;run_spec]
 
     if[null run_spec`source_version;
         '"init: source_version must be set - coverage under one source release says nothing about another (ETL-09)"];
-    .qcov.require_interval[run_spec`range_from;run_spec`range_to];
+    .qmatz.require_interval[run_spec`range_from;run_spec`range_to];
 
     .qbfstate.register[worker;cfg`ns];
     .qbfstate.require_contract worker;
@@ -365,7 +365,7 @@ init:{[worker;run_spec]
     / bites when the ledger already existed, i.e. when another process
     / created it - which is exactly when its shape is evidence rather than
     / our own assumption.
-    .qcov.attach[];
+    .qmatz.attach[];
 
     / Same reasoning one table over: create it and verify its shape
     / here, in a live path, rather than leaving a checker that never fires.
@@ -544,7 +544,7 @@ run:{[worker]
 
 / Private: open this execution's run, tolerating an absent .qrun.
 / .
-/ Wrapped for the same reason .qcov.current_run is: run.q is not a load-time
+/ Wrapped for the same reason .qmatz.current_run is: run.q is not a load-time
 / dependency of this file, and a worker loaded by one of the minimal test
 / loaders should still run. Attribution is an addition to what a run records,
 / never a precondition for running one.

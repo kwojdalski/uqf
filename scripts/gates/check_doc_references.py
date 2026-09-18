@@ -6,7 +6,7 @@ There were already gates keeping the GENERATED documentation honest -
 ``generate_man_registry.py --check`` holds ``docs/man.q`` to the qDoc blocks,
 ``check_env_reference.py`` holds the environment page to the code that reads
 each variable. Nothing held the *prose* to anything. A guide could name
-``.qcov.stage_coverage``, a function that has never existed, and every gate
+``.qmatz.stage_coverage``, a function that has never existed, and every gate
 would pass: the name appears in no generated artifact, so no generator
 disagrees with it.
 
@@ -105,7 +105,7 @@ EXCLUDED_FILES = {
 ALLOWED_MISSING = {
     (
         ".claude/agents/pipeline-developer.md",
-        ".qcov.sub",
+        ".qmatz.sub",
     ): "an illustration of the nested namespace the convention forbids - it must not exist",
     (
         ".claude/agents/uqf-developer.md",

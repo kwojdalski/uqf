@@ -5,7 +5,7 @@
 / The test that matters most is the LAST one, which runs a real worker and
 / checks the beat count against windows_completed. The API tests below it
 / could all pass with nothing calling beat[] from the worker loop at all -
-/ which is the state .qcov.require_schema was in for a while, and the reason
+/ which is the state .qmatz.require_schema was in for a while, and the reason
 / this file ends with an integration check rather than starting with one.
 
 \d .hbtest
@@ -139,7 +139,7 @@ test_never_started_comes_from_the_worker_registry:{[t]
 / broke 21 tests in other files.
 / .
 / Worth being explicit that every test above would pass with the worker loop
-/ never touching this table at all. That is the .qcov.require_schema state,
+/ never touching this table at all. That is the .qmatz.require_schema state,
 / and it is why the wiring is asserted somewhere rather than assumed here.
 
 \d .
