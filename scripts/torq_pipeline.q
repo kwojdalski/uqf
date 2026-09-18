@@ -249,14 +249,18 @@ legal_transitions:(!). flip (
 / would trade a real diagnostic for a rule with nothing to protect.
 / @throws error when the transition is forbidden
 / @eg .qpipe.require_transition[`completed;`running]  -> throws
-require_transition:{[from;to]
-    if[null from; :1b];
-    if[not from in key legal_transitions;
-        '"require_transition: unknown previous state ",string from];
-    allowed:legal_transitions from;
+/ `from_state`, not `from`: `from` is a qSQL keyword, and a lambda that takes
+/ it cannot run `select ... from ...` in its own body - `{[from] select x from
+/ t where x>from}` throws a bare 'type. Nothing here runs qSQL today, so this
+/ was latent rather than broken; the linter's QF001 found it.
+require_transition:{[from_state;to]
+    if[null from_state; :1b];
+    if[not from_state in key legal_transitions;
+        '"require_transition: unknown previous state ",string from_state];
+    allowed:legal_transitions from_state;
     if[not to in allowed;
-        '"require_transition: ",string[from]," -> ",string[to]," is forbidden",
-         $[from in `idle`completed`failed;
+        '"require_transition: ",string[from_state]," -> ",string[to]," is forbidden",
+         $[from_state in `idle`completed`failed;
             / Consequence FIRST: q truncates a thrown string at 255 bytes,
             / so anything after that is silently lost - and what gets lost
             / is the part that explains the failure. This message was 254
