@@ -8,6 +8,8 @@ poll-only, so a socket would add a moving part without adding liveness.
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -16,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from uqf_frontend import authz, catalog, control, coverage, health, ops, procfile, queries, status
 from uqf_frontend.authz import Policy, Request_, allow_all, enforce
+from uqf_frontend.capture import CaptureScheduler, JsonlSink, UsageCapture
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
     CoverageIncomplete,
@@ -74,15 +77,40 @@ def create_app(
     fleet = fleet or KolaFleet(settings)
     policy = policy or allow_all
 
+    # FE-13's capture, started with the app and stopped with it. Off unless
+    # a destination is configured - see Settings.capture_dir on why "off" is
+    # a real choice and not a safe one.
+    scheduler: CaptureScheduler | None = None
+    if settings.capture_dir is not None:
+        scheduler = CaptureScheduler(
+            UsageCapture(fleet, JsonlSink(settings.capture_dir)),
+            interval_seconds=settings.capture_interval,
+        )
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        # The sweep runs in a daemon thread rather than on the event loop:
+        # capture_once is blocking kola IPC, one round trip per process, and
+        # on the loop it would stall every request for a whole fleet sweep.
+        if scheduler is not None:
+            scheduler.start()
+        try:
+            yield
+        finally:
+            if scheduler is not None:
+                scheduler.stop()
+
     app = FastAPI(
         title="uqf frontend API",
         summary="Validated, parameterised access to the uqf TorQ gateway",
         version="0.1.0",
+        lifespan=lifespan,
     )
     app.state.settings = settings
     app.state.gateway = gateway
     app.state.fleet = fleet
     app.state.policy = policy
+    app.state.capture = scheduler
 
     def authorise(request: Request, table: str | None = None) -> None:
         """Run the seam for this request. One call per route, so "was this

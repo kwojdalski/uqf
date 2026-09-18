@@ -175,11 +175,22 @@ what it does.
 - **FE-23 — hosting model for the API layer and the React app?** → **answered
   together with FE-22: one host** ([#57]). This gives FE-13's usage-capture
   pipeline a home — it ships as `UsageCapture.capture_once()`, and a timer in
-  the API process or a cron entry both work. That matters more than it sounds:
-  `.usage.flushtime` defaults to **three hours** (measured, not the one day the
-  requirements state), so unscheduled capture means history older than three
-  hours is simply gone. The React app is still unwritten and deliberately not
-  under `python/`.
+  the API process or a cron entry both work. That matters more than it sounds: unscheduled capture
+  means history older than `.usage.flushtime` is simply gone, and until #263
+  nothing scheduled it — `capture_once()` was implemented, tested and called
+  by nobody. It now runs from the API process's lifespan.
+
+  **Correction (2026-09-18).** This bullet used to read "`.usage.flushtime`
+  defaults to **three hours** (measured, not the one day the requirements
+  state)". That is wrong in both halves, and the requirements' "one day" was
+  right. `code/handlers/logusage.q` reads `@[value;`flushtime;0D03]`, which
+  is a *fallback* for a value already defined, and
+  `config/settings/default.q` sets `1D00` before it loads — so the fallback
+  never fires. Measured on three running processes: one day. The figure is
+  read at runtime via `ops.FLUSHTIME` rather than assumed, because a
+  deployment may override it again.
+
+  The React app is still unwritten and deliberately not under `python/`.
 
 The B-phase gates below still name the question they were gated on (B3 on FE-22,
 B4 on FE-21, B5 on FE-20); those gates are now open rather than blocked.

@@ -84,9 +84,12 @@ USAGE_SINCE = """{[since;lim]
 
 #: How long this process keeps usage rows in memory before flushing them.
 #:
-#: Worth reading rather than assuming: the vendored default is `0D03` - three
-#: hours - not the one day the frontend requirements state. A capture pipeline
-#: sized for a day would lose most of the log.
+#: Worth READING rather than assuming, in either direction.
+#: `code/handlers/logusage.q` says `@[value;`flushtime;0D03]` - three hours -
+#: and that line has been quoted here as fact. It is a fallback for a value
+#: already defined, and `config/settings/default.q` sets `1D00` first, so a
+#: standard stack runs at one day. A deployment may override it again, which
+#: is why this is a query and not a constant.
 FLUSHTIME = "value `.usage.flushtime"
 
 #: What a process can say about itself over IPC.

@@ -2,10 +2,15 @@ table,description
 crypto_book,"Live venue order books published by cryptorust's kdb-market-data-recorder (uqf-stack crypto start): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. time is stamped by the tickerplant on receipt"
 crypto_sim_fills,"Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from"
 crypto_trades,Real confirmed exchange executions recorded from the OMS
+databento_book,"Live Databento MBP-10 folded into the book shape by databento1, using the same .qxf transform the ODBC backfill applies - so a live row and a backfilled one are the same shape"
 demo_deals,"Generic analogue of an external relational deal source, landed by the demo_deals_backfill bounded worker. Synthetic by design - the real source is bank-internal and out of scope for this repository"
 etl_coverage,"Append-only completeness ledger: which [range_from, range_to) window of which dataset is published, at which source_version. A window with rows_published=0 still counts as covered - that is what distinguishes 'ran, found nothing' from 'never ran'"
 event_tape,"Per-event order/trade tape: add, cancel and trade events with the aggressor side on a trade. A superset of trades, so a tape filtered to action='trade' is trade-shaped. Sorted ascending by time by contract - see docs/architecture/event-tape.md"
 execution_quality,"Post-trade markout per fill per horizon; a null markout_pips means no reference quote existed at that horizon, not a zero markout"
+executions,"Every fill table the stack carries, spelled one way by the executions normalizer: the FX trades and cryptorust's crypto_trades. source_time is the source's own stamp, time the plant's on the normalized row. This is what posbook1 reads"
+marks,"A mid per instrument from every book the stack carries, spelled one way by the marks normalizer: the vendored quote and crypto_book. This is what posbook1 marks positions against"
+mkt_orderbook,"vectorize1's output: wide_book folded into the vector-column shape every pricing and execution function in src/ expects, one row per (time, sym)"
 position,"Running position book marked to the prevailing mid, with realised and unrealised P&L"
 quotes,FX top-of-book and depth as per-row level vectors
 trades,"Client fills, shaped to match .qpos.apply_fill and .qexec.markout_at_horizons exactly"
+wide_book,"The unfolded book widefeed1 publishes: one column per level per side, bids0..bids10 and asks0..asks10. vectorize1 folds it into mkt_orderbook; a reader wanting a book usually wants that one instead"
