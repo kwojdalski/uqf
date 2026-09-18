@@ -79,7 +79,7 @@ or documented as the narrower thing it actually is.
 
 **`src/etl/` (new).** The framework the four-part series specified: `.qsrc`
 source contract with parameterised q lambdas and environment-only credentials,
-`.qbw` generic bounded worker, `.qcov` append-only coverage ledger with
+`.qbw` generic bounded worker, `.qmatz` append-only coverage ledger with
 half-open intervals and `source_version` provenance, `.qcont` continuous
 feeders with dataset freshness, `.qcoer` shared text coercion, `.qlog` four
 levels over TorQ's `.lg`, `.qhb` per-worker heartbeat, and `.qdag` — a job

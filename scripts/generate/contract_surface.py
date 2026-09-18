@@ -49,7 +49,7 @@ Q_EXPORTER = REPO / "scripts" / "generate" / "export_contract_surface.q"
 #: The committed export of this tree's own surface. Checked in so a
 #: comparison against the authority needs only the authority's half, and
 #: gated below so it cannot quietly go stale - a committed baseline nothing
-#: verifies is the `.qcov.require_schema` shape, where a file's existence
+#: verifies is the `.qmatz.require_schema` shape, where a file's existence
 #: reads as protection it is not providing.
 #:
 #: A DIRECTORY OF CSVs rather than one JSON file, and the reason is review.

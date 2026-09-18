@@ -1,5 +1,28 @@
-/ coverage.q - the append-only completeness ledger and its interval
-/ arithmetic (.qcov).
+/ materialisation.q - the append-only completeness ledger and its interval
+/ arithmetic (.qmatz).
+/ .
+/ ON THE NAME, because three things here are called different versions of
+/ one idea and that is deliberate rather than sloppy.
+/ .
+/ The namespace is named for what this module RECORDS: a materialisation,
+/ Dagster's word for "this asset was produced, for this partition, at this
+/ time". That is what stage_completion writes and what the ledger holds.
+/ .
+/ The TABLE stays `etl_coverage`, and the requirements stay ETL-07 to
+/ ETL-11 "coverage", because those name what callers ASK: "is this range
+/ covered?". Four things outside this file already agree on that word - the
+/ persisted table, the requirements document, the frontend's /coverage
+/ endpoint and its Coverage view - and renaming a persisted table to match
+/ a namespace is the tail wagging the dog. A namespace and the table it
+/ writes need not share a name; .qpos manages `position` and .qexec writes
+/ `execution_quality` on the same principle.
+/ .
+/ It was `.qcov` until the maintainer pointed out that `scripts/dev/
+/ coverage.q` is a completely different module - CODE coverage, `.cov`,
+/ KX's own API - and that two 580-line files called coverage.q in
+/ namespaces one character apart is a trap rather than a coincidence. The
+/ file was renamed with the namespace so the collision is gone at both
+/ ends.
 / .
 / Implements requirements ETL-07 to ETL-11 of docs/reference/etl-framework-requirements.md.
 / Those IDs are the REQUIREMENTS document's; the question bank uses an
@@ -20,7 +43,7 @@
 /      another, so every read filters on it and intervals from different
 /      versions are NEVER merged to satisfy a dependency.
 
-\d .qcov
+\d .qmatz
 
 / ---------------------------------------------------------------- SCHEMA
 
@@ -101,14 +124,14 @@ schema:`dataset`partition`source_version`range_from`range_to`rows_published`reco
 / This comment used to say "nothing in this file updates or deletes a
 / row", which supersede made false the moment it landed here.
 / .
-/ The table lives at the ROOT, not in .qcov, because it is a published
+/ The table lives at the ROOT, not in .qmatz, because it is a published
 / database table like quotes/trades/position - it flows through the
 / tickerplant to rdb/hdb and is read by processes that know nothing about
 / this namespace.
 / .
 / That has a consequence worth stating, because it is a silent-wrong-answer
-/ trap: inside `\d .qcov` a bare `etl_coverage` resolves to
-/ `.qcov.etl_coverage`, NOT the root table. Backtick forms
+/ trap: inside `\d .qmatz` a bare `etl_coverage` resolves to
+/ `.qmatz.etl_coverage`, NOT the root table. Backtick forms
 / (`etl_coverage set / insert) are absolute and hit the root; bare reads are
 / not. Every read below therefore goes through ledger[] rather than naming
 / the table directly.
@@ -125,12 +148,12 @@ still_current:0Wp
 
 / Create the root ledger table if it is absent, and return its name.
 / .
-/ Inside \d .qcov a bare `etl_coverage` resolves to `.qcov.etl_coverage`, NOT
+/ Inside \d .qmatz a bare `etl_coverage` resolves to `.qmatz.etl_coverage`, NOT
 / the root table. Backtick forms (`etl_coverage set / insert) are absolute and
 / hit the root; bare reads are not. Every read below therefore goes through
 / ledger[] rather than naming the table directly.
 / @return the ledger table name
-/ @eg .qcov.init_ledger[]
+/ @eg .qmatz.init_ledger[]
 init_ledger:{[]
     if[not `etl_coverage in tables `.;
         `etl_coverage set ([] dataset:`symbol$(); partition:`symbol$();
@@ -171,7 +194,7 @@ ledger:{[] value `etl_coverage}
 / @return the ledger table name
 / @throws error, via require_schema, when an existing ledger has a
 /   different shape
-/ @eg .qcov.attach[]
+/ @eg .qmatz.attach[]
 attach:{[]
     existed:`etl_coverage in tables `.;
     init_ledger[];
@@ -251,7 +274,7 @@ require_interval:{[range_from;range_to]
 / prevent.
 / @param intervals a table with range_from and range_to columns
 / @return a table of composed intervals, ordered by range_from
-/ @eg .qcov.compose[([] range_from:2026.09.11D00:00 2026.09.12D00:00; range_to:2026.09.12D00:00 2026.09.13D00:00)]
+/ @eg .qmatz.compose[([] range_from:2026.09.11D00:00 2026.09.12D00:00; range_to:2026.09.12D00:00 2026.09.13D00:00)]
 compose:{[intervals]
     if[0=count intervals; :intervals];
     sorted:`range_from xasc 0!intervals;
@@ -281,7 +304,7 @@ compose:{[intervals]
 / .
 / Vectorised rather than looped. An earlier version used a while loop with
 / `continue`, which is not q - it is a C-ism that parses as an undefined
-/ name and aborted the whole file's load, leaving .qcov empty while
+/ name and aborted the whole file's load, leaving .qmatz empty while
 / `system"l"` still reported success.
 / @param from_ts start of the requested range
 / @param to_ts end of the requested range, exclusive
@@ -317,7 +340,7 @@ gaps:{[from_ts;to_ts;covered]
 / dependency a worker did not already have. A process that can checkpoint can
 / persist; a process that cannot fails the same way it already failed.
 / @return the ledger file path
-/ @eg .qcov.ledger_path[]
+/ @eg .qmatz.ledger_path[]
 ledger_path:{[] (.qbfstate.lock_dir[]),"/etl_coverage"}
 
 / Private: this ledger's mutex path. Distinct from .qbfstate's per-worker
@@ -335,7 +358,7 @@ lock_path:{[] .qbfstate.file_lock_path `etl_coverage}
 / @param f the function to run under the lock
 / @param args its arguments, as a list
 / @return whatever f returns
-/ @eg .qcov.with_lock[{[n] n};enlist 1]
+/ @eg .qmatz.with_lock[{[n] n};enlist 1]
 with_lock:{[f;args] .qbfstate.with_file_lock[`etl_coverage;f;args]}
 
 / Write the in-memory ledger to disk.
@@ -360,7 +383,7 @@ persist:{[] (hsym `$ledger_path[]) set ledger[]; ledger_path[]}
 / .
 / No file is not an error: a first run has nothing to reload.
 / @return the ledger table name
-/ @eg .qcov.reload[]
+/ @eg .qmatz.reload[]
 reload:{[]
     p:hsym `$ledger_path[];
     if[()~key p; :init_ledger[]];
@@ -372,7 +395,7 @@ reload:{[]
 / .
 / Protected rather than a bare .qrun.current[] call, because run.q is not a
 / load-time dependency of this file and several minimal loaders
-/ (tests/q/read_checkpoint.q and friends) pull in coverage.q alone. Without
+/ (tests/q/read_checkpoint.q and friends) pull in materialisation.q alone. Without
 / the wrapper, staging a completion in one of those would fail on a missing
 / namespace rather than record a run-less materialisation, which is the
 / honest outcome there.
@@ -404,7 +427,7 @@ current_run:{[] @[{.qrun.current[]};::;0Ng]}
 /   meaningful
 / @return the number of rows now in the ledger
 / @throws error if source_version is null, or the interval is empty/reversed
-/ @eg .qcov.stage_completion[`markouts;`EURUSD;`v1;2026.09.13D00:00;2026.09.14D00:00;1234]
+/ @eg .qmatz.stage_completion[`markouts;`EURUSD;`v1;2026.09.13D00:00;2026.09.14D00:00;1234]
 stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_published]
     if[null source_version;
         '"stage_completion: source_version must be set - coverage under one source release says nothing about another (ETL-09)"];
@@ -463,7 +486,7 @@ valid_at:{[ds;part;version;as_of]
 / understood at `as_of`.
 / @param as_of the instant to answer as of; .z.p for "now"
 / @param partition the slice to report on, or ` for an unpartitioned dataset
-/ @eg .qcov.intervals[`demo_deals;`;`v1;.z.p]
+/ @eg .qmatz.intervals[`demo_deals;`;`v1;.z.p]
 intervals:{[ds;part;version;as_of]
     compose valid_at[ds;part;version;as_of]}
 
@@ -516,7 +539,7 @@ require_covered:{[ds;part;version;as_of;from_ts;to_ts]
 / run that was entirely restated look like a run that did nothing.
 / @param id the run id
 / @return the coverage rows that run staged
-/ @eg .qcov.materialisations_of[.qrun.current[]]
+/ @eg .qmatz.materialisations_of[.qrun.current[]]
 materialisations_of:{[id]
     init_ledger[];
     target:id;
@@ -537,7 +560,7 @@ materialisations_of:{[id]
 / @param part the partition, or ` for an unpartitioned dataset
 / @param version the source release
 / @return the distinct run ids, in first-recorded order
-/ @eg .qcov.contributing_runs[`demo_deals;`;`v1]
+/ @eg .qmatz.contributing_runs[`demo_deals;`;`v1]
 contributing_runs:{[ds;part;version]
     init_ledger[];
     distinct exec run_id from `recorded_at xasc ledger[]
@@ -573,7 +596,7 @@ contributing_runs:{[ds;part;version]
 / @param to_ts exclusive upper bound
 / @return the number of claims withdrawn
 / @throws error when the interval is not a proper half-open range
-/ @eg .qcov.supersede[`demo_deals;`;`v1;2026.09.12D00:00;2026.09.13D00:00]
+/ @eg .qmatz.supersede[`demo_deals;`;`v1;2026.09.12D00:00;2026.09.13D00:00]
 supersede:{[ds;part;version;from_ts;to_ts]
     require_interval[from_ts;to_ts];
     init_ledger[];
@@ -594,7 +617,7 @@ supersede:{[ds;part;version;from_ts;to_ts]
 supersede_locked:{[ds;part;version;from_ts;to_ts]
     now:.z.p;
     / `cur` is a LOCAL copy of still_current, not the namespace global.
-    / Inside \d .qcov a bare name in a qSQL where-clause does not resolve to
+    / Inside \d .qmatz a bare name in a qSQL where-clause does not resolve to
     / the namespace's own global - the same trap this file documents at
     / length for `etl_coverage`, and it throws 'still_current rather than
     / silently matching nothing, which is the better of the two failures.
@@ -618,7 +641,7 @@ supersede_locked:{[ds;part;version;from_ts;to_ts]
 / @param part the partition, or ` for an unpartitioned dataset
 / @param version the source release
 / @return the ledger rows for this dataset/partition/version, in record order
-/ @eg .qcov.history[`demo_deals;`;`v1]
+/ @eg .qmatz.history[`demo_deals;`;`v1]
 history:{[ds;part;version]
     init_ledger[];
     select from ledger[]

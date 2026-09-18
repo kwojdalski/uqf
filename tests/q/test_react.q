@@ -297,7 +297,7 @@ test_a_failing_reaction_leaves_the_window_published_and_covered:{[t]
     .qwrk.demo_deals_backfill.init[`source_version`range_from`range_to!(`rx3;.rxtest.d 1;.rxtest.d 4)];
     r:.qwrk.demo_deals_backfill.run[];
     .qwrk.demo_deals_backfill.cleanup[];
-    .qunit.assertEquals[(r`state;r`windows_failed;.qcov.is_covered[`demo_deals;`;`rx3;.z.p;.rxtest.d 1;.rxtest.d 4]);
+    .qunit.assertEquals[(r`state;r`windows_failed;.qmatz.is_covered[`demo_deals;`;`rx3;.z.p;.rxtest.d 1;.rxtest.d 4]);
         (`completed;0;1b);
         "the upstream run completes and its coverage stands, whatever the downstream did"]};
 

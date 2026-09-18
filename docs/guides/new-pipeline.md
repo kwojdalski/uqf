@@ -193,7 +193,7 @@ worker instance lives under the one `.qwrk` root, named exactly as it is
 registered, and `.qbw.define` derives the namespace from the worker name —
 a supplied `ns` key is refused. So `key `.qwrk` lists every loaded worker,
 and a worker has one name rather than a name and an abbreviation to keep in
-step. The library's own modules stay flat (`.qbw`, `.qcov`, `.qsrc`); the
+step. The library's own modules stay flat (`.qbw`, `.qmatz`, `.qsrc`); the
 nesting marks the line between the framework and what runs on it.
 
 **The contract's names are stamped by `define`, not written by you.**
@@ -319,7 +319,7 @@ and there was nothing" distinguishable from "we never ran", and a derived
 ledger cannot express the difference at all.
 
 ```q
-q).qcov.is_covered[`fx_rates;`;`v1;.z.p;2026.09.11D00:00;2026.09.16D00:00]
+q).qmatz.is_covered[`fx_rates;`;`v1;.z.p;2026.09.11D00:00;2026.09.16D00:00]
 1b
 ```
 
@@ -338,8 +338,8 @@ q).qwrk.fx_rates_backfill.run[][`state]
 "Ran, found no work" is a success. An orchestrator that cannot tell
 the two apart retries a successful no-op forever.
 
-`.qcov.missing` narrows a range to what is still absent, `.qcov.history`
-shows every claim ever made, and `.qcov.contributing_runs` says which
+`.qmatz.missing` narrows a range to what is still absent, `.qmatz.history`
+shows every claim ever made, and `.qmatz.contributing_runs` says which
 executions built it.
 
 ## 6. Test it

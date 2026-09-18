@@ -114,7 +114,7 @@ Structure each finding as:
 ```
 ### CONCEPT — N spellings
 
-  dominant  `ts`         40 uses   src/etl/core/coverage.q:173, ...
+  dominant  `ts`         40 uses   src/etl/core/materialisation.q:173, ...
   outlier   `timestamp`   2 uses   src/etl/core/coercion.q:88
 
   Public API: yes (.qcoer.to_timestamp)

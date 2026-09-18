@@ -10,13 +10,13 @@
 // That warning is ENFORCED here rather than repeated as a comment. The set of
 // doubleable adapters is closed, and asking to double a transform or the
 // coverage ledger throws with ETL-19's own wording. The failure it prevents is
-// specific and plausible: a suite where .qcov.stage_completion is a double
+// specific and plausible: a suite where .qmatz.stage_completion is a double
 // passes whatever the real ledger does, so the interval arithmetic that
 // decides whether a range is complete goes untested while the test names all
 // say "coverage".
 //
-// So: the EDGES are doubled here; the MIDDLE (.qcov's arithmetic, and any
-// transform) is tested against the real implementation in test_coverage.q.
+// So: the EDGES are doubled here; the MIDDLE (.qmatz's arithmetic, and any
+// transform) is tested against the real implementation in test_materialisation.q.
 
 \d .qetldbl
 

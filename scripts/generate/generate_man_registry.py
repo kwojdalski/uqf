@@ -8,11 +8,11 @@ fallen a long way behind:
 
     348 public q functions
      78 registered in man.q
-    273 undocumented - including .qmicro, .qsrc, .qdag, .qbw, .qcov and
+    273 undocumented - including .qmicro, .qsrc, .qdag, .qbw, .qmatz and
         every other ETL namespace at zero coverage
 
 `.man.getDocs[]` is the programmatic documentation API, so that gap is not
-cosmetic: a caller asking about `.qcov.is_covered` gets nothing back and
+cosmetic: a caller asking about `.qmatz.is_covered` gets nothing back and
 cannot tell "undocumented" from "does not exist".
 
 Nobody noticed because until recently `docs/man.q` DID NOT LOAD AT ALL - two

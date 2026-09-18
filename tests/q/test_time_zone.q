@@ -14,7 +14,7 @@
 // for the type: a test that proves the trap exists has to build the value
 // the trap needs. The checker is scoped to non-test files for exactly this.
 //
-// Load src/etl/core/status.q, src/etl/core/coverage.q,
+// Load src/etl/core/status.q, src/etl/core/materialisation.q,
 // src/etl/core/worker_runtime.q, src/etl/core/source_contract.q,
 // src/etl/sources/demo_deals.q, tests/lib/qunit.q and tests/lib/testutil.q
 // before this file.
@@ -121,7 +121,7 @@ test_a_datetime_time_column_is_refused_by_the_contract:{[t]
 
 / WHAT THE CANONICAL CODE MEANT BY A TRADING DAY IS NOT KNOWABLE HERE, and
 / nothing in this tree has a business-date notion: .qwrt.windows cuts
-/ elapsed time, .qcov composes half-open intervals, and .qdcf counts actual
+/ elapsed time, .qmatz composes half-open intervals, and .qdcf counts actual
 / calendar days. These two tests pin the assumption that is therefore in
 / force, so that whoever adds a venue calendar later has to change a failing
 / test rather than a comment.

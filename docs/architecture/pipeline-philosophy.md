@@ -125,7 +125,7 @@ it*, rather than pinning a copy made on the day it was written.
 A component handed something malformed should stop, naming what is wrong,
 before the first read that would depend on it:
 
-- `.qcov.require_schema` refuses a ledger built to a different shape, because
+- `.qmatz.require_schema` refuses a ledger built to a different shape, because
   every read here would otherwise aggregate across whatever the unexpected
   column distinguishes, and a range covered for one value of it would report
   as covered for all.
@@ -138,7 +138,7 @@ before the first read that would depend on it:
   partition, because their coverage rows would then be indistinguishable,
   and refuses a worker that supplies its own `ns`, because the namespace is
   derived from the worker's name — `.qwrk.<worker name>`.
-- `.qcov.require_interval` refuses a zero-width or reversed window, because
+- `.qmatz.require_interval` refuses a zero-width or reversed window, because
   recording one claims completeness for no data.
 
 Each refusal names a specific failure it prevents. A guard whose comment
@@ -153,7 +153,7 @@ suite then healed on first use, hiding the fault until something called
 ## 6. Required where the value is a choice; ambient where it is a fact.
 
 ETL-09 makes `source_version` a required parameter of
-`.qcov.stage_completion`, not an optional filter, on the grounds that an
+`.qmatz.stage_completion`, not an optional filter, on the grounds that an
 optional filter is one a caller forgets — and forgetting this one merges
 coverage across releases.
 

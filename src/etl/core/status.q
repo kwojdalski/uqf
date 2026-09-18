@@ -28,7 +28,7 @@
 / called them, which put src/ downstream of scripts/ and is why lock_dir was
 / wrapped in a try-with-fallback: the author knew .qpipe might not be
 / loaded. Here, under src/etl/core/, the dependency points the right way and
-/ the guard is gone. Same convention as coverage.q, run.q and heartbeat.q:
+/ the guard is gone. Same convention as materialisation.q, run.q and heartbeat.q:
 / one file per persisted artefact that something outside this process reads.
 
 \d .qstatus

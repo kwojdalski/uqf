@@ -36,7 +36,7 @@
 / give every caller the chance to pass the wrong one, which is a failure mode
 / that does not otherwise exist.
 / .
-/ So `current[]` is the single source, and .qcov.stage_completion reads it.
+/ So `current[]` is the single source, and .qmatz.stage_completion reads it.
 / Outside a run it returns the null guid, and that is recorded honestly: a
 / materialisation not attributable to any run is a real state (a direct call
 / from a test, or a repair by hand) and saying so is better than inventing an
@@ -55,7 +55,7 @@
 
 / The run ledger's columns, in order. One constant in one place: changing the
 / shape is an edit here plus the writer's column list plus require_run_schema,
-/ not a hunt through the file. Same discipline as .qcov.schema.
+/ not a hunt through the file. Same discipline as .qmatz.schema.
 run_schema:`run_id`worker`process`host`pid`started_at`ended_at`status
 
 / The metadata table's columns, in order.
@@ -77,7 +77,7 @@ run_schema:`run_id`worker`process`host`pid`started_at`ended_at`status
 / reader than everything being text.
 meta_schema:`run_id`dataset`range_from`range_to`label`text`recorded_at
 
-/ A run in flight has not ended. Same sentinel discipline as .qcov's
+/ A run in flight has not ended. Same sentinel discipline as .qmatz's
 / still_current: an ended_at far in the future satisfies every "ended before
 / x" comparison by arithmetic, so no read needs a null branch.
 not_ended:0Wp
@@ -116,7 +116,7 @@ init_meta:{[]
 / The root run table. Exists so no read below names `etl_runs` bare - inside
 / \d .qrun a bare name resolves to .qrun.etl_runs, which does not exist, and
 / the read would fail at the point of use rather than here. Same reason
-/ .qcov.ledger exists.
+/ .qmatz.ledger exists.
 runs:{[] value `etl_runs}
 
 / The root metadata table, for the same reason.
@@ -129,7 +129,7 @@ meta_table:{[] value `etl_run_meta}
 
 / Check a run ledger this process did not create against the shape above.
 / .
-/ Same asymmetry .qcov.attach draws: a table we just built matches by
+/ Same asymmetry .qmatz.attach draws: a table we just built matches by
 / construction and checking it would only ever confirm itself; a table
 / someone else built is EVIDENCE, and must be validated before a read is
 / trusted.
@@ -149,7 +149,7 @@ require_run_schema:{[]
 
 / Attach to both tables, validating a shape this process did not create.
 / .
-/ The same create-if-absent-and-verify contract .qcov.attach offers, and the
+/ The same create-if-absent-and-verify contract .qmatz.attach offers, and the
 / function a worker's init should call. The asymmetry is the point: a table
 / we just built matches by construction, so checking it would only ever
 / confirm itself; a table another process built is evidence, and is validated
@@ -190,7 +190,7 @@ table_path:{[name] (.qbfstate.lock_dir[]),"/",string name}
 
 / Write both tables to disk. Call only under the lock.
 / .
-/ q binary via `set`, like .qcov.persist: the run ledger carries a guid, an
+/ q binary via `set`, like .qmatz.persist: the run ledger carries a guid, an
 / int pid and three timestamps including the 0Wp not_ended sentinel, and a
 / sentinel that came back as a null would make every unfinished[] read wrong.
 / @return the two paths written
@@ -215,7 +215,7 @@ reload:{[]
 
 / Private: read-modify-write under the run ledger's own mutex.
 / .
-/ Its OWN mutex, not .qcov's: these are different tables, and guarding one
+/ Its OWN mutex, not .qmatz's: these are different tables, and guarding one
 / with another's lock would serialise writes that never contend while
 / leaving the pair that do unprotected the moment someone changed either.
 under_lock:{[f;args] .qbfstate.with_file_lock[`etl_runs;f;args]}
@@ -331,7 +331,7 @@ finish:{[status]
     / than `id` and `status`: a bare `id` in the where clause would resolve
     / to the run_id column and a bare `status` to the status column, each
     / comparing a column to itself and matching every row. Same trap
-    / .qcov.valid_at documents.
+    / .qmatz.valid_at documents.
     under_lock[{[target;outcome]
         reload[];
         `etl_runs set update ended_at:.z.p, status:outcome from runs[] where run_id=target;
@@ -388,7 +388,7 @@ record:{[dataset;range_from;range_to;facts]
     ks:key facts;
     if[not 11h=abs type ks;
         '"record: facts labels must be symbols"];
-    .qcov.require_interval[range_from;range_to];
+    .qmatz.require_interval[range_from;range_to];
     init_meta[];
     n:count ks;
     under_lock[{[rows]

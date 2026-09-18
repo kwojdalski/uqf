@@ -1,13 +1,13 @@
 / verify_coverage_schema.q - check a coverage ledger against the shape
-/ src/etl/core/coverage.q declares.
+/ src/etl/core/materialisation.q declares.
 / .
 / Written to settle issue #60, which asked whether the assumed shape matched
 / a canonical one. That question is closed: this tree is the primary
-/ lineage and canonical is frozen, so the shape coverage.q declares IS the
+/ lineage and canonical is frozen, so the shape materialisation.q declares IS the
 / schema and there is nothing else to compare it to.
 / .
 / What the script is still for is DRIFT: a ledger some other process built
-/ to a different shape. Every read in coverage.q filters on dataset,
+/ to a different shape. Every read in materialisation.q filters on dataset,
 / partition and source_version, so an extra column that distinguishes rows
 / BEYOND those makes those reads aggregate across it, and a range covered for
 / one value of it reports as COMPLETE for all of them. Nothing errors,
@@ -18,8 +18,8 @@
 / - what the check below still catches is a SECOND partitioning dimension,
 / one this tree does not know it should be slicing on.
 / .
-/ .qcov.require_schema is the same check inside a worker's init, reached via
-/ .qcov.attach. This is the standalone form, for looking at a ledger without
+/ .qmatz.require_schema is the same check inside a worker's init, reached via
+/ .qmatz.attach. This is the standalone form, for looking at a ledger without
 / starting a worker.
 / .
 / Usage, on a machine that can reach the real ledger:
@@ -37,7 +37,7 @@
 
 \c 400 2000
 
-\l src/etl/core/coverage.q
+\l src/etl/core/materialisation.q
 
 args:.Q.opt .z.x;
 
@@ -66,7 +66,7 @@ fetch_meta:{[]
 
 m:fetch_meta[];
 present:exec c from m;
-assumed:.qcov.schema;
+assumed:.qmatz.schema;
 
 -1 "";
 -1 "=================== etl_coverage: live schema ===================";
@@ -85,7 +85,7 @@ problems:0;
 
 if[count missing;
     -1 "MISSING   ",", " sv string missing;
-    -1 "          coverage.q reads these, so every read against the real";
+    -1 "          materialisation.q reads these, so every read against the real";
     -1 "          ledger fails or returns nulls. This is the LOUD failure -";
     -1 "          bad, but it announces itself.";
     -1 "";
@@ -100,7 +100,7 @@ if[count partition_like;
     -1 "          covered for one but empty for the others is reported";
     -1 "          COMPLETE. Fix before any consumer trusts is_covered - the";
     -1 "          same four steps #185 followed for `partition` itself:";
-    -1 "            1. add the column to .qcov.schema and init_ledger";
+    -1 "            1. add the column to .qmatz.schema and init_ledger";
     -1 "            2. add it as a REQUIRED parameter to intervals/";
     -1 "               is_covered/missing/require_covered - required, not";
     -1 "               optional, for the same reason source_version is (ETL-09)";
@@ -118,7 +118,7 @@ if[count extra except partition_like;
 
 -1 "=================== verdict ===================";
 -1 $[0=problems;
-     "MATCH - the ledger agrees with the shape coverage.q declares.";
+     "MATCH - the ledger agrees with the shape materialisation.q declares.";
      "MISMATCH - ",string[problems]," problem class(es) above. Paste this whole output into #60."];
 -1 "===============================================";
 exit $[0=problems; 0; 1];

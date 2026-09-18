@@ -26,7 +26,7 @@ alike:
 | History | bounded workers under [`src/etl/workers/`](../../src/etl/workers), run by [`.qbw`](../../src/etl/core/bounded_worker.q) | whatever the upstream holds, written through `.qio` — never via the plant |
 
 The last row is the one to notice. A backfill writes into storage directly
-and records what it covered in the [coverage ledger](../../src/etl/core/coverage.q),
+and records what it covered in the [coverage ledger](../../src/etl/core/materialisation.q),
 bitemporally. It never traverses the tickerplant, which is why the two halves
 of the ETL tree look alike in the code and take different paths in the
 diagram.
@@ -91,7 +91,7 @@ sockets — called from a query, a notebook or a surface.
   chaining.
 - Restatement — the coverage ledger is bitemporal, so a window can be
   re-run and the answer it replaced is still there. [The design note](restatement-design.md)
-  is the argument; `.qcov` is the implementation.
+  is the argument; `.qmatz` is the implementation.
 
 ## 6 · Surfaces
 

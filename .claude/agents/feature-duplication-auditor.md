@@ -140,7 +140,7 @@ first is the kind of finding worth reporting, the second is the kind worth
 **Report this one.** Interval algebra exists twice:
 
 ```
-  q       .qcov.compose / .qcov.gaps    src/etl/core/coverage.q:243, :278
+  q       .qmatz.compose / .qmatz.gaps    src/etl/core/materialisation.q:243, :278
   python  Interval.touches / merge      python/uqf_frontend/src/uqf_frontend/coverage.py:39
 
   Shared behaviour: merging adjacent half-open [from,to) intervals, which

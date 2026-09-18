@@ -66,7 +66,7 @@ def test_the_committed_baseline_is_well_formed(baseline: dict) -> None:
 def test_the_baseline_carries_the_etl_coverage_schema(baseline: dict) -> None:
     """The table whose shape is #139's sharp conflict.
 
-    `etl_coverage` is created lazily by `.qcov.attach`, so the first version of
+    `etl_coverage` is created lazily by `.qmatz.attach`, so the first version of
     the exporter reported ZERO tables - the most misleading possible answer,
     since a surface claiming no tables reads as "this tree defines none"
     rather than "none had been created yet". This is the regression guard for
@@ -170,7 +170,7 @@ def test_the_committed_baseline_matches_this_tree() -> None:
     A committed baseline that nothing verifies goes stale the first time
     anyone changes a signature, and then every diff against it is measuring
     against a tree that no longer exists. This repository has shipped that
-    exact shape before - `.qcov.require_schema` was defined, tested, and
+    exact shape before - `.qmatz.require_schema` was defined, tested, and
     called from no live path.
 
     Here rather than only in CI because the q suite and the Python suite run

@@ -79,12 +79,12 @@ test_the_resolver_accepts_a_name_that_does_exist:{[t]
 test_the_registry_covers_the_etl_tree:{[t]
     / The gap that prompted generating this file. Before the generator,
     / man.q registered 78 of 348 public functions and FIFTEEN NAMESPACES had
-    / zero coverage - .qmicro, .qsrc, .qdag, .qbw, .qcov and every other ETL
+    / zero coverage - .qmicro, .qsrc, .qdag, .qbw, .qmatz and every other ETL
     / namespace. `.man.getDocs[]` is the programmatic documentation API, so a
-    / caller asking about .qcov.is_covered got nothing back and could not tell
+    / caller asking about .qmatz.is_covered got nothing back and could not tell
     / "undocumented" from "does not exist".
     names:exec fullname from .man.funcs;
-    .qunit.assertTrue[any names like ".qcov.*";
+    .qunit.assertTrue[any names like ".qmatz.*";
         "the coverage namespace is documented, not just the original library"]};
 
 / The coverage ratchet. A FLOOR, not a target.

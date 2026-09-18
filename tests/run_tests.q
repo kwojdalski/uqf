@@ -66,7 +66,7 @@
 \l tests/q/test_io_manager.q
 \l tests/q/test_singlestore_odbc.q
 \l tests/q/test_backfill_state.q
-\l tests/q/test_coverage.q
+\l tests/q/test_materialisation.q
 \l tests/q/test_run.q
 \l tests/q/test_stack_tables.q
 \l tests/q/test_log.q

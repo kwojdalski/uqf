@@ -141,7 +141,7 @@ settled here.
   after EOD.**
 
   > **NOT IMPLEMENTED, and deliberately so for now.** The ledger is durable
-  > and cross-process as of the persistence layer in `src/etl/core/coverage.q`
+  > and cross-process as of the persistence layer in `src/etl/core/materialisation.q`
   > — it round-trips to a file beside the checkpoints and every `attach`
   > reloads it — but it is *not* tiered through the tickerplant into `rdb`
   > and `hdb`, and no read here goes via a gateway.

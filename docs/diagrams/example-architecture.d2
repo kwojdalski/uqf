@@ -103,7 +103,7 @@ sources: "1 · sources — each in its own shape" {
   fx: "FX venue feeds\nfx_feed · quotes_feed · fx_trades_feed\n(synthetic here; a venue adapter in production)" { class: source }
   crypto: "crypto venues\ncryptorust's two kdb recorders,\nor crypto_mock standing in" { class: source }
   databento: "Databento MBP-10\ndatabento_feed.py → databento_book\nlive; the same fold as the ODBC backfill" { class: source }
-  backfill: "history\nbounded workers over ODBC / upstream q\n.qbw · .qcov coverage ledger · .qrun" { class: source }
+  backfill: "history\nbounded workers over ODBC / upstream q\n.qbw · .qmatz coverage ledger · .qrun" { class: source }
 }
 
 plant: "2 · the plant" {

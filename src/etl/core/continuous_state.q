@@ -23,7 +23,7 @@
 / to here", NOT "everything up to here is published and complete". Those are
 / different claims, and conflating them is how a dataset gets declared
 / complete because a tailer happened to get far enough. So this file has NO
-/ path to .qcov.stage_completion, and `advance` refuses a cursor that would
+/ path to .qmatz.stage_completion, and `advance` refuses a cursor that would
 / go backwards - the one way a tailer can silently re-publish.
 / .
 / Freshness is reported instead, which is the honest statement a consumer of
