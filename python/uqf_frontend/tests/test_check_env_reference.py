@@ -103,3 +103,32 @@ def test_the_refusal_points_at_the_header_that_explains_the_themes(monkeypatch, 
     _, err = _run_with_example(monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nLOG_LEVEL=DEBUG\n")
     assert "Only .qdata.cfg reads .env" in err
     assert "header of .env.example" in err
+
+
+# ------------------------------- the documented DEFAULT, not just the name
+
+
+def test_the_documented_gateway_port_is_the_one_the_code_actually_defaults_to():
+    """The gate above checks every variable is NAMED in the reference. It
+    does not read the Default column, and that column was wrong for a
+    release: #235 moved the frontend's default from 6052 (which is rdb1) to
+    the gateway's port, and `docs/reference/environment.md` went on saying
+    6052 with every check green.
+
+    A name-only gate is the shape of the bug it was written to prevent -
+    documentation that exists and is wrong reads as documentation that is
+    right. Asserted against `Settings()` rather than the literal, so
+    changing the default fails here until the reference is updated.
+    """
+    from uqf_frontend.config import Settings
+
+    reference = Path(__file__).resolve().parents[3] / "docs" / "reference" / "environment.md"
+    row = next(
+        line
+        for line in reference.read_text().splitlines()
+        if line.startswith("| `UQF_FRONTEND_GATEWAY_PORT`")
+    )
+    assert str(Settings().port) in row, (
+        f"environment.md documents a default the code does not use; "
+        f"Settings().port is {Settings().port}, the row reads: {row}"
+    )

@@ -110,18 +110,23 @@ contract: it is validated at registration, its fixture is checked against it
 on every commit, and `.qsrc.fetch_window` windows it identically to a live
 source.
 
-**No dedicated worker file was written, and that is a finding rather than an
-omission.** `demo_deals_backfill.q` is 238 lines of which exactly **four** are
-worker-specific (`worker_name`, `source_name`, `dataset`, `width`); the other
-234 are framework glue — `init`, `plan`, `fetch`, `publish`, `checkpoint`,
-`run`, `do_window`, `cleanup`. A second worker would duplicate 234 lines to
-change four, and the duplicate would then have to be kept in step by hand
-every time the framework moved.
+**No dedicated worker file was written at first, and that was a finding
+rather than an omission.** `demo_deals_backfill.q` was then 238 lines of
+which exactly **four** were worker-specific (the worker's name, its source,
+its dataset and its window width); the other 234 were framework glue —
+`init`, `plan`, `fetch`, `publish`, `checkpoint`, `run`, `do_window`,
+`cleanup`. A second worker would have duplicated 234 lines to change four,
+and the duplicate would then have needed keeping in step by hand every time
+the framework moved.
 
-The right fix is a generic bounded-worker shell parameterised on those four
-values, with both workers as thin declarations over it. That is a refactor of
-the one working worker rather than an addition, so it is filed separately
-instead of being done in the same change as a new feature.
+**That is what `.qbw` is, and it is built.** #124 made the shell generic and
+both workers declarations over it; #227 went further and had `.qbw.define`
+*stamp* the contract's names into the worker's namespace, so the four
+delegating lines each worker still pasted are gone too. A worker file today
+is its transform, an optional check, and one `define` call — the event-tape
+worker is 52 lines. See
+[`../guides/new-pipeline.md`](../guides/new-pipeline.md) for what writing
+one now looks like.
 
 The source is **synthetic**, per A-04: every column is one any venue's tape
 would carry, and the fixture's values are invented. Nothing about a real
