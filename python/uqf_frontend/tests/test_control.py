@@ -281,7 +281,7 @@ def test_a_backfill_is_launched_detached_and_reports_where_to_watch(writeable, m
 
 
 def test_the_range_reaches_the_process_as_q_timestamps(writeable, monkeypatch):
-    """`scripts/torq_backfill.q` parses its bounds with "P"$, which wants
+    """`scripts/processes/torq_backfill.q` parses its bounds with "P"$, which wants
     2026.09.11D00:00:00 rather than ISO-8601. Converting here keeps the HTTP
     surface ISO like every other timestamp it takes."""
     seen: dict[str, Any] = {}

@@ -719,7 +719,7 @@ def test_feed_and_etl_kinds_derive_proctype_and_credentials():
 
 
 def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
-    """scripts/torq_pipeline.q must come FIRST in the load column: the
+    """scripts/processes/torq_pipeline.q must come FIRST in the load column: the
     pipeline script calls .qpipe.load_uqf[] at top level, and TorQ's
     .proc.reloadf each loads -load's files in the order given.
     """
@@ -841,9 +841,18 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     real = core.default_paths().scripts_dir
     scripts = tmp_path / "scripts"
     scripts.mkdir()
+
+    def _copy(name: str) -> None:
+        # A script name carries its subdirectory since #241 foldered
+        # scripts/, and that subdirectory is part of what lands in
+        # process.csv - so the fake tree has to have it too.
+        dest = scripts / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text((real / name).read_text())
+
     for pipeline in core.PIPELINES:
-        (scripts / pipeline.script).write_text((real / pipeline.script).read_text())
-    (scripts / core.PIPELINE_LIB_SCRIPT).write_text((real / core.PIPELINE_LIB_SCRIPT).read_text())
+        _copy(pipeline.script)
+    _copy(core.PIPELINE_LIB_SCRIPT)
     real_jobs = real.parent / "src" / "etl" / "streaming"
     jobs = tmp_path / "src" / "etl" / "streaming"
     jobs.mkdir(parents=True)
@@ -914,9 +923,10 @@ def test_the_edge_verifier_detects_a_duplicate_procname(monkeypatch, tmp_path):
     monkeypatch.setattr(pipelines, "PIPELINES", duplicated)
 
     real = core.default_paths().scripts_dir
-    for pipeline in duplicated:
-        (tmp_path / pipeline.script).write_text((real / pipeline.script).read_text())
-    (tmp_path / core.PIPELINE_LIB_SCRIPT).write_text((real / core.PIPELINE_LIB_SCRIPT).read_text())
+    for name in [p.script for p in duplicated] + [core.PIPELINE_LIB_SCRIPT]:
+        # mkdir first: a script name carries its subdirectory since #241.
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text((real / name).read_text())
 
     problems = pipelines.verify_pipeline_edges(tmp_path)
     duplicate_reports = [p for p in problems if "declared twice" in p]

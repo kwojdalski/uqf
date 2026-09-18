@@ -31,7 +31,7 @@ repos:
       # torq_orchestrator/ and uqf_frontend/, so 43 of 47 tracked .py files
       # were never linted, and nothing complained because the scope was
       # still valid, merely too narrow. Matching all Python and excluding
-      # lib/ cannot drift that way. scripts/check_hook_scopes.py enforces it.
+      # lib/ cannot drift that way. scripts/gates/check_hook_scopes.py enforces it.
       - id: ruff
         name: ruff (all python)
         args: ['--fix']
@@ -71,7 +71,7 @@ repos:
 
       - id: check-hook-scopes
         name: Check pre-commit hook scopes cover the code
-        entry: python3 scripts/check_hook_scopes.py
+        entry: python3 scripts/gates/check_hook_scopes.py
         language: system
         pass_filenames: false
         always_run: true
@@ -103,21 +103,21 @@ repos:
 
       - id: q-traps
         name: Check q files for silent-failure traps
-        entry: python3 scripts/check_q_traps.py
+        entry: python3 scripts/gates/check_q_traps.py
         language: system
         pass_filenames: false
         always_run: true
 
       - id: doc-references
         name: Check the docs cite functions that exist
-        entry: python3 scripts/check_doc_references.py
+        entry: python3 scripts/gates/check_doc_references.py
         language: system
         pass_filenames: false
         always_run: true
 
       - id: rendered-diagrams
         name: Check the rendered diagrams match their d2 sources
-        entry: python3 scripts/render_diagrams.py --check
+        entry: python3 scripts/generate/render_diagrams.py --check
         language: system
         pass_filenames: false
         files: ^docs/diagrams/

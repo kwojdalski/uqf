@@ -22,12 +22,12 @@
 \l src/init.q
 \l src/integrations/data.q
 \l docs/man.q
-\l scripts/torq_pipeline.q
-\l scripts/torq_metatables.q
+\l scripts/processes/torq_pipeline.q
+\l scripts/processes/torq_metatables.q
 \l src/etl/init.q
 \l tests/lib/etl_test_doubles.q
 \l tests/q/reference_worker.q
-\l scripts/coverage.q
+\l scripts/dev/coverage.q
 
 / The suite's own file and namespace lists, read from run_tests.q rather than
 / copied: a second copy is a second thing to forget, and forgetting the

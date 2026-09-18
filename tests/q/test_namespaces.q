@@ -169,8 +169,14 @@ test_the_subscriber_processes_are_inside_the_prefix:{[t]
         "the tickerplant subscriber processes declare their namespaces under .qsub"]};
 
 / Private: the process scripts - the files TorQ starts as a process, as
-/ opposed to the tools and worked examples that also live in scripts/.
-process_scripts:{[] system"ls scripts | grep '^torq_.*\\.q$'"}
+/ opposed to the tools and worked examples that also live under scripts/.
+/ .
+/ scripts/processes/ since #241 foldered scripts/ by role. The directory is
+/ named here rather than searched for, and the companion test below asserts
+/ the scan found something: pointed at the old flat scripts/ this returned
+/ an empty list and both tests passed over nothing, which is how the move
+/ was caught.
+process_scripts:{[] system"ls scripts/processes | grep '^torq_.*\\.q$'"}
 
 test_every_process_script_declares_a_namespace:{[t]
     / The prefix rule above only sees files that declare a namespace at all.
@@ -183,9 +189,9 @@ test_every_process_script_declares_a_namespace:{[t]
     / at the root, and demanding a namespace of them would be a rule about
     / the wrong files.
     bare:.nstest.process_scripts[] where not {[f]
-        any (read0 hsym `$"scripts/",f) like "\\d .*"} each .nstest.process_scripts[];
+        any (read0 hsym `$"scripts/processes/",f) like "\\d .*"} each .nstest.process_scripts[];
     .qunit.assertEquals[bare;();
-        "every scripts/torq_*.q declares the namespace it owns, rather than working at the root"]};
+        "every scripts/processes/torq_*.q declares the namespace it owns, rather than working at the root"]};
 
 test_the_process_script_scan_found_the_scripts:{[t]
     .qunit.assertTrue[3<count process_scripts[];

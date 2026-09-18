@@ -33,7 +33,10 @@ import re
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+REPO = Path(__file__).resolve().parents[2]
 DOC = REPO / "docs" / "reference" / "environment.md"
 
 #: Directories whose reads are an operator's business. `web/` is included
@@ -70,7 +73,7 @@ LITERAL_READS = (
     # A q process DECLARING the variables it requires as a symbol vector, then
     # reading them through a loop: `required_env:`A`B`C` with `getenv nm`.
     # The read itself carries no literal, so without this the names look
-    # unread - which is how scripts/torq_backfill.q's four variables were
+    # unread - which is how scripts/processes/torq_backfill.q's four variables were
     # reported as documented-but-dead on their first run. Declaring the set is
     # better practice than four scattered getenv calls (it lets the process
     # refuse naming every missing one at once, per ETL-16), so the gate should

@@ -1,6 +1,6 @@
 # repo-overview.d2 - the whole of uqf on one page.
 #
-# Rendered to repo-overview.svg by scripts/render_diagrams.py, which CI runs
+# Rendered to repo-overview.svg by scripts/generate/render_diagrams.py, which CI runs
 # with --check: editing this file without re-rendering fails the build, the
 # same gate docs/man.q and the contract surface already have.
 #
@@ -17,7 +17,7 @@
 # file under src/ loads in a plain q process with no TorQ present (bank
 # B-09), which is what lets a worker or a streaming job be tested against a
 # recorder instead of a tickerplant. Exactly one namespace may know TorQ
-# exists - .qpipe, in scripts/ - and scripts/check_etl_layering.py fails the
+# exists - .qpipe, in scripts/ - and scripts/gates/check_etl_layering.py fails the
 # build if anything under src/etl/ reaches for it. So the adapter gets its
 # own band, and every arrow into the stack passes through it.
 #

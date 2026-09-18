@@ -3,7 +3,7 @@
 The one list C-04 asked for. Hand-written, because "required or optional",
 "what happens when it is unset" and "who sets it" are judgements no generator
 can read off the code — and machine-checked for completeness by
-`scripts/check_env_reference.py`, so it cannot quietly fall behind.
+`scripts/gates/check_env_reference.py`, so it cannot quietly fall behind.
 
 Read this table as the operator's surface. Two things make it non-obvious
 without it:
@@ -35,14 +35,14 @@ without it:
 | Variable | Read by | Required | Unset behaviour |
 |---|---|---|---|
 | `UQF_DRY_RUN` | `.qwrt.is_dry_run` (`src/etl/core/worker_runtime.q`) | no | false — the worker publishes for real. Opt-in on purpose: defaulting to true would make a worker silently do nothing and report success |
-| `UQF_STREAM_JOB` | `scripts/torq_stream.q` | no | the process falls back to its own procname, which is how the stack starts it; set this only to run a job by hand |
-| `UQF_BACKFILL_WORKER` | `scripts/torq_backfill.q` | yes, for a backfill process | the process refuses to start and names every missing variable at once |
+| `UQF_STREAM_JOB` | `scripts/processes/torq_stream.q` | no | the process falls back to its own procname, which is how the stack starts it; set this only to run a job by hand |
+| `UQF_BACKFILL_WORKER` | `scripts/processes/torq_backfill.q` | yes, for a backfill process | the process refuses to start and names every missing variable at once |
 | `UQF_BACKFILL_VERSION` | as above | yes | as above — a run that cannot name its source release cannot record coverage (ETL-09) |
 | `UQF_BACKFILL_FROM` | as above | yes | as above. Deliberately no default: a backfill that guessed a range would publish the wrong window and record it as covered |
 | `UQF_BACKFILL_TO` | as above | yes | as above |
 | `UQF_SOURCE_CRED_<SOURCE>` | `.qsrc.require_credentials` (`src/etl/core/source_contract.q`) | per live source | `require_credentials` refuses and names the variable. There is deliberately no file and no vault fallback (ETL-07) |
 | `Q` | `scripts/test.py` | no | `~/.kx/bin/q`. The interpreter every q lane runs. Together with `QHOME` this is the deliberate, explicit way to point the suite at another q — there is no automatic fallback, see [the README](../../README.md#requirements). It was invisible to this list until the runner became Python: `check_env_reference.py` reads `.py` and `.q`, never `.sh` |
-| `QLINTER` | `scripts/check_q_traps.py` | no | `qlinter` on `PATH`. The [q linter](https://github.com/kwojdalski/q-lint), which the trap hook delegates thirteen of its fifteen rules to. Set it to point at a build that is not installed — the same escape hatch `Q` gives for the interpreter. The hook refuses rather than skipping when neither finds it: a hook that reports success over checks that did not run is worse than one that fails |
+| `QLINTER` | `scripts/gates/check_q_traps.py` | no | `qlinter` on `PATH`. The [q linter](https://github.com/kwojdalski/q-lint), which the trap hook delegates thirteen of its fifteen rules to. Set it to point at a build that is not installed — the same escape hatch `Q` gives for the interpreter. The hook refuses rather than skipping when neither finds it: a hook that reports success over checks that did not run is worse than one that fails |
 | `UQFROOT` | `scripts/torq_*.q`, `wizard.py`'s generated q | yes | the `\l` of every repository script fails. Set by `build_env`, not by hand |
 | `UQFSTATUSDIR` | `.qstatus.status_dir` (`src/etl/core/status.q`) | no | falls back to `$TORQDATA/status`. Pairs with `UQF_FRONTEND_STATUS_DIR` on the reading side |
 | `DATABENTO_DATA_DIR` | `.qdata.databentoDir` (`src/integrations/data.q`) | for that path only | `.qdata.cfg` also accepts it from a `.env` file, then throws naming the key. Note this is a *data directory*, not a credential — ETL-07's no-file rule is about secrets |
@@ -118,7 +118,7 @@ deliberate choice, not a default. `HOME` is read only to locate `~/.kx`.
 
 ## How this page is kept honest
 
-`scripts/check_env_reference.py --check` runs in CI and fails the build when
+`scripts/gates/check_env_reference.py --check` runs in CI and fails the build when
 the code and this page disagree, in either direction:
 
 - a variable read by `src/`, `scripts/`, a package's `src/`, `web/` or the

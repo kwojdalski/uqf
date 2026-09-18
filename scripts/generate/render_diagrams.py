@@ -35,7 +35,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+REPO = Path(__file__).resolve().parents[2]
 DIAGRAMS = REPO / "docs" / "diagrams"
 
 #: The renderer this repository's committed SVGs were produced with.
@@ -115,7 +118,7 @@ def main() -> int:
         print("render_diagrams: committed SVGs do not match their sources:", file=sys.stderr)
         for line in stale:
             print(f"  {line}", file=sys.stderr)
-        print("\nRun: python3 scripts/render_diagrams.py", file=sys.stderr)
+        print("\nRun: python3 scripts/generate/render_diagrams.py", file=sys.stderr)
         return 1
 
     print(f"render_diagrams: {len(srcs)} diagram(s) match their sources (d2 {version})")

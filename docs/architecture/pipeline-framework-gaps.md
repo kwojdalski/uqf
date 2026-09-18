@@ -188,7 +188,7 @@ is what makes a materialisation *auditable* rather than merely *recorded*.
   (`src/etl/core/stream_job.q`) is for a streaming job what `.qbw` is for a
   backfill: a job declares `subscribes`, `publishes`, `on_batch` and
   `on_timer` from its own file under `src/etl/streaming/`, and one generic
-  runner (`scripts/torq_stream.q`) runs any of them. The four hand-rolled
+  runner (`scripts/processes/torq_stream.q`) runs any of them. The four hand-rolled
   `torq_*_etl.q` scripts and the four feed scripts this entry described are
   gone, and with them the `:()`-on-no-tickerplant copies. `.qpipe` did *not*
   become the shell: it stayed the TorQ adapter the runner calls, which is

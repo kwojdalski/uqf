@@ -54,7 +54,7 @@ from canonical, not merely lagged — a mirror refresh is no longer a fast-forwa
 That is not what happened. `a27e785` and `a4a7dd4` were pushed to the branch
 `kwojdalski/snake-case-function-names`, not to master. `origin/master` is still exactly `b62464e`,
 which contains no `.claude/agents/causality-auditor.md`, no `extension-brainstormer.md`, no
-`docstring-example-verifier.md` and no `scripts/torq_pipeline.q`
+`docstring-example-verifier.md` and no `scripts/processes/torq_pipeline.q`
 (`git ls-tree -r origin/master .claude/agents/` returns only `uqf-developer.md`;
 `git ls-tree origin/master scripts/` has no `torq_pipeline.q`).
 

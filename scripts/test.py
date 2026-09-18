@@ -168,7 +168,7 @@ def lane_coverage() -> None:
     """What the suites actually EXECUTE - not what they mention.
 
     Python is pytest-cov. q is the `.cov` library
-    (`scripts/coverage.q`), driven over the whole suite by
+    (`scripts/dev/coverage.q`), driven over the whole suite by
     `tests/q/run_coverage.q`.
 
     ONE INSTRUMENTER, not two. This lane briefly had a second - a Python

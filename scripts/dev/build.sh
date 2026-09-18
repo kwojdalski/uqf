@@ -13,7 +13,7 @@
 # package (own pyproject.toml/uv build) and is excluded too.
 #
 # Usage:
-#   scripts/build.sh [version]
+#   scripts/dev/build.sh [version]
 #     version defaults to `git describe --tags --always --dirty`, or
 #     today's date (YYYY-MM-DD) if this isn't a git checkout.
 #
@@ -21,7 +21,8 @@
 # root) to run the test suite - see README's Requirements section.
 
 set -euo pipefail
-cd "$(dirname "$0")/.."
+# ../.. since scripts/ was foldered (#241): this file is scripts/dev/.
+cd "$(dirname "$0")/../.."
 REPO_ROOT="$(pwd)"
 
 VERSION="${1:-}"

@@ -191,8 +191,8 @@ a removed or moved function breaks three generated artefacts:
 ```bash
 scripts/test.py q-unit
 scripts/test.py python
-uv run python scripts/generate_man_registry.py     # man.q records every name
-uv run python scripts/contract_surface.py export
+uv run python scripts/generate/generate_man_registry.py     # man.q records every name
+uv run python scripts/generate/contract_surface.py export
 ```
 
 If the remedy was a shared fixture rather than a unification, the fixture

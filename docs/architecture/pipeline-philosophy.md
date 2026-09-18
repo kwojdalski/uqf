@@ -225,7 +225,7 @@ frameworks of the same shape rather than one framework with a flag:
 | framework | `.qbw` — `core/bounded_worker.q` | `.qstream` — `core/stream_job.q` |
 | an instance | `.qwrk.<worker>`, `workers/` | `.qsub.<job>`, `streaming/` |
 | declaration | `.qbw.define[name; source dataset width transform …]` | `.qstream.register[name; procname subscribes publishes on_batch on_timer …]` |
-| runner | `scripts/torq_backfill.q` | `scripts/torq_stream.q` |
+| runner | `scripts/processes/torq_backfill.q` | `scripts/processes/torq_stream.q` |
 | lifecycle | init → plan → fetch → transform → publish → cover → **done** | wire `publish` → subscribe → `on_batch` per tick, `on_timer` per period → **forever** |
 
 A bounded worker covers a stated range and finishes, so it can carry a
@@ -242,7 +242,7 @@ carries the callbacks and the runner wires only `publish`.
 **Nothing under `src/etl/` knows TorQ exists** (bank B-09). That is what
 lets a worker or job load in a plain q process and be tested with a
 recorder in place of a tickerplant. The one namespace allowed to know TorQ
-is `.qpipe` (`scripts/torq_pipeline.q`), the adapter: find the tickerplant,
+is `.qpipe` (`scripts/processes/torq_pipeline.q`), the adapter: find the tickerplant,
 open the access-listed handle, reshape rows for `.u.upd`, trap a timer so it
 is not silently deactivated. It is called by the runners and by nothing in
 `src/`. The arrow points one way — `src/` never reaches into `scripts/` —
@@ -256,7 +256,7 @@ Airflow sensor and the frontend poll — lives in `core/status.q`
 (`.qstatus`), not in the adapter, because it is not TorQ plumbing: it is a
 cross-repository contract, and its header names its readers.
 
-*Enforced by* `scripts/check_etl_layering.py`, twice: `core/` may not
+*Enforced by* `scripts/gates/check_etl_layering.py`, twice: `core/` may not
 reference a declaring namespace (§9), and nothing under `src/etl/` may
 reference `.qpipe`.
 

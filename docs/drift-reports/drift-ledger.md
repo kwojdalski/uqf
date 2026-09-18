@@ -9,7 +9,7 @@
 >
 > What replaces it: capability gaps are tracked as ordinary GitHub issues, and
 > design decisions live in `docs/decisions/README.md`, derived from the question
-> bank by `scripts/build_decision_log.py`.
+> bank by `scripts/generate/build_decision_log.py`.
 
 
 
@@ -25,7 +25,7 @@ that a merge happened. Sources are `docs/drift-reports/`,
 
 Design decisions do **not** belong in this table. They live in
 `docs/decisions/README.md`, derived from the GitHub question bank by
-`scripts/build_decision_log.py`. Keeping them apart avoids a real collision:
+`scripts/generate/build_decision_log.py`. Keeping them apart avoids a real collision:
 this ledger numbers its rows `D1`, `D2`, ... while the bank dash-numbers its
 backfill questions, so `D8` here is not `D-08` there.
 
@@ -41,7 +41,7 @@ that a merge happened. Sources are `docs/drift-reports/`,
 
 Design decisions do **not** belong in this table. They live in
 `docs/decisions/README.md`, derived from the GitHub question bank by
-`scripts/build_decision_log.py`. Keeping them apart avoids a real collision:
+`scripts/generate/build_decision_log.py`. Keeping them apart avoids a real collision:
 this ledger numbers its rows `D1`, `D2`, ... while the bank dash-numbers its
 backfill questions, so `D8` here is not `D-08` there.
 
@@ -59,7 +59,7 @@ backfill questions, so `D8` here is not `D-08` there.
 | # | Divergence | Status | Closed by / blocked on |
 |---|---|---|---|
 | D1 | `python/uqf-client/` hyphenated; canonical uses `python/uqf_client/`. The drift report names this a **blocking packaging conflict** | `closed` | Directory renamed, 7 live references updated, venv rebuilt. Verified: `check_hook_scopes.py` 43/43, all four suites green |
-| D2 | Lint gate scoped to one package; 43 of 47 tracked `.py` files ungated | `closed` | `python3 scripts/check_hook_scopes.py` exits 0 reporting **49/49** tracked `.py` files covered by each of the lint, test and type gates (43/43 when closed; the count grew, and a type gate was added). Verified adversarially on 2026-09-15: narrowing any hook's scope makes it exit 1 and name the ungated files by directory |
+| D2 | Lint gate scoped to one package; 43 of 47 tracked `.py` files ungated | `closed` | `python3 scripts/gates/check_hook_scopes.py` exits 0 reporting **49/49** tracked `.py` files covered by each of the lint, test and type gates (43/43 when closed; the count grew, and a type gate was added). Verified adversarially on 2026-09-15: narrowing any hook's scope makes it exit 1 and name the ungated files by directory |
 | D3 | Agent definitions in `.claude/agents/`; canonical has `.github/agents/*.agent.md` | `wontfix` | **False equivalence.** `.agent.md` is GitHub Copilot's custom-agent format; `.claude/agents/*.md` is Claude Code's, with `tools:`/`model:` frontmatter. Different tools, not one artifact in two places — which is why the report dispositions them "side-local workflow rules". Converging them would break both. See D14 for the real gap |
 | D4 | `src/*.q` flat; canonical splits into `foundation/ pricing/ portfolio/ execution/ market_data/ integrations/ examples/` | `closed` | Split adopted with **namespaces unchanged** (B-03 answered), so no call site or test assertion moved — only `init.q`'s 13 load lines and 124 path references. `init.q` and README now record that the directories are organisational, since the graph has a real `pricing/` ↔ `execution/` cycle |
 | D5 | `tests/test_*.q` flat; canonical uses `tests/q/test_*.q` | `closed` | 14 files moved, runner retargeted, 19 doc references fixed. `nsList` untouched (keys on namespaces, not paths). The `scripts/test.sh` dispatcher was deliberately deferred here — a one-option dispatcher is worse than none — and **built in #88**, once E-21's three lanes made it earn its place |
@@ -68,9 +68,9 @@ backfill questions, so `D8` here is not `D-08` there.
 | D8 | `docs/guides/torq-demo.md`; canonical supersedes with `docs/guides/torq-demo.md` | `wontfix` | **Closed by A-03.** Canonical's layout is no longer a target; this tree's docs taxonomy is decided here on its own merits (J-05 remains a live question in #78, about *this* tree's docs, not about matching another's) |
 | D9 | No `src/etl/` at all; canonical has `core/` (14 files) and `workers/` (7) | `open` | **Unblocked and in progress.** Reimplementation from the requirements, not a port. `src/etl/core/` now holds 4 of canonical's 14: `backfill_state.q` (#85, E-01..E-05), `coverage.q` (#86, E-06..E-11), `worker_config.q` and `worker_runtime.q` (#87, E-13..E-17). #88 adds `tests/lib/etl_test_doubles.q`, the `q-backfill-process` and `smoke` lanes and `scripts/test.sh` (E-18..E-21). `src/etl/core/source_contract.q` adds E-12, `src/etl/sources/demo_deals.q` a generic analogue source (A-04), and `src/etl/workers/demo_deals_backfill.q` the first real bounded worker. Seven of canonical's `core/` 14 — the last two being `continuous_state.q` (E-03's poll-and-cursor pattern) and `coercion.q` (E-05's shared text-to-type layer) — one source, one worker. The file COUNT will not converge — this tree is its own lineage per F-04, so only capability drift is meaningful. **E-05 is now answered** (#106), so a worker over a real source is no longer blocked on the coercion trap list; it is blocked only on having a real source to point at, which A-04 rules out for this public tree. |
 | D10 | No `python/uqf_airflow_provider/`; canonical has the full package | `open` | **Unblocked: #55 is closed** (`gh issue view 55` → CLOSED), and the status-file mechanism it chose is built on both sides. `python/uqf_airflow_provider/` holds a status reader, an E-15 translator and a lazily-imported sensor. Proved by `uv run pytest -q` (322 passing, 14 this package's) and by `import uqf_airflow_provider.sensor` succeeding with **Airflow not installed** — deliberately not a dependency (F-22/F-23), so the demo needs no Airflow. What remains is DAG-level work that only runs inside a real Airflow environment |
-| D11 | **The one row that survives the closure, re-scoped:** `etl_coverage` schema assumed, not verified. Now **16 files** rest on the assumed shape (8 source, 8 test), up from `queries.py`/`catalog.py` alone — and `.qcov.require_schema`, the guard meant to refuse a wrong-shaped ledger, is **defined and tested but called from no live path** | `blocked` | #60, still open with no `meta` output posted back. `scripts/verify_coverage_schema.q` and `.qcov.require_schema` are built and tested, but only a machine that can reach the real ledger can discharge it: `QHOME=~/.kx ~/.kx/bin/q scripts/verify_coverage_schema.q -target host:port`. The requirements mention a **partition key** absent from the assumed shape, so the untested direction reports a gap-ridden range as complete |
+| D11 | **The one row that survives the closure, re-scoped:** `etl_coverage` schema assumed, not verified. Now **16 files** rest on the assumed shape (8 source, 8 test), up from `queries.py`/`catalog.py` alone — and `.qcov.require_schema`, the guard meant to refuse a wrong-shaped ledger, is **defined and tested but called from no live path** | `blocked` | #60, still open with no `meta` output posted back. `scripts/dev/verify_coverage_schema.q` and `.qcov.require_schema` are built and tested, but only a machine that can reach the real ledger can discharge it: `QHOME=~/.kx ~/.kx/bin/q scripts/dev/verify_coverage_schema.q -target host:port`. The requirements mention a **partition key** absent from the assumed shape, so the untested direction reports a gap-ridden range as complete |
 | D12 | `python/uqf_frontend/` exists only here: 253 callables of comparison-only drift | `wontfix` | Deliberate. It is the reimplementation the frontend requirements describe; it narrows capability drift while widening file drift |
-| D13 | `scripts/torq_pipeline.q` + the three demo pipelines exist only here | `wontfix` | Same reasoning as D12. Canonical has its own `src/etl/workers/`; reconciliation is F-04's job |
+| D13 | `scripts/processes/torq_pipeline.q` + the three demo pipelines exist only here | `wontfix` | Same reasoning as D12. Canonical has its own `src/etl/workers/`; reconciliation is F-04's job |
 | D14 | `AGENTS.md` present in canonical, absent here | `wontfix` | **Closed by A-03.** With canonical frozen there is no `AGENTS.md` to learn the contents of. This tree has `CLAUDE.md` and `.claude/`; whether it also wants an `AGENTS.md` for other tools is a question about this tree (#90), not a divergence |
 
 ## Counters
@@ -128,7 +128,7 @@ What the ledger got right while it was open, and is worth keeping:
 
 Capability gaps are now ordinary GitHub issues. Design decisions live in
 `docs/decisions/README.md`, derived from the question bank by
-`scripts/build_decision_log.py` and reconciled into the issue bodies by
-`scripts/reconcile_question_bodies.py` — which together answer the question
+`scripts/generate/build_decision_log.py` and reconciled into the issue bodies by
+`scripts/dev/reconcile_question_bodies.py` — which together answer the question
 this ledger could not: not "how far are we from canonical" but "what have we
 decided, and where is it recorded".

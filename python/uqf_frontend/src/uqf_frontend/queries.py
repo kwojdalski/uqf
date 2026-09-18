@@ -26,7 +26,7 @@ references the parameter. ``{[ds;sv] 1+1}[\`a;\`b]`` fails because ``sv`` is
 scalar-from-vector; ``{[ds;release] ...}`` is fine. ``test_q_programs.py``
 checks every parameter in this module against the 182 reserved and ``.q``
 names, because this trap has already cost this repository three separate
-debugging sessions (``desc`` and ``tables`` in scripts/torq_pipeline.q, and
+debugging sessions (``desc`` and ``tables`` in scripts/processes/torq_pipeline.q, and
 ``sv`` here).
 
 1. A functional select accepts the table *name* as a symbol -

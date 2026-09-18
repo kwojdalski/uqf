@@ -20,7 +20,7 @@
 // Requires KDB-X: log4q relies on a mid-expression variable assignment/read
 // pattern (see README's Licensing section).
 //
-// Run from the repository root: q scripts/cross_book_chain_example.q
+// Run from the repository root: q scripts/examples/cross_book_chain_example.q
 
 \c 400 1000
 \l src/init.q

@@ -31,7 +31,7 @@ finally being pointed at the code.
 
 Run standalone to audit, or as a pre-commit hook to enforce:
 
-    python3 scripts/check_hook_scopes.py
+    python3 scripts/gates/check_hook_scopes.py
 """
 
 from __future__ import annotations
@@ -41,7 +41,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONFIG = Path(__file__).resolve().parent.parent / ".pre-commit-config.yaml"
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+CONFIG = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
 
 #: Hooks whose scope is deliberately allowed to match nothing, with a reason.
 #: Keep this empty unless there is a real one - the point of the check is to

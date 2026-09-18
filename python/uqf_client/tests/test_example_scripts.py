@@ -40,7 +40,7 @@ UQF_ROOT = Path(__file__).resolve().parents[3]
 #: tests passed; `test_examples_are_discovered` below closes the other half of
 #: that hole, where the glob matches nothing and every parametrized test
 #: silently vanishes.
-EXAMPLES = sorted((UQF_ROOT / "scripts").glob("*_example.q"))
+EXAMPLES = sorted((UQF_ROOT / "scripts" / "examples").glob("*_example.q"))
 
 #: Generous: the slowest of these is ~0.1s, so anything approaching this is a
 #: script that has started waiting on something - a timer that never fires, a

@@ -16,7 +16,7 @@
 // Requires KDB-X: log4q relies on a mid-expression variable assignment/read
 // pattern (see README's Licensing section).
 //
-// Run from the repository root: q scripts/cross_markout_example.q [n_ticks]
+// Run from the repository root: q scripts/examples/cross_markout_example.q [n_ticks]
 // n_ticks (default 6) is how many ticks to generate per leg - optional,
 // positional, same convention as timer_replay_example.q's parameters.
 
@@ -67,7 +67,7 @@ mk_tick_series:{[sym;start_spot;drift_per_tick;ts]
 / 6 ticks per leg over roughly a second: AUDUSD and EURPLN drift up,
 / EURUSD drifts down - so a synthetic AUDPLN move should show up as a
 / genuine multi-leg story, not one leg dominating everything. Overridable
-/ via the command line (q scripts/cross_markout_example.q [n_ticks]) -
+/ via the command line (q scripts/examples/cross_markout_example.q [n_ticks]) -
 / .z.x is the list of args after the script name, always strings; cast
 / and fall back to the default whenever an arg wasn't given, same
 / convention as timer_replay_example.q's parameters.

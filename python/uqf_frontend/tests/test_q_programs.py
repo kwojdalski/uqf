@@ -4,7 +4,7 @@ These are text constants, so nothing type-checks them. The parameter-name
 check exists because a q builtin used as a lambda parameter raises a bare
 ``'nyi`` when the lambda is *called* - not when it is defined, and whether or
 not the body references it. That has already cost this repository three
-debugging sessions (``desc`` and ``tables`` in scripts/torq_pipeline.q, and
+debugging sessions (``desc`` and ``tables`` in scripts/processes/torq_pipeline.q, and
 ``sv`` in this package's own COVERAGE lambda).
 """
 

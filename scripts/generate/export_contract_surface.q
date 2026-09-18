@@ -16,7 +16,7 @@
 / compiles, passes shape checks and returns a wrong number - which this
 / repository has already been bitten by.
 / .
-/ Run: q scripts/export_contract_surface.q -q < /dev/null > surface.json
+/ Run: q scripts/generate/export_contract_surface.q -q < /dev/null > surface.json
 
 \l src/init.q
 \l src/integrations/data.q
@@ -102,7 +102,7 @@ materialise_tables:{[]
 
 / Private: define the tickerplant tables, so the surface carries them.
 / .
-/ They are top-level table declarations in scripts/uqf_stack_tables.q rather
+/ They are top-level table declarations in scripts/processes/uqf_stack_tables.q rather
 / than the lazily-created, namespace-owned kind materialise_tables above
 / reaches - nothing calls an `attach` for them, because the process that
 / creates them is stp1 loading a generated database.q.
@@ -114,7 +114,7 @@ materialise_tables:{[]
 / Loading is idempotent and safe here for the same reason calling `attach` is:
 / these are empty typed declarations with no side effect beyond existing.
 load_tickerplant_tables:{[]
-    f:"scripts/uqf_stack_tables.q";
+    f:"scripts/processes/uqf_stack_tables.q";
     @[{system"l ",x};f;{[e] -2 "could not load ",f,": ",e;}];
     f}
 
@@ -138,7 +138,7 @@ table_schemas:{[]
 / from every other and destroys the diff this file exists to enable.
 surface:{[]
     `generated_by`namespaces`functions`tables!(
-        "scripts/export_contract_surface.q";
+        "scripts/generate/export_contract_surface.q";
         string own_namespaces[];
         functions[];
         table_schemas[])}

@@ -1,6 +1,6 @@
 """Guards on the contract-surface exporter and differ.
 
-`scripts/contract_surface.py` produces the half of WP2 (#139) that does not
+`scripts/generate/contract_surface.py` produces the half of WP2 (#139) that does not
 need the authority checkout: a machine-readable statement of what this tree's
 public contract IS, so that locking contracts against the authority becomes a
 diff rather than a person reading 29 q namespaces side by side.
@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = UQF_ROOT / "scripts" / "contract_surface.py"
+SCRIPT = UQF_ROOT / "scripts" / "generate" / "contract_surface.py"
 BASELINE = UQF_ROOT / "docs" / "migrations" / "surfaces" / "uqf-local"
 
 # Loaded by path rather than imported, because `scripts/` is not a package on

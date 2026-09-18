@@ -7,13 +7,14 @@
 #
 # Requires KDB-X: q-doc uses .Q.opt, .h.ty and HTTP request handlers.
 #
-# Run from the repository root: ./scripts/run_qdoc.sh [port]
+# Run from the repository root: ./scripts/dev/run_qdoc.sh [port]
 # Once it's up, at the q) prompt run (any subset of this repo's folders):
 #   .qdoc.parser.init `:src`:python/uqf_client
 # then browse http://localhost:<port>/index-kdb.html
 
 set -euo pipefail
-cd "$(dirname "$0")/.."
+# ../.. since scripts/ was foldered (#241): this file is scripts/dev/.
+cd "$(dirname "$0")/../.."
 
 PORT="${1:-8090}"
 

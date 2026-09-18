@@ -25,7 +25,7 @@ reordered pair of same-typed arguments compiles, passes every shape check, and
 returns a wrong number - a defect this repository has already shipped and
 fixed once.
 
-The q half is produced by `scripts/export_contract_surface.q`, which must run
+The q half is produced by `scripts/generate/export_contract_surface.q`, which must run
 under KDB-X; this script invokes it and merges the result.
 """
 
@@ -40,8 +40,11 @@ import sys
 from pathlib import Path
 from typing import Any, Literal
 
-REPO = Path(__file__).resolve().parent.parent
-Q_EXPORTER = REPO / "scripts" / "export_contract_surface.q"
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+REPO = Path(__file__).resolve().parents[2]
+Q_EXPORTER = REPO / "scripts" / "generate" / "export_contract_surface.q"
 
 #: The committed export of this tree's own surface. Checked in so a
 #: comparison against the authority needs only the authority's half, and
@@ -475,7 +478,7 @@ def main() -> int:
         print("\n".join(lines), file=sys.stderr)
         print(
             "\nIf the change is intended, rerun:\n"
-            "  uv run python scripts/contract_surface.py export",
+            "  uv run python scripts/generate/contract_surface.py export",
             file=sys.stderr,
         )
         return 1

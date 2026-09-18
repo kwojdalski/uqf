@@ -20,7 +20,8 @@
 # the kdb-q-conventions skill for the full writeup).
 
 set -euo pipefail
-cd "$(dirname "$0")/.."
+# ../.. since scripts/ was foldered (#241): this file is scripts/dev/.
+cd "$(dirname "$0")/../.."
 
 QSTUDIO_JAR="${QSTUDIO_JAR:-qstudio.jar}"
 

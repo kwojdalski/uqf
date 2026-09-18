@@ -42,7 +42,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+REPO = Path(__file__).resolve().parents[2]
 
 #: Vendored trees are not ours to fix, and `build/` is generated.
 EXCLUDED_PREFIXES = ("lib/", "build/")

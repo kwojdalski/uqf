@@ -155,7 +155,7 @@ require_run_schema:{[]
 / confirm itself; a table another process built is evidence, and is validated
 / before a read is trusted.
 / .
-/ Niladic and idempotent deliberately - scripts/export_contract_surface.q
+/ Niladic and idempotent deliberately - scripts/generate/export_contract_surface.q
 / discovers this tree's tables by calling every niladic `attach` in an owned
 / namespace, so a table reachable only through init_runs/init_meta would be
 / missing from the contract surface and a reconciliation would not compare it.

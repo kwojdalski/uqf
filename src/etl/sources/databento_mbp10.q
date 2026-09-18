@@ -3,13 +3,13 @@
 / .
 / The first source in this tree reached through ODBC and carrying real market
 / data: Databento's MBP-10 schema (market by price, ten levels) for US
-/ equities, loaded into DuckDB by scripts/dump_databento_duckdb.py. Each row
+/ equities, loaded into DuckDB by scripts/dev/dump_databento_duckdb.py. Each row
 / is one book event - an add, cancel or trade - with the book's top ten levels
 / on each side AFTER that event.
 / .
 / The credential, UQF_SOURCE_CRED_DATABENTO_MBP10, is an ODBC connection
 / string, e.g. "DRIVER=DuckDB;Database=/path/databento.duckdb;
-/ access_mode=READ_ONLY". scripts/odbc_rosetta.sh sets it up on macOS.
+/ access_mode=READ_ONLY". scripts/dev/odbc_rosetta.sh sets it up on macOS.
 / .
 / WHAT THE DRIVER GETS WRONG, AND THE QUERY FIXES
 / .

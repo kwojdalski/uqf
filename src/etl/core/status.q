@@ -23,7 +23,7 @@
 / so status_dir is the one spelling of "this deployment's runtime state".
 / .
 / WHY THIS IS ITS OWN FILE (#229). These functions lived in
-/ scripts/torq_pipeline.q, the TorQ adapter, and they have nothing to do
+/ scripts/processes/torq_pipeline.q, the TorQ adapter, and they have nothing to do
 / with TorQ - env vars, .j.j, mkdir and mv. Worse, backfill_state.q in src/
 / called them, which put src/ downstream of scripts/ and is why lock_dir was
 / wrapped in a try-with-fallback: the author knew .qpipe might not be

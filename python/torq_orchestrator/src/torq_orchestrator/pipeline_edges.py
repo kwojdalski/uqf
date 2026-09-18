@@ -40,7 +40,7 @@ _PUB_RE = re.compile(
 
 #: A streaming job declares its own edges rather than spelling out the calls:
 #: the subscribe, the publish and the timer all happen in the one runner
-#: (scripts/torq_stream.q), which is generic, so reading THAT file back tells
+#: (scripts/processes/torq_stream.q), which is generic, so reading THAT file back tells
 #: you nothing about any particular job. The declaration is read instead -
 #: from src/etl/streaming/<job>.q, found by the procname it claims.
 #:
@@ -59,7 +59,7 @@ _STREAM_DIR = Path("src") / "etl" / "streaming"
 
 #: The one process script every streaming job runs under. Spelled here rather
 #: than imported from `pipelines`, which imports this module.
-STREAM_RUNNER = "torq_stream.q"
+STREAM_RUNNER = "processes/torq_stream.q"
 
 
 def _symbol_field(text: str) -> tuple[str, ...]:

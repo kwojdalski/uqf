@@ -1,4 +1,4 @@
-"""Tests for `scripts/check_doc_references.py` - that it FIRES, and that it
+"""Tests for `scripts/gates/check_doc_references.py` - that it FIRES, and that it
 stays quiet on the things it must not flag.
 
 The must-not-flag half is the important one here. A documentation gate that
@@ -27,7 +27,7 @@ REPO = Path(__file__).resolve().parents[3]
 # scripts/ is not a package, so the checker is loaded by path - the same
 # idiom test_check_q_traps.py uses, and for the same reason.
 _SPEC = importlib.util.spec_from_file_location(
-    "check_doc_references", REPO / "scripts" / "check_doc_references.py"
+    "check_doc_references", REPO / "scripts" / "gates" / "check_doc_references.py"
 )
 assert _SPEC and _SPEC.loader
 cdr = importlib.util.module_from_spec(_SPEC)

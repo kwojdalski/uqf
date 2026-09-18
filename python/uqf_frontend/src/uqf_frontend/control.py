@@ -251,7 +251,7 @@ def start_backfill(
     The range is REQUIRED and has no default, which is ETL-02 reaching the
     HTTP surface: a backfill that guessed a range would publish the wrong
     window and record it as covered. The four values go to the process as the
-    same environment variables `scripts/torq_backfill.q` already reads - not
+    same environment variables `scripts/processes/torq_backfill.q` already reads - not
     a second way of starting a worker.
     """
     require_writes(settings)
@@ -288,7 +288,7 @@ def start_backfill(
         "UQF_BACKFILL_TO": _to_q_timestamp(range_to),
     }
     q = env.get("QBIN") or os.environ.get("Q") or str(Path.home() / ".kx" / "bin" / "q")
-    script = paths.scripts_dir.parent / "scripts" / "torq_backfill.q"
+    script = paths.scripts_dir.parent / "scripts" / "processes" / "torq_backfill.q"
     if not script.is_file():
         raise ValidationFailed(f"{script} not found - is this the repository root?")
 

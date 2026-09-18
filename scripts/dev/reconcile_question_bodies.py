@@ -30,13 +30,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Loaded by path so this script stays a plain system hook with no package.
 # Registered in sys.modules before exec, because @dataclass resolves its
 # annotations through sys.modules[cls.__module__].
 _spec = importlib.util.spec_from_file_location(
-    "build_decision_log", REPO_ROOT / "scripts" / "build_decision_log.py"
+    "build_decision_log", REPO_ROOT / "scripts" / "generate" / "build_decision_log.py"
 )
 assert _spec and _spec.loader
 bdl = importlib.util.module_from_spec(_spec)

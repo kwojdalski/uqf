@@ -41,7 +41,7 @@ step — schemas, transform, batch handler, timer body, its own buffers — and 
 publishes and the TorQ process that runs it. A **feed** is the same thing
 with no subscription: it declares a `timer_period` and an `on_timer` that
 builds rows and publishes them. One generic process script,
-[`scripts/torq_stream.q`](../../scripts/torq_stream.q), runs whichever job
+[`scripts/processes/torq_stream.q`](../../scripts/processes/torq_stream.q), runs whichever job
 the process it was started as claims.
 
 A job never calls TorQ: it calls `publish` in its own namespace, which the
@@ -255,14 +255,14 @@ In a q session from the repository root:
 
 ```q
 \l src/init.q
-\l scripts/torq_pipeline.q
+\l scripts/processes/torq_pipeline.q
 \l src/etl/init.q
 
 .qwrk.fx_rates_backfill.init[`source_version`range_from`range_to!(`v1;2026.09.11D00:00;2026.09.16D00:00)];
 .qwrk.fx_rates_backfill.run[]
 ```
 
-`scripts/torq_pipeline.q` is easy to forget and the failure is obscure: it
+`scripts/processes/torq_pipeline.q` is easy to forget and the failure is obscure: it
 defines `.qpipe`, which is where the status and lock directories come from,
 and without it `init` dies inside `mkdir` on a path built from nothing.
 
@@ -287,7 +287,7 @@ UQF_BACKFILL_WORKER=fx_rates_backfill \
 UQF_BACKFILL_VERSION=v1 \
 UQF_BACKFILL_FROM=2026.09.11D00:00 \
 UQF_BACKFILL_TO=2026.09.16D00:00 \
-  q scripts/torq_backfill.q
+  q scripts/processes/torq_backfill.q
 ```
 
 ## 5. Check what it claims

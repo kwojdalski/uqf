@@ -10,7 +10,7 @@
 // exactly one day wide across a DST transition.
 //
 // The L-03 tests deliberately CONSTRUCT q datetimes, which
-// scripts/check_q_traps.py forbids in src/. That is the one legitimate place
+// scripts/gates/check_q_traps.py forbids in src/. That is the one legitimate place
 // for the type: a test that proves the trap exists has to build the value
 // the trap needs. The checker is scoped to non-test files for exactly this.
 //

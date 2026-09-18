@@ -77,7 +77,7 @@ def test_write_quotes_feed_skeleton_produces_valid_q_literals(fake_paths: core.U
         port_offset=29,
     )
     content = dest.read_text()
-    assert dest == fake_paths.scripts_dir / "torq_myfeed1.q"
+    assert dest == fake_paths.scripts_dir / "processes" / "torq_myfeed1.q"
     assert "pairs:`EURUSD`USDJPY" in content
     assert "spot:1.085 150.0" in content
     # EURUSD -> 0.0001, USDJPY (a JPY cross) -> 0.01
@@ -99,7 +99,7 @@ def test_write_cross_etl_skeleton_produces_valid_q_literals(fake_paths: core.Uqf
         port_offset=30,
     )
     content = dest.read_text()
-    assert dest == fake_paths.scripts_dir / "torq_myetl1.q"
+    assert dest == fake_paths.scripts_dir / "processes" / "torq_myetl1.q"
     # Under the .qsub root, like every subscriber process in scripts/ - a
     # generated process that named itself at the root would be invisible to
     # every tool that enumerates this tree's namespaces.

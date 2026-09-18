@@ -11,7 +11,7 @@
 / .
 / A job is now ONE file (src/etl/streaming/<job>.q) holding every step:
 / schemas, transform, the batch handler, the timer body, its state, and the
-/ declaration below. One runner (scripts/torq_stream.q) runs any of them.
+/ declaration below. One runner (scripts/processes/torq_stream.q) runs any of them.
 / .
 / WHAT MAKES THAT POSSIBLE is the publish seam. A job never calls TorQ: it
 / calls `publish` in its OWN namespace, which is a stub that throws until
@@ -180,7 +180,7 @@ wire:{[job;publisher]
 / between the two cannot be dropped unscored; hand-written drain code that
 / recomputes its cutoff in the delete clause has exactly that race.
 / .
-/ Lived in scripts/torq_pipeline.q until the jobs moved into src/, where
+/ Lived in scripts/processes/torq_pipeline.q until the jobs moved into src/, where
 / nothing may call .qpipe (B-09). It belongs here anyway: buffering is the
 / job's own business, not TorQ's.
 / @param tblname the buffer table's fully-qualified name, e.g. `.qsub.markout.pending

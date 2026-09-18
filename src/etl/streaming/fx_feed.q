@@ -6,14 +6,15 @@
 / it invents is .qsynth's, shared with every other feed here.
 / .
 / WHAT IS IN THIS FILE: the level this process walks, the row builder, and
-/ the declaration the runner reads. It was scripts/torq_fx_feed.q, where the
+/ the declaration the runner reads. It was scripts/torq_fx_feed.q (deleted in
+/ #204), where the
 / row builder both built AND published, so nothing could look at a row
 / without a tickerplant to send it to.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / .
 / The published columns match the vendored `quote` schema. `time` is not
-/ among them: .u.upd stamps its own on receipt (scripts/torq_pipeline.q,
+/ among them: .u.upd stamps its own on receipt (scripts/processes/torq_pipeline.q,
 / invariant 1).
 
 \d .qsub.fx_feed

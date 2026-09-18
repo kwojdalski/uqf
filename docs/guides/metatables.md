@@ -17,7 +17,7 @@ in the latest partition. Use those directly when they meet the need.
 This component adds a shared definition format, explicit multi-partition
 selection, regular typed metatables, and replacement of previously measured
 slices. It installs no process, scheduler, connections, handlers, persistence
-engine or quality checker. `scripts/torq_metatables.q` adapts the same queries
+engine or quality checker. `scripts/processes/torq_metatables.q` adapts the same queries
 to DQE's existing result protocol. ETL run records and publication coverage
 remain separate: observed row counts cannot establish successful ingestion,
 expected completeness, or absence of duplicates.
@@ -148,7 +148,7 @@ Load both files on the DQE process and each target HDB:
 
 ```q
 \l src/metadata/metatables.q
-\l scripts/torq_metatables.q
+\l scripts/processes/torq_metatables.q
 ```
 
 The adapter returns a dictionary of metatable name to result table. It can

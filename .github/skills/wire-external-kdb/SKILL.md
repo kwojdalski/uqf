@@ -94,7 +94,7 @@ that already handles each one (reuse it, don't re-derive it):
 ### 4. Generate the wiring
 Based on what step 3 actually found (not a generic template):
 - A q bridge script under `scripts/`, mirroring the shape of the existing
-  `scripts/reshape_wide_order_book_example.q` / `scripts/torq_quotes_feed.q`,
+  `scripts/examples/reshape_wide_order_book_example.q` / `src/etl/streaming/quotes_feed.q`,
   that opens the IPC handle to the named server (connection details read from
   the qmcp config or an env var - never hardcoded), pulls or subscribes to
   the real table(s), and reshapes into the `quotes` shape using the `book.q`
