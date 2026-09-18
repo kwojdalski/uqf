@@ -266,6 +266,7 @@ each, and the rule for which a new page belongs in.
   [restatement-design.md](docs/architecture/restatement-design.md),
   [event-tape.md](docs/architecture/event-tape.md),
   [pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md),
+  [example-architecture.md](docs/architecture/example-architecture.md),
   [cryptorust-discovery.md](docs/architecture/cryptorust-discovery.md).
 - **What is the contract?** → [`docs/reference/`](docs/reference/):
   [environment.md](docs/reference/environment.md) (every variable,
