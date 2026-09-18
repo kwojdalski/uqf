@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from torq_orchestrator import core, pipelines
+from torq_orchestrator import core, pipeline_edges, pipelines
 
 
 @pytest.fixture
@@ -187,13 +187,13 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPath
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
     # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
     # markout1(+31)
-    # +7, not +1: the two bounded backfill processes, databento1, cryptomock1
+    # +9, not +1: the two bounded backfill processes, databento1, cryptomock1
     # and the two normalizers occupy the offsets immediately after markout1. They
     # are declared processes like any other, so their ports are reserved
     # even though the backfills and the mock do not start with the stack -
     # two of them sharing a port with a feed would fail at bind time, and
     # only when someone happened to run one.
-    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 7
+    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 9
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
@@ -265,6 +265,8 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "cryptomock1",
         "executions1",
         "marks1",
+        "fxordersfeed1",
+        "fxpositions1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -340,6 +342,8 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPa
         "cryptomock1",
         "executions1",
         "marks1",
+        "fxordersfeed1",
+        "fxpositions1",
     }
 
 
@@ -702,6 +706,8 @@ def test_pipeline_offsets_are_stable():
         "cryptomock1": 35,
         "executions1": 36,
         "marks1": 37,
+        "fxordersfeed1": 38,
+        "fxpositions1": 39,
     }
 
 
@@ -822,6 +828,42 @@ def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStack
     assert core.CRYPTO_BOOK_TABLE_SCHEMA in generated
     assert core.CRYPTO_SIM_FILLS_TABLE_SCHEMA in generated
     assert core.CRYPTO_TRADES_TABLE_SCHEMA in generated
+
+
+def test_every_streaming_job_can_be_started_by_the_stack():
+    """A job registered in q must have a process that can start it.
+
+    The rule, stated as a requirement rather than left to habit: a `.qstream`
+    job is TorQ-free *code*, and which runner starts it is a separate
+    decision — `torq_stream.q` against TorQ, `run_stream.q` against `.qtick`.
+    So "it runs standalone" is not a reason to be unstartable by the stack.
+
+    Until #281 `fxpositions1` and `fxordersfeed1` were exactly that: they
+    registered in q, claimed a procname, and no pipeline declared them, so
+    `process.csv` never mentioned them. Every existing check ran the other
+    way — "does this process's job exist?" — and none of them noticed.
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    declared = pipeline_edges._declared_stream_edges(repo_root)
+    have_process = {p.procname for p in core.PIPELINES}
+    orphans = set(declared) - have_process - pipeline_edges.RUNS_WITHOUT_A_PROCESS
+    assert not orphans, (
+        f"streaming job(s) claim {sorted(orphans)} but no Pipeline declares them, "
+        "so uqf-stack cannot start them"
+    )
+
+
+def test_the_unstartable_list_is_empty_and_should_stay_that_way():
+    """`RUNS_WITHOUT_A_PROCESS` is the escape hatch for a job that genuinely
+    cannot be started by the stack. It is empty, and an entry appearing in it
+    should be argued for rather than assumed: the publish seam means the same
+    job file runs under either runner, so "written for the other runner" is
+    not an argument.
+    """
+    assert pipeline_edges.RUNS_WITHOUT_A_PROCESS == frozenset(), (
+        "a job has been excused from being startable - check the reason is "
+        "stronger than 'it was written for run_stream.q'"
+    )
 
 
 def test_declared_dataflow_edges_match_the_q_scripts():

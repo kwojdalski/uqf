@@ -25,6 +25,7 @@ from torq_orchestrator.schemas import (
     EXECUTIONS_TABLE_SCHEMA,
     MARKS_TABLE_SCHEMA,
     MKT_ORDERBOOK_TABLE_SCHEMA,
+    ORDERS_TABLE_SCHEMA,
     POSITION_TABLE_SCHEMA,
     QUOTES_TABLE_SCHEMA,
     TRADES_TABLE_SCHEMA,
@@ -222,6 +223,29 @@ PIPELINES: tuple[Pipeline, ...] = (
         table="marks",
         schema=MARKS_TABLE_SCHEMA,
         note="a mid per instrument from every book: quote and crypto_book -> marks",
+    ),
+    Pipeline(
+        procname="fxordersfeed1",
+        script=STREAM_RUNNER_SCRIPT,
+        loads_qpipe=True,
+        kind="feed",
+        table="orders",
+        schema=ORDERS_TABLE_SCHEMA,
+        note="synthetic order flow, most of which never becomes a fill - fxpositions1's input",
+    ),
+    Pipeline(
+        procname="fxpositions1",
+        script=STREAM_RUNNER_SCRIPT,
+        loads_qpipe=True,
+        kind="etl",
+        subscribes=("orders",),
+        publishes=("fx_position", "fx_limit_breach"),
+        note=(
+            "net exposure by (sym, book, product) with limit breaches. Runs here "
+            "AND standalone under processes/run_stream.q on stock kdb+ - a job is "
+            "TorQ-free code and the runner decides the transport, so being "
+            "runnable without TorQ is no reason not to be startable with it"
+        ),
     ),
 )
 

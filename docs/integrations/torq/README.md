@@ -5,8 +5,9 @@ Diagrams for the running state of the uqf stack (see
 it). Reflects what `uqf-stack list processes` shows today: the vendored
 14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
-`markout1`, `databento1`, `cryptomock1`, `executions1`, `marks1`), and two
-bounded backfill processes (`deals_backfill1`, `events_backfill1`).
+`markout1`, `databento1`, `cryptomock1`, `executions1`, `marks1`,
+`fxordersfeed1`, `fxpositions1`), and two bounded backfill processes
+(`deals_backfill1`, `events_backfill1`).
 
 **The backfills are on the topology diagram but have no edge to the
 tickerplant, and that is the point.** They were left off entirely at first,
@@ -103,6 +104,16 @@ so one position book carries FX and crypto from one subscription each, and a
 new market is a mapping in a normalizer rather than a branch in the
 position job. (Note `executions`, not `fills`: `fills` is a q builtin, and a
 table by that name would shadow the verb in every process holding it.)
+
+`fxordersfeed1` and `fxpositions1` are the FX positions service: synthetic
+order flow in, net exposure by (sym, book, product) out, with limit breaches
+throttled so a standing breach does not republish every tick. They are worth
+a note because they are the one pair that runs **two** ways. `torq_stream.q`
+starts them here like any other streaming job; `run_stream.q` starts the same
+two job files on stock kdb+ against `.qtick`, with `lib/torq` never loaded.
+That is the publish seam working as intended - a job is TorQ-free code and
+the runner decides the transport - and being runnable without TorQ was never
+a reason not to be startable with it.
 
 `tap1` is the one process still running its own script
 (`scripts/processes/torq_tap.q`): it chooses its tables at runtime rather

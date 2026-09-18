@@ -37,4 +37,6 @@
     .qdag.register[`cryptomock1;`kind`inputs`outputs!(`stream;`$();`crypto_book`crypto_trades)];
     .qdag.register[`executions1;`kind`inputs`outputs!(`normalizer;`trades`crypto_trades;`executions)];
     .qdag.register[`marks1;`kind`inputs`outputs!(`normalizer;`quote`crypto_book;`marks)];
-    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`executions1`marks1}
+    .qdag.register[`fxordersfeed1;`kind`inputs`outputs!(`stream;`$();`orders)];
+    .qdag.register[`fxpositions1;`kind`inputs`outputs!(`stream;`orders;`fx_position`fx_limit_breach)];
+    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`executions1`marks1`fxordersfeed1`fxpositions1}
