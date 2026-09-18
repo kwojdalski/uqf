@@ -1,10 +1,19 @@
 """Usage-log capture (FE-13).
 
 ``.usage.usage`` rows are flushed to disk and dropped from memory after
-``.usage.flushtime`` - **three hours** by the vendored default, not the one
-day the requirements state. So any frontend view of error or latency history
-longer than that window is not a query against a live process; it is a
-capture pipeline that has to run *before* the rows are pruned.
+``.usage.flushtime`` - **one day** in a standard TorQ stack. So any frontend
+view of error or latency history longer than that window is not a query
+against a live process; it is a capture pipeline that has to run *before*
+the rows are pruned.
+
+The number is worth getting right because it was got wrong here twice, in
+both directions. ``code/handlers/logusage.q`` reads
+``@[value;`flushtime;0D03]`` - three hours - and that line is what earlier
+comments in this package quoted. But it is a FALLBACK for a value already
+defined, and ``config/settings/default.q`` defines ``flushtime:1D00``
+first, so the fallback never fires. Measured on three running processes:
+one day. Read it with :data:`uqf_frontend.ops.FLUSHTIME` rather than
+assuming either figure - a deployment may override it again.
 
 Getting this wrong is unrecoverable in a way most bugs are not: if capture is
 added later, the history in between is simply gone. That is why B2 builds it
@@ -157,7 +166,7 @@ class CaptureScheduler:
 
     WHY THIS EXISTS AT ALL. ``capture_once`` was written, tested and called
     by nothing. FE-13 is the one requirement whose failure is invisible
-    while it is failing - a view of the last three hours looks exactly like
+    while it is failing - a view of the last day looks exactly like
     a view of everything, right up to the day someone asks about yesterday -
     which is why the requirements call it "the trap" and why the pipeline
     needs a thing that actually runs it rather than a README line saying it
