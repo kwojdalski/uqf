@@ -94,11 +94,24 @@ it("builds filters from the catalog and renders a 409 with its missing range", a
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: /Desk/ }));
   await screen.findByRole("button", { name: "trades" });
+  // Wait for the glimpse before adding a filter. Choosing a table runs an
+  // effect that calls setFilters([]) and fires the unfiltered query; the
+  // table's button is in the DOM before that effect has flushed, so a click
+  // here can add a filter row the effect then wipes - after which there is
+  // no Value input and the test fails with "Unable to find a label with the
+  // text of: Value". It lost that race once on CI and passes on every
+  // developer machine, which is what a race looks like. The glimpse landing
+  // is the observable proof the effect has run.
+  await waitFor(() =>
+    expect(fetcher.mock.calls.some(([path]) => path === "/query")).toBe(true),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
   expect(
     screen.queryByRole("option", { name: /levels/ }),
   ).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Value"), {
+  // findBy, not getBy: the row is rendered by a state update the click
+  // schedules, which React may flush after this line in a slow environment.
+  fireEvent.change(await screen.findByLabelText("Value"), {
     target: { value: "EURUSD" },
   });
   fireEvent.change(screen.getByLabelText("Storage tier"), {
