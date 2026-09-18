@@ -1,4 +1,6 @@
 table,description
+crypto_book,"Live venue order books published by cryptorust's kdb-market-data-recorder (uqf-stack crypto start): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. time is stamped by the tickerplant on receipt"
+crypto_sim_fills,"Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from"
 crypto_trades,Real confirmed exchange executions recorded from the OMS
 demo_deals,"Generic analogue of an external relational deal source, landed by the demo_deals_backfill bounded worker. Synthetic by design - the real source is bank-internal and out of scope for this repository (A-04)"
 etl_coverage,"Append-only completeness ledger: which [range_from, range_to) window of which dataset is published, at which source_version. A window with rows_published=0 still counts as covered - that is what distinguishes 'ran, found nothing' from 'never ran'"

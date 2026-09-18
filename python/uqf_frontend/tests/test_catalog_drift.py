@@ -120,10 +120,22 @@ def test_the_schema_source_is_where_this_test_expects_it():
     assert TABLES_Q.is_file(), f"expected the tickerplant table definitions at {TABLES_Q}"
 
 
-@pytest.mark.parametrize(
-    "table_name",
-    ["trades", "position", "execution_quality", "quotes", "crypto_trades"],
-)
+#: Catalog tables whose schema is a tickerplant table in scripts/uqf_stack_tables.q.
+#: ONE list, read by the parametrize below and by the closed-loop gate at the
+#: bottom: the gate used to carry its own copy, which is the drift it exists
+#: to catch.
+_TICKERPLANT_TABLES = [
+    "trades",
+    "position",
+    "execution_quality",
+    "quotes",
+    "crypto_trades",
+    "crypto_book",
+    "crypto_sim_fills",
+]
+
+
+@pytest.mark.parametrize("table_name", _TICKERPLANT_TABLES)
 def test_catalog_matches_the_generated_schema(table_name):
     expected = _parse(_tickerplant_schema(table_name))
     actual = TABLES[table_name].columns
@@ -172,16 +184,10 @@ def test_every_catalog_table_is_cross_checked():
     drift gate that does not know what it is failing to check is the same
     failure mode as a lint hook scoped to a stale path.
     """
-    checked = {
-        "trades",
-        "position",
-        "execution_quality",
-        "quotes",
-        "crypto_trades",
-    } | set(_Q_OWNED)
+    checked = set(_TICKERPLANT_TABLES) | set(_Q_OWNED)
     unchecked = set(TABLES) - checked
     assert not unchecked, (
-        f"catalog table(s) {sorted(unchecked)} have no drift check. Add the schema "
-        f"constant to test_catalog_matches_the_generated_schema, or the q file to "
-        f"_Q_OWNED - do not just add it here."
+        f"catalog table(s) {sorted(unchecked)} have no drift check. Add the table "
+        f"to _TICKERPLANT_TABLES if scripts/uqf_stack_tables.q defines it, or the q "
+        f"file to _Q_OWNED."
     )

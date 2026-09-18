@@ -1,4 +1,17 @@
 table,column,type
+crypto_book,time,timestamp
+crypto_book,venue,symbol
+crypto_book,sym,symbol
+crypto_book,bid_prices,list
+crypto_book,bid_sizes,list
+crypto_book,ask_prices,list
+crypto_book,ask_sizes,list
+crypto_sim_fills,time,timestamp
+crypto_sim_fills,sym,symbol
+crypto_sim_fills,side,long
+crypto_sim_fills,trade_price,float
+crypto_sim_fills,size,float
+crypto_sim_fills,realized_delta_pnl,float
 crypto_trades,time,timestamp
 crypto_trades,sym,symbol
 crypto_trades,venue,symbol
