@@ -238,7 +238,8 @@ table below only says what each module is *for*.
 
 The data-engineering component is documented separately: see
 [pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md)
-for what `src/etl/` has and lacks, and
+for how `src/etl/` maps onto a Dagster-shaped framework, what closed each
+gap it found, and what it deliberately does not have, and
 [etl-framework-requirements.md](docs/reference/etl-framework-requirements.md)
 for the contract CI holds it to.
 

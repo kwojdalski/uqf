@@ -3,9 +3,9 @@
 `src/etl/` has a shape, and the shape came from a small number of positions
 held consistently. This page states them, because the requirements
 (`docs/reference/etl-framework-requirements.md`) say *what* the code must do
-and the gap register
-([`pipeline-framework-gaps.md`](pipeline-framework-gaps.md)) says what is
-missing, but neither says *why* any of it is arranged this way. Someone
+and the framework assessment
+([`pipeline-framework-gaps.md`](pipeline-framework-gaps.md)) says what each
+piece replaced, but neither says *why* the whole is arranged this way. Someone
 changing `src/etl/` needs the why, or the next change will be locally
 reasonable and globally wrong.
 
@@ -301,8 +301,9 @@ the obvious way to mint a unique id returns the same value everywhere.
 
 ## See also
 
-- [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) — what this
-  framework has and lacks, gap by gap.
+- [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) — the closed
+  assessment against Dagster: what each piece replaced, and the four
+  differences that are decisions.
 - [`restatement-design.md`](restatement-design.md) — the bitemporal coverage
   design behind §7.
 - [`../reference/etl-framework-requirements.md`](../reference/etl-framework-requirements.md)

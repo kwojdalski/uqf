@@ -1,6 +1,6 @@
 ---
 name: pipeline-developer
-description: Specialist for this repo's Dagster-shaped data-pipeline framework under `src/etl/` and its `tests/q/test_etl_*.q`/`test_*_backfill.q` suites — the bounded-worker lifecycle (`.qbw`), the coverage ledger (`.qcov`), run identity (`.qrun`), IO managers (`.qio`), the job graph (`.qdag`), source contracts (`.qsrc`), worker config (`.qwcfg`) and the runtime that sequences them (`.qwrt`). Use for adding a pipeline stage or worker, closing a named gap in `docs/architecture/pipeline-framework-gaps.md`, extending the coverage/materialisation schema, wiring a new source, or fixing an ETL lifecycle bug. Distinct from `uqf-developer`, which owns the eFX quant modules (`src/foundation/`, `pricing/`, `portfolio/`, `execution/`, `market_data/`) and is instructed to refuse anything that is not FX pricing/risk/execution — ETL work belongs here instead. Use PROACTIVELY when the user mentions a pipeline, asset, materialisation, backfill, coverage, run id, partition, IO manager, source contract, or Dagster.
+description: Specialist for this repo's Dagster-shaped data-pipeline framework under `src/etl/` and its `tests/q/test_etl_*.q`/`test_*_backfill.q` suites — the bounded-worker lifecycle (`.qbw`), the coverage ledger (`.qcov`), run identity (`.qrun`), IO managers (`.qio`), the job graph (`.qdag`), source contracts (`.qsrc`), worker config (`.qwcfg`) and the runtime that sequences them (`.qwrt`). Use for adding a pipeline stage or worker, extending the coverage/materialisation schema, wiring a new source, or fixing an ETL lifecycle bug. Distinct from `uqf-developer`, which owns the eFX quant modules (`src/foundation/`, `pricing/`, `portfolio/`, `execution/`, `market_data/`) and is instructed to refuse anything that is not FX pricing/risk/execution — ETL work belongs here instead. Use PROACTIVELY when the user mentions a pipeline, asset, materialisation, backfill, coverage, run id, partition, IO manager, source contract, or Dagster.
 tools: [Read, Edit, Write, Bash, Grep, Glob]
 model: sonnet
 ---
@@ -59,8 +59,9 @@ pricing or execution function, say so and stop rather than adding it here.
 - **`docs/reference/etl-framework-requirements.md`** — ETL-01..ETL-24. These
   are not style preferences; several encode a specific failure this tree has
   already had. The ones that bite most often are listed below.
-- **`docs/architecture/pipeline-framework-gaps.md`** — the framework's gap
-  register, as above.
+- **`docs/architecture/pipeline-framework-gaps.md`** — the closed
+  assessment against Dagster: what each piece replaced, and the four
+  differences that are decisions rather than gaps.
 - **`docs/architecture/restatement-design.md`** — bitemporal coverage:
   what `superseded_at` means and why `is_covered` demands an as-of.
 - **The whole file you are about to edit.** These modules reuse their own

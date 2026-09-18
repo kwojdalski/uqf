@@ -50,8 +50,9 @@ locally).
 [`restatement-design.md`](architecture/restatement-design.md)
 (the bitemporal design, now built),
 [`event-tape.md`](architecture/event-tape.md),
-[`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) (what
-`src/etl/` has and lacks relative to a Dagster-shaped framework),
+[`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) (a
+closed assessment against a Dagster-shaped framework: what closed each gap,
+and what is deliberately absent),
 [`cryptorust-discovery.md`](architecture/cryptorust-discovery.md) (why a
 non-listening process belongs in the client table, not the server one).
 
