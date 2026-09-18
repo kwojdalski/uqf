@@ -115,6 +115,14 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: rendered-diagrams
+        name: Check the rendered diagrams match their d2 sources
+        entry: python3 scripts/render_diagrams.py --check
+        language: system
+        pass_filenames: false
+        files: ^docs/diagrams/
+        always_run: false
+
       - id: q-tests
         name: Run qUnit tests for uqf
         entry: bash
