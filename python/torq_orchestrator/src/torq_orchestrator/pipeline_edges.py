@@ -64,9 +64,7 @@ _REGISTER_RE = re.compile(
 #:         `executions1;
 #:         .qsub.executions.executions;
 #:         `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
-_NORMALIZER_RE = re.compile(
-    r"\.qnorm\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S
-)
+_NORMALIZER_RE = re.compile(r"\.qnorm\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S)
 _STREAM_DIR = Path("src") / "etl" / "streaming"
 
 #: The one process script every streaming job runs under. Spelled here rather
