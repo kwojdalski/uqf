@@ -221,6 +221,28 @@ test_ofi_multilevel_level_disappearing_is_negative_flow:{[t]
     / disappears (50 -> gone) while ask level 1 is unchanged -> -50
     .testutil.assertApprox[r 1;-50f;1e-9;"bid level 1 disappearing shows up as -50, not a dropped/null contribution"]};
 
+test_ofi_multilevel_ask_level_disappearing_and_reappearing:{[t]
+    t0:2026.01.01D09:00:00.000000000;
+    quotes:([] ts:t0+(1000000000*til 5);
+        sym:5#`EURUSD;
+        bid_prices:5#enlist 1.1000 1.0998;
+        bid_sizes:5#enlist 100 50;
+        ask_prices:(1.1002 1.1004;enlist 1.1002;enlist 1.1002;1.1002 1.1004;1.1002 1.1004);
+        ask_sizes:(100 50;enlist 100;enlist 100;100 70;100 70));
+    r:.qmicro.ofi_multilevel[quotes;`EURUSD;2];
+    .qunit.assertEquals[r;0n 50 0 -70 0f;"ask removal adds 50, continued absence adds zero, reappearance subtracts the new 70, unchanged depth adds zero"]};
+
+test_ofi_multilevel_absent_deeper_levels_preserve_l0_flow:{[t]
+    t0:2026.01.01D09:00:00.000000000;
+    quotes:([] ts:t0+0 1000000000;
+        sym:2#`EURUSD;
+        bid_prices:2#enlist enlist 1.1000;
+        bid_sizes:2#enlist enlist 100;
+        ask_prices:2#enlist enlist 1.1002;
+        ask_sizes:enlist each 100 70);
+    r:.qmicro.ofi_multilevel[quotes;`EURUSD;3];
+    .qunit.assertEquals[r;0n 30f;"levels absent on both sides contribute zero while the L0 ask reduction contributes +30"]};
+
 / ---- rolling_ofi / spread_ratio (thin builtin wrappers) ----
 
 test_rolling_ofi_matches_msum_directly:{[t]
