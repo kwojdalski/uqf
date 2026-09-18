@@ -115,6 +115,14 @@ jobs:
         # file reaching the wrong way would break it with every test green.
         if: ${{ !cancelled() }}
         run: python3 scripts/check_etl_layering.py --check
+      - name: Check the rendered diagrams match their d2 sources
+        # An .svg committed beside its .d2 is a derived artefact, and this
+        # tree knows what happens to those without a gate - man.q called
+        # itself generated while covering 78 of 348 functions. Skips with a
+        # notice when d2 is absent or is a different version, since the
+        # bytes are only comparable for one renderer (see the script).
+        if: ${{ !cancelled() }}
+        run: python3 scripts/render_diagrams.py --check
       - name: Check the docs cite functions that exist
         # The generated documentation had gates; the PROSE had none, so a
         # guide could name a function that never existed and every check
