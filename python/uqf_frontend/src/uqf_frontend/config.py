@@ -12,10 +12,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 #: Seconds between usage-capture sweeps when nothing overrides it. Well
-#: under the MEASURED `.usage.flushtime` of three hours - FE-23 records that
-#: the requirements' "one day" is wrong - because the interval is the whole
-#: guarantee: a capture that runs less often than the flush window loses
-#: history silently.
+#: under `.usage.flushtime`, which is one day in a standard TorQ stack - see
+#: capture.py on why three hours is the figure usually quoted and why it is
+#: the wrong one. The interval is the whole guarantee: a capture that runs
+#: less often than the flush window loses history silently, so this is sized
+#: for the shorter of the two readings rather than the longer.
 #:
 #: Here rather than in capture.py so that config imports nothing: capture
 #: imports fleet, and fleet imports config.
@@ -132,8 +133,8 @@ class Settings:
     enable_writes: bool = False
     #: Where captured usage rows are written (FE-13). None means capture does
     #: not run - and that is a real choice, not a safe one: `.usage.flushtime`
-    #: is three hours, so with this unset the usage view can only ever show
-    #: the last three hours and history before that is gone for good. It is
+    #: is one day in a standard stack, so with this unset the usage view can
+    #: only ever show the last day and history before that is gone. It is
     #: off by default because a capture pipeline writes files and fans out
     #: across the fleet on a timer, which a process should not start doing
     #: because someone imported it.

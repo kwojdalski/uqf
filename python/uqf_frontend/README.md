@@ -240,9 +240,12 @@ default — so the view says it has nothing configured rather than lying.
   **dict per server**, which kola cannot serialise at all (`Not supported
   nested list - k type 99`). The program unkeys the table and drops that one
   column; leaving it in fails the entire view for a field no dashboard shows.
-- **`.usage.flushtime` defaults to `0D03` — three hours, not the one day the
-  requirements state.** Measured on a live process. A capture pipeline sized
-  for a day would lose most of the log.
+- **`.usage.flushtime` is one day, and the "three hours" once recorded here
+  was wrong.** `code/handlers/logusage.q` reads `@[value;`flushtime;0D03]`,
+  but that is a fallback for a value already set — `config/settings/default.q`
+  defines `1D00` first, so the fallback never fires. Measured on three live
+  processes: one day. The requirements' "one day" was right all along. Read it
+  with `ops.FLUSHTIME`; a deployment may override it again.
 
 ## Fleet health (B3)
 
