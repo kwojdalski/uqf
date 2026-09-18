@@ -1,5 +1,5 @@
 // test_etl_lifecycle.q - the ETL-18 lifecycle coverage and the ETL-19 doubles
-// discipline. Load scripts/torq_pipeline.q, src/etl/core/backfill_state.q,
+// discipline. Load src/etl/core/status.q, src/etl/core/backfill_state.q,
 // src/etl/core/coverage.q, src/etl/core/worker_config.q,
 // src/etl/core/worker_runtime.q, tests/lib/etl_test_doubles.q,
 // tests/q/reference_worker.q, tests/lib/qunit.q and tests/lib/testutil.q

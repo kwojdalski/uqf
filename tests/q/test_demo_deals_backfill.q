@@ -7,7 +7,7 @@
 // synthetic by A-04 - only `.qsrc.validate_live` on the work machine settles
 // that.
 //
-// Load scripts/torq_pipeline.q, src/etl/core/*.q, src/etl/sources/demo_deals.q,
+// Load src/etl/core/*.q, src/etl/sources/demo_deals.q,
 // src/etl/workers/demo_deals_backfill.q, tests/lib/qunit.q and
 // tests/lib/testutil.q before this file.
 

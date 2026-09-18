@@ -92,10 +92,13 @@ require_contract:{[worker]
 
 / -------------------------------------------------------------------- LOCK
 
-/ Where lock files live. Shares the status directory, since .qpipe.status_dir
+/ Where lock files live. Shares the status directory, since .qstatus.status_dir
 / already establishes one per deployment and a lock is the same kind of
-/ per-deployment runtime state.
-lock_dir:{[] @[{.qpipe.status_dir[]};::;{(getenv[`TORQDATA]),"/status"}]}
+/ per-deployment runtime state. A plain call: status.q is loaded by this
+/ tree's own init.q, so there is nothing to guard against - the try-with-
+/ fallback this used to carry existed because status_dir lived in scripts/
+/ and might not have been loaded (#229).
+lock_dir:{[] .qstatus.status_dir[]}
 
 lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
 
@@ -292,7 +295,7 @@ clear_checkpoint:{[worker]
 / @param err the caught error string
 / @return the status file path written
 fail:{[worker;spec;progress;err]
-    .qpipe.write_status[worker;worker;`failed;spec;progress;err]}
+    .qstatus.write_status[worker;worker;`failed;spec;progress;err]}
 
 / Run a worker's pass under the shell contract: trap, convert, release.
 / .

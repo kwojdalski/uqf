@@ -17,6 +17,15 @@ The direction is one-way on purpose. `sources/` and `workers/` SHOULD call
 into `core/` - that is what a declaration over a generic shell means - so
 this checks only that the arrow never points back.
 
+The second rule is the same arrow one level out (#229): nothing under
+`src/etl/` may call `.qpipe`, the TorQ adapter in `scripts/torq_pipeline.q`.
+B-09 says the ETL tree must load in a plain q process with no TorQ present,
+and `.qpipe` is the one namespace allowed to know TorQ exists. The status
+writer used to live there and `backfill_state.q` called it, which is why
+`lock_dir` carried a try-with-fallback - the author knew the namespace might
+not be loaded. A dependency that has to be guarded against being absent is
+pointing the wrong way, and this stops it coming back.
+
 STRING AND COMMENT AWARE, and it has to be. `bounded_worker.q` names
 `.qwrk.demo_deals_backfill` inside an error message ("ns must be a namespace symbol such as
 `.qwrk.demo_deals_backfill"), which is documentation, not a dependency. A naive search reports
@@ -33,7 +42,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CORE = REPO / "src" / "etl" / "core"
+ETL = REPO / "src" / "etl"
 DECLARING_DIRS = ("sources", "workers", "streaming")
+
+#: The TorQ adapter. Lives in scripts/ because it is the one place TorQ is
+#: allowed; nothing under src/etl/ may reach it (B-09).
+ADAPTER_NS = ".qpipe"
 
 #: A namespace declaration, e.g. `\d .qwrk.demo_deals_backfill`.
 NAMESPACE_RE = re.compile(
@@ -124,6 +138,26 @@ def main() -> int:
                         f"{ns} (declared by {owner})"
                     )
 
+    adapter_hits: list[str] = []
+    for path in sorted(ETL.rglob("*.q")):
+        code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
+        for lineno, line in enumerate(code.splitlines(), 1):
+            if re.search(rf"{re.escape(ADAPTER_NS)}\b", line):
+                adapter_hits.append(f"{path.relative_to(REPO)}:{lineno}: {line.strip()}")
+
+    if adapter_hits:
+        print(
+            f"src/etl/ must not call {ADAPTER_NS} (the TorQ adapter in scripts/):", file=sys.stderr
+        )
+        for v in adapter_hits:
+            print(f"  {v}", file=sys.stderr)
+        print(
+            "\nB-09: the ETL tree loads in a plain q process with no TorQ. Anything\n"
+            "src/ needs from .qpipe is not TorQ plumbing and belongs under src/etl/core/.",
+            file=sys.stderr,
+        )
+        return 1
+
     if violations:
         print("src/etl/core/ must not depend on sources/ or workers/:", file=sys.stderr)
         for v in violations:
@@ -139,7 +173,7 @@ def main() -> int:
 
     print(
         f"check_etl_layering: {len(list(CORE.glob('*.q')))} core file(s) depend on none "
-        f"of the {len(declared)} declaring namespace(s)"
+        f"of the {len(declared)} declaring namespace(s); nothing under src/etl/ calls {ADAPTER_NS}"
     )
     return 0
 

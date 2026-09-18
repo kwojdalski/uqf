@@ -1,5 +1,5 @@
 // test_backfill_state.q - tests for src/etl/core/backfill_state.q (the
-// bounded worker lifecycle contract). Load scripts/torq_pipeline.q,
+// bounded worker lifecycle contract). Load src/etl/core/status.q,
 // src/etl/core/backfill_state.q, tests/lib/qunit.q and tests/lib/testutil.q
 // before this file.
 
@@ -144,7 +144,7 @@ test_run_pass_writes_a_failed_status:{[t]
     .qbfstate.release_lock[`shell_status];
     .qbfstate.acquire_lock[`shell_status];
     @[{[s] .qbfstate.run_pass[`shell_status;s;{'"fetch: deliberate"}]};spec;{x}];
-    status:.j.k first read0 hsym `$(.qpipe.status_dir[]),"/airflow_status_shell_status.txt";
+    status:.j.k first read0 hsym `$(.qstatus.status_dir[]),"/airflow_status_shell_status.txt";
     .qunit.assertEquals[status`state;"failed";"the failure is recorded as a terminal failed state"];
     .qunit.assertTrue["fetch: deliberate" ~ status`error;"the thrown message is preserved verbatim, prefixed by its own function"]};
 

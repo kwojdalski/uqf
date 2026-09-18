@@ -162,7 +162,7 @@ Machine-derived index: [`docs/decisions/README.md`](decisions.md).
   is FE-14: credentials stay server-side and no client input reaches query text.
 
 - **FE-21 — how does Airflow/backfill status reach the frontend?** → **read q's
-  own status files** ([#55]), merged in #68. `.qpipe.write_status` writes,
+  own status files** ([#55]), merged in #68. `.qstatus.write_status` writes,
   `uqf_frontend/status.py` reads, and `test_status.py` parses the q source to
   keep the two field sets in step. The format is defined here rather than
   inherited — there is no Airflow provider in this tree to be compatible with

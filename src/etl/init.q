@@ -48,6 +48,7 @@
 / Assumes src/init.q has already been loaded: the ETL tree uses the library's
 / own namespaces. Run from the repository root, like every other loader here.
 
+\l src/etl/core/status.q
 \l src/etl/core/backfill_state.q
 \l src/etl/core/log.q
 \l src/etl/core/coercion.q

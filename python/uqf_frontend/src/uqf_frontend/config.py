@@ -104,7 +104,7 @@ class Settings:
     #: Directory q writes backfill status files into (FE-06). None means the
     #: backfill view reports itself unconfigured rather than returning an
     #: empty list, which would be indistinguishable from an idle fleet.
-    #: Pairs with UQFSTATUSDIR on the q side - see .qpipe.status_dir.
+    #: Pairs with UQFSTATUSDIR on the q side - see .qstatus.status_dir.
     status_dir: Path | None = None
     #: Processes to fan out to for the per-process query log (FE-04). Empty by
     #: default: the fleet view then reports that it has nothing configured,

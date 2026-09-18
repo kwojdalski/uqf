@@ -184,28 +184,16 @@ is what makes a materialisation *auditable* rather than merely *recorded*.
   outputs, which is asset-shaped thinking. But an asset has no identity of its
   own: no description, no owner, no freshness policy attached to *the asset*
   rather than to the worker that happens to produce it.
-- **Only one of the three job roles has a shell.** `.qbw` makes a backfill a
-  declaration; `feed` and `etl` have nothing equivalent. `.qpipe.subscribe_etl`
-  is the closest thing to an ETL shell and **one of the five ETLs uses it** —
-  `torq_cross_etl.q`, `torq_posbook_etl.q`, `torq_vectorize_etl.q` and
-  `torq_tap.q` each hand-roll the same
-  `getsubscriptionhandles` → `first` → `.sub.subscribe` sequence, and
-  `torq_cross_etl.q`'s own comment says so: *"same as every ETL did by hand"*.
-
-  The copies are also weaker than the original in one specific way: each
-  returns `:()` when no tickerplant is found, where `.qpipe.subscribe_etl`
-  throws. In practice all four call `.servers.startupdepcycles[…;0W]` first,
-  which blocks until the tickerplant is up, so the silent path is reached
-  only if the tickerplant dies between that check and the subscribe. Narrow,
-  but the failure it produces — a process that subscribes to nothing and
-  still reports healthy — is the one this tree refuses everywhere else.
-
-  The question is whether `.qpipe` should become for ETLs what `.qbw` is for
-  backfills. It is a design decision rather than a defect: four scripts
-  duplicating a library function is a smell, and the same four blocking
-  correctly on startup is why nothing has broken. See the job-shape taxonomy
-  in
-  [etl-framework-requirements.md](../reference/etl-framework-requirements.md#the-job-shapes-on-two-axes).
+- **Only one of the three job roles has a shell.** **Closed.** `.qstream`
+  (`src/etl/core/stream_job.q`) is for a streaming job what `.qbw` is for a
+  backfill: a job declares `subscribes`, `publishes`, `on_batch` and
+  `on_timer` from its own file under `src/etl/streaming/`, and one generic
+  runner (`scripts/torq_stream.q`) runs any of them. The four hand-rolled
+  `torq_*_etl.q` scripts and the four feed scripts this entry described are
+  gone, and with them the `:()`-on-no-tickerplant copies. `.qpipe` did *not*
+  become the shell: it stayed the TorQ adapter the runner calls, which is
+  the layering [`pipeline-philosophy.md`](pipeline-philosophy.md) §10 now
+  states and `check_etl_layering.py` enforces.
 
 ## 4. Is this implementable in q? Yes — and q is a better fit than it looks
 

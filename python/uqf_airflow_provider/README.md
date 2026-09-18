@@ -1,6 +1,6 @@
 # uqf_airflow_provider
 
-Reads the status files `.qpipe.write_status` (`scripts/torq_pipeline.q`)
+Reads the status files `.qstatus.write_status` (`src/etl/core/status.q`)
 writes, and translates them into Airflow's sensor vocabulary — a poke that
 is pending, succeeded, or failed.
 
@@ -34,8 +34,8 @@ with no driver, or licensed dependency, at all.
 ## Lineage (FE-04)
 
 This tree has no reachable canonical `uqf_airflow_provider` to port from.
-The format this package reads is the one `scripts/torq_pipeline.q` and
+The format this package reads is the one `src/etl/core/status.q` and
 `python/uqf_frontend/src/uqf_frontend/status.py` already define and share;
 this package is a second reader of that same contract, kept honest by
-`tests/test_translate.py` parsing `scripts/torq_pipeline.q` directly, the
+`tests/test_translate.py` parsing `src/etl/core/status.q` directly, the
 same technique `uqf_frontend/tests/test_status.py` uses.

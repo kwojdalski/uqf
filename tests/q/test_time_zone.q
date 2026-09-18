@@ -14,7 +14,7 @@
 // for the type: a test that proves the trap exists has to build the value
 // the trap needs. The checker is scoped to non-test files for exactly this.
 //
-// Load scripts/torq_pipeline.q, src/etl/core/coverage.q,
+// Load src/etl/core/status.q, src/etl/core/coverage.q,
 // src/etl/core/worker_runtime.q, src/etl/core/source_contract.q,
 // src/etl/sources/demo_deals.q, tests/lib/qunit.q and tests/lib/testutil.q
 // before this file.

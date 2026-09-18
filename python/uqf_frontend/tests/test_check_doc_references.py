@@ -112,7 +112,7 @@ def test_an_unknown_namespace_is_counted_not_flagged(scan):
     # It cannot be confirmed OR denied, so reporting it as missing would be a
     # claim the gate cannot support. It is counted instead, so the blind spot
     # stays visible rather than passing silently.
-    problems, unverifiable = scan("`.qpipe.status_dir[]` and `.qpipe.publish`\n")
+    problems, unverifiable = scan("`.qpipe.safe_timer[]` and `.qpipe.publish`\n")
     assert problems == []
     assert unverifiable == {".qpipe": 2}
 

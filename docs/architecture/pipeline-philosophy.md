@@ -215,7 +215,52 @@ But a declaration *registers itself as it loads*, which is why
 have a declaration without its implementation, or a registry entry describing
 something that is not there.
 
-## 10. This repository is public, and the real sources are not.
+## 10. Two frameworks, one adapter, and the adapter is the only thing that knows TorQ.
+
+There are two kinds of ETL process here, and they are deliberately *two*
+frameworks of the same shape rather than one framework with a flag:
+
+| | bounded (batch) | streaming |
+|---|---|---|
+| framework | `.qbw` — `core/bounded_worker.q` | `.qstream` — `core/stream_job.q` |
+| an instance | `.qwrk.<worker>`, `workers/` | `.qsub.<job>`, `streaming/` |
+| declaration | `.qbw.define[name; source dataset width transform …]` | `.qstream.register[name; procname subscribes publishes on_batch on_timer …]` |
+| runner | `scripts/torq_backfill.q` | `scripts/torq_stream.q` |
+| lifecycle | init → plan → fetch → transform → publish → cover → **done** | wire `publish` → subscribe → `on_batch` per tick, `on_timer` per period → **forever** |
+
+A bounded worker covers a stated range and finishes, so it can carry a
+contract (`.qbfstate.require_contract`) and a coverage claim. A streaming
+job never finishes, so it carries neither (§2: state the weakest guarantee
+that is true — for a tailer that is freshness, not completion). Forcing the
+two under one abstraction would give every instance a lifecycle half of
+which is null. The instance namespace is derived from the name in both
+(`.qwrk.x`, `.qsub.x`), and an instance file is its own logic plus one
+declaration: on the bounded side `define` stamps the inherited lifecycle
+methods into the namespace (#227), on the streaming side the declaration
+carries the callbacks and the runner wires only `publish`.
+
+**Nothing under `src/etl/` knows TorQ exists** (bank B-09). That is what
+lets a worker or job load in a plain q process and be tested with a
+recorder in place of a tickerplant. The one namespace allowed to know TorQ
+is `.qpipe` (`scripts/torq_pipeline.q`), the adapter: find the tickerplant,
+open the access-listed handle, reshape rows for `.u.upd`, trap a timer so it
+is not silently deactivated. It is called by the runners and by nothing in
+`src/`. The arrow points one way — `src/` never reaches into `scripts/` —
+and the day it pointed the other way the symptom was a try-with-fallback
+around `.qpipe.status_dir` in `backfill_state.q`, guarding against a
+namespace that might not be loaded (#229). A dependency you have to guard
+against being absent is a dependency pointing the wrong way.
+
+What both halves share and the outside world reads — the status file the
+Airflow sensor and the frontend poll — lives in `core/status.q`
+(`.qstatus`), not in the adapter, because it is not TorQ plumbing: it is a
+cross-repository contract, and its header names its readers.
+
+*Enforced by* `scripts/check_etl_layering.py`, twice: `core/` may not
+reference a declaring namespace (§9), and nothing under `src/etl/` may
+reference `.qpipe`.
+
+## 11. This repository is public, and the real sources are not.
 
 Every source, dataset and table here is a generic analogue — `demo_deals`,
 `demo_events`, `event_tape`. No bank table name, hostname, schema shape or
