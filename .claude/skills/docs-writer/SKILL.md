@@ -58,12 +58,25 @@ Use for: Garman-Kohlhagen (`options.q`), CIRP forwards (`forwards.q`), VaR (`ris
 
 ## Composition
 
-```mermaid
-flowchart TD
-    INPUT["Inputs: <spot/rd/rf/t or bid_prices/ask_sizes/...>"] --> FN["<qf function name>"]
-    FN --> HELPER1["<internal helper called, if any>"]
-    FN --> OUTPUT["Output: <price/greek/table shape>"]
+<!-- Diagrams are d2, rendered to a committed SVG. Write the source to
+     docs/diagrams/<topic>.d2, run `python3 scripts/generate/render_diagrams.py`,
+     and embed the .svg here. Never paste mermaid, and never hand-edit an
+     .svg: CI re-renders and compares (`render_diagrams.py --check`). -->
+
+docs/diagrams/<topic>.d2:
+
 ```
+direction: down
+input: "Inputs: <spot/rd/rf/t or bid_prices/ask_sizes/...>"
+fn: "<qf function name>"
+helper: "<internal helper called, if any>"
+output: "Output: <price/greek/table shape>"
+input -> fn
+fn -> helper
+fn -> output
+```
+
+![<what the reader should see>](../diagrams/<topic>.svg)
 
 ## Math Summary
 
@@ -110,11 +123,18 @@ One paragraph: what this workflow does, when to use it, and what it produces.
 
 ## Workflow Diagram
 
-```mermaid
-flowchart TD
-    A["Entry point: .q<abbrev>.<fn>"] --> B["..."]
-    B --> C["..."]
+docs/diagrams/<topic>-workflow.d2, embedded as an SVG (see above):
+
 ```
+direction: down
+a: "Entry point: .q<abbrev>.<fn>"
+b: "..."
+c: "..."
+a -> b
+b -> c
+```
+
+![<what the reader should see>](../diagrams/<topic>-workflow.svg)
 
 ## Component Details
 
@@ -191,13 +211,20 @@ One paragraph: what this component does, where it sits in the library, and why i
 
 ## Architecture Diagram
 
-```mermaid
-flowchart TD
-    INPUT["Input"] --> COMP["<Component>"]
-    COMP --> OUTPUT["Output"]
+docs/diagrams/<topic>-architecture.d2, embedded as an SVG (see above):
 
-    COMP -.->|depends on| DEP["<other src/*.q module>"]
 ```
+direction: down
+input: "Input"
+comp: "<Component>"
+output: "Output"
+dep: "<other src/*.q module>"
+input -> comp
+comp -> output
+comp -> dep: "depends on" { style.stroke-dash: 4 }
+```
+
+![<what the reader should see>](../diagrams/<topic>-architecture.svg)
 
 ## Functions
 

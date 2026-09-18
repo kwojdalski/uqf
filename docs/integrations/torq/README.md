@@ -8,12 +8,15 @@ it). Reflects what `uqf-stack list processes` shows today: the vendored
 `markout1`), and two bounded backfill processes (`deals_backfill1`,
 `events_backfill1`).
 
-**The backfills are not in the diagrams below, deliberately.** Those draw the
-streaming dataflow — who publishes to the tickerplant and who subscribes — and
-a backfill does neither: it reads an external source and writes its target
-table directly. It appears in `uqf-stack list processes` and, once started, in
-discovery, but drawing it on a tickerplant diagram would put an edge where
-there is none.
+**The backfills are on the topology diagram but have no edge to the
+tickerplant, and that is the point.** They were left off entirely at first,
+on the reasoning that a backfill neither publishes to the tickerplant nor
+subscribes — it reads an external source and writes its target table
+directly — so drawing one would put an edge where there is none. True, but
+their absence read as an omission rather than as a fact: a reader counting
+processes found eleven in `uqf-stack list processes` and nine in the
+picture. They now sit in their own band, with no edge and with the reason
+written on the box.
 
 They are declared processes so that **starting one wires it to discovery**:
 TorQ registers a declared process at startup, so a running backfill is visible
@@ -37,89 +40,40 @@ Who connects to whom over IPC. Solid arrows are `.u.upd` publishes or
 `.sub.subscribe` subscriptions (real data flow); dashed arrows are
 discovery/registration only.
 
-```mermaid
-flowchart LR
-    disc["discovery1<br/>:6051"]
+<!-- Source: docs/diagrams/stack-topology.d2. Rendered by
+     scripts/generate/render_diagrams.py, which CI runs with --check.
+     Do not edit the .svg. -->
 
-    subgraph tp["Tickerplant"]
-        stp["stp1<br/>segmentedtickerplant<br/>:6050"]
-        sctp["sctp1<br/>chained TP<br/>:6065"]
-    end
+![Who connects to whom in the running stack: the uqf streaming jobs, the one runner they share, the tickerplant, and storage](../../diagrams/stack-topology.svg)
 
-    subgraph feeds["Feeds (publish only, self-managed handle)"]
-        feed1["feed1<br/>vendored equity<br/>:6064"]
-        fxfeed1["fxfeed1<br/>uqf FX<br/>:6069"]
-        quotesfeed1["quotesfeed1<br/>uqf depth-aware FX<br/>:6074"]
-        widefeed1["widefeed1<br/>uqf wide book<br/>:6076"]
-        fxtradesfeed1["fxtradesfeed1<br/>uqf synthetic fills<br/>:6079"]
-    end
+Two different connection patterns coexist, deliberately - **and since #204
+no job performs either one itself**. A streaming job declares `subscribes`
+and `publishes`; `.qpipe` opens whichever handle that implies, and
+`scripts/processes/torq_stream.q` wires the job's `publish` to it. The
+patterns are still worth knowing, because they are why some processes need
+a credential and some do not:
 
-    subgraph etl["uqf ETL (subscribe + republish, credentialed)"]
-        cross1["cross1<br/>cross-rate reprice<br/>:6075"]
-        vectorize1["vectorize1<br/>wide->vector fold<br/>:6077"]
-        posbook1["posbook1<br/>position/PnL from fills<br/>:6080"]
-        markout1["markout1<br/>execution-quality markouts<br/>:6081"]
-        tap1["tap1<br/>subscribe-and-log tap<br/>(tables chosen at runtime)<br/>:6078"]
-    end
-
-    subgraph storage["Storage"]
-        rdb1["rdb1<br/>:6052"]
-        wdb1["wdb1<br/>:6055"]
-        sort1["sort1<br/>:6056"]
-        sw["sortworker1/2<br/>:6066/6067"]
-        hdb1["hdb1<br/>:6053"]
-        hdb2["hdb2<br/>:6054"]
-    end
-
-    gw["gateway1<br/>:6057"]
-    ops["housekeeping1 :6061<br/>metrics1 :6068"]
-
-    feed1 -->|"upd quote/trade"| stp
-    fxfeed1 -->|"upd quote"| stp
-    quotesfeed1 -->|"upd quotes"| stp
-    widefeed1 -->|"upd wide_book"| stp
-    fxtradesfeed1 -->|"upd trades"| stp
-    vectorize1 -->|"upd mkt_orderbook<br/>(2nd, unauth handle)"| stp
-    posbook1 -->|"upd position<br/>(2nd, unauth handle)"| stp
-    markout1 -->|"upd execution_quality<br/>(2nd, unauth handle)"| stp
-
-    stp -->|"subscribeto: all tables<br/>(default)"| rdb1
-    stp -->|"sub.subscribe quotes"| cross1
-    stp -->|"sub.subscribe wide_book"| vectorize1
-    stp -->|"sub.subscribe trades,quote"| posbook1
-    stp -->|"sub.subscribe trades,quote"| markout1
-    sctp -.->|"chained from"| stp
-
-    rdb1 -->|"EOD writedown"| wdb1
-    wdb1 --> sort1
-    sort1 --> sw
-    wdb1 -->|"reload"| hdb1
-    wdb1 -->|"reload"| hdb2
-
-    gw --> rdb1
-    gw --> hdb1
-    gw --> hdb2
-
-    disc -.->|register| stp
-    disc -.->|register| rdb1
-    disc -.->|register| gw
-    disc -.->|register| etl
-```
-
-Two different connection patterns coexist, deliberately:
-
-- **Feeds** (`feed1`/`fxfeed1`/`quotesfeed1`/`widefeed1`) only ever
-  *publish*. They find the tickerplant via
-  `.servers.gethandlebytype[\`segmentedtickerplant;\`any]` - a
-  self-managed handle, no credentials, no `.servers.startup[]`.
-- **ETL processes** (`cross1`/`vectorize1`) *subscribe*, which needs a
+- **Publish only** (`fxfeed1`/`quotesfeed1`/`widefeed1`/`fxtradesfeed1`,
+  and the vendored `feed1`) needs no credential: `.qpipe.feed_handle`
+  finds the tickerplant with
+  `.servers.gethandlebytype[\`segmentedtickerplant;\`any]` and that is a
+  self-managed handle, no `.servers.startup[]`.
+- **Subscribing** (`cross1`/`vectorize1`/`posbook1`/`markout1`) needs a
   real `.servers`-managed, access-listed handle -
-  `.servers.startup[]` against `accesslist.txt`. Both borrow the
-  already-credentialed `metrics` proctype rather than adding a new
-  password file to the vendored tree (see `core.py`'s `add_extra_process`
-  comments). `vectorize1` additionally opens a *second*, self-managed
-  publish handle (same kind feeds use) to republish its output - one
-  process, two connection styles, for two different jobs.
+  `.qpipe.subscribe_etl` runs `.servers.startup[]` against
+  `accesslist.txt`. They borrow the already-credentialed `metrics`
+  proctype rather than adding a password file to the vendored tree (see
+  `core.py`'s `add_extra_process` comments).
+
+A job that both subscribes and republishes - `vectorize1`, `posbook1`,
+`markout1` - needs both, and gets both from the same runner. That used to
+be something each script arranged for itself, which is what made the eight
+of them near-copies.
+
+`tap1` is the one process still running its own script
+(`scripts/processes/torq_tap.q`): it chooses its tables at runtime rather
+than declaring them, which is exactly what a `.qstream` declaration cannot
+express.
 
 ## Data pipeline: table by table
 
@@ -127,43 +81,9 @@ What each process actually reads and writes, and where the two uqf ETL
 processes diverge - one publishes its output back onto the tickerplant
 (a real, persisted table), the other keeps it private to the process.
 
-```mermaid
-flowchart TD
-    fxfeed1["fxfeed1"] -->|writes| quote[("quote<br/>(vendored schema)")]
-    feed1["feed1"] -->|writes| quote
-    feed1 -->|writes| trade[("trade<br/>(vendored schema)")]
+<!-- Source: docs/diagrams/stack-dataflow.d2. -->
 
-    quotesfeed1["quotesfeed1"] -->|writes| quotes[("quotes<br/>time,sym,bid/ask_prices,bid/ask_sizes")]
-    widefeed1["widefeed1"] -->|writes| wide_book[("wide_book<br/>time,sym,bids0..10,asks0..10")]
-
-    quotes -->|"sub.subscribe"| cross1["cross1<br/>.qfwd.cross_book_at"]
-    cross1 -->|"private, in-process only<br/>(never written to stp1)"| cross_quotes["cross_quotes<br/>(cross1's own memory)"]
-
-    wide_book -->|"sub.subscribe"| vectorize1["vectorize1<br/>.qbook.book_from_wide_levels"]
-    vectorize1 -->|"republished via upd"| mkt_orderbook[("mkt_orderbook<br/>time,sym,bid/ask_prices")]
-
-    fxtradesfeed1["fxtradesfeed1"] -->|writes| trades[("trades<br/>time,sym,side,trade_price,size,pip_factor")]
-    trades -->|"sub.subscribe"| posbook1["posbook1<br/>.qpos.apply_fill + .qrisk.pnl"]
-    quote -->|"sub.subscribe<br/>(mark-to-mid)"| posbook1
-    posbook1 -->|"republished via upd"| position[("position<br/>time,sym,qty,avg_price,realized_pnl,<br/>mark_price,unrealized_pnl,total_pnl")]
-
-    trades -->|"sub.subscribe<br/>(buffered)"| markout1["markout1<br/>.qexec.markout_at_horizons<br/>(1s timer)"]
-    quote -->|"sub.subscribe<br/>(buffered)"| markout1
-    markout1 -->|"republished via upd"| execution_quality[("execution_quality<br/>time,sym,trade_time,horizon,<br/>trade_price,ref_price,markout_pips")]
-
-    quote --> rdb1[("rdb1<br/>(today's ticks, in memory)")]
-    trade --> rdb1
-    quotes --> rdb1
-    wide_book --> rdb1
-    mkt_orderbook --> rdb1
-    trades --> rdb1
-    position --> rdb1
-    execution_quality --> rdb1
-
-    rdb1 -->|EOD writedown| hdb[("hdb1/hdb2<br/>(on-disk history)")]
-
-    style cross_quotes stroke-dasharray: 5 5
-```
+![Which process writes which table, and which of those tables is persisted rather than private to its process](../../diagrams/stack-dataflow.svg)
 
 `posbook1` and `markout1` are the two processes in this stack that run
 uqf's actual eFX business logic (position/PnL and execution quality, not
@@ -198,25 +118,9 @@ vendored file fresh, generate an extended copy, point the real process at
 the copy - the vendored `lib/torq-finance-starter-pack/appconfig/process.csv`
 and `database.q` are never written to.
 
-```mermaid
-flowchart LR
-    vendored_csv["vendored<br/>appconfig/process.csv"]
-    vendored_schema["vendored<br/>database.q"]
-    overrides["process_overrides.csv<br/>(config-set)"]
-    extra_procs["extra_processes.csv<br/>(new-process wizard)"]
-    extra_schema["extra_schema.q<br/>(new-process wizard)"]
+<!-- Source: docs/diagrams/config-generation.d2. -->
 
-    vendored_csv --> base["_base_process_rows()<br/>+ fxfeed1/quotesfeed1/<br/>cross1/widefeed1/vectorize1"]
-    extra_procs --> base
-    overrides -->|"field overrides<br/>applied on top"| gen_csv
-    base --> gen_csv["generated<br/>scripts/output/uqf-stack/<br/>process.csv"]
-
-    vendored_schema --> gen_schema["generated<br/>scripts/output/uqf-stack/<br/>database.q"]
-    extra_schema --> gen_schema
-
-    gen_csv -->|"stp1's -schemafile<br/>repointed at"| gen_schema
-    gen_csv -->|"read by"| torqsh["lib/torq/torq.sh<br/>(every start/stop/summary)"]
-```
+![The vendored process.csv and database.q read fresh on every command, extended, and written to generated copies the stack actually runs on](../../diagrams/config-generation.svg)
 
 `bootstrap()` (`python/torq_orchestrator/src/torq_orchestrator/core.py`)
 regenerates both files on every command - `start`, `stop`, `summary`,
