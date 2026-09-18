@@ -1,0 +1,149 @@
+# fx-positions-service.d2 - the FX positions service on stock kdb+.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/architecture/fx-positions-service.md.
+#
+# WHAT THIS DIAGRAM IS FOR. The thing worth seeing is the SEAM, not the
+# boxes: every job in this tree calls `publish` in its own namespace, and
+# something else decides what that means. Until run_stream.q the only
+# thing that ever decided was TorQ, so "the jobs are TorQ-free" was a
+# claim about the source tree rather than about running one. The two
+# runners are drawn side by side against the same seam because that is
+# the whole argument - the job files below the seam are identical on both
+# paths, and nothing in them knows which runner started them.
+#
+# The dashed edge back from the log to the service is deliberately not
+# the same kind of arrow as the live ones: it is traversed once, at
+# startup, BEFORE the subscription exists. Drawing it as just another
+# input would hide the ordering the recovery depends on.
+
+direction: down
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+# Same palette as repo-overview.d2 and stack-topology.d2, so the set reads
+# as one system: light fills with dark text in both themes rather than a
+# --dark-theme pairing, which d2 still applies explicit styles over
+# (d2lang/d2#831).
+classes: {
+  feed: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  job: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  plant: {
+    style: {
+      fill: "#fbeef0"
+      stroke: "#a54a5c"
+      font-color: "#5f1f2c"
+      border-radius: 6
+    }
+  }
+  table: {
+    style: {
+      fill: "#eef3fb"
+      stroke: "#4a6fa5"
+      font-color: "#1e3a5f"
+      border-radius: 6
+    }
+  }
+  store: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+    }
+  }
+  lib: {
+    style: {
+      fill: "#f4f1ea"
+      stroke: "#8a7f6a"
+      font-color: "#3d3527"
+      border-radius: 6
+    }
+  }
+  band: {
+    style: {
+      fill: "#fbfcfd"
+      stroke: "#c3c9cf"
+      font-color: "#25323d"
+      stroke-width: 2
+      border-radius: 10
+    }
+  }
+}
+
+runners: "the publish seam — a job never chooses its own transport" {
+  class: band
+  grid-columns: 2
+  grid-gap: 30
+
+  standalone: "run_stream.q\n.qproc.standalone\nstock kdb+, no lib/torq" { class: plant }
+  torq: "torq_stream.q\n.qproc.stream\nthe TorQ stack" { class: lib }
+}
+
+pipeline: "the service — one file per step, none of them aware of a runner" {
+  class: band
+  grid-columns: 3
+  grid-gap: 26
+
+  feed: "fx_orders_feed\norder flow: new, filled,\ncancelled, rejected" { class: feed }
+  plant: ".qtick\nsubscribe · publish\nlog · replay" { class: plant }
+  service: "fx_positions\nnets FILLED orders\nsnapshots every 5s" { class: job }
+}
+
+state: "what the service holds and what it emits" {
+  class: band
+  grid-columns: 3
+  grid-gap: 26
+
+  book: "the book\nkeyed (sym, book, product)\nbase_qty · quote_qty" { class: table }
+  snapshot: "fx_position\nthe whole book,\nnot only what moved" { class: table }
+  breach: "fx_limit_breach\none row per limit\nNEWLY crossed" { class: table }
+}
+
+log: "tickerplant log — one file a day" { class: store }
+
+modules: "the pure modules underneath — no state, no clock, no sockets" {
+  class: band
+  grid-columns: 2
+  grid-gap: 26
+
+  desk: ".qdesk\nnets fills along\ndeclared dimensions" { class: job }
+  limit: ".qlimit\ncaps · breaches ·\nalert throttling" { class: job }
+}
+
+runners.standalone -> pipeline.plant: "wires publish"
+runners.torq -> pipeline.plant: "wires publish\n(to TorQ's own plant)" { style.stroke-dash: 4 }
+
+pipeline.feed -> pipeline.plant: "orders"
+pipeline.plant -> pipeline.service: "subscribe"
+pipeline.plant -> log: "log, then send"
+
+log -> pipeline.service: "replay on restart,\nBEFORE subscribing" { style.stroke-dash: 4 }
+
+pipeline.service -> state.book: "net the filled ones"
+state.book -> state.snapshot: "on the timer"
+state.book -> state.breach: "when a cap is crossed,\nonce per alert period"
+
+state.snapshot -> pipeline.plant: "republish"
+state.breach -> pipeline.plant: "republish"
+
+pipeline.service -> modules.desk: "apply_fills"
+pipeline.service -> modules.limit: "measure · evaluate · throttle"

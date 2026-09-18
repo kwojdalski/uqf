@@ -68,6 +68,7 @@
 \l src/etl/core/bounded_worker.q
 \l src/etl/core/stream_job.q
 \l src/etl/core/normalizer.q
+\l src/etl/core/tick.q
 
 / The invented market the demo's feeds publish and its jobs consume. Before
 / the core declarations, because a job filters on .qsynth.pairs.
@@ -99,8 +100,10 @@
 / the feeds that produce their sources, before the jobs that consume them.
 \l src/etl/streaming/executions.q
 \l src/etl/streaming/marks.q
+\l src/etl/streaming/fx_orders_feed.q
 \l src/etl/streaming/markout.q
 \l src/etl/streaming/cross.q
 \l src/etl/streaming/posbook.q
 \l src/etl/streaming/vectorize.q
 \l src/etl/streaming/databento_book.q
+\l src/etl/streaming/fx_positions.q

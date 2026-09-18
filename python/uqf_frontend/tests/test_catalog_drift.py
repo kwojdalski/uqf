@@ -137,6 +137,9 @@ _TICKERPLANT_TABLES = [
     "databento_book",
     "executions",
     "marks",
+    "orders",
+    "fx_position",
+    "fx_limit_breach",
 ]
 
 #: Tickerplant tables the desk catalog deliberately does NOT carry, with the

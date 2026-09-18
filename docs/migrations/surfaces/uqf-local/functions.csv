@@ -197,6 +197,13 @@ qdcf,dcf_30e_360,function,2,d1 d2
 qdcf,dcf_act_360,function,2,d1 d2
 qdcf,dcf_act_365,function,2,d1 d2
 qdcf,year_frac,function,3,conv d1 d2
+qdesk,apply_fills,function,2,book batch
+qdesk,break_even,function,1,book
+qdesk,ccy_exposure,function,2,book group_cols
+qdesk,dimensions,function,1,book
+qdesk,empty_book,function,1,dims
+qdesk,required_cols,value,,
+qdesk,rollup,function,2,book group_cols
 qdqc,check_ccy_exposure_limits,function,2,exposure limits
 qdqc,check_limit,function,3,metrics limits key_col
 qdqc,check_market_data_quality,function,2,quotes max_spread_bps
@@ -324,6 +331,17 @@ qio,required,value,,
 qio,write,function,3,mgr target batch
 qio,write_discard,function,2,target batch
 qio,write_memory,function,2,target batch
+qlimit,evaluate,function,2,measured limits
+qlimit,identity,function,1,scopes
+qlimit,measure,function,2,book metrics
+qlimit,no_alerts,function,1,
+qlimit,non_scope_cols,value,,
+qlimit,require_limits,function,1,limits
+qlimit,required_limit_cols,value,,
+qlimit,required_measured_cols,value,,
+qlimit,scope_cols,function,1,limits
+qlimit,throttle,function,4,state breaches now period
+qlimit,unmatched_limits,function,2,measured limits
 qlog,dbg,function,3,id text fields
 qlog,debug,function,1,on
 qlog,debug_enabled,value,,
@@ -636,6 +654,32 @@ qsub.fx_feed,on_timer,function,1,
 qsub.fx_feed,publish,value,,
 qsub.fx_feed,spot,value,,
 qsub.fx_feed,tick_rows,function,1,levels
+qsub.fx_orders_feed,books,value,,
+qsub.fx_orders_feed,last_id,value,,
+qsub.fx_orders_feed,on_timer,function,1,
+qsub.fx_orders_feed,order_rows,function,8,id i bk pr side size status slip_pips
+qsub.fx_orders_feed,pip_factor,value,,
+qsub.fx_orders_feed,products,value,,
+qsub.fx_orders_feed,publish,value,,
+qsub.fx_orders_feed,sizes,value,,
+qsub.fx_orders_feed,statuses,value,,
+qsub.fx_positions,alert_period,value,,
+qsub.fx_positions,alerts,dict,,
+qsub.fx_positions,book,dict,,
+qsub.fx_positions,desk_book,table,,
+qsub.fx_positions,dimensions,value,,
+qsub.fx_positions,filled_status,value,,
+qsub.fx_positions,fresh_breaches,function,1,now
+qsub.fx_positions,fx_limit_breach,table,,
+qsub.fx_positions,fx_position,table,,
+qsub.fx_positions,limits,table,,
+qsub.fx_positions,load_limits,function,1,t
+qsub.fx_positions,net_orders,function,2,book batch
+qsub.fx_positions,on_batch,function,2,tbl batch
+qsub.fx_positions,on_timer,function,1,
+qsub.fx_positions,orders,table,,
+qsub.fx_positions,policed,value,,
+qsub.fx_positions,publish,value,,
 qsub.fx_trades_feed,fill_rows,function,4,i side size slip_pips
 qsub.fx_trades_feed,on_timer,function,1,
 qsub.fx_trades_feed,pip_factor,value,,
@@ -699,6 +743,23 @@ qsynth,pairs,value,,
 qsynth,pip,value,,
 qsynth,size_unit,value,,
 qsynth,spot,value,,
+qtick,can_send,function,1,sink
+qtick,fan_out,function,2,name batch
+qtick,learn,function,2,tbl stamped
+qtick,log_handle,value,,
+qtick,log_path,value,,
+qtick,msg_count,value,,
+qtick,open_log,function,3,dir name dt
+qtick,publish,function,2,tbl rows
+qtick,record,function,1,msg
+qtick,replay,function,2,path handler
+qtick,require_batch,function,2,tbl rows
+qtick,reset,function,1,
+qtick,schema,function,2,tbl empty
+qtick,schemas,dict,,
+qtick,subscribe,function,2,want sink
+qtick,subscribers,table,,
+qtick,unsubscribe,function,1,sink
 qwcfg,default_values,dict,,
 qwcfg,env_name,function,1,k
 qwcfg,env_values,dict,,
