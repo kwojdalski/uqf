@@ -186,14 +186,14 @@ test_hit_ratio_by_daily_bucket_no_other_grouping:{[t]
 test_hit_ratio_by_rejects_bad_mode:{[t]
     requests:mk_hit_ratio_requests[::];
     t0:2026.01.01D08:00:00.000000000;
-    wrapper:{[q] .qexec.hit_ratio_by[q;t0;t0+2D;0Nn;enlist `sym;`bogus]};
+    wrapper:{[q;t0] .qexec.hit_ratio_by[q;t0;t0+2D;0Nn;enlist `sym;`bogus]}[;t0];
     .qunit.assertError[wrapper;requests;"mode must be `count or `amount is rejected"]};
 
 test_hit_ratio_by_rejects_requests_missing_a_column:{[t]
     requests:mk_hit_ratio_requests[::];
     bad:delete size from requests;
     t0:2026.01.01D08:00:00.000000000;
-    wrapper:{[q] .qexec.hit_ratio_by[q;t0;t0+2D;0Nn;enlist `sym;`amount]};
+    wrapper:{[q;t0] .qexec.hit_ratio_by[q;t0;t0+2D;0Nn;enlist `sym;`amount]}[;t0];
     .qunit.assertError[wrapper;bad;"a requests table missing a required column is rejected immediately"]};
 
 test_vwap_known_example:{[t] .testutil.assertApprox[.qexec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000];1.100625;1e-9;"size-weighted average across three fills"]};

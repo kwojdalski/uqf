@@ -341,7 +341,7 @@ validate_fixture:{[source] validate[source;(declaration[source]`fixture)[]]}
 validate_live:{[source;h]
     decl:declaration source;
     m:@[{[handle;tbl] handle({0!meta x};tbl)}[h];decl`table;
-        {'"validate_live: cannot read metadata for ",string[decl`table]," (",x,")"}];
+        {[tbl;err] '"validate_live: cannot read metadata for ",string[tbl]," (",err,")"}[decl`table;]];
     present:exec c from m;
     chars:exec t from m;
     missing:decl[`fields] where not decl[`fields] in present;
