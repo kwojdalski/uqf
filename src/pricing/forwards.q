@@ -693,12 +693,14 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
 
 / Decompose a synthetic cross pair's price move between two times into
 / exact per-leg contributions, by revaluing one leg at a time - in the
-/ chain's own order (cross_decomp) - from its t0 price to its t1 price,
-/ and attributing each step's resulting price change to that leg. This
+/ chain's own order (cross_decomp) - from its t0 book to its t1 book,
+/ and attributing each step's resulting cross-mid change to that leg. Each
+/ step reprices the full cross book, including bid/ask inversion and
+/ bridge-currency depth, with the same primitives as cross_book_at. This
 / is exact (contribution_pips sums exactly to
 / pip_factor*(cross_mid[t1]-cross_mid[t0]), not an approximation), but it
 / is ORDER-DEPENDENT: attributing leg 2's move happens with leg 1 already
-/ held at its t1 price, so which leg "gets credit" for a move that
+/ held at its t1 book, so which leg "gets credit" for a move that
 / happens to coincide with another leg's move depends on chain order -
 / a well-known property of any sequential/waterfall-style attribution,
 / not a bug.
@@ -707,9 +709,12 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
 / @param t0 the earlier reference time
 / @param t1 the later reference time
 / @param pip_factor 10000 for most pairs, 100 for JPY crosses
-/ @param ref_size the (typically negligible) size to sweep for each
-/   leg's own reference price at t0/t1 (see cross_ref_price_at)
+/ @param ref_size the size to sweep in the cross pair's base currency;
+/   also used for the standalone leg mids reported in price_t0/price_t1
 / @return a table, one row per leg in chain order: `leg`invert`price_t0`price_t1`contribution_pips
+/   price_t0/price_t1 are standalone leg mids in their original quote
+/   convention. Contributions are all null if any endpoint leg mid is
+/   unavailable, because the complete cross cannot then be attributed.
 / @throws error if quotes is missing a required column, isn't sorted
 /   `sym`ts xasc (checked explicitly here rather than left to leak out of
 /   cross_ref_price_at's protective error handling as a misleading null -
@@ -729,17 +734,22 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
     n:count path;
     price_t0:cross_ref_price_at[quotes;;t0;ref_size] each path;
     price_t1:cross_ref_price_at[quotes;;t1;ref_size] each path;
-    oriented_t0:?[inverts;1%price_t0;price_t0];
-    oriented_t1:?[inverts;1%price_t1;price_t1];
-    running:oriented_t0;
-    contributions:n#0f;
-    i:0;
-    while[i<n;
-        before:prd running;
-        running[i]:oriented_t1 i;
-        after:prd running;
-        contributions[i]:after-before;
-        i+:1];
+    contributions:n#0n;
+    if[not any null price_t0,price_t1;
+        price_books:{[cross_sym;path;ref_size;books]
+            $[1=count path;
+                (single_leg_at_one_size[cross_sym;books 0;not (path 0)~cross_sym;ref_size])`mid;
+                (cross_book_chain_at_one_size[path;books;ref_size])`mid]};
+        running:leg_book_as_of[quotes;t0;] each path;
+        end_books:leg_book_as_of[quotes;t1;] each path;
+        before:price_books[cross_sym;path;ref_size;running];
+        i:0;
+        while[i<n;
+            running[i]:end_books i;
+            after:price_books[cross_sym;path;ref_size;running];
+            contributions[i]:after-before;
+            before:after;
+            i+:1]];
     ([] leg:path; invert:inverts; price_t0; price_t1; contribution_pips:pip_factor*contributions)};
 
 / Market-impact check: did a trade in traded_sym coincide with a price
