@@ -555,6 +555,62 @@ test_cross_markout_decomp_flat_leg_contributes_zero:{[t]
     eurusd_row:first select from decomp where leg=`EURUSD;
     .testutil.assertApprox[eurusd_row`contribution_pips;0f;1e-6;"EURUSD didn't move between t0 and t1, so it contributes exactly zero"]};
 
+test_cross_markout_decomp_reprices_bridge_depth:{[t]
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    quotes:([] ts:t0,t1,t0,t1; sym:`EURUSD`EURUSD`USDJPY`USDJPY;
+        bid_prices:(enlist 1.1;enlist 1.2;150 150f;150 150f);
+        bid_sizes:(enlist 100f;enlist 100f;1 100f;1 100f);
+        ask_prices:(enlist 1.1;enlist 1.2;150 151f;150 151f);
+        ask_sizes:(enlist 100f;enlist 100f;1 100f;1 100f));
+    r:.qfwd.cross_markout_decomp[quotes;`EURJPY;t0;t1;100;1];
+    / EURUSD's move increases the USDJPY sweep from 1.1 to 1.2 USD.
+    / Cross bid/ask: 165/165.1 -> 180/180.2, so mid moves 15.05.
+    .testutil.assertApprox[r`contribution_pips;1505 0f;1e-9;"EURUSD's contribution includes its effect on the bridge sweep; the unchanged USDJPY book contributes zero"];
+    before:.qfwd.cross_ref_price_at[quotes;`EURJPY;t0;1];
+    after:.qfwd.cross_ref_price_at[quotes;`EURJPY;t1;1];
+    .testutil.assertApprox[sum r`contribution_pips;100*(after-before);1e-9;"attribution reconciles with the actual depth-aware cross move"]};
+
+test_cross_markout_decomp_attributes_spread_moves_with_flat_leg_mids:{[t]
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    quotes:([] ts:t0,t1,t0,t1; sym:`EURUSD`EURUSD`USDJPY`USDJPY;
+        bid_prices:enlist each 1.0 0.9 149 148f;
+        bid_sizes:4#enlist enlist 1000000f;
+        ask_prices:enlist each 1.2 1.3 151 152f;
+        ask_sizes:4#enlist enlist 1000000f);
+    r:.qfwd.cross_markout_decomp[quotes;`EURJPY;t0;t1;100;1];
+    .qunit.assertEquals[r`price_t0;r`price_t1;"both descriptive leg mids remain unchanged"];
+    / Full-book midpoint: 165.1 -> 165.2 after EURUSD -> 165.4 after USDJPY.
+    .testutil.assertApprox[r`contribution_pips;10 20f;1e-9;"spread changes affect the cross mid despite unchanged standalone leg mids"];
+    .qunit.assertEquals[r`leg;`EURUSD`USDJPY;"the waterfall follows the currency path"]};
+
+test_cross_markout_decomp_prices_inverted_single_leg_book:{[t]
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    quotes:([] ts:t0,t1; sym:2#`EURUSD;
+        bid_prices:enlist each 1.0 0.9;
+        bid_sizes:2#enlist enlist 1000000f;
+        ask_prices:enlist each 1.2 1.3;
+        ask_sizes:2#enlist enlist 1000000f);
+    r:.qfwd.cross_markout_decomp[quotes;"usd/eur";t0;t1;10000;1];
+    expected:10000*((110%117)-(11%12));
+    .testutil.assertApprox[first r`contribution_pips;expected;1e-9;"USDEUR uses the midpoint of inverted bid and ask, not the reciprocal EURUSD midpoint"];
+    .qunit.assertEquals[r`invert;enlist 1b;"the direct quote is inverted for USDEUR"];
+    direct:.qfwd.cross_markout_decomp[quotes;`EURUSD;t0;t1;10000;1];
+    .testutil.assertApprox[first direct`contribution_pips;0f;1e-9;"the directly quoted EURUSD midpoint is unchanged"]};
+
+test_cross_markout_decomp_missing_endpoint_quotes_null_attribution:{[t]
+    t0:2026.01.01D00:00:00.000000000;
+    t1:t0+0D00:00:01;
+    quotes:mk_ts_quotes_table[::];
+    quotes:delete from quotes where sym=`EURUSD,ts=t0;
+    r:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
+    .qunit.assertTrue[all null r`contribution_pips;"an unavailable t0 leg makes the cross attribution undefined"];
+    .qunit.assertTrue[any null r`price_t0;"the missing historical leg retains a null descriptive price"];
+    reverse_r:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t1;t0;10000;1];
+    .qunit.assertTrue[all null reverse_r`contribution_pips;"an unavailable t1 leg also makes attribution undefined"]};
+
 test_cross_markout_decomp_rejects_unreachable_pair:{[t]
     quotes:mk_ts_quotes_table[::];
     t0:2026.01.01D00:00:00.000000000;
