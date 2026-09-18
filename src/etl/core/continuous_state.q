@@ -214,7 +214,7 @@ is_fresh:{[worker;tolerance]
 / An empty page is a SUCCESS with state `idle, not a failure and not an
 / error. A tailer on a quiet source is working correctly, and an orchestrator
 / that cannot tell "nothing new" from "broken" alerts all night on a healthy
-/ process (C-07).
+/ process.
 / @param worker the worker's name
 / @param fetch_page a unary function taking the current cursor and returning
 /   a table - the page after that cursor

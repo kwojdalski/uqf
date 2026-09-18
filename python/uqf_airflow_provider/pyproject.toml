@@ -7,7 +7,7 @@ authors = [
     { name = "Krzysztof Wojdalski", email = "krzysztof.wojdalski@gmail.com" }
 ]
 requires-python = ">=3.14"
-# Deliberately NO apache-airflow dependency (FE-22/FE-23, A-04). This is a
+# Deliberately NO apache-airflow dependency (FE-22/FE-23). This is a
 # public repo and a local single-host demo; a licensed or heavy external
 # dependency cannot be required or the whole path becomes undemonstrable
 # outside a real Airflow install - the same reasoning src/etl/core's

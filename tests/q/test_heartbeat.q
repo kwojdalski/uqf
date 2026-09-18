@@ -1,6 +1,6 @@
 / test_heartbeat.q - the per-worker liveness table (.hbtest).
 / .
-/ K-04, decided by the maintainer: yes, a heartbeat table.
+/ Decided by the maintainer: yes, a heartbeat table.
 / .
 / The test that matters most is the LAST one, which runs a real worker and
 / checks the beat count against windows_completed. The API tests below it

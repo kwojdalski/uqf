@@ -4,7 +4,7 @@
 // nested under a shared .q parent.
 // .
 // Flat namespaces began as a portability constraint and are now a CONVENTION
-// this tree keeps (N-01): one flat .q<abbrev> per file, with the file list as
+// this tree keeps: one flat .q<abbrev> per file, with the file list as
 // the registry. The original constraint is gone, but the convention is load
 // bearing in its own right - the filename-to-namespace tie is what the naming
 // auditor checks and what docs/man.q's registry is generated against, and 30

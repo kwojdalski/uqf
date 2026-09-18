@@ -95,7 +95,7 @@ class Pipeline:
     # verified: verify_pipeline_edges() below greps each pipeline's own .q
     # script for its `.sub.subscribe`/`.qpipe.subscribe_etl`/`.u.upd` calls
     # and fails if the declaration and the code disagree. A hand-drawn
-    # diagram goes stale silently; this one cannot (see docs J-04).
+    # diagram goes stale silently; this one cannot.
     subscribes: tuple[str, ...] = ()  # tickerplant tables it subscribes to
     # Tables it publishes via `.u.upd`. Defaults to (table,) - set it
     # explicitly only when a pipeline publishes onto a table whose schema it

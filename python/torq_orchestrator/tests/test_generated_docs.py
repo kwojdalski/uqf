@@ -1,4 +1,4 @@
-"""Guards on `scripts/generate/generate_operational_docs.py` (J-01, J-02).
+"""Guards on `scripts/generate/generate_operational_docs.py`.
 
 The decision those questions record: operational docs are generated at
 build, committed so a clone has them, and checked in CI — and where the

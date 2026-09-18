@@ -26,16 +26,15 @@ deliberately stops at the shape.
 
 ## Where a document goes
 
-Five directories, one question each. The rule is what a document *is for*,
+Four directories, one question each. The rule is what a document *is for*,
 not what it is about — a page about the ETL framework can be a guide, a
 reference or an architecture note, and only its purpose decides where it goes.
 
-| Directory | Answers | Audience (J-08) |
+| Directory | Answers | Audience |
 |---|---|---|
 | [`guides/`](guides/) | *How do I do this?* | operators and new developers |
 | [`architecture/`](architecture/) | *Why is it shaped this way?* | developers changing it |
 | [`reference/`](reference/) | *What is the contract?* | anyone integrating, and CI |
-| [`decisions/`](decisions/) | *What was decided, and when?* | reviewers and future maintainers |
 | [`integrations/`](integrations/) | *How does this meet something external?* | operators |
 
 ## What is where
@@ -49,7 +48,7 @@ locally).
 **`architecture/`** — [`pipeline-philosophy.md`](architecture/pipeline-philosophy.md)
 (the positions `src/etl/` is built on, and what enforces each),
 [`restatement-design.md`](architecture/restatement-design.md)
-(D-11's bitemporal design, now built),
+(the bitemporal design, now built),
 [`event-tape.md`](architecture/event-tape.md),
 [`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) (what
 `src/etl/` has and lacks relative to a Dagster-shaped framework),
@@ -63,18 +62,12 @@ variable, machine-checked),
 (FE-nn). These are the pages CI holds the code to, which is why they are a
 category rather than prose.
 
-**`decisions/`** — [the register](decisions/README.md) plus one page per
-decision, both **generated** by `scripts/generate/build_decision_log.py` from the
-GitHub issue comments that are the authority. Do not edit either by hand:
-`--check` runs in CI and reports a stale page, a missing one, *and* a page
-that corresponds to no answer.
-
 **`integrations/`** — [`torq/`](integrations/torq/), including the generated
 process table and dataflow diagram.
 
 ## What deliberately stays at the top level
 
-Not everything is one of the five, and forcing it would be worse than the
+Not everything is one of the four, and forcing it would be worse than the
 exception:
 
 - **[`ROADMAP.md`](ROADMAP.md)** — a plan, which is neither a guide nor a
@@ -83,12 +76,9 @@ exception:
 - **`audits/`**, **`prompts/`** — agent output and agent input, dated and
   append-only. They are a record of a run rather than documentation of the
   system.
-- **`drift-reports/`** — provenance. Closed as a document under A-03, when
-  canonical was frozen and this tree became the primary lineage; kept because
-  deleting it would erase the history of how this repository got here.
 - **`migrations/`** — plans for restructurings, written before the work and
   kept afterwards as the reasoning behind it.
-- **`diagrams/`** — d2 sources and their rendered SVGs. Not one of the five
+- **`diagrams/`** — d2 sources and their rendered SVGs. Not one of the four
   because a diagram is not a document: it illustrates one, and the page it
   illustrates is where the words live. Edit the `.d2` and run
   `python3 scripts/generate/render_diagrams.py`; never edit the `.svg`, which

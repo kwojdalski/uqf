@@ -32,7 +32,7 @@ setUp_fresh:{[]
     .qwrt.declared_dependencies:(`symbol$())!();
     }
 
-/ --- classification (question-bank M-04) ---------------------------------
+/ --- classification ---------------------------------
 
 test_a_connection_failure_is_transport:{[t]
     .qunit.assertEquals[.qwrt.classify["connection refused by rdb"];`transport;"a refused socket may genuinely succeed on the next attempt"]};
@@ -97,14 +97,14 @@ test_retries_are_bounded:{[t]
     r:.qwrt.with_retry[.wrttest.fast 3;{.wrttest.calls+:1; '"connection refused"}];
     .qunit.assertEquals[(r`state;r`kind;.wrttest.calls);(`failed;`transport;3);"exhausting the policy stops, rather than retrying forever"]};
 
-/ M-04's decision, as a behavioural assertion: the attempt function is called
+/ As a behavioural assertion: the attempt function is called
 / exactly ONCE for a data failure, however many attempts the policy allows.
 test_a_data_failure_is_not_retried_at_all:{[t]
     `.wrttest.calls set 0;
     r:.qwrt.with_retry[.wrttest.fast 5;{.wrttest.calls+:1; '"type error on column px"}];
     .qunit.assertEquals[(r`state;r`kind;.wrttest.calls);(`failed;`data;1);"a deterministic failure is attempted once, not five times"]};
 
-/ M-05: exhaustion is terminal for the window - with_retry returns a failed
+/ Exhaustion is terminal for the window - with_retry returns a failed
 / state rather than throwing, so the caller decides to move on.
 test_exhaustion_returns_a_failed_state_rather_than_throwing:{[t]
     r:.qwrt.with_retry[.wrttest.fast 2;{'"connection reset"}];

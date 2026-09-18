@@ -25,7 +25,7 @@ trigger to Airflow), not part of the stack `uqf-stack start` brings up.
 For the authoritative per-process table - ports, scripts, the table each
 owns, and its subscribe/publish edges - see
 [processes.md](processes.md), which is **generated** from the pipeline
-registry (J-01/J-02) rather than written by hand. The diagrams below are
+registry rather than written by hand. The diagrams below are
 authored, because choosing what to show is a judgement; their process
 *names* are checked against the registry by
 `test_generated_docs.test_the_prose_architecture_doc_is_consistent_with_the_registry`,

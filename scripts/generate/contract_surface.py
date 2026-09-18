@@ -142,7 +142,7 @@ def export_python_surface() -> dict[str, Any]:
 
 def export_env_surface() -> dict[str, Any]:
     """Environment variables, from the reference page the gate already holds
-    to the code (C-04). Reusing it rather than re-deriving means the two
+    to the code. Reusing it rather than re-deriving means the two
     cannot disagree.
     """
     doc = REPO / "docs" / "reference" / "environment.md"

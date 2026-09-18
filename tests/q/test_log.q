@@ -1,4 +1,4 @@
-// test_log.q - tests for src/etl/core/log.q (.qlog), the K-01 logging
+// test_log.q - tests for src/etl/core/log.q (.qlog), the logging
 // contract. Runs WITHOUT TorQ loaded, which is deliberate: the ETL core is
 // unit-tested standalone, and the layer must behave identically in both
 // transports or a test would pass here and the worker would behave
@@ -69,7 +69,7 @@ test_the_id_is_carried:{[t]
 
 / err records and RETURNS. TorQ's .lg.e throws or exits depending on .proc
 / state, which is right for init and wrong for a worker noting one failed
-/ window and moving on (M-05).
+/ window and moving on.
 test_err_does_not_throw:{[t]
     / (enlist `err)!enlist "boom", not `err!enlist "boom": a symbol ATOM
     / keying a list is a type error in q, and the first draft of this test
@@ -107,7 +107,7 @@ test_other_levels_are_unaffected_by_debug:{[t]
     .qlog.info[`w;"a";()!()]; .qlog.warn[`w;"b";()!()]; .qlog.err[`w;"c";()!()];
     .qunit.assertEquals[.logtest.captured[;0];`INF`WARN`ERR;"INF, WARN and ERR emit regardless of the debug switch"]};
 
-/ --- lazy rendering (bank K-02) -----------------------------------------
+/ --- lazy rendering -----------------------------------------
 
 / The suppression check must precede rendering, because DBG is off by
 / default and is the level a worker emits per WINDOW - a million-row

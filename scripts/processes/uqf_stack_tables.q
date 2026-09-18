@@ -12,7 +12,7 @@
 /   read as TEXT  torq_orchestrator's _generated_schema_content() appends
 /                 these definitions to a copy of the vendored database.q and
 /                 points stp1's -schemafile at the copy. The vendored file is
-/                 never edited (H-01).
+/                 never edited.
 /   LOADED as q   tests/q/test_demo_tables.q loads it and checks the tables
 /                 parse and carry the columns their consumers expect, and
 /                 scripts/generate/export_contract_surface.q loads it so these tables

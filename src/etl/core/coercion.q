@@ -1,6 +1,6 @@
 / coercion.q - the shared text-to-type layer for external sources (.qcoer).
 / .
-/ Implements bank question E-05 (issue #73), answered there: sources return text
+/ Implements the question bank (issue #73), answered there: sources return text
 / that q must coerce, and there IS one shared coercion layer rather than a
 / per-source cast. Three trap classes were named as having actually bitten
 / the real sources, and each is handled explicitly below rather than left to

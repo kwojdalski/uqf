@@ -96,12 +96,11 @@ are missing, rather than assuming the reader has them.
 ## What is not touched
 
 **Vendored trees.** `lib/torq`, `lib/torq-finance-starter-pack` — never
-edited, including their own scripts and their own names (H-01).
+edited, including their own scripts and their own names.
 
-**Historical records.** `CHANGELOG.md`, `docs/migrations/`,
-`docs/drift-reports/drift-ledger.md`. A changelog entry states what shipped on
-a date and a drift-ledger row states what canonical had; rewriting either
-makes the record claim something that never happened.
+**Historical records.** `CHANGELOG.md` and `docs/migrations/`. A changelog
+entry states what shipped on a date; rewriting one makes the record claim
+something that never happened.
 
 > *2026-09-17.* During the `torq-demo` → `uqf-stack` rename the drift ledger
 > was rewritten by the first pass and reverted for this reason, while the
@@ -109,7 +108,7 @@ makes the record claim something that never happened.
 > told which files still carry the old name and why, rather than the boundary
 > being applied silently.
 
-**Generated files.** `docs/man.q`, `docs/decisions/`,
+**Generated files.** `docs/man.q`,
 `docs/integrations/torq/processes.md`, `src/etl/generated/pipeline_dag.q`,
 `docs/migrations/surfaces/uqf-local/`. Edit the source and regenerate; CI
 fails on a hand-edit.

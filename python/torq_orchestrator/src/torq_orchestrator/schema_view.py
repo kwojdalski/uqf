@@ -203,7 +203,7 @@ def columns(table: str, port: int, host: str = "localhost", **creds: str) -> lis
     over this transport. It is validated against the live table list first,
     so the only names that reach the expression are ones the process already
     reported - which is the same one-escape-path discipline `.qodbc` follows
-    where a driver cannot parameterise (bank E-08).
+    where a driver cannot parameterise.
     """
     available = table_names(port, host=host, **creds)
     if table not in available:

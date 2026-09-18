@@ -16,7 +16,7 @@ setUp_layers:{[]
     setenv[`UQF_SHARED;""];
     }
 
-/ --- precedence (question-bank C-02) -------------------------------------
+/ --- precedence -------------------------------------
 
 / The whole reason this file exists. An unstated precedence's failure mode is
 / "works on my machine", so it is asserted rather than documented - and

@@ -1,6 +1,7 @@
 / namespaces.q - which namespaces this tree owns, and how they nest (.qns).
 / .
-/ N-01 as code. The rule used to be "every namespace is a flat .q<abbrev>",
+/ The naming convention as code. The rule used to be "every namespace is a
+/ flat .q<abbrev>",
 / and four tools each carried their own copy of the enumeration that rule
 / implied - `(key `) where like "q*"` - in the contract surface export, the
 / coverage driver, the documentation-coverage ratchet and the reseeder.
@@ -51,7 +52,7 @@ descend:{[ns] ns,raze descend each children ns}
 / Every namespace this tree owns, leaves and containers alike, fully
 / qualified and in depth-first order: `.qbw, `.qwrk, `.qwrk.demo_deals_backfill.
 / .
-/ Ownership is the `.q` prefix N-01 ties to filenames, minus q's own `.q`
+/ Ownership is the `.q` prefix the convention ties to filenames, minus q's own `.q`
 / (KX's, 180-odd names that would swamp any listing). Test scaffolding such
 / as .qunit is owned here in the sense that matters - it is loaded in this
 / process and prefixed the same way - so callers that want the LIBRARY drop

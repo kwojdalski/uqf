@@ -124,7 +124,7 @@ Never propose any of these, and say why if asked:
   both bodies. `init`, `register`, `attach`, `cleanup`, `spec`, `publish`
   recur across `src/etl/core/` as a lifecycle *interface*.
 - **Proposing a rename to resolve duplication.** A rename is
-  `abbreviation-auditor`'s subject, and N-01 ties module, namespace and test
+  `abbreviation-auditor`'s subject, and the convention ties module, namespace and test
   filename together, so it is a migration rather than a tidy.
 - **Treating deliberate convention-mirroring as duplication.**
   `microstructure.q:178` states it mirrors `sweep_price`'s `(prices;sizes)`

@@ -34,7 +34,7 @@ assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];exp
 //
 // It exists as ONE fixture because it was three hardcoded column lists, and
 // every addition to .qcov.schema broke all three at once in a way that read
-// like a bug in require_schema. D-11's superseded_at did it; run_id did it
+// like a bug in require_schema. superseded_at did it; run_id did it
 // again. test_coverage's test_the_foreign_fixture_tracks_the_declared_schema
 // now fails FIRST, and by name, so the next one is a one-line fix here.
 foreign_coverage_ledger:{[]

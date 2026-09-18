@@ -1,6 +1,6 @@
 / test_singlestore_odbc.q - the SingleStore ODBC adapter (.odbctest).
 / .
-/ Every test here runs WITHOUT a driver, which is bank E-04's requirement
+/ Every test here runs WITHOUT a driver, which is the question bank's requirement
 / rather than a limitation of the test lane: if these needed unixODBC and a
 / licensed SingleStore driver, the adapter would be unverifiable on every
 / machine this repository actually runs on.
@@ -136,7 +136,7 @@ test_the_driver_is_named_first:{[t]
     .qunit.assertTrue[conn like "DRIVER=*";"DRIVER leads the string"]};
 
 test_the_password_is_a_parameter_not_a_literal:{[t]
-    / bank E-07: the credential comes from the environment, so this function
+    / the question bank: the credential comes from the environment, so this function
     / must never carry a default. Two different passwords must produce two
     / different strings - a hardcoded one would make them identical.
     a:.qodbc.build_connection_string["h";1;"d";"u";"one"];

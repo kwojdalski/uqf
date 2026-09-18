@@ -179,7 +179,7 @@ test_the_assumed_schema_is_accepted:{[t]
 test_an_undeclared_column_is_refused_rather_than_ignored:{[t]
     / Every declared column PRESENT plus an extra `date`, so the refusal
     / exercises the extra-column path rather than the missing-column one.
-    / After D-11 added superseded_at, omitting it made these two tests pass
+    / After superseded_at was added, omitting it made these two tests pass
     / for the wrong reason - the message named the missing column, and the
     / `date` assertion below would have gone on matching a refusal about a
     / different column entirely.
@@ -346,7 +346,7 @@ test_attaching_to_a_ledger_we_created_does_not_second_guess_it:{[t]
 test_attaching_to_a_foreign_ledger_with_an_extra_column_is_refused:{[t]
     / Every declared column PRESENT plus an extra `date`, so the refusal
     / exercises the extra-column path rather than the missing-column one.
-    / After D-11 added superseded_at, omitting it made these two tests pass
+    / After superseded_at was added, omitting it made these two tests pass
     / for the wrong reason - the message named the missing column, and the
     / `date` assertion below would have gone on matching a refusal about a
     / different column entirely.
@@ -479,7 +479,7 @@ test_a_missing_column_is_refused:{[t]
     .qunit.assertEquals[r like "*source_version*";1b;"a ledger without source_version is named as such, not read anyway"]};
 
 
-/ --- supersession (D-11) --------------------------------------------------
+/ --- supersession --------------------------------------------------
 
 / The decisions this implements, so a reader need not go to the design note:
 / bitemporal rows (option A), a REQUIRED as-of on every read, and a natural

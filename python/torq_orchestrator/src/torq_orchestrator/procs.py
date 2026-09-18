@@ -1,6 +1,6 @@
 """process.csv composition and per-process config overrides.
 
-The precedence, decided as question-bank H-01 and asserted by
+The precedence, decided as the question bank and asserted by
 test_core.test_the_three_process_csv_layers_compose_in_a_stated_order:
 
     vendored process.csv  ->  PIPELINES  ->  extra_processes.csv  (appended)
@@ -47,7 +47,7 @@ log = get_logger(__name__)
 #   stack - a monitoring surface that is only ever populated if an operator
 #   knows to start one more process by hand is not monitoring.
 #
-# This is an overlay, not an edit: the vendored file is never touched (H-01),
+# This is an overlay, not an edit: the vendored file is never touched,
 # and because process_overrides.csv is still applied afterwards, an operator
 # who does want the upstream behaviour can put it back with
 # `uqf-stack config-set monitor1 startwithall 0`.
@@ -98,10 +98,10 @@ def _vendored_monitor_connections(paths: UqfStackPaths) -> list[str]:
 def _monitor_connection_extras(paths: UqfStackPaths) -> str:
     """`.servers.CONNECTIONS` as a command-line override for monitor1.
 
-    `.proc.override[]` runs after every config layer, including the vendored
-    appconfig, so a command-line value wins without that file being edited
-    (H-01). It REPLACES rather than appends, which is why the vendored list
-    is read back above and passed through in full.
+     `.proc.override[]` runs after every config layer, including the vendored
+     appconfig, so a command-line value wins without that file being edited
+    . It REPLACES rather than appends, which is why the vendored list
+     is read back above and passed through in full.
     """
     connections = _vendored_monitor_connections(paths)
     if not connections:

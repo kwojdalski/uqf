@@ -1,7 +1,7 @@
 / test_man_registry.q - every function docs/man.q registers must exist
 / (.mantest).
 / .
-/ The exact, checkable half of question-bank J-07 ("is there a freshness gate
+/ The exact, checkable half of the question bank ("is there a freshness gate
 / catching a document that references a symbol which no longer exists?").
 / .
 / A general symbol-freshness gate over prose cannot be made complete -
@@ -113,7 +113,7 @@ test_documentation_coverage_does_not_regress:{[t]
     / version of this test counted every q-prefixed namespace in the suite
     / process and failed on scaffolding: .qunit is the vendored test
     / framework, .qetldbl and .qrefw are test doubles, and .qpipe lives in
-    / scripts/ rather than src/ (B-09). None is this library's public API, and
+    / scripts/ rather than src/. None is this library's public API, and
     / demanding qDoc blocks for them would have meant documenting the test
     / harness to satisfy a counter.
     nss:nss except `.q`.qunit`.qetldbl`.qrefw`.qpipe;

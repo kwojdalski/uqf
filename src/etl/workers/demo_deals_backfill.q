@@ -8,7 +8,7 @@
 / .
 / A real worker with a synthetic source, not a demonstration of a worker.
 / The lifecycle, coverage and retry behaviour are the production ones; only
-/ the rows are invented (A-04). Its tests say nothing about the real source's
+/ the rows are invented. Its tests say nothing about the real source's
 / schema, which only .qsrc.validate_live on the work machine can settle.
 / .
 / WHERE THE CONTRACT'S NAMES ARE

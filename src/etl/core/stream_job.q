@@ -19,7 +19,7 @@
 / to a recorder and gets the job's output as data. So the job file can be
 / loaded by src/etl/init.q in a plain q process with no TorQ present, which
 / is what keeps its functions in docs/man.q and under test - the reason the
-/ computations were moved out to src/ in the first place (B-09: nothing in
+/ computations were moved out to src/ in the first place (nothing in
 / src/etl/ may depend on TorQ).
 
 \d .qstream
@@ -181,7 +181,7 @@ wire:{[job;publisher]
 / recomputes its cutoff in the delete clause has exactly that race.
 / .
 / Lived in scripts/processes/torq_pipeline.q until the jobs moved into src/, where
-/ nothing may call .qpipe (B-09). It belongs here anyway: buffering is the
+/ nothing may call .qpipe. It belongs here anyway: buffering is the
 / job's own business, not TorQ's.
 / @param tblname the buffer table's fully-qualified name, e.g. `.qsub.markout.pending
 / @param mask a boolean vector over that table, as long as it is

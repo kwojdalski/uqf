@@ -34,7 +34,7 @@
 \d .qstatus
 
 / The lifecycle states a worker may report. Three of them are terminal, and
-/ the distinction between the first two is the one C-07 asks for - "nothing
+/ the distinction between the first two is the important one - "nothing
 / to do" must not look like "failed", or an orchestrator retries a
 / successful no-op forever.
 /   starting  - initialising, not yet acquired work
@@ -44,9 +44,9 @@
 /   failed    - error set, see the error field (terminal)
 status_states:`starting`running`idle`completed`failed
 
-/ Which states may legally follow which (question-bank G-02).
+/ Which states may legally follow which.
 / .
-/ G-02 asks for "the legal status values AND which transitions are
+/ What matters is "the legal status values AND which transitions are
 / forbidden". The values were already here and validated; the transitions
 / were not, so every illegal one wrote cleanly. The dangerous case is
 / specific and silent:
@@ -184,7 +184,7 @@ write_status:{[worker;instance_id;state;spec;progress;err]
          string[spec`range_from],"; ",string[spec`range_to],")"];
     if[(state=`failed) and 0=count err;
         '"write_status: a failed state must carry an error string"];
-    / G-02: refuse a transition that would resurrect a terminal run. Checked
+    / Refuse a transition that would resurrect a terminal run. Checked
     / HERE rather than left to the caller, because the caller gets it wrong
     / exactly when it matters - after a restart, when it no longer remembers
     / what it last wrote.

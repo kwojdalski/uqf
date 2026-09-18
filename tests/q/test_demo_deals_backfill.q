@@ -4,7 +4,7 @@
 // What these prove and what they do not. They prove the FRAMEWORK works end
 // to end: contract, windowing, coverage, retry, dry-run, resumption. They say
 // nothing about the real source's schema, because the source here is
-// synthetic by A-04 - only `.qsrc.validate_live` on the work machine settles
+// synthetic by design - only `.qsrc.validate_live` on the work machine settles
 // that.
 //
 // Load src/etl/core/*.q, src/etl/sources/demo_deals.q,
@@ -82,7 +82,7 @@ test_the_cursor_lands_on_the_range_end:{[t]
 
 / --- coverage skipping (ETL-13) -------------------------------------------
 
-/ "Ran, found no work" is a SUCCESS, not a failure (C-07). An orchestrator
+/ "Ran, found no work" is a SUCCESS, not a failure. An orchestrator
 / that cannot tell them apart retries a successful no-op forever.
 test_a_second_run_is_idle_not_failed:{[t]
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
@@ -230,7 +230,7 @@ test_plan_delegates_and_passes_the_cursor:{[t]
     .qunit.assertEquals[count .qwrk.demo_deals_backfill.plan[.ddbftest.d 2];2;
         "with day 1 covered, a cursor at day 2 plans the two days after it"]};
 
-/ A gap BEHIND the cursor is planned. This is the restatement case (D-11):
+/ A gap BEHIND the cursor is planned. This is the restatement case:
 / a finished run's cursor is range_to, and a supersede then withdraws a
 / window's coverage. The old plan took the cursor as a hard lower bound and
 / reported idle over a range the ledger said was missing - so a restatement
@@ -461,9 +461,9 @@ test_the_two_shipped_workers_claim_distinct_dataset_partitions:{[t]
     .qunit.assertEquals[count[claims];count distinct claims;
         "every registered worker owns its dataset and partition alone"]};
 
-/ --- the cursor is forward-only (D-09) ------------------------------------
+/ --- the cursor is forward-only ------------------------------------
 
-/ D-09: backfill is oldest-first by construction, and plan[] uses the cursor
+/ Backfill is oldest-first by construction, and plan[] uses the cursor
 / as its LOWER bound - so a cursor pushed past windows that are still
 / uncovered means the next run plans from beyond them and never comes back.
 / Coverage still shows them as gaps, so nothing is wrongly reported complete;
@@ -491,7 +491,7 @@ test_a_forward_cursor_is_returned_unchanged:{[t]
     .qunit.assertEquals[.qbw.advanced_to[`demo_deals_backfill;.ddbftest.d 2;.ddbftest.d 3];
         .ddbftest.d 3;"the guard is a pass-through on the legitimate path"]};
 
-/ --- the heartbeat is actually written (K-04) -----------------------------
+/ --- the heartbeat is actually written -----------------------------
 
 / .qhb's own tests cover the table's behaviour. These two prove the worker
 / loop CALLS it - which every one of those tests would pass without.
@@ -627,7 +627,7 @@ test_a_failing_check_leaves_the_window_uncovered:{[t]
         "a window that failed its check is not recorded as covered"]};
 
 test_a_failing_check_counts_as_a_failed_window:{[t]
-    / M-05: terminal for that window, and the run continues rather than
+    / Terminal for that window, and the run continues rather than
     / throwing - the same treatment a failed fetch gets.
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`chk3;1;4]];
     r:.ddbftest.with_bad_fixture[{.qwrk.demo_deals_backfill.run[]}];

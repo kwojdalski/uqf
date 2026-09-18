@@ -19,7 +19,7 @@ queue position, a timeout, or any other Airflow-owned fact — there is
 nothing in q's status file to manufacture it from, and `translate.py`'s
 tests assert the mapping touches only the fields q actually writes.
 
-## Airflow is optional (FE-22/FE-23, A-04)
+## Airflow is optional (FE-22/FE-23)
 
 This package has **no `apache-airflow` dependency**. `translate.py` and
 `status_reader.py` are plain stdlib and fully testable without Airflow

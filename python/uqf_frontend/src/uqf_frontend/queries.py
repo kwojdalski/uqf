@@ -68,13 +68,13 @@ SELECT = """{[t;fc;fo;fv;lim]
 #: an instant.
 #:
 #: ETL-09 requires consumers to filter on ``source_version``; doing it inside
-#: the program rather than in Python means a caller cannot omit it. D-11 adds
+#: the program rather than in Python means a caller cannot omit it. Restatement adds
 #: the same reasoning one dimension over: a coverage row is true *until
 #: superseded*, so a read without an as-of silently reports withdrawn claims
 #: as current.
 #:
 #: The as-of is a REQUIRED parameter for the reason `source_version` is
-#: (bank E-09): an optional filter is one a caller forgets, and forgetting this one
+#:: an optional filter is one a caller forgets, and forgetting this one
 #: returns a plausible interval list rather than an error. Pass the gateway's
 #: own `.z.p` for "now".
 #:

@@ -28,7 +28,7 @@ Two checks, because they fail differently:
 WHAT IS DELIBERATELY NOT CHECKED
 
 *Namespaces this tree does not own.* The pattern only matches a lowercase
-``.q``-prefixed namespace, which is this repository's own convention (N-01).
+``.q``-prefixed namespace, which is this repository's own convention.
 TorQ's ``.servers``/``.hb``/``.u``/``.proc``/``.lg``, kdb's ``.Q``/``.z``/
 ``.j``, and Python references are all out of scope, because their surface is
 not ours to verify and a gate that guesses about someone else's API is a
@@ -85,7 +85,6 @@ EXCLUDED_DIRS = {
     # not a description of the system.
     "audits",
     "prompts",
-    # Provenance, frozen under A-03.
     "drift-reports",
     # Plans written BEFORE the work, kept afterwards as the reasoning. They
     # name things that did not exist when written, which is the point.
@@ -107,7 +106,7 @@ ALLOWED_MISSING = {
     (
         ".claude/agents/pipeline-developer.md",
         ".qcov.sub",
-    ): "an illustration of the nested namespace N-01 forbids - it must not exist",
+    ): "an illustration of the nested namespace the convention forbids - it must not exist",
     (
         ".claude/agents/uqf-developer.md",
         ".qfwd.sub",

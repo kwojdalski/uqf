@@ -2,8 +2,7 @@
 / (.qwrt).
 / .
 / Implements requirements ETL-13 to ETL-17 of docs/reference/etl-framework-requirements.md,
-/ and the retry decisions recorded on issues #71/#72 (question-bank M-04,
-/ M-05).
+/ and the retry decisions recorded on issues #71/#72.
 / .
 / The guarantee this file provides is deliberately WEAKER than the one people
 / assume. ETL-13 says so in as many words: "do not assume exactly-once
@@ -15,7 +14,7 @@
 / Three things here are easy to get backwards, so each is enforced rather
 / than commented:
 / .
-/   1. Data failures do NOT retry (M-04). Retrying a schema mismatch produces
+/   1. Data failures do NOT retry. Retrying a schema mismatch produces
 /      the same mismatch more slowly and buries the real error under N
 /      identical ones. Only transport failures retry.
 /   2. Unclassifiable errors are treated as DATA, i.e. terminal. Defaulting
@@ -34,7 +33,7 @@
 q_owned:`startup`source_reads`query_failures`checkpoints`run_counts`window_counts`coverage_events
 airflow_owned:`task_ordering`scheduling`retries`timeouts`concurrency`alert_routing
 
-/ ETL-15 assigns RETRIES to Airflow, and M-04 has this file retrying transport
+/ ETL-15 assigns RETRIES to Airflow, and this file retries transport
 / errors in-process. That reads like a contradiction and is not, so state the
 / resolution plainly rather than leaving the next reader to reconcile it:
 / .
@@ -60,13 +59,13 @@ owner:{[concern]
 / ------------------------------------------------------ CLASSIFICATION
 
 / Transport failures: the connection, the host, the socket. Retryable,
-/ because the next attempt genuinely may differ (M-04).
+/ because the next attempt genuinely may differ.
 transport_patterns:("*connection*";"*timeout*";"*timed out*";"*broken pipe*";
                     "*refused*";"*reset*";"*unreachable*";"*temporarily unavailable*";
                     "*no route*";"*handle*";"*closed*")
 
 / Data failures: the payload is wrong. Terminal, because the next attempt is
-/ identical (M-04).
+/ identical.
 data_patterns:("*schema*";"*type*";"*cast*";"*parse*";"*length*";
                "*mismatch*";"*null*";"*domain*";"*not covered*";"*invalid*")
 
@@ -92,7 +91,7 @@ retryable:{[err] `transport~classify err}
 
 / ------------------------------------------------------------ RETRYING
 
-/ Bounded backoff, config-driven (M-04). Defaults are deliberately small:
+/ Bounded backoff, config-driven. Defaults are deliberately small:
 / this is an in-attempt blip, not a scheduling policy - a worker sitting in
 / backoff for minutes is Airflow's job to time out, not this file's job to
 / wait through.
@@ -100,7 +99,7 @@ default_policy:`max_attempts`base_delay_ms`max_delay_ms!(3j;250j;8000j)
 
 / Resolve the policy from configuration, falling back to the defaults.
 / .
-/ Read through .qwcfg so the precedence is the one C-02 fixed, rather than a
+/ Read through .qwcfg so the precedence is the settled one, rather than a
 / second ad-hoc lookup order that drifts from it.
 policy:{[]
     read_one:{[k;fallback]
@@ -125,7 +124,7 @@ sleep_ms:{[ms] if[ms>0; system"sleep ",string ms%1000]; ms}
 / Run a niladic function under the retry policy.
 / .
 / Returns a dict rather than throwing, because the CALLER decides what a
-/ terminal failure means: under M-05 a worker's failed window is terminal and
+/ terminal failure means: a worker's failed window is terminal and
 / the worker moves on, which is a decision about the run, not about this
 / function.
 / @param pol a policy dict as returned by `policy`
@@ -211,7 +210,7 @@ commit:{[dry;effect;action;args]
 /     over-running final window records coverage for a range that was never
 /     requested, which a later run then skips.
 / .
-/ WHAT A "DAY" IS HERE (issue #80's L-04, and L-05 with it)
+/ WHAT A "DAY" IS HERE (issue #80)
 / .
 / A 1D window is 24h of ELAPSED UTC TIME measured from from_ts. It is not a
 / calendar day, not a business date, and not aligned to any venue's session:
@@ -219,7 +218,8 @@ commit:{[dry;effect;action;args]
 / five-day range over a weekend is five windows, not five trading days.
 / .
 / WHAT DEFINES A TRADING DAY FOR THE CANONICAL WORKERS IS NOT KNOWABLE FROM
-/ THIS TREE - that answer lived with the bank's calendars, which A-04 keeps
+/ THIS TREE - that answer lived with the bank's calendars, which being a
+/ public repository keeps
 / out of a public repository. So the assumption is written down instead of
 / guessed at, and tests/q/test_time_zone.q pins it: whoever adds a venue
 / calendar has to change a failing test rather than a comment. Nothing else
@@ -228,7 +228,7 @@ commit:{[dry;effect;action;args]
 / this tree knows about is TorQ's EOD reload, which is an operational state
 / rather than a business date.
 / .
-/ Cutting in UTC is also what makes DST harmless (L-05): a daily window is
+/ Cutting in UTC is also what makes DST harmless: a daily window is
 / exactly 24h across a transition, never the 23h or 25h a local calendar day
 / becomes, so coverage keeps tiling exactly. The variable local span is
 / handled where it belongs, in .qsrc's per-source zone conversion.
@@ -268,7 +268,7 @@ needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
 / .
 / Returns the gaps rather than a yes/no, so a retry after a partial run
 / re-fetches only what is missing instead of the whole range. An empty result
-/ means there is nothing to do - which under C-07 is an `idle success, not a
+/ means there is nothing to do - which is an `idle success, not a
 / failure.
 remaining:{[ds;part;version;as_of;from_ts;to_ts]
     .qcov.missing[ds;part;version;as_of;from_ts;to_ts]}

@@ -19,7 +19,7 @@
 / subscription, the publish handle and the timer. The job files know nothing
 / about any of it - they call `publish` in their own namespace, which this
 / file wires. That is what lets src/etl/init.q load them in a plain q
-/ process, which is what keeps them under test and in docs/man.q (B-09).
+/ process, which is what keeps them under test and in docs/man.q.
 
 / SOURCE: pull in uqf's own src/init.q and the ETL tree, which is where the
 / job declarations live.

@@ -61,7 +61,7 @@ pricing or execution function, say so and stop rather than adding it here.
   already had. The ones that bite most often are listed below.
 - **`docs/architecture/pipeline-framework-gaps.md`** — the framework's gap
   register, as above.
-- **`docs/architecture/restatement-design.md`** — D-11 bitemporal coverage:
+- **`docs/architecture/restatement-design.md`** — bitemporal coverage:
   what `superseded_at` means and why `is_covered` demands an as-of.
 - **The whole file you are about to edit.** These modules reuse their own
   primitives heavily (`.qcov.require_interval`, `.qcoer.to_timestamp`,
@@ -91,16 +91,16 @@ pricing or execution function, say so and stop rather than adding it here.
   window parameters are refused together**, not one at a time.
 - **ETL-19 — use `etl_test_doubles`** to replace fetch/publish/checkpoint.
   Doubling the edges is not the same as testing the middle.
-- **E-07 — source credentials come from the environment only**
+- **Source credentials come from the environment only**
   (`UQF_SOURCE_CRED_*`). No file fallback, no vault. A file fallback is how a
   credential ends up committed.
-- **E-08 — source queries are parameterised q lambdas, never string
+- **Source queries are parameterised q lambdas, never string
   concatenation.** Where a driver genuinely cannot parameterise (ODBC),
   there is exactly one escape function and everything routes through it.
-- **A-04 — this repository is public.** No bank table names, hostnames,
+- **This repository is public.** No bank table names, hostnames,
   schema shapes or business logic, in code, tests, comments or commit
   messages. Rebuild as generic analogues (`demo_deals`, `demo_events`).
-- **H-01 — `lib/torq` and `lib/torq-finance-starter-pack` are never edited.**
+- **`lib/torq` and `lib/torq-finance-starter-pack` are never edited.**
   Extend through the orchestrator's overlay/override mechanisms.
 
 ## Working style
@@ -111,7 +111,7 @@ pricing or execution function, say so and stop rather than adding it here.
   `scripts/generate/generate_man_registry.py`; run it (without `--check`) after adding
   or changing one, and commit the result.
 - `lower_snake_case` throughout. Framework namespaces are flat and one level
-  deep (N-01) — never `\d .qcov.sub`. The nested families are the ETL
+  deep — never `\d .qcov.sub`. The nested families are the ETL
   instances: every bounded worker is `\d .qwrk.<worker name>`, derived by
   `.qbw.define` from the registered name and refused if a `cfg` supplies its
   own `ns`; every source is `\d .qfeed.<source name>`, which
@@ -123,7 +123,7 @@ pricing or execution function, say so and stop rather than adding it here.
   is `\d .qproc.<name>`; `scripts/processes/torq_stream.q` runs whichever job the
   process it started as claims. A job publishes through `publish` in its own
   namespace (wired by the runner, or by a test to a recorder), never through
-  `.qpipe` - nothing in `src/` may depend on TorQ (B-09).
+  `.qpipe` - nothing in `src/` may depend on TorQ.
   Anything listing namespaces uses `.qns.owned`/`.qns.functional`
   (`src/namespaces.q`), never a root scan for a `q` prefix, which stops at
   `.qwrk`/`.qfeed`/`.qsub` and silently drops every worker, source and

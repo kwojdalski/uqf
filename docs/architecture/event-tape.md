@@ -104,7 +104,7 @@ snapshot-schema change, not an event-tape one. Six of seven, not seven.
 
 ## Ingestion
 
-`demo_events` is a registered source under the E-12 contract
+`demo_events` is a registered source under the fetch-validation contract
 (`src/etl/sources/demo_events.q`). That declaration **is** the ingestion
 contract: it is validated at registration, its fixture is checked against it
 on every commit, and `.qsrc.fetch_window` windows it identically to a live
@@ -128,6 +128,6 @@ worker is 52 lines. See
 [`../guides/new-pipeline.md`](../guides/new-pipeline.md) for what writing
 one now looks like.
 
-The source is **synthetic**, per A-04: every column is one any venue's tape
+The source is **synthetic**: every column is one any venue's tape
 would carry, and the fixture's values are invented. Nothing about a real
 venue's schema or a bank's data is recoverable from it.

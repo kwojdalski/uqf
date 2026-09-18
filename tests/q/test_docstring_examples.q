@@ -1,7 +1,8 @@
 / test_docstring_examples.q - execute the @eg assertions in the qDoc blocks
 / (.egtest).
 / .
-/ I-08's other half. There are 116 `@eg` lines under src/ carrying a `->`
+/ The other half of the executable-examples work. There are 116 `@eg`
+/ lines under src/ carrying a `->`
 / expected value, and until this file NOTHING RAN ANY OF THEM. They are an
 / assertion suite with no runner: 116 claims about what this library returns,
 / every one of which goes stale the moment a formula or a return shape
@@ -194,7 +195,7 @@ needs_live:([] expr:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
         "registers a TorQ timer, which needs .timer and .proc from a TorQ process";
-        "opens an ODBC connection, which needs a licensed driver this tree does not require (bank E-04)";
+        "opens an ODBC connection, which needs a licensed driver this tree does not require";
         "opens a Databento parquet file, which exists only where that data has been downloaded"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".

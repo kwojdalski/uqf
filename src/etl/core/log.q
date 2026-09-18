@@ -1,6 +1,6 @@
 / log.q - the logging contract for ETL workers (.qlog).
 / .
-/ Answers question-bank K-01: "bare .lg.o/.lg.e, or a levelled layer on
+/ Answers the question bank: "bare .lg.o/.lg.e, or a levelled layer on
 / top?" A levelled layer, and a thin one - four functions over TorQ's own
 / .lg, adding exactly the two things TorQ lacks and nothing else.
 / .
@@ -113,7 +113,7 @@ enabled:{[level]
 / Private: assemble and emit one line.
 / .
 / The suppression check comes FIRST, before the fields are rendered (bank
-/ question K-02). Rendering a message nobody will read is pure waste, and
+/ the logging question). Rendering a message nobody will read is pure waste, and
 / the waste is concentrated exactly where it hurts: DBG is off by default and
 / is the level a worker emits per WINDOW, so a million-row backfill with
 / debug off would otherwise render and discard one message per window.
@@ -146,7 +146,7 @@ warn:{[id;text;fields] line[`WARN;id;text;fields]}
 
 / Log an error. Does NOT throw and does NOT exit - TorQ's .lg.e does both
 / depending on .proc state, which is right for an init failure and wrong
-/ for a worker recording that one window failed and moving on (M-05). A
+/ for a worker recording that one window failed and moving on. A
 / worker that wants to abort throws itself; this only records.
 err:{[id;text;fields]  line[`ERR;id;text;fields]}
 

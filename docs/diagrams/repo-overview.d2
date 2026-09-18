@@ -15,7 +15,7 @@
 #
 # The property worth drawing over all others is the TorQ boundary. Every q
 # file under src/ loads in a plain q process with no TorQ present (bank
-# B-09), which is what lets a worker or a streaming job be tested against a
+# rule), which is what lets a worker or a streaming job be tested against a
 # recorder instead of a tickerplant. Exactly one namespace may know TorQ
 # exists - .qpipe, in scripts/ - and scripts/gates/check_etl_layering.py fails the
 # build if anything under src/etl/ reaches for it. So the adapter gets its

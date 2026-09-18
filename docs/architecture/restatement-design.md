@@ -1,9 +1,9 @@
-# Restatements: what answering D-11 "yes" actually costs
+# Restatements: what answering "yes" to superseding rows actually costs
 
 **Status:** design note, awaiting review. **Nothing in this document is
 implemented.**
 
-**Decision being acted on:** D-11 (issue #72) was answered *"yes — rows can
+**Decision being acted on:** issue #72 was answered *"yes — rows can
 be superseded in place"*, over the alternatives *"no, append-only, a
 correction is a new `source_version`"* and *"yes, but only via a
 full-window replace"*.
@@ -46,10 +46,10 @@ to express which one you asked for.
 
 ## 2. Three things must be decided before any code
 
-### 2.1 The row key — and E-23 deliberately left it open
+### 2.1 The row key — deliberately left open
 
 Supersession needs to know *which* row is being superseded. The framework
-has no row-level identity: **E-23** is explicitly open on whether a bounded
+has no row-level identity: it is explicitly open whether a bounded
 worker may use an idempotency mechanism alongside versioned coverage, and
 the requirements say the framework "does not define a universal row-level
 idempotency-key interface".
@@ -89,9 +89,9 @@ at revision N.
   downstream has to learn about as-of.
 - But the previous *values* are gone. If the reason for the restatement was
   an audit question, the answer has been overwritten.
-- And it is really "full-window replace" — which was the third option D-11
+- And it is really "full-window replace" — which was the third option
   was offered and **not** chosen. If A's cost is unacceptable, that is a
-  signal to revisit D-11 rather than to quietly implement B.
+  signal to revisit the decision rather than to quietly implement B.
 
 **This note does not pick.** A is what "superseded in place" most naturally
 means; B is cheaper and arguably not what was asked for.
@@ -106,7 +106,7 @@ Three candidates, in increasing honesty and cost:
    parameter — the thing this codebase keeps getting bitten by.
 2. **Required as-of.** `is_covered[ds;version;as_of;from;to]`. Every one of
    the call sites below must pass one, which makes the question explicit at
-   every site. Follows the precedent of `source_version` in E-09, which is
+   every site. Follows the precedent `source_version` set, which is
    a *required* parameter precisely because an optional filter is one a
    caller forgets.
 3. **Both, named apart.** `is_covered` (latest) and `is_covered_as_of`.
@@ -143,7 +143,7 @@ Also affected:
   `catalog.py`'s `etl_coverage` entry, `coverage.py`'s interval building,
   and `test_catalog_drift.py`'s q-side cross-check.
 - **`python/uqf_airflow_provider`** — unaffected. It reads worker *status*,
-  not coverage, which is E-15's split working as intended.
+  not coverage, which is that split working as intended.
 - **16 files total** currently depend on the assumed shape (8 source, 8
   test).
 
@@ -159,7 +159,7 @@ It is worth being clear that the current model already handles corrections
 
 And costs:
 
-- The row key decision (§2.1), which E-23 left open on purpose.
+- The row key decision (§2.1), left open on purpose.
 - An as-of parameter at every completeness question (§2.3), or a silent
   default.
 - `compose`/`gaps` needing revision-awareness, which is where subtle
@@ -186,15 +186,15 @@ Deliberately ordered so the riskiest thing is not first:
 5. **Then the frontend**, whose `COVERAGE` program and catalog entry follow
    mechanically once the q side is fixed.
 
-## 6. The interaction with D-08, which is favourable
+## 6. The interaction with the re-run decision, which is favourable
 
-D-08 was answered *"leave the published rows, record no coverage, re-run
+A failed window was answered *"leave the published rows, record no coverage, re-run
 redoes the window"*, and I noted at the time that this **duplicates rows
-unless the publish path dedupes** — E-13 promises retry-safe publication,
+unless the publish path dedupes** — retry-safe publication is promised,
 which is explicitly weaker than exactly-once.
 
 A row key (§2.1) is exactly what makes that dedupe possible. So the two
-answers fit together, and the key is worth having for D-08 alone even if
+answers fit together, and the key is worth having for that alone even if
 supersession is later deferred. That is an argument for step 3 above
 independent of everything else in this note.
 
@@ -239,7 +239,7 @@ is a function an operator or a feed can call, and nothing yet assumes either.
 ## Open questions for review
 
 1. **§2.2: A or B?** Bitemporal rows, or full-window replace recorded as a
-   revision? B is cheaper but is the option D-11 was offered and not
+   revision? B is cheaper but is the option that was offered and not
    chosen.
 2. **§2.1: what is the row key** for a deal-shaped source — natural,
    composite, or source-supplied revision?

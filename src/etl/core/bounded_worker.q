@@ -73,7 +73,7 @@ required_cfg:`source`dataset`width`transform
 / Every worker instance lives under this one namespace, as
 / .qwrk.<worker>: .qwrk.demo_deals_backfill, .qwrk.upstream_trades_backfill.
 / .
-/ The library's own modules are flat by convention (N-01: one file, one
+/ The library's own modules are flat by convention (one file, one
 / `\d .q<abbrev>`), and workers used to follow suit - .qddbf, .qevbf,
 / .qupbf, .qdbnbf - which put four instances of one shape beside .qbw,
 / .qcov and .qsrc as if they were four more frameworks, and made each
@@ -367,7 +367,7 @@ init:{[worker;run_spec]
     / our own assumption.
     .qcov.attach[];
 
-    / Same reasoning one table over (K-04): create it and verify its shape
+    / Same reasoning one table over: create it and verify its shape
     / here, in a live path, rather than leaving a checker that never fires.
     .qhb.attach[];
     .qhb.beat[worker;`starting];
@@ -421,7 +421,7 @@ plan:{[worker;cursor]
     cfg:declaration worker;
     s:spec worker;
     / ONE as_of for the whole plan, captured here rather than read per call
-    / (D-11). Calling .z.p inside each coverage read would plan against a
+    / Calling .z.p inside each coverage read would plan against a
     / ledger that could be superseded midway, so a range could be reported
     / both covered and uncovered within a single planning pass - and the
     / resulting window list would correspond to no coherent belief about the
@@ -432,7 +432,7 @@ plan:{[worker;cursor]
     / .
     / This used to plan from the cursor as a hard lower bound, and the
     / cursor of a finished run is range_to. So after a restatement withdrew
-    / a window's coverage (D-11), a re-run with the same spec found its
+    / a window's coverage, a re-run with the same spec found its
     / cursor at the end, consulted coverage for nothing, and reported idle
     / over a range the ledger itself said was missing - supersede worked and
     / nothing would ever refill what it withdrew. advanced_to's own comment
@@ -455,12 +455,12 @@ plan:{[worker;cursor]
 
 / ------------------------------------------------------- FETCH / PUBLISH
 
-/ Fetch one window under the retry policy (M-04).
+/ Fetch one window under the retry policy.
 / .
 / Transport failures retry; data failures do not, because retrying a schema
 / mismatch produces the same mismatch more slowly. with_retry returns a dict
 / rather than throwing, so the caller decides what a terminal failure means -
-/ here, per M-05, the window fails and the run moves on.
+/ here, the window fails and the run moves on.
 / .
 / Every fetched window is validated against the source contract (ETL-12).
 / Not belt-and-braces: a source that dropped a column returns rows where the
@@ -494,7 +494,7 @@ checkpoint:{[worker;cursor] .qbfstate.save_checkpoint[worker;spec worker;cursor]
 
 / Run one bounded pass to completion.
 / .
-/ Per M-05 a window that exhausts its retries is TERMINAL for that window and
+/ a window that exhausts its retries is TERMINAL for that window and
 / the run continues: failing the whole pass would throw away the windows that
 / did succeed, and their coverage is what makes the retry cheap. Failed
 / windows stay uncovered, so the next run plans them again.
@@ -508,7 +508,7 @@ run:{[worker]
     cursor:.qbfstate.load_checkpoint[worker;spec worker];
     windows:own[worker;`plan][cursor];
     if[0=count windows;
-        / "ran, found no work" is a SUCCESS, not a failure (C-07). An
+        / "ran, found no work" is a SUCCESS, not a failure. An
         / orchestrator that cannot tell them apart retries a successful
         / no-op forever.
         .qhb.beat[worker;`idle];
@@ -621,13 +621,13 @@ transform_batch:{[worker;batch]
 / @param worker the worker's name
 / @param w a row carrying range_from and range_to
 / @return 1b when the window completed, 0b when it failed and the run
-/   should continue with the next one (M-05)
+/   should continue with the next one
 do_window:{[worker;w]
     cfg:declaration worker;
     .qlog.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
     f:own[worker;`fetch][w`range_from;w`range_to];
     if[`failed~f`state;
-        / ERR, not a throw: per M-05 a failed window is terminal for that
+        / ERR, not a throw: a failed window is terminal for that
         / window and the run continues. Recording it with the window and the
         / classified kind is what makes "which windows failed and why"
         / answerable from the log rather than from a debugger.
@@ -638,7 +638,7 @@ do_window:{[worker;w]
         :0b];
     / TRANSFORM, between fetch and the quality gate, so the gate judges the
     / rows that will actually be published. A throwing transform takes the
-    / same terminal-window path as a failed fetch (M-05): nothing published,
+    / same terminal-window path as a failed fetch: nothing published,
     / no coverage staged, the window planned again next run.
     out:@[transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
     if[(0h=type out) and `transform_failed~first out;
@@ -655,7 +655,7 @@ do_window:{[worker;w]
     / record a lie, and nothing anywhere would say so.
     / .
     / A failed check takes the SAME terminal-window path as a failed fetch
-    / (M-05): the window is not published, no coverage is staged, the run
+    /: the window is not published, no coverage is staged, the run
     / continues, and the next run plans the window again because coverage
     / never claimed it. That is the behaviour that makes a check safe to add
     / to an existing worker - the worst case is work redone, never data lost
@@ -742,7 +742,7 @@ record_facts:{[worker;cfg;w;batch;r]
 
 / Private: the new cursor, refusing any move that is not strictly forward.
 / .
-/ D-09 asked whether backfill is strictly oldest-first, and whether the order
+/ It was asked whether backfill is strictly oldest-first, and whether the order
 / matters to correctness or only to observability. It is oldest-first by
 / construction - windows[] builds starts as from_ts+width*til n, and remaining
 / hands back ascending sub-ranges. The order used to matter to CORRECTNESS:

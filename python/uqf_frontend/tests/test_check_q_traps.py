@@ -411,7 +411,7 @@ def test_the_real_repository_has_none():
     after the trap was hit, so it has to be true of the code that exists.
 
     Through the checker's own file list, which excludes the vendored trees
-    this repository must not edit (H-01).
+    this repository must not edit.
     """
     found = [f for f in cqt._linter_findings(QLINTER) if f.rule.startswith("QB002")]
     assert not found, found
@@ -463,7 +463,7 @@ def test_the_real_repository_is_clean():
     exists.
 
     Scoped through the checker's OWN file list rather than a raw
-    `git ls-files`: `lib/torq` is vendored and never edited (H-01), and it
+    `git ls-files`: `lib/torq` is vendored and never edited, and it
     does carry an instance of this trap. Holding this repository to a rule
     it cannot act on in a tree it must not touch is how a gate gets
     switched off.

@@ -32,17 +32,6 @@ The local branch-name and protected-branch hooks are excluded in CI because
 PR checkout can be detached and pushes to `master` are expected. Every other
 hook retains its existing configuration.
 
-## Decision-register failures
-
-`python3 scripts/generate/build_decision_log.py --check` needs GitHub access, so it
-runs in CI instead of during every local commit. After an answer or issue
-body changes, run `python3 scripts/generate/build_decision_log.py` from an authenticated
-checkout, inspect `docs/decisions/README.md`, and commit the regenerated snapshot.
-The check compares against live issue data; an API failure also fails it.
-No manual changes to generated text are needed.
-
-CI runs checks; this workflow does not configure branch-protection rules.
-
 ## Browser application
 
 The `Browser application` job installs Node 24 and runs `npm ci`,

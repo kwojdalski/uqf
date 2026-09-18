@@ -65,14 +65,8 @@ jobs:
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
-      - name: Check decision register against GitHub
-        # This gate should still report stale decisions if a code hook fails.
-        if: ${{ !cancelled() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/generate/build_decision_log.py --check
       - name: Check the generated operational docs match the registry
-        # J-01/J-02: operational docs are generated, committed and checked.
+        # Operational docs are generated, committed and checked.
         # Where the source and the document disagree the source is right by
         # definition, so this fails the build rather than reconciling.
         if: ${{ !cancelled() }}
@@ -109,9 +103,9 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/generate/generate_man_registry.py --check
       - name: Check the ETL core does not depend on its declarations
-        # F-08 makes core/ framework and sources//workers/ declarations; E-02
+        # The split makes core/ framework and sources//workers/ declarations; that
         # is the property that buys - a new source needs no core change.
-        # N-04's answer noted the rule was a convention with no gate, so a
+        # The rule was a convention with no gate, so a
         # file reaching the wrong way would break it with every test green.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_etl_layering.py --check
@@ -132,7 +126,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_doc_references.py
       - name: Check the environment reference lists every variable
-        # C-04: docs/reference/environment.md is the one operator-facing list. It is
+        # docs/reference/environment.md is the one operator-facing list. It is
         # hand-written because "optional, and here is what unset does" is a
         # judgement, and checked in both directions because a hand-written
         # reference otherwise ends up describing a previous version of the

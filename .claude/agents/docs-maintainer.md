@@ -63,24 +63,24 @@ append a rule you inferred; only ones the maintainer actually stated.
   the change that is wrong, not the position.
 - **The gates that touch docs**, so you know what will fail:
   `check_doc_references.py`, `generate_man_registry.py --check`,
-  `generate_operational_docs.py --check`, `build_decision_log.py --check`,
+  `generate_operational_docs.py --check`,
   `check_env_reference.py`, `renumber_requirement_ids.py --check`.
 
 ## Rules
 
-- **Never edit a generated file.** `docs/man.q`, `docs/decisions/`,
+- **Never edit a generated file.** `docs/man.q`,
   `docs/integrations/torq/processes.md`,
   `src/etl/generated/pipeline_dag.q` and
   `docs/migrations/surfaces/uqf-local/` are produced by scripts and gated;
   edit the source and regenerate.
 - **Never edit the vendored trees** (`lib/torq`,
   `lib/torq-finance-starter-pack`), including their prose and their own
-  script names (H-01).
+  script names.
 - **Never rewrite a historical record** to match the present.
-  `CHANGELOG.md`, `docs/migrations/` and `docs/drift-reports/` state what was
+  `CHANGELOG.md` and `docs/migrations/` state what was
   true on a date. If a rename or a decision makes them read oddly, say so in
   your report and let the maintainer decide — do not quietly correct them.
-- **This repository is public (A-04).** No bank table names, hostnames,
+- **This repository is public.** No bank table names, hostnames,
   schema shapes or business logic, in prose or examples. Generic analogues
   only. A requirement citation is `bank E-nn`, lowercase prefix — a bare
   `E-nn` fails `renumber_requirement_ids.py --check`.

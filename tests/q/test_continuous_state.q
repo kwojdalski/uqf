@@ -115,7 +115,7 @@ test_a_stale_cursor_is_not_fresh:{[t]
     .qcont.save_cursor[`tailer;.z.p-2D];
     .qunit.assertEquals[.qcont.is_fresh[`tailer;0D00:05];0b;"a two-day-old cursor is not within five minutes"]};
 
-/ --- dataset freshness across feeders (bank E-22) ------------------------
+/ --- dataset freshness across feeders ------------------------
 
 / A dataset is only as fresh as its SLOWEST feeder, so the aggregate is
 / min over cursors and the laggard is named. These tests use three tailers
@@ -184,7 +184,7 @@ test_a_poll_persists_the_new_cursor:{[t]
 
 / A tailer on a quiet source is working correctly. An orchestrator that
 / cannot tell "nothing new" from "broken" alerts all night on a healthy
-/ process (C-07).
+/ process.
 test_an_empty_page_is_idle_not_a_failure:{[t]
     r:.qcont.poll_once[`tailer;{[c] ([] ts:`timestamp$(); v:`float$())};{[p] count p};{[p] .conttest.d 2}];
     .qunit.assertEquals[r`state;`idle;"an empty poll is a success, because a quiet source is not a broken one"]};

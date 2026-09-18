@@ -27,7 +27,7 @@ def test_starting_and_running_are_pending():
 
 
 def test_idle_and_completed_are_both_success():
-    """C-07: "ran, found no work" (idle) is as successful as "ran, did
+    """ "ran, found no work" (idle) is as successful as "ran, did
     work" (completed) — neither may read as pending or failed.
     """
     assert translate(make_status("idle")) is PokeOutcome.SUCCESS
