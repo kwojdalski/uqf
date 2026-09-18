@@ -1,249 +1,198 @@
 # What a Dagster-shaped pipeline framework needs, and what `src/etl/` has
 
-An assessment, not a plan. It answers two questions: **what is missing**
-relative to how a modern orchestration framework is structured, and **is that
-implementable in q**.
+**This assessment is closed.** It asked two questions — what is missing
+relative to how a modern orchestration framework is structured, and is that
+implementable in q — found three real gaps and four smaller ones, and every
+one of those has since been built or been decided against. What remains
+different from Dagster is listed in §3, and each difference is a decision
+with a stated condition for reopening it, not an item waiting for someone.
 
-Short answers: less is missing than the framework's age suggests, the gaps
-are concentrated in three places, and yes — q is unusually *well* suited to
-most of it, for a reason given in §4.
+Kept rather than deleted because the *reasoning* is the part worth having:
+each gap below says what was wrong before, which is why the thing that
+replaced it is shaped the way it is. A reader wondering why `.qio` exists,
+or why `run_id` is not a parameter, will not find that anywhere else.
 
-## 1. The mapping — what already exists
+## 1. The mapping
 
 Dagster's abstractions, against this tree:
 
 | Dagster concept | `src/etl/` today | State |
 |---|---|---|
-| **Resource** — pluggable external connection | `.qsrc` source contract: a declaration carrying `query`, `fixture`, credentials | **partial** — source-shaped only |
 | **Op / asset compute** | `.qbw` bounded worker (`init`/`plan`/`fetch`/`publish`/`checkpoint`) and `.qstream` streaming job (`on_batch`/`on_timer`) | **yes** |
-| **Graph / job** | `.qdag` — edges *derived* from declared inputs and outputs | **yes** |
-| **Partitions** | `.qcov` half-open time intervals + `source_version`, plus a categorical `partition` | **yes** — see §5.4 |
-| **Materialization record** | `.qcov` rows, bitemporal, with per-window metadata from `.qrun` | **yes** — see §2.3 |
+| **Graph / job** | `.qdag` — edges *derived* from declared inputs and outputs, over four job kinds: `bounded`, `continuous`, `stream`, `reaction` | **yes** |
+| **Partitions** | `.qcov` half-open time intervals + `source_version`, plus a categorical `partition` | **yes** — §2.4 |
+| **Materialization record** | `.qcov` rows, bitemporal, with per-window metadata from `.qrun` | **yes** — §2.3 |
 | **Backfill** | `.qbw.plan` narrows by cursor then coverage | **yes**, and better than most |
-| **Config** | `.qwcfg` typed getters, stated precedence, accumulated errors | **partial** — global, not per-op |
 | **Retry policy** | `.qwrt` classification: data failures don't retry, transport does | **yes** |
 | **Logging / events** | `.qlog` four levels over TorQ's `.lg`, structured fields | **yes** |
-| **Sensors / monitoring** | `.qhb` heartbeat, status files, `/ops/backfill` | **yes** |
-| **Asset checks** | `.qdqc`, reached through a worker's declared `check` | **yes** — see §2.2 |
-| **Schedules** | *deliberately absent* — Airflow owns ordering (ETL-15) | **by decision** |
-| **IO manager** — compute/storage separation | `.qio` — a manager is a declared dict | **yes** — see §2.1 |
-| **Run identity** | `.qrun` — one identity per execution | **yes** — see §2.3 |
+| **Sensors / monitoring** | `.qhb` heartbeat, `.qstatus` status files, `/ops/backfill` | **yes** |
+| **Asset checks** | `.qdqc`, reached through a worker's declared `check` | **yes** — §2.2 |
+| **IO manager** — compute/storage separation | `.qio` — a manager is a declared dict | **yes** — §2.1 |
+| **Run identity** | `.qrun` — one identity per execution | **yes** — §2.3 |
+| **Resource** — pluggable external connection | `.qsrc` source contract | **source-shaped, by decision** — §3 |
+| **Config** | `.qwcfg` typed getters, stated precedence, accumulated errors | **global, by decision** — §3 |
+| **Asset identity** | an asset is the table a job declares; it has no record of its own | **absent, by decision** — §3 |
+| **Schedules** | *deliberately absent* — Airflow owns ordering (ETL-15) | **by decision** — §3 |
 
-The four rows that read **missing** or **partial — no metadata** when this
-register was written are now done, and the table says so; §2 and §5 are
-where each was closed. A summary that still described the gaps its own body
-reported as fixed is worse than no summary, because the table is the part a
-reader skims.
+The worker contract, the coverage ledger and the derived DAG are the three
+things most homegrown pipelines never get, and they are the three this tree
+had from the start.
 
-That is a substantial framework. The worker contract, the coverage ledger and
-the derived DAG are the three things most homegrown pipelines never get, and
-they are the three this tree does have.
+## 2. The gaps it found, and what closed each
 
-## 2. The three real gaps
+### 2.1 No IO manager — compute and storage were fused
 
-### 2.1 ~~No IO manager~~ — CLOSED
+`.qbw.publish` was four lines and they decided everything: every worker
+wrote to an in-process table named by its source declaration, and that was
+the only thing a worker could do with its output. There was no way to run a
+worker in a test and capture its output without touching a table, to write
+the same asset to a partitioned HDB instead of memory, or to change where
+an asset lands without changing the worker.
 
-**Fixed.** `.qio` declares where output goes: a manager is a dict carrying
-`write`, defaulting to `.qio.memory` — today's in-process insert — so a worker
-that says nothing about io behaves exactly as before. `.qio.discard` writes
-nothing and reports honestly, which is what makes a pipeline runnable end to
-end without touching storage.
+**Closed by `.qio`.** A manager is a dict carrying `write`, defaulting to
+`.qio.memory` — the in-process insert — so a worker that says nothing about
+io behaves exactly as it did. `.qio.discard` writes nothing and reports
+honestly, which is what makes a pipeline runnable end to end without
+touching storage.
 
-No `read` or `exists`: nothing in this framework reads a target back through
-an abstraction, and a capability reached from no live path is the shape this
-repository keeps finding. They go in when something calls them.
+No `read` or `exists`: nothing in this framework reads a target back
+through an abstraction, and a capability reached from no live path is the
+shape this repository keeps finding and deleting. They go in when something
+calls them.
 
-The original text follows, because the fusion it describes is why the seam
-exists.
+### 2.2 `.qdqc` was wired to nothing — a pipeline could publish garbage and record success
 
----
+Nine check functions existed and no worker called any of them. The sequence
+was fetch → publish → **record coverage as complete**, so a window of nulls
+or of semantically wrong rows was recorded as covered and read as published
+forever. The ledger could hold a lie and nothing anywhere would say so.
 
-### 2.1 (as written) No IO manager — compute and storage are fused
+**Closed by the declared `check`.** A worker declaration takes an optional
+callback, run between transform and publish. A failed check takes the same
+terminal-window path as a failed fetch: nothing published, no coverage
+staged, the run continues, and the next run plans that window again because
+coverage never claimed it. `demo_deals_backfill` declares one, so the path
+is exercised rather than merely available.
 
-`.qbw.publish` is four lines and they decide everything:
+### 2.3 No run identity, and materialisations carried no metadata
 
-```q
-publish:{[worker;batch]
-    t:.qsrc.declaration[(declaration worker)`source]`target;
-    if[not t in tables `.; t set 0#batch];
-    t insert batch;
-    count batch}
-```
+Three questions had no answer: what did one execution produce, what else
+did it produce or fail to produce, and are two assets consistent because
+they were built together. `rows_published` was the only fact recorded.
 
-Every worker writes to an in-process table named by its source declaration.
-That is the *only* thing a worker can do with its output. There is no way to:
+**Closed by `.qrun`.** `etl_coverage` gains a `run_id`, written from
+`.qrun.current[]` rather than passed in — the one design argument worth
+restating: ETL-09 requires `source_version` to be a *parameter* because an
+optional filter is one a caller forgets, and a wrong `source_version` is
+silent corruption. `run_id` is different in kind: a fact about the
+executing process, with exactly one right answer at any instant. Threading
+it through five signatures would manufacture the chance to pass the wrong
+one, a failure mode that otherwise cannot occur. Outside a run the column
+records the null guid, honestly — a materialisation staged by hand belongs
+to no run, and saying so beats inventing an identity.
 
-- run a worker in a test and capture its output without touching a table;
-- write the same asset to a partitioned HDB instead of an in-memory table;
-- write to two places (a table and an archive) without editing the shell;
-- change where an asset lands without changing the worker.
+Three reads answer the three questions: `.qcov.materialisations_of[run]`,
+`.qcov.contributing_runs[dataset;partition;version]`, and `.qrun.unfinished[]`
+— the executions that began and never reported an outcome, which is the state an
+interrupted process leaves and which nothing else records.
 
-**This is the single biggest modularity gap.** Dagster's IO manager exists
-precisely because "what to compute" and "where it goes" change for different
-reasons and at different times.
+Arbitrary metadata is the worker's own `facts` hook: a function from the
+batch to a dict, attached to the window's materialisation. The framework
+records what it can know without a schema (rows, source_version, dry_run);
+anything needing to know what a column *means* goes there.
 
-### 2.2 ~~`.qdqc` is wired to nothing~~ — CLOSED
+### 2.4 Partitions were time-only
 
-**Fixed.** A worker declaration now takes an optional `check` callback, run
-between fetch and publish. A failed check takes the same terminal-window path
-as a failed fetch: not published, no coverage staged, run continues,
-and the next run plans the window again because coverage never claimed it.
+Coverage carried only `[range_from, range_to)`, so a categorical partition
+— per-`sym`, per-region — had no expression, and `.qbw.define` refused two
+workers sharing a dataset *because* their coverage rows would have been
+indistinguishable. That refusal was correct given the schema, and it was
+the ceiling on parallelism.
 
-`demo_deals_backfill` declares one, so the path is exercised rather than
-merely available. The original text follows, because the failure it describes
-is the reason the gate exists.
+**Closed.** `etl_coverage` carries `partition`, required on write and on
+read; the refusal keys on the (dataset, partition) pair, so one dataset can
+be filled by several workers at once.
 
----
+### 2.5 Only one job role had a shell
 
-### 2.2 (as written) `.qdqc` is wired to nothing — a pipeline can publish garbage and record success
+`.qbw` made a backfill a declaration; feeds and subscribers were
+hand-rolled scripts, eight of them, each repeating the same twenty lines of
+subscribe-and-publish wiring — and the copies were weaker than the original
+they were copied from, returning an empty list where it threw.
 
-Nine check functions exist — `check_market_data_quality`, `check_stale_quotes`,
-`check_position_notional_limits`, `summarize_checks` and more. No worker calls
-any of them. `grep -n 'dqc' src/etl/core/bounded_worker.q` returns nothing.
+**Closed by `.qstream`.** A job declares `subscribes`, `publishes`,
+`on_batch` and `on_timer` in its own file under `src/etl/streaming/`, and
+one runner (`scripts/processes/torq_stream.q`) runs any of them, selected
+by procname. `.qpipe` did *not* become the shell: it stayed the TorQ
+adapter the runner calls, which is the layering
+[`pipeline-philosophy.md`](pipeline-philosophy.md) §10 states and
+`check_etl_layering.py` enforces.
 
-So the sequence today is: fetch → publish → **record coverage as complete**.
-A window of nulls, a window with a schema-shaped but semantically wrong
-payload, a window with every price at zero — all are recorded as covered, and
-`is_covered` will report them as published forever.
+The live Databento adapter is the test of whether that shell generalised:
+its feed handler is Python, outside q entirely, and the job that folds its
+rows reuses the `.qxf` transform the ODBC backfill already declared. One
+fold, two paths, no second implementation.
 
-This is the repository's own recurring pattern (a capability that exists and
-is reached from no live path), and here the consequence is a coverage ledger
-that lies.
+## 3. What is deliberately not here
 
-### 2.3 ~~No run identity, and materialisations carry no metadata~~ — CLOSED
+Each of these is a difference from Dagster that this tree has decided
+against, with what would change the decision.
 
-**Fixed.** `.qrun` (`src/etl/core/run.q`) adds an execution identity and a
-place to record facts about what an execution produced.
+- **Resources are source-shaped.** `.qsrc` is a resource in all but name,
+  but a worker cannot declare "I need a clock" or "I need a cache" — it
+  declares a source. Generalising is mostly renaming, and nothing has asked
+  for a second kind of resource in the life of this tree. *Reopen when a
+  worker genuinely needs a non-source dependency; the shape to copy is
+  `.qio`, which is a resource that already generalised.*
 
-`etl_coverage` gains a `run_id` column, written from `.qrun.current[]` rather
-than passed in. That is deliberate and is the one design argument worth
-restating here: ETL-09 requires `source_version` to be a parameter because an
-optional filter is one a caller forgets, but `source_version` is a *choice*
-and a wrong one is silent corruption, whereas `run_id` is a *fact about the
-executing process* with exactly one right answer at any instant. Threading it
-through five signatures would create the chance to pass the wrong one, a
-failure mode that otherwise does not exist. Outside a run the column records
-the null guid, honestly: a materialisation staged by hand belongs to no run,
-and saying so beats inventing an identity.
+- **Config is global.** `.qwcfg` has precedence, typed getters and
+  accumulated errors, but a worker does not declare its config schema, so a
+  missing key is found at first read rather than at startup. *Reopen when a
+  worker has enough configuration for that distinction to cost something;
+  today the fields are few and `.qbw.define` already refuses a malformed
+  declaration at load.*
 
-Three reads answer the three questions the gap named:
-`.qcov.materialisations_of[run]` (what one execution produced — including
-superseded rows, since restating a run's output later does not change what it
-produced), `.qcov.contributing_runs[dataset;version]` (which executions
-assembled a dataset), and `.qrun.unfinished[]` (executions that began and
-never reported an outcome — the state an interrupted process leaves, which
-nothing else records).
+- **Assets have no identity of their own.** `.qdag` derives edges from
+  declared inputs and outputs, which is asset-shaped thinking, but an asset
+  is just a table name: no description, no owner, no freshness policy
+  attached to the asset rather than to the job that happens to produce it.
+  This is the one with real value left in it. *Reopen when something needs
+  to ask a question of an asset rather than of a job — "who owns this", "is
+  this stale" — because the answer would otherwise be spread across the
+  jobs that write it.*
 
-Metadata is long-form in `etl_run_meta` — one row per fact, keyed by run *and*
-window — rather than a column per kind of fact, because the facts worth
-attaching are not known in advance and a wide table would need a migration per
-new one. The framework records what it can know without reading a column
-(`rows`, `source_version`, `dry_run`); anything needing to know what a column
-*means* comes from the worker's optional `facts` function, which
-`demo_events_backfill` demonstrates with event span, distinct syms and the
-terminal-event share.
+- **Scheduling stays out.** ETL-15 gives ordering, retries, timeouts and
+  alerting to Airflow. Re-implementing any of it here would create a second
+  authority for the same decisions, and the two would disagree. *This one
+  does not reopen: it is the authority split, not a gap.*
 
-One measured trap is recorded in the code: `first 1?0Ng` is the obvious way to
-mint a run id and is wrong here, because q seeds its random state identically
-at every process start — three separate interpreters each returned the same
-first guid. On a *shared* ledger that stamps two executions with one identity,
-which is worse than the gap it closes: absent attribution is visibly absent,
-wrong attribution reads as correct. `.qrun.mint` derives from host, pid and
-clock instead.
+## 4. Why q suited this better than it looks
 
-The original text follows.
-
----
-
-### 2.3 (as written) No run identity, and materialisations carry no metadata
-
-A coverage row records `dataset, source_version, range, rows_published,
-recorded_at, superseded_at`. There is no `run_id`, so it is not possible to
-ask:
-
-- which materialisations came from one execution;
-- what else that execution produced or failed to produce;
-- whether two assets are consistent because they were built together.
-
-And `rows_published` is the only fact recorded about a materialisation.
-Dagster attaches arbitrary metadata — row counts, min/max of the partition
-column, null fractions, a checksum, the query that produced it. That metadata
-is what makes a materialisation *auditable* rather than merely *recorded*.
-
-## 3. The smaller gaps, honestly ranked lower
-
-- **Resources are source-shaped.** `.qsrc` is a resource in all but name, but
-  a worker cannot declare "I need a clock", "I need a second connection", "I
-  need a cache". Generalising it is mostly renaming.
-- ~~**Partitions are time-only.**~~ **Done** (#185). Coverage carried only
-  `[range_from, range_to)`, so a categorical partition (per-`sym`,
-  per-region) had no expression and `.qbw.define` refused two workers sharing
-  a dataset *because* their coverage rows would be indistinguishable. That
-  refusal was correct given the schema, and it was the ceiling on
-  parallelism. `etl_coverage` now carries `partition`, required on write and
-  on read; the refusal keys on the (dataset, partition) pair, so one dataset
-  can be filled by several workers at once.
-- **Config is global.** `.qwcfg` has precedence, typed getters and accumulated
-  errors — genuinely good — but a worker does not *declare* its config schema,
-  so a missing key is found at first read rather than at startup.
-- **Assets are implicit.** `.qdag` derives edges from declared inputs and
-  outputs, which is asset-shaped thinking. But an asset has no identity of its
-  own: no description, no owner, no freshness policy attached to *the asset*
-  rather than to the worker that happens to produce it.
-- **Only one of the three job roles has a shell.** **Closed.** `.qstream`
-  (`src/etl/core/stream_job.q`) is for a streaming job what `.qbw` is for a
-  backfill: a job declares `subscribes`, `publishes`, `on_batch` and
-  `on_timer` from its own file under `src/etl/streaming/`, and one generic
-  runner (`scripts/processes/torq_stream.q`) runs any of them. The four hand-rolled
-  `torq_*_etl.q` scripts and the four feed scripts this entry described are
-  gone, and with them the `:()`-on-no-tickerplant copies. `.qpipe` did *not*
-  become the shell: it stayed the TorQ adapter the runner calls, which is
-  the layering [`pipeline-philosophy.md`](pipeline-philosophy.md) §10 now
-  states and `check_etl_layering.py` enforces.
-
-## 4. Is this implementable in q? Yes — and q is a better fit than it looks
-
-Three properties of q make this easier than in most languages:
+Three properties made the work easier than it would have been elsewhere,
+and they are why the pieces above are small:
 
 **Functions are values, and a dict of functions is a first-class object.**
-That is exactly what a resource, an IO manager and an asset check all are.
-`.qsrc` already proves the pattern works in this codebase: a source is a
-dictionary carrying `query`, `fixture` and friends, validated at registration.
-An IO manager is the same shape with `write`, `read` and `exists`. No new
-language mechanism is needed — only a second instance of a pattern already
-shipped.
+That is exactly what a resource, an IO manager and an asset check are.
+`.qsrc` proved the pattern before any of them: a source is a dictionary
+carrying `query`, `fixture` and friends, validated at registration. `.qio`
+is the same shape with `write`. No new language mechanism was needed for
+any of them — only further instances of a pattern already shipped.
 
-**Tables are the native data structure.** A materialisation event log, a run
-table, an asset catalogue and a check-result table are all *just tables*, and
-they are queryable with the same syntax as the data they describe. In Python
-these are ORM objects and a database; here they are three lines each.
+**Tables are the native data structure.** The materialisation log, the run
+table and the check results are *just tables*, queryable with the same
+syntax as the data they describe. In Python these are ORM objects and a
+database; here they are three lines each.
 
 **The namespace-per-module convention already gives module boundaries.**
-`.qio`, `.qres`, `.qcheck`, `.qrun` slot in beside `.qsrc`/`.qbw`/`.qcov`
-without disturbing anything.
+`.qio`, `.qrun`, `.qstream` and `.qstatus` slotted in beside
+`.qsrc`/`.qbw`/`.qcov` without disturbing anything.
 
-Two things are genuinely harder in q, and should be acknowledged rather than
-discovered later:
+Two things are genuinely harder in q, and both proved manageable:
 
-- **No type system for config schemas.** Dagster validates config against a
-  declared schema before a run starts. In q that has to be a runtime
-  validator — which `.qwcfg` already is in miniature, and which `.qsrc.register`
-  already does for source declarations. So it is achievable, just not free.
-- **No decorators, so registration is explicit.** Dagster's `@asset` does
-  registration implicitly. Here a module registers itself on load, which this
-  tree already does deliberately (a declaration and its implementation cannot
-  drift because there is no way to have one without the other). That is
-  arguably better, and it is certainly not a blocker.
-
-## 5. Recommended order, by leverage
-
-1. ~~**Asset checks in the publish path.**~~ **Done** — see §2.2.
-2. ~~**IO manager.**~~ **Done** — see §2.1.
-3. ~~**Run identity and materialisation metadata.**~~ **Done** — see §2.3.
-4. ~~**Categorical partitions.**~~ **Done** — see the partition bullet in §3.
-5. **Generalise resources**, then **per-op config schemas**. Each is worth
-   doing and neither blocks the other.
-
-Scheduling stays out, deliberately: ETL-15 gives ordering, retries and
-alerting to Airflow, and re-implementing them here would create the second
-authority the never-edit-the-vendored-tree rule exists to warn about.
+- **No type system for config schemas**, so validation is a runtime
+  validator — which `.qwcfg` and `.qsrc.register` both are. Achievable, not
+  free, and the reason §3's config item is still open.
+- **No decorators, so registration is explicit.** A module registers itself
+  as it loads. That is arguably better than Dagster's `@asset`: a
+  declaration and its implementation cannot drift, because there is no way
+  to have one without the other.
