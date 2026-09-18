@@ -290,6 +290,56 @@ test_every_contract_method_is_callable_not_merely_present:{[t]
 
 / --- the shell's own guards (#124, #60) ---------------------------------
 
+/ --- inheritance (#227) --------------------------------------------------
+
+/ The worker's file writes none of the contract's names; define stamps them.
+/ Checked against the contract's own lists, so a method added to either is
+/ covered without editing this test.
+test_define_stamps_the_contract_into_the_workers_namespace:{[t]
+    names:key `.qwrk.demo_deals_backfill;
+    wanted:.qbfstate.bounded_worker_globals,.qbw.inherited_methods;
+    .qunit.assertEquals[wanted where not wanted in names;`symbol$();
+        "every contract global and every delegator is present without being written in the file"]};
+
+/ The delegate's signature is the shell's minus `worker`, in the shell's
+/ order - so the wiring the tests above check cannot be swapped by a stamp,
+/ and a reader of .qwrk.x.fetch at the prompt sees from_ts and to_ts.
+test_a_stamped_delegate_carries_the_shells_parameter_names:{[t]
+    .qunit.assertEquals[(value .qwrk.demo_deals_backfill.fetch)[1];`from_ts`to_ts;
+        "the delegate's parameters are the shell's, in the shell's order"]};
+
+/ THE OVERRIDE. A worker that defines its own publish before its define
+/ keeps it, and run REACHES it: the rows land where the override put them
+/ and not in the source's target. Before #227 the shell's run loop called
+/ .qbw.publish whatever the worker had defined, so this test would have
+/ found the target written and the override never called.
+test_a_workers_own_publish_is_kept_and_reached_by_run:{[t]
+    .ddbftest.seen:0#.qfeed.demo_deals.fixture[];
+    `.qwrk.overriding_worker.publish set {[batch] .ddbftest.seen,:batch; count batch};
+    .qbfstate.release_lock `overriding_worker;
+    .qbfstate.clear_checkpoint `overriding_worker;
+    .qbw.define[`overriding_worker;
+        `source`dataset`width`transform!(`demo_deals;`overriding_worker_ds;1D;`demo_deals_passthrough)];
+    .qwrk.overriding_worker.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qwrk.overriding_worker.run[];
+    .qwrk.overriding_worker.cleanup[];
+    .qbw.worker_cfg:(enlist `overriding_worker) _ .qbw.worker_cfg;
+    .qunit.assertEquals[r`state;`completed;"the run completes through the override"];
+    .qunit.assertEquals[count .ddbftest.seen;3;"every window's rows went through the worker's own publish"];
+    .qunit.assertEquals[count value `demo_deals;0;
+        "and none through the shell's, which would have written the source's target"]};
+
+/ A reload re-runs the worker's define. The names it stamped the first time
+/ are left alone, so the run specification of a worker already initialised
+/ is not reset to nulls under it.
+test_redeclaring_a_worker_keeps_its_state:{[t]
+    .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qbw.define[`demo_deals_backfill;
+        `source`dataset`width`transform`check!
+        (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qwrk.demo_deals_backfill.quality_check)];
+    .qunit.assertEquals[.qwrk.demo_deals_backfill.spec[];.ddbftest.spec_for[`v1;1;4];
+        "a second define fills only absent names, and the run specification is not one"]};
+
 / --- the derived namespace (.qwrk) --------------------------------------
 
 test_define_derives_the_workers_namespace:{[t]

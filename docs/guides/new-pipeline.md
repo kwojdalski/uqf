@@ -141,26 +141,6 @@ Mostly a declaration. Create `src/etl/workers/fx_rates_backfill.q`:
 
 \d .qwrk.fx_rates_backfill
 
-worker_name:`fx_rates_backfill
-
-/ The contract's required globals (ETL-01, ETL-02), written by .qbw.init.
-source_version:`;
-range_from:0Np;
-range_to:0Np;
-handle:0Ni;
-progress:`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);
-last_batch:();
-
-/ The contract's required methods, delegated to the shell.
-spec:{[] .qbw.spec worker_name}
-init:{[run_spec] .qbw.init[worker_name;run_spec]}
-plan:{[cursor] .qbw.plan[worker_name;cursor]}
-fetch:{[from_ts;to_ts] .qbw.fetch[worker_name;from_ts;to_ts]}
-publish:{[batch] .qbw.publish[worker_name;batch]}
-checkpoint:{[cursor] .qbw.checkpoint[worker_name;cursor]}
-run:{[] .qbw.run worker_name}
-cleanup:{[] .qbw.cleanup worker_name}
-
 / Refuse a batch that is shaped correctly but cannot be true.
 quality_check:{[batch]
     if[0=count batch; :.qbw.no_failures[]];
@@ -195,17 +175,33 @@ and a worker has one name rather than a name and an abbreviation to keep in
 step. The library's own modules stay flat (`.qbw`, `.qcov`, `.qsrc`); the
 nesting marks the line between the framework and what runs on it.
 
-**The globals stay in the worker's namespace deliberately.** ETL-01 requires
-`source_version`, `range_from` and `range_to` to be names in *this*
-namespace, so that "is this worker complete" is a check rather than a
-code-review question. Moving them into the shell would make every worker
-pass the contract vacuously.
+**The contract's names are stamped by `define`, not written by you.**
+ETL-01 requires `source_version`, `range_from` and `range_to` to be names in
+*this* namespace, so that "is this worker complete" is a check rather than a
+code-review question — and `.qbw.define` writes them there, along with
+`handle`, the run accumulators, and the eight methods
+(`init`, `plan`, `fetch`, `publish`, `checkpoint`, `spec`, `run`, `cleanup`),
+each a one-line delegate to the shell with the shell's own parameter names:
 
-**The five methods are one line each, and they are still worth calling in a
-test.** `.qbfstate.require_contract` checks they *exist*; nothing checks they
-are wired correctly. A delegator with its arguments swapped —
-`.qbw.fetch[worker;to_ts;from_ts]` — fetches a backwards window and passes
-every test that never calls it.
+```q
+q).qwrk.fx_rates_backfill.fetch
+{[from_ts;to_ts] .qbw.fetch[`fx_rates_backfill;from_ts;to_ts]}
+```
+
+Until #227 every worker file carried that block by hand. The method list
+comes from `.qbfstate.bounded_worker_methods`, so a method added to the
+contract reaches every worker without any file being edited.
+
+**To override a method, define it before the `define` call.** `define` fills
+only the names the namespace does not already have, and `.qbw.run` reaches
+`plan`, `fetch` and `publish` through the worker's namespace rather than
+calling its own — so a worker with a genuinely different publish path
+writes `publish:{[batch] ...}` above its `define` and the run loop uses it.
+An override that wants the default for part of its work calls the shell by
+its full name, `.qbw.publish[`fx_rates_backfill;batch]`. Tests should call
+an override through `.qwrk.fx_rates_backfill.run[]`, not only directly: the
+first version of the shell honoured overrides from the prompt and from
+nowhere else.
 
 **`transform` is required, because it is the job.** It runs between fetch and
 the check, so the check and the target both see its output. Its one input
