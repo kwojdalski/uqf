@@ -47,7 +47,12 @@ required_spec:`kind`inputs`outputs
 / whatever it declared. Unlike the other three it may be ASSERTED rather than
 / derived - see .qreact.on's header and `reaction_edges` below - which is why
 / it is a kind of its own rather than being folded into `bounded`.
-kinds:`bounded`continuous`stream`reaction
+/ `normalizer` is a stream job of a particular shape - many sources, one
+/ canonical output, one declared transform per source (.qnorm). It runs
+/ exactly as a `stream` does; it is a kind of its own so that a graph can
+/ show where shapes converge, which is the one thing about a normalizer
+/ worth seeing.
+kinds:`bounded`continuous`stream`reaction`normalizer
 
 / Register a job's inputs and outputs.
 / .

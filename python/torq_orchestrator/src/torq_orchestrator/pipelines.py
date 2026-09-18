@@ -22,6 +22,8 @@ from torq_orchestrator.pipeline import (  # noqa: F401 - re-exported: core.py im
 from torq_orchestrator.schemas import (
     DATABENTO_BOOK_TABLE_SCHEMA,
     EXECUTION_QUALITY_TABLE_SCHEMA,
+    EXECUTIONS_TABLE_SCHEMA,
+    MARKS_TABLE_SCHEMA,
     MKT_ORDERBOOK_TABLE_SCHEMA,
     POSITION_TABLE_SCHEMA,
     QUOTES_TABLE_SCHEMA,
@@ -112,9 +114,13 @@ PIPELINES: tuple[Pipeline, ...] = (
         script=STREAM_RUNNER_SCRIPT,
         loads_qpipe=True,
         kind="etl",
-        subscribes=("trades", "quote"),
+        subscribes=("executions", "marks"),
         table="position",
         schema=POSITION_TABLE_SCHEMA,
+        note=(
+            "reads the two normalizers' outputs, not trades and quote, so one "
+            "book carries FX and crypto and a new market is a mapping, not a job"
+        ),
     ),
     Pipeline(
         procname="markout1",
@@ -198,13 +204,24 @@ PIPELINES: tuple[Pipeline, ...] = (
         ),
     ),
     Pipeline(
-        procname="cryptoposbook1",
+        procname="executions1",
         script=STREAM_RUNNER_SCRIPT,
         loads_qpipe=True,
-        kind="etl",
-        subscribes=("crypto_trades", "crypto_book"),
-        publishes=("position",),
-        note="posbook1's transform over crypto fills, marked to the crypto top of book",
+        kind="normalizer",
+        subscribes=("trades", "crypto_trades"),
+        table="executions",
+        schema=EXECUTIONS_TABLE_SCHEMA,
+        note="every fill table as one: trades and crypto_trades -> executions",
+    ),
+    Pipeline(
+        procname="marks1",
+        script=STREAM_RUNNER_SCRIPT,
+        loads_qpipe=True,
+        kind="normalizer",
+        subscribes=("quote", "crypto_book"),
+        table="marks",
+        schema=MARKS_TABLE_SCHEMA,
+        note="a mid per instrument from every book: quote and crypto_book -> marks",
     ),
 )
 

@@ -187,13 +187,13 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPath
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
     # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
     # markout1(+31)
-    # +6, not +1: the two bounded backfill processes, databento1, cryptomock1
-    # and cryptoposbook1 occupy the offsets immediately after markout1. They
+    # +7, not +1: the two bounded backfill processes, databento1, cryptomock1
+    # and the two normalizers occupy the offsets immediately after markout1. They
     # are declared processes like any other, so their ports are reserved
     # even though the backfills and the mock do not start with the stack -
     # two of them sharing a port with a feed would fail at bind time, and
     # only when someone happened to run one.
-    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 6
+    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 7
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
@@ -263,7 +263,8 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "events_backfill1",
         "databento1",
         "cryptomock1",
-        "cryptoposbook1",
+        "executions1",
+        "marks1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -337,7 +338,8 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPa
         "events_backfill1",
         "databento1",
         "cryptomock1",
-        "cryptoposbook1",
+        "executions1",
+        "marks1",
     }
 
 
@@ -698,7 +700,8 @@ def test_pipeline_offsets_are_stable():
         # pipeline inserted mid-list renumbers everything after it.
         "databento1": 34,
         "cryptomock1": 35,
-        "cryptoposbook1": 36,
+        "executions1": 36,
+        "marks1": 37,
     }
 
 
@@ -725,7 +728,9 @@ def test_feed_and_etl_kinds_derive_proctype_and_credentials():
             # access list - only a pure feed needs none.
             assert pipeline.access_list.endswith("accesslist.txt")
         else:
-            assert pipeline.kind == "etl"
+            # A normalizer is an etl of one shape - it subscribes and
+            # republishes - so discovery sees the two alike.
+            assert pipeline.kind in ("etl", "normalizer")
             assert pipeline.proctype == "metrics"
             assert pipeline.access_list.endswith("accesslist.txt")
 

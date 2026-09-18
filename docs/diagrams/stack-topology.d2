@@ -109,10 +109,11 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
 
   databento1: "databento1 :6084\nlive MBP-10 → book\nsame fold as the backfill" { class: job }
   cryptomock1: "cryptomock1 :6085\nstands in for cryptorust\npublishes only, on demand" { class: feed }
-  cryptoposbook1: "cryptoposbook1 :6086\ncrypto position and P&L\nsubscribes + publishes" { class: job }
+  executions1: "executions1 :6086\nnormalizer: fills as one\nsubscribes + publishes" { class: job }
+  marks1: "marks1 :6087\nnormalizer: mids as one\nsubscribes + publishes" { class: job }
   cross1: "cross1 :6075\nquotes → cross rates\noutput stays private" { class: job }
   vectorize1: "vectorize1 :6077\nwide → level vectors\nsubscribes + publishes" { class: job }
-  posbook1: "posbook1 :6080\nposition and P&L\nsubscribes + publishes" { class: job }
+  posbook1: "posbook1 :6080\nposition and P&L, FX + crypto\nreads the two normalizers" { class: job }
   markout1: "markout1 :6081\nexecution quality\nsubscribes + publishes" { class: job }
   legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish.\n\ndatabento1's input comes from an\nexternal Python handler, not from\na process in this diagram." { class: band }
 }

@@ -88,6 +88,8 @@ trade: "trade\nvendored schema" { class: table }
 quotes: "quotes\ntime · sym · bid/ask_prices · bid/ask_sizes" { class: table }
 wide_book: "wide_book\ntime · sym · bids0..10 · asks0..10" { class: table }
 trades: "trades\ntime · sym · side · trade_price · size · pip_factor" { class: table }
+executions: "executions\nsource_time · sym · venue · side · size · price\nfee · fee_ccy · fill_id" { class: table }
+marks: "marks\nsource_time · sym · venue · mid" { class: table }
 crypto_book: "crypto_book\ntime · venue · sym · bid/ask_prices · bid/ask_sizes" { class: table }
 crypto_trades: "crypto_trades\ntime · sym · venue · side · trade_price · size\nfee · fee_currency · exchange_fill_id" { class: table }
 
@@ -101,7 +103,8 @@ cross_quotes: "cross_quotes\nnever written to stp1 —\nlives in cross1's memory
 cross1: "cross1\n.qfwd.cross_book_at" { class: job }
 vectorize1: "vectorize1\n.qbook.book_from_wide_levels" { class: job }
 posbook1: "posbook1\n.qpos.apply_fill + .qrisk.pnl" { class: job }
-cryptoposbook1: "cryptoposbook1\nposbook's transform,\nmarked to the crypto touch" { class: job }
+executions1: "executions1\nnormalizer: every fill\ntable as one" { class: job }
+marks1: "marks1\nnormalizer: a mid from\nevery book" { class: job }
 markout1: "markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
 
 storage: "rdb1 — today's ticks\n↓ EOD writedown\nhdb1 / hdb2 — on disk" { class: store }
@@ -125,13 +128,17 @@ cross1 -> cross_quotes: "in-process only" { style.stroke-dash: 4 }
 wide_book -> vectorize1: "subscribe"
 vectorize1 -> mkt_orderbook: "republish"
 
-trades -> posbook1: "subscribe"
-quote -> posbook1: "mark to mid"
-posbook1 -> position: "republish"
+trades -> executions1: "one shape in"
+crypto_trades -> executions1: "another"
+executions1 -> executions: "one shape out"
 
-crypto_trades -> cryptoposbook1: "subscribe"
-crypto_book -> cryptoposbook1: "mark to the touch"
-cryptoposbook1 -> position: "republish"
+quote -> marks1: "one shape in"
+crypto_book -> marks1: "another"
+marks1 -> marks: "one shape out"
+
+executions -> posbook1: "subscribe"
+marks -> posbook1: "mark to mid"
+posbook1 -> position: "republish"
 
 trades -> markout1: "subscribe, buffered"
 quote -> markout1: "buffered"
@@ -146,6 +153,8 @@ wide_book -> storage
 trades -> storage
 crypto_book -> storage
 crypto_trades -> storage
+executions -> storage
+marks -> storage
 mkt_orderbook -> storage
 position -> storage
 execution_quality -> storage

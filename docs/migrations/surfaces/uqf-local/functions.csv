@@ -388,6 +388,14 @@ qmicro,volume_buckets,function,2,tape bucket_volume
 qmicro,vpin,function,3,tape bucket_volume n_buckets
 qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
 qmicro,vwmp_skew_one,function,5,n_levels bid_prices bid_sizes ask_prices ask_sizes
+qnorm,check_source,function,4,who out src xf
+qnorm,declaration,function,1,name
+qnorm,define,function,2,name decl
+qnorm,defined,function,1,
+qnorm,dispatch,function,3,name src batch
+qnorm,normalize,function,3,name src batch
+qnorm,registry,dict,,
+qnorm,required_keys,value,,
 qns,children,function,1,ns
 qns,descend,function,1,ns
 qns,functional,function,1,
@@ -612,17 +620,18 @@ qsub.crypto_mock,touch,function,1,mid
 qsub.crypto_mock,toxicity_factor,value,,
 qsub.crypto_mock,venues,value,,
 qsub.crypto_mock,walk,function,1,m
-qsub.crypto_posbook,book,dict,,
-qsub.crypto_posbook,crypto_book,table,,
-qsub.crypto_posbook,crypto_trades,table,,
-qsub.crypto_posbook,last_mid,dict,,
-qsub.crypto_posbook,on_batch,function,2,tbl batch
-qsub.crypto_posbook,publish,value,,
-qsub.crypto_posbook,top_mid,function,2,bids asks
 qsub.databento_book,book,table,,
 qsub.databento_book,on_batch,function,2,tbl batch
 qsub.databento_book,publish,value,,
 qsub.databento_book,raw,table,,
+qsub.executions,crypto_trades,table,,
+qsub.executions,executions,table,,
+qsub.executions,from_crypto_trades,function,1,batch
+qsub.executions,from_trades,function,1,batch
+qsub.executions,fx_venue,value,,
+qsub.executions,on_batch,value,,
+qsub.executions,publish,value,,
+qsub.executions,trades,table,,
 qsub.fx_feed,on_timer,function,1,
 qsub.fx_feed,publish,value,,
 qsub.fx_feed,spot,value,,
@@ -646,9 +655,19 @@ qsub.markout,quotes,table,,
 qsub.markout,score_markouts,function,2,trades quotes
 qsub.markout,score_ready,function,1,now
 qsub.markout,trades,table,,
+qsub.marks,crypto_book,table,,
+qsub.marks,from_crypto_book,function,1,batch
+qsub.marks,from_quote,function,1,batch
+qsub.marks,fx_venue,value,,
+qsub.marks,marks,table,,
+qsub.marks,on_batch,value,,
+qsub.marks,publish,value,,
+qsub.marks,quote,table,,
 qsub.posbook,book,dict,,
+qsub.posbook,executions,table,,
 qsub.posbook,last_mid,dict,,
 qsub.posbook,mark_positions,function,3,book trades marks
+qsub.posbook,marks,table,,
 qsub.posbook,next_book,function,2,book positions
 qsub.posbook,on_batch,function,2,tbl batch
 qsub.posbook,position,table,,

@@ -29,11 +29,12 @@
     .qdag.register[`vectorize1;`kind`inputs`outputs!(`stream;`wide_book;`mkt_orderbook)];
     .qdag.register[`tap1;`kind`inputs`outputs!(`stream;`$();`$())];
     .qdag.register[`fxtradesfeed1;`kind`inputs`outputs!(`stream;`$();`trades)];
-    .qdag.register[`posbook1;`kind`inputs`outputs!(`stream;`trades`quote;`position)];
+    .qdag.register[`posbook1;`kind`inputs`outputs!(`stream;`executions`marks;`position)];
     .qdag.register[`markout1;`kind`inputs`outputs!(`stream;`trades`quote;`execution_quality)];
     .qdag.register[`deals_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
     .qdag.register[`events_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
     .qdag.register[`databento1;`kind`inputs`outputs!(`stream;`databento_mbp10;`databento_book)];
     .qdag.register[`cryptomock1;`kind`inputs`outputs!(`stream;`$();`crypto_book`crypto_trades)];
-    .qdag.register[`cryptoposbook1;`kind`inputs`outputs!(`stream;`crypto_trades`crypto_book;`position)];
-    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`cryptoposbook1}
+    .qdag.register[`executions1;`kind`inputs`outputs!(`normalizer;`trades`crypto_trades;`executions)];
+    .qdag.register[`marks1;`kind`inputs`outputs!(`normalizer;`quote`crypto_book;`marks)];
+    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`executions1`marks1}

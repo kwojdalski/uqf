@@ -96,3 +96,14 @@ position:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`flo
 
 / markout1's output: per-trade execution quality at each horizon.
 execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$())
+
+/ executions1's output: every fill table the stack carries, as one. The
+/ `executions` normalizer (src/etl/streaming/executions.q) maps `trades` and
+/ `crypto_trades` onto this; posbook1 reads it and nothing else for fills.
+/ source_time is the source's own stamp, `time` the plant's on the
+/ normalized row. Named `executions` because `fills` is a q builtin.
+executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$())
+
+/ marks1's output: a mid per instrument from every book the stack carries.
+/ The `marks` normalizer maps `quote` and `crypto_book` onto this.
+marks:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); mid:`float$())

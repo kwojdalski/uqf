@@ -1,8 +1,17 @@
 / posbook.q - the whole of the position-book job (.qsub.posbook).
 / .
-/ Subscribes to `trades` and `quote`, folds every fill through .qpos into a
-/ running book, marks each result to the last mid seen for that sym, and
-/ publishes `position`.
+/ Subscribes to `executions` and `marks`, folds every fill through .qpos
+/ into a running book, marks each result to the last mid seen for that
+/ sym, and publishes `position`.
+/ .
+/ EXECUTIONS AND MARKS, NOT TRADES AND QUOTE. This job used to subscribe
+/ to the FX tables directly, and a second job - crypto_posbook - ran the
+/ same transform over the crypto ones, because the two markets spell a fill
+/ and a mid differently. The two normalizers (executions.q, marks.q) now
+/ spell them one way, so this file knows nothing about where a fill came
+/ from: FX and crypto positions land in one book, from one subscription
+/ each, and a third market is a mapping in a normalizer rather than a
+/ branch here.
 / .
 / WHAT IS IN THIS FILE: the schemas, the marking transform with its examples,
 / the batch handler, the book and the mark cache, and the declaration the
@@ -84,25 +93,38 @@ book:1!position_book;
 / by sym, never queried as a table.
 last_mid:(`symbol$())!`float$();
 
-/ Trades: apply every fill in the batch in arrival order - already time
+/ The canonical tables this job reads, as the plant delivers them - the
+/ normalizers' outputs with `time` stamped in front. Declared so that
+/ tests/q/test_stack_tables.q can hold them to the plant's own.
+executions:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$();
+    side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$();
+    fill_id:`symbol$())
+marks:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); mid:`float$())
+
+/ Executions: apply every fill in the batch in arrival order - already time
 / order off the tickerplant - mark each to the current last_mid, and publish
 / one position row per fill. The book is rebuilt from those rows BEFORE
 / publishing, as it was when this was inline: the fills will not be
 / redelivered, so a failed publish must not also lose them from the book.
-/ Quotes: just refresh last_mid.
+/ Marks: just refresh last_mid.
+/ .
+/ A fill's `time` for the transform is its source_time - when it happened -
+/ not the plant's stamp on the normalized row, which is when it was
+/ reshaped. The mark cache is per sym and the last venue to publish wins;
+/ .qpos keys a book on sym alone, so that is the resolution it has.
 / @param tbl the table the batch arrived on
 / @param batch the rows, as a table
 / @return nothing
 on_batch:{[tbl;batch]
-    $[tbl=`trades;
+    $[tbl=`executions;
         [out:.qxf.apply[`position;`book`trades`marks!(
             0!.qsub.posbook.book;
-            select time, sym, side, trade_price, size from batch;
+            select time:source_time, sym, side, trade_price:price, size from batch;
             ([] sym:key .qsub.posbook.last_mid; mid:value .qsub.posbook.last_mid))];
          `.qsub.posbook.book set 1!.qsub.posbook.next_book[0!.qsub.posbook.book;out];
          .qsub.posbook.publish[`position;out]];
-      tbl=`quote;
-        .qsub.posbook.last_mid[batch`sym]:((batch`bid)+batch`ask)%2;
+      tbl=`marks;
+        .qsub.posbook.last_mid[batch`sym]:batch`mid;
       ()];
     }
 
@@ -146,6 +168,6 @@ on_batch:{[tbl;batch]
 
 .qstream.register[`posbook;`procname`subscribes`publishes`on_batch!(
     `posbook1;
-    `trades`quote;
+    `executions`marks;
     enlist `position;
     .qsub.posbook.on_batch)];

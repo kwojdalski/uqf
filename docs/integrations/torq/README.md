@@ -5,8 +5,8 @@ Diagrams for the running state of the uqf stack (see
 it). Reflects what `uqf-stack list processes` shows today: the vendored
 14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
-`markout1`, `databento1`, `cryptomock1`, `cryptoposbook1`), and two bounded
-backfill processes (`deals_backfill1`, `events_backfill1`).
+`markout1`, `databento1`, `cryptomock1`, `executions1`, `marks1`), and two
+bounded backfill processes (`deals_backfill1`, `events_backfill1`).
 
 **The backfills are on the topology diagram but have no edge to the
 tickerplant, and that is the point.** They were left off entirely at first,
@@ -86,14 +86,23 @@ venues. `cryptomock1` stands in for both when cryptorust is not running: it
 walks a simulated market per (venue, sym), publishes the ladder onto
 `crypto_book`, and fills the maker's own touch using cryptorust's fill
 model, publishing each fill onto `crypto_trades` in the recorder's exact wire
-shape. It is `startwithall:0` and started **instead of** cryptorust, never
-beside it - two publishers onto one fills table would interleave invented
-fills with confirmed ones. `cryptoposbook1` is the consumer either way: it
-runs the `position` transform `posbook1` declares over `crypto_trades`,
-marks to the top of the crypto book, and republishes onto the same
-`position` table, so one position view carries FX and crypto. Neither
-process reads `crypto_sim_fills`; those are the paper strategy's own fills
-and are not a position.
+shape. It is `startwithall:0` and started **instead of** cryptorust's
+recorders, never beside them - two publishers onto one table would
+interleave invented rows with real ones. Neither it nor anything downstream
+reads `crypto_sim_fills`; those are the paper strategy's own fills and are
+not a position.
+
+`executions1` and `marks1` are **normalizers** - a job kind of their own
+(`.qnorm`, `src/etl/core/normalizer.q`). A normalizer subscribes to several
+tables that carry the same fact in different shapes and publishes one
+canonical table, with one declared `.qxf` transform per source; `define`
+refuses a mapping whose output drifts from the canonical schema. `executions1`
+maps `trades` and `crypto_trades` onto `executions`; `marks1` maps `quote`
+and `crypto_book` onto `marks`. `posbook1` reads those two and nothing else,
+so one position book carries FX and crypto from one subscription each, and a
+new market is a mapping in a normalizer rather than a branch in the
+position job. (Note `executions`, not `fills`: `fills` is a q builtin, and a
+table by that name would shadow the verb in every process holding it.)
 
 `tap1` is the one process still running its own script
 (`scripts/processes/torq_tap.q`): it chooses its tables at runtime rather
