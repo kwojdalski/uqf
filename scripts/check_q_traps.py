@@ -10,12 +10,9 @@ finds.
 
 ## What did NOT move, and why
 
-Two rules have no counterpart in the linter, and dropping them to tidy the
+One rule has no counterpart in the linter, and dropping it to tidy the
 delegation would be losing a check to gain a diagram:
 
-  rule_bare_remote_table          a `.q` rule with no QB code. It is about
-                                  how THIS tree talks to remote processes,
-                                  which a general q linter has no opinion on.
   rule_reserved_name_in_embedded_q  reads PYTHON files. The linter discovers
                                   `.q` files only - `qlinter some.py` returns
                                   nothing - and q does not only live in `.q`
@@ -26,9 +23,9 @@ delegation would be losing a check to gain a diagram:
                                   process, which is the bug this rule exists
                                   for and which no `.q` rule could have seen.
 
-Both are candidates for upstreaming into the linter - the second needs it to
-scan `.py` too - at which point this file becomes a two-line wrapper. Until
-then it is the smaller half of a split, not a duplicate.
+It is a candidate for upstreaming into the linter - which needs it to scan
+`.py` too - at which point this file becomes a two-line wrapper. Until then
+it is the smaller half of a split, not a duplicate.
 
 Run directly, or via the pre-commit hook. Exits 1 on any finding.
 """
@@ -380,59 +377,6 @@ def rule_reserved_name_in_embedded_q(path: str, text: str) -> list[Finding]:
     return findings
 
 
-def rule_bare_remote_table(path: str, text: str) -> list[Finding]:
-    r"""A source's `query` lambda selecting `from` a bare table name.
-
-    A lambda carries the namespace it was defined in. Every source under
-    src/etl/sources/ sits under a `\d .q<something>`, and its `query` sends an
-    inner lambda to the upstream over a handle - so on the remote, a bare
-    `from trade` resolves as `.qfeed.upstream_trades.trade`, which exists nowhere, and the
-    query throws `'trade`. The symbol form `` from `trade `` is resolved by
-    the remote's own select at ITS root, where the table actually is.
-
-    This passed every test in the tree because no test had ever sent a
-    source query to a second process: the fixture path never runs `query`.
-    It surfaced the first time a source ran live, and two older sources
-    had the identical latent fault.
-
-    Scope is deliberately narrow: only files under src/etl/sources/, and only
-    the `query:` definition - a `from t` on a local in a fixture builder is
-    fine, and a select in ordinary library code is not sent anywhere.
-    """
-    if not path.startswith("src/etl/sources/"):
-        return []
-    findings = []
-    lines = text.splitlines()
-    in_query = False
-    for n, raw in enumerate(lines, 1):
-        code = _strip_strings(_strip_comments(raw))
-        if re.match(r"query\s*:", code):
-            in_query = True
-        elif in_query and re.match(r"[A-Za-z_.]", code):
-            # The next top-level definition ends the block.
-            in_query = False
-        if not in_query:
-            continue
-        for match in re.finditer(r"\bfrom\s+([A-Za-z_]\w*)\b", code):
-            findings.append(
-                Finding(
-                    path=path,
-                    line=n,
-                    rule="bare-remote-table",
-                    detail=f"from {match.group(1)}",
-                    why=(
-                        "a lambda sent over a handle carries this file's \\d namespace, "
-                        "so a bare table name resolves there on the remote and throws. "
-                        "Write the symbol form: from `" + match.group(1) + "."
-                    ),
-                )
-            )
-    return findings
-
-
-# ------------------------------------------------------- the linter half
-
-
 def _qlinter() -> str | None:
     """The linter binary, or None when it is not installed."""
     explicit = os.environ.get(QLINTER_ENV)
@@ -556,13 +500,6 @@ def main() -> int:
 
     findings = _linter_findings(binary)
 
-    # The .q rule the linter does not have.
-    for path in q_files:
-        rel = str(path.relative_to(REPO))
-        findings.extend(
-            rule_bare_remote_table(rel, path.read_text(encoding="utf-8", errors="replace"))
-        )
-
     # q does not only live in .q files. The orchestrator and the gateway build
     # q expressions in Python and send them over IPC, and those are invisible
     # both to every .q rule and to the linter, which discovers .q files only.
@@ -581,7 +518,7 @@ def main() -> int:
 
     print(
         f"check_q_traps: {len(q_files)} .q + {len(python_files)} .py file(s) clean "
-        "(13 rules through qlinter, 2 here)"
+        "(13 rules through qlinter, 1 here)"
     )
     return 0
 

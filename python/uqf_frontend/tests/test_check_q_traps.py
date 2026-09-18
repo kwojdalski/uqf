@@ -477,16 +477,18 @@ def test_every_rule_left_here_is_still_called():
     own version of the bug it exists to catch.
 
     The registries this used to compare against are gone with the thirteen
-    rules that moved, so it reads `main` instead: the two that stayed must
-    appear there, and a third rule added later must be wired in rather than
+    rules that moved, so it reads `main` instead: the one that stayed must
+    appear there, and a second rule added later must be wired in rather than
     merely written.
+
+    `rule_bare_remote_table` was the other survivor until it moved to
+    tests/q/test_source_contract.q, where it is read from the source text of
+    every file under src/etl/sources/ rather than from a Python rule.
     """
     import inspect
 
     defined = {n for n in dir(cqt) if n.startswith("rule_")}
-    assert defined == {"rule_bare_remote_table", "rule_reserved_name_in_embedded_q"}, (
-        f"unexpected rule(s) here: {defined}"
-    )
+    assert defined == {"rule_reserved_name_in_embedded_q"}, f"unexpected rule(s) here: {defined}"
     called = inspect.getsource(cqt.main)
     unwired = {n for n in defined if n not in called}
     assert not unwired, f"defined but never called: {unwired}"
@@ -609,54 +611,3 @@ def test_unparseable_python_is_not_this_rule_s_problem():
     # ruff already reports a syntax error; this rule returning findings for
     # one would be noise attached to the wrong tool.
     assert _py_rule("def (\n") == []
-
-
-# --------------------------------------------- bare remote table
-
-
-_SOURCE = "src/etl/sources/t.q"
-
-_BARE = """\\d .qx
-query:{[h;range_from;range_to]
-    h({[f;t] select time, sym from trade where time>=f, time<t};range_from;range_to)}
-fixture:{[] ([] time:`timestamp$(); sym:`symbol$())}
-"""
-
-
-def test_a_bare_table_in_a_source_query_is_flagged():
-    """The live shape: `from trade` threw 'trade on the remote because the
-    lambda carried \\d .qsup across the wire. Three sources had it."""
-    (finding,) = cqt.rule_bare_remote_table(_SOURCE, _BARE)
-    assert finding.rule == "bare-remote-table"
-    assert finding.detail == "from trade"
-    assert "`trade" in finding.why
-
-
-def test_the_symbol_form_is_not_flagged():
-    fixed = _BARE.replace("from trade", "from `trade")
-    assert cqt.rule_bare_remote_table(_SOURCE, fixed) == []
-
-
-def test_a_select_outside_the_query_block_is_not_flagged():
-    # A fixture builder selecting from its own local is not sent anywhere.
-    src = _BARE.replace("from trade", "from `trade")
-    src += "\nfixture2:{[] t:fixture[]; select from t}\n"
-    assert cqt.rule_bare_remote_table(_SOURCE, src) == []
-
-
-def test_a_from_inside_a_comment_or_string_is_not_flagged():
-    src = _BARE.replace("from trade", "from `trade")
-    src += '/ copied from trade on the upstream\nnote:"rows from trade";\n'
-    assert cqt.rule_bare_remote_table(_SOURCE, src) == []
-
-
-def test_a_file_outside_the_sources_tree_is_not_the_rule_s_concern():
-    # Ordinary library code selects from bare names all day and sends none
-    # of them over a handle.
-    assert cqt.rule_bare_remote_table("src/execution/execution.q", _BARE) == []
-
-
-def test_the_shipped_sources_all_use_the_symbol_form():
-    for path in cqt._tracked_q_files():
-        rel = str(path.relative_to(cqt.REPO))
-        assert not cqt.rule_bare_remote_table(rel, path.read_text(errors="replace")), rel

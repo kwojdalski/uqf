@@ -61,7 +61,8 @@ tz:`UTC
 / there, and the query throws 'trade. The symbol form is resolved by the
 / remote's own select at ITS root, which is where the table is. Found the
 / first time any source in this tree ran live; both older sources have the
-/ same latent fault, and check_q_traps now refuses the bare form.
+/ same latent fault, and test_source_contract.q now reads every source's
+/ query block and refuses the bare form.
 / @param h an open handle to the upstream process
 / @param range_from inclusive lower bound, in the source's own clock
 / @param range_to exclusive upper bound
