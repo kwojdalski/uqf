@@ -1,4 +1,4 @@
-"""Tests for `scripts/check_q_traps.py` - that each rule FIRES.
+"""Tests for the q traps this repository checks for - that each rule FIRES.
 
 A checker nobody has seen fail is a checker that might match nothing. This
 repository has hit that failure mode three times: a lint hook scoped to a
@@ -10,11 +10,28 @@ The must-NOT-flag cases are the more important half. Each is real code from
 this repository that an earlier, naive version of the rule wrongly flagged -
 `cross_ref_price_at` in particular, whose trailing-semicolon projection is
 correct and which the first draft of the `@` rule reported as a bug.
+
+## Why these now drive a binary
+
+Thirteen of the fifteen rules moved to the standalone q linter, so the
+corpus below is checked against `qlinter` rather than against Python
+functions. The corpus is the part worth keeping: it is this repository's
+accumulated evidence about what must and must not be flagged, and it is
+still the thing that would catch the linter silently ceasing to match.
+
+`_flagged` runs the real binary over a snippet on stdin, which also means
+these tests exercise the same path the hook does. They skip when the linter
+is not installed, because a missing tool is not a failing rule - but the
+hook itself refuses in that case rather than passing vacuously.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -33,31 +50,60 @@ cqt = importlib.util.module_from_spec(_SPEC)
 sys.modules["check_q_traps"] = cqt
 _SPEC.loader.exec_module(cqt)
 
+QLINTER = os.environ.get("QLINTER") or shutil.which("qlinter")
+needs_linter = pytest.mark.skipif(
+    QLINTER is None,
+    reason="qlinter is not installed; see scripts/check_q_traps.py for the install",
+)
 
-def _line_rule(rule, source: str):
-    return rule("t.q", source.splitlines())
 
+def _flagged(source: str, code: str, name: str = "t.q") -> list:
+    """The linter's findings of one code over a snippet, through stdin.
 
-def _text_rule(rule, source: str):
-    return rule("t.q", source)
+    stdin rather than a temporary file so the snippet is linted exactly as
+    an unsaved editor buffer would be, and so `name` can claim a path the
+    filesystem does not have.
+
+    Returns `cqt.Finding` rather than raw JSON so the assertions below read
+    the same as when these rules were Python functions - the corpus is the
+    point, and rewriting every assertion would have risked changing what it
+    claims while moving it.
+    """
+    if QLINTER is None:
+        pytest.skip("qlinter is not installed; see scripts/check_q_traps.py")
+    result = subprocess.run(
+        [QLINTER, "-", "--stdin-filename", name, "--format", "json", "--profile", "uqf"],
+        input=source,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode in (0, 1), result.stderr
+    return [
+        cqt.Finding(
+            path=f["path"], line=f["line"], rule=f["rule"], detail=f["detail"], why=f["why"]
+        )
+        for f in json.loads(result.stdout or "[]")
+        if f["code"] == code
+    ]
 
 
 # ------------------------------------------------------------ bare slash
 
 
 def test_a_lone_slash_is_flagged():
-    found = _line_rule(cqt.rule_bare_slash_comment_block, "a:1\n/\nb:2\n")
+    found = _flagged("a:1\n/\nb:2\n", "QP001")
     assert len(found) == 1
     assert found[0].line == 2
 
 
 def test_the_intended_blank_comment_line_is_not_flagged():
     """`/ .` is what this repo uses, and must stay quiet."""
-    assert not _line_rule(cqt.rule_bare_slash_comment_block, "/ header\n/ .\n/ more\n")
+    assert not _flagged("/ header\n/ .\n/ more\n", "QP001")
 
 
 def test_a_normal_comment_is_not_flagged():
-    assert not _line_rule(cqt.rule_bare_slash_comment_block, "/ this is prose\n")
+    assert not _flagged("/ this is prose\n", "QP001")
 
 
 # ------------------------------------------------- reserved parameters
@@ -65,55 +111,56 @@ def test_a_normal_comment_is_not_flagged():
 
 @pytest.mark.parametrize("name", ["desc", "tables", "sv", "load"])
 def test_each_name_that_has_bitten_this_repo_is_flagged(name):
-    found = _line_rule(cqt.rule_reserved_parameter_names, "f:{[" + name + ";ok] ok}")
+    found = _flagged("f:{[" + name + ";ok] ok}", "QF001")
     assert len(found) == 1
     assert name in found[0].detail
 
 
 def test_a_safe_parameter_name_is_not_flagged():
-    assert not _line_rule(cqt.rule_reserved_parameter_names, "f:{[label;ok] ok}")
+    assert not _flagged("f:{[label;ok] ok}", "QF001")
 
 
 def test_the_repo_s_own_renames_are_not_flagged():
     """timer_desc, sub_tables and label are the fixes; they must stay quiet."""
     src = "f:{[timer_desc;sub_tables;label] 1}"
-    assert not _line_rule(cqt.rule_reserved_parameter_names, src)
+    assert not _flagged(src, "QF001")
 
 
 def test_a_reserved_name_in_prose_is_not_flagged():
-    assert not _line_rule(
-        cqt.rule_reserved_parameter_names, "/ this mentions {[desc;x] ...} in a comment"
-    )
+    assert not _flagged("/ this mentions {[desc;x] ...} in a comment", "QF001")
 
 
 # ------------------------------------------------------------- `. ()`
 
 
 def test_applying_to_an_empty_list_is_flagged():
-    assert _line_rule(cqt.rule_niladic_dot_empty, "r:f . ()")
+    assert _flagged("r:f . ()", "QA004")
 
 
 def test_the_correct_niladic_application_is_not_flagged():
-    assert not _line_rule(cqt.rule_niladic_dot_empty, "r:f . enlist(::)")
+    assert not _flagged("r:f . enlist(::)", "QA004")
 
 
 # ------------------------------------------------- multiparam under @
 
 
 def test_a_two_parameter_lambda_under_at_is_flagged():
-    found = _text_rule(cqt.rule_multiparam_lambda_under_at, "r:@[{[a;b] a+b};x;{0n}]")
+    found = _flagged("r:@[{[a;b] a+b};x;{0n}]", "QA003")
     assert len(found) == 1
-    assert "effectively 2-argument" in found[0].detail
+    # The wording is the linter's, not this repository's; what the corpus
+    # claims is that a 2-parameter lambda under unary @ is reported, and
+    # that the count appears so a reader knows which lambda.
+    assert "2" in found[0].detail
 
 
 def test_the_smoke_check_bug_shape_is_flagged():
     """The actual bug: a 2-parameter lambda trapped with a pair."""
     src = "m:@[{[h;t] h(meta;t)};(h;tbl);{[e] (::)}]"
-    assert _text_rule(cqt.rule_multiparam_lambda_under_at, src)
+    assert _flagged(src, "QA003")
 
 
 def test_a_one_parameter_lambda_under_at_is_not_flagged():
-    assert not _text_rule(cqt.rule_multiparam_lambda_under_at, "m:@[{[t] h t};tbl;{(::)}]")
+    assert not _flagged("m:@[{[t] h t};tbl;{(::)}]", "QA003")
 
 
 def test_a_trailing_semicolon_projection_is_not_flagged():
@@ -127,29 +174,29 @@ def test_a_trailing_semicolon_projection_is_not_flagged():
         "    @[{[quotes;sym;ref_size;t] first cross_book_at[quotes;sym;t]`mid}"
         "[quotes;sym;ref_size;];t;{0n}]};"
     )
-    assert not _text_rule(cqt.rule_multiparam_lambda_under_at, src)
+    assert not _flagged(src, "QA003")
 
 
 def test_a_partially_applied_projection_is_not_flagged():
     """`@[{[spec;w] ...}[spec];w;{x}]` - two params, one supplied, so unary."""
     src = "@[{[spec;w] f[spec;w]}[spec];w;{x}]"
-    assert not _text_rule(cqt.rule_multiparam_lambda_under_at, src)
+    assert not _flagged(src, "QA003")
 
 
 def test_a_lambda_body_containing_braces_is_matched_correctly():
     """Brace-matching, not a regex: a nested lambda must not end the body."""
     src = "@[{[a;b] {x+1} each a}[a];b;{0n}]"
-    assert not _text_rule(cqt.rule_multiparam_lambda_under_at, src)
+    assert not _flagged(src, "QA003")
 
 
 def test_a_named_function_under_at_is_not_flagged():
     """Arity is not local information, so this is deliberately out of scope."""
-    assert not _text_rule(cqt.rule_multiparam_lambda_under_at, "@[some.func;x;{0n}]")
+    assert not _flagged("@[some.func;x;{0n}]", "QA003")
 
 
 def test_dot_apply_with_an_argument_list_is_not_flagged():
     """`.[f;(a;b);h]` genuinely takes an argument list - only `@` is unary."""
-    assert not _text_rule(cqt.rule_multiparam_lambda_under_at, ".[{[a;b] a+b};(x;y);{0n}]")
+    assert not _flagged(".[{[a;b] a+b};(x;y);{0n}]", "QA003")
 
 
 # --------------------------------------------------- reserved locals
@@ -164,29 +211,29 @@ def test_the_var_bug_is_flagged():
     Sixth reserved-name collision in this repo, first as a local.
     """
     bug = "f:{[source]\n    var:credential_var source;\n    v:getenv `$var;\n    }"
-    found = cqt.rule_reserved_local_assignment("t.q", bug)
+    found = _flagged(bug, "QF003")
     assert len(found) == 1
     assert "var" in found[0].detail
 
 
 def test_the_rename_is_not_flagged():
     ok = "f:{[source]\n    env_var:credential_var source;\n    }"
-    assert not cqt.rule_reserved_local_assignment("t.q", ok)
+    assert not _flagged(ok, "QF003")
 
 
 def test_a_namespace_level_definition_is_not_flagged():
     """Outside a lambda the same name is legal - it defines `.ns.var`."""
-    assert not cqt.rule_reserved_local_assignment("t.q", "\\d .qsrc\nvar:1\n")
+    assert not _flagged("\\d .qsrc\nvar:1\n", "QF003")
 
 
 def test_a_qsql_column_alias_is_not_flagged():
     """`select max:max px` is an alias, not an assignment."""
-    assert not cqt.rule_reserved_local_assignment("t.q", "f:{[t] select max:max px from t}")
+    assert not _flagged("f:{[t] select max:max px from t}", "QF003")
 
 
 def test_a_global_assignment_through_a_symbol_is_not_flagged():
     """Backtick-set is absolute and unambiguous, so it is not a local."""
-    assert not cqt.rule_reserved_local_assignment("t.q", "f:{[x] `var set x;}")
+    assert not _flagged("f:{[x] `var set x;}", "QF003")
 
 
 # ------------------------------------------------ underscore params
@@ -199,22 +246,22 @@ def test_an_underscore_parameter_is_flagged():
     `bounded_worker.q` loaded cleanly, planned its windows, and died on the
     first publish.
     """
-    found = cqt.rule_underscore_parameter("t.q", ["f:{[a;_] a+1}"])
+    found = _flagged("f:{[a;_] a+1}" + "\n", "QF002")
     assert len(found) == 1
     assert "_" in found[0].detail
 
 
 def test_the_conventional_replacement_is_not_flagged():
-    assert not cqt.rule_underscore_parameter("t.q", ["f:{[a;unused] a+1}"])
+    assert not _flagged("f:{[a;unused] a+1}" + "\n", "QF002")
 
 
 def test_a_snake_case_parameter_is_not_flagged():
     """Names merely containing an underscore are the norm in this tree."""
-    assert not cqt.rule_underscore_parameter("t.q", ["f:{[from_ts;to_ts] 1}"])
+    assert not _flagged("f:{[from_ts;to_ts] 1}" + "\n", "QF002")
 
 
 def test_an_underscore_in_a_comment_is_not_flagged():
-    assert not cqt.rule_underscore_parameter("t.q", ["/ mentions {[a;_] x} in prose"])
+    assert not _flagged("/ mentions {[a;_] x} in prose" + "\n", "QF002")
 
 
 # -------------------------------------------------- overlong throws
@@ -223,13 +270,13 @@ def test_an_underscore_in_a_comment_is_not_flagged():
 def test_a_long_thrown_message_is_flagged():
     """q truncates a thrown string at 255 bytes, silently."""
     msg = "x" * 260
-    found = cqt.rule_overlong_throw("t.q", "f:{[x] '\"" + msg + '"}')
+    found = _flagged("f:{[x] '\"" + msg + '"}', "QB004")
     assert len(found) == 1
     assert "260 chars" in found[0].detail
 
 
 def test_a_short_thrown_message_is_not_flagged():
-    assert not cqt.rule_overlong_throw("t.q", 'f:{[x] \'"too small"}')
+    assert not _flagged('f:{[x] \'"too small"}', "QB004")
 
 
 def test_a_message_containing_an_apostrophe_is_measured_correctly():
@@ -245,7 +292,7 @@ def test_a_message_containing_an_apostrophe_is_measured_correctly():
         '    if[not ok s; \'"normalize: cannot normalize \'",s,"\' to a 6-letter pair"];\n'
         "    `$s};\n"
     )
-    assert not cqt.rule_overlong_throw("t.q", src)
+    assert not _flagged(src, "QB004")
 
 
 def test_a_dollar_bracket_throw_does_not_swallow_the_next_function():
@@ -261,13 +308,13 @@ def test_a_dollar_bracket_throw_does_not_swallow_the_next_function():
         "\n"
         'other:{[x] "' + "y" * 300 + '"}\n'
     )
-    assert not cqt.rule_overlong_throw("t.q", src)
+    assert not _flagged(src, "QB004")
 
 
 def test_a_long_message_inside_a_comment_is_not_flagged():
     """Prose can contain anything, including an apostrophe and a quote."""
     src = "/ this comment mentions '\"" + ("z" * 400) + '"\nf:{[x] x}\n'
-    assert not cqt.rule_overlong_throw("t.q", src)
+    assert not _flagged(src, "QB004")
 
 
 def test_interpolated_values_are_not_counted():
@@ -277,30 +324,30 @@ def test_interpolated_values_are_not_counted():
     sits below 255 to leave room for them.
     """
     src = 'f:{[x] \'"short: ",string[x]," also short"}'
-    assert not cqt.rule_overlong_throw("t.q", src)
+    assert not _flagged(src, "QB004")
 
 
 # ------------------------------------------------------ self comparison
 
 
 def test_a_self_comparison_in_a_where_clause_is_flagged():
-    found = _line_rule(cqt.rule_self_comparison, "select from t where dataset=dataset, ts<x")
+    found = _flagged("select from t where dataset=dataset, ts<x", "QB001")
     assert len(found) == 1
     assert "dataset=dataset" in found[0].detail
 
 
 def test_the_repo_s_renamed_parameters_are_not_flagged():
-    assert not _line_rule(cqt.rule_self_comparison, "select from t where dataset=ds")
+    assert not _flagged("select from t where dataset=ds", "QB001")
 
 
 def test_arithmetic_on_the_same_name_is_not_flagged():
     """`x+x` and `x&x` are legitimate; only `=` and `~` are nonsensical."""
-    assert not _line_rule(cqt.rule_self_comparison, "select from t where x+x>0")
+    assert not _flagged("select from t where x+x>0", "QB001")
 
 
 def test_a_self_comparison_outside_qsql_is_not_flagged():
     """Scoped to qSQL, so a non-query line does not fire."""
-    assert not _line_rule(cqt.rule_self_comparison, "flag:a=a")
+    assert not _flagged("flag:a=a", "QB001")
 
 
 # ---------------------------------------------------------------- wiring
@@ -310,7 +357,7 @@ def test_a_self_comparison_outside_qsql_is_not_flagged():
 
 
 def _like(src: str):
-    return cqt.rule_interior_like_wildcard("f.q", src.splitlines())
+    return _flagged(src, "QB002")
 
 
 def test_an_interior_wildcard_is_flagged():
@@ -366,34 +413,38 @@ def test_the_real_repository_has_none():
     Through the checker's own file list, which excludes the vendored trees
     this repository must not edit (H-01).
     """
-    for path in cqt._tracked_q_files():
-        found = cqt.rule_interior_like_wildcard(
-            str(path), path.read_text(errors="replace").splitlines()
-        )
-        assert not found, f"{path}: {found}"
+    found = [f for f in cqt._linter_findings(QLINTER) if f.rule.startswith("QB002")]
+    assert not found, found
 
 
 # --------------------------------------------- unparenthesised `sv`
 
 
-def _sv(src: str):
-    return cqt.rule_unparenthesised_sv("f.q", src.splitlines())
+def _sv(body: str):
+    """The snippet as a COMPLETE lambda.
+
+    These used to be bare fragments, which suited a line-by-line regex. The
+    linter reads structure, so an unbalanced fragment trips the delimiter
+    rule (QE001) and never reaches this one - the check would have looked
+    like it stopped working when it had only stopped being reachable.
+    """
+    return _flagged("f:{[clash;xs] " + body + "}\n", "QB003")
 
 
 def test_a_join_after_sv_is_flagged():
     """The live shape: four instances of this existed, each with a passing
     test, because the tests asserted the NAME appeared and it did - right
     before the wreckage."""
-    assert _sv('\'"claimed by ",", " sv string clash," - two workers share it"];')
+    assert _sv('\'"claimed by ",", " sv string clash," - two workers share it"')
 
 
 def test_the_finding_quotes_the_offending_fragment():
-    (finding,) = _sv('\'"a ",", " sv string xs," b"];')
+    (finding,) = _sv('\'"a ",", " sv string xs," b"')
     assert "sv string xs" in finding.detail
 
 
 def test_a_parenthesised_sv_is_correct_and_not_flagged():
-    assert not _sv('\'"claimed by ",(", " sv string clash)," - two workers share it"];')
+    assert not _sv('\'"claimed by ",(", " sv string clash)," - two workers share it"')
 
 
 def test_an_sv_that_ends_the_expression_is_not_flagged():
@@ -417,20 +468,54 @@ def test_the_real_repository_is_clean():
     it cannot act on in a tree it must not touch is how a gate gets
     switched off.
     """
-    for path in cqt._tracked_q_files():
-        found = cqt.rule_unparenthesised_sv(
-            str(path), path.read_text(errors="replace").splitlines()
-        )
-        assert not found, f"{path}: {found}"
+    found = [f for f in cqt._linter_findings(QLINTER) if f.rule.startswith("QB003")]
+    assert not found, found
 
 
-def test_every_rule_is_registered():
-    """A rule defined but never called would pass silently - which is this
-    checker's own version of the bug it exists to catch.
+def test_every_rule_left_here_is_still_called():
+    """A rule defined but never called would pass silently - this checker's
+    own version of the bug it exists to catch.
+
+    The registries this used to compare against are gone with the thirteen
+    rules that moved, so it reads `main` instead: the two that stayed must
+    appear there, and a third rule added later must be wired in rather than
+    merely written.
     """
+    import inspect
+
     defined = {n for n in dir(cqt) if n.startswith("rule_")}
-    registered = {r.__name__ for r in cqt.LINE_RULES + cqt.TEXT_RULES + cqt.PYTHON_RULES}
-    assert defined == registered, f"unregistered rule(s): {defined - registered}"
+    assert defined == {"rule_bare_remote_table", "rule_reserved_name_in_embedded_q"}, (
+        f"unexpected rule(s) here: {defined}"
+    )
+    called = inspect.getsource(cqt.main)
+    unwired = {n for n in defined if n not in called}
+    assert not unwired, f"defined but never called: {unwired}"
+
+
+@needs_linter
+def test_the_delegated_rules_are_the_ones_the_linter_has():
+    """The split is only safe while the linter really carries the other
+    thirteen. If a code disappeared upstream, this repository would lose a
+    check and nothing else would say so.
+    """
+    assert QLINTER is not None  # narrowed by @needs_linter, but not for the type checker
+    listed = subprocess.run([QLINTER, "--rules"], capture_output=True, text=True, check=True).stdout
+    for code in (
+        "QE002",
+        "QF001",
+        "QF002",
+        "QF003",
+        "QF004",
+        "QA003",
+        "QA004",
+        "QB001",
+        "QB002",
+        "QB003",
+        "QB004",
+        "QP001",
+        "QP002",
+    ):
+        assert code in listed, f"{code} is no longer in the linter's catalogue"
 
 
 def test_the_checker_finds_the_repo_s_q_files():

@@ -34,6 +34,22 @@ jobs:
           enable-cache: true
       - name: Install workspace dependencies
         run: uv sync --locked
+      - name: Install qlinter
+        shell: bash
+        # The q-traps hook delegates thirteen of its fifteen rules to the
+        # standalone linter, and refuses rather than passing vacuously when
+        # it is missing. Pinned: the linter releases on its own cadence, and
+        # a new rule landing upstream must not turn this repository red
+        # without anyone choosing it - see DELEGATED_CODES.
+        env:
+          QLINT_VERSION: v0.2.0
+        run: |
+          set -euo pipefail
+          url="https://github.com/kwojdalski/q-lint/releases/download/${QLINT_VERSION}/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL "$url" -o /tmp/qlinter.tar.gz
+          tar xzf /tmp/qlinter.tar.gz -C /tmp
+          install -m755 "/tmp/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu/qlinter" /usr/local/bin/qlinter
+          qlinter --rules > /dev/null && echo "qlinter ${QLINT_VERSION} installed"
       - name: Report q runtime coverage
         shell: bash
         run: |
