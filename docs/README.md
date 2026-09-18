@@ -54,7 +54,9 @@ locally).
 closed assessment against a Dagster-shaped framework: what closed each gap,
 and what is deliberately absent),
 [`cryptorust-discovery.md`](architecture/cryptorust-discovery.md) (why a
-non-listening process belongs in the client table, not the server one).
+non-listening process belongs in the client table, not the server one),
+[`example-architecture.md`](architecture/example-architecture.md) (a desk
+system composed from the implemented services, in six bands).
 
 **`reference/`** — [`environment.md`](reference/environment.md) (every
 variable, machine-checked),
