@@ -45,10 +45,6 @@
 .qpipe.load_uqf
 .qpipe.safe_timer
 .qpipe.subscribe_etl
-.qsub.markout.now
-.qsub.markout.on_timer
-.qsub.quotes_feed.on_timer
-.qsub.wide_book_feed.on_timer
 
 # --- Genuine gaps, worth closing ---------------------------------------
 # Nothing external stands in the way of these; no test calls them.

@@ -189,6 +189,105 @@ test_the_trades_feed_publishes_one_fill_a_tick:{[t]
     .qunit.assertEquals[(count .sjtest.published;first exec tbl from .sjtest.published);(1;`trades);
         "a tick publishes exactly one fill, onto trades"]};
 
+/ --- the publisher invariants, over every feed --------------------------
+
+/ Three rules govern every batch that reaches a tickerplant, and they are
+/ restated in five file headers and enforced by no gate:
+/ .
+/   1. the PLANT stamps `time`; a publisher must not send one
+/   2. keyed tables are refused - a plant appends
+/   3. the row count comes from column length, so every column is a LIST
+/ .
+/ Both plants guard all three at RUNTIME. But a feed's timer body only
+/ runs under a live plant, which is the least-covered path in the tree -
+/ the .qpipe column-list regression sat undetected for exactly that
+/ reason, and would have failed all four FX feeds on every tick.
+/ .
+/ So fire each feed's own on_timer against the recorder and check what it
+/ WOULD have published. Two tests already did this, one feed at a time
+/ (fx_trades_feed and crypto_mock); six feeds exist. Enumerating is the
+/ same correction #267 made to the schema gate: a rule that applies to a
+/ class should not be checked one instance at a time.
+
+/ Every registered job that publishes on a timer.
+feeds:{[] .qstream.registered[] where
+    {[j] d:.qstream.declaration j; (`timer_period in key d) and count d`publishes} each .qstream.registered[]}
+
+/ Invariant 3, plus the length agreement it exists to protect: a batch's
+/ row count comes from its first column, so a column of a different
+/ length silently truncates or overruns.
+columns_are_lists:{[batch]
+    cs:$[98h=type batch; value flip batch; batch];
+    $[not all 0<=type each cs; "a column is an ATOM - a one-row batch then reads as a one-COLUMN batch";
+      1<count distinct count each cs; "columns are not all the same length, so the row count depends on which one is read first";
+      ""]}
+
+test_every_feed_publishes_columns_that_are_lists:{[t]
+    / Invariant 3, the one that actually bites: `enlist` omitted from a row
+    / builder is invisible until a plant takes the row count from it.
+    bad:();
+    {[job]
+        reset[];
+        (.qstream.declaration[job]`on_timer)[];
+        {[job;cell]
+            problem:.sjtest.columns_are_lists cell;
+            if[count problem; `.sjtest.bad set .sjtest.bad,enlist string[job],": ",problem]
+          }[job] each first each exec rows from .sjtest.published
+      } each feeds[];
+    .qunit.assertEquals[.sjtest.bad;();"every feed publishes column vectors of equal length"]};
+
+test_no_feed_sends_its_own_time:{[t]
+    / Invariant 1. Both plants now STRIP a publisher's `time` rather than
+    / refusing it (#266), so a feed that sends one is silently corrected
+    / and would never be caught at runtime. That makes this the invariant
+    / with the least live protection, not the most.
+    bad:();
+    {[job]
+        reset[];
+        (.qstream.declaration[job]`on_timer)[];
+        {[job;cell]
+            / Nested, not `and`: q's `and` does not short-circuit, so the
+            / one-line spelling evaluates `cols` on a list-of-columns
+            / batch and throws `type`. The same trap this suite's own
+            / subject hit in .qtick.publish.
+            if[$[98h<>type cell; 0b; `time in cols cell];
+                `.sjtest.bad set .sjtest.bad,enlist string[job]," sends its own `time`"]
+          }[job] each first each exec rows from .sjtest.published
+      } each feeds[];
+    .qunit.assertEquals[.sjtest.bad;();
+        "no feed sends `time` - the plant stamps it, and a source's own event time belongs in a column named for what it is"]};
+
+test_no_feed_publishes_a_keyed_table:{[t]
+    / Invariant 2. A plant appends; upserting by key drops the ticks that
+    / make a log a log.
+    bad:();
+    {[job]
+        reset[];
+        (.qstream.declaration[job]`on_timer)[];
+        {[job;cell]
+            if[99h=type cell; `.sjtest.bad set .sjtest.bad,enlist string[job]," published a keyed table"]
+          }[job] each first each exec rows from .sjtest.published
+      } each feeds[];
+    .qunit.assertEquals[.sjtest.bad;();"no feed publishes a keyed table"]};
+
+test_the_invariant_check_catches_an_atom_column:{[t]
+    / The check must fail on the shape it exists for, or it is decoration.
+    .qunit.assertEquals[.sjtest.columns_are_lists (enlist `EURUSD;enlist 1.085);"";
+        "one-element vectors are fine"];
+    .qunit.assertTrue[0<count .sjtest.columns_are_lists (`EURUSD;1.085);
+        "bare atoms are caught"];
+    .qunit.assertTrue[0<count .sjtest.columns_are_lists (enlist `EURUSD;1.085 1.086);
+        "and so are columns of unequal length"]};
+
+test_every_feed_is_covered_by_these_checks:{[t]
+    / feeds[] is derived, so a new feed is covered the day it registers -
+    / but only if it publishes on its timer. This pins the count so that a
+    / feed which quietly stops publishing is noticed.
+    .qunit.assertTrue[4<count feeds[];
+        "the FX feeds, the trades feed and the crypto mock all publish on a timer"]};
+
+bad:()
+
 / --- markout --------------------------------------------------------------
 
 test_markout_buffers_trades_and_quotes_separately:{[t]
