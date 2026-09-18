@@ -1,7 +1,7 @@
 // init.q - loads every uqf module, each into its own flat namespace (one
 // per file - .qstats, .qccy, .qdcf, .qrates, .qfwd, .qopt, .qrisk, .qpos,
-// .qexec, .qbook, .qmicro, .qdqc, .qexdef - kept single-level throughout, not
-// nested under a shared .q parent.
+// .qalloc, .qexec, .qbook, .qmicro, .qdqc, .qexdef - kept single-level
+// throughout, not nested under a shared .q parent.
 // .
 // Flat namespaces began as a portability constraint and are now a CONVENTION
 // this tree keeps: one flat .q<abbrev> per file, with the file list as
@@ -54,6 +54,7 @@
 \l src/pricing/options.q
 \l src/portfolio/risk.q
 \l src/portfolio/positions.q
+\l src/portfolio/allocation.q
 \l src/execution/execution.q
 \l src/market_data/book.q
 \l src/market_data/microstructure.q
