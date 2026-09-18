@@ -40,6 +40,14 @@ dependencies = [
 # An aggregator, not a package: nothing here to build or install.
 package = false
 
+# Read by qlinter (https://github.com/kwojdalski/q-lint), which walks up from
+# the file it is linting looking for this section. The tool is installed
+# separately and is not a dependency of this project - this is only the
+# exclusion list, so nobody has to remember `--exclude` for the vendored tree
+# or for the agent worktrees nested inside the repository.
+[tool.q-lint]
+exclude = ["lib/torq/", ".claude/worktrees/"]
+
 [tool.uv.workspace]
 members = [
     "python/uqf_client",

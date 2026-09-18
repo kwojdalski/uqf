@@ -20,7 +20,7 @@
 \l tests/lib/qunit.q
 \l tests/lib/testutil.q
 \l src/init.q
-\l scripts/torq_pipeline.q
+\l src/etl/core/status.q
 \l src/etl/core/backfill_state.q
 \l src/etl/core/coverage.q
 \l src/etl/core/run.q

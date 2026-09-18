@@ -1,6 +1,6 @@
 // test_worker_runtime.q - tests for src/etl/core/worker_runtime.q (.qwrt):
 // retry classification, bounded backoff, the dry-run gate, coverage
-// skipping and init-time dependency resolution. Load scripts/torq_pipeline.q,
+// skipping and init-time dependency resolution. Load src/etl/core/status.q,
 // src/etl/core/backfill_state.q, src/etl/core/coverage.q,
 // src/etl/core/worker_config.q, src/etl/core/worker_runtime.q,
 // tests/lib/qunit.q and tests/lib/testutil.q before this file.

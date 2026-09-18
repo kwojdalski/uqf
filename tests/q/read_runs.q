@@ -12,7 +12,7 @@ system"l src/init.q";
 system"l src/etl/core/backfill_state.q";
 system"l src/etl/core/coverage.q";
 system"l src/etl/core/run.q";
-system"l scripts/torq_pipeline.q";
+system"l src/etl/core/status.q";
 
 .qrun.attach[];
 -1 "RUNS:",string count .qrun.history[];

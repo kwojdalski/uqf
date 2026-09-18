@@ -121,6 +121,12 @@ test_documentation_coverage_does_not_regress:{[t]
         ks:key full;
         ks:ks where not ks in `;
         ks:ks where not (string ks) like "_*";
+        / A worker's inherited methods are stamped into .qwrk.<worker> by
+        / .qbw.define (#227), not written in its file, so man.q's generator
+        / never sees them. Their documentation is the shell's - .qbw.fetch
+        / documents .qwrk.x.fetch - and counting them here would fail every
+        / worker, including the ones the tests define, eight names at a time.
+        if[(string full) like ".qwrk.*"; ks:ks except .qbw.inherited_methods];
         ks:ks where {[f;k] 100h=type value ` sv f,k}[full] each ks;
         string ` sv/: full,/:ks} each nss;
     undocumented:public where not public in documented;

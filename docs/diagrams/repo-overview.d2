@@ -1,0 +1,247 @@
+# repo-overview.d2 - the whole of uqf on one page.
+#
+# Rendered to repo-overview.svg by scripts/render_diagrams.py, which CI runs
+# with --check: editing this file without re-rendering fails the build, the
+# same gate docs/man.q and the contract surface already have.
+#
+# WHAT THIS DIAGRAM IS FOR, and what it leaves out.
+#
+# It answers "what is in this repository, and what depends on what". It is
+# NOT the running stack: who connects to whom over IPC, with ports, is
+# docs/integrations/torq/README.md's process topology, and drawing it twice
+# would give two pictures to keep in step. It is not a namespace index
+# either - docs/man.q is generated for that. Every box is a directory or a
+# published interface, so a reader can go and open it.
+#
+# The property worth drawing over all others is the TorQ boundary. Every q
+# file under src/ loads in a plain q process with no TorQ present (bank
+# B-09), which is what lets a worker or a streaming job be tested against a
+# recorder instead of a tickerplant. Exactly one namespace may know TorQ
+# exists - .qpipe, in scripts/ - and scripts/check_etl_layering.py fails the
+# build if anything under src/etl/ reaches for it. So the adapter gets its
+# own band, and every arrow into the stack passes through it.
+#
+# ON SIZE. A holistic diagram earns its place by being READ, so this is kept
+# to boxes a reader takes in at once: a directory each, one line of what it
+# is. The first draft carried every namespace in the tree and rendered
+# 6107px wide, which in a README is a thumbnail nobody opens. Detail belongs
+# on the page that needs it.
+#
+# ON COLOUR. Light fills with dark text in BOTH themes, rather than a d2
+# --dark-theme pairing: d2 still applies explicit styles in dark mode
+# (d2lang/d2#831), so a theme pair leaves half the diagram unreadable. A
+# light card on GitHub's dark background reads fine; a dark fill behind a
+# dark label does not.
+
+direction: down
+
+# A GRID, not dagre's free layout. This is a map, and a map has a fixed
+# arrangement - dagre placed the bands by edge weight instead, putting
+# scripts/ above src/ and the running stack in the middle.
+#
+# TWO COLUMNS, not five stacked bands. Stacked, the pipeline's own order
+# (declare, run, publish) read correctly top to bottom, but then every edge
+# from the Python surface had to cross it: the BFF reaching the gateway
+# traversed four bands and three boxes on the way. With the pipeline as one
+# column and everything that talks to it alongside the band it talks to,
+# those become short sideways hops.
+grid-columns: 2
+grid-gap: 80
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  ext: {
+    style: {
+      fill: "#f4f1ea"
+      stroke: "#8a7f6a"
+      font-color: "#3d3527"
+      border-radius: 14
+    }
+  }
+  py: {
+    style: {
+      fill: "#f3eefb"
+      stroke: "#6f4aa5"
+      font-color: "#3a1e5f"
+      border-radius: 6
+    }
+  }
+  lib: {
+    style: {
+      fill: "#eef3fb"
+      stroke: "#4a6fa5"
+      font-color: "#1e3a5f"
+      border-radius: 6
+    }
+  }
+  fw: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  decl: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  adapter: {
+    style: {
+      fill: "#fbeef0"
+      stroke: "#a54a5c"
+      font-color: "#5f1f2c"
+      border-radius: 6
+    }
+  }
+  runtime: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+    }
+  }
+  band: {
+    style: {
+      fill: "#fbfcfd"
+      stroke: "#c3c9cf"
+      font-color: "#25323d"
+      stroke-width: 2
+      border-radius: 10
+    }
+  }
+}
+
+# ============================================ left column: the q pipeline
+
+pipeline: "" {
+  grid-rows: 3
+  grid-gap: 55
+  style: {
+    fill: transparent
+    stroke: transparent
+  }
+
+  src: "src/ — q, and none of it knows TorQ exists" {
+    class: band
+    grid-columns: 3
+    grid-gap: 34
+
+    # Column order is chosen, not incidental: whatever a box connects to
+    # outside this band sits on the side nearest it. Declarations are on the
+    # right because the feeds declare into them; with them on the left the
+    # edge crossed the band and dropped its label on top of the quant
+    # library's.
+    quant: "The quant library\nfoundation · pricing · portfolio\nexecution · market_data" { class: lib }
+    core: "src/etl/core/\nthe pipeline framework\n.qbw bounded · .qstream streaming\ncoverage · runs · transforms · status" { class: fw }
+    decls: "Declarations\nsources/ · workers/ · streaming/\none file each, registered on load" { class: decl }
+
+    decls -> core
+    quant -> core
+  }
+
+  scripts: "scripts/ — the only q allowed to know TorQ" {
+    class: band
+    grid-columns: 2
+    grid-gap: 34
+
+    # Same rule: runners on the right, because Airflow triggers them from
+    # there, and .qpipe on the left, because the tickerplant it publishes
+    # into is the left-hand box of the band below.
+    qpipe: ".qpipe — the TorQ adapter\ndiscovery · subscribe · publish · timers" { class: adapter }
+    runners: "torq_backfill.q · torq_stream.q\none process runs one worker or job" { class: adapter }
+
+    runners -> qpipe
+  }
+
+  stack: "The running stack — lib/torq, vendored, never edited" {
+    class: band
+    grid-columns: 3
+    grid-gap: 34
+
+    tp: "stp1\ntickerplant" { class: runtime }
+    store: "rdb1 · wdb1\nhdb1/2 · sort1" { class: runtime }
+    gw: "gateway1\nthe only door in" { class: runtime }
+
+    tp -> store
+    store -> gw
+  }
+
+  src.core -> scripts.runners: "run" { style.stroke: "#3d7a5a" }
+  scripts.qpipe -> stack.tp: "subscribe · .u.upd" {
+    style.stroke: "#a54a5c"
+    style.stroke-width: 3
+  }
+}
+
+# ========================================= right column: what talks to it
+
+surfaces: "" {
+  grid-rows: 2
+  grid-gap: 55
+  style: {
+    fill: transparent
+    stroke: transparent
+  }
+
+  outside: "Outside the repository" {
+    class: band
+    grid-columns: 1
+    grid-gap: 26
+
+    feeds: "Market data\nBinance · Bybit, via the cryptorust repo\nDatabento MBP-10 · an upstream kdb+" { class: ext }
+    airflow: "Airflow\nschedules and watches the backfills" { class: ext }
+    browser: "Browser" { class: ext }
+  }
+
+  py: "python/ · web/ — everything that is not q" {
+    class: band
+    grid-columns: 1
+    grid-gap: 26
+
+    web: "web/ — React\nDesk · Control · Ops" { class: py }
+    bff: "uqf_frontend\nbackend-for-frontend\ncredentials stay server-side" { class: py }
+    provider: "uqf_airflow_provider\nAirflow's sensor: reads the status files" { class: py }
+    orch: "torq_orchestrator\nuqf-stack CLI · generates process.csv" { class: py }
+  }
+
+  outside.browser -> py.web: "HTTP"
+  py.web -> py.bff
+
+  # No Airflow -> provider edge, though Airflow is what runs the sensor.
+  # Drawn, it ran the length of the right-hand column and passed straight
+  # through web/ and the BFF to reach a box two rows down, and it said
+  # nothing the diagram did not already carry: Airflow triggers a window on
+  # one side and the status files reach the provider on the other. The
+  # relationship is in the box's own label instead.
+}
+
+# ================================================= edges across the columns
+
+surfaces.outside.feeds -> pipeline.src.decls: "a source contract each" {
+  style.stroke: "#8a7f6a"
+}
+surfaces.outside.airflow -> pipeline.scripts.runners: "triggers a window" {
+  style.stroke: "#8a7f6a"
+}
+pipeline.src.core -> surfaces.py.provider: "status files on disk, not IPC" {
+  style.stroke: "#6f4aa5"
+  style.stroke-dash: 4
+}
+surfaces.py.bff -> pipeline.stack.gw: "one handle, .gw.syncexec" {
+  style.stroke: "#6f4aa5"
+}
+surfaces.py.orch -> pipeline.stack: "starts · stops · configures" {
+  style.stroke: "#6f4aa5"
+  style.stroke-dash: 4
+}

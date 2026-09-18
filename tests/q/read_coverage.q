@@ -11,7 +11,7 @@
 system"l src/init.q";
 system"l src/etl/core/backfill_state.q";
 system"l src/etl/core/coverage.q";
-system"l scripts/torq_pipeline.q";
+system"l src/etl/core/status.q";
 
 .qcov.attach[];
 -1 "ROWS:",string count .qcov.ledger[];

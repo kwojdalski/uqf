@@ -162,14 +162,12 @@ def parse_file(path: Path) -> tuple[str, list[str], list[Documented]]:
         # block above the run. That is what the source actually means and
         # says: log.q's block opens "The four levels" and its own @eg names
         # `.qlog.info`, yet attaching the block only to the first definition
-        # left `info` and `warn` reported as undocumented. The eight worker
-        # delegator methods are the same shape, under a block that opens
-        # "Ordinary names in this namespace that happen to delegate".
+        # left `info` and `warn` reported as undocumented.
         #
         # Treating that as a documentation gap would have been the wrong
-        # reading twice over: it invites writing eight near-identical
-        # docstrings to satisfy a counter, when the source is already correct
-        # and the parser was not.
+        # reading twice over: it invites writing near-identical docstrings
+        # to satisfy a counter, when the source is already correct and the
+        # parser was not.
         j = i - 1
         while j >= 0 and (FUNC_RE.match(lines[j]) or QUALIFIED_RE.match(lines[j])):
             j -= 1

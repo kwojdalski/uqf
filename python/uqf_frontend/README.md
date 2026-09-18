@@ -125,19 +125,32 @@ being silently wrong.
 uv run uvicorn --factory uqf_frontend.app:create_app --port 8000
 ```
 
+Against the local demo stack, set the credential first — the defaults below
+leave it empty on purpose (**FE-14**: a credential baked into the package is
+how a real one ends up committed beside it), and the gateway's access list
+refuses an empty one:
+
+```bash
+export UQF_FRONTEND_GATEWAY_USER=admin UQF_FRONTEND_GATEWAY_PASSWD=admin
+```
+
+`admin:admin` is what `uqf-stack query` uses against the generated
+appconfig. The port needs no setting: it is derived from the base port, and
+a stack on another base only needs `UQF_FRONTEND_BASE_PORT`.
+
 Configuration is environment-only, so credentials stay server-side
 (**FE-14**):
 
 | Variable | Default |
 |---|---|
 | `UQF_FRONTEND_GATEWAY_HOST` | `localhost` |
-| `UQF_FRONTEND_GATEWAY_PORT` | `6052` |
-| `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty |
+| `UQF_FRONTEND_GATEWAY_PORT` | `6057` — the base port +7, where `process.csv` puts `gateway1`; derived from `UQF_FRONTEND_BASE_PORT` when that is set |
+| `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty — set both; `admin`/`admin` for the demo stack |
 | `UQF_FRONTEND_TIMEOUT` | `30` |
 | `UQF_FRONTEND_MAX_ROWS` | `10000` |
 | `UQF_FRONTEND_PROCESSES` | empty — `rdb1:6052,hdb1:6053` or `name:host:port` |
 | `UQF_FRONTEND_PROCESS_CSV` | unset — TorQ's generated `process.csv` |
-| `UQF_FRONTEND_BASE_PORT` | `6050` — what `{KDBBASEPORT}` resolves to |
+| `UQF_FRONTEND_BASE_PORT` | `6050` — what `{KDBBASEPORT}` resolves to, and what the gateway port is derived from |
 | `UQF_FRONTEND_STATUS_DIR` | unset — where q writes status files (pairs with `UQFSTATUSDIR`) |
 
 A malformed numeric value fails at startup rather than falling back to a
@@ -305,12 +318,12 @@ strictly greater, a successful pass captures each row exactly once.
 `GET /ops/backfill` reads the status files q writes, rather than calling
 Airflow's REST API. That keeps q authoritative for the facts **ETL-15** says it
 owns and adds no Airflow dependency to a frontend that should work without
-one. Set `UQF_FRONTEND_STATUS_DIR` to the directory `.qpipe.status_dir`
+one. Set `UQF_FRONTEND_STATUS_DIR` to the directory `.qstatus.status_dir`
 writes into.
 
 **The format is defined here, not inherited.** This tree has no Airflow
-provider to be compatible with, so `.qpipe.write_status` in
-`scripts/torq_pipeline.q` defines it and `status.py` consumes it.
+provider to be compatible with, so `.qstatus.write_status` in
+`src/etl/core/status.q` defines it and `status.py` consumes it.
 `test_status.py` parses the q source to assert the two field sets and state
 sets match — without that, adding a field on one side would silently drop
 data on the other.

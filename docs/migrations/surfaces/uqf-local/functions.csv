@@ -36,15 +36,20 @@ qbw,cleanup,function,1,worker
 qbw,connect,function,1,worker
 qbw,declaration,function,1,worker
 qbw,define,function,2,worker cfg
+qbw,delegate,function,2,worker nm
 qbw,do_window,function,2,worker w
 qbw,empty_windows,function,1,
 qbw,end_run,function,1,state
 qbw,fetch,function,3,worker from_ts to_ts
+qbw,inherit,function,2,worker ns
+qbw,inherited_methods,value,,
 qbw,init,function,2,worker run_spec
+qbw,initial_state,dict,,
 qbw,namespace,function,1,worker
 qbw,no_failures,function,1,
 qbw,normalised,function,1,cfg
 qbw,optional_cfg,value,,
+qbw,own,function,2,worker nm
 qbw,partition_of,function,1,worker
 qbw,plan,function,2,worker cursor
 qbw,publish,function,2,worker batch
@@ -509,6 +514,12 @@ qstats,horner_eval,function,2,coeffs x
 qstats,inv_ncdf,function,1,p
 qstats,ncdf,function,1,x
 qstats,npdf,function,1,x
+qstatus,legal_transitions,dict,,
+qstatus,previous_state,function,1,instance_id
+qstatus,require_transition,function,2,from_state to
+qstatus,status_dir,function,1,
+qstatus,status_states,value,,
+qstatus,write_status,function,6,worker instance_id state spec progress err
 qstream,declaration,function,1,job
 qstream,drain,function,2,tblname mask
 qstream,evict,function,2,tblname mask
@@ -630,7 +641,6 @@ qwrk.databento_book_backfill,run,function,1,
 qwrk.databento_book_backfill,source_version,value,,
 qwrk.databento_book_backfill,spec,function,1,
 qwrk.databento_book_backfill,to_book,function,1,batch
-qwrk.databento_book_backfill,worker_name,value,,
 qwrk.demo_deals_backfill,checkpoint,function,1,cursor
 qwrk.demo_deals_backfill,cleanup,function,1,
 qwrk.demo_deals_backfill,fetch,function,2,from_ts to_ts
@@ -646,7 +656,6 @@ qwrk.demo_deals_backfill,range_to,value,,
 qwrk.demo_deals_backfill,run,function,1,
 qwrk.demo_deals_backfill,source_version,value,,
 qwrk.demo_deals_backfill,spec,function,1,
-qwrk.demo_deals_backfill,worker_name,value,,
 qwrk.demo_events_backfill,checkpoint,function,1,cursor
 qwrk.demo_events_backfill,cleanup,function,1,
 qwrk.demo_events_backfill,facts,function,1,batch
@@ -662,7 +671,6 @@ qwrk.demo_events_backfill,range_to,value,,
 qwrk.demo_events_backfill,run,function,1,
 qwrk.demo_events_backfill,source_version,value,,
 qwrk.demo_events_backfill,spec,function,1,
-qwrk.demo_events_backfill,worker_name,value,,
 qwrk.upstream_trades_backfill,checkpoint,function,1,cursor
 qwrk.upstream_trades_backfill,cleanup,function,1,
 qwrk.upstream_trades_backfill,facts,function,1,batch
@@ -679,7 +687,6 @@ qwrk.upstream_trades_backfill,range_to,value,,
 qwrk.upstream_trades_backfill,run,function,1,
 qwrk.upstream_trades_backfill,source_version,value,,
 qwrk.upstream_trades_backfill,spec,function,1,
-qwrk.upstream_trades_backfill,worker_name,value,,
 qwrt,airflow_owned,value,,
 qwrt,backoff_ms,function,2,pol attempt
 qwrt,classify,function,1,err

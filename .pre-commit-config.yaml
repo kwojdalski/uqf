@@ -115,6 +115,14 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: rendered-diagrams
+        name: Check the rendered diagrams match their d2 sources
+        entry: python3 scripts/render_diagrams.py --check
+        language: system
+        pass_filenames: false
+        files: ^docs/diagrams/
+        always_run: false
+
       - id: q-tests
         name: Run qUnit tests for uqf
         entry: bash
@@ -131,6 +139,34 @@ repos:
             # README's: $Q if you set it, otherwise ~/.kx/bin/q, nothing else.
             python3 scripts/test.py q-unit
             python3 scripts/test.py q-examples
+        files: '\.q$'
+        pass_filenames: false
+
+      - id: q-coverage
+        name: Check every function a test should reach is reached
+        entry: bash
+        language: system
+        args:
+          - -c
+          - |
+            set -euo pipefail
+            # Runs the whole suite a SECOND time, under .cov's in-memory
+            # instrumentation, and fails when the set of functions nothing
+            # enters differs from tests/q/coverage_baseline.txt - in either
+            # direction. A new blind spot is a failure; so is a baseline
+            # entry whose gap has been closed, because a list that only grows
+            # stops describing anything.
+            #
+            # Through scripts/test.py for the same reason the hook above is:
+            # one rule for which interpreter ($Q, else ~/.kx/bin/q), never a
+            # fallback to something the tree is not verified on.
+            #
+            # It roughly doubles the time a q commit takes (~14s on top of
+            # the suite's own ~13s). If that becomes the reason people reach
+            # for --no-verify, move this one hook to `stages: [pre-push]`
+            # rather than dropping it: the check is cheap compared to
+            # noticing months later that nothing calls a function.
+            python3 scripts/test.py q-coverage
         files: '\.q$'
         pass_filenames: false
 

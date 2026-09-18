@@ -69,7 +69,7 @@
 \l tests/q/test_worker_runtime.q
 \l tests/q/test_etl_lifecycle.q
 \l tests/q/test_continuous_state.q
-\l tests/q/test_pipeline_status.q
+\l tests/q/test_status.q
 \l tests/q/test_source_contract.q
 \l tests/q/test_event_tape.q
 \l tests/q/test_time_zone.q

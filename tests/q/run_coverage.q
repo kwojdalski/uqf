@@ -70,4 +70,46 @@ if[count cold;
     -1 "Never entered (",string[count cold],"):";
     {[n] -1 "  ",string n} each asc cold];
 
+/ ------------------------------------------------------------ THE GATE
+/ .
+/ This driver used to end `exit 0`: it reported and never refused, so a
+/ function could stop being called and nothing said so. What it prints is
+/ exactly what a gate needs, and printing it without checking it is the shape
+/ of a check that reads as protection while asserting nothing.
+/ .
+/ The comparison is against tests/q/coverage_baseline.txt, and it fails in
+/ BOTH directions. A new never-entered function is a blind spot that just
+/ opened. A baseline entry that is now entered means the list has gone stale,
+/ and a list that only ever grows stops describing anything - so closing a
+/ gap includes deleting its line.
+baseline_path:`:tests/q/coverage_baseline.txt;
+baseline_lines:@[read0;baseline_path;{[e] ()}];
+if[0=count baseline_lines;
+    -1 "";
+    -1 "coverage: cannot read ",string[baseline_path]," - it is the list this run is checked against";
+    exit 2];
+/ Comments and blanks out; the rest are function names.
+baseline:`$baseline_lines where not (baseline_lines like "#*") or 0=count each baseline_lines;
+
+new_gaps:asc cold except baseline;
+closed:asc baseline except cold;
+
+if[count new_gaps;
+    -1 "";
+    -1 "FAIL  ",string[count new_gaps]," function(s) no test enters, and not in the baseline:";
+    {[n] -1 "  ",string n} each new_gaps;
+    -1 "";
+    -1 "      Cover them, or add them to tests/q/coverage_baseline.txt with the reason."];
+
+if[count closed;
+    -1 "";
+    -1 "FAIL  ",string[count closed]," baseline entry(ies) are now covered - delete them:";
+    {[n] -1 "  ",string n} each closed;
+    -1 "";
+    -1 "      A baseline that keeps entries after their gap is closed stops describing anything."];
+
+if[count[new_gaps]+count closed; exit 1];
+
+-1 "";
+-1 "coverage: every uncovered function is a known one (",string[count baseline]," in the baseline)";
 exit 0
