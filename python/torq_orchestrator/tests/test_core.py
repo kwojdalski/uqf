@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from torq_orchestrator import core, pipelines
+from torq_orchestrator import core, pipeline_edges, pipelines
 
 
 @pytest.fixture
@@ -828,6 +828,42 @@ def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStack
     assert core.CRYPTO_BOOK_TABLE_SCHEMA in generated
     assert core.CRYPTO_SIM_FILLS_TABLE_SCHEMA in generated
     assert core.CRYPTO_TRADES_TABLE_SCHEMA in generated
+
+
+def test_every_streaming_job_can_be_started_by_the_stack():
+    """A job registered in q must have a process that can start it.
+
+    The rule, stated as a requirement rather than left to habit: a `.qstream`
+    job is TorQ-free *code*, and which runner starts it is a separate
+    decision — `torq_stream.q` against TorQ, `run_stream.q` against `.qtick`.
+    So "it runs standalone" is not a reason to be unstartable by the stack.
+
+    Until #281 `fxpositions1` and `fxordersfeed1` were exactly that: they
+    registered in q, claimed a procname, and no pipeline declared them, so
+    `process.csv` never mentioned them. Every existing check ran the other
+    way — "does this process's job exist?" — and none of them noticed.
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    declared = pipeline_edges._declared_stream_edges(repo_root)
+    have_process = {p.procname for p in core.PIPELINES}
+    orphans = set(declared) - have_process - pipeline_edges.RUNS_WITHOUT_A_PROCESS
+    assert not orphans, (
+        f"streaming job(s) claim {sorted(orphans)} but no Pipeline declares them, "
+        "so uqf-stack cannot start them"
+    )
+
+
+def test_the_unstartable_list_is_empty_and_should_stay_that_way():
+    """`RUNS_WITHOUT_A_PROCESS` is the escape hatch for a job that genuinely
+    cannot be started by the stack. It is empty, and an entry appearing in it
+    should be argued for rather than assumed: the publish seam means the same
+    job file runs under either runner, so "written for the other runner" is
+    not an argument.
+    """
+    assert pipeline_edges.RUNS_WITHOUT_A_PROCESS == frozenset(), (
+        "a job has been excused from being startable - check the reason is "
+        "stronger than 'it was written for run_stream.q'"
+    )
 
 
 def test_declared_dataflow_edges_match_the_q_scripts():

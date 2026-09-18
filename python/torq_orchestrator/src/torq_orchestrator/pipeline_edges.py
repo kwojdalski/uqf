@@ -71,6 +71,16 @@ _STREAM_DIR = Path("src") / "etl" / "streaming"
 #: than imported from `pipelines`, which imports this module.
 STREAM_RUNNER = "processes/torq_stream.q"
 
+#: Procnames a streaming job claims that deliberately have no Pipeline entry,
+#: with the reason. Empty, and that is the point: the rule is that every job
+#: the tree registers can be started by the stack.
+#:
+#: A job that only ever runs standalone is not an exception to want - the
+#: publish seam means the same job file runs under either runner, so an
+#: entry here says "this job cannot be started the normal way", which needs
+#: an argument stronger than "it was written for the other runner".
+RUNS_WITHOUT_A_PROCESS: frozenset[str] = frozenset()
+
 
 def _symbol_field(text: str) -> tuple[str, ...]:
     """The symbols in one field of a register call: a backtick list, an
@@ -256,4 +266,28 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
                 f"{pipeline.procname}: declares publishes={pipeline.published_tables!r} "
                 f"but {pipeline.script} publishes {tuple(published)!r}"
             )
+
+    # The other direction, and it was missing. Everything above asks "does
+    # this PROCESS's job exist?". Nothing asked "does this JOB have a
+    # process?", so a streaming job could register in q, subscribe to
+    # nothing, publish nowhere, and no gate would say a word - which is
+    # exactly what fxpositions1 and fxordersfeed1 did until #281.
+    #
+    # A job is TorQ-free code and a runner decides its transport, so being
+    # runnable standalone is no reason to be unstartable by the stack. Every
+    # registered job gets a process, or a named reason it does not.
+    declared = _declared_stream_edges(scripts_dir.parent)
+    have_process = {p.procname for p in pipelines}
+    for procname in sorted(set(declared) - have_process - RUNS_WITHOUT_A_PROCESS):
+        problems.append(
+            f"{procname}: a streaming job claims this process, but no pipeline "
+            f"declares it - so process.csv never mentions it and uqf-stack cannot "
+            f"start it. Add a Pipeline entry, or add the procname to "
+            f"RUNS_WITHOUT_A_PROCESS with the reason it is deliberately unstartable"
+        )
+    for procname in sorted(RUNS_WITHOUT_A_PROCESS - set(declared)):
+        problems.append(
+            f"{procname}: listed in RUNS_WITHOUT_A_PROCESS but no streaming job "
+            f"claims it - remove the entry rather than leaving a dead exemption"
+        )
     return problems
