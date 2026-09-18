@@ -158,8 +158,22 @@ connect:{[job;tp]
         :{[t;r] .qtick.publish[t;r]}];
     h:hopen tp;
     if[count decl`subscribes;
-        h(`.qtick.subscribe;decl`subscribes;`;::)];
-    neg h}
+        / The plant has to call US back, so it needs a sink addressed at
+        / this process - which only the REMOTE can build, out of its own
+        / .z.w. Send it a lambda to apply: a local function would arrive
+        / as a value the plant cannot route anywhere.
+        h({[want] .qtick.subscribe[want;neg .z.w]};decl`subscribes);
+        / What comes back is (`upd;table;rows), which q evaluates here as
+        / upd[table;rows] - so the job's handler has to BE root upd.
+        `upd set decl`on_batch];
+    / NOT a bare `neg h`. Two reasons, and the first is why the three-process
+    / mode never ran: a handle is an integer, and .qstream.wire rejects it
+    / (.qstream.is_callable is 100-112h, functions only - unlike
+    / .qtick.can_send, which does accept a handle). The second is that even
+    / had it passed, `(neg h)[tbl;rows]` sends a two-element message, which
+    / the remote evaluates as `tbl[rows]` - indexing a table NAME by the
+    / rows. The wrapper names the function to call over there.
+    {[send;tbl;rows] send(`.qtick.publish;tbl;rows)}[neg h]}
 
 / Start everything this process was asked to run.
 / @return the jobs started

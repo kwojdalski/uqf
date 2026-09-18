@@ -19,8 +19,17 @@
 / whichever plant carries it, so the three rules that bite in this
 / repository are the same three rules here:
 / .
-/   1. the PLANT stamps `time`, never the publisher. A feed that sends its
-/      own time gets a column too many and its rows land shifted.
+/   1. the PLANT stamps `time`, never the publisher - and a publisher that
+/      sends one anyway has it STRIPPED and replaced, silently. That is
+/      .qpipe.publish's behaviour, and matching it is the point: a job
+/      developed against the TorQ stack must not fail on first contact
+/      with this plant, which is the whole reason these invariants are
+/      TorQ's rather than invented here.
+/      .
+/      Forgiveness with a cost, worth naming: a source's OWN event time,
+/      if it is called `time`, is discarded here without a word. That is
+/      why the normalizers name theirs `source_time`, and why a schema
+/      that means "when it happened" should never spell it `time`.
 /   2. keyed tables are refused. A tickerplant appends; upserting by key
 /      silently drops the history that makes a tick log a tick log.
 /   3. the row count comes from column length, so every column must be a
@@ -129,10 +138,7 @@ can_send:{[sink] ((type sink) within 100 112h) or (type sink) in -6 -7h}
 require_batch:{[tbl;rows]
     if[99h=type rows;
         '"publish: ",string[tbl]," was given a KEYED table - a tickerplant appends, and upserting by key would silently drop ticks"];
-    if[98h=type rows;
-        if[any `time=cols rows;
-            '"publish: ",string[tbl]," carries its own `time` column - the plant stamps it, so a publisher that sends one shifts every column after it"];
-        :1b];
+    if[98h=type rows; :1b];
     if[0h<>type rows;
         '"publish: ",string[tbl],"'s rows must be a table, or a list of one column vector each"];
     if[not all 0<=type each rows;
@@ -161,6 +167,18 @@ publish:{[tbl;rows]
     / plant that appended it instead would build tables whose columns are
     / one position out from everything else in this repository.
     now:.z.p;
+    / Invariant 1: strip a publisher-supplied `time` rather than refusing
+    / it, so this plant and .qpipe treat the same mistake the same way.
+    / Only the table form can carry one - the list-of-columns form has no
+    / names to check.
+    / .
+    / A NESTED cond, not `(98h=type rows) and `time in cols rows`: q's `and`
+    / does not short-circuit, so the single-condition spelling evaluates
+    / `cols` on every batch, and `cols` of a list of column vectors throws
+    / `type`. The $[c;v;c;v;else] form does short-circuit between pairs.
+    rows:$[98h<>type rows; rows;
+        `time in cols rows; ![rows;();0b;enlist `time];
+        rows];
     stamped:$[98h=type rows;
         ([] time:(count rows)#now) ,' rows;
         (enlist (count first rows)#now),rows];

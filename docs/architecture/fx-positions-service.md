@@ -27,7 +27,11 @@ h:hopen `::5011
 h"0!.qsub.fx_positions.book"
 ```
 
-`lib/torq` is never loaded on any of these paths.
+`lib/torq` is never loaded on any of these paths. All four invocations are
+exercised: the single-process one by `tests/q/test_fx_positions.q`, and the
+three-process one live — it did not work until #266, because the runner
+handed `.qstream.wire` a raw handle it refuses, and the subscribe call it
+sent the plant was malformed.
 
 ## What it is made of
 

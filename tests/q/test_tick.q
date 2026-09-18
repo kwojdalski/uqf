@@ -91,12 +91,28 @@ test_the_plant_stamps_time_at_the_front:{[t]
     .qunit.assertEquals[count distinct exec time from batch;1;
         "one stamp for the batch, not one per row - the rows arrived together"]};
 
-test_a_publisher_may_not_send_its_own_time:{[t]
+test_a_publishers_own_time_is_stripped_and_replaced:{[t]
+    / Stripped, not refused - matching .qpipe.publish, which strips before
+    / forwarding to TorQ's stp1. The two paths must treat the same mistake
+    / the same way, or a job developed against the TorQ stack fails on
+    / first contact with this plant.
     setup[];
-    .qunit.assertThrows[.qtick.publish[`tt_trade;];
-        ([] time:enlist .z.p; sym:enlist `EURUSD; px:enlist 1.085);
-        "*carries its own `time` column*";
-        "a publisher that sends one shifts every column after it"]};
+    .qtick.subscribe[`tt_trade;.ticktest.recorder];
+    theirs:2020.01.01D00:00:00;
+    .qtick.publish[`tt_trade;([] time:enlist theirs; sym:enlist `EURUSD; px:enlist 1.085)];
+    batch:.ticktest.received[0;2];
+    .qunit.assertEquals[cols batch;`time`sym`px;"the batch still has exactly its declared columns"];
+    .qunit.assertTrue[theirs<first exec time from batch;
+        "and `time` holds the plant's stamp, not the publisher's - the value is REPLACED, which is why a source's own event time must never be called `time`"]};
+
+test_a_column_list_batch_is_not_searched_for_a_time_column:{[t]
+    / The strip must not evaluate `cols` on a list-of-columns batch. q's
+    / `and` does not short-circuit, so the one-line spelling of this check
+    / threw `type` on every feed in the tree - found live, not in review.
+    setup[];
+    .qtick.subscribe[`tt_trade;.ticktest.recorder];
+    .qunit.assertEquals[.qtick.publish[`tt_trade;(enlist `EURUSD;enlist 1.085)];1;
+        "a batch with no column names publishes without the strip looking for one"]};
 
 test_a_keyed_batch_is_refused:{[t]
     setup[];
