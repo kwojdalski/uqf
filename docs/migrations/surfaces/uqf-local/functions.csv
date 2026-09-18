@@ -544,6 +544,10 @@ qsub.cross,quotes,table,,
 qsub.cross,quotes_in,table,,
 qsub.cross,reprice,function,1,now
 qsub.cross,reprice_crosses,function,2,quotes as_of
+qsub.databento_book,book,table,,
+qsub.databento_book,on_batch,function,2,tbl batch
+qsub.databento_book,publish,value,,
+qsub.databento_book,raw,table,,
 qsub.fx_feed,on_timer,function,1,
 qsub.fx_feed,publish,value,,
 qsub.fx_feed,spot,value,,

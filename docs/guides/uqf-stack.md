@@ -37,6 +37,7 @@ process topology, table-level data pipeline, and config-generation flow.
 - [Connecting](#connecting)
 - [Verifying it's alive](#verifying-its-alive)
 - [What lib/torq ships that uqf deliberately does not use](#what-libtorq-ships-that-uqf-deliberately-does-not-use)
+- [databento - a live market-data feed](#databento---a-live-market-data-feed)
 - [crypto recorder (cryptorust) - a proof of concept](#crypto-recorder-cryptorust---a-proof-of-concept)
 - [MCP server](#mcp-server)
 - [Other commands](#other-commands)
@@ -522,6 +523,50 @@ the next TorQ upgrade from a copy into a three-way merge, and every overlay
 in `torq_orchestrator` relies on that copy being exact. Unused files cost
 nothing. If a future audience genuinely wants Grafana, the adapter is
 there; the decision to be revisited then is #54's, not this one.
+
+## databento - a live market-data feed
+
+`uqf-stack databento start`/`stop`/`status` subscribe to
+[Databento](https://databento.com) and stream MBP-10 into this stack. It is
+the live counterpart to the ODBC backfill in
+[`new-pipeline.md`](new-pipeline.md): same vendor, same schema, same fold -
+the difference is only whether the rows arrive from a historical query or a
+subscription.
+
+```
+uqf-stack databento start                                  # XNAS.ITCH, AAPL/MSFT
+uqf-stack databento start --dataset XNAS.ITCH --symbols AAPL,TSLA
+uqf-stack databento status
+uqf-stack databento stop
+```
+
+Needs `$DATABENTO_API_KEY` (Databento's own variable, so an existing export
+works). It refuses to start without one rather than failing on its first
+call.
+
+**Two halves, and the split is the point.** A Python handler holds the
+subscription and publishes raw MBP-10 onto `databento_mbp10` - forty
+per-level columns, exactly as Databento sends them. `databento1`, an
+ordinary streaming job, subscribes to that and republishes
+`databento_book`, folding the forty columns into four level-0-first vectors
+with **the same `.qxf` transform the backfill uses**. The fold exists once,
+in q, with its own worked examples; the Python side decides nothing about
+what a book is.
+
+The handler is not a process.csv row, for the same reason cryptorust is
+not: a q process cannot hold a Databento subscription, so it gets a pidfile
+and a subprocess rather than a `torq.sh` entry. `databento1` *is* a normal
+row and starts with the stack.
+
+```
+uqf-stack query "select from databento_book" --port 6052   # rdb1
+uqf-stack query "select time, ts_event, sym, price from databento_book" --port 6052
+```
+
+Rows carry **both** clocks: `time` is stamped by the tickerplant on
+receipt, `ts_event` is Databento's own. Their difference is the feed's
+latency - and a feed whose venue clock is wrong is visible instead of
+silent, which a Binance book stamped 1973 in the crypto recorder was not.
 
 ## crypto recorder (cryptorust) - a proof of concept
 

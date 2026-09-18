@@ -32,6 +32,7 @@ from torq_orchestrator.schemas import (
     CRYPTO_BOOK_TABLE_SCHEMA,
     CRYPTO_SIM_FILLS_TABLE_SCHEMA,
     CRYPTO_TRADES_TABLE_SCHEMA,
+    DATABENTO_MBP10_TABLE_SCHEMA,
 )
 
 log = get_logger(__name__)
@@ -226,6 +227,11 @@ def _generated_schema_content(paths: UqfStackPaths) -> str:
     # Definition order among independent table declarations is immaterial to
     # q, which is why grouping them this way is safe.
     definitions = [p.schema for p in PIPELINES if p.schema is not None] + [
+        # databento_mbp10 is the same case: the live feed handler
+        # (databento_feed.py) publishes it, databento1 only subscribes, so
+        # no pipeline row carries its schema and stp1 would not know the
+        # table without this line.
+        DATABENTO_MBP10_TABLE_SCHEMA,
         CRYPTO_BOOK_TABLE_SCHEMA,
         CRYPTO_SIM_FILLS_TABLE_SCHEMA,
         CRYPTO_TRADES_TABLE_SCHEMA,

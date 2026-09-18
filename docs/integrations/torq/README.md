@@ -70,6 +70,15 @@ A job that both subscribes and republishes - `vectorize1`, `posbook1`,
 be something each script arranged for itself, which is what made the eight
 of them near-copies.
 
+`databento1` is the newest subscriber and the only one whose input comes
+from outside q entirely: an external Python handler
+(`databento_feed.py`) holds a live Databento subscription and publishes
+raw MBP-10 onto `databento_mbp10`, and `databento1` folds it into
+`databento_book` with the same `.qxf` transform the ODBC backfill applies.
+The handler is not a process here, for the reason cryptorust is not: a q
+process cannot hold that subscription, so it is started by `uqf-stack
+databento start` rather than by `torq.sh`.
+
 `tap1` is the one process still running its own script
 (`scripts/processes/torq_tap.q`): it chooses its tables at runtime rather
 than declaring them, which is exactly what a `.qstream` declaration cannot

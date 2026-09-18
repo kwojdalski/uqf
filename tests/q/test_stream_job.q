@@ -47,10 +47,10 @@ d:{[n] 2026.09.17D10:00:00.000000000+n*0D00:00:01}
 / --- the contract ---------------------------------------------------------
 
 test_every_job_is_registered:{[t]
-    / The four feeds publish on a timer and subscribe to nothing; the four
+    / The four feeds publish on a timer and subscribe to nothing; the five
     / subscribers are the other half. One contract covers both.
     .qunit.assertEquals[asc .qstream.registered[];
-        `cross`fx_feed`fx_trades_feed`markout`posbook`quotes_feed`vectorize`wide_book_feed;
+        `cross`databento_book`fx_feed`fx_trades_feed`markout`posbook`quotes_feed`vectorize`wide_book_feed;
         "each job file registers itself as it loads"]};
 
 test_a_feed_declares_no_subscription:{[t]
@@ -350,5 +350,69 @@ test_vectorize_ignores_another_table:{[t]
     reset[];
     .qsub.vectorize.on_batch[`quotes;wide_row[]];
     .qunit.assertEquals[count .sjtest.published;0;"a batch from another table is ignored"]};
+
+/ --- databento_book: the live fold ----------------------------------------
+
+/ The job under test republishes rows folded by the SAME .qxf transform the
+/ ODBC backfill applies. That sharing is the point of the job existing, so
+/ the tests below check the wiring and the two things the job itself
+/ decides - which table it listens to, and that the venue clock survives -
+/ rather than re-testing the fold, which test_transform.q already runs
+/ against its own declared examples.
+
+/ Private: a live batch, shaped as it arrives off the tickerplant - the
+/ source's own fixture with a `time` prepended, which is what .u.upd does
+/ to every message on receipt.
+mbp10_batch:{[] update time:.z.p from .qfeed.databento_mbp10.fixture[]}
+
+test_databento_folds_a_live_batch_and_republishes_it:{[t]
+    reset[];
+    .qsub.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    out:last_rows[];
+    .qunit.assertEquals[
+        (first exec tbl from .sjtest.published;count out;count out[0;`bid_prices]);
+        (`databento_book;4;10);
+        "four MBP-10 records fold into four book rows of ten levels a side"]};
+
+test_databento_keeps_the_venue_clock_as_its_own_column:{[t]
+    / THE POINT OF ts_event. .u.upd stamps `time` on receipt, so a book
+    / carrying only `time` would say when it ARRIVED and nothing about when
+    / it happened - and a feed stuck an hour behind would look current. A
+    / Binance book in the cryptorust recorder was stamped 1973 for weeks
+    / because the only clock came from the venue and nothing could
+    / cross-check it.
+    reset[];
+    .qsub.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    out:last_rows[];
+    .qunit.assertEquals[`ts_event in cols out;1b;"the venue clock is carried through"];
+    .qunit.assertEquals[out[0;`ts_event];(.qfeed.databento_mbp10.fixture[])[0;`ts_event];
+        "and it is Databento's value, not the time the row was folded"]};
+
+test_databento_does_not_republish_the_tickerplants_time:{[t]
+    / One column too wide is a live `length error at the tickerplant, not a
+    / warning - .qpipe.publish drops `time`, and this job must not hand it
+    / one to drop in the first place.
+    reset[];
+    .qsub.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    .qunit.assertEquals[`time in cols last_rows[];0b;
+        "the receipt stamp is the tickerplant's to add, not this job's to send"]};
+
+test_databento_ignores_a_table_it_did_not_subscribe_to:{[t]
+    reset[];
+    .qsub.databento_book.on_batch[`quotes;mbp10_batch[]];
+    .qunit.assertEquals[count .sjtest.published;0;"a batch from another table is ignored"]};
+
+test_databento_publishes_nothing_for_an_empty_batch:{[t]
+    / An empty batch is ordinary on a quiet symbol. Publishing a zero-row
+    / message would put an empty write on the tickerplant every tick.
+    reset[];
+    .qsub.databento_book.on_batch[`databento_mbp10;0#mbp10_batch[]];
+    .qunit.assertEquals[count .sjtest.published;0;"an empty batch publishes nothing"]};
+
+test_databento_keeps_no_state:{[t]
+    reset[];
+    .qsub.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    .qsub.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    .qunit.assertEquals[count .sjtest.published;2;"each batch stands alone"]};
 
 \d .

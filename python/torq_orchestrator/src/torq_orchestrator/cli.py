@@ -24,7 +24,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from torq_orchestrator import core, wizard
+from torq_orchestrator import core, databento_feed, wizard
 from torq_orchestrator.logger import configure_logging, get_logger
 
 app = typer.Typer(
@@ -457,6 +457,69 @@ def new_process(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
 # crypto start/stop/status`) rather than flat crypto-* commands, since these
 # don't drive torq.sh/process.csv at all (see core.py's start_crypto_recorder
 # docstring) - a distinct enough concern to read as its own namespace.
+# Live Databento. Its own group for the same reason crypto has one: this
+# does not drive torq.sh or process.csv either - the handler is an external
+# publisher, and the q half of it (databento1) is an ordinary pipeline row
+# that `uqf-stack start` brings up like any other.
+databento_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Live Databento MBP-10 into the tickerplant, folded by databento1.",
+)
+app.add_typer(databento_app, name="databento")
+
+
+@databento_app.command("start")
+def databento_start(
+    dataset: Annotated[str, typer.Option(help="Databento dataset, e.g. XNAS.ITCH")] = (
+        databento_feed.DEFAULT_DATASET
+    ),
+    symbols: Annotated[str, typer.Option(help="Comma-separated symbols")] = ",".join(
+        databento_feed.DEFAULT_SYMBOLS
+    ),
+    api_key: Annotated[
+        str | None,
+        typer.Option(
+            help=f"Databento API key; defaults to ${databento_feed.DATABENTO_API_KEY_ENV}"
+        ),
+    ] = None,
+) -> None:
+    """Subscribe to Databento and publish MBP-10 onto this stack's stp1.
+
+    The rows land on `databento_mbp10` raw; `databento1` folds them into
+    `databento_book` with the same transform the ODBC backfill uses.
+    """
+    try:
+        pid = databento_feed.start_databento_feed(
+            _paths(),
+            dataset=dataset,
+            symbols=tuple(s.strip() for s in symbols.split(",") if s.strip()),
+            api_key=api_key,
+        )
+    except core.UqfStackError as exc:
+        _die(exc)
+    console.print(f"databento feed started (pid {pid})")
+
+
+@databento_app.command("stop")
+def databento_stop() -> None:
+    """Stop the Databento feed handler started by `databento start`."""
+    databento_feed.stop_databento_feed(_paths())
+    console.print("databento feed stopped")
+
+
+@databento_app.command("status")
+def databento_status() -> None:
+    """Whether the handler is running, its pid, and where its log lives."""
+    status = databento_feed.databento_feed_status(_paths())
+    table = Table(title="databento feed status")
+    table.add_column("field")
+    table.add_column("value")
+    for k, v in status.items():
+        table.add_row(k, v)
+    console.print(table)
+
+
 crypto_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
