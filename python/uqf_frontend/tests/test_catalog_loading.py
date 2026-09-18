@@ -24,11 +24,13 @@ from uqf_frontend.catalog import CATALOG_DIR, TABLES, QType
 
 def _write(dir_: Path, tables: list[dict], columns: list[dict]) -> None:
     with (dir_ / "tables.csv").open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["table", "description"], lineterminator="\n")
+        w = csv.DictWriter(f, fieldnames=["table", "description", "decimals"], lineterminator="\n")
         w.writeheader()
         w.writerows(tables)
     with (dir_ / "columns.csv").open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["table", "column", "type"], lineterminator="\n")
+        w = csv.DictWriter(
+            f, fieldnames=["table", "column", "type", "decimals"], lineterminator="\n"
+        )
         w.writeheader()
         w.writerows(columns)
 
@@ -142,3 +144,127 @@ def test_the_two_files_describe_the_same_tables():
     with (CATALOG_DIR / "columns.csv").open(newline="") as f:
         columned = {row["table"] for row in csv.DictReader(f)}
     assert described == columned
+
+
+# ------------------------------------------------- decimal places
+
+
+def test_a_float_gets_five_places_by_default():
+    """Enough for an FX rate quoted in fractional pips, which is what the
+    float columns in this catalog are."""
+    assert TABLES["trades"].decimals_for("trade_price") == 5
+
+
+def test_an_instant_gets_three_places_by_default():
+    """Milliseconds. q carries nanoseconds, and a column of nine-digit
+    fractions cannot be read at a glance."""
+    assert TABLES["trades"].decimals_for("time") == 3
+
+
+def test_a_symbol_has_no_decimals():
+    """None, not zero: zero would mean "show it rounded to whole units",
+    which for a symbol means coercing text into a number."""
+    assert TABLES["trades"].decimals_for("sym") is None
+
+
+def test_a_vector_column_has_no_decimals():
+    """Its cells are lists, rendered as JSON - there is no single value to
+    put a decimal point in."""
+    assert TABLES["quotes"].decimals_for("bid_prices") is None
+
+
+def test_an_unknown_column_has_no_decimals():
+    """A name the catalog does not carry cannot be given a width. The UI
+    asks per column and must get a usable answer for one it has never
+    heard of."""
+    assert TABLES["trades"].decimals_for("no_such_column") is None
+
+
+def test_a_table_wide_setting_applies_to_its_numeric_columns(tmp_path):
+    """The per-TABLE half: set it once, and every column that can carry a
+    width takes it."""
+    _write(
+        tmp_path,
+        [{"table": "t", "description": "d", "decimals": "2"}],
+        [
+            {"table": "t", "column": "rate", "type": "float", "decimals": ""},
+            {"table": "t", "column": "time", "type": "timestamp", "decimals": ""},
+            {"table": "t", "column": "sym", "type": "symbol", "decimals": ""},
+        ],
+    )
+    table = _load_from(tmp_path).TABLES["t"]
+    assert (table.decimals_for("rate"), table.decimals_for("time")) == (2, 2)
+    assert table.decimals_for("sym") is None
+
+
+def test_a_column_setting_beats_its_table(tmp_path):
+    """The per-COLUMN half, and the reason both exist: a size in whole units
+    sits beside a rate in fractional pips, and one table-wide number cannot
+    be right for both."""
+    _write(
+        tmp_path,
+        [{"table": "t", "description": "d", "decimals": "2"}],
+        [
+            {"table": "t", "column": "rate", "type": "float", "decimals": "6"},
+            {"table": "t", "column": "size", "type": "float", "decimals": "0"},
+        ],
+    )
+    table = _load_from(tmp_path).TABLES["t"]
+    assert (table.decimals_for("rate"), table.decimals_for("size")) == (6, 0)
+
+
+def test_a_column_may_declare_a_width_its_type_would_not_get(tmp_path):
+    """An override is about DISPLAY, so it applies to whatever column asks
+    for it - a long of basis points shown as a decimal fraction, say. The
+    type defaults decide only what happens when nobody said anything."""
+    _write(
+        tmp_path,
+        [{"table": "t", "description": "d", "decimals": ""}],
+        [{"table": "t", "column": "bps", "type": "long", "decimals": "4"}],
+    )
+    assert _load_from(tmp_path).TABLES["t"].decimals_for("bps") == 4
+
+
+def test_a_non_numeric_decimals_is_refused_naming_the_row(tmp_path):
+    """At load, not in a browser: a bad value here would otherwise reach the
+    UI and turn every cell of that column into NaN."""
+    _write(
+        tmp_path,
+        [{"table": "t", "description": "d", "decimals": ""}],
+        [{"table": "t", "column": "rate", "type": "float", "decimals": "two"}],
+    )
+    with pytest.raises(ValueError, match="t.rate"):
+        _load_from(tmp_path)
+
+
+def test_a_negative_decimals_is_refused(tmp_path):
+    _write(
+        tmp_path,
+        [{"table": "t", "description": "d", "decimals": "-1"}],
+        [{"table": "t", "column": "rate", "type": "float", "decimals": ""}],
+    )
+    with pytest.raises(ValueError, match="negative"):
+        _load_from(tmp_path)
+
+
+def test_more_places_than_q_carries_is_refused(tmp_path):
+    """Nanoseconds are nine digits; past that a width is padding presented as
+    precision."""
+    _write(
+        tmp_path,
+        [{"table": "t", "description": "d", "decimals": ""}],
+        [{"table": "t", "column": "time", "type": "timestamp", "decimals": "12"}],
+    )
+    with pytest.raises(ValueError, match="nanoseconds"):
+        _load_from(tmp_path)
+
+
+def test_a_catalog_written_without_the_column_still_loads(tmp_path):
+    """The field is optional, and every row in this repository's own CSVs
+    leaves it blank. A reader that required it would make the defaults
+    unusable."""
+    with (tmp_path / "tables.csv").open("w", newline="") as f:
+        f.write("table,description\nt,d\n")
+    with (tmp_path / "columns.csv").open("w", newline="") as f:
+        f.write("table,column,type\nt,rate,float\n")
+    assert _load_from(tmp_path).TABLES["t"].decimals_for("rate") == 5

@@ -4,6 +4,7 @@ const column = (type: string): Column => ({
   name: "value",
   type,
   filterable: true,
+  decimals: null,
 });
 it("sends typed numbers, booleans and lists; preserves symbol text without query interpolation", () => {
   expect(filterValue("1.25", column("float"), "eq")).toBe(1.25);

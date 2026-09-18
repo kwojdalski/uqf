@@ -6,6 +6,9 @@ export interface Column {
   name: string;
   type: string;
   filterable: boolean;
+  /** Decimal places this column is shown with, resolved server-side from the
+   * column, then its table, then its type. Null means show it as it arrives. */
+  decimals: number | null;
 }
 export interface Catalog {
   tables: { name: string; description: string; columns: Column[] }[];

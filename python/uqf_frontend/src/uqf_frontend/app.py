@@ -168,7 +168,12 @@ def create_app(
                     name=t.name,
                     description=t.description,
                     columns=[
-                        ColumnInfo(name=c, type=str(qt), filterable=c in t.filterable)
+                        ColumnInfo(
+                            name=c,
+                            type=str(qt),
+                            filterable=c in t.filterable,
+                            decimals=t.decimals_for(c),
+                        )
                         for c, qt in t.columns.items()
                     ],
                 )

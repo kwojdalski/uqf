@@ -86,6 +86,14 @@ class ColumnInfo(BaseModel):
     name: str
     type: str
     filterable: bool
+    decimals: int | None = Field(
+        default=None,
+        description=(
+            "Decimal places this column is shown with, resolved from the column, "
+            "then its table, then its type. None means show the value as it "
+            "arrives - a symbol, a boolean, or a count that has no fractional part"
+        ),
+    )
 
 
 class TableInfo(BaseModel):
