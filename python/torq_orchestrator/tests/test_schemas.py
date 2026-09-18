@@ -34,6 +34,8 @@ EXPECTED_TABLES = {
     "trades",
     "position",
     "execution_quality",
+    "executions",
+    "marks",
 }
 
 

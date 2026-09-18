@@ -47,9 +47,11 @@ class Pipeline:
 
     procname: str
     script: str
-    # "feed"     publishes only
-    # "etl"      subscribes, so needs credentials
-    # "backfill" bounded: registers with discovery, runs a window range, exits
+    # "feed"       publishes only
+    # "etl"        subscribes, so needs credentials
+    # "normalizer" an etl of one shape: N source tables in, one canonical
+    #              table out, one declared transform per source (.qnorm)
+    # "backfill"   bounded: registers with discovery, runs a window range, exits
     kind: str
     table: str | None = None  # the table it publishes onto the tickerplant, if any
     schema: str | None = None  # that table's database.q definition
@@ -91,6 +93,8 @@ class Pipeline:
             return "feed"
         if self.kind == "backfill":
             return "backfill"
+        # etl and normalizer alike: a normalizer subscribes and republishes,
+        # which is what makes it a metrics process to discovery.
         return "metrics"
 
     @property

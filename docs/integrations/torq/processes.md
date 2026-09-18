@@ -9,7 +9,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 [docs/guides/uqf-stack.md](../uqf-stack.md); for the topology diagrams see
 [README.md](README.md).
 
-**23 vendored processes** plus **14 uqf processes** — 37 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **15 uqf processes** — 38 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -22,25 +22,28 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `vectorize1` | 6077 | etl | `processes/torq_stream.q` | `mkt_orderbook` | `wide_book` | `mkt_orderbook` |
 | `tap1` | 6078 | etl | `processes/torq_tap.q` | — | _chosen at runtime_ | — |
 | `fxtradesfeed1` | 6079 | feed | `processes/torq_stream.q` | `trades` | — | `trades` |
-| `posbook1` | 6080 | etl | `processes/torq_stream.q` | `position` | `trades`, `quote` | `position` |
+| `posbook1` | 6080 | etl | `processes/torq_stream.q` | `position` | `executions`, `marks` | `position` |
 | `markout1` | 6081 | etl | `processes/torq_stream.q` | `execution_quality` | `trades`, `quote` | `execution_quality` |
 | `deals_backfill1` | 6082 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `events_backfill1` | 6083 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `databento1` | 6084 | etl | `processes/torq_stream.q` | `databento_book` | `databento_mbp10` | `databento_book` |
 | `cryptomock1` | 6085 | feed | `processes/torq_stream.q` | — | — | `crypto_book`, `crypto_trades` |
-| `cryptoposbook1` | 6086 | etl | `processes/torq_stream.q` | — | `crypto_trades`, `crypto_book` | `position` |
+| `executions1` | 6086 | normalizer | `processes/torq_stream.q` | `executions` | `trades`, `crypto_trades` | `executions` |
+| `marks1` | 6087 | normalizer | `processes/torq_stream.q` | `marks` | `quote`, `crypto_book` | `marks` |
 
 ### Why a row deviates from the defaults
 
 - **`fxfeed1`** — pinned below the vendored dqc/dqe block, not part of the contiguous run
 - **`cross1`** — keeps cross_quotes as private process state, publishes no table
 - **`tap1`** — diagnostic subscriber - started on demand, not with the whole stack
+- **`posbook1`** — reads the two normalizers' outputs, not trades and quote, so one book carries FX and crypto and a new market is a mapping, not a job
 - **`markout1`** — localtime:0, unlike every other process here - markout1 is the only process in this demo that compares .proc.cp[] against incoming data timestamps (its process_ready cutoff calc); every other process just reacts to each tick immediately, so localtime never mattered for them. .u.upd stamps trades/quote with the tickerplant's own .z.p (UTC) - with localtime:1, .proc.cp[] returns local time instead, silently skewing the cutoff by the local UTC offset (confirmed live: a full hour off on a UTC+1 machine)
 - **`deals_backfill1`** — bounded: runs a window range and exits, so it must not start with the stack
 - **`events_backfill1`** — bounded: see deals_backfill1
 - **`databento1`** — folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list
 - **`cryptomock1`** — stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one
-- **`cryptoposbook1`** — posbook1's transform over crypto fills, marked to the crypto top of book
+- **`executions1`** — every fill table as one: trades and crypto_trades -> executions
+- **`marks1`** — a mid per instrument from every book: quote and crypto_book -> marks
 
 ## Tables these processes publish
 
@@ -50,8 +53,10 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `crypto_trades` | `schemas.CRYPTO_TRADES_TABLE_SCHEMA` | `cryptomock1` |
 | `databento_book` | `schemas.DATABENTO_BOOK_TABLE_SCHEMA` | `databento1` |
 | `execution_quality` | `schemas.EXECUTION_QUALITY_TABLE_SCHEMA` | `markout1` |
+| `executions` | `schemas.EXECUTIONS_TABLE_SCHEMA` | `executions1` |
+| `marks` | `schemas.MARKS_TABLE_SCHEMA` | `marks1` |
 | `mkt_orderbook` | `schemas.MKT_ORDERBOOK_TABLE_SCHEMA` | `vectorize1` |
-| `position` | `schemas.POSITION_TABLE_SCHEMA` | `cryptoposbook1`, `posbook1` |
+| `position` | `schemas.POSITION_TABLE_SCHEMA` | `posbook1` |
 | `quote` | _vendored_ | `fxfeed1` |
 | `quotes` | `schemas.QUOTES_TABLE_SCHEMA` | `quotesfeed1` |
 | `trades` | `schemas.TRADES_TABLE_SCHEMA` | `fxtradesfeed1` |

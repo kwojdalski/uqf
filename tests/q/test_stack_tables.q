@@ -23,7 +23,7 @@ beforeNamespace_load:{[]
 / Every table the orchestrator's generated database.q is expected to carry.
 / A floor AND a list: a missing name is caught, and so is a new one added to
 / the q file without a thought about who consumes it.
-expected:`quotes`wide_book`mkt_orderbook`databento_mbp10`databento_book`crypto_book`crypto_sim_fills`crypto_trades`trades`position`execution_quality
+expected:`quotes`wide_book`mkt_orderbook`databento_mbp10`databento_book`crypto_book`crypto_sim_fills`crypto_trades`trades`position`execution_quality`executions`marks
 
 / The names THIS FILE declares, read back out of it.
 / .
@@ -116,14 +116,18 @@ test_every_table_is_empty_as_declared:{[t]
         "every declaration is an empty typed table"]};
 
 
-test_the_crypto_posbooks_inputs_match_the_stack_tables:{[t]
-    / cryptoposbook1 reads what cryptorust's recorders - or the mock - put
-    / on the plant. The job declares the shapes it reads; this holds them
-    / to the plant's, so a column added on one side shows up here rather
-    / than as a misaligned batch.
-    .qunit.assertEquals[cols .qsub.crypto_posbook.crypto_trades;cols .tabletest.tbl `crypto_trades;
-        "the fills the job reads are the fills the plant carries"];
-    .qunit.assertEquals[cols .qsub.crypto_posbook.crypto_book;cols .tabletest.tbl `crypto_book;
-        "and the book it marks to is the book the plant carries"]};
+test_the_normalizers_outputs_and_posbooks_inputs_match_the_stack_tables:{[t]
+    / Three declarations of one shape: the normalizer's output (no time),
+    / the plant's table (time first), and posbook's declared input (as the
+    / plant delivers it). A column added to one and not the others would
+    / land as a misaligned batch; this makes it a failing test instead.
+    .qunit.assertEquals[`time,cols .qsub.executions.executions;cols .tabletest.tbl `executions;
+        "the executions normalizer publishes the stack table without time"];
+    .qunit.assertEquals[`time,cols .qsub.marks.marks;cols .tabletest.tbl `marks;
+        "and so does marks"];
+    .qunit.assertEquals[cols .qsub.posbook.executions;cols .tabletest.tbl `executions;
+        "posbook reads executions as the plant delivers it"];
+    .qunit.assertEquals[cols .qsub.posbook.marks;cols .tabletest.tbl `marks;
+        "and marks likewise"]};
 
 \d .

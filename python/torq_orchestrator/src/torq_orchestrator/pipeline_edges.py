@@ -55,6 +55,16 @@ _PUB_RE = re.compile(
 _REGISTER_RE = re.compile(
     r"\.qstream\.register\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S
 )
+#: A normalizer registers with .qstream from inside .qnorm.define, so its
+#: file carries no `.qstream.register[` literal to read. Its edges are its
+#: declaration's: subscribes is the key side of `sources`, publishes is the
+#: normalizer's own name.
+#:
+#:     .qnorm.define[`executions;`procname`output`sources!(
+#:         `executions1;
+#:         .qsub.executions.executions;
+#:         `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
+_NORMALIZER_RE = re.compile(r"\.qnorm\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S)
 _STREAM_DIR = Path("src") / "etl" / "streaming"
 
 #: The one process script every streaming job runs under. Spelled here rather
@@ -110,7 +120,32 @@ def _declared_stream_edges(repo_root: Path) -> dict[str, tuple[tuple[str, ...], 
                 _symbol_field(fields.get("subscribes", "")),
                 _symbol_field(fields.get("publishes", "")),
             )
+        for match in _NORMALIZER_RE.finditer(source):
+            fields = _normalizer_fields(match.group(2))
+            procname = _symbol_field(fields.get("procname", ""))
+            if not procname:
+                continue
+            sources = fields.get("sources", "")
+            edges[procname[0]] = (
+                _symbol_list(sources.split("!", 1)[0]),
+                (match.group(1),),
+            )
     return edges
+
+
+def _normalizer_fields(body: str) -> dict[str, str]:
+    """The `key!(value; ...)` of one .qnorm.define call, as {key: value}.
+
+    Unlike _register_fields, a value here may itself contain a `!` - the
+    `sources` dictionary - and its own `;` separators only inside a symbol
+    list, so the split is on the top-level `;` between values.
+    """
+    if "!(" not in body:
+        return {}
+    keys_text, values_text = body.split("!(", 1)
+    keys = [key for key in keys_text.strip().strip("`").split("`") if key]
+    values = [value.strip() for value in values_text.split(";")]
+    return dict(zip(keys, values, strict=False))
 
 
 def _symbol_list(match_text: str) -> tuple[str, ...]:

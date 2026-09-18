@@ -33,8 +33,6 @@ reset:{[]
     `.qsub.cross.crosses set 0#.qsub.cross.crosses;
     `.qsub.posbook.book set 1!0#.qsub.posbook.position_book;
     `.qsub.posbook.last_mid set (`symbol$())!`float$();
-    `.qsub.crypto_posbook.book set 1!0#.qsub.posbook.position_book;
-    `.qsub.crypto_posbook.last_mid set (`symbol$())!`float$();
     `.qsub.crypto_mock.last_id set .qsub.crypto_mock.venues!(count .qsub.crypto_mock.venues)#0;
     {.qstream.wire[x;.sjtest.recorder x]} each .qstream.registered[];
     }
@@ -53,7 +51,7 @@ test_every_job_is_registered:{[t]
     / The four feeds publish on a timer and subscribe to nothing; the five
     / subscribers are the other half. One contract covers both.
     .qunit.assertEquals[asc .qstream.registered[];
-        `cross`crypto_mock`crypto_posbook`databento_book`fx_feed`fx_trades_feed`markout`posbook`quotes_feed`vectorize`wide_book_feed;
+        `cross`crypto_mock`databento_book`executions`fx_feed`fx_trades_feed`markout`marks`posbook`quotes_feed`vectorize`wide_book_feed;
         "each job file registers itself as it loads"]};
 
 test_a_feed_declares_no_subscription:{[t]
@@ -392,38 +390,42 @@ test_cross_ignores_a_table_it_did_not_subscribe_to:{[t]
 
 / --- posbook --------------------------------------------------------------
 
-test_posbook_marks_a_fill_against_the_last_quote:{[t]
+/ posbook reads the two normalizers' outputs, as the plant delivers them:
+/ an executions row and a marks row, `time` stamped in front.
+an_execution:{[ts;s;side;price;size]
+    ([] time:enlist ts; source_time:enlist ts; sym:enlist s; venue:enlist `fx; side:enlist side;
+        size:enlist size; price:enlist price; fee:enlist 0f; fee_ccy:enlist `; fill_id:enlist `)}
+
+a_mark:{[s;mid] ([] time:enlist d 0; source_time:enlist d 0; sym:enlist s; venue:enlist `fx; mid:enlist mid)}
+
+test_posbook_marks_a_fill_against_the_last_mark:{[t]
     reset[];
-    .qsub.posbook.on_batch[`quote;`sym`bid`ask!(`EURUSD;1.1035;1.1045)];
-    .qsub.posbook.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
+    .qsub.posbook.on_batch[`marks;a_mark[`EURUSD;1.104]];
+    .qsub.posbook.on_batch[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]];
     out:last_rows[];
     .qunit.assertEquals[out[`mark_price];enlist 1.104;
-        "the fill is marked to the mid of the last quote seen for its sym"]};
+        "the fill is marked to the last mid seen for its sym"]};
 
 test_posbook_carries_the_book_between_batches:{[t]
     / The book is process state rebuilt from each batch's output - the one
     / thing a transform test cannot check, because the transform is pure.
     reset[];
-    .qsub.posbook.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-    .qsub.posbook.on_batch[`trades;([] time:enlist d 1; sym:enlist `EURUSD; side:enlist -1;
-        trade_price:enlist 1.105; size:enlist 4e5; pip_factor:enlist 10000)];
+    .qsub.posbook.on_batch[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]];
+    .qsub.posbook.on_batch[`executions;an_execution[d 1;`EURUSD;-1;1.105;4e5]];
     .qunit.assertEquals[exec qty from 0!.qsub.posbook.book;enlist 6e5;
         "the second batch applies to the book the first one left"]};
 
 test_posbook_publishes_one_row_per_fill:{[t]
     reset[];
-    .qsub.posbook.on_batch[`trades;([] time:d 0 1; sym:`EURUSD`USDJPY; side:1 -1;
-        trade_price:1.1 150f; size:1e6 1e6; pip_factor:10000 100)];
+    .qsub.posbook.on_batch[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6],an_execution[d 1;`USDJPY;-1;150f;1e6]];
     .qunit.assertEquals[count last_rows[];2;
         "every fill in the batch produces a position row"]};
 
-test_posbook_publishes_nothing_for_a_quote:{[t]
+test_posbook_publishes_nothing_for_a_mark:{[t]
     reset[];
-    .qsub.posbook.on_batch[`quote;`sym`bid`ask!(`EURUSD;1.1;1.1002)];
+    .qsub.posbook.on_batch[`marks;a_mark[`EURUSD;1.1001]];
     .qunit.assertEquals[count .sjtest.published;0;
-        "a quote only refreshes the mark, it is not a publication"]};
+        "a mark only refreshes the cache, it is not a publication"]};
 
 / --- vectorize ------------------------------------------------------------
 
@@ -593,7 +595,7 @@ test_a_mock_fill_is_the_recorders_wire_shape:{[t]
     .qunit.assertEquals[type each r;recorder_types;
         "sym, venue, side, trade_price, size, fee, fee_currency, exchange_fill_id - the recorder's types in the recorder's order"];
     .qunit.assertEquals[distinct count each r;enlist 1;"every column is a one-element vector, never an atom"];
-    .qunit.assertEquals[count r;count 1_cols .qsub.crypto_posbook.crypto_trades;
+    .qunit.assertEquals[count r;count 1_cols .qsub.executions.crypto_trades;
         "and there are exactly as many as crypto_trades has columns after time"]};
 
 test_a_mock_fills_fee_is_the_venues_maker_bps_in_the_quote_currency:{[t]
@@ -643,71 +645,84 @@ test_the_mock_publishes_no_sim_fills:{[t]
     .qunit.assertFalse[`crypto_sim_fills in .qstream.declaration[`crypto_mock]`publishes;
         "crypto_sim_fills is not something this mock claims to publish"]};
 
-/ --- crypto posbook -------------------------------------------------------
+/ --- the normalizers and posbook over them -------------------------------
 
 crypto_fill:{[s;side;price;size]
     ([] time:enlist d 0; sym:enlist s; venue:enlist `binance_spot; side:enlist side;
         trade_price:enlist price; size:enlist size; fee:enlist 0f;
         fee_currency:enlist `USDT; exchange_fill_id:enlist `$"binance_spot-1")}
 
+fx_fill:{[s;side;price;size]
+    ([] time:enlist d 0; sym:enlist s; side:enlist side; trade_price:enlist price;
+        size:enlist size; pip_factor:enlist 10000)}
+
 crypto_book_row:{[s;bid;ask]
     ([] time:enlist d 0; venue:enlist `binance_spot; sym:enlist s;
         bid_prices:enlist bid; bid_sizes:enlist 3#0.5; ask_prices:enlist ask; ask_sizes:enlist 3#0.5)}
 
-test_crypto_posbook_folds_a_fill_into_a_position:{[t]
-    reset[];
-    .qsub.crypto_posbook.on_batch[`crypto_trades;crypto_fill[`$"BTC-USDT";1;62000f;0.5]];
-    .qunit.assertEquals[(count .sjtest.published;first exec tbl from .sjtest.published);(1;`position);
-        "one position row, onto the same table posbook publishes"];
-    .testutil.assertApprox[(.qsub.crypto_posbook.book`$"BTC-USDT")`qty;0.5;1e-12;"long half a bitcoin"]};
+/ Deliver a normalizer's published rows to posbook the way the plant would:
+/ as a table with `time` stamped in front.
+to_posbook:{[tbl;rows] .qsub.posbook.on_batch[tbl;`time xcols update time:.sjtest.d 0 from rows]; count rows}
 
-test_crypto_posbook_marks_to_the_top_of_the_crypto_book:{[t]
+test_the_executions_normalizer_spells_both_fill_tables_one_way:{[t]
     reset[];
-    .qsub.crypto_posbook.on_batch[`crypto_book;crypto_book_row[`$"BTC-USDT";61999 61998 61997f;62001 62002 62003f]];
-    .qsub.crypto_posbook.on_batch[`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]];
+    .qsub.executions.on_batch[`trades;fx_fill[`EURUSD;1;1.085;1e6]];
+    .qsub.executions.on_batch[`crypto_trades;crypto_fill[`$"BTC-USDT";-1;62000f;0.25]];
+    out:raze first each exec rows from .sjtest.published;
+    .qunit.assertEquals[distinct exec tbl from .sjtest.published;enlist `executions;
+        "both go out on the one canonical table"];
+    .qunit.assertEquals[exec venue from out;`fx`binance_spot;"each attributed to its venue"];
+    .qunit.assertEquals[cols out;cols .qsub.executions.executions;"in the canonical columns"]};
+
+test_a_normalizer_drops_a_table_that_is_not_its_source:{[t]
+    reset[];
+    .qsub.executions.on_batch[`quote;([] time:enlist d 0; sym:enlist `EURUSD; bid:enlist 1f; ask:enlist 1.1)];
+    .qunit.assertEmpty[.sjtest.published;"a batch on a table that is not a source is not normalized"]};
+
+test_posbook_folds_an_fx_and_a_crypto_fill_into_one_book:{[t]
+    / The point of the normalizers: one job, one book, two markets, and
+    / posbook itself knows nothing about either.
+    reset[];
+    to_posbook[`executions;.qnorm.normalize[`executions;`trades;fx_fill[`EURUSD;1;1.085;1e6]]];
+    to_posbook[`executions;.qnorm.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;62000f;0.5]]];
+    .qunit.assertEquals[count .qsub.posbook.book;2;"one position per instrument, whichever market"];
+    .testutil.assertApprox[(.qsub.posbook.book`$"BTC-USDT")`qty;0.5;1e-12;"long half a bitcoin"];
+    .testutil.assertApprox[(.qsub.posbook.book`EURUSD)`qty;1e6;1e-9;"and a million euros"]};
+
+test_posbook_marks_to_whichever_book_the_marks_normalizer_saw:{[t]
+    reset[];
+    to_posbook[`marks;.qnorm.normalize[`marks;`crypto_book;crypto_book_row[`$"BTC-USDT";61999 61998 61997f;62001 62002 62003f]]];
+    to_posbook[`marks;.qnorm.normalize[`marks;`quote;([] time:enlist d 0; sym:enlist `EURUSD; bid:enlist 1.0849; ask:enlist 1.0851)]];
+    to_posbook[`executions;.qnorm.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
     row:last_rows[];
-    .testutil.assertApprox[first row`mark_price;62000f;1e-9;"the mid of level 0 each side"];
-    .testutil.assertApprox[first row`unrealized_pnl;1000f;1e-9;"bought at 61000, marked at 62000"]};
+    .testutil.assertApprox[first row`mark_price;62000f;1e-9;"the crypto mid, off the ladder's first level"];
+    .testutil.assertApprox[first row`unrealized_pnl;1000f;1e-9;"bought at 61000, marked at 62000"];
+    .testutil.assertApprox[.qsub.posbook.last_mid`EURUSD;1.085;1e-9;"and the FX mid is cached alongside it"]};
 
-test_crypto_posbook_marks_to_the_fill_when_never_quoted:{[t]
+test_posbook_no_longer_reads_the_raw_tables:{[t]
+    .qunit.assertEquals[.qstream.declaration[`posbook]`subscribes;`executions`marks;
+        "posbook subscribes to the two normalizers and nothing else"];
     reset[];
-    .qsub.crypto_posbook.on_batch[`crypto_trades;crypto_fill[`$"ETH-USDT";-1;2450f;5f]];
-    .testutil.assertApprox[first last_rows[]`unrealized_pnl;0f;1e-9;
-        "no book yet for this sym, so it is marked at its own price - posbook's fallback, inherited with its transform"]};
+    .qsub.posbook.on_batch[`trades;fx_fill[`EURUSD;1;1.085;1e6]];
+    .qunit.assertEmpty[.qsub.posbook.book;"a raw trades batch, were one to arrive, moves nothing"]};
 
-test_crypto_posbook_ignores_sim_fills:{[t]
-    reset[];
-    .qsub.crypto_posbook.on_batch[`crypto_sim_fills;
-        ([] time:enlist d 0; sym:enlist `$"BTC-USDT"; side:enlist 1; trade_price:enlist 62000f;
-            size:enlist 0.5; realized_delta_pnl:enlist 0f)];
-    .qunit.assertEmpty[.qsub.crypto_posbook.book;"paper fills are not a position"]};
-
-test_crypto_posbook_keeps_its_own_book_apart_from_posbooks:{[t]
-    reset[];
-    .qsub.crypto_posbook.on_batch[`crypto_trades;crypto_fill[`$"BTC-USDT";1;62000f;0.5]];
-    .qunit.assertEmpty[.qsub.posbook.book;"the FX book did not move"];
-    .qunit.assertEquals[count .qsub.crypto_posbook.book;1;"the crypto book did"]};
-
-test_crypto_posbook_and_posbook_share_one_transform:{[t]
-    / The computation is reused, not copied: this job declares no transform
-    / of its own and runs the one posbook registered.
-    .qunit.assertFalse[`crypto_position in key .qxf.registry;"no second transform was declared"];
-    .qunit.assertTrue[`position in key .qxf.registry;"the one it runs is posbook's"]};
-
-test_the_mock_feeds_the_crypto_posbook_end_to_end:{[t]
-    / The mock's rows, delivered the way the plant would deliver them - as
-    / a table with time stamped first - land in a position.
+test_the_mock_reaches_posbook_through_both_normalizers:{[t]
+    / The mock's rows, delivered the way the plant would deliver them, run
+    / through executions and marks and land in the one book.
     reset[];
     as_table:{[cols_after_time;r] update time:.sjtest.d 0 from flip cols_after_time!r};
     .qstream.wire[`crypto_mock;{[as_table;tbl;r]
-        .qsub.crypto_posbook.on_batch[tbl;`time xcols as_table[
+        norm:$[tbl=`crypto_book;`marks;`executions];
+        .sjtest.to_posbook[norm;.qnorm.normalize[norm;tbl;`time xcols as_table[
             $[tbl=`crypto_book;`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
-              `sym`venue`side`trade_price`size`fee`fee_currency`exchange_fill_id];r]];
+              `sym`venue`side`trade_price`size`fee`fee_currency`exchange_fill_id];r]]];
         1}[as_table]];
     do[20;.qsub.crypto_mock.on_timer[]];
-    .qunit.assertTrue[0<count .qsub.crypto_posbook.book;
-        "twenty ticks of the mock at a 30% touch share is enough for at least one fill to reach the book"];
-    .qunit.assertTrue[all (exec sym from .qsub.crypto_posbook.book) in .qsub.crypto_mock.syms;
-        "and every position is in a symbol the mock trades"]};
+    .qunit.assertTrue[0<count .qsub.posbook.book;
+        "twenty ticks at a 30% touch share is enough for at least one fill to reach the book"];
+    .qunit.assertTrue[all (exec sym from .qsub.posbook.book) in .qsub.crypto_mock.syms;
+        "and every position is in a symbol the mock trades"];
+    .qunit.assertTrue[all (exec sym from .qsub.posbook.book) in key .qsub.posbook.last_mid;
+        "each marked to a mid the marks normalizer produced from the mock's own book"]};
 
 \d .

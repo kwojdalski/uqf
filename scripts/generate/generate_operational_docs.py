@@ -235,7 +235,8 @@ def render_dag() -> str:
     for pipeline in PIPELINES:
         lines.append(
             f"    .qdag.register[`{pipeline.procname};`kind`inputs`outputs!"
-            f"(`stream;{_q_symbol_list(pipeline.subscribes)};"
+            f"(`{'normalizer' if pipeline.kind == 'normalizer' else 'stream'};"
+            f"{_q_symbol_list(pipeline.subscribes)};"
             f"{_q_symbol_list(pipeline.published_tables)})];"
         )
     names = "".join(f"`{p.procname}" for p in PIPELINES)

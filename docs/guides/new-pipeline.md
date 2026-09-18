@@ -49,6 +49,27 @@ runner wires to the tickerplant and a test wires to a recorder
 (`tests/q/test_stream_job.q`). That seam is what lets the whole job — not
 just its transform — be loaded and driven in a plain q process.
 
+**Normalizer** — a continuous job of one particular shape: several tables
+carrying the same fact in different spellings, one canonical table out.
+`.qnorm` in [`src/etl/core/normalizer.q`](../../src/etl/core/normalizer.q).
+An instance declares its output and one `.qxf` transform per source, and
+the shell owns the rest — it dispatches on the table a batch arrived on,
+projects the batch onto the columns that source's transform declares,
+applies it, and publishes. It also performs the `.qstream.register` itself,
+so the job's edges cannot disagree with its mappings, and it refuses at
+`define` any mapping whose declared output drifts from the canonical table,
+column, type and order. Two ship: `executions` (`trades` + `crypto_trades`)
+and `marks` (`quote` + `crypto_book`), which is how `posbook1` holds FX and
+crypto positions in one book without knowing either market's tape format.
+A third market is a mapping in a normalizer, not a branch in a consumer.
+
+```q
+.qnorm.define[`executions;`procname`output`sources!(
+    `executions1;
+    .qsub.executions.executions;
+    `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
+```
+
 The rest of this guide is the bounded case.
 
 ## 1. Declare the source
