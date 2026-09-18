@@ -1,9 +1,10 @@
 # Audit log
 
-One row per audit run. Three agents write here — `causality-auditor`,
-`docstring-example-verifier` and `naming-cohesion-auditor` — and each of them
-is instructed to **read this file before starting** so a run builds on what a
-previous run cleared instead of re-deriving it.
+One row per audit run. Four agents write here — `causality-auditor`,
+`docstring-example-verifier`, `naming-cohesion-auditor` and
+`architecture-basher` — and each of them is instructed to **read this file
+before starting** so a run builds on what a previous run cleared instead of
+re-deriving it.
 
 That handoff is the reason this file exists. Until it did, all three agents
 read a missing index, found nothing, and silently started from zero every
@@ -47,3 +48,10 @@ they propose, the user applies.
 | 2026-09-16 | causality | Execution metrics and rolling OFI | [Report](2026-09-16-causality-execution.md) | 0 | Signed buy/sell metrics; execution as-of sorting/boundaries and nulls; expanding VWAP and rolling OFI prefixes | Forwards/chain as-of paths; other rolling functions; downstream null consumers; integrations excluded |
 | 2026-09-16 | docstring-eg | All 13 execution examples; 8 executable assertions | [Report](2026-09-16-docstring-eg-execution.md) | 0 STALE/THROWS; 1 test candidate; 7 already covered | All 8 executable assertions match, dictionary compared per key | 5 execution lines have no executable assertion; 138 other in-scope examples unexecuted; 6 integrations examples excluded |
 | 2026-09-16 | naming-cohesion | 11 execution definitions; selected layout and three prior rename seeds | [Report](2026-09-16-naming-cohesion-execution-seeds.md) | 0 | Execution families and test/loader pairing; namespace, convexity and timestamp-order seeds already fixed | Whole-tree layout/collisions; other module bodies and call graphs; integrations convention/layout |
+
+`architecture-basher` is the odd one out and is meant to be. The other three
+look for defects; it argues a case — the harshest reading of this
+repository's own design that the evidence supports — and is scoped to code
+this repo wrote, never the vendored trees. Read its verdicts as advocacy, and
+read its "what I could not break" section first: that is the part the other
+three would agree with.
