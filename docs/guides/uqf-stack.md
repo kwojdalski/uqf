@@ -273,33 +273,38 @@ that process (the running process itself isn't touched).
 
 ## fxfeed1 - adding your own row-generating process
 
-`scripts/torq_fx_feed.q` is a second, independent feed process publishing
+`src/etl/streaming/fx_feed.q` is a second, independent feed process publishing
 synthetic top-of-book quotes for `EURUSD`/`GBPUSD`/`USDJPY`/`AUDUSD` (a
 small random walk around a fixed spot, `+/-` 1 pip wide) into the same
 `quote` table the vendored `feed1` already writes equity quotes into -
 `sym` is just a symbol column, so FX pairs and equity tickers coexist in
 one table with no schema change. It's the concrete worked example for "how
-do I add a process that publishes rows": it mirrors
-`lib/torq-finance-starter-pack/code/tick/feed.q`'s own pattern exactly -
+do I add a process that publishes rows".
 
-1. find the tickerplant via discovery: `.servers.startupdepcycles[...]` /
-   `.servers.gethandlebytype[...]`
-2. build one row per pair as plain vectors (see the file's own comment on
+**It is a declaration, not a process script.** Since #204 a feed says what
+it is and the framework does the rest: the job file declares its timer body
+and the table it publishes, `.qstream.register` records that, and one
+generic runner - `scripts/processes/torq_stream.q` - is what TorQ actually
+starts. Which job a process runs is decided by its procname, so there is no
+per-feed script any more. The three things the job itself still owns:
+
+1. build one row per pair as plain vectors (see the file's own comment on
    why they must stay vectors, not dicts keyed by pair - a dict here
    silently produces a `length` error on insert, the hard way to find out)
-3. publish with `h (`.u.upd;`quote;data)`
-4. repeat on a timer: `.timer.repeat[...]`
+2. hand them to its own `publish`, which the runner wires to the
+   tickerplant - the job never calls `.u.upd` or touches discovery itself
+3. declare `timer_period` and `on_timer`, which is what makes it a feed
+   rather than a subscriber
 
-To add your own: copy `torq_fx_feed.q`'s shape, drop the new file anywhere
-under `scripts/` (it's referenced by absolute path, not `KDBAPPCODE`, so it
-doesn't need to live inside either vendored `lib/` tree), and add a line
-for it in `torq_orchestrator.core.bootstrap()`'s process.csv-generation
-block (pick a free port offset - the table above lists every offset
-already taken).
+To add your own: write a job file under `src/etl/streaming/`, register it
+with `.qstream.register`, and add a `Pipeline(...)` row in
+`python/torq_orchestrator/src/torq_orchestrator/pipelines.py` (pick a free
+port offset - the table above lists every offset already taken). Or let
+`uqf-stack wizard` do all three, which is what the next section covers.
 
 ## quotesfeed1 - a real database for one of uqf's own table shapes
 
-`scripts/torq_quotes_feed.q` is a proof of concept for getting an actual
+`src/etl/streaming/quotes_feed.q` is a proof of concept for getting an actual
 on-disk kdb+ database, built with the TorQ Finance Starter Pack's own
 tickerplant/RDB/WDB/HDB machinery, seeded with a table shape uqf's *own*
 pricing code understands - rather than the vendored pack's generic
@@ -323,8 +328,9 @@ things:
    `bootstrap()`, same generate-never-edit approach as `process.csv`), and
    `_base_process_rows()` repoints `stp1`'s `-schemafile` extras arg at
    that copy instead of the vendored file.
-2. **Feed** - `torq_quotes_feed.q` itself, wired in as a process.csv row
-   exactly like `fxfeed1` (port offset `+24`).
+2. **Feed** - the `quotes_feed` job itself, wired in as a process.csv row
+   exactly like `fxfeed1` (port offset `+24`), running under the shared
+   `torq_stream.q` runner.
 
 ```
 uqf-stack query \
@@ -408,8 +414,8 @@ uqf-stack new-process
 **1** and **2** are for anyone, no q/kdb+ knowledge needed - answer a few
 prompts (pairs, starting rates, table/port names) and the generated `.q`
 file is a fully working process already, not a stub: a parametrized copy
-of `scripts/torq_quotes_feed.q` (1) or `scripts/torq_cross_etl.q` (2)'s
-own working shape. **1** also registers its new table's schema
+of `src/etl/streaming/quotes_feed.q` (1) or `cross.q` (2)'s own working
+shape. **1** also registers its new table's schema
 automatically (see below) - nothing left to do by hand before starting it.
 
 **3** and **4** are for q/kdb+ users who want to write their own
@@ -512,7 +518,7 @@ own `kdb-market-data-recorder` binary (`src/bin/kdb_market_data_recorder.rs`
 there) connects live venue order books (Binance, Bybit, ...) straight to
 this demo's `stp1` over raw IPC (via the [`kxkdb`](https://github.com/KxSystems/kxkdb)
 crate) and calls `.u.upd` directly - the exact same wire protocol
-`torq_fx_feed.q`/`torq_quotes_feed.q` use, just from Rust instead of q -
+the q feeds use, just from Rust instead of q -
 with its own reconnect-on-drop loop, so a `stp1` restart doesn't take it
 down permanently.
 
@@ -546,7 +552,7 @@ proof of concept, alongside the book recorder above: cryptorust's own
 `kdb-fills-recorder` binary (`src/bin/kdb_fills_recorder.rs`) polls an
 *already-running* cryptorust service's OMS over its own IPC unix socket
 (default `/tmp/beacon.sock`) and republishes new fills onto this demo's
-`stp1`, the bridge role `torq_posbook_etl.q`/`torq_markout_etl.q` play
+`stp1`, the bridge role the `posbook` and `markout` streaming jobs play
 inside this repo's own uqf stack - except this one bridges two entirely
 different IPC protocols (cryptorust's JSON-RPC and kdb+'s wire protocol)
 rather than two kdb+ processes. It polls two independent methods each

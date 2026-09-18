@@ -15,19 +15,25 @@ Dagster's abstractions, against this tree:
 | Dagster concept | `src/etl/` today | State |
 |---|---|---|
 | **Resource** — pluggable external connection | `.qsrc` source contract: a declaration carrying `query`, `fixture`, credentials | **partial** — source-shaped only |
-| **Op / asset compute** | `.qbw` bounded worker: `init`/`plan`/`fetch`/`publish`/`checkpoint` | **yes** |
+| **Op / asset compute** | `.qbw` bounded worker (`init`/`plan`/`fetch`/`publish`/`checkpoint`) and `.qstream` streaming job (`on_batch`/`on_timer`) | **yes** |
 | **Graph / job** | `.qdag` — edges *derived* from declared inputs and outputs | **yes** |
-| **Partitions** | `.qcov` half-open time intervals + `source_version` | **partial** — time only |
-| **Materialization record** | `.qcov` rows, now bitemporal (D-11) | **partial** — no metadata |
+| **Partitions** | `.qcov` half-open time intervals + `source_version`, plus a categorical `partition` | **yes** — see §5.4 |
+| **Materialization record** | `.qcov` rows, bitemporal (D-11), with per-window metadata from `.qrun` | **yes** — see §2.3 |
 | **Backfill** | `.qbw.plan` narrows by cursor then coverage | **yes**, and better than most |
 | **Config** | `.qwcfg` typed getters, stated precedence, accumulated errors | **partial** — global, not per-op |
 | **Retry policy** | `.qwrt` classification: data failures don't retry, transport does | **yes** |
 | **Logging / events** | `.qlog` four levels over TorQ's `.lg`, structured fields | **yes** |
 | **Sensors / monitoring** | `.qhb` heartbeat, status files, `/ops/backfill` | **yes** |
-| **Asset checks** | `.qdqc` — nine check functions | **exists, wired to nothing** |
+| **Asset checks** | `.qdqc`, reached through a worker's declared `check` | **yes** — see §2.2 |
 | **Schedules** | *deliberately absent* — Airflow owns ordering (ETL-15) | **by decision** |
-| **IO manager** — compute/storage separation | — | **missing** |
-| **Run identity** | — | **missing** |
+| **IO manager** — compute/storage separation | `.qio` — a manager is a declared dict | **yes** — see §2.1 |
+| **Run identity** | `.qrun` — one identity per execution | **yes** — see §2.3 |
+
+The four rows that read **missing** or **partial — no metadata** when this
+register was written are now done, and the table says so; §2 and §5 are
+where each was closed. A summary that still described the gaps its own body
+reported as fixed is worse than no summary, because the table is the part a
+reader skims.
 
 That is a substantial framework. The worker contract, the coverage ledger and
 the derived DAG are the three things most homegrown pipelines never get, and

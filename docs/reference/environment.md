@@ -47,7 +47,7 @@ without it:
 | `UQFSTATUSDIR` | `.qstatus.status_dir` (`src/etl/core/status.q`) | no | falls back to `$TORQDATA/status`. Pairs with `UQF_FRONTEND_STATUS_DIR` on the reading side |
 | `DATABENTO_DATA_DIR` | `.qdata.databentoDir` (`src/integrations/data.q`) | for that path only | `.qdata.cfg` also accepts it from a `.env` file, then throws naming the key. Note this is a *data directory*, not a credential — ETL-07's no-file rule is about secrets |
 | `UQF_FRONTEND_GATEWAY_HOST` | `uqf_frontend.config.Settings.from_env` | no | `localhost` |
-| `UQF_FRONTEND_GATEWAY_PORT` | as above | no | `6052` |
+| `UQF_FRONTEND_GATEWAY_PORT` | as above | no | `6057` — the base port +7, where `process.csv` puts `gateway1`; derived from `UQF_FRONTEND_BASE_PORT` when that is set |
 | `UQF_FRONTEND_GATEWAY_USER` | as above | no | empty |
 | `UQF_FRONTEND_GATEWAY_PASSWD` | as above | no | empty |
 | `UQF_FRONTEND_TIMEOUT` | as above | no | `30` seconds, enforced per query by kola (FE-11) |
