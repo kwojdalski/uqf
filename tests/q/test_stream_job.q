@@ -33,6 +33,9 @@ reset:{[]
     `.qsub.cross.crosses set 0#.qsub.cross.crosses;
     `.qsub.posbook.book set 1!0#.qsub.posbook.position_book;
     `.qsub.posbook.last_mid set (`symbol$())!`float$();
+    `.qsub.crypto_posbook.book set 1!0#.qsub.posbook.position_book;
+    `.qsub.crypto_posbook.last_mid set (`symbol$())!`float$();
+    `.qsub.crypto_mock.last_id set .qsub.crypto_mock.venues!(count .qsub.crypto_mock.venues)#0;
     {.qstream.wire[x;.sjtest.recorder x]} each .qstream.registered[];
     }
 
@@ -50,7 +53,7 @@ test_every_job_is_registered:{[t]
     / The four feeds publish on a timer and subscribe to nothing; the five
     / subscribers are the other half. One contract covers both.
     .qunit.assertEquals[asc .qstream.registered[];
-        `cross`databento_book`fx_feed`fx_trades_feed`markout`posbook`quotes_feed`vectorize`wide_book_feed;
+        `cross`crypto_mock`crypto_posbook`databento_book`fx_feed`fx_trades_feed`markout`posbook`quotes_feed`vectorize`wide_book_feed;
         "each job file registers itself as it loads"]};
 
 test_a_feed_declares_no_subscription:{[t]
@@ -414,5 +417,198 @@ test_databento_keeps_no_state:{[t]
     .qsub.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
     .qsub.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
     .qunit.assertEquals[count .sjtest.published;2;"each batch stands alone"]};
+
+/ --- the adapter's publish, over what the feeds actually send ------------
+
+/ A handle that records the .u.upd message instead of sending it - the
+/ integer-handle seam .qpipe.publish applies as h[(`.u.upd;tbl;data)].
+sent:();
+fake_handle:{[m] `.sjtest.sent set .sjtest.sent,enlist m; 1};
+
+test_the_adapter_recognises_the_list_of_columns_form:{[t]
+    / Every feed's row builder returns this shape, and so does cryptorust's
+    / recorder. Refusing it was invisible while the running stack predated
+    / the runner, because the old per-feed scripts sent to .u.upd directly.
+    .qunit.assertTrue[.qpipe.is_columns .qsub.fx_trades_feed.fill_rows[0;1;1e6;0];
+        "a fill's rows are the list-of-columns form"];
+    .qunit.assertTrue[.qpipe.is_columns .qsub.quotes_feed.tick_rows .qsynth.spot;
+        "and so is a depth tick, whose ladder columns are lists of vectors"];
+    .qunit.assertTrue[.qpipe.is_columns .qsub.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`x];
+        "and a mock crypto fill"]};
+
+test_the_adapter_still_refuses_a_list_of_atoms:{[t]
+    / Invariant 3's own trap: one row of atoms reads as one column each.
+    .qunit.assertFalse[.qpipe.is_columns (`EURUSD;1;1.085);"a general list of atoms is not the columns form"];
+    .qunit.assertFalse[.qpipe.is_columns ([] a:1 2);"and a table is a table, handled by as_table"];
+    .qunit.assertFalse[.qpipe.is_columns ();"an empty list is nothing to publish"]};
+
+test_the_adapter_sends_columns_straight_through:{[t]
+    `.sjtest.sent set ();
+    rows:.qsub.fx_trades_feed.fill_rows[0;1;1e6;0];
+    n:.qpipe.publish[.sjtest.fake_handle;`trades;rows];
+    .qunit.assertEquals[n;1;"one row, counted from the first column"];
+    .qunit.assertEquals[.sjtest.sent 0;(`.u.upd;`trades;rows);
+        "the message is .u.upd's own shape, untouched"]};
+
+test_the_adapter_reshapes_a_table_and_a_dict_to_u_upds_shape:{[t]
+    / The invariants as_table exists for: a keyed table is unkeyed (2), a
+    / dict of atoms is one row of one-element vectors (3), and a `time`
+    / column is stripped because the plant stamps its own (1).
+    `.sjtest.sent set ();
+    .qpipe.publish[.sjtest.fake_handle;`trades;([sym:enlist `EURUSD] time:enlist d 0; side:enlist 1)];
+    .qunit.assertEquals[.sjtest.sent[0;2];(enlist `EURUSD;enlist 1);
+        "a keyed table goes out unkeyed and without its time, as column vectors"];
+    `.sjtest.sent set ();
+    .qpipe.publish[.sjtest.fake_handle;`trades;`sym`side!(`EURUSD;1)];
+    .qunit.assertEquals[.sjtest.sent[0;2];(enlist `EURUSD;enlist 1);
+        "a dict of atoms is one row, every column a one-element vector"];
+    .qunit.assertThrows[.qpipe.publish[.sjtest.fake_handle;`trades;];(`EURUSD;1);
+        "*expected a table*";"a bare list of atoms is refused by name"]};
+
+test_the_adapter_publishes_nothing_for_empty_columns:{[t]
+    `.sjtest.sent set ();
+    .qunit.assertEquals[.qpipe.publish[.sjtest.fake_handle;`trades;(`symbol$();`long$())];0;
+        "empty columns are zero rows"];
+    .qunit.assertEmpty[.sjtest.sent;"and nothing is sent"]};
+
+/ --- crypto mock ----------------------------------------------------------
+
+/ The exact column order and types cryptorust's kdb_fills_recorder.rs sends
+/ in build_real_upd_message: symbol, symbol, long, float, float, float,
+/ symbol, symbol. The mock's whole reason to exist is to be this, row for
+/ row, so this is the assertion that matters most in the section.
+recorder_types:11 11 7 9 9 9 11 11h
+
+test_the_mock_publishes_a_book_and_then_fills:{[t]
+    reset[];
+    .qsub.crypto_mock.on_timer[];
+    .qunit.assertEquals[first exec tbl from .sjtest.published;`crypto_book;
+        "the book goes out first, so no fill prints at a price the tape has not shown"]};
+
+test_a_mock_fill_is_the_recorders_wire_shape:{[t]
+    / One message per fill, every column a one-element typed vector, no
+    / time. Not a table: the recorder does not send one, and a mock that
+    / sent the tidier shape would pass here and fail against the plant.
+    reset[];
+    r:.qsub.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`$"binance_spot-1"];
+    .qunit.assertEquals[type each r;recorder_types;
+        "sym, venue, side, trade_price, size, fee, fee_currency, exchange_fill_id - the recorder's types in the recorder's order"];
+    .qunit.assertEquals[distinct count each r;enlist 1;"every column is a one-element vector, never an atom"];
+    .qunit.assertEquals[count r;count 1_cols .qsub.crypto_posbook.crypto_trades;
+        "and there are exactly as many as crypto_trades has columns after time"]};
+
+test_a_mock_fills_fee_is_the_venues_maker_bps_in_the_quote_currency:{[t]
+    r:.qsub.crypto_mock.fill_rows[`bybit_spot;`$"ETH-USDT";-1;2000f;2f;`$"bybit_spot-7"];
+    .testutil.assertApprox[first r 5;2000*2*8%10000;1e-9;"2 ETH at 2000 on bybit's 8bps is 3.2"];
+    .qunit.assertEquals[first r 6;`USDT;"charged in the quote currency, which is what comes after the hyphen"]};
+
+test_the_fill_model_skews_with_toxicity_the_way_cryptorust_does:{[t]
+    / Positive toxicity is buy-heavy flow: it lifts the ASK more. Negative
+    / hits the bid. The mock keeps the sign convention of QuoteFillSimulator.
+    up:.qsub.crypto_mock.skewed[0.4;1f];
+    down:.qsub.crypto_mock.skewed[0.4;-1f];
+    .qunit.assertTrue[(up 1)>up 0;"buy-heavy flow makes the ask likelier to fill than the bid"];
+    .qunit.assertTrue[(down 0)>down 1;"sell-heavy flow, the bid"];
+    .qunit.assertEquals[.qsub.crypto_mock.skewed[0.4;0f];0.4 0.4;"and no toxicity leaves them equal"]};
+
+test_a_fill_takes_a_capped_fraction_of_the_quote:{[t]
+    row:first .qsub.crypto_mock.market;
+    q:.qsub.crypto_mock.quote_size .qsub.crypto_mock.syms?row`sym;
+    / draws: at the touch, both uniforms at 0 (certain fill), fractions 1
+    decided:.qsub.crypto_mock.decide[row;1;(1b;0f;0f;1f;1f)];
+    .qunit.assertEquals[count decided;2;"both sides filled"];
+    .testutil.assertApprox[decided[0;2];q*.qsub.crypto_mock.max_fill_fraction;1e-12;
+        "a fraction of 1 is capped at max_fill_fraction, as the simulator caps it"];
+    .qunit.assertEquals[decided[;0];1 -1;"the bid fill is a buy and the ask fill a sell"]};
+
+test_a_maker_not_at_the_touch_fills_nothing:{[t]
+    row:first .qsub.crypto_mock.market;
+    .qunit.assertEmpty[.qsub.crypto_mock.decide[row;1;(0b;0f;0f;1f;1f)];
+        "outquoted, the maker fills nothing however the dice fall"]};
+
+test_the_beta_draw_is_in_range:{[t]
+    draws:{[i] .qsub.crypto_mock.beta_draw[.qsub.crypto_mock.fill_alpha;.qsub.crypto_mock.fill_beta]} each til 200;
+    .qunit.assertTrue[all draws within 0 1f;"a Beta draw is a fraction"];
+    / Beta(2,2) has mean a half; 200 draws sit within a few percent of it.
+    .qunit.assertTrue[0.15>abs 0.5-avg draws;"and Beta(2,2) draws average about a half"]};
+
+test_fill_ids_are_unique_per_venue:{[t]
+    reset[];
+    ids:.qsub.crypto_mock.next_id each 3#`binance_spot;
+    .qunit.assertEquals[ids;`$("binance_spot-1";"binance_spot-2";"binance_spot-3");
+        "monotonic within a venue, the way an exchange's own ids are"]};
+
+test_the_mock_publishes_no_sim_fills:{[t]
+    / The paper strategy's table. A mock that published it would tempt a
+    / position engine into consuming it.
+    .qunit.assertFalse[`crypto_sim_fills in .qstream.declaration[`crypto_mock]`publishes;
+        "crypto_sim_fills is not something this mock claims to publish"]};
+
+/ --- crypto posbook -------------------------------------------------------
+
+crypto_fill:{[s;side;price;size]
+    ([] time:enlist d 0; sym:enlist s; venue:enlist `binance_spot; side:enlist side;
+        trade_price:enlist price; size:enlist size; fee:enlist 0f;
+        fee_currency:enlist `USDT; exchange_fill_id:enlist `$"binance_spot-1")}
+
+crypto_book_row:{[s;bid;ask]
+    ([] time:enlist d 0; venue:enlist `binance_spot; sym:enlist s;
+        bid_prices:enlist bid; bid_sizes:enlist 3#0.5; ask_prices:enlist ask; ask_sizes:enlist 3#0.5)}
+
+test_crypto_posbook_folds_a_fill_into_a_position:{[t]
+    reset[];
+    .qsub.crypto_posbook.on_batch[`crypto_trades;crypto_fill[`$"BTC-USDT";1;62000f;0.5]];
+    .qunit.assertEquals[(count .sjtest.published;first exec tbl from .sjtest.published);(1;`position);
+        "one position row, onto the same table posbook publishes"];
+    .testutil.assertApprox[(.qsub.crypto_posbook.book`$"BTC-USDT")`qty;0.5;1e-12;"long half a bitcoin"]};
+
+test_crypto_posbook_marks_to_the_top_of_the_crypto_book:{[t]
+    reset[];
+    .qsub.crypto_posbook.on_batch[`crypto_book;crypto_book_row[`$"BTC-USDT";61999 61998 61997f;62001 62002 62003f]];
+    .qsub.crypto_posbook.on_batch[`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]];
+    row:last_rows[];
+    .testutil.assertApprox[first row`mark_price;62000f;1e-9;"the mid of level 0 each side"];
+    .testutil.assertApprox[first row`unrealized_pnl;1000f;1e-9;"bought at 61000, marked at 62000"]};
+
+test_crypto_posbook_marks_to_the_fill_when_never_quoted:{[t]
+    reset[];
+    .qsub.crypto_posbook.on_batch[`crypto_trades;crypto_fill[`$"ETH-USDT";-1;2450f;5f]];
+    .testutil.assertApprox[first last_rows[]`unrealized_pnl;0f;1e-9;
+        "no book yet for this sym, so it is marked at its own price - posbook's fallback, inherited with its transform"]};
+
+test_crypto_posbook_ignores_sim_fills:{[t]
+    reset[];
+    .qsub.crypto_posbook.on_batch[`crypto_sim_fills;
+        ([] time:enlist d 0; sym:enlist `$"BTC-USDT"; side:enlist 1; trade_price:enlist 62000f;
+            size:enlist 0.5; realized_delta_pnl:enlist 0f)];
+    .qunit.assertEmpty[.qsub.crypto_posbook.book;"paper fills are not a position"]};
+
+test_crypto_posbook_keeps_its_own_book_apart_from_posbooks:{[t]
+    reset[];
+    .qsub.crypto_posbook.on_batch[`crypto_trades;crypto_fill[`$"BTC-USDT";1;62000f;0.5]];
+    .qunit.assertEmpty[.qsub.posbook.book;"the FX book did not move"];
+    .qunit.assertEquals[count .qsub.crypto_posbook.book;1;"the crypto book did"]};
+
+test_crypto_posbook_and_posbook_share_one_transform:{[t]
+    / The computation is reused, not copied: this job declares no transform
+    / of its own and runs the one posbook registered.
+    .qunit.assertFalse[`crypto_position in key .qxf.registry;"no second transform was declared"];
+    .qunit.assertTrue[`position in key .qxf.registry;"the one it runs is posbook's"]};
+
+test_the_mock_feeds_the_crypto_posbook_end_to_end:{[t]
+    / The mock's rows, delivered the way the plant would deliver them - as
+    / a table with time stamped first - land in a position.
+    reset[];
+    as_table:{[cols_after_time;r] update time:.sjtest.d 0 from flip cols_after_time!r};
+    .qstream.wire[`crypto_mock;{[as_table;tbl;r]
+        .qsub.crypto_posbook.on_batch[tbl;`time xcols as_table[
+            $[tbl=`crypto_book;`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
+              `sym`venue`side`trade_price`size`fee`fee_currency`exchange_fill_id];r]];
+        1}[as_table]];
+    do[20;.qsub.crypto_mock.on_timer[]];
+    .qunit.assertTrue[0<count .qsub.crypto_posbook.book;
+        "twenty ticks of the mock at a 30% touch share is enough for at least one fill to reach the book"];
+    .qunit.assertTrue[all (exec sym from .qsub.crypto_posbook.book) in .qsub.crypto_mock.syms;
+        "and every position is in a symbol the mock trades"]};
 
 \d .

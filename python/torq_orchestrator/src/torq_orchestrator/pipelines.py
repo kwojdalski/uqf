@@ -2,7 +2,8 @@
 
 Adding a pipeline means adding one entry here, not picking a port number and
 remembering three other places to edit - the per-process offsets, the
-process.csv rows and the generated schema all derive from this tuple.
+process.csv rows and the generated schema all derive from this tuple. The
+Pipeline dataclass itself is in pipeline.py.
 
 Also holds the dataflow-edge declarations and verify_pipeline_edges, which
 greps each pipeline's own q script and fails if a declaration disagrees with
@@ -10,10 +11,14 @@ the code. A hand-drawn diagram goes stale silently; a derived one cannot."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 from torq_orchestrator.logger import get_logger
+from torq_orchestrator.pipeline import (  # noqa: F401 - re-exported: core.py imports them from here
+    PIPELINE_LIB_SCRIPT,
+    STREAM_RUNNER_SCRIPT,
+    Pipeline,
+)
 from torq_orchestrator.schemas import (
     DATABENTO_BOOK_TABLE_SCHEMA,
     EXECUTION_QUALITY_TABLE_SCHEMA,
@@ -38,119 +43,6 @@ DEFAULT_BASE_PORT = 6050
 # picking a number and remembering three other places to edit.
 FXFEED_PINNED_OFFSET = 19
 PIPELINE_BLOCK_START = 24
-
-#: Paths under $UQFSCRIPTS, which is scripts/. The subdirectory is part of
-#: the name because that is what lands in process.csv's load column - see
-#: load_expression below. scripts/ was foldered by role in #241.
-PIPELINE_LIB_SCRIPT = "processes/torq_pipeline.q"
-
-#: The one process script every streaming job runs under - the feeds that
-#: publish on a timer as well as the jobs that subscribe. Which job a process
-#: runs is decided in q, by its procname: each job under src/etl/streaming/
-#: declares the process that runs it, and the runner looks itself up. There
-#: were EIGHT near-identical scripts here before, one per job.
-STREAM_RUNNER_SCRIPT = "processes/torq_stream.q"
-
-# The access list a real .sub.subscribe subscriber needs: an ETL process
-# borrows an already-credentialed proctype so .servers.startup[] can open an
-# access-listed handle to stp1. Feeds only publish and need no credentials.
-_ETL_ACCESS_LIST = "${TORQAPPHOME}/appconfig/passwords/accesslist.txt"
-
-
-@dataclass(frozen=True)
-class Pipeline:
-    """One uqf-authored uqf stack process, declared once.
-
-    Everything a pipeline needs in three generated places - its
-    `{KDBBASEPORT}+N` port offset, its process.csv row, and its `database.q`
-    table definition - is derived from this single entry, so adding a
-    pipeline is one list entry rather than a port constant plus a schema
-    string plus a _base_process_rows() block (and remembering to chain the
-    offset comment to the previous one).
-
-    `kind` picks the two fields that always move together: a "feed" gets
-    proctype "feed" and no access list, an "etl" gets proctype "metrics" and
-    the subscriber access list.
-    """
-
-    procname: str
-    script: str
-    # "feed"     publishes only
-    # "etl"      subscribes, so needs credentials
-    # "backfill" bounded: registers with discovery, runs a window range, exits
-    kind: str
-    table: str | None = None  # the table it publishes onto the tickerplant, if any
-    schema: str | None = None  # that table's database.q definition
-    # Only whether to LOAD the library. There was once a second flag to skip
-    # publish-edge verification for a pipeline publishing through
-    # .qpipe.publish; the check now reads the table at that call site, so
-    # every pipeline's declared publishes are verified the same way.
-    loads_qpipe: bool = False  # load scripts/processes/torq_pipeline.q ahead of its own script
-    offset: int | None = None  # None = allocate from PIPELINE_BLOCK_START in list order
-    localtime: str = "1"
-    startwithall: str = "1"
-    note: str = ""  # why this row deviates from the defaults, if it does
-
-    # --- dataflow edges, for scripts/generate/generate_operational_docs.py ---
-    # Declared here so a diagram can be DERIVED rather than drawn, and
-    # verified: verify_pipeline_edges() below greps each pipeline's own .q
-    # script for its `.sub.subscribe`/`.qpipe.subscribe_etl`/`.u.upd` calls
-    # and fails if the declaration and the code disagree. A hand-drawn
-    # diagram goes stale silently; this one cannot.
-    subscribes: tuple[str, ...] = ()  # tickerplant tables it subscribes to
-    # Tables it publishes via `.u.upd`. Defaults to (table,) - set it
-    # explicitly only when a pipeline publishes onto a table whose schema it
-    # does NOT own (fxfeed1 -> the vendored `quote`), or onto more than one.
-    publishes: tuple[str, ...] | None = None
-    # tap1 chooses its subscription at runtime from -tables, so no fixed
-    # edge exists to declare or to verify.
-    subscribes_dynamic: bool = False
-
-    @property
-    def proctype(self) -> str:
-        """The TorQ proctype, which is what discovery indexes processes BY.
-
-        `backfill` is its own type rather than reusing `metrics`, because
-        proctype is the lookup key: gethandlebytype on `backfill`
-        has to find backfill workers and not the four metrics pipelines that
-        happen to share a code path with them.
-        """
-        if self.kind == "feed":
-            return "feed"
-        if self.kind == "backfill":
-            return "backfill"
-        return "metrics"
-
-    @property
-    def access_list(self) -> str:
-        """A backfill reads from the fleet the way an etl does, so it carries
-        the same access list. Only a pure feed, which publishes and subscribes
-        to nothing, needs none.
-        """
-        return "" if self.kind == "feed" else _ETL_ACCESS_LIST
-
-    @property
-    def published_tables(self) -> tuple[str, ...]:
-        """Tables this pipeline publishes onto the tickerplant.
-
-        `table` is schema ownership and is the common case, so it doubles as
-        the publish edge; `publishes` overrides it for the pipelines that
-        publish onto a table they did not define.
-        """
-        if self.publishes is not None:
-            return self.publishes
-        return (self.table,) if self.table else ()
-
-    def load_column(self) -> str:
-        """The process.csv `load` value - the .qpipe library first when the
-        script needs it, then the script itself. Order matters: see
-        PIPELINE_LIB_SCRIPT.
-        """
-        scripts = [self.script]
-        if self.loads_qpipe:
-            scripts.insert(0, PIPELINE_LIB_SCRIPT)
-        return " ".join(f"${{UQFSCRIPTS}}/{s}" for s in scripts)
-
 
 # Declared in port order. Reordering this list renumbers ports, so
 # test_pipeline_offsets_are_stable pins every derived offset to its current
@@ -272,6 +164,11 @@ PIPELINES: tuple[Pipeline, ...] = (
         startwithall="0",
         note="bounded: see deals_backfill1",
     ),
+    # --- appended, never inserted --------------------------------------
+    #
+    # Offsets are allocated in list order, so a new process goes at the END:
+    # inserting above would renumber tap1 and both backfills onto other
+    # processes' ports.
     Pipeline(
         procname="databento1",
         script=STREAM_RUNNER_SCRIPT,
@@ -281,14 +178,33 @@ PIPELINES: tuple[Pipeline, ...] = (
         table="databento_book",
         schema=DATABENTO_BOOK_TABLE_SCHEMA,
         note=(
-            "LAST in this list on purpose: offsets are allocated in list "
-            "order, so inserting above would renumber tap1 and both "
-            "backfills. Folds live Databento MBP-10 into the book shape. The raw rows it "
-            "subscribes to are published by an EXTERNAL Python feed handler "
-            "(databento_feed.py), not by a process here - a q process cannot "
-            "hold a Databento subscription - so databento_mbp10 has a schema "
-            "row below but no producer in this list"
+            "folds live Databento MBP-10 into the book shape. The raw rows are "
+            "published by an EXTERNAL Python feed handler (databento_feed.py) - a "
+            "q process cannot hold a Databento subscription - so databento_mbp10 "
+            "has a schema row but no producer in this list"
         ),
+    ),
+    Pipeline(
+        procname="cryptomock1",
+        script=STREAM_RUNNER_SCRIPT,
+        loads_qpipe=True,
+        kind="feed",
+        publishes=("crypto_book", "crypto_trades"),
+        startwithall="0",
+        note=(
+            "stands in for cryptorust's two kdb recorders. startwithall:0: start it "
+            "INSTEAD of them, never as well as - it publishes onto the same two "
+            "tables, and an invented ladder or fill must not interleave with a real one"
+        ),
+    ),
+    Pipeline(
+        procname="cryptoposbook1",
+        script=STREAM_RUNNER_SCRIPT,
+        loads_qpipe=True,
+        kind="etl",
+        subscribes=("crypto_trades", "crypto_book"),
+        publishes=("position",),
+        note="posbook1's transform over crypto fills, marked to the crypto top of book",
     ),
 )
 
