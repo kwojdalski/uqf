@@ -9,7 +9,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 [docs/guides/uqf-stack.md](../uqf-stack.md); for the topology diagrams see
 [README.md](README.md).
 
-**23 vendored processes** plus **15 uqf processes** — 38 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **17 uqf processes** — 40 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -30,6 +30,8 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `cryptomock1` | 6085 | feed | `processes/torq_stream.q` | — | — | `crypto_book`, `crypto_trades` |
 | `executions1` | 6086 | normalizer | `processes/torq_stream.q` | `executions` | `trades`, `crypto_trades` | `executions` |
 | `marks1` | 6087 | normalizer | `processes/torq_stream.q` | `marks` | `quote`, `crypto_book` | `marks` |
+| `fxordersfeed1` | 6088 | feed | `processes/torq_stream.q` | `orders` | — | `orders` |
+| `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `orders` | `fx_position`, `fx_limit_breach` |
 
 ### Why a row deviates from the defaults
 
@@ -44,6 +46,8 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 - **`cryptomock1`** — stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one
 - **`executions1`** — every fill table as one: trades and crypto_trades -> executions
 - **`marks1`** — a mid per instrument from every book: quote and crypto_book -> marks
+- **`fxordersfeed1`** — synthetic order flow, most of which never becomes a fill - fxpositions1's input
+- **`fxpositions1`** — net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it
 
 ## Tables these processes publish
 
@@ -54,8 +58,11 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `databento_book` | `schemas.DATABENTO_BOOK_TABLE_SCHEMA` | `databento1` |
 | `execution_quality` | `schemas.EXECUTION_QUALITY_TABLE_SCHEMA` | `markout1` |
 | `executions` | `schemas.EXECUTIONS_TABLE_SCHEMA` | `executions1` |
+| `fx_limit_breach` | `schemas.FX_LIMIT_BREACH_TABLE_SCHEMA` | `fxpositions1` |
+| `fx_position` | `schemas.FX_POSITION_TABLE_SCHEMA` | `fxpositions1` |
 | `marks` | `schemas.MARKS_TABLE_SCHEMA` | `marks1` |
 | `mkt_orderbook` | `schemas.MKT_ORDERBOOK_TABLE_SCHEMA` | `vectorize1` |
+| `orders` | `schemas.ORDERS_TABLE_SCHEMA` | `fxordersfeed1` |
 | `position` | `schemas.POSITION_TABLE_SCHEMA` | `posbook1` |
 | `quote` | _vendored_ | `fxfeed1` |
 | `quotes` | `schemas.QUOTES_TABLE_SCHEMA` | `quotesfeed1` |

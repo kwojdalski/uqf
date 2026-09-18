@@ -6,6 +6,8 @@ deals_backfill1,backfill,32,,
 events_backfill1,backfill,33,,
 executions1,metrics,36,crypto_trades trades,executions
 fxfeed1,feed,19,,quote
+fxordersfeed1,feed,38,,orders
+fxpositions1,metrics,39,orders,fx_limit_breach fx_position
 fxtradesfeed1,feed,29,,trades
 markout1,metrics,31,quote trades,execution_quality
 marks1,metrics,37,crypto_book quote,marks
