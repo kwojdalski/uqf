@@ -1,4 +1,4 @@
-/ test_coverage_tool.q - scripts/coverage.q, the .cov library (.covtest).
+/ test_coverage_tool.q - scripts/dev/coverage.q, the .cov library (.covtest).
 / .
 / The API is KX's (code.kx.com/developer/libraries/code-coverage), so the
 / tests are written against that contract rather than against this
@@ -16,7 +16,7 @@
 /   silently alters a result. So several tests below are pairs: a construct
 /   that must be instrumented, beside its look-alike that must not.
 / .
-/ Load scripts/coverage.q, tests/lib/qunit.q and tests/lib/testutil.q before
+/ Load scripts/dev/coverage.q, tests/lib/qunit.q and tests/lib/testutil.q before
 / this file.
 
 / Fixtures live in their own namespace so instrumenting them cannot disturb

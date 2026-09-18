@@ -18,7 +18,7 @@ into `core/` - that is what a declaration over a generic shell means - so
 this checks only that the arrow never points back.
 
 The second rule is the same arrow one level out (#229): nothing under
-`src/etl/` may call `.qpipe`, the TorQ adapter in `scripts/torq_pipeline.q`.
+`src/etl/` may call `.qpipe`, the TorQ adapter in `scripts/processes/torq_pipeline.q`.
 B-09 says the ETL tree must load in a plain q process with no TorQ present,
 and `.qpipe` is the one namespace allowed to know TorQ exists. The status
 writer used to live there and `backfill_state.q` called it, which is why
@@ -40,7 +40,10 @@ import re
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+REPO = Path(__file__).resolve().parents[2]
 CORE = REPO / "src" / "etl" / "core"
 ETL = REPO / "src" / "etl"
 DECLARING_DIRS = ("sources", "workers", "streaming")

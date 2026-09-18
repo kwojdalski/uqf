@@ -46,7 +46,7 @@ which_job:{[]
 / root `upd` the tickerplant calls, and start the job's timer if it has one.
 / .
 / `upd` and the publish handle are at ROOT by necessity - the tickerplant
-/ calls `upd` by name there (scripts/torq_pipeline.q, invariant 5) - and
+/ calls `upd` by name there (scripts/processes/torq_pipeline.q, invariant 5) - and
 / everything else stays inside the job's own namespace.
 / @param job the job's name
 / @return the job name

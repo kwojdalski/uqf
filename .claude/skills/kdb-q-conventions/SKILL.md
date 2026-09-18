@@ -301,7 +301,7 @@ running `com.timestored.qdoc.QDocMain` against a scratch file:
   TimeStored's own help page states the reverse order
   (`<source> <target>`) - that is wrong; passing it that way silently
   writes qDoc's own output files into your source folder and finds
-  nothing to document. `scripts/gen-docs.sh` has the verified order baked in.
+  nothing to document. `scripts/dev/gen-docs.sh` has the verified order baked in.
 - qDoc documents each namespace separately per source file in its nav
   (`.qopt (options.q)`, `.qrisk (risk.q)`, ...) - one page per file, since
   each file now has its own distinct namespace.

@@ -20,14 +20,14 @@ actual/
 # local qStudio jar kept alongside the repo to run it
 /qstudio.jar
 
-# build output from scripts/build.sh - regenerate on demand, don't commit it
+# build output from scripts/dev/build.sh - regenerate on demand, don't commit it
 /dist/
 
-# run artifacts from scripts/timer_replay_example.q - regenerate on demand,
+# run artifacts from scripts/examples/timer_replay_example.q - regenerate on demand,
 # don't commit it
 /scripts/output/
 
-# test databases built from external data by scripts/dump_databento_duckdb.py -
+# test databases built from external data by scripts/dev/dump_databento_duckdb.py -
 # large, derived, and rebuilt on demand
 /output/
 
@@ -40,7 +40,7 @@ __pycache__/
 *.swp
 *.swo
 
-# generated documentation - regenerate with scripts/gen-docs.sh
+# generated documentation - regenerate with scripts/dev/gen-docs.sh
 build/
 
 .venv/

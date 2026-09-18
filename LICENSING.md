@@ -34,7 +34,7 @@ the seven vendored dependencies below:
   commit q-doc's own `.gitmodules` pins (Apache License 2.0, full text at
   `lib/q-doc/kdb-common/LICENSE-kdb-common`) - both permissive and fine to
   combine with this repository's MIT code. Not loaded by `src/init.q`;
-  run via `scripts/run_qdoc.sh` (see [Documentation](README.md#documentation)). Requires KDB-X:
+  run via `scripts/dev/run_qdoc.sh` (see [Documentation](README.md#documentation)). Requires KDB-X:
   q-doc uses `.Q.opt`/`.h.ty` and kdb+'s built-in HTTP request handlers.
   Verified working end-to-end against this repo's own `src/*.q`.
 - `lib/kdb-parquet/`, vendored from

@@ -1,4 +1,4 @@
-"""Tests for `scripts/render_diagrams.py` - and mostly for the two ways it
+"""Tests for `scripts/generate/render_diagrams.py` - and mostly for the two ways it
 can pass while checking nothing.
 
 The gate's whole job is to fail when a committed `.svg` no longer matches
@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parents[3]
 # scripts/ is not a package, so the script is loaded by path - the same
 # idiom test_check_doc_references.py uses, and for the same reason.
 _SPEC = importlib.util.spec_from_file_location(
-    "render_diagrams", REPO / "scripts" / "render_diagrams.py"
+    "render_diagrams", REPO / "scripts" / "generate" / "render_diagrams.py"
 )
 assert _SPEC and _SPEC.loader
 render_diagrams = importlib.util.module_from_spec(_SPEC)

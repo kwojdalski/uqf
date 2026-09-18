@@ -40,7 +40,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+REPO = Path(__file__).resolve().parents[2]
 
 #: Files whose E-/F- citations are requirement citations.
 RENUMBER_PREFIXES = ("src/", "tests/", "scripts/", "python/")
@@ -51,9 +54,9 @@ RENUMBER_FILES = {
 }
 #: Explicitly excluded even under a renumbered prefix.
 EXCLUDE = {
-    "scripts/renumber_requirement_ids.py",  # this file's own docstring
-    "scripts/build_decision_log.py",  # parses the BANK's ids
-    "scripts/reconcile_question_bodies.py",  # same
+    "scripts/dev/renumber_requirement_ids.py",  # this file's own docstring
+    "scripts/generate/build_decision_log.py",  # parses the BANK's ids
+    "scripts/dev/reconcile_question_bodies.py",  # same
 }
 
 #: The requirement id ranges. E-01..E-24 and F-01..F-23 are what the two

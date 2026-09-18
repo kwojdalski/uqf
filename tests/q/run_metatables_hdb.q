@@ -1,6 +1,6 @@
 / Integration check in a fresh q process. Argument: a NEW disposable directory.
 \l src/metadata/metatables.q
-\l scripts/torq_metatables.q
+\l scripts/processes/torq_metatables.q
 
 if[1<>count .z.x;'"supply one disposable HDB directory"];
 db:hsym `$first .z.x;

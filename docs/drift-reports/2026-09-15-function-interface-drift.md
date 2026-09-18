@@ -91,8 +91,8 @@ python/uqf_frontend/tests/
 Also appearing on the `comparison` side:
 
 ```
-scripts/check_hook_scopes.py
-scripts/torq_pipeline.q            (INFERRED — the .q entries were harder to read)
+scripts/gates/check_hook_scopes.py
+scripts/processes/torq_pipeline.q            (INFERRED — the .q entries were harder to read)
 ```
 
 ### primary-only — upstream subsystems absent from the mirror
@@ -345,7 +345,7 @@ two can be compared in about thirty seconds.**
 |---|---|---|---|---|---|
 | `uqf_frontend/src` — comparison-only | 41 | 50 | 25 | 0 | **116** |
 | `uqf_frontend/tests` — comparison-only | 1 | 10 | 5 | 118 | **134** |
-| `scripts/check_hook_scopes.py` — comparison-only | 0 | 3 | 0 | 0 | **3** |
+| `scripts/gates/check_hook_scopes.py` — comparison-only | 0 | 3 | 0 | 0 | **3** |
 | **comparison-only Python, this session** | | | | | **253** |
 | `torq_orchestrator/src` — present both sides | 3 | 84 | 55 | 0 | 142 |
 | `torq_orchestrator/tests` — present both sides | 0 | 2 | 0 | 64 | 66 |
@@ -355,7 +355,7 @@ lambdas passed inline:
 
 | File | named lambdas |
 |---|---|
-| `scripts/torq_pipeline.q` | 8 |
+| `scripts/processes/torq_pipeline.q` | 8 |
 | `scripts/torq_markout_etl.q` | 2 |
 | `scripts/torq_posbook_etl.q` | 3 |
 | `scripts/torq_fx_trades_feed.q` | 1 |

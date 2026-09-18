@@ -30,7 +30,7 @@
 / existed only in a canonical tree that could not be reached from here. That
 / premise is gone: A-03 made this repository the primary lineage and A-02
 / froze canonical, so there is no other schema to verify against. The shape
-/ below IS the schema, and `scripts/verify_coverage_schema.q -local 1`
+/ below IS the schema, and `scripts/dev/verify_coverage_schema.q -local 1`
 / confirms the code and the table agree.
 / .
 / ON THE PARTITION KEY, WHICH IS THE PART WORTH READING
@@ -86,7 +86,7 @@
 / A LEDGER WRITTEN BEFORE THIS COLUMN EXISTED will now fail require_schema
 / with "missing run_id". That is deliberate and is the whole point of the
 / guard: this file's reads would return nulls for a column the table does not
-/ have. `scripts/verify_coverage_schema.q` prints the remedy.
+/ have. `scripts/dev/verify_coverage_schema.q` prints the remedy.
 / .
 / Deliberately one constant in one place: changing it should be an edit here
 / plus the writer's column list, not a hunt through the file.
@@ -206,7 +206,7 @@ attach:{[]
 / table this file just built trivially matches, so checking there would only
 / ever confirm itself.
 / .
-/ `scripts/verify_coverage_schema.q` is the same check as a standalone
+/ `scripts/dev/verify_coverage_schema.q` is the same check as a standalone
 / command, against a local table or a remote handle.
 / @return 1b when the live shape matches
 / @throws error naming the difference, and what it would silently do

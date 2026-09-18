@@ -53,7 +53,7 @@ rather than assumed:
 `'nyi` when the lambda is *called* — not when it is defined, and whether or
 not the body references it. `{[ds;sv] 1+1}` fails because `sv` is
 scalar-from-vector. This has cost this repository three debugging sessions
-(`desc` and `tables` in `scripts/torq_pipeline.q`, `sv` here), so
+(`desc` and `tables` in `scripts/processes/torq_pipeline.q`, `sv` here), so
 `test_q_programs.py` now checks every parameter against the 182 reserved and
 `.q` names.
 

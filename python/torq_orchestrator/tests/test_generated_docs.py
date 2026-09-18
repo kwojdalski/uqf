@@ -1,4 +1,4 @@
-"""Guards on `scripts/generate_operational_docs.py` (J-01, J-02).
+"""Guards on `scripts/generate/generate_operational_docs.py` (J-01, J-02).
 
 The decision those questions record: operational docs are generated at
 build, committed so a clone has them, and checked in CI — and where the
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-GENERATOR = REPO / "scripts" / "generate_operational_docs.py"
+GENERATOR = REPO / "scripts" / "generate" / "generate_operational_docs.py"
 GENERATED = REPO / "docs" / "integrations" / "torq" / "processes.md"
 
 _spec = importlib.util.spec_from_file_location("gen_ops_docs", GENERATOR)

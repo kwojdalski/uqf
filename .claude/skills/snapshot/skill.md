@@ -104,7 +104,7 @@ stale silently whenever a question is answered in a comment. A snapshot is
 the right moment to catch that, because the tag is what someone will clone.
 
 ```bash
-python3 scripts/build_decision_log.py
+python3 scripts/generate/build_decision_log.py
 ```
 
 If it changes the file, commit it before tagging:

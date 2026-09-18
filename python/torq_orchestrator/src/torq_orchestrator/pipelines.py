@@ -38,14 +38,17 @@ DEFAULT_BASE_PORT = 6050
 FXFEED_PINNED_OFFSET = 19
 PIPELINE_BLOCK_START = 24
 
-PIPELINE_LIB_SCRIPT = "torq_pipeline.q"
+#: Paths under $UQFSCRIPTS, which is scripts/. The subdirectory is part of
+#: the name because that is what lands in process.csv's load column - see
+#: load_expression below. scripts/ was foldered by role in #241.
+PIPELINE_LIB_SCRIPT = "processes/torq_pipeline.q"
 
 #: The one process script every streaming job runs under - the feeds that
 #: publish on a timer as well as the jobs that subscribe. Which job a process
 #: runs is decided in q, by its procname: each job under src/etl/streaming/
 #: declares the process that runs it, and the runner looks itself up. There
 #: were EIGHT near-identical scripts here before, one per job.
-STREAM_RUNNER_SCRIPT = "torq_stream.q"
+STREAM_RUNNER_SCRIPT = "processes/torq_stream.q"
 
 # The access list a real .sub.subscribe subscriber needs: an ETL process
 # borrows an already-credentialed proctype so .servers.startup[] can open an
@@ -81,13 +84,13 @@ class Pipeline:
     # publish-edge verification for a pipeline publishing through
     # .qpipe.publish; the check now reads the table at that call site, so
     # every pipeline's declared publishes are verified the same way.
-    loads_qpipe: bool = False  # load scripts/torq_pipeline.q ahead of its own script
+    loads_qpipe: bool = False  # load scripts/processes/torq_pipeline.q ahead of its own script
     offset: int | None = None  # None = allocate from PIPELINE_BLOCK_START in list order
     localtime: str = "1"
     startwithall: str = "1"
     note: str = ""  # why this row deviates from the defaults, if it does
 
-    # --- dataflow edges, for scripts/generate_diagrams.py ---------------
+    # --- dataflow edges, for scripts/generate/generate_operational_docs.py ---
     # Declared here so a diagram can be DERIVED rather than drawn, and
     # verified: verify_pipeline_edges() below greps each pipeline's own .q
     # script for its `.sub.subscribe`/`.qpipe.subscribe_etl`/`.u.upd` calls
@@ -197,7 +200,7 @@ PIPELINES: tuple[Pipeline, ...] = (
     ),
     Pipeline(
         procname="tap1",
-        script="torq_tap.q",
+        script="processes/torq_tap.q",
         kind="etl",
         subscribes_dynamic=True,
         startwithall="0",
@@ -256,14 +259,14 @@ PIPELINES: tuple[Pipeline, ...] = (
     # environment, so a third worker is an entry here and nothing else.
     Pipeline(
         procname="deals_backfill1",
-        script="torq_backfill.q",
+        script="processes/torq_backfill.q",
         kind="backfill",
         startwithall="0",
         note="bounded: runs a window range and exits, so it must not start with the stack",
     ),
     Pipeline(
         procname="events_backfill1",
-        script="torq_backfill.q",
+        script="processes/torq_backfill.q",
         kind="backfill",
         startwithall="0",
         note="bounded: see deals_backfill1",

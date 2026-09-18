@@ -61,7 +61,10 @@ import re
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+# parents[2], not parent.parent: this file sits one level deeper since
+# scripts/ was foldered (#241). Getting it wrong does not raise - it
+# resolves to scripts/ and the checker reports over an empty tree.
+REPO = Path(__file__).resolve().parents[2]
 SURFACE = REPO / "docs" / "migrations" / "surfaces" / "uqf-local" / "functions.csv"
 
 #: Where living documentation lives. Everything under these roots is checked.

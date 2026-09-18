@@ -21,12 +21,12 @@
 # Everything lands in <main checkout>/output/odbc-x86_64 (gitignored).
 #
 # Usage:
-#   scripts/odbc_rosetta.sh setup          build/fetch everything (idempotent)
-#   scripts/odbc_rosetta.sh q <q args...>  run q under Rosetta with ODBC wired up
-#   scripts/odbc_rosetta.sh databento <q args...>
+#   scripts/dev/odbc_rosetta.sh setup          build/fetch everything (idempotent)
+#   scripts/dev/odbc_rosetta.sh q <q args...>  run q under Rosetta with ODBC wired up
+#   scripts/dev/odbc_rosetta.sh databento <q args...>
 #       as `q`, with UQF_SOURCE_CRED_DATABENTO_MBP10 pointing at
 #       output/duckdb/databento.duckdb (build it with
-#       scripts/dump_databento_duckdb.py)
+#       scripts/dev/dump_databento_duckdb.py)
 #
 # Requires: Rosetta 2, Xcode command line tools, gh (authenticated), curl,
 # KDB-X at ~/.kx.
@@ -95,7 +95,7 @@ setup_qhome() {
 
 require_setup() {
     if [ ! -f "$QHOME_OVERLAY/m64/odbc.so" ] || [ ! -f "$PREFIX/odbcinst.ini" ]; then
-        echo "ODBC under Rosetta is not set up - run: scripts/odbc_rosetta.sh setup" >&2
+        echo "ODBC under Rosetta is not set up - run: scripts/dev/odbc_rosetta.sh setup" >&2
         exit 1
     fi
 }
@@ -110,7 +110,7 @@ case "${1:-}" in
         setup_unixodbc
         setup_duckdb_driver
         setup_qhome
-        echo "ready: scripts/odbc_rosetta.sh q <args>"
+        echo "ready: scripts/dev/odbc_rosetta.sh q <args>"
         ;;
     q)
         shift
@@ -120,7 +120,7 @@ case "${1:-}" in
         shift
         db="$MAIN_ROOT/output/duckdb/databento.duckdb"
         if [ ! -f "$db" ]; then
-            echo "no $db - build it with: uv run scripts/dump_databento_duckdb.py" >&2
+            echo "no $db - build it with: uv run scripts/dev/dump_databento_duckdb.py" >&2
             exit 1
         fi
         export UQF_SOURCE_CRED_DATABENTO_MBP10="DRIVER=DuckDB;Database=$db;access_mode=READ_ONLY"

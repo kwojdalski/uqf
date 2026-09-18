@@ -39,7 +39,7 @@ REPO = Path(__file__).resolve().parents[3]
 #: why `test_the_schema_source_is_where_this_test_expects_it` exists below: a
 #: stale path here would make every parametrised case fail loudly, which is
 #: the behaviour to keep.
-TABLES_Q = REPO / "scripts" / "uqf_stack_tables.q"
+TABLES_Q = REPO / "scripts" / "processes" / "uqf_stack_tables.q"
 
 #: q type characters, as they appear in a source contract's `types` string.
 _CHAR_TO_CATALOG = {
@@ -120,7 +120,7 @@ def test_the_schema_source_is_where_this_test_expects_it():
     assert TABLES_Q.is_file(), f"expected the tickerplant table definitions at {TABLES_Q}"
 
 
-#: Catalog tables whose schema is a tickerplant table in scripts/uqf_stack_tables.q.
+#: Catalog tables whose schema is a tickerplant table in scripts/processes/uqf_stack_tables.q.
 #: ONE list, read by the parametrize below and by the closed-loop gate at the
 #: bottom: the gate used to carry its own copy, which is the drift it exists
 #: to catch.
@@ -188,6 +188,6 @@ def test_every_catalog_table_is_cross_checked():
     unchecked = set(TABLES) - checked
     assert not unchecked, (
         f"catalog table(s) {sorted(unchecked)} have no drift check. Add the table "
-        f"to _TICKERPLANT_TABLES if scripts/uqf_stack_tables.q defines it, or the q "
+        f"to _TICKERPLANT_TABLES if scripts/processes/uqf_stack_tables.q defines it, or the q "
         f"file to _Q_OWNED."
     )

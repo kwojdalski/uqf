@@ -38,13 +38,13 @@
 // pattern (see README's Licensing section).
 //
 // Run from the repository root, with stdin kept open:
-//   yes "" | q scripts/timer_replay_example.q [n_ticks] [tick_ms]
+//   yes "" | q scripts/examples/timer_replay_example.q [n_ticks] [tick_ms]
 // n_ticks (default 8) is how many historical rows to generate and
 // replay; tick_ms (default 50) is the system timer interval between
 // replayed rows, in milliseconds. Both are optional and positional, e.g.
-// `yes "" | q scripts/timer_replay_example.q 20 100` for 20 ticks 100ms
+// `yes "" | q scripts/examples/timer_replay_example.q 20 100` for 20 ticks 100ms
 // apart. Run in an actual interactive terminal, plain
-// `q scripts/timer_replay_example.q` is fine too (stdin naturally stays
+// `q scripts/examples/timer_replay_example.q` is fine too (stdin naturally stays
 // open until you type something). But run non-interactively - stdin
 // closed/redirected from /dev/null, as any CI job or subprocess-launched
 // invocation would do - a genuine, confirmed kdb+ race exists between
@@ -104,7 +104,7 @@ level_prefix_targets:(
     ("ask_sz_";`ask_sizes));
 col_order:`ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
 
-/ Command-line params: q scripts/timer_replay_example.q [n_ticks] [tick_ms]
+/ Command-line params: q scripts/examples/timer_replay_example.q [n_ticks] [tick_ms]
 / - .z.x is the list of args after the script name, always strings; cast
 / and fall back to the default whenever an arg wasn't given.
 default_n_ticks:8;

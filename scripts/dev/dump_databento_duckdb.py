@@ -13,7 +13,7 @@ pipeline can read windows of it the way it would read a real database.
 
 A PEP 723 script rather than a workspace dependency: DuckDB is needed only to
 build this test database, so it stays out of the shared lockfile. Run it with
-``uv run scripts/dump_databento_duckdb.py``.
+``uv run scripts/dev/dump_databento_duckdb.py``.
 
 Timestamps are the one deliberate change. Databento stamps ``ts_event`` and
 ``ts_recv`` in nanoseconds, and DuckDB reads a timezone-aware parquet

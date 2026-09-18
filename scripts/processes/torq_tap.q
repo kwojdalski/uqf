@@ -61,7 +61,7 @@ init:{
 / shape x happens to arrive in (a table, or a list of columns) without
 / needing to know which.
 / .
-/ At ROOT, where the tickerplant calls it (scripts/torq_pipeline.q,
+/ At ROOT, where the tickerplant calls it (scripts/processes/torq_pipeline.q,
 / invariant 5). Everything else this process owns is in .qproc.tap.
 upd:{[t;x]
   .lg.o[t; .Q.s1 x];

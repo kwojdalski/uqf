@@ -43,7 +43,7 @@ import pytest
 # that is mid-import, and fails with a bare "'NoneType' has no attribute
 # '__dict__'" that says nothing about the real cause.
 _SPEC = importlib.util.spec_from_file_location(
-    "check_q_traps", Path(__file__).resolve().parents[3] / "scripts" / "check_q_traps.py"
+    "check_q_traps", Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_q_traps.py"
 )
 assert _SPEC and _SPEC.loader
 cqt = importlib.util.module_from_spec(_SPEC)
@@ -53,7 +53,7 @@ _SPEC.loader.exec_module(cqt)
 QLINTER = os.environ.get("QLINTER") or shutil.which("qlinter")
 needs_linter = pytest.mark.skipif(
     QLINTER is None,
-    reason="qlinter is not installed; see scripts/check_q_traps.py for the install",
+    reason="qlinter is not installed; see scripts/gates/check_q_traps.py for the install",
 )
 
 
@@ -70,7 +70,7 @@ def _flagged(source: str, code: str, name: str = "t.q") -> list:
     claims while moving it.
     """
     if QLINTER is None:
-        pytest.skip("qlinter is not installed; see scripts/check_q_traps.py")
+        pytest.skip("qlinter is not installed; see scripts/gates/check_q_traps.py")
     result = subprocess.run(
         [QLINTER, "-", "--stdin-filename", name, "--format", "json", "--profile", "uqf"],
         input=source,
@@ -541,7 +541,7 @@ def test_the_type_gate_is_registered_in_the_scope_checker():
     check_hook_scopes.py is unenforced: it can narrow to a stale path and
     nothing complains - which is exactly how 43 of 47 files went unlinted.
     """
-    scope_checker = Path(__file__).resolve().parents[3] / "scripts" / "check_hook_scopes.py"
+    scope_checker = Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_hook_scopes.py"
     text = scope_checker.read_text()
     assert 'TYPE_HOOKS = ("ty",)' in text
     assert '("type", TYPE_HOOKS)' in text

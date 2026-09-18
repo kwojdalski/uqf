@@ -11,7 +11,7 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / .
 / The output carries no `time`; .u.upd stamps its own on receipt
-/ (scripts/torq_pipeline.q, invariant 1).
+/ (scripts/processes/torq_pipeline.q, invariant 1).
 
 \d .qsub.vectorize
 

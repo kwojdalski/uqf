@@ -89,7 +89,7 @@ Never propose any of these, and say why if asked:
 - **A q builtin.** `count`, `value`, `table`, `type`, `first`, `sum`, `max`,
   `min`, `var`, `get`, `set`, `save`, `load`, `desc`, `sv`, `prior`, `deltas`
   and ~170 more. Shadowing one as a name throws at LOAD time or on APPLICATION
-  — this repository has lost eight names to that trap. `scripts/check_q_traps.py`
+  — this repository has lost eight names to that trap. `scripts/gates/check_q_traps.py`
   carries the list it knows about.
 - **A word that names a type.** `to_timestamp`, `to_float`, `to_symbol`.
 - **A namespace or filename.** N-01 ties `src/<area>/<module>.q` to its
@@ -135,8 +135,8 @@ breaks three generated artefacts and two gates notice:
 
 ```bash
 scripts/test.py q-unit
-uv run python scripts/generate_man_registry.py     # man.q records every name
-uv run python scripts/contract_surface.py export
+uv run python scripts/generate/generate_man_registry.py     # man.q records every name
+uv run python scripts/generate/contract_surface.py export
 ```
 
 The `man.q` registry gate is what caught the `config` → `cfg` rename leaving

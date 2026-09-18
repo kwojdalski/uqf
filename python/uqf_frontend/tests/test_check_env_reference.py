@@ -1,4 +1,4 @@
-"""Tests for `scripts/check_env_reference.py`'s .env.example check.
+"""Tests for `scripts/gates/check_env_reference.py`'s .env.example check.
 
 The gate had no tests at all, which for a checker means nobody has seen it
 fail - the repository's own recurring failure mode (a hook scoped to nothing,
@@ -16,7 +16,7 @@ from pathlib import Path
 
 _SPEC = importlib.util.spec_from_file_location(
     "check_env_reference",
-    Path(__file__).resolve().parents[3] / "scripts" / "check_env_reference.py",
+    Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_env_reference.py",
 )
 assert _SPEC and _SPEC.loader
 cer = importlib.util.module_from_spec(_SPEC)

@@ -22,7 +22,7 @@
 / port, which the hermetic suite must not.
 
 \l src/init.q
-\l scripts/torq_pipeline.q
+\l scripts/processes/torq_pipeline.q
 \l src/etl/init.q
 
 statusdir:getenv `UQFSTATUSDIR;

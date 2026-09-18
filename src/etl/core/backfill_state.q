@@ -301,7 +301,7 @@ fail:{[worker;spec;progress;err]
 / .
 / `@[f;::;handler]` rather than `.[f;();handler]` - the latter fires its
 / handler even when f SUCCEEDS on this build, discarding the real result.
-/ That is documented at length in scripts/torq_pipeline.q's safe_timer, and
+/ That is documented at length in scripts/processes/torq_pipeline.q's safe_timer, and
 / it is the same trap here.
 / @param worker the worker's name
 / @param spec the run specification

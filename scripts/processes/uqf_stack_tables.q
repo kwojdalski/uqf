@@ -15,7 +15,7 @@
 /                 never edited (H-01).
 /   LOADED as q   tests/q/test_demo_tables.q loads it and checks the tables
 /                 parse and carry the columns their consumers expect, and
-/                 scripts/export_contract_surface.q loads it so these tables
+/                 scripts/generate/export_contract_surface.q loads it so these tables
 /                 appear in the contract surface alongside the ETL ledgers.
 / .
 / So the definitions are checked by a q parser on every commit, which is the

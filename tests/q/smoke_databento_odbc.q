@@ -2,7 +2,7 @@
 // ODBC.
 //
 // Runs databento_book_backfill over a range of the DuckDB database built by
-// scripts/dump_databento_duckdb.py, then checks what it published against
+// scripts/dev/dump_databento_duckdb.py, then checks what it published against
 // DuckDB directly, through a second connection:
 //
 //   - the run completed with no failed window;
@@ -17,13 +17,13 @@
 // It SKIPs, exit 0, when either is missing.
 //
 // Run, on macOS:
-//   scripts/odbc_rosetta.sh databento tests/q/smoke_databento_odbc.q [-from ts] [-to ts]
+//   scripts/dev/odbc_rosetta.sh databento tests/q/smoke_databento_odbc.q [-from ts] [-to ts]
 // The range defaults to the first trading hour of 2026-02-25.
 
 \c 400 1000
 
 \l src/init.q
-\l scripts/torq_pipeline.q
+\l scripts/processes/torq_pipeline.q
 \l src/etl/init.q
 
 opts:.Q.opt .z.x;
@@ -31,10 +31,10 @@ range_from:$[`from in key opts; "P"$first opts`from; 2026.02.25D14:30:00];
 range_to:$[`to in key opts; "P"$first opts`to; 2026.02.25D15:30:00];
 
 if[not .qsrc.has_credentials `databento_mbp10;
-    -1 "SKIP  ",.qsrc.credential_var[`databento_mbp10]," is not set - run through scripts/odbc_rosetta.sh databento";
+    -1 "SKIP  ",.qsrc.credential_var[`databento_mbp10]," is not set - run through scripts/dev/odbc_rosetta.sh databento";
     exit 0];
 if[not .qodbc.available[];
-    -1 "SKIP  the q ODBC client is not loadable in this process - run through scripts/odbc_rosetta.sh";
+    -1 "SKIP  the q ODBC client is not loadable in this process - run through scripts/dev/odbc_rosetta.sh";
     exit 0];
 
 / A status directory of its own, emptied first: the coverage ledger persists

@@ -8,7 +8,8 @@
 / the batch handler, the timer body, the job's own buffers, and the
 / declaration the runner reads. Every step of the job, in the order it runs.
 / It was two files - the computation in src/etl/transforms/stream.q, the
-/ subscription and timer in scripts/torq_markout_etl.q - because the
+/ subscription and timer in the old scripts/torq_markout_etl.q (deleted in
+/ #204) - because the
 / computation had to be testable and the wiring had to connect. The publish
 / seam (.qstream.wire) makes both true of one file.
 / .
@@ -16,9 +17,9 @@
 / .
 / Every global a transform reads is fully qualified: these functions run
 / inside TorQ processes, where a bare name in a namespaced function is what
-/ scripts/torq_pipeline.q's invariant 5 warns does not resolve reliably.
+/ scripts/processes/torq_pipeline.q's invariant 5 warns does not resolve reliably.
 / .
-/ The output schema is the published table in scripts/uqf_stack_tables.q
+/ The output schema is the published table in scripts/processes/uqf_stack_tables.q
 / WITHOUT `time`, which .u.upd stamps on receipt (invariant 1).
 / tests/q/test_transform.q holds the two to each other.
 

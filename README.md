@@ -203,7 +203,7 @@ by `.qbw.define` from the registered worker name), source declarations under
 `.qfeed` (`.qfeed.demo_deals`, checked against each file's own
 `source_name`), the continuous jobs under `.qsub` (`.qsub.fx_feed`, `.qsub.markout` and six
 more — each one file under `src/etl/streaming/` holding every step of that
-job, feeds included, run by the generic `scripts/torq_stream.q`), and each
+job, feeds included, run by the generic `scripts/processes/torq_stream.q`), and each
 process script's own wiring state under `.qproc` (`.qproc.stream`,
 `.qproc.backfill`, `.qproc.tap`). Library modules stay flat. Every
 namespace in `src/` and `scripts/` carries the `.q` prefix or is listed in
@@ -305,13 +305,13 @@ scripts/test.py all                 # everything except smoke and coverage
 
 `scripts/test.py coverage` measures what the suites actually **execute** —
 line coverage for Python, and **statement and branch coverage for q** through
-the [`.cov` library](scripts/coverage.q).
+the [`.cov` library](scripts/dev/coverage.q).
 
 q has no coverage tool, so `.cov` is one, with
 [KX's own coverage API](https://code.kx.com/developer/libraries/code-coverage/):
 
 ```q
-\l scripts/coverage.q
+\l scripts/dev/coverage.q
 .cov.format.display .cov.run[.qfwd.fwd_cont; 1.10 0.02 0.01 0.5; (enlist `namespaces)!enlist `.qfwd]
 ```
 ```
@@ -366,7 +366,7 @@ The Python side is gated three ways on every commit, all scoped by *intent*
 | type | `ty` | types resolve across module boundaries |
 | test | `python-tests` | the whole workspace suite passes |
 
-`scripts/check_hook_scopes.py` asserts all three cover **every** tracked
+`scripts/gates/check_hook_scopes.py` asserts all three cover **every** tracked
 Python file, and fails the commit otherwise. That check exists because the
 lint gate silently drifted once: it was scoped to a directory that stayed
 valid while the code moved out from under it, leaving **43 of 47 files
@@ -441,7 +441,7 @@ Generate browsable HTML API docs with:
 ```
 brew install openjdk                        # or any JDK 8+
 curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place at repo root
-./scripts/gen-docs.sh                        # writes build/docs/index.html (gitignored)
+./scripts/dev/gen-docs.sh                        # writes build/docs/index.html (gitignored)
 ```
 
 `qstudio.jar` also bundles a small q linter that `gen-docs.sh` runs as a
@@ -464,7 +464,7 @@ backwards. The verified, working order (baked into `gen-docs.sh`) is
 process serving docs over HTTP rather than writing static files:
 
 ```
-./scripts/run_qdoc.sh                        # starts on port 8090 by default
+./scripts/dev/run_qdoc.sh                        # starts on port 8090 by default
 q) .qdoc.parser.init `:src                    # at the q) prompt once it's up
 ```
 

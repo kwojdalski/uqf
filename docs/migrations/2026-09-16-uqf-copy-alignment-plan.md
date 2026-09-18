@@ -95,9 +95,9 @@ behavioral porting safer than branch merging.
 **Candidate ports**
 
 - `.github/workflows/ci.yml`
-- `scripts/check_q_traps.py`
-- `scripts/check_hook_scopes.py`
-- `scripts/check_env_reference.py`
+- `scripts/gates/check_q_traps.py`
+- `scripts/gates/check_hook_scopes.py`
+- `scripts/gates/check_env_reference.py`
 - Relevant tests under `python/uqf_frontend/tests/` only where they test the
   checker itself rather than the frontend.
 
@@ -115,7 +115,7 @@ behavioral porting safer than branch merging.
 uv run pre-commit run --all-files
 scripts/test.sh q-unit
 uv run pytest python/torq_orchestrator/tests python/uqf_client/tests python/uqf_airflow_provider/tests
-scripts/build.sh
+scripts/dev/build.sh
 ```
 
 **Rollback**: revert an individual check and its directly required fixes.
@@ -268,10 +268,10 @@ production build, and an end-to-end read-only smoke against a local TorQ demo.
 **Gate**
 
 ```sh
-scripts/gen-docs.sh
+scripts/dev/gen-docs.sh
 uv run pytest python/torq_orchestrator/tests/test_doc_links.py \
   python/torq_orchestrator/tests/test_qmd_references.py
-scripts/build.sh
+scripts/dev/build.sh
 ```
 
 ### 9. Final parity review

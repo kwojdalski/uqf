@@ -9,7 +9,8 @@
 / .
 / WHAT IS IN THIS FILE: the level this process walks, its depth, the row
 / builder, and the declaration the runner reads. It was
-/ scripts/torq_wide_book_feed.q, where the builder both built AND published.
+/ the old scripts/torq_wide_book_feed.q (deleted in #204), where the builder
+/ both built AND published.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).

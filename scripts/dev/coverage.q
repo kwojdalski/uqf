@@ -28,8 +28,10 @@
 / than none: this instruments the functions NAMED AT CALL TIME. A function
 / whose value was captured into a dictionary earlier - .qio.memory holds
 / write_memory - is called through that copy and its probes do not fire. For
-/ whole-tree coverage where that matters, scripts/qcov.py instruments the
-/ SOURCE FILES before they load and has no such blind spot. This library is
+/ whole-tree coverage where that matters, an instrument-the-source-files
+/ approach (rewriting each file before it loads) has no such blind spot.
+/ This tree has no such tool - the note is about the tradeoff, not a
+/ pointer: a `qcov.py` was cited here for years and never existed. This library is
 / for the question KX's answers: run THIS call, show me what it missed.
 
 \d .cov

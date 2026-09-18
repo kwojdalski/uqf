@@ -54,7 +54,7 @@ deliberate:
   shorthand `{A,C,T}`. A single character is an **atom** in q, so a `"A"`
   column is a char vector whose elements do not compare against a
   one-element string — a trap this repository has hit repeatedly
-  (see `docs/…` and `scripts/check_q_traps.py`). Symbols cost nothing, grep
+  (see `docs/…` and `scripts/gates/check_q_traps.py`). Symbols cost nothing, grep
   cleanly, and cannot silently fail to match.
 
 ### Column meanings, and the two that are easy to get wrong

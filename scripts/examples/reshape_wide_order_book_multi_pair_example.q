@@ -13,7 +13,7 @@
 // Requires KDB-X: log4q relies on a mid-expression variable assignment/read
 // pattern (see README's Licensing section).
 //
-// Run from the repository root: q scripts/reshape_wide_order_book_multi_pair_example.q [rows_per_pair]
+// Run from the repository root: q scripts/examples/reshape_wide_order_book_multi_pair_example.q [rows_per_pair]
 // rows_per_pair (default 20) is how many rows each of the three pairs
 // contributes - optional, positional, same convention as
 // timer_replay_example.q's parameters.

@@ -24,12 +24,12 @@
 / .
 / Usage, on a machine that can reach the real ledger:
 / .
-/   QHOME=~/.kx ~/.kx/bin/q scripts/verify_coverage_schema.q \
+/   QHOME=~/.kx ~/.kx/bin/q scripts/dev/verify_coverage_schema.q \
 /       -target localhost:5010
 / .
 / or against a table in the current process:
 / .
-/   QHOME=~/.kx ~/.kx/bin/q scripts/verify_coverage_schema.q -local 1
+/   QHOME=~/.kx ~/.kx/bin/q scripts/dev/verify_coverage_schema.q -local 1
 / .
 / It prints a verdict and the exact `meta` output to paste into #60. It reads
 / metadata only - no data, no writes - so it is safe to run against a
@@ -45,8 +45,8 @@ target:$[`target in key args; first args`target; ""];
 uselocal:`local in key args;
 
 if[(0=count target) and not uselocal;
-    -1 "usage: q scripts/verify_coverage_schema.q -target host:port";
-    -1 "   or: q scripts/verify_coverage_schema.q -local 1";
+    -1 "usage: q scripts/dev/verify_coverage_schema.q -target host:port";
+    -1 "   or: q scripts/dev/verify_coverage_schema.q -local 1";
     exit 2];
 
 / Names that would plausibly BE a partition key, since the requirements name

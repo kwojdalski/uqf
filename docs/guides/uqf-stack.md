@@ -89,7 +89,7 @@ uqf-stack schema --port 6052      # a port directly, skipping --proc resolution
 ```
 
 **It reads the live process, not the declarations.**
-`scripts/uqf_stack_tables.q` says what the tickerplant is *configured* to
+`scripts/processes/uqf_stack_tables.q` says what the tickerplant is *configured* to
 carry; that is not evidence a table exists in the process you are about to
 query. A tickerplant that failed to load its schema file, or an RDB that has
 not replayed, looks identical in every other view - so reporting the

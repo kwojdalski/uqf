@@ -44,7 +44,7 @@ test_the_stream_jobs_and_backfill_workers_all_declare_a_transform:{[t]
 
 / A stream transform's output is published positionally by .u.upd, so its
 / columns must be the tickerplant table's, in order, minus the `time` .u.upd
-/ stamps. Checked against scripts/uqf_stack_tables.q itself, read in a
+/ stamps. Checked against scripts/processes/uqf_stack_tables.q itself, read in a
 / scratch namespace so its root-level tables do not leak into other suites.
 test_stream_outputs_match_the_tickerplant_tables:{[t]
     stack:.xftest.stack_tables[];
@@ -56,7 +56,7 @@ test_stream_outputs_match_the_tickerplant_tables:{[t]
     .qunit.assertEquals[count raze bad;0;"each published transform output matches its table, column for column: ",.Q.s1 raze bad]};
 
 stack_tables:{[]
-    ls:read0 `$":scripts/uqf_stack_tables.q";
+    ls:read0 `$":scripts/processes/uqf_stack_tables.q";
     nms:`execution_quality`position`mkt_orderbook;
     nms!{[ls;nm] line:first ls where ls like string[nm],":*"; value (1+line?":") _ line}[ls] each nms}
 

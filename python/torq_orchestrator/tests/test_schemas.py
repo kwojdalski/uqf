@@ -1,6 +1,6 @@
 """Tests for the reader in `torq_orchestrator.schemas`.
 
-The tickerplant table definitions live in `scripts/uqf_stack_tables.q`, and
+The tickerplant table definitions live in `scripts/processes/uqf_stack_tables.q`, and
 this module reads them out by table name. Two things can go wrong with that
 arrangement, and neither announces itself:
 

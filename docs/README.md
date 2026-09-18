@@ -3,7 +3,7 @@
 ## The system, on one page
 
 <!-- Source: docs/diagrams/repo-overview.d2. Rendered by
-     scripts/render_diagrams.py, which CI runs with --check: edit the .d2
+     scripts/generate/render_diagrams.py, which CI runs with --check: edit the .d2
      without re-rendering and the build fails. Do not edit the .svg. -->
 
 ![The q pipeline, top to bottom: declarations, the framework in src/etl/core, the TorQ adapter in scripts, and the running stack - with the outside world and the Python and web surfaces alongside it](diagrams/repo-overview.svg)
@@ -17,7 +17,7 @@ being part of it.
 The line worth knowing is the one between the first two bands. **No q file
 under `src/` knows TorQ exists** — that is what lets a worker be tested
 against a recorder instead of a tickerplant — and exactly one namespace is
-allowed to, `.qpipe` in `scripts/`. `scripts/check_etl_layering.py` fails
+allowed to, `.qpipe` in `scripts/`. `scripts/gates/check_etl_layering.py` fails
 the build if anything under `src/etl/` reaches for it.
 
 For the *running* stack — who connects to whom, with ports — see
@@ -64,7 +64,7 @@ variable, machine-checked),
 category rather than prose.
 
 **`decisions/`** — [the register](decisions/README.md) plus one page per
-decision, both **generated** by `scripts/build_decision_log.py` from the
+decision, both **generated** by `scripts/generate/build_decision_log.py` from the
 GitHub issue comments that are the authority. Do not edit either by hand:
 `--check` runs in CI and reports a stale page, a missing one, *and* a page
 that corresponds to no answer.
@@ -91,5 +91,5 @@ exception:
 - **`diagrams/`** — d2 sources and their rendered SVGs. Not one of the five
   because a diagram is not a document: it illustrates one, and the page it
   illustrates is where the words live. Edit the `.d2` and run
-  `python3 scripts/render_diagrams.py`; never edit the `.svg`, which
+  `python3 scripts/generate/render_diagrams.py`; never edit the `.svg`, which
   `--check` re-renders in CI.

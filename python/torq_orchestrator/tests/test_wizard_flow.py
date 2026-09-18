@@ -211,7 +211,7 @@ def test_quotes_feed_end_to_end_registers_the_process_and_its_table(monkeypatch,
     assert row["procname"] == "fxq1" and row["port"] == "{KDBBASEPORT}+41"
     assert row["proctype"] == "feed"
     assert stack.calls["schema"] == [wizard._quotes_table_schema("fxq")]
-    assert (paths.scripts_dir / "torq_fxq1.q").is_file()
+    assert (paths.scripts_dir / "processes" / "torq_fxq1.q").is_file()
     assert stack.calls["start"], "it was started, as confirmed"
 
 
@@ -271,7 +271,7 @@ def test_declining_registration_registers_nothing_and_starts_nothing(
     assert s.exhausted()
     assert stack.calls["registered"] == []
     assert stack.calls["start"] == []
-    assert list(paths.scripts_dir.glob("torq_*.q")), "the skeleton itself is kept"
+    assert list((paths.scripts_dir / "processes").glob("torq_*.q")), "the skeleton itself is kept"
 
 
 @pytest.mark.parametrize(

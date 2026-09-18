@@ -3,7 +3,7 @@
 `uqf-stack schema` answers "what tables are in the database, and what shape
 are they" without anyone hand-writing `meta` at a q prompt.
 
-**It reads the LIVE database, not the declarations.** `scripts/uqf_stack_tables.q`
+**It reads the LIVE database, not the declarations.** `scripts/processes/uqf_stack_tables.q`
 says what the tickerplant is configured to carry, and the contract surface
 says what this tree declares; neither is evidence that a table exists in the
 process you are about to query. A schema command that reported the
