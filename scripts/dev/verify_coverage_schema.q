@@ -3,11 +3,11 @@
 / .
 / Written to settle issue #60, which asked whether the assumed shape matched
 / a canonical one. That question is closed: this tree is the primary
-/ lineage and canonical is frozen, so the shape coverage.q declares IS the
+/ lineage and canonical is frozen, so the shape materialisation.q declares IS the
 / schema and there is nothing else to compare it to.
 / .
 / What the script is still for is DRIFT: a ledger some other process built
-/ to a different shape. Every read in coverage.q filters on dataset,
+/ to a different shape. Every read in materialisation.q filters on dataset,
 / partition and source_version, so an extra column that distinguishes rows
 / BEYOND those makes those reads aggregate across it, and a range covered for
 / one value of it reports as COMPLETE for all of them. Nothing errors,
@@ -85,7 +85,7 @@ problems:0;
 
 if[count missing;
     -1 "MISSING   ",", " sv string missing;
-    -1 "          coverage.q reads these, so every read against the real";
+    -1 "          materialisation.q reads these, so every read against the real";
     -1 "          ledger fails or returns nulls. This is the LOUD failure -";
     -1 "          bad, but it announces itself.";
     -1 "";
@@ -118,7 +118,7 @@ if[count extra except partition_like;
 
 -1 "=================== verdict ===================";
 -1 $[0=problems;
-     "MATCH - the ledger agrees with the shape coverage.q declares.";
+     "MATCH - the ledger agrees with the shape materialisation.q declares.";
      "MISMATCH - ",string[problems]," problem class(es) above. Paste this whole output into #60."];
 -1 "===============================================";
 exit $[0=problems; 0; 1];

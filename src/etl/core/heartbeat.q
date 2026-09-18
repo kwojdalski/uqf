@@ -49,7 +49,7 @@ columns:`worker`state`last_seen`windows
 / .
 / Backtick form (`worker_heartbeat set), not a bare name: inside \d .qhb a
 / bare `worker_heartbeat` resolves to .qhb.worker_heartbeat, NOT the root
-/ table. Same trap coverage.q documents at length.
+/ table. Same trap materialisation.q documents at length.
 init_table:{[]
     if[not `worker_heartbeat in tables `.;
         `worker_heartbeat set 1!([] worker:`symbol$(); state:`symbol$();

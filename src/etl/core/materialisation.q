@@ -395,7 +395,7 @@ reload:{[]
 / .
 / Protected rather than a bare .qrun.current[] call, because run.q is not a
 / load-time dependency of this file and several minimal loaders
-/ (tests/q/read_checkpoint.q and friends) pull in coverage.q alone. Without
+/ (tests/q/read_checkpoint.q and friends) pull in materialisation.q alone. Without
 / the wrapper, staging a completion in one of those would fail on a missing
 / namespace rather than record a run-less materialisation, which is the
 / honest outcome there.

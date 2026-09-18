@@ -210,7 +210,7 @@ process script's own wiring state under `.qproc` (`.qproc.stream`,
 namespace in `src/` and `scripts/` carries the `.q` prefix or is listed in
 `tests/q/test_namespaces.q`'s `outside_the_prefix` with the reason it
 cannot: `.dqe` is TorQ's own namespace, `.cov` is KX's published coverage API
-shape (and `.qmatz` is already the ETL ledger), `.surface` is the exporter
+shape and matching it is the point, `.surface` is the exporter
 that would otherwise export itself. `src/namespaces.q` (`.qns`) is the one
 enumeration that knows about the nesting; any tool listing namespaces goes
 through it rather than scanning the root for a `q` prefix.

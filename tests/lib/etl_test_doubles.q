@@ -16,7 +16,7 @@
 // say "coverage".
 //
 // So: the EDGES are doubled here; the MIDDLE (.qmatz's arithmetic, and any
-// transform) is tested against the real implementation in test_coverage.q.
+// transform) is tested against the real implementation in test_materialisation.q.
 
 \d .qetldbl
 

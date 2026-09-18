@@ -60,7 +60,7 @@ require_manager:{[mgr]
 / shape when absent.
 / .
 / Backtick form (`target set / insert), because inside \d .qio a bare name
-/ resolves to .qio.<name> rather than the root table - the trap coverage.q
+/ resolves to .qio.<name> rather than the root table - the trap materialisation.q
 / documents at length, and the reason every write here is explicit.
 write_memory:{[target;batch]
     if[not target in tables `.; target set 0#batch];

@@ -20,7 +20,7 @@
 /                                          LOAD TIME, so a later coercion.q
 /                                          aborts source_contract.q with a
 /                                          bare `.qcoer.to_symbol
-/   coverage    before  worker_runtime   - .qwrt.remaining calls .qmatz
+/   materialisation before worker_runtime - .qwrt.remaining calls .qmatz
 /   dag         before  pipeline_dag     - the generated bridge defines
 /                                          .qdag.register_pipelines, which
 /                                          calls .qdag.register
@@ -28,11 +28,12 @@
 /                                          load, so the registry it registers
 /                                          into has to exist
 / .
-/ run.q sits after coverage.q by READABILITY, not by necessity: .qrun.record
+/ run.q sits after materialisation.q by READABILITY, not by necessity:
+/ .qrun.record
 / calls .qmatz.require_interval and .qmatz.stage_completion reads
 / .qrun.current[], so the two reference each other and q's call-time binding
 / resolves both whichever order they load in. Both calls are additionally
-/ protected, because several minimal loaders pull in coverage.q without the
+/ protected, because several minimal loaders pull in materialisation.q without the
 / rest of the tree and a missing .qrun must degrade to an unattributed
 / materialisation rather than an error.
 / .

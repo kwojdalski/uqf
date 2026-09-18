@@ -1,4 +1,4 @@
-// test_coverage.q - tests for src/etl/core/materialisation.q (the append-only
+// test_materialisation.q - tests for src/etl/core/materialisation.q (the append-only
 // completeness ledger) and the ETL-06 checkpoint functions in
 // src/etl/core/backfill_state.q. Load src/etl/core/status.q,
 // src/etl/core/backfill_state.q, src/etl/core/materialisation.q, tests/lib/qunit.q
