@@ -1,0 +1,139 @@
+# stack-dataflow.d2 - which process writes which table, and which of those
+# tables is real.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/integrations/torq/README.md.
+#
+# The companion to stack-topology.d2: that one is who connects to whom, this
+# one is what flows. Kept apart because they answer different questions and
+# one drawing doing both was unreadable at the width a README gives it.
+#
+# THE DISTINCTION THIS DIAGRAM EXISTS FOR is dashed versus solid. cross1's
+# output never becomes a database table: it is a plain in-memory table in
+# cross1's own process, reachable only by connecting to cross1 on :6075.
+# Everything else drawn as a cylinder round-trips through the tickerplant
+# into rdb1 and on to the HDB, and survives its producer restarting. Two
+# jobs that look identical in src/etl/streaming/ differ exactly here, and
+# the difference is one declaration: whether `publishes` names a table.
+
+# Down, not right. Left to right is the natural reading for a pipeline and
+# was the first try, but five stages of producer - table - job - table -
+# storage came out 5662px wide, which a README renders as a thumbnail.
+# Vertical is 3714 and a reader scrolls anyway.
+direction: down
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  producer: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  job: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  table: {
+    shape: cylinder
+    style: {
+      fill: "#eef3fb"
+      stroke: "#4a6fa5"
+      font-color: "#1e3a5f"
+    }
+  }
+  private: {
+    shape: cylinder
+    style: {
+      fill: "#fbfcfd"
+      stroke: "#8a7f6a"
+      font-color: "#3d3527"
+      stroke-dash: 4
+    }
+  }
+  store: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+    }
+  }
+}
+
+# --------------------------------------------------------------- producers
+
+feed1: "feed1\nvendored" { class: producer }
+fxfeed1: "fxfeed1" { class: producer }
+quotesfeed1: "quotesfeed1" { class: producer }
+widefeed1: "widefeed1" { class: producer }
+fxtradesfeed1: "fxtradesfeed1" { class: producer }
+
+# ------------------------------------------------------------- the tables
+
+quote: "quote\nvendored schema" { class: table }
+trade: "trade\nvendored schema" { class: table }
+quotes: "quotes\ntime · sym · bid/ask_prices · bid/ask_sizes" { class: table }
+wide_book: "wide_book\ntime · sym · bids0..10 · asks0..10" { class: table }
+trades: "trades\ntime · sym · side · trade_price · size · pip_factor" { class: table }
+
+mkt_orderbook: "mkt_orderbook\ntime · sym · bid/ask_prices" { class: table }
+position: "position\nqty · avg_price · realized_pnl\nmark_price · unrealized_pnl · total_pnl" { class: table }
+execution_quality: "execution_quality\ntrade_time · horizon\ntrade_price · ref_price · markout_pips" { class: table }
+cross_quotes: "cross_quotes\nnever written to stp1 —\nlives in cross1's memory" { class: private }
+
+# --------------------------------------------------------------- the jobs
+
+cross1: "cross1\n.qfwd.cross_book_at" { class: job }
+vectorize1: "vectorize1\n.qbook.book_from_wide_levels" { class: job }
+posbook1: "posbook1\n.qpos.apply_fill + .qrisk.pnl" { class: job }
+markout1: "markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
+
+storage: "rdb1 — today's ticks\n↓ EOD writedown\nhdb1 / hdb2 — on disk" { class: store }
+
+# ------------------------------------------------------------------ writes
+
+feed1 -> quote
+feed1 -> trade
+fxfeed1 -> quote
+quotesfeed1 -> quotes
+widefeed1 -> wide_book
+fxtradesfeed1 -> trades
+
+# ------------------------------------------------- subscribe, then publish
+
+quotes -> cross1: "subscribe"
+cross1 -> cross_quotes: "in-process only" { style.stroke-dash: 4 }
+
+wide_book -> vectorize1: "subscribe"
+vectorize1 -> mkt_orderbook: "republish"
+
+trades -> posbook1: "subscribe"
+quote -> posbook1: "mark to mid"
+posbook1 -> position: "republish"
+
+trades -> markout1: "subscribe, buffered"
+quote -> markout1: "buffered"
+markout1 -> execution_quality: "republish"
+
+# --------------------------------------------------------------- persisted
+
+quote -> storage
+trade -> storage
+quotes -> storage
+wide_book -> storage
+trades -> storage
+mkt_orderbook -> storage
+position -> storage
+execution_quality -> storage
