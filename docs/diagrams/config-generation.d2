@@ -1,0 +1,128 @@
+# config-generation.d2 - how the vendored TorQ config becomes the config the
+# stack actually runs on.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/integrations/torq/README.md.
+#
+# THE RULE THIS DRAWS is H-01: the vendored trees are never written to. Read
+# the vendored file fresh, generate an extended copy, point the running
+# process at the copy. An edit to lib/ would work until the next upgrade and
+# then be silently lost, which is the failure the whole arrangement exists
+# to make impossible.
+#
+# The other thing worth seeing is that there is no setup step. bootstrap()
+# regenerates both outputs on EVERY command - start, stop, summary, all of
+# them - so the generated files are always a fresh function of the vendored
+# tree plus the three small tracked extension files. Nothing here is a state
+# you can get out of sync; the only way to change the output is to change an
+# input.
+
+direction: right
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  vendored: {
+    style: {
+      fill: "#f4f1ea"
+      stroke: "#8a7f6a"
+      font-color: "#3d3527"
+      border-radius: 6
+    }
+  }
+  tracked: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  step: {
+    style: {
+      fill: "#f3eefb"
+      stroke: "#6f4aa5"
+      font-color: "#3a1e5f"
+      border-radius: 6
+    }
+  }
+  generated: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  consumer: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+    }
+  }
+}
+
+inputs: "Inputs — read, never written" {
+  style: {
+    fill: "#fbfcfd"
+    stroke: "#c3c9cf"
+    stroke-width: 2
+    border-radius: 10
+    font-color: "#25323d"
+  }
+
+  # Declared in the order they are consumed - the process.csv inputs, then
+  # the database.q ones - so dagre keeps each group near the step it feeds.
+  vendored_csv: "lib/torq-finance-starter-pack/\nappconfig/process.csv" { class: vendored }
+  extra_procs: "extra_processes.csv\nwritten by the wizard" { class: tracked }
+  overrides: "process_overrides.csv\nwritten by `uqf-stack config set`" { class: tracked }
+  vendored_schema: "lib/torq-finance-starter-pack/\ndatabase.q" { class: vendored }
+  extra_schema: "extra_schema.q\nwritten by the wizard" { class: tracked }
+}
+
+bootstrap: "bootstrap() — every command, not once" {
+  style: {
+    fill: "#fbfcfd"
+    stroke: "#c3c9cf"
+    stroke-width: 2
+    border-radius: 10
+    font-color: "#25323d"
+  }
+
+  rows: "_base_process_rows()\nvendored rows + the eleven uqf ones\nfrom the PIPELINES registry" { class: step }
+  schema: "_generated_schema_content()\nvendored tables + uqf's own" { class: step }
+}
+
+outputs: "Generated — scripts/output/uqf-stack/" {
+  style: {
+    fill: "#fbfcfd"
+    stroke: "#c3c9cf"
+    stroke-width: 2
+    border-radius: 10
+    font-color: "#25323d"
+  }
+
+  gen_csv: "process.csv" { class: generated }
+  gen_schema: "database.q" { class: generated }
+
+  gen_csv -> gen_schema: "stp1's -schemafile\npoints here" { style.stroke: "#3d7a5a" }
+}
+
+torqsh: "lib/torq/torq.sh\nreads the generated csv on\nevery start · stop · summary" { class: consumer }
+
+inputs.vendored_csv -> bootstrap.rows
+inputs.extra_procs -> bootstrap.rows
+inputs.vendored_schema -> bootstrap.schema
+inputs.extra_schema -> bootstrap.schema
+
+bootstrap.rows -> outputs.gen_csv
+bootstrap.schema -> outputs.gen_schema
+inputs.overrides -> outputs.gen_csv: "field overrides,\napplied last" { style.stroke: "#a8762f" }
+
+outputs.gen_csv -> torqsh

@@ -1,0 +1,154 @@
+# stack-topology.d2 - who connects to whom over IPC in the running stack.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/integrations/torq/README.md.
+#
+# Ports are the defaults at base 6050; every one is {KDBBASEPORT}+offset, so
+# a different base shifts them all together. The authority for the offsets
+# is docs/integrations/torq/processes.md, which is GENERATED from the
+# pipeline registry - if this diagram and that table disagree, the table is
+# right.
+#
+# WHAT THIS SHOWS THAT THE MERMAID VERSION DID NOT (#245).
+#
+# Eight of the eleven uqf processes run the SAME script. Since #204 a
+# streaming job is a declaration under src/etl/streaming/ and
+# processes/torq_stream.q is the one runner; which job a process runs is
+# decided by its procname at startup. The old diagram drew a script per
+# process, which is what the stack looked like before .qstream and is the
+# single most misleading thing about it.
+#
+# The two connection patterns are still real and still different - publish
+# only, versus an access-listed subscribe - but a job performs neither
+# itself now. .qpipe does both on its behalf, which is why the adapter is
+# drawn between the processes and the tickerplant rather than left out.
+#
+# Backfills are on here too, and were not before. They are the other half
+# of the ETL tree and they reach the tickerplant NOT AT ALL: a bounded
+# worker writes through .qio into its own process, so its rows never
+# traverse stp1. Drawing them beside the streaming jobs is the point - the
+# two halves look alike in the code and take completely different paths to
+# storage.
+
+direction: down
+
+grid-rows: 4
+grid-gap: 55
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+# Same palette as repo-overview.d2, so the set reads as one system: light
+# fills with dark text in both themes rather than a --dark-theme pairing,
+# which d2 still applies explicit styles over (d2lang/d2#831).
+classes: {
+  feed: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  job: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  adapter: {
+    style: {
+      fill: "#fbeef0"
+      stroke: "#a54a5c"
+      font-color: "#5f1f2c"
+      border-radius: 6
+    }
+  }
+  store: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+    }
+  }
+  vendored: {
+    style: {
+      fill: "#f4f1ea"
+      stroke: "#8a7f6a"
+      font-color: "#3d3527"
+      border-radius: 6
+    }
+  }
+  band: {
+    style: {
+      fill: "#fbfcfd"
+      stroke: "#c3c9cf"
+      font-color: "#25323d"
+      stroke-width: 2
+      border-radius: 10
+    }
+  }
+}
+
+jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
+  class: band
+  grid-columns: 5
+  grid-gap: 26
+
+  fxfeed1: "fxfeed1 :6069\nFX top of book\npublishes only" { class: feed }
+  quotesfeed1: "quotesfeed1 :6074\ndepth-aware FX\npublishes only" { class: feed }
+  widefeed1: "widefeed1 :6076\nwide book\npublishes only" { class: feed }
+  fxtradesfeed1: "fxtradesfeed1 :6079\nsynthetic fills\npublishes only" { class: feed }
+  tap1: "tap1 :6078\nsubscribe and log\nits own torq_tap.q" { class: job }
+
+  cross1: "cross1 :6075\nquotes → cross rates\noutput stays private" { class: job }
+  vectorize1: "vectorize1 :6077\nwide → level vectors\nsubscribes + publishes" { class: job }
+  posbook1: "posbook1 :6080\nposition and P&L\nsubscribes + publishes" { class: job }
+  markout1: "markout1 :6081\nexecution quality\nsubscribes + publishes" { class: job }
+  legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish." { class: band }
+}
+
+runner: "One script for eight of them — scripts/processes/torq_stream.q" {
+  class: band
+  grid-columns: 2
+  grid-gap: 26
+
+  qpipe: ".qpipe — the TorQ adapter\nfinds the tickerplant, opens the handle,\nreshapes rows for .u.upd, traps the timer" { class: adapter }
+  note: "A job declares subscribes · publishes ·\non_batch · on_timer and nothing else.\nIts procname is what selects it at startup.\ntap1 is the exception: its own script." { class: adapter }
+}
+
+tp: "Tickerplant" {
+  class: band
+  grid-columns: 3
+  grid-gap: 26
+
+  feed1: "feed1 :6064\nvendored equity feed\npublishes straight to stp1" { class: vendored }
+  stp: "stp1 :6050\nsegmented tickerplant" { class: vendored }
+  sctp: "sctp1 :6065\nchained" { class: vendored }
+
+  feed1 -> stp { style.stroke: "#8a7f6a" }
+  stp -> sctp { style.stroke-dash: 4 }
+}
+
+downstream: "Storage, the gateway, and the bounded half" {
+  class: band
+  grid-columns: 3
+  grid-gap: 26
+
+  storage: "rdb1 :6052 — today's ticks\nwdb1 :6055 → sort1 :6056 → sortworker1/2\nhdb1 :6053 · hdb2 :6054 — on disk" { class: store }
+  gw: "gateway1 :6057\nthe only door in\n\nhousekeeping1 :6061 · metrics1 :6068\ndiscovery1 :6051 registers every process" { class: store }
+  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qio writes into their own\nprocess. Two more workers exist in q\n(databento, upstream) with no process row." { class: job }
+}
+
+jobs -> runner.qpipe: "run under" { style.stroke: "#3d7a5a" }
+runner.qpipe -> tp.stp: "subscribe · upd" {
+  style.stroke: "#a54a5c"
+  style.stroke-width: 3
+}
+tp.stp -> downstream.storage: "every table, by default" { style.stroke: "#5a6a78" }
