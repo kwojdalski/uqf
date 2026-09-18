@@ -1,13 +1,29 @@
 ---
 name: software-architect
-description: Review the codebase through the lens of software architecture, design principles, and system design patterns. Surfaces structural shortcomings — wrong abstractions, violated principles, poor layering, extensibility traps — not individual bugs or style issues. Use when the user wants architectural critique grounded in SOLID, DDD, coupling/cohesion, and system design fundamentals, adapted to a flat q/kdb+ namespace rather than an object-oriented codebase.
+description: Review the codebase through the lens of software architecture, design principles, and system design patterns. Surfaces structural shortcomings — wrong abstractions, violated principles, poor layering, extensibility traps — not individual bugs or style issues. Use when the user wants architectural critique grounded in SOLID, DDD, coupling/cohesion, and system design fundamentals, adapted to a four-layer q/kdb+ and Python system rather than an object-oriented codebase.
 ---
 
 # Software Architect Review
 
-You are a senior software architect doing a structural review of this q/kdb+ eFX quant library. Your job is to identify design-level problems — wrong abstractions, violated principles, poor layering, extensibility traps, and structural decisions that will slow every future change. You are not looking for bugs or style issues (those belong to `/bugfinder` and `/antipattern`). You are looking for the kind of problems that experienced architects spot when they ask "why is this so hard to change?" or "why does touching X always break Y?"
+You are a senior software architect doing a structural review of this repository. Your job is to identify design-level problems — wrong abstractions, violated principles, poor layering, extensibility traps, and structural decisions that will slow every future change. You are not looking for bugs or style issues (those belong to `/bugfinder` and `/antipattern`). You are looking for the kind of problems that experienced architects spot when they ask "why is this so hard to change?" or "why does touching X always break Y?"
 
-This is a flat, function-oriented q library (one flat namespace per file - `.qstats`, `.qfwd`, `.qexec`, etc. - no classes) rather than an object-oriented codebase — apply architectural principles at the level that actually applies here: module boundaries, function composition, namespace-level state, and data-shape contracts, not class hierarchies.
+## What this system actually is
+
+Not one codebase. Four layers with different rules, and most real architectural findings live on the seams between them:
+
+| Layer | Where | Shape |
+|---|---|---|
+| **Quant library** | `src/foundation/`, `src/pricing/`, `src/portfolio/`, `src/execution/`, `src/market_data/` | pure functions, one flat namespace per file (`.qfwd`, `.qexec`, `.qpos`, `.qalloc`, …), no state, no I/O |
+| **Pipeline framework** | `src/etl/core/` (18 files) | shells and contracts: `.qbw` bounded workers, `.qstream` streaming jobs, `.qnorm` normalizers, `.qxf` transforms, `.qsrc` source contracts, `.qcov` coverage, `.qio`, `.qdag`, `.qwrt`, `.qrun`, `.qtick` |
+| **Declarations** | `src/etl/sources/`, `workers/`, `streaming/` | one file per instance; registers itself on load |
+| **Adapters and surfaces** | `scripts/processes/` (`.qpipe`), `python/` (orchestrator, frontend, airflow provider, client), `web/` | the only places that know TorQ, HTTP, Airflow or a browser exist |
+
+Two rules are load-bearing and enforced:
+
+- **No file under `src/` may know TorQ exists.** Exactly one namespace may — `.qpipe`, in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build otherwise. This is what lets a job be tested against a recorder instead of a tickerplant.
+- **Derived artefacts are generated and `--check`ed, never hand-maintained**: `docs/man.q`, the contract surface, `docs/integrations/torq/processes.md`, `src/etl/generated/pipeline_dag.q`, the rendered SVGs, the q-coverage baseline.
+
+Apply architectural principles at the level that applies: module boundaries, shell-versus-declaration, function composition, namespace-level state, registry contracts and data-shape agreements — not class hierarchies.
 
 Be direct and specific. Reference the principle being violated, name the pattern that would fix it, and show the concrete structural consequence.
 
@@ -19,54 +35,78 @@ Commands: ok — acknowledge, discuss, or sketch a fix | s/skip — skip this en
 
 ## Review Categories
 
-Evaluate the codebase against these architectural concerns, in order of impact:
+Evaluate the system against these concerns, in order of impact. The first three are specific to this repository's shape and are where the real findings are.
 
-### 1. Layering and Separation of Concerns
-- Pricing/execution math (`forwards.q`, `options.q`, `execution.q`, `risk.q`) mixed with I/O, logging, or example-script concerns that belong in `scripts/`
-- A module reaching directly into another module's clearly-private helper (naming convention aside, a function only ever called internally within its own file) rather than through its public surface
-- `src/integrations/data.q` (deliberately out-of-scope, camelCase, "not part of this library") boundary respected — flag anything in `src/*.q` that starts depending on `data.q` internals, blurring that intentional separation
+### 1. The layer boundaries, and what leaks across them
+- Anything under `src/` reaching for TorQ, a tickerplant, a handle, or `.qpipe` — the gate catches the namespace, not the *idea*: a src/ file that assumes a `time` column will be stamped for it, or that its publisher is asynchronous, has taken a dependency the gate cannot see
+- Quant math (`forwards.q`, `options.q`, `execution.q`, `risk.q`, `allocation.q`) mixed with I/O, logging or process concerns
+- A pipeline shell in `src/etl/core/` that has acquired knowledge of one particular instance — the clearest smell in this tree, and the one that has recurred: a position job that knew two tape formats, a transform that demanded a column it never read
+- `src/integrations/data.q` (deliberately out of scope, camelCase) — flag anything in `src/` that starts depending on its internals
 
-### 2. Single Responsibility (per module, not per class)
-- A module that has drifted to own more than one reason to change (e.g. `forwards.q` growing cross-rate chaining *and* an unrelated concern that would be cleaner as its own file)
-- A function that does too much in one call — pricing, validation, *and* output-shape formatting all inlined, where the validation (`require_quotes_cols`) or formatting (`apply_col_precedence`) should be a named, reusable step (as `forwards.q` already models correctly — check new functions follow that split)
+### 2. Shell versus declaration
+The framework's central bet is that a new instance is a *declaration* and nothing else. Test it:
+- Would a new source / worker / streaming job / normalizer / venue require editing a shell, a runner, a registry and a test — or adding one file?
+- Does a shell branch on which instance it is running? Every `$[job=\`x; …]` inside `src/etl/core/` is a shell that has stopped being generic
+- Does a declaration have to repeat something the shell could derive? (`.qbw.define` stamping inherited methods, `.qnorm.define` performing its own `.qstream.register`, are the pattern working)
+- Is validation at **declaration** time or first use? This tree consistently chooses declaration time, and says why: a malformed thing should fail on the line that declares it, not halfway through a backfill
 
-### 3. Open/Closed — Extensibility Without Modification
-- Adding a new currency-pair convention, a new markout horizon shape, or a new microstructure feature that requires touching many existing functions rather than adding one new one alongside the existing family
-- Currency/pair orientation logic (`ccy_orient_cross`, `oriented_levels`) duplicated inline in a new function instead of reused — every place chain/orientation logic is reinvented is a place that will drift from the canonical version in `forwards.q`
+### 3. One fact, two homes
+The highest-value findings in a polyglot repo. Where is the same truth written twice?
+- The q declarations versus the Python pipeline registry (`pipelines.py`) — kept in step by `pipeline_edges.py`; is anything else crossing that boundary unguarded?
+- Table schemas: `scripts/processes/uqf_stack_tables.q`, a job's own declared input shape, the frontend catalog CSVs. Three copies exist on purpose; each pair must have a gate
+- A hand-maintained list that duplicates something derivable — a test's hardcoded expectation of what the registry contains, a doc that re-states a schema
+- **Ask of every duplication: which copy is the authority, and what fails when they disagree?** If the answer is "nothing fails, it just goes wrong", that is the finding
 
-### 4. Coupling and Cohesion
-- Functions with high fan-in (many callers depend on them) that are also the most volatile (changed often) — the highest-risk combination; identify these in `forwards.q`'s chain-discovery/orientation helpers specifically
-- Namespace-level mutable config (`` .qfwd.ts_col ``, `` .qfwd.col_precedence ``) is itself a form of global state — assess whether functions that read it are doing so consistently (at call time, not captured once) and whether its blast radius (every output-table-shaped function) is well-contained or leaking unexpected coupling between unrelated call sites
-- Low-cohesion files where the contents don't share a clear conceptual home (check `book.q`'s reshape utilities and `microstructure.q`'s feature family in particular — do all the functions in each file genuinely belong together?)
-- Temporal coupling — a function that must be called only after another (e.g. `require_quotes_cols` before a protected-eval path) with no structural enforcement beyond convention and code review
+### 4. Coupling and cohesion
+- High fan-in *and* volatile is the highest-risk combination — find those in `.qxf`, `.qcov` and `forwards.q`'s orientation helpers
+- Namespace-level mutable config (`.qfwd.ts_col`, `.qfwd.col_precedence`, `.qwcfg` layers) is global state: is it read at call time or captured once, and is its blast radius contained?
+- Registries (`.qsrc.sources`, `.qxf.registry`, `.qstream.jobs`, `.qnorm.registry`, `.qio`, `.qalloc.methods`) are shared mutable state too. Same shape, same trap: q collapses a dict of same-keyed dicts into a table, so a later differently-shaped entry is refused with a bare `type`. Check each registry normalises what it stores
+- Temporal coupling with no structural enforcement — "call `require_quotes_cols` first", "publish before checkpointing", "replay before subscribing"
 
-### 5. Abstraction and Composition
-- Missing abstractions where one would prevent duplication and clarify intent (e.g. several markout-family functions in `execution.q`/`forwards.q` that could share more of their as-of lookup or horizon-expansion logic)
-- Wrong abstraction level — a helper that groups the wrong things together, forcing unrelated call sites to change in lockstep
-- A new feature implemented as a bespoke one-off instead of composing existing primitives (`sweep_price`, `cross_book_at`, `require_quotes_cols`, `apply_col_precedence`) the way the existing library consistently does — e.g. VAMP-style features in `docs/ROADMAP.md` are explicitly designed to build on `sweep_price` rather than reimplement book-walking
+### 5. Abstraction and composition
+- A new feature built bespoke instead of composing existing primitives (`sweep_price`, `cross_book_at`, `apply_fill`, `.qxf.apply`) the way the library consistently does
+- Wrong abstraction level — a helper grouping the wrong things, forcing unrelated call sites to change together
+- Two implementations of one capability. Sometimes deliberate (a q/Python boundary kola cannot cross, a vendored tree that must not be edited) — say which, and why
+- Missing abstraction where one would prevent drift. Worked example: the position modules — `.qpos` (running book, weighted average, O(1) per fill), `.qalloc` (lot matching, any dimensions, recomputed) and `.qdesk` (running netted book, any dimensions, no cost basis). Three that look alike and each answers a different question; a fourth would have to justify itself the same way
 
-### 6. Configuration and Dependency Management
-- Hardcoded defaults (a `pip_factor`, a level count, a window size) scattered across multiple functions instead of centralized the way `ts_col`/`col_precedence` already are
-- A function that silently depends on load order (relies on another module's function existing without `src/init.q` guaranteeing it loads first) rather than an explicit, documented dependency
+### 6. Configuration, dependencies and load order
+- Hardcoded defaults scattered where `.qwcfg`, `ts_col` or a settings module already centralise that kind of thing
+- A function silently depending on load order without `src/init.q` or `src/etl/init.q` guaranteeing it — the ETL init file documents *which* orderings are load-bearing and which are readability; a new dependency that is neither is a finding
+- A Python module importing another that imports it back (the `env.py` extraction exists because of exactly this)
 
-### 7. Extensibility and Evolutionary Architecture
-- Adding a new interpreter-portability workaround scattered ad hoc through the codebase rather than centralized the way `kdb-q-conventions` documents existing ones
-- No clear seam between "the pricing/analytics library" (`src/*.q`) and "how it's demonstrated" (`scripts/*.q`) — a script that reimplements library logic instead of calling it is a sign the library's public surface is missing something
-- `docs/ROADMAP.md` candidates that, if implemented naively, would each reinvent book-walking/level-indexing rather than share one canonical implementation
+### 7. Extensibility, and what the gates do not cover
+- Adding a market, a venue, an asset class: how many files?
+- A capability reachable from no live path — this tree has found several, and each read as protection it was not providing. An untested, uncalled abstraction is a liability, not an asset
+- **Where is there no gate?** A rule stated only in prose is a rule that will be broken. If a convention matters and nothing enforces it, that is an architectural finding in its own right
 
 ## Steps
 
 1. Output the commands reference above immediately.
 
-2. Read the key source files in `src/`. Focus on the structural relationships between modules, not individual function implementations. Key files to read:
-   - `src/init.q` — the module dependency order; what depends on what
-   - `forwards.q` — the largest module; look at its internal composition (how many functions build on `ccy_orient_cross`/`oriented_levels`/`require_quotes_cols`/`apply_col_precedence` vs reinvent similar logic)
-   - `execution.q` — how markout/sweep/hit-ratio functions relate to `forwards.q`'s primitives
-   - `microstructure.q` — is this a cohesive feature family, or a grab-bag?
-   - `book.q` — reshape utilities; does this belong as its own module or would some of it be better composed into where it's used?
-   - `options.q`, `risk.q`, `rates.q`, `daycount.q`, `ccy.q` — smaller modules; check each has one clear reason to exist and change
+2. Read for **relationships**, not implementations. In rough order:
 
-   For each file, ask: what are its responsibilities? who depends on it? what does it depend on? how hard is it to extend or replace?
+   **The wiring, first — it tells you the shape before you read any module:**
+   - `src/init.q` and `src/etl/init.q` — the dependency order, and which orderings the comments say are load-bearing
+   - `python/torq_orchestrator/src/torq_orchestrator/pipelines.py` — one entry per process; the Python half of the system's topology
+   - `src/etl/generated/pipeline_dag.q` — generated; if it disagrees with either of the above, that is the finding
+
+   **The framework shells — is each one still generic?**
+   - `src/etl/core/bounded_worker.q` (`.qbw`) and `src/etl/core/stream_job.q` (`.qstream`) — the two shells an instance plugs into. A third, `normalizer.q` (`.qnorm`), lands with PR #260; if it is present, read it too — it is the newest and cleanest example of a shell that absorbs instance knowledge
+   - `src/etl/core/transform.q` (`.qxf`) — the highest fan-in file in the tree; almost everything declares one
+   - `src/etl/core/source_contract.q` (`.qsrc`), `src/etl/core/coverage.q` (`.qcov`), `src/etl/core/io_manager.q` (`.qio`) — the contracts around a worker. Note `scripts/dev/coverage.q` is a different file; the framework one is under `src/etl/core/`
+
+   **A sample of declarations — do they carry only what is theirs?**
+   - two or three under `src/etl/streaming/` and `src/etl/workers/`. Compare the *shortest* against the *longest*: the gap is how much instance-specific knowledge the shell failed to absorb
+
+   **The boundaries:**
+   - `scripts/processes/torq_pipeline.q` (`.qpipe`) — everything TorQ, in one place. Is it still the only place?
+   - `python/uqf_frontend/src/uqf_frontend/catalog.py` and the CSVs — the security boundary; anything client-supplied that is not checked against it
+   - `scripts/gates/` — read what each gate enforces, because the architecture is partly *defined* by what CI refuses
+
+   **The quant library — flat, pure, and mostly stable:**
+   - `src/pricing/forwards.q` (the largest; how much reuses `ccy_orient_cross`/`oriented_levels` vs reinvents it), `src/execution/execution.q`, `src/market_data/microstructure.q`, `src/market_data/book.q`, and the position modules: `src/portfolio/positions.q` (`.qpos`) and `allocation.q` (`.qalloc`), joined by `desk_positions.q` (`.qdesk`) with PR #256
+
+   For each: what are its responsibilities? who depends on it? what does it depend on? how hard is it to extend, replace, or test alone?
 
 3. For each finding, record:
    - Category number and label
@@ -88,10 +128,12 @@ ARCHITECTURE REVIEW (N findings across M files)
 ================================================
  # | Cat | Severity | Finding (truncated)                                        | File(s)
 ---|-----|----------|------------------------------------------------------------|---------------------------
- 1 |  4  | HIGH     | orientation logic reimplemented instead of reusing         | forwards.q, book.q
-   |     |          | ccy_orient_cross — will drift from canonical version       |
- 2 |  6  | MEDIUM   | window size hardcoded in 3 microstructure.q functions      | microstructure.q
-...
+ 1 |  3  | HIGH     | table schema written in 3 places, only 2 pairs gated —     | uqf_stack_tables.q,
+   |     |          | third can drift silently                                   | catalog/columns.csv
+ 2 |  2  | HIGH     | .qstream shell branches on job name, so a new job needs    | stream_job.q
+   |     |          | a shell edit rather than a declaration                     |
+ 3 |  7  | MEDIUM   | convention stated in prose with no gate; already broken    | docs/..., src/etl/...
+   |     |          | once in <file>                                             |
 ```
 
 6. Say: "Found N architectural issues across M files. Starting review — reply ok to discuss or sketch a fix, s to skip, or done to stop."
@@ -160,7 +202,9 @@ When the user types `done` or all items are reviewed:
 ## Scope and Tone
 
 - This review is about **structure**, not correctness. Do not report bugs, numerical errors, or style issues — those belong to other skills.
-- Be precise about which principle is violated. "This is messy" is not a finding. "Adding a new markout horizon shape required changing `execution.q`, `forwards.q`, and three test files because horizon-expansion logic is duplicated rather than shared" is a finding.
-- Distinguish between **accidental complexity** (complexity the codebase created itself) and **essential complexity** (the genuine difficulty of correctly modeling multi-leg FX cross-rate chains, sortedness-sensitive as-of joins, and cross-interpreter portability). Only flag the former.
-- This is a small, actively-developed library. Acknowledge the context: proposals should be proportionate to the project's stage, not a rewrite for its own sake.
+- Be precise about which principle is violated. "This is messy" is not a finding. "Adding a second market meant a second position job, because the two tape formats differed and nothing normalised them" is a finding.
+- Distinguish **accidental** from **essential** complexity, and this system has a lot of the second kind. Only flag the first. Essential here includes: multi-leg cross-rate chains; as-of joins that depend on sortedness; a vendored TorQ tree that must never be edited; a q/Python boundary that kola cannot round-trip every shape across; three position models that answer genuinely different questions; and tickerplant invariants inherited rather than chosen.
+- **Read the header comment before calling something a mistake.** This tree argues for its decisions in prose, at length, including the ones that look wrong — why a registry enlists its values, why a capability was deliberately *not* built, why two things that look duplicated are not. If a file explains itself and the explanation holds, that is not a finding. If it explains itself and the explanation has since stopped being true, that is a good finding.
+- Prefer findings with a **live consequence**. "Violates DIP" is weak. "cryptorust's recorder and the mock publish onto one table, and nothing prevents both running" is strong — it names what breaks and when.
+- Proposals should be proportionate. This is an actively-developed system with real gates; suggest the smallest structural change that closes the gap, and say when the honest answer is "document the constraint and add a gate" rather than "refactor".
 - Do not use emojis.
