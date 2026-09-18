@@ -17,6 +17,12 @@ Several of this tree's most expensive recurring bugs are things it checks
 for: a q builtin used as a parameter name, a line containing only `/` opening
 a block comment, a legacy `datetime` where a timestamp was meant.
 
+**Assert the message, not just the throw.** `assertError` passes on *any*
+error, including an undefined-name error from a typo in the test itself - so
+a test that meant to prove a refusal can pass while proving nothing. Use
+`assertThrows` with the expected text where the message is part of what the
+code promises.
+
 **Its findings are clues, not proof.** They are heuristics over text: verify
 each against the code and, where it matters, against a running q. A clean run
 means no rule matched, which is much weaker than "this is correct" - it is

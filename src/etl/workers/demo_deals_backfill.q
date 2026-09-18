@@ -11,56 +11,17 @@
 / the rows are invented (A-04). Its tests say nothing about the real source's
 / schema, which only .qsrc.validate_live on the work machine can settle.
 / .
-/ WHY THE GLOBALS ARE STILL DECLARED HERE
+/ WHERE THE CONTRACT'S NAMES ARE
 / .
-/ ETL-01's contract, enforced by .qbfstate.require_contract, requires
-/ source_version/range_from/range_to to be names in THIS namespace. Moving
-/ them into the shell would make the contract check inspect the shell rather
-/ than the worker, and every worker would pass it vacuously. So the shell
-/ reads and writes them here - see bounded_worker.q's header.
+/ In this namespace, stamped by the define call at the bottom (#227):
+/ ETL-01's globals and the delegating methods are written here by .qbw
+/ because require_contract looks for them HERE, and a worker that wanted a
+/ different fetch or publish would define its own above that call. This
+/ file declares only what is this worker's: its check and its transform.
 
 \d .qwrk.demo_deals_backfill
-
-worker_name:`demo_deals_backfill
-
-/ --- the contract's required globals (ETL-01, ETL-02) --------------------
-
-/ Explicit and inspectable rather than buried in a call, which is what
-/ ETL-02 asks for: a bounded worker must make its bound visible. Written by
-/ .qbw.init.
-source_version:`;
-range_from:0Np;
-range_to:0Np;
-
-/ The live handle, or 0Ni when running on the fixture. Resolved at init.
-handle:0Ni;
-
-/ Run accumulators, written by the shell. Here rather than in .qbw because a
-/ q lambda does not close over an enclosing local, so `each` over windows
-/ needs a named place to put the running totals - and one per worker, or two
-/ workers running in one process would share them.
-progress:`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);
-last_batch:();
-
-/ --- the contract's required methods, delegated -------------------------
-
-/ Ordinary names in this namespace that happen to delegate. A worker needing
-/ a genuinely different publish path defines its own here and the shell does
-/ not object - .qbw is a default, not an owner.
-spec:{[] .qbw.spec worker_name}
-init:{[run_spec] .qbw.init[worker_name;run_spec]}
-plan:{[cursor] .qbw.plan[worker_name;cursor]}
-fetch:{[from_ts;to_ts] .qbw.fetch[worker_name;from_ts;to_ts]}
-publish:{[batch] .qbw.publish[worker_name;batch]}
-checkpoint:{[cursor] .qbw.checkpoint[worker_name;cursor]}
-run:{[] .qbw.run worker_name}
-cleanup:{[] .qbw.cleanup worker_name}
-
-\d .
 
 / --- the data-quality gate ------------------------------------------------
-
-\d .qwrk.demo_deals_backfill
 
 / Refuse a batch that is shaped correctly but cannot be true.
 / .

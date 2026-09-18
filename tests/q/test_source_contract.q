@@ -117,6 +117,15 @@ test_a_wrong_type_is_refused:{[t]
     .qsrc.register[`t;.srctest.decl[]];
     .qunit.assertError[{.qsrc.validate[`t;x]};([] ts:enlist .srctest.d 1; px:enlist `sym);"a column whose type changed is a contract breach"]};
 
+/ The handler's own error text used to reference `decl`, a local of the
+/ ENCLOSING function that a lambda does not capture - so a real metadata
+/ failure threw a value error about `decl` instead of naming the table and
+/ the underlying reason. Found by the linter's nested-local rule (QF005).
+test_live_metadata_failure_preserves_context:{[t]
+    .qsrc.register[`t;.srctest.decl[]];
+    err:@[{.qsrc.validate_live[`t;x]};{[request] '"offline"};{x}];
+    .qunit.assertEquals[err;"validate_live: cannot read metadata for ext (offline)";"the handler reports the source and underlying error, not an undefined outer local"]};
+
 / An upstream ADDING a column is routine; breaking on it would make every
 / upstream addition an outage.
 test_an_extra_column_is_allowed:{[t]

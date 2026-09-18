@@ -13,6 +13,21 @@ from pathlib import Path
 
 DEFAULT_MAX_ROWS = 10_000
 
+#: What ``{KDBBASEPORT}`` resolves to when the stack is started with defaults.
+DEFAULT_BASE_PORT = 6050
+
+#: The gateway's offset from the base port, as TorQ's generated process.csv
+#: declares it: ``{KDBBASEPORT}+7,gateway,gateway1``.
+#:
+#: Written down because the default port used to be 6050+2 - which is
+#: **rdb1** - and the failure that produced is the one worth naming. The BFF
+#: sends every data query as ``.gw.syncexec`` and reads ``.gw.getqueue`` /
+#: ``.gw.servers`` / ``.gw.clients``; none of those exists on an RDB, so
+#: every routed query and every ops view errored while ``/health``, which
+#: only opened a handle, reported ``up``. Connected to the wrong process is
+#: worse than not connected: it looks fine.
+GATEWAY_PORT_OFFSET = 7
+
 
 @dataclass(frozen=True)
 class Process:
@@ -57,7 +72,17 @@ class Settings:
     """Where the gateway is, and the caps this layer enforces."""
 
     host: str = "localhost"
-    port: int = 6052
+    #: Derived from the base port rather than written as a literal, so the
+    #: two cannot disagree - see GATEWAY_PORT_OFFSET. ``from_env`` re-derives
+    #: it when UQF_FRONTEND_BASE_PORT is set and the port is not, so a stack
+    #: on a non-default base port still reaches its own gateway.
+    port: int = DEFAULT_BASE_PORT + GATEWAY_PORT_OFFSET
+    #: Empty, and it stays empty: FE-14 puts credentials in the server
+    #: environment and never in a default baked into the package, which
+    #: test_config.py asserts. The local demo stack does want a credential
+    #: (`admin:admin`, what `uqf-stack query` uses) - that belongs in the
+    #: README's run instructions, not here. A default credential in source
+    #: is how a real one ends up committed next to it.
     user: str = ""
     passwd: str = ""
     #: Seconds. Passed to kola, which enforces it per query. FE-11: historical
@@ -73,8 +98,9 @@ class Settings:
     process_csv: Path | None = None
     #: Base port the {KDBBASEPORT} placeholders in process.csv resolve
     #: against. Must match whatever the stack was started with, or every
-    #: probe targets the wrong port.
-    base_port: int = 6050
+    #: probe targets the wrong port - and, since `port` is derived from it,
+    #: so does the gateway connection itself.
+    base_port: int = DEFAULT_BASE_PORT
     #: Directory q writes backfill status files into (FE-06). None means the
     #: backfill view reports itself unconfigured rather than returning an
     #: empty list, which would be indistinguishable from an idle fleet.
@@ -107,9 +133,15 @@ class Settings:
         falling back to a default, matching the config posture in ETL-14
         (refuse to start rather than start misconfigured).
         """
+        base_port = _int_env("UQF_FRONTEND_BASE_PORT", cls.base_port)
         return cls(
             host=os.environ.get("UQF_FRONTEND_GATEWAY_HOST", cls.host),
-            port=_int_env("UQF_FRONTEND_GATEWAY_PORT", cls.port),
+            # Falls back to the base port's gateway rather than to cls.port,
+            # so moving the stack to another base port moves this with it.
+            # An explicit UQF_FRONTEND_GATEWAY_PORT still wins - that is the
+            # escape hatch for a gateway that is not where process.csv puts
+            # it.
+            port=_int_env("UQF_FRONTEND_GATEWAY_PORT", base_port + GATEWAY_PORT_OFFSET),
             user=os.environ.get("UQF_FRONTEND_GATEWAY_USER", cls.user),
             passwd=os.environ.get("UQF_FRONTEND_GATEWAY_PASSWD", cls.passwd),
             timeout=_int_env("UQF_FRONTEND_TIMEOUT", cls.timeout),
@@ -118,7 +150,7 @@ class Settings:
             process_csv=_path_env("UQF_FRONTEND_PROCESS_CSV"),
             status_dir=_path_env("UQF_FRONTEND_STATUS_DIR"),
             web_dist=_path_env("UQF_FRONTEND_WEB_DIST"),
-            base_port=_int_env("UQF_FRONTEND_BASE_PORT", cls.base_port),
+            base_port=base_port,
             enable_writes=_flag_env("UQF_FRONTEND_ENABLE_WRITES"),
             stack_root=_path_env("UQF_FRONTEND_STACK_ROOT"),
         )

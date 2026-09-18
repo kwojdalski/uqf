@@ -22,16 +22,31 @@
 / worker.
 / .
 / So the shell reads and writes through the worker's namespace
-/ (`get`/`put` below), and the worker declares the globals itself. The cost
-/ is two indirection helpers; the benefit is that require_contract still
-/ means something.
+/ (read_state/write_state below), and the names live there. The cost is two
+/ indirection helpers; the benefit is that require_contract still means
+/ something.
+/ .
+/ HOW A WORKER INHERITS THEM (#227)
+/ .
+/ define STAMPS them. Until #227 every worker file carried the same twenty
+/ lines by hand - six globals and eight one-line delegators - which was #124's
+/ duplication again at a smaller scale: a fourth worker pasted the block a
+/ fourth time, and the delegator list was a second copy of
+/ .qbfstate.bounded_worker_methods that nothing kept in step. Now define
+/ writes every inherited name the worker has not defined itself into the
+/ worker's namespace, from the shell's own signatures (see inherit), and a
+/ worker file is its transform, its optional check and facts, and one define.
 / .
 / WHAT A WORKER MAY STILL OVERRIDE
 / .
-/ Everything. The worker's own `fetch`, `publish` and so on are ordinary
-/ names in its namespace that happen to delegate here, so a worker with a
-/ genuinely different publish path defines its own and nothing in this file
-/ objects. The shell is a default, not a framework that owns the worker.
+/ Everything, and the override is honoured. A name the worker defines BEFORE
+/ its define call is left alone, and run and do_window reach plan, fetch and
+/ publish through the worker's namespace (see `own`) rather than calling the
+/ shell's directly - which is what the first version of this file promised
+/ and did not do: its run loop called .qbw.fetch whatever the worker had
+/ defined, so an override was reachable from the prompt and from nowhere
+/ else. A worker with a genuinely different publish path defines its own,
+/ and the shell is a default rather than a framework that owns the worker.
 
 \d .qbw
 
@@ -76,6 +91,51 @@ worker_root:`.qwrk
 / @return the namespace symbol, e.g. `.qwrk.demo_deals_backfill
 / @eg .qbw.namespace `demo_deals_backfill  ->  `.qwrk.demo_deals_backfill
 namespace:{[worker] ` sv worker_root,worker}
+
+/ ------------------------------------------------------- INHERITANCE
+
+/ The globals every worker starts with. The first three are ETL-01's
+/ contract; `handle` is the live connection or 0Ni on the fixture; `progress`
+/ and `last_batch` are the run accumulators, one set PER WORKER because a q
+/ lambda does not close over an enclosing local, so `each` over windows needs
+/ a named place for the running totals - and two workers in one process must
+/ not share it.
+initial_state:`source_version`range_from`range_to`handle`progress`last_batch!
+    (`;0Np;0Np;0Ni;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);())
+
+/ The methods every worker gets: the contract's five, taken from the
+/ contract itself so the two cannot drift, plus the three the launcher and
+/ the tests call through the worker's namespace.
+inherited_methods:.qbfstate.bounded_worker_methods,`spec`run`cleanup
+
+/ Private: the delegating lambda for one method, built from the shell
+/ function's own parameter list so its signature is the shell's minus
+/ `worker`. For `fetch it is
+/   {[from_ts;to_ts] .qbw.fetch[`demo_deals_backfill;from_ts;to_ts]}
+/ which is what the hand-written one used to say, and what `.qwrk.x.fetch`
+/ at the prompt still shows. A real lambda rather than a projection for
+/ that readability, and because the niladic ones - run[], cleanup[] - have
+/ no projection form: a projection with every argument supplied is a call.
+delegate:{[worker;nm]
+    / value of the NAME is the function; value of the function is its
+    / parse tree, whose second element is the parameter list.
+    args:1_(value value ` sv `.qbw,nm)[1];
+    value "{[",(";" sv string args),"] .qbw.",string[nm],"[",.Q.s1[worker],
+        $[count args; ";",";" sv string args; ""],"]}"}
+
+/ Private: give a worker namespace every inherited name it has not defined.
+/ .
+/ Only the ABSENT names, which is the whole override mechanism: a worker
+/ that defined its own `publish` before calling define keeps it. It is also
+/ what makes a reload safe - a worker file re-runs its own define, and the
+/ state its previous run left behind is not reset under it.
+inherit:{[worker;ns]
+    have:.qbfstate.ns_names ns;
+    globals:(key initial_state) except have;
+    {[ns;nm;v] (` sv ns,nm) set v}[ns;;]'[globals;initial_state globals];
+    methods:inherited_methods except have;
+    {[ns;worker;nm] (` sv ns,nm) set delegate[worker;nm]}[ns;worker;] each methods;
+    }
 
 / The partition every worker fills when it does not declare one.
 / .
@@ -190,6 +250,8 @@ define:{[worker;cfg]
 
     / Normalise to the full key set before storing - see optional_cfg.
     worker_cfg[worker]:normalised cfg;
+    / Last, so a refused declaration leaves no half-stamped namespace behind.
+    inherit[worker;cfg`ns];
     worker}
 
 / Private: the declared transform exists and reads exactly this worker's
@@ -260,6 +322,13 @@ partition_of:{[worker] (declaration worker)`partition}
 / this repository, after desc, tables, sv, load, var and save.
 read_state:{[worker;nm] value ` sv ((declaration worker)`ns),nm}
 write_state:{[worker;nm;v] (` sv ((declaration worker)`ns),nm) set v}
+
+/ Private: one of the worker's own methods - the inherited delegate, or the
+/ worker's override. run and do_window go through here rather than calling
+/ the shell's plan, fetch and publish directly; that is what makes an
+/ override take effect, and the delegate calls back into the shell's
+/ function by its full name, so there is no loop.
+own:{[worker;nm] read_state[worker;nm]}
 
 / The worker's current run specification.
 spec:{[worker] `source_version`range_from`range_to!read_state[worker] each `source_version`range_from`range_to}
@@ -437,7 +506,7 @@ run:{[worker]
     / than leaving no trace - see .qrun's header.
     begin_run[worker];
     cursor:.qbfstate.load_checkpoint[worker;spec worker];
-    windows:plan[worker;cursor];
+    windows:own[worker;`plan][cursor];
     if[0=count windows;
         / "ran, found no work" is a SUCCESS, not a failure (C-07). An
         / orchestrator that cannot tell them apart retries a successful
@@ -556,7 +625,7 @@ transform_batch:{[worker;batch]
 do_window:{[worker;w]
     cfg:declaration worker;
     .qlog.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
-    f:fetch[worker;w`range_from;w`range_to];
+    f:own[worker;`fetch][w`range_from;w`range_to];
     if[`failed~f`state;
         / ERR, not a throw: per M-05 a failed window is terminal for that
         / window and the run continues. Recording it with the window and the
@@ -710,7 +779,7 @@ advanced_to:{[worker;current;next_cursor]
 / punctuation rather than a word.
 publish_pending:{[worker] publish_last_batch[worker;]}
 
-publish_last_batch:{[worker;unused] publish[worker;read_state[worker;`last_batch]]}
+publish_last_batch:{[worker;unused] own[worker;`publish] read_state[worker;`last_batch]}
 
 / Release everything the worker holds. Safe on the failure branch too, since
 / release_lock is a no-op when not held.

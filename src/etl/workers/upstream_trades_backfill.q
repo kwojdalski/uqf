@@ -19,26 +19,6 @@
 
 \d .qwrk.upstream_trades_backfill
 
-worker_name:`upstream_trades_backfill
-
-/ --- the contract's required globals (ETL-01, ETL-02) --------------------
-source_version:`;
-range_from:0Np;
-range_to:0Np;
-handle:0Ni;
-progress:`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);
-last_batch:();
-
-/ --- the contract's required methods, delegated -------------------------
-spec:{[] .qbw.spec worker_name}
-init:{[run_spec] .qbw.init[worker_name;run_spec]}
-plan:{[cursor] .qbw.plan[worker_name;cursor]}
-fetch:{[from_ts;to_ts] .qbw.fetch[worker_name;from_ts;to_ts]}
-publish:{[batch] .qbw.publish[worker_name;batch]}
-checkpoint:{[cursor] .qbw.checkpoint[worker_name;cursor]}
-run:{[] .qbw.run worker_name}
-cleanup:{[] .qbw.cleanup worker_name}
-
 / Refuse a batch that cannot be a trade: a non-positive price or size.
 / Shaped correctly and still wrong is what a check is for.
 / @param batch the transformed rows, before publication

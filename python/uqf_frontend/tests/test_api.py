@@ -7,6 +7,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from uqf_frontend import ops
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
@@ -20,6 +21,28 @@ from uqf_frontend.errors import (
 def test_health_reports_up(client):
     body = client.get("/health").json()
     assert body == {"ok": True, "gateway": "up", "detail": None, "poll_seconds": 5}
+
+
+def test_health_refuses_a_process_that_is_not_a_gateway(gw):
+    """Connected to the wrong process is worse than not connected: it looks
+    fine. Every routed query goes through .gw.*, which an RDB does not
+    have, so answering `up` here sends the caller to debug their query.
+    """
+    gw._responses[ops.IDENTITY] = [{"procname": "rdb1", "proctype": "rdb"}]
+    body = TestClient(create_app(gateway=gw)).get("/health").json()
+    assert body["ok"] is False
+    assert body["gateway"] == "wrong_process"
+    assert "rdb" in body["detail"] and "UQF_FRONTEND_GATEWAY_PORT" in body["detail"]
+
+
+def test_health_accepts_a_process_that_cannot_name_its_type(gw):
+    """`unknown` is .proc.proctype being absent, which every non-TorQ q
+    process reports. Refusing on it would fail deployments we simply cannot
+    interrogate - the refusal is for POSITIVE evidence of the wrong type.
+    """
+    gw._responses[ops.IDENTITY] = [{"procname": "unknown", "proctype": "unknown"}]
+    body = TestClient(create_app(gateway=gw)).get("/health").json()
+    assert (body["ok"], body["gateway"]) == (True, "up")
 
 
 def test_health_reports_reloading_as_ok_because_it_is_transient(gw):

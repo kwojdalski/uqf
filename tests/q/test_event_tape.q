@@ -210,10 +210,15 @@ test_the_worker_honours_dry_run:{[t]
     .qunit.assertEquals[(count value `event_tape;count value `etl_coverage);(0;0);"ETL-14 comes free too - nothing published, no coverage staged"]};
 
 / The two workers must not share state. They have separate namespaces and
-/ separate `progress` globals for exactly this reason.
+/ separate `progress` globals for exactly this reason - stamped one set per
+/ worker by .qbw.define, so a run of one leaves the other's untouched.
 test_the_two_workers_have_separate_state:{[t]
+    other:.qwrk.demo_deals_backfill.progress;
     .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    .qunit.assertEquals[(.qwrk.demo_events_backfill.worker_name;.qwrk.demo_deals_backfill.worker_name);(`demo_events_backfill;`demo_deals_backfill);"two workers in one process, two sets of accumulators"]};
+    .qwrk.demo_events_backfill.run[];
+    .qunit.assertEquals[.qwrk.demo_events_backfill.progress`windows_completed;1;"the run counted its one window"];
+    .qunit.assertEquals[.qwrk.demo_deals_backfill.progress;other;
+        "two workers in one process, two sets of accumulators - the other's is untouched"]};
 
 / The declared width is hourly, but the fixture's range is ten SECONDS, so
 / the single window is clipped to the range - the final window is never
