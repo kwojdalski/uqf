@@ -346,15 +346,14 @@ ofi:{[quotes;target_sym]
 / Private: ofi's e_bid-e_ask contribution at one specific level, across
 / every row of sub. A level absent on a row (level_at's null) contributes
 / 0 size (`0^` before use) rather than nulling that level's whole
-/ contribution - a level disappearing between rows shows up as negative
-/ flow (the old size draining away: its null price loses every price
-/ comparison against the prior row's real price, falling into the "price
-/ worsened" branch, -prev_size), matching genuine order-flow semantics
-/ rather than silently dropping the level.
+/ contribution. A missing bid price sorts below real prices; a missing ask
+/ is filled with positive infinity so it sorts above them. Disappearance
+/ therefore drains the previous size on either side, and reappearance adds
+/ the new size. Two absent snapshots contribute zero.
 ofi_at_level:{[sub;level]
     bid_px:level_at[sub`bid_prices;level];
     bid_sz:0^level_at[sub`bid_sizes;level];
-    ask_px:level_at[sub`ask_prices;level];
+    ask_px:0w^level_at[sub`ask_prices;level];
     ask_sz:0^level_at[sub`ask_sizes;level];
     prev_bid_px:prev bid_px;
     prev_bid_sz:prev bid_sz;
