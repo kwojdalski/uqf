@@ -132,7 +132,25 @@ _TICKERPLANT_TABLES = [
     "crypto_trades",
     "crypto_book",
     "crypto_sim_fills",
+    "wide_book",
+    "mkt_orderbook",
+    "databento_book",
+    "executions",
+    "marks",
 ]
+
+#: Tickerplant tables the desk catalog deliberately does NOT carry, with the
+#: reason. The gate below holds this list closed in the other direction: a
+#: table published onto the plant and absent from both this list and the
+#: catalog is an OMISSION, not a decision, and that is how five of them went
+#: unbrowsable without anything noticing.
+_NOT_IN_CATALOG = {
+    "databento_mbp10": (
+        "the RAW Databento feed, published by an external Python handler and "
+        "consumed only by databento1, which folds it into databento_book. A desk "
+        "browsing a book wants the folded one; this is the input to that fold."
+    ),
+}
 
 
 @pytest.mark.parametrize("table_name", _TICKERPLANT_TABLES)
@@ -190,4 +208,38 @@ def test_every_catalog_table_is_cross_checked():
         f"catalog table(s) {sorted(unchecked)} have no drift check. Add the table "
         f"to _TICKERPLANT_TABLES if scripts/processes/uqf_stack_tables.q defines it, or the q "
         f"file to _Q_OWNED."
+    )
+
+
+def test_every_published_table_is_in_the_catalog_or_explicitly_not():
+    """The other direction, and the one that was missing.
+
+    The gate above asks "is every catalog table checked". It cannot notice a
+    table that is published and absent from the catalog entirely - and five
+    were: wide_book, mkt_orderbook, databento_book, executions and marks.
+    The desk view browses the catalog, so those tables simply did not exist
+    as far as FE-07 was concerned, and no test could say so.
+
+    A published table must therefore be in the catalog, or in _NOT_IN_CATALOG
+    with a reason. "We forgot" is not one of the two.
+    """
+    published = set(re.findall(r"^(\w+):\(\[\]", TABLES_Q.read_text(), re.M))
+    missing = published - set(TABLES) - set(_NOT_IN_CATALOG)
+    assert not missing, (
+        f"table(s) {sorted(missing)} are published onto the tickerplant but are not in "
+        f"the desk catalog, so FE-07 cannot browse them. Add them to "
+        f"python/uqf_frontend/catalog/, or to _NOT_IN_CATALOG with the reason they "
+        f"are deliberately absent."
+    )
+
+
+def test_the_deliberate_omissions_are_all_real_tables():
+    """So the exemption list cannot rot: a name that no longer exists on the
+    plant is a stale excuse, and would hide the next real omission behind it.
+    """
+    published = set(re.findall(r"^(\w+):\(\[\]", TABLES_Q.read_text(), re.M))
+    stale = set(_NOT_IN_CATALOG) - published
+    assert not stale, (
+        f"_NOT_IN_CATALOG names {sorted(stale)}, which {TABLES_Q.name} no longer "
+        f"publishes - remove the entry rather than leaving a dead exemption."
     )
