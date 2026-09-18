@@ -8,8 +8,11 @@ etl_coverage,"Append-only completeness ledger: which [range_from, range_to) wind
 event_tape,"Per-event order/trade tape: add, cancel and trade events with the aggressor side on a trade. A superset of trades, so a tape filtered to action='trade' is trade-shaped. Sorted ascending by time by contract - see docs/architecture/event-tape.md"
 execution_quality,"Post-trade markout per fill per horizon; a null markout_pips means no reference quote existed at that horizon, not a zero markout"
 executions,"Every fill table the stack carries, spelled one way by the executions normalizer: the FX trades and cryptorust's crypto_trades. source_time is the source's own stamp, time the plant's on the normalized row. This is what posbook1 reads"
+fx_limit_breach,"fxpositions1's alerts: one row per limit newly crossed, throttled so a standing breach does not republish on every tick. utilisation is the observed value over the cap"
+fx_position,"fxpositions1's snapshot: net exposure per (sym, book, product), republished whole on every timer tick rather than only what moved. base_qty and quote_qty are both carried because an FX position is two currencies and reporting one hides a cross; break_even is the rate at which closing out leaves the desk flat"
 marks,"A mid per instrument from every book the stack carries, spelled one way by the marks normalizer: the vendored quote and crypto_book. This is what posbook1 marks positions against"
 mkt_orderbook,"vectorize1's output: wide_book folded into the vector-column shape every pricing and execution function in src/ expects, one row per (time, sym)"
+orders,"Order flow from fx_orders_feed: every order, most of which never becomes a fill. order_status is what fxpositions1 filters on; book and product are the dimensions a position is keyed on beyond sym. For the fills these became, see executions"
 position,"Running position book marked to the prevailing mid, with realised and unrealised P&L"
 quotes,FX top-of-book and depth as per-row level vectors
 trades,"Client fills, shaped to match .qpos.apply_fill and .qexec.markout_at_horizons exactly"
