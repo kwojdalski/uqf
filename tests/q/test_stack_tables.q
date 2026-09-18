@@ -116,18 +116,88 @@ test_every_table_is_empty_as_declared:{[t]
         "every declaration is an empty typed table"]};
 
 
-test_the_normalizers_outputs_and_posbooks_inputs_match_the_stack_tables:{[t]
-    / Three declarations of one shape: the normalizer's output (no time),
-    / the plant's table (time first), and posbook's declared input (as the
-    / plant delivers it). A column added to one and not the others would
-    / land as a misaligned batch; this makes it a failing test instead.
-    .qunit.assertEquals[`time,cols .qsub.executions.executions;cols .tabletest.tbl `executions;
-        "the executions normalizer publishes the stack table without time"];
-    .qunit.assertEquals[`time,cols .qsub.marks.marks;cols .tabletest.tbl `marks;
-        "and so does marks"];
-    .qunit.assertEquals[cols .qsub.posbook.executions;cols .tabletest.tbl `executions;
-        "posbook reads executions as the plant delivers it"];
-    .qunit.assertEquals[cols .qsub.posbook.marks;cols .tabletest.tbl `marks;
-        "and marks likewise"]};
+/ --- every job's declared shapes against the plant's ----------------------
 
+/ A streaming job declares the shape of each table it exchanges with the
+/ plant, so .qxf can refuse a mismatched batch at the boundary. When the
+/ plant's column list changes and the job's declaration does not, the job
+/ starts, subscribes, reports healthy and refuses every batch - which is
+/ the failure the declaration exists to prevent, arriving silently.
+/ .
+/ WHICH COMPARISON APPLIES IS DERIVED, not listed. A job's own declaration
+/ already says whether it reads a table or writes one:
+/ .
+/   subscribes  it receives rows as the plant delivers them, `time` first
+/   publishes   it sends rows WITHOUT `time` - the plant stamps that
+/ .
+/ So the rule is `cols match` in the first case and `cols match 1_` in the
+/ second, and a new job is covered the day it registers. This test used to
+/ name one job (cryptoposbook1) and check its two inputs by hand; three
+/ other jobs had the same exposure and no check. A gate written for an
+/ instance is a gate that is true exactly once.
+
+/ (job; table) pairs where a job declares a table sharing a plant table's
+/ NAME without exchanging that table with the plant. Each needs a reason:
+/ absent one, a collision is an accident waiting to mislead a reader.
+/ ENLISTED. `((a;b;c))` is just `(a;b;c)` in q - a three-element list, not
+/ a list of one triple - so a single entry without this reads as three
+/ separate fields and matches nothing.
+not_exchanged:enlist (`markout;`quotes;
+    "the shape of the VENDORED `quote` table markout subscribes to (time, sym, bid, ask), held under the name its transform gives that input. The plant's own `quotes` is the depth-aware table with vector columns - a different thing that happens to be spelled plural too")
+
+/ Private: one symbol per (job; table) pair, so a pair can be tested for
+/ membership. q has no composite `in` over two columns - `([a;b]) in tbl`
+/ is a `mismatch` - and rendering is clearer here than a keyed-table join.
+pair:{[job;tbl] `$string[job],"/",string tbl}
+
+/ The excused pairs, rendered.
+excused:{[] pair .' 2#/:not_exchanged}
+
+/ Every table a streaming job declares, with the role its own registration
+/ implies.
+job_tables:{[]
+    raze {[job]
+        ns:.qstream.namespace job;
+        d:.qstream.declaration job;
+        nms:key[ns] except `;
+        nms:nms where {[ns;nm] 98h=type get ` sv ns,nm}[ns] each nms;
+        ([] job:(count nms)#job; tbl:nms;
+            role:{[d;nm] $[nm in d`subscribes;`subscribes;nm in d`publishes;`publishes;`internal]}[d] each nms)
+      } each .qstream.registered[]}
+
+test_every_job_declares_the_shape_the_plant_actually_carries:{[t]
+    rows:select from .tabletest.job_tables[] where tbl in .tabletest.declared[];
+    rows:select from rows where not .tabletest.pair'[job;tbl] in .tabletest.excused[];
+    `.tabletest.bad set ();
+    {[row]
+        plant:cols .tabletest.tbl row`tbl;
+        theirs:cols get ` sv (.qstream.namespace row`job),row`tbl;
+        want:$[row[`role]=`publishes; 1_plant; plant];
+        if[not theirs~want;
+            `.tabletest.bad set .tabletest.bad,enlist
+                (string[row`job],"/",string[row`tbl]," (",string[row`role],"): job has ",
+                 (" " sv string theirs),", plant has ",(" " sv string want))]
+      } each rows;
+    .qunit.assertEquals[.tabletest.bad;();
+        "every job's declared table matches the plant's, with `time` for one it subscribes to and without for one it publishes"]};
+
+test_every_job_table_sharing_a_plant_name_is_exchanged_or_excused:{[t]
+    / The loophole in the test above: it derives the comparison from the
+    / role, and a table declared with NEITHER role is silently skipped. A
+    / name collision is then invisible - which is how markout's `quotes`
+    / (a different shape from the plant's `quotes`) went unnoticed.
+    rows:select from .tabletest.job_tables[]
+        where tbl in .tabletest.declared[], role=`internal;
+    unexcused:select from rows where not .tabletest.pair'[job;tbl] in .tabletest.excused[];
+    .qunit.assertEquals[count unexcused;0;
+        "a job declaring a table named after a plant table, while neither subscribing nor publishing it, is a collision that needs a reason in not_exchanged"]};
+
+test_the_exemptions_still_describe_something_real:{[t]
+    / So the excuse list cannot rot into cover for the next real collision.
+    live:.tabletest.job_tables[];
+    stale:.tabletest.excused[] except .tabletest.pair'[live`job;live`tbl];
+    .qunit.assertEquals[count stale;0;
+        "every not_exchanged entry names a job and table that still exist - remove the entry rather than leaving a dead excuse"]};
+
+bad:()
 \d .
