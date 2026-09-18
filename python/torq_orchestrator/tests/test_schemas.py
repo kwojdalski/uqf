@@ -36,6 +36,9 @@ EXPECTED_TABLES = {
     "execution_quality",
     "executions",
     "marks",
+    "orders",
+    "fx_position",
+    "fx_limit_breach",
 }
 
 

@@ -107,3 +107,16 @@ executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); 
 / marks1's output: a mid per instrument from every book the stack carries.
 / The `marks` normalizer maps `quote` and `crypto_book` onto this.
 marks:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); mid:`float$())
+/ fx_orders_feed's output: order flow, most of which never becomes a fill.
+/ Wider than `trades` because a position keyed on more than sym needs the
+/ dimensions to arrive with the order, and order_status is what
+/ fxpositions1 filters on.
+orders:([]time:`timestamp$(); order_id:`long$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); side:`long$(); size:`float$(); price:`float$(); order_status:`symbol$())
+
+/ fxpositions1's snapshot: net exposure per (sym, book, product), the
+/ whole book on every timer tick rather than only what moved.
+fx_position:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); base_qty:`float$(); quote_qty:`float$(); fill_count:`long$(); break_even:`float$())
+
+/ fxpositions1's alerts: one row per limit newly crossed, throttled so a
+/ standing breach does not republish on every tick.
+fx_limit_breach:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); metric:`symbol$(); observed:`float$(); cap:`float$(); severity:`symbol$(); utilisation:`float$())

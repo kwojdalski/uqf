@@ -191,7 +191,8 @@ the others the tree is built on, are written down in
 
 Each module loads into its own flat namespace after `src/init.q` -
 `.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
-`.qalloc`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef`. Kept single-level
+`.qalloc`, `.qdesk`, `.qlimit`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
+`.qexdef`. Kept single-level
 throughout rather than nested under a shared parent (e.g. not
 `.q.options`). This began as a portability constraint and is now a
 convention the tree keeps: the filename-to-namespace tie is what the naming
@@ -230,6 +231,8 @@ table below only says what each module is *for*.
 | [`portfolio/risk.q`](src/portfolio/risk.q) | `.qrisk` | pip value, P&L, carry, parametric and historical VaR | [tests](tests/q/test_risk.q) |
 | [`portfolio/positions.q`](src/portfolio/positions.q) | `.qpos` | weighted-average-cost position tracking, currency exposure, reconciliation | [tests](tests/q/test_positions.q) |
 | [`portfolio/allocation.q`](src/portfolio/allocation.q) | `.qalloc` | P&L attribution: lot matching (FIFO/LIFO/HIFO/weighted), carried positions, as-of books | [tests](tests/q/test_allocation.q) |
+| [`portfolio/desk_positions.q`](src/portfolio/desk_positions.q) | `.qdesk` | net FX exposure along declared dimensions, per-currency netting, break-even rates | [tests](tests/q/test_desk_positions.q) |
+| [`portfolio/limits.q`](src/portfolio/limits.q) | `.qlimit` | risk limits, breach detection, alert throttling | [tests](tests/q/test_limits.q) |
 | [`execution/execution.q`](src/execution/execution.q) | `.qexec` | markouts, effective spread, slippage, fill/reject ratios, VWAP, sweep pricing | [tests](tests/q/test_execution.q) |
 | [`market_data/book.q`](src/market_data/book.q) | `.qbook` | reshapes wide/mis-typed order books into the shape the other modules expect | [tests](tests/q/test_book.q) |
 | [`market_data/microstructure.q`](src/market_data/microstructure.q) | `.qmicro` | LOB signals: book pressure, microprice, order flow imbalance, VAMP | [tests](tests/q/test_microstructure.q) |
@@ -267,6 +270,7 @@ each, and the rule for which a new page belongs in.
   [event-tape.md](docs/architecture/event-tape.md),
   [pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md),
   [example-architecture.md](docs/architecture/example-architecture.md),
+  [fx-positions-service.md](docs/architecture/fx-positions-service.md),
   [cryptorust-discovery.md](docs/architecture/cryptorust-discovery.md).
 - **What is the contract?** → [`docs/reference/`](docs/reference/):
   [environment.md](docs/reference/environment.md) (every variable,
