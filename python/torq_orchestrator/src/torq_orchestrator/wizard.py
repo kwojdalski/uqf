@@ -96,7 +96,7 @@ _PUBLISHER_TEMPLATE = """\
 / only in process_overrides-style extra_processes.csv (see core.py's
 / add_extra_process()), port {{KDBBASEPORT}}+{port_offset}.
 
-run:{{[] .lg.o[`run;"stub - fill in {table} publish logic, see src/etl/streaming/fx_feed.q for the shape"]}}
+run:{{[] .lg.o[`run;"stub - fill in {table} publish logic, see fx_feed.q"]}}
 
 /- use the discovery service to find the tickerplant to publish data to,
 /  exactly as feed.q and src/etl/streaming/fx_feed.q do

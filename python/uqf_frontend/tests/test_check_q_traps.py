@@ -541,7 +541,9 @@ def test_the_type_gate_is_registered_in_the_scope_checker():
     check_hook_scopes.py is unenforced: it can narrow to a stale path and
     nothing complains - which is exactly how 43 of 47 files went unlinted.
     """
-    scope_checker = Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_hook_scopes.py"
+    scope_checker = (
+        Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_hook_scopes.py"
+    )
     text = scope_checker.read_text()
     assert 'TYPE_HOOKS = ("ty",)' in text
     assert '("type", TYPE_HOOKS)' in text
