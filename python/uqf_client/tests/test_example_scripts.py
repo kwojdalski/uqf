@@ -1,6 +1,6 @@
 """Execute the worked examples in ``scripts/*_example.q``.
 
-B-08 asked whether examples are executed by tests. Until this module they
+It was asked whether examples are executed by tests. Until this module they
 were not: five scripts, 1,100 lines, referenced from ``README.md`` and run by
 nothing. They are the same kind of untested assertion as the ``@eg`` lines in
 the qDoc blocks - prose that claims a call works, with no gate to notice when

@@ -1,6 +1,6 @@
 / heartbeat.q - a per-worker liveness table monitoring can poll (.qhb).
 / .
-/ Answers bank question K-04, decided by the maintainer: yes, a heartbeat
+/ Answers the question bank, decided by the maintainer: yes, a heartbeat
 / table.
 / .
 / WHAT IT ADDS OVER THE STATUS FILES. A status file records what a run is

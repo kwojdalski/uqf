@@ -2,12 +2,12 @@
 """Keep ``docs/reference/environment.md`` and the code's actual environment surface in
 agreement, in both directions.
 
-C-04 asked what the required-versus-optional environment set is and where it
+It was asked what the required-versus-optional environment set is and where it
 is documented as one list. The list is hand-written, because "optional, and
 here is what happens when it is unset" is a judgement no generator can read
 off a ``os.environ.get`` call. A hand-written list decays, so this gate
 checks it rather than a generator producing it - the same shape as
-``check_hook_scopes.py``, and the split J-01 settled: generate what is
+``check_hook_scopes.py``, and the settled split: generate what is
 mechanical, check what is not.
 
 Two directions, because each catches a different failure:
@@ -299,7 +299,7 @@ def main() -> int:
 
     if problems:
         print(
-            f"\n{problems} problem(s). docs/reference/environment.md is the list C-04 asked for;",
+            f"\n{problems} problem(s). docs/reference/environment.md is the operator-facing listr;",
             file=sys.stderr,
         )
         print("it is only worth having while it is complete.", file=sys.stderr)

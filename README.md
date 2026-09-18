@@ -269,9 +269,6 @@ each, and the rule for which a new page belongs in.
   [environment.md](docs/reference/environment.md) (every variable,
   machine-checked), [ETL](docs/reference/etl-framework-requirements.md) and
   [frontend](docs/reference/frontend-requirements.md) requirements.
-- **What was decided, and when?** →
-  [the decision register](docs/decisions/README.md), generated from the
-  GitHub issue comments that are its authority.
 - **How does this meet something external?** →
   [`docs/integrations/torq/`](docs/integrations/torq/README.md), including the
   generated [process table](docs/integrations/torq/processes.md).

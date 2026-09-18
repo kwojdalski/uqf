@@ -27,7 +27,7 @@ class PokeOutcome(Enum):
 
 
 #: `idle` (ran, found nothing to do) and `completed` (ran, did work) are
-#: both q-side successes — see C-07 in uqf_frontend.status, which this
+#: both q-side successes — see uqf_frontend.status, which this
 #: mirrors. Neither may be conflated with `failed`, and Airflow has no
 #: business telling them apart further than "the task instance succeeded".
 _SUCCESS_STATES = ("idle", "completed")

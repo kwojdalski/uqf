@@ -467,7 +467,7 @@ def _coverage(
     range_from: str | None,
     range_to: str | None,
 ) -> CoverageResponse:
-    # D-11: coverage is now a claim that is true until superseded, so the
+    # Coverage is now a claim that is true until superseded, so the
     # read needs an as-of. `datetime.now(UTC)` here rather than letting q use
     # its own `.z.p`: the value is sent as a parameter so the answer is
     # reproducible and the test doubles can pin it, and a caller asking twice

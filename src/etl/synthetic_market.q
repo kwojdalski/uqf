@@ -16,7 +16,7 @@
 / .
 / It is a SIMULATION, deliberately crude: a symmetric random walk with a
 / fixed spread and a fixed ladder shape. It stands in for a market data feed
-/ in a demo (A-04) and nothing here should be read as a market model.
+/ in a demo and nothing here should be read as a market model.
 
 \d .qsynth
 

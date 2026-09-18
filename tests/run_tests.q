@@ -5,7 +5,7 @@
 \c 400 1000
 
 / Seed q's random generator so the suite is DETERMINISTIC (question-bank
-/ I-01). test_execution_scale.q generates a million synthetic trades with
+/ determinism). test_execution_scale.q generates a million synthetic trades with
 / `n?` and asserts statistical properties of them - "spans more than 20
 / hours", "size spread over 1e7". Those hold with overwhelming probability
 / on any seed, which is exactly the problem: a failure would be

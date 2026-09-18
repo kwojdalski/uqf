@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Keep `src/etl/core/` from depending on `sources/`, `workers/` or `streaming/`.
 
-Question bank F-08 settled the split: `core/` is framework, `sources/` and
-`workers/` are declarations, and bank question E-02 names the property that
+Question the question bank settled the split: `core/` is framework, `sources/` and
+`workers/` are declarations, and the question bank names the property that
 split buys - adding a source is a file in `sources/` plus a registration,
 with NO core change - and it is the reason the ETL tree can grow without the
 framework learning about each new feed.
 
-Nothing enforced it. N-04's answer said so plainly: the directory rule is a
+Nothing enforced it: the directory rule is a
 convention, and a file dropped into `core/` that reached into `sources/`
 would break the property silently, because every test would still pass. A
 convention that only holds while everyone remembers it is the state this
@@ -19,7 +19,7 @@ this checks only that the arrow never points back.
 
 The second rule is the same arrow one level out (#229): nothing under
 `src/etl/` may call `.qpipe`, the TorQ adapter in `scripts/processes/torq_pipeline.q`.
-B-09 says the ETL tree must load in a plain q process with no TorQ present,
+The ETL tree must load in a plain q process with no TorQ present,
 and `.qpipe` is the one namespace allowed to know TorQ exists. The status
 writer used to live there and `backfill_state.q` called it, which is why
 `lock_dir` carried a try-with-fallback - the author knew the namespace might
@@ -49,7 +49,7 @@ ETL = REPO / "src" / "etl"
 DECLARING_DIRS = ("sources", "workers", "streaming")
 
 #: The TorQ adapter. Lives in scripts/ because it is the one place TorQ is
-#: allowed; nothing under src/etl/ may reach it (B-09).
+#: allowed; nothing under src/etl/ may reach it.
 ADAPTER_NS = ".qpipe"
 
 #: A namespace declaration, e.g. `\d .qwrk.demo_deals_backfill`.
@@ -166,8 +166,8 @@ def main() -> int:
         for v in violations:
             print(f"  {v}", file=sys.stderr)
         print(
-            "\nPer bank F-08 core/ is framework and the other two are\n"
-            "declarations; bank E-02 is\n"
+            "\nPer the question bank core/ is framework and the other two are\n"
+            "declarations; the question bank is\n"
             "the property that buys - a new source needs no core change. An arrow\n"
             "pointing this way removes it.",
             file=sys.stderr,

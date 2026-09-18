@@ -1,6 +1,6 @@
 // test_time_zone.q - tests for the time and timezone decisions recorded on
-// issue #80: L-03 (the z->p cast bug class), L-04 (what a window's "day"
-// means), L-05 (DST in windowed backfills) and L-06 (who converts).
+// issue #80: the z->p cast bug class, what a window's "day" means, DST in
+// windowed backfills, and who converts.
 //
 // Two of those questions are about a WRONG ANSWER rather than an error, so
 // most of what follows asserts that something did NOT happen: that a
@@ -9,7 +9,7 @@
 // window does not publish its neighbours' rows, and that windows stay
 // exactly one day wide across a DST transition.
 //
-// The L-03 tests deliberately CONSTRUCT q datetimes, which
+// The cast tests deliberately CONSTRUCT q datetimes, which
 // scripts/gates/check_q_traps.py forbids in src/. That is the one legitimate place
 // for the type: a test that proves the trap exists has to build the value
 // the trap needs. The checker is scoped to non-test files for exactly this.
@@ -62,7 +62,7 @@ drop_sources:{[]
     if[count mine; .qsrc.sources:mine _ .qsrc.sources];
     }
 
-/ --- L-03: the z->p cast bug class -------------------------------------
+/ --- the z->p cast bug class -------------------------------------
 
 / q's datetime (type 15h, "z") is a FLOAT count of days; a timestamp (12h,
 / "p") is a long count of nanoseconds. So z->p is a float-to-long rounding,
@@ -117,7 +117,7 @@ test_a_datetime_time_column_is_refused_by_the_contract:{[t]
     bad:([] ts:enlist "z"$2026.09.11D09:00:00.000000000; px:enlist 1.5);
     .qunit.assertError[{.qsrc.validate[`tz_summer;x]};bad;"a datetime where a timestamp was declared is a contract breach, not a coercion"]};
 
-/ --- L-04: what a window's "day" is ------------------------------------
+/ --- what a window's "day" is ------------------------------------
 
 / WHAT THE CANONICAL CODE MEANT BY A TRADING DAY IS NOT KNOWABLE HERE, and
 / nothing in this tree has a business-date notion: .qwrt.windows cuts
@@ -133,7 +133,7 @@ test_five_days_means_five_windows_not_five_business_days:{[t]
     w:.qwrt.windows[2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000;1D];
     .qunit.assertEquals[count w;5;"the weekend is not skipped: 'the previous five days' is five 24h windows, and any business-day reading would have to be built on top"]};
 
-/ --- L-05: DST in windowed backfills -----------------------------------
+/ --- DST in windowed backfills -----------------------------------
 
 / The deliberate pick: windows are cut in UTC, so a daily window is always
 / exactly 24h of elapsed time - never the 23h or 25h a local-calendar day
@@ -164,7 +164,7 @@ test_the_ambiguity_error_names_both_candidate_instants:{[t]
 
 / An ambiguity is a DATA failure, so .qwrt must not retry it: the next
 / attempt reads the same unresolvable row and buries the real error under N
-/ identical ones (M-04).
+/ identical ones.
 test_an_ambiguity_is_a_terminal_failure_not_a_retryable_one:{[t]
     err:@[{.qsrc.local_to_utc[.tztest.london;x]; ""};.tztest.autumn+0D00:30;{x}];
     .qunit.assertEquals[(.qwrt.classify err;.qwrt.retryable err);(`data;0b);"retrying an unresolvable local time produces the same unresolvable local time, more slowly"]};
@@ -200,7 +200,7 @@ test_the_over_fetch_does_not_publish_neighbouring_rows:{[t]
     got:last .qsrc.fetch_window[`tz_london;0Ni;lo;hi];
     .qunit.assertEquals[all (got[`ts]>=lo) and got[`ts]<hi;1b;"every returned row is inside the requested half-open range, in UTC"]};
 
-/ --- L-06: who converts -------------------------------------------------
+/ --- who converts -------------------------------------------------
 
 / The zone is a per-source declaration, because only the source knows it.
 test_the_demo_source_declares_its_zone:{[t]

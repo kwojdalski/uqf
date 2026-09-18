@@ -5,7 +5,8 @@
 / Jobs declare what they READ and what they WRITE; the edges are derived by
 / matching one job's outputs against another's inputs. Nothing declares an
 / edge directly, because an edge stated by hand is a third place for the
-/ graph to be wrong - and this repository already has H-01 as its standing
+/ graph to be wrong - and this repository already has the never-edit-the-
+/ vendored-tree rule as its standing
 / lesson about process facts living in more than one file.
 / .
 / DERIVE, NEVER RE-DECLARE. Three registries already know their own inputs
@@ -16,7 +17,7 @@
 /                   declaration, reachable from the worker's `source`.
 /   .qcont.feeds    continuous feeders. Output is the dataset they feed;
 /                   their input is external by definition (a live feed).
-/   PIPELINES       the nine TorQ streaming processes. H-05 already decided
+/   PIPELINES       the nine TorQ streaming processes. It was already decided
 /                   the Python Pipeline registry is the source of truth, so
 /                   this side is GENERATED into q rather than re-declared -
 /                   the same shape as generate_operational_docs.py, and for
@@ -192,7 +193,7 @@ safe_id:{[s] c:string s; @[c;where not c in id_chars;:;"_"]}
 / .
 / Mermaid rather than an image format: GitHub renders it, a plain clone reads
 / it as text, and a reviewer sees a diagram change as a readable diff. That is
-/ J-03's answer applied here.
+/ The same answer applied here.
 mermaid:{[]
     e:edges[];
     lines:enlist "flowchart LR";
@@ -232,7 +233,7 @@ to_json:{[]
 / had been told.
 / .
 / Qualifying the remote side fixes the model rather than the symptom. The
-/ same trap in a different costume as `quote` versus `quotes` (N-03): two
+/ same trap in a different costume as `quote` versus `quotes`: two
 / different things one character - here, zero characters - apart.
 / .
 / Parseable on purpose, so a viz tool can split it back into source and table
@@ -269,7 +270,7 @@ adopt_feeders:{[]
 / been loaded.
 / .
 / src/etl/generated/pipeline_dag.q defines register_pipelines; it is
-/ GENERATED from the Python Pipeline registry, because H-05 made that the
+/ GENERATED from the Python Pipeline registry, because that registry is the
 / source of truth and a hand-written q copy would be a second place for the
 / same edges to be wrong. Absent - a bare ETL process that never loads it -
 / this returns empty rather than throwing, so the graph is simply smaller.

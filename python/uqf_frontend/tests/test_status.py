@@ -88,7 +88,7 @@ def test_reads_a_completed_run(tmp_path):
 
 
 def test_idle_is_successful_and_distinct_from_completed(tmp_path):
-    """C-07: "ran, found no work" must not look like a failure, or an
+    """ "ran, found no work" must not look like a failure, or an
     orchestrator retries a successful no-op forever.
     """
     write_status_file(tmp_path, "idle1", state="idle", rows_published=0, windows_completed=0)

@@ -1,6 +1,6 @@
 # Environment variables
 
-The one list C-04 asked for. Hand-written, because "required or optional",
+The one operator-facing list. Hand-written, because "required or optional",
 "what happens when it is unset" and "who sets it" are judgements no generator
 can read off the code — and machine-checked for completeness by
 `scripts/gates/check_env_reference.py`, so it cannot quietly fall behind.
@@ -18,7 +18,7 @@ without it:
   are TorQ's own convention and the vendored tree reads them by those names.
   Everything this repository introduced uses `UQF_` with underscores. Neither
   is wrong; picking one and renaming the other would mean editing
-  `lib/torq`, which H-01 forbids.
+  `lib/torq`, which the vendored-tree rule forbids.
 
 - **Almost none of this is read from `.env`.** Exactly one reader consults
   that file: `.qdata.cfg` in `src/integrations/data.q`, for

@@ -68,7 +68,7 @@ test_a_source_without_a_fixture_is_refused:{[t]
     bad:@[.srctest.decl[];`fixture;:;()];
     .qunit.assertError[{.qsrc.register[`t;x]};bad;"without a fixture the whole backfill path is undemonstrable"]};
 
-/ L-06: the zone is a required declaration with no default. A defaulted zone
+/ The zone is a required declaration with no default. A defaulted zone
 / reads as a decision downstream while nobody ever made one, and the failure
 / is silent - every consumer assumes UTC while the source hands over local
 / wall-clock time.
@@ -85,7 +85,7 @@ test_a_time_field_outside_the_declared_fields_is_refused:{[t]
     bad:@[.srctest.decl[];`time_field;:;`nosuch];
     .qunit.assertError[{.qsrc.register[`t;x]};bad;"a typo in time_field must fail at registration, not two layers down"]};
 
-/ L-03. q's datetime (`z`) is a FLOAT count of days, so z->p rounding loses
+/ q's datetime (`z`) is a FLOAT count of days, so z->p rounding loses
 / sub-second precision silently: measured, 999 of 1000 nanosecond-spaced
 / instants do not survive the round trip, while whole seconds do - which is
 / why it passes every hand-check built from round numbers.
@@ -175,10 +175,10 @@ test_the_whole_fixture_is_reachable:{[t]
 test_the_fetch_path_is_announced:{[t]
     .qunit.assertEquals[first .qsrc.fetch_window[`demo_deals;0Ni;.srctest.d 1;.srctest.d 2];`fixture;"synthetic data is announced in the return value, never inferred"]};
 
-/ --- the row key (D-11) --------------------------------------------------
+/ --- the row key --------------------------------------------------
 
 / Declared and validated, deliberately unused. The mechanism lands ahead of
-/ the semantics because answering D-11 "superseded in place" changes what
+/ the semantics because answering "superseded in place" changes what
 / is_covered MEANS - see docs/architecture/restatement-design.md. A declared key is the
 / one piece that is a prerequisite either way with no blast radius.
 

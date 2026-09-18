@@ -66,8 +66,8 @@ fields:`rate_time`sym`mid     / the columns this adapter reads
 types:"psf"                    / one q type character per field
 target:`fx_rates               / the local table they land in
 time_field:`rate_time          / the column the window is taken on
-row_key:`rate_time`sym         / what identifies a row uniquely (D-11)
-tz:`UTC                        / what time_field is expressed in (L-06)
+row_key:`rate_time`sym         / what identifies a row uniquely
+tz:`UTC                        / what time_field is expressed in
 
 query:{[h;range_from;range_to]
     h({[from_ts;to_ts]
@@ -314,7 +314,7 @@ q).qwrk.fx_rates_backfill.run[][`state]
 `idle
 ```
 
-"Ran, found no work" is a success (C-07). An orchestrator that cannot tell
+"Ran, found no work" is a success. An orchestrator that cannot tell
 the two apart retries a successful no-op forever.
 
 `.qcov.missing` narrows a range to what is still absent, `.qcov.history`

@@ -196,7 +196,7 @@ test_the_worker_publishes_the_windowed_events:{[t]
     .qunit.assertEquals[(r`state;r`rows_published;count value `event_tape);(`completed;10;10);"ten seconds of a ten-event tape, published once each"]};
 
 / Inherited from the shell, not restated in the worker: an already-covered
-/ range is idle, and idle is a success (C-07).
+/ range is idle, and idle is a success.
 test_a_second_run_is_idle:{[t]
     .qwrk.demo_events_backfill.init .evttest.espec[0;10];
     .qwrk.demo_events_backfill.run[];

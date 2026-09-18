@@ -1,12 +1,12 @@
 / demo_deals.q - a generic analogue of an external relational deal source
 / (.qfeed.demo_deals).
 / .
-/ WHY THIS IS AN ANALOGUE AND NOT A PORT (bank question E-09, answered via A-04)
+/ WHY THIS IS AN ANALOGUE AND NOT A PORT (an analogue, not a port)
 / .
 / The canonical tree has workers over `marketwarehouse_deals` and
 / `piggybank_general_ledger`. Those names, their schemas, and the business
 / logic over them are bank-internal and must not appear in a public
-/ repository - that was decided in A-04 and it is not a technical
+/ repository - that is settled and it is not a technical
 / limitation to be worked around.
 / .
 / So this file reproduces the SHAPE of such a source and none of its
@@ -48,7 +48,7 @@ target:`demo_deals
 / .qsrc can window the fixture exactly as the live query windows the source.
 time_field:`deal_time
 
-/ What identifies a row uniquely (D-11). `deal_id` is the natural key for a
+/ What identifies a row uniquely. `deal_id` is the natural key for a
 / deal-shaped source and is obviously right for this synthetic one, where
 / the fixture generates distinct ids.
 / .
@@ -59,7 +59,7 @@ time_field:`deal_time
 / - see docs/architecture/restatement-design.md §2.1.
 row_key:`deal_id
 
-/ The zone deal_time is expressed in (L-06).
+/ The zone deal_time is expressed in.
 / .
 / Stated rather than left to a default, because an unstated zone is exactly
 / the shape of the bug: every later reader assumes UTC while the source may
@@ -76,7 +76,7 @@ tz:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
-/ A PARAMETERISED lambda, never string concatenation (bank question E-08, answered via
+/ A PARAMETERISED lambda, never string concatenation (the question bank, answered via
 / FE-14).
 / .
 / The window bounds are arguments to a functional select evaluated on the
@@ -99,7 +99,7 @@ query:{[h;range_from;range_to]
 
 / ------------------------------------------------------------ THE FIXTURE
 
-/ A synthetic table of the same shape (bank question E-04, answered via A-04 + FE-22/FE-23).
+/ A synthetic table of the same shape (an analogue, not a port).
 / .
 / Deterministic - fixed values, no .z.p, no random - because a fixture that
 / changes between runs makes a failing assertion impossible to attribute.

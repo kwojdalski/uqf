@@ -339,7 +339,7 @@ def test_resolve_procnames_specific_splits_on_space(fake_paths: core.UqfStackPat
 
 
 def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.UqfStackPaths):
-    """H-03: an unknown name used to be returned as given.
+    """An unknown name used to be returned as given.
 
     This test previously asserted exactly that, using `"stp1 rdb1"` - and
     `rdb1` is not a process in this fixture. So the test passed a name
@@ -358,7 +358,7 @@ def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.UqfSta
 def test_resolve_procnames_still_allows_a_process_with_no_log_file(
     fake_paths: core.UqfStackPaths,
 ):
-    """The distinction that makes H-03 fixable rather than a trade-off.
+    """The distinction that makes it fixable rather than a trade-off.
 
     A name absent from process.csv is a typo. A name present in process.csv
     with no log file yet is legitimate - a process that has never started has
@@ -899,7 +899,7 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
 
 
 def test_pipeline_procnames_are_unique():
-    """H-09: a procname identifies a process, so two entries cannot share one.
+    """A procname identifies a process, so two entries cannot share one.
 
     Nothing enforced this. `PIPELINE_BY_NAME` and `PIPELINE_OFFSETS` are both
     dict comprehensions over `PIPELINES`, so a repeated name does not raise -
@@ -941,7 +941,7 @@ def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
     fully healthy stack and `uqf-stack summary`'s Heartbeat column read
     "not collected" unless an operator knew to start one more process by
     hand. VENDORED_STARTWITHALL_OVERLAY fixes that without editing the
-    vendored file (H-01).
+    vendored file.
 
     Read against the REAL vendored csv rather than the fixture's two-row
     stand-in, because the whole point is what upstream ships.
@@ -993,7 +993,7 @@ def test_an_operator_can_put_monitor1_back_to_the_upstream_default(
 
 
 def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core.UqfStackPaths):
-    """H-01: what is the precedence between the vendored `process.csv`,
+    """What is the precedence between the vendored `process.csv`,
     `extra_processes.csv` and `process_overrides.csv`?
 
     Answered by the code, asserted here so it stays answered. The order is:

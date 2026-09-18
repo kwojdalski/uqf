@@ -60,7 +60,7 @@ register:{[worker;ns]
 registered:{[] key bounded_workers}
 
 / Check that a registered worker implements the whole contract, and throw
-/ naming everything missing if it does not (question-bank C-01).
+/ naming everything missing if it does not.
 / .
 / Called during the worker's own initialisation, so an incomplete worker
 / fails at startup rather than part-way through a backfill against a live
@@ -103,7 +103,7 @@ lock_dir:{[] .qstatus.status_dir[]}
 lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
 
 / Take an exclusive single-instance lock, or refuse to start
-/ (question-bank C-09).
+/ .
 / .
 / One instance per worker is what lets ETL-06's checkpoint stay PRIVATE to that
 / worker: no claim column, no shared cursor state, no claim-expiry logic for
@@ -275,7 +275,7 @@ clear_checkpoint:{[worker]
 
 / ------------------------------------------------------------------- SHELL
 
-/ Convert a thrown error into a terminal failed status (question-bank M-01).
+/ Convert a thrown error into a terminal failed status.
 / .
 / The convention is: deterministic code throws with a message prefixed by its
 / own name, and the worker SHELL catches once and converts. That follows
@@ -284,8 +284,8 @@ clear_checkpoint:{[worker]
 / unit-testable, and the code that converts is exactly the shell.
 / .
 / Note an empty result is NOT an error and must not come through here: "ran,
-/ found no work" is an `idle status, a success. Conflating the two is what
-/ C-07 warns against, because an orchestrator that cannot tell them apart
+/ found no work" is an `idle status, a success. Conflating the two is the
+/ mistake, because an orchestrator that cannot tell them apart
 / retries a successful no-op forever.
 / @param worker the worker's name
 / @param spec the run specification, for the status record

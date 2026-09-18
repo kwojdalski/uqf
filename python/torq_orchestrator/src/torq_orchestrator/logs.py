@@ -80,7 +80,7 @@ def resolve_procnames(paths: UqfStackPaths, procs: str) -> list[str]:
     process's last-run log is still worth reading); otherwise the given
     space-separated names, each of which must name a real process.
 
-    H-03: these names used to be unvalidated, and the mixed case was the bad
+    These names used to be unvalidated, and the mixed case was the bad
     one. `logs posbook1 typo1` silently dropped the typo and returned
     posbook1's log as though one process had been asked for - so a reader
     diagnosing a quiet process saw an empty section and concluded it was
@@ -95,7 +95,7 @@ def resolve_procnames(paths: UqfStackPaths, procs: str) -> list[str]:
 
     Only the log commands route through here. `start`/`stop`/`restart`/`print`
     hand `procs` straight to the vendored torq.sh, which owns its own
-    handling of an unknown name and is never edited (H-01).
+    handling of an unknown name and is never edited.
     """
     if procs == "all":
         return list_process_names(paths)

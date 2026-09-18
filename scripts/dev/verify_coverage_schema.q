@@ -2,8 +2,8 @@
 / src/etl/core/coverage.q declares.
 / .
 / Written to settle issue #60, which asked whether the assumed shape matched
-/ a canonical one. That question is closed: A-03 made this tree the primary
-/ lineage and A-02 froze canonical, so the shape coverage.q declares IS the
+/ a canonical one. That question is closed: this tree is the primary
+/ lineage and canonical is frozen, so the shape coverage.q declares IS the
 / schema and there is nothing else to compare it to.
 / .
 / What the script is still for is DRIFT: a ledger some other process built

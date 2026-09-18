@@ -2,7 +2,7 @@
 / .
 / Subscribes to nothing and publishes `quote` twice a second: one row per
 / pair, bid and ask one pip either side of a level that walks on every tick.
-/ It stands in for a venue's top-of-book feed in this demo (A-04); the market
+/ It stands in for a venue's top-of-book feed in this demo; the market
 / it invents is .qsynth's, shared with every other feed here.
 / .
 / WHAT IS IN THIS FILE: the level this process walks, the row builder, and

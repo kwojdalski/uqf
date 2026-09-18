@@ -97,26 +97,7 @@ git commit -m "Add changelog entry for stable/YYYY-MM-DD"
 
 If there's nothing to commit (e.g. re-running after the tag already existed), skip the commit.
 
-### 6. Refresh the decision register
-
-`docs/decisions/README.md` is derived from the GitHub `decision` issues, so it goes
-stale silently whenever a question is answered in a comment. A snapshot is
-the right moment to catch that, because the tag is what someone will clone.
-
-```bash
-python3 scripts/generate/build_decision_log.py
-```
-
-If it changes the file, commit it before tagging:
-```bash
-git add docs/decisions/README.md && git commit -m "Refresh the decision register for stable/YYYY-MM-DD"
-```
-
-If `gh` is unauthenticated or offline the script exits non-zero - say so in the
-output and carry on; a snapshot is not worth blocking on it, but a silently
-stale register is exactly what this step exists to prevent.
-
-### 7. Create the tag
+### 6. Create the tag
 
 Check if there are uncommitted changes first (the CHANGELOG.md commit above should be the only one, but confirm):
 ```bash
@@ -136,7 +117,7 @@ git push origin HEAD
 git push origin stable/YYYY-MM-DD
 ```
 
-### 8. Create the GitHub Release
+### 7. Create the GitHub Release
 
 Compose the release body from the same notes written in step 4, then run:
 
@@ -151,7 +132,7 @@ If the release already exists (exit code non-zero with "already exists" message)
 
 Report the release URL returned by `gh release create`.
 
-### 9. Output format
+### 8. Output format
 
 Print to the user:
 

@@ -4,7 +4,7 @@
 / The ingestion half of issue #46. Shape and rationale in docs/architecture/event-tape.md;
 / this file is the ETL-12 source declaration for it.
 / .
-/ SYNTHETIC BY DESIGN (A-04)
+/ SYNTHETIC BY DESIGN
 / .
 / Every column is one any venue's tape would carry and every value is
 / invented. Nothing about a real venue's schema, a bank's data, or any
@@ -41,7 +41,7 @@ time_field:`time
 / pair is unique where order_id alone is not.
 / .
 / Worth stating because it is the first COMPOSITE key in this tree, and it
-/ is what D-11's restatement path will key on if a venue ever corrects an
+/ is what the restatement path will key on if a venue ever corrects an
 / event.
 row_key:`order_id`action
 

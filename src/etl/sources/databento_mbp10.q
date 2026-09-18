@@ -15,7 +15,8 @@
 / .
 /   ts_event    KX's ODBC client returns a SQL timestamp as a q DATETIME -
 /               milliseconds, as a float. Databento stamps nanoseconds, and a
-/               datetime window column is exactly what L-03 refuses. So the
+/               datetime window column is exactly what the contract
+/               refuses. So the
 /               SQL selects epoch_ns(ts_event), a BIGINT, and the query turns
 /               it back into a timestamp exactly.
 /   size, *_sz  UINTEGER in DuckDB, which the driver hands over as a SIGNED
@@ -78,7 +79,7 @@ adapt:{[raw]
     `ts_event`symbol`action`side`price`size`sequence xcols t}
 
 / One window of records, half-open [range_from;range_to) on ts_event (ETL-08),
-/ built through .qodbc's one escape function (bank E-08) and returned in the
+/ built through .qodbc's one escape function and returned in the
 / declared types. Ordered so a window is the same table on every fetch.
 / @param h an ODBC handle from .qodbc.open
 / @param range_from inclusive lower bound

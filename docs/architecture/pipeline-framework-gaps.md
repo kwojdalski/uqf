@@ -18,7 +18,7 @@ Dagster's abstractions, against this tree:
 | **Op / asset compute** | `.qbw` bounded worker (`init`/`plan`/`fetch`/`publish`/`checkpoint`) and `.qstream` streaming job (`on_batch`/`on_timer`) | **yes** |
 | **Graph / job** | `.qdag` — edges *derived* from declared inputs and outputs | **yes** |
 | **Partitions** | `.qcov` half-open time intervals + `source_version`, plus a categorical `partition` | **yes** — see §5.4 |
-| **Materialization record** | `.qcov` rows, bitemporal (D-11), with per-window metadata from `.qrun` | **yes** — see §2.3 |
+| **Materialization record** | `.qcov` rows, bitemporal, with per-window metadata from `.qrun` | **yes** — see §2.3 |
 | **Backfill** | `.qbw.plan` narrows by cursor then coverage | **yes**, and better than most |
 | **Config** | `.qwcfg` typed getters, stated precedence, accumulated errors | **partial** — global, not per-op |
 | **Retry policy** | `.qwrt` classification: data failures don't retry, transport does | **yes** |
@@ -86,7 +86,7 @@ reasons and at different times.
 
 **Fixed.** A worker declaration now takes an optional `check` callback, run
 between fetch and publish. A failed check takes the same terminal-window path
-as a failed fetch (M-05): not published, no coverage staged, run continues,
+as a failed fetch: not published, no coverage staged, run continues,
 and the next run plans the window again because coverage never claimed it.
 
 `demo_deals_backfill` declares one, so the path is exercised rather than
@@ -246,4 +246,4 @@ discovered later:
 
 Scheduling stays out, deliberately: ETL-15 gives ordering, retries and
 alerting to Airflow, and re-implementing them here would create the second
-authority H-01 exists to warn about.
+authority the never-edit-the-vendored-tree rule exists to warn about.

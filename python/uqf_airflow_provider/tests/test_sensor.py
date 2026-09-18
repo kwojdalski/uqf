@@ -5,7 +5,7 @@ It is the whole integration point - the thing an Airflow DAG actually
 instantiates - and nothing executed a line of it.
 
 THE AWKWARD PART, and how it is handled. Airflow is deliberately NOT a
-dependency of this package (FE-22/FE-23, A-04): the module has no
+dependency of this package (FE-22/FE-23): the module has no
 `import airflow` at module scope, so it stays importable without it. That
 also means the sensor CLASS cannot be built in this environment by ordinary
 means, which is presumably why it went untested.
@@ -75,7 +75,7 @@ def test_a_running_worker_is_pending(tmp_path):
 
 @pytest.mark.parametrize("state", ["completed", "idle"])
 def test_both_terminal_successes_are_success(tmp_path, state):
-    """C-07 reaching the sensor: "ran, found no work" is as successful as
+    """Reaching the sensor: "ran, found no work" is as successful as
     "ran, did work"."""
     write_status(tmp_path, state=state)
     assert poke_worker_status(tmp_path, WORKER, INSTANCE) is PokeOutcome.SUCCESS

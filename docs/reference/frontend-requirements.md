@@ -2,14 +2,14 @@
 
 > **Provenance.** Snapshot as of 2026-09, confirmed by the maintainer. It was
 > originally reconstructed from screen photographs of a document in a
-> repository that is no longer reachable and, per decisions A-02 and A-03
+> repository that is no longer reachable and, canonical having been frozen,
 > (issue #69), is now **frozen and non-authoritative**: this tree is the
 > primary lineage. The build sequence in the final section was always this
 > tree's own and is now simply the plan.
 >
 > **Ids.** Requirements here are `FE-nn`, **formerly `F-nn`**. The `F-nn`
 > prefix now refers only to the design-question bank (issue #74), so an old
-> citation like "F-06" in an issue comment means the *question*, and the
+> citation like "F-06" in an issue comment means the old numbering, and the
 > requirement it once named is `FE-06`. Renamed to end the collision
 > recorded in #109.
 
@@ -144,8 +144,6 @@ All five of this document's open questions were answered on 2026-09-15, each on
 its own issue, and each issue is closed. Each bullet keeps the question before
 the arrow, because the reason it was worth asking is the reason the answer costs
 what it does.
-Machine-derived index: [`docs/decisions/README.md`](decisions.md).
-
 - **FE-19 — which audience is in scope?** → **both**, ops-monitoring *and*
   desk-facing analytics ([#53]). Because B0's query layer was built
   audience-agnostic, roughly half of what exists already serves each: the

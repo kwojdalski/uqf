@@ -1,4 +1,4 @@
-// test_status.q - tests for .qstatus, the status writer and its G-02
+// test_status.q - tests for .qstatus, the status writer and its
 // transition rules (src/etl/core/status.q).
 //
 // write_status had no direct q tests before this file - it was exercised only
@@ -57,7 +57,7 @@ test_the_previous_state_is_read_back:{[t]
     .statustest.write[`starting;""];
     .qunit.assertEquals[.qstatus.previous_state `st1;`starting;"the writer can see what it last wrote, across a restart"]};
 
-/ --- the transition rules (G-02) -------------------------------------------
+/ --- the transition rules -------------------------------------------
 
 test_a_first_state_is_always_permitted:{[t]
     .qunit.assertEquals[.qstatus.require_transition[`;`failed];1b;"a worker whose init failed before writing `starting must still be able to record it"]};

@@ -28,7 +28,7 @@
 / .
 / This block used to read "ASSUMED, NOT VERIFIED", because etl_coverage
 / existed only in a canonical tree that could not be reached from here. That
-/ premise is gone: A-03 made this repository the primary lineage and A-02
+/ premise is gone: this repository is the primary lineage now and canonical
 / froze canonical, so there is no other schema to verify against. The shape
 / below IS the schema, and `scripts/dev/verify_coverage_schema.q -local 1`
 / confirms the code and the table agree.
@@ -98,8 +98,8 @@ schema:`dataset`partition`source_version`range_from`range_to`rows_published`reco
 / about a window is edited once written. `supersede` is the one writer that
 / updates, and it only ever stamps `superseded_at` on a row whose claim has
 / been withdrawn - the claim itself stays readable at any earlier as-of
-/ (D-11). This comment used to say "nothing in this file updates or deletes a
-/ row", which D-11 made false the moment supersede landed here.
+/ This comment used to say "nothing in this file updates or deletes a
+/ row", which supersede made false the moment it landed here.
 / .
 / The table lives at the ROOT, not in .qcov, because it is a published
 / database table like quotes/trades/position - it flows through the
@@ -460,7 +460,7 @@ valid_at:{[ds;part;version;as_of]
               recorded_at<=as_of, as_of<superseded_at}
 
 / The composed intervals covered for a dataset and source_version, as
-/ understood at `as_of` (D-11).
+/ understood at `as_of`.
 / @param as_of the instant to answer as of; .z.p for "now"
 / @param partition the slice to report on, or ` for an unpartitioned dataset
 / @eg .qcov.intervals[`demo_deals;`;`v1;.z.p]
@@ -545,7 +545,7 @@ contributing_runs:{[ds;part;version]
 
 / Withdraw the coverage claims overlapping [from_ts;to_ts), as of now.
 / .
-/ D-11, option A: a restatement does not DELETE the old claim, it closes it.
+/ Option A: a restatement does not DELETE the old claim, it closes it.
 / The row stays in the ledger with `superseded_at` set, so a read at an
 / earlier as_of still sees it - which is the whole point of recording a
 / restatement rather than overwriting one. "What did we believe on the 12th"

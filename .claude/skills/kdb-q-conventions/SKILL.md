@@ -178,7 +178,7 @@ library with no processes/IPC/tables).
   `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
   `.qexdef` - `src/integrations/data.q` is `.qdata`, out of scope for this library, see
   below). Every one of these is single-level (not nested under a shared
-  `.q` parent) by convention (N-01) - the filename-to-namespace tie is what
+  `.q` parent) by convention - the filename-to-namespace tie is what
   the naming auditor checks and what `docs/man.q` is generated against.
   THREE families nest, on purpose, and all hold INSTANCES rather than
   modules: bounded workers under a single `.qwrk` root

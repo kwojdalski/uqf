@@ -342,7 +342,7 @@ what ETL-15 forbids.
 
 `idle` is a **success**, distinct from `completed`: "ran, found no work" is
 not "ran, did work", and neither is a failure. An orchestrator that cannot
-tell them apart retries a successful no-op forever (**C-07**). The summary
+tell them apart retries a successful no-op forever. The summary
 counts `failed` separately from `running` for the same reason — a worker
 still in flight is not a problem.
 

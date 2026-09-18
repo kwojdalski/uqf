@@ -97,7 +97,6 @@ silent. So the second copy is generated, or checked, or both:
 | `src/etl/generated/pipeline_dag.q` | the pipeline registry | `generate_operational_docs.py --check` |
 | `docs/man.q` | the qDoc blocks in `src/` | `generate_man_registry.py --check` |
 | `docs/integrations/torq/processes.md` | the pipeline registry | `generate_operational_docs.py --check` |
-| `docs/decisions/` | the GitHub issue comments | `build_decision_log.py --check` |
 | `docs/reference/environment.md` | the code that reads each variable | `check_env_reference.py` |
 | the contract surface | the loaded q tree | `contract_surface.py check` |
 
@@ -107,7 +106,7 @@ against the code it describes: `verify_pipeline_edges` reads each pipeline's
 they disagree with the registry. A hand-drawn diagram goes stale silently;
 that one cannot.
 
-Prose cannot be generated, so it is checked instead — the split J-01
+Prose cannot be generated, so it is checked instead — the split
 settled: generate what is mechanical, check what is not.
 `check_doc_references.py` reads every living document and confirms that each
 `.q*` function it names exists, and that any call it shows passes no more
@@ -172,7 +171,7 @@ it?"** If yes, demand it. If no, read it.
 
 The coverage ledger is append-only. A restatement does not edit the row it
 replaces — it stamps `superseded_at`, and every read takes an as-of instant
-(D-11, [`restatement-design.md`](restatement-design.md)). A claim is
+(see [`restatement-design.md`](restatement-design.md)). A claim is
 therefore *true until superseded* rather than *true or gone*, and "what did
 we believe on Tuesday" stays answerable.
 
@@ -198,7 +197,7 @@ regression rather than a feature: it would create a second authority for
 ordering and retries, and the two would disagree.
 
 The same rule governs the vendored trees. `lib/torq` and
-`lib/torq-finance-starter-pack` are never edited (H-01); they are extended
+`lib/torq-finance-starter-pack` are never edited; they are extended
 through overlays, overrides, and command-line configuration that the
 framework applies *after* every vendored layer. An edit would work until the
 next upgrade and then be silently lost.
@@ -239,7 +238,7 @@ declaration: on the bounded side `define` stamps the inherited lifecycle
 methods into the namespace (#227), on the streaming side the declaration
 carries the callbacks and the runner wires only `publish`.
 
-**Nothing under `src/etl/` knows TorQ exists** (bank B-09). That is what
+**Nothing under `src/etl/` knows TorQ exists**. That is what
 lets a worker or job load in a plain q process and be tested with a
 recorder in place of a tickerplant. The one namespace allowed to know TorQ
 is `.qpipe` (`scripts/processes/torq_pipeline.q`), the adapter: find the tickerplant,
@@ -264,13 +263,13 @@ reference `.qpipe`.
 
 Every source, dataset and table here is a generic analogue — `demo_deals`,
 `demo_events`, `event_tape`. No bank table name, hostname, schema shape or
-business rule appears in code, tests, comments or commit messages (A-04).
+business rule appears in code, tests, comments or commit messages.
 
 Credentials come from the environment only (`UQF_SOURCE_CRED_*`), with no
 file fallback and no vault, because a file fallback is how a credential ends
-up committed (bank E-07). Source queries are parameterised q lambdas rather than
+up committed. Source queries are parameterised q lambdas rather than
 concatenated strings; where a driver genuinely cannot parameterise, there is
-exactly one escape function and everything routes through it (bank E-08).
+exactly one escape function and everything routes through it.
 
 ---
 

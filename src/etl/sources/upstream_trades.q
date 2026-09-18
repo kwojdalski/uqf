@@ -35,7 +35,7 @@ time_field:`time
 / are distinct, 189,988 (time;sym;ex), and 196,509 even with price and size
 / - but no two rows are identical. The starter pack is a synthetic tick feed
 / with no trade id, and a key that pretended otherwise would silently merge
-/ distinct trades on restatement (D-11). Declaring the truth costs nothing
+/ distinct trades on restatement. Declaring the truth costs nothing
 / here and is exactly what the row_key exists to make explicit.
 row_key:`time`sym`ex`price`size`side
 

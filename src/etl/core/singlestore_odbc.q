@@ -1,7 +1,7 @@
 / singlestore_odbc.q - a SingleStore source adapter over KX's q client for
 / ODBC (.qodbc).
 / .
-/ The "skippable ODBC adapter" half of bank question E-04. The other half -
+/ The "skippable ODBC adapter" half of the question bank. The other half -
 / a generic file fixture - already ships, and that ordering is the whole
 / design: the driver is NOT a hard dependency, because a public single-host
 / demo cannot require a licensed one or the backfill path becomes
@@ -21,7 +21,7 @@
 /      missing" is a normal condition on a developer machine, not an error.
 / .
 / FACT 2 IS THE HARD ONE, and it is why this file exists rather than a
-/ three-line wrapper. Per bank E-08: parameterise where the driver
+/ three-line wrapper. Per the question bank: parameterise where the driver
 / allows, ONE escape function otherwise. ODBC via .odbc.eval is the
 / "otherwise", so there is exactly one escaping path here and every value
 / goes through it. A second place that builds SQL is the bug this design
@@ -59,7 +59,7 @@ available:{[]
 /   found. See code.kx.com/q/interfaces/q-client-for-odbc.
 / .
 /   You do NOT need any of that to exercise the backfill path - every source
-/   declares a fixture, which is bank E-04's whole point.
+/   declares a fixture, which is the question bank's whole point.
 / @throws error when the driver is unavailable
 require_available:{[]
     if[not available[];
@@ -82,7 +82,7 @@ escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
 
 / A q value as a SQL literal.
 / .
-/ Every value reaching a query goes through here - that is bank E-08's "one
+/ Every value reaching a query goes through here - that is the question bank's "one
 / escape function", and it is only true while there is no second path. A
 / type this does not know is REFUSED rather than rendered with `string`,
 / because `string` on an unexpected type produces something that is usually
@@ -115,7 +115,7 @@ literal:{[v]
 / Build a SingleStore connection string from its parts.
 / .
 / The credential is NOT a parameter: it is read from the environment by
-/ .qsrc.require_credentials (bank E-07), because nothing secret lives in this
+/ .qsrc.require_credentials, because nothing secret lives in this
 / tree and a parameter is something a caller can log.
 / @param host the SingleStore host
 / @param port the port, as a long
@@ -193,7 +193,7 @@ run_sql:{[h;sql]
 / cost this repository a debugging session once before.
 / .
 / For .qsrc.validate_live, which verifies a DECLARED shape rather than
-/ discovering one (bank E-11).
+/ discovering one.
 / @param h an ODBC handle
 / @return a symbol vector of table names
 table_names:{[h] require_available[]; .odbc.tables h}
@@ -207,7 +207,7 @@ table_names:{[h] require_available[]; .odbc.tables h}
 / .
 / The table and column names are q SYMBOLS from the source declaration, not
 / caller input - they are validated at registration - while the two bounds
-/ are values and go through `literal`. That split is the whole of bank E-08
+/ are values and go through `literal`. That split is the whole of the question bank
 / here.
 / @param h an ODBC handle
 / @param tbl the table to read, as a symbol

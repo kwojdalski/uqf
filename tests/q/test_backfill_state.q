@@ -14,7 +14,7 @@
 / environment happens to hold - and under the pre-commit hook that is
 / nothing, so lock_dir falls back to "/status", which is not writable and
 / errored 8 tests. A suite that only passes when a variable happens to be
-/ set is not deterministic, which is what I-01 asks of this suite.
+/ set is not deterministic, which this suite requires.
 beforeNamespace_register_fixtures:{[]
     setenv[`UQFSTATUSDIR;"build/test-status"];
     system"rm -rf build/test-status";
@@ -43,7 +43,7 @@ beforeNamespace_register_fixtures:{[]
     .qbfstate.register[`fixture_no_methods;`.qglobalsonly];
     }
 
-/ --- the contract (requirement ETL-01, question-bank C-01) ------------------
+/ --- the contract (requirement ETL-01, the question bank) ------------------
 
 test_a_complete_worker_satisfies_the_contract:{[t]
     .qunit.assertEquals[.qbfstate.require_contract[`fixture_complete];`fixture_complete;"a complete worker passes and returns its own name, so it can sit inline in an init chain"]};
@@ -80,7 +80,7 @@ test_source_version_is_part_of_the_contract:{[t]
 test_the_range_bounds_are_part_of_the_contract:{[t]
     .qunit.assertTrue[all `range_from`range_to in .qbfstate.bounded_worker_globals;"a bounded worker must make its bound explicit (ETL-02)"]};
 
-/ --- the single-instance lock (question-bank C-09) ------------------------
+/ --- the single-instance lock ------------------------
 
 test_a_lock_is_exclusive:{[t]
     .qbfstate.release_lock[`lock_excl];
@@ -116,7 +116,7 @@ test_the_lock_records_its_owner:{[t]
     .qunit.assertTrue[`pid in key owner;"the lock records the holding pid, so a stale lock can be diagnosed rather than deleted blindly"];
     .qbfstate.release_lock[`lock_owner]};
 
-/ --- the shell (question-bank M-01, requirement ETL-04) --------------------
+/ --- the shell (the question bank, requirement ETL-04) --------------------
 
 test_run_pass_returns_progress_on_success:{[t]
     spec:`source_version`range_from`range_to!(`v1;2026.09.13D00:00:00.000000000;2026.09.14D00:00:00.000000000);

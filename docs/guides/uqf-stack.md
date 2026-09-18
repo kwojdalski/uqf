@@ -22,6 +22,26 @@ dependency (`kola`).
 See [docs/integrations/torq/README.md](torq/README.md) for diagrams of the current
 process topology, table-level data pipeline, and config-generation flow.
 
+## Contents
+
+- [Quick start](#quick-start)
+- [Reading the database's shape](#reading-the-databases-shape)
+- [Commands](#commands)
+- [Listing things](#listing-things)
+- [What actually starts](#what-actually-starts)
+- [Changing a process's config](#changing-a-processs-config)
+- [fxfeed1 - adding your own row-generating process](#fxfeed1---adding-your-own-row-generating-process)
+- [quotesfeed1 - a real database for one of uqf's own table shapes](#quotesfeed1---a-real-database-for-one-of-uqfs-own-table-shapes)
+- [Logs](#logs)
+- [Adding a new process interactively](#adding-a-new-process-interactively)
+- [Connecting](#connecting)
+- [Verifying it's alive](#verifying-its-alive)
+- [What lib/torq ships that uqf deliberately does not use](#what-libtorq-ships-that-uqf-deliberately-does-not-use)
+- [crypto recorder (cryptorust) - a proof of concept](#crypto-recorder-cryptorust---a-proof-of-concept)
+- [MCP server](#mcp-server)
+- [Other commands](#other-commands)
+- [Known harmless warnings](#known-harmless-warnings)
+
 ## Quick start
 
 The CLI is also a `uqf-stack` script entry point

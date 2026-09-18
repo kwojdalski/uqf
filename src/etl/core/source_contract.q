@@ -15,31 +15,32 @@
 / time-and-timezone block after them likewise. They follow from answers
 / already given, and are stated so nobody has to re-derive them:
 / .
-/   bank E-04 (answered via A-04 + FE-22/FE-23) - the external driver is NOT a hard
+/   the question bank (answered by the maintainer) - the external driver is NOT a hard
 /     dependency. A public single-host demo cannot require a licensed ODBC
 /     driver, or the whole backfill path is undemonstrable. Every source
 /     declares a fixture, so the path is exercisable with no driver at all.
 / .
-/   bank E-07 (answered via A-04 + the FE-20 precedent) - credentials come from the
+/   the question bank (answered by the maintainer + the FE-20 precedent) - credentials come from the
 /     ENVIRONMENT only. Nothing secret lives in this tree, and the YAML layer
 /     must never carry one. `require_credentials` enforces that rather than
 /     documenting it.
 / .
-/   bank E-08 (answered via FE-14) - source queries are PARAMETERISED q lambdas,
+/   the question bank (answered via FE-14) - source queries are PARAMETERISED q lambdas,
 /     never built by string concatenation. FE-14's guarantee is that no caller
 /     input reaches query text; uqf_frontend/queries.py already honours it,
 /     and a source adapter is the same problem with a less friendly input.
 / .
-/   bank E-09 (answered via A-04) - bank-internal business logic is not
+/   the question bank - bank-internal business logic is not
 /     reimplementable here. What gets built is a generic ANALOGUE with the
 /     same shape and none of the logic. So this contract describes shapes, and
 /     deliberately carries no business semantics.
 / .
-/ TIME AND TIMEZONE (issue #80: L-03, L-05, L-06)
+/ TIME AND TIMEZONE (issue #80)
 / .
-/   L-06 - "do external sources return local times, and who converts?"
+/   Do external sources return local times, and who converts?"
 /     WHAT THE BANK'S SOURCES ACTUALLY RETURN IS NOT KNOWABLE FROM HERE. The
-/     canonical tree is unreachable and A-04 forbids its schemas appearing
+/     canonical tree is unreachable and this repository being public forbids
+/     its schemas appearing
 /     here, so nobody in this repository can answer that half. What IS
 /     decidable is the policy, and the policy is what changes the code:
 / .
@@ -59,7 +60,7 @@
 /         worker that forgot would be indistinguishable from a UTC source),
 /         and not the consumer (by then the zone is gone).
 / .
-/   L-03 - the `z->p` cast bug class. THE CANONICAL BUG ITSELF IS NOT
+/   The `z->p` cast bug class. THE CANONICAL BUG ITSELF IS NOT
 /     RECOVERABLE from this tree; what follows is the class, measured here
 /     under KDB-X, and the guards that stop it recurring. q's `datetime`
 /     (type 15h, `z`) is a FLOAT count of days; `timestamp` (12h, `p`) is a
@@ -90,7 +91,7 @@
 /     the cast direction is not statically decidable, but the type's
 /     PRESENCE is, and this tree has no legitimate use for it.
 / .
-/   L-05 - DST in windowed backfills. Windows are cut in UTC by
+/   DST in windowed backfills. Windows are cut in UTC by
 /     .qwrt.windows, so a "daily" window is always exactly 24h of elapsed
 /     time: never short, never long, and the coverage ledger keeps tiling
 /     exactly across a transition. The variable thing is the LOCAL span, and
@@ -104,7 +105,7 @@
 / What every registered source must declare. Named as data so a test can
 / assert the set rather than trusting a code review.
 / .
-/ `tz` is REQUIRED, with no default (L-06). A defaulted zone is the
+/ `tz` is REQUIRED, with no default. A defaulted zone is the
 / bug: it reads as a decision downstream while nobody ever made one. Stating
 / `UTC` costs one symbol and makes "this source hands over UTC" a claim
 / somebody wrote, which validate_live can then be run against.
@@ -117,7 +118,7 @@ required_declarations:`source`table`target`time_field`row_key`fields`types`query
 /         because every source before ODBC was one.
 /   odbc  anything with an ODBC driver: the credential is the connection
 /         string, opened with .qodbc.open, and the query callback builds SQL
-/         through .qodbc's one escape function (bank E-08).
+/         through .qodbc's one escape function.
 / .
 / A source's transport decides how .qbw.connect opens a handle and how
 / cleanup closes one, so it belongs to the source rather than the worker: two
@@ -147,7 +148,7 @@ sources:(`symbol$())!();
 /   query   - a parameterised lambda taking (handle;range_from;range_to)
 /   fixture - a niladic lambda returning a synthetic table of the same shape
 /   tz - the zone the source's time_field is expressed in, as a
-/     symbol: `UTC, or a tz-database name such as `$"Europe/London" (L-06)
+/     symbol: `UTC, or a tz-database name such as `$"Europe/London"
 / and optionally:
 /   transport - `ipc (the default) or `odbc, see `transports`
 / @return the source name
@@ -168,22 +169,23 @@ register:{[source;decl]
     if[not 100h=type decl`fixture;
         '"register: ",string[source],"'s fixture must be a niladic lambda (ETL-04: the path must be exercisable with no driver)"];
     if[not -11h=type decl`tz;
-        '"register: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\" (L-06)"];
+        '"register: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
     / The window is taken on time_field, so time_field must be a field this
     / adapter actually READS. Without this check a typo registers happily and
     / surfaces two layers down: validate never checks the column (it is not
     / in `fields`), the live query filters on something the declaration never
     / described, and only window_fixture notices - at fetch time, mid-run.
-    / row_key: declared and VALIDATED, deliberately not yet used (D-11).
+    / row_key: declared and VALIDATED, deliberately not yet used.
     / .
     / The mechanism lands ahead of the semantics on purpose. docs/restatement-
-    / design.md sets out why: answering D-11 "rows can be superseded in
+    / design.md sets out why: answering "rows can be superseded in
     / place" changes what is_covered MEANS, and sixteen files rest on the
     / current meaning - so the shape of that change needs agreeing before
     / any of it is built. A declared key is the one piece that is a
     / prerequisite either way and has zero blast radius on its own.
     / .
-    / It also earns its place independently of restatements. D-08 was
+    / It also earns its place independently of restatements. A failed
+    / window was
     / answered "leave the published rows, record no coverage, re-run redoes
     / the window", and that duplicates rows unless the publish path can
     / dedupe - ETL-13 promises retry-SAFE publication, which is explicitly
@@ -195,7 +197,7 @@ register:{[source;decl]
     / vector (11h), which is the point - a single-column key should not have
     / to be enlisted at the call site.
     if[not 11h=abs type decl`row_key;
-        '"register: ",string[source],"'s row_key must be a symbol or symbol vector naming the column(s) that identify a row uniquely (D-11)"];
+        '"register: ",string[source],"'s row_key must be a symbol or symbol vector naming the column(s) that identify a row uniquely"];
     key_cols:(),decl`row_key;
     key_absent:key_cols where not key_cols in decl`fields;
     if[count key_absent;
@@ -206,7 +208,7 @@ register:{[source;decl]
         '"register: ",string[source],"'s time_field ",string[decl`time_field],
          " is not one of its declared fields (",(", " sv string decl`fields),
          ") - the window is taken on that column, so it must be one the contract describes"];
-    / L-03, enforced rather than hoped for: the window column must be a
+    / Enforced rather than hoped for: the window column must be a
     / TIMESTAMP. q's datetime (`z`) is a float count of days, so z->p is a
     / rounding that loses sub-second precision silently - 999 of 1000
     / nanosecond-spaced instants do not survive it, and whole seconds do,
@@ -218,7 +220,7 @@ register:{[source;decl]
         / Short by necessity: q truncates a thrown string at 255 bytes, so the
         / long form lives in the comment above rather than in the message.
         '"register: ",string[source],"'s time_field ",string[decl`time_field],
-         " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently (L-03)"];
+         " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently"];
     tr:$[`transport in key decl; decl`transport; default_transport];
     if[not tr in transports;
         '"register: ",string[source],"'s transport must be one of ",(", " sv string transports)];
@@ -240,7 +242,7 @@ register:{[source;decl]
 / Every registered source's name.
 / .
 / The registry IS the list - there is no second declaration of which sources
-/ exist, which is what makes bank E-02 true: adding a source is a file plus a
+/ exist, which is what makes the question bank true: adding a source is a file plus a
 / registration, with no core change.
 / @return a symbol vector, empty when nothing has registered yet
 / @eg .qsrc.registered[]
@@ -393,7 +395,7 @@ has_credentials:{[source] 0<count getenv `$credential_var source}
 
 / ---------------------------------------------------------------- ZONES
 
-/ The zone table: timezoneID, gmtDateTime, adjustment (L-06).
+/ The zone table: timezoneID, gmtDateTime, adjustment.
 / .
 / Empty until an operator loads one, and that is deliberate. q has no
 / built-in tz database - `ltime`/`gtime` only ever speak the PROCESS's own
@@ -411,7 +413,7 @@ zone_table:0#([] timezoneID:`symbol$(); gmtDateTime:`timestamp$(); adjustment:`t
 / Cached so require_zone_table is not a 70k-row scan per fetch.
 zone_names:`symbol$()
 
-/ Load a zone table from a serialised q table (L-06).
+/ Load a zone table from a serialised q table.
 / @param path a file path, e.g. "lib/torq/config/tzinfo"
 / @return the number of transitions loaded
 / @throws error when the file does not hold a table of the expected shape
@@ -434,7 +436,7 @@ load_zone_table:{[path]
     zone_names::exec distinct timezoneID from zone_table;
     count zone_table}
 
-/ Refuse to convert without a table, or for a zone it does not know (L-06).
+/ Refuse to convert without a table, or for a zone it does not know.
 / .
 / There is deliberately no fallback to a fixed offset. A fixed offset is
 / correct for part of the year and an hour wrong for the rest, which puts
@@ -462,7 +464,7 @@ offset_at:{[zone;ts]
         ([] timezoneID:(count ts)#zone; gmtDateTime:ts);
         zone_table]}
 
-/ UTC -> the source's local wall clock (L-06).
+/ UTC -> the source's local wall clock.
 / .
 / Shape-preserving: an atom in, an atom out, so a caller converting window
 / bounds does not have to enlist and unwrap.
@@ -478,7 +480,7 @@ utc_to_local:{[zone;ts]
          (-3!min tsv where null a)," - it predates the zone table's coverage"];
     $[0>type ts; first; ::] tsv+a}
 
-/ The source's local wall clock -> UTC (L-06), and the answer to L-05.
+/ The source's local wall clock -> UTC.
 / .
 / This direction is the hard one, and it is the whole reason a fixed offset
 / will not do. A local wall-clock reading is not a unique instant:
@@ -497,7 +499,7 @@ utc_to_local:{[zone;ts]
 /   0 survivors - the local time never existed. THROW.
 /   2 survivors - the local time is ambiguous. THROW.
 / .
-/ Throwing on both is the deliberate pick L-05 asks for, and it is the only
+/ Throwing on both is the deliberate pick, and it is the only
 / one that cannot lie. Picking either candidate silently assigns the row a
 / UTC instant that may be an hour off, which moves it into a neighbouring
 / backfill window - and since the ledger records windows rather than rows,
@@ -544,14 +546,14 @@ nonexistent_message:{[zone;bad]
     "local time ",(-3!bad)," does not exist in ",string[zone],
     " - it falls in a spring-forward gap, so no UTC instant maps to it. Either the ",
     "declared tz is wrong for this source, or the source is emitting ",
-    "wall-clock readings its own calendar never had (L-05)"}
+    "wall-clock readings its own calendar never had"}
 
 ambiguous_message:{[zone;bad;cs]
     "local time ",(-3!bad)," is ambiguous in ",string[zone],
     " - it occurs twice on an autumn transition, at ",(" and " sv -3!'asc cs),
     " UTC. Refusing to pick: either choice can move the row into a neighbouring ",
     "backfill window, which the ledger would still record as complete. Have the ",
-    "source hand over UTC (L-05)"}
+    "source hand over UTC"}
 
 / ------------------------------------------------------------- COERCION
 

@@ -2,7 +2,7 @@
 
 > **Provenance.** Snapshot as of 2026-09, confirmed by the maintainer. It was
 > originally reconstructed from screen photographs of a document in a
-> repository that is no longer reachable and, per decisions A-02 and A-03
+> repository that is no longer reachable and, canonical having been frozen,
 > (issue #69), is now **frozen and non-authoritative**: this tree is the
 > primary lineage, and this document describes what *this* tree implements.
 > Where the code and this document disagree, the code is the design and this
@@ -10,7 +10,7 @@
 >
 > **Ids.** Requirements here are `ETL-nn`, **formerly `E-nn`**. The `E-nn`
 > prefix now refers only to the design-question bank (issue #73), so an old
-> citation like "E-05" in an issue comment means the *question*, and the
+> citation like "E-05" in an issue comment means the old numbering, and the
 > requirement it once named is `ETL-05`. Renamed to end the collision
 > recorded in #109.
 
@@ -39,7 +39,7 @@ are written against, and the distinction to preserve:
   registry, for the reason `continuous_state.q`'s header gives. **There is no
   instance of one in this tree.** ETL-03 grounds the pattern in
   `src/etl/workers/marketwarehouse_deals.q`, which is bank-internal and
-  excluded under A-04, so `.qcont` is here for the shape rather than for a
+  excluded so `.qcont` is here for the shape rather than for a
   caller. `.qdag.adopt_feeders` reads `.qcont.feeds` and finds it empty.
 
 **Axis 2 - role: what does it do in the dataflow?** This is what
@@ -147,7 +147,7 @@ settled here.
   > and `hdb`, and no read here goes via a gateway.
   >
   > The obstacle is specific rather than effort: a tickerplant stream is
-  > append-only, and D-11's `supersede` **updates** rows to stamp
+  > append-only, and `supersede` **updates** rows to stamp
   > `superseded_at`. Tiering therefore requires supersession to be re-modelled
   > as an *event* that readers compose, which is a redesign of the bitemporal
   > layer rather than a change of storage. Doing it as a side effect of a

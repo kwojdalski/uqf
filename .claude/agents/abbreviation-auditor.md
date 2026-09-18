@@ -92,7 +92,7 @@ Never propose any of these, and say why if asked:
   — this repository has lost eight names to that trap. `scripts/gates/check_q_traps.py`
   carries the list it knows about.
 - **A word that names a type.** `to_timestamp`, `to_float`, `to_symbol`.
-- **A namespace or filename.** N-01 ties `src/<area>/<module>.q` to its
+- **A namespace or filename.** The convention ties `src/<area>/<module>.q` to its
   `\d .q<ns>`, so renaming one means renaming both plus the test file, the
   `src/init.q` entry and every citation. That is a migration, not a spelling
   tidy.

@@ -1,7 +1,7 @@
 """The Airflow-facing adapter: a sensor that pokes one q worker instance's
 status file and reports it in Airflow's own vocabulary.
 
-Airflow is optional here (FE-22/FE-23, A-04): this module has no
+Airflow is optional here (FE-22/FE-23): this module has no
 `import airflow` at module scope anywhere, so it is importable — and this
 whole package testable — with Airflow not installed at all. The real
 Airflow class is only assembled inside `build_sensor_class()`, which a DAG

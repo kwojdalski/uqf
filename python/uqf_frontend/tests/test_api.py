@@ -228,7 +228,7 @@ def test_coverage_filters_on_source_version(client_for):
 
 
 def test_coverage_passes_an_as_of_to_q(client_for):
-    """D-11: a coverage row is true until superseded, so the read needs an
+    """A coverage row is true until superseded, so the read needs an
     as-of.
 
     Asserted as the LAST argument rather than by exact tuple, because the

@@ -140,7 +140,7 @@ feed_handle:{[]
 / The buffer helpers that used to live here - drain and evict - are now
 / .qstream.drain and .qstream.evict (src/etl/core/stream_job.q). They moved
 / with the jobs that use them: a job is a src/ file now, and nothing in src/
-/ may call .qpipe (B-09).
+/ may call .qpipe.
 
 / ------------------------------------------------------------------ SINK
 

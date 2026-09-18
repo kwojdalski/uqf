@@ -1,6 +1,6 @@
-// test_seed.q - pins the determinism guarantee question-bank I-01 asks about.
+// test_seed.q - pins the determinism guarantee the question bank asks about.
 //
-// I-01: what makes tests/q deterministic - no clock, no network, no
+// What makes tests/q deterministic - no clock, no network, no
 // randomness, seeded - and is that enforced or aspirational? The answer,
 // now: seeded, and enforced by these tests rather than by a comment.
 //

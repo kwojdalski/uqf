@@ -2,7 +2,7 @@
 / precedence (.qwcfg).
 / .
 / Implements the configuration half of requirement ETL-16, and the precedence
-/ decision recorded on issue #71 (question-bank C-02):
+/ decision recorded on issue #71:
 / .
 /   env  >  process_overrides.csv  >  config/backfill.yaml  >  code default
 / .
@@ -14,12 +14,12 @@
 / .
 / The precedence is therefore a decided contract with one supplier, not a
 / description of four live layers. It is left standing rather than deleted
-/ because C-02 settled the ORDER and that answer does not expire - but a
+/ because the ORDER is settled and that answer does not expire - but a
 / reader who concluded they could drop a key into a YAML file and have a
 / worker pick it up would be wrong, and the previous version of this comment
 / invited exactly that. Wiring the rest needs a YAML hand-off from the Python
 / orchestrator (which already owns that parsing) plus a decision about where
-/ `config/` lives, which is bank question H-07.
+/ `config/` lives, which is the question bank.
 / .
 / Most specific and most immediate wins, so an operator can override anything
 / from the environment without editing tracked config - which is what you
@@ -29,7 +29,8 @@
 / left as intent: the order is documented at the point of use, and
 / test_worker_config.q asserts it by setting the same key in two sources and
 / checking which one wins. An unstated precedence's failure mode is "works on
-/ my machine", which this repository already hit once with H-01's three
+/ my machine", which this repository already hit once with the vendored
+/ tree's three
 / process-definition files.
 / .
 / Errors accumulate rather than failing on the first problem (ETL-16, and the
@@ -100,7 +101,7 @@ raw_from:{[source;k]
 / .
 / The previous example claimed (`env;"2026.09.01") for `backfill_from, which
 / was wrong twice over: nothing in this repository sets UQF_BACKFILL_FROM (a
-/ worker's window comes from read_state, not from config - see C-04), and an
+/ worker's window comes from read_state, not from config), and an
 / example whose documented value depends on the caller's ambient environment
 / cannot be verified by anything. `dry_run` is the one key production really
 / reads, via .qwrt.is_dry_run.
