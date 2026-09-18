@@ -106,7 +106,7 @@ class CatalogResponse(BaseModel):
 class HealthResponse(BaseModel):
     poll_seconds: int
     ok: bool
-    gateway: Literal["up", "reloading", "unreachable"]
+    gateway: Literal["up", "reloading", "unreachable", "wrong_process"]
     detail: str | None = None
 
 

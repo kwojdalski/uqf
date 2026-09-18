@@ -90,8 +90,15 @@ class KolaGateway:
         try:
             q.connect()
         except Exception as exc:
+            # Name the variable that fixes it. The two failures here are a
+            # wrong port and an unset credential, and both arrive as one
+            # opaque line from the driver ("Wrong credential.") that says
+            # nothing about where the setting lives - so the reader is left
+            # guessing at a package they did not write.
             raise GatewayUnavailable(
-                f"gateway at {s.host}:{s.port} is not reachable: {exc}"
+                f"gateway at {s.host}:{s.port} is not reachable: {exc} "
+                f"(set UQF_FRONTEND_GATEWAY_PORT / _USER / _PASSWD; against the "
+                f"local demo stack that is the gateway's port and admin/admin)"
             ) from exc
 
         try:

@@ -2,13 +2,42 @@ from __future__ import annotations
 
 import pytest
 
-from uqf_frontend.config import Settings
+from uqf_frontend.config import GATEWAY_PORT_OFFSET, Settings
 
 
 def test_defaults_point_at_the_local_gateway():
     s = Settings()
     assert s.host == "localhost"
     assert s.max_rows > 0
+
+
+def test_the_default_port_is_the_gateways_not_another_processes():
+    """THE regression. The default was 6052, which is rdb1 - so every
+    routed query and every ops view failed against a stack started with
+    defaults, while /health reported up. Stated against process.csv's own
+    arithmetic rather than the literal 6057, so a base-port change cannot
+    make this test agree with a wrong answer.
+    """
+    s = Settings()
+    assert s.port == s.base_port + GATEWAY_PORT_OFFSET
+    assert s.port == 6057
+
+
+def test_a_non_default_base_port_moves_the_gateway_with_it(monkeypatch):
+    """The gateway is +7 from wherever the stack was started, so configuring
+    the base port alone is enough - and is what someone running a second
+    stack on another base actually sets.
+    """
+    monkeypatch.setenv("UQF_FRONTEND_BASE_PORT", "7000")
+    s = Settings.from_env()
+    assert (s.base_port, s.port) == (7000, 7007)
+
+
+def test_an_explicit_gateway_port_still_wins_over_the_base_port(monkeypatch):
+    """The escape hatch: a gateway that is not where process.csv puts it."""
+    monkeypatch.setenv("UQF_FRONTEND_BASE_PORT", "7000")
+    monkeypatch.setenv("UQF_FRONTEND_GATEWAY_PORT", "9999")
+    assert Settings.from_env().port == 9999
 
 
 def test_env_overrides_are_read(monkeypatch):
