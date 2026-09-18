@@ -400,6 +400,7 @@ qmicro,tape_actions,value,,
 qmicro,tape_cols,value,,
 qmicro,trade_arrival_rate,function,1,tape
 qmicro,trade_arrival_rate_by,function,3,tape bucket_size group_cols
+qmicro,undefined_if_zero,function,1,n
 qmicro,vamp,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
 qmicro,vamp_one,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
 qmicro,volume_buckets,function,2,tape bucket_volume

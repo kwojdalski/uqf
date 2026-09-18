@@ -153,6 +153,43 @@ test_bucketing_puts_the_time_back:{[t]
     r:.qmicro.cancel_to_trade_ratio_by[tp;0D01:00:00;enlist `sym];
     .qunit.assertEquals[`time in cols 0!r;1b;"an hourly bucket groups by the floored time as well as the group columns"]};
 
+/ A group with cancels and no trade. The scalar form has returned 0n for
+/ this since it was written, and the grouped form returned 0w - the two
+/ disagreeing on the same events, against the docstring's own promise that
+/ "buckets with no trade get 0n". The neighbouring populated group is the
+/ point of the fixture: a guard that nulls everything would pass a test
+/ that only checked the quiet group.
+mixed_tape:{[]
+    tp:.evttest.tape[`cancel`cancel`cancel`trade;1 1 1 1;4#1000f];
+    update sym:`EURUSD`GBPUSD`GBPUSD`GBPUSD from tp}
+
+test_a_group_with_no_trades_is_null_not_infinity:{[t]
+    r:.qmicro.cancel_to_trade_ratio_by[.evttest.mixed_tape[];0Nn;enlist `sym];
+    quiet:first exec ratio from r where sym=`EURUSD;
+    .qunit.assertEquals[(null quiet;quiet=0w);(1b;0b);
+        "cancels with nothing trading is undefined, not infinite"];
+    .qunit.assertEquals[first exec ratio from r where sym=`GBPUSD;2f;
+        "and the group that did trade keeps its ratio - the guard nulls a zero denominator, not every group"]};
+
+test_a_bucket_with_no_trades_is_null_not_infinity:{[t]
+    r:0!.qmicro.cancel_to_trade_ratio_by[.evttest.mixed_tape[];0D01:00:00;enlist `sym];
+    .qunit.assertTrue[null first exec ratio from r where sym=`EURUSD;
+        "the bucketed form guards too - a quiet bucket is the common case, which is why 0w here would poison an average over buckets"];
+    .qunit.assertEquals[first exec ratio from r where sym=`GBPUSD;2f;"the busy bucket is unaffected"]};
+
+test_the_grouped_and_scalar_forms_agree_on_a_cancel_only_tape:{[t]
+    / The invariant the bug broke: one tape, one group, two code paths,
+    / one answer.
+    tp:select from .evttest.mixed_tape[] where sym=`EURUSD;
+    grouped:first exec ratio from .qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
+    .qunit.assertEquals[(null grouped;null .qmicro.cancel_to_trade_ratio tp);(1b;1b);
+        "grouped and ungrouped give the same answer for the same events"]};
+
+test_undefined_if_zero_is_the_guard_and_only_the_guard:{[t]
+    .qunit.assertTrue[null .qmicro.undefined_if_zero 0;"zero becomes undefined"];
+    .qunit.assertEquals[.qmicro.undefined_if_zero 3;3;"and anything else is untouched"];
+    .qunit.assertEquals[.qmicro.undefined_if_zero 0 2 0 5;0n 2 0n 5f;"vectorised, because a functional select hands it one value per group"]};
+
 test_grouped_ratios_match_the_ungrouped_one_for_a_single_group:{[t]
     tp:.qfeed.demo_events.fixture[];
     r:.qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];

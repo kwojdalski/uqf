@@ -556,6 +556,20 @@ cancel_to_trade_ratio:{[tape]
 / @param bucket_size a timespan to floor time into, or 0Nn for no bucketing
 / @param group_cols extra columns to group by, e.g. enlist `sym
 / @eg .qmicro.cancel_to_trade_ratio_by[tape;0D01:00:00;enlist `sym]
+/ Private: a zero denominator becomes a null, so a ratio over a group with
+/ nothing in the denominator is undefined rather than infinite.
+/ .
+/ Exists because q's `%` gives 0w for n%0, and 0w propagates: one quiet
+/ bucket poisons every average a caller takes over buckets. The scalar
+/ ratios in this file guard with a plain $[0=n; 0n; ...]; a grouped one
+/ cannot, because the division happens inside a functional select where
+/ the denominator is a parse tree rather than a value. This is that guard,
+/ in a form a parse tree can hold.
+/ @param n a count, per group
+/ @return n, or 0n when n is zero
+/ @eg .qmicro.undefined_if_zero 0  ->  0n
+undefined_if_zero:{[n] ?[0=n;0n;n]}
+
 cancel_to_trade_ratio_by:{[tape;bucket_size;group_cols]
     require_tape tape;
     t:select time, sym, action from tape where action in `cancel`trade;
@@ -565,9 +579,14 @@ cancel_to_trade_ratio_by:{[tape;bucket_size;group_cols]
     t:$[null bucket_size; t; update time:bucket_size xbar time from t];
     if[0=count by_cols;
         :([] ratio:enlist cancel_to_trade_ratio tape)];
+    / The denominator is guarded, exactly as the scalar form guards it - a
+    / group with cancels and no trade is undefined, not infinite. Without
+    / this the two forms disagree on the same events: 0n from
+    / cancel_to_trade_ratio, 0w from here.
     ?[t;();by_cols!by_cols;
       (enlist `ratio)!enlist
-        (%;(sum;(=;`action;enlist `cancel));(sum;(=;`action;enlist `trade)))]}
+        (%;(sum;(=;`action;enlist `cancel));
+           (undefined_if_zero;(sum;(=;`action;enlist `trade))))]}
 
 / Split the trades in a tape into equal-VOLUME buckets (ROADMAP #25).
 / .
