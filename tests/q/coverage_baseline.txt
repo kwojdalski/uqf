@@ -77,8 +77,6 @@
 .qwrk.upstream_trades_backfill.publish
 .qwrk.upstream_trades_backfill.run
 .qwrk.upstream_trades_backfill.spec
-.qfeed.databento_mbp10.fixture
-.qfeed.databento_mbp10.fixture_levels
 .qdag.reaction_edges
 .qrun.attach
 .qrun.history

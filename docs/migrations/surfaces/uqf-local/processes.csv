@@ -1,5 +1,6 @@
 procname,proctype,offset,subscribes,publishes
 cross1,metrics,25,quotes,
+databento1,metrics,34,databento_mbp10,databento_book
 deals_backfill1,backfill,32,,
 events_backfill1,backfill,33,,
 fxfeed1,feed,19,,quote

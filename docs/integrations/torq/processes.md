@@ -9,7 +9,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 [docs/guides/uqf-stack.md](../uqf-stack.md); for the topology diagrams see
 [README.md](README.md).
 
-**23 vendored processes** plus **11 uqf processes** — 34 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **12 uqf processes** — 35 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -26,6 +26,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `markout1` | 6081 | etl | `processes/torq_stream.q` | `execution_quality` | `trades`, `quote` | `execution_quality` |
 | `deals_backfill1` | 6082 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `events_backfill1` | 6083 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `databento1` | 6084 | etl | `processes/torq_stream.q` | `databento_book` | `databento_mbp10` | `databento_book` |
 
 ### Why a row deviates from the defaults
 
@@ -35,11 +36,13 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 - **`markout1`** — localtime:0, unlike every other process here - markout1 is the only process in this demo that compares .proc.cp[] against incoming data timestamps (its process_ready cutoff calc); every other process just reacts to each tick immediately, so localtime never mattered for them. .u.upd stamps trades/quote with the tickerplant's own .z.p (UTC) - with localtime:1, .proc.cp[] returns local time instead, silently skewing the cutoff by the local UTC offset (confirmed live: a full hour off on a UTC+1 machine)
 - **`deals_backfill1`** — bounded: runs a window range and exits, so it must not start with the stack
 - **`events_backfill1`** — bounded: see deals_backfill1
+- **`databento1`** — LAST in this list on purpose: offsets are allocated in list order, so inserting above would renumber tap1 and both backfills. Folds live Databento MBP-10 into the book shape. The raw rows it subscribes to are published by an EXTERNAL Python feed handler (databento_feed.py), not by a process here - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row below but no producer in this list
 
 ## Tables these processes publish
 
 | table | defined by | published by |
 |---|---|---|
+| `databento_book` | `schemas.DATABENTO_BOOK_TABLE_SCHEMA` | `databento1` |
 | `execution_quality` | `schemas.EXECUTION_QUALITY_TABLE_SCHEMA` | `markout1` |
 | `mkt_orderbook` | `schemas.MKT_ORDERBOOK_TABLE_SCHEMA` | `vectorize1` |
 | `position` | `schemas.POSITION_TABLE_SCHEMA` | `posbook1` |

@@ -187,12 +187,12 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPath
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
     # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
     # markout1(+31)
-    # +3, not +1: the two bounded backfill processes occupy the offsets
-    # immediately after markout1. They are declared processes like any other,
-    # so their ports are reserved even though they do not start with the
-    # stack - two backfills sharing a port with a feed would fail at bind
-    # time, and only when someone happened to run one.
-    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 3
+    # +4, not +1: the two bounded backfill processes and databento1 occupy
+    # the offsets immediately after markout1. They are declared processes
+    # like any other, so their ports are reserved even though the backfills
+    # do not start with the stack - two backfills sharing a port with a feed
+    # would fail at bind time, and only when someone happened to run one.
+    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 4
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
@@ -260,6 +260,7 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "markout1",
         "deals_backfill1",
         "events_backfill1",
+        "databento1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -331,6 +332,7 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPa
         "markout1",
         "deals_backfill1",
         "events_backfill1",
+        "databento1",
     }
 
 
@@ -687,6 +689,9 @@ def test_pipeline_offsets_are_stable():
         "markout1": 31,
         "deals_backfill1": 32,
         "events_backfill1": 33,
+        # Appended last so the eleven above keep their ports; a new
+        # pipeline inserted mid-list renumbers everything after it.
+        "databento1": 34,
     }
 
 

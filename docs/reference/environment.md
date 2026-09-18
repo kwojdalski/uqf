@@ -62,6 +62,7 @@ without it:
 | `UQF_API_ORIGIN` | `web/vite.config.ts` | no | `http://127.0.0.1:8000`. Dev proxy only — it has no effect on a built bundle |
 | `LOG_LEVEL` | `torq_orchestrator.logger.decorators` | no | the logger's own default |
 | `LOG_REGEX` | `torq_orchestrator.logger.core` | no | no name filtering |
+| `DATABENTO_API_KEY` | `torq_orchestrator.databento_feed` | for `uqf-stack databento start` only | Databento's own variable name, so an existing export works unchanged. The live feed refuses to start without it rather than failing on its first call; the ODBC backfill does not read it |
 | `CRYPTORUST_ROOT` | `torq_orchestrator.crypto` | no | the checkout is located by the search path in `cryptorust_root`'s docstring |
 | `UQF_SMOKE_TARGETS` | `tests/q/smoke_external_metadata.q` | yes, for that script | the smoke check has nothing to connect to and says so |
 | `UQF_SMOKE_TABLES` | as above | yes, for that script | as above |

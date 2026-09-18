@@ -26,6 +26,8 @@ EXPECTED_TABLES = {
     "quotes",
     "wide_book",
     "mkt_orderbook",
+    "databento_mbp10",
+    "databento_book",
     "crypto_book",
     "crypto_sim_fills",
     "crypto_trades",

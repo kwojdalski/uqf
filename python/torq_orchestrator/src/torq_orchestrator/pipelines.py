@@ -15,6 +15,7 @@ from pathlib import Path
 
 from torq_orchestrator.logger import get_logger
 from torq_orchestrator.schemas import (
+    DATABENTO_BOOK_TABLE_SCHEMA,
     EXECUTION_QUALITY_TABLE_SCHEMA,
     MKT_ORDERBOOK_TABLE_SCHEMA,
     POSITION_TABLE_SCHEMA,
@@ -270,6 +271,24 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind="backfill",
         startwithall="0",
         note="bounded: see deals_backfill1",
+    ),
+    Pipeline(
+        procname="databento1",
+        script=STREAM_RUNNER_SCRIPT,
+        loads_qpipe=True,
+        kind="etl",
+        subscribes=("databento_mbp10",),
+        table="databento_book",
+        schema=DATABENTO_BOOK_TABLE_SCHEMA,
+        note=(
+            "LAST in this list on purpose: offsets are allocated in list "
+            "order, so inserting above would renumber tap1 and both "
+            "backfills. Folds live Databento MBP-10 into the book shape. The raw rows it "
+            "subscribes to are published by an EXTERNAL Python feed handler "
+            "(databento_feed.py), not by a process here - a q process cannot "
+            "hold a Databento subscription - so databento_mbp10 has a schema "
+            "row below but no producer in this list"
+        ),
     ),
 )
 

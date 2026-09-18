@@ -107,14 +107,15 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   fxtradesfeed1: "fxtradesfeed1 :6079\nsynthetic fills\npublishes only" { class: feed }
   tap1: "tap1 :6078\nsubscribe and log\nits own torq_tap.q" { class: job }
 
+  databento1: "databento1 :6084\nlive MBP-10 → book\nsame fold as the backfill" { class: job }
   cross1: "cross1 :6075\nquotes → cross rates\noutput stays private" { class: job }
   vectorize1: "vectorize1 :6077\nwide → level vectors\nsubscribes + publishes" { class: job }
   posbook1: "posbook1 :6080\nposition and P&L\nsubscribes + publishes" { class: job }
   markout1: "markout1 :6081\nexecution quality\nsubscribes + publishes" { class: job }
-  legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish." { class: band }
+  legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish.\n\ndatabento1's input comes from an\nexternal Python handler, not from\na process in this diagram." { class: band }
 }
 
-runner: "One script for eight of them — scripts/processes/torq_stream.q" {
+runner: "One script for nine of them — scripts/processes/torq_stream.q" {
   class: band
   grid-columns: 2
   grid-gap: 26

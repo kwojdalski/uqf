@@ -97,3 +97,4 @@
 \l src/etl/streaming/cross.q
 \l src/etl/streaming/posbook.q
 \l src/etl/streaming/vectorize.q
+\l src/etl/streaming/databento_book.q

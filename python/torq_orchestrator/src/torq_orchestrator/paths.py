@@ -64,6 +64,16 @@ class UqfStackPaths:
     def crypto_fills_recorder_pid_path(self) -> Path:
         return self.orchestrator_dir / "crypto_fills_recorder.pid"
 
+    @property
+    def databento_feed_pid_path(self) -> Path:
+        """The live Databento handler's pid file.
+
+        Beside the crypto recorders' because it is the same kind of thing:
+        an external publisher this repository starts, which torq.sh knows
+        nothing about and so cannot stop.
+        """
+        return self.orchestrator_dir / "databento_feed.pid"
+
 
 def default_paths() -> UqfStackPaths:
     # this file: <repo_root>/python/torq_orchestrator/src/torq_orchestrator/core.py
