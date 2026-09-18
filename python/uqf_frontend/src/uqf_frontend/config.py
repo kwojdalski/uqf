@@ -11,6 +11,16 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+#: Seconds between usage-capture sweeps when nothing overrides it. Well
+#: under the MEASURED `.usage.flushtime` of three hours - FE-23 records that
+#: the requirements' "one day" is wrong - because the interval is the whole
+#: guarantee: a capture that runs less often than the flush window loses
+#: history silently.
+#:
+#: Here rather than in capture.py so that config imports nothing: capture
+#: imports fleet, and fleet imports config.
+DEFAULT_CAPTURE_INTERVAL = 900
+
 DEFAULT_MAX_ROWS = 10_000
 
 #: What ``{KDBBASEPORT}`` resolves to when the stack is started with defaults.
@@ -120,6 +130,18 @@ class Settings:
     #: can reach the port" is the whole access control - so turning that on
     #: is a deliberate act with a name, not a thing that happens by default.
     enable_writes: bool = False
+    #: Where captured usage rows are written (FE-13). None means capture does
+    #: not run - and that is a real choice, not a safe one: `.usage.flushtime`
+    #: is three hours, so with this unset the usage view can only ever show
+    #: the last three hours and history before that is gone for good. It is
+    #: off by default because a capture pipeline writes files and fans out
+    #: across the fleet on a timer, which a process should not start doing
+    #: because someone imported it.
+    capture_dir: Path | None = None
+    #: Seconds between capture sweeps. Must stay well under the flush window:
+    #: the interval IS the guarantee, and one longer than the window loses
+    #: rows silently.
+    capture_interval: int = DEFAULT_CAPTURE_INTERVAL
     #: Where torq.sh and process.csv live, for the control routes. None means
     #: they refuse and say which variable is unset, rather than guessing a
     #: path and acting on the wrong stack.
@@ -153,6 +175,8 @@ class Settings:
             base_port=base_port,
             enable_writes=_flag_env("UQF_FRONTEND_ENABLE_WRITES"),
             stack_root=_path_env("UQF_FRONTEND_STACK_ROOT"),
+            capture_dir=_path_env("UQF_FRONTEND_CAPTURE_DIR"),
+            capture_interval=_int_env("UQF_FRONTEND_CAPTURE_INTERVAL", cls.capture_interval),
         )
 
 

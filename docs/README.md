@@ -67,22 +67,3 @@ category rather than prose.
 
 **`integrations/`** — [`torq/`](integrations/torq/), including the generated
 process table and dataflow diagram.
-
-## What deliberately stays at the top level
-
-Not everything is one of the four, and forcing it would be worse than the
-exception:
-
-- **[`ROADMAP.md`](ROADMAP.md)** — a plan, which is neither a guide nor a
-  reference. It describes what does not exist yet, so filing it under either
-  would mislead.
-- **`audits/`**, **`prompts/`** — agent output and agent input, dated and
-  append-only. They are a record of a run rather than documentation of the
-  system.
-- **`migrations/`** — plans for restructurings, written before the work and
-  kept afterwards as the reasoning behind it.
-- **`diagrams/`** — d2 sources and their rendered SVGs. Not one of the four
-  because a diagram is not a document: it illustrates one, and the page it
-  illustrates is where the words live. Edit the `.d2` and run
-  `python3 scripts/generate/render_diagrams.py`; never edit the `.svg`, which
-  `--check` re-renders in CI.
