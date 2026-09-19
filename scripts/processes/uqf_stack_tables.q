@@ -44,6 +44,14 @@ superbook:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); bid_pri
 / Status snapshots, including active=0b to clear an earlier gross opportunity.
 arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); buy_source:`symbol$(); sell_source:`symbol$(); ask:`float$(); bid:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$())
 
+/ Synthetic-versus-direct cross opportunities: one pair priced against a
+/ route through others (EURJPY against EURUSD x USDJPY). `route` carries the
+/ legs so a reader can see what to trade, and `skew` how far apart they were
+/ quoted - a synthetic price is only as fresh as its stalest leg. Like
+/ `arbitrage`, an append-only status history: read the latest row per sym
+/ BEFORE filtering on active.
+cross_arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$(); fully_filled:`boolean$(); skew:`timespan$())
+
 / A deliberately "incorrectly-shaped" wide book: one scalar column per level
 / rather than vector columns, which is the shape real venue feeds arrive in
 / and the input src/market_data/book.q exists to fold.

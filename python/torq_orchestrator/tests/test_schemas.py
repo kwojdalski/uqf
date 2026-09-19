@@ -39,6 +39,7 @@ EXPECTED_TABLES = {
     "market_data",
     "superbook",
     "arbitrage",
+    "cross_arbitrage",
     "orders",
     "fx_position",
     "fx_limit_breach",

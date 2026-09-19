@@ -194,7 +194,7 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPath
     # even though the backfills and the mock do not start with the stack -
     # two of them sharing a port with a feed would fail at bind time, and
     # only when someone happened to run one.
-    assert core.next_free_port_offset(fake_paths) == 45
+    assert core.next_free_port_offset(fake_paths) == 46
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
@@ -273,6 +273,7 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "marketdata1",
         "superbook1",
         "arbitrage1",
+        "crossarb1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -355,6 +356,7 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPa
         "marketdata1",
         "superbook1",
         "arbitrage1",
+        "crossarb1",
     }
 
 
@@ -724,6 +726,7 @@ def test_pipeline_offsets_are_stable():
         "marketdata1": 42,
         "superbook1": 43,
         "arbitrage1": 44,
+        "crossarb1": 45,
     }
 
 
@@ -829,7 +832,7 @@ def test_timestamp_consumers_run_on_utc_and_tap_does_not_autostart():
     offset. Every other process just reacts to a tick and never asks the
     clock.
     """
-    utc = {"markout1", "marketdata1", "superbook1", "arbitrage1"}
+    utc = {"markout1", "marketdata1", "superbook1", "arbitrage1", "crossarb1"}
     assert all(core.PIPELINE_BY_NAME[n].localtime == "0" for n in utc)
     assert all(p.localtime == "1" for p in core.PIPELINES if p.procname not in utc)
     # tap1 is a diagnostic subscriber; the four backfills are bounded jobs
@@ -854,6 +857,7 @@ def test_timestamp_consumers_run_on_utc_and_tap_does_not_autostart():
         "marketdata1",
         "superbook1",
         "arbitrage1",
+        "crossarb1",
     }
     assert all(core.PIPELINE_BY_NAME[n].startwithall == "0" for n in on_demand)
     assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname not in on_demand)

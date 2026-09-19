@@ -182,3 +182,16 @@ arbitrage,bid,float
 arbitrage,size,float
 arbitrage,gross_edge,float
 arbitrage,gross_profit,float
+cross_arbitrage,time,timestamp
+cross_arbitrage,sym,symbol
+cross_arbitrage,as_of,timestamp
+cross_arbitrage,active,boolean
+cross_arbitrage,direction,symbol
+cross_arbitrage,route,list
+cross_arbitrage,direct_price,float
+cross_arbitrage,synthetic_price,float
+cross_arbitrage,size,float
+cross_arbitrage,gross_edge,float
+cross_arbitrage,gross_profit,float
+cross_arbitrage,fully_filled,boolean
+cross_arbitrage,skew,timespan

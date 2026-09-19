@@ -104,6 +104,7 @@
 \l src/etl/streaming/market_data.q
 \l src/etl/streaming/superbook.q
 \l src/etl/streaming/arbitrage.q
+\l src/etl/streaming/cross_arbitrage.q
 \l src/etl/streaming/fx_orders_feed.q
 \l src/etl/streaming/markout.q
 \l src/etl/streaming/cross.q
