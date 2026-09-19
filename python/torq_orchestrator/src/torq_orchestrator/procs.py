@@ -24,15 +24,14 @@ from torq_orchestrator.logger import get_logger
 from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 from torq_orchestrator.pipelines import (
     DEFAULT_BASE_PORT,
-    PIPELINES,
     PROCESS_CSV_FIELDS,
     _pipeline_rows,
 )
-from torq_orchestrator.schemas import (
-    CRYPTO_BOOK_TABLE_SCHEMA,
-    CRYPTO_SIM_FILLS_TABLE_SCHEMA,
-    CRYPTO_TRADES_TABLE_SCHEMA,
-    DATABENTO_MBP10_TABLE_SCHEMA,
+from torq_orchestrator.plant_schema import (  # noqa: F401  (re-exported)
+    _generated_schema_content,
+    _published_tables,
+    add_extra_table_schema,
+    undefined_published_tables,
 )
 
 log = get_logger(__name__)
@@ -205,47 +204,6 @@ def add_extra_process(paths: UqfStackPaths, row: dict[str, str]) -> None:
             writer.writeheader()
         writer.writerow({field: row.get(field, "") for field in PROCESS_CSV_FIELDS})
     log.info("added process {} ({})", row["procname"], row["proctype"])
-
-
-def add_extra_table_schema(paths: UqfStackPaths, table_def: str) -> None:
-    """Append one q table definition line (e.g. 'mytable:([]time:...;
-    sym:...)') to extra_schema.q - _generated_schema_content()'s
-    extension point for the `new-process` wizard, the same
-    generate-never-edit-vendored approach as everything else here.
-    """
-    paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
-    with paths.extra_schema_path.open("a") as f:
-        f.write(table_def.rstrip("\n") + "\n")
-
-
-def _generated_schema_content(paths: UqfStackPaths) -> str:
-    """The vendored database.q's tables, plus uqf's own `quotes`/`wide_book`/
-    `mkt_orderbook`/`crypto_book` tables and any add_extra_table_schema()
-    additions (extra_schema.q) appended - never edited in place, always
-    read fresh from the vendored file. stp1's process.csv row (see
-    _base_process_rows) is pointed at the generated copy this produces
-    rather than the vendored file.
-    """
-    vendored = (paths.torqapphome / "database.q").read_text()
-    extra = paths.extra_schema_path.read_text() if paths.extra_schema_path.is_file() else ""
-    # Pipeline-owned tables come from the PIPELINES registry, so a new
-    # pipeline that publishes a table gets its definition here automatically.
-    # The crypto tables are not pipelines - they are written by the external
-    # cryptorust recorders (see start_crypto_recorder/start_crypto_fills_recorder),
-    # not by any scripts/torq_*.q process - so they stay listed explicitly.
-    # Definition order among independent table declarations is immaterial to
-    # q, which is why grouping them this way is safe.
-    definitions = [p.schema for p in PIPELINES if p.schema is not None] + [
-        # databento_mbp10 is the same case: the live feed handler
-        # (databento_feed.py) publishes it, databento1 only subscribes, so
-        # no pipeline row carries its schema and stp1 would not know the
-        # table without this line.
-        DATABENTO_MBP10_TABLE_SCHEMA,
-        CRYPTO_BOOK_TABLE_SCHEMA,
-        CRYPTO_SIM_FILLS_TABLE_SCHEMA,
-        CRYPTO_TRADES_TABLE_SCHEMA,
-    ]
-    return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions) + extra
 
 
 def _read_overrides(paths: UqfStackPaths) -> dict[str, dict[str, str]]:

@@ -59,7 +59,16 @@ run:{[job]
     / A job that publishes nothing keeps its unwired stub, so a later edit
     / that starts publishing without declaring it fails loudly instead of
     / sending rows nowhere.
-    if[count decl`publishes; .qstream.wire[job;.qpipe.publish[h;;]]];
+    / .
+    / The declared tables are checked against the plant BEFORE the seam is
+    / wired: a table the tickerplant does not define swallows every row
+    / without an error anywhere, which is how the whole FX positions
+    / service published into nothing (#287). Refusing here costs one round
+    / trip per process start and turns that into a startup failure naming
+    / the table.
+    if[count decl`publishes;
+        .qpipe.assert_publishable[h;decl`publishes];
+        .qstream.wire[job;.qpipe.publish[h;;]]];
     if[`on_batch in key decl; `upd set decl`on_batch];
     if[`timer_period in key decl;
         `.qproc.stream.tick set decl`on_timer;

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from torq_orchestrator import core, pipeline_edges, pipelines
+from torq_orchestrator import core, pipeline_edges, pipelines, plant_schema, schemas
 
 
 @pytest.fixture
@@ -843,15 +843,38 @@ def test_markout_runs_on_utc_and_tap_does_not_autostart():
 
 
 def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStackPaths):
+    """Both directions, because for a long time this ran only one.
+
+    The body used to be `if pipeline.schema: assert pipeline.schema in
+    generated` - every declared schema reaches the generated file. That is
+    not what the name says, and the gap was not hypothetical: fxpositions1
+    declares `fx_position` and `fx_limit_breach`, carries no `schema`, and
+    so contributed nothing to check. Both tables were defined in
+    uqf_stack_tables.q all along, `database.q` never mentioned them, and the
+    service published a correct book onto tables the plant had never heard
+    of - silently, every five seconds, for as long as it had been running
+    (#287).
+
+    So the direction that matters is the other one: every table a pipeline
+    sends rows to has a definition the tickerplant will load.
+    """
+    undefined = plant_schema.undefined_published_tables(fake_paths)
+    assert not undefined, (
+        "published with no definition in the generated database.q, so stp1 "
+        f"would not know the table and the rows would go nowhere: {undefined}"
+    )
+
     generated = core._generated_schema_content(fake_paths)
+    # and the original direction, so a definition cannot quietly stop being
+    # emitted either
     for pipeline in core.PIPELINES:
         if pipeline.schema:
             assert pipeline.schema in generated, pipeline.procname
-    # the crypto tables are written by the external cryptorust recorders, not
-    # by any pipeline, so they are listed explicitly and must survive too
-    assert core.CRYPTO_BOOK_TABLE_SCHEMA in generated
+    # the tables no pipeline publishes: crypto_sim_fills comes from
+    # cryptorust's recorder and databento_mbp10 from the live feed handler,
+    # so they are listed explicitly and must survive too
     assert core.CRYPTO_SIM_FILLS_TABLE_SCHEMA in generated
-    assert core.CRYPTO_TRADES_TABLE_SCHEMA in generated
+    assert schemas.DATABENTO_MBP10_TABLE_SCHEMA in generated
 
 
 def test_every_bounded_worker_can_be_started_by_the_stack():
@@ -1250,3 +1273,43 @@ def test_every_on_demand_plant_client_still_has_a_producer_to_start_with():
                 "which no declared pipeline publishes - starting it would consume "
                 "nothing"
             )
+
+
+def test_a_pipeline_publishing_an_undefined_table_is_reported(
+    fake_paths: core.UqfStackPaths, monkeypatch: pytest.MonkeyPatch
+):
+    """The gate firing, which is the half #287 never had.
+
+    The old check could not fail for the case it was named after: it
+    iterated declared *schemas*, so a pipeline that declared a publish and
+    no schema contributed nothing to assert. This adds one and expects to
+    be told.
+    """
+    invented = replace(
+        core.PIPELINE_BY_NAME["fxpositions1"],
+        procname="ghost1",
+        publishes=("fx_position", "a_table_nothing_defines"),
+    )
+    monkeypatch.setattr(plant_schema, "PIPELINES", (*core.PIPELINES, invented))
+
+    undefined = plant_schema.undefined_published_tables(fake_paths)
+    assert len(undefined) == 1, undefined
+    assert "a_table_nothing_defines" in undefined[0]
+    # and it names who to go and ask
+    assert "ghost1" in undefined[0]
+
+
+def test_the_fx_positions_tables_reach_the_tickerplant(fake_paths: core.UqfStackPaths):
+    """The regression itself, named so it cannot be quietly undone.
+
+    fxpositions1 publishes two tables and owns neither `table` nor
+    `schema`. Both were defined in uqf_stack_tables.q and neither reached
+    `database.q`, so the whole FX positions service published into nothing.
+    """
+    generated = core._generated_schema_content(fake_paths)
+    assert schemas.FX_POSITION_TABLE_SCHEMA in generated
+    assert schemas.FX_LIMIT_BREACH_TABLE_SCHEMA in generated
+    assert plant_schema._published_tables([core.PIPELINE_BY_NAME["fxpositions1"]]) == {
+        "fx_position",
+        "fx_limit_breach",
+    }
