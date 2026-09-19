@@ -66,6 +66,17 @@ _REGISTER_RE = re.compile(
 #:         `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
 _NORMALIZER_RE = re.compile(r"\.qnorm\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S)
 _STREAM_DIR = Path("src") / "etl" / "streaming"
+_WORKER_DIR = Path("src") / "etl" / "workers"
+
+#: A bounded worker declares itself the way a streaming job does, and is
+#: found the same way - by reading the declaration rather than a list kept
+#: beside it.
+_WORKER_RE = re.compile(r"\.qbw\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)")
+
+#: Workers with no process, and the reason. Empty: one script serves every
+#: worker, so a process costs one registry entry, and a worker nobody can
+#: start is a worker nobody runs.
+WORKERS_WITHOUT_A_PROCESS: frozenset[str] = frozenset()
 
 #: The one process script every streaming job runs under. Spelled here rather
 #: than imported from `pipelines`, which imports this module.
@@ -141,6 +152,17 @@ def _declared_stream_edges(repo_root: Path) -> dict[str, tuple[tuple[str, ...], 
                 (match.group(1),),
             )
     return edges
+
+
+def _declared_workers(repo_root: Path) -> set[str]:
+    """Every bounded worker that registers itself under src/etl/workers/."""
+    directory = repo_root / _WORKER_DIR
+    if not directory.is_dir():
+        return set()
+    found: set[str] = set()
+    for path in sorted(directory.glob("*.q")):
+        found.update(_WORKER_RE.findall(_strip_q_comments(path.read_text())))
+    return found
 
 
 def _normalizer_fields(body: str) -> dict[str, str]:
@@ -290,4 +312,36 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
             f"{procname}: listed in RUNS_WITHOUT_A_PROCESS but no streaming job "
             f"claims it - remove the entry rather than leaving a dead exemption"
         )
+
+    # The same rule for the bounded half. A backfill process and the worker
+    # it runs are joined at RUNTIME by UQF_BACKFILL_WORKER, so nothing
+    # statically connected the two until `worker` was declared - which is
+    # how databento_book_backfill and upstream_trades_backfill ended up
+    # fully declared with no process able to run them (#283).
+    workers = _declared_workers(scripts_dir.parent)
+    run_by = {p.worker for p in pipelines if p.kind == "backfill" and p.worker}
+    for worker in sorted(workers - run_by - WORKERS_WITHOUT_A_PROCESS):
+        problems.append(
+            f"{worker}: a bounded worker declares itself but no backfill pipeline "
+            f"names it, so it can only be run by hand. Add a Pipeline with "
+            f"worker={worker!r}, or add it to WORKERS_WITHOUT_A_PROCESS with a reason"
+        )
+    for worker in sorted(WORKERS_WITHOUT_A_PROCESS - workers):
+        problems.append(
+            f"{worker}: listed in WORKERS_WITHOUT_A_PROCESS but no worker declares "
+            f"it - remove the dead exemption"
+        )
+    for pipeline in pipelines:
+        if pipeline.kind == "backfill" and not pipeline.worker:
+            problems.append(
+                f"{pipeline.procname}: a backfill pipeline must name the worker it "
+                f"runs, so the link is declared rather than left to an environment "
+                f"variable nobody can grep for"
+            )
+        elif pipeline.worker and pipeline.worker not in workers:
+            problems.append(
+                f"{pipeline.procname}: names worker {pipeline.worker!r}, which no "
+                f"file under {_WORKER_DIR} declares - the process would start and "
+                f"then refuse"
+            )
     return problems

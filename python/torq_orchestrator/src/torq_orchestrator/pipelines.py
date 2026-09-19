@@ -161,6 +161,7 @@ PIPELINES: tuple[Pipeline, ...] = (
         procname="deals_backfill1",
         script="processes/torq_backfill.q",
         kind="backfill",
+        worker="demo_deals_backfill",
         startwithall="0",
         note="bounded: runs a window range and exits, so it must not start with the stack",
     ),
@@ -168,6 +169,7 @@ PIPELINES: tuple[Pipeline, ...] = (
         procname="events_backfill1",
         script="processes/torq_backfill.q",
         kind="backfill",
+        worker="demo_events_backfill",
         startwithall="0",
         note="bounded: see deals_backfill1",
     ),
@@ -246,6 +248,25 @@ PIPELINES: tuple[Pipeline, ...] = (
             "TorQ-free code and the runner decides the transport, so being "
             "runnable without TorQ is no reason not to be startable with it"
         ),
+    ),
+    Pipeline(
+        procname="databento_backfill1",
+        script="processes/torq_backfill.q",
+        kind="backfill",
+        worker="databento_book_backfill",
+        startwithall="0",
+        note=(
+            "bounded: reads Databento MBP-10 over ODBC and folds it with the same "
+            "transform databento1 applies live"
+        ),
+    ),
+    Pipeline(
+        procname="upstream_backfill1",
+        script="processes/torq_backfill.q",
+        kind="backfill",
+        worker="upstream_trades_backfill",
+        startwithall="0",
+        note="bounded: reads an upstream q process over IPC",
     ),
 )
 

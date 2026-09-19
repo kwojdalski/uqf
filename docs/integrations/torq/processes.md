@@ -9,7 +9,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 [docs/guides/uqf-stack.md](../uqf-stack.md); for the topology diagrams see
 [README.md](README.md).
 
-**23 vendored processes** plus **17 uqf processes** — 40 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **19 uqf processes** — 42 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -32,6 +32,8 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `marks1` | 6087 | normalizer | `processes/torq_stream.q` | `marks` | `quote`, `crypto_book` | `marks` |
 | `fxordersfeed1` | 6088 | feed | `processes/torq_stream.q` | `orders` | — | `orders` |
 | `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `orders` | `fx_position`, `fx_limit_breach` |
+| `databento_backfill1` | 6090 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `upstream_backfill1` | 6091 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -48,6 +50,8 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 - **`marks1`** — a mid per instrument from every book: quote and crypto_book -> marks
 - **`fxordersfeed1`** — synthetic order flow, most of which never becomes a fill - fxpositions1's input
 - **`fxpositions1`** — net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it
+- **`databento_backfill1`** — bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live
+- **`upstream_backfill1`** — bounded: reads an upstream q process over IPC
 
 ## Tables these processes publish
 

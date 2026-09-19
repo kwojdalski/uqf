@@ -79,6 +79,12 @@ class Pipeline:
     # tap1 chooses its subscription at runtime from -tables, so no fixed
     # edge exists to declare or to verify.
     subscribes_dynamic: bool = False
+    # For a backfill: the .qbw worker this process runs. One script serves
+    # every worker and UQF_BACKFILL_WORKER names which at runtime, so
+    # without this the link between a process and its worker exists only
+    # in an operator's head - which is how two declared workers ended up
+    # with no process at all and nothing noticed (#283).
+    worker: str | None = None
 
     @property
     def proctype(self) -> str:
