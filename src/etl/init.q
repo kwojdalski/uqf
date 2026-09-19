@@ -101,6 +101,9 @@
 / the feeds that produce their sources, before the jobs that consume them.
 \l src/etl/streaming/executions.q
 \l src/etl/streaming/marks.q
+\l src/etl/streaming/market_data.q
+\l src/etl/streaming/superbook.q
+\l src/etl/streaming/arbitrage.q
 \l src/etl/streaming/fx_orders_feed.q
 \l src/etl/streaming/markout.q
 \l src/etl/streaming/cross.q

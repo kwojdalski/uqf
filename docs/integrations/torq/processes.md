@@ -9,7 +9,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 [docs/guides/uqf-stack.md](../uqf-stack.md); for the topology diagrams see
 [README.md](README.md).
 
-**23 vendored processes** plus **19 uqf processes** — 42 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **22 uqf processes** — 45 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -34,6 +34,9 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `orders` | `fx_position`, `fx_limit_breach` |
 | `databento_backfill1` | 6090 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `upstream_backfill1` | 6091 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `marketdata1` | 6092 | normalizer | `processes/torq_stream.q` | `market_data` | `quote`, `quotes` | `market_data` |
+| `superbook1` | 6093 | etl | `processes/torq_stream.q` | `superbook` | `market_data` | `superbook` |
+| `arbitrage1` | 6094 | etl | `processes/torq_stream.q` | `arbitrage` | `superbook` | `arbitrage` |
 
 ### Why a row deviates from the defaults
 
@@ -54,11 +57,15 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 - **`fxpositions1`** — net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it
 - **`databento_backfill1`** — bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live
 - **`upstream_backfill1`** — bounded: reads an upstream q process over IPC
+- **`marketdata1`** — direct FX snapshots with source identity and original receipt time. Head of a closed three-process chain - market_data is read only by superbook1, superbook only by arbitrage1, and arbitrage by nothing - so the whole chain is on demand together and no default-start job notices. startwithall:0 because the licence allows a q process sixteen inbound connections and the default start is at thirteen (#285): `uqf-stack start marketdata1 superbook1 arbitrage1` spends the three spare slots, which is what they are for
+- **`superbook1`** — latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there
+- **`arbitrage1`** — gross direct cross-source opportunities, including inactive clearing rows. Tail of the marketdata1 chain - see there
 
 ## Tables these processes publish
 
 | table | defined by | published by |
 |---|---|---|
+| `arbitrage` | `schemas.ARBITRAGE_TABLE_SCHEMA` | `arbitrage1` |
 | `crypto_book` | `schemas.CRYPTO_BOOK_TABLE_SCHEMA` | `cryptomock1` |
 | `crypto_trades` | `schemas.CRYPTO_TRADES_TABLE_SCHEMA` | `cryptomock1` |
 | `databento_book` | `schemas.DATABENTO_BOOK_TABLE_SCHEMA` | `databento1` |
@@ -66,12 +73,14 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `executions` | `schemas.EXECUTIONS_TABLE_SCHEMA` | `executions1` |
 | `fx_limit_breach` | `schemas.FX_LIMIT_BREACH_TABLE_SCHEMA` | `fxpositions1` |
 | `fx_position` | `schemas.FX_POSITION_TABLE_SCHEMA` | `fxpositions1` |
+| `market_data` | `schemas.MARKET_DATA_TABLE_SCHEMA` | `marketdata1` |
 | `marks` | `schemas.MARKS_TABLE_SCHEMA` | `marks1` |
 | `mkt_orderbook` | `schemas.MKT_ORDERBOOK_TABLE_SCHEMA` | `vectorize1` |
 | `orders` | `schemas.ORDERS_TABLE_SCHEMA` | `fxordersfeed1` |
 | `position` | `schemas.POSITION_TABLE_SCHEMA` | `posbook1` |
 | `quote` | _vendored_ | `fxfeed1` |
 | `quotes` | `schemas.QUOTES_TABLE_SCHEMA` | `quotesfeed1` |
+| `superbook` | `schemas.SUPERBOOK_TABLE_SCHEMA` | `superbook1` |
 | `trades` | `schemas.TRADES_TABLE_SCHEMA` | `fxtradesfeed1` |
 | `wide_book` | `schemas.WIDE_BOOK_TABLE_SCHEMA` | `widefeed1` |
 

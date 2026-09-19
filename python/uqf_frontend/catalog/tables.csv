@@ -17,3 +17,6 @@ position,"Running position book marked to the prevailing mid, with realised and 
 quotes,FX top-of-book and depth as per-row level vectors
 trades,"Client fills, shaped to match .qpos.apply_fill and .qexec.markout_at_horizons exactly"
 wide_book,"The unfolded book widefeed1 publishes: one column per level per side, bids0..bids10 and asks0..asks10. vectorize1 folds it into mkt_orderbook; a reader wanting a book usually wants that one instead"
+market_data,"Direct FX full snapshots per pair and source, normalized from quote and quotes. source_time preserves original receipt time; zero size or empty sides withdraw liquidity"
+superbook,"Latest fresh direct FX liquidity merged across sources, bids descending and asks ascending, with aligned source and original timestamp vectors. Empty snapshots clear expired books"
+arbitrage,"Gross direct cross-source bid-over-ask opportunities, one status per pair and snapshot. Select the latest row per pair before filtering active; inactive rows clear previous opportunities"

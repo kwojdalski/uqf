@@ -596,6 +596,11 @@ qstream,registered,function,1,
 qstream,required_declarations,value,,
 qstream,unwired,function,1,job
 qstream,wire,function,2,job publisher
+qsub.arbitrage,arbitrage,table,,
+qsub.arbitrage,evaluate,function,1,batch
+qsub.arbitrage,on_batch,function,2,tbl batch
+qsub.arbitrage,opportunity,function,1,book
+qsub.arbitrage,publish,value,,
 qsub.cross,cross_pairs,value,,
 qsub.cross,cross_quotes,table,,
 qsub.cross,crosses,table,,
@@ -687,6 +692,13 @@ qsub.fx_trades_feed,pip_factor,value,,
 qsub.fx_trades_feed,publish,value,,
 qsub.fx_trades_feed,sizes,value,,
 qsub.fx_trades_feed,spot,value,,
+qsub.market_data,from_quote,function,1,batch
+qsub.market_data,from_quotes,function,1,batch
+qsub.market_data,market_data,table,,
+qsub.market_data,on_batch,value,,
+qsub.market_data,publish,value,,
+qsub.market_data,quote,table,,
+qsub.market_data,quotes,table,,
 qsub.markout,execution_quality,table,,
 qsub.markout,horizons,value,,
 qsub.markout,max_horizon,value,,
@@ -725,6 +737,17 @@ qsub.quotes_feed,on_timer,function,1,
 qsub.quotes_feed,publish,value,,
 qsub.quotes_feed,spot,value,,
 qsub.quotes_feed,tick_rows,function,1,mids
+qsub.superbook,books,dict,,
+qsub.superbook,levels,function,2,prices sizes
+qsub.superbook,max_age,value,,
+qsub.superbook,on_batch,function,2,tbl batch
+qsub.superbook,on_timer,function,1,
+qsub.superbook,publish,value,,
+qsub.superbook,refresh,function,1,as_of
+qsub.superbook,replace_books,function,3,state batch as_of
+qsub.superbook,side_levels,function,2,rows side
+qsub.superbook,snapshot,function,3,state as_of age
+qsub.superbook,superbook,table,,
 qsub.vectorize,fold_wide_book,function,1,book
 qsub.vectorize,mkt_orderbook,table,,
 qsub.vectorize,on_batch,function,2,tbl batch
