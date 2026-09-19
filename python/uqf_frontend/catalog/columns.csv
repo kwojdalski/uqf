@@ -195,3 +195,9 @@ cross_arbitrage,gross_edge,float
 cross_arbitrage,gross_profit,float
 cross_arbitrage,fully_filled,boolean
 cross_arbitrage,skew,timespan
+config_change,time,timestamp
+config_change,owner,symbol
+config_change,name,symbol
+config_change,old,list
+config_change,new,list
+config_change,as_of,timestamp

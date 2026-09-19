@@ -45,6 +45,8 @@ worker, end to end), [`superbook.md`](guides/superbook.md) (merging quoted
 liquidity across sources, and reading the opportunities that fall out),
 [`cross-arbitrage.md`](guides/cross-arbitrage.md) (the direct book against a
 synthetic route through other pairs),
+[`config-audit.md`](guides/config-audit.md) (recording runtime
+configuration changes, and joining them to who made them),
 [`metatables.md`](guides/metatables.md) (partition profiling),
 [`ci.md`](guides/ci.md) (what the gates do and how to run them locally).
 

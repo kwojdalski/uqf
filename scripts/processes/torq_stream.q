@@ -74,6 +74,24 @@ run:{[job]
         `.qproc.stream.tick set decl`on_timer;
         .qpipe.safe_timer[job;decl`timer_period;`.qproc.stream.tick;
             "Run the ",(string job)," streaming job"]];
+    / A SECOND timer, when the job declares configuration worth auditing.
+    / .
+    / q has no hook on assignment, so the only way to notice that someone
+    / set .qsub.x.notional over IPC is to look and compare (#295). It runs
+    / here rather than in a central process because config lives in each
+    / process's own memory: a poller elsewhere would need a handle per
+    / process - and connections are the scarce resource (#285) - and could
+    / only see what it thought to ask for. In-process costs nothing and
+    / catches a change whatever caused it.
+    / .
+    / It publishes through the job's OWN publish seam, so the table is
+    / declared in the job's .qstream.register like any other output and
+    / verify_pipeline_edges needs no exemption.
+    if[count .qcfgaudit.watching job;
+        `.qproc.stream.audit_config set .qcfgaudit.publisher job;
+        .qpipe.safe_timer[`$(string job),"_config";.qcfgaudit.period;
+            `.qproc.stream.audit_config;
+            "Audit ",(string job)," configuration changes"]];
     .lg.o[`qproc;"streaming job ",(string job),
         $[count decl`subscribes; " subscribed to ",", " sv string decl`subscribes; " producing"],
         $[count decl`publishes; ", publishing ",", " sv string decl`publishes; ", publishing nothing"]];

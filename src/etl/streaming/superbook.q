@@ -130,10 +130,14 @@ on_timer:{[] refresh .z.p;}
 
 \d .
 
+/ The expiry window is what decides which liquidity counts as live, so a
+/ change to it changes every snapshot downstream - worth recording (#295).
+.qcfgaudit.watch[`superbook;enlist `.qsub.superbook.max_age];
+
 .qstream.register[`superbook;`procname`subscribes`publishes`on_batch`timer_period`on_timer!(
     `superbook1;
     enlist `market_data;
-    enlist `superbook;
+    `superbook`config_change;
     .qsub.superbook.on_batch;
     0D00:00:00.500;
     .qsub.superbook.on_timer)];
