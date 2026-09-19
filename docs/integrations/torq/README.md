@@ -213,6 +213,34 @@ is a full round trip instead: `vectorize1` folds `wide_book` and republishes
 onto `stp1`, so it flows through `rdb1`/`wdb1`/`hdb` exactly like any
 vendored table and survives past `vectorize1` restarting.
 
+### A published table is a defined table
+
+`.u.upd` onto a table the tickerplant does not define discards the rows and
+says nothing - no throw at the publisher, no line in the plant's log, no row
+downstream. It is the quietest failure in the stack, and it is not
+theoretical: `fxpositions1` published a correct sixteen-row book every five
+seconds onto `fx_position` and `fx_limit_breach` for as long as it had been
+running, and neither table existed (#287). Both had been defined in
+`scripts/processes/uqf_stack_tables.q` the whole time - the registry simply
+never asked for them, because `database.q` was generated from each
+pipeline's `schema` field and `fxpositions1` publishes two tables and owns
+neither.
+
+The rule now holds from both ends:
+
+- **At declaration.** `database.q` is generated from what each pipeline
+  says it *publishes*, so a table a pipeline sends rows to is a table `stp1`
+  is told about, and there is no second field to forget.
+  `plant_schema.undefined_published_tables` reports any that slip through,
+  and the Python suite fails on a non-empty answer.
+- **At startup.** `.qpipe.assert_publishable` asks the plant for `tables[]`
+  before wiring a job's publish seam, and refuses to start when a declared
+  table is absent - naming every missing one, so a single restart fixes
+  them all.
+
+Adding a table is therefore two edits and no third: define it in
+`uqf_stack_tables.q`, and name it in the publishing pipeline's `publishes`.
+
 ## Config generation
 
 Every process/table addition here (`fxfeed1` through `vectorize1`, and

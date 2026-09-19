@@ -15,7 +15,7 @@
 / pipeline still writes its own readable, root-level `upd` and its own
 / compute function. The blocks own the plumbing, not the logic.
 / .
-/ The seven invariants, each of which cost a live debugging session
+/ The eight invariants, each of which cost a live debugging session
 / somewhere in scripts/torq_*.q before it was written down:
 / .
 /   1. .u.upd stamps its own `time` on receipt (see
@@ -62,6 +62,18 @@
 /      already-credentialed proctype ("metrics") in process.csv.
 /      -> .qpipe.subscribe_etl does the whole startup/depcycles/subscribe
 /         dance and hands back the publish handle.
+/   8. .u.upd onto a table the tickerplant does NOT define discards the rows
+/      and reports nothing - no throw at the publisher, no line in the
+/      plant's log, no row downstream. It is the quietest failure in this
+/      file: fxpositions1 published a correct sixteen-row book every five
+/      seconds onto `fx_position` and `fx_limit_breach`, neither of which
+/      the generated database.q defined, for as long as it had been running
+/      (#287). Both were defined in uqf_stack_tables.q the whole time; the
+/      registry simply never asked for them.
+/      -> .qpipe.assert_publishable refuses to start a process whose
+/         declared publishes the plant has no table for, and
+/         plant_schema.undefined_published_tables holds the same rule over
+/         the registry so it fails at declaration rather than at runtime.
 / .
 / Loaded via each pipeline row's own `load` column in the process.csv
 / torq_orchestrator.core.bootstrap() generates - not by src/init.q, and not
@@ -126,6 +138,41 @@ subscribe_etl:{[nm;sub_tables]
     / tickerplant was confirmed up. Separate, unauthenticated handle from the
     / .servers.startup[] subscription handle, same as every ETL did by hand.
     .servers.gethandlebytype[tp_type;`any]}
+
+/ Refuse to start when the plant has no table for something this process
+/ says it publishes.
+/ .
+/ WHY AT STARTUP. `.u.upd` onto a table the tickerplant does not define
+/ neither lands nor complains: the rows go nowhere, the publisher logs
+/ nothing, the plant logs nothing, and the only symptom is a downstream
+/ table that stays empty. fxpositions1 published a correct sixteen-row book
+/ every five seconds for as long as it had been running before anyone
+/ noticed the table did not exist (#287). One `tables[]` round trip at
+/ startup turns that into a process that refuses to start and names the
+/ table.
+/ .
+/ The generated database.q is checked against the same rule from the other
+/ side (procs.undefined_published_tables), so this should never fire in a
+/ stack built from this tree - which is the point of a runtime assertion:
+/ it covers the case the generator was not the thing that was wrong.
+/ @param h the publish handle to the tickerplant
+/ @param pub_tables the table(s) this process declares it publishes
+/ @return pub_tables
+/ @throws error naming every declared table the tickerplant does not define
+assert_publishable:{[h;pub_tables]
+    / `(),` because a job that publishes ONE table declares it as an atom,
+    / and `except` takes a list on the left - an atom there is a 'type, so
+    / the single-publish jobs (every feed, and posbook) would each have
+    / failed to start on an assertion meant to protect them.
+    tbls:(),pub_tables;
+    if[0=count tbls; :pub_tables];
+    missing:tbls except h"tables[]";
+    if[count missing;
+        '"qpipe.assert_publishable: the tickerplant defines no table ",
+            (", " sv string missing),
+            " - rows published onto it are discarded without an error. Add it to ",
+            "scripts/processes/uqf_stack_tables.q and restart the stack"];
+    pub_tables}
 
 / Publish handle only, for a feed process that produces rows but subscribes
 / to nothing (torq_fx_feed.q / torq_quotes_feed.q / torq_wide_book_feed.q /
