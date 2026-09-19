@@ -15,7 +15,7 @@
 / pipeline still writes its own readable, root-level `upd` and its own
 / compute function. The blocks own the plumbing, not the logic.
 / .
-/ The eight invariants, each of which cost a live debugging session
+/ The nine invariants, each of which cost a live debugging session
 / somewhere in scripts/torq_*.q before it was written down:
 / .
 /   1. .u.upd stamps its own `time` on receipt (see
@@ -74,6 +74,15 @@
 /         declared publishes the plant has no table for, and
 /         plant_schema.undefined_published_tables holds the same rule over
 /         the registry so it fails at declaration rather than at runtime.
+/ .
+/   9. The plant sends `(`endofperiod;x;y;z)` and `(`endofday;x;y)` to
+/      every subscriber (.stpps.endp / .stpps.end in
+/      lib/torq/code/common/pubsub.q), and expects both at ROOT - the same
+/      requirement as `upd`, for invariant 5's reason. A subscriber that
+/      defines neither throws once a period, and TorQ traps that into the
+/      process's own stderr log: four invisible error lines an hour in
+/      every uqf process, with nothing else different, until #298.
+/      -> .qpipe.install_period_handlers defines both.
 / .
 / Loaded via each pipeline row's own `load` column in the process.csv
 / torq_orchestrator.core.bootstrap() generates - not by src/init.q, and not
@@ -222,6 +231,35 @@ as_table:{[data]
 / invariant 3's own trap (one row that reads as one column) and is still
 / refused, by as_table, with the message that names it.
 is_columns:{[data] (0h=type data) and (0<count data) and all 0<=type each data}
+
+/ Define the end-of-period and end-of-day callbacks the plant sends every
+/ subscriber (invariant 9).
+/ .
+/ ROOT, like `upd`, because that is where the plant calls them.
+/ .
+/ NO-OPS, and deliberately so rather than by omission. A streaming job here
+/ holds RUNNING state - a position book, a merged superbook, a quote
+/ history - which is exactly the kind of thing that must survive a period
+/ boundary; clearing it would throw away positions at 19:00. Everything
+/ these jobs derive has already been published onto the plant, so there is
+/ nothing to flush either. The rdb and wdb, which DO roll their tables,
+/ have their own vendored handlers and never load this file.
+/ @return the names defined
+/ @eg .qpipe.install_period_handlers[] -> `endofperiod`endofday
+install_period_handlers:{[]
+    / `` `endofperiod ``, NOT `` `.endofperiod ``. A dotless symbol passed
+    / to `set` names the ROOT global even from inside `\d .qpipe`, which is
+    / what the plant calls. A LEADING DOT makes it a different name
+    / entirely - `.endofperiod` - which is defined, resolvable, and never
+    / called by anything. Measured, because both forms look equally
+    / plausible and only one of them is a handler:
+    /   \d .ns  /  f:{`endofperiod set {..}}  ->  root type 100
+    /   \d .ns  /  f:{`.endofday set {..}}    ->  root MISSING, .endofday 100
+    `endofperiod set {[current_period;next_period;data]
+        .lg.o[`qpipe;"end of period ",(string current_period)," -> ",string next_period];
+        };
+    `endofday set {[dt;data] .lg.o[`qpipe;"end of day ",string dt]; };
+    `endofperiod`endofday}
 
 / Publish rows onto the tickerplant (invariants 1, 2, 3 and 5). The one and
 / only way a pipeline in this demo should send data.

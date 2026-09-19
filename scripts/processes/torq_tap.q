@@ -74,3 +74,17 @@ upd:{[t;x]
 .servers.CONNECTIONS:.qproc.tap.requiredprocs;
 .servers.startup[];
 .qproc.tap.init[];
+
+/ The plant sends `(`endofperiod;x;y;z)` and `(`endofday;x;y)` to every
+/ subscriber and expects both at ROOT. tap1 is a subscriber like any other,
+/ and without these it throws once a period into its own stderr log, where
+/ nothing looks. Defined here rather than via
+/ .qpipe.install_period_handlers because tap1 does its own subscribing and
+/ deliberately does not load the adapter (loads_qpipe=False) - see
+/ scripts/processes/torq_pipeline.q, invariant 9, for the reasoning behind
+/ the empty bodies.
+endofperiod:{[current_period;next_period;data]
+    .lg.o[`qproc;"end of period ",(string current_period)," -> ",string next_period];
+    }
+
+endofday:{[dt;data] .lg.o[`qproc;"end of day ",string dt]; }

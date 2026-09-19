@@ -99,4 +99,7 @@ run:{[job]
 
 \d .
 
+/ Every plant subscriber needs these at ROOT - see .qpipe's own header.
+.qpipe.install_period_handlers[];
+
 .qproc.stream.run .qproc.stream.which_job[];

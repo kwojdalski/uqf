@@ -69,3 +69,32 @@ test_a_job_that_publishes_nothing_asks_the_plant_nothing:{[t]
     .qunit.assertEquals[.qpipe.assert_publishable[h;`symbol$()];
         `symbol$();
         "no publishes means no round trip"]};
+
+/ --- the handlers the plant calls on a period boundary -------------------
+
+/ These exist because every uqf process was throwing `'endofperiod` once a
+/ period into its own stderr log, where nothing looks (#298). What makes
+/ them worth a test is that the FIRST version defined them under the wrong
+/ names - `.endofperiod` rather than root `endofperiod` - which is
+/ resolvable, greppable, and never called by anything. Asserting the root
+/ name is the only thing that separates the two.
+test_the_period_handlers_land_at_root_where_the_plant_calls_them:{[t]
+    .qpipe.install_period_handlers[];
+    .qunit.assertEquals[type @[get;`endofperiod;`missing];100h;
+        "the plant sends (`endofperiod;x;y;z) to a ROOT name, like upd"];
+    .qunit.assertEquals[type @[get;`endofday;`missing];100h;
+        "and (`endofday;x;y) to another"]};
+
+test_the_period_handlers_take_what_the_plant_sends:{[t]
+    .qpipe.install_period_handlers[];
+    / .stpps.endp sends three arguments and .stpps.end two; a handler of
+    / the wrong arity throws exactly like a missing one, and into the same
+    / log nobody reads.
+    .qunit.assertEquals[count (value get `endofperiod)1;3;
+        "endofperiod takes currentperiod, nextperiod and data"];
+    .qunit.assertEquals[count (value get `endofday)1;2;
+        "endofday takes the date and data"]};
+
+test_installing_them_reports_what_it_defined:{[t]
+    .qunit.assertEquals[.qpipe.install_period_handlers[];`endofperiod`endofday;
+        "so a caller can see which names were claimed at root"]};
