@@ -35,9 +35,9 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | `databento_backfill1` | 6090 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `upstream_backfill1` | 6091 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `marketdata1` | 6092 | normalizer | `processes/torq_stream.q` | `market_data` | `quote`, `quotes` | `market_data` |
-| `superbook1` | 6093 | etl | `processes/torq_stream.q` | `superbook` | `market_data` | `superbook` |
+| `superbook1` | 6093 | etl | `processes/torq_stream.q` | `superbook` | `market_data` | `superbook`, `config_change` |
 | `arbitrage1` | 6094 | etl | `processes/torq_stream.q` | `arbitrage` | `superbook` | `arbitrage` |
-| `crossarb1` | 6095 | etl | `processes/torq_stream.q` | `cross_arbitrage` | `superbook` | `cross_arbitrage` |
+| `crossarb1` | 6095 | etl | `processes/torq_stream.q` | `cross_arbitrage` | `superbook` | `cross_arbitrage`, `config_change` |
 
 ### Why a row deviates from the defaults
 
@@ -68,6 +68,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 | table | defined by | published by |
 |---|---|---|
 | `arbitrage` | `schemas.ARBITRAGE_TABLE_SCHEMA` | `arbitrage1` |
+| `config_change` | `schemas.CONFIG_CHANGE_TABLE_SCHEMA` | `crossarb1`, `superbook1` |
 | `cross_arbitrage` | `schemas.CROSS_ARBITRAGE_TABLE_SCHEMA` | `crossarb1` |
 | `crypto_book` | `schemas.CRYPTO_BOOK_TABLE_SCHEMA` | `cryptomock1` |
 | `crypto_trades` | `schemas.CRYPTO_TRADES_TABLE_SCHEMA` | `cryptomock1` |

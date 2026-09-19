@@ -52,6 +52,14 @@ arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:
 / BEFORE filtering on active.
 cross_arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$(); fully_filled:`boolean$(); skew:`timespan$())
 
+/ An audit trail of runtime configuration changes (.qcfgaudit). `old` is
+/ empty on a name's first observation, which is the row that says what the
+/ process STARTED with. Values are -3! renderings, because one column has to
+/ hold a timespan, a float and a symbol list. WHO made a change is not here:
+/ join to TorQ's own usage log at the same timestamp, which records .z.u,
+/ .z.a and the command text for every incoming query.
+config_change:([]time:`timestamp$(); owner:`g#`symbol$(); name:`symbol$(); old:(); new:(); as_of:`timestamp$())
+
 / A deliberately "incorrectly-shaped" wide book: one scalar column per level
 / rather than vector columns, which is the shape real venue feeds arrive in
 / and the input src/market_data/book.q exists to fold.

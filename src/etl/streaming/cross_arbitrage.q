@@ -194,8 +194,14 @@ on_batch:{[tbl;batch]
 
 \d .
 
+/ The two numbers that change what this job reports, declared so a change
+/ to either is recorded rather than inferred later from a shift in the
+/ output (#295). `books` is deliberately absent: it is state, and large.
+.qcfgaudit.watch[`cross_arbitrage;
+    `.qsub.cross_arbitrage.notional`.qsub.cross_arbitrage.max_skew];
+
 .qstream.register[`cross_arbitrage;`procname`subscribes`publishes`on_batch!(
     `crossarb1;
     enlist `superbook;
-    enlist `cross_arbitrage;
+    `cross_arbitrage`config_change;
     .qsub.cross_arbitrage.on_batch)];

@@ -141,6 +141,7 @@ _TICKERPLANT_TABLES = [
     "superbook",
     "arbitrage",
     "cross_arbitrage",
+    "config_change",
     "orders",
     "fx_position",
     "fx_limit_breach",
