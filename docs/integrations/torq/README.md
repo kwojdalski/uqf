@@ -7,7 +7,7 @@ it). Reflects what `uqf-stack list processes` shows today: the vendored
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
 `markout1`, `databento1`, `cryptomock1`, `executions1`, `marks1`,
 `fxordersfeed1`, `fxpositions1`, `marketdata1`, `superbook1`,
-`arbitrage1`), and four bounded backfill processes (`deals_backfill1`,
+`arbitrage1`, `crossarb1`), and four bounded backfill processes (`deals_backfill1`,
 `events_backfill1`, `databento_backfill1`, `upstream_backfill1`).
 Declared is not the same as running here - see
 [what starts with the stack](#what-starts-with-the-stack-and-why-not-all-of-it).
@@ -19,6 +19,13 @@ three are on demand rather than part of `uqf-stack start` - see the
 connection budget below. See
 [the superbook guide](../../guides/superbook.md) for source identity, expiry
 and the query for currently active opportunities.
+
+`crossarb1` reads the same `superbook` and asks the other arbitrage
+question: not "are two sources crossed on one pair" but "is the direct
+market out of line with a route through other pairs" - EURJPY against
+EURUSD x USDJPY, into `cross_arbitrage`. It is a second CONSUMER of that
+chain rather than a fifth link in it, so it can run with or without
+`arbitrage1`. See [the cross-arbitrage guide](../../guides/cross-arbitrage.md).
 
 Each backfill process now NAMES the `.qbw` worker it runs. One script
 serves all four and `UQF_BACKFILL_WORKER` picks which at runtime, so until
@@ -175,14 +182,20 @@ keep their schema row and their place in the DAG, and are one command away:
 | `widefeed1`, `vectorize1` | a closed pair - the only producer of `wide_book` and its only consumer - so they start and stop together |
 | `databento1` | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing |
 | `feed1` | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table |
-| `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1`, and `arbitrage` by nothing, so the three move together |
+| `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together |
+| `crossarb1` | the synthetic-versus-direct detector, a second consumer of that chain - and the fourth connection against three spare, so it needs something stopped first |
 | `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in `processes.md` |
 
 ```bash
 uqf-stack start widefeed1 vectorize1                 # the vectorize branch
 uqf-stack start cross1                               # quotesfeed1 already runs
 uqf-stack start marketdata1 superbook1 arbitrage1    # direct FX arbitrage
+uqf-stack start marketdata1 superbook1 crossarb1     # cross-currency instead
 ```
+
+The last two lines are alternatives, not a sequence: `arbitrage1` and
+`crossarb1` both read `superbook` and answer different questions, and
+running the chain plus BOTH is four plant connections against three spare.
 
 Each of those has its upstream producer either in the default set or shed
 alongside it, so starting one is enough - that property is held by a test,

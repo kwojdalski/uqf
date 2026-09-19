@@ -22,6 +22,11 @@ and 44 from `KDBBASEPORT`, respectively. On an existing stack, restart
 through `uqf-stack` to load the added table schemas as well as the
 services.
 
+A second consumer, `crossarb1`, reads the same `superbook` and compares each
+pair's direct book against a synthetic route through the others - see
+[the cross-arbitrage guide](cross-arbitrage.md). It is independent of
+`arbitrage1`; neither needs the other.
+
 They are **on demand**, not part of `uqf-stack start`:
 
 ```bash

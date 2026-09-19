@@ -20,17 +20,31 @@
 
 \d .qsynth
 
-/ The four pairs every FX feed and ETL in this demo produces. The markout
-/ and position jobs filter incoming quotes to these, because the vendored
+/ The pairs every FX feed and ETL in this demo produces. The markout and
+/ position jobs filter incoming quotes to these, because the vendored
 / starter pack publishes its own equity quotes onto the same table.
-pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD
+/ .
+/ EURJPY is here to CLOSE A TRIANGLE. The other four are all USD-legged, so
+/ every route between two non-USD currencies passes through USD exactly
+/ once and never returns - there is no cycle, and therefore no cross-
+/ currency arbitrage to find. With EURJPY quoted directly, EURUSD x USDJPY
+/ has something to be compared against, which is what cross_arbitrage.q
+/ does.
+pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY
 
 / Starting mid for each pair, in pairs order.
-spot:1.0850 1.2650 149.50 0.6550
+/ .
+/ EURJPY starts at 1.0850 * 149.50, so the triangle begins consistent. It
+/ does not stay that way: each pair walks INDEPENDENTLY below, so the three
+/ drift apart and the synthetic and direct prices cross each other from
+/ time to time. That is what gives the cross-arbitrage detector something
+/ to report, and it is also why those reports are an artefact of three
+/ unrelated random walks rather than anything resembling a market.
+spot:1.0850 1.2650 149.50 0.6550 162.2075
 
-/ One pip for each pair, in pairs order - 0.01 for the JPY pair, 0.0001 for
-/ the rest. Also the half-spread each feed quotes around the mid.
-pip:0.0001 0.0001 0.01 0.0001
+/ One pip for each pair, in pairs order - 0.01 for the JPY pairs, 0.0001
+/ for the rest. Also the half-spread each feed quotes around the mid.
+pip:0.0001 0.0001 0.01 0.0001 0.01
 
 / The size every quote is published at, and the size the cross job prices.
 size_unit:1000000

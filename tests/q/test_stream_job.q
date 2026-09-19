@@ -55,7 +55,7 @@ test_every_job_is_registered:{[t]
     / The four feeds publish on a timer and subscribe to nothing; the five
     / subscribers are the other half. One contract covers both.
     .qunit.assertEquals[asc .qstream.registered[];
-        `arbitrage`cross`crypto_mock`databento_book`executions`fx_feed`fx_orders_feed`fx_positions`fx_trades_feed`market_data`markout`marks`posbook`quotes_feed`superbook`vectorize`wide_book_feed;
+        `arbitrage`cross`cross_arbitrage`crypto_mock`databento_book`executions`fx_feed`fx_orders_feed`fx_positions`fx_trades_feed`market_data`markout`marks`posbook`quotes_feed`superbook`vectorize`wide_book_feed;
         "each job file registers itself as it loads"]};
 
 test_a_feed_declares_no_subscription:{[t]

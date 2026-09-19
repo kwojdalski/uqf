@@ -41,9 +41,12 @@ reference or an architecture note, and only its purpose decides where it goes.
 
 **`guides/`** — [`uqf-stack.md`](guides/uqf-stack.md) (running the stack),
 [`new-pipeline.md`](guides/new-pipeline.md) (adding a source and a bounded
-worker, end to end), [`metatables.md`](guides/metatables.md) (partition
-profiling), [`ci.md`](guides/ci.md) (what the gates do and how to run them
-locally).
+worker, end to end), [`superbook.md`](guides/superbook.md) (merging quoted
+liquidity across sources, and reading the opportunities that fall out),
+[`cross-arbitrage.md`](guides/cross-arbitrage.md) (the direct book against a
+synthetic route through other pairs),
+[`metatables.md`](guides/metatables.md) (partition profiling),
+[`ci.md`](guides/ci.md) (what the gates do and how to run them locally).
 
 **`architecture/`** — [`pipeline-philosophy.md`](architecture/pipeline-philosophy.md)
 (the positions `src/etl/` is built on, and what enforces each),

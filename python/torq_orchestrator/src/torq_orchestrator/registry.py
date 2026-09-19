@@ -19,6 +19,7 @@ from torq_orchestrator.pipeline import (
 )
 from torq_orchestrator.schemas import (
     ARBITRAGE_TABLE_SCHEMA,
+    CROSS_ARBITRAGE_TABLE_SCHEMA,
     DATABENTO_BOOK_TABLE_SCHEMA,
     EXECUTION_QUALITY_TABLE_SCHEMA,
     EXECUTIONS_TABLE_SCHEMA,
@@ -338,6 +339,26 @@ PIPELINES: tuple[Pipeline, ...] = (
         note=(
             "gross direct cross-source opportunities, including inactive clearing "
             "rows. Tail of the marketdata1 chain - see there"
+        ),
+    ),
+    Pipeline(
+        procname="crossarb1",
+        script=STREAM_RUNNER_SCRIPT,
+        loads_qpipe=True,
+        kind="etl",
+        subscribes=("superbook",),
+        table="cross_arbitrage",
+        schema=CROSS_ARBITRAGE_TABLE_SCHEMA,
+        localtime="0",
+        startwithall="0",
+        note=(
+            "the direct book against a synthetic route through other pairs "
+            "(EURJPY against EURUSD x USDJPY), where arbitrage1 compares two "
+            "sources on the SAME pair. Reads superbook like arbitrage1, so it "
+            "is the second consumer of the marketdata1 chain rather than a "
+            "fifth link - see there. startwithall:0 for that chain's reason "
+            "(#285), and note that the chain plus this one is four plant "
+            "connections against three spare: stop something first"
         ),
     ),
 )

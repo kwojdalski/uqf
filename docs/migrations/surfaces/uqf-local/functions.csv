@@ -611,6 +611,19 @@ qsub.cross,quotes,table,,
 qsub.cross,quotes_in,table,,
 qsub.cross,reprice,function,1,now
 qsub.cross,reprice_crosses,function,2,quotes as_of
+qsub.cross_arbitrage,books,dict,,
+qsub.cross_arbitrage,cross_arbitrage,table,,
+qsub.cross_arbitrage,direct_side,function,3,row side size
+qsub.cross_arbitrage,evaluate,function,3,state size as_of
+qsub.cross_arbitrage,leg_book,function,1,row
+qsub.cross_arbitrage,leg_times,function,2,state route
+qsub.cross_arbitrage,max_skew,value,,
+qsub.cross_arbitrage,notional,value,,
+qsub.cross_arbitrage,on_batch,function,2,tbl batch
+qsub.cross_arbitrage,opportunity,function,5,state avail sym size as_of
+qsub.cross_arbitrage,publish,value,,
+qsub.cross_arbitrage,quotable,function,1,state
+qsub.cross_arbitrage,route_for,function,2,avail sym
 qsub.crypto_mock,beta_draw,function,2,a b
 qsub.crypto_mock,book_rows,function,1,mkt
 qsub.crypto_mock,decide,function,3,row horizon draws

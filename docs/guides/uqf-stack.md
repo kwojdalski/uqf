@@ -250,6 +250,12 @@ command count as present, so the recommended form for a chain is silent:
 uqf-stack start marketdata1 superbook1 arbitrage1
 ```
 
+`crossarb1` is a second consumer of that chain, answering the other
+arbitrage question - the direct book against a synthetic route rather than
+two sources on one pair. The chain plus BOTH detectors is four plant
+connections against three spare, so run one or the other unless you stop
+something first. See [the cross-arbitrage guide](cross-arbitrage.md).
+
 The graph behind all of this is the `subscribes`/`publishes` pair on each
 `Pipeline`, the same declaration the generated `database.q` and the `.qdag`
 job graph are built from - so what you are warned about and what is running
