@@ -124,20 +124,71 @@ test_a_name_that_appears_later_is_reported_as_a_change:{[t]
 
 / --- the publisher seam ---------------------------------------------------
 
-test_the_publisher_is_niladic_and_quiet_when_nothing_moved:{[t]
+/ WHY THIS ASSERTS A TYPE. The first version of the timer target was
+/ `{[job] ...}[job]`, which supplies every argument and so CALLS the
+/ lambda rather than projecting it. The poll therefore ran once, at wiring
+/ time, and the timer was left pointing at `()` - which it then "called"
+/ every five seconds without error and without effect. Both tests here
+/ passed anyway, because the publish they asserted had already happened
+/ during the setup line. Asserting the value is a function is what
+/ separates "the work happened" from "the work happens when called".
+test_the_timer_target_is_a_function_not_the_result_of_calling_one:{[t]
     reset[];
-    .qunit.assertEquals[.qcfgaudit.publisher[`never_registered][];();
-        "a job with no watched config runs the timer and publishes nothing"]};
+    .qunit.assertTrue[100h=type .qcfgaudit.poll_and_publish;
+        "a timer target that is not a lambda runs once at wiring time and never again"]};
 
-test_the_publisher_sends_through_the_jobs_own_seam:{[t]
+test_the_timer_target_is_niladic:{[t]
+    / .qpipe.safe_timer wraps it as `@[f;::;handler]`, the idiom invariant 4
+    / documents for niladic functions.
+    reset[];
+    / q reports a niladic lambda's parameters as `,`` ` ``` - one empty
+    / symbol - not as an empty list, so that is what "takes no argument"
+    / looks like under introspection.
+    .qunit.assertEquals[(value .qcfgaudit.poll_and_publish)1;enlist `;
+        "safe_timer calls it with no arguments"]};
+
+test_nothing_is_published_before_the_runner_names_this_processs_job:{[t]
+    reset[];
+    `.qcfgaudit.owner_here set `;
+    .qunit.assertEquals[.qcfgaudit.poll_and_publish[];();
+        "a process whose job declares no config must not publish, or reach for a seam that was never wired"]};
+
+test_the_publisher_sends_through_the_jobs_own_seam_when_called:{[t]
     reset[];
     `.cfgatest.sent set ();
     .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
+    `.qcfgaudit.owner_here set `cross_arbitrage;
     .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
-    .qcfgaudit.publisher[`cross_arbitrage][];
+    / nothing yet - the work must happen on the CALL, not on the wiring
+    .qunit.assertEquals[.cfgatest.sent;();"wiring alone publishes nothing"];
+    .qcfgaudit.poll_and_publish[];
     .qunit.assertEquals[first .cfgatest.sent;`config_change;
         "onto the table the job declares, through the publisher the runner wired"];
     .qunit.assertEquals[count last .cfgatest.sent;1;"carrying the one change"]};
+
+test_a_second_call_publishes_nothing_when_nothing_moved:{[t]
+    reset[];
+    .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
+    `.qcfgaudit.owner_here set `cross_arbitrage;
+    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
+    .qcfgaudit.poll_and_publish[];
+    `.cfgatest.sent set ();
+    .qcfgaudit.poll_and_publish[];
+    .qunit.assertEquals[.cfgatest.sent;();"a timer that republished every tick would be a sampler"]};
+
+test_a_change_between_two_calls_is_published_by_the_second:{[t]
+    / The end-to-end property the live stack needed and did not have: the
+    / value changes AFTER wiring, and the next timer call must carry it.
+    reset[];
+    .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
+    `.qcfgaudit.owner_here set `cross_arbitrage;
+    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
+    .qcfgaudit.poll_and_publish[];
+    `.cfgatest.a_number set 99;
+    `.cfgatest.sent set ();
+    .qcfgaudit.poll_and_publish[];
+    .qunit.assertEquals[first .cfgatest.sent;`config_change;"the change is published"];
+    .qunit.assertEquals[(first last .cfgatest.sent)`new;"99";"with the new value"]};
 
 / --- what the jobs actually declare ---------------------------------------
 

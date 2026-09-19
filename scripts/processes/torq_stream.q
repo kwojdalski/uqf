@@ -88,9 +88,9 @@ run:{[job]
     / declared in the job's .qstream.register like any other output and
     / verify_pipeline_edges needs no exemption.
     if[count .qcfgaudit.watching job;
-        `.qproc.stream.audit_config set .qcfgaudit.publisher job;
+        `.qcfgaudit.owner_here set job;
         .qpipe.safe_timer[`$(string job),"_config";.qcfgaudit.period;
-            `.qproc.stream.audit_config;
+            `.qcfgaudit.poll_and_publish;
             "Audit ",(string job)," configuration changes"]];
     .lg.o[`qproc;"streaming job ",(string job),
         $[count decl`subscribes; " subscribed to ",", " sv string decl`subscribes; " producing"],
