@@ -129,6 +129,55 @@ a reason not to be startable with it.
 than declaring them, which is exactly what a `.qstream` declaration cannot
 express.
 
+### What starts with the stack, and why not all of it
+
+`uqf-stack start` does not start every process it knows about, and that is
+deliberate. A q process running on the community licence in `~/.kx/kc.lic`
+accepts **sixteen** concurrent inbound connections and resets the
+seventeenth. Every streaming job is its own process holding one handle to
+`stp1`, so the plant is the scarce resource in this topology, and the
+sixteen slots are spent before the process list runs out.
+
+The failure is silent, which is the part worth knowing. `stp1` does not log
+the refusal, the shut-out process retries forever inside `torq_stream.q`'s
+initialisation, and because `uqf-stack summary` is a PID check it reports
+that process as `up`. Nothing anywhere says the stack is short. What you get
+instead is a topology decided by start order - whichever sixteen processes
+won the race that boot - which changes every time. It was found the hard way
+when `fxpositions1` and `executions1` came up "up" and never subscribed to
+anything (#285).
+
+So the budget is declared rather than discovered. `PLANT_CONNECTION_BUDGET`
+and `PLANT_CONNECTION_RESERVE` in `pipeline_edges.py` hold the cap and the
+slots kept back for ad-hoc handles (`uqf-stack query`, `uqf-stack schema`,
+the frontend's health view each take one while they run), and
+`verify_pipeline_edges` counts the `startwithall=1` plant clients against
+them. Adding a process that would push the default start over the cap now
+fails in CI, naming every client, rather than quietly costing someone else
+their slot.
+
+Declaring a job and running it are separate decisions. These stay declared,
+keep their schema row and their place in the DAG, and are one command away:
+
+| process | why it is not in the default start |
+|---|---|
+| `cross1` | a leaf: it subscribes to `quotes` and publishes no table, so nothing stalls while it is stopped |
+| `widefeed1`, `vectorize1` | a closed pair - the only producer of `wide_book` and its only consumer - so they start and stop together |
+| `databento1` | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing |
+| `feed1` | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table |
+| `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in `processes.md` |
+
+```bash
+uqf-stack start widefeed1 vectorize1     # the vectorize branch
+uqf-stack start cross1                   # quotesfeed1 is already running
+```
+
+Each of those has its upstream producer either in the default set or shed
+alongside it, so starting one is enough - that property is held by a test,
+not by habit. Starting several at once eats into the reserve; if you need
+the whole graph up at the same time, stop something first or raise the
+budget against a licence that allows it.
+
 ## Data pipeline: table by table
 
 What each process actually reads and writes, and where the two uqf ETL

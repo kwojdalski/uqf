@@ -48,11 +48,20 @@ log = get_logger(__name__)
 #   stack - a monitoring surface that is only ever populated if an operator
 #   knows to start one more process by hand is not monitoring.
 #
+#   feed1 - the starter pack's random demo feed, turned OFF. It publishes
+#   `trade` and `quote`, and this tree has its own producer for `quote`
+#   (fxfeed1) built from the FX curve rather than from `rand`. Keeping both
+#   meant two feeds interleaving rows into one table, and it cost one of the
+#   sixteen inbound connections the licence allows a q process - which is the
+#   budget that decides whether fxpositions1 and executions1 can reach the
+#   plant at all (#285, PLANT_CONNECTION_BUDGET). Start it by hand for a
+#   vendored TorQ demo.
+#
 # This is an overlay, not an edit: the vendored file is never touched,
 # and because process_overrides.csv is still applied afterwards, an operator
 # who does want the upstream behaviour can put it back with
 # `uqf-stack config-set monitor1 startwithall 0`.
-VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1"}
+VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 
 # Proctypes monitor1 must also subscribe to, on top of the ten the vendored
 # settings file lists.
