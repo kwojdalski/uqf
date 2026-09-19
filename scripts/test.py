@@ -149,6 +149,21 @@ def lane_smoke() -> None:
     _q("smoke", "tests/q/smoke_external_metadata.q")
 
 
+def lane_stack_smoke() -> None:
+    """Start the real stack and check it is actually doing something.
+
+    The only lane that runs PROCESSES rather than functions, and the only
+    one that can catch a job whose computation is correct and whose wiring
+    is not - which is every ETL bug this tree has had (#298). Restarts the
+    stack, watches it, and fails if a running pipeline's declared output
+    has no rows or a running process wrote to its error log meanwhile.
+    """
+    _banner("stack-smoke: the running stack publishes and stays quiet")
+    # uv run, not sys.executable: the gate imports torq_orchestrator, which
+    # needs the workspace environment, the same way lane_python does.
+    _run("stack-smoke", ["uv", "run", "python", "scripts/gates/stack_smoke.py"])
+
+
 # ---------------------------------------------------------------- coverage
 
 
@@ -211,11 +226,14 @@ LANES: dict[str, Callable[[], None]] = {
     "q-coverage": lane_q_coverage,
     "coverage": lane_coverage,
     "smoke": lane_smoke,
+    "stack-smoke": lane_stack_smoke,
 }
 
-#: `all` is every lane except smoke (ETL-20) and coverage - coverage runs the
-#: q suite a second time under instrumentation, which is worth asking for and
-#: not worth paying for on every release run.
+#: `all` is every lane except smoke (ETL-20), stack-smoke and coverage.
+#: coverage runs the q suite a second time under instrumentation;
+#: stack-smoke needs a licence, free ports and a couple of minutes because
+#: it starts the actual stack. Both are worth asking for and neither is
+#: worth paying for on every release run.
 ALL = [
     "q-unit",
     "q-examples",
