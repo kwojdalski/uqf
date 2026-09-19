@@ -110,9 +110,10 @@ qccy,normalize_ccy_pair,function,1,x
 qcfgaudit,config_change,table,,
 qcfgaudit,forget,function,1,
 qcfgaudit,max_render,value,,
+qcfgaudit,owner_here,value,,
 qcfgaudit,period,value,,
 qcfgaudit,poll,function,2,owner as_of
-qcfgaudit,publisher,function,1,job
+qcfgaudit,poll_and_publish,function,1,
 qcfgaudit,render,function,1,name
 qcfgaudit,seen,dict,,
 qcfgaudit,watch,function,2,owner names

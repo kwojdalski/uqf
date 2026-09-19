@@ -126,24 +126,34 @@ poll:{[owner;as_of]
 / not show up at all, which is the cost of having no assignment hook.
 period:0D00:00:05.000
 
-/ A niladic function that polls one owner and publishes what moved.
+/ The job whose configuration THIS process audits, set by the runner.
 / .
-/ NILADIC because that is what a TorQ timer takes, and a PROJECTION over
-/ the job name rather than a lookup at call time, so the timer cannot be
-/ pointed at a job this process is not running.
+/ A global rather than a value closed over by the timer function, for two
+/ reasons that both bite. A q lambda does not close over its definer's
+/ locals, so a captured `job` would not be visible at call time; and
+/ `{[job] ...}[job]` is not a projection but a CALL - supplying every
+/ argument runs the lambda and yields its result, which is how the first
+/ version of this ran the poll exactly once, at wiring time, and left the
+/ timer pointing at `()` (#295). One process runs one job, so a global is
+/ also simply the truth.
+owner_here:`
+
+/ Poll this process's own job and publish whatever moved.
 / .
-/ It resolves the job's publish seam at CALL time, not here: the runner
-/ wires that seam after the job is registered, and capturing it now would
-/ capture the unwired stub.
-/ @param job the streaming job whose config to audit
-/ @return a niladic function
-/ @eg .qcfgaudit.publisher[`nothing_declares_this][]
-publisher:{[job]
-    {[job]
-        rows:poll[job;.z.p];
-        if[0=count rows; :()];
-        (get ` sv (.qstream.declaration[job]`ns),`publish)[`config_change;rows];
-        }[job]}
+/ NILADIC, because that is what .qpipe.safe_timer's `@[f;::;handler]`
+/ wrapper expects - see invariant 4 in scripts/processes/torq_pipeline.q.
+/ .
+/ It resolves the job's publish seam at CALL time rather than at wiring
+/ time: the runner wires that seam after the job registers, so looking it
+/ up any earlier captures the unwired stub.
+/ @return nothing
+/ @eg .qcfgaudit.poll_and_publish[]
+poll_and_publish:{[]
+    if[null owner_here; :()];
+    rows:poll[owner_here;.z.p];
+    if[0=count rows; :()];
+    (get ` sv (.qstream.declaration[owner_here]`ns),`publish)[`config_change;rows];
+    }
 
 / Forget every observation, so the next poll reports each watched name as
 / new again. For tests and for a deliberate re-baseline; nothing in a
