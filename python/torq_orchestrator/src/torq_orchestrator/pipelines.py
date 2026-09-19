@@ -75,7 +75,13 @@ PIPELINES: tuple[Pipeline, ...] = (
         loads_qpipe=True,
         kind="etl",
         subscribes=("quotes",),
-        note="keeps cross_quotes as private process state, publishes no table",
+        startwithall="0",
+        note=(
+            "keeps cross_quotes as private process state, publishes no table - so "
+            "it is a leaf, and nothing downstream stalls while it is stopped. "
+            "startwithall:0 to stay inside PLANT_CONNECTION_BUDGET (#285); "
+            "quotesfeed1 runs by default, so `uqf-stack start cross1` is enough"
+        ),
     ),
     Pipeline(
         procname="widefeed1",
@@ -84,6 +90,13 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind="feed",
         table="wide_book",
         schema=WIDE_BOOK_TABLE_SCHEMA,
+        startwithall="0",
+        note=(
+            "half of a closed pair with vectorize1: it is the only producer of "
+            "wide_book and vectorize1 the only consumer, so the two start and stop "
+            "together and no other job notices. startwithall:0 to stay inside "
+            "PLANT_CONNECTION_BUDGET (#285) - `uqf-stack start widefeed1 vectorize1`"
+        ),
     ),
     Pipeline(
         procname="vectorize1",
@@ -93,6 +106,12 @@ PIPELINES: tuple[Pipeline, ...] = (
         subscribes=("wide_book",),
         table="mkt_orderbook",
         schema=MKT_ORDERBOOK_TABLE_SCHEMA,
+        startwithall="0",
+        note=(
+            "the other half of the widefeed1 pair: nothing subscribes to "
+            "mkt_orderbook, so this branch of the graph is self-contained. See "
+            "widefeed1"
+        ),
     ),
     Pipeline(
         procname="tap1",
@@ -186,11 +205,15 @@ PIPELINES: tuple[Pipeline, ...] = (
         subscribes=("databento_mbp10",),
         table="databento_book",
         schema=DATABENTO_BOOK_TABLE_SCHEMA,
+        startwithall="0",
         note=(
             "folds live Databento MBP-10 into the book shape. The raw rows are "
             "published by an EXTERNAL Python feed handler (databento_feed.py) - a "
             "q process cannot hold a Databento subscription - so databento_mbp10 "
-            "has a schema row but no producer in this list"
+            "has a schema row but no producer in this list. That is also why "
+            "startwithall:0: on a default start nothing publishes the table it "
+            "subscribes to, so it held one of the sixteen licensed plant "
+            "connections (#285) to consume nothing. Start it with the feed handler"
         ),
     ),
     Pipeline(

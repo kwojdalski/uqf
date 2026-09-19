@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -817,8 +818,14 @@ def test_markout_runs_on_utc_and_tap_does_not_autostart():
     """
     assert core.PIPELINE_BY_NAME["markout1"].localtime == "0"
     assert all(p.localtime == "1" for p in core.PIPELINES if p.procname != "markout1")
-    # tap1 is a diagnostic subscriber; the two backfills are bounded jobs
+    # tap1 is a diagnostic subscriber; the four backfills are bounded jobs
     # triggered with a range. Neither belongs in `uqf-stack start`.
+    #
+    # cross1, widefeed1, vectorize1 and databento1 are on demand for a
+    # different reason: the licence allows a q process sixteen inbound
+    # connections and the default start would want more (#285). Each is a
+    # leaf or a closed pair, so shedding it strands nothing - which is held
+    # by test_every_on_demand_plant_client_still_has_a_producer_to_start_with.
     on_demand = {
         "tap1",
         "deals_backfill1",
@@ -826,6 +833,10 @@ def test_markout_runs_on_utc_and_tap_does_not_autostart():
         "cryptomock1",
         "databento_backfill1",
         "upstream_backfill1",
+        "cross1",
+        "widefeed1",
+        "vectorize1",
+        "databento1",
     }
     assert all(core.PIPELINE_BY_NAME[n].startwithall == "0" for n in on_demand)
     assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname not in on_demand)
@@ -1040,7 +1051,9 @@ def test_the_edge_verifier_detects_a_duplicate_procname(monkeypatch, tmp_path):
 
 
 def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
-    """Every process publishes a heartbeat; only monitor1 collects them.
+    """The vendored overlay, in both directions: monitor1 on, feed1 off.
+
+    Every process publishes a heartbeat; only monitor1 collects them.
 
     TorQ ships monitor1 `startwithall=0`, which made `.hb.hb` empty on a
     fully healthy stack and `uqf-stack summary`'s Heartbeat column read
@@ -1064,12 +1077,23 @@ def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
         "VENDORED_STARTWITHALL_OVERLAY is now redundant and should be removed"
     )
 
+    # feed1 is the other half of the overlay, in the other direction: the
+    # starter pack's random demo feed, turned OFF because fxfeed1 already
+    # publishes `quote` and because it held one of the sixteen plant
+    # connections the licence allows (#285).
+    assert upstream["feed1"] == "1", (
+        "the vendored csv no longer ships feed1 on by default - the feed1 half "
+        "of VENDORED_STARTWITHALL_OVERLAY is now redundant and should be removed"
+    )
+
     composed = {row["procname"]: row for row in core._base_process_rows(real)}
     assert composed["monitor1"]["startwithall"] == "1"
+    assert composed["feed1"]["startwithall"] == "0"
 
-    # Nothing else moved: the overlay is one field on one process.
+    # Nothing else moved: the overlay changes one field, on the processes it
+    # names and no others.
     for procname, value in upstream.items():
-        if procname == "monitor1":
+        if procname in core.VENDORED_STARTWITHALL_OVERLAY:
             continue
         assert composed[procname]["startwithall"] == value, (
             f"{procname} changed, but the overlay only declares "
@@ -1146,3 +1170,83 @@ def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core
     )
     vendored = (fake_paths.torqapphome / "appconfig" / "process.csv").read_text()
     assert "vendored-overridden" not in vendored
+
+
+def test_the_default_start_fits_inside_the_licence_connection_budget():
+    """The stack must fit on the licence it is actually run under.
+
+    The community edition in `~/.kx/kc.lic` refuses a q process's
+    seventeenth concurrent inbound connection, and every streaming job is
+    its own process holding one handle to stp1. The plant does not report
+    the refusal in any way an operator sees: it resets the handle, the
+    process retries forever inside `torq_stream.q`'s init, and a PID check
+    calls it `up`. So going over the cap does not fail — it silently makes
+    *which* jobs run depend on which sixteen won the race to start, and that
+    changes on every boot. `fxpositions1` and `executions1` lost it (#285).
+
+    Declaring a job and running it are separate decisions here: a pipeline
+    that need not start with the stack says so with `startwithall="0"` and a
+    note. This holds the sum.
+    """
+    clients = {
+        p.procname for p in core.PIPELINES if p.startwithall == "1" and p.kind != "backfill"
+    } | pipeline_edges.VENDORED_PLANT_CLIENTS
+    allowance = pipeline_edges.PLANT_CONNECTION_BUDGET - pipeline_edges.PLANT_CONNECTION_RESERVE
+    assert len(clients) <= allowance, (
+        f"the default start opens {len(clients)} tickerplant connections but only "
+        f"{allowance} are available: {sorted(clients)}"
+    )
+
+
+def test_the_connection_budget_check_fires_when_the_default_start_grows(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The gate, not just the current sum.
+
+    A check that only ever passes is indistinguishable from one that cannot
+    fail, so this turns every shed pipeline back on and asserts the message
+    names them and says how to get back under.
+    """
+    grown = tuple(
+        replace(p, startwithall="1") if p.kind != "backfill" else p for p in core.PIPELINES
+    )
+    monkeypatch.setattr(pipelines, "PIPELINES", grown)
+
+    problems = pipelines.verify_pipeline_edges(core.default_paths().scripts_dir)
+    budget = [p for p in problems if "tickerplant connections" in p]
+    assert len(budget) == 1, problems
+    assert 'startwithall="0"' in budget[0]
+    # the ones this tree sheds on purpose have to be in the list, or the
+    # message sends the reader looking in the wrong place
+    for shed in ("cross1", "widefeed1", "vectorize1", "databento1"):
+        assert shed in budget[0]
+
+
+def test_every_on_demand_plant_client_still_has_a_producer_to_start_with():
+    """Shedding a process must leave it *startable*, not stranded.
+
+    The point of `startwithall="0"` is that the job is still declared and
+    one command away. That only holds if whatever publishes the tables it
+    subscribes to is either in the default set or shed alongside it — a job
+    whose producer was removed from the registry entirely would start and
+    then consume nothing, which is the failure this guards.
+    """
+    producers: dict[str, set[str]] = {}
+    for pipeline in core.PIPELINES:
+        for table in pipeline.publishes or ((pipeline.table,) if pipeline.table else ()):
+            producers.setdefault(table, set()).add(pipeline.procname)
+    declared = {p.procname for p in core.PIPELINES}
+    for pipeline in core.PIPELINES:
+        if pipeline.startwithall == "1" or pipeline.subscribes_dynamic:
+            continue
+        for table in pipeline.subscribes:
+            # databento_mbp10 comes from an external Python feed handler and
+            # from the backfill; no pipeline publishes it, which its own
+            # note says.
+            if table == "databento_mbp10":
+                continue
+            assert producers.get(table, set()) & declared, (
+                f"{pipeline.procname} is on-demand and subscribes to {table!r}, "
+                "which no declared pipeline publishes - starting it would consume "
+                "nothing"
+            )

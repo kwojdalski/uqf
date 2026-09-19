@@ -92,6 +92,44 @@ STREAM_RUNNER = "processes/torq_stream.q"
 #: an argument stronger than "it was written for the other runner".
 RUNS_WITHOUT_A_PROCESS: frozenset[str] = frozenset()
 
+#: How many inbound connections one q process will accept at once.
+#:
+#: This is a LICENCE limit, not a kdb+ one: the community edition in
+#: ~/.kx/kc.lic refuses the seventeenth. Measured rather than assumed - a
+#: throwaway `\p 19099` server, and a client opening handles until one
+#: fails, stops at sixteen and then reports `conn`.
+#:
+#: It matters here because every streaming job is its own process and every
+#: one of them opens a handle to stp1. Exceed it and the plant does not
+#: complain: it resets the connection, the process wedges in the retry loop
+#: in scripts/processes/torq_stream.q, and `uqf-stack summary` reports it
+#: `up` because that is a PID check. Which jobs run then depends on which
+#: sixteen won the race to start (#285).
+PLANT_CONNECTION_BUDGET = 16
+
+#: Slots held back from the default start, so an operator can still open a
+#: handle to the plant. `uqf-stack query --port 6050`, `uqf-stack schema`
+#: and the frontend's health view each take one while they run, and a stack
+#: sized exactly to the cap has none to give them - the tooling fails
+#: against a stack that is, by its own reckoning, healthy.
+PLANT_CONNECTION_RESERVE = 2
+
+#: Vendored processes that hold an stp1 slot on a default start, so the
+#: budget counts them alongside this tree's own.
+#:
+#: They are listed rather than derived because their subscription lives in
+#: lib/torq settings files this tree must not edit, and reading those to
+#: infer a connection would couple the gate to the vendored tree's layout.
+#: A name here that stops connecting costs a spare slot, which the reserve
+#: absorbs; one that starts connecting and is missing is caught the first
+#: time the stack is started, by the process that fails to get in.
+#:
+#: `feed1` is a plant client too and is deliberately absent: it is the
+#: starter pack's random demo feed, VENDORED_STARTWITHALL_OVERLAY turns it
+#: off, and this set counts only what a default start actually runs. Put it
+#: back here if that overlay ever does.
+VENDORED_PLANT_CLIENTS: frozenset[str] = frozenset({"rdb1", "wdb1", "sctp1", "metrics1"})
+
 
 def _symbol_field(text: str) -> tuple[str, ...]:
     """The symbols in one field of a register call: a backtick list, an
@@ -344,4 +382,42 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
                 f"file under {_WORKER_DIR} declares - the process would start and "
                 f"then refuse"
             )
+
+    # Every plant client the default start brings up costs one of the
+    # licence's sixteen inbound connections, and the plant does not refuse
+    # the seventeenth in a way anyone notices: it resets the handle, the
+    # process retries forever inside torq_stream.q's init, and a PID check
+    # calls it `up`. So the sixteen that get in are whichever sixteen won
+    # the race - a topology that changes on every boot and cannot be read
+    # off any file (#285).
+    #
+    # Counted here, against the registry, so growing the stack past what it
+    # can run fails when the process is DECLARED rather than the next time
+    # someone starts it. A pipeline that should not start with the stack
+    # says so with startwithall="0" and a note, which is the distinction
+    # this check exists to force: declaring a job and running it are
+    # separate decisions.
+    # A backfill is bounded: it registers with discovery, runs its window
+    # and exits, and never subscribes to the plant - so it is not a client
+    # even on the day one is set to start with the stack.
+    plant_clients = sorted(
+        {
+            pipeline.procname
+            for pipeline in pipelines
+            if pipeline.startwithall == "1" and pipeline.kind != "backfill"
+        }
+        | VENDORED_PLANT_CLIENTS
+    )
+    allowance = PLANT_CONNECTION_BUDGET - PLANT_CONNECTION_RESERVE
+    if len(plant_clients) > allowance:
+        problems.append(
+            f"the default start opens {len(plant_clients)} tickerplant connections "
+            f"but only {allowance} are available ({PLANT_CONNECTION_BUDGET} on the "
+            f"licence, {PLANT_CONNECTION_RESERVE} held back for ad-hoc handles): "
+            f"{', '.join(plant_clients)}. The plant resets the extras and they wedge "
+            f'in the retry loop while still reporting `up`, so set startwithall="0" '
+            f"on the ones that need not run by default - with a note saying why - "
+            f"or raise PLANT_CONNECTION_BUDGET if the licence has changed"
+        )
+
     return problems

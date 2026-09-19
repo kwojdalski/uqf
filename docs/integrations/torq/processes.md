@@ -38,13 +38,15 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 ### Why a row deviates from the defaults
 
 - **`fxfeed1`** — pinned below the vendored dqc/dqe block, not part of the contiguous run
-- **`cross1`** — keeps cross_quotes as private process state, publishes no table
+- **`cross1`** — keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside PLANT_CONNECTION_BUDGET (#285); quotesfeed1 runs by default, so `uqf-stack start cross1` is enough
+- **`widefeed1`** — half of a closed pair with vectorize1: it is the only producer of wide_book and vectorize1 the only consumer, so the two start and stop together and no other job notices. startwithall:0 to stay inside PLANT_CONNECTION_BUDGET (#285) - `uqf-stack start widefeed1 vectorize1`
+- **`vectorize1`** — the other half of the widefeed1 pair: nothing subscribes to mkt_orderbook, so this branch of the graph is self-contained. See widefeed1
 - **`tap1`** — diagnostic subscriber - started on demand, not with the whole stack
 - **`posbook1`** — reads the two normalizers' outputs, not trades and quote, so one book carries FX and crypto and a new market is a mapping, not a job
 - **`markout1`** — localtime:0, unlike every other process here - markout1 is the only process in this demo that compares .proc.cp[] against incoming data timestamps (its process_ready cutoff calc); every other process just reacts to each tick immediately, so localtime never mattered for them. .u.upd stamps trades/quote with the tickerplant's own .z.p (UTC) - with localtime:1, .proc.cp[] returns local time instead, silently skewing the cutoff by the local UTC offset (confirmed live: a full hour off on a UTC+1 machine)
 - **`deals_backfill1`** — bounded: runs a window range and exits, so it must not start with the stack
 - **`events_backfill1`** — bounded: see deals_backfill1
-- **`databento1`** — folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list
+- **`databento1`** — folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler
 - **`cryptomock1`** — stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one
 - **`executions1`** — every fill table as one: trades and crypto_trades -> executions
 - **`marks1`** — a mid per instrument from every book: quote and crypto_book -> marks
