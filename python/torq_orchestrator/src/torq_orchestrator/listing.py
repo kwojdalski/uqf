@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from torq_orchestrator.dependencies import dependency_rows
 from torq_orchestrator.env import build_env
 from torq_orchestrator.logger import get_logger
 from torq_orchestrator.paths import UqfStackError, UqfStackPaths
@@ -65,11 +66,23 @@ def _list_env(paths: UqfStackPaths, base_port: int) -> list[dict[str, str]]:
     return [{"name": name, "value": value} for name, value in env.items()]
 
 
+def _list_dependencies(paths: UqfStackPaths, base_port: int) -> list[dict[str, str]]:
+    """Who needs what, and who publishes it.
+
+    Static: it reads the registry, not the fleet, so it answers "what would
+    this process need" rather than "is it being fed". `uqf-stack start` and
+    `uqf-stack summary` answer the second, because only they know what is
+    running.
+    """
+    return dependency_rows()
+
+
 LISTABLE_KINDS: dict[str, Any] = {
     "processes": _list_processes,
     "fields": _list_fields,
     "overrides": _list_overrides,
     "env": _list_env,
+    "dependencies": _list_dependencies,
 }
 
 
@@ -79,8 +92,9 @@ def list_items(
     """List every item of *kind* - 'processes' (procname/proctype/port/
     startwithall, resolved+overridden), 'fields' (process.csv's valid
     column names, for config-set), 'overrides' (every process_overrides.csv
-    entry currently set), or 'env' (build_env()'s resolved KDBBASEPORT/
-    KDBHDB/... values). See LISTABLE_KINDS for the full, extensible set.
+    entry currently set), 'env' (build_env()'s resolved KDBBASEPORT/
+    KDBHDB/... values), or 'dependencies' (each process's input tables and
+    who publishes them). See LISTABLE_KINDS for the full, extensible set.
     """
     if kind not in LISTABLE_KINDS:
         raise UqfStackError(f"unknown list kind {kind!r} - {sorted(LISTABLE_KINDS)}")
