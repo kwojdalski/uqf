@@ -7,7 +7,16 @@ it). Reflects what `uqf-stack list processes` shows today: the vendored
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
 `markout1`, `databento1`, `cryptomock1`, `executions1`, `marks1`,
 `fxordersfeed1`, `fxpositions1`), and two bounded backfill processes
-(`deals_backfill1`, `events_backfill1`).
+(`deals_backfill1`, `events_backfill1`, `databento_backfill1`,
+`upstream_backfill1`).
+
+Each backfill process now NAMES the `.qbw` worker it runs. One script
+serves all four and `UQF_BACKFILL_WORKER` picks which at runtime, so until
+that field existed nothing statically joined a process to its worker — and
+two workers (`databento_book_backfill`, `upstream_trades_backfill`) sat
+fully declared with no process able to start them. `verify_pipeline_edges`
+now refuses a worker with no process, a process with no worker, and a
+process naming a worker that does not exist.
 
 **The backfills are on the topology diagram but have no edge to the
 tickerplant, and that is the point.** They were left off entirely at first,

@@ -187,13 +187,13 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPath
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
     # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
     # markout1(+31)
-    # +9, not +1: the two bounded backfill processes, databento1, cryptomock1
+    # +11, not +1: the two bounded backfill processes, databento1, cryptomock1
     # and the two normalizers occupy the offsets immediately after markout1. They
     # are declared processes like any other, so their ports are reserved
     # even though the backfills and the mock do not start with the stack -
     # two of them sharing a port with a feed would fail at bind time, and
     # only when someone happened to run one.
-    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 9
+    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 11
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
@@ -267,6 +267,8 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "marks1",
         "fxordersfeed1",
         "fxpositions1",
+        "databento_backfill1",
+        "upstream_backfill1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -344,6 +346,8 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPa
         "marks1",
         "fxordersfeed1",
         "fxpositions1",
+        "databento_backfill1",
+        "upstream_backfill1",
     }
 
 
@@ -708,6 +712,8 @@ def test_pipeline_offsets_are_stable():
         "marks1": 37,
         "fxordersfeed1": 38,
         "fxpositions1": 39,
+        "databento_backfill1": 40,
+        "upstream_backfill1": 41,
     }
 
 
@@ -813,7 +819,14 @@ def test_markout_runs_on_utc_and_tap_does_not_autostart():
     assert all(p.localtime == "1" for p in core.PIPELINES if p.procname != "markout1")
     # tap1 is a diagnostic subscriber; the two backfills are bounded jobs
     # triggered with a range. Neither belongs in `uqf-stack start`.
-    on_demand = {"tap1", "deals_backfill1", "events_backfill1", "cryptomock1"}
+    on_demand = {
+        "tap1",
+        "deals_backfill1",
+        "events_backfill1",
+        "cryptomock1",
+        "databento_backfill1",
+        "upstream_backfill1",
+    }
     assert all(core.PIPELINE_BY_NAME[n].startwithall == "0" for n in on_demand)
     assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname not in on_demand)
 
@@ -828,6 +841,39 @@ def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStack
     assert core.CRYPTO_BOOK_TABLE_SCHEMA in generated
     assert core.CRYPTO_SIM_FILLS_TABLE_SCHEMA in generated
     assert core.CRYPTO_TRADES_TABLE_SCHEMA in generated
+
+
+def test_every_bounded_worker_can_be_started_by_the_stack():
+    """The bounded half of #281's rule.
+
+    A backfill process and the worker it runs are joined at *runtime* by
+    `UQF_BACKFILL_WORKER` — one script serves every worker. So nothing
+    statically connected the two, and `databento_book_backfill` and
+    `upstream_trades_backfill` sat fully declared with no process able to
+    run them. `Pipeline.worker` declares the link; this holds it.
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    workers = pipeline_edges._declared_workers(repo_root)
+    run_by = {p.worker for p in core.PIPELINES if p.kind == "backfill" and p.worker}
+    orphans = workers - run_by - pipeline_edges.WORKERS_WITHOUT_A_PROCESS
+    assert not orphans, (
+        f"bounded worker(s) {sorted(orphans)} have no backfill pipeline naming them, "
+        "so they can only be run by hand"
+    )
+
+
+def test_every_backfill_names_a_worker_that_exists():
+    """The other direction: a process naming a worker nothing declares would
+    start, read its environment, and refuse."""
+    repo_root = Path(__file__).resolve().parents[3]
+    workers = pipeline_edges._declared_workers(repo_root)
+    for pipeline in core.PIPELINES:
+        if pipeline.kind == "backfill":
+            assert pipeline.worker, f"{pipeline.procname} names no worker"
+            assert pipeline.worker in workers, (
+                f"{pipeline.procname} names {pipeline.worker!r}, which no file under "
+                f"src/etl/workers declares"
+            )
 
 
 def test_every_streaming_job_can_be_started_by_the_stack():
