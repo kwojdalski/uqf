@@ -35,6 +35,15 @@
 / here is usable by cross_book_at with no reshaping.
 quotes:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
+/ Direct FX books retain their source and original timestamp across normalization.
+market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+
+/ Complete per-pair snapshots; level provenance stays aligned with prices and sizes.
+superbook:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())
+
+/ Status snapshots, including active=0b to clear an earlier gross opportunity.
+arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); buy_source:`symbol$(); sell_source:`symbol$(); ask:`float$(); bid:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$())
+
 / A deliberately "incorrectly-shaped" wide book: one scalar column per level
 / rather than vector columns, which is the shape real venue feeds arrive in
 / and the input src/market_data/book.q exists to fold.

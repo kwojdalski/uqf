@@ -41,4 +41,7 @@
     .qdag.register[`fxpositions1;`kind`inputs`outputs!(`stream;`orders;`fx_position`fx_limit_breach)];
     .qdag.register[`databento_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
     .qdag.register[`upstream_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
-    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`executions1`marks1`fxordersfeed1`fxpositions1`databento_backfill1`upstream_backfill1}
+    .qdag.register[`marketdata1;`kind`inputs`outputs!(`normalizer;`quote`quotes;`market_data)];
+    .qdag.register[`superbook1;`kind`inputs`outputs!(`stream;`market_data;`superbook)];
+    .qdag.register[`arbitrage1;`kind`inputs`outputs!(`stream;`superbook;`arbitrage)];
+    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`executions1`marks1`fxordersfeed1`fxpositions1`databento_backfill1`upstream_backfill1`marketdata1`superbook1`arbitrage1}

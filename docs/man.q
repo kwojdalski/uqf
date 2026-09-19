@@ -1040,6 +1040,21 @@
 .man.registerArg (".qfeed.upstream_trades.fixture";"return";"";"ten real upstream rows, sorted by time");
 .man.registerArg (".qfeed.upstream_trades.fixture";"eg";"";".qfeed.upstream_trades.fixture[]");
 
+.man.registerFile ("arbitrage.q";"";".qsub.arbitrage";"arbitrage.q - direct cross-source price opportunities (.qsub.arbitrage). One status row per pair and superbook snapshot, including active=0b when an opportunity disappears. Gross quoted opportunity only: no fees, credit checks, execution or synthetic crosses. Size is the smaller base quantity at the two selected levels, not a sum that reuses the same liquidity.");
+.man.registerFunc (".qsub.arbitrage.opportunity";".qsub.arbitrage";"Find the widest strictly positive bid-minus-ask across distinct sources. A crossed single source is not a cross-source opportunity; still consider the other sources, instead of testing only the first bid and first ask.";".qsub.arbitrage.opportunity";"(.qsub.arbitrage.opportunity[first 1#.qsub.superbook.superbook]) 2 -> 0b");
+.man.registerArg (".qsub.arbitrage.opportunity";"param";"book";"one sorted superbook row");
+.man.registerArg (".qsub.arbitrage.opportunity";"return";"";"one arbitrage status row, inactive with null prices when none exists");
+.man.registerArg (".qsub.arbitrage.opportunity";"eg";"";"(.qsub.arbitrage.opportunity[first 1#.qsub.superbook.superbook]) 2 -> 0b");
+.man.registerFunc (".qsub.arbitrage.evaluate";".qsub.arbitrage";"Convert complete superbook snapshots into opportunity status rows.";".qsub.arbitrage.evaluate";"count .qsub.arbitrage.evaluate[.qsub.superbook.superbook] -> 0");
+.man.registerArg (".qsub.arbitrage.evaluate";"param";"batch";"superbook rows");
+.man.registerArg (".qsub.arbitrage.evaluate";"return";"";"the arbitrage status table");
+.man.registerArg (".qsub.arbitrage.evaluate";"eg";"";"count .qsub.arbitrage.evaluate[.qsub.superbook.superbook] -> 0");
+.man.registerFunc (".qsub.arbitrage.on_batch";".qsub.arbitrage";"Publish status for every updated pair, including clears.";".qsub.arbitrage.on_batch";".qsub.arbitrage.on_batch[`unrelated;()]");
+.man.registerArg (".qsub.arbitrage.on_batch";"param";"tbl";"incoming table name");
+.man.registerArg (".qsub.arbitrage.on_batch";"param";"batch";"superbook rows");
+.man.registerArg (".qsub.arbitrage.on_batch";"return";"";"nothing");
+.man.registerArg (".qsub.arbitrage.on_batch";"eg";"";".qsub.arbitrage.on_batch[`unrelated;()]");
+
 .man.registerFile ("cross.q";"";".qsub.cross";"cross.q - the whole of the cross-rate reprice job (.qsub.cross). Subscribes to `quotes`, mirrors it, and after every batch reprices four synthetic cross pairs through USD, keeping the result as private process state. It publishes nothing: the crosses are there to be queried on the process itself. WHAT IS IN THIS FILE: the mirror's schema, the repricing transform with its examples, the batch handler, the job's state, and the declaration the runner reads. Every step, in the order it runs. Loaded by src/etl/init.q in any q process: nothing here touches TorQ. The mirror grows for as long as the job runs - a proof-of-concept tradeoff, kept deliberately: an eviction policy here would have to decide how much history a cross chain may need, which is a real question this demo does not answer.");
 .man.registerFunc (".qsub.cross.cross_pairs";".qsub.cross";"The synthetic pairs this job reprices - deliberately none of the directly quoted pairs, so every one has to chain through USD.";".qsub.cross.cross_pairs";"");
 .man.registerFunc (".qsub.cross.quotes_in";".qsub.cross";"Mirror of the quotes feed's own schema - what this process receives via its subscription, and exactly what the transform reads.";".qsub.cross.quotes_in";"");
@@ -1227,6 +1242,16 @@
 .man.registerArg (".qsub.fx_trades_feed.fill_rows";"eg";"";"count .qsub.fx_trades_feed.fill_rows[0;1;1e6;0]  ->  5");
 .man.registerFunc (".qsub.fx_trades_feed.on_timer";".qsub.fx_trades_feed";"Draw one fill and publish it. The draws are here rather than in fill_rows so that the row builder stays deterministic.";".qsub.fx_trades_feed.on_timer";"");
 
+.man.registerFile ("market_data.q";"";".qsub.market_data";"market_data.q - direct FX source snapshots in one shape (.qsub.market_data). A row replaces the whole book for (sym, source); empty ladders withdraw it. source identifies independent liquidity, not a transport connection. Two adapters carrying the same liquidity must use the same source identifier. The existing quote and quotes feeds carry no exchange event timestamp, so source_time preserves their ORIGINAL plant timestamp, before normalization.");
+.man.registerFunc (".qsub.market_data.from_quote";".qsub.market_data";"Direct top-of-book quotes, with the feed's own source identifier. The shared quote table also carries equities; only canonical FX pairs pass.";".qsub.market_data.from_quote";"count .qsub.market_data.from_quote[.qsub.market_data.quote] -> 0");
+.man.registerArg (".qsub.market_data.from_quote";"param";"batch";"quote rows");
+.man.registerArg (".qsub.market_data.from_quote";"return";"";"complete single-level market_data snapshots, sizes in base currency");
+.man.registerArg (".qsub.market_data.from_quote";"eg";"";"count .qsub.market_data.from_quote[.qsub.market_data.quote] -> 0");
+.man.registerFunc (".qsub.market_data.from_quotes";".qsub.market_data";"The single synthetic depth feed, identified separately from UQFFX. quotes has no source column: another publisher must use market_data or add its own declared mapping, rather than interleave unidentified books.";".qsub.market_data.from_quotes";"count .qsub.market_data.from_quotes[.qsub.market_data.quotes] -> 0");
+.man.registerArg (".qsub.market_data.from_quotes";"param";"batch";"quotes rows");
+.man.registerArg (".qsub.market_data.from_quotes";"return";"";"complete market_data snapshots with the original receipt time");
+.man.registerArg (".qsub.market_data.from_quotes";"eg";"";"count .qsub.market_data.from_quotes[.qsub.market_data.quotes] -> 0");
+
 .man.registerFile ("markout.q";"";".qsub.markout";"markout.q - the whole of the markout job (.qsub.markout). Subscribes to `trades` and `quote`, buffers both, and every second scores the fills old enough to score against the mid at each horizon, publishing `execution_quality`. WHAT IS IN THIS FILE: the schemas, the scoring transform with its examples, the batch handler, the timer body, the job's own buffers, and the declaration the runner reads. Every step of the job, in the order it runs. It was two files - the computation in src/etl/transforms/stream.q, the subscription and timer in the old scripts/torq_markout_etl.q (deleted in #204) - because the computation had to be testable and the wiring had to connect. The publish seam (.qstream.wire) makes both true of one file. Loaded by src/etl/init.q in any q process: nothing here touches TorQ. Every global a transform reads is fully qualified: these functions run inside TorQ processes, where a bare name in a namespaced function is what scripts/processes/torq_pipeline.q's invariant 5 warns does not resolve reliably. The output schema is the published table in scripts/processes/uqf_stack_tables.q WITHOUT `time`, which .u.upd stamps on receipt (invariant 1). tests/q/test_transform.q holds the two to each other.");
 .man.registerFunc (".qsub.markout.horizons";".qsub.markout";"The horizons each fill is scored at. Here rather than in the runner, because they decide what the transform outputs; the timer body reads max_horizon to decide when a fill is old enough to score.";".qsub.markout.horizons";"");
 .man.registerFunc (".qsub.markout.max_horizon";".qsub.markout";"The horizons each fill is scored at. Here rather than in the runner, because they decide what the transform outputs; the timer body reads max_horizon to decide when a fill is old enough to score.";".qsub.markout.max_horizon";"");
@@ -1288,6 +1313,43 @@
 .man.registerArg (".qsub.quotes_feed.tick_rows";"return";"";"the tick's rows: pairs, bid prices, bid sizes, ask prices, ask sizes");
 .man.registerArg (".qsub.quotes_feed.tick_rows";"eg";"";"count first .qsub.quotes_feed.tick_rows[.qsynth.spot] 1  ->  3");
 .man.registerFunc (".qsub.quotes_feed.on_timer";".qsub.quotes_feed";"Walk every pair's mid, then publish the tick built from it.";".qsub.quotes_feed.on_timer";"");
+
+.man.registerFile ("superbook.q";"";".qsub.superbook";"superbook.q - latest direct liquidity across sources (.qsub.superbook). Keeps one full snapshot per (sym, source), never a concatenated history. Publishes one sorted ladder per pair with aligned source and time vectors. Source timestamps are also watermarks: expiry does not erase them and let a delayed older snapshot resurrect withdrawn liquidity.");
+.man.registerFunc (".qsub.superbook.max_age";".qsub.superbook";"The demo feeds tick every 500ms. Override for the actual feed SLA.";".qsub.superbook.max_age";"");
+.man.registerFunc (".qsub.superbook.levels";".qsub.superbook";"Remove non-executable levels, keeping prices and base sizes aligned.";".qsub.superbook.levels";".qsub.superbook.levels[1.1 1.2;100 0f] -> ([] price:enlist 1.1; size:enlist 100f)");
+.man.registerArg (".qsub.superbook.levels";"param";"prices";"a numeric vector");
+.man.registerArg (".qsub.superbook.levels";"param";"sizes";"the matching numeric vector in base currency");
+.man.registerArg (".qsub.superbook.levels";"return";"";"a table of positive finite price and size");
+.man.registerArg (".qsub.superbook.levels";"throws";"";"when vectors are malformed or their lengths differ");
+.man.registerArg (".qsub.superbook.levels";"eg";"";".qsub.superbook.levels[1.1 1.2;100 0f] -> ([] price:enlist 1.1; size:enlist 100f)");
+.man.registerFunc (".qsub.superbook.replace_books";".qsub.superbook";"Replace newer source snapshots. Equal timestamps use arrival order. Empty or unusable sides replace the old side too; zero size is withdrawal. Future-dated rows are ignored, so they cannot poison a source's watermark.";".qsub.superbook.replace_books";"count .qsub.superbook.replace_books[.qsub.superbook.books;.qsub.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0");
+.man.registerArg (".qsub.superbook.replace_books";"param";"state";"latest snapshots keyed by sym and source");
+.man.registerArg (".qsub.superbook.replace_books";"param";"batch";"market_data rows; a plant time column may also be present");
+.man.registerArg (".qsub.superbook.replace_books";"param";"as_of";"UTC processing timestamp");
+.man.registerArg (".qsub.superbook.replace_books";"return";"";"updated keyed snapshots, without mutating state");
+.man.registerArg (".qsub.superbook.replace_books";"throws";"";"when columns, identities, timestamps or level vectors are malformed");
+.man.registerArg (".qsub.superbook.replace_books";"eg";"";"count .qsub.superbook.replace_books[.qsub.superbook.books;.qsub.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0");
+.man.registerFunc (".qsub.superbook.side_levels";".qsub.superbook";"Flatten one side without merging liquidity belonging to different sources.";".qsub.superbook.side_levels";"count .qsub.superbook.side_levels[.qsub.market_data.market_data;1] -> 0");
+.man.registerArg (".qsub.superbook.side_levels";"param";"rows";"current source snapshots for one pair");
+.man.registerArg (".qsub.superbook.side_levels";"param";"side";"1 for bids, -1 for asks");
+.man.registerArg (".qsub.superbook.side_levels";"return";"";"price, size, source and source_time sorted best-first");
+.man.registerArg (".qsub.superbook.side_levels";"eg";"";"count .qsub.superbook.side_levels[.qsub.market_data.market_data;1] -> 0");
+.man.registerFunc (".qsub.superbook.snapshot";".qsub.superbook";"Aggregate fresh source snapshots. Known pairs with no liquidity get empty ladders, explicitly clearing downstream opportunities even in a quiet market.";".qsub.superbook.snapshot";"count .qsub.superbook.snapshot[`sym`source xkey 0#.qsub.market_data.market_data;2026.09.19D10:00:00.000000000;0D00:00:05] -> 0");
+.man.registerArg (".qsub.superbook.snapshot";"param";"state";"latest source snapshots keyed by sym and source");
+.man.registerArg (".qsub.superbook.snapshot";"param";"as_of";"UTC processing timestamp");
+.man.registerArg (".qsub.superbook.snapshot";"param";"age";"maximum quote age, inclusive at the boundary");
+.man.registerArg (".qsub.superbook.snapshot";"return";"";"unkeyed superbook snapshots, one row per known pair");
+.man.registerArg (".qsub.superbook.snapshot";"eg";"";"count .qsub.superbook.snapshot[`sym`source xkey 0#.qsub.market_data.market_data;2026.09.19D10:00:00.000000000;0D00:00:05] -> 0");
+.man.registerFunc (".qsub.superbook.refresh";".qsub.superbook";"Publish current snapshots, including empty books after expiry.";".qsub.superbook.refresh";"");
+.man.registerArg (".qsub.superbook.refresh";"param";"as_of";"UTC timestamp, explicit for replay and deterministic tests");
+.man.registerArg (".qsub.superbook.refresh";"return";"";"nothing");
+.man.registerFunc (".qsub.superbook.on_batch";".qsub.superbook";"Consume a canonical market_data batch and publish the recomputed books.";".qsub.superbook.on_batch";".qsub.superbook.on_batch[`unrelated;()]");
+.man.registerArg (".qsub.superbook.on_batch";"param";"tbl";"incoming table name");
+.man.registerArg (".qsub.superbook.on_batch";"param";"batch";"full source snapshots");
+.man.registerArg (".qsub.superbook.on_batch";"return";"";"nothing");
+.man.registerArg (".qsub.superbook.on_batch";"eg";"";".qsub.superbook.on_batch[`unrelated;()]");
+.man.registerFunc (".qsub.superbook.on_timer";".qsub.superbook";"Recompute on the clock so silence withdraws stale liquidity.";".qsub.superbook.on_timer";"");
+.man.registerArg (".qsub.superbook.on_timer";"return";"";"nothing");
 
 .man.registerFile ("vectorize.q";"";".qsub.vectorize";"vectorize.q - the whole of the wide-book fold job (.qsub.vectorize). Subscribes to `wide_book` - twenty-two per-level columns, as a venue publishes them - folds each row into one price vector per side, and publishes `mkt_orderbook`, the book shape .qbook and .qfwd.cross_book_at read. It keeps no state: every batch is republished as it arrives. WHAT IS IN THIS FILE: the wide and folded schemas, the fold transform with its examples, the batch handler, and the declaration the runner reads. Loaded by src/etl/init.q in any q process: nothing here touches TorQ. The output carries no `time`; .u.upd stamps its own on receipt (scripts/processes/torq_pipeline.q, invariant 1).");
 .man.registerFunc (".qsub.vectorize.wide_level_names";".qsub.vectorize";"Eleven levels a side, level 0 first, named as the feed publishes them.";".qsub.vectorize.wide_level_names";"");

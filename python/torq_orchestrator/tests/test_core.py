@@ -188,13 +188,13 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPath
     # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
     # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
     # markout1(+31)
-    # +11, not +1: the two bounded backfill processes, databento1, cryptomock1
-    # and the two normalizers occupy the offsets immediately after markout1. They
+    # The declared services, including the direct-arbitrage chain, reserve
+    # the offsets immediately after markout1. They
     # are declared processes like any other, so their ports are reserved
     # even though the backfills and the mock do not start with the stack -
     # two of them sharing a port with a feed would fail at bind time, and
     # only when someone happened to run one.
-    assert core.next_free_port_offset(fake_paths) == core.MARKOUT_PORT_OFFSET + 11
+    assert core.next_free_port_offset(fake_paths) == 45
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
@@ -270,6 +270,9 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
         "fxpositions1",
         "databento_backfill1",
         "upstream_backfill1",
+        "marketdata1",
+        "superbook1",
+        "arbitrage1",
     }
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
@@ -349,6 +352,9 @@ def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPa
         "fxpositions1",
         "databento_backfill1",
         "upstream_backfill1",
+        "marketdata1",
+        "superbook1",
+        "arbitrage1",
     }
 
 
@@ -715,6 +721,9 @@ def test_pipeline_offsets_are_stable():
         "fxpositions1": 39,
         "databento_backfill1": 40,
         "upstream_backfill1": 41,
+        "marketdata1": 42,
+        "superbook1": 43,
+        "arbitrage1": 44,
     }
 
 
@@ -810,14 +819,19 @@ def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: core.UqfStackPa
         assert row["qcmd"] == "q"
 
 
-def test_markout_runs_on_utc_and_tap_does_not_autostart():
-    """The two rows that deviate from the defaults, kept honest: markout1 is
-    the only process comparing .proc.cp[] against tickerplant-stamped data
-    timestamps (localtime:1 would skew its cutoff by the local UTC offset),
-    and tap1 is a diagnostic subscriber started on demand.
+def test_timestamp_consumers_run_on_utc_and_tap_does_not_autostart():
+    """The rows that deviate from the defaults, kept honest.
+
+    `localtime="0"` is for processes that compare `.proc.cp[]` against
+    tickerplant-stamped data timestamps: markout1's `process_ready` cutoff,
+    and the direct-arbitrage chain's freshness and expiry. `.u.upd` stamps
+    UTC, so `localtime=1` would silently skew each of them by the local
+    offset. Every other process just reacts to a tick and never asks the
+    clock.
     """
-    assert core.PIPELINE_BY_NAME["markout1"].localtime == "0"
-    assert all(p.localtime == "1" for p in core.PIPELINES if p.procname != "markout1")
+    utc = {"markout1", "marketdata1", "superbook1", "arbitrage1"}
+    assert all(core.PIPELINE_BY_NAME[n].localtime == "0" for n in utc)
+    assert all(p.localtime == "1" for p in core.PIPELINES if p.procname not in utc)
     # tap1 is a diagnostic subscriber; the four backfills are bounded jobs
     # triggered with a range. Neither belongs in `uqf-stack start`.
     #
@@ -837,6 +851,9 @@ def test_markout_runs_on_utc_and_tap_does_not_autostart():
         "widefeed1",
         "vectorize1",
         "databento1",
+        "marketdata1",
+        "superbook1",
+        "arbitrage1",
     }
     assert all(core.PIPELINE_BY_NAME[n].startwithall == "0" for n in on_demand)
     assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname not in on_demand)
