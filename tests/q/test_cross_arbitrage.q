@@ -158,6 +158,29 @@ test_a_one_sided_book_is_not_offered_as_a_leg:{[t]
 
 / --- the job seam ----------------------------------------------------------
 
+/ The gap that let a live bug through. The suite drove `evaluate` directly
+/ and `on_batch` only with a batch it rejects, so nothing ever handed the
+/ job a REAL superbook batch - which arrives with the tickerplant's own
+/ `time` column prepended. `` `time _ batch `` is a 'type on a table, TorQ
+/ traps it into the error log, and the process stayed up reporting healthy
+/ while doing nothing on every batch, 634 times before anyone looked.
+test_a_real_plant_batch_carries_a_time_column_and_is_still_consumed:{[t]
+    `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
+    stamped:update time:.xarbtest.t0 from 0!with_direct[164.80;164.90];
+    .qsub.cross_arbitrage.on_batch[`superbook;stamped];
+    .qunit.assertEquals[count .qsub.cross_arbitrage.books;3;
+        "every pair in the batch reaches the state, `time` and all"];
+    .qunit.assertTrue[not `time in cols 0!.qsub.cross_arbitrage.books;
+        "and the plant's own column is stripped rather than stored"]};
+
+/ The same job also runs under run_stream.q against .qtick, where nothing
+/ has stamped a time yet - so the strip has to be conditional, not assumed.
+test_a_batch_without_a_time_column_is_consumed_too:{[t]
+    `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
+    .qsub.cross_arbitrage.on_batch[`superbook;0!with_direct[164.80;164.90]];
+    .qunit.assertEquals[count .qsub.cross_arbitrage.books;3;
+        "a standalone runner's batch has no time column and must still land"]};
+
 test_a_batch_on_another_table_is_ignored:{[t]
     `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
     .qsub.cross_arbitrage.on_batch[`quote;([] sym:enlist `EURUSD)];

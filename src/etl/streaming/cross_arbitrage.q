@@ -181,7 +181,13 @@ evaluate:{[state;size;as_of]
 on_batch:{[tbl;batch]
     if[not tbl=`superbook; :()];
     if[0=count batch; :()];
-    `.qsub.cross_arbitrage.books upsert `sym xkey `time _ batch;
+    / `![...;enlist `time]`, not `` `time _ batch ``: `_` drops a key from a
+    / DICT, and on a table it is a 'type - which TorQ traps into the error
+    / log, so the process stays up, keeps reporting healthy, and silently
+    / does nothing on every batch. Guarded on presence because the same job
+    / runs under run_stream.q, where the plant has not stamped a `time`.
+    rows:$[`time in cols batch; ![batch;();0b;enlist `time]; batch];
+    `.qsub.cross_arbitrage.books upsert `sym xkey rows;
     rows:evaluate[books;notional;.z.p];
     if[count rows; .qsub.cross_arbitrage.publish[`cross_arbitrage;rows]];
     }
