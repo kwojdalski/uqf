@@ -24,7 +24,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from torq_orchestrator import core, databento_feed, wizard
+from torq_orchestrator import core, databento_feed, dependencies, wizard
 from torq_orchestrator.logger import configure_logging, get_logger
 
 app = typer.Typer(
@@ -72,9 +72,46 @@ def _run_streaming(result_fn, *args, **kwargs) -> None:
     raise typer.Exit(code=result.returncode)
 
 
+def _warn_about_unfed_inputs(procs: str, port: int) -> None:
+    """Say so when what is being started subscribes to a table nothing
+    running publishes.
+
+    A subscriber started without its producer subscribes SUCCESSFULLY - the
+    table is defined on the plant either way - then heartbeats and reports
+    `up` while receiving nothing, with no error and no symptom but an
+    output table that stays empty (#290).
+
+    Advisory only, and deliberately so: starting a subscriber before its
+    feed is how you avoid missing the first batch, and some tables come
+    from outside the process list entirely. Processes named in this same
+    invocation count as present, so starting a whole chain is silent.
+
+    Never fails the command. A warning that cannot be produced - the fleet
+    is unreachable, the registry cannot be read - must not stop a start.
+    """
+    try:
+        names = [p for p in procs.split() if p != "all"]
+        if not names:
+            return  # `start all` brings up every startwithall=1 producer too
+        running = {
+            row["Process"]
+            for row in core.summary_rows(core.summary(_paths(), base_port=port).stdout, {}, None)
+            if row["Status"] == "up"
+        }
+        warnings = [
+            line for name in names for line in dependencies.unfed_inputs(name, running | set(names))
+        ]
+    except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
+        log.debug("dependency warning skipped: %s", exc)
+        return
+    for line in warnings:
+        console.print(f"[yellow]warning[/] {line}")
+
+
 @app.command()
 def start(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Start every startwithall=1 process (or specific process name(s))."""
+    _warn_about_unfed_inputs(procs, port)
     _run_streaming(core.start, procs, base_port=port)
 
 
@@ -87,6 +124,7 @@ def stop(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> Non
 @app.command()
 def restart(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
+    _warn_about_unfed_inputs(procs, port)
     _run_streaming(core.restart, procs, base_port=port)
 
 
@@ -155,6 +193,22 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
             hb_cell,
         )
     console.print(table)
+
+    # Up and fed are different questions, and the table above only answers
+    # the first. A process can hold a PID, heartbeat `ok`, and still be
+    # receiving nothing because whatever publishes its input is stopped -
+    # which has no other symptom at all (#290).
+    starved = dependencies.starved_processes(
+        {row["Process"] for row in rows if row["Status"] == "up"}
+    )
+    if starved:
+        console.print(
+            f"\n[yellow]{len(starved)} running process(es) have an input nothing "
+            "running publishes - up, but idle:[/]"
+        )
+        for reason in (r for reasons in starved.values() for r in reasons):
+            console.print(f"  [yellow]·[/] {reason}")
+
     if heartbeats is None:
         console.print(
             "[dim]Heartbeats not collected: monitor1 is not running. It starts "

@@ -193,6 +193,8 @@ uqf-stack list processes
 - `overrides` - every `config-set` override currently in effect
 - `env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values (the
   same env `config-get`'s placeholder resolution and `torq.sh` itself use)
+- `dependencies` - each process's input tables and who publishes them, so
+  you can see what a process needs before starting it on its own
 
 New kinds are one function + one `core.LISTABLE_KINDS` entry, not a new
 CLI command each time - see `core.py`'s `_list_*` functions.
@@ -208,6 +210,50 @@ the KDB-X community edition's connection limits mean `reporter1`,
 `filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off unless you have a
 fully-licensed kdb+/KDB-X. `killtick` and `tpreplay1` are on-demand utility
 processes, not part of the standing stack, so they also don't auto-start.
+
+### Started is not the same as fed
+
+A subscriber started without its producer subscribes **successfully**. The
+table is defined on the tickerplant whether or not anybody publishes to it,
+so the process comes up, heartbeats, reports `up`, and receives nothing for
+as long as you leave it. There is no error and no symptom except an output
+table that stays empty.
+
+That matters more than it used to: seven processes are on demand, and the
+direct-arbitrage chain is three of them deep. So `start` and `restart` say
+something when what you are starting has an input nothing running
+publishes:
+
+```
+$ uqf-stack start superbook1
+warning superbook1 subscribes to `market_data`, which no running process
+        publishes - start `uqf-stack start marketdata1`.
+```
+
+and `summary` says the same about processes that are already up:
+
+```
+2 running process(es) have an input nothing running publishes - up, but idle:
+  · executions1 subscribes to `crypto_trades`, which no running process
+    publishes - start `uqf-stack start cryptomock1`, unless it is coming
+    from cryptorust's kdb recorder, which cryptomock1 stands in for.
+```
+
+Both are **advisory and never block a start**. Bringing a subscriber up
+before its feed is how you avoid missing the first batch, and some tables
+come from outside the process list entirely - the Databento feed handler,
+cryptorust's recorders, a backfill run - which is why those are named as
+context rather than reported as faults. Processes you name in the same
+command count as present, so the recommended form for a chain is silent:
+
+```bash
+uqf-stack start marketdata1 superbook1 arbitrage1
+```
+
+The graph behind all of this is the `subscribes`/`publishes` pair on each
+`Pipeline`, the same declaration the generated `database.q` and the `.qdag`
+job graph are built from - so what you are warned about and what is running
+cannot describe different systems.
 
 ### monitor1 is the one vendored default this tree overrides
 
