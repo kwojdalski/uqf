@@ -103,7 +103,12 @@ dev = [
 # repo twice - reporting duplicate findings, and reporting them against the
 # vendored code in the copy, which is doubly unactionable. The harness
 # creates these, so this is a standing exclusion rather than a workaround.
-exclude = ["lib", ".venv", "build", ".claude/worktrees"]
+#
+# `tools` is the same thing for a different reason: it holds local checkouts of
+# the q linter, which is its own project installed separately (see CLAUDE.md).
+# Type errors in another repository's source are not actionable here, and left
+# unexcluded they fail this hook and block every commit in this one.
+exclude = ["lib", ".venv", "build", ".claude/worktrees", "tools"]
 
 [tool.ty.environment]
 root = [

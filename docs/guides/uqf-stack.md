@@ -440,6 +440,40 @@ rolling/restart-aliasing correctly) and merges them through a queue; without
 printed sorted by the log's own timestamp - not wall-clock arrival order.
 `--level` filters to that level and above (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
 
+### The CLI's own logging, which is a different thing
+
+`logs --level` filters what the *q processes* wrote. It says nothing about
+what `uqf-stack` itself is doing, and the two are easy to confuse when a
+command reports something surprising about a fleet whose own logs look fine.
+
+```
+uqf-stack --debug summary        # this invocation only
+LOG_LEVEL=DEBUG uqf-stack summary   # same, for a shell session
+```
+
+`--debug` wins over `LOG_LEVEL`; an unrecognised `LOG_LEVEL` falls back to
+`INFO` rather than refusing to run.
+
+This matters most on `summary`, because two of its three lookups degrade
+instead of failing. A port map that cannot be built leaves every `down` row
+with a blank port, and an unreachable `monitor1` leaves the whole Heartbeat
+column blank - at the default level both look the same as a stack with
+nothing to report. `--debug` prints the reason, and separates `monitor1` not
+being a declared process from `monitor1` being declared but not answering:
+
+```
+summary base_port=6050 torqdata=.../scripts/output/uqf-stack
+torq.sh summary returncode=0 stdout_lines=47
+configured ports for 46 process(es)
+monitor1 not reached; Heartbeat column is a monitoring gap, not a verdict
+parsed 46 row(s): 23 up, 23 down
+starved process(es): executions1, marks1
+```
+
+`parsed N row(s)` against `stdout_lines` is the one to read when the table
+looks short: it is the only place the rows `torq.sh` emitted and the rows the
+parser kept are both visible.
+
 ### tap1 - printing every row landing in kdb+
 
 `tap1` (`torq_tap.q`) is a generic debug tap: it subscribes to some (or,
