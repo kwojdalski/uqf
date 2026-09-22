@@ -129,7 +129,7 @@ def render() -> str:
         subs = (
             "_chosen at runtime_"
             if p.subscribes_dynamic
-            else (", ".join(f"`{t}`" for t in p.subscribes) or "—")
+            else (", ".join(f"`{t}`" for t in p.subscribed_tables) or "—")
         )
         pubs = ", ".join(f"`{t}`" for t in p.published_tables) or "—"
         owns = f"`{p.table}`" if p.table else "—"
@@ -236,7 +236,7 @@ def render_dag() -> str:
         lines.append(
             f"    .qdag.register[`{pipeline.procname};`kind`inputs`outputs!"
             f"(`{'normalizer' if pipeline.kind == 'normalizer' else 'stream'};"
-            f"{_q_symbol_list(pipeline.subscribes)};"
+            f"{_q_symbol_list(pipeline.subscribed_tables)};"
             f"{_q_symbol_list(pipeline.published_tables)})];"
         )
     names = "".join(f"`{p.procname}" for p in PIPELINES)

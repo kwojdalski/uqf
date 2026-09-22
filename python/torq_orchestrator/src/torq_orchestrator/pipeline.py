@@ -30,6 +30,33 @@ STREAM_RUNNER_SCRIPT = "processes/torq_stream.q"
 _ETL_ACCESS_LIST = "${TORQAPPHOME}/appconfig/passwords/accesslist.txt"
 
 
+class _FromDeclaration:
+    """Sentinel: this edge is declared in the job's own q file, read it there.
+
+    A streaming job's `.qstream.register` already names its procname, the
+    tables it subscribes to and the tables it publishes. Restating them here
+    made the registry a second copy of a fact the code states - and
+    `verify_pipeline_edges` existed to check the two copies agreed, which is
+    a check that only has a job to do because the duplication exists.
+
+    So the registry stops restating them. `FROM_DECLARATION` says "the q file
+    is the source of truth for this edge", and `resolve_edges` reads it.
+
+    Distinct from `None` on `publishes`, which already means something else:
+    "default to `(table,)`". A pipeline that owns exactly one table and
+    publishes onto it still says nothing, and gets the old behaviour.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return "FROM_DECLARATION"
+
+
+#: See `_FromDeclaration`. Spelled as a singleton so `is` identifies it.
+FROM_DECLARATION = _FromDeclaration()
+
+
 class PipelineKind(StrEnum):
     """What shape of process a `Pipeline` declares.
 
@@ -92,11 +119,13 @@ class Pipeline:
     # script for its `.sub.subscribe`/`.qpipe.subscribe_etl`/`.u.upd` calls
     # and fails if the declaration and the code disagree. A hand-drawn
     # diagram goes stale silently; this one cannot.
-    subscribes: tuple[str, ...] = ()  # tickerplant tables it subscribes to
+    # FROM_DECLARATION reads it from the job's own .qstream.register / .qnorm
+    # .define instead, which is where a streaming job already states it.
+    subscribes: tuple[str, ...] | _FromDeclaration = ()
     # Tables it publishes via `.u.upd`. Defaults to (table,) - set it
     # explicitly only when a pipeline publishes onto a table whose schema it
     # does NOT own (fxfeed1 -> the vendored `quote`), or onto more than one.
-    publishes: tuple[str, ...] | None = None
+    publishes: tuple[str, ...] | None | _FromDeclaration = None
     # tap1 chooses its subscription at runtime from -tables, so no fixed
     # edge exists to declare or to verify.
     subscribes_dynamic: bool = False
@@ -133,16 +162,33 @@ class Pipeline:
         return "" if self.kind is PipelineKind.FEED else _ETL_ACCESS_LIST
 
     @property
+    def subscribed_tables(self) -> tuple[str, ...]:
+        """Tables this pipeline subscribes to, resolved.
+
+        The resolved spelling of `subscribes`, for the same reason
+        `published_tables` is the resolved spelling of `publishes`: a consumer
+        that reads the raw field gets the FROM_DECLARATION sentinel instead of
+        a tuple, and finds out by iterating it.
+        """
+        return self._resolved()[0]
+
+    def _resolved(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        # Imported at call time: pipeline_edges imports this module, so a
+        # module-scope import here is a cycle.
+        from torq_orchestrator.pipeline_edges import resolve_edges
+
+        return resolve_edges(self)
+
+    @property
     def published_tables(self) -> tuple[str, ...]:
         """Tables this pipeline publishes onto the tickerplant.
 
         `table` is schema ownership and is the common case, so it doubles as
         the publish edge; `publishes` overrides it for the pipelines that
-        publish onto a table they did not define.
+        publish onto a table they did not define, and FROM_DECLARATION defers
+        it to the job's own q declaration.
         """
-        if self.publishes is not None:
-            return self.publishes
-        return (self.table,) if self.table else ()
+        return self._resolved()[1]
 
     def load_column(self) -> str:
         """The process.csv `load` value - the .qpipe library first when the

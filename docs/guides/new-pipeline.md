@@ -299,12 +299,43 @@ naming the worker it runs:
 Pipeline(
     procname="fx_rates_backfill1",
     script="processes/torq_backfill.q",
-    kind="backfill",
+    kind=PipelineKind.BACKFILL,
     worker="fx_rates_backfill",
     startwithall="0",
     note="bounded: reads the vendor's daily fixings over ODBC",
 ),
 ```
+
+**A streaming job does not restate its edges here.** Its
+`.qstream.register` already names the tables it subscribes to and publishes,
+so the entry defers to it:
+
+```python
+Pipeline(
+    procname="posbook1",
+    script=STREAM_RUNNER_SCRIPT,
+    kind=PipelineKind.ETL,
+    subscribes=FROM_DECLARATION,   # read from posbook.q's own declaration
+    table="position",
+    schema=POSITION_TABLE_SCHEMA,
+),
+```
+
+Those fields used to be written twice - once in q, once here - and
+`verify_pipeline_edges` existed to check the two agreed. There is one
+declaration now, so there is nothing to drift and nothing to check. What
+still belongs in the entry is what q has no way to know: the port offset,
+whether it starts with the stack, and which table's schema it owns.
+
+`FROM_DECLARATION` is strict. A pipeline that defers and has no matching
+`.qstream.register`/`.qnorm.define` **raises** rather than resolving to
+nothing - usually because the `procname` in the entry and the one in the q
+file disagree. Resolving to empty would drop the job's tables out of the
+generated `database.q`, and `.u.upd` onto a table the plant does not define
+discards its rows in silence.
+
+A feed that subscribes to nothing keeps `subscribes=()`: there is no second
+copy to remove, and `()` says it more plainly than a pointer to a file.
 
 `verify_pipeline_edges` checks this in both directions — a worker no pipeline
 names, and a pipeline naming a worker no file declares:

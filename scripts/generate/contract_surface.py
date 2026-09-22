@@ -132,7 +132,7 @@ def export_python_surface() -> dict[str, Any]:
             "procname": p.procname,
             "proctype": p.proctype,
             "offset": PIPELINE_OFFSETS[p.procname],
-            "subscribes": sorted(p.subscribes),
+            "subscribes": sorted(p.subscribed_tables),
             "publishes": sorted(p.published_tables),
         }
         for p in sorted(PIPELINES, key=lambda p: p.procname)

@@ -77,11 +77,13 @@ def inputs_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tuple[s
     `-tables`) has no fixed input to check and is absent rather than
     reported as depending on nothing.
     """
-    return {
-        pipeline.procname: tuple(pipeline.subscribes)
-        for pipeline in pipelines
-        if pipeline.subscribes and not pipeline.subscribes_dynamic
-    }
+    out: dict[str, tuple[str, ...]] = {}
+    for pipeline in pipelines:
+        if pipeline.subscribes_dynamic:
+            continue
+        if subscribes := pipeline.subscribed_tables:
+            out[pipeline.procname] = subscribes
+    return out
 
 
 def outputs_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tuple[str, ...]]:
@@ -93,11 +95,8 @@ def outputs_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tuple[
     """
     out: dict[str, tuple[str, ...]] = {}
     for pipeline in pipelines:
-        declared = pipeline.publishes
-        if declared is None:
-            declared = (pipeline.table,) if pipeline.table else ()
-        if declared:
-            out[pipeline.procname] = tuple(declared)
+        if declared := pipeline.published_tables:
+            out[pipeline.procname] = declared
     return out
 
 

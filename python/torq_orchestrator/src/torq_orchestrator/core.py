@@ -80,6 +80,9 @@ from torq_orchestrator.paths import (  # noqa: F401
     clean,
     default_paths,
 )
+from torq_orchestrator.pipeline import (  # noqa: F401
+    FROM_DECLARATION,
+)
 from torq_orchestrator.pipeline_edges import (  # noqa: F401  (re-exported)
     PLANT_CONNECTION_BUDGET,
 )
@@ -174,6 +177,7 @@ __all__ = [
     "EXECUTION_QUALITY_TABLE_SCHEMA",
     "FXFEED_PORT_OFFSET",
     "FX_TRADES_FEED_PORT_OFFSET",
+    "FROM_DECLARATION",
     "LISTABLE_KINDS",
     "MARKOUT_PORT_OFFSET",
     "MONITOR_CONNECTION_BUDGET",
