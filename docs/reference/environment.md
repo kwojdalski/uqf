@@ -62,7 +62,7 @@ without it:
 | `UQF_FRONTEND_PROCESSES` | as above | no | the per-process query log reports nothing configured rather than an empty log (FE-04) |
 | `UQF_FRONTEND_WEB_DIST` | as above | no | no built React app is served under `/ui/`; the API still serves |
 | `UQF_API_ORIGIN` | `web/vite.config.ts` | no | `http://127.0.0.1:8000`. Dev proxy only — it has no effect on a built bundle |
-| `LOG_LEVEL` | `torq_orchestrator.logger.decorators` | no | the logger's own default |
+| `LOG_LEVEL` | `torq_orchestrator.cli` (`_env_log_level`), `torq_orchestrator.logger.decorators` | no | `INFO`. Sets the level every `uqf-stack` command logs at, and turns on the `logged_function` call trace at `DEBUG`. An unrecognised value falls back to `INFO` rather than aborting — a typo in a log level must not stop the fleet being started or inspected. `uqf-stack --debug` is the same thing per-invocation, and wins over this |
 | `LOG_REGEX` | `torq_orchestrator.logger.core` | no | no name filtering |
 | `DATABENTO_API_KEY` | `torq_orchestrator.databento_feed` | for `uqf-stack databento start` only | Databento's own variable name, so an existing export works unchanged. The live feed refuses to start without it rather than failing on its first call; the ODBC backfill does not read it |
 | `CRYPTORUST_ROOT` | `torq_orchestrator.crypto` | no | the checkout is located by the search path in `cryptorust_root`'s docstring |

@@ -73,11 +73,20 @@ class Recorder:
         return self.calls[-1][0]
 
 
+@dataclass
+class _Paths:
+    """Stands in for UqfStackPaths. No test here cares what it points at, but
+    it has to have the attributes the commands read - a bare sentinel string
+    made `summary`'s debug line an AttributeError in tests only."""
+
+    torqdata: str = "TORQDATA"
+
+
 @pytest.fixture(autouse=True)
 def _no_real_paths(monkeypatch):
     """`_paths()` reads the filesystem and the vendored tree. Every command
     calls it, and no test here cares what it returns."""
-    monkeypatch.setattr(cli.core, "default_paths", lambda: "PATHS")
+    monkeypatch.setattr(cli.core, "default_paths", _Paths)
 
 
 def _patch(monkeypatch, name: str, **kw) -> Recorder:
@@ -577,3 +586,146 @@ def test_main_configures_logging_before_running(monkeypatch):
     monkeypatch.setattr(cli, "app", lambda: order.append("app"))
     cli.main()
     assert order == ["configure", "app"]
+
+
+# ------------------------------------------------------------ debug mode
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("DEBUG", "DEBUG"),
+        ("debug", "DEBUG"),
+        ("  Warning  ", "WARNING"),
+        ("", "INFO"),
+        ("bananas", "INFO"),
+        ("11", "INFO"),
+    ],
+)
+def test_log_level_comes_from_the_environment(monkeypatch, value, expected):
+    """LOG_LEVEL is listed in .env.example as a developer knob and in
+    docs/reference/environment.md as a variable this package reads. It has
+    to actually move the level, and an unrecognised value has to fall back
+    rather than abort - a typo in a log level must never stop someone
+    inspecting the fleet."""
+    monkeypatch.setenv("LOG_LEVEL", value)
+    assert cli._env_log_level() == expected
+
+
+def test_an_unset_log_level_is_the_default(monkeypatch):
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+    assert cli._env_log_level() == cli.DEFAULT_LOG_LEVEL
+
+
+def test_main_passes_the_environment_level_to_the_logger(monkeypatch):
+    """The wiring this whole knob depends on: main() used to call
+    configure_logging with a hardcoded INFO, so LOG_LEVEL=DEBUG changed
+    nothing and the absence of debug output read as 'nothing to see'."""
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(cli, "configure_logging", lambda **kw: seen.update(kw))
+    monkeypatch.setattr(cli, "app", lambda: None)
+    cli.main()
+    assert seen["level"] == "DEBUG"
+
+
+def test_the_debug_flag_wins_over_the_environment(monkeypatch):
+    """`--debug` is the more deliberate of the two, so it has to override an
+    environment that says otherwise - otherwise a LOG_LEVEL exported once in
+    a shell profile silently disables the flag."""
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    levels: list[Any] = []
+    monkeypatch.setattr(cli, "configure_logging", lambda **kw: levels.append(kw.get("level")))
+    _summary_ok(monkeypatch)
+    assert runner.invoke(cli.app, ["--debug", "summary"]).exit_code == 0
+    assert levels == ["DEBUG"], "the callback reconfigures to DEBUG"
+
+
+def test_no_debug_flag_leaves_the_level_alone(monkeypatch):
+    """Without the flag the callback must not reconfigure: doing so would
+    overwrite whatever main() already set from LOG_LEVEL."""
+    levels: list[Any] = []
+    monkeypatch.setattr(cli, "configure_logging", lambda **kw: levels.append(kw.get("level")))
+    _summary_ok(monkeypatch)
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert levels == []
+
+
+class _DebugLog:
+    """Captures the debug lines a command emits, without going through a
+    loguru sink - the assertion is about what the code decided to say."""
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    def debug(self, message: str, *args: Any) -> None:
+        self.messages.append(message.format(*args))
+
+    def __getattr__(self, _name: str):
+        return lambda *a, **kw: None
+
+
+def _debug_log(monkeypatch) -> _DebugLog:
+    captured = _DebugLog()
+    monkeypatch.setattr(cli, "log", captured)
+    return captured
+
+
+def test_summary_says_at_debug_why_the_port_map_is_missing(monkeypatch):
+    """The failure is swallowed so the table still prints - which means the
+    only symptom is every `down` row losing its port, with nothing on screen
+    saying why. The reason has to survive somewhere, and DEBUG is where."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", raises=core.UqfStackError("no process.csv"))
+    _patch(monkeypatch, "heartbeat_states", result={})
+    _patch(monkeypatch, "summary_rows", result=[])
+    captured = _debug_log(monkeypatch)
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert any("no process.csv" in m for m in captured.messages)
+
+
+def test_summary_says_at_debug_why_heartbeats_are_missing(monkeypatch):
+    """Two different faults print the same sentence at INFO - monitor1 absent
+    from the registry, and monitor1 declared but unreachable. Only the debug
+    line distinguishes them, which is the difference between restarting a
+    process and chasing a connection."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    _patch(monkeypatch, "heartbeat_states", raises=core.UqfStackError("monitor1 is not declared"))
+    _patch(monkeypatch, "summary_rows", result=[])
+    captured = _debug_log(monkeypatch)
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert any("monitor1 is not declared" in m for m in captured.messages)
+
+
+def test_summary_distinguishes_unreachable_from_undeclared_at_debug(monkeypatch):
+    """A None return is monitor1 declared but not answering - a different
+    fault from the raise above, and it must not be reported as that one."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    _patch(monkeypatch, "heartbeat_states", result=None)
+    _patch(monkeypatch, "summary_rows", result=[])
+    captured = _debug_log(monkeypatch)
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert any("monitor1 not reached" in m for m in captured.messages)
+
+
+def test_summary_counts_the_rows_it_parsed_at_debug(monkeypatch):
+    """`torq.sh summary` emitting rows the parser then drops is silent
+    otherwise: the table just looks short."""
+    _summary_ok(monkeypatch, rows=[_row(), _row(Process="hdb1", Status="down")])
+    captured = _debug_log(monkeypatch)
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert any("1 up, 1 down" in m for m in captured.messages)
+
+
+def test_a_skipped_dependency_warning_keeps_its_reason(monkeypatch):
+    """loguru formats with str.format, so the `%s` this line used to carry
+    printed literally and dropped the exception - the one line explaining
+    why the warning was skipped explained nothing."""
+    _patch(monkeypatch, "summary", raises=RuntimeError("fleet unreachable"))
+    _patch(monkeypatch, "start", result=Completed())
+    captured = _debug_log(monkeypatch)
+    assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
+    assert any("fleet unreachable" in m for m in captured.messages)
+    assert not any("%s" in m for m in captured.messages)

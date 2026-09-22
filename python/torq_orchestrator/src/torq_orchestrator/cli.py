@@ -17,6 +17,7 @@ Exposed two ways - both call main() below, so they can't drift apart either:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -34,6 +35,46 @@ app = typer.Typer(
 )
 console = Console()
 log = get_logger(__name__)
+
+DEFAULT_LOG_LEVEL = "INFO"
+
+
+def _env_log_level() -> str:
+    """The level LOG_LEVEL asks for, or the default if it asks for nothing.
+
+    `.env.example` lists LOG_LEVEL as a developer knob and
+    docs/reference/environment.md names it a variable this package reads, but
+    until now the only thing that read it was the `logged_function` trace
+    decorator - `configure_logging` was called with a hardcoded INFO, so
+    `LOG_LEVEL=DEBUG uqf-stack summary` printed exactly what INFO did. A
+    documented knob that does nothing is worse than no knob, because the
+    reader concludes there is nothing to see rather than that the switch is
+    unwired.
+
+    An unrecognised value falls back to the default rather than aborting: a
+    typo in a log level must not stop the fleet being started or inspected.
+    """
+    level = os.environ.get("LOG_LEVEL", "").strip().upper()
+    if level in {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"}:
+        return level
+    return DEFAULT_LOG_LEVEL
+
+
+@app.callback()
+def _configure(
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it."),
+    ] = False,
+) -> None:
+    """Global options, applied before any subcommand runs."""
+    # main() has already configured logging from the environment so that
+    # anything logged during Typer's own startup lands somewhere. Re-running
+    # it here is what makes --debug take effect, and the flag wins over the
+    # environment because it is the more deliberate of the two.
+    if debug:
+        configure_logging(component="uqf_stack", level="DEBUG")
+
 
 PortOpt = Annotated[int, typer.Option("--port", help="KDBBASEPORT - shifts every process's port")]
 ProcsArg = Annotated[str, typer.Argument(help="'all', or space-separated process name(s)")]
@@ -56,6 +97,11 @@ def _export(rows, export: Path | None) -> None:
 
 def _paths():
     return core.default_paths()
+
+
+def _lines(result) -> int:
+    """Non-empty stdout line count, for a debug line that must not itself fail."""
+    return len((result.stdout or "").strip().splitlines())
 
 
 def _die(exc: core.UqfStackError) -> None:
@@ -102,7 +148,11 @@ def _warn_about_unfed_inputs(procs: str, port: int) -> None:
             line for name in names for line in dependencies.unfed_inputs(name, running | set(names))
         ]
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
-        log.debug("dependency warning skipped: %s", exc)
+        # loguru formats with str.format, not %-interpolation: the `%s` this
+        # used to carry printed literally and the exception was dropped, so
+        # the one line explaining why the warning was skipped explained
+        # nothing.
+        log.debug("dependency warning skipped: {}", exc)
         return
     for line in warnings:
         console.print(f"[yellow]warning[/] {line}")
@@ -133,22 +183,35 @@ _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 
 @app.command()
 def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) -> None:
-    """Status table (up/down, pid, port) for every process in process.csv."""
+    """Status table (up/down, pid, port) for every process in process.csv.
+
+    Run with `--debug` (or LOG_LEVEL=DEBUG) to see where each column came
+    from: the two lookups below degrade rather than fail, so on the default
+    level a missing port map and an unreachable monitor1 look the same as a
+    stack that simply has nothing to report.
+    """
+    paths = _paths()
+    log.debug("summary base_port={} torqdata={}", port, paths.torqdata)
     try:
-        result = core.summary(_paths(), base_port=port)
+        result = core.summary(paths, base_port=port)
     except core.UqfStackError as exc:
         _die(exc)
         return
+    log.debug("torq.sh summary returncode={} stdout_lines={}", result.returncode, _lines(result))
 
     # TorQ reports a port only for a process that is UP, so every `down` row
     # used to show a blank - for exactly the processes whose port a reader is
     # most likely looking up. The port is declared in process.csv either way,
     # so fill it from there and mark where it came from.
     try:
-        ports = core.configured_ports(_paths(), base_port=port)
-    except core.UqfStackError:
+        ports = core.configured_ports(paths, base_port=port)
+        log.debug("configured ports for {} process(es)", len(ports))
+    except core.UqfStackError as exc:
         # A summary that still prints beats one that dies because the port
-        # map could not be built - the reported ports are unaffected.
+        # map could not be built - the reported ports are unaffected. The
+        # reason is worth keeping even so: without it, every `down` row shows
+        # a blank port and nothing on screen says why.
+        log.debug("configured port map unavailable, every down row loses its port: {}", exc)
         ports = {}
 
     # Heartbeat state, which answers a different question from Status: the
@@ -156,11 +219,27 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
     # PID. None here means monitor1 could not be reached, which is a gap in
     # MONITORING rather than a verdict on the fleet - rendered as such below.
     try:
-        heartbeats = core.heartbeat_states(_paths(), base_port=port)
-    except core.UqfStackError:
+        heartbeats = core.heartbeat_states(paths, base_port=port)
+    except core.UqfStackError as exc:
+        # Two distinct failures reach the same printed sentence below, and it
+        # names only the commoner one. This branch is monitor1 missing from
+        # the registry entirely; a None return (handled next) is monitor1
+        # declared but unreachable - a refused connection, a bad password or a
+        # timeout. Only DEBUG tells the reader which of the two they have.
+        log.debug("heartbeat states unavailable, Heartbeat column is a monitoring gap: {}", exc)
         heartbeats = None
+    if heartbeats is None:
+        log.debug("monitor1 not reached; Heartbeat column is a monitoring gap, not a verdict")
+    else:
+        log.debug("monitor1 reported heartbeats for {} process(es)", len(heartbeats))
 
     rows = core.summary_rows(result.stdout, ports, heartbeats)
+    log.debug(
+        "parsed {} row(s): {} up, {} down",
+        len(rows),
+        sum(1 for r in rows if r["Status"] == "up"),
+        sum(1 for r in rows if r["Status"] == "down"),
+    )
 
     table = Table(title=f"uqf_stack summary (base port {port})")
     for col in core.SUMMARY_COLUMNS:
@@ -201,6 +280,7 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
     starved = dependencies.starved_processes(
         {row["Process"] for row in rows if row["Status"] == "up"}
     )
+    log.debug("starved process(es): {}", ", ".join(sorted(starved)) or "none")
     if starved:
         console.print(
             f"\n[yellow]{len(starved)} running process(es) have an input nothing "
@@ -725,7 +805,7 @@ def raw(ctx: typer.Context, port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
 
 def main() -> None:
     """Entry point for both the `uqf-stack` script and the uqf_stack.py shim."""
-    configure_logging(component="uqf_stack")
+    configure_logging(component="uqf_stack", level=_env_log_level())
     app()
 
 
