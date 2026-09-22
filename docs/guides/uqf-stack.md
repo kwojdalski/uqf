@@ -159,7 +159,8 @@ filenames first.
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
-summary [--port N] [--export FILE] [--columns C,...]  rich status table (up/down, pid, port)
+summary [--port N] [--export FILE] [--columns all|status|C,...]  status table plus the
+                                      declared graph (--columns status for just up/down/pid/port)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/uqf-stack/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
@@ -254,11 +255,12 @@ and `summary` says the same about processes that are already up:
     from cryptorust's kdb recorder, which cryptomock1 stands in for.
 ```
 
-To see the whole graph rather than just the unsatisfied part of it,
-`--columns` adds three columns derived from the same declarations:
+`summary` shows the whole graph, not just the unsatisfied part of it, in
+three columns derived from the same declarations:
 
 ```
-uqf-stack summary --columns all
+uqf-stack summary                     # all nine columns
+uqf-stack summary --columns status    # the six status ones, for a narrow terminal
 uqf-stack summary --columns "Process,Depends on,Inputs,Outputs"
 ```
 
@@ -277,9 +279,14 @@ produced from outside the process list is named as external rather than
 dropped - "nothing in this list provides it" and "nothing provides it" are
 different facts, and only one is a problem. Cells break at the commas once
 there are more than two entries, so a table name is never split across
-lines. They are off by default because the six status columns already fill a
-normal terminal, and a process with no declared edges - every vendored TorQ
-one - shows a dash.
+lines, and a process with no declared edges - every vendored TorQ one - shows
+a dash.
+
+Nine columns need a wide terminal; at eighty they squeeze and Rich elides the
+headers. `--columns status` gives the original six back. They are shown by
+default anyway, because a column nobody knows about answers nothing: a reader
+on a narrow terminal can ask for fewer, while one who never learns the graph
+is there has no such move.
 
 Both warnings are **advisory and never block a start**. Bringing a subscriber
 up before its feed is how you avoid missing the first batch, and some tables

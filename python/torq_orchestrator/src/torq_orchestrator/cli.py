@@ -258,14 +258,20 @@ def _graph_cell(items: tuple[str, ...] | list[str]) -> str:
 def _resolve_columns(requested: str | None) -> list[str]:
     """The columns to render, from a comma-separated `--columns` value.
 
-    `all` is spelled out rather than being the default: the graph columns are
-    wide, and a reader who wants them is asking a different question from
-    "is it running".
+    The graph columns are ON by default. They were opt-in first, on the
+    grounds that nine columns do not fit an eighty-column terminal - which is
+    true, and was still the wrong trade: a column nobody knows about answers
+    nothing, and "what feeds this" is the question that follows "is it
+    running" almost every time. A reader on a narrow terminal can say
+    `--columns status`; a reader who never learns the columns exist has no
+    such move.
     """
     if not requested:
-        return list(core.SUMMARY_COLUMNS)
+        return list(core.SUMMARY_ALL_COLUMNS)
     if requested.strip().lower() == "all":
         return list(core.SUMMARY_ALL_COLUMNS)
+    if requested.strip().lower() == "status":
+        return list(core.SUMMARY_COLUMNS)
     wanted = [c.strip() for c in requested.split(",") if c.strip()]
     known = {c.lower(): c for c in core.SUMMARY_ALL_COLUMNS}
     resolved, unknown = [], []
@@ -279,7 +285,8 @@ def _resolve_columns(requested: str | None) -> list[str]:
         _die(
             core.UqfStackError(
                 f"unknown summary column(s): {', '.join(unknown)}. "
-                f"Available: {', '.join(core.SUMMARY_ALL_COLUMNS)}, or `all`"
+                f"Available: {', '.join(core.SUMMARY_ALL_COLUMNS)}, "
+                "or `all` / `status`"
             )
         )
     return resolved
@@ -315,18 +322,21 @@ def summary(
         typer.Option(
             "--columns",
             help=(
-                "Comma-separated columns, or `all`. Adds to the default six: "
-                "'Depends on', 'Inputs', 'Outputs' - the declared process graph."
+                "Comma-separated columns, `all` (the default), or `status` for "
+                "just up/down/pid/port - narrower, for an 80-column terminal."
             ),
         ),
     ] = None,
 ) -> None:
-    """Status table (up/down, pid, port) for every process in process.csv.
+    """Status table for every process in process.csv, with its declared graph.
 
-    `--columns all` adds the declared graph - what each process subscribes to,
-    what it publishes, and which processes it therefore needs running. That is
-    the question behind every `up, but idle` process, and it is answered from
-    the same declarations `verify_pipeline_edges` checks.
+    The graph columns - what each process subscribes to, what it publishes,
+    and which processes it therefore needs running - answer the question
+    behind every `up, but idle` process, from the same declarations
+    `verify_pipeline_edges` checks.
+
+    Nine columns need a wide terminal. `--columns status` gives the original
+    six, and any subset can be named explicitly.
 
     Run with `--debug` (or LOG_LEVEL=DEBUG) to see where each column came
     from: the two lookups below degrade rather than fail, so on the default

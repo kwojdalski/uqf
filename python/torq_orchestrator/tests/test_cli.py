@@ -222,14 +222,24 @@ def test_a_genuinely_stopped_monitor_still_says_to_start_it(monkeypatch):
 # ------------------------------------------------- the graph columns
 
 
-def test_summary_defaults_to_the_status_columns_only(monkeypatch):
-    """The graph columns are wide, and the default table answers "is it
-    running". Someone asking what feeds a process is asking a second question
-    and says so with --columns."""
+def test_summary_shows_the_graph_by_default(monkeypatch):
+    """These were opt-in first, because nine columns do not fit an
+    eighty-column terminal. That was the wrong trade: a column nobody knows
+    about answers nothing, and a reader on a narrow terminal can say
+    `--columns status` while one who never learns they exist cannot."""
+    monkeypatch.setenv("COLUMNS", "220")
     _summary_ok(monkeypatch, rows=[_row()])
     result = runner.invoke(cli.app, ["summary"])
-    assert "Depends on" not in result.stdout
-    assert "Heartbeat" in result.stdout
+    flat = " ".join(result.stdout.split())
+    for column in core.SUMMARY_GRAPH_COLUMNS:
+        assert column in flat
+
+
+def test_columns_status_gives_back_the_narrow_table(monkeypatch):
+    """The escape hatch for an 80-column terminal, and the reason showing the
+    graph by default is safe."""
+    assert cli._resolve_columns("status") == list(core.SUMMARY_COLUMNS)
+    assert cli._resolve_columns("STATUS") == list(core.SUMMARY_COLUMNS)
 
 
 def test_columns_all_adds_the_graph(monkeypatch):
