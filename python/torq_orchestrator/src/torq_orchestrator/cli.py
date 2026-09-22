@@ -158,10 +158,56 @@ def _warn_about_unfed_inputs(procs: str, port: int) -> None:
         console.print(f"[yellow]warning[/] {line}")
 
 
+def _warn_about_connection_cap(procs: str, port: int) -> None:
+    """Say so when the fleet this start produces is bigger than the licence
+    lets one process hold handles for.
+
+    The licence caps a q process at `PLANT_CONNECTION_BUDGET` concurrent
+    connections. Every streaming job opens a handle to stp1 and monitor1
+    opens one per process it watches, so past that count the cap - not the
+    configuration - decides what works. The plant does not complain: it
+    resets the extra connection, the process wedges in its retry loop, and
+    `summary` still reports it `up` because that is a PID check.
+
+    Advisory only, and never fails the command: the limit is a property of
+    the licence, not a mistake, and a bigger fleet is a legitimate thing to
+    want on a full kdb+/KDB-X licence.
+    """
+    try:
+        running = {
+            row["Process"]
+            for row in core.summary_rows(core.summary(_paths(), base_port=port).stdout, {}, None)
+            if row["Status"] == "up"
+        }
+        if procs.strip() == "all":
+            starting = {
+                row["procname"]
+                for row in core.list_items(_paths(), "processes", base_port=port)
+                if row.get("startwithall") == "1"
+            }
+        else:
+            starting = {p for p in procs.split() if p != "all"}
+        total = len(running | starting)
+    except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
+        log.debug("connection-cap warning skipped: {}", exc)
+        return
+    if total <= core.PLANT_CONNECTION_BUDGET:
+        return
+    console.print(
+        f"[yellow]warning[/] this start leaves {total} processes running, past the "
+        f"{core.PLANT_CONNECTION_BUDGET} concurrent connections this licence allows "
+        "one q process. Handles past the cap are reset, not refused: the process "
+        "wedges in its retry loop and still reports `up`, and monitor1 may become "
+        "unreachable so the Heartbeat column empties. Start a subset, or stop what "
+        "you are not using."
+    )
+
+
 @app.command()
 def start(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Start every startwithall=1 process (or specific process name(s))."""
     _warn_about_unfed_inputs(procs, port)
+    _warn_about_connection_cap(procs, port)
     _run_streaming(core.start, procs, base_port=port)
 
 
@@ -175,6 +221,7 @@ def stop(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> Non
 def restart(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
     _warn_about_unfed_inputs(procs, port)
+    _warn_about_connection_cap(procs, port)
     _run_streaming(core.restart, procs, base_port=port)
 
 
@@ -290,11 +337,31 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
             console.print(f"  [yellow]·[/] {reason}")
 
     if heartbeats is None:
+        # This used to assert "monitor1 is not running", which is one cause
+        # and not the common one. Saturation looks identical from here and is
+        # what actually happens on a full stack: monitor1 opens a handle to
+        # every process it monitors, the licence caps a q process at
+        # MONITOR_CONNECTION_BUDGET concurrent connections, and once it is at
+        # the cap it cannot accept the inbound handle this query needs - so a
+        # monitor that is running perfectly, and collecting heartbeats
+        # correctly, is unreachable. Telling the reader to restart it then
+        # sends them to fix a process that has nothing wrong with it.
+        monitor_up = any(
+            r["Process"] == core.MONITOR_PROCNAME and r["Status"] == "up" for r in rows
+        )
+        cause = (
+            "It is up, so it is most likely at its connection cap "
+            f"({core.MONITOR_CONNECTION_BUDGET} on this licence) and cannot accept "
+            "another handle - check `err_monitor1.log`, which will still be "
+            "recording the heartbeats it collected"
+            if monitor_up
+            else "It is not running - it starts with the stack, so it died or was "
+            "stopped. Run `uqf-stack start monitor1`"
+        )
         console.print(
-            "[dim]Heartbeats not collected: monitor1 is not running. It starts "
-            "with the stack, so this means it died or was stopped - run "
-            "`uqf-stack start monitor1`. Status above is a PID check, which "
-            "cannot tell a hung process from a working one.[/]"
+            f"[dim]Heartbeats not collected: monitor1 could not be reached. {cause}. "
+            "Status above is a PID check, which cannot tell a hung process from a "
+            "working one.[/]"
         )
     else:
         # A "-" on an `up` process is not an all-clear and not a fault: it

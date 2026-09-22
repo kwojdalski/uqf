@@ -273,11 +273,26 @@ health signal, so `procs.VENDORED_STARTWITHALL_OVERLAY` turns it on.
 
 Two consequences worth knowing:
 
-- **Under the community licence the coverage is partial.** `monitor1`
-  saturates at roughly 16 connections and the processes past that point are
-  never subscribed to - they show `-` in the Heartbeat column, and `summary`
-  names them explicitly rather than leaving the dash to be guessed at. On a
-  fully-licensed kdb+/KDB-X it reaches the whole fleet.
+- **Under the community licence the coverage is partial, and deliberately
+  so.** `monitor1` opens one handle per process it monitors, and the licence
+  caps a q process at 16 concurrent connections. Untrimmed on this tree it
+  wants 32 - so it saturated, and a saturated monitor cannot *accept* the
+  handle `uqf-stack summary` needs to read `.hb.hb`. Heartbeats were
+  collected correctly and nothing could read them, which is the worst shape
+  of monitoring failure available: an empty Heartbeat column on a fleet that
+  was being monitored perfectly well.
+
+  `monitor_budget.py` therefore trims `.servers.CONNECTIONS` to fit
+  `MONITOR_CONNECTION_BUDGET` minus `MONITOR_INBOUND_RESERVE`, giving up
+  proctypes in `MONITOR_CONNECTION_SACRIFICE_ORDER` - `sortworker`,
+  `reporter`, `housekeeping`, `feed`, then `metrics` - until the rest fit.
+  Core infrastructure is never given up: a stack whose `rdb` or plant is
+  unheard is not monitored in any useful sense. Processes of a dropped
+  proctype show `-` in the Heartbeat column, and `summary` names them rather
+  than leaving the dash to be guessed at. On a fully-licensed kdb+/KDB-X
+  nothing is trimmed and it reaches the whole fleet.
+
+  Partial coverage that can be queried beats full coverage that cannot.
 - **`monitor1` subscribes to the proctypes in `.servers.CONNECTIONS`**, and
   the vendored settings file lists TorQ's own types only. The orchestrator
   reads that list back out and appends `metrics` (via a `-.servers.CONNECTIONS`
