@@ -626,6 +626,81 @@ def test_an_unknown_kind_exits_one(monkeypatch):
     assert runner.invoke(cli.app, ["list", "bogus"]).exit_code == 1
 
 
+# -------------------------------------------------------- list --sort
+
+
+def _procs() -> list[dict[str, str]]:
+    return [
+        {"procname": "sortworker2", "port": "6067"},
+        {"procname": "stp1", "port": "659"},
+        {"procname": "Arbitrage1", "port": "6100"},
+    ]
+
+
+def test_a_numeric_column_sorts_numerically_not_lexicographically():
+    """`port` is a string like "6051". Sorted as text, "6100" comes before
+    "659" - which looks like the sort silently did nothing on the one column
+    most worth sorting."""
+    order = [i["port"] for i in cli._sorted_items(_procs(), "port", reverse=False)]
+    assert order == ["659", "6067", "6100"]
+
+
+def test_a_text_column_sorts_case_insensitively():
+    """ "Arbitrage1" must not sort before every lowercase name just for its
+    capital - the reader is looking up a name, not an ordinal."""
+    order = [i["procname"] for i in cli._sorted_items(_procs(), "procname", reverse=False)]
+    assert order == ["Arbitrage1", "sortworker2", "stp1"]
+
+
+def test_reverse_flips_the_order():
+    order = [i["port"] for i in cli._sorted_items(_procs(), "port", reverse=True)]
+    assert order == ["6100", "6067", "659"]
+
+
+def test_the_column_name_is_matched_case_insensitively():
+    assert cli._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
+
+
+def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
+    """A process with no override set is not "before aaa", it is absent -
+    and a blank interleaved among real values reads as data."""
+    items = [{"v": "b"}, {"v": ""}, {"v": "a"}]
+    assert [i["v"] for i in cli._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
+
+
+def test_sorting_is_a_no_op_without_the_option():
+    items = _procs()
+    assert cli._sorted_items(items, None, reverse=False) == items
+
+
+def test_sorting_an_empty_listing_does_not_look_up_columns():
+    """There is no first row to read column names from, and a kind with no
+    items is a legitimate result - `overrides` is empty until something is
+    set."""
+    assert cli._sorted_items([], "anything", reverse=False) == []
+
+
+def test_an_unsortable_column_names_the_real_ones(monkeypatch):
+    """The columns differ per kind, so there is no fixed set to check
+    against - a typo has to be answered with the columns this listing
+    actually produced."""
+    _patch(monkeypatch, "list_items", result=_procs())
+    result = runner.invoke(cli.app, ["list", "processes", "--sort", "bogus"])
+    assert result.exit_code == 1
+
+
+def test_the_sorted_order_reaches_the_export(monkeypatch):
+    """An exported CSV that disagreed with what was on screen would be the
+    worst of both."""
+    _patch(monkeypatch, "list_items", result=_procs())
+    rec = _patch(monkeypatch, "export_table", result=None)
+    result = runner.invoke(
+        cli.app, ["list", "processes", "--sort", "port", "--export", "/tmp/x.csv"]
+    )
+    assert result.exit_code == 0
+    assert [i["port"] for i in rec.args[0]] == ["659", "6067", "6100"]
+
+
 # ------------------------------------------------------------------- logs
 
 
