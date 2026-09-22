@@ -2,9 +2,14 @@
 / the book looks like (imbalance, microprice, depth, slope, convexity) and
 / how it's moving (order flow imbalance, velocity/acceleration, queue
 / depletion) - built on top of execution.q's sweep_price/vwap and
-/ forwards.q's require_quotes_cols/quotes table shape. See
-/ docs/ROADMAP.md and docs/prompts/microstructure-features.md for the
-/ design this module implements.
+/ forwards.q's require_quotes_cols/quotes table shape. The formulas were
+/ mined from an external equity LOB feature catalog and re-expressed
+/ against this tree's quotes shape; docs/ROADMAP.md carries what is still
+/ unbuilt from it.
+/ .
+/ Two families, referred to throughout as Tier 1 and Tier 2. Tier 1 reads
+/ one snapshot per row; Tier 2 needs a time-ordered slice for one sym and
+/ diffs consecutive snapshots, so its first row is conventionally 0/null.
 / .
 / Unlike execution.q/forwards.q, Tier 1 functions here take a whole COLUMN
 / from a quotes table - i.e. bid_prices/bid_sizes/ask_prices/ask_sizes are

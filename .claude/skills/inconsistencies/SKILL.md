@@ -56,7 +56,7 @@ Commands: ok — fix it | s/skip — skip | done — stop
    - `forwards.q` — the largest module; internal consistency across its many related cross-rate functions is the highest-value target
    - `execution.q` — markout family, sweep pricing, hit-ratio analytics
    - `options.q` — pricing/Greeks function family
-   - `microstructure.q` — the LOB feature family (do all functions follow the same "whole quotes-table column in, row-aligned vector out" shape documented in `docs/ROADMAP.md`?)
+   - `microstructure.q` — the LOB feature family (do all functions follow the same "whole quotes-table column in, row-aligned vector out" shape documented in the module's own header?)
    - `book.q`, `risk.q`, `rates.q`, `daycount.q`, `ccy.q` — smaller modules, check they follow the same conventions as the larger ones
 
    Read enough of each file to understand its interface, not just its surface. Look at function signatures, return shapes, naming patterns, and how `quotes`/`side`/`pip_factor`/`ts_col` are handled.

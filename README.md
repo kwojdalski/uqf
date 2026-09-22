@@ -259,31 +259,22 @@ this code is written.
 
 ## Further reading
 
-[**`docs/`**](docs/README.md) is the map — five directories, one question
-each, and the rule for which a new page belongs in.
+[**`docs/`**](docs/README.md) is the map, and lists every page. Four
+directories, one question each:
 
-- **How do I do this?** → [`docs/guides/`](docs/guides/):
-  [uqf-stack.md](docs/guides/uqf-stack.md) (running the stack),
-  [ci.md](docs/guides/ci.md) (the gates, and running them locally).
-- **Why is it shaped this way?** → [`docs/architecture/`](docs/architecture/):
-  [restatement-design.md](docs/architecture/restatement-design.md),
-  [event-tape.md](docs/architecture/event-tape.md),
-  [pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md),
-  [example-architecture.md](docs/architecture/example-architecture.md),
-  [fx-positions-service.md](docs/architecture/fx-positions-service.md),
-  [cryptorust-discovery.md](docs/architecture/cryptorust-discovery.md).
-- **What is the contract?** → [`docs/reference/`](docs/reference/):
-  [environment.md](docs/reference/environment.md) (every variable,
-  machine-checked), [ETL](docs/reference/etl-framework-requirements.md) and
-  [frontend](docs/reference/frontend-requirements.md) requirements.
-- **How does this meet something external?** →
-  [`docs/integrations/torq/`](docs/integrations/torq/README.md), including the
-  generated [process table](docs/integrations/torq/processes.md).
-- **What is planned?** → [`docs/ROADMAP.md`](docs/ROADMAP.md).
+| Directory | Answers |
+|---|---|
+| [`docs/guides/`](docs/guides/) | *How do I do this?* — running the stack, adding a pipeline, the CI gates |
+| [`docs/architecture/`](docs/architecture/) | *Why is it shaped this way?* |
+| [`docs/reference/`](docs/reference/) | *What is the contract?* — the pages CI holds the code to |
+| [`docs/integrations/`](docs/integrations/torq/README.md) | *How does this meet something external?* |
+
+Still open, and why: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 Component READMEs: [`web/`](web/README.md) (the React desk app),
 [`env/`](env/README.md),
 [`python/torq_orchestrator/`](python/torq_orchestrator/README.md).
+
 ## Browser application
 
 The local React [desk and operations app](web/README.md) provides catalog-driven

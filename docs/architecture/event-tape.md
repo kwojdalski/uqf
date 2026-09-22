@@ -1,15 +1,20 @@
 # The order/trade event tape
 
 **Status:** contract decided 2026-09-16 (issue #46). Shape implemented in
-`src/etl/sources/demo_events.q`; two of the six features it unblocks are
-implemented in `src/market_data/microstructure.q`.
+`src/etl/sources/demo_events.q`; five of the six features it unblocks are
+implemented in `src/market_data/microstructure.q` (`vpin`,
+`signed_trade_flow`, `trade_arrival_rate`, `large_trade_ratio`,
+`cancel_to_trade_ratio`). The sixth, the odd-lot ratios, is blocked on a
+venue convention rather than on the tape.
 
 ## Why this document exists
 
-`quotes` in this library is periodic book **snapshots**. Seven features in
-`docs/ROADMAP.md`'s "Explicitly out of scope" section were blocked on the
-absence of a per-event tape, and the roadmap says plainly that adding one is
-"a bigger scope decision than adding a function". This is that decision.
+`quotes` in this library is periodic book **snapshots**. Seven candidate
+features were blocked on the absence of a per-event tape, and adding one was
+a bigger scope decision than adding a function. This is that decision. Six
+of the seven were unblocked by it; the seventh, `order_count_imbalance`,
+needs a snapshot-schema change instead and is still open — see
+[`../ROADMAP.md`](../ROADMAP.md).
 
 ## Which tape this is — and which it is not
 

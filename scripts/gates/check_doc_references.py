@@ -81,10 +81,9 @@ EXCLUDED_DIRS = {
     # Generated from the GitHub issues that are the authority; a decision page
     # records what was decided, including about code since changed.
     "decisions",
-    # Agent output and agent input, dated and append-only. A record of a run,
-    # not a description of the system.
+    # Agent output, dated and append-only. A record of a run, not a
+    # description of the system.
     "audits",
-    "prompts",
     "drift-reports",
     # Plans written BEFORE the work, kept afterwards as the reasoning. They
     # name things that did not exist when written, which is the point.
