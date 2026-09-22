@@ -2,6 +2,88 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-09-22
+
+The largest snapshot so far: 119 commits and 124 PRs since `stable/2026-09-16.1`,
+453 files changed (145 added, 128 deleted, 156 modified), +38,371 / -14,211 lines.
+The thrust was `src/etl/`: the pipeline framework was reorganised into one
+namespace tree, streaming jobs were split one-per-file out of the old monolithic
+scripts, and every job was forced to declare the process that runs it. Around
+that, four new services landed, q gained statement-level coverage, and the
+decision register was deleted in favour of docs that describe the code.
+
+### `src/etl/` — the pipeline framework (50 files, +6,040 / -378)
+
+The namespace tree was flattened into predictable roots: source declarations under
+`.qfeed`, subscriber processes under `.qsub`, worker instances under `.qwrk`, with
+`src/namespaces.q` enumerating the lot. `.qcov` became `.qmatz` and `coverage.q`
+became `materialisation.q`, so the ledger is named for what it records. New core
+modules: `transform.q` (a transform is now part of every job, backfill and
+subscribe alike), `react.q` (recompute a dataset when the one it reads publishes,
+deriving the graph edge where it can be derived), `normalizer.q` (many
+differently-shaped sources into one canonical table), `run.q` (a persisted run
+ledger, so `run_id` points at something), `stream_job.q`, `tick.q`, `status.q` and
+`config_audit.q`. Every bounded worker now declares its process rather than
+implying it, and `database.q` is generated from what pipelines actually publish
+rather than from declared schemas.
+
+### Streaming jobs and new services
+
+The nine `scripts/torq_*.q` monoliths were retired: eighteen jobs now live one per
+file under `src/etl/streaming/`, run by a single process that takes any of them.
+New alongside them — `fx_positions.q`, an FX positions service that runs on stock
+kdb+ with no TorQ; `crypto_mock.q`, a mock crypto trading process so crypto fills
+reach a position without cryptorust; `databento_book.q`, a live Databento adapter
+folded by the same transform the backfill uses; and `superbook.q` +
+`cross_arbitrage.q`, which build the direct FX superbook and hunt cross-currency
+arbitrage by pricing the direct book against a synthetic route.
+
+### Quant modules — four correctness fixes and a new area
+
+`src/portfolio/` is new: `allocation.q` attributes realised P&L to trades under a
+choice of lot-matching method, plus `desk_positions.q` and `limits.q` (+944 lines).
+Fixed: cross attribution now reprices the full book instead of approximating;
+multi-level OFI was missing ask depth entirely; `cancel_to_trade_ratio_by` returned
+infinity rather than null for a group with no trades; and `var_historical`'s
+docstring promised a sign the function never guaranteed. `src/metadata/metatables.q`
+adds bounded eFX metatable definitions with temporal, null and quality profiling,
+and a TorQ DQE adapter.
+
+### Tests and gates (58 files, +7,261 / -654)
+
+Twenty-nine new test files. The shell test runner was replaced by `scripts/test.py`
+with a coverage lane, and q gained real statement-level coverage — first as `qcov`,
+then consolidated into a single `.cov` API shaped like KX's, with the gaps it found
+closed. Every documented `@eg` example now runs and is checked (`run_examples.q`),
+the build fails when a function no test enters is a new one, publisher invariants
+are checked against every feed rather than two, and each registry's guard is tested
+against the trap it exists for. Python coverage went 78% → 93%.
+
+### Frontend (43 files across `web/` and `python/uqf_frontend/`)
+
+The Desk became a glimpse — pick a table from a panel and see its rows at once. The
+table catalog moved to CSV with schema wildcards, every column got a decimal width
+from the catalog, lifecycle processes are picked from a list rather than a text box,
+and setters were added behind an off-by-default flag. The frontend now points at the
+gateway and refuses a process that is not one; the Vite dev server proxies `/control`
+so the Control view can start TorQ.
+
+### Docs (≈150 files)
+
+The decision register and drift reports were deleted along with every citation of
+them — 111 files under `docs/decisions/`, 2,389 lines. In their place: d2 diagrams in
+`docs/diagrams/` including a holistic view of the repository in `docs/README.md`, a
+pipeline-building guide, an example architecture composed from the implemented
+services, `LICENSING.md`, and a README rewrite describing the repository as the
+several components it is. A gate now checks that documented functions actually exist.
+
+### Tooling
+
+`qlinter` moved to its own repository, and thirteen q-trap rules were delegated to it.
+New agents: `architecture-basher` (the prosecution case against our own design) and
+`docs-maintainer` (remembers what it was told). `CLAUDE.md` now requires a new git
+worktree for every GitHub issue an agent picks up.
+
 ## stable/2026-09-16.1
 
 The second snapshot of the day, cut after `stable/2026-09-16` because six PRs
