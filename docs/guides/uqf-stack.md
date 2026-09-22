@@ -56,14 +56,29 @@ uv tool install --editable python/torq_orchestrator
 ```
 
 installs `uqf-stack` onto your `PATH` as an editable link back to this
-repo's source (edits are picked up immediately, no reinstall), so from then
-on, from anywhere:
+repo's source, so from then on, from anywhere:
 
 ```
 uqf-stack start all      # start every startwithall=1 process
 uqf-stack summary        # status table
 uqf-stack stop all       # stop everything
 ```
+
+**Editable updates the code, not the script names.** A `.pth` file points the
+install at `python/torq_orchestrator/src`, so every source edit is live the
+moment it is saved - no reinstall for a new command, option or fix. The
+console scripts in `[project.scripts]` are a different thing: they are
+generated once, at install time. So an install made before this package was
+renamed from `torq-demo` to `uqf-stack` keeps working, keeps picking up new
+code, and still calls itself `torq-demo` - which looks like the rename never
+happened. `uv tool list` shows which you have:
+
+```
+uv tool install --force --editable python/torq_orchestrator
+```
+
+`--force` is what re-generates them. The same applies to any entry point
+added or renamed later.
 
 Without that one-time step, or in CI/a fresh checkout, fall back to `uv
 run`:
