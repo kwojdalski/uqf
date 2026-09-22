@@ -49,12 +49,21 @@
 # --- Genuine gaps, worth closing ---------------------------------------
 # Nothing external stands in the way of these; no test calls them.
 #
-# The two workers below are the clearest case. Every worker declares the same
-# one-line delegators, and `fetch:{[from_ts;to_ts] ...}` is the only one with
-# two same-typed arguments - so a swap there is silent. demo_deals_backfill
-# and demo_events_backfill each have a regression test for exactly that
-# (test_demo_deals_backfill.q, test_event_tape.q); these two have none, which
-# is what this list is for.
+# The two workers below are the clearest case. Every worker's one-line
+# delegators are STAMPED by `.qbw.define`, and `fetch:{[from_ts;to_ts] ...}` is
+# the only one with two same-typed arguments - so a swap there is silent.
+#
+# That risk is now covered for every worker at once rather than per worker:
+# test_worker_runtime.q asserts each stamped delegator takes the shell's own
+# parameter names in the shell's own order, which is a fact about the stamping
+# and cannot drift one worker at a time. Verified by injecting a reversed
+# window into `.qbw.delegate` and watching it fail.
+#
+# What stays here is what a STRUCTURAL test cannot reach: reading a
+# delegator's parse tree never enters the function, so the coverage lane
+# rightly still counts it. `spec` came off this list because there is a test
+# that calls it on every worker; the rest need a run, which needs a live
+# source - see the section above.
 .qwrk.databento_book_backfill.checkpoint
 .qwrk.databento_book_backfill.cleanup
 .qwrk.databento_book_backfill.example_book
@@ -64,7 +73,6 @@
 .qwrk.databento_book_backfill.publish
 .qwrk.databento_book_backfill.quality_check
 .qwrk.databento_book_backfill.run
-.qwrk.databento_book_backfill.spec
 .qwrk.upstream_trades_backfill.checkpoint
 .qwrk.upstream_trades_backfill.cleanup
 .qwrk.upstream_trades_backfill.fetch
@@ -72,7 +80,6 @@
 .qwrk.upstream_trades_backfill.plan
 .qwrk.upstream_trades_backfill.publish
 .qwrk.upstream_trades_backfill.run
-.qwrk.upstream_trades_backfill.spec
 .qdag.reaction_edges
 .qrun.attach
 .qrun.history
