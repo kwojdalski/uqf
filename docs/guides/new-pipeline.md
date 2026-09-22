@@ -260,17 +260,20 @@ labels recorded as materialisation metadata.
 
 ## 3. Register it
 
-Add two lines to [`src/etl/init.q`](../../src/etl/init.q), sources before
-workers:
+**Nothing, for the load.** `src/etl/init.q` globs `sources/`, `workers/` and
+`streaming/`, so a declaration file is loaded the moment it exists. It used
+to list all twenty-six by hand, in the right place.
 
-```q
-\l src/etl/sources/fx_rates.q
-\l src/etl/workers/fx_rates_backfill.q
-```
+Two orderings still hold, and the file explains both: directories load
+sources before workers, because `.qbw.define` looks its source up at define
+time; and within `streaming/` the two jobs that read another job's table at
+load time are named in a `lead` list. Add a file that does the same and you
+will get a bare `` `.qsub.<name> `` on load — put it in that list.
 
-Order matters and is not obvious from the filenames — a declaration
-registers itself on load, so the registry has to exist first. The file's own
-header lists the couplings.
+A test file needs no registration either. `tests/run_tests.q` globs
+`tests/q/test_*.q` and derives its namespace list from what actually loaded.
+It used to keep two hand-written lists, and forgetting the second one was
+silent: the file loaded, its tests never ran, and the suite stayed green.
 
 The job graph adopts the worker from its own declaration:
 

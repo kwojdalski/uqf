@@ -19,22 +19,6 @@ from torq_orchestrator.pipeline import (
     Pipeline,
     PipelineKind,
 )
-from torq_orchestrator.schemas import (
-    ARBITRAGE_TABLE_SCHEMA,
-    CROSS_ARBITRAGE_TABLE_SCHEMA,
-    DATABENTO_BOOK_TABLE_SCHEMA,
-    EXECUTION_QUALITY_TABLE_SCHEMA,
-    EXECUTIONS_TABLE_SCHEMA,
-    MARKET_DATA_TABLE_SCHEMA,
-    MARKS_TABLE_SCHEMA,
-    MKT_ORDERBOOK_TABLE_SCHEMA,
-    ORDERS_TABLE_SCHEMA,
-    POSITION_TABLE_SCHEMA,
-    QUOTES_TABLE_SCHEMA,
-    SUPERBOOK_TABLE_SCHEMA,
-    TRADES_TABLE_SCHEMA,
-    WIDE_BOOK_TABLE_SCHEMA,
-)
 
 DEFAULT_BASE_PORT = 6050
 
@@ -68,7 +52,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         script=STREAM_RUNNER_SCRIPT,
         kind=PipelineKind.FEED,
         table="quotes",
-        schema=QUOTES_TABLE_SCHEMA,
     ),
     Pipeline(
         procname="cross1",
@@ -90,7 +73,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         script=STREAM_RUNNER_SCRIPT,
         kind=PipelineKind.FEED,
         table="wide_book",
-        schema=WIDE_BOOK_TABLE_SCHEMA,
         startwithall="0",
         note=(
             "half of a closed pair with vectorize1: it is the only producer of "
@@ -106,7 +88,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes=FROM_DECLARATION,
         table="mkt_orderbook",
-        schema=MKT_ORDERBOOK_TABLE_SCHEMA,
         startwithall="0",
         note=(
             "the other half of the widefeed1 pair: nothing subscribes to "
@@ -128,7 +109,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         script=STREAM_RUNNER_SCRIPT,
         kind=PipelineKind.FEED,
         table="trades",
-        schema=TRADES_TABLE_SCHEMA,
     ),
     Pipeline(
         procname="posbook1",
@@ -137,7 +117,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes=FROM_DECLARATION,
         table="position",
-        schema=POSITION_TABLE_SCHEMA,
         note=(
             "reads the two normalizers' outputs, not trades and quote, so one "
             "book carries FX and crypto and a new market is a mapping, not a job"
@@ -149,7 +128,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes=FROM_DECLARATION,
         table="execution_quality",
-        schema=EXECUTION_QUALITY_TABLE_SCHEMA,
         loads_qpipe=True,
         localtime="0",
         note=(
@@ -205,7 +183,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes=FROM_DECLARATION,
         table="databento_book",
-        schema=DATABENTO_BOOK_TABLE_SCHEMA,
         startwithall="0",
         note=(
             "folds live Databento MBP-10 into the book shape. The raw rows are "
@@ -237,7 +214,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.NORMALIZER,
         subscribes=FROM_DECLARATION,
         table="executions",
-        schema=EXECUTIONS_TABLE_SCHEMA,
         note="every fill table as one: trades and crypto_trades -> executions",
     ),
     Pipeline(
@@ -247,7 +223,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.NORMALIZER,
         subscribes=FROM_DECLARATION,
         table="marks",
-        schema=MARKS_TABLE_SCHEMA,
         note="a mid per instrument from every book: quote and crypto_book -> marks",
     ),
     Pipeline(
@@ -256,7 +231,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         loads_qpipe=True,
         kind=PipelineKind.FEED,
         table="orders",
-        schema=ORDERS_TABLE_SCHEMA,
         note="synthetic order flow, most of which never becomes a fill - fxpositions1's input",
     ),
     Pipeline(
@@ -299,7 +273,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.NORMALIZER,
         subscribes=FROM_DECLARATION,
         table="market_data",
-        schema=MARKET_DATA_TABLE_SCHEMA,
         localtime="0",
         startwithall="0",
         note=(
@@ -320,7 +293,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes=FROM_DECLARATION,
         table="superbook",
-        schema=SUPERBOOK_TABLE_SCHEMA,
         publishes=FROM_DECLARATION,
         localtime="0",
         startwithall="0",
@@ -336,7 +308,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes=FROM_DECLARATION,
         table="arbitrage",
-        schema=ARBITRAGE_TABLE_SCHEMA,
         localtime="0",
         startwithall="0",
         note=(
@@ -351,7 +322,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes=FROM_DECLARATION,
         table="cross_arbitrage",
-        schema=CROSS_ARBITRAGE_TABLE_SCHEMA,
         publishes=FROM_DECLARATION,
         localtime="0",
         startwithall="0",
