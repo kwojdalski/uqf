@@ -186,7 +186,73 @@ def test_summary_distinguishes_unreachable_monitoring_from_a_healthy_fleet(monke
     rec = _patch(monkeypatch, "summary_rows", result=[])
     result = runner.invoke(cli.app, ["summary"])
     assert rec.args[2] is None, "unreachable monitoring is None, not an empty dict"
-    assert "monitor1 is not running" in result.stdout
+    assert "could not be reached" in result.stdout
+
+
+def test_an_unreachable_but_running_monitor_is_not_called_stopped(monkeypatch):
+    """The message used to assert "monitor1 is not running", which is one
+    cause and not the common one. A monitor at its connection cap is running
+    perfectly and still collecting heartbeats - it just has no slot left to
+    answer on. Telling the reader to restart it sends them to fix a process
+    with nothing wrong with it."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    _patch(monkeypatch, "heartbeat_states", result=None)
+    _patch(monkeypatch, "summary_rows", result=[_row(Process="monitor1", Status="up")])
+    result = runner.invoke(cli.app, ["summary"])
+    assert "connection cap" in result.stdout
+    assert "is not running" not in result.stdout
+    assert "uqf-stack start monitor1" not in result.stdout, "it is already running"
+
+
+def test_a_genuinely_stopped_monitor_still_says_to_start_it(monkeypatch):
+    """The other half: when monitor1 really is down, the advice that was
+    always given is the right advice, and must not be lost to the new one."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    _patch(monkeypatch, "heartbeat_states", result=None)
+    _patch(monkeypatch, "summary_rows", result=[_row(Process="monitor1", Status="down")])
+    result = runner.invoke(cli.app, ["summary"])
+    # Rich hard-wraps the panel text, so a phrase can straddle a newline.
+    flat = " ".join(result.stdout.split())
+    assert "is not running" in flat
+    assert "uqf-stack start monitor1" in flat
+
+
+# --------------------------------------------------- the connection cap
+
+
+def test_a_start_past_the_licence_cap_warns(monkeypatch):
+    """Past the cap the licence, not the configuration, decides what runs -
+    and it does so silently: the extra handle is reset, the process wedges in
+    its retry loop, and `summary` still reports it `up` because that is a PID
+    check."""
+    over = [_row(Process=f"p{i}") for i in range(core.PLANT_CONNECTION_BUDGET + 1)]
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "summary_rows", result=over)
+    _patch(monkeypatch, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "rdb1"])
+    assert result.exit_code == 0
+    assert "past the" in result.stdout
+    assert str(core.PLANT_CONNECTION_BUDGET) in result.stdout
+
+
+def test_a_start_inside_the_cap_is_silent(monkeypatch):
+    """A warning on every start would be noise, and noise is how a real one
+    gets missed."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "summary_rows", result=[_row(Process="rdb1")])
+    _patch(monkeypatch, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "rdb1"])
+    assert "concurrent connections" not in result.stdout
+
+
+def test_the_cap_warning_never_blocks_a_start(monkeypatch):
+    """Advisory only. A warning that cannot be produced - the fleet is
+    unreachable, the registry cannot be read - must not stop a start."""
+    _patch(monkeypatch, "summary", raises=RuntimeError("fleet unreachable"))
+    _patch(monkeypatch, "start", result=Completed())
+    assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
 
 
 def test_summary_refusal_exits_one(monkeypatch):

@@ -57,6 +57,7 @@ from torq_orchestrator.env import (  # noqa: F401
 )
 from torq_orchestrator.listing import (
     LISTABLE_KINDS,
+    MONITOR_PROCNAME,  # noqa: F401  (re-exported for the CLI's heartbeat message)
     SUMMARY_COLUMNS,
     configured_ports,
     heartbeat_states,
@@ -76,6 +77,9 @@ from torq_orchestrator.paths import (  # noqa: F401
     check_prerequisites,
     clean,
     default_paths,
+)
+from torq_orchestrator.pipeline_edges import (  # noqa: F401  (re-exported)
+    PLANT_CONNECTION_BUDGET,
 )
 from torq_orchestrator.pipelines import (  # noqa: F401
     CROSS_ETL_PORT_OFFSET,
@@ -98,6 +102,7 @@ from torq_orchestrator.pipelines import (  # noqa: F401
     verify_pipeline_edges,
 )
 from torq_orchestrator.procs import (  # noqa: F401
+    MONITOR_CONNECTION_BUDGET,
     VENDORED_STARTWITHALL_OVERLAY,
     _base_process_rows,
     _generated_schema_content,
@@ -169,6 +174,9 @@ __all__ = [
     "FX_TRADES_FEED_PORT_OFFSET",
     "LISTABLE_KINDS",
     "MARKOUT_PORT_OFFSET",
+    "MONITOR_CONNECTION_BUDGET",
+    "MONITOR_PROCNAME",
+    "PLANT_CONNECTION_BUDGET",
     "MKT_ORDERBOOK_TABLE_SCHEMA",
     "PIPELINES",
     "PIPELINE_BY_NAME",

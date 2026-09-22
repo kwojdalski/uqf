@@ -21,6 +21,14 @@ from string import Template
 
 from torq_orchestrator.env import build_env
 from torq_orchestrator.logger import get_logger
+from torq_orchestrator.monitor_budget import (  # noqa: F401  (re-exported)
+    MONITOR_CONNECTION_BUDGET,
+    MONITOR_CONNECTION_SACRIFICE_ORDER,
+    MONITOR_EXTRA_CONNECTIONS,
+    MONITOR_INBOUND_RESERVE,
+    monitor_connection_extras,
+    monitor_connection_plan,
+)
 from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 from torq_orchestrator.pipelines import (
     DEFAULT_BASE_PORT,
@@ -62,69 +70,6 @@ log = get_logger(__name__)
 # `uqf-stack config-set monitor1 startwithall 0`.
 VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 
-# Proctypes monitor1 must also subscribe to, on top of the ten the vendored
-# settings file lists.
-#
-# Starting monitor1 is only half of collecting heartbeats. It subscribes to
-# the proctypes in `.servers.CONNECTIONS`, and the vendored
-# appconfig/settings/monitor.q lists TorQ's own types only - so the four
-# standing uqf ETLs (cross1, vectorize1, posbook1, markout1, all proctype
-# `metrics`) published heartbeats that nothing was listening for. The feeds
-# were already covered, since `feed` is on the vendored list.
-#
-# `backfill` is deliberately NOT here. A backfill is a bounded job that
-# registers, runs a window and exits (ETL-16). Its `.hb.hb` row would
-# outlive it, and `checkheartbeat` would age that row into `warning` and
-# then `error` - reporting a job that SUCCEEDED as a fault, permanently.
-# Absence is the expected end state for a bounded worker, so the thing to
-# monitor is its run record, not its heartbeat.
-MONITOR_EXTRA_CONNECTIONS = ("metrics",)
-
-
-def _vendored_monitor_connections(paths: UqfStackPaths) -> list[str]:
-    """The proctypes the vendored monitor settings file subscribes to.
-
-    Parsed out rather than restated, so that if upstream adds a proctype to
-    its list we extend THEIR list instead of silently pinning a copy of it
-    made on the day this was written. The line looks like:
-
-        CONNECTIONS:`discovery`rdb`hdb`...`sortworker
-
-    Returns [] if the file or the line is not found, which makes the
-    override below a no-op rather than a truncation - losing nine
-    subscriptions would be a far worse failure than not adding one.
-    """
-    settings = paths.torqapphome / "appconfig" / "settings" / "monitor.q"
-    if not settings.is_file():
-        return []
-    for line in settings.read_text().splitlines():
-        stripped = line.strip()
-        if stripped.startswith("CONNECTIONS:`"):
-            return [part for part in stripped[len("CONNECTIONS:") :].split("`") if part]
-    return []
-
-
-def _monitor_connection_extras(paths: UqfStackPaths) -> str:
-    """`.servers.CONNECTIONS` as a command-line override for monitor1.
-
-     `.proc.override[]` runs after every config layer, including the vendored
-     appconfig, so a command-line value wins without that file being edited
-    . It REPLACES rather than appends, which is why the vendored list
-     is read back above and passed through in full.
-    """
-    connections = _vendored_monitor_connections(paths)
-    if not connections:
-        return ""
-    for proctype in MONITOR_EXTRA_CONNECTIONS:
-        if proctype not in connections:
-            connections.append(proctype)
-    return "-.servers.CONNECTIONS " + " ".join(connections)
-
-
-# ---------------------------------------------------------------------------
-# process.csv rows + config overrides (get/set)
-# ---------------------------------------------------------------------------
-
 
 def _base_process_rows(paths: UqfStackPaths) -> list[dict[str, str]]:
     """The vendored process.csv rows, plus one row per PIPELINES entry
@@ -138,6 +83,15 @@ def _base_process_rows(paths: UqfStackPaths) -> list[dict[str, str]]:
     vendored_procs = paths.torqapphome / "appconfig" / "process.csv"
     with vendored_procs.open(newline="") as f:
         rows = list(csv.DictReader(f))
+    appended = _pipeline_rows() + _read_extra_processes(paths)
+    # monitor1's budget is decided against the WHOLE fleet, not just the
+    # vendored half - the uqf pipelines are most of what it would dial out
+    # to. Built before the loop because the overlay below needs it, and the
+    # startwithall overlay has to be applied first or monitor1's own row
+    # would be counted as not starting.
+    for row in rows:
+        if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
+            row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
     for row in rows:
         # stp1 loads its schema via -schemafile in `extras`; point it at the
         # generated copy (vendored database.q + uqf's own `quotes` table -
@@ -147,14 +101,11 @@ def _base_process_rows(paths: UqfStackPaths) -> list[dict[str, str]]:
             row["extras"] = row["extras"].replace(
                 "${TORQAPPHOME}/database.q", "${TORQDATA}/database.q"
             )
-        if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
-            row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
         if row["procname"] == "monitor1":
-            extras = _monitor_connection_extras(paths)
+            extras = monitor_connection_extras(paths, rows + appended)
             if extras:
                 row["extras"] = " ".join(x for x in (row["extras"], extras) if x)
-    rows.extend(_pipeline_rows())
-    rows.extend(_read_extra_processes(paths))
+    rows.extend(appended)
     return rows
 
 
