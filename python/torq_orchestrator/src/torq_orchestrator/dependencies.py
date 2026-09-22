@@ -84,6 +84,53 @@ def inputs_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tuple[s
     }
 
 
+def outputs_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tuple[str, ...]]:
+    """{procname: the tables it publishes onto}.
+
+    Resolved the same way `_publishers` resolves them - an explicit
+    `publishes` if the pipeline declares one, otherwise its single `table` -
+    so this and the generated `database.q` cannot describe different systems.
+    """
+    out: dict[str, tuple[str, ...]] = {}
+    for pipeline in pipelines:
+        declared = pipeline.publishes
+        if declared is None:
+            declared = (pipeline.table,) if pipeline.table else ()
+        if declared:
+            out[pipeline.procname] = tuple(declared)
+    return out
+
+
+def depends_on_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tuple[str, ...]]:
+    """{procname: the processes that publish what it subscribes to}.
+
+    The edge an operator actually reasons about. `inputs_by_process` answers
+    "what table does this need"; this answers "and who do I have to start to
+    get it", which is the question behind every `up, but idle` process.
+
+    A table produced from outside the process list entirely - Databento's
+    feed handler, cryptorust's recorder - resolves to the name in
+    EXTERNAL_PRODUCERS rather than being dropped, because "nothing in this
+    list provides it" and "nothing provides it" are different facts and only
+    one of them is a problem. A process never lists itself: a normalizer that
+    republishes onto a table it also reads would otherwise appear to be its
+    own dependency.
+    """
+    producers = producers_by_table(pipelines)
+    out: dict[str, tuple[str, ...]] = {}
+    for procname, tables in inputs_by_process(pipelines).items():
+        names: list[str] = []
+        for table in tables:
+            for source in sorted(producers.get(table, set())):
+                if source != procname and source not in names:
+                    names.append(source)
+            if table in EXTERNAL_PRODUCERS and table not in names:
+                names.append(f"({table}: external)")
+        if names:
+            out[procname] = tuple(names)
+    return out
+
+
 def dependency_rows(pipelines: Iterable[Any] = PIPELINES) -> list[dict[str, str]]:
     """One row per (process, input table): who needs what, and who provides it.
 

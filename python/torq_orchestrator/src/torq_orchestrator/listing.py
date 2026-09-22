@@ -108,6 +108,22 @@ def list_items(
 #: The columns `uqf-stack summary` shows, in order.
 SUMMARY_COLUMNS = ("Time", "Process", "Status", "PID", "Port", "Heartbeat")
 
+#: Columns derived from the process GRAPH rather than from `torq.sh summary`,
+#: off by default.
+#:
+#: They are not in SUMMARY_COLUMNS because that tuple is load-bearing for
+#: parsing - `summary_rows` zips it against the pipe-separated cells torq.sh
+#: prints, so a name added there would silently shift every column right.
+#: These are attached to a row after it is parsed.
+#:
+#: Off by default because the default table answers "is it running", and a
+#: six-column answer to that is already at the width of a normal terminal.
+#: Someone asking "and what feeds it" is asking a second question and can say
+#: so with `--columns`.
+SUMMARY_GRAPH_COLUMNS = ("Depends on", "Inputs", "Outputs")
+
+SUMMARY_ALL_COLUMNS = SUMMARY_COLUMNS + SUMMARY_GRAPH_COLUMNS
+
 #: The process that aggregates heartbeats. TorQ's `monitor.q` is the only
 #: process type that calls `.hb.storeheartbeat`, so `.hb.hb` is populated there
 #: and nowhere else.

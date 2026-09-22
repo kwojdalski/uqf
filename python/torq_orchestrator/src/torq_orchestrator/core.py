@@ -58,7 +58,9 @@ from torq_orchestrator.env import (  # noqa: F401
 from torq_orchestrator.listing import (
     LISTABLE_KINDS,
     MONITOR_PROCNAME,  # noqa: F401  (re-exported for the CLI's heartbeat message)
+    SUMMARY_ALL_COLUMNS,  # noqa: F401
     SUMMARY_COLUMNS,
+    SUMMARY_GRAPH_COLUMNS,  # noqa: F401
     configured_ports,
     heartbeat_states,
     list_items,

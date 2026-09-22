@@ -170,7 +170,10 @@ def monitor_connection_extras(paths: UqfStackPaths, rows: list[dict[str, str]]) 
             connections.append(proctype)
     kept, dropped = monitor_connection_plan(connections, rows)
     if dropped:
-        log.info(
+        # DEBUG, not INFO: process.csv is composed several times per command,
+        # so at INFO this printed three times above every `summary` table. It
+        # is a standing property of the licence, not news.
+        log.debug(
             "monitor1 gives up {} to stay inside its connection budget, so it can "
             "still be queried: {}",
             "subscription" if len(dropped) == 1 else "subscriptions",

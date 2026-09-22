@@ -219,6 +219,89 @@ def test_a_genuinely_stopped_monitor_still_says_to_start_it(monkeypatch):
     assert "uqf-stack start monitor1" in flat
 
 
+# ------------------------------------------------- the graph columns
+
+
+def test_summary_defaults_to_the_status_columns_only(monkeypatch):
+    """The graph columns are wide, and the default table answers "is it
+    running". Someone asking what feeds a process is asking a second question
+    and says so with --columns."""
+    _summary_ok(monkeypatch, rows=[_row()])
+    result = runner.invoke(cli.app, ["summary"])
+    assert "Depends on" not in result.stdout
+    assert "Heartbeat" in result.stdout
+
+
+def test_columns_all_adds_the_graph(monkeypatch):
+    # Nine columns do not fit the 80-column default the runner reports, and
+    # Rich elides the headers rather than the data - so the width is set here
+    # to assert on the columns rather than on Rich's truncation of them.
+    monkeypatch.setenv("COLUMNS", "220")
+    _summary_ok(monkeypatch, rows=[_row()])
+    result = runner.invoke(cli.app, ["summary", "--columns", "all"])
+    flat = " ".join(result.stdout.split())
+    for column in core.SUMMARY_GRAPH_COLUMNS:
+        assert column in flat
+
+
+def test_columns_are_matched_case_insensitively_and_kept_in_order(monkeypatch):
+    """The names have a space and a capital in them ("Depends on"), so an
+    exact-match-only option would be unusable from a shell."""
+    assert cli._resolve_columns("outputs,process") == ["Outputs", "Process"]
+    assert cli._resolve_columns("PROCESS") == ["Process"]
+
+
+def test_a_repeated_column_is_not_rendered_twice(monkeypatch):
+    assert cli._resolve_columns("Process,process,Process") == ["Process"]
+
+
+def test_an_unknown_column_is_refused_with_the_available_ones(monkeypatch):
+    """A typo in a column name must not silently render a narrower table -
+    the reader would conclude the data is missing, not the column name wrong."""
+    _summary_ok(monkeypatch, rows=[_row()])
+    result = runner.invoke(cli.app, ["summary", "--columns", "Process,Bogus"])
+    assert result.exit_code == 1
+
+
+def test_a_graph_cell_breaks_between_entries_not_inside_a_name(monkeypatch):
+    """Rich would wrap these itself, on whitespace and at whatever width is
+    left over - which splits `fx_limit_breach` across two lines. A reader
+    scans these cells by counting entries, so the break belongs at the
+    commas."""
+    cell = cli._graph_cell(["a_table", "b_table", "c_table"])
+    lines = cell.split("\n")
+    assert lines == ["a_table, b_table,", "c_table"]
+    assert all("_" not in line[-1:] for line in lines), "no name split mid-word"
+
+
+def test_a_short_graph_cell_does_not_wrap(monkeypatch):
+    assert "\n" not in cli._graph_cell(["one", "two"])
+
+
+def test_an_empty_graph_cell_is_a_dash_not_a_blank(monkeypatch):
+    """ "declares no inputs" and "this column has nothing to say" look
+    identical as a blank, and the first is a real fact about a feed."""
+    assert "-" in cli._graph_cell([])
+
+
+def test_the_graph_columns_come_from_the_declared_pipelines(monkeypatch):
+    """Derived from the same Pipeline declarations verify_pipeline_edges
+    checks, so a row here cannot claim an edge the build would reject."""
+    rows = [_row(Process="posbook1")]
+    cli._attach_graph_columns(rows)
+    assert "executions" in rows[0]["Inputs"]
+    assert "position" in rows[0]["Outputs"]
+    assert "executions1" in rows[0]["Depends on"]
+
+
+def test_a_process_with_no_declared_edges_gets_dashes(monkeypatch):
+    """A vendored TorQ process has no Pipeline entry and so no declared
+    edges. It must render, not raise."""
+    rows = [_row(Process="hdb1")]
+    cli._attach_graph_columns(rows)
+    assert all(rows[0][c] == "[dim]-[/]" for c in core.SUMMARY_GRAPH_COLUMNS)
+
+
 # --------------------------------------------------- the connection cap
 
 

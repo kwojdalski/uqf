@@ -227,16 +227,113 @@ def restart(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> 
 
 _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 
+#: How many table names go on one line of a graph cell before it wraps.
+#:
+#: Rich would wrap these on its own, but on whitespace and at whatever width
+#: is left over - so `fx_position` and `fx_limit_breach` could break as
+#: `fx_position, fx_` / `limit_breach`, splitting a name across lines. These
+#: cells are lists, and a reader scans them by counting entries, so the break
+#: belongs between entries and nowhere else.
+GRAPH_CELL_ITEMS_PER_LINE = 2
+
+
+def _graph_cell(items: tuple[str, ...] | list[str]) -> str:
+    """A list of table or process names, broken across lines at the commas.
+
+    Empty renders as a dim dash rather than blank: "this process declares no
+    inputs" and "this column has nothing to say about it" look identical
+    otherwise, and the first is a real fact about a feed.
+    """
+    if not items:
+        return "[dim]-[/]"
+    lines = [
+        ", ".join(items[i : i + GRAPH_CELL_ITEMS_PER_LINE])
+        for i in range(0, len(items), GRAPH_CELL_ITEMS_PER_LINE)
+    ]
+    # Every line but the last keeps its trailing comma, so a wrapped cell
+    # still reads as one list rather than as separate values per line.
+    return "\n".join(line + "," if i < len(lines) - 1 else line for i, line in enumerate(lines))
+
+
+def _resolve_columns(requested: str | None) -> list[str]:
+    """The columns to render, from a comma-separated `--columns` value.
+
+    `all` is spelled out rather than being the default: the graph columns are
+    wide, and a reader who wants them is asking a different question from
+    "is it running".
+    """
+    if not requested:
+        return list(core.SUMMARY_COLUMNS)
+    if requested.strip().lower() == "all":
+        return list(core.SUMMARY_ALL_COLUMNS)
+    wanted = [c.strip() for c in requested.split(",") if c.strip()]
+    known = {c.lower(): c for c in core.SUMMARY_ALL_COLUMNS}
+    resolved, unknown = [], []
+    for column in wanted:
+        match = known.get(column.lower())
+        if match is None:
+            unknown.append(column)
+        elif match not in resolved:
+            resolved.append(match)
+    if unknown:
+        _die(
+            core.UqfStackError(
+                f"unknown summary column(s): {', '.join(unknown)}. "
+                f"Available: {', '.join(core.SUMMARY_ALL_COLUMNS)}, or `all`"
+            )
+        )
+    return resolved
+
+
+def _attach_graph_columns(rows: list[dict[str, str]]) -> None:
+    """Fill the graph columns on each row, in place.
+
+    Derived from the same `Pipeline` declarations `verify_pipeline_edges`
+    checks and `database.q` is generated from, so a process's row here cannot
+    claim an edge the build would reject.
+
+    A vendored TorQ process has no `Pipeline` entry and so no declared edges;
+    it gets the same dash as a uqf process that genuinely has none, because
+    this table is not the place to explain the difference.
+    """
+    inputs = dependencies.inputs_by_process()
+    outputs = dependencies.outputs_by_process()
+    depends = dependencies.depends_on_by_process()
+    for row in rows:
+        name = row["Process"]
+        row["Depends on"] = _graph_cell(depends.get(name, ()))
+        row["Inputs"] = _graph_cell(inputs.get(name, ()))
+        row["Outputs"] = _graph_cell(outputs.get(name, ()))
+
 
 @app.command()
-def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) -> None:
+def summary(
+    port: PortOpt = core.DEFAULT_BASE_PORT,
+    export: ExportOpt = None,
+    columns: Annotated[
+        str | None,
+        typer.Option(
+            "--columns",
+            help=(
+                "Comma-separated columns, or `all`. Adds to the default six: "
+                "'Depends on', 'Inputs', 'Outputs' - the declared process graph."
+            ),
+        ),
+    ] = None,
+) -> None:
     """Status table (up/down, pid, port) for every process in process.csv.
+
+    `--columns all` adds the declared graph - what each process subscribes to,
+    what it publishes, and which processes it therefore needs running. That is
+    the question behind every `up, but idle` process, and it is answered from
+    the same declarations `verify_pipeline_edges` checks.
 
     Run with `--debug` (or LOG_LEVEL=DEBUG) to see where each column came
     from: the two lookups below degrade rather than fail, so on the default
     level a missing port map and an unreachable monitor1 look the same as a
     stack that simply has nothing to report.
     """
+    chosen = _resolve_columns(columns)
     paths = _paths()
     log.debug("summary base_port={} torqdata={}", port, paths.torqdata)
     try:
@@ -288,9 +385,15 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
         sum(1 for r in rows if r["Status"] == "down"),
     )
 
+    if any(col in core.SUMMARY_GRAPH_COLUMNS for col in chosen):
+        _attach_graph_columns(rows)
+
     table = Table(title=f"uqf_stack summary (base port {port})")
-    for col in core.SUMMARY_COLUMNS:
-        table.add_column(col)
+    for col in chosen:
+        # The graph cells are pre-wrapped at their commas by _graph_cell, so
+        # Rich must not wrap them again at whatever width is left over - that
+        # is what splits a table name across two lines.
+        table.add_column(col, overflow="fold" if col in core.SUMMARY_GRAPH_COLUMNS else "ellipsis")
 
     for row in rows:
         status_style = _STATUS_STYLE.get(row["Status"], "")
@@ -310,14 +413,13 @@ def summary(port: PortOpt = core.DEFAULT_BASE_PORT, export: ExportOpt = None) ->
             "error": "[bold red]error[/]",
             "not collected": "[dim]not collected[/]",
         }.get(hb, hb)
-        table.add_row(
-            row["Time"],
-            row["Process"],
-            f"[{status_style}]{row['Status']}[/]" if status_style else row["Status"],
-            row["PID"],
-            port_cell,
-            hb_cell,
-        )
+        rendered = {
+            **row,
+            "Status": f"[{status_style}]{row['Status']}[/]" if status_style else row["Status"],
+            "Port": port_cell,
+            "Heartbeat": hb_cell,
+        }
+        table.add_row(*(rendered.get(col, "") for col in chosen))
     console.print(table)
 
     # Up and fed are different questions, and the table above only answers

@@ -144,7 +144,7 @@ filenames first.
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
-summary [--port N] [--export FILE]    rich status table (up/down, pid, port)
+summary [--port N] [--export FILE] [--columns C,...]  rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/uqf-stack/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
@@ -239,8 +239,35 @@ and `summary` says the same about processes that are already up:
     from cryptorust's kdb recorder, which cryptomock1 stands in for.
 ```
 
-Both are **advisory and never block a start**. Bringing a subscriber up
-before its feed is how you avoid missing the first batch, and some tables
+To see the whole graph rather than just the unsatisfied part of it,
+`--columns` adds three columns derived from the same declarations:
+
+```
+uqf-stack summary --columns all
+uqf-stack summary --columns "Process,Depends on,Inputs,Outputs"
+```
+
+```
+┃ Process      ┃ Depends on                  ┃ Inputs                ┃ Outputs        ┃
+│ posbook1     │ executions1, marks1         │ executions, marks     │ position       │
+│ databento1   │ (databento_mbp10: external) │ databento_mbp10       │ databento_book │
+│ executions1  │ fxtradesfeed1, cryptomock1, │ trades, crypto_trades │ executions     │
+│              │ (crypto_trades: external)   │                       │                │
+```
+
+`Inputs` and `Outputs` are the tables a process subscribes to and publishes;
+`Depends on` resolves those inputs to the **processes** that produce them,
+which is the question behind every `up, but idle` line above. A table
+produced from outside the process list is named as external rather than
+dropped - "nothing in this list provides it" and "nothing provides it" are
+different facts, and only one is a problem. Cells break at the commas once
+there are more than two entries, so a table name is never split across
+lines. They are off by default because the six status columns already fill a
+normal terminal, and a process with no declared edges - every vendored TorQ
+one - shows a dash.
+
+Both warnings are **advisory and never block a start**. Bringing a subscriber
+up before its feed is how you avoid missing the first batch, and some tables
 come from outside the process list entirely - the Databento feed handler,
 cryptorust's recorders, a backfill run - which is why those are named as
 context rather than reported as faults. Processes you name in the same
