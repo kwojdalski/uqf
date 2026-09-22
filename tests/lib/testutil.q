@@ -54,4 +54,45 @@ reset_coverage_ledger:{[]
     .qmatz.init_ledger[];
     value `etl_coverage};
 
+// ---------------------------------------------------------------------------
+// What the suite IS: its files, and the namespaces they declare.
+// ---------------------------------------------------------------------------
+// Three scripts need this and all three used to get it by reading
+// tests/run_tests.q as TEXT - run_examples.q and run_coverage.q each scanned
+// it for `\l tests/q/test_*` lines to re-execute, and run_coverage.q
+// additionally `value`d the line starting `nsList:`. That worked only while
+// the runner listed its suites literally, and coupled three files to the
+// exact spelling of a fourth.
+//
+// So the definition lives here, as functions, and the runner is one caller
+// among three rather than the source everyone parses.
+
+// Every test suite file under tests/q/, alphabetically.
+//
+// test_*.q ONLY: tests/q/ also holds scripts RUN as child processes -
+// run_examples.q, run_coverage.q, upstream_instance.q,
+// smoke_databento_odbc.q - and loading those here would execute them.
+//
+// Two clauses rather than like "test_*.q": an interior wildcard is unreliable
+// in q's like (QB002), which the repository's trap gate refuses.
+suite_files:{[]
+    f:key `:tests/q;
+    f:f where f like "*.q";
+    f:asc f where f like "test_*";
+    if[0=count f; '"testutil.suite_files: no tests/q/test_*.q found - wrong directory?"];
+    f}
+
+// Load every suite file. Globbed, so a new suite runs the day it is written.
+load_suites:{[] {system "l tests/q/",string x} each .testutil.suite_files[];}
+
+// The namespaces the loaded suites declare.
+//
+// `key `` enumerates the namespaces under root - not the variables in root -
+// so every .<name>test that loaded is found, and a plain global whose name
+// happens to end in "test" is not one of them. Call AFTER load_suites.
+suite_namespaces:{[]
+    ns:asc `$".",/:string (key `) where (key `) like "*test";
+    if[0=count ns; '"testutil.suite_namespaces: no test namespaces loaded"];
+    ns}
+
 \d .

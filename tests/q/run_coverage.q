@@ -29,16 +29,12 @@
 \l tests/q/reference_worker.q
 \l scripts/dev/coverage.q
 
-/ The suite's own file and namespace lists, read from run_tests.q rather than
-/ copied: a second copy is a second thing to forget, and forgetting the
-/ namespace list is how a test silently never runs.
-run_tests_src:read0 `:tests/run_tests.q;
-/ `1_l` drops the backslash and leaves `l path`, which `system` runs as the
-/ q command. Dropping three characters leaves a bare path, which `system`
-/ hands to the SHELL - and the shell's "Permission denied" names the file,
-/ so it reads like a file-mode problem rather than a q one.
-{[l] if[l like "\\l tests/q/test_*"; system 1_l]} each run_tests_src;
-value first run_tests_src where run_tests_src like "nsList:*";
+/ The suite's file and namespace lists come from testutil, not from a copy
+/ kept here and not from parsing run_tests.q as text: a second copy is a
+/ second thing to forget, and forgetting the namespace list is how a test
+/ silently never runs.
+.testutil.load_suites[];
+nsList:.testutil.suite_namespaces[];
 
 / Every namespace this tree declares, from the one enumeration in
 / src/namespaces.q - fully qualified already, and INCLUDING the nested
