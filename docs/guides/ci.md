@@ -1,6 +1,6 @@
 # Continuous integration
 
-[The CI workflow](../.github/workflows/ci.yml) runs on pull requests and pushes
+[The CI workflow](../../.github/workflows/ci.yml) runs on pull requests and pushes
 to `master`. It checks the PR merge result using the same
 `.pre-commit-config.yaml` as local commits, then checks the generated decision
 register against GitHub. Failed hooks fail the job, including hooks that

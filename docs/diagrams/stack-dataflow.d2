@@ -19,7 +19,16 @@
 # Down, not right. Left to right is the natural reading for a pipeline and
 # was the first try, but five stages of producer - table - job - table -
 # storage came out 5662px wide, which a README renders as a thumbnail.
-# Vertical is 3714 and a reader scrolls anyway.
+# Vertical was 3714 at twelve jobs and a reader scrolls anyway.
+#
+# It is 4330 at eighteen, and the growth is parallel chains rather than long
+# labels - shortening every new label bought 228px of it. The alternative
+# was a second diagram for the market_data -> superbook -> arbitrage half,
+# which was rejected for the reason repo-overview.d2 gives for not redrawing
+# the topology: two pictures of one system have to be kept in step, and the
+# one nobody updates is the one being read. Splitting is the right move when
+# this passes ~5000; shortening labels again is not, because that is not
+# where the width is.
 direction: down
 
 vars: {
@@ -80,6 +89,8 @@ quotesfeed1: "quotesfeed1" { class: producer }
 widefeed1: "widefeed1" { class: producer }
 fxtradesfeed1: "fxtradesfeed1" { class: producer }
 cryptomock1: "cryptomock1\nstands in for cryptorust's\ntwo recorders" { class: producer }
+fxordersfeed1: "fxordersfeed1\nsynthetic order flow" { class: producer }
+databento_py: "databento1\nPython feed handler" { class: producer }
 
 # ------------------------------------------------------------- the tables
 
@@ -98,6 +109,16 @@ position: "position\nqty · avg_price · realized_pnl\nmark_price · unrealized_
 execution_quality: "execution_quality\ntrade_time · horizon\ntrade_price · ref_price · markout_pips" { class: table }
 cross_quotes: "cross_quotes\nnever written to stp1 —\nlives in cross1's memory" { class: private }
 
+databento_book: "databento_book\ntime · sym · bid/ask prices+sizes" { class: table }
+orders: "orders\ntime · sym · book · product\nside · qty · price · status" { class: table }
+fx_position: "fx_position\nthe whole book each snapshot" { class: table }
+fx_limit_breach: "fx_limit_breach\none row per NEW breach" { class: table }
+market_data: "market_data\none shape from two quote tables" { class: table }
+superbook: "superbook\nliquidity merged across sources" { class: table }
+arbitrage: "arbitrage\nbid over ask in the merged book" { class: table }
+cross_arbitrage: "cross_arbitrage\ndirect vs a synthetic route" { class: table }
+config_change: "config_change\nwho changed which knob" { class: table }
+
 # --------------------------------------------------------------- the jobs
 
 cross1: "cross1\n.qfwd.cross_book_at" { class: job }
@@ -106,6 +127,11 @@ posbook1: "posbook1\n.qpos.apply_fill + .qrisk.pnl" { class: job }
 executions1: "executions1\nnormalizer: every fill\ntable as one" { class: job }
 marks1: "marks1\nnormalizer: a mid from\nevery book" { class: job }
 markout1: "markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
+fxpositions1: "fxpositions1\n.qdesk + .qlimit\nnets FILLED orders, on a timer" { class: job }
+marketdata1: "marketdata1\nnormalizer" { class: job }
+superbook1: "superbook1\n.qsuper merge across sources" { class: job }
+arbitrage1: "arbitrage1\ncrossed levels in the merged book" { class: job }
+crossarb1: "crossarb1\n.qfwd.cross_book_chain_at_sizes" { class: job }
 
 storage: "rdb1 — today's ticks\n↓ EOD writedown\nhdb1 / hdb2 — on disk" { class: store }
 
@@ -119,6 +145,8 @@ widefeed1 -> wide_book
 fxtradesfeed1 -> trades
 cryptomock1 -> crypto_book
 cryptomock1 -> crypto_trades: "one message per fill,\nthe recorder's wire shape"
+fxordersfeed1 -> orders
+databento_py -> databento_book: "the same .qxf fold\nthe backfill declares"
 
 # ------------------------------------------------- subscribe, then publish
 
@@ -144,6 +172,25 @@ trades -> markout1: "subscribe, buffered"
 quote -> markout1: "buffered"
 markout1 -> execution_quality: "republish"
 
+orders -> fxpositions1: "subscribe"
+fxpositions1 -> fx_position: "republish"
+fxpositions1 -> fx_limit_breach: "new breaches only"
+
+quote -> marketdata1: "one shape in"
+quotes -> marketdata1: "another"
+marketdata1 -> market_data: "one shape out"
+
+market_data -> superbook1: "subscribe"
+superbook1 -> superbook: "republish"
+superbook1 -> config_change { style.stroke-dash: 4 }
+
+superbook -> arbitrage1: "subscribe"
+arbitrage1 -> arbitrage: "republish"
+
+superbook -> crossarb1: "subscribe"
+crossarb1 -> cross_arbitrage: "republish"
+crossarb1 -> config_change: "a knob change, either side" { style.stroke-dash: 4 }
+
 # --------------------------------------------------------------- persisted
 
 quote -> storage
@@ -158,3 +205,12 @@ marks -> storage
 mkt_orderbook -> storage
 position -> storage
 execution_quality -> storage
+databento_book -> storage
+orders -> storage
+fx_position -> storage
+fx_limit_breach -> storage
+market_data -> storage
+superbook -> storage
+arbitrage -> storage
+cross_arbitrage -> storage
+config_change -> storage

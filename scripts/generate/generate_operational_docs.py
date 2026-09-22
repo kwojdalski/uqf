@@ -108,7 +108,7 @@ def render() -> str:
     lines += [
         "Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored",
         "`process.csv`. For how to start, stop and query the stack see",
-        "[docs/guides/uqf-stack.md](../uqf-stack.md); for the topology diagrams see",
+        "[docs/guides/uqf-stack.md](../../guides/uqf-stack.md); for the topology diagrams see",
         "[README.md](README.md).",
         "",
         f"**{len(vendored)} vendored processes** plus **{len(PIPELINES)} uqf processes**"

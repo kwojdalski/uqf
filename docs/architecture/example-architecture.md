@@ -34,7 +34,7 @@ diagram.
 ## 2 · The plant
 
 One tickerplant, every table. In the stack it is TorQ's `stp1`; on stock
-kdb+ it is `.qtick` ([PR #256](https://github.com/kwojdalski/uqf/pull/256)). The jobs do not
+kdb+ it is [`.qtick`](../../src/etl/core/tick.q). The jobs do not
 know which — they call `publish` in their own namespace and a runner wires
 it — and the three invariants a job must respect are the same on both:
 
@@ -68,14 +68,15 @@ runner.
 | Engine | Reads | Holds | Publishes |
 |---|---|---|---|
 | [`posbook`](../../src/etl/streaming/posbook.q) | `executions`, `marks` | a [`.qpos`](../../src/portfolio/positions.q) book: position and P&L per sym, weighted-average cost | `position` — FX and crypto in one book |
-| `fx_positions` *([PR #256](https://github.com/kwojdalski/uqf/pull/256))* | `orders` | a `.qdesk` book: net exposure by (sym, book, product); `.qlimit` caps | `fx_position` snapshots, `fx_limit_breach` throttled alerts |
+| [`fx_positions`](../../src/etl/streaming/fx_positions.q) | `orders` | a `.qdesk` book: net exposure by (sym, book, product); `.qlimit` caps | `fx_position` snapshots, `fx_limit_breach` throttled alerts |
 | [`markout`](../../src/etl/streaming/markout.q) | `trades`, `quote` | buffered fills awaiting their horizons | `execution_quality` |
 | [`cross`](../../src/etl/streaming/cross.q), [`vectorize`](../../src/etl/streaming/vectorize.q) | `quotes`, `wide_book` | mirrors | synthetic crosses; a reshaped book |
 
 `posbook` and `fx_positions` answer different questions and are deliberately
 two engines: *what did we make*, per sym, marked; and *what are we holding*,
-along the dimensions a desk reports on, with no marks. The positions service
-page in [PR #256](https://github.com/kwojdalski/uqf/pull/256) argues why one module cannot honestly do both.
+along the dimensions a desk reports on, with no marks.
+[`fx-positions-service.md`](fx-positions-service.md) argues why one module
+cannot honestly do both.
 
 ## 5 · On demand
 

@@ -79,11 +79,6 @@ classes: {
       border-radius: 6
     }
   }
-  proposed: {
-    style: {
-      stroke-dash: 4
-    }
-  }
   band: {
     style: {
       fill: "#fbfcfd"
@@ -122,6 +117,7 @@ normalize: "3 · normalizers — one shape from many (.qnorm)" {
 
   executions: "executions\ntrades + crypto_trades\n→ one fill table" { class: job }
   marks: "marks\nquote + crypto_book\n→ one mid per instrument" { class: job }
+  marketdata: "market_data\nquote + quotes\n→ one book shape" { class: job }
 }
 
 engines: "4 · engines — subscribe, hold state, republish" {
@@ -130,9 +126,10 @@ engines: "4 · engines — subscribe, hold state, republish" {
   grid-gap: 14
 
   posbook: "posbook\n.qpos: position & P&L per sym\nmarked to marks, FX and crypto in one book" { class: job }
-  fxpos: "fx_positions\n.qdesk: exposure by (sym, book, product)\n.qlimit: breaches, throttled  ·  PR #256" { class: job; class: proposed }
+  fxpos: "fx_positions\n.qdesk: exposure by (sym, book, product)\n.qlimit: breaches, throttled" { class: job }
   markout: "markout\n.qexec: execution quality\nat horizons, on a timer" { class: job }
   cross: "cross · vectorize\n.qfwd synthetic crosses,\n.qbook reshaping" { class: job }
+  superbook: "superbook · arbitrage · crossarb\n.qsuper merges quoted liquidity;\ncrossed levels and synthetic routes\nfall out of the merged book" { class: job }
 }
 
 analytics: "5 · on demand — pure, over whatever the store holds" {

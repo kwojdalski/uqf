@@ -200,13 +200,19 @@ and adjacent intervals compose **only at their common boundary**, so
 Tuesday as a reported gap. That arithmetic is pure and unit-tested without a
 gateway.
 
-### Known gap
+### The schema it reads
 
-`etl_coverage`'s real schema could not be verified from this repo — it exists
-only upstream. The `COVERAGE` program assumes `dataset`, `source_version`,
-`range_from`, `range_to`, which is what **ETL-08**/**ETL-09** and the frontend
-requirements together imply. Confirm before trusting it against a real
-ledger.
+`etl_coverage` is defined in
+[`src/etl/core/materialisation.q`](../../src/etl/core/materialisation.q), and
+this tree is the authority for it (issue #60). The block there carries the
+full column list — `dataset`, `partition`, `source_version`, `range_from`,
+`range_to`, `rows_published`, `recorded_at`, `superseded_at`, `run_id` — and
+`scripts/dev/verify_coverage_schema.q -local 1` confirms the code and the
+table agree. The `COVERAGE` program reads the first five.
+
+This block used to say the schema "could not be verified from this repo — it
+exists only upstream", which stopped being true when canonical froze and this
+tree became the primary lineage.
 
 ## Ops views (B2)
 

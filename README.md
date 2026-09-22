@@ -154,17 +154,17 @@ All four variables are required together: the process refuses to start and
 names every missing one at once, because a backfill that silently defaulted
 its range would publish the wrong window and record coverage for it.
 
-**Check it all still works.** Four lanes, described under
+**Check it all still works.** One lane per layer, listed under
 [Testing](#testing):
 
 ```
 ./scripts/test.py all
 ```
 
-`all` runs three of them - the q suite, the bounded-worker lifecycle against
-a real filesystem, and the Python suite. The fourth, `smoke`, is deliberately
-separate: it checks a live external source's metadata against its declared
-contract (ETL-20) and so needs credentials and a reachable source.
+`all` is every lane except `coverage` and the two that reach outside the
+process: `smoke`, which checks a live external source's metadata against its
+declared contract (ETL-20) and so needs credentials and a reachable source,
+and `stack-smoke`, which restarts the fleet and watches it.
 
 ## Components
 
@@ -286,14 +286,17 @@ served by the API under `/ui/`.
 
 ```
 scripts/test.py q-unit              # deterministic qUnit suite
+scripts/test.py q-order             # the same suite, reversed and shuffled
 scripts/test.py q-metatables-hdb    # metatable queries against a temporary HDB
 scripts/test.py q-examples          # every documented @eg runs, in its own process
 scripts/test.py q-backfill-process  # bounded lifecycle, real filesystem, child processes
 scripts/test.py q-two-instances     # a second kdb+ process, data moved across the wire
 scripts/test.py python              # orchestrator and frontend
-scripts/test.py coverage            # what the suites execute, q and Python
+scripts/test.py q-coverage          # what the q suite executes
+scripts/test.py coverage            # the same, q and Python together
 scripts/test.py smoke               # live external metadata check
-scripts/test.py all                 # everything except smoke and coverage
+scripts/test.py stack-smoke         # restart the fleet, watch what it publishes
+scripts/test.py all                 # every lane except coverage, smoke and stack-smoke
 ```
 
 ### Coverage
@@ -377,7 +380,7 @@ Run the lane matching the layer you changed (requirement ETL-21). `q-unit` is
 also runnable directly as `q tests/run_tests.q`: it loads every module and
 every `test_*.q` file, prints a pass/fail summary, and exits non-zero if
 anything failed - safe to wire into CI as-is. As of this writing:
-**491 tests, all passing**.
+**1459 tests, all passing**.
 
 The lanes are separate because they prove different things, and two of them
 cannot prove what they claim if folded into the first:
