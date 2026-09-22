@@ -97,7 +97,10 @@ def test_the_graph_is_the_one_the_generated_schema_is_built_from():
     warning would describe a different system from the one running.
     """
     invented = replace(
-        core.PIPELINE_BY_NAME["cross1"], procname="ghost1", publishes=("market_data",)
+        core.PIPELINE_BY_NAME["cross1"],
+        procname="ghost1",
+        subscribes=(),
+        publishes=("market_data",),
     )
     producers = dependencies.producers_by_table([*core.PIPELINES, invented])
     assert producers["market_data"] == {"marketdata1", "ghost1"}

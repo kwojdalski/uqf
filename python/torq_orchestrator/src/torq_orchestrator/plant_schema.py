@@ -82,13 +82,18 @@ def undefined_published_tables(paths: UqfStackPaths) -> list[str]:
 
 
 def _publishers(pipelines: Iterable[Any]) -> dict[str, set[str]]:
-    """{table: the procnames that publish onto it}."""
+    """{table: the procnames that publish onto it}.
+
+    Through `resolve_edges`, so a pipeline that defers its edges to its own
+    q declaration is counted the same as one that spells them here. That
+    resolution is strict: a deferred edge with nothing to read raises rather
+    than resolving to empty, because an empty publish set would drop the
+    pipeline's tables out of the generated database.q - and a table the plant
+    does not define discards its rows in silence (#288).
+    """
     by: dict[str, set[str]] = {}
     for pipeline in pipelines:
-        declared = pipeline.publishes
-        if declared is None:
-            declared = (pipeline.table,) if pipeline.table else ()
-        for table in declared:
+        for table in pipeline.published_tables:
             by.setdefault(table, set()).add(pipeline.procname)
     return by
 

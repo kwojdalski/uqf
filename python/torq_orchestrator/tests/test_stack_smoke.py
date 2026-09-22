@@ -123,7 +123,10 @@ def test_an_unlisted_publisher_is_still_expected(monkeypatch: pytest.MonkeyPatch
     """Derivation, not enumeration: an invented pipeline is covered without
     touching this module."""
     invented = replace(
-        core.PIPELINE_BY_NAME["cross1"], procname="ghost1", publishes=("ghost_table",)
+        core.PIPELINE_BY_NAME["cross1"],
+        procname="ghost1",
+        subscribes=(),
+        publishes=("ghost_table",),
     )
     monkeypatch.setattr(stack_smoke, "PIPELINES", (*core.PIPELINES, invented))
     assert stack_smoke.expected_tables({"ghost1"})["ghost_table"] == {"ghost1"}

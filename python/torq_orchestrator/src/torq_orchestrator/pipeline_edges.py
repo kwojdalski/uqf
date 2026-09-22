@@ -14,10 +14,24 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from torq_orchestrator.pipeline import PipelineKind
+from torq_orchestrator.paths import UqfStackError
+from torq_orchestrator.pipeline import FROM_DECLARATION, PipelineKind
+
+
+def _repo_root() -> Path:
+    """This repository's root, from this file's own location.
+
+    Derived rather than taken from `UqfStackPaths`, which carries a dozen
+    other resolved locations and would make every edge lookup depend on the
+    vendored tree being present. This module is four levels down:
+    python/torq_orchestrator/src/torq_orchestrator/pipeline_edges.py
+    """
+    return Path(__file__).resolve().parents[4]
+
 
 #
 # The dataflow edges declared above are what the generated diagrams draw.
@@ -194,6 +208,52 @@ def _declared_stream_edges(repo_root: Path) -> dict[str, tuple[tuple[str, ...], 
     return edges
 
 
+@lru_cache(maxsize=8)
+def _stream_edge_cache(repo_root: Path) -> dict[str, tuple[tuple[str, ...], tuple[str, ...]]]:
+    """`_declared_stream_edges`, memoised per repo root.
+
+    Every consumer of a resolved edge would otherwise re-read and re-parse
+    twenty-odd q files, and `_publishers` is on the path that generates
+    `database.q` on every command.
+    """
+    return _declared_stream_edges(repo_root)
+
+
+def resolve_edges(
+    pipeline: Any, repo_root: Path | None = None
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(subscribes, published_tables) for one pipeline, reading the q file
+    where the registry defers to it.
+
+    STRICT BY DESIGN. A pipeline that says FROM_DECLARATION and has no
+    declaration to read raises, rather than resolving to empty. An empty
+    publish set silently drops the pipeline's tables out of the generated
+    `database.q`, and a table the plant does not define discards its rows
+    without an error - which is the failure #288 exists to prevent, and
+    exactly the one this indirection could reintroduce.
+    """
+    subscribes = pipeline.subscribes
+    publishes = pipeline.publishes
+    needs = subscribes is FROM_DECLARATION or publishes is FROM_DECLARATION
+    if needs:
+        root = repo_root or _repo_root()
+        declared = _stream_edge_cache(root).get(pipeline.procname)
+        if declared is None:
+            raise UqfStackError(
+                f"{pipeline.procname}: declares its edges in q (FROM_DECLARATION) but no "
+                f"`.qstream.register`/`.qnorm.define` naming that process was found under "
+                f"{_STREAM_DIR}. Either the job file is missing, its procname disagrees "
+                f"with the registry, or the edges belong back in the Pipeline entry"
+            )
+        if subscribes is FROM_DECLARATION:
+            subscribes = declared[0]
+        if publishes is FROM_DECLARATION:
+            publishes = declared[1]
+    if publishes is None:
+        publishes = (pipeline.table,) if pipeline.table else ()
+    return tuple(subscribes), tuple(publishes)
+
+
 def _declared_workers(repo_root: Path) -> set[str]:
     """Every bounded worker that registers itself under src/etl/workers/."""
     directory = repo_root / _WORKER_DIR
@@ -295,13 +355,22 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
                     "process would refuse to start"
                 )
                 continue
+            # An edge the registry defers to the q file cannot disagree with
+            # it - there is one declaration, not two - so there is nothing to
+            # compare and the check is skipped rather than passed. Only an
+            # edge still spelled in the Pipeline entry is checked, which is
+            # what this function is for: two copies that could drift.
             subscribes, publishes = stream_edges[pipeline.procname]
-            if subscribes != tuple(pipeline.subscribes):
+            if pipeline.subscribes is not FROM_DECLARATION and subscribes != tuple(
+                pipeline.subscribes
+            ):
                 problems.append(
                     f"{pipeline.procname}: declares subscribes={pipeline.subscribes!r} "
                     f"but its streaming job subscribes to {subscribes!r}"
                 )
-            if publishes != tuple(pipeline.published_tables):
+            if pipeline.publishes is not FROM_DECLARATION and publishes != tuple(
+                pipeline.published_tables
+            ):
                 problems.append(
                     f"{pipeline.procname}: declares publishes={pipeline.published_tables!r} "
                     f"but its streaming job publishes {publishes!r}"

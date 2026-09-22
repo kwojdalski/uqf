@@ -1020,8 +1020,19 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     for path in real_jobs.glob("*.q"):
         (jobs / path.name).write_text(path.read_text())
 
-    target = next(p for p in core.PIPELINES if p.subscribes and not p.subscribes_dynamic)
-    first = target.subscribes[0]
+    # A pipeline that DEFERS its edges cannot drift from them - there is one
+    # declaration, not two - so the verifier deliberately skips it and there
+    # is nothing here to detect. What this test still has a job to check is
+    # the other case: an entry that spells its edges out. Since every
+    # streaming entry now defers, one is copied and given the edges back, so
+    # the drift path stays exercised rather than quietly covering nothing.
+    deferred = next(
+        p
+        for p in core.PIPELINES
+        if p.subscribes is core.FROM_DECLARATION and p.script == core.STREAM_RUNNER_SCRIPT
+    )
+    target = replace(deferred, subscribes=deferred.subscribed_tables)
+    first = target.subscribed_tables[0]
 
     if target.script == core.STREAM_RUNNER_SCRIPT:
         # The job file that claims this process - found the same way the
@@ -1055,7 +1066,11 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
             original.replace(call, f"{prefix}not_a_declared_table", 1)
         )
 
-    problems = core.verify_pipeline_edges(scripts)
+    # The spelled-out copy is passed in, not PIPELINES: the real entry defers
+    # and would report nothing, which is the point of the copy.
+    problems = pipeline_edges.verify_pipeline_edges(
+        scripts, [target, *(p for p in core.PIPELINES if p.procname != target.procname)]
+    )
     assert any(target.procname in problem for problem in problems), problems
 
 
@@ -1281,13 +1296,13 @@ def test_every_on_demand_plant_client_still_has_a_producer_to_start_with():
     """
     producers: dict[str, set[str]] = {}
     for pipeline in core.PIPELINES:
-        for table in pipeline.publishes or ((pipeline.table,) if pipeline.table else ()):
+        for table in pipeline.published_tables:
             producers.setdefault(table, set()).add(pipeline.procname)
     declared = {p.procname for p in core.PIPELINES}
     for pipeline in core.PIPELINES:
         if pipeline.startwithall == "1" or pipeline.subscribes_dynamic:
             continue
-        for table in pipeline.subscribes:
+        for table in pipeline.subscribed_tables:
             # databento_mbp10 comes from an external Python feed handler and
             # from the backfill; no pipeline publishes it, which its own
             # note says.
@@ -1313,6 +1328,9 @@ def test_a_pipeline_publishing_an_undefined_table_is_reported(
     invented = replace(
         core.PIPELINE_BY_NAME["fxpositions1"],
         procname="ghost1",
+        # An invented process has no q file to defer to, so it states its
+        # own edges - which is the resolver's strictness working.
+        subscribes=(),
         publishes=("fx_position", "a_table_nothing_defines"),
     )
     monkeypatch.setattr(plant_schema, "PIPELINES", (*core.PIPELINES, invented))
