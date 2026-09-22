@@ -29,6 +29,7 @@ that starts the stack and waits is `scripts/test.py`'s `stack-smoke`.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from torq_orchestrator.logger import get_logger
@@ -57,11 +58,27 @@ MAY_BE_EMPTY: dict[str, str] = {
 }
 
 
+class FindingKind(StrEnum):
+    """What kind of thing the smoke check found.
+
+    A StrEnum rather than a plain Enum because these values are printed in
+    `__str__` and compared against in tests - a bare Enum would render as
+    `FindingKind.EMPTY_TABLE` and change every line of the report.
+    """
+
+    #: A table a running process declares it publishes, with no rows in it.
+    #: The process is up and publishing nothing, which is what a trapped
+    #: handler error looks like from outside.
+    EMPTY_TABLE = "empty-table"
+    #: A process that wrote to its error log while the check watched.
+    PROCESS_ERRORS = "process-errors"
+
+
 @dataclass(frozen=True)
 class SmokeFinding:
     """One thing wrong with the running stack."""
 
-    kind: str  # "empty-table" | "process-errors"
+    kind: FindingKind
     subject: str  # the table or process name
     detail: str
 
@@ -152,7 +169,7 @@ def findings(
         if row_counts.get(table, 0) <= 0:
             out.append(
                 SmokeFinding(
-                    "empty-table",
+                    FindingKind.EMPTY_TABLE,
                     table,
                     f"{', '.join(sorted(publishers))} declares it and it has no rows - "
                     "the process is up and publishing nothing, which is what a "
@@ -163,7 +180,7 @@ def findings(
         first = lines[0][:160]
         out.append(
             SmokeFinding(
-                "process-errors",
+                FindingKind.PROCESS_ERRORS,
                 procname,
                 f"wrote {len(lines)} line(s) to its error log while we watched, starting: {first}",
             )

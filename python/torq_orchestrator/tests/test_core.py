@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from torq_orchestrator import core, pipeline_edges, pipelines, plant_schema, schemas
+from torq_orchestrator.pipeline import PipelineKind
 
 
 @pytest.fixture
@@ -741,10 +742,10 @@ def test_feed_and_etl_kinds_derive_proctype_and_credentials():
     .servers.startup[]'s access-listed handle to stp1.
     """
     for pipeline in core.PIPELINES:
-        if pipeline.kind == "feed":
+        if pipeline.kind is PipelineKind.FEED:
             assert pipeline.proctype == "feed"
             assert pipeline.access_list == ""
-        elif pipeline.kind == "backfill":
+        elif pipeline.kind is PipelineKind.BACKFILL:
             # Its OWN proctype, because proctype is what discovery indexes by:
             # gethandlebytype on `backfill` must find backfill workers and not
             # the metrics pipelines they share a code path with.
@@ -755,7 +756,7 @@ def test_feed_and_etl_kinds_derive_proctype_and_credentials():
         else:
             # A normalizer is an etl of one shape - it subscribes and
             # republishes - so discovery sees the two alike.
-            assert pipeline.kind in ("etl", "normalizer")
+            assert pipeline.kind in (PipelineKind.ETL, PipelineKind.NORMALIZER)
             assert pipeline.proctype == "metrics"
             assert pipeline.access_list.endswith("accesslist.txt")
 
@@ -909,7 +910,7 @@ def test_every_bounded_worker_can_be_started_by_the_stack():
     """
     repo_root = Path(__file__).resolve().parents[3]
     workers = pipeline_edges._declared_workers(repo_root)
-    run_by = {p.worker for p in core.PIPELINES if p.kind == "backfill" and p.worker}
+    run_by = {p.worker for p in core.PIPELINES if p.kind is PipelineKind.BACKFILL and p.worker}
     orphans = workers - run_by - pipeline_edges.WORKERS_WITHOUT_A_PROCESS
     assert not orphans, (
         f"bounded worker(s) {sorted(orphans)} have no backfill pipeline naming them, "
@@ -923,7 +924,7 @@ def test_every_backfill_names_a_worker_that_exists():
     repo_root = Path(__file__).resolve().parents[3]
     workers = pipeline_edges._declared_workers(repo_root)
     for pipeline in core.PIPELINES:
-        if pipeline.kind == "backfill":
+        if pipeline.kind is PipelineKind.BACKFILL:
             assert pipeline.worker, f"{pipeline.procname} names no worker"
             assert pipeline.worker in workers, (
                 f"{pipeline.procname} names {pipeline.worker!r}, which no file under "
@@ -1233,7 +1234,9 @@ def test_the_default_start_fits_inside_the_licence_connection_budget():
     note. This holds the sum.
     """
     clients = {
-        p.procname for p in core.PIPELINES if p.startwithall == "1" and p.kind != "backfill"
+        p.procname
+        for p in core.PIPELINES
+        if p.startwithall == "1" and p.kind is not PipelineKind.BACKFILL
     } | pipeline_edges.VENDORED_PLANT_CLIENTS
     allowance = pipeline_edges.PLANT_CONNECTION_BUDGET - pipeline_edges.PLANT_CONNECTION_RESERVE
     assert len(clients) <= allowance, (
@@ -1252,7 +1255,8 @@ def test_the_connection_budget_check_fires_when_the_default_start_grows(
     names them and says how to get back under.
     """
     grown = tuple(
-        replace(p, startwithall="1") if p.kind != "backfill" else p for p in core.PIPELINES
+        replace(p, startwithall="1") if p.kind is not PipelineKind.BACKFILL else p
+        for p in core.PIPELINES
     )
     monkeypatch.setattr(pipelines, "PIPELINES", grown)
 

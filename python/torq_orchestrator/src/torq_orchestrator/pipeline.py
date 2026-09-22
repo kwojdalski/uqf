@@ -10,6 +10,7 @@ new derived property) and at a different rate."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 #: Paths under $UQFSCRIPTS, which is scripts/. The subdirectory is part of
 #: the name because that is what lands in process.csv's load column - see
@@ -27,6 +28,31 @@ STREAM_RUNNER_SCRIPT = "processes/torq_stream.q"
 # borrows an already-credentialed proctype so .servers.startup[] can open an
 # access-listed handle to stp1. Feeds only publish and need no credentials.
 _ETL_ACCESS_LIST = "${TORQAPPHOME}/appconfig/passwords/accesslist.txt"
+
+
+class PipelineKind(StrEnum):
+    """What shape of process a `Pipeline` declares.
+
+    This was a bare `str` with the four values written in a comment beside
+    it, which made a typo in `registry.py` silent: an unrecognised kind falls
+    through `proctype`'s two checks to "metrics" and through `access_list` to
+    the subscriber list, so a mistyped feed would be declared, started, and
+    given credentials it does not need, with nothing raised anywhere.
+
+    A StrEnum rather than a plain Enum because these values are written into
+    `process.csv` and compared against strings read back out of it. A bare
+    Enum would serialise as `PipelineKind.FEED`.
+    """
+
+    #: Publishes only, subscribes to nothing, so it needs no credentials.
+    FEED = "feed"
+    #: Subscribes, so it needs the access list.
+    ETL = "etl"
+    #: An etl of one shape: N source tables in, one canonical table out, one
+    #: declared transform per source (`.qnorm`).
+    NORMALIZER = "normalizer"
+    #: Bounded: registers with discovery, runs a window range, exits.
+    BACKFILL = "backfill"
 
 
 @dataclass(frozen=True)
@@ -47,12 +73,7 @@ class Pipeline:
 
     procname: str
     script: str
-    # "feed"       publishes only
-    # "etl"        subscribes, so needs credentials
-    # "normalizer" an etl of one shape: N source tables in, one canonical
-    #              table out, one declared transform per source (.qnorm)
-    # "backfill"   bounded: registers with discovery, runs a window range, exits
-    kind: str
+    kind: PipelineKind
     table: str | None = None  # the table it publishes onto the tickerplant, if any
     schema: str | None = None  # that table's database.q definition
     # Only whether to LOAD the library. There was once a second flag to skip
@@ -95,9 +116,9 @@ class Pipeline:
         has to find backfill workers and not the four metrics pipelines that
         happen to share a code path with them.
         """
-        if self.kind == "feed":
+        if self.kind is PipelineKind.FEED:
             return "feed"
-        if self.kind == "backfill":
+        if self.kind is PipelineKind.BACKFILL:
             return "backfill"
         # etl and normalizer alike: a normalizer subscribes and republishes,
         # which is what makes it a metrics process to discovery.
@@ -109,7 +130,7 @@ class Pipeline:
         the same access list. Only a pure feed, which publishes and subscribes
         to nothing, needs none.
         """
-        return "" if self.kind == "feed" else _ETL_ACCESS_LIST
+        return "" if self.kind is PipelineKind.FEED else _ETL_ACCESS_LIST
 
     @property
     def published_tables(self) -> tuple[str, ...]:

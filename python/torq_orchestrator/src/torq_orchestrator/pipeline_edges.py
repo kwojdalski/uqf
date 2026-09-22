@@ -17,6 +17,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from torq_orchestrator.pipeline import PipelineKind
+
 #
 # The dataflow edges declared above are what the generated diagrams draw.
 # A declaration nobody checks is just a second place for the truth to rot,
@@ -357,7 +359,7 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
     # how databento_book_backfill and upstream_trades_backfill ended up
     # fully declared with no process able to run them (#283).
     workers = _declared_workers(scripts_dir.parent)
-    run_by = {p.worker for p in pipelines if p.kind == "backfill" and p.worker}
+    run_by = {p.worker for p in pipelines if p.kind is PipelineKind.BACKFILL and p.worker}
     for worker in sorted(workers - run_by - WORKERS_WITHOUT_A_PROCESS):
         problems.append(
             f"{worker}: a bounded worker declares itself but no backfill pipeline "
@@ -370,7 +372,7 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
             f"it - remove the dead exemption"
         )
     for pipeline in pipelines:
-        if pipeline.kind == "backfill" and not pipeline.worker:
+        if pipeline.kind is PipelineKind.BACKFILL and not pipeline.worker:
             problems.append(
                 f"{pipeline.procname}: a backfill pipeline must name the worker it "
                 f"runs, so the link is declared rather than left to an environment "
@@ -404,7 +406,7 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
         {
             pipeline.procname
             for pipeline in pipelines
-            if pipeline.startwithall == "1" and pipeline.kind != "backfill"
+            if pipeline.startwithall == "1" and pipeline.kind is not PipelineKind.BACKFILL
         }
         | VENDORED_PLANT_CLIENTS
     )
