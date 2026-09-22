@@ -312,6 +312,71 @@ def test_a_process_with_no_declared_edges_gets_dashes(monkeypatch):
     assert all(rows[0][c] == "[dim]-[/]" for c in core.SUMMARY_GRAPH_COLUMNS)
 
 
+# -------------------------------------------------------- the timeout
+
+
+def test_summary_passes_a_default_timeout_to_both_blocking_calls(monkeypatch):
+    """`summary` is the command you run when something is already wrong, which
+    makes it the worst thing to hang. Both of its blocking steps could: the
+    torq.sh subprocess had no timeout at all, and the heartbeat query talks to
+    a process that at its connection cap accepts and then goes quiet."""
+    rec_summary = _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    rec_hb = _patch(monkeypatch, "heartbeat_states", result={})
+    _patch(monkeypatch, "summary_rows", result=[])
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert rec_summary.kwargs["timeout"] is not None
+    assert rec_summary.kwargs["timeout"] <= cli.SUMMARY_TIMEOUT_SECONDS
+    assert 0 < rec_hb.kwargs["timeout"] <= cli.SUMMARY_TIMEOUT_SECONDS
+
+
+def test_the_timeout_is_one_budget_not_one_per_call(monkeypatch):
+    """Two calls given ten seconds each is a twenty-second hang, which is not
+    what anyone means by a ten-second timeout. The second call gets what the
+    first left behind."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    rec_hb = _patch(monkeypatch, "heartbeat_states", result={})
+    _patch(monkeypatch, "summary_rows", result=[])
+    # A monotonic clock that jumps 4s per reading, so the budget visibly
+    # drains between the two calls without the test sleeping.
+    ticks = iter([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])
+    monkeypatch.setattr(cli.time, "monotonic", lambda: next(ticks))
+    runner.invoke(cli.app, ["summary", "--timeout", "10"])
+    assert rec_hb.kwargs["timeout"] < 10, "the heartbeat query gets the remainder"
+
+
+def test_a_zero_timeout_waits_forever(monkeypatch):
+    """The documented escape hatch, and it has to reach BOTH calls as their
+    own 'no limit' spelling - None for subprocess, 0 for kola."""
+    rec_summary = _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    rec_hb = _patch(monkeypatch, "heartbeat_states", result={})
+    _patch(monkeypatch, "summary_rows", result=[])
+    runner.invoke(cli.app, ["summary", "--timeout", "0"])
+    assert rec_summary.kwargs["timeout"] is None
+    assert rec_hb.kwargs["timeout"] == 0
+
+
+def test_an_exhausted_budget_never_hands_out_zero(monkeypatch):
+    """kola refuses a zero duration outright and subprocess reads <=0 as
+    already-expired, so a spent budget would raise something less legible
+    than the timeout it actually is."""
+    _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
+    _patch(monkeypatch, "configured_ports", result={})
+    rec_hb = _patch(monkeypatch, "heartbeat_states", result={})
+    _patch(monkeypatch, "summary_rows", result=[])
+    ticks = iter([0.0, 99.0, 99.0, 99.0, 99.0, 99.0])
+    monkeypatch.setattr(cli.time, "monotonic", lambda: next(ticks))
+    runner.invoke(cli.app, ["summary", "--timeout", "10"])
+    assert rec_hb.kwargs["timeout"] >= 1
+
+
+def test_a_timed_out_summary_exits_one_rather_than_hanging(monkeypatch):
+    _patch(monkeypatch, "summary", raises=core.UqfStackError("did not finish within 10s"))
+    assert runner.invoke(cli.app, ["summary"]).exit_code == 1
+
+
 # --------------------------------------------------- the connection cap
 
 

@@ -17,7 +17,9 @@ Exposed two ways - both call main() below, so they can't drift apart either:
 
 from __future__ import annotations
 
+import math
 import os
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -227,6 +229,21 @@ def restart(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> 
 
 _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 
+#: Seconds `summary` will spend gathering its table before giving up.
+#:
+#: It is a read-only command an operator runs to find out what is going on,
+#: which makes it the worst possible thing to hang: the one time you run it
+#: is when something is already wrong. Both of its blocking steps can hang
+#: indefinitely without this - `torq.sh summary` shells out and had no
+#: timeout at all, and the heartbeat query talks to a process that, at its
+#: licence connection cap, accepts the TCP connection and then does not
+#: answer.
+#:
+#: A BUDGET for the whole command rather than a per-call limit, because two
+#: calls each given ten seconds is a twenty-second hang, which is not what
+#: anyone means by a ten-second timeout.
+SUMMARY_TIMEOUT_SECONDS = 10.0
+
 #: How many table names go on one line of a graph cell before it wraps.
 #:
 #: Rich would wrap these on its own, but on whitespace and at whatever width
@@ -327,6 +344,16 @@ def summary(
             ),
         ),
     ] = None,
+    timeout: Annotated[
+        float,
+        typer.Option(
+            "--timeout",
+            help=(
+                f"Seconds to spend gathering the table before giving up "
+                f"(default {SUMMARY_TIMEOUT_SECONDS:g}). 0 waits forever."
+            ),
+        ),
+    ] = SUMMARY_TIMEOUT_SECONDS,
 ) -> None:
     """Status table for every process in process.csv, with its declared graph.
 
@@ -344,10 +371,25 @@ def summary(
     stack that simply has nothing to report.
     """
     chosen = _resolve_columns(columns)
+    # One budget shared across both blocking steps, spent in order. `remaining`
+    # is what is left when each is reached; 0 means no limit, as it does on
+    # the option itself.
+    deadline = None if timeout <= 0 else time.monotonic() + timeout
+
+    def remaining() -> float | None:
+        if deadline is None:
+            return None
+        # Never hand a caller zero or a negative: subprocess treats <=0 as
+        # "already expired" and kola refuses a zero duration outright, so a
+        # budget that has just run out would raise something less legible
+        # than the timeout it is. A floor of one second lets the last step
+        # fail on its own terms.
+        return max(1.0, deadline - time.monotonic())
+
     paths = _paths()
     log.debug("summary base_port={} torqdata={}", port, paths.torqdata)
     try:
-        result = core.summary(paths, base_port=port)
+        result = core.summary(paths, base_port=port, timeout=remaining())
     except core.UqfStackError as exc:
         _die(exc)
         return
@@ -373,7 +415,13 @@ def summary(
     # PID. None here means monitor1 could not be reached, which is a gap in
     # MONITORING rather than a verdict on the fleet - rendered as such below.
     try:
-        heartbeats = core.heartbeat_states(paths, base_port=port)
+        # kola's timeout is whole seconds, so the remaining budget is rounded
+        # UP: rounding down could hand it 0, which kola reads as "wait
+        # forever" - the exact opposite of a spent budget.
+        left = remaining()
+        heartbeats = core.heartbeat_states(
+            paths, base_port=port, timeout=0 if left is None else max(1, math.ceil(left))
+        )
     except core.UqfStackError as exc:
         # Two distinct failures reach the same printed sentence below, and it
         # names only the commoner one. This branch is monitor1 missing from

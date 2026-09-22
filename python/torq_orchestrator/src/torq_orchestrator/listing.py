@@ -144,7 +144,7 @@ def configured_ports(paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT) -
 
 
 def heartbeat_states(
-    paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT
+    paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT, timeout: int = 0
 ) -> dict[str, str] | None:
     """procname -> heartbeat state, or None when monitor1 cannot be reached.
 
@@ -164,11 +164,12 @@ def heartbeat_states(
     the signal a PID cannot give: a hung process still has a PID.
     """
     try:
-        rows = query(HEARTBEAT_QUERY, _monitor_port(paths, base_port))
+        rows = query(HEARTBEAT_QUERY, _monitor_port(paths, base_port), timeout=timeout)
     except Exception:
         # Deliberately broad: kola raises its own connection errors, and a
         # summary that dies because the optional monitor is down would be a
-        # worse regression than the gap this closes.
+        # worse regression than the gap this closes. A timeout lands here too
+        # and is the same answer - the column is a monitoring gap either way.
         return None
     return _heartbeat_by_procname(rows)
 

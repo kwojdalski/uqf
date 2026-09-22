@@ -143,13 +143,13 @@ def _decode(value: Any) -> str:
     return "" if value is None else str(value)
 
 
-def table_names(port: int, host: str = "localhost", **creds: str) -> list[str]:
+def table_names(port: int, host: str = "localhost", **creds: Any) -> list[str]:
     """Every table in the process's root namespace, in q's own order."""
     result = query("([] name:string tables `)", port, host=host, **creds)
     return [_decode(row["name"]) for row in _rows(result)]
 
 
-def overview(port: int, host: str = "localhost", **creds: str) -> list[dict[str, Any]]:
+def overview(port: int, host: str = "localhost", **creds: Any) -> list[dict[str, Any]]:
     """One row per table: name, row count, column count.
 
     Row count comes from the process rather than being inferred, because
@@ -176,7 +176,7 @@ def overview(port: int, host: str = "localhost", **creds: str) -> list[dict[str,
     ]
 
 
-def match_tables(pattern: str, port: int, host: str = "localhost", **creds: str) -> list[str]:
+def match_tables(pattern: str, port: int, host: str = "localhost", **creds: Any) -> list[str]:
     """Live table names matching a shell-style pattern.
 
     `fnmatch`, not a regex: `crypto*` is what someone types, and the whole
@@ -195,7 +195,7 @@ def match_tables(pattern: str, port: int, host: str = "localhost", **creds: str)
     return [name for name in names if fnmatch.fnmatchcase(name, pattern)]
 
 
-def columns(table: str, port: int, host: str = "localhost", **creds: str) -> list[dict[str, str]]:
+def columns(table: str, port: int, host: str = "localhost", **creds: Any) -> list[dict[str, str]]:
     """One table's columns, as `meta` reports them.
 
     The table name is interpolated rather than parameterised because q's
