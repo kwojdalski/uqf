@@ -39,8 +39,24 @@
 / `\l tests/q/test_*` lines and for the line starting `nsList:`. One
 / definition, three callers.
 .testutil.load_suites[];
-nsList:.testutil.suite_namespaces[];
+/ LISTED, and checked against what actually loaded.
+/ .
+/ Deriving it - `key `` filtered to `*test` - works, and was tried: it
+/ produces exactly these namespaces. What it also does is REORDER them, and
+/ three suites here measure live global state that other suites mutate.
+/ .qbw fixture workers (`reference`, `partial`, three `fixture_*`) registered
+/ at run time reach .mantest's documentation ratchet and .nstest's worker
+/ enumeration; .qdag.jobs reaches .regtest's registry scan. Each of those
+/ passed only because this list happened to run it first. That fragility is
+/ real and worth fixing on its own terms, not inside the change that found
+/ it.
+/ .
+/ So the list stays - and test_namespaces.q holds it against the derived set,
+/ which is what makes an omission LOUD. The problem being solved was never
+/ the typing: it was that a forgotten entry loaded the file, ran none of its
+/ tests, and left the suite green.
 nsList:`.covtest`.metatest`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.alloctest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.nstest`.sjtest`.normtest`.sbtest`.regtest`.synthtest`.dagtest`.rxtest`.egtest`.hbtest`.iotest`.odbctest`.backfillstatetest`.coveragetest`.runtest`.tabletest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest`.xftest`.desktest`.limittest`.ticktest`.pipetest`.xarbtest`.cfgatest;
+if[0=count nsList; '"run_tests: no test namespaces listed"];
 res:.qunit.runTests[nsList];
 
 nTotal:count res;
