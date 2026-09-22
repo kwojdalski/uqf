@@ -68,6 +68,28 @@ consults deliberately should not sit in the path of someone reading past it.
 > *2026-09-17.* 95 lines of per-dependency licensing moved from `README.md`
 > to `LICENSING.md`, leaving three lines and a link.
 
+**A document whose title states a status must be re-read when that status
+changes.** Otherwise it goes on asserting the old one from the table of
+contents, where it is read most and checked least.
+
+> *2026-09-22.* `docs/ROADMAP.md` said `Status: implemented` at line 8 and
+> had a "Still to do" section whose first item was headed `— DONE.`; 136 of
+> its 146 lines were built candidates. Cut to the three items actually open.
+> `pipeline-framework-gaps.md` §2 narrated five closed gaps whose reasoning
+> already sat, at greater length, in the header of the module that closed
+> each — replaced with a table naming that module per row.
+
+**Reasoning belongs in one place, next to the code it explains.** A design
+argument repeated in a document and in a module header will be updated in one
+of them.
+
+> *2026-09-22.* `docs/prompts/` held three LLM implementation briefs for
+> features since built and tested; deleted, and the `"prompts"` entry in
+> `check_doc_references.py`'s `EXCLUDED_DIRS` with them. `README.md`'s
+> "Further reading" was a second copy of `docs/README.md`'s index and had
+> already drifted — it said five directories where the map said four, and
+> omitted five guides. Collapsed to the four-question table and a link.
+
 **No prescriptive meta-rules about the documentation process itself.**
 Describe what is, not how future documents must be filed.
 

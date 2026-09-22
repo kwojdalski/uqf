@@ -7,10 +7,11 @@ one of those has since been built or been decided against. What remains
 different from Dagster is listed in §3, and each difference is a decision
 with a stated condition for reopening it, not an item waiting for someone.
 
-Kept rather than deleted because the *reasoning* is the part worth having:
-each gap below says what was wrong before, which is why the thing that
-replaced it is shaped the way it is. A reader wondering why `.qio` exists,
-or why `run_id` is not a parameter, will not find that anywhere else.
+Kept rather than deleted because the *list* is worth having: it says which
+questions were asked and how each was answered, which is not recoverable from
+the code. The reasoning behind each answer is not repeated here — it lives in
+the header of the module that closed the gap, where someone reading that code
+will actually meet it. §2 names the module for each.
 
 ## 1. The mapping
 
@@ -40,95 +41,19 @@ had from the start.
 
 ## 2. The gaps it found, and what closed each
 
-### 2.1 No IO manager — compute and storage were fused
+Three real gaps and two smaller ones. The `§` numbers are cited from source
+headers, so they are stable: `io_manager.q:4` names §2.1 and `run.q:2` names
+§2.3.
 
-`.qbw.publish` was four lines and they decided everything: every worker
-wrote to an in-process table named by its source declaration, and that was
-the only thing a worker could do with its output. There was no way to run a
-worker in a test and capture its output without touching a table, to write
-the same asset to a partitioned HDB instead of memory, or to change where
-an asset lands without changing the worker.
+| | Gap | Closed by | Where the reasoning is |
+|---|---|---|---|
+| **2.1** | **No IO manager.** `.qbw.publish` was four lines that decided everything: every worker wrote to an in-process table named by its source declaration, and could do nothing else. No way to capture a worker's output in a test, or to land an asset elsewhere, without editing the shell. | `.qio` — a manager is a dict carrying `write`, defaulting to `.qio.memory`, so a worker that declares no io behaves as before. `.qio.discard` writes nothing and says so, which is what makes a pipeline runnable end to end without storage. No `read`/`exists`: nothing reads a target back through an abstraction. | `src/etl/core/io_manager.q` header |
+| **2.2** | **`.qdqc` was wired to nothing.** Nine check functions existed and no worker called one. fetch → publish → record coverage complete, so a window of nulls was recorded as covered and read as published forever — the ledger could hold a lie and nothing would say so. | A worker's optional declared `check`, run between transform and publish. A failed check takes the failed-fetch path: nothing published, no coverage staged, and the next run plans that window again. `demo_deals_backfill` declares one, so the path is exercised rather than merely available. | `src/etl/core/bounded_worker.q:66` (why `check` is optional and `transform` is not) |
+| **2.3** | **No run identity, no materialisation metadata.** Coverage described the *window*, never the *execution*, so three questions had no answer: what did one execution produce, what else did it produce or fail to produce, and are two assets consistent because they were built together. `rows_published` was the only fact recorded. | `.qrun`, and a `run_id` on `etl_coverage` written from `.qrun.current[]` rather than passed in. Reads: `.qmatz.materialisations_of`, `.qmatz.contributing_runs`, `.qrun.unfinished[]`. Arbitrary metadata is the worker's `facts` hook. | `src/etl/core/run.q` header — including why `run_id` is ambient where ETL-09 requires `source_version` to be a parameter |
+| **2.4** | **Partitions were time-only.** Coverage carried only `[range_from, range_to)`, so a categorical partition had no expression and `.qbw.define` refused two workers sharing a dataset — correctly, given the schema, and it was the ceiling on parallelism. | `etl_coverage` carries `partition`, required on write and on read; the refusal keys on the (dataset, partition) pair, so one dataset can be filled by several workers at once. | `src/etl/core/materialisation.q` |
+| **2.5** | **Only one job role had a shell.** `.qbw` made a backfill a declaration; feeds and subscribers were eight hand-rolled scripts repeating the same twenty lines of subscribe-and-publish wiring — and the copies were weaker than the original, returning an empty list where it threw. | `.qstream`: a job declares `subscribes`, `publishes`, `on_batch` and `on_timer` in one file under `src/etl/streaming/`, and one runner (`scripts/processes/torq_stream.q`) runs any of them by procname. `.qpipe` did *not* become the shell — it stayed the TorQ adapter the runner calls, the layering [`pipeline-philosophy.md`](pipeline-philosophy.md) §10 states and `check_etl_layering.py` enforces. | `src/etl/core/stream_job.q` header |
 
-**Closed by `.qio`.** A manager is a dict carrying `write`, defaulting to
-`.qio.memory` — the in-process insert — so a worker that says nothing about
-io behaves exactly as it did. `.qio.discard` writes nothing and reports
-honestly, which is what makes a pipeline runnable end to end without
-touching storage.
-
-No `read` or `exists`: nothing in this framework reads a target back
-through an abstraction, and a capability reached from no live path is the
-shape this repository keeps finding and deleting. They go in when something
-calls them.
-
-### 2.2 `.qdqc` was wired to nothing — a pipeline could publish garbage and record success
-
-Nine check functions existed and no worker called any of them. The sequence
-was fetch → publish → **record coverage as complete**, so a window of nulls
-or of semantically wrong rows was recorded as covered and read as published
-forever. The ledger could hold a lie and nothing anywhere would say so.
-
-**Closed by the declared `check`.** A worker declaration takes an optional
-callback, run between transform and publish. A failed check takes the same
-terminal-window path as a failed fetch: nothing published, no coverage
-staged, the run continues, and the next run plans that window again because
-coverage never claimed it. `demo_deals_backfill` declares one, so the path
-is exercised rather than merely available.
-
-### 2.3 No run identity, and materialisations carried no metadata
-
-Three questions had no answer: what did one execution produce, what else
-did it produce or fail to produce, and are two assets consistent because
-they were built together. `rows_published` was the only fact recorded.
-
-**Closed by `.qrun`.** `etl_coverage` gains a `run_id`, written from
-`.qrun.current[]` rather than passed in — the one design argument worth
-restating: ETL-09 requires `source_version` to be a *parameter* because an
-optional filter is one a caller forgets, and a wrong `source_version` is
-silent corruption. `run_id` is different in kind: a fact about the
-executing process, with exactly one right answer at any instant. Threading
-it through five signatures would manufacture the chance to pass the wrong
-one, a failure mode that otherwise cannot occur. Outside a run the column
-records the null guid, honestly — a materialisation staged by hand belongs
-to no run, and saying so beats inventing an identity.
-
-Three reads answer the three questions: `.qmatz.materialisations_of[run]`,
-`.qmatz.contributing_runs[dataset;partition;version]`, and `.qrun.unfinished[]`
-— the executions that began and never reported an outcome, which is the state an
-interrupted process leaves and which nothing else records.
-
-Arbitrary metadata is the worker's own `facts` hook: a function from the
-batch to a dict, attached to the window's materialisation. The framework
-records what it can know without a schema (rows, source_version, dry_run);
-anything needing to know what a column *means* goes there.
-
-### 2.4 Partitions were time-only
-
-Coverage carried only `[range_from, range_to)`, so a categorical partition
-— per-`sym`, per-region — had no expression, and `.qbw.define` refused two
-workers sharing a dataset *because* their coverage rows would have been
-indistinguishable. That refusal was correct given the schema, and it was
-the ceiling on parallelism.
-
-**Closed.** `etl_coverage` carries `partition`, required on write and on
-read; the refusal keys on the (dataset, partition) pair, so one dataset can
-be filled by several workers at once.
-
-### 2.5 Only one job role had a shell
-
-`.qbw` made a backfill a declaration; feeds and subscribers were
-hand-rolled scripts, eight of them, each repeating the same twenty lines of
-subscribe-and-publish wiring — and the copies were weaker than the original
-they were copied from, returning an empty list where it threw.
-
-**Closed by `.qstream`.** A job declares `subscribes`, `publishes`,
-`on_batch` and `on_timer` in its own file under `src/etl/streaming/`, and
-one runner (`scripts/processes/torq_stream.q`) runs any of them, selected
-by procname. `.qpipe` did *not* become the shell: it stayed the TorQ
-adapter the runner calls, which is the layering
-[`pipeline-philosophy.md`](pipeline-philosophy.md) §10 states and
-`check_etl_layering.py` enforces.
-
-The live Databento adapter is the test of whether that shell generalised:
+The live Databento adapter is the test of whether §2.5's shell generalised:
 its feed handler is Python, outside q entirely, and the job that folds its
 rows reuses the `.qxf` transform the ODBC backfill already declared. One
 fold, two paths, no second implementation.
