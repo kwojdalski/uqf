@@ -101,3 +101,40 @@ def test_the_graph_is_the_one_the_generated_schema_is_built_from():
     )
     producers = dependencies.producers_by_table([*core.PIPELINES, invented])
     assert producers["market_data"] == {"marketdata1", "ghost1"}
+
+
+def test_outputs_resolve_the_same_way_the_generated_schema_does():
+    """A pipeline's outputs are its explicit `publishes` if it declares one,
+    otherwise its single `table` - the rule `_publishers` applies. Two
+    derivations of "what does this publish" could disagree, and then the
+    summary's Outputs column would describe a different system from the one
+    whose tables the plant defines."""
+    outputs = dependencies.outputs_by_process()
+    assert outputs["cryptomock1"] == ("crypto_book", "crypto_trades")
+    assert outputs["fxfeed1"] == ("quote",)
+
+
+def test_depends_on_names_processes_not_tables():
+    """`inputs_by_process` answers "what table does this need"; this answers
+    "who do I have to start to get it", which is the question behind every
+    `up, but idle` process."""
+    depends = dependencies.depends_on_by_process()
+    assert "executions1" in depends["posbook1"]
+    assert "marks1" in depends["posbook1"]
+    assert "executions" not in depends["posbook1"], "processes, not tables"
+
+
+def test_a_table_produced_outside_the_process_list_is_named_as_external():
+    """ "nothing in this list provides it" and "nothing provides it" are
+    different facts, and only one of them is a problem. Dropping the edge
+    would report databento1 as depending on nothing at all."""
+    depends = dependencies.depends_on_by_process()
+    assert any("external" in d for d in depends["databento1"])
+
+
+def test_a_process_is_never_its_own_dependency():
+    """A normalizer republishes onto tables it also reads from, so a naive
+    lookup makes it depend on itself - which reads as a cycle the operator
+    has to resolve, and there is nothing to resolve."""
+    for procname, sources in dependencies.depends_on_by_process().items():
+        assert procname not in sources
