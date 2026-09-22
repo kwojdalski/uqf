@@ -209,4 +209,32 @@ test_the_exception_list_has_not_become_the_rule:{[t]
     .qunit.assertTrue[5>count key outside_the_prefix;
         "the exceptions stay a handful - each one is code no tool can see"]};
 
+/ ---------------------------------------------------------------------------
+/ The declaration globs in src/etl/init.q
+/ ---------------------------------------------------------------------------
+/ init.q loads sources/, workers/ and streaming/ by GLOB rather than by a
+/ hand-kept list. That removes the failure it replaced - a file nobody
+/ loaded - but only if the glob really reaches every file, and nothing else
+/ in the tree would notice if it stopped: the Python edge verifier reads
+/ those directories itself, straight from disk, so it agrees with the files
+/ whether or not q ever loaded them.
+
+/ .q files in one of the ETL declaration directories.
+etl_files:{[dir] n:key hsym `$dir; count n where n like "*.q"}
+
+test_every_streaming_file_is_a_registered_job:{[t]
+    .qunit.assertEquals[count key .qstream.jobs;
+        .nstest.etl_files["src/etl/streaming"];
+        "every src/etl/streaming/*.q registers a job - a file the glob missed would load nothing"]};
+
+test_every_source_file_is_a_registered_source:{[t]
+    .qunit.assertEquals[count .qns.children `.qfeed;
+        .nstest.etl_files["src/etl/sources"];
+        "every src/etl/sources/*.q registers under .qfeed"]};
+
+test_every_worker_file_is_a_registered_worker:{[t]
+    .qunit.assertEquals[count .qns.children `.qwrk;
+        .nstest.etl_files["src/etl/workers"];
+        "every src/etl/workers/*.q registers under .qwrk"]};
+
 \d .

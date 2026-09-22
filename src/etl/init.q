@@ -79,37 +79,46 @@
 / Declarations last. Each registers itself on load, so that a declaration and
 / its implementation cannot drift - there is no way to have one without the
 / other.
-\l src/etl/sources/demo_deals.q
-\l src/etl/sources/demo_events.q
-\l src/etl/sources/databento_mbp10.q
-\l src/etl/sources/upstream_trades.q
-\l src/etl/workers/demo_deals_backfill.q
-\l src/etl/workers/demo_events_backfill.q
-\l src/etl/workers/databento_book_backfill.q
-\l src/etl/workers/upstream_trades_backfill.q
+/ .
+/ GLOBBED, not listed. Every .q file in these three directories is loaded, so
+/ adding a source, a worker or a streaming job means adding the file and
+/ nothing else. What this replaced was twenty-six \l lines - a hand-kept copy
+/ of `ls`, which had to be edited in the right place and whose failure mode
+/ was a file nobody loaded.
+/ .
+/ The DIRECTORY order is load-bearing: .qbw.define looks its source up at
+/ define time, so a worker whose source has not loaded aborts with a bare
+/ `.qfeed.<name> from inside a declaration that looks fine.
+/ .
+/ Within a directory the order is alphabetical, except the names passed as
+/ lead, which load first. Those are the files that read ANOTHER job's table
+/ at load time, to build an empty keyed table from its schema:
+/ .
+/   superbook.q:11        .qsub.market_data.market_data
+/   cross_arbitrage.q:47  .qsub.superbook.superbook
+/ .
+/ Alphabetically superbook sorts AFTER cross_arbitrage, so a plain glob
+/ aborts there. A name in lead with no matching file throws rather than being
+/ ignored - a stale entry that silently does nothing is how an ordering rots.
 
-/ The continuous jobs. Last, because each registers its transform into .qxf
-/ and itself into .qstream on load, and calls the library through
-/ src/init.q. One file per job, holding every step of it; scripts/
-/ torq_stream.q runs whichever one its environment names.
-/ The feeds first: they invent the rows the rest consume.
-\l src/etl/streaming/fx_feed.q
-\l src/etl/streaming/quotes_feed.q
-\l src/etl/streaming/wide_book_feed.q
-\l src/etl/streaming/fx_trades_feed.q
-\l src/etl/streaming/crypto_mock.q
-/ The normalizers: many source shapes into one canonical table each. After
-/ the feeds that produce their sources, before the jobs that consume them.
-\l src/etl/streaming/executions.q
-\l src/etl/streaming/marks.q
-\l src/etl/streaming/market_data.q
-\l src/etl/streaming/superbook.q
-\l src/etl/streaming/arbitrage.q
-\l src/etl/streaming/cross_arbitrage.q
-\l src/etl/streaming/fx_orders_feed.q
-\l src/etl/streaming/markout.q
-\l src/etl/streaming/cross.q
-\l src/etl/streaming/posbook.q
-\l src/etl/streaming/vectorize.q
-\l src/etl/streaming/databento_book.q
-\l src/etl/streaming/fx_positions.q
+etl_load_declarations:{[dir;lead]
+    lead:(),lead;
+    found:key hsym `$dir;
+    found:asc found where found like "*.q";
+    if[0=count found; '"etl_load_declarations: no .q files under ",dir];
+    leadq:`$string[lead],\:".q";
+    missing:leadq except found;
+    if[count missing;
+        '"etl_load_declarations: ",dir," names ",(", " sv string missing),
+            " first, but no such file"];
+    {system "l ",x} each (dir,"/"),/:string leadq,found except leadq;
+    }
+
+etl_load_declarations["src/etl/sources";`symbol$()];
+etl_load_declarations["src/etl/workers";`symbol$()];
+etl_load_declarations["src/etl/streaming";`market_data`superbook];
+
+/ Local to this file rather than tree API: the load order is init.q's own
+/ business, and a helper left in the root namespace is one the enumeration
+/ tools in src/namespaces.q would have to account for.
+delete etl_load_declarations from `.;
