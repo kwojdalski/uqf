@@ -129,16 +129,12 @@ PIPELINES: tuple[Pipeline, ...] = (
         subscribes=FROM_DECLARATION,
         table="execution_quality",
         loads_qpipe=True,
-        localtime="0",
         note=(
-            "localtime:0, unlike every other process here - markout1 is the only "
-            "process in this demo that compares .proc.cp[] against incoming data "
-            "timestamps (its process_ready cutoff calc); every other process just "
-            "reacts to each tick immediately, so localtime never mattered for them. "
-            ".u.upd stamps trades/quote with the tickerplant's own .z.p (UTC) - with "
-            "localtime:1, .proc.cp[] returns local time instead, silently skewing the "
-            "cutoff by the local UTC offset (confirmed live: a full hour off on a "
-            "UTC+1 machine)"
+            "compares its own clock against incoming data timestamps (the "
+            "process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p "
+            "directly for that reason, so it needs no localtime override - it used "
+            "to carry localtime:0 instead, which fixed the arithmetic by starting "
+            "one process on a different clock from the other twenty-two"
         ),
     ),
     # --- bounded backfill workers ------------------------------------
@@ -273,7 +269,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.NORMALIZER,
         subscribes=FROM_DECLARATION,
         table="market_data",
-        localtime="0",
         startwithall="0",
         note=(
             "direct FX snapshots with source identity and original receipt time. "
@@ -294,7 +289,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         subscribes=FROM_DECLARATION,
         table="superbook",
         publishes=FROM_DECLARATION,
-        localtime="0",
         startwithall="0",
         note=(
             "latest source books merged by pair; stale liquidity expires on a "
@@ -308,7 +302,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         kind=PipelineKind.ETL,
         subscribes=FROM_DECLARATION,
         table="arbitrage",
-        localtime="0",
         startwithall="0",
         note=(
             "gross direct cross-source opportunities, including inactive clearing "
@@ -323,7 +316,6 @@ PIPELINES: tuple[Pipeline, ...] = (
         subscribes=FROM_DECLARATION,
         table="cross_arbitrage",
         publishes=FROM_DECLARATION,
-        localtime="0",
         startwithall="0",
         note=(
             "the direct book against a synthetic route through other pairs "

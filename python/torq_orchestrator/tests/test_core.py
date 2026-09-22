@@ -823,19 +823,36 @@ def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: core.UqfStackPa
         assert row["qcmd"] == "q"
 
 
-def test_timestamp_consumers_run_on_utc_and_tap_does_not_autostart():
-    """The rows that deviate from the defaults, kept honest.
+def test_no_pipeline_overrides_the_process_clock():
+    """Every process reads the same clock, because the CODE names its own.
 
-    `localtime="0"` is for processes that compare `.proc.cp[]` against
-    tickerplant-stamped data timestamps: markout1's `process_ready` cutoff,
-    and the direct-arbitrage chain's freshness and expiry. `.u.upd` stamps
-    UTC, so `localtime=1` would silently skew each of them by the local
-    offset. Every other process just reacts to a tick and never asks the
-    clock.
+    This used to assert the opposite: five processes carried `localtime="0"`
+    so that `.proc.cp[]` returned UTC, because `.u.upd` stamps data in UTC
+    and comparing a local-time clock against it skews every comparison by the
+    machine's offset. It was found live - markout scoring trades an hour
+    before their horizon had elapsed on a UTC+1 machine.
+
+    Starting one process on a different clock fixed that arithmetic and left
+    a worse problem. The override spread by association rather than by need:
+    of the five that carried it, `superbook` and `cross_arbitrage` read `.z.p`
+    directly and never needed it, `marketdata` and `arbitrage` read no clock
+    at all, and `cross1` - which compares `.proc.cp[]` against UTC data
+    exactly as markout did - never got it and carried the bug.
+
+    So the clock is named in the code now (`now:{[] .z.p}`), the override is
+    gone, and the fleet reads one clock. A new `localtime="0"` means someone
+    is fixing a timestamp bug in process configuration again, which is the
+    thing that produced a permanent false `error` in monitor1's heartbeat
+    table: markout1 stamped its heartbeat in UTC while the monitor compared
+    against local time.
     """
-    utc = {"markout1", "marketdata1", "superbook1", "arbitrage1", "crossarb1"}
-    assert all(core.PIPELINE_BY_NAME[n].localtime == "0" for n in utc)
-    assert all(p.localtime == "1" for p in core.PIPELINES if p.procname not in utc)
+    assert all(p.localtime == "1" for p in core.PIPELINES), [
+        p.procname for p in core.PIPELINES if p.localtime != "1"
+    ]
+
+
+def test_tap_and_the_on_demand_chain_do_not_autostart():
+    """The rows that deviate from the startwithall default, kept honest."""
     # tap1 is a diagnostic subscriber; the four backfills are bounded jobs
     # triggered with a range. Neither belongs in `uqf-stack start`.
     #

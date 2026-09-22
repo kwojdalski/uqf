@@ -123,10 +123,23 @@ score_ready:{[now]
 / score_ready, which is the testable half.
 on_timer:{[] .qsub.markout.score_ready .qsub.markout.now[]}
 
-/ The clock, as a function so a test can replace it. .proc.cp[] is TorQ's
-/ current-process time; outside TorQ there is no .proc, so fall back to .z.p
-/ rather than failing to load.
-now:{[] $[()~key `.proc; .z.p; .proc.cp[]]}
+/ The clock, as a function so a test can replace it.
+/ .
+/ .z.p, NOT .proc.cp[]. Both read "now", and only one of them agrees with the
+/ data: `.u.upd` stamps every row with the tickerplant's own .z.p, so the
+/ times this is compared against are UTC. `.proc.cp[]` is `.z.P` - LOCAL time -
+/ whenever TorQ was started with -localtime, which the vendored process.csv
+/ does for all 23 of its processes.
+/ .
+/ The comparison below is therefore off by the machine's UTC offset. It was
+/ found live as markout scoring trades an hour before their horizon had
+/ elapsed on a UTC+1 machine, and patched then by starting that ONE process
+/ with localtime=0 - which fixed the arithmetic and left every other process
+/ reading a different clock, including this one.
+/ .
+/ Reading .z.p here is what superbook.q and cross_arbitrage.q already do, and
+/ it holds whatever flag the process was started with.
+now:{[] .z.p}
 
 \d .
 
