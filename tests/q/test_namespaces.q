@@ -81,7 +81,7 @@ test_every_registered_worker_has_its_namespace_listed:{[t]
     / files alone stopped exercising .qbfstate.registered at all, which the
     / coverage lane noticed. Both halves matter: the registry is the thing
     / under test, the files are what separates a real worker from a fixture.
-    registered:.qbfstate.registered[] inter .nstest.etl_names["src/etl/workers"];
+    registered:.qbfstate.registered[] inter .testutil.etl_declaration_names["src/etl/workers"];
     missing:registered where not {[w] (.qbw.namespace w) in .qns.owned[]} each registered;
     .qunit.assertEquals[missing;`symbol$();
         "every registered bounded worker's namespace is enumerated"]};
@@ -231,12 +231,6 @@ test_the_exception_list_has_not_become_the_rule:{[t]
 / those directories itself, straight from disk, so it agrees with the files
 / whether or not q ever loaded them.
 
-/ The declaration file STEMS in one of the ETL directories: `foo.q -> `foo.
-etl_names:{[dir]
-    n:key hsym `$dir;
-    n:n where n like "*.q";
-    asc `$-2_/:string n}
-
 / Every file registered, checked as a SUBSET rather than by count. .qwrk and
 / .qfeed are mutable: tests register their own workers and sources into them
 / (reference_worker.q does it at load time), so a count comparison passes or
@@ -251,19 +245,19 @@ missing_declarations:{[names;registered] names except registered}
 leaf_names:{[root;names] `$(1+count string root)_/:string names}
 
 test_every_streaming_file_is_a_registered_job:{[t]
-    missed:.nstest.missing_declarations[.nstest.etl_names["src/etl/streaming"];
+    missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/streaming"];
         key .qstream.jobs];
     .qunit.assertEquals[missed; `symbol$();
         "every src/etl/streaming/*.q registers a job - one the glob missed would load nothing"]};
 
 test_every_source_file_is_a_registered_source:{[t]
-    missed:.nstest.missing_declarations[.nstest.etl_names["src/etl/sources"];
+    missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/sources"];
         .nstest.leaf_names[`.qfeed; .qns.children `.qfeed]];
     .qunit.assertEquals[missed; `symbol$();
         "every src/etl/sources/*.q registers under .qfeed"]};
 
 test_every_worker_file_is_a_registered_worker:{[t]
-    missed:.nstest.missing_declarations[.nstest.etl_names["src/etl/workers"];
+    missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/workers"];
         .nstest.leaf_names[`.qwrk; .qns.children `.qwrk]];
     .qunit.assertEquals[missed; `symbol$();
         "every src/etl/workers/*.q registers under .qwrk"]};

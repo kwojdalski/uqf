@@ -16,6 +16,8 @@ between them:
                        beyond a temp status directory. Fast, hermetic, and
                        the only lane the commit hook runs.
   q-metatables-hdb     metatable queries against a temporary partitioned HDB.
+  q-order              the q suite again, suites in the opposite order, so a
+                       test that depends on running after another one fails
   q-examples           every documented @eg runs, in its own process, since
                        many examples change state.
   q-two-instances      a second kdb+ process is started on the starter
@@ -102,6 +104,17 @@ def _banner(text: str) -> None:
 def lane_q_unit() -> None:
     _banner("q-unit: deterministic qUnit suite")
     _q("q-unit", "tests/run_tests.q")
+
+
+def lane_q_order() -> None:
+    _banner("q-order: the same suite, in the opposite order")
+    # Four tests here once passed on run_tests.q's hand-written namespace
+    # order alone: each scanned live global state that other suites mutate,
+    # so whichever ran first decided the answer. They were fixed to ask about
+    # the tree rather than about the process, and this is what keeps them
+    # fixed - a new dependency on running after some other suite fails here
+    # rather than the next time anyone touches that list.
+    _q("q-order", "tests/run_tests.q", env={"UQF_TEST_ORDER": "reverse"})
 
 
 def lane_q_backfill_process() -> None:
@@ -218,6 +231,7 @@ def lane_coverage() -> None:
 
 LANES: dict[str, Callable[[], None]] = {
     "q-unit": lane_q_unit,
+    "q-order": lane_q_order,
     "q-metatables-hdb": lane_q_metatables_hdb,
     "q-backfill-process": lane_q_backfill_process,
     "q-examples": lane_q_examples,
@@ -236,6 +250,7 @@ LANES: dict[str, Callable[[], None]] = {
 #: worth paying for on every release run.
 ALL = [
     "q-unit",
+    "q-order",
     "q-examples",
     "q-backfill-process",
     "q-two-instances",

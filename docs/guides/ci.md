@@ -61,6 +61,34 @@ reasons, in `stack_smoke.MAY_BE_EMPTY` - a table that is empty because
 nothing happened carries no information. A test holds that list free of
 dead entries.
 
+## The suite does not depend on its own order
+
+`scripts/test.py q-order` runs the whole q suite again with the suites in the
+opposite order, and `UQF_TEST_ORDER=shuffle` runs them in a seeded random
+one. Both are the same 1459 tests; only the order differs.
+
+It exists because five tests once passed on `run_tests.q`'s hand-written
+namespace list alone. Each read live global state that other suites mutate:
+
+| test | what leaked in |
+|---|---|
+| the documentation ratchet | `.qcompletetest`, `.qmethodsonly` and `.qsub.nt_k` - whole namespaces built inside assertions |
+| every registered source has a `.qfeed` namespace | sources registered by `etl_test_doubles.q`, which have no declaration file |
+| every registered worker has a `.qwrk` namespace | `.qbw` fixture workers named `reference`, `partial`, `fixture_*` |
+| every dict-valued registry is covered | `.qdag.jobs`, which has not collapsed into a table while it is empty |
+| cross-arbitrage consumes a batch | `publish`, left wired by whichever suite ran first |
+
+None was a flaky test - each was deterministic, and each measured the process
+rather than the tree. The fix in every case was to ask the tree: a registry
+is intersected with the declaration files, the namespace set is read from
+`src/` rather than scanned live, and a suite that drives a job wires that
+job's `publish` itself.
+
+The lane is what keeps them fixed. **A discrepancy between the two lanes is
+the signal**, in either direction - a test that passes listed and fails
+reversed depends on running after something, and one that passes reversed and
+fails listed depends on running before it.
+
 ## q coverage limitation
 
 GitHub's hosted runner has no project-provided q interpreter. If none is

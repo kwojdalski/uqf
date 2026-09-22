@@ -50,6 +50,20 @@ legs:{[]
 / The legs plus a direct EURJPY at the given prices.
 with_direct:{[bid;ask] (legs[]) upsert one .xarbtest.row[`EURJPY;bid;ask;1e9;.xarbtest.t0]}
 
+/ Empty the job's state AND point its publish somewhere, before driving it.
+/ .
+/ The wiring is the part that matters. A job's `publish` starts as
+/ `.qstream.unwired`, which THROWS, and `on_batch` only reaches it when the
+/ batch produces an opportunity. So a test that drove the job and happened
+/ not to produce one passed while leaving publish unwired - and the same test
+/ threw as soon as another suite's leftover state made the batch produce one.
+/ It was `.cfgatest` that wired this job, by running first; under a shuffled
+/ suite order it no longer did.
+drive_ready:{[]
+    `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
+    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.xarbtest.published set (tbl;rows); count rows}];
+    }
+
 beforeNamespace_load:{[] `.xarbtest.saved set .qsub.cross_arbitrage.books;}
 afterNamespace_restore:{[] `.qsub.cross_arbitrage.books set .xarbtest.saved;}
 
@@ -165,7 +179,7 @@ test_a_one_sided_book_is_not_offered_as_a_leg:{[t]
 / traps it into the error log, and the process stayed up reporting healthy
 / while doing nothing on every batch, 634 times before anyone looked.
 test_a_real_plant_batch_carries_a_time_column_and_is_still_consumed:{[t]
-    `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
+    .xarbtest.drive_ready[];
     stamped:update time:.xarbtest.t0 from 0!with_direct[164.80;164.90];
     .qsub.cross_arbitrage.on_batch[`superbook;stamped];
     .qunit.assertEquals[count .qsub.cross_arbitrage.books;3;
@@ -176,13 +190,13 @@ test_a_real_plant_batch_carries_a_time_column_and_is_still_consumed:{[t]
 / The same job also runs under run_stream.q against .qtick, where nothing
 / has stamped a time yet - so the strip has to be conditional, not assumed.
 test_a_batch_without_a_time_column_is_consumed_too:{[t]
-    `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
+    .xarbtest.drive_ready[];
     .qsub.cross_arbitrage.on_batch[`superbook;0!with_direct[164.80;164.90]];
     .qunit.assertEquals[count .qsub.cross_arbitrage.books;3;
         "a standalone runner's batch has no time column and must still land"]};
 
 test_a_batch_on_another_table_is_ignored:{[t]
-    `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
+    .xarbtest.drive_ready[];
     .qsub.cross_arbitrage.on_batch[`quote;([] sym:enlist `EURUSD)];
     .qunit.assertEquals[count .qsub.cross_arbitrage.books;0;
         "only superbook rows update the state"]};

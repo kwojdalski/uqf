@@ -108,15 +108,25 @@ test_documentation_coverage_does_not_regress:{[t]
     / scan sees one namespace holding no functions - so every worker's
     / public surface would leave this count without lowering it, which is
     / the opposite of a ratchet.
-    nss:.qns.functional[];
-    / Only namespaces docs/man.q actually covers, which is src/. The first
-    / version of this test counted every q-prefixed namespace in the suite
-    / process and failed on scaffolding: .qunit is the vendored test
-    / framework, .qetldbl and .qrefw are test doubles, and .qpipe lives in
-    / scripts/ rather than src/. None is this library's public API, and
-    / demanding qDoc blocks for them would have meant documenting the test
-    / harness to satisfy a counter.
-    nss:nss except `.q`.qunit`.qetldbl`.qrefw`.qpipe;
+    / The live namespaces INTERSECTED with the ones this tree's source
+    / declares in a file. Both halves are needed: live, because the ratchet
+    / counts functions that actually exist; declared, because the process
+    / running this suite holds a great deal that is not the tree.
+    / .
+    / This replaced a hand-kept deny-list - `.q`.qunit`.qetldbl`.qrefw`.qpipe -
+    / which could not hold, because suites create whole namespaces at RUN
+    / time: `.qcompletetest` and `.qmethodsonly` are fixture workers built
+    / inside assertions, `.qsub.nt_k`/`.qsub.nt_l` are streaming jobs a test
+    / registers. Every new one would have to be remembered here, and until it
+    / was, this count depended on which suites had already run rather than on
+    / the tree.
+    / .
+    / .qns.functional, not a root-level `like "q*"` scan: worker instances
+    / live under .qwrk (.qwrk.demo_deals_backfill and so on), and a root scan
+    / sees one namespace holding no functions - so every worker's public
+    / surface would leave this count without lowering it, which is the
+    / opposite of a ratchet.
+    nss:.qns.functional[] inter .testutil.tree_namespaces[];
     public:raze {[full]
         ks:key full;
         ks:ks where not ks in `;
@@ -127,6 +137,16 @@ test_documentation_coverage_does_not_regress:{[t]
         / documents .qwrk.x.fetch - and counting them here would fail every
         / worker, including the ones the tests define, eight names at a time.
         if[(string full) like ".qwrk.*"; ks:ks except .qbw.inherited_methods];
+        / A streaming job's `publish` is the framework's seam, not the job's
+        / API: the file assigns `.qstream.unwired`, and the runner (or a test)
+        / replaces it through `.qstream.wire`. Its documentation is
+        / .qstream.wire's, the same standing as a worker's inherited methods.
+        / .
+        / It also has to be excluded to make this count STABLE. `unwired`
+        / hands back a projection and `wire` usually installs a lambda, so
+        / the type test below sees a function only for jobs some suite
+        / happened to wire - which made this ratchet depend on run order.
+        if[(string full) like ".qsub.*"; ks:ks except `publish];
         ks:ks where {[f;k] 100h=type value ` sv f,k}[full] each ks;
         string ` sv/: full,/:ks} each nss;
     undocumented:public where not public in documented;

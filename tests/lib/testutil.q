@@ -85,14 +85,75 @@ suite_files:{[]
 // Load every suite file. Globbed, so a new suite runs the day it is written.
 load_suites:{[] {system "l tests/q/",string x} each .testutil.suite_files[];}
 
-// The namespaces the loaded suites declare.
+// The namespaces the suite files DECLARE, read from the files.
 //
-// `key `` enumerates the namespaces under root - not the variables in root -
-// so every .<name>test that loaded is found, and a plain global whose name
-// happens to end in "test" is not one of them. Call AFTER load_suites.
+// From the files, not from `key `` after loading, and that distinction is
+// the whole point. A test body may create a namespace at RUN time -
+// test_backfill_state.q builds `.qcompletetest` as a fixture worker inside
+// an assertion - and those match `*test` just as a suite does. Deriving from
+// the live root therefore returns a different set depending on WHICH SUITES
+// HAVE ALREADY RUN, which is not a property of the tree and cannot be
+// compared against anything stable.
+//
+// A file may declare helper namespaces beside its suite (test_coverage_tool.q
+// has `.covfix`), so only the ones named `*test` are suites.
 suite_namespaces:{[]
-    ns:asc `$".",/:string (key `) where (key `) like "*test";
-    if[0=count ns; '"testutil.suite_namespaces: no test namespaces loaded"];
+    ns:raze {[f]
+        src:read0 hsym `$"tests/q/",string f;
+        decls:3_/:src where src like "\\d .*";
+        decls where decls like "*test"} each .testutil.suite_files[];
+    ns:asc distinct `$ns;
+    if[0=count ns; '"testutil.suite_namespaces: no \\d .<name>test found in tests/q/"];
     ns}
+
+// ---------------------------------------------------------------------------
+// What the TREE declares, as opposed to what a test registered
+// ---------------------------------------------------------------------------
+// Several suites check a live registry against the namespaces it should have
+// produced - every registered source has a `.qfeed.<name>`, every registered
+// worker a `.qwrk.<name>`. Those registries also hold entries the TESTS put
+// there: `.qbw` fixture workers named `reference`, `partial` and `fixture_*`,
+// and sources registered by `etl_test_doubles.q`. None has a declaration
+// file, so none has a namespace, and a test that reads the registry alone
+// fails or passes on whether the suite that registered them ran first.
+//
+// So: the files are the tree's declarations, and a suite intersects the
+// registry with these to ask about the tree rather than about the process.
+
+// The declaration stems in one of the ETL directories: `foo.q -> `foo.
+etl_declaration_names:{[dir]
+    n:key hsym `$dir;
+    n:n where n like "*.q";
+    asc `$-2_/:string n}
+
+// Every .q file under a directory, recursively.
+//
+// `key` on a directory returns a symbol LIST (11h) and on a file an atom
+// (-11h), which is how a subdirectory is told from a file without shelling
+// out.
+q_files:{[dir]
+    paths:(dir,"/"),/:string key hsym `$dir;
+    isdir:{11h=type key hsym `$x} each paths;
+    (paths where (not isdir) and paths like "*.q"),
+        raze .testutil.q_files each paths where isdir}
+
+// The namespaces this tree's own source DECLARES, from the files.
+//
+// The alternative - a live scan filtered by a hand-kept deny-list of test
+// scaffolding - cannot hold, because suites create whole namespaces at run
+// time: `.qcompletetest` and `.qmethodsonly` are fixture workers built
+// inside assertions, and `.qsub.nt_k`/`.qsub.nt_l` are streaming jobs
+// registered by a test. Each new one would have to be remembered, and until
+// it was, whichever suite ran first decided the answer.
+//
+// Worker instances are appended because no file declares them: `.qbw.define`
+// stamps `.qwrk.<name>` from the registered name (#227).
+tree_namespaces:{[]
+    decls:raze {[f]
+        src:read0 hsym `$f;
+        3_/:src where src like "\\d .*"} each .testutil.q_files["src"];
+    ns:`$decls where 1<count each decls;
+    ns:ns,`$".qwrk.",/:string .testutil.etl_declaration_names["src/etl/workers"];
+    asc distinct ns}
 
 \d .

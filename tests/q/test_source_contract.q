@@ -325,7 +325,14 @@ test_a_registered_source_resolves_under_the_feed_root:{[t]
     / The loaded half: every name .qsrc has been told about has a namespace
     / under .qfeed holding it. Stated against the registry so a source added
     / later is covered without editing this file.
-    names:.qsrc.registered[];
+    / The registry INTERSECTED with the sources this tree declares in a file.
+    / etl_test_doubles.q registers sources at run time that have no
+    / declaration file and therefore no namespace, so reading the registry
+    / alone made this pass or fail on whether that suite had run yet.
+    / Intersecting keeps the registry as the thing under test - the property
+    / is still "what .qsrc was told about resolves" - while asking it only
+    / about the tree's own sources.
+    names:.qsrc.registered[] inter .testutil.etl_declaration_names["src/etl/sources"];
     missing:names where not {[n] (` sv `.qfeed,n) in .qns.owned[]} each names;
     .qunit.assertEquals[missing;`symbol$();
         "every registered source has its own namespace under .qfeed"]};
