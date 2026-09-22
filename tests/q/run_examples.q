@@ -36,7 +36,7 @@
 / The test files, for the builders the fixtures reuse - read from
 / run_tests.q rather than listed again, so a new suite cannot be forgotten
 / here. Loading a test file defines its tests; nothing runs them.
-{[l] if[l like "\\l tests/q/test_*"; system 1_l]} each read0 `:tests/run_tests.q;
+.testutil.load_suites[];
 
 / A status directory of our own. Examples take locks and write status
 / files, and a directory another run left behind would make a lock example

@@ -43,14 +43,41 @@ decided against.
 
 Sources (`sources/*.q`) and workers (`workers/*.q`) load **last**, because a
 declaration registers itself on load — there is no way to have a declaration
-without its implementation. The header comment in `src/etl/init.q` explains
-which ordering constraints are load-bearing and why; re-read it before
-inserting a file into that list.
+without its implementation.
+
+`src/etl/init.q` **globs** those three directories rather than listing them,
+so a new declaration file is loaded the moment it exists and there is no `\l`
+line to add. Two orderings are still load-bearing and its header explains
+both: sources before workers, because `.qbw.define` resolves its source at
+define time; and a short `lead` list inside `streaming/` for the jobs that
+read another job's table at load time. A file that needs to be in that list
+announces itself — the tree stops loading with a bare `` `.qsub.<name> ``.
 
 `src/init.q` (the quant library) is assumed loaded first. The ETL tree uses
 its namespaces but nothing in `src/foundation/`, `pricing/`, `portfolio/`,
 `execution/` or `market_data/` is yours to change — if a request needs a new
 pricing or execution function, say so and stop rather than adding it here.
+
+## Adding ONE job is not your job
+
+`uqf-stack new-job` scaffolds a streaming job or a bounded worker — the q
+files, the table definition, the registry entry and a failing test — and the
+`new-job` skill walks the whole loop from scaffold to green. Point the user
+there when the request is "add a feed / a backfill / a job" and the framework
+already supports it.
+
+You own the FRAMEWORK those jobs run on: the lifecycle, the coverage ledger,
+the job graph, the source contract, the IO managers. Use the scaffold
+yourself when a framework change needs a job to exercise it, rather than
+hand-writing one — a hand-written job is how a template silently stops
+matching what the tree generates.
+
+Two registry facts that changed under you, and that a job no longer states:
+
+- `subscribes`/`publishes` defer to the q declaration with
+  `FROM_DECLARATION`. The job file's `.qstream.register` is the single
+  declaration; restating it in `registry.py` is the duplication #311 removed.
+- `schema` derives from `table`. There is no `schema=` field.
 
 ## What to read before writing anything
 

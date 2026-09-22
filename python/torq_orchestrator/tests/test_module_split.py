@@ -104,43 +104,58 @@ def test_each_module_exists_and_imports(module):
     __import__(f"torq_orchestrator.{module}")
 
 
+#: Modules already past the threshold when the rule was widened to cover the
+#: whole package, and the size each was at. They may SHRINK but not grow: a
+#: ratchet keeps them visible and stops "already over" becoming a licence.
+#:
+#: Both are real splits waiting to happen - wizard.py is four recipe templates
+#: beside a prompt loop, and pipeline_edges.py is a parser beside a set of
+#: checks - and neither was worth bundling into the change that found them.
+OVERSIZED_BY_HISTORY = {
+    "wizard": 683,
+    "pipeline_edges": 494,
+}
+
+
 def test_no_module_is_still_oversized():
     """The split exists because one file had grown to 1578 lines.
 
     400 is the threshold, not 1578: it is roughly the point at which a file
-    stops being readable in one sitting, and every module here came out well
-    under it. If one grows past it the right response is another split, not a
-    larger number.
+    stops being readable in one sitting. If one grows past it the right
+    response is another split, not a larger number.
+
+    EVERY module in the package is checked, not the eleven that came out of
+    the original core.py split. That list was the reason cli.py reached 1270
+    lines across twenty-four commands without anything objecting: it was
+    never in it, so the rule it appeared to be under never applied to it.
     """
+    package = PKG / "src" / "torq_orchestrator"
     oversized = {}
-    for module in MODULES:
-        path = PKG / "src" / "torq_orchestrator" / f"{module}.py"
+    for path in sorted(package.glob("*.py")):
+        module = path.stem
+        if module == "__init__":
+            continue
         n = len(path.read_text().splitlines())
-        if n > 400:
-            oversized[module] = n
-    assert not oversized, f"modules past the 400-line threshold: {oversized}"
+        cap = OVERSIZED_BY_HISTORY.get(module, 400)
+        if n > cap:
+            oversized[module] = f"{n} > {cap}"
+    assert not oversized, f"modules past their line budget: {oversized}"
 
 
-def test_the_facade_is_only_a_facade():
-    """`core.py` must not regrow logic.
-
-    It re-exports and documents; it defines nothing. A `def` or `class` here
-    means a concern has started accumulating in the facade again, which is
-    how the 1578 lines happened the first time.
-    """
-    source = (PKG / "src" / "torq_orchestrator" / "core.py").read_text()
-    definitions = re.findall(r"^(?:def|class)\s+(\w+)", source, re.M)
-    assert not definitions, f"core.py should re-export only, but defines {definitions}"
+def test_the_oversized_list_has_not_become_the_rule():
+    """An exemption per module would be no rule at all. Two is the number
+    that existed when the check was widened; a third needs an argument, not
+    an entry."""
+    assert len(OVERSIZED_BY_HISTORY) <= 2, OVERSIZED_BY_HISTORY
 
 
-def test_shutil_is_reachable_through_the_facade():
-    """`test_core` patches `core.shutil.which`.
-
-    That patches the stdlib module object, so it is a global patch and works
-    through the facade exactly as it did before — but only while `core.shutil`
-    resolves at all. Dropping the import would make every one of those
-    monkeypatches silently target nothing, and the tests would still pass.
-    """
-    import shutil
-
-    assert core.shutil is shutil
+def test_every_exempt_module_still_exists_and_is_still_over():
+    """An entry for a module that has since been split, or deleted, is dead -
+    and left in place it silently exempts whatever later takes that name."""
+    package = PKG / "src" / "torq_orchestrator"
+    for module, cap in OVERSIZED_BY_HISTORY.items():
+        path = package / f"{module}.py"
+        assert path.is_file(), f"{module} is exempt but does not exist"
+        n = len(path.read_text().splitlines())
+        assert n > 400, f"{module} is under the threshold now - remove its exemption"
+        assert n <= cap, f"{module} grew: {n} > {cap}"

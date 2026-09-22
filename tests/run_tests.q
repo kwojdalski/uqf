@@ -32,64 +32,31 @@
 \l tests/q/reference_worker.q
 
 \l scripts/dev/coverage.q
-\l tests/q/test_coverage_tool.q
-\l tests/q/test_metatables.q
-\l tests/q/test_seed.q
-\l tests/q/test_stats.q
-\l tests/q/test_ccy.q
-\l tests/q/test_daycount.q
-\l tests/q/test_rates.q
-\l tests/q/test_forwards.q
-\l tests/q/test_options.q
-\l tests/q/test_risk.q
-\l tests/q/test_positions.q
-\l tests/q/test_desk_positions.q
-\l tests/q/test_limits.q
-\l tests/q/test_allocation.q
-\l tests/q/test_execution.q
-\l tests/q/test_execution_scale.q
-\l tests/q/test_book.q
-\l tests/q/test_microstructure.q
-\l tests/q/test_dqchecks.q
-\l tests/q/test_data.q
-\l tests/q/test_man_registry.q
-\l tests/q/test_namespaces.q
-\l tests/q/test_stream_job.q
-\l tests/q/test_normalizer.q
-\l tests/q/test_superbook.q
-\l tests/q/test_cross_arbitrage.q
-\l tests/q/test_config_audit.q
-\l tests/q/test_registries.q
-\l tests/q/test_tick.q
-\l tests/q/test_synthetic_market.q
-\l tests/q/test_dag.q
-\l tests/q/test_react.q
-\l tests/q/test_docstring_examples.q
-\l tests/q/test_heartbeat.q
-\l tests/q/test_io_manager.q
-\l tests/q/test_singlestore_odbc.q
-\l tests/q/test_backfill_state.q
-\l tests/q/test_materialisation.q
-\l tests/q/test_run.q
-\l tests/q/test_stack_tables.q
-\l tests/q/test_torq_pipeline.q
-\l tests/q/test_log.q
-\l tests/q/test_coercion.q
-\l tests/q/test_worker_config.q
-\l tests/q/test_worker_runtime.q
-\l tests/q/test_etl_lifecycle.q
-\l tests/q/test_continuous_state.q
-\l tests/q/test_status.q
-\l tests/q/test_source_contract.q
-\l tests/q/test_event_tape.q
-\l tests/q/test_time_zone.q
-\l tests/q/test_demo_deals_backfill.q
-\l tests/q/test_transform.q
 
-/ The namespace list is unchanged by the tests/q/ move: it keys on test
-/ NAMESPACES, not file paths, and the move deliberately left namespaces
-/ alone - the same choice made for src/ (see src/init.q).
+/ The suite is defined in tests/lib/testutil.q, not here: run_examples.q and
+/ run_coverage.q need the same file list and the same namespaces, and all
+/ three used to get them by reading THIS file as text - scanning it for
+/ `\l tests/q/test_*` lines and for the line starting `nsList:`. One
+/ definition, three callers.
+.testutil.load_suites[];
+/ LISTED, and checked against what actually loaded.
+/ .
+/ Deriving it - `key `` filtered to `*test` - works, and was tried: it
+/ produces exactly these namespaces. What it also does is REORDER them, and
+/ three suites here measure live global state that other suites mutate.
+/ .qbw fixture workers (`reference`, `partial`, three `fixture_*`) registered
+/ at run time reach .mantest's documentation ratchet and .nstest's worker
+/ enumeration; .qdag.jobs reaches .regtest's registry scan. Each of those
+/ passed only because this list happened to run it first. That fragility is
+/ real and worth fixing on its own terms, not inside the change that found
+/ it.
+/ .
+/ So the list stays - and test_namespaces.q holds it against the derived set,
+/ which is what makes an omission LOUD. The problem being solved was never
+/ the typing: it was that a forgotten entry loaded the file, ran none of its
+/ tests, and left the suite green.
 nsList:`.covtest`.metatest`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.alloctest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.nstest`.sjtest`.normtest`.sbtest`.regtest`.synthtest`.dagtest`.rxtest`.egtest`.hbtest`.iotest`.odbctest`.backfillstatetest`.coveragetest`.runtest`.tabletest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest`.xftest`.desktest`.limittest`.ticktest`.pipetest`.xarbtest`.cfgatest;
+if[0=count nsList; '"run_tests: no test namespaces listed"];
 res:.qunit.runTests[nsList];
 
 nTotal:count res;

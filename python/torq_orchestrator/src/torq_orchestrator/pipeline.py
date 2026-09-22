@@ -102,7 +102,6 @@ class Pipeline:
     script: str
     kind: PipelineKind
     table: str | None = None  # the table it publishes onto the tickerplant, if any
-    schema: str | None = None  # that table's database.q definition
     # Only whether to LOAD the library. There was once a second flag to skip
     # publish-edge verification for a pipeline publishing through
     # .qpipe.publish; the check now reads the table at that call site, so
@@ -160,6 +159,34 @@ class Pipeline:
         to nothing, needs none.
         """
         return "" if self.kind is PipelineKind.FEED else _ETL_ACCESS_LIST
+
+    @property
+    def schema(self) -> str | None:
+        """The owned table's q definition, read from uqf_stack_tables.q.
+
+        DERIVED, not declared. This was a `schema=X_TABLE_SCHEMA` field sitting
+        beside `table="x"`, and `X_TABLE_SCHEMA` is defined in schemas.py as
+        `_DEFS["x"]` - the same lookup, written out by hand in two files.
+        Across the registry: fourteen pipelines carry a table, fourteen carried
+        a schema, and not one of them disagreed, which is what a derived value
+        looks like before anyone derives it.
+
+        A table the q file does not define RAISES rather than returning None.
+        `.u.upd` onto a table the plant has never been told about discards the
+        rows in silence (#288), so a pipeline naming a table nobody defined is
+        a mistake to report, not a None to pass along.
+        """
+        if self.table is None:
+            return None
+        from torq_orchestrator.schemas import _DEFS
+
+        if self.table not in _DEFS:
+            raise KeyError(
+                f"{self.procname}: declares table {self.table!r}, which "
+                "scripts/processes/uqf_stack_tables.q does not define - the "
+                "plant would discard its rows without an error"
+            )
+        return _DEFS[self.table]
 
     @property
     def subscribed_tables(self) -> tuple[str, ...]:

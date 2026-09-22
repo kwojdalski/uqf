@@ -42,7 +42,11 @@ test_the_runner_seeds_before_loading_any_suite:{[t]
     / escape here would search for a literal backslash-backslash and match
     / nothing, failing the test against a runner that is correctly seeded.
     seed_line:first where src like "\\S *";
-    first_load:first where src like "\\l tests/q/test_*";
+    / The runner asks testutil for its suites rather than listing them, so
+    / there is no `\l tests/q/test_*` line left to find - the load happens at
+    / the .testutil.load_suites call. The property under test is unchanged:
+    / seeding happens before any suite is loaded.
+    first_load:first where src like "*.testutil.load_suites*";
     .qunit.assertTrue[(not null seed_line) and seed_line<first_load;"run_tests.q seeds the generator before the first test suite loads"]};
 
 \d .
