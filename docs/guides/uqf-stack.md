@@ -159,8 +159,9 @@ filenames first.
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
-summary [--port N] [--export FILE] [--columns all|status|C,...]  status table plus the
-                                      declared graph (--columns status for just up/down/pid/port)
+summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]  status table
+                                      plus the declared graph (--columns status for just
+                                      up/down/pid/port; --timeout defaults to 10s)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/uqf-stack/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
@@ -287,6 +288,35 @@ headers. `--columns status` gives the original six back. They are shown by
 default anyway, because a column nobody knows about answers nothing: a reader
 on a narrow terminal can ask for fewer, while one who never learns the graph
 is there has no such move.
+
+### summary gives up after ten seconds
+
+`summary` is the command you run when something is already wrong, which makes
+it the worst thing in the CLI to hang - and both of its blocking steps could.
+`torq.sh summary` is a subprocess that had no timeout at all, and the
+heartbeat lookup talks to `monitor1`, which at its connection cap accepts the
+TCP connection and then never answers.
+
+```
+uqf-stack summary --timeout 30   # a stack that is genuinely slow to start
+uqf-stack summary --timeout 0    # wait forever, the old behaviour
+```
+
+It is one **budget for the whole command**, not a limit per call - two steps
+given ten seconds each is a twenty-second hang, which is not what anyone
+means by a ten-second timeout. The subprocess is asked first and the
+heartbeat query gets whatever is left, with a floor of one second so the last
+step fails on its own terms rather than on an expired clock. Running out is a
+refusal, not a traceback:
+
+```
+torq.sh summary did not finish within 10s. It is still bootstrapping, or a
+process it queries is not answering - raise --timeout if the stack is simply
+slow to start
+```
+
+A heartbeat lookup that runs out is not fatal: it degrades to the same
+"monitor1 could not be reached" the column already knows how to say.
 
 Both warnings are **advisory and never block a start**. Bringing a subscriber
 up before its feed is how you avoid missing the first batch, and some tables

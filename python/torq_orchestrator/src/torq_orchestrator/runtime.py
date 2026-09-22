@@ -82,22 +82,42 @@ def run_torq_sh(
     args: list[str],
     base_port: int = DEFAULT_BASE_PORT,
     capture: bool = False,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Bootstrap, then run lib/torq/torq.sh with *args* under the generated env."""
+    """Bootstrap, then run lib/torq/torq.sh with *args* under the generated env.
+
+    `timeout` is seconds to wait before giving up, or None to wait forever -
+    which is the right default for `start`/`stop`, whose whole job is to wait
+    for something slow. A read-only command that an operator runs to find out
+    what is going on should not be the thing that hangs, so `summary` sets
+    one.
+    """
     overrides = bootstrap(paths, base_port=base_port)
     # subprocess.run's env= *replaces* the environment rather than extending
     # it - merge onto the inherited one (PATH, etc.) or envsubst/rlwrap/q
     # stop resolving even though they're on PATH in the calling shell.
     env = {**os.environ, **overrides}
     cmd = [str(paths.torqhome / "torq.sh"), *args]
-    log.debug("running: {}", " ".join(cmd))
-    return subprocess.run(
-        cmd,
-        env=env,
-        capture_output=capture,
-        text=True,
-        check=False,
-    )
+    log.debug("running: {} (timeout={})", " ".join(cmd), timeout)
+    try:
+        return subprocess.run(
+            cmd,
+            env=env,
+            capture_output=capture,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        # subprocess.run kills the child before re-raising, so there is no
+        # orphan left behind. Reported as a refusal rather than a traceback,
+        # and named as a timeout rather than a failure: torq.sh did not say
+        # no, it did not say anything.
+        raise UqfStackError(
+            f"torq.sh {' '.join(args)} did not finish within {timeout:g}s. "
+            "It is still bootstrapping, or a process it queries is not "
+            "answering - raise --timeout if the stack is simply slow to start"
+        ) from exc
 
 
 def start(
@@ -127,8 +147,13 @@ def restart(
     return run_torq_sh(paths, ["restart", procs], base_port=base_port, capture=capture)
 
 
-def summary(paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT, capture: bool = True):
-    return run_torq_sh(paths, ["summary"], base_port=base_port, capture=capture)
+def summary(
+    paths: UqfStackPaths,
+    base_port: int = DEFAULT_BASE_PORT,
+    capture: bool = True,
+    timeout: float | None = None,
+):
+    return run_torq_sh(paths, ["summary"], base_port=base_port, capture=capture, timeout=timeout)
 
 
 def print_procs(
@@ -146,13 +171,23 @@ def query(
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",
+    timeout: int = 0,
 ) -> Any:
     """Run a synchronous q expression against a running demo process (e.g.
     rdb1 on base_port+2) over kdb+ IPC via kola.
+
+    `timeout` is whole SECONDS, kola's own unit, and 0 means wait forever -
+    kola's default, kept as this function's default so an interactive query
+    against a slow process is not cut off at an arbitrary point.
+
+    It matters most for a process that accepts the TCP connection and then
+    does not answer, which is not hypothetical here: a q process at its
+    licence connection cap resets late in the handshake, and monitor1 sits at
+    that cap on a full stack.
     """
     import kola
 
-    q = kola.Q(host, port, user=user, passwd=passwd)
+    q = kola.Q(host, port, user=user, passwd=passwd, timeout=timeout)
     q.connect()
     try:
         return q.sync(expr)

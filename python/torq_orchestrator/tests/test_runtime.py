@@ -252,13 +252,30 @@ def test_heartbeat_states_reads_monitor1_s_table(monkeypatch):
     monkeypatch.setattr(listing, "_monitor_port", lambda paths, base_port: 6059)
     seen: dict[str, Any] = {}
 
-    def answer(expr, port):
+    def answer(expr, port, timeout=0):
         seen["port"] = port
+        seen["timeout"] = timeout
         return pl.DataFrame({"procname": ["rdb1"], "warning": [False], "error": [False]})
 
     monkeypatch.setattr(listing, "query", answer)
     assert listing.heartbeat_states(_paths(), base_port=6050) == {"rdb1": "ok"}
     assert seen["port"] == 6059, "the monitor's port comes from the registry"
+
+
+def test_the_heartbeat_query_gets_the_timeout_it_is_given(monkeypatch):
+    """The reason it exists: monitor1 at its licence connection cap accepts
+    the TCP connection and then does not answer, so a heartbeat lookup with
+    no timeout hangs `summary` indefinitely."""
+    monkeypatch.setattr(listing, "_monitor_port", lambda paths, base_port: 6059)
+    seen: dict[str, Any] = {}
+
+    def answer(expr, port, timeout=0):
+        seen["timeout"] = timeout
+        return pl.DataFrame({"procname": ["rdb1"], "warning": [False], "error": [False]})
+
+    monkeypatch.setattr(listing, "query", answer)
+    listing.heartbeat_states(_paths(), base_port=6050, timeout=7)
+    assert seen["timeout"] == 7
 
 
 def test_the_monitor_port_is_refused_when_monitor1_is_not_declared(monkeypatch):
