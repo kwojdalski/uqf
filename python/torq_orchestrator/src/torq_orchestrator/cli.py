@@ -728,6 +728,51 @@ def config_get(
     _export([{"field": k, "value": v} for k, v in row.items()], export)
 
 
+def _sort_key(value: str):
+    """Sort key for one cell, numeric where the whole column is numeric.
+
+    Returned as a tuple so empties group together at one end rather than
+    sorting as the empty string among real values - a process with no
+    override set is not "before aaa", it is absent.
+    """
+    text = (value or "").strip()
+    if not text:
+        return (1, 0.0, "")
+    try:
+        return (0, float(text), "")
+    except ValueError:
+        return (0, 0.0, text.casefold())
+
+
+def _sorted_items(
+    items: list[dict[str, str]], sort: str | None, reverse: bool
+) -> list[dict[str, str]]:
+    """`items` ordered by one column, or untouched when none is named.
+
+    The column is matched case-insensitively against the keys the listing
+    actually produced, because those differ per kind - `processes` has
+    procname/proctype/port/startwithall, `env` has name/value - so there is no
+    fixed set to validate against and an unknown name has to name the real
+    ones back.
+
+    Numeric columns sort numerically. `port` is a string like "6051", and
+    lexicographically "6100" sorts before "659" - which looks like the sort
+    silently did nothing on the one column most worth sorting.
+    """
+    if not sort or not items:
+        return items
+    known = {column.casefold(): column for column in items[0]}
+    column = known.get(sort.strip().casefold())
+    if column is None:
+        _die(
+            core.UqfStackError(
+                f"cannot sort by {sort!r}: no such column. Available: {', '.join(items[0])}"
+            )
+        )
+        return items
+    return sorted(items, key=lambda item: _sort_key(item.get(column, "")), reverse=reverse)
+
+
 @app.command("list")
 def list_items(
     kind: Annotated[
@@ -735,11 +780,22 @@ def list_items(
     ] = None,
     port: PortOpt = core.DEFAULT_BASE_PORT,
     export: ExportOpt = None,
+    sort: Annotated[
+        str | None,
+        typer.Option("--sort", help="Sort by this column (case-insensitive, numeric-aware)."),
+    ] = None,
+    reverse: Annotated[
+        bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
+    ] = False,
 ) -> None:
     """List every item of KIND - run with no argument to see the available
     kinds. Not just processes: 'fields' lists process.csv's valid config-set
     columns, 'overrides' lists every process_overrides.csv entry currently
     set, 'env' lists build_env()'s resolved KDBBASEPORT/KDBHDB/... values.
+
+    `--sort` takes any column the chosen kind produces, which differ between
+    kinds. The order reaches `--export` too, so an exported CSV matches what
+    was on screen.
     """
     if kind is None:
         console.print(f"Available kinds: {', '.join(sorted(core.LISTABLE_KINDS))}")
@@ -749,6 +805,7 @@ def list_items(
     except core.UqfStackError as exc:
         _die(exc)
         return
+    items = _sorted_items(items, sort, reverse)
     table = Table(title=f"{kind} ({len(items)})")
     if items:
         for col in items[0]:

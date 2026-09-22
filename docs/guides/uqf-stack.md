@@ -167,8 +167,9 @@ clean                                 wipe scripts/output/uqf-stack/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern
-list [KIND] [--port N] [--export FILE]  list every item of KIND ('processes', 'fields',
-                                       'overrides', 'env') - no argument shows the kinds
+list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse]  list every item of KIND
+                                       ('processes', 'fields', 'overrides', 'env') - no
+                                       argument shows the kinds
 config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective
                                                  process.csv row (or one field), with
                                                  placeholders resolved unless --raw
@@ -215,6 +216,27 @@ uqf-stack list processes
 
 New kinds are one function + one `core.LISTABLE_KINDS` entry, not a new
 CLI command each time - see `core.py`'s `_list_*` functions.
+
+`--sort` orders by any column the chosen kind produces, `--reverse` flips it:
+
+```
+uqf-stack list processes --sort port              # 6050, 6051, 6052, ...
+uqf-stack list processes --sort proctype
+uqf-stack list processes --sort port --reverse
+uqf-stack list env --sort name
+```
+
+Two things it gets right that a plain sort would not. **Numeric columns sort
+numerically**: `port` is a string, and as text `6100` comes before `659`,
+which looks like the sort silently did nothing on the one column most worth
+sorting. And **empty cells group at the end** rather than sorting as the
+empty string among real values - an unset override is absent, not "before
+aaa".
+
+The column name is matched case-insensitively, and because the columns differ
+per kind there is no fixed set to check against: an unknown name is refused
+with the columns that listing actually produced. The order reaches `--export`
+too, so an exported CSV matches what was on screen.
 
 ## What actually starts
 
