@@ -27,7 +27,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from torq_orchestrator import core, databento_feed, dependencies, wizard
+from torq_orchestrator import core, databento_feed, dependencies, scaffold, wizard
 from torq_orchestrator.logger import configure_logging, get_logger
 
 app = typer.Typer(
@@ -853,6 +853,87 @@ def logs(
             core.print_recent_logs(_paths(), procs, lines=lines, min_level=level)
     except core.UqfStackError as exc:
         _die(exc)
+
+
+@app.command("new-job")
+def new_job(
+    name: Annotated[str, typer.Argument(help="Job name: a q namespace and a filename")],
+    kind: Annotated[
+        str, typer.Option("--kind", help="'streaming' (default) or 'backfill'")
+    ] = "streaming",
+    subscribes: Annotated[
+        str | None,
+        typer.Option("--subscribes", help="Comma-separated tables it reads. Omit for a feed."),
+    ] = None,
+    publishes: Annotated[
+        str | None, typer.Option("--publishes", help="The table it writes (streaming)")
+    ] = None,
+    dataset: Annotated[
+        str | None, typer.Option("--dataset", help="The table it fills (backfill)")
+    ] = None,
+    columns: Annotated[
+        str | None,
+        typer.Option("--columns", help="Its table's columns: 'sym:symbol, value:float'"),
+    ] = None,
+    source: Annotated[
+        str | None, typer.Option("--source", help="Source name (backfill; defaults to NAME)")
+    ] = None,
+    width: Annotated[
+        str, typer.Option("--width", help="Backfill window width, as a q timespan")
+    ] = "1D",
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print what would be written, write nothing")
+    ] = False,
+) -> None:
+    """Scaffold a new ETL job: its q files, its table, and its registry entry.
+
+    Writes the SHAPE, never the logic. The generated handler throws and the
+    generated test fails, on purpose - a scaffold that left something green
+    behind would make "generated" and "implemented" look the same from
+    outside, which is the state that produces a process reporting `up` while
+    publishing nothing.
+
+    Streaming, reading two tables and writing one:
+
+        uqf-stack new-job markout2 --subscribes trades,quote \\
+            --publishes my_metric --columns "sym:symbol, value:float"
+
+    Bounded worker, with its source and transform:
+
+        uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \\
+            --columns "sym:symbol, mid:float" --width 1D
+    """
+    subs = [s.strip() for s in (subscribes or "").split(",") if s.strip()]
+    try:
+        if kind == "streaming":
+            plan = scaffold.streaming_job(name, subs, publishes, columns)
+        elif kind == "backfill":
+            if not dataset:
+                _die(core.UqfStackError("--kind backfill needs --dataset: the table it fills"))
+                return
+            if not columns:
+                _die(core.UqfStackError("--kind backfill needs --columns for its dataset"))
+                return
+            plan = scaffold.bounded_worker(name, dataset, columns, width=width, source=source)
+        else:
+            _die(core.UqfStackError(f"--kind must be 'streaming' or 'backfill', not {kind!r}"))
+            return
+    except core.UqfStackError as exc:
+        _die(exc)
+        return
+
+    console.print(plan.render())
+    if dry_run:
+        console.print("[dim]--dry-run: nothing written[/]")
+        return
+    try:
+        written = scaffold.apply_plan(plan, _paths().repo_root)
+    except core.UqfStackError as exc:
+        _die(exc)
+        return
+    console.print(f"\n[green]scaffolded {len(written)} file(s)[/]")
+    for note in plan.notes:
+        console.print(f"  [yellow]next[/] {note}")
 
 
 @app.command("new-process")

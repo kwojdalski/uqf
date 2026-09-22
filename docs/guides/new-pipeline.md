@@ -21,6 +21,39 @@ Everything else follows from those. Why it is shaped this way is
 [the pipeline philosophy](../architecture/pipeline-philosophy.md); what the
 framework guarantees is [ETL-nn](../reference/etl-framework-requirements.md).
 
+## Scaffolding it
+
+`uqf-stack new-job` writes the skeleton: the q files, the table definition,
+the registry entry and a test.
+
+```
+uqf-stack new-job markout2 --subscribes trades,quote \
+    --publishes my_metric --columns "sym:symbol, value:float"
+
+uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \
+    --columns "sym:symbol, mid:float" --width 1D
+```
+
+`--dry-run` prints what it would write and writes nothing. `kind` is derived
+for a streaming job - one that subscribes to nothing is a feed - and the
+registry entry is APPENDED, because offsets are allocated in list order and
+inserting above an existing entry renumbers every process after it.
+
+**It writes the shape, never the logic.** The generated handler throws and
+the generated test fails, on purpose: a scaffold that left something green
+behind would make "generated" and "implemented" look the same from outside,
+which is how you get a process that is `up`, heartbeating, and publishing
+nothing.
+
+The one place it does NOT leave a throw is a source's `fixture`, which the
+worker's `.qxf.passthrough` reads at LOAD time - a throw there stops the
+whole ETL tree from loading, and an empty table is refused by `.qxf.define`,
+which needs at least one example with rows. So it writes one deterministic
+row of the declared shape. Replace it before trusting a run.
+
+The rest of this guide is what to write into that skeleton, and why each
+part is shaped the way it is.
+
 ## Before you start: is it bounded or continuous?
 
 Two different shells, and picking the wrong one is the only structural
