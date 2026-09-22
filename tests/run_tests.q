@@ -57,6 +57,26 @@
 / tests, and left the suite green.
 nsList:`.covtest`.metatest`.seedtest`.statstest`.ccytest`.daycounttest`.ratestest`.forwardstest`.optionstest`.risktest`.positionstest`.alloctest`.executiontest`.executionscaletest`.booktest`.microstructuretest`.dqcheckstest`.datatest`.mantest`.nstest`.sjtest`.normtest`.sbtest`.regtest`.synthtest`.dagtest`.rxtest`.egtest`.hbtest`.iotest`.odbctest`.backfillstatetest`.coveragetest`.runtest`.tabletest`.logtest`.coertest`.wcfgtest`.wrttest`.lifecycletest`.srctest`.evttest`.ddbftest`.conttest`.statustest`.tztest`.xftest`.desktest`.limittest`.ticktest`.pipetest`.xarbtest`.cfgatest;
 if[0=count nsList; '"run_tests: no test namespaces listed"];
+/ ORDER. Default is the order listed above; UQF_TEST_ORDER=reverse or
+/ =shuffle runs the same suites in another one.
+/ .
+/ It exists because four tests here USED to pass on this list's order alone.
+/ Each scanned live global state that other suites mutate - .qbw fixture
+/ workers reaching a documentation ratchet, a test-registered source reaching
+/ a namespace check, .qdag.jobs reaching a registry scan - and each was
+/ fixed to ask about the tree rather than about the process. This is what
+/ keeps them fixed: `scripts/test.py q-order` runs the whole suite reversed,
+/ and a test that quietly grows a dependency on running after some other
+/ suite fails there rather than years later.
+/ .
+/ shuffle uses the seed set above, so a shuffled run is reproducible: the
+/ same seed gives the same order, and a failure can be repeated.
+test_order:getenv `UQF_TEST_ORDER;
+if[test_order~"reverse"; nsList:reverse nsList];
+if[test_order~"shuffle"; nsList:nsList iasc (count nsList)?1000000];
+if[not test_order in ("";"reverse";"shuffle");
+    '"run_tests: UQF_TEST_ORDER must be reverse, shuffle, or unset - not ",test_order];
+
 res:.qunit.runTests[nsList];
 
 nTotal:count res;

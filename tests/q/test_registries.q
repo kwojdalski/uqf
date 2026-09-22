@@ -64,7 +64,7 @@ test_the_trap_is_real_and_has_two_halves:{[t]
 / of DIFFERENT shape through the public API. Shape variation is the whole
 / point - registering twice with the same keys proves nothing, because that
 / is the case the collapse handles fine.
-covered:`.qstream.jobs`.qxf.registry`.qalloc.methods`.qnorm.registry`.qsrc.sources`.qbw.worker_cfg
+covered:`.qstream.jobs`.qxf.registry`.qalloc.methods`.qnorm.registry`.qsrc.sources`.qbw.worker_cfg`.qdag.jobs
 
 empty_in:([] time:`timestamp$(); x:`long$())
 rows_in:([] time:enlist 2026.01.01D00:00:00; x:enlist 1)
@@ -174,6 +174,33 @@ test_every_dict_valued_registry_is_covered_here:{[t]
     missing:.regtest.dict_registries[] except covered;
     .qunit.assertEquals[missing;`$();
         "every registry relying on normalisation is listed in `covered` and has a test above registering two declarations of different shape - copying another registry's guard is not evidence, because the guards are not interchangeable"]};
+
+test_a_job_graph_declaration_normalises_its_edges:{[t]
+    / .qdag normalises instead of enlisting: every registration writes the
+    / same three keys, so `jobs` collapses into a table. That is safe only
+    / because `inputs` and `outputs` are forced to VECTORS with `(),` on the
+    / way in - an atom stored in one row's column and vectors in the rest
+    / makes `count` answer 1 both for a job with one input and for a job
+    / whose input is a single symbol that was never a list.
+    / .
+    / This registry reached `covered` late, and how says something. The
+    / completeness check below had been reporting it for as long as it had
+    / existed; it only reported it when .dagtest happened to run FIRST and
+    / leave `jobs` populated, because an empty dict has not collapsed and
+    / does not look like a registry that normalises. With the suite order
+    / derived rather than hand-written, that stopped being luck.
+    .qdag.register[`regtest_one;`kind`inputs`outputs!(`stream;`regtest_a;`regtest_out)];
+    .qdag.register[`regtest_many;`kind`inputs`outputs!(`stream;`regtest_a`regtest_b;`symbol$())];
+    one:.qdag.declaration `regtest_one;
+    many:.qdag.declaration `regtest_many;
+    .qunit.assertEquals[count one`inputs;1;
+        "a scalar input is stored as a one-element vector, not as an atom"];
+    .qunit.assertEquals[abs type one`inputs;11h;
+        "and it is a SYMBOL vector, whatever shape the declaration arrived in"];
+    .qunit.assertEquals[count many`inputs;2;"a vector keeps its length"];
+    .qunit.assertEquals[count many`outputs;0;
+        "an empty output stays empty rather than becoming a one-element null"];
+    forget[`.qdag.jobs;`regtest_one`regtest_many]};
 
 / Every symbol-keyed registry in src/ whose values are dictionaries, read
 / from the live namespaces rather than from a list kept by hand.
