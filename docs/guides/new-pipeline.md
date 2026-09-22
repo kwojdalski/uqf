@@ -49,6 +49,19 @@ runner wires to the tickerplant and a test wires to a recorder
 (`tests/q/test_stream_job.q`). That seam is what lets the whole job — not
 just its transform — be loaded and driven in a plain q process.
 
+**Every table you publish must exist on the plant.** `.u.upd` onto a table
+the tickerplant does not define discards the rows *silently* — no error, no
+warning, just a table that stays empty while the job reports healthy. This
+is not hypothetical: `fxpositions1` published a correct sixteen-row book
+onto `fx_position` and `fx_limit_breach` every five seconds, and neither
+table existed. `database.q` is generated from each pipeline's `publishes`
+rather than from a single `schema` field, precisely because a job can
+publish two tables and own neither, and `.qpipe.assert_publishable` makes a
+process refuse to start when the plant has no table for something it
+declares. So the failure is now loud at startup instead of silent forever —
+but only for what the job *declares*, which is one more reason the register
+call has to name every table the job actually publishes.
+
 **Normalizer** — a continuous job of one particular shape: several tables
 carrying the same fact in different spellings, one canonical table out.
 `.qnorm` in [`src/etl/core/normalizer.q`](../../src/etl/core/normalizer.q).
@@ -259,8 +272,7 @@ Order matters and is not obvious from the filenames — a declaration
 registers itself on load, so the registry has to exist first. The file's own
 header lists the couplings.
 
-Nothing else needs registering. The job graph adopts the worker from its own
-declaration:
+The job graph adopts the worker from its own declaration:
 
 ```q
 q).qdag.adopt_workers[];
@@ -269,6 +281,47 @@ kind   | `bounded
 inputs | ,`fx_rates@fx_rates
 outputs| ,`fx_rates
 ```
+
+### Give it a process, or the build fails
+
+One more registration, and it is the one that is easy to miss because
+nothing in q needs it. A backfill process and its worker are joined at
+*runtime* by `UQF_BACKFILL_WORKER` — one script serves every worker, and the
+environment picks which. So a fully declared worker with no process to run it
+is invisible to every grep: it looks finished and can only ever be started by
+hand. Two workers were adrift exactly this way before the rule existed.
+
+Add a `Pipeline` to `PIPELINES` in
+[`registry.py`](../../python/torq_orchestrator/src/torq_orchestrator/registry.py)
+naming the worker it runs:
+
+```python
+Pipeline(
+    procname="fx_rates_backfill1",
+    script="processes/torq_backfill.q",
+    kind="backfill",
+    worker="fx_rates_backfill",
+    startwithall="0",
+    note="bounded: reads the vendor's daily fixings over ODBC",
+),
+```
+
+`verify_pipeline_edges` checks this in both directions — a worker no pipeline
+names, and a pipeline naming a worker no file declares:
+
+```
+fx_rates_backfill: a bounded worker declares itself but no backfill pipeline
+names it, so it can only be run by hand. Add a Pipeline with
+worker='fx_rates_backfill', or add it to WORKERS_WITHOUT_A_PROCESS with a reason
+```
+
+`WORKERS_WITHOUT_A_PROCESS` is empty and meant to stay that way: the publish
+seam means the same file runs under either runner, so an entry there claims
+"this job cannot be started the normal way", which needs a reason.
+
+`startwithall="0"` is the normal choice for a backfill — it registers with
+discovery, runs its range and exits, so starting it with the fleet would run
+it on every `uqf-stack start all`.
 
 ## 4. Run it
 
