@@ -1,9 +1,9 @@
 # uqf stack architecture
 
 Diagrams for the running state of the uqf stack (see
-[docs/guides/uqf-stack.md](../uqf-stack.md) for how to actually start/stop/query
-it). Reflects what `uqf-stack list processes` shows today: the vendored
-14-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
+[docs/guides/uqf-stack.md](../../guides/uqf-stack.md) for how to actually
+start/stop/query it). Reflects what `uqf-stack list processes` shows today:
+the vendored 23-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
 `markout1`, `databento1`, `cryptomock1`, `executions1`, `marks1`,
 `fxordersfeed1`, `fxpositions1`, `marketdata1`, `superbook1`,

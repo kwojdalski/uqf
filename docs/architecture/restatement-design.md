@@ -1,18 +1,24 @@
 # Restatements: what answering "yes" to superseding rows actually costs
 
-**Status:** design note, awaiting review. **Nothing in this document is
-implemented.**
+**Status: built.** This was a design note written before the work, and it is
+kept for the reasoning rather than as a statement of what is missing.
+`.qmatz.supersede` closes a claim instead of deleting it (Option A below),
+`etl_coverage` carries `superseded_at`, and an as-of read tests
+`recorded_at<=as_of<superseded_at` — see
+[`materialisation.q`](../../src/etl/core/materialisation.q) and
+`tests/q/test_materialisation.q`. Where this note and the code disagree, the
+code is right.
 
-**Decision being acted on:** issue #72 was answered *"yes — rows can
+**Decision that was acted on:** issue #72 was answered *"yes — rows can
 be superseded in place"*, over the alternatives *"no, append-only, a
 correction is a new `source_version`"* and *"yes, but only via a
 full-window replace"*.
 
-This note exists because that answer changes what `is_covered` **means**,
-and sixteen files rest on the current meaning. Writing the code first and
+This note existed because that answer changed what `is_covered` **means**,
+and sixteen files rested on the older meaning. Writing the code first and
 discovering the semantics second is how a completeness ledger starts giving
 confidently wrong answers — which is the one failure the ledger exists to
-prevent.
+prevent, and the reason the semantics were settled here first.
 
 ---
 

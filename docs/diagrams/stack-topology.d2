@@ -105,20 +105,28 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   quotesfeed1: "quotesfeed1 :6074\ndepth-aware FX\npublishes only" { class: feed }
   widefeed1: "widefeed1 :6076\nwide book\npublishes only" { class: feed }
   fxtradesfeed1: "fxtradesfeed1 :6079\nsynthetic fills\npublishes only" { class: feed }
-  tap1: "tap1 :6078\nsubscribe and log\nits own torq_tap.q" { class: job }
+  fxordersfeed1: "fxordersfeed1 :6088\nsynthetic order flow,\nmost of it never fills" { class: feed }
 
-  databento1: "databento1 :6084\nlive MBP-10 → book\nsame fold as the backfill" { class: job }
   cryptomock1: "cryptomock1 :6085\nstands in for cryptorust\npublishes only, on demand" { class: feed }
+  databento1: "databento1 :6084\nlive MBP-10 → book\nsame fold as the backfill" { class: job }
   executions1: "executions1 :6086\nnormalizer: fills as one\nsubscribes + publishes" { class: job }
   marks1: "marks1 :6087\nnormalizer: mids as one\nsubscribes + publishes" { class: job }
+  marketdata1: "marketdata1 :6092\nnormalizer: one book shape\nfrom quote and quotes" { class: job }
+
   cross1: "cross1 :6075\nquotes → cross rates\noutput stays private" { class: job }
   vectorize1: "vectorize1 :6077\nwide → level vectors\nsubscribes + publishes" { class: job }
   posbook1: "posbook1 :6080\nposition and P&L, FX + crypto\nreads the two normalizers" { class: job }
   markout1: "markout1 :6081\nexecution quality\nsubscribes + publishes" { class: job }
+  fxpositions1: "fxpositions1 :6089\nexposure by (sym, book, product)\nand the limits that trip" { class: job }
+
+  superbook1: "superbook1 :6093\nmerges quoted liquidity\nacross sources" { class: job }
+  arbitrage1: "arbitrage1 :6094\nbid over ask in\nthe merged book" { class: job }
+  crossarb1: "crossarb1 :6095\ndirect book against a\nsynthetic route" { class: job }
+  tap1: "tap1 :6078\nsubscribe and log\nits own torq_tap.q" { class: job }
   legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish.\n\ndatabento1's input comes from an\nexternal Python handler, not from\na process in this diagram." { class: band }
 }
 
-runner: "One script for nine of them — scripts/processes/torq_stream.q" {
+runner: "One script for all but tap1 — scripts/processes/torq_stream.q" {
   class: band
   grid-columns: 2
   grid-gap: 26
@@ -147,7 +155,7 @@ downstream: "Storage, the gateway, and the bounded half" {
 
   storage: "rdb1 :6052 — today's ticks\nwdb1 :6055 → sort1 :6056 → sortworker1/2\nhdb1 :6053 · hdb2 :6054 — on disk" { class: store }
   gw: "gateway1 :6057\nthe only door in\n\nhousekeeping1 :6061 · metrics1 :6068\ndiscovery1 :6051 registers every process" { class: store }
-  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qio writes into their own\nprocess. Two more workers exist in q\n(databento, upstream) with no process row." { class: job }
+  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\ndatabento_backfill1 :6090 · upstream_backfill1 :6091\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qio writes into their own\nprocess. One worker file each, under\nsrc/etl/workers/." { class: job }
 }
 
 jobs -> runner.qpipe: "run under" { style.stroke: "#3d7a5a" }

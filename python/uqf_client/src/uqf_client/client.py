@@ -14,8 +14,8 @@ class UqfClient:
     e.g. `q src/init.q -p 5000` from the uqf repo root. Each src/*.q
     module loads into its own flat namespace rather than one shared
     namespace - qstats, qccy, qdcf, qrates, qfwd, qopt, qrisk, qexec,
-    qbook, qmicro, qex (see README's Layout section for which file maps
-    to which namespace) - so `call()` takes the namespace explicitly.
+    qbook, qmicro, qex (see README's Quant modules section for which file
+    maps to which namespace) - so `call()` takes the namespace explicitly.
     """
 
     def __init__(
