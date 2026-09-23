@@ -145,9 +145,9 @@ def test_the_prose_architecture_doc_is_consistent_with_the_registry():
 
     This is the check that would have caught the missing `tap1`. It is
     deliberately here rather than in the generator: the README stays
-    hand-written (its mermaid diagrams are a judgement about what to show),
-    so the right gate is one that verifies its facts, not one that overwrites
-    its wording.
+    hand-written (which of the stack's parts its three d2 diagrams show is a
+    judgement), so the right gate is one that verifies its facts, not one that
+    overwrites its wording.
     """
     readme = (REPO / "docs" / "integrations" / "torq" / "README.md").read_text()
     missing = [p.procname for p in PIPELINES if not re.search(rf"\b{p.procname}\b", readme)]

@@ -1,0 +1,139 @@
+# scaffolding.d2 - what `uqf-stack new-job` writes, and what picks each file
+# up afterwards.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/guides/new-pipeline.md.
+#
+# THE THING THIS DRAWS is that there is no registration step. Three
+# directories are globbed by src/etl/init.q and one by .testutil.load_suites,
+# so a new file is loaded because it exists. The two APPENDS are exactly the
+# two facts that are NOT derivable from the tree - the registry, where a
+# process's port offset is its position in a list, and nsList, the one
+# hand-kept list of test namespaces - which is why they are the only two
+# places the scaffold has to edit rather than create.
+#
+# The other thing worth seeing is the red column. The scaffold writes the
+# SHAPE and never the logic: the generated handler throws and the generated
+# test fails, deliberately, because a scaffold that left something green
+# behind would make "generated" and "implemented" look the same from outside.
+# That is the state stack_smoke.py exists to catch - a process that is `up`,
+# heartbeating, and publishing nothing.
+
+
+direction: right
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  command: {
+    style: {
+      fill: "#f3eefb"
+      stroke: "#6f4aa5"
+      font-color: "#3a1e5f"
+      border-radius: 6
+    }
+  }
+  created: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  appended: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  derived: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+    }
+  }
+  todo: {
+    style: {
+      fill: "#fbeceb"
+      stroke: "#a8342c"
+      font-color: "#6b1e18"
+      border-radius: 6
+    }
+  }
+  band: {
+    style: {
+      fill: "#fbfcfd"
+      stroke: "#c3c9cf"
+      stroke-width: 2
+      border-radius: 10
+      font-color: "#25323d"
+    }
+  }
+}
+
+cmd: "uqf-stack new-job" {
+  class: band
+
+  plan: "a ScaffoldPlan\nrendered first,\nwritten second\n\n--dry-run stops here" { class: command }
+}
+
+written: "Created" {
+  class: band
+
+  job: "src/etl/streaming/NAME.q\n.qstream.register, and a\nhandler that THROWS" { class: created }
+  source: "src/etl/sources/SRC.q\n.qfeed: query, and a\nfixture of one real row" { class: created }
+  worker: "src/etl/workers/\nNAME_backfill.q\n.qbw.define" { class: created }
+  test: "tests/q/test_NAME.q\nasserts behaviour,\nso it FAILS" { class: created }
+}
+
+appended: "Appended, not created" {
+  class: band
+
+  tables: "uqf_stack_tables.q\nthe table definition:\nwithout it .u.upd drops\nthe rows in silence" { class: appended }
+  registry: "model/registry.py\nappended, never inserted -\na port offset is a\nposition in this list" { class: appended }
+  nslist: "run_tests.q nsList\nthe one hand-kept list;\na suite absent from it\nloads and never runs" { class: appended }
+}
+
+picked_up: "Picked up: no registration step" {
+  class: band
+
+  init: "src/etl/init.q\nglobs the three\ndeclaration directories" { class: derived }
+  suites: ".testutil.load_suites[]\nglobs tests/q/test_*.q" { class: derived }
+  consumers: "process.csv, processes.md,\npipeline_dag.q, the declared\nedges - all re-derived" { class: derived }
+}
+
+todo: "Yours" {
+  class: band
+
+  logic: "the handler, and\n.qfeed.SRC.query\n+ .fixture" { class: todo }
+  assertion: "what the test\nshould assert" { class: todo }
+}
+
+cmd.plan -> written.job: "streaming" { style.stroke: "#6f4aa5" }
+cmd.plan -> written.source: "backfill" { style.stroke: "#6f4aa5" }
+cmd.plan -> written.worker: "backfill" { style.stroke: "#6f4aa5" }
+cmd.plan -> written.test: "both" { style.stroke: "#6f4aa5" }
+cmd.plan -> appended.tables { style.stroke: "#a8762f" }
+cmd.plan -> appended.registry { style.stroke: "#a8762f" }
+cmd.plan -> appended.nslist { style.stroke: "#a8762f" }
+
+written.job -> picked_up.init
+written.source -> picked_up.init
+written.worker -> picked_up.init
+written.test -> picked_up.suites
+appended.nslist -> picked_up.suites: "names it" { style.stroke: "#a8762f" }
+appended.registry -> picked_up.consumers { style.stroke: "#a8762f" }
+appended.tables -> picked_up.consumers { style.stroke: "#a8762f" }
+written.job -> picked_up.consumers: ".qstream.register re-parsed" { style.stroke: "#3d7a5a" }
+
+picked_up.init -> todo.logic
+picked_up.suites -> todo.assertion

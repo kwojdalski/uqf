@@ -5,9 +5,9 @@ completeness you can query and a bound you can see. The worked example below
 is a real one: every command was run against this tree, and the output shown
 is what it printed.
 
-A pipeline here is **three declarations and one line in a loader**. The
-lifecycle — windowing, retries, coverage, checkpoints, dry-run, the job graph
-— is the shell's, and you do not write any of it. If you find yourself
+A pipeline here is **three declarations**, and nothing that registers them.
+The lifecycle — windowing, retries, coverage, checkpoints, dry-run, the job
+graph — is the shell's, and you do not write any of it. If you find yourself
 writing a loop over days, you are rebuilding `.qbw`.
 
 | You write | It says |
@@ -15,7 +15,11 @@ writing a loop over days, you are rebuilding `.qbw`.
 | a **source** in `src/etl/sources/` | what the rows are, where they come from, how to window them |
 | a **transform**, beside the worker | what a fetched batch becomes before it is published, with example tables |
 | a **worker** in `src/etl/workers/` | which source, which transform, which target dataset, how wide a window |
-| one `\l` line in [`src/etl/init.q`](../../src/etl/init.q) | load them, in order |
+
+[`src/etl/init.q`](../../src/etl/init.q) **globs** those three directories, so
+there is no fourth row: a declaration loads because its file exists. It used
+to be a `\l` line per file — twenty-six of them, a hand-kept copy of `ls`
+whose failure mode was a file nobody loaded.
 
 Everything else follows from those. Why it is shaped this way is
 [the pipeline philosophy](../architecture/pipeline-philosophy.md); what the
@@ -25,6 +29,17 @@ framework guarantees is [ETL-nn](../reference/etl-framework-requirements.md).
 
 `uqf-stack new-job` writes the skeleton: the q files, the table definition,
 the registry entry and a test.
+
+<!-- Source: docs/diagrams/scaffolding.d2. Rendered by
+     scripts/generate/render_diagrams.py, which CI runs with --check. -->
+
+![What uqf-stack new-job writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
+
+Read it left to right. The two **appends** are the whole reason the middle
+band exists: everything else is picked up by a glob, and those two files hold
+the only two facts the tree cannot derive from itself — a process's port
+offset, which is its position in the registry list, and `nsList`, the one
+hand-kept list of test namespaces.
 
 ```
 uqf-stack new-job markout2 --subscribes trades,quote \
