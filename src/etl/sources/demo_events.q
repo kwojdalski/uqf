@@ -13,7 +13,7 @@
 / .
 / WHY THIS IS THE MICROSTRUCTURE TAPE AND NOT AN OMS TAPE
 / .
-/ The seven ROADMAP features blocked on #46 need `action` in {add,cancel,
+/ The seven catalogue features blocked on #46 need `action` in {add,cancel,
 / trade}, an AGGRESSOR side, and a per-event size - flow-toxicity inputs.
 / An OMS lifecycle tape (new/ack/fill/cancel/reject over our own orders)
 / unblocks execution-quality metrics instead, which is a different set and

@@ -4,7 +4,7 @@
 #
 # Output goes to build/docs/, NOT docs/. This used to `rm -rf docs` before
 # regenerating, which would have deleted every hand-written document in
-# docs/ - ROADMAP.md, the requirements files, migrations/, drift-reports/,
+# docs/ - the requirements files, migrations/, drift-reports/,
 # torq/. Generated output and authored documentation must not share a
 # directory when the generator clears its target.
 #

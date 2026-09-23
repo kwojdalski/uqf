@@ -2,10 +2,19 @@
 / the book looks like (imbalance, microprice, depth, slope, convexity) and
 / how it's moving (order flow imbalance, velocity/acceleration, queue
 / depletion) - built on top of execution.q's sweep_price/vwap and
-/ forwards.q's require_quotes_cols/quotes table shape. The formulas were
-/ mined from an external equity LOB feature catalog and re-expressed
-/ against this tree's quotes shape; docs/ROADMAP.md carries what is still
-/ unbuilt from it.
+/ forwards.q's require_quotes_cols/quotes table shape.
+/ .
+/ PROVENANCE. The formulas were mined from an external equity LOB deep-RL
+/ feature catalog built on Databento MBP-10 data, then re-expressed against
+/ this tree's shape. That shape is periodic book SNAPSHOTS plus an event tape
+/ (docs/architecture/event-tape.md), not an L3 order-by-order feed, and the
+/ translation is the reason several catalogue features are not here: what
+/ survives it is built, and what does not is a decision rather than a task.
+/ Two such decisions are open, and both are about whether the concept means
+/ anything in FX rather than about effort - see the `decision`-labelled
+/ issues. This note used to live in docs/ROADMAP.md, which carried three
+/ unbuilt candidates and little else; the candidates are issues now and the
+/ provenance is here, where it cannot drift from the code it describes.
 / .
 / Two families, referred to throughout as Tier 1 and Tier 2. Tier 1 reads
 / one snapshot per row; Tier 2 needs a time-ordered slice for one sym and
@@ -756,7 +765,7 @@ trade_arrival_rate_by:{[tape;bucket_size;group_cols]
 / The size at or above which a trade counts as "large", taken from the tape's
 / OWN distribution at the given quantile.
 / .
-/ The ROADMAP parked large_trade_ratio (#27) on the grounds that "large" is
+/ The catalogue parked large_trade_ratio (#27) on the grounds that "large" is
 / relative to a venue's typical clip and picking a number here would be
 / inventing a market convention. That is right about the number and wrong
 / about the blocker: the threshold does not have to be a constant. Asking for

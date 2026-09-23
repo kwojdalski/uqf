@@ -30,7 +30,7 @@ Before writing any documentation:
 
 2. **Do not invent behavior** — derive every claim from what the code actually does. Run the relevant function in a scratch q session if the qDoc `@eg` alone doesn't make the behavior obvious.
 
-3. **Check existing docs** — read `docs/` (tracked in this repo, not generated-only) and `docs/ROADMAP.md` to find related documentation to cross-link.
+3. **Check existing docs** — read `docs/` (tracked in this repo, not generated-only) to find related documentation to cross-link.
 
 ## Step 1 — Determine output path
 
@@ -346,5 +346,5 @@ After writing the file:
 - For formulas, verify the mathematical formulas match the implementation, and cite the reference value the tests check against
 - For workflows, trace the actual code path (read the function bodies), not what you think it should be
 - For components, read both the implementation and its tests to understand expected behavior
-- Always cross-link to related documentation that already exists, including `docs/ROADMAP.md` for not-yet-implemented candidates
+- Always cross-link to related documentation that already exists for not-yet-implemented candidates
 - Do not use emojis

@@ -23,8 +23,8 @@ So an idea for an equity signal, a crypto venue adapter, a generic ML layer, or 
 
 ## What to check first
 
-- **`docs/ROADMAP.md`, in full.** It is short by design: built candidates are struck from it rather than marked done, so everything it lists is genuinely unbuilt. The microstructure features it no longer names are implemented — check `src/market_data/microstructure.q` and `docs/man.q` before proposing anything in that family, because re-proposing a built function is the single most likely way for this agent to waste the user's time.
-- **The ROADMAP's "Open" table.** Three items, each blocked on a decision rather than on effort, and the blocker is named per row. `order_count_imbalance` (#18) needs a **snapshot-schema change** — per-level resting-order counts in `quotes` — so file that schema change, once, with #18 as its consequence; filing #18 itself is filing a blocked leaf, a classic brainstorm failure. The two odd-lot ratios (#20-21) are blocked on a venue convention FX does not have, which is a question for the user, not an issue. The event tape (issue #46) already landed and unblocked six features that are now built, so do not propose it again.
+- **`src/market_data/microstructure.q` and `docs/man.q`, before proposing anything in the LOB-feature family.** Most of that catalogue is implemented, and re-proposing a built function is the single most likely way for this agent to waste the user's time. Its header carries the provenance and says which translations did not survive contact with FX.
+- **The `decision`-labelled issues.** These are blocked on a judgement rather than on effort, and each names its blocker. `order_count_imbalance` needs a **snapshot-schema change** — per-level resting-order counts in `quotes` — so propose that schema change, once, with the feature as its consequence; proposing the feature itself is filing a blocked leaf, a classic brainstorm failure. The odd-lot ratios are blocked on a venue convention FX does not have, which is a question for the user rather than an issue. The event tape (issue #46) already landed and unblocked six features that are now built, so do not propose it again. These three came out of `docs/ROADMAP.md` when that file was retired; do not go looking for it.
 - **Existing issues, open *and* closed:** `gh issue list --label brainstorm --state all --limit 200 --json number,title,state,body`. Then the full set, `gh issue list --state all --limit 200 --json number,title,state`. A closed issue is a decision, not an opening — if it was closed as `wontfix` or `invalid`, re-filing it overrides a judgement the user already made. Quote the prior issue number in your report when you skip an idea for this reason.
 - **`docs/audits/`**, if it exists — `docstring-example-verifier` and `causality-auditor` write findings there. A finding that needs new capability rather than a fix (e.g. "`vwap` has no causal/expanding variant to serve as an honest benchmark") is the highest-quality idea source in the repo, because it comes with evidence attached.
 - **`src/init.q`** for the module inventory and load order, and the target module in full before proposing a function for it. This library reuses its own primitives heavily; an idea that duplicates `sweep_price`, `ccy_orient_cross`, `oriented_levels`, `require_quotes_cols` or `apply_col_precedence` instead of calling it is a bad idea wearing a new name.
@@ -84,7 +84,7 @@ gh issue create --label brainstorm --label enhancement \
 S | M | L
 
 ## Notes
-<prior art in docs/ROADMAP.md, related issue numbers, anything that would block it>
+<prior art, related issue numbers, anything that would block it>
 
 ---
 Filed by `extension-brainstormer`.
@@ -111,7 +111,7 @@ Close with: how many candidates you generated and how many cleared the five-poin
 
 - No GitHub mutation before explicit approval. Not one issue, not the label, not a comment.
 - Quality over volume, always. Five ideas that clear the bar beat fifteen that mostly do. If only two clear it, file two and say so — a short slate is a valid result, not a failed run.
-- Never re-file an implemented ROADMAP item, and never re-file something closed as `wontfix`/`invalid` without saying which issue it was and why the situation changed.
+- Never re-file an implemented LOB-catalogue feature, and never re-file something closed as `wontfix`/`invalid` without saying which issue it was and why the situation changed.
 - Never file the seven event-tape features individually. File the ingestion path or nothing.
 - Never widen the eFX scope to admit a good idea. Report it as out of scope instead.
 - Don't propose a new namespace nested more than one level (`` \d .qfwd.sub ``) — every namespace in this library is deliberately flat. (Nesting resolves fine in q; the ETL tree uses it for its instances — workers under `.qwrk`, sources under `.qfeed`. It is the quant library that stays flat.)

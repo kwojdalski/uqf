@@ -21,14 +21,14 @@ Modules, in `src/init.q`'s load order:
 - `risk.q` — pip value, P&L, carry, parametric/historical VaR
 - `execution.q` — `markout`/`markout_at_horizons`, `eff_spread`, `slippage`, `fill_ratio`/`reject_ratio`, `hit_ratio_by`, `vwap`, `sweep_price`
 - `book.q` — reshapes wide/mis-typed order book tables into the vector-column shape everything above expects
-- `microstructure.q` — LOB feature family (book pressure, microprice, OFI, VAMP, VPIN, etc.), in two tiers: Tier 1 reads one snapshot per row, Tier 2 diffs consecutive snapshots. The module header defines both; `docs/ROADMAP.md` lists only what is still unbuilt
+- `microstructure.q` — LOB feature family (book pressure, microprice, OFI, VAMP, VPIN, etc.), in two tiers: Tier 1 reads one snapshot per row, Tier 2 diffs consecutive snapshots. The module header defines both
 
 `src/integrations/data.q` is explicitly out of scope — not part of this library, deliberately left in its original camelCase, don't touch it.
 
 ## What to check first
 
 - **`.claude/skills/kdb-q-conventions/SKILL.md`** (and its `q-language-reference.md`) before writing or editing any `.q` file — it documents this repo's actual, hard-won gotchas: q's lack of operator precedence, dict-construction ambiguity, the qUnit hook-naming trap, and the two deliberate snake_case exceptions.
-- **`src/market_data/microstructure.q` in full** before implementing a new microstructure/LOB feature — the family is large and mostly built, and the qDoc on each function carries the formula and the reasoning behind its shape. Check `docs/ROADMAP.md` too, but only for what is *not* there: built candidates are struck from it, so it is short, and the three it still lists are each blocked on a decision rather than on effort.
+- **`src/market_data/microstructure.q` in full** before implementing a new microstructure/LOB feature — the family is large and mostly built, and the qDoc on each function carries the formula and the reasoning behind its shape. What is still unbuilt lives in the `decision`-labelled issues, each blocked on a judgement rather than on effort.
 - **The relevant `src/*.q` file in full** before adding a function to it — this library reuses its own primitives heavily (`ccy_orient_cross`, `oriented_levels`, `sweep_price`, `require_quotes_cols`, `apply_col_precedence`); a new function that duplicates one of these instead of calling it is the most common mistake here.
 - **`tests/test_<module>.q`** for the existing test pattern in that file (helper builders like `mk_quotes_table`, the `.{module}test` namespace, `test*`-prefixed functions) before adding new tests — match the established style, don't invent a new one.
 

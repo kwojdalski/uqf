@@ -61,7 +61,7 @@ For **bug reports**:
 
 For **feature requests or enhancements**:
 - Check if the feature already exists under a different name (this library snake_cases everything: `fwd_simple`, `cross_book_at_sizes`, etc.)
-- Check `docs/ROADMAP.md` — the request may already be a scoped, not-yet-implemented candidate there
+- Check the `decision`-labelled issues — the request may already be a scoped decision waiting on the maintainer rather than a new item.
 - Assess whether the request contradicts an existing design decision (e.g. this library is strictly scoped to eFX — see `kdb-q-conventions`'s scope note)
 
 For **numerical/precision issues**:

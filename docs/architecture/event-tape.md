@@ -13,8 +13,8 @@ venue convention rather than on the tape.
 features were blocked on the absence of a per-event tape, and adding one was
 a bigger scope decision than adding a function. This is that decision. Six
 of the seven were unblocked by it; the seventh, `order_count_imbalance`,
-needs a snapshot-schema change instead and is still open — see
-[`../ROADMAP.md`](../ROADMAP.md).
+needs a snapshot-schema change instead and is still open — see the
+`decision`-labelled issues.
 
 ## Which tape this is — and which it is not
 
@@ -28,7 +28,7 @@ different features. This one is the **market microstructure tape**:
 | `side` on a trade | the **aggressor's** side | our side |
 | unblocks | flow toxicity: signed flow, VPIN, arrival rate, large-trade and odd-lot ratios, cancel-to-trade | execution quality: fill rate, hit ratio, order-to-fill latency |
 
-The ROADMAP's seven items are all in the left column — they need
+The seven candidates are all in the left column — they need
 `action`, an aggressor `side`, and a per-event `size`. An earlier comment on
 #46 described the right column instead; that was wrong, and the shape below
 is the left one.
@@ -55,7 +55,7 @@ deliberate:
   a trade; calling the column `trade_price` on an add event would be a name
   that lies. A caller feeding `markout_at_horizons` renames on the way in —
   one `xcol`, at the boundary, where the meaning actually changes.
-- **`action` is a symbol**, `` `add`cancel`trade ``, not the ROADMAP's
+- **`action` is a symbol**, `` `add`cancel`trade ``, not the catalogue's
   shorthand `{A,C,T}`. A single character is an **atom** in q, so a `"A"`
   column is a char vector whose elements do not compare against a
   one-element string — a trap this repository has hit repeatedly
@@ -91,7 +91,7 @@ tree:
 So: the ingesting worker publishes in event order, and a function given an
 unsorted tape **throws**. `.qmicro.require_tape` is that check.
 
-## What it unblocks — six of the ROADMAP's seven
+## What it unblocks — six of the seven candidates
 
 | feature | status |
 |---|---|
@@ -102,10 +102,17 @@ unsorted tape **throws**. `.qmicro.require_tape` is that check.
 | `odd_lot_trade_ratio` / `odd_lot_imbalance` (#20-21) | unblocked: needs an odd-lot size definition, which is venue-specific |
 | `vpin` (#25) | unblocked: volume-bucketed signed flow, built on `signed_trade_flow` |
 
-**`order_count_imbalance` (#18) is NOT unblocked by this**, and the ROADMAP
-says why: it needs resting-order **counts per level** (`bid_ct_NN` /
-`ask_ct_NN`) alongside `bid_sizes`/`ask_sizes` in `quotes`. That is a
-snapshot-schema change, not an event-tape one. Six of seven, not seven.
+**`order_count_imbalance` is NOT unblocked by this.** It needs
+resting-order **counts per level** (`bid_ct_NN` / `ask_ct_NN`) alongside
+`bid_sizes`/`ask_sizes` in `quotes` — a snapshot-schema change, not an
+event-tape one. Six of seven, not seven.
+
+The numbers beside each feature above are the external LOB catalogue's own,
+kept because the test comments cite them. They were indexed by
+`docs/ROADMAP.md` until that file was retired: it held three unbuilt
+candidates and this table already says what happened to the rest. The two
+still open are issues now, labelled `decision`, because both turn on whether
+the concept means anything in FX rather than on effort.
 
 ## Ingestion
 
