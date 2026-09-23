@@ -57,13 +57,12 @@ a process reporting `up` while publishing nothing.
 So after scaffolding, the tree is in a known state:
 
 - `src/etl/init.q` still LOADS — the one thing the scaffold never breaks
-- `q tests/run_tests.q` fails **three** times, and not yet on your stub
+- `q tests/run_tests.q` fails on your stub, and on two hand-kept lists
 
-That last one is not the intent, it is the current state (#350, #352). The
-scaffolded test is missing from the failures because its namespace is not in
-`nsList`, so it loaded and never ran; the three you get instead are the
-hand-kept lists in Step 5. Close those first, then the suite fails once — on
-your stub — and that is where the work starts.
+Those two are not about your job (#352): `test_every_job_is_registered` in
+`test_stream_job.q`, and — if you publish a new table — `expected` in
+`test_stack_tables.q`. Close them and the suite fails once, on your stub, which
+is where the work starts.
 
 If the tree does not LOAD after scaffolding, that is a bug in the scaffold,
 not in your job. Say so rather than working around it.
@@ -132,12 +131,12 @@ Say this back to the user, because it is the part that surprises people:
   directories. Only add a name to its `lead` list if your file reads another
   job's table at load time — and you will know, because the tree stops
   loading with a bare `` `.qsub.<name> ``.
-- **No test FILE registration.** `tests/run_tests.q` globs
-  `tests/q/test_*.q`. Its namespace list is still kept by hand, though, so add
-  `.<name>test` to `nsList` — the scaffold does not (#350), and until you do,
-  your test file loads and none of its tests run.
-  `test_the_runner_runs_every_suite_it_loads` fails and names the missing one.
-- **Two more hand-kept lists** fail on a new job and are not about your job:
+- **No test registration at all.** `tests/run_tests.q` globs
+  `tests/q/test_*.q` for the file, and the scaffold appends the test's
+  NAMESPACE to that file's `nsList` (#350). Both halves matter: the list is
+  kept by hand, and a namespace missing from it means the file loads and none
+  of its tests run.
+- **Two hand-kept lists still fail** on a new job and are not about your job:
   `test_every_job_is_registered` in `test_stream_job.q`, and - if you publish a
   new table - `expected` in `test_stack_tables.q`. The second is a deliberate
   gate; the first is redundant with a generic check (#352).
