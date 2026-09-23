@@ -360,7 +360,7 @@ is invisible to every grep: it looks finished and can only ever be started by
 hand. Two workers were adrift exactly this way before the rule existed.
 
 Add a `Pipeline` to `PIPELINES` in
-[`model/registry.py`](../../python/torq_orchestrator/src/torq_orchestrator/model/registry.py)
+[`model/registry.py`](../../python/uqf_stack/src/uqf_stack/model/registry.py)
 naming the worker it runs:
 
 ```python

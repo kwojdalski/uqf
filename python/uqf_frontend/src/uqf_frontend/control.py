@@ -8,7 +8,7 @@ and each is a different kind of change with a different way of going wrong:
     worker config       a `.qwcfg` layer value, over IPC, in a live process
     backfill            a bounded worker run for a named range
 
-WHY THIS PACKAGE NOW DEPENDS ON torq_orchestrator, having deliberately not
+WHY THIS PACKAGE NOW DEPENDS ON uqf_stack, having deliberately not
 before. `procfile.py` states the old rule and its reason: resolving two forms
 of port placeholder is not worth coupling a hot read path to another package.
 That reasoning holds for *reading a CSV column* and does not survive contact
@@ -89,8 +89,8 @@ def _paths(settings: Settings):
     it names rather than trusted, so a wrong path fails here instead of
     starting the wrong stack.
     """
-    from torq_orchestrator import core
-    from torq_orchestrator.paths import UqfStackPaths
+    from uqf_stack import core
+    from uqf_stack.paths import UqfStackPaths
 
     if settings.stack_root is None:
         return core.default_paths()
@@ -106,7 +106,7 @@ def _paths(settings: Settings):
         torqapphome=root / "lib" / "torq-finance-starter-pack",
         torqdata=root / "scripts" / "output" / "uqf-stack",
         scripts_dir=root / "scripts",
-        orchestrator_dir=root / "python" / "torq_orchestrator",
+        orchestrator_dir=root / "python" / "uqf_stack",
     )
 
 
@@ -120,7 +120,7 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
     require_writes(settings)
     if action not in LIFECYCLE_ACTIONS:
         raise ValidationFailed(f"unknown action {action!r} - expected one of {LIFECYCLE_ACTIONS}")
-    from torq_orchestrator import core
+    from uqf_stack import core
 
     fn = {"start": core.start, "stop": core.stop, "restart": core.restart}[action]
     try:
@@ -144,7 +144,7 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
     sometimes not bother.
     """
     require_writes(settings)
-    from torq_orchestrator import core
+    from uqf_stack import core
 
     paths = _paths(settings)
     try:
@@ -161,7 +161,7 @@ def settable_fields(settings: Settings) -> list[str]:
     orchestrator's whitelist is the authority; echoing it here means the two
     cannot drift.
     """
-    from torq_orchestrator import core
+    from uqf_stack import core
 
     return sorted(core.PROCESS_CSV_FIELDS)
 
@@ -175,7 +175,7 @@ def process_choices(settings: Settings) -> list[dict[str, Any]]:
     process.csv - vendored, pipelines, extras, overrides - so the list here
     and the list `uqf-stack start all` acts on cannot differ.
     """
-    from torq_orchestrator import core
+    from uqf_stack import core
 
     return [
         {
@@ -270,8 +270,8 @@ def start_backfill(
     import os
     import subprocess
 
-    from torq_orchestrator import core
-    from torq_orchestrator.stack.runtime import bootstrap
+    from uqf_stack import core
+    from uqf_stack.stack.runtime import bootstrap
 
     paths = _paths(settings)
     try:

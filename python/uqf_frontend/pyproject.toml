@@ -22,7 +22,7 @@ dependencies = [
     # whitelist and the read-modify-write against process_overrides.csv.
     # Reimplementing either here would make a second writer to one file,
     # which is worse than a dependency by any measure used in this tree.
-    "torq-orchestrator",
+    "uqf-stack",
 ]
 
 [build-system]

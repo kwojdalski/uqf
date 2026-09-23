@@ -207,7 +207,7 @@ def test_setting_a_field_returns_the_effective_row(writeable, monkeypatch):
 def test_an_unknown_field_is_refused_by_the_orchestrator_whitelist(writeable, monkeypatch):
     """The whitelist lives in the orchestrator and is not re-implemented
     here - one authority, so the two cannot drift."""
-    from torq_orchestrator import core
+    from uqf_stack import core
 
     def refuse(*a, **k):
         raise core.UqfStackError("unknown process.csv field 'nope'")
@@ -332,7 +332,7 @@ def test_a_malformed_range_bound_says_what_it_wanted(writeable):
 
 def _patch_core(monkeypatch, **fns: Any) -> None:
     """Patch orchestrator functions on the module `control` imports lazily."""
-    from torq_orchestrator import core
+    from uqf_stack import core
 
     for name, fn in fns.items():
         monkeypatch.setattr(core, name, fn)
@@ -340,8 +340,8 @@ def _patch_core(monkeypatch, **fns: Any) -> None:
 
 
 def _patch_bootstrap(monkeypatch) -> None:
-    from torq_orchestrator import core
-    from torq_orchestrator.stack import runtime
+    from uqf_stack import core
+    from uqf_stack.stack import runtime
 
     monkeypatch.setattr(core, "default_paths", lambda: _FakePaths())
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QBIN": "/bin/true"})

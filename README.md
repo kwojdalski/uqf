@@ -83,7 +83,7 @@ through IPC instead: `uqf-stack query`, `uqf-stack summary` and
 `uqf-stack logs` need nothing beyond what is already installed.
 
 `torq.sh` resolves both through `$QCON` and `$RLWRAP`, which
-`torq_orchestrator`'s `build_env()` sets, so a differently-named or
+`uqf_stack`'s `build_env()` sets, so a differently-named or
 differently-located binary is a variable to set rather than a patch.
 
 ### `qlinter`, suggested
@@ -176,7 +176,7 @@ change usually belongs to exactly one.
 | **Data engineering** | [`src/etl/`](src/etl) | The pipeline framework: bounded and continuous workers, normalizers that spell many sources one way, a bitemporal coverage ledger, run identity, IO managers, source contracts, and a job graph derived from declared inputs and outputs. Asset-oriented, in the sense [the philosophy note](docs/architecture/pipeline-philosophy.md) sets out |
 | **Quant library** | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. [Detailed below](#quant-modules) |
 | **Data processing** | [`src/market_data/`](src/market_data) | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw |
-| **Fleet and orchestration** | [`scripts/`](scripts), [`python/torq_orchestrator/`](python/torq_orchestrator) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
+| **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqf_stack/`](python/uqf_stack) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
 | **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`python/uqf_client/`](python/uqf_client), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, a q client, and the React desk and operations app |
 | **Database metadata** | [`src/metadata/`](src/metadata) | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable eFX breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md) |
 | **Reference data model** | [`env/`](env/README.md) | Typed table shapes for a broader eFX system — market data, positions, predictions, orders, routing, an economic calendar — as scaffolding this library's functions could sit inside |
@@ -220,7 +220,7 @@ Still open, and why: the `decision`-labelled issues.
 
 Component READMEs: [`web/`](web/README.md) (the React desk app),
 [`env/`](env/README.md),
-[`python/torq_orchestrator/`](python/torq_orchestrator/README.md).
+[`python/uqf_stack/`](python/uqf_stack/README.md).
 
 ## Browser application
 

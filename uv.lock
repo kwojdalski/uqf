@@ -4,10 +4,10 @@ requires-python = ">=3.14"
 
 [manifest]
 members = [
-    "torq-orchestrator",
     "uqf-airflow-provider",
     "uqf-client",
     "uqf-frontend",
+    "uqf-stack",
     "uqf-workspace",
 ]
 
@@ -1299,41 +1299,6 @@ wheels = [
 ]
 
 [[package]]
-name = "torq-orchestrator"
-version = "0.1.0"
-source = { editable = "python/torq_orchestrator" }
-dependencies = [
-    { name = "fastmcp" },
-    { name = "kola" },
-    { name = "loguru" },
-    { name = "polars" },
-    { name = "rich" },
-    { name = "typer" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastmcp", specifier = ">=3.4.7" },
-    { name = "kola", specifier = ">=2.5.0" },
-    { name = "loguru", specifier = ">=0.7.3" },
-    { name = "polars", specifier = ">=1.31.0" },
-    { name = "rich", specifier = ">=15.0.0" },
-    { name = "typer", specifier = ">=0.27.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "ruff", specifier = ">=0.16.2" },
-]
-
-[[package]]
 name = "truststore"
 version = "0.10.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1462,7 +1427,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "kola" },
     { name = "pydantic" },
-    { name = "torq-orchestrator" },
+    { name = "uqf-stack" },
     { name = "uvicorn" },
 ]
 
@@ -1478,7 +1443,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "kola", specifier = ">=2.5.0" },
     { name = "pydantic", specifier = ">=2.9" },
-    { name = "torq-orchestrator", editable = "python/torq_orchestrator" },
+    { name = "uqf-stack", editable = "python/uqf_stack" },
     { name = "uvicorn", specifier = ">=0.32" },
 ]
 
@@ -1490,14 +1455,49 @@ dev = [
 ]
 
 [[package]]
+name = "uqf-stack"
+version = "0.1.0"
+source = { editable = "python/uqf_stack" }
+dependencies = [
+    { name = "fastmcp" },
+    { name = "kola" },
+    { name = "loguru" },
+    { name = "polars" },
+    { name = "rich" },
+    { name = "typer" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastmcp", specifier = ">=3.4.7" },
+    { name = "kola", specifier = ">=2.5.0" },
+    { name = "loguru", specifier = ">=0.7.3" },
+    { name = "polars", specifier = ">=1.31.0" },
+    { name = "rich", specifier = ">=15.0.0" },
+    { name = "typer", specifier = ">=0.27.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "ruff", specifier = ">=0.16.2" },
+]
+
+[[package]]
 name = "uqf-workspace"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "torq-orchestrator" },
     { name = "uqf-airflow-provider" },
     { name = "uqf-client" },
     { name = "uqf-frontend" },
+    { name = "uqf-stack" },
 ]
 
 [package.dev-dependencies]
@@ -1511,10 +1511,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "torq-orchestrator", editable = "python/torq_orchestrator" },
     { name = "uqf-airflow-provider", editable = "python/uqf_airflow_provider" },
     { name = "uqf-client", editable = "python/uqf_client" },
     { name = "uqf-frontend", editable = "python/uqf_frontend" },
+    { name = "uqf-stack", editable = "python/uqf_stack" },
 ]
 
 [package.metadata.requires-dev]

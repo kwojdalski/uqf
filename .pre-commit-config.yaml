@@ -28,7 +28,7 @@ repos:
       # Scoped by INTENT - every .py file except vendored - rather than by
       # directory. A directory list goes stale silently: this was scoped
       # '^python/uqf-client/' while Python was being added under
-      # torq_orchestrator/ and uqf_frontend/, so 43 of 47 tracked .py files
+      # uqf_stack/ and uqf_frontend/, so 43 of 47 tracked .py files
       # were never linted, and nothing complained because the scope was
       # still valid, merely too narrow. Matching all Python and excluding
       # lib/ cannot drift that way. scripts/gates/check_hook_scopes.py enforces it.

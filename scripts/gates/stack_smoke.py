@@ -21,10 +21,10 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "python" / "torq_orchestrator" / "src"))
+sys.path.insert(0, str(REPO / "python" / "uqf_stack" / "src"))
 
-from torq_orchestrator import core  # noqa: E402
-from torq_orchestrator.checks import hdb_shape, stack_smoke  # noqa: E402
+from uqf_stack import core  # noqa: E402
+from uqf_stack.checks import hdb_shape, stack_smoke  # noqa: E402
 
 #: How long to let the stack run before looking. The feeds publish on
 #: sub-second timers and the slowest consumer chain is three deep, so this

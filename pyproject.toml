@@ -17,7 +17,7 @@
 # The directory layout is deliberately unchanged, because two couplings
 # depend on it and are documented as such at their call sites:
 #   - python/uqf_frontend/tests/test_catalog_drift.py resolves parents[2] to
-#     read torq_orchestrator's core.py as TEXT (never importing it)
+#     read uqf_stack's core.py as TEXT (never importing it)
 #   - python/uqf_client/tests/conftest.py resolves parents[3] to the repo
 #     root so it can launch `q src/init.q`
 # Moving the packages would break both.
@@ -31,7 +31,7 @@ description = "Workspace root aggregating uqf's Python packages; not published"
 requires-python = ">=3.14"
 dependencies = [
     "uqf-client",
-    "torq-orchestrator",
+    "uqf-stack",
     "uqf-frontend",
     "uqf-airflow-provider",
 ]
@@ -51,7 +51,7 @@ exclude = ["lib/torq/", ".claude/worktrees/"]
 [tool.uv.workspace]
 members = [
     "python/uqf_client",
-    "python/torq_orchestrator",
+    "python/uqf_stack",
     "python/uqf_frontend",
     "python/uqf_airflow_provider",
 ]
@@ -65,7 +65,7 @@ members = [
 # scope that matches nothing.
 [tool.uv.sources]
 uqf-client = { workspace = true }
-torq-orchestrator = { workspace = true }
+uqf-stack = { workspace = true }
 uqf-frontend = { workspace = true }
 uqf-airflow-provider = { workspace = true }
 
@@ -113,7 +113,7 @@ exclude = ["lib", ".venv", "build", ".claude/worktrees", "tools"]
 [tool.ty.environment]
 root = [
     "python/uqf_client/src",
-    "python/torq_orchestrator/src",
+    "python/uqf_stack/src",
     "python/uqf_frontend/src",
 ]
 
@@ -151,7 +151,7 @@ extend-exclude = ["lib", ".claude/worktrees"]
 # treated as third-party - which silently reformats 13 files' import blocks.
 src = [
     "python/uqf_client/src",
-    "python/torq_orchestrator/src",
+    "python/uqf_stack/src",
     "python/uqf_frontend/src",
 ]
 
@@ -165,7 +165,7 @@ select = ["E", "F", "I", "UP", "B"]
 # on commit.
 testpaths = [
     "python/uqf_client/tests",
-    "python/torq_orchestrator/tests",
+    "python/uqf_stack/tests",
     "python/uqf_frontend/tests",
     "python/uqf_airflow_provider/tests",
 ]

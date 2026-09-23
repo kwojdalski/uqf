@@ -22,7 +22,7 @@ alike:
 |---|---|---|
 | FX venue feeds | [`fx_feed`](../../src/etl/streaming/fx_feed.q), [`quotes_feed`](../../src/etl/streaming/quotes_feed.q), [`fx_trades_feed`](../../src/etl/streaming/fx_trades_feed.q) — synthetic here, a venue adapter in production | `quote` (one bid, one ask), `trades` (sym, side, price, size, pip_factor) |
 | Crypto venues | cryptorust's two kdb recorders, or [`crypto_mock`](../../src/etl/streaming/crypto_mock.q) standing in | `crypto_book` (a ladder per venue), `crypto_trades` (venue, fee, exchange id) |
-| Databento MBP-10 | [`external/databento_feed.py`](../../python/torq_orchestrator/src/torq_orchestrator/external/databento_feed.py) → [`databento_book`](../../src/etl/streaming/databento_book.q) | raw MBP-10, folded by the same `.qxf` transform the ODBC backfill applies |
+| Databento MBP-10 | [`external/databento_feed.py`](../../python/uqf_stack/src/uqf_stack/external/databento_feed.py) → [`databento_book`](../../src/etl/streaming/databento_book.q) | raw MBP-10, folded by the same `.qxf` transform the ODBC backfill applies |
 | History | bounded workers under [`src/etl/workers/`](../../src/etl/workers), run by [`.qbw`](../../src/etl/core/bounded_worker.q) | whatever the upstream holds, written through `.qio` — never via the plant |
 
 The last row is the one to notice. A backfill writes into storage directly

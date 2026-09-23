@@ -85,7 +85,7 @@
 /      -> .qpipe.install_period_handlers defines both.
 / .
 / Loaded via each pipeline row's own `load` column in the process.csv
-/ torq_orchestrator.core.bootstrap() generates - not by src/init.q, and not
+/ uqf_stack.core.bootstrap() generates - not by src/init.q, and not
 / part of the uqf library proper (this is TorQ plumbing, outside the eFX
 / pricing/risk/execution/microstructure scope src/*.q keeps to).
 

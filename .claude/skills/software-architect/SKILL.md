@@ -87,7 +87,7 @@ The highest-value findings in a polyglot repo. Where is the same truth written t
 
    **The wiring, first — it tells you the shape before you read any module:**
    - `src/init.q` and `src/etl/init.q` — the dependency order, and which orderings the comments say are load-bearing
-   - `python/torq_orchestrator/src/torq_orchestrator/pipelines.py` — one entry per process; the Python half of the system's topology
+   - `python/uqf_stack/src/uqf_stack/pipelines.py` — one entry per process; the Python half of the system's topology
    - `src/etl/generated/pipeline_dag.q` — generated; if it disagrees with either of the above, that is the finding
 
    **The framework shells — is each one still generic?**

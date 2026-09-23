@@ -50,7 +50,7 @@ procnames:(`symbol$())!`symbol$();
 / with neither is declared but does nothing, which is refused.
 / .
 / `subscribes` and `publishes` are the wiring the runner performs on the
-/ job's behalf, and they are also what torq_orchestrator's pipeline_edges
+/ job's behalf, and they are also what uqf_stack's pipeline_edges
 / checks the Python registry against - so the q file and the registry cannot
 / drift. `procname` is the TorQ process that runs this job, and is how the
 / runner knows which job it is: one generic process script, and the name it
