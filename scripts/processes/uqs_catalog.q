@@ -79,6 +79,25 @@ describe[`trades]:
 describe[`wide_book]:
     "The unfolded book widefeed1 publishes: one column per level per side, bids0..bids10 and asks0..asks10. vectorize1 folds it into mkt_orderbook; a reader wanting a book usually wants that one instead";
 
+/ The six declared-but-not-yet-produced tables (see uqs_tables.q's block on
+/ them). Described rather than hidden: a desk SHOULD be able to see that the
+/ shape exists and what it is meant to hold - the description is the only
+/ place that says so, since the table itself is empty and will stay empty
+/ until something produces it. Each says so plainly rather than reading as a
+/ table that merely happens to have no rows today.
+describe[`predictions]:
+    "Model output per (time, sym, horizon_ms, model). DECLARED, NOT YET PRODUCED - nothing in this tree runs a model, so the shape is agreed and the table is empty";
+describe[`ccy_exposure]:
+    "Net exposure per currency at an instant, revalued into one reporting currency. DECLARED, NOT YET PRODUCED - .qpos.ccy_exposure_in computes this, but no job publishes it yet";
+describe[`reference_data]:
+    "Static instrument reference per pair, base and quote legs as .qccy.ccy_pair_legs names them. DECLARED, NOT YET PRODUCED - no loader, and no decision yet on where the static data lives";
+describe[`order_routing]:
+    "Routing decisions, one row per (order, venue) - not 1:1 with orders, since an order can split. DECLARED, NOT YET PRODUCED - nothing in this tree routes";
+describe[`connections]:
+    "Venue connection registry, one row per venue link. NOT process liveness, which is .qhb and `uqs summary`. DECLARED, NOT YET PRODUCED";
+describe[`economic_calendar]:
+    "Scheduled macro releases, actual null until the event fires. DECLARED, NOT YET PRODUCED - needs an external data source and a licence for it";
+
 / Tables that exist and are deliberately NOT browsable, each with the reason.
 / The reason is data rather than a comment so the test can require one: a
 / hidden table with no reason is how "we forgot" gets recorded as a decision.

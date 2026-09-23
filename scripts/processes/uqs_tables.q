@@ -28,9 +28,20 @@
 / Definition order is immaterial to q - these are independent declarations.
 
 / The order book shape every pricing and execution function in src/ expects:
-/ vector-valued price and size columns, one row per (time, sym). Matches
-/ src/pricing/forwards.q's require_quotes_cols exactly, so a row published
-/ here is usable by cross_book_at with no reshaping.
+/ vector-valued price and size columns, one row per (time, sym).
+/ .
+/ ONE RENAME SHORT of forwards.q's require_quotes_cols, and it is load
+/ bearing. That function demands `ts`; this table leads with `time` because
+/ the tickerplant's .u.upd requires the first column to be literally that.
+/ So `select ts:time, sym, bid_prices, ... from quotes` is what a caller
+/ hands to cross_book_at - the vector columns match exactly, the instant's
+/ NAME does not.
+/ .
+/ This comment used to claim the table was usable "with no reshaping", which
+/ was false for as long as it stood: cross_book_at refuses it, naming the
+/ missing ts. Nothing caught that because nothing ran a pricing function
+/ against a real tickerplant table - scripts/examples/scenario_example.q now
+/ does, on every commit.
 quotes:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / Direct FX books retain their source and original timestamp across normalization.
@@ -143,3 +154,67 @@ fx_position:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`
 / fxpositions1's alerts: one row per limit newly crossed, throttled so a
 / standing breach does not republish on every tick.
 fx_limit_breach:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); product:`symbol$(); metric:`symbol$(); observed:`float$(); cap:`float$(); severity:`symbol$(); utilisation:`float$())
+
+/ ------------------------------------------------- declared, not yet produced
+/ .
+/ Six shapes for parts of an eFX system this tree has not built. They came
+/ from env/, which carried them as `.envschema` reference scaffolding that
+/ nothing loaded and no lane ran; env/ was deleted because three of its
+/ eleven tables named real tickerplant tables while disagreeing with them on
+/ columns, and a reference model that contradicts the real thing is worse
+/ than none. These six had no counterpart, so they are kept - here, in the
+/ one file that declares what the tickerplant carries, rather than in a
+/ second model beside it.
+/ .
+/ THEY ARE THE ONLY TABLES HERE WITH NO PRODUCER, in-tree or external, and
+/ that is a deliberate exception rather than an oversight. Every other table
+/ in this file is published by a process, by cryptorust's recorder or by a
+/ Python feed handler. These are declared so the shape is agreed and
+/ reviewable before anything fills them - which is the trade being made
+/ against `pipeline-philosophy.md` §3, "nothing exists that does nothing".
+/ .
+/ What each still needs, so the gap is legible rather than implied:
+/ .
+/   ccy_exposure     .qpos.ccy_exposure_in already computes this. Needs a job
+/                    that runs it over `position` and `market_data` and
+/                    publishes the result - the nearest of the six.
+/   reference_data   .qccy.ccy_pair_legs already derives base/quote. Needs a
+/                    loader, and a decision on where the static data lives.
+/   connections      VENUE connections, not process ones: .qhb and
+/                    `uqs summary` already answer process liveness, and this
+/                    must not become a second spelling of that.
+/   predictions      needs a model. Nothing in this tree produces one.
+/   order_routing    needs a router. Nothing in this tree routes.
+/   economic_calendar needs an external data source and a licence for it.
+/ .
+/ `time` first in every one of them, including where env/ used `ts`: the
+/ tickerplant's .u.upd requires the first column to be literally `time`, so a
+/ shape that disagrees could never be published even once something produced
+/ it.
+
+/ Model output, one row per (time, sym, horizon_ms, model). horizon_ms
+/ matches the horizon convention markout_at_horizons uses.
+predictions:([]time:`timestamp$(); sym:`g#`symbol$(); horizon_ms:`long$(); model:`symbol$(); predicted_mid:`float$(); confidence:`float$())
+
+/ Net exposure per currency at an instant, revalued into one reporting
+/ currency - .qpos.ccy_exposure_in's output shape, with the time and the
+/ reporting currency it was computed against.
+ccy_exposure:([]time:`timestamp$(); ccy:`g#`symbol$(); amount:`float$(); reporting_ccy:`symbol$(); reporting_amount:`float$())
+
+/ Static instrument reference, one row per pair. base_ccy/quote_ccy are
+/ .qccy.ccy_pair_legs' field names, so a row here feeds it unchanged.
+reference_data:([]time:`timestamp$(); sym:`g#`symbol$(); base_ccy:`symbol$(); quote_ccy:`symbol$(); pip_factor:`long$(); min_size:`float$(); active:`boolean$())
+
+/ Routing decisions, one row per (order, venue). NOT 1:1 with `orders` - an
+/ order can split across venues, which is the whole reason this is its own
+/ table rather than columns on that one.
+order_routing:([]time:`timestamp$(); order_id:`long$(); venue:`symbol$(); routed_size:`float$(); routing_reason:`symbol$())
+
+/ Venue connection registry - one row per venue link, not per process.
+/ Process liveness is .qhb's heartbeat and `uqs summary`; this is the
+/ upstream side, which nothing in this tree talks to yet.
+connections:([]time:`timestamp$(); venue:`g#`symbol$(); host:`symbol$(); port:`long$(); status:`symbol$(); last_heartbeat:`timestamp$())
+
+/ Scheduled macro releases, one row per event. `actual` is null until the
+/ event fires, which is what distinguishes a forecast row from a fired one.
+economic_calendar:([]time:`timestamp$(); event_id:`long$(); ccy:`symbol$(); event_name:`symbol$(); importance:`symbol$(); forecast:`float$(); previous:`float$(); actual:`float$())

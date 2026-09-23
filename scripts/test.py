@@ -20,6 +20,10 @@ between them:
                        test that depends on running after another one fails
   q-examples           every documented @eg runs, in its own process, since
                        many examples change state.
+  q-scripts            every worked example under scripts/examples/, each
+                       run as a script in its own process. Nothing ran these
+                       before; the first commit to add one found a false
+                       claim in uqs_tables.q that had stood untested.
   q-two-instances      a second kdb+ process is started on the starter
                        pack's HDB and a bounded worker moves trades out of
                        it - the only lane in which a worker's LIVE path runs.
@@ -144,6 +148,37 @@ def lane_q_examples() -> None:
         _q("q-examples", "tests/q/run_examples.q", env={"UQFSTATUSDIR": statusdir})
 
 
+def lane_q_scripts() -> None:
+    """Every worked example under scripts/examples/, each in its own process.
+
+    These are scripts a reader runs by hand to see the library work end to
+    end, and until this lane existed NOTHING ran them - five of them, none
+    executed by any suite, gate or hook. `find src scripts` does scan them
+    for `@eg` blocks, but none of these files has one: an example script is
+    a top-level narrative, not a documented function.
+
+    That gap was not theoretical. The first commit to add a scenario here
+    found `uqs_tables.q` claiming its `quotes` table was usable by
+    `cross_book_at` "with no reshaping", when `cross_book_at` refuses it
+    outright for a missing `ts`. A prose claim about two halves of this tree
+    fitting together, false for as long as it stood, because nothing ever
+    called one half with the other's table.
+
+    Each runs in its own process: they load src/init.q, define top-level
+    tables and insert into them, and a shared process would let one
+    example's rows reach the next. A non-zero exit fails the lane, which is
+    the whole point - the scripts already narrate through .qlog, so the
+    output is the report.
+    """
+    _banner("q-scripts: every worked example under scripts/examples/")
+    scripts = sorted(Path("scripts/examples").glob("*.q"))
+    if not scripts:  # pragma: no cover - the directory is not empty
+        raise SystemExit("q-scripts: no examples found under scripts/examples/")
+    for script in scripts:
+        with tempfile.TemporaryDirectory() as statusdir:
+            _q(f"q-scripts:{script.stem}", str(script), env={"UQFSTATUSDIR": statusdir})
+
+
 def lane_q_two_instances() -> None:
     _banner("q-two-instances: data moved between two kdb+ processes")
     # The upstream is a second q process on a port; its own status directory
@@ -235,6 +270,7 @@ LANES: dict[str, Callable[[], None]] = {
     "q-metatables-hdb": lane_q_metatables_hdb,
     "q-backfill-process": lane_q_backfill_process,
     "q-examples": lane_q_examples,
+    "q-scripts": lane_q_scripts,
     "q-two-instances": lane_q_two_instances,
     "python": lane_python,
     "q-coverage": lane_q_coverage,
@@ -252,6 +288,7 @@ ALL = [
     "q-unit",
     "q-order",
     "q-examples",
+    "q-scripts",
     "q-backfill-process",
     "q-two-instances",
     "q-metatables-hdb",
