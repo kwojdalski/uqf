@@ -51,6 +51,36 @@ whole ETL tree from loading, and an empty table is refused by `.qxf.define`,
 which needs at least one example with rows. So it writes one deterministic
 row of the declared shape. Replace it before trusting a run.
 
+### What a fresh scaffold leaves red
+
+The generated handler throws and the generated test fails — but today you will
+see **three** failures rather than that one, and the one you want is not among
+them:
+
+```
+$ uqf-stack new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
+$ q tests/run_tests.q
+  .nstest.test_the_runner_runs_every_suite_it_loads
+  .sjtest.test_every_job_is_registered
+  .tabletest.test_no_undeclared_table_appears
+```
+
+Three edits close them, and none is about your job:
+
+1. Add `.<name>test` to `nsList` in [`tests/run_tests.q`](../../tests/run_tests.q).
+   Until you do, the scaffolded test loads and never runs — which is why the
+   stub is missing from the list above. (#350 would have the scaffold do this.)
+2. Add the job name to `test_every_job_is_registered` in
+   [`tests/q/test_stream_job.q`](../../tests/q/test_stream_job.q), which keeps
+   the list of jobs by hand. (#352 — it is redundant with a generic check.)
+3. If the job publishes a new table, add it to `expected` in
+   [`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q). This one
+   is a **deliberate gate**: a new table is either a capability nobody wired up
+   or a stray definition, and both deserve a moment's thought.
+
+After those three, `q tests/run_tests.q` fails once, on your stub, which is
+where the work starts.
+
 The rest of this guide is what to write into that skeleton, and why each
 part is shaped the way it is.
 
@@ -464,9 +494,12 @@ executions built it.
 
 ## 6. Test it
 
-Add `tests/q/test_fx_rates_backfill.q`, register the file *and* its namespace
-in [`tests/run_tests.q`](../../tests/run_tests.q) — the namespace list is
-separate, and forgetting it means the tests silently never run — then:
+Add `tests/q/test_fx_rates_backfill.q`. The file itself needs no
+registration — `tests/run_tests.q` globs `tests/q/test_*.q` — but its
+NAMESPACE does: add `.<name>test` to that file's `nsList`. Forgetting it used
+to mean the suite loaded your tests and silently never ran them;
+`test_the_runner_runs_every_suite_it_loads` now fails instead, naming the
+namespace that is missing. Then:
 
 ```
 scripts/test.py q-unit
