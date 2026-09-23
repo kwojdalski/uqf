@@ -91,11 +91,14 @@ EXCLUDED_DIRS = {
 }
 
 #: Individual files excluded, with the reason each is exempt.
-EXCLUDED_FILES = {
-    # A plan. It describes what does not exist yet, so naming an unwritten
-    # function is the document working correctly.
-    "ROADMAP.md": "a roadmap names functions that are not written yet",
-}
+#:
+#: Empty, and worth keeping that way. The one entry was ROADMAP.md - a plan,
+#: so naming an unwritten function was the document working correctly - and it
+#: went when that file was retired into issues. A document that has to be
+#: exempted from "the functions you name exist" is usually a document making a
+#: promise rather than a description, and an issue is the better home for a
+#: promise.
+EXCLUDED_FILES: dict[str, str] = {}
 
 #: References that are deliberately not real, with why. A reference only
 #: belongs here if the document is BETTER for naming something non-existent -

@@ -62,7 +62,7 @@ gh issue view <number> --json number,title,body,labels,comments,author,createdAt
 **Verification Points:**
 - Bug claims must match actual code logic
 - Wrong line numbers indicate misunderstandings
-- Feature requests require checking existing implementations and `docs/ROADMAP.md`
+- Feature requests require checking existing implementations and the `decision`-labelled issues
 
 ### 4. Triage Decision
 

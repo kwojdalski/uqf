@@ -63,7 +63,9 @@ non-listening process belongs in the client table, not the server one),
 [`example-architecture.md`](architecture/example-architecture.md) (a desk
 system composed from the implemented services, in six bands).
 
-**`reference/`** — [`environment.md`](reference/environment.md) (every
+**`reference/`** — [`quant-modules.md`](reference/quant-modules.md) (what
+each module under `src/` is for, its namespace, and the conventions all of
+them follow), [`environment.md`](reference/environment.md) (every
 variable, machine-checked),
 [`etl-framework-requirements.md`](reference/etl-framework-requirements.md)
 (ETL-nn), [`frontend-requirements.md`](reference/frontend-requirements.md)
