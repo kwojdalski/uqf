@@ -334,9 +334,10 @@ test_a_workers_own_publish_is_kept_and_reached_by_run:{[t]
 / is not reset to nulls under it.
 test_redeclaring_a_worker_keeps_its_state:{[t]
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    .qbw.define[`demo_deals_backfill;
-        `source`dataset`width`transform`check!
-        (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qwrk.demo_deals_backfill.quality_check)];
+    .ddbftest.with_declaration_restored[{
+        .qbw.define[`demo_deals_backfill;
+            `source`dataset`width`transform`check!
+            (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qwrk.demo_deals_backfill.quality_check)]}];
     .qunit.assertEquals[.qwrk.demo_deals_backfill.spec[];.ddbftest.spec_for[`v1;1;4];
         "a second define fills only absent names, and the run specification is not one"]};
 
@@ -469,7 +470,9 @@ test_a_non_symbol_partition_is_refused:{[t]
 / at load, and reloading a worker file is ordinary.
 test_a_worker_may_redeclare_itself:{[t]
     .qunit.assertEquals[
-        .qbw.define[`demo_deals_backfill;`source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough)];
+        .ddbftest.with_declaration_restored[{
+            .qbw.define[`demo_deals_backfill;
+                `source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough)]}];
         `demo_deals_backfill;
         "reloading a worker file re-runs its own define, which must not trip the clash guard"]};
 
@@ -554,6 +557,29 @@ double_notional:{[]
         0#.qfeed.demo_deals.fixture[];
         {[batch] update notional:2*notional from batch};
         enlist `inputs`expected!(enlist[`batch]!enlist .qfeed.demo_deals.fixture[];update notional:2*notional from .qfeed.demo_deals.fixture[]))]};
+
+/ Run f, then put the shipped worker's whole declaration back.
+/ .
+/ A test that redefines `demo_deals_backfill` with a PARTIAL dictionary does
+/ not only change what it names: .qbw.define fills every absent optional from
+/ its default (bounded_worker.q:239), so an omitted `procname` is silently
+/ reset to `demo_deals_backfill1` - and STAYS reset for every test that runs
+/ afterwards. That is what broke test_a_worker_runs_as_the_procname_it_declares,
+/ which sorts after both of the redeclaring tests and asserts the
+/ `deals_backfill1` the worker file actually declares.
+/ .
+/ Nothing caught it for two reasons worth knowing: the test passes in
+/ isolation, and UQF_TEST_ORDER shuffles the NAMESPACE list rather than the
+/ tests inside a namespace, so reverse and shuffle both reproduced the same
+/ intra-suite order.
+/ .
+/ Same shape as with_transform below, for the whole dictionary rather than one
+/ field.
+with_declaration_restored:{[f]
+    orig:.qbw.worker_cfg[`demo_deals_backfill];
+    r:@[f;::;{(`threw;x)}];
+    .qbw.worker_cfg[`demo_deals_backfill]:orig;
+    r};
 
 with_transform:{[nm;f]
     orig:.qbw.declaration[`demo_deals_backfill]`transform;
