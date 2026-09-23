@@ -13,6 +13,7 @@ listing these commands exactly where they were before the split.
 
 from __future__ import annotations
 
+import shlex
 from typing import Annotated
 
 import typer
@@ -162,6 +163,36 @@ def config_set(procname: str, field: str, value: str) -> None:
         _die(exc)
         return
     console.print(f"{procname}.{field} = {value}")
+
+
+@app.command()
+def multitail(
+    procs: ProcsArg = "all",
+    stream: Annotated[
+        str, typer.Option("--stream", help="Which log files get a pane: out, err or both")
+    ] = "both",
+    columns: Annotated[
+        int, typer.Option("--columns", "-c", help="Split the panes into this many columns")
+    ] = 1,
+    lines: Annotated[int, typer.Option("--lines", "-n", help="History each pane opens with")] = 20,
+    print_only: Annotated[
+        bool, typer.Option("--print", help="Show the multitail command without running it")
+    ] = False,
+) -> None:
+    """Follow process logs in multitail, one pane per out_/err_*.log file -
+    e.g. `multitail "rdb1 fxpositions1"`, `multitail all --stream err -c 2`.
+    Needs the `multitail` binary; `logs -f` merges the same files without it.
+    """
+    try:
+        argv = stack_logs.multitail_command(
+            _paths(), procs, stream=stream, columns=columns, lines=lines
+        )
+        if print_only:
+            console.print(shlex.join(argv), markup=False, highlight=False, soft_wrap=True)
+            return
+        stack_logs.run_multitail(argv)
+    except UqsError as exc:
+        _die(exc)
 
 
 @app.command()

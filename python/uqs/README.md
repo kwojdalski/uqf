@@ -197,6 +197,14 @@ uqs logs "stp1 rdb1" -n 50
 uqs logs -f --level WARNING
 ```
 
+`multitail` follows the same files in multitail instead, one pane per file
+(`--stream out|err|both`, `-c N` columns, `--print` to show the command);
+it needs the `multitail` binary.
+
+```
+uqs multitail "rdb1 fxpositions1" -c 2
+```
+
 ## crypto recorder (cryptorust) - a proof of concept
 
 `crypto start`/`stop`/`status` (a nested command group) build and launch a sibling

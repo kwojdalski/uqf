@@ -751,6 +751,35 @@ def test_the_level_filter_reaches_core(monkeypatch):
     assert rec.kwargs["lines"] == 5
 
 
+# -------------------------------------------------------------- multitail
+
+
+def test_multitail_passes_its_options_to_core_and_execs(monkeypatch):
+    build = _patch(monkeypatch, stack_logs, "multitail_command", result=["multitail", "x"])
+    run = _patch(monkeypatch, stack_logs, "run_multitail")
+    result = runner.invoke(
+        cli.app, ["multitail", "rdb1 stp1", "--stream", "err", "-c", "2", "-n", "7"]
+    )
+    assert result.exit_code == 0
+    assert build.args[1] == "rdb1 stp1"
+    assert build.kwargs == {"stream": "err", "columns": 2, "lines": 7}
+    assert run.args == (["multitail", "x"],)
+
+
+def test_multitail_print_shows_the_command_and_runs_nothing(monkeypatch):
+    _patch(monkeypatch, stack_logs, "multitail_command", result=["multitail", "-t", "a b"])
+    run = _patch(monkeypatch, stack_logs, "run_multitail")
+    result = runner.invoke(cli.app, ["multitail", "--print"])
+    assert result.exit_code == 0
+    assert "multitail -t 'a b'" in result.stdout
+    assert run.calls == []
+
+
+def test_a_multitail_refusal_exits_one(monkeypatch):
+    _patch(monkeypatch, stack_logs, "multitail_command", raises=UqsError("no such process"))
+    assert runner.invoke(cli.app, ["multitail", "nope"]).exit_code == 1
+
+
 # -------------------------------------------------------------------- raw
 
 
@@ -876,7 +905,17 @@ def test_every_command_is_reachable_and_documented():
     fails here rather than the first time someone runs it."""
     result = runner.invoke(cli.app, ["--help"])
     assert result.exit_code == 0
-    for command in ("start", "stop", "restart", "summary", "query", "schema", "logs", "raw"):
+    for command in (
+        "start",
+        "stop",
+        "restart",
+        "summary",
+        "query",
+        "schema",
+        "logs",
+        "multitail",
+        "raw",
+    ):
         assert command in result.stdout
 
 
