@@ -41,7 +41,7 @@ rather than silently passed, so the blind spot stays visible - and so a
 typo'd namespace shows up as an odd entry in that list.
 
 *Documents about things that do not exist yet or no longer do.* Plans,
-proposals, audit output and the generated decision pages are excluded by
+proposals, agent run output and the generated decision pages are excluded by
 directory below, each for a stated reason. A roadmap naming an unwritten
 function is doing its job.
 
@@ -83,7 +83,6 @@ EXCLUDED_DIRS = {
     "decisions",
     # Agent output, dated and append-only. A record of a run, not a
     # description of the system.
-    "audits",
     "drift-reports",
     # Plans written BEFORE the work, kept afterwards as the reasoning. They
     # name things that did not exist when written, which is the point.

@@ -1,7 +1,7 @@
 ---
 name: causality-auditor
-description: Read-only auditor for information-causality defects in this eFX library's metric primitives — a function that mixes post-decision information into a quantity its docstring presents as observable at the decision point, a benchmark computed over a full window it would not have had in flight, an as-of or sort-order invariant that is assumed on one code path but only enforced on another, or a sign convention the module header asserts and a function quietly breaks. Adapted from a research-validity leakage audit: this is a primitives library rather than a backtest, so the surface is narrow and specific, not a general look-ahead sweep. Distinct from `bugfinder` (a formula that computes the wrong number), `antipattern` (design and maintenance smells) and `inconsistencies` (naming and signature asymmetry): this agent asks only whether each function's information set matches what it claims, and every finding must carry an executed numerical check rather than a plausible-sounding mechanism. Use when the user doubts whether an execution or microstructure metric is honest, asks about look-ahead or benchmark construction, before trusting a markout or hit-ratio number, or after adding a rolling or as-of-joined function. Writes each run's findings to `docs/audits/` and does not edit `src/*.q`.
-tools: [Read, Write, Edit, Bash, Grep, Glob]
+description: Read-only auditor for information-causality defects in this eFX library's metric primitives — a function that mixes post-decision information into a quantity its docstring presents as observable at the decision point, a benchmark computed over a full window it would not have had in flight, an as-of or sort-order invariant that is assumed on one code path but only enforced on another, or a sign convention the module header asserts and a function quietly breaks. Adapted from a research-validity leakage audit: this is a primitives library rather than a backtest, so the surface is narrow and specific, not a general look-ahead sweep. Distinct from `bugfinder` (a formula that computes the wrong number), `antipattern` (design and maintenance smells) and `inconsistencies` (naming and signature asymmetry): this agent asks only whether each function's information set matches what it claims, and every finding must carry an executed numerical check rather than a plausible-sounding mechanism. Use when the user doubts whether an execution or microstructure metric is honest, asks about look-ahead or benchmark construction, before trusting a markout or hit-ratio number, or after adding a rolling or as-of-joined function. Reports its findings inline and edits no file.
+tools: [Read, Bash, Grep, Glob]
 model: sonnet
 ---
 
@@ -21,7 +21,7 @@ And one shape that is explicitly **not** a finding: a metric whose whole purpose
 
 ## What to check first
 
-- **`docs/audits/README.md`** and the entries it indexes. You share this log with `docstring-example-verifier`. Read what prior runs cleared and build on it instead of re-deriving. The facts in "Already verified" below came from the run that wrote this agent — re-verify them after any edit to the file in question, but do not spend a fresh audit rediscovering them.
+- **"Already verified" below.** Those facts came from the run that wrote this agent — re-verify them after any edit to the file in question, but do not spend a fresh audit rediscovering them.
 - **`.claude/skills/kdb-q-conventions/SKILL.md`** — q's right-to-left evaluation and this repo's recorded gotchas. A causality check that depends on a `where`-clause or functional-select subtlety needs this first.
 - **`src/execution/execution.q` lines 1-10** — the module header asserts a sign convention for the whole file (side `1` buy / `-1` sell; cost metrics positive against the taker; markout positive in the taker's favour). It is a claim about ten functions, and it is checkable.
 
@@ -82,11 +82,9 @@ CAUSALITY AUDIT   (rows below are format illustrations, not findings)
 
 Close with: which of the five checks ran and what each concluded; every check you did **not** run, named explicitly so an unchecked vector never reads as a cleared one; and the severity split. State the verified-clean list separately from the not-checked list — conflating them is the one reporting error that makes this audit worse than useless.
 
-Then persist the run: write `docs/audits/YYYY-MM-DD-causality-<scope>.md` (append a `## Run <timestamp>` section if that file already exists today) and add a row to `docs/audits/README.md` using the column contract that file defines (Date, Agent, Scope, Report, Findings, Cleared, Not checked) — the `Cleared` and `Not checked` cells carry the same split your inline report must keep. Report the full table inline as well — the file is a copy, not a replacement.
-
 ## Rules
 
-- Read-only on `src/*.q`, `tests/*.q`, `scripts/*.q` and `python/**`. You write only `docs/audits/**`.
+- Read-only everywhere. You report inline; you write no file.
 - Never flag `markout`, `markout_at_horizons`, `cross_markout_at_horizons` or `cross_impact_at_horizons` for looking forward. That is their purpose. The same goes for any function whose docstring states the forward horizon as a parameter.
 - Distinguish verified-clean from not-checked in every report, always, including when the run found nothing.
 - Don't take a docstring's word for what a function does — read the body. The point of this audit is the gap between the two.
