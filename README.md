@@ -80,7 +80,7 @@ paths relative to it (e.g. `src/foundation/stats.q`).
 |---|---|---|
 | **KDB-X** | everything in `src/`, `scripts/` and `tests/` | preferred — see [above](#requirements) for what else may work |
 | **[uv](https://docs.astral.sh/uv/)** | the Python packages and every `uqs` command | yes, for the fleet |
-| **`qcon`** | attaching a console to a running process: `uqs raw -- qcon gateway1 admin:admin` | no - only that command |
+| **`qcon`** | attaching a console to a running process: `uqs query --port <p> --console` | no - only that command |
 | **`rlwrap`** | line editing and history inside `qcon` | no - `qcon` runs without it |
 | **Node** | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares | no - only for `web/` |
 | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor | no - suggested when writing or debugging q |
