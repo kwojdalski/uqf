@@ -15,6 +15,37 @@ from torq_orchestrator.logger import get_logger
 log = get_logger(__name__)
 
 
+#: ---------------------------------------------------------------------------
+#: Where this repository keeps each kind of file, relative to its root.
+#: ---------------------------------------------------------------------------
+#: One home, because `src/etl/streaming` was spelled in four: `pipeline_edges`
+#: as `Path("src") / "etl" / "streaming"`, `scaffold` as
+#: `Path("src/etl/streaming")`, and twice more in q (`src/etl/init.q`,
+#: `tests/lib/testutil.q`). Four spellings of one fact is four places to edit
+#: and three chances to miss one.
+#:
+#: RELATIVE, because every consumer joins them to a root it already has - the
+#: scaffold to the repo root it is writing into, the edge verifier to the one
+#: it is reading. An absolute constant would decide that for them.
+ETL_DIR = Path("src/etl")
+STREAM_DIR = ETL_DIR / "streaming"
+SOURCE_DIR = ETL_DIR / "sources"
+WORKER_DIR = ETL_DIR / "workers"
+ETL_INIT = ETL_DIR / "init.q"
+
+TEST_DIR = Path("tests/q")
+RUN_TESTS_FILE = Path("tests/run_tests.q")
+
+PROCESS_SCRIPTS_DIR = Path("scripts/processes")
+TABLES_FILE = PROCESS_SCRIPTS_DIR / "uqf_stack_tables.q"
+
+#: This package, and the registry the scaffold appends to. Spelled here rather
+#: than in `scaffold.py`, which hardcoded its own location as a string - a
+#: self-reference that the package rename would silently break.
+PACKAGE_DIR = Path("python/torq_orchestrator")
+REGISTRY_FILE = PACKAGE_DIR / "src" / "torq_orchestrator" / "registry.py"
+
+
 class UqfStackError(RuntimeError):
     """Raised for anything that stops the demo from being runnable as-is."""
 
@@ -75,17 +106,48 @@ class UqfStackPaths:
         return self.orchestrator_dir / "databento_feed.pid"
 
 
+#: Directories that together identify this repository's root and nothing else.
+#: Both, because either alone is a plausible name inside some other tree.
+_ROOT_MARKERS = (Path("lib") / "torq", ETL_DIR)
+
+
+def repo_root() -> Path:
+    """This repository's root, found by searching upward for a marker.
+
+    NOT by counting directory levels, which is what three modules did
+    separately - `paths.py` (`parents[2]` then `parents[1]`), `schemas.py`
+    (`parents[4]`) and `pipeline_edges.py` (`parents[4]`). Each count is a fact
+    about how deep that particular file sits, so moving a module one directory
+    changes its count: the path still resolves, to the wrong place, and no type
+    checker can see it.
+
+    That is not hypothetical. `default_paths`' own comment said
+    "this file: .../torq_orchestrator/core.py" long after the split moved it to
+    `paths.py` - the count stayed right by luck, and the comment describing it
+    went stale unnoticed.
+
+    Searching for a marker is indifferent to how deep the caller is, which is
+    what makes moving modules into subdirectories safe.
+    """
+    here = Path(__file__).resolve()
+    for candidate in (here, *here.parents):
+        if all((candidate / marker).is_dir() for marker in _ROOT_MARKERS):
+            return candidate
+    raise UqfStackError(
+        f"cannot find the repository root above {here}: no parent holds both "
+        + " and ".join(str(m) for m in _ROOT_MARKERS)
+    )
+
+
 def default_paths() -> UqfStackPaths:
-    # this file: <repo_root>/python/torq_orchestrator/src/torq_orchestrator/core.py
-    orchestrator_dir = Path(__file__).resolve().parents[2]
-    repo_root = orchestrator_dir.parents[1]
+    root = repo_root()
     return UqfStackPaths(
-        repo_root=repo_root,
-        torqhome=repo_root / "lib" / "torq",
-        torqapphome=repo_root / "lib" / "torq-finance-starter-pack",
-        torqdata=repo_root / "scripts" / "output" / "uqf-stack",
-        scripts_dir=repo_root / "scripts",
-        orchestrator_dir=orchestrator_dir,
+        repo_root=root,
+        torqhome=root / "lib" / "torq",
+        torqapphome=root / "lib" / "torq-finance-starter-pack",
+        torqdata=root / "scripts" / "output" / "uqf-stack",
+        scripts_dir=root / "scripts",
+        orchestrator_dir=root / PACKAGE_DIR,
     )
 
 

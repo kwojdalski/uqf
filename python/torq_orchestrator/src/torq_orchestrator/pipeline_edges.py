@@ -18,20 +18,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from torq_orchestrator.paths import UqfStackError
+# `repo_root` is aliased because several functions here take a repo root as
+# a PARAMETER of that name, which would shadow the finder.
+from torq_orchestrator.paths import STREAM_DIR, WORKER_DIR, UqfStackError
+from torq_orchestrator.paths import repo_root as find_repo_root
 from torq_orchestrator.pipeline import FROM_DECLARATION, PipelineKind
-
-
-def _repo_root() -> Path:
-    """This repository's root, from this file's own location.
-
-    Derived rather than taken from `UqfStackPaths`, which carries a dozen
-    other resolved locations and would make every edge lookup depend on the
-    vendored tree being present. This module is four levels down:
-    python/torq_orchestrator/src/torq_orchestrator/pipeline_edges.py
-    """
-    return Path(__file__).resolve().parents[4]
-
 
 #
 # The dataflow edges declared above are what the generated diagrams draw.
@@ -81,8 +72,6 @@ _REGISTER_RE = re.compile(
 #:         .qsub.executions.executions;
 #:         `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
 _NORMALIZER_RE = re.compile(r"\.qnorm\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S)
-_STREAM_DIR = Path("src") / "etl" / "streaming"
-_WORKER_DIR = Path("src") / "etl" / "workers"
 
 #: A bounded worker declares itself the way a streaming job does, and is
 #: found the same way - by reading the declaration rather than a list kept
@@ -181,7 +170,7 @@ def _declared_stream_edges(repo_root: Path) -> dict[str, tuple[tuple[str, ...], 
     mismatch rather than silently agreeing.
     """
     edges: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
-    directory = repo_root / _STREAM_DIR
+    directory = repo_root / STREAM_DIR
     if not directory.is_dir():
         return edges
     for path in sorted(directory.glob("*.q")):
@@ -236,13 +225,13 @@ def resolve_edges(
     publishes = pipeline.publishes
     needs = subscribes is FROM_DECLARATION or publishes is FROM_DECLARATION
     if needs:
-        root = repo_root or _repo_root()
+        root = repo_root or find_repo_root()
         declared = _stream_edge_cache(root).get(pipeline.procname)
         if declared is None:
             raise UqfStackError(
                 f"{pipeline.procname}: declares its edges in q (FROM_DECLARATION) but no "
                 f"`.qstream.register`/`.qnorm.define` naming that process was found under "
-                f"{_STREAM_DIR}. Either the job file is missing, its procname disagrees "
+                f"{STREAM_DIR}. Either the job file is missing, its procname disagrees "
                 f"with the registry, or the edges belong back in the Pipeline entry"
             )
         if subscribes is FROM_DECLARATION:
@@ -256,7 +245,7 @@ def resolve_edges(
 
 def _declared_workers(repo_root: Path) -> set[str]:
     """Every bounded worker that registers itself under src/etl/workers/."""
-    directory = repo_root / _WORKER_DIR
+    directory = repo_root / WORKER_DIR
     if not directory.is_dir():
         return set()
     found: set[str] = set()
@@ -350,7 +339,7 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
             if pipeline.procname not in stream_edges:
                 problems.append(
                     f"{pipeline.procname}: runs {STREAM_RUNNER} but no job under "
-                    f"{_STREAM_DIR} claims that process - .qstream.register's "
+                    f"{STREAM_DIR} claims that process - .qstream.register's "
                     "procname is how the runner finds out which job it is, so this "
                     "process would refuse to start"
                 )
@@ -450,7 +439,7 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
         elif pipeline.worker and pipeline.worker not in workers:
             problems.append(
                 f"{pipeline.procname}: names worker {pipeline.worker!r}, which no "
-                f"file under {_WORKER_DIR} declares - the process would start and "
+                f"file under {WORKER_DIR} declares - the process would start and "
                 f"then refuse"
             )
 
