@@ -29,7 +29,7 @@ framework - see [Testing](#testing).
 ## Contents
 
 - [Requirements](#requirements) — KDB-X preferred, what else might work, and why nothing falls back automatically
-- [Quick start](#quick-start) — load it and price something
+- [Quick start](#quick-start) — price something, run the fleet, run a backfill, add a pipeline, run the tests
 - [Components](#components) — what this tree contains, and which part owns what
 - [Quant modules](#quant-modules) — each `src/` pricing file, its namespace and tests
   - [Conventions](#conventions) — quoting, sign, pip factors, naming
@@ -123,7 +123,7 @@ Helix configuration.
 
 ## Quick start
 
-Four entry points, one per thing you might have come for. None depends on
+Five entry points, one per thing you might have come for. None depends on
 the others - the library prices without a running process, and the fleet
 runs without anyone loading the library by hand.
 
@@ -163,6 +163,30 @@ UQF_BACKFILL_TO=2026.09.15D00:00 \
 All four variables are required together: the process refuses to start and
 names every missing one at once, because a backfill that silently defaulted
 its range would publish the wrong window and record coverage for it.
+
+**Add a pipeline.** `uqs new-job` scaffolds one of three shapes, and
+`--dry-run` lists every file it would create or append to without writing
+any of them:
+
+```
+# a streaming job: reads quote, publishes a table of its own
+uv run uqs new-job spread_stats --subscribes quote \
+    --publishes spread_stats --columns "sym:symbol, spread_pips:float" --dry-run
+
+# a feed: subscribes to nothing, publishes on a timer
+uv run uqs new-job rates_feed --publishes rates \
+    --columns "sym:symbol, mid:float" --dry-run
+
+# a bounded worker, with its source and transform, one day per window
+uv run uqs new-job eod_rates --kind backfill --dataset eod_rates \
+    --columns "sym:symbol, mid:float" --width 1D --dry-run
+```
+
+The handler it writes throws and the test it writes fails, on purpose: a
+scaffold that left something green would look implemented from outside. The
+output ends with what is still yours to write.
+[Adding a data pipeline](docs/guides/new-pipeline.md) walks one through end
+to end.
 
 **Check it all still works.** One lane per layer, listed under
 [Testing](#testing):
@@ -224,14 +248,16 @@ directories, one question each:
 | [`docs/guides/`](docs/guides/) | *How do I do this?* — running the stack, adding a pipeline, the CI gates |
 | [`docs/services/`](docs/services/README.md) | *What does this running service do, and how do I run it?* — one page per service |
 | [`docs/architecture/`](docs/architecture/) | *Why is it shaped this way?* |
-| [`docs/reference/`](docs/reference/) | *What is the contract?* — the pages CI holds the code to |
+| [`docs/reference/`](docs/reference/) | *What is the contract?* — the quant modules, environment variables and requirement ids |
 | [`docs/integrations/`](docs/integrations/torq/README.md) | *How does this meet something external?* |
 
 Still open, and why: the `decision`-labelled issues.
 
-Component READMEs: [`web/`](web/README.md) (the React desk app),
-[`env/`](env/README.md),
-[`python/uqs/`](python/uqs/README.md).
+Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
+[`python/uqf_frontend/`](python/uqf_frontend/README.md) (the API),
+[`web/`](web/README.md) (the React desk app),
+[`python/uqf_airflow_provider/`](python/uqf_airflow_provider/README.md),
+[`env/`](env/README.md).
 
 ## Browser application
 
