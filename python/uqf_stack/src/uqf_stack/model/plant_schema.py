@@ -21,10 +21,6 @@ from typing import Any
 from uqf_stack.logger import get_logger
 from uqf_stack.model.pipelines import PIPELINES
 from uqf_stack.model.schemas import (
-    CRYPTO_SIM_FILLS_TABLE_SCHEMA,
-    DATABENTO_MBP10_TABLE_SCHEMA,
-)
-from uqf_stack.model.schemas import (
     _definitions as _table_definitions,
 )
 from uqf_stack.paths import UqfStackPaths
@@ -108,34 +104,17 @@ def _generated_schema_content(paths: UqfStackPaths) -> str:
     """
     vendored = (paths.torqapphome / "database.q").read_text()
     extra = paths.extra_schema_path.read_text() if paths.extra_schema_path.is_file() else ""
-    # Definitions are resolved from what each pipeline says it PUBLISHES,
-    # not from the `schema` field it happens to carry.
-    #
-    # The difference is the whole of #287. `schema` describes one table, and
-    # a pipeline may publish two: fxpositions1 declares `fx_position` and
-    # `fx_limit_breach`, owns no `schema`, and so contributed nothing here.
-    # Both tables were defined in uqf_stack_tables.q the entire time. The
-    # service computed a correct book and published it every five seconds
-    # onto tables the tickerplant had never heard of - no error at the
-    # publisher, none at the plant, and nothing downstream to read.
-    #
-    # Deriving from `publishes` closes it for good: a table a pipeline sends
-    # rows to is a table stp1 is told about, and there is no second field to
-    # forget. `quote` is published by fxfeed1 and is absent below because
-    # the vendored file already defines it - which is the same rule read the
-    # other way, since uqf_stack_tables.q defines only the tables this tree
-    # owns.
+    # EVERY table uqf_stack_tables.q defines. That file is the list of the
+    # tables this tree puts on the plant - what its jobs publish, and what
+    # the producers outside it publish (the Databento feed handler into
+    # databento_mbp10, cryptorust's recorder into crypto_sim_fills) - so it is
+    # the whole answer, with nothing to add by name. That no published table
+    # is missing from it is held by test_generated_schema_covers_every_
+    # published_table: .u.upd onto a table the plant was never told about
+    # discards the rows in silence (#287, #288).
     #
     # Definition order among independent table declarations is immaterial to
-    # q, which is why grouping them this way is safe.
+    # q, so they are sorted for a stable file.
     owned = _table_definitions()
-    definitions = [owned[t] for t in sorted(_published_tables(PIPELINES) & set(owned))] + [
-        # Tables no pipeline publishes, so nothing above reaches them.
-        # databento_mbp10 comes from the live feed handler
-        # (external/databento_feed.py) and databento1 only subscribes;
-        # crypto_sim_fills is written by cryptorust's recorder (see
-        # start_crypto_fills_recorder), not by any process in this list.
-        DATABENTO_MBP10_TABLE_SCHEMA,
-        CRYPTO_SIM_FILLS_TABLE_SCHEMA,
-    ]
+    definitions = [owned[t] for t in sorted(owned)]
     return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions) + extra

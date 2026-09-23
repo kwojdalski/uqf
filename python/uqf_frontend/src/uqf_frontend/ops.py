@@ -58,8 +58,8 @@ CLIENTS = ".gw.clients"
 #:
 #: An EXPRESSION, not a `{[] ...}` lambda: a niladic lambda sent with no
 #: arguments makes q return the function itself, which kola cannot
-#: deserialise. That has bitten `queries.PING` and `ops.IDENTITY` before, and
-#: `test_q_programs.py` caught this one before it shipped.
+#: deserialise. That has bitten this package twice, and `test_q_programs.py`
+#: caught this one before it shipped.
 #:
 #: Guarded on `.clients` existing, because a process without TorQ's
 #: trackclients handler loaded has no such table and an unguarded read would
@@ -82,16 +82,6 @@ USAGE_SINCE = """{[since;lim]
   r:`time xasc select from .usage.usage where time>since;
   $[lim>0; lim sublist r; r]}"""
 
-#: How long this process keeps usage rows in memory before flushing them.
-#:
-#: Worth READING rather than assuming, in either direction.
-#: `code/handlers/logusage.q` says `@[value;`flushtime;0D03]` - three hours -
-#: and that line has been quoted here as fact. It is a fallback for a value
-#: already defined, and `config/settings/default.q` sets `1D00` first, so a
-#: standard stack runs at one day. A deployment may override it again, which
-#: is why this is a query and not a constant.
-FLUSHTIME = "value `.usage.flushtime"
-
 #: What a process can say about itself over IPC.
 #:
 #: This is what makes fleet health work without shelling out to torq.sh and
@@ -104,9 +94,8 @@ FLUSHTIME = "value `.usage.flushtime"
 #: fall back to `unknown rather than failing the probe. Returns a one-row
 #: table rather than a dict so it projects the same way as every other view.
 #:
-#: An *expression*, not a ``{[] ...}`` lambda, for the same reason as
-#: :data:`uqf_frontend.queries.PING`: sending a niladic lambda with no
-#: arguments makes q return the function itself, which kola cannot
+#: An *expression*, not a ``{[] ...}`` lambda: sending a niladic lambda with
+#: no arguments makes q return the function itself, which kola cannot
 #: deserialise ("Not supported k type 100"). Second time this bit, hence the
 #: test asserting no program in either module is a bare niladic lambda.
 IDENTITY = (

@@ -31,7 +31,6 @@ ETL_DIR = Path("src/etl")
 STREAM_DIR = ETL_DIR / "streaming"
 SOURCE_DIR = ETL_DIR / "sources"
 WORKER_DIR = ETL_DIR / "workers"
-ETL_INIT = ETL_DIR / "init.q"
 
 TEST_DIR = Path("tests/q")
 RUN_TESTS_FILE = Path("tests/run_tests.q")

@@ -60,7 +60,7 @@ from uqf_stack.model.pipelines import (  # noqa: E402
     verify_pipeline_edges,
 )
 from uqf_stack.model.registry import render_port_lock  # noqa: E402
-from uqf_stack.paths import PROCESS_PORTS_FILE, default_paths  # noqa: E402
+from uqf_stack.paths import PROCESS_PORTS_FILE, TABLES_FILE, default_paths  # noqa: E402
 from uqf_stack.stack import procs  # noqa: E402
 
 OUT = REPO / "docs" / "integrations" / "torq" / "processes.md"
@@ -86,15 +86,8 @@ def _vendored_procnames() -> list[str]:
 
 
 def _schema_names() -> dict[str, str]:
-    """Table name -> the constant that defines it, for the schema section."""
-    out: dict[str, str] = {}
-    for name in dir(schemas):
-        if not name.endswith("_TABLE_SCHEMA"):
-            continue
-        text = getattr(schemas, name)
-        if isinstance(text, str) and ":(" in text:
-            out[text.split(":(")[0].strip()] = name
-    return out
+    """Table name -> where it is defined, for the schema section."""
+    return {table: f"`{TABLES_FILE.name}`" for table in schemas._definitions()}
 
 
 def render() -> str:
@@ -164,7 +157,7 @@ def render() -> str:
             publishers.setdefault(t, []).append(p.procname)
     for table in sorted(publishers):
         const = schema_of.get(table)
-        defined = f"`schemas.{const}`" if const else "_vendored_"
+        defined = const or "_vendored_"
         who = ", ".join(f"`{n}`" for n in sorted(publishers[table]))
         lines.append(f"| `{table}` | {defined} | {who} |")
 

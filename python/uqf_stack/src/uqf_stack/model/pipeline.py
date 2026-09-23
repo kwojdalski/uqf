@@ -168,12 +168,8 @@ class Pipeline:
     def schema(self) -> str | None:
         """The owned table's q definition, read from uqf_stack_tables.q.
 
-        DERIVED, not declared. This was a `schema=X_TABLE_SCHEMA` field sitting
-        beside `table="x"`, and `X_TABLE_SCHEMA` is defined in model/schemas.py as
-        `_DEFS["x"]` - the same lookup, written out by hand in two files.
-        Across the registry: fourteen pipelines carry a table, fourteen carried
-        a schema, and not one of them disagreed, which is what a derived value
-        looks like before anyone derives it.
+        DERIVED, not declared: `table` is read from the job's declaration and
+        its definition from the q table file.
 
         A table the q file does not define RAISES rather than returning None.
         `.u.upd` onto a table the plant has never been told about discards the

@@ -22,8 +22,6 @@ from uqf_stack.model.pipeline import (  # noqa: F401 - re-exported: core.py impo
 )
 from uqf_stack.model.registry import (  # noqa: F401 - re-exported, every caller imports them from here
     DEFAULT_BASE_PORT,
-    FXFEED_PINNED_OFFSET,
-    PIPELINE_BLOCK_START,
     PIPELINES,
     allocate_offsets,
     read_port_lock,
@@ -63,20 +61,6 @@ def _pipeline_rows() -> list[dict[str, str]]:
         }
         for pipeline in PIPELINES
     ]
-
-
-# Per-process offset constants, kept as a stable public surface (tests and
-# docs reference them by name) but derived from PIPELINES rather than
-# hand-maintained.
-FXFEED_PORT_OFFSET = PIPELINE_OFFSETS["fxfeed1"]
-QUOTES_FEED_PORT_OFFSET = PIPELINE_OFFSETS["quotesfeed1"]
-CROSS_ETL_PORT_OFFSET = PIPELINE_OFFSETS["cross1"]
-WIDE_BOOK_FEED_PORT_OFFSET = PIPELINE_OFFSETS["widefeed1"]
-VECTORIZE_ETL_PORT_OFFSET = PIPELINE_OFFSETS["vectorize1"]
-TAP_PORT_OFFSET = PIPELINE_OFFSETS["tap1"]
-FX_TRADES_FEED_PORT_OFFSET = PIPELINE_OFFSETS["fxtradesfeed1"]
-POSBOOK_PORT_OFFSET = PIPELINE_OFFSETS["posbook1"]
-MARKOUT_PORT_OFFSET = PIPELINE_OFFSETS["markout1"]
 
 
 # Edge verification lives in model/pipeline_edges.py - see its header for why the

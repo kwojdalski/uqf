@@ -427,7 +427,7 @@ Two consequences worth knowing:
   was being monitored perfectly well.
 
   `stack/monitor_budget.py` therefore trims `.servers.CONNECTIONS` to fit
-  `MONITOR_CONNECTION_BUDGET` minus `MONITOR_INBOUND_RESERVE`, giving up
+  `LICENCE_CONNECTION_LIMIT` minus `INBOUND_RESERVE`, giving up
   proctypes in `MONITOR_CONNECTION_SACRIFICE_ORDER` - `sortworker`,
   `reporter`, `housekeeping`, `feed`, then `metrics` - until the rest fit.
   Core infrastructure is never given up: a stack whose `rdb` or plant is
@@ -840,7 +840,7 @@ uqf-stack crypto stop
 ```
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
-`ask_prices`/`ask_sizes` - see `core.py`'s `CRYPTO_BOOK_TABLE_SCHEMA`),
+`ask_prices`/`ask_sizes` - see its definition in `scripts/processes/uqf_stack_tables.q`),
 flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`quotes`/
 `wide_book`:
 
@@ -897,9 +897,9 @@ uqf-stack crypto fills-stop
 ```
 
 Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/
-`realized_delta_pnl` - see `core.py`'s `CRYPTO_SIM_FILLS_TABLE_SCHEMA`)
+`realized_delta_pnl` - see its definition in `scripts/processes/uqf_stack_tables.q`)
 and `crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
-`fee`/`fee_currency`/`exchange_fill_id` - `CRYPTO_TRADES_TABLE_SCHEMA`):
+`fee`/`fee_currency`/`exchange_fill_id` - defined in `scripts/processes/uqf_stack_tables.q`):
 
 ```
 uqf-stack query "select from crypto_sim_fills" --port <rdb1's port>

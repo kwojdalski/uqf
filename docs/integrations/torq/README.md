@@ -164,8 +164,8 @@ won the race that boot - which changes every time. It was found the hard way
 when `fxpositions1` and `executions1` came up "up" and never subscribed to
 anything (#285).
 
-So the budget is declared rather than discovered. `PLANT_CONNECTION_BUDGET`
-and `PLANT_CONNECTION_RESERVE` in `model/pipeline_edges.py` hold the cap and the
+So the budget is declared rather than discovered. `LICENCE_CONNECTION_LIMIT`
+and `INBOUND_RESERVE` in `model/pipeline_edges.py` hold the cap and the
 slots kept back for ad-hoc handles (`uqf-stack query`, `uqf-stack schema`,
 the frontend's health view each take one while they run), and
 `verify_pipeline_edges` counts the `startwithall=1` plant clients against

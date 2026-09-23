@@ -115,8 +115,8 @@ def crypto_start(
     """Build and launch a sibling cryptorust checkout's own
     kdb-market-data-recorder and point it at this demo's stp1 - publishing
     live venue order books onto the same kdb+ infra everything else here
-    already runs on, into `crypto_book` (see core.py's
-    CRYPTO_BOOK_TABLE_SCHEMA). Requires a cryptorust checkout - see
+    already runs on, into `crypto_book` (defined in
+    scripts/processes/uqf_stack_tables.q). Requires a cryptorust checkout - see
     $CRYPTORUST_ROOT in core.cryptorust_root's docstring.
     """
     try:
@@ -173,9 +173,9 @@ def crypto_fills_start(
 ) -> None:
     """Build and launch a sibling cryptorust checkout's own
     kdb-fills-recorder, publishing BOTH the market-making bot's SIMULATED
-    (paper) fills into `crypto_sim_fills` (core.py's
-    CRYPTO_SIM_FILLS_TABLE_SCHEMA) AND real confirmed exchange executions
-    into `crypto_trades` (CRYPTO_TRADES_TABLE_SCHEMA) - see that binary's
+    (paper) fills into `crypto_sim_fills` AND real confirmed exchange
+    executions into `crypto_trades` (both defined in
+    scripts/processes/uqf_stack_tables.q) - see that binary's
     own doc header for how each source differs. Requires an already-running
     cryptorust service (its OMS IPC socket, default /tmp/beacon.sock) -
     this doesn't start one itself, unlike `crypto start` which owns its

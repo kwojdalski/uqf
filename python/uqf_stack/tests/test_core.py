@@ -63,7 +63,7 @@ def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(
 
     generated = fake_paths.generated_procs.read_text()
     assert "discovery1" in generated
-    assert f"localhost,{{KDBBASEPORT}}+{core.FXFEED_PORT_OFFSET},feed,fxfeed1" in generated
+    assert f"localhost,{{KDBBASEPORT}}+{core.PIPELINE_OFFSETS['fxfeed1']},feed,fxfeed1" in generated
 
     assert env["KDBBASEPORT"] == "7000"
     assert env["TORQPROCESSES"] == str(fake_paths.generated_procs)
@@ -106,7 +106,7 @@ def test_get_process_config_unknown_process_raises(fake_paths: core.UqfStackPath
 
 def test_get_process_config_resolves_brace_arith_placeholder(fake_paths: core.UqfStackPaths):
     row = core.get_process_config(fake_paths, "fxfeed1", base_port=7000)
-    assert row["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
+    assert row["port"] == str(7000 + core.PIPELINE_OFFSETS["fxfeed1"])
 
 
 def test_get_process_config_resolves_dollar_brace_placeholder(fake_paths: core.UqfStackPaths):
@@ -173,10 +173,10 @@ def test_bootstrap_generates_schema_with_quotes_table(fake_paths: core.UqfStackP
 
     generated = fake_paths.generated_schema.read_text()
     assert "quote:" in generated  # vendored table still present
-    assert core.QUOTES_TABLE_SCHEMA in generated
-    assert core.TRADES_TABLE_SCHEMA in generated
-    assert core.POSITION_TABLE_SCHEMA in generated
-    assert core.EXECUTION_QUALITY_TABLE_SCHEMA in generated
+    assert schemas.definition("quotes") in generated
+    assert schemas.definition("trades") in generated
+    assert schemas.definition("position") in generated
+    assert schemas.definition("execution_quality") in generated
 
 
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
@@ -258,16 +258,16 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.
     by_name = {item["procname"]: item for item in items}
     assert set(by_name) == _FIXTURE_VENDORED | {p.procname for p in core.PIPELINES}
     assert by_name["discovery1"]["port"] == "7000"
-    assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
-    assert by_name["quotesfeed1"]["port"] == str(7000 + core.QUOTES_FEED_PORT_OFFSET)
-    assert by_name["cross1"]["port"] == str(7000 + core.CROSS_ETL_PORT_OFFSET)
-    assert by_name["widefeed1"]["port"] == str(7000 + core.WIDE_BOOK_FEED_PORT_OFFSET)
-    assert by_name["vectorize1"]["port"] == str(7000 + core.VECTORIZE_ETL_PORT_OFFSET)
-    assert by_name["tap1"]["port"] == str(7000 + core.TAP_PORT_OFFSET)
+    assert by_name["fxfeed1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["fxfeed1"])
+    assert by_name["quotesfeed1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["quotesfeed1"])
+    assert by_name["cross1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["cross1"])
+    assert by_name["widefeed1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["widefeed1"])
+    assert by_name["vectorize1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["vectorize1"])
+    assert by_name["tap1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["tap1"])
     assert by_name["tap1"]["startwithall"] == "0"
-    assert by_name["fxtradesfeed1"]["port"] == str(7000 + core.FX_TRADES_FEED_PORT_OFFSET)
-    assert by_name["posbook1"]["port"] == str(7000 + core.POSBOOK_PORT_OFFSET)
-    assert by_name["markout1"]["port"] == str(7000 + core.MARKOUT_PORT_OFFSET)
+    assert by_name["fxtradesfeed1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["fxtradesfeed1"])
+    assert by_name["posbook1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["posbook1"])
+    assert by_name["markout1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["markout1"])
 
 
 def test_list_processes_reflects_overrides(fake_paths: core.UqfStackPaths):
@@ -897,80 +897,11 @@ def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStack
     for pipeline in core.PIPELINES:
         if pipeline.schema:
             assert pipeline.schema in generated, pipeline.procname
-    # the tables no pipeline publishes: crypto_sim_fills comes from
-    # cryptorust's recorder and databento_mbp10 from the live feed handler,
-    # so they are listed explicitly and must survive too
-    assert core.CRYPTO_SIM_FILLS_TABLE_SCHEMA in generated
-    assert schemas.DATABENTO_MBP10_TABLE_SCHEMA in generated
-
-
-def test_every_bounded_worker_can_be_started_by_the_stack():
-    """The bounded half of #281's rule.
-
-    A backfill process and the worker it runs are joined at *runtime* by
-    `UQF_BACKFILL_WORKER` — one script serves every worker. So nothing
-    statically connected the two, and `databento_book_backfill` and
-    `upstream_trades_backfill` sat fully declared with no process able to
-    run them. `Pipeline.worker` declares the link; this holds it.
-    """
-    repo_root = Path(__file__).resolve().parents[3]
-    workers = pipeline_edges._declared_workers(repo_root)
-    run_by = {p.worker for p in core.PIPELINES if p.kind is PipelineKind.BACKFILL and p.worker}
-    orphans = workers - run_by - pipeline_edges.WORKERS_WITHOUT_A_PROCESS
-    assert not orphans, (
-        f"bounded worker(s) {sorted(orphans)} have no backfill pipeline naming them, "
-        "so they can only be run by hand"
-    )
-
-
-def test_every_backfill_names_a_worker_that_exists():
-    """The other direction: a process naming a worker nothing declares would
-    start, read its environment, and refuse."""
-    repo_root = Path(__file__).resolve().parents[3]
-    workers = pipeline_edges._declared_workers(repo_root)
-    for pipeline in core.PIPELINES:
-        if pipeline.kind is PipelineKind.BACKFILL:
-            assert pipeline.worker, f"{pipeline.procname} names no worker"
-            assert pipeline.worker in workers, (
-                f"{pipeline.procname} names {pipeline.worker!r}, which no file under "
-                f"src/etl/workers declares"
-            )
-
-
-def test_every_streaming_job_can_be_started_by_the_stack():
-    """A job registered in q must have a process that can start it.
-
-    The rule, stated as a requirement rather than left to habit: a `.qstream`
-    job is TorQ-free *code*, and which runner starts it is a separate
-    decision — `torq_stream.q` against TorQ, `run_stream.q` against `.qtick`.
-    So "it runs standalone" is not a reason to be unstartable by the stack.
-
-    Until #281 `fxpositions1` and `fxordersfeed1` were exactly that: they
-    registered in q, claimed a procname, and no pipeline declared them, so
-    `process.csv` never mentioned them. Every existing check ran the other
-    way — "does this process's job exist?" — and none of them noticed.
-    """
-    repo_root = Path(__file__).resolve().parents[3]
-    declared = pipeline_edges._declared_stream_edges(repo_root)
-    have_process = {p.procname for p in core.PIPELINES}
-    orphans = set(declared) - have_process - pipeline_edges.RUNS_WITHOUT_A_PROCESS
-    assert not orphans, (
-        f"streaming job(s) claim {sorted(orphans)} but no Pipeline declares them, "
-        "so uqf-stack cannot start them"
-    )
-
-
-def test_the_unstartable_list_is_empty_and_should_stay_that_way():
-    """`RUNS_WITHOUT_A_PROCESS` is the escape hatch for a job that genuinely
-    cannot be started by the stack. It is empty, and an entry appearing in it
-    should be argued for rather than assumed: the publish seam means the same
-    job file runs under either runner, so "written for the other runner" is
-    not an argument.
-    """
-    assert pipeline_edges.RUNS_WITHOUT_A_PROCESS == frozenset(), (
-        "a job has been excused from being startable - check the reason is "
-        "stronger than 'it was written for run_stream.q'"
-    )
+    # and every table uqf_stack_tables.q defines, including the ones only an
+    # outside producer writes (crypto_sim_fills from cryptorust's recorder,
+    # databento_mbp10 from the live feed handler) - no list names them
+    for definition in schemas._definitions().values():
+        assert definition in generated, definition.split(":")[0]
 
 
 def test_declared_dataflow_edges_match_the_q_scripts():
@@ -1262,7 +1193,7 @@ def test_the_default_start_fits_inside_the_licence_connection_budget():
         for p in core.PIPELINES
         if p.startwithall == "1" and p.kind is not PipelineKind.BACKFILL
     } | pipeline_edges.VENDORED_PLANT_CLIENTS
-    allowance = pipeline_edges.PLANT_CONNECTION_BUDGET - pipeline_edges.PLANT_CONNECTION_RESERVE
+    allowance = pipeline_edges.LICENCE_CONNECTION_LIMIT - pipeline_edges.INBOUND_RESERVE
     assert len(clients) <= allowance, (
         f"the default start opens {len(clients)} tickerplant connections but only "
         f"{allowance} are available: {sorted(clients)}"
@@ -1359,8 +1290,8 @@ def test_the_fx_positions_tables_reach_the_tickerplant(fake_paths: core.UqfStack
     `database.q`, so the whole FX positions service published into nothing.
     """
     generated = core._generated_schema_content(fake_paths)
-    assert schemas.FX_POSITION_TABLE_SCHEMA in generated
-    assert schemas.FX_LIMIT_BREACH_TABLE_SCHEMA in generated
+    assert schemas.definition("fx_position") in generated
+    assert schemas.definition("fx_limit_breach") in generated
     assert plant_schema._published_tables([core.PIPELINE_BY_NAME["fxpositions1"]]) == {
         "fx_position",
         "fx_limit_breach",

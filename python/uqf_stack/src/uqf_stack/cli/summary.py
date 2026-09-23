@@ -303,7 +303,7 @@ def summary(
         # and not the common one. Saturation looks identical from here and is
         # what actually happens on a full stack: monitor1 opens a handle to
         # every process it monitors, the licence caps a q process at
-        # MONITOR_CONNECTION_BUDGET concurrent connections, and once it is at
+        # LICENCE_CONNECTION_LIMIT concurrent connections, and once it is at
         # the cap it cannot accept the inbound handle this query needs - so a
         # monitor that is running perfectly, and collecting heartbeats
         # correctly, is unreachable. Telling the reader to restart it then
@@ -313,7 +313,7 @@ def summary(
         )
         cause = (
             "It is up, so it is most likely at its connection cap "
-            f"({core.MONITOR_CONNECTION_BUDGET} on this licence) and cannot accept "
+            f"({core.LICENCE_CONNECTION_LIMIT} on this licence) and cannot accept "
             "another handle - check `err_monitor1.log`, which will still be "
             "recording the heartbeats it collected"
             if monitor_up

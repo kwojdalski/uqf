@@ -390,14 +390,14 @@ def test_a_start_past_the_licence_cap_warns(monkeypatch):
     and it does so silently: the extra handle is reset, the process wedges in
     its retry loop, and `summary` still reports it `up` because that is a PID
     check."""
-    over = [_row(Process=f"p{i}") for i in range(core.PLANT_CONNECTION_BUDGET + 1)]
+    over = [_row(Process=f"p{i}") for i in range(core.LICENCE_CONNECTION_LIMIT + 1)]
     _patch(monkeypatch, "summary", result=Completed(stdout="raw"))
     _patch(monkeypatch, "summary_rows", result=over)
     _patch(monkeypatch, "start", result=Completed())
     result = runner.invoke(cli.app, ["start", "rdb1"])
     assert result.exit_code == 0
     assert "past the" in result.stdout
-    assert str(core.PLANT_CONNECTION_BUDGET) in result.stdout
+    assert str(core.LICENCE_CONNECTION_LIMIT) in result.stdout
 
 
 def test_a_start_inside_the_cap_is_silent(monkeypatch):

@@ -42,8 +42,8 @@ Derived from `uqf_stack.model.pipelines.PIPELINES` and the vendored
 ### Why a row deviates from the defaults
 
 - **`fxfeed1`** — pinned below the vendored dqc/dqe block, not part of the contiguous run
-- **`cross1`** — keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside PLANT_CONNECTION_BUDGET (#285); quotesfeed1 runs by default, so `uqf-stack start cross1` is enough
-- **`widefeed1`** — half of a closed pair with vectorize1: it is the only producer of wide_book and vectorize1 the only consumer, so the two start and stop together and no other job notices. startwithall:0 to stay inside PLANT_CONNECTION_BUDGET (#285) - `uqf-stack start widefeed1 vectorize1`
+- **`cross1`** — keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); quotesfeed1 runs by default, so `uqf-stack start cross1` is enough
+- **`widefeed1`** — half of a closed pair with vectorize1: it is the only producer of wide_book and vectorize1 the only consumer, so the two start and stop together and no other job notices. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285) - `uqf-stack start widefeed1 vectorize1`
 - **`vectorize1`** — the other half of the widefeed1 pair: nothing subscribes to mkt_orderbook, so this branch of the graph is self-contained. See widefeed1
 - **`tap1`** — diagnostic subscriber - started on demand, not with the whole stack
 - **`posbook1`** — reads the two normalizers' outputs, not trades and quote, so one book carries FX and crypto and a new market is a mapping, not a job
@@ -67,26 +67,26 @@ Derived from `uqf_stack.model.pipelines.PIPELINES` and the vendored
 
 | table | defined by | published by |
 |---|---|---|
-| `arbitrage` | `schemas.ARBITRAGE_TABLE_SCHEMA` | `arbitrage1` |
-| `config_change` | `schemas.CONFIG_CHANGE_TABLE_SCHEMA` | `crossarb1`, `superbook1` |
-| `cross_arbitrage` | `schemas.CROSS_ARBITRAGE_TABLE_SCHEMA` | `crossarb1` |
-| `crypto_book` | `schemas.CRYPTO_BOOK_TABLE_SCHEMA` | `cryptomock1` |
-| `crypto_trades` | `schemas.CRYPTO_TRADES_TABLE_SCHEMA` | `cryptomock1` |
-| `databento_book` | `schemas.DATABENTO_BOOK_TABLE_SCHEMA` | `databento1` |
-| `execution_quality` | `schemas.EXECUTION_QUALITY_TABLE_SCHEMA` | `markout1` |
-| `executions` | `schemas.EXECUTIONS_TABLE_SCHEMA` | `executions1` |
-| `fx_limit_breach` | `schemas.FX_LIMIT_BREACH_TABLE_SCHEMA` | `fxpositions1` |
-| `fx_position` | `schemas.FX_POSITION_TABLE_SCHEMA` | `fxpositions1` |
-| `market_data` | `schemas.MARKET_DATA_TABLE_SCHEMA` | `marketdata1` |
-| `marks` | `schemas.MARKS_TABLE_SCHEMA` | `marks1` |
-| `mkt_orderbook` | `schemas.MKT_ORDERBOOK_TABLE_SCHEMA` | `vectorize1` |
-| `orders` | `schemas.ORDERS_TABLE_SCHEMA` | `fxordersfeed1` |
-| `position` | `schemas.POSITION_TABLE_SCHEMA` | `posbook1` |
+| `arbitrage` | `uqf_stack_tables.q` | `arbitrage1` |
+| `config_change` | `uqf_stack_tables.q` | `crossarb1`, `superbook1` |
+| `cross_arbitrage` | `uqf_stack_tables.q` | `crossarb1` |
+| `crypto_book` | `uqf_stack_tables.q` | `cryptomock1` |
+| `crypto_trades` | `uqf_stack_tables.q` | `cryptomock1` |
+| `databento_book` | `uqf_stack_tables.q` | `databento1` |
+| `execution_quality` | `uqf_stack_tables.q` | `markout1` |
+| `executions` | `uqf_stack_tables.q` | `executions1` |
+| `fx_limit_breach` | `uqf_stack_tables.q` | `fxpositions1` |
+| `fx_position` | `uqf_stack_tables.q` | `fxpositions1` |
+| `market_data` | `uqf_stack_tables.q` | `marketdata1` |
+| `marks` | `uqf_stack_tables.q` | `marks1` |
+| `mkt_orderbook` | `uqf_stack_tables.q` | `vectorize1` |
+| `orders` | `uqf_stack_tables.q` | `fxordersfeed1` |
+| `position` | `uqf_stack_tables.q` | `posbook1` |
 | `quote` | _vendored_ | `fxfeed1` |
-| `quotes` | `schemas.QUOTES_TABLE_SCHEMA` | `quotesfeed1` |
-| `superbook` | `schemas.SUPERBOOK_TABLE_SCHEMA` | `superbook1` |
-| `trades` | `schemas.TRADES_TABLE_SCHEMA` | `fxtradesfeed1` |
-| `wide_book` | `schemas.WIDE_BOOK_TABLE_SCHEMA` | `widefeed1` |
+| `quotes` | `uqf_stack_tables.q` | `quotesfeed1` |
+| `superbook` | `uqf_stack_tables.q` | `superbook1` |
+| `trades` | `uqf_stack_tables.q` | `fxtradesfeed1` |
+| `wide_book` | `uqf_stack_tables.q` | `widefeed1` |
 
 ## The vendored stack
 

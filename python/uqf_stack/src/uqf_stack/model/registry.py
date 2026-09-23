@@ -19,8 +19,9 @@ Two things are not read from a declaration:
 * Ports. A port has to survive processes being added around it, which no
   order over files can promise, so each process's offset is remembered in
   scripts/processes/process_ports.csv - generated and append-only, like a
-  lockfile. A process not yet in it is allocated the next free offset here,
-  and generate_operational_docs.py writes that down.
+  lockfile, and the lock is the only place a port comes from: a process
+  not yet in it is allocated the next free offset here, and
+  generate_operational_docs.py writes that down.
 """
 
 from __future__ import annotations
@@ -41,13 +42,6 @@ from uqf_stack.paths import PROCESS_PORTS_FILE, TABLES_FILE, repo_root
 
 DEFAULT_BASE_PORT = 6050
 
-# fxfeed1 sits at the one offset the vendored process.csv leaves free below
-# its own dqc/dqe block (+20..+23); every other uqf process was allocated
-# contiguously from PIPELINE_BLOCK_START. Both now live in the port lock;
-# these remain as the anchors a fresh lock is allocated from.
-FXFEED_PINNED_OFFSET = 19
-PIPELINE_BLOCK_START = 24
-
 #: Processes that run no declared job, so nothing in q describes them.
 NON_JOB_PIPELINES: tuple[Pipeline, ...] = (
     Pipeline(
@@ -62,12 +56,20 @@ NON_JOB_PIPELINES: tuple[Pipeline, ...] = (
 
 
 def read_port_lock(root: Path) -> dict[str, int]:
-    """procname -> offset, from the lock file; empty when there is none."""
+    """procname -> offset, from the lock file.
+
+    Refuses a missing or empty lock rather than allocating from nothing: the
+    lock is committed, and a registry built without it would renumber every
+    process - the one thing it exists to prevent.
+    """
     path = root / PROCESS_PORTS_FILE
     if not path.is_file():
-        return {}
+        raise FileNotFoundError(f"{PROCESS_PORTS_FILE} is missing - it is committed; restore it")
     rows = (line for line in path.read_text().splitlines() if not line.startswith("#"))
-    return {row["procname"]: int(row["offset"]) for row in csv.DictReader(rows)}
+    locked = {row["procname"]: int(row["offset"]) for row in csv.DictReader(rows)}
+    if not locked:
+        raise ValueError(f"{PROCESS_PORTS_FILE} holds no processes - restore it from git")
+    return locked
 
 
 def allocate_offsets(procnames: list[str], locked: dict[str, int]) -> dict[str, int]:
@@ -76,7 +78,7 @@ def allocate_offsets(procnames: list[str], locked: dict[str, int]) -> dict[str, 
     New names are allocated in sorted order, so two added at once land the
     same way on every machine."""
     offsets = {name: locked[name] for name in procnames if name in locked}
-    nxt = max([PIPELINE_BLOCK_START - 1, *locked.values()]) + 1
+    nxt = max(locked.values()) + 1
     for name in sorted(set(procnames) - set(locked)):
         offsets[name] = nxt
         nxt += 1

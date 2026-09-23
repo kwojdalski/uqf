@@ -12,8 +12,8 @@ both directions. ``code/handlers/logusage.q`` reads
 comments in this package quoted. But it is a FALLBACK for a value already
 defined, and ``config/settings/default.q`` defines ``flushtime:1D00``
 first, so the fallback never fires. Measured on three running processes:
-one day. Read it with :data:`uqf_frontend.ops.FLUSHTIME` rather than
-assuming either figure - a deployment may override it again.
+one day. Query ``.usage.flushtime`` rather than assuming either figure - a
+deployment may override it again.
 
 Getting this wrong is unrecoverable in a way most bugs are not: if capture is
 added later, the history in between is simply gone. That is why B2 builds it

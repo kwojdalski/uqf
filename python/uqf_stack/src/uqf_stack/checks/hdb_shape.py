@@ -62,11 +62,6 @@ _DEFINITION = re.compile(r"^([a-z_0-9]+):\(\[\]", re.MULTILINE)
 #: after the colon, and this only reads what is before it.
 _COLUMN = re.compile(r"(?:^|[;(\[])\s*([a-z_][a-z_0-9]*)\s*:")
 
-#: Files that live beside the partitions and are not one. `sym` is the
-#: enumeration domain every symbol column points into; par.txt names a
-#: segmented database's roots.
-NOT_PARTITIONS = frozenset({"sym", "par.txt"})
-
 
 def partitions(hdb_root: Path) -> list[str]:
     """Every partition directory in the HDB, oldest first.

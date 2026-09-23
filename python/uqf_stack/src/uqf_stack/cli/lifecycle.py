@@ -72,7 +72,7 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     """Say so when the fleet this start produces is bigger than the licence
     lets one process hold handles for.
 
-    The licence caps a q process at `PLANT_CONNECTION_BUDGET` concurrent
+    The licence caps a q process at `LICENCE_CONNECTION_LIMIT` concurrent
     connections. Every streaming job opens a handle to stp1 and monitor1
     opens one per process it watches, so past that count the cap - not the
     configuration - decides what works. The plant does not complain: it
@@ -101,11 +101,11 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
         log.debug("connection-cap warning skipped: {}", exc)
         return
-    if total <= core.PLANT_CONNECTION_BUDGET:
+    if total <= core.LICENCE_CONNECTION_LIMIT:
         return
     console.print(
         f"[yellow]warning[/] this start leaves {total} processes running, past the "
-        f"{core.PLANT_CONNECTION_BUDGET} concurrent connections this licence allows "
+        f"{core.LICENCE_CONNECTION_LIMIT} concurrent connections this licence allows "
         "one q process. Handles past the cap are reset, not refused: the process "
         "wedges in its retry loop and still reports `up`, and monitor1 may become "
         "unreachable so the Heartbeat column empties. Start a subset, or stop what "
