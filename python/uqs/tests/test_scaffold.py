@@ -382,9 +382,9 @@ def test_a_job_publishing_a_new_table_is_told_about_the_desk_catalog():
     """
     plan = jobs.streaming_job("catprobe", ["quote"], "cat_probe", "sym:symbol, v:float")
     notes = " ".join(plan.notes)
-    assert "catalog/tables.csv" in notes
+    assert "uqs_catalog.q" in notes
     assert "cat_probe" in notes
-    assert "_NOT_IN_CATALOG" in notes, "the opt-out has to be offered, not just the row"
+    assert ".qcat.hidden" in notes, "the opt-out has to be offered, not just the entry"
 
 
 def test_a_job_publishing_nothing_is_not_sent_to_the_catalog():
@@ -392,7 +392,7 @@ def test_a_job_publishing_nothing_is_not_sent_to_the_catalog():
     nothing to describe. A note here would be advice that does not apply,
     which is how notes stop being read."""
     plan = jobs.streaming_job("localprobe", ["quote"], None, None)
-    assert "catalog/tables.csv" not in " ".join(plan.notes)
+    assert "uqs_catalog.q" not in " ".join(plan.notes)
 
 
 def test_a_bounded_worker_is_told_about_its_dataset():
@@ -401,7 +401,7 @@ def test_a_bounded_worker_is_told_about_its_dataset():
     into the streaming path."""
     plan = jobs.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
     notes = " ".join(plan.notes)
-    assert "catalog/tables.csv" in notes and "fx_probe" in notes
+    assert "uqs_catalog.q" in notes and "fx_probe" in notes
 
 
 # ------------------------------------------- publishes, subscribes, the plant
@@ -431,7 +431,7 @@ def test_a_job_publishes_onto_an_existing_table_without_redefining_it():
     assert d.publishes == ("orders",)
     assert not _writes_to(plan, jobs.TABLES_FILE)
     assert not _writes_to(plan, jobs.STACK_TABLES_TEST)
-    assert "catalog/tables.csv" not in " ".join(plan.notes), "the table is already described"
+    assert "uqs_catalog.q" not in " ".join(plan.notes), "the table is already described"
 
 
 def test_a_job_can_publish_an_existing_and_a_new_table():
@@ -473,55 +473,40 @@ def test_without_the_plant_every_published_table_is_new():
 
 
 def test_a_new_table_gets_its_catalog_entry_with_a_placeholder_description():
+    """One line of q, fully qualified, appended to uqs_catalog.q.
+
+    Only the prose: the columns used to be written here too, as a row each in
+    columns.csv, and are `meta`'s answer now.
+    """
     plan = jobs.streaming_job("cat2", ["quote"], "cat_two", "sym:symbol, v:float, n:long")
-    assert _body(plan, "tables.csv").startswith('cat_two,"SCAFFOLDED:')
-    assert _body(plan, "columns.csv").splitlines() == [
-        "cat_two,time,timestamp",
-        "cat_two,sym,symbol",
-        "cat_two,v,float",
-        "cat_two,n,long",
-    ]
-    assert _body(plan, "test_catalog_drift.py") == "cat_two"
+    entry = _body(plan, "uqs_catalog.q")
+    assert entry.startswith(".qcat.describe[`cat_two]:")
+    assert "SCAFFOLDED:" in entry
+    assert not any("csv" in str(a.path) for a in plan.actions)
+
+
+def test_the_catalog_entry_is_qualified_so_it_lands_in_the_namespace():
+    """It is appended past uqs_catalog.q's `\\d .`, so a bare `describe[...]`
+    would make a ROOT-level dictionary and the table would silently not be
+    catalogued."""
+    plan = jobs.streaming_job("cat4", ["quote"], "cat_four", "sym:symbol")
+    assert _body(plan, "uqs_catalog.q").startswith(".qcat.describe[`")
 
 
 def test_a_worker_dataset_gets_a_catalog_entry_only_when_it_is_new():
     new = jobs.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
-    assert _body(new, "tables.csv").startswith('fx_probe,"SCAFFOLDED:')
+    assert _body(new, "uqs_catalog.q").startswith(".qcat.describe[`fx_probe]:")
     old = jobs.bounded_worker("fxprobe", "fx_probe", "mid:float", define_table=False)
-    assert not any(str(a.path).endswith("tables.csv") for a in old.actions)
+    assert not any(str(a.path).endswith("uqs_catalog.q") for a in old.actions)
 
 
-def test_a_type_the_catalog_cannot_hold_leaves_the_note_instead():
+def test_a_type_the_old_catalog_could_not_hold_is_now_catalogued_anyway():
+    """The writer used to refuse a table with a column it had no catalog type
+    for, because it had to write that type into columns.csv. It does not write
+    types any more, so `date` - which has no QType - no longer blocks the
+    description."""
     plan = jobs.streaming_job("cat3", ["quote"], "cat_three", "sym:symbol, d:date")
-    assert not any("catalog" in str(a.path) for a in plan.actions)
-    assert "not scaffolded: d has no catalog type" in " ".join(plan.notes)
-
-
-_DRIFT = 'x = 1\n_TICKERPLANT_TABLES = [\n    "trades",\n    "orders",\n]\ny = 2\n'
-
-
-def test_the_catalog_list_entry_goes_before_the_closing_bracket():
-    out = write._with_catalog_checked_table(_DRIFT, "cat_two")
-    assert out.splitlines()[1:6] == [
-        "_TICKERPLANT_TABLES = [",
-        '    "trades",',
-        '    "orders",',
-        '    "cat_two",',
-        "]",
-    ]
-
-
-@pytest.mark.parametrize(
-    ("content", "table", "message"),
-    [
-        (_DRIFT, "orders", "already in"),
-        ("_TICKERPLANT_TABLES = [\n", "t", "no closing"),
-        ("nothing here\n", "t", "0 `_TICKERPLANT_TABLES"),
-    ],
-)
-def test_a_catalog_list_that_does_not_look_right_is_refused(content, table, message):
-    with pytest.raises(UqsError, match=message):
-        write._with_catalog_checked_table(content, table)
+    assert _body(plan, "uqs_catalog.q").startswith(".qcat.describe[`cat_three]:")
 
 
 # ------------------------------------------------ the output-contract driver

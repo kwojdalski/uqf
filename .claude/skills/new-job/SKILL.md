@@ -84,14 +84,14 @@ So after scaffolding, the tree is in a known state:
 - `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
   every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is
   the to-do list: the handler, the test, the job's `note`, and the two below.
-- For a job that defines a NEW table, the scaffold writes its desk catalog
-  entry - the columns in `python/uqf_frontend/catalog/columns.csv` and the name
-  in `test_catalog_drift.py`'s `_TICKERPLANT_TABLES` - with a SCAFFOLDED
-  description in `tables.csv` to replace. The description is for someone
-  choosing a table, so it is yours to write. If the desk should not see the
-  table, delete its catalog rows and list it in `_NOT_IN_CATALOG` with the
-  reason. A column type the catalog has no equivalent for (`int`, `date`, ...)
-  gets a note instead of an entry.
+- For a job that defines a NEW table, the scaffold appends a SCAFFOLDED
+  `.qcat.describe` line to `scripts/processes/uqs_catalog.q`. The description
+  is for someone choosing a table, so it is yours to write. If the desk should
+  not see the table, delete that line and add the table to `.qcat.hidden` with
+  the reason - `tests/q/test_catalog.q` refuses a published table that is in
+  neither list. Only the prose is scaffolded: columns and types come from
+  `meta` on a running process, so a column type the front end cannot coerce no
+  longer blocks the entry.
 - A streaming job that subscribes AND publishes gets a `contract_driver` in its
   scaffolded test file, which throws until written: the batch
   `tests/q/test_job_output_contracts.q` pushes through the job to hold every

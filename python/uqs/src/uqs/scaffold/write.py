@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from uqs.paths import CATALOG_DRIFT_TEST, RUN_TESTS_FILE, STACK_TABLES_TEST, UqsError
+from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, UqsError
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
 
@@ -63,38 +63,7 @@ def _appended(existing: str, action: FileAction) -> str:
         return _with_nslist_entry(existing, action.body)
     if action.path == STACK_TABLES_TEST:
         return _with_expected_table(existing, action.body)
-    if action.path == CATALOG_DRIFT_TEST:
-        return _with_catalog_checked_table(existing, action.body)
     return existing.rstrip("\n") + "\n" + action.body
-
-
-#: The line that opens the catalog drift test's list of plant tables.
-_CHECKED_TABLES_OPEN = "_TICKERPLANT_TABLES = ["
-
-
-def _with_catalog_checked_table(existing: str, table: str) -> str:
-    """`test_catalog_drift.py` with `table` added to `_TICKERPLANT_TABLES`.
-
-    That test fails for a catalogued table missing from the list, so a catalog
-    entry the scaffold writes has to be listed here too. The same refusals as
-    the q lists: exactly one opening line, a closing `]` of its own, and the
-    table not already listed.
-    """
-    lines = existing.splitlines(keepends=True)
-    opens = [i for i, line in enumerate(lines) if line.rstrip() == _CHECKED_TABLES_OPEN]
-    if len(opens) != 1:
-        raise UqsError(
-            f"{CATALOG_DRIFT_TEST} has {len(opens)} `{_CHECKED_TABLES_OPEN}` lines, expected 1 - "
-            "this scaffold cannot tell where a table goes, so add it by hand"
-        )
-    close = next((i for i in range(opens[0] + 1, len(lines)) if lines[i].rstrip() == "]"), None)
-    if close is None:
-        raise UqsError(f"{CATALOG_DRIFT_TEST}'s `_TICKERPLANT_TABLES` list has no closing `]`")
-    listed = {line.strip().strip(",").strip('"') for line in lines[opens[0] + 1 : close]}
-    if table in listed:
-        raise UqsError(f"{table} is already in {CATALOG_DRIFT_TEST}'s _TICKERPLANT_TABLES")
-    lines.insert(close, f'    "{table}",\n')
-    return "".join(lines)
 
 
 def _with_nslist_entry(existing: str, entry: str) -> str:

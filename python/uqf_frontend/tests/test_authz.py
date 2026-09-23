@@ -113,14 +113,22 @@ def test_a_refusing_policy_blocks_query():
     assert "trades" in resp.json()["detail"]
 
 
-def test_refusal_happens_before_the_gateway_is_touched():
+def test_refusal_happens_before_any_data_is_read():
     """The property that makes this a gate rather than a filter on the way
     out - a refused request must not have read any data.
+
+    "No IPC at all" is no longer the same statement: building the whitelist
+    asks the stack what tables exist and what they are for, which is
+    metadata, carries none of the caller's input, and happens whether or not
+    the request is refused. What must not happen is a SELECT.
     """
     c, gw = client(policy=deny_tables({"trades"}))
     c.post("/query", json={"table": "trades", "filters": []})
-    assert gw.routed == [], "no query may reach q after a refusal"
-    assert gw.calls == []
+    metadata = {queries.CATALOG, queries.SCHEMA}
+    assert [p for p, _, _ in gw.routed if p not in metadata] == [], (
+        "no query may reach q after a refusal"
+    )
+    assert [p for p, _ in gw.calls if p not in metadata] == []
 
 
 def test_an_unknown_table_is_422_not_403():

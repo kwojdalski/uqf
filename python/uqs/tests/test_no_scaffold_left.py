@@ -25,7 +25,13 @@ MARKER = "SCAFFOLDED"
 #: Where a scaffold writes, relative to the repository root. Not `docs/`: the
 #: only files it touches there are generated, and the guides that explain the
 #: marker have to be able to name it.
-SCANNED = ("src", "tests", "scripts", "python/uqf_frontend")
+#:
+#: `python/uqf_frontend` was here while the desk catalog was two CSVs in that
+#: package. The catalog's authored half is scripts/processes/uqs_catalog.q
+#: now, which `scripts` already covers, and the scaffold writes nothing into
+#: the frontend at all - so listing it would be scanning a tree this tool no
+#: longer touches.
+SCANNED = ("src", "tests", "scripts")
 
 #: What may mention the marker without being a placeholder: the templates
 #: that write it, their tests, runtime output nothing reviews, and the

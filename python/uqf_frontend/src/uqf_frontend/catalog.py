@@ -1,5 +1,5 @@
-"""The queryable-surface whitelist: which tables exist, which of their columns
-may be filtered, and what q type each column holds.
+"""The queryable-surface whitelist: which tables a desk may browse, which of
+their columns may be filtered, and what q type each column holds.
 
 This module is the security boundary. Per FE-14 no client input is ever
 interpolated into query text, so the only things a caller can influence are
@@ -8,51 +8,59 @@ interpolated into query text, so the only things a caller can influence are
 sent. Values never enter query text at all; they travel as typed IPC
 arguments (see queries.py).
 
-**The catalog itself is data, and lives in `python/uqf_frontend/catalog/`
-as two CSVs** - `tables.csv` (name, description, decimals) and `columns.csv`
-(table, column, type, decimals). This module reads them; it does not contain
-them.
+**THE STACK OWNS THE CATALOG.** It is not data in this package. `Catalog`
+below asks the running stack two questions and browses the INTERSECTION of
+the answers:
 
-`decimals` is optional in both and blank nearly everywhere: it is how many
-places a value is SHOWN with, resolved column, then table, then type (see
-DEFAULT_DECIMALS and Table.decimals_for). It lives here because this file
-already says what type each column holds, and a display width kept anywhere
-else would be a second copy of that fact - the frontend used to render
-whatever JSON carried, which meant a rate as 1.1002100000000001 beside an
-instant with nine fractional digits.
+    what EXISTS      queries.SCHEMA, routed to a data tier -> `meta`
+    what is ALLOWED  queries.CATALOG, called on the gateway -> `.qcat`
 
-They were 229 lines of Python literals until they were not. Three reasons
-they moved: `test_catalog_drift.py` holds this catalog against the q-side
-table definitions and had to parse Python source with a regex to do it,
-which quietly constrained how this file could be formatted; column
-descriptions are editorial text a non-Python reader should be able to edit;
-and nothing here needs to be executable.
+Being in one answer is never enough. A table the database holds that nothing
+describes is not browsable, so a new table stays invisible until somebody
+says what it is for; a table `.qcat` describes that the database does not
+hold is not browsable either, so a typo or a stale entry exposes nothing.
+The intersection fails closed in both directions.
 
-CSV rather than YAML because the descriptions are single-line, so CSV costs
-nothing in readability - and PyYAML is present in this environment only as
-somebody else's transitive dependency, which is not a thing to build a
-security boundary on. The contract surface made the same call (JSON to CSV,
-4,911 lines to 677).
+WHY IT MOVED. Both halves used to be CSVs here - `tables.csv` for the prose
+and `columns.csv` for 203 rows of table, column and type. The second was a
+COPY of scripts/processes/uqs_tables.q, and `test_catalog_drift.py` existed
+solely to keep the copy honest. Asking `meta` deletes the copy instead of
+moving it, which is the same argument uqs's own `schema` command already
+makes: a catalogue of DECLARATIONS is confidently wrong exactly when it
+matters - a tickerplant that failed to load its schema file, an RDB that has
+not replayed, a table nobody publishes into. The prose, which cannot be
+derived, went to `.qcat` in scripts/processes/uqs_catalog.q, next to the
+tables it describes; tests/q/test_catalog.q holds every published table to
+being either described there or explicitly hidden with a reason.
 
-`filterable` is still DERIVED here rather than stored: it is exactly "every
-column whose type is not LIST", and writing it down would create a second
-place for it to disagree with the types beside it.
+It also freed this package: the one thing tying it to the q tree was that
+copy and the test that policed it, and both are gone.
 
-Column types are cross-checked against `scripts/processes/uqs_tables.q` by
-test_catalog_drift.py, so the catalog cannot silently drift from the q
-tables it describes.
+`filterable` is DERIVED rather than stored: it is exactly "every column whose
+type is not LIST", and writing it down would create a second place for it to
+disagree with the types beside it. Vector-valued columns
+(`quotes.bid_prices` and friends) are deliberately NOT filterable - a per-row
+list of level prices has no sensible scalar comparison, and offering one
+would invite confusing results. `meta` reports them with a BLANK type
+character, which is how they arrive as LIST.
 
-Vector-valued columns (`quotes.bid_prices` and friends) are deliberately
-listed as NOT filterable: a per-row list of level prices has no sensible
-scalar comparison, and offering one would invite confusing results.
+`decimals` is how many places a value is SHOWN with, resolved column, then
+table, then type (see DEFAULT_DECIMALS and Table.decimals_for). It lives
+here because this file already says what type each column holds, and a
+display width kept anywhere else would be a second copy of that fact. Only
+the type-level defaults are populated today: the per-table and per-column
+overrides were carried by CSV fields that were never once filled in, so they
+are reachable through the dataclass and no longer have a source.
 """
 
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # queries imports Table and QType from here at runtime
+    from uqf_frontend.gateway import Gateway
 
 #: How many decimal places a value of each type is shown with, when neither
 #: the column nor its table says otherwise.
@@ -138,112 +146,151 @@ class Table:
         return None
 
 
-#: Where the catalog data lives. Resolved from this module rather than a
-#: working directory, so the reader works from anywhere in the workspace.
-CATALOG_DIR = Path(__file__).resolve().parents[2] / "catalog"
+#: A `meta` type character to the type this layer coerces into.
+#:
+#: LOWERCASE ONLY, and that is the whole rule q uses: a lowercase character
+#: means a SIMPLE vector - one atom per row - and an UPPERCASE one means a
+#: nested column, a list per row. `quotes.bid_prices` reports `F` once it
+#: holds float vectors, and a blank only while the table is still empty.
+#:
+#: That distinction is load-bearing and was nearly got wrong: an earlier
+#: version of this map had the blank and no uppercase, which worked against
+#: the empty table declarations and would have raised on the first populated
+#: `quotes` - taking the whole catalog down with it, since one unmappable
+#: column makes every table unbuildable. Tested now against a table with rows
+#: in it, which is the only version of this test that means anything.
+#:
+#: Spelled out rather than derived from QType, so a lowercase character
+#: nothing here knows about is refused by name instead of silently becoming
+#: something filterable.
+_QTYPE_BY_CHAR: dict[str, QType] = {
+    "p": QType.TIMESTAMP,
+    "n": QType.TIMESPAN,
+    "f": QType.FLOAT,
+    "j": QType.LONG,
+    "s": QType.SYMBOL,
+    "b": QType.BOOLEAN,
+    "g": QType.GUID,
+}
 
-#: The `type` column's values, as written in columns.csv. Spelled out rather
-#: than `QType(value)` so an unknown type is refused by name at load time
-#: instead of raising a bare ValueError deep in a comprehension - this is the
-#: security boundary, and it should fail loudly when it cannot be built.
-_TYPE_BY_NAME = {t.value: t for t in QType}
 
+def _qtype(char: str) -> QType | None:
+    """One `meta` type character as the type this layer coerces into.
 
-def _read_csv(path: Path) -> list[dict[str, str]]:
-    if not path.is_file():
-        raise FileNotFoundError(
-            f"catalog data missing at {path} - the queryable-surface whitelist "
-            "cannot be built, and serving without it would mean serving with no "
-            "whitelist at all"
-        )
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
-
-
-def _decimals(row: dict[str, str], where: str) -> int | None:
-    """The optional `decimals` field of one CSV row.
-
-    Absent or blank means "no opinion", which is how nearly every row is
-    written: the defaults are the point, and an override is the exception.
-    A value that is not a non-negative integer is refused HERE, naming the
-    row, rather than reaching a browser as a NaN in every cell of a column.
+    Nested and empty columns are LIST, which `Table.filterable` excludes -
+    a list per row has no scalar comparison. Everything else must be a
+    lowercase character this layer knows; None means it does not, and the
+    caller refuses it by name rather than guessing.
     """
-    raw = (row.get("decimals") or "").strip()
-    if not raw:
-        return None
-    try:
-        places = int(raw)
-    except ValueError:
-        raise ValueError(f"{where}: decimals must be a whole number, not {raw!r}") from None
-    if places < 0:
-        raise ValueError(f"{where}: decimals must not be negative, got {places}")
-    if places > 9:
-        raise ValueError(
-            f"{where}: decimals is {places}, and q carries nanoseconds - nine digits - "
-            "so anything beyond that is padding rather than precision"
-        )
-    return places
+    if char == "" or char.isspace():
+        return QType.LIST
+    if char.isupper():
+        return QType.LIST
+    return _QTYPE_BY_CHAR.get(char)
 
 
-def _load() -> dict[str, Table]:
-    """Build the catalog from the two CSVs.
+class Catalog:
+    """The queryable surface, as the running stack reports it.
 
-    Read once at import. A table with no column rows is refused rather than
-    published as an empty whitelist: an empty `columns` would make every
-    filter on it fail as "unknown column", which reads like a caller error
-    rather than a missing data file.
+    Two questions, asked of the two processes that can answer them, and
+    intersected:
+
+    * `queries.SCHEMA`, routed to a data tier - which tables EXIST, and what
+      `meta` says each column's type is.
+    * `queries.CATALOG`, called on the gateway - which tables a desk MAY see
+      and what each is for, from `.qcat` in
+      scripts/processes/uqs_catalog.q.
+
+    **The intersection is the allowlist, and it fails closed.** A table the
+    database has that nothing describes is not browsable, so a new table is
+    invisible until somebody says what it is for. A table `.qcat` describes
+    that the database does not have is not browsable either, so a typo or a
+    stale entry exposes nothing. Being in one list is never enough.
+
+    Until this existed both halves were CSVs in this package, including a
+    203-row copy of every column and type that needed a drift test to keep it
+    honest against the q declarations. Asking `meta` deletes the copy rather
+    than moving it - the same argument uqs's own `schema` command makes, that
+    a catalogue of declarations is confidently wrong exactly when it matters.
+
+    Cached after the first answer. Nothing invalidates it yet: a table added
+    to a running stack needs a restart to be browsable, which is the same
+    restart the stack needs to publish into it.
     """
-    descriptions: dict[str, str] = {}
-    table_decimals: dict[str, int | None] = {}
-    for row in _read_csv(CATALOG_DIR / "tables.csv"):
-        descriptions[row["table"]] = row["description"]
-        table_decimals[row["table"]] = _decimals(row, f"tables.csv: {row['table']}")
 
-    columns: dict[str, dict[str, QType]] = {}
-    column_decimals: dict[str, dict[str, int]] = {}
-    for row in _read_csv(CATALOG_DIR / "columns.csv"):
-        qtype = _TYPE_BY_NAME.get(row["type"])
-        if qtype is None:
-            raise ValueError(
-                f"columns.csv: {row['table']}.{row['column']} has unknown type "
-                f"{row['type']!r} - known types are {', '.join(sorted(_TYPE_BY_NAME))}"
+    def __init__(self, gateway: Gateway) -> None:
+        self._gateway = gateway
+        self._tables: dict[str, Table] | None = None
+
+    def tables(self) -> dict[str, Table]:
+        """Every browsable table, built once and cached.
+
+        Propagates whatever the gateway raises - `GatewayUnavailable` when
+        the stack is down. The browse endpoints then fail the way every other
+        gateway-backed view already fails, rather than serving an empty
+        whitelist, which would read to a caller as "there is no such table".
+        """
+        if self._tables is None:
+            self._tables = self._build()
+        return self._tables
+
+    def table(self, name: str) -> Table:
+        """Look up a table, or refuse it by name."""
+        from uqf_frontend.errors import ValidationFailed
+
+        tables = self.tables()
+        try:
+            return tables[name]
+        except KeyError:
+            known = ", ".join(sorted(tables))
+            raise ValidationFailed(
+                f"unknown table {name!r}; queryable tables are: {known}"
+            ) from None
+
+    def _build(self) -> dict[str, Table]:
+        described = self._described()
+        columns = self._columns()
+        return {
+            name: Table(
+                name=name,
+                columns=columns[name],
+                description=described[name],
             )
-        columns.setdefault(row["table"], {})[row["column"]] = qtype
-        places = _decimals(row, f"columns.csv: {row['table']}.{row['column']}")
-        if places is not None:
-            column_decimals.setdefault(row["table"], {})[row["column"]] = places
+            for name in sorted(set(described) & set(columns))
+        }
 
-    missing_columns = sorted(set(descriptions) - set(columns))
-    if missing_columns:
-        raise ValueError(f"tables.csv names tables with no columns.csv rows: {missing_columns}")
-    missing_descriptions = sorted(set(columns) - set(descriptions))
-    if missing_descriptions:
-        raise ValueError(f"columns.csv names tables absent from tables.csv: {missing_descriptions}")
+    def _described(self) -> dict[str, str]:
+        """`table -> description`, from .qcat on the gateway."""
+        from uqf_frontend import ops, queries
 
-    return {
-        name: Table(
-            name=name,
-            columns=columns[name],
-            description=descriptions[name],
-            decimals=table_decimals[name],
-            column_decimals=column_decimals.get(name, {}),
-        )
-        for name in sorted(descriptions)
-    }
+        rows = ops._as_rows(self._gateway.call(queries.CATALOG))
+        return {str(r["table"]): _text(r["description"]) for r in rows}
+
+    def _columns(self) -> dict[str, dict[str, QType]]:
+        """`table -> {column: type}`, from `meta` on a data tier."""
+        from uqf_frontend import ops, queries
+
+        out: dict[str, dict[str, QType]] = {}
+        for row in ops._as_rows(self._gateway.route(queries.SCHEMA, (), ["rdb"])):
+            char = _text(row["kind"])
+            qtype = _qtype(char)
+            if qtype is None:
+                raise ValueError(
+                    f"{row['table']}.{row['column']}: meta reports type character "
+                    f"{char!r}, which this layer cannot coerce - add it to "
+                    "_QTYPE_BY_CHAR, or the column cannot be filtered on safely"
+                )
+            out.setdefault(str(row["table"]), {})[str(row["column"])] = qtype
+        return out
 
 
-TABLES: dict[str, Table] = _load()
+def _text(value: object) -> str:
+    """One q char vector as a Python string.
 
-
-def table(name: str) -> Table:
-    """Look up a table, or raise if it is not on the whitelist.
-
-    Import-local to avoid a cycle: errors imports nothing from here.
+    kola hands a char column back as bytes on some paths and str on others,
+    and a blank `meta` type arrives as either "" or " ". Normalised here so
+    the two callers above do not each guess.
     """
-    from uqf_frontend.errors import ValidationFailed
-
-    try:
-        return TABLES[name]
-    except KeyError:
-        known = ", ".join(sorted(TABLES))
-        raise ValidationFailed(f"unknown table {name!r}; queryable tables are: {known}") from None
+    if isinstance(value, bytes):
+        return value.decode()
+    return "" if value is None else str(value)

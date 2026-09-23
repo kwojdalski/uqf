@@ -28,6 +28,7 @@
 \l docs/man.q
 \l scripts/processes/torq_pipeline.q
 \l scripts/processes/torq_metatables.q
+\l scripts/processes/uqs_catalog.q
 \l src/etl/init.q
 \l tests/lib/etl_test_doubles.q
 \l tests/q/reference_worker.q

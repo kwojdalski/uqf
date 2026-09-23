@@ -84,12 +84,12 @@ against, with what would change the decision.
 
 - **Assets have partial identity — a description, and nothing else.** This
   was written as "an asset is just a table name", and half of that has since
-  stopped being true. `python/uqf_frontend/catalog/tables.csv` carries a
-  prose description per table and `columns.csv` its column types, and
-  `test_every_published_table_is_in_the_catalog_or_explicitly_not` fails
-  until a newly published table is described or explicitly excluded — so the
-  set is complete by construction rather than by diligence, which is the part
-  that usually rots. `uqs new-job` names the file among the steps it leaves
+  stopped being true. `.qcat` in `scripts/processes/uqs_catalog.q` carries a
+  prose description per table, and `tests/q/test_catalog.q` fails until a
+  newly published table is described or explicitly hidden — so the set is
+  complete by construction rather than by diligence, which is the part that
+  usually rots. Its column types are not stored at all: they are `meta`'s
+  answer on a running process. `uqs new-job` names the file among the steps it leaves
   you.
 
   What that closed is "what IS this table", asked of the asset rather than of
