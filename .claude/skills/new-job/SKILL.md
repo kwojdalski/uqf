@@ -1,6 +1,6 @@
 ---
 name: new-job
-description: Add a new ETL job to this tree end to end - scaffold it with `uqs new-job`, implement the handler, write the test that replaces the failing stub, and verify it against a real q. Covers both shapes: a streaming job (a feed, an etl or a normalizer under `src/etl/streaming/`) and a bounded worker (a source + worker + transform under `src/etl/sources/` and `src/etl/workers/`). Use when the user asks to add a job, a feed, a backfill, a worker, a source, or a pipeline stage, or says "scaffold" or "new-job". Distinct from the `pipeline-developer` agent, which changes the FRAMEWORK those jobs run on - the lifecycle, the coverage ledger, the job graph. This is for adding one job to a framework that already works.
+description: Add a new ETL job to this tree end to end - scaffold it with `uqs new-job`, implement the handler, write the test that replaces the failing stub, and verify it against a real q. Covers both shapes `uqs new-job` scaffolds: a streaming job (a feed or an etl under `src/etl/streaming/`; a normalizer's `.qnorm.define` is written by hand) and a bounded worker (a source + worker + transform under `src/etl/sources/` and `src/etl/workers/`). Use when the user asks to add a job, a feed, a backfill, a worker, a source, or a pipeline stage, or says "scaffold" or "new-job". Distinct from the `pipeline-developer` agent, which changes the FRAMEWORK those jobs run on - the lifecycle, the coverage ledger, the job graph. This is for adding one job to a framework that already works.
 ---
 
 # Adding an ETL job
@@ -47,9 +47,13 @@ appends to `uqs_tables.q` and two test lists, which are files they may
 have opinions about.
 
 `kind` is derived for a streaming job — no `--subscribes` means a feed — so
-do not ask for it. `--columns` is only for the table the job OWNS; a job
-publishing onto a table someone else defined takes no `--columns` and no
-`--publishes`, and declares the edge in q alone.
+do not ask for it. `--publishes` takes a comma list. A table the plant
+already defines is published onto as it is - no `--columns`, and none is
+accepted - so `--columns` shapes the one NEW table, and two new tables in one
+scaffold are refused. `--subscribes` must name tables the plant defines
+(`uqs_tables.q` or the vendored `quote`/`trade`): a typo is refused rather
+than scaffolded into a job that never receives a row, so scaffold a producer
+before its consumer.
 
 ## Step 2 — what the scaffold deliberately leaves broken
 
@@ -62,10 +66,23 @@ So after scaffolding, the tree is in a known state:
 
 - `src/etl/init.q` still LOADS — the one thing the scaffold never breaks
 - `q tests/run_tests.q` fails once, on your stub, which is where the work starts
-- `uv run pytest python/` fails once, on
+- `uv run pytest python/` fails on
   `test_the_prose_architecture_doc_is_consistent_with_the_registry`: name the
   new process in `docs/integrations/torq/README.md`. That file is authored
-  prose, so it is the one registry consequence the scaffold cannot write.
+  prose, so the scaffold cannot write it.
+- For a job that defines a NEW table, the `uqf_frontend` tests also fail in
+  `test_catalog_drift.py` until the table is described in
+  `python/uqf_frontend/catalog/tables.csv`, or listed in `_NOT_IN_CATALOG`
+  with the reason. The row is a description for someone choosing a table, so
+  it is written by hand too.
+- A streaming job that subscribes AND publishes fails
+  `test_every_publishing_job_can_be_driven` in
+  `tests/q/test_job_output_contracts.q` until it has an entry in
+  `.jobouttest.drivers`: a few lines pushing a batch it acts on, built from the
+  job test's own row builders. That suite then holds every batch it publishes
+  to its plant table by name, order and type - `.qpipe.publish` sends columns
+  positionally, so a reordered `select` is otherwise silent. A feed needs no
+  driver; it runs on its own timer.
 
 The scaffold also appends the job's table (if it owns one) to `expected` in
 `test_stack_tables.q` and regenerates `processes.md` and

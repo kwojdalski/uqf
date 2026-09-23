@@ -32,6 +32,7 @@ from uqs.paths import (
     TABLES_FILE,
     WORKER_DIR,
     UqsError,
+    UqsPaths,
 )
 from uqs.scaffold import jobs, write
 
@@ -85,6 +86,18 @@ def _defined_tables(repo_root: Path) -> set[str]:
     return {m.group(1) for m in _DEFINITION.finditer((repo_root / TABLES_FILE).read_text())}
 
 
+def _plant_tables(paths: UqsPaths) -> set[str]:
+    """Every table the plant carries: this tree's, plus the vendored starter
+    pack's (`quote`, `trade`), which the generated database.q merges in."""
+    vendored = paths.torqapphome / "database.q"
+    theirs = (
+        {m.group(1) for m in _DEFINITION.finditer(vendored.read_text())}
+        if vendored.is_file()
+        else set()
+    )
+    return _defined_tables(paths.repo_root) | theirs
+
+
 @app.command("new-job")
 def new_job(
     name: Annotated[str, typer.Argument(help="Job name: a q namespace and a filename")],
@@ -96,7 +109,11 @@ def new_job(
         typer.Option("--subscribes", help="Comma-separated tables it reads. Omit for a feed."),
     ] = None,
     publishes: Annotated[
-        str | None, typer.Option("--publishes", help="The table it writes (streaming)")
+        str | None,
+        typer.Option(
+            "--publishes",
+            help="Comma-separated tables it writes (streaming); an existing one is published onto",
+        ),
     ] = None,
     dataset: Annotated[
         str | None, typer.Option("--dataset", help="The table it fills (backfill)")
@@ -137,7 +154,9 @@ def new_job(
     repo_root = _paths().repo_root
     try:
         if kind == "streaming":
-            plan = jobs.streaming_job(name, subs, publishes, columns)
+            plan = jobs.streaming_job(
+                name, subs, publishes, columns, known_tables=_plant_tables(_paths())
+            )
         elif kind == "backfill":
             if not dataset:
                 _die(UqsError("--kind backfill needs --dataset: the table it fills"))

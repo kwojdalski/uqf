@@ -144,35 +144,64 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
     return out
 
 
+def _symbol_list(names: list[str]) -> str:
+    """A q symbol-list literal: `enlist` for one, since a bare `` `a `` is an atom."""
+    return f"enlist `{names[0]}" if len(names) == 1 else "`" + "`".join(names)
+
+
 def streaming_job(
     name: str,
     subscribes: list[str],
     publishes: str | None,
     columns: str | None,
     procname: str | None = None,
+    *,
+    known_tables: set[str] | None = None,
 ) -> ScaffoldPlan:
     """Plan a new streaming job: the q file, its table and its test.
 
     `kind` is derived rather than asked for - a job that subscribes to
     nothing is a feed, and one that subscribes is an etl. There is no third
     answer the caller could give that the edges do not already imply.
+
+    `publishes` is one table or a comma-separated list. `known_tables` is
+    every table the plant defines - a fact about the tree, so the caller,
+    which has one, supplies it, as it supplies `define_table` to
+    `bounded_worker`. With it, a subscription to a table nothing defines is
+    refused here rather than found idle after `uqs start`, and a published
+    table that already exists is published onto rather than defined twice.
+    Without it every published table is new.
     """
     _check_name(name, "job name")
     proc = procname or f"{name}1"
     _check_name(proc, "procname")
+    for table in subscribes:
+        _check_name(table, "subscribed table")
+    pubs = [p.strip() for p in (publishes or "").split(",") if p.strip()]
+    for table in pubs:
+        _check_name(table, "published table")
+    if known_tables is not None:
+        unknown = [t for t in subscribes if t not in known_tables]
+        if unknown:
+            raise UqsError(
+                f"--subscribes names {', '.join(unknown)}, which no plant table defines - a job "
+                "subscribed to it would start, heartbeat and never receive a row. Scaffold the "
+                "job that publishes it first, or check the spelling"
+            )
+    new_tables = [t for t in pubs if known_tables is None or t not in known_tables]
     is_feed = not subscribes
     actions: list[FileAction] = []
     notes: list[str] = []
 
     sub_literal = "`symbol$()" if is_feed else "`" + "`".join(subscribes)
-    pub_literal = f"enlist `{publishes}" if publishes else "`symbol$()"
+    pub_literal = _symbol_list(pubs) if pubs else "`symbol$()"
     handler = "on_timer" if is_feed else "on_batch"
     handler_args = "[]" if is_feed else "[t;data]"
     timer = "\n    0D00:00:01;" if is_feed else ""
     timer_key = "`timer_period" if is_feed else ""
 
     reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribes)
-    writes = f"`{publishes}`" if publishes else "nothing - it keeps its output local"
+    writes = ", ".join(f"`{t}`" for t in pubs) if pubs else "nothing - it keeps its output local"
 
     body = f"""/ {name}.q - <one line: what this job is for> (.qsub.{name}).
 / .
@@ -209,14 +238,23 @@ publish:.qstream.unwired `{name};
 """
     actions.append(FileAction(STREAM_DIR / f"{name}.q", body))
 
-    if publishes:
+    # --columns shapes ONE new table. A table that already exists is published
+    # onto as it is; two new ones would need two column specs this option
+    # cannot carry, so that is refused rather than guessed at.
+    if len(new_tables) > 1:
+        raise UqsError(
+            f"--publishes names {len(new_tables)} tables the plant does not define yet "
+            f"({', '.join(new_tables)}), and --columns can shape only one - scaffold with one "
+            "new table and add the others to scripts/processes/uqs_tables.q by hand"
+        )
+    if new_tables:
         if not columns:
             raise UqsError(
-                f"--publishes {publishes} needs --columns: the plant must define a table "
+                f"--publishes {new_tables[0]} needs --columns: the plant must define a table "
                 "before anything writes to it, or .u.upd discards the rows in silence"
             )
         cols = parse_columns(columns)
-        definition = table_definition(publishes, cols)
+        definition = table_definition(new_tables[0], cols)
         actions.append(
             FileAction(
                 TABLES_FILE,
@@ -224,9 +262,16 @@ publish:.qstream.unwired `{name};
                 mode=WriteMode.APPEND,
             )
         )
-        actions.append(_expected_table_action(publishes))
+        actions.append(_expected_table_action(new_tables[0]))
     elif columns:
-        raise UqsError("--columns given with no --publishes: there is no table to define")
+        raise UqsError(
+            "--columns has nothing to shape: "
+            + (
+                f"{', '.join(pubs)} already defined by the plant - drop --columns"
+                if pubs
+                else "no --publishes, so there is no table to define"
+            )
+        )
 
     ns = test_namespace(name)
     actions.append(
@@ -238,8 +283,8 @@ publish:.qstream.unwired `{name};
     actions.append(_nslist_action(ns))
     notes.append(f"implement .qsub.{name}.{handler}, then replace the scaffolded test")
     notes.append(_README_NOTE.format(proc=proc))
-    if publishes:
-        notes.append(_CATALOG_NOTE.format(table=publishes))
+    for table in new_tables:
+        notes.append(_CATALOG_NOTE.format(table=table))
     if not is_feed:
         notes.append("start it with its producers: " + " ".join(sorted(set(subscribes))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)
