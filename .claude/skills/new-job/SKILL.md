@@ -1,6 +1,6 @@
 ---
 name: new-job
-description: Add a new ETL job to this tree end to end - scaffold it with `uqf-stack new-job`, implement the handler, write the test that replaces the failing stub, and verify it against a real q. Covers both shapes: a streaming job (a feed, an etl or a normalizer under `src/etl/streaming/`) and a bounded worker (a source + worker + transform under `src/etl/sources/` and `src/etl/workers/`). Use when the user asks to add a job, a feed, a backfill, a worker, a source, or a pipeline stage, or says "scaffold" or "new-job". Distinct from the `pipeline-developer` agent, which changes the FRAMEWORK those jobs run on - the lifecycle, the coverage ledger, the job graph. This is for adding one job to a framework that already works.
+description: Add a new ETL job to this tree end to end - scaffold it with `uqs new-job`, implement the handler, write the test that replaces the failing stub, and verify it against a real q. Covers both shapes: a streaming job (a feed, an etl or a normalizer under `src/etl/streaming/`) and a bounded worker (a source + worker + transform under `src/etl/sources/` and `src/etl/workers/`). Use when the user asks to add a job, a feed, a backfill, a worker, a source, or a pipeline stage, or says "scaffold" or "new-job". Distinct from the `pipeline-developer` agent, which changes the FRAMEWORK those jobs run on - the lifecycle, the coverage ledger, the job graph. This is for adding one job to a framework that already works.
 ---
 
 # Adding an ETL job
@@ -27,23 +27,23 @@ expensive to undo.
 
 ```bash
 # continuous: subscribes to two tables, publishes one
-uqf-stack new-job markout2 --subscribes trades,quote \
+uqs new-job markout2 --subscribes trades,quote \
     --publishes my_metric --columns "sym:symbol, value:float" --dry-run
 
 # continuous FEED: subscribes to nothing, publishes on a timer
-uqf-stack new-job tickfeed --publishes ticks --columns "sym:symbol, px:float"
+uqs new-job tickfeed --publishes ticks --columns "sym:symbol, px:float"
 
 # bounded worker: source + worker + transform together
-uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \
+uqs new-job fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
 
 # a second worker over that source, into its own dataset: the source is reused
-uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
+uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
     --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
 ```
 
 **Always `--dry-run` first** and show the user what it would write. It
-appends to `uqf_stack_tables.q` and two test lists, which are files they may
+appends to `uqs_tables.q` and two test lists, which are files they may
 have opinions about.
 
 `kind` is derived for a streaming job — no `--subscribes` means a feed — so
@@ -174,5 +174,5 @@ Say this back to the user, because it is the part that surprises people:
   `uqf-developer`'s.
 - The port budget is full. The licence caps a q process at 16 concurrent
   connections and every streaming job opens one to the plant; past that the
-  cap, not the configuration, decides what runs. `uqf-stack start` warns, but
+  cap, not the configuration, decides what runs. `uqs start` warns, but
   check before adding the seventeenth.

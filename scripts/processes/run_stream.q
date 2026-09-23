@@ -37,7 +37,7 @@
 
 \l src/init.q
 \l src/etl/init.q
-\l scripts/processes/uqf_stack_tables.q
+\l scripts/processes/uqs_tables.q
 
 \d .qproc.standalone
 
@@ -55,7 +55,7 @@ opt:{[nm;dflt]
         '"run_stream: -",string[nm]," was given ",string[count v]," times - which one binds would depend on argument order"];
     first v}
 
-/ Every table name declared in scripts/processes/uqf_stack_tables.q.
+/ Every table name declared in scripts/processes/uqs_tables.q.
 / .
 / The plant learns its schemas from the SAME file the TorQ stack's
 / tickerplant does, so a job publishes identical rows either way. A plant

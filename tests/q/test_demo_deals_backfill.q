@@ -399,7 +399,7 @@ test_the_clash_error_reads_as_a_sentence:{[t]
 
 / --- the process that runs a worker ---------------------------------------
 
-/ uqf_stack derives its process registry from these declarations, so the
+/ uqs derives its process registry from these declarations, so the
 / procname a worker declares is the process it runs as.
 test_a_worker_runs_as_the_procname_it_declares:{[t]
     .qunit.assertEquals[(.qbw.worker_cfg `demo_deals_backfill)`procname;`deals_backfill1;

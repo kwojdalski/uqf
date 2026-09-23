@@ -21,7 +21,7 @@ it matches nothing, exits zero, and reports green. That is strictly worse
 than having no hook: the commit looks gated when it is not.
 
 The ruff hooks were scoped ``^python/uqf-client/`` while Python was being
-added under ``python/uqf_stack/`` and ``python/uqf_frontend/``. That
+added under ``python/uqs/`` and ``python/uqf_frontend/``. That
 scope was never dead - the directory still exists - so a dead-scope check
 alone would have passed it, which is why the coverage check exists too. Four
 consecutive pull requests of Python went through a lint gate pointed at a

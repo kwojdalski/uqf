@@ -1,9 +1,9 @@
 """Guard against the catalog drifting from the generated database.q schemas.
 
 The catalog is hand-written because this package must not depend on
-uqf_stack at runtime. This test closes the loop by reading the table
+uqs at runtime. This test closes the loop by reading the table
 definitions out of the q files as *text* - no import, so no dependency on
-uqf_stack's own environment, and no way for this gate to silently
+uqs's own environment, and no way for this gate to silently
 skip itself.
 """
 
@@ -39,7 +39,7 @@ REPO = Path(__file__).resolve().parents[3]
 #: why `test_the_schema_source_is_where_this_test_expects_it` exists below: a
 #: stale path here would make every parametrised case fail loudly, which is
 #: the behaviour to keep.
-TABLES_Q = REPO / "scripts" / "processes" / "uqf_stack_tables.q"
+TABLES_Q = REPO / "scripts" / "processes" / "uqs_tables.q"
 
 #: q type characters, as they appear in a source contract's `types` string.
 _CHAR_TO_CATALOG = {
@@ -120,7 +120,7 @@ def test_the_schema_source_is_where_this_test_expects_it():
     assert TABLES_Q.is_file(), f"expected the tickerplant table definitions at {TABLES_Q}"
 
 
-#: Catalog tables whose schema is a tickerplant table in scripts/processes/uqf_stack_tables.q.
+#: Catalog tables whose schema is a tickerplant table in scripts/processes/uqs_tables.q.
 #: ONE list, read by the parametrize below and by the closed-loop gate at the
 #: bottom: the gate used to carry its own copy, which is the drift it exists
 #: to catch.
@@ -171,7 +171,7 @@ def test_catalog_matches_the_generated_schema(table_name):
     )
 
 
-#: Catalog tables whose schema is owned by a q file other than uqf_stack_tables.q.
+#: Catalog tables whose schema is owned by a q file other than uqs_tables.q.
 #: (table name) -> (q file, how to read the columns out of it)
 _Q_OWNED = {
     "etl_coverage": lambda: _q_table_schema(Path("src/etl/core/materialisation.q"), "etl_coverage"),
@@ -214,7 +214,7 @@ def test_every_catalog_table_is_cross_checked():
     unchecked = set(TABLES) - checked
     assert not unchecked, (
         f"catalog table(s) {sorted(unchecked)} have no drift check. Add the table "
-        f"to _TICKERPLANT_TABLES if scripts/processes/uqf_stack_tables.q defines it, or the q "
+        f"to _TICKERPLANT_TABLES if scripts/processes/uqs_tables.q defines it, or the q "
         f"file to _Q_OWNED."
     )
 

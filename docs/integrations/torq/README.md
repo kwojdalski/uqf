@@ -1,8 +1,8 @@
 # uqf stack architecture
 
 Diagrams for the running state of the uqf stack (see
-[docs/guides/uqf-stack.md](../../guides/uqf-stack.md) for how to actually
-start/stop/query it). Reflects what `uqf-stack list processes` shows today:
+[docs/guides/uqs.md](../../guides/uqs.md) for how to actually
+start/stop/query it). Reflects what `uqs list processes` shows today:
 the vendored 23-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
 `markout1`, `databento1`, `cryptomock1`, `executions1`, `marks1`,
@@ -15,7 +15,7 @@ Declared is not the same as running here - see
 Direct FX arbitrage flows through `marketdata1` (`quote` and `quotes` into
 `market_data`), `superbook1` (fresh source books merged into `superbook`), and
 `arbitrage1` (gross cross-source price opportunities into `arbitrage`). The
-three are on demand rather than part of `uqf-stack start` - see the
+three are on demand rather than part of `uqs start` - see the
 connection budget below. See
 [the superbook guide](../../guides/superbook.md) for source identity, expiry
 and the query for currently active opportunities.
@@ -41,7 +41,7 @@ on the reasoning that a backfill neither publishes to the tickerplant nor
 subscribes — it reads an external source and writes its target table
 directly — so drawing one would put an edge where there is none. True, but
 their absence read as an omission rather than as a fact: a reader counting
-processes found eleven in `uqf-stack list processes` and nine in the
+processes found eleven in `uqs list processes` and nine in the
 picture. They now sit in their own band, with no edge and with the reason
 written on the box.
 
@@ -50,7 +50,7 @@ TorQ registers a declared process at startup, so a running backfill is visible
 in `.servers.SERVERS` and can be found by proctype `backfill`. Before that they
 were spawned ad hoc and were invisible to the fleet. `startwithall=0` on both —
 a backfill is a bounded job triggered with a window range (ETL-15 gives that
-trigger to Airflow), not part of the stack `uqf-stack start` brings up.
+trigger to Airflow), not part of the stack `uqs start` brings up.
 
 For the authoritative per-process table - ports, scripts, the table each
 owns, and its subscribe/publish edges - see
@@ -103,7 +103,7 @@ from outside q entirely: an external Python handler
 raw MBP-10 onto `databento_mbp10`, and `databento1` folds it into
 `databento_book` with the same `.qxf` transform the ODBC backfill applies.
 The handler is not a process here, for the reason cryptorust is not: a q
-process cannot hold that subscription, so it is started by `uqf-stack
+process cannot hold that subscription, so it is started by `uqs
 databento start` rather than by `torq.sh`.
 
 The crypto half of the stack has the same shape, with one difference in who
@@ -148,7 +148,7 @@ express.
 
 ### What starts with the stack, and why not all of it
 
-`uqf-stack start` does not start every process it knows about, and that is
+`uqs start` does not start every process it knows about, and that is
 deliberate. A q process running on the community licence in `~/.kx/kc.lic`
 accepts **sixteen** concurrent inbound connections and resets the
 seventeenth. Every streaming job is its own process holding one handle to
@@ -157,7 +157,7 @@ sixteen slots are spent before the process list runs out.
 
 The failure is silent, which is the part worth knowing. `stp1` does not log
 the refusal, the shut-out process retries forever inside `torq_stream.q`'s
-initialisation, and because `uqf-stack summary` is a PID check it reports
+initialisation, and because `uqs summary` is a PID check it reports
 that process as `up`. Nothing anywhere says the stack is short. What you get
 instead is a topology decided by start order - whichever sixteen processes
 won the race that boot - which changes every time. It was found the hard way
@@ -166,7 +166,7 @@ anything (#285).
 
 So the budget is declared rather than discovered. `LICENCE_CONNECTION_LIMIT`
 and `INBOUND_RESERVE` in `model/pipeline_edges.py` hold the cap and the
-slots kept back for ad-hoc handles (`uqf-stack query`, `uqf-stack schema`,
+slots kept back for ad-hoc handles (`uqs query`, `uqs schema`,
 the frontend's health view each take one while they run), and
 `verify_pipeline_edges` counts the `startwithall=1` plant clients against
 them. Adding a process that would push the default start over the cap now
@@ -187,10 +187,10 @@ keep their schema row and their place in the DAG, and are one command away:
 | `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in `processes.md` |
 
 ```bash
-uqf-stack start widefeed1 vectorize1                 # the vectorize branch
-uqf-stack start cross1                               # quotesfeed1 already runs
-uqf-stack start marketdata1 superbook1 arbitrage1    # direct FX arbitrage
-uqf-stack start marketdata1 superbook1 crossarb1     # cross-currency instead
+uqs start widefeed1 vectorize1                 # the vectorize branch
+uqs start cross1                               # quotesfeed1 already runs
+uqs start marketdata1 superbook1 arbitrage1    # direct FX arbitrage
+uqs start marketdata1 superbook1 crossarb1     # cross-currency instead
 ```
 
 The last two lines are alternatives, not a sequence: `arbitrage1` and
@@ -233,7 +233,7 @@ persisted tables (round-trip through `rdb1`/`wdb1`/`hdb`, same as
 `cross_quotes` is drawn dashed because it never becomes a real database
 table - it's `.qsub.cross.crosses`, a plain in-memory table inside
 `cross1`'s own process, queryable only by connecting to `cross1` directly
-(`uqf-stack query "select from cross_quotes" --port 6075`). `mkt_orderbook`
+(`uqs query "select from cross_quotes" --port 6075`). `mkt_orderbook`
 is a full round trip instead: `vectorize1` folds `wide_book` and republishes
 onto `stp1`, so it flows through `rdb1`/`wdb1`/`hdb` exactly like any
 vendored table and survives past `vectorize1` restarting.
@@ -246,7 +246,7 @@ downstream. It is the quietest failure in the stack, and it is not
 theoretical: `fxpositions1` published a correct sixteen-row book every five
 seconds onto `fx_position` and `fx_limit_breach` for as long as it had been
 running, and neither table existed (#287). Both had been defined in
-`scripts/processes/uqf_stack_tables.q` the whole time - the registry simply
+`scripts/processes/uqs_tables.q` the whole time - the registry simply
 never asked for them, because `database.q` was generated from each
 pipeline's `schema` field and `fxpositions1` publishes two tables and owns
 neither.
@@ -264,7 +264,7 @@ The rule now holds from both ends:
   them all.
 
 Adding a table is therefore two edits and no third: define it in
-`uqf_stack_tables.q`, and name it in the publishing pipeline's `publishes`.
+`uqs_tables.q`, and name it in the publishing pipeline's `publishes`.
 
 ## Config generation
 
@@ -278,7 +278,7 @@ and `database.q` are never written to.
 
 ![The vendored process.csv and database.q read fresh on every command, extended, and written to generated copies the stack actually runs on](../../diagrams/config-generation.svg)
 
-`bootstrap()` (`python/uqf_stack/src/uqf_stack/stack/runtime.py`)
+`bootstrap()` (`python/uqs/src/uqs/stack/runtime.py`)
 regenerates both files on every command - `start`, `stop`, `summary`,
 everything - so nothing here is a one-time setup step; the generated
 files are always a fresh function of the vendored tree plus whatever's

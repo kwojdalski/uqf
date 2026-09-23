@@ -231,7 +231,7 @@ define:{[worker;cfg]
     / be absent because nothing compares them; this one is compared.
     cfg[`partition]:part;
     / The process that runs this worker, and a line on why it is deployed the
-    / way it is. Both feed the uqf_stack process registry, which is DERIVED
+    / way it is. Both feed the uqs process registry, which is DERIVED
     / from these declarations rather than kept as a second list. Resolved
     / before storage for the reason partition is: worker_cfg's rows share one
     / shape, and a column that is a symbol on one row and (::) on the next

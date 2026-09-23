@@ -719,7 +719,7 @@ function OpsView({
 /** torq.sh's selector for a chosen set: "all", or the names joined by
  * spaces. "all" is sent as the literal word rather than every name spelled
  * out, so what torq.sh does with it - startwithall=1 only - stays torq.sh's
- * decision and matches `uqf-stack start all`.
+ * decision and matches `uqs start all`.
  */
 export function selectorFor(
   mode: "all" | "pick",

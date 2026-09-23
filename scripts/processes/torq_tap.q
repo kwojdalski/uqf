@@ -4,17 +4,17 @@
 / filter comes from process.csv's `extras` field (-tables t1 t2 ...), the
 / same convention other processes here already use for CLI flags (e.g.
 / sctp1's -parentproctype); blank/unset means every table. Change it live
-/ with `uqf-stack config-set tap1 extras "-tables quote wide_book"` then
+/ with `uqs config-set tap1 extras "-tables quote wide_book"` then
 / restart tap1 - no orchestrator-side code needed for the filtering.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - registered
-/ only in the process.csv uqf_stack.stack.runtime.bootstrap() generates on
+/ only in the process.csv uqs.stack.runtime.bootstrap() generates on
 / the fly (port {KDBBASEPORT}+28 - see scripts/processes/process_ports.csv).
 / startwithall=0 (a debug utility, not part of the standing demo stack) -
-/ start it explicitly with `uqf-stack start tap1`, then watch it with
-/ `uqf-stack logs -f tap1`. Each line's `id` field (see
+/ start it explicitly with `uqs start tap1`, then watch it with
+/ `uqs logs -f tap1`. Each line's `id` field (see
 / stack/logs.py's parse_log_line/_LOG_FIELDS) is the table name that ticked, so
-/ `uqf-stack logs -f tap1 | grep quotes`-style filtering works even
+/ `uqs logs -f tap1 | grep quotes`-style filtering works even
 / without narrowing the subscription itself.
 
 \d .qproc.tap

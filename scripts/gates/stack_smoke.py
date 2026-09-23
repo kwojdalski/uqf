@@ -8,7 +8,7 @@ licence, free ports and a couple of minutes. That is not a reason to skip
 it - the bugs it catches are precisely the ones CI cannot see, because
 every one of them passed CI on the day it shipped (#298).
 
-WHAT IT DOES NOT DO: it never calls `uqf-stack clean`. A developer's tplogs
+WHAT IT DOES NOT DO: it never calls `uqs clean`. A developer's tplogs
 and sample data are not this gate's to delete.
 """
 
@@ -21,12 +21,12 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "python" / "uqf_stack" / "src"))
+sys.path.insert(0, str(REPO / "python" / "uqs" / "src"))
 
-from uqf_stack import paths as stack_paths  # noqa: E402
-from uqf_stack.checks import hdb_shape, stack_smoke  # noqa: E402
-from uqf_stack.model.registry import DEFAULT_BASE_PORT  # noqa: E402
-from uqf_stack.stack import listing, runtime  # noqa: E402
+from uqs import paths as stack_paths  # noqa: E402
+from uqs.checks import hdb_shape, stack_smoke  # noqa: E402
+from uqs.model.registry import DEFAULT_BASE_PORT  # noqa: E402
+from uqs.stack import listing, runtime  # noqa: E402
 
 #: How long to let the stack run before looking. The feeds publish on
 #: sub-second timers and the slowest consumer chain is three deep, so this
@@ -37,7 +37,7 @@ SETTLE_SECONDS = 30
 
 def _stack(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["uv", "run", "uqf-stack", *args],
+        ["uv", "run", "uqs", *args],
         cwd=REPO,
         capture_output=True,
         text=True,

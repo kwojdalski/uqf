@@ -31,7 +31,7 @@ Recognise them by shape, not only by comment:
 | Shape | Example of the pattern |
 |---|---|
 | facade module re-exporting other modules' names | a `core.py` whose body is `from x import (...)  # noqa: F401` |
-| per-module re-export of a moved name | `from uqf_stack.model.registry import FOO  # noqa: F401 - re-exported` |
+| per-module re-export of a moved name | `from uqs.model.registry import FOO  # noqa: F401 - re-exported` |
 | named constants that restate a lookup | `QUOTES_TABLE_SCHEMA = _DEFS["quotes"]`, `FXFEED_PORT_OFFSET = OFFSETS["fxfeed1"]` |
 | alias after a rename | `app = create_app`, `old_name = new_name` |
 | a comment saying "kept", "re-exported", "compat", "legacy", "stable surface", "keeps working" | |
@@ -43,12 +43,12 @@ Run these first; they produce CANDIDATES only.
 ```bash
 # Python: unused names. Include the tests so a test-only name is not "dead",
 # and ignore the decorators that register functions with a framework.
-uvx vulture python/uqf_stack python/uqf_frontend python/uqf_airflow_provider \
+uvx vulture python/uqs python/uqf_frontend python/uqf_airflow_provider \
     python/uqf_client scripts --exclude .venv --min-confidence 60 \
     --ignore-decorators "@app.*,@*.command,@*.get,@*.post,@*.put,@*.delete,@*.callback,@pytest.fixture,@*.tool,@*.validator,@field_validator,@model_validator,@*.middleware,@*.exception_handler"
 
 # The same without the tests: what disappears between the two runs is TEST-ONLY.
-uvx vulture python/uqf_stack/src python/uqf_frontend/src python/uqf_airflow_provider/src \
+uvx vulture python/uqs/src python/uqf_frontend/src python/uqf_airflow_provider/src \
     python/uqf_client/src scripts --min-confidence 60 --ignore-decorators "..."
 
 # q: definitions under src/ nothing references, and those only tests reference.

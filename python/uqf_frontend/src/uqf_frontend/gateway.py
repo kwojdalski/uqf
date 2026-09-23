@@ -1,7 +1,7 @@
 """The q gateway client.
 
 Reuses the kola IPC pattern already proven twice in this repo - by
-``uqf_client.UqfClient`` and by ``uqf_stack.stack.runtime.query()`` - rather
+``uqf_client.UqfClient`` and by ``uqs.stack.runtime.query()`` - rather
 than introducing a second mechanism, per FE-16.
 
 ``Gateway`` is a Protocol so that tests run with a fake and no q process.

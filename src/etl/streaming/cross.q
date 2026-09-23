@@ -144,4 +144,4 @@ now:{[] .z.p}
     enlist `quotes;
     `symbol$();
     .qsub.cross.on_batch;
-    "keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); quotesfeed1 runs by default, so `uqf-stack start cross1` is enough")];
+    "keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); quotesfeed1 runs by default, so `uqs start cross1` is enough")];

@@ -19,7 +19,7 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / .
-/ The output schema is the published table in scripts/processes/uqf_stack_tables.q
+/ The output schema is the published table in scripts/processes/uqs_tables.q
 / WITHOUT `time`, which .u.upd stamps on receipt (invariant 1).
 
 \d .qsub.posbook

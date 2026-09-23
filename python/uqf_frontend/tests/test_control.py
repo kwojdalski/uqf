@@ -180,7 +180,7 @@ def test_clean_is_not_reachable(writeable):
     """Deliberately absent. `clean` deletes logs, tplogs, wdb and the copied
     sample data - the one orchestrator verb whose blast radius is DATA, and
     not something to offer to anyone who can reach the port on a deployment
-    with a claimed identity. `uqf-stack clean` remains, at a terminal."""
+    with a claimed identity. `uqs clean` remains, at a terminal."""
     assert writeable.post("/control/process/clean", json={"procs": "all"}).status_code == 422
     assert "clean" not in control.LIFECYCLE_ACTIONS
 
@@ -207,10 +207,10 @@ def test_setting_a_field_returns_the_effective_row(writeable, monkeypatch):
 def test_an_unknown_field_is_refused_by_the_orchestrator_whitelist(writeable, monkeypatch):
     """The whitelist lives in the orchestrator and is not re-implemented
     here - one authority, so the two cannot drift."""
-    from uqf_stack.paths import UqfStackError
+    from uqs.paths import UqsError
 
     def refuse(*a, **k):
-        raise UqfStackError("unknown process.csv field 'nope'")
+        raise UqsError("unknown process.csv field 'nope'")
 
     _patch_core(monkeypatch, set_process_config=refuse)
     resp = writeable.put("/control/process/rdb1/config", json={"field": "nope", "value": "1"})
@@ -333,8 +333,8 @@ def test_a_malformed_range_bound_says_what_it_wanted(writeable):
 def _patch_core(monkeypatch, **fns: Any) -> None:
     """Patch orchestrator functions on the module that defines each - where
     `control`, which imports them lazily, looks them up."""
-    from uqf_stack import paths as stack_paths
-    from uqf_stack.stack import procs, runtime
+    from uqs import paths as stack_paths
+    from uqs.stack import procs, runtime
 
     for name, fn in fns.items():
         (module,) = [m for m in (runtime, procs) if hasattr(m, name)]
@@ -343,8 +343,8 @@ def _patch_core(monkeypatch, **fns: Any) -> None:
 
 
 def _patch_bootstrap(monkeypatch) -> None:
-    from uqf_stack import paths as stack_paths
-    from uqf_stack.stack import runtime
+    from uqs import paths as stack_paths
+    from uqs.stack import runtime
 
     monkeypatch.setattr(stack_paths, "default_paths", lambda: _FakePaths())
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QBIN": "/bin/true"})

@@ -264,7 +264,7 @@ def rule_reserved_name_in_embedded_q(path: str, text: str) -> list[Finding]:
     Python and sends them over IPC, and those were invisible to all eleven
     rules - including the one that already knew the name.
 
-    `uqf-stack schema` shipped with:
+    `uqs schema` shipped with:
 
         expr = "([] name:string tables `; rows:...; cols:count each cols each tables `)"
 

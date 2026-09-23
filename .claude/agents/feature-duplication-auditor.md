@@ -55,7 +55,7 @@ grep -rn 'mid_price:' --include="*.q" src
 **2. The same behaviour on both sides of the q/Python boundary.** The highest
 value axis and the one with the strongest legitimate defence. Compare
 `src/etl/core/*.q` against `python/uqf_frontend/` and
-`python/uqf_stack/` by *subject*, not by name — coverage intervals,
+`python/uqs/` by *subject*, not by name — coverage intervals,
 heartbeat liveness, process status, run identity, schema shapes.
 
 **3. Own code beside a vendored tree that already does it.** `lib/torq`

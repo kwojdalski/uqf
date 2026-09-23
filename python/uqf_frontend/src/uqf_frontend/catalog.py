@@ -38,7 +38,7 @@ security boundary on. The contract surface made the same call (JSON to CSV,
 column whose type is not LIST", and writing it down would create a second
 place for it to disagree with the types beside it.
 
-Column types are cross-checked against `scripts/processes/uqf_stack_tables.q` by
+Column types are cross-checked against `scripts/processes/uqs_tables.q` by
 test_catalog_drift.py, so the catalog cannot silently drift from the q
 tables it describes.
 

@@ -1,6 +1,6 @@
 ---
 name: wire-external-kdb
-description: Connect uqf to a real external kdb+/KDB-X database over the qmcp MCP server, discover its actual live table/column schema, and wire it into uqf's quotes-table shape. Never analyzes from static files alone (MCP connection is mandatory), and never targets a local test database or the vendored uqf-stack sample stack. Use when the user wants uqf connected to a production, staging, or other real external kdb+ source rather than local example data.
+description: Connect uqf to a real external kdb+/KDB-X database over the qmcp MCP server, discover its actual live table/column schema, and wire it into uqf's quotes-table shape. Never analyzes from static files alone (MCP connection is mandatory), and never targets a local test database or the vendored uqs sample stack. Use when the user wants uqf connected to a production, staging, or other real external kdb+ source rather than local example data.
 ---
 
 # Wire External kdb+ Database
@@ -26,7 +26,7 @@ assumption.
    - `servers.default` in the qmcp config is the local test instance
      `tests/run_tests.q` exercises - not a legitimate target for this skill.
    - `lib/torq-finance-starter-pack`'s vendored sample HDB (managed via
-     `python/uqf_stack`/`uqf-stack`, see `docs/guides/uqf-stack.md`) is also
+     `python/uqs`/`uqs`, see `docs/guides/uqs.md`) is also
      local example data, not "an actual" database.
    - If the user hasn't named a real external host/port or an existing named
      server in the qmcp config other than `default`, ask before connecting -
@@ -121,7 +121,7 @@ Based on what step 3 actually found (not a generic template):
   `tests/run_tests.q` - explicitly excluded, it's the example db this skill
   exists to go beyond.
 - `lib/torq-finance-starter-pack`'s vendored sample stack driven by
-  `python/uqf_stack`/`uqf-stack` - also local example data (see
-  `docs/guides/uqf-stack.md`), a separate concern from this skill.
+  `python/uqs`/`uqs` - also local example data (see
+  `docs/guides/uqs.md`), a separate concern from this skill.
 - `src/*.q` pricing/analytics logic itself is never modified here - only the
   data-wiring boundary that feeds it with real quotes.

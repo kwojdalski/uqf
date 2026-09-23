@@ -115,7 +115,7 @@ QWCFG_READ = re.compile(
 
 #: `build_env`'s dict keys: produced for TorQ, never read back by us, so they
 #: are exempt from the stale direction but still required to be documented.
-ENV_PRODUCER = REPO / "python" / "uqf_stack" / "src" / "uqf_stack" / "stack" / "env.py"
+ENV_PRODUCER = REPO / "python" / "uqs" / "src" / "uqs" / "stack" / "env.py"
 
 #: This file. Its own regexes contain example variable names, and scanning
 #: itself made the first run report a variable called NAME - the same

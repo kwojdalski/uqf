@@ -83,9 +83,9 @@ def test_the_real_generated_process_csv_parses():
     """
     from pathlib import Path
 
-    real = Path(__file__).resolve().parents[3] / "scripts" / "output" / "uqf-stack" / "process.csv"
+    real = Path(__file__).resolve().parents[3] / "scripts" / "output" / "uqs" / "process.csv"
     if not real.is_file():
-        pytest.skip(f"no generated process.csv at {real}; run uqf-stack bootstrap")
+        pytest.skip(f"no generated process.csv at {real}; run uqs bootstrap")
     procs = read(real, 6050)
     assert len(procs) > 10
     assert all(p.procname for p in procs)
