@@ -17,8 +17,10 @@
 / So every publishing job is driven here against a recorder and every batch
 / it publishes is compared, by name, order and type, with the plant's table
 / minus `time` (which the plant stamps). Feeds drive themselves on their own
-/ timer. A job that subscribes needs a driver below: a few lines pushing a
-/ batch it actually acts on. A new job with no driver fails
+/ timer. A job that subscribes needs a driver: a few lines pushing a batch it
+/ actually acts on, declared as .<job>test.contract_driver in its own test
+/ file (where `uqs new-job` scaffolds one) or in the dictionary below. A new
+/ job with no driver fails
 / test_every_publishing_job_can_be_driven by name - that is the point, since
 / a job this suite cannot drive is a job whose output nothing checks.
 / .
@@ -145,6 +147,19 @@ publishing:{[] j where {[j] 0<count (),.qstream.declaration[j]`publishes} each j
 / twenty producing one, and this suite needs one every run.
 is_feed:{[j] 0=count (),.qstream.declaration[j]`subscribes}
 
+/ The driver `j`'s own test file declares, as .<job>test.contract_driver -
+/ where `uqs new-job` scaffolds one - or :: when it declares none.
+/ .
+/ A second home because the dictionary above cannot take a new job's entry:
+/ it is one literal in this file, and a test file loaded before this one that
+/ amended it would be overwritten when this one loads. A name the job's test
+/ owns has no load order. The dictionary wins where both exist; it holds the
+/ jobs whose suites predate this.
+own_driver:{[j] @[get;`$".",string[j],"test.contract_driver";{[e] ::}]}
+
+/ Can this suite drive `j`: a driver in either place, or its own timer?
+can_drive:{[j] (j in key .jobouttest.drivers) or (100h=type .jobouttest.own_driver j) or .jobouttest.is_feed j}
+
 / Everything `j` published when driven, as a (tbl; rows) table. Each rows
 / cell holds its batch ENLISTED, as .sjtest.recorder stores it - so a
 / reader takes `first each` before looking at a batch, as .sjtest does.
@@ -152,12 +167,13 @@ drive:{[j]
     .sjtest.reset[];
     `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
     $[j in key .jobouttest.drivers; .jobouttest.drivers[j][];
+      100h=type f:own_driver j; f[];
       is_feed j; do[50; (.qstream.declaration[j]`on_timer)[]];
       '"drive: ",string[j]," subscribes and has no driver"];
     select tbl, rows from .sjtest.published where job=j}
 
 / The jobs this suite can drive, each with what it published.
-runs:{[] js!drive each js:publishing[] where {[j] (j in key .jobouttest.drivers) or is_feed j} each publishing[]}
+runs:{[] js!drive each js:publishing[] where can_drive each publishing[]}
 
 / Leave the jobs as .sjtest leaves them, not holding this suite's batches.
 afterNamespace_reset_the_jobs:{[] .sjtest.reset[];}
@@ -167,9 +183,9 @@ afterNamespace_reset_the_jobs:{[] .sjtest.reset[];}
 bad:()
 
 test_every_publishing_job_can_be_driven:{[t]
-    missing:publishing[] where not {[j] (j in key .jobouttest.drivers) or .jobouttest.is_feed j} each publishing[];
+    missing:publishing[] where not .jobouttest.can_drive each publishing[];
     .qunit.assertEquals[missing;`symbol$();
-        "every job that subscribes and publishes has a driver in .jobouttest.drivers - without one, nothing checks what it sends the plant"]};
+        "every job that subscribes and publishes has a driver - .<job>test.contract_driver in its own test file, or an entry in .jobouttest.drivers - without one, nothing checks what it sends the plant"]};
 
 test_every_driver_names_a_publishing_job:{[t]
     / The other direction, so a renamed or retired job cannot leave a

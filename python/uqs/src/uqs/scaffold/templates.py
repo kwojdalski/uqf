@@ -77,13 +77,29 @@ _SAMPLE_VALUES = {
 }
 
 
-def test_stub(name: str, namespace: str, what: str) -> str:
+def test_stub(name: str, namespace: str, what: str, *, driver: bool = False) -> str:
     """A test that FAILS until the job is written.
 
     The whole point of the scaffold is to leave something red. A passing stub
     would make "I scaffolded it" and "it works" look identical from the
     outside, which is the state a scaffold should make impossible.
+
+    `driver` adds the `contract_driver` tests/q/test_job_output_contracts.q
+    looks for in this namespace: a job that subscribes and publishes has no
+    output check until it has one. It throws until it is written.
     """
+    contract = (
+        f"""
+/ SCAFFOLDED. What test_job_output_contracts.q drives {name} with, so every
+/ table it publishes is held to its plant table by name, order and type.
+/ Push one batch {name} acts on through .qsub.{name}.on_batch - built from
+/ the rows this file's own tests use - and call its timer if it publishes on one.
+contract_driver:{{[]
+    '"{name}: write .{namespace}.contract_driver - see tests/q/test_job_output_contracts.q"}}
+"""
+        if driver
+        else ""
+    )
     return f"""/ test_{name}.q - {what} (.{namespace}).
 / .
 / SCAFFOLDED, AND FAILING ON PURPOSE. Replace the assertion below with what
@@ -95,7 +111,7 @@ def test_stub(name: str, namespace: str, what: str) -> str:
 test_{name}_is_implemented:{{[t]
     .qunit.assertTrue[0b;
         "{name} has not been implemented yet - write this test, then the job"]}}
-
+{contract}
 \\d .
 """
 

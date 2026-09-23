@@ -522,3 +522,30 @@ def test_the_catalog_list_entry_goes_before_the_closing_bracket():
 def test_a_catalog_list_that_does_not_look_right_is_refused(content, table, message):
     with pytest.raises(UqsError, match=message):
         write._with_catalog_checked_table(content, table)
+
+
+# ------------------------------------------------ the output-contract driver
+
+
+def _test_file(plan: jobs.ScaffoldPlan, name: str) -> str:
+    return _body(plan, f"test_{name}.q")
+
+
+def test_a_job_that_subscribes_and_publishes_gets_a_throwing_contract_driver():
+    """test_job_output_contracts.q finds it by this exact name, in this
+    namespace, and it must throw until written rather than pass on nothing."""
+    body = _test_file(jobs.streaming_job("zz", ["quote"], "zz_out", "v:float"), "zz")
+    assert "\\d .zztest" in body and "contract_driver:{[]" in body
+    driver = body[body.index("contract_driver:") :]
+    assert "'\"zz: write .zztest.contract_driver" in driver, "it throws"
+    assert "SCAFFOLDED" in body[body.index("test_zz_is_implemented") :], "and is marked"
+
+
+@pytest.mark.parametrize(
+    ("subscribes", "publishes", "columns"),
+    [([], "feed_out", "v:float"), (["quote"], None, None)],
+    ids=["a-feed-runs-on-its-timer", "a-job-publishing-nothing-has-nothing-to-check"],
+)
+def test_no_driver_where_the_contract_test_needs_none(subscribes, publishes, columns):
+    body = _test_file(jobs.streaming_job("zz", subscribes, publishes, columns), "zz")
+    assert "contract_driver" not in body

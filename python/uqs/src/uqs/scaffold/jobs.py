@@ -265,7 +265,7 @@ publish:.qstream.unwired `{name};
     actions.append(
         FileAction(
             TEST_DIR / f"test_{name}.q",
-            test_stub(name, ns, f"the {name} streaming job"),
+            test_stub(name, ns, f"the {name} streaming job", driver=bool(subscribes and pubs)),
         )
     )
     actions.append(_nslist_action(ns))

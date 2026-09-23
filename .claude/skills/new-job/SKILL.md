@@ -65,24 +65,29 @@ a process reporting `up` while publishing nothing.
 So after scaffolding, the tree is in a known state:
 
 - `src/etl/init.q` still LOADS — the one thing the scaffold never breaks
-- `q tests/run_tests.q` fails once, on your stub, which is where the work starts
+- `q tests/run_tests.q` fails on your stub, which is where the work starts -
+  and, for a job that subscribes and publishes, on its `contract_driver` too
 - `uv run pytest python/` fails on
   `test_the_prose_architecture_doc_is_consistent_with_the_registry`: name the
   new process in `docs/integrations/torq/README.md`. That file is authored
   prose, so the scaffold cannot write it.
-- For a job that defines a NEW table, the `uqf_frontend` tests also fail in
-  `test_catalog_drift.py` until the table is described in
-  `python/uqf_frontend/catalog/tables.csv`, or listed in `_NOT_IN_CATALOG`
-  with the reason. The row is a description for someone choosing a table, so
-  it is written by hand too.
-- A streaming job that subscribes AND publishes fails
-  `test_every_publishing_job_can_be_driven` in
-  `tests/q/test_job_output_contracts.q` until it has an entry in
-  `.jobouttest.drivers`: a few lines pushing a batch it acts on, built from the
-  job test's own row builders. That suite then holds every batch it publishes
-  to its plant table by name, order and type - `.qpipe.publish` sends columns
-  positionally, so a reordered `select` is otherwise silent. A feed needs no
-  driver; it runs on its own timer.
+- `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
+  every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is
+  the to-do list: the handler, the test, the job's `note`, and the two below.
+- For a job that defines a NEW table, the scaffold writes its desk catalog
+  entry - the columns in `python/uqf_frontend/catalog/columns.csv` and the name
+  in `test_catalog_drift.py`'s `_TICKERPLANT_TABLES` - with a SCAFFOLDED
+  description in `tables.csv` to replace. The description is for someone
+  choosing a table, so it is yours to write. If the desk should not see the
+  table, delete its catalog rows and list it in `_NOT_IN_CATALOG` with the
+  reason. A column type the catalog has no equivalent for (`int`, `date`, ...)
+  gets a note instead of an entry.
+- A streaming job that subscribes AND publishes gets a `contract_driver` in its
+  scaffolded test file, which throws until written: the batch
+  `tests/q/test_job_output_contracts.q` pushes through the job to hold every
+  table it publishes to its plant table by name, order and type -
+  `.qpipe.publish` sends columns positionally, so a reordered `select` is
+  otherwise silent. A feed needs no driver; it runs on its own timer.
 
 The scaffold also appends the job's table (if it owns one) to `expected` in
 `test_stack_tables.q` and regenerates `processes.md` and
