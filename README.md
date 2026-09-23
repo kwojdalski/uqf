@@ -224,14 +224,16 @@ directories, one question each:
 | [`docs/guides/`](docs/guides/) | *How do I do this?* — running the stack, adding a pipeline, the CI gates |
 | [`docs/services/`](docs/services/README.md) | *What does this running service do, and how do I run it?* — one page per service |
 | [`docs/architecture/`](docs/architecture/) | *Why is it shaped this way?* |
-| [`docs/reference/`](docs/reference/) | *What is the contract?* — the pages CI holds the code to |
+| [`docs/reference/`](docs/reference/) | *What is the contract?* — the quant modules, environment variables and requirement ids |
 | [`docs/integrations/`](docs/integrations/torq/README.md) | *How does this meet something external?* |
 
 Still open, and why: the `decision`-labelled issues.
 
-Component READMEs: [`web/`](web/README.md) (the React desk app),
-[`env/`](env/README.md),
-[`python/uqs/`](python/uqs/README.md).
+Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
+[`python/uqf_frontend/`](python/uqf_frontend/README.md) (the API),
+[`web/`](web/README.md) (the React desk app),
+[`python/uqf_airflow_provider/`](python/uqf_airflow_provider/README.md),
+[`env/`](env/README.md).
 
 ## Browser application
 
