@@ -777,22 +777,6 @@ def test_clean_delegates(monkeypatch):
     assert len(rec.calls) == 1
 
 
-# ----------------------------------------------------------- new-process
-
-
-def test_new_process_runs_the_wizard(monkeypatch):
-    rec = Recorder()
-    monkeypatch.setattr(create.wizard, "run", rec)
-    result = runner.invoke(cli.app, ["new-process", "--port", "7000"])
-    assert result.exit_code == 0
-    assert rec.kwargs["base_port"] == 7000
-
-
-def test_a_wizard_refusal_exits_one(monkeypatch):
-    monkeypatch.setattr(create.wizard, "run", Recorder(raises=UqsError("no recipe")).__call__)
-    assert runner.invoke(cli.app, ["new-process"]).exit_code == 1
-
-
 # ----------------------------------------------------------------- crypto
 
 
@@ -1015,7 +999,9 @@ def test_summary_says_at_debug_why_heartbeats_are_missing(monkeypatch):
     process and chasing a connection."""
     _patch(monkeypatch, runtime, "summary", result=Completed(stdout="raw"))
     _patch(monkeypatch, listing, "configured_ports", result={})
-    _patch(monkeypatch, listing, "heartbeat_states", raises=UqsError("monitor1 is not declared"))
+    _patch(
+        monkeypatch, listing, "heartbeat_states", raises=UqsError("monitor1 is not declared")
+    )
     _patch(monkeypatch, listing, "summary_rows", result=[])
     captured = _debug_log(monkeypatch)
     assert runner.invoke(cli.app, ["summary"]).exit_code == 0

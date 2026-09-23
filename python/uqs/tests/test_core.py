@@ -69,7 +69,9 @@ def fake_paths(tmp_path: Path) -> UqsPaths:
 _FIXTURE_VENDORED = {"discovery1", "stp1"}
 
 
-def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(fake_paths: UqsPaths, monkeypatch):
+def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(
+    fake_paths: UqsPaths, monkeypatch
+):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
     env = runtime.bootstrap(fake_paths, base_port=7000)
@@ -195,7 +197,9 @@ def test_bootstrap_generates_schema_with_quotes_table(fake_paths: UqsPaths, monk
     assert schemas.definition("execution_quality") in generated
 
 
-def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(fake_paths: UqsPaths, monkeypatch):
+def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
+    fake_paths: UqsPaths, monkeypatch
+):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
     runtime.bootstrap(fake_paths, base_port=7000)
@@ -203,65 +207,6 @@ def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(fake_paths: UqsPat
     generated_procs = fake_paths.generated_procs.read_text()
     assert "${TORQDATA}/database.q" in generated_procs
     assert "${TORQAPPHOME}/database.q" not in generated_procs
-
-
-def test_next_free_port_offset_skips_taken_offsets(fake_paths: UqsPaths):
-    # fixture's vendored csv: discovery1 (bare {KDBBASEPORT}), stp1 (+1);
-    # _base_process_rows also appends every declared pipeline at its offset.
-    # They are declared processes like any other, so their ports are reserved
-    # even though the backfills and the mock do not start with the stack -
-    # two of them sharing a port with a feed would fail at bind time, and
-    # only when someone happened to run one.
-    #
-    # Derived from the registry rather than written as a number: appending a
-    # pipeline moves the answer, and a pinned 46 made every new job an edit
-    # here. test_pipeline_offsets_are_stable is what pins the offsets.
-    assert stack_procs.next_free_port_offset(fake_paths) == max(PIPELINE_OFFSETS.values()) + 1
-
-
-def test_add_extra_process_appears_in_base_rows(fake_paths: UqsPaths):
-    offset = stack_procs.next_free_port_offset(fake_paths)
-    stack_procs.add_extra_process(
-        fake_paths,
-        {
-            "host": "localhost",
-            "port": f"{{KDBBASEPORT}}+{offset}",
-            "proctype": "feed",
-            "procname": "wizardfeed1",
-            "U": "",
-            "localtime": "1",
-            "g": "0",
-            "T": "",
-            "w": "",
-            "load": "${UQFSCRIPTS}/wizardfeed1.q",
-            "startwithall": "1",
-            "extras": "",
-            "qcmd": "q",
-        },
-    )
-
-    assert "wizardfeed1" in stack_procs.list_process_names(fake_paths)
-    row = stack_procs.get_process_config(fake_paths, "wizardfeed1", base_port=7000)
-    assert row["port"] == str(7000 + offset)
-
-    # extra_processes.csv is the only file touched - vendored csv untouched
-    vendored = (fake_paths.torqapphome / "appconfig" / "process.csv").read_text()
-    assert "wizardfeed1" not in vendored
-
-
-def test_add_extra_process_rejects_duplicate_procname(fake_paths: UqsPaths):
-    with pytest.raises(UqsError):
-        stack_procs.add_extra_process(fake_paths, {"procname": "stp1", "proctype": "x"})
-
-
-def test_add_extra_table_schema_appears_in_generated_schema(fake_paths: UqsPaths):
-    plant_schema.add_extra_table_schema(
-        fake_paths, "mytable:([]time:`timestamp$(); sym:`g#`symbol$())"
-    )
-
-    generated = plant_schema._generated_schema_content(fake_paths)
-    assert "mytable:" in generated
-    assert "quotes:" in generated  # existing extension point untouched
 
 
 def test_list_items_unknown_kind_raises(fake_paths: UqsPaths):
@@ -1036,9 +981,7 @@ def test_pipeline_procnames_are_unique():
     Nothing enforced this. `PIPELINE_OFFSETS` and every lookup by name are
     dict comprehensions over `PIPELINES`, so a repeated name does not raise -
     it drops one pipeline from the registry and hands the survivor the
-    other's port offset. `add_extra_process` already refuses a duplicate that
-    an operator adds at runtime, which made the unguarded literal the wrong
-    way round: the trusted source of truth was the one with no check.
+    other's port offset.
     """
     names = [pipeline.procname for pipeline in PIPELINES]
     assert len(names) == len(set(names)), f"duplicate procname in PIPELINES: {names}"
@@ -1121,13 +1064,13 @@ def test_an_operator_can_put_monitor1_back_to_the_upstream_default(
     )
 
 
-def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: UqsPaths):
-    """What is the precedence between the vendored `process.csv`,
-    `extra_processes.csv` and `process_overrides.csv`?
+def test_the_process_csv_layers_compose_in_a_stated_order(fake_paths: UqsPaths):
+    """What is the precedence between the vendored `process.csv`, the
+    pipelines and `process_overrides.csv`?
 
     Answered by the code, asserted here so it stays answered. The order is:
 
-        vendored process.csv  ->  PIPELINES  ->  extra_processes.csv  (appended)
+        vendored process.csv  ->  PIPELINES  (appended)
         then process_overrides.csv applied LAST, per procname, field by field
 
     So an override wins over every other source, and the vendored file is
@@ -1135,31 +1078,12 @@ def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: UqsP
     machine"; this test sets the same field in two layers and checks which
     one wins, which is the only way an order is observable.
     """
-    offset = stack_procs.next_free_port_offset(fake_paths)
-    stack_procs.add_extra_process(
-        fake_paths,
-        {
-            "host": "localhost",
-            "port": f"{{KDBBASEPORT}}+{offset}",
-            "proctype": "feed",
-            "procname": "layered1",
-            "U": "",
-            "localtime": "1",
-            "g": "0",
-            "T": "",
-            "w": "",
-            "load": "${UQFSCRIPTS}/layered1.q",
-            "startwithall": "1",
-            "extras": "from-extra",
-            "qcmd": "q",
-        },
-    )
-    # extra_processes.csv supplied extras="from-extra"; an override says otherwise
-    stack_procs.set_process_config(fake_paths, "layered1", "extras", "from-override")
+    # the pipeline row supplies extras=""; an override says otherwise
+    stack_procs.set_process_config(fake_paths, "fxfeed1", "extras", "from-override")
 
-    row = stack_procs.get_process_config(fake_paths, "layered1", base_port=7000)
+    row = stack_procs.get_process_config(fake_paths, "fxfeed1", base_port=7000)
     assert row["extras"] == "from-override", (
-        "process_overrides.csv must outrank extra_processes.csv for the same field"
+        "process_overrides.csv must outrank a pipeline's own row for the same field"
     )
 
     # ...and an override on a VENDORED process outranks the vendored file too,

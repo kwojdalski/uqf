@@ -30,8 +30,8 @@ src/uqs/
                      family, all registering onto one shared Typer `app` so
                      `uqs start` stays spelled that way. `entry.py` is
                      the `[project.scripts]` entry point
-  scaffold/         `uqs new-job` and `new-process`: the plan, the file
-                     templates, and the interactive wizard that fills them in
+  scaffold/         `uqs new-job`: the plan, the file templates, and
+                     applying one to the tree
   external/         processes this tree starts but does not own - the crypto
                      recorder, the Databento feed and its streamer
   checks/           read-only diagnostics: the smoke test over a running
@@ -43,11 +43,6 @@ src/uqs/
 process_overrides.csv   created on first `config-set` - per-process
                          process.csv field overrides (see "Config setters"
                          below); tracked in git like any other config
-extra_processes.csv     created by `new-process` (or add_extra_process()) -
-                         whole new process rows, process_overrides.csv's
-                         sibling for adding a process rather than tweaking one
-extra_schema.q           created by add_extra_table_schema() - extra table
-                         defs appended to the generated stp1 schema copy
 tests/                  flat, one test module per source module, because
                          pytest discovery and `-k` are easier to aim at a
                          flat tree than the source is to read as one
@@ -123,7 +118,6 @@ list [KIND] [--export FILE]           list every item of KIND - no argument show
 config-get PROCNAME [FIELD] [--raw] [--export FILE]   show a process's effective process.csv row, resolved
 config-set PROCNAME FIELD VALUE       persist a process.csv field override
 logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own logger
-new-process                           interactive wizard to add a new process
 crypto start/stop/status              proof of concept: cryptorust (Rust) publishing over kdb+ IPC
 raw -- ARGS...                        anything else torq.sh supports
 ```
@@ -218,8 +212,7 @@ Exposes `uqs_start`/`stop`/`restart`/`summary`/`print`/`clean`/`query`/
 `get_config`/`set_config`/`list`/`logs`, plus the crypto recorder lifecycle
 (`crypto_start`/`stop`/`status`, `crypto_fills_start`/`stop`/`status`), as
 MCP tools (stdio transport) for an MCP client to drive the demo directly.
-`new-process` (an interactive wizard) and `raw` (an arbitrary passthrough
-to `torq.sh`) aren't exposed - see `uqs_mcp.py` for the exact,
+`raw` (an arbitrary passthrough to `torq.sh`) isn't exposed - see `uqs_mcp.py` for the exact,
 current tool list.
 
 ## Testing

@@ -88,14 +88,6 @@ class UqsPaths:
         return self.orchestrator_dir / "process_overrides.csv"
 
     @property
-    def extra_processes_path(self) -> Path:
-        return self.orchestrator_dir / "extra_processes.csv"
-
-    @property
-    def extra_schema_path(self) -> Path:
-        return self.orchestrator_dir / "extra_schema.q"
-
-    @property
     def crypto_recorder_pid_path(self) -> Path:
         return self.orchestrator_dir / "crypto_recorder.pid"
 

@@ -33,7 +33,6 @@ process topology, table-level data pipeline, and config-generation flow.
 - [fxfeed1 - adding your own row-generating process](#fxfeed1---adding-your-own-row-generating-process)
 - [quotesfeed1 - a real database for one of uqf's own table shapes](#quotesfeed1---a-real-database-for-one-of-uqfs-own-table-shapes)
 - [Logs](#logs)
-- [Adding a new process interactively](#adding-a-new-process-interactively)
 - [Connecting](#connecting)
 - [Verifying it's alive](#verifying-its-alive)
 - [What lib/torq ships that uqf deliberately does not use](#what-libtorq-ships-that-uqf-deliberately-does-not-use)
@@ -249,7 +248,6 @@ config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's
 config-set PROCNAME FIELD VALUE       persist a process.csv field override for a process
 logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own colorized
                                        logger instead of raw files (see "Logs" below)
-new-process                           interactive wizard to add a new process (see below)
 crypto start/stop/status              proof of concept: cryptorust (Rust) publishing over
                                        kdb+ IPC (see "crypto recorder" below)
 crypto fills-start/fills-stop/        proof of concept: cryptorust's simulated + real fills
@@ -691,47 +689,10 @@ uqs restart tap1
 one of its own options). Set `extras` back to `""` to return to "every
 table".
 
-## Adding a new process interactively
+## Adding a process
 
-`uqs new-process` is a console wizard for adding a process, opening
-with a menu of recipes:
-
-```
-uqs new-process
-```
-
-```
-1. FX quotes feed - publish quotes for currency pairs you pick (ready to run, no q editing)
-2. Cross-rate reprice ETL - watch a quotes table and reprice synthetic cross pairs you pick (ready to run, no q editing)
-3. Blank publisher - write your own row-generating process from scratch (for q/kdb+ users)
-4. Blank subscriber - write your own table-watching process from scratch (for q/kdb+ users)
-```
-
-**1** and **2** are for anyone, no q/kdb+ knowledge needed - answer a few
-prompts (pairs, starting rates, table/port names) and the generated `.q`
-file is a fully working process already, not a stub: a parametrized copy
-of `src/etl/streaming/quotes_feed.q` (1) or `cross.q` (2)'s own working
-shape. **1** also registers its new table's schema
-automatically (see below) - nothing left to do by hand before starting it.
-
-**3** and **4** are for q/kdb+ users who want to write their own
-publish/subscribe logic - the same **Stage 1 only** skeleton the wizard
-always wrote (connects/subscribes and logs - no business logic, per the
-torq-developer skill's PROCESS SETUP GUIDE). If the process you write
-publishes into a brand-new table (not `quote`/`trade`/`quotes`), add its
-schema line to `python/uqs/extra_schema.q` by hand before
-starting it - recipe **1** does this step for you; **3** doesn't, since a
-blank skeleton might not even settle on its final table shape yet.
-
-Every recipe starts it immediately if you ask, running the same
-alive-check either way (checks `err_<proc>.log` is empty and the process
-shows up in `summary`).
-
-Registration goes into `python/uqs/extra_processes.csv` (a
-sibling of `process_overrides.csv` - same never-edit-the-vendored/
-generated-files approach, tracked in git) rather than editing Python
-source - `_base_process_rows()` reads it generically, so adding a process
-this way is a data change, not a code change.
+There is one way: declare a job in q and let `uqs new-job` scaffold
+it. See [adding a pipeline](new-pipeline.md).
 
 ## Connecting
 
@@ -947,9 +908,8 @@ logs/crypto-lifecycle operations as MCP tools (`uqs_start`,
 itself for the full, current list), built with
 [FastMCP](https://gofastmcp.com/), for an MCP client (e.g. Claude) to
 drive the demo directly instead of shelling out to the CLI. Not
-exposed: `new-process` (an interactive terminal wizard - doesn't map to
-a stateless MCP tool as-is) and `raw` (an arbitrary passthrough to
-`torq.sh`, deliberately left off as a scope boundary). Point an MCP
+exposed: `raw` (an arbitrary passthrough to `torq.sh`, deliberately left
+off as a scope boundary). Point an MCP
 client's server command at:
 
 ```
