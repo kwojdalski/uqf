@@ -163,17 +163,36 @@ can_drive:{[j] (j in key .jobouttest.drivers) or (100h=type .jobouttest.own_driv
 / Everything `j` published when driven, as a (tbl; rows) table. Each rows
 / cell holds its batch ENLISTED, as .sjtest.recorder stores it - so a
 / reader takes `first each` before looking at a batch, as .sjtest does.
+/ Jobs whose own driver THREW, as (job; error) pairs. `uqs new-job` scaffolds
+/ a contract_driver that throws until someone writes it, which is the right
+/ signal and was reaching the reader in the worst possible way: can_drive sees
+/ a lambda and says yes, so the throw escaped `runs` and turned the two
+/ contract tests below into ERRORS - and an errored test never reaches an
+/ assertion, so both reported nothing at all.
+/ .
+/ Trapped here instead, and asserted by its own test. A job whose driver is
+/ not written yet is then indistinguishable, to the two contract tests, from
+/ one with no driver at all: not checked, and named by a failure that says
+/ what to write. Which is what the design already did for a missing driver.
+unimplemented:()
+
 drive:{[j]
     .sjtest.reset[];
     `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
     $[j in key .jobouttest.drivers; .jobouttest.drivers[j][];
-      100h=type f:own_driver j; f[];
+      100h=type f:own_driver j;
+        @[f;::;{[j;e] `.jobouttest.unimplemented set
+            .jobouttest.unimplemented,enlist (j;e); }[j]];
       is_feed j; do[50; (.qstream.declaration[j]`on_timer)[]];
       '"drive: ",string[j]," subscribes and has no driver"];
     select tbl, rows from .sjtest.published where job=j}
 
-/ The jobs this suite can drive, each with what it published.
-runs:{[] js!drive each js:publishing[] where can_drive each publishing[]}
+/ The jobs this suite can drive, each with what it published - minus any whose
+/ driver threw, which cannot be held to a contract it never reached.
+runs:{[]
+    `.jobouttest.unimplemented set ();
+    js:publishing[] where can_drive each publishing[];
+    (first each .jobouttest.unimplemented) _ js!drive each js}
 
 / Leave the jobs as .sjtest leaves them, not holding this suite's batches.
 afterNamespace_reset_the_jobs:{[] .sjtest.reset[];}
@@ -186,6 +205,19 @@ test_every_publishing_job_can_be_driven:{[t]
     missing:publishing[] where not .jobouttest.can_drive each publishing[];
     .qunit.assertEquals[missing;`symbol$();
         "every job that subscribes and publishes has a driver - .<job>test.contract_driver in its own test file, or an entry in .jobouttest.drivers - without one, nothing checks what it sends the plant"]};
+
+test_no_contract_driver_is_left_scaffolded:{[t]
+    / The scaffolded driver throws, so this is the test a fresh `uqs new-job`
+    / is meant to leave red. It replaces two errors that said `.
+    runs[];
+    / The job AND its error IN THE MESSAGE. assertEquals reports only its msg,
+    / never the values it compared - which is why .xftest builds its detail
+    / into the string too. With thirty publishing jobs, "a driver threw" sends
+    / the reader looking; the scaffolded driver's own text names the file to
+    / open and what to write in it.
+    detail:", " sv {string[x 0],": ",x 1} each .jobouttest.unimplemented;
+    .qunit.assertEquals[detail;"";
+        "every declared contract_driver runs - a scaffolded one throws until it is written: ",detail]};
 
 test_every_driver_names_a_publishing_job:{[t]
     / The other direction, so a renamed or retired job cannot leave a
