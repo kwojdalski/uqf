@@ -39,9 +39,9 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 / @param horizons a timespan, or list of timespans, to look ahead from
 /   each trade's time, e.g. 0D00:00:01 0D00:00:10 0D00:01:00 for 1s/10s/1m
 / @return a table with one row per (trade, horizon), columns reordered
-/   by forwards.q's col_precedence (`ts`sym leading by default) when
-/   both are present: `ts`sym`trade_time`horizon`trade_price`ref_price`markout_pips
-/   (the target-time column is named per ts_col, `ts by default, matching
+/   by forwards.q's col_precedence (`time`sym leading by default) when
+/   both are present: `time`sym`trade_time`horizon`trade_price`ref_price`markout_pips
+/   (the target-time column is named per time_col, `time by default, matching
 /   the quotes-table timestamp convention used elsewhere in this
 /   library, e.g. forwards.q's cross_book_at/cross_markout_at_horizons)
 / @throws error naming every column missing from trades (`sym`time`side`trade_price`pip_factor)
@@ -69,7 +69,7 @@ markout_at_horizons:{[trades;quotes;horizons]
     joined:aj[`sym`time;lookup_tbl;sorted_quotes];
     ref_price:joined`mid;
     markout_pips:markout[exp_trades`side;exp_trades`trade_price;ref_price;exp_trades`pip_factor];
-    col_names:`sym`trade_time`horizon,.qfwd.ts_col,`trade_price`ref_price`markout_pips;
+    col_names:`sym`trade_time`horizon,.qfwd.time_col,`trade_price`ref_price`markout_pips;
     col_values:(exp_trades`sym;exp_trades`time;exp_horizons;target_time;exp_trades`trade_price;ref_price;markout_pips);
     .qfwd.apply_col_precedence flip col_names!col_values};
 
@@ -118,32 +118,32 @@ reject_ratio:{[num_rejects;num_requests] num_rejects%num_requests};
 / of hit size / sum of total size, so one large hit counts more than
 / many small misses, and one huge miss can swamp the ratio the way it
 / wouldn't in `count mode).
-/ @param requests table with at least `ts`hit`size, plus whatever columns group_cols names
+/ @param requests table with at least `time`hit`size, plus whatever columns group_cols names
 / @param start_ts only consider requests at or after this time
 / @param end_ts only consider requests at or before this time
-/ @param bucket_size a timespan to floor ts into buckets by (xbar) and
+/ @param bucket_size a timespan to floor time into buckets by (xbar) and
 /   group by alongside group_cols, e.g. 0D01:00:00 for hourly, 1D for
 /   daily - a null timespan (0Nn) disables time-bucketing entirely (no
-/   ts column in the result, group_cols alone decide the grouping)
+/   time column in the result, group_cols alone decide the grouping)
 / @param group_cols column names to group by in addition to any time
 /   bucket, e.g. `sym or `sym`side - empty () for no additional grouping
 / @param mode `count (hit ratio by number of requests) or `amount (hit ratio weighted by size)
-/ @return a table, ts (if bucket_size isn't null) then group_cols columns
+/ @return a table, time (if bucket_size isn't null) then group_cols columns
 /   (if any) then hit_ratio - one row per distinct combination, or a
 /   single row if bucket_size is null and group_cols is empty
-/ @throws error if requests is missing a required column (ts, hit, size,
+/ @throws error if requests is missing a required column (time, hit, size,
 /   or any column named in group_cols), or if mode isn't `count or `amount
 / @eg .qexec.hit_ratio_by[requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
 / @eg .qexec.hit_ratio_by[requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio, no time-bucketing or grouping
 hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
     group_cols:group_cols,();
-    req_cols:distinct `ts`hit`size,group_cols;
+    req_cols:distinct `time`hit`size,group_cols;
     missing:req_cols where not req_cols in cols requests;
     if[count missing; '"hit_ratio_by: requests is missing required column(s) ",", " sv string missing];
     if[not mode in `count`amount; '"hit_ratio_by: mode must be `count or `amount, got ",string mode];
-    windowed:select from requests where ts within (start_ts;end_ts);
-    windowed:$[null bucket_size; windowed; update ts:bucket_size xbar ts from windowed];
-    time_group:$[null bucket_size; `symbol$(); enlist `ts];
+    windowed:select from requests where time within (start_ts;end_ts);
+    windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
+    time_group:$[null bucket_size; `symbol$(); enlist `time];
     effective_group_cols:time_group,group_cols;
     / an empty group-by dict is not a reliable way to say "no grouping".
     / 0b is the explicit "no group by at all" functional-select argument on
@@ -164,31 +164,31 @@ hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
 / counterparty, or on one pair. Same two modes as hit_ratio_by - `count
 / (number rejected / number of requests) and `amount (size-weighted, so one
 / large reject counts for more than several small ones).
-/ @param requests table with at least `ts`reject`size, plus whatever columns group_cols names
+/ @param requests table with at least `time`reject`size, plus whatever columns group_cols names
 / @param start_ts only consider requests at or after this time
 / @param end_ts only consider requests at or before this time
-/ @param bucket_size a timespan to floor ts into buckets by (xbar) and group
+/ @param bucket_size a timespan to floor time into buckets by (xbar) and group
 /   by alongside group_cols, e.g. 0D01:00:00 for hourly - a null timespan
 /   (0Nn) disables time-bucketing entirely
 / @param group_cols column names to group by in addition to any time bucket,
 /   e.g. `sym or `sym`counterparty - empty () for no additional grouping
 / @param mode `count (by number of requests) or `amount (weighted by size)
-/ @return a table, ts (if bucket_size isn't null) then group_cols columns
+/ @return a table, time (if bucket_size isn't null) then group_cols columns
 /   (if any) then reject_ratio - one row per distinct combination, or a
 /   single row if bucket_size is null and group_cols is empty
-/ @throws error if requests is missing a required column (ts, reject, size,
+/ @throws error if requests is missing a required column (time, reject, size,
 /   or any column named in group_cols), or if mode isn't `count or `amount
 / @eg .qexec.reject_ratio_by[reject_requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
 / @eg .qexec.reject_ratio_by[reject_requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio
 reject_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
     group_cols:group_cols,();
-    req_cols:distinct `ts`reject`size,group_cols;
+    req_cols:distinct `time`reject`size,group_cols;
     missing:req_cols where not req_cols in cols requests;
     if[count missing; '"reject_ratio_by: requests is missing required column(s) ",", " sv string missing];
     if[not mode in `count`amount; '"reject_ratio_by: mode must be `count or `amount, got ",string mode];
-    windowed:select from requests where ts within (start_ts;end_ts);
-    windowed:$[null bucket_size; windowed; update ts:bucket_size xbar ts from windowed];
-    time_group:$[null bucket_size; `symbol$(); enlist `ts];
+    windowed:select from requests where time within (start_ts;end_ts);
+    windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
+    time_group:$[null bucket_size; `symbol$(); enlist `time];
     effective_group_cols:time_group,group_cols;
     / 0b, not an empty dict - see hit_ratio_by's own comment on why an empty
     / group-by dict is not portable across kdb+-family interpreters.

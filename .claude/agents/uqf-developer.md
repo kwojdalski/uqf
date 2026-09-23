@@ -16,7 +16,7 @@ Modules, in `src/init.q`'s load order:
 - `ccy.q` — CURCUR pair symbol convention, validation/normalization
 - `daycount.q` — ACT/360, ACT/365, 30E/360 → year fraction `t`
 - `rates.q` — simple/continuous growth and discount factor conversions
-- `forwards.q` — the largest module: CIRP forwards, synthetic cross-rate order books, N-leg cross-book chaining (`ccy_shortest_path`, `cross_decomp`, `cross_book_at`), the markout family (`cross_markout_at_horizons`, `cross_markout_decomp`, `cross_impact_at_horizons`), and the `ts_col`/`col_precedence` output-shape config
+- `forwards.q` — the largest module: CIRP forwards, synthetic cross-rate order books, N-leg cross-book chaining (`ccy_shortest_path`, `cross_decomp`, `cross_book_at`), the markout family (`cross_markout_at_horizons`, `cross_markout_decomp`, `cross_impact_at_horizons`), and the `time_col`/`col_precedence` output-shape config
 - `options.q` — Garman-Kohlhagen pricing, Greeks, implied vol
 - `risk.q` — pip value, P&L, carry, parametric/historical VaR
 - `execution.q` — `markout`/`markout_at_horizons`, `eff_spread`, `slippage`, `fill_ratio`/`reject_ratio`, `hit_ratio_by`, `vwap`, `sweep_price`
@@ -48,6 +48,6 @@ Modules, in `src/init.q`'s load order:
 - Don't add functions outside eFX pricing/risk/execution/microstructure scope, even if q makes them easy to bolt on.
 - Don't introduce a new namespace nested more than one level deep (`` \d .qfwd.sub ``) — every namespace in the quant library is flat by convention. (The ETL tree nests its instances — workers under `.qwrk`, sources under `.qfeed`; those are the exceptions, and they are not yours.)
 - Don't silently swallow structural errors in a protected-eval wrapper meant only for a legitimate "no data yet" case — that class of bug (a malformed table producing null results with no error) has bitten this codebase before.
-- Don't hardcode `pip_factor` or a fixed output column name inside a function body — `pip_factor` is always caller-supplied, and output timestamp/column-order conventions route through `.qfwd.ts_col`/`.qfwd.col_precedence`.
+- Don't hardcode `pip_factor` or a fixed output column name inside a function body — `pip_factor` is always caller-supplied, and output timestamp/column-order conventions route through `.qfwd.time_col`/`.qfwd.col_precedence`.
 - If adding a module, wire it into `src/init.q` in correct dependency order and add a matching `tests/test_<module>.q` wired into `tests/run_tests.q` — a module that loads but isn't tested isn't finished.
 - Commit only when the full suite passes on every interpreter you have available; don't leave a red suite committed.

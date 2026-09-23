@@ -145,11 +145,11 @@ check_reject_ratio_limits:{[reject_ratios;limits;key_col]
 / separately (thin/stale liquidity or a bad print, not necessarily wrong,
 / but worth a human's attention) so the two very different severities
 / don't collapse into one generic "bad" bucket.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 /   (see forwards.q's require_quotes_cols) - any row order, needn't be sorted
 / @param max_spread_bps a spread at or below this many bps is `ok; above
 /   it (and non-negative) is `wide
-/ @return a table ts/sym/spread_bps/status (`ok`, `crossed`, or `wide`),
+/ @return a table time/sym/spread_bps/status (`ok`, `crossed`, or `wide`),
 /   sorted status-ascending (`crossed` sorts first, then `ok`, then `wide`
 /   - see the note on sort order in check_limit; `crossed` rows are the
 /   most urgent, so this is the right order even though it isn't a strict
@@ -168,7 +168,7 @@ check_market_data_quality:{[quotes;max_spread_bps]
     is_crossed:spreads<0;
     is_wide:spreads>max_spread_bps;
     idx:(1-is_crossed)*(1+is_wide);
-    result:([] ts:quotes`ts; sym:quotes`sym; spread_bps:spreads);
+    result:([] time:quotes`time; sym:quotes`sym; spread_bps:spreads);
     result:update status:`crossed`ok`wide idx from result;
     `status xasc result};
 
@@ -178,8 +178,8 @@ check_market_data_quality:{[quotes;max_spread_bps]
 / quoting but never ticks at all needs live process/feed monitoring (see
 / lib/torq/code/dqc/tableticking.q for that different, complementary
 / concern), which this pure-function library has no way to observe.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
-/   sorted `sym`ts xasc (same as every other as-of lookup in this library
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
+/   sorted `sym`time xasc (same as every other as-of lookup in this library
 /   - see forwards.q's cross_book_at)
 / @param at_time only consider quotes at or before this time
 / @param max_age a gap at or below this is `ok; above it is `stale
@@ -191,7 +191,7 @@ check_stale_quotes:{[quotes;at_time;max_age]
     .qfwd.require_quotes_cols[`check_stale_quotes;quotes];
     / by before from, where after from - the canonical qSQL clause order,
     / kept because a reordered clause reads as a typo to anyone scanning it.
-    latest:select last_ts:last ts by sym from quotes where ts<=at_time;
+    latest:select last_ts:last time by sym from quotes where time<=at_time;
     result:([] sym:exec sym from latest; last_ts:exec last_ts from latest);
     result:update age:at_time-last_ts from result;
     result:update status:`ok`stale (age>max_age) from result;

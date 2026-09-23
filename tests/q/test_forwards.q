@@ -388,15 +388,15 @@ test_cross_decomp_empty_when_unreachable:{[t]
 
 / Shared 3-pair quotes table (AUDUSD, EURUSD, EURPLN, one row each, all at
 / the same synthetic timestamp) reused by the cross_book_at tests below.
-/ cross_book_at requires `sym`ts xasc sorted input (for its internal
+/ cross_book_at requires `sym`time xasc sorted input (for its internal
 / as-of join) - sorted here once so every test below gets a valid table.
 mk_quotes_table:{[dummy]
     mk_book:{[spot]
         `bid_prices`bid_sizes`ask_prices`ask_sizes!(
             spot-0 0.0001;1000000 2000000;spot+0.0001 0.0002;1000000 2000000)};
-    ts:2026.01.01D00:00:00.000000000+0D 0D00:00:00.001 0D00:00:00.002;
-    unsorted:([] ts;sym:`AUDUSD`EURUSD`EURPLN),'(mk_book each 0.6550 1.0850 4.2500);
-    `sym`ts xasc unsorted};
+    time:2026.01.01D00:00:00.000000000+0D 0D00:00:00.001 0D00:00:00.002;
+    unsorted:([] time;sym:`AUDUSD`EURUSD`EURPLN),'(mk_book each 0.6550 1.0850 4.2500);
+    `sym`time xasc unsorted};
 
 test_cross_book_at_chains_through_available_pairs:{[t]
     quotes:mk_quotes_table[::];
@@ -432,14 +432,14 @@ test_cross_book_at_rejects_quote_after_at_time:{[t]
     .qunit.assertError[wrapper;quotes;"no quote exists yet at or before the requested time"]};
 
 test_cross_book_at_rejects_unsorted_quotes:{[t]
-    / mk_quotes_table already sorts `sym`ts xasc; deliberately reverse the
+    / mk_quotes_table already sorts `sym`time xasc; deliberately reverse the
     / row order here to prove cross_book_at catches this rather than
     / silently running its internal as-of join (aj) against unsorted
     / data, which wouldn't error - it would just quietly return the
     / wrong row.
     unsorted:reverse mk_quotes_table[::];
     wrapper:{[q] .qfwd.cross_book_at[q;`AUDPLN;2026.01.02D00:00:00.000000000;enlist 500000;`mid]};
-    .qunit.assertError[wrapper;unsorted;"quotes rows out of `sym`ts xasc order is rejected"]};
+    .qunit.assertError[wrapper;unsorted;"quotes rows out of `sym`time xasc order is rejected"]};
 
 / A 5-level, single-snapshot quotes table with real depth (15mm total per
 / leg) - needed so the price has genuine room to worsen with size before
@@ -454,10 +454,10 @@ mk_deep_quotes_table:{[dummy]
             spot-0.0001*levels;1000000*1+levels;
             (spot+0.0001)+0.0001*levels;1000000*1+levels)};
     t0:2026.01.01D00:00:00.000000000;
-    audusd_q:([] ts:enlist t0;sym:enlist `AUDUSD),'(enlist mk_book 0.6550);
-    eurusd_q:([] ts:enlist t0;sym:enlist `EURUSD),'(enlist mk_book 1.0850);
-    eurpln_q:([] ts:enlist t0;sym:enlist `EURPLN),'(enlist mk_book 4.2500);
-    `sym`ts xasc (audusd_q,eurusd_q,eurpln_q)};
+    audusd_q:([] time:enlist t0;sym:enlist `AUDUSD),'(enlist mk_book 0.6550);
+    eurusd_q:([] time:enlist t0;sym:enlist `EURUSD),'(enlist mk_book 1.0850);
+    eurpln_q:([] time:enlist t0;sym:enlist `EURPLN),'(enlist mk_book 4.2500);
+    `sym`time xasc (audusd_q,eurusd_q,eurpln_q)};
 
 test_cross_size_at_price_finds_boundary_size:{[t]
     quotes:mk_deep_quotes_table[::];
@@ -493,10 +493,10 @@ mk_ts_quotes_table:{[dummy]
             (spot+0.0001)+0.0001*levels;1000000*1+levels)};
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    audusd_q:([] ts:(t0;t1);sym:`AUDUSD`AUDUSD),'(mk_book each 0.6550 0.6560);
-    eurusd_q:([] ts:(t0;t1);sym:`EURUSD`EURUSD),'(mk_book each 1.0850 1.0850);
-    eurpln_q:([] ts:(t0;t1);sym:`EURPLN`EURPLN),'(mk_book each 4.2500 4.2600);
-    `sym`ts xasc (audusd_q,eurusd_q,eurpln_q)};
+    audusd_q:([] time:(t0;t1);sym:`AUDUSD`AUDUSD),'(mk_book each 0.6550 0.6560);
+    eurusd_q:([] time:(t0;t1);sym:`EURUSD`EURUSD),'(mk_book each 1.0850 1.0850);
+    eurpln_q:([] time:(t0;t1);sym:`EURPLN`EURPLN),'(mk_book each 4.2500 4.2600);
+    `sym`time xasc (audusd_q,eurusd_q,eurpln_q)};
 
 test_cross_markout_at_horizons_negative_horizon_looks_backward:{[t]
     quotes:mk_ts_quotes_table[::];
@@ -504,28 +504,28 @@ test_cross_markout_at_horizons_negative_horizon_looks_backward:{[t]
     trade_time:t0+0D00:00:00.500;
     r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;-500 0 500;1];
     .qunit.assertEquals[count r;3;"one row per horizon"];
-    .qunit.assertEquals[r[0]`ts;t0;"a -500ms horizon from a t0+500ms trade lands exactly on t0"];
+    .qunit.assertEquals[r[0]`time;t0;"a -500ms horizon from a t0+500ms trade lands exactly on t0"];
     .testutil.assertApprox[r[0]`ref_price;r[1]`ref_price;1e-9;"the -500ms and 0ms horizons both land before t1, so see the same (t0) quote"];
     .qunit.assertTrue[(r[2]`ref_price)>(r[0]`ref_price);"the +500ms horizon (at t1) sees the higher price after AUDUSD/EURPLN drifted up"]};
 
 test_cross_markout_at_horizons_ts_col_is_configurable:{[t]
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
-    original:.qfwd.ts_col;
-    .qfwd.ts_col:`timestamp;
+    original:.qfwd.time_col;
+    .qfwd.time_col:`timestamp;
     r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0;1];
-    .qfwd.ts_col:original;
-    / col_precedence (`ts`sym) is independent of ts_col, so with ts_col
-    / overridden away from `ts, `ts is no longer a column at all - the
+    .qfwd.time_col:original;
+    / col_precedence (`time`sym) is independent of time_col, so with time_col
+    / overridden away from `time, `time is no longer a column at all - the
     / precedence match fails entirely and apply_col_precedence leaves the
     / column order exactly as originally built, unreordered.
-    .qunit.assertEquals[cols r;`horizon_ms`timestamp`sym`ref_price`markout_pips;"overriding .qfwd.ts_col renames the timestamp column and disables col_precedence's reorder (it no longer matches)"]};
+    .qunit.assertEquals[cols r;`horizon_ms`timestamp`sym`ref_price`markout_pips;"overriding .qfwd.time_col renames the timestamp column and disables col_precedence's reorder (it no longer matches)"]};
 
 test_cross_markout_at_horizons_col_precedence_orders_ts_then_sym:{[t]
     quotes:mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
     r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5600;10000;enlist 0;1];
-    .qunit.assertEquals[cols r;`ts`sym`horizon_ms`ref_price`markout_pips;"ts and sym lead, by default col_precedence"];
+    .qunit.assertEquals[cols r;`time`sym`horizon_ms`ref_price`markout_pips;"time and sym lead, by default col_precedence"];
     .qunit.assertEquals[first r`sym;`AUDPLN;"sym is the (normalized) traded pair"]};
 
 test_cross_markout_at_horizons_nulls_out_of_range_horizon_instead_of_erroring:{[t]
@@ -558,7 +558,7 @@ test_cross_markout_decomp_flat_leg_contributes_zero:{[t]
 test_cross_markout_decomp_reprices_bridge_depth:{[t]
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    quotes:([] ts:t0,t1,t0,t1; sym:`EURUSD`EURUSD`USDJPY`USDJPY;
+    quotes:([] time:t0,t1,t0,t1; sym:`EURUSD`EURUSD`USDJPY`USDJPY;
         bid_prices:(enlist 1.1;enlist 1.2;150 150f;150 150f);
         bid_sizes:(enlist 100f;enlist 100f;1 100f;1 100f);
         ask_prices:(enlist 1.1;enlist 1.2;150 151f;150 151f);
@@ -574,7 +574,7 @@ test_cross_markout_decomp_reprices_bridge_depth:{[t]
 test_cross_markout_decomp_attributes_spread_moves_with_flat_leg_mids:{[t]
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    quotes:([] ts:t0,t1,t0,t1; sym:`EURUSD`EURUSD`USDJPY`USDJPY;
+    quotes:([] time:t0,t1,t0,t1; sym:`EURUSD`EURUSD`USDJPY`USDJPY;
         bid_prices:enlist each 1.0 0.9 149 148f;
         bid_sizes:4#enlist enlist 1000000f;
         ask_prices:enlist each 1.2 1.3 151 152f;
@@ -588,7 +588,7 @@ test_cross_markout_decomp_attributes_spread_moves_with_flat_leg_mids:{[t]
 test_cross_markout_decomp_prices_inverted_single_leg_book:{[t]
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
-    quotes:([] ts:t0,t1; sym:2#`EURUSD;
+    quotes:([] time:t0,t1; sym:2#`EURUSD;
         bid_prices:enlist each 1.0 0.9;
         bid_sizes:2#enlist enlist 1000000f;
         ask_prices:enlist each 1.2 1.3;
@@ -604,7 +604,7 @@ test_cross_markout_decomp_missing_endpoint_quotes_null_attribution:{[t]
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
     quotes:mk_ts_quotes_table[::];
-    quotes:delete from quotes where sym=`EURUSD,ts=t0;
+    quotes:delete from quotes where sym=`EURUSD,time=t0;
     r:.qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1];
     .qunit.assertTrue[all null r`contribution_pips;"an unavailable t0 leg makes the cross attribution undefined"];
     .qunit.assertTrue[any null r`price_t0;"the missing historical leg retains a null descriptive price"];
@@ -680,7 +680,7 @@ test_cross_markout_at_horizons_rejects_unsorted_quotes_instead_of_nulling:{[t]
     unsorted:reverse mk_ts_quotes_table[::];
     trade_time:2026.01.01D00:00:00.000000000+0D00:00:00.500;
     wrapper:{[q;trade_time] .qfwd.cross_markout_at_horizons[q;`AUDPLN;trade_time;1;2.5650;10000;enlist 0;1]}[;trade_time];
-    .qunit.assertThrows[wrapper;unsorted;"cross_markout_at_horizons: quotes must be sorted*";"quotes rows out of `sym`ts xasc order throws immediately, not a silent null"]};
+    .qunit.assertThrows[wrapper;unsorted;"cross_markout_at_horizons: quotes must be sorted*";"quotes rows out of `sym`time xasc order throws immediately, not a silent null"]};
 
 test_cross_markout_at_horizons_rejects_unreachable_pair_instead_of_nulling:{[t]
     / without this check, an unbridgeable sym (mistyped, or the bridge
@@ -711,13 +711,13 @@ test_cross_markout_decomp_rejects_unsorted_quotes_instead_of_nulling:{[t]
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
     wrapper:{[q;t0;t1] .qfwd.cross_markout_decomp[q;`AUDPLN;t0;t1;10000;1]}[;t0;t1];
-    .qunit.assertThrows[wrapper;unsorted;"cross_markout_decomp: quotes must be sorted*";"quotes rows out of `sym`ts xasc order throws immediately, not a silent null"]};
+    .qunit.assertThrows[wrapper;unsorted;"cross_markout_decomp: quotes must be sorted*";"quotes rows out of `sym`time xasc order throws immediately, not a silent null"]};
 
 test_apply_col_precedence_leaves_table_unchanged_when_precedence_not_fully_present:{[t]
     / cross_book_chain_at_sizes-style tables (`size`sym`bid`... - no
     / timestamp column at all) must never get partially reordered just
     / because they happen to have a `sym column.
     t:([] size:1 2; sym:`EURUSD`EURUSD; mid:1.1 1.2);
-    .qunit.assertEquals[.qfwd.apply_col_precedence t;t;"a table with sym but no ts column is left completely unchanged"]};
+    .qunit.assertEquals[.qfwd.apply_col_precedence t;t;"a table with sym but no time column is left completely unchanged"]};
 
 \d .

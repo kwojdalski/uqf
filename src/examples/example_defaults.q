@@ -1,6 +1,6 @@
 / example_defaults.q - shared scaling constants used by scripts/*.q to
 / build synthetic order-book/tick data for worked examples. Unlike
-/ forwards.q's ts_col/col_precedence (genuine library output-shape
+/ forwards.q's time_col/col_precedence (genuine library output-shape
 / config, read by src/*.q functions), nothing in src/*.q consumes these -
 / they exist so every example script that builds a synthetic book (level
 / prices, level sizes) starts from the same baseline instead of each

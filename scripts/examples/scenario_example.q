@@ -13,7 +13,7 @@
 // library's shapes actually connect end to end, which no unit test shows.
 //
 // It came from env/seed.q, which did the same thing against env/schemas.q's
-// `.envschema` tables. Those disagreed with the real ones - `ts` where the
+// `.envschema` tables. Those disagreed with the real ones - `time` where the
 // tickerplant requires `time`, `status` where `orders` says `order_status` -
 // so the scenario taught the wrong column names for the tables this stack
 // actually publishes. env/ was deleted; this is the half worth keeping,
@@ -112,14 +112,13 @@ pos_unrealized:{[book;mark_rates;sym] .qpos.unrealized_pnl[book;sym;mark_rates s
 / PLN has no direct USD quote in market_data, so ccy_exposure_in bridges
 / through EUR - the same chaining cross_book_at does for a cross pair.
 / .
-/ `ts:time` IS THE RESHAPING, and it is not optional. forwards.q's
-/ require_quotes_cols demands a `ts` column; every tickerplant table here
-/ leads with `time`, because .u.upd requires that name. So a book table
-/ published by this stack has to be renamed on its way into the pricing
-/ functions - one `select ts:time`, but a real seam between the two halves
-/ of this tree, and the reason this example runs on every commit rather
-/ than sitting in a directory nobody executes.
-quotes_for_exposure:`sym`ts xasc select ts:time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from market_data;
+/ NO RENAME ON THE WAY IN, and that is recent. require_quotes_cols demanded
+/ a `ts` column until the timestamp column was made one name across this
+/ tree, so this line used to read `select ts:time, ...` and cross_book_at
+/ refused a real tickerplant table without it. The columns are selected
+/ explicitly anyway, because market_data carries source and source_time
+/ that the quotes shape does not.
+quotes_for_exposure:`sym`time xasc select time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from market_data;
 .qlog.dbg[`seed;"running: .qpos.ccy_exposure_in[book;quotes;`USD;snap_time]";()!()];
 exposure:.qpos.ccy_exposure_in[book;quotes_for_exposure;`USD;snap_time];
 `ccy_exposure insert update time:snap_time, reporting_ccy:`USD from exposure;

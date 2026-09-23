@@ -31,7 +31,7 @@
 //   2. The directories do NOT imply a dependency layering, and it would be
 //      wrong to assume one. The module graph is not acyclic:
 //        pricing/forwards.q   -> .qexec.sweep_price, .qexec.markout
-//        execution/execution.q -> .qfwd.ts_col, .qfwd.apply_col_precedence
+//        execution/execution.q -> .qfwd.time_col, .qfwd.apply_col_precedence
 //      That is a genuine cycle between pricing/ and execution/, and it
 //      resolves only because q binds names at call time rather than at
 //      definition time. Likewise market_data/dqchecks.q reaches into
@@ -42,7 +42,7 @@
 //      names at call time.
 //
 // The one ordering constraint that is real: pricing/forwards.q defines
-// module-level DATA (ts_col, col_precedence), not just functions, and
+// module-level DATA (time_col, col_precedence), not just functions, and
 // execution/execution.q reads it. Still fine at call time, but it is state
 // rather than code, so it is worth knowing about.
 

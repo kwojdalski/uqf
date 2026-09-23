@@ -30,7 +30,7 @@ Commands: ok — fix it | s/skip — skip | done — stop
 ### 3. Return Types and Return Conventions
 - Some functions return a bare dict, others return a one-row table, for results of equivalent shape and use (compare `sweep_price`'s dict return to `cross_book_at`'s table return — is the difference justified by how each is consumed, or just drift?)
 - Some functions null out on a missing-data case (`cross_ref_price_at`), others throw — verify each choice is deliberate given how the function is meant to be used (a caller that filters `where not null x` vs a caller that should fail loud)
-- Output tables that should honor `forwards.q`'s `ts_col`/`col_precedence` convention but don't route through `apply_col_precedence`, producing inconsistent column ordering across functions that otherwise look like a family (`markout_at_horizons`, `cross_markout_at_horizons`, `hit_ratio_by`)
+- Output tables that should honor `forwards.q`'s `time_col`/`col_precedence` convention but don't route through `apply_col_precedence`, producing inconsistent column ordering across functions that otherwise look like a family (`markout_at_horizons`, `cross_markout_at_horizons`, `hit_ratio_by`)
 - Functions that can return a null result not documented as such in their qDoc `@return`/`@throws`
 
 ### 4. Module and Namespace Structure
@@ -59,7 +59,7 @@ Commands: ok — fix it | s/skip — skip | done — stop
    - `microstructure.q` — the LOB feature family (do all functions follow the same "whole quotes-table column in, row-aligned vector out" shape documented in the module's own header?)
    - `book.q`, `risk.q`, `rates.q`, `daycount.q`, `ccy.q` — smaller modules, check they follow the same conventions as the larger ones
 
-   Read enough of each file to understand its interface, not just its surface. Look at function signatures, return shapes, naming patterns, and how `quotes`/`side`/`pip_factor`/`ts_col` are handled.
+   Read enough of each file to understand its interface, not just its surface. Look at function signatures, return shapes, naming patterns, and how `quotes`/`side`/`pip_factor`/`time_col` are handled.
 
 3. For each inconsistency found, record:
    - Category (from the list above)

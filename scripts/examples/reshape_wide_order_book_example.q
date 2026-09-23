@@ -89,7 +89,7 @@ mk_timestamps:{[n;start_ts]
     z:.qstats.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*z;
     start_ts+sums gaps};
-ts:mk_timestamps[n_rows;.z.p];
+time:mk_timestamps[n_rows;.z.p];
 
 / Identifier columns ingested as strings (type 10h cells) instead of
 / symbols - the shape symbolize_columns/candidate_symbol_columns exist
@@ -102,8 +102,8 @@ action_idx:(til n_rows) mod 3;
 side_idx:(til n_rows) mod 2;
 actions:("A";"M";"C") action_idx;
 sides:("B";"S") side_idx;
-meta_table:flip `ts`sym`venue`exchange`action`side!(
-    ts;
+meta_table:flip `time`sym`venue`exchange`action`side!(
+    time;
     n_rows#enlist "EURUSD";
     n_rows#enlist "XCME";
     n_rows#enlist "GLBX";
@@ -140,7 +140,7 @@ candidates:.qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
 / `col_order#out` selects/reorders out's columns and stays a table; plain
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
-col_order:`ts`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
+col_order:`time`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
 .qlog.dbg[`reshape_wide_order_book;"running: .qbook.book_from_wide_levels[t;level_groups;candidates]";()!()];
 out:col_order#.qbook.book_from_wide_levels[t;level_groups;candidates];
 .qlog.info[`reshape_wide_order_book;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";()!()];

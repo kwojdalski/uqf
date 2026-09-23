@@ -49,7 +49,7 @@ cross_quotes:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(
 / @return one row per pair that could be priced, in cross_pairs order
 reprice_crosses:{[quotes;as_of]
     if[0=count quotes; :.qsub.cross.cross_quotes];
-    q:`sym`ts xasc select ts:time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from quotes where time<=as_of;
+    q:`sym`time xasc select time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from quotes where time<=as_of;
     if[0=count q; :.qsub.cross.cross_quotes];
     rows:{[q;as_of;pair]
         r:.[.qfwd.cross_book_at;(q;pair;as_of;enlist .qsynth.size_unit;`bid`ask`mid);{[e] ()}];

@@ -61,19 +61,19 @@ mk_timestamps:{[n;start_ts]
     gaps:min_gap|mean_gap+std_gap*z;
     start_ts+sums gaps};
 
-/ A quotes table - ts, sym, bid_prices, bid_sizes, ask_prices, ask_sizes,
+/ A quotes table - time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes,
 / one row per pair - rather than a bare dict per leg: `mk_book each spots`
 / comes back as a table already (a list of dicts sharing the same keys
-/ auto-collapses to one), so ,'-joining ts/sym onto it is exactly the
+/ auto-collapses to one), so ,'-joining time/sym onto it is exactly the
 / meta_table,'level_table idiom the other example scripts use. Sorted
-/ `sym`ts xasc afterward - cross_book_at requires that (it does an as-of
+/ `sym`time xasc afterward - cross_book_at requires that (it does an as-of
 / join per leg internally, which silently gives wrong answers on
 / unsorted input, so cross_book_at checks and errors instead of guessing).
 pairs:`AUDUSD`EURUSD`EURPLN;
 approx_spot_rates:0.6550 1.0850 4.2500;
-ts:mk_timestamps[count pairs;.z.p];
-unsorted_quotes:([] ts;sym:pairs),'(mk_book each approx_spot_rates);
-quotes:`sym`ts xasc unsorted_quotes;
+time:mk_timestamps[count pairs;.z.p];
+unsorted_quotes:([] time;sym:pairs),'(mk_book each approx_spot_rates);
+quotes:`sym`time xasc unsorted_quotes;
 .qlog.info[`cross_book_chain;"quotes - ",.Q.s1[count quotes]," rows, one 10-level book per pair, no wide-table reshape needed for this example";()!()];
 show quotes;
 
@@ -146,8 +146,8 @@ if[not manual_audpln_book~audpln_book;
 / tick1's price, not tick2's.
 tick_ts:.z.p+0D 0D00:00:00.010 0D00:00:00.020;
 tick_spots:0.6550 0.6555 0.6560;
-unsorted_audusd_ticks:([] ts:tick_ts; sym:3#`AUDUSD),'(mk_book each tick_spots);
-audusd_ticks:`sym`ts xasc unsorted_audusd_ticks;
+unsorted_audusd_ticks:([] time:tick_ts; sym:3#`AUDUSD),'(mk_book each tick_spots);
+audusd_ticks:`sym`time xasc unsorted_audusd_ticks;
 .qlog.info[`cross_book_chain;"audusd_ticks - ",.Q.s1[count audusd_ticks]," successive AUDUSD quotes, 10ms apart, price drifting up:";()!()];
 show audusd_ticks;
 

@@ -40,7 +40,7 @@ Scan for the following, in order of severity:
 ### 5. Convention Drift
 - A new function, parameter, or local variable that isn't `lower_snake_case` (this library renamed everything to snake_case deliberately — camelCase creeping back in is regression, not a style choice)
 - `side`/`pip_factor` sign or scale convention violated: `side` is `1` for a buy/long-base-currency, `-1` for a sell; `pip_factor` is caller-supplied (never hardcoded to 10000 inside a function, since JPY crosses use 100)
-- An output table that doesn't route through `forwards.q`'s `ts_col`/`apply_col_precedence` convention when it has a timestamp/sym-leading shape other functions in this library already standardize on
+- An output table that doesn't route through `forwards.q`'s `time_col`/`apply_col_precedence` convention when it has a timestamp/sym-leading shape other functions in this library already standardize on
 - A public function in `src/*.q` missing a qDoc comment block (`/ @param`, `/ @return`, `/ @throws`, `/ @eg`) — every existing function has one; a new one without it is drift
 - A function that duplicates chain-discovery, orientation, or sweep logic already implemented in `forwards.q` (`ccy_orient_cross`, `oriented_levels`, `cross_sweep_side`, `ccy_shortest_path`) rather than reusing it
 

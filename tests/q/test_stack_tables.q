@@ -66,9 +66,10 @@ test_no_undeclared_table_appears:{[t]
 
 test_quotes_matches_the_shape_pricing_expects:{[t]
     / src/pricing/forwards.q's require_quotes_cols reads these five columns
-    / off a quotes table. `time` rather than `ts` because the tickerplant's
-    / .u.upd requires the first column to be literally `time`; consumers
-    / rename at query time.
+    / off a quotes table, which leads with `time` because the tickerplant's
+    / .u.upd requires the first column to be literally `time`. The library
+    / demanded `ts` here until that was made one name tree-wide, so a
+    / consumer had to rename at query time; none does now.
     .qunit.assertEquals[cols .tabletest.tbl `quotes;
         `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
         "quotes carries the vector-column shape cross_book_at consumes"]};

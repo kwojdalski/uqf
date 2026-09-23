@@ -50,8 +50,8 @@ test_check_ccy_exposure_limits_uses_abs_reporting_amount:{[t]
     .qunit.assertEquals[row`status;`breach;"1,412,500 exceeds a 1,000,000 limit -> breach"];
     .qunit.assertEquals[first exec status from r where ccy=`EUR;`unmonitored;"EUR has no configured limit -> unmonitored"]};
 
-mk_quotes_row:{[ts;sym;bid0;ask0]
-    `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes!(ts;sym;enlist bid0;enlist 1000000;enlist ask0;enlist 1000000)};
+mk_quotes_row:{[time;sym;bid0;ask0]
+    `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes!(time;sym;enlist bid0;enlist 1000000;enlist ask0;enlist 1000000)};
 
 test_check_market_data_quality_flags_a_crossed_book:{[t]
     t0:2026.01.01D00:00:00.000000000;
@@ -74,11 +74,11 @@ test_check_market_data_quality_normal_spread_is_ok:{[t]
 
 test_check_market_data_quality_rejects_missing_columns:{[t]
     wrapper:{[q] .qdqc.check_market_data_quality[q;5]};
-    .qunit.assertError[wrapper;([] ts:enlist 2026.01.01D00:00:00.000000000; sym:enlist `EURUSD);"missing bid_prices/ask_prices etc -> rejected, not silently misread"]};
+    .qunit.assertError[wrapper;([] time:enlist 2026.01.01D00:00:00.000000000; sym:enlist `EURUSD);"missing bid_prices/ask_prices etc -> rejected, not silently misread"]};
 
 test_check_stale_quotes_flags_a_gap_past_max_age:{[t]
     t0:2026.01.01D00:00:00.000000000;
-    quotes:`sym`ts xasc (enlist mk_quotes_row[t0;`EURUSD;1.0999;1.1001]);
+    quotes:`sym`time xasc (enlist mk_quotes_row[t0;`EURUSD;1.0999;1.1001]);
     at:t0+0D00:00:10;
     r:.qdqc.check_stale_quotes[quotes;at;0D00:00:05];
     row:first r;
@@ -87,7 +87,7 @@ test_check_stale_quotes_flags_a_gap_past_max_age:{[t]
 
 test_check_stale_quotes_within_max_age_is_ok:{[t]
     t0:2026.01.01D00:00:00.000000000;
-    quotes:`sym`ts xasc (enlist mk_quotes_row[t0;`EURUSD;1.0999;1.1001]);
+    quotes:`sym`time xasc (enlist mk_quotes_row[t0;`EURUSD;1.0999;1.1001]);
     at:t0+0D00:00:02;
     r:.qdqc.check_stale_quotes[quotes;at;0D00:00:05];
     .qunit.assertEquals[first r`status;`ok;"2s since the last quote is within a 5s max_age -> ok"]};
@@ -96,7 +96,7 @@ test_check_stale_quotes_ignores_quotes_after_at_time:{[t]
     t0:2026.01.01D00:00:00.000000000;
     / a later, fresher-looking row must not mask staleness as of an
     / earlier at_time - only rows at/before at_time count.
-    quotes:`sym`ts xasc (enlist mk_quotes_row[t0;`EURUSD;1.0999;1.1001]),(enlist mk_quotes_row[t0+0D00:01:00;`EURUSD;1.0999;1.1001]);
+    quotes:`sym`time xasc (enlist mk_quotes_row[t0;`EURUSD;1.0999;1.1001]),(enlist mk_quotes_row[t0+0D00:01:00;`EURUSD;1.0999;1.1001]);
     at:t0+0D00:00:10;
     r:.qdqc.check_stale_quotes[quotes;at;0D00:00:05];
     .qunit.assertEquals[first r`status;`stale;"the only quote at/before at_time is 10s old, despite a fresher later row existing"]};
@@ -132,7 +132,7 @@ test_summarize_checks_all_ok_checks_produce_an_empty_report:{[t]
 / the test builds it that way rather than hand-rolling a metrics table -
 / a hand-built fixture would pass even if the two shapes had diverged.
 mk_reject_ratios:{[]
-    reqs:([] ts:2026.09.15D10:00:00.000000000 2026.09.15D10:30:00.000000000 2026.09.15D11:00:00.000000000 2026.09.15D11:30:00.000000000;
+    reqs:([] time:2026.09.15D10:00:00.000000000 2026.09.15D10:30:00.000000000 2026.09.15D11:00:00.000000000 2026.09.15D11:30:00.000000000;
             sym:`EURUSD`EURUSD`GBPUSD`GBPUSD;
             reject:1001b;
             size:4#1000000f);

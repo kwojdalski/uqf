@@ -69,7 +69,7 @@ mk_level_cols:{[prefix;n_levels;base;step;row_step]
     names!vals_list};
 
 / Synthetic per-row event timestamps, one contiguous series covering every
-/ pair's rows back-to-back (so the final table's ts column is strictly
+/ pair's rows back-to-back (so the final table's time column is strictly
 / increasing top to bottom, same as row order): each row lands ~1ms after
 / the previous one, with gap jitter drawn from Normal(1ms, 1ms) via this
 / repo's own .qstats.inv_ncdf (inverse normal CDF) - approximates the
@@ -102,7 +102,7 @@ mk_pair_table:{[pair;base;ts_slice]
     side_idx:(til rows_per_pair) mod 2;
     actions:("A";"M";"C") action_idx;
     sides:("B";"S") side_idx;
-    meta_table:flip `ts`sym`venue`exchange`action`side!(
+    meta_table:flip `time`sym`venue`exchange`action`side!(
         ts_slice;
         rows_per_pair#enlist string pair;
         rows_per_pair#enlist "XCME";
@@ -148,7 +148,7 @@ candidates:.qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
 / `col_order#out` selects/reorders out's columns and stays a table; plain
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
-col_order:`ts`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
+col_order:`time`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
 .qlog.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.book_from_wide_levels[t;level_groups;candidates]";()!()];
 out:col_order#.qbook.book_from_wide_levels[t;level_groups;candidates];
 .qlog.info[`reshape_wide_order_book_multi_pair;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";()!()];

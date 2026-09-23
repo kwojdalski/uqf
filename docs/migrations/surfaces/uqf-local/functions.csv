@@ -297,7 +297,7 @@ qfwd,require_quotes_cols,function,2,fn_name quotes
 qfwd,side_cols,function,1,s
 qfwd,single_leg_at_one_size,function,4,cross_sym leg_book invert size
 qfwd,single_leg_at_sizes,function,5,cross_sym leg_book invert sizes sides
-qfwd,ts_col,value,,
+qfwd,time_col,value,,
 qhb,attach,function,1,
 qhb,beat,function,2,worker state
 qhb,beat_window,function,1,worker

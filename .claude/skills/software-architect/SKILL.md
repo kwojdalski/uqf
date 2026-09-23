@@ -59,7 +59,7 @@ The highest-value findings in a polyglot repo. Where is the same truth written t
 
 ### 4. Coupling and cohesion
 - High fan-in *and* volatile is the highest-risk combination — find those in `.qxf`, `.qmatz` and `forwards.q`'s orientation helpers
-- Namespace-level mutable config (`.qfwd.ts_col`, `.qfwd.col_precedence`, `.qwcfg` layers) is global state: is it read at call time or captured once, and is its blast radius contained?
+- Namespace-level mutable config (`.qfwd.time_col`, `.qfwd.col_precedence`, `.qwcfg` layers) is global state: is it read at call time or captured once, and is its blast radius contained?
 - Registries (`.qsrc.sources`, `.qxf.registry`, `.qstream.jobs`, `.qnorm.registry`, `.qio`, `.qalloc.methods`) are shared mutable state too. Same shape, same trap: q collapses a dict of same-keyed dicts into a table, so a later differently-shaped entry is refused with a bare `type`. Check each registry normalises what it stores
 - Temporal coupling with no structural enforcement — "call `require_quotes_cols` first", "publish before checkpointing", "replay before subscribing"
 
@@ -70,7 +70,7 @@ The highest-value findings in a polyglot repo. Where is the same truth written t
 - Missing abstraction where one would prevent drift. Worked example: the position modules — `.qpos` (running book, weighted average, O(1) per fill), `.qalloc` (lot matching, any dimensions, recomputed) and `.qdesk` (running netted book, any dimensions, no cost basis). Three that look alike and each answers a different question; a fourth would have to justify itself the same way
 
 ### 6. Configuration, dependencies and load order
-- Hardcoded defaults scattered where `.qwcfg`, `ts_col` or a settings module already centralise that kind of thing
+- Hardcoded defaults scattered where `.qwcfg`, `time_col` or a settings module already centralise that kind of thing
 - A function silently depending on load order without `src/init.q` or `src/etl/init.q` guaranteeing it — the ETL init file documents *which* orderings are load-bearing and which are readability; a new dependency that is neither is a finding
 - A Python module importing another that imports it back (the `env.py` extraction exists because of exactly this)
 
