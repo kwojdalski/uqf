@@ -1,7 +1,7 @@
 # Licensing
 
 Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)), **except**
-the seven vendored dependencies below:
+the six vendored dependencies below:
 
 - `tests/lib/qunit.q`, vendored from
   [TimeStored's qUnit](https://github.com/timestored/kdb/blob/master/qunit/qunit.q)
@@ -27,16 +27,6 @@ the seven vendored dependencies below:
   a variable being assigned mid-expression and read earlier in that same
   expression - valid, standard q right-to-left evaluation, and confirmed
   working under KDB-X.
-- `lib/q-doc/`, vendored from [jasraj/q-doc](https://github.com/jasraj/q-doc)
-  (BSD-3-Clause, full text at `lib/q-doc/LICENSE-q-doc`), plus its
-  `kdb-common` dependency vendored into `lib/q-doc/kdb-common/` from
-  [BuaBook/kdb-common](https://github.com/BuaBook/kdb-common) at the
-  commit q-doc's own `.gitmodules` pins (Apache License 2.0, full text at
-  `lib/q-doc/kdb-common/LICENSE-kdb-common`) - both permissive and fine to
-  combine with this repository's MIT code. Not loaded by `src/init.q`;
-  run via `scripts/dev/run_qdoc.sh` (see [Documentation](README.md#documentation)). Requires KDB-X:
-  q-doc uses `.Q.opt`/`.h.ty` and kdb+'s built-in HTTP request handlers.
-  Verified working end-to-end against this repo's own `src/*.q`.
 - `lib/kdb-parquet/`, vendored from
   [DataIntellectTech/kdb-parquet](https://github.com/DataIntellectTech/kdb-parquet)
   at commit `e5cd641`. **Unlike the vendored files above, upstream has no

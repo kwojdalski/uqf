@@ -27,7 +27,7 @@ framework - see [Testing](#testing).
 - [Browser application](#browser-application) — the React desk and operations app
 - [Testing](#testing) — the four lanes, and what each one proves
 - [Documentation](#documentation) — generating browsable API docs from qDoc
-- [Licensing](#licensing) — MIT, plus seven vendored dependencies with their own terms
+- [Licensing](#licensing) — MIT, plus six vendored dependencies with their own terms
 
 ## Requirements
 
@@ -401,36 +401,11 @@ see the other loaded namespaces), so don't be alarmed by those specifically.
 backwards. The verified, working order (baked into `gen-docs.sh`) is
 `QDocMain <targetFolder> <sourceFolder>`.
 
-### Alternative: q-doc (live, no external download)
-
-[`lib/q-doc/`](lib/q-doc) is a vendored copy of
-[jasraj/q-doc](https://github.com/jasraj/q-doc) (see Licensing) - unlike
-`gen-docs.sh`, it needs no jar download, but it runs as a live kdb+
-process serving docs over HTTP rather than writing static files:
-
-```
-./scripts/dev/run_qdoc.sh                        # starts on port 8090 by default
-q) .qdoc.parser.init `:src                    # at the q) prompt once it's up
-```
-
-Then browse `http://localhost:8090/index-kdb.html`. Requires real
-kdb+/KDB-X (see Licensing).
-
-**Known gap:** q-doc's `@param` tag expects `@param name (Type)
-description` - one token for the type, in parentheses. This repo's
-existing `@param` comments (written for `gen-docs.sh`'s qDoc) instead
-follow `@param name description` with no type token, so q-doc misparses
-the first description word as an (unrecognized, logged-as-a-warning) type
-and drops it from the rendered description. Harmless - parsing still
-succeeds and the rest of each description renders correctly - but don't
-expect q-doc's rendered `@param` text to exactly match the source
-comment.
-
 ## Licensing
 
 This repository's own code is MIT licensed — see [`LICENSE`](LICENSE).
 
-Seven vendored dependencies under `lib/` and `tests/lib/` carry their own
+Six vendored dependencies under `lib/` and `tests/lib/` carry their own
 terms, one of which (qUnit, the test framework) is **non-commercial**. See
 [**`LICENSING.md`**](LICENSING.md) for the per-dependency breakdown: the
 license each is under, where its full text lives, whether `src/init.q` loads
