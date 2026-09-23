@@ -10,7 +10,7 @@ import pytest
 from uqs import paths as stack_paths
 from uqs.external import crypto
 from uqs.external.crypto import CRYPTORUST_ROOT_ENV
-from uqs.model import pipeline_edges, plant_schema, schemas
+from uqs.model import dependencies, pipeline_edges, plant_schema, schemas
 from uqs.model.pipeline import (
     FROM_DECLARATION,
     PIPELINE_LIB_SCRIPT,
@@ -225,6 +225,51 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: UqsPa
     assert by_name["fxtradesfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxtradesfeed1"])
     assert by_name["posbook1"]["port"] == str(7000 + PIPELINE_OFFSETS["posbook1"])
     assert by_name["markout1"]["port"] == str(7000 + PIPELINE_OFFSETS["markout1"])
+
+
+def test_list_processes_shows_what_each_process_reads_and_writes(fake_paths: UqsPaths):
+    by_name = {i["procname"]: i for i in listing.list_items(fake_paths, "processes")}
+    assert by_name["fxpositions1"]["inputs"] == "orders"
+    assert set(by_name["fxpositions1"]["outputs"].split(", ")) == {"fx_position", "fx_limit_breach"}
+    assert by_name["fxfeed1"]["inputs"] == "", "a feed reads nothing"
+    assert by_name["discovery1"]["outputs"] == "", "a vendored process declares no edges"
+
+
+def test_list_processes_edges_are_the_ones_summary_draws(fake_paths: UqsPaths):
+    """One source for both views, so `list` and `summary` cannot disagree."""
+    inputs, outputs = dependencies.inputs_by_process(), dependencies.outputs_by_process()
+    for item in listing.list_items(fake_paths, "processes"):
+        name = item["procname"]
+        assert item["outputs"] == ", ".join(outputs.get(name, ())), name
+        if item["inputs"] != listing.RUNTIME_INPUTS:
+            assert item["inputs"] == ", ".join(inputs.get(name, ())), name
+
+
+def test_list_processes_gives_a_bounded_worker_its_dataset_as_output(fake_paths: UqsPaths):
+    """A worker writes through its IO manager, so it has no publish edge; the
+    dataset it fills is still its output. Without a procname it runs as <name>1."""
+    workers = fake_paths.repo_root / "src" / "etl" / "workers"
+    workers.mkdir(parents=True)
+    (workers / "w.q").write_text(
+        "/ .qbw.define[`commented;`source`dataset!(`s;`nope)];\n"
+        ".qbw.define[`demo_deals_backfill;`source`dataset`width`procname!(\n"
+        "    `demo_deals;`demo_deals;1D;`deals_backfill1)];\n"
+        ".qbw.define[`x_backfill;`source`dataset`width!(`x;`x_rows;1D)];\n"
+    )
+    assert listing._worker_datasets(fake_paths) == {
+        "deals_backfill1": "demo_deals",
+        "x_backfill1": "x_rows",
+    }
+    by_name = {i["procname"]: i for i in listing.list_items(fake_paths, "processes")}
+    assert by_name["deals_backfill1"]["outputs"] == "demo_deals"
+
+
+def test_list_processes_says_a_runtime_input_is_chosen_at_start(fake_paths: UqsPaths):
+    """tap1 picks its tables with -tables; an empty cell would say it reads nothing."""
+    by_name = {i["procname"]: i for i in listing.list_items(fake_paths, "processes")}
+    dynamic = [p.procname for p in PIPELINES if p.subscribes_dynamic]
+    assert dynamic, "the case this covers must still exist"
+    assert all(by_name[name]["inputs"] == listing.RUNTIME_INPUTS for name in dynamic)
 
 
 def test_list_processes_reflects_overrides(fake_paths: UqsPaths):
