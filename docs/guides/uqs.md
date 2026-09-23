@@ -99,18 +99,28 @@ uv tool install --force --editable python/uqs
 
 **The data directory moved with the name.** `scripts/output/uqf-stack/` is
 now `scripts/output/uqs/`, and it holds the HDB, the tickerplant logs and the
-write-down database. Nothing reads the old path any more, so with the stack
-stopped:
+write-down database. Nothing reads the old path any more. No downtime needed -
+both paths are under `scripts/output/`, so this is a rename on one filesystem
+and every running process keeps the files it already has open:
 
 ```
 mv scripts/output/uqf-stack scripts/output/uqs
 ```
 
-Forgetting this does not error - `bootstrap()` regenerates `process.csv` and
-`database.q` on every command, so the stack would start cleanly against an
+Restart the stack afterwards when convenient, so each process reopens at the
+new path rather than through the handle it already holds.
+
+Forgetting the move does not error - `bootstrap()` regenerates `process.csv`
+and `database.q` on every command, so the stack would start cleanly against an
 EMPTY HDB and every historical query would return no rows. That is why
-`check_data_dir_was_migrated` refuses to run when the old directory is
-present and the new one is not, and prints the `mv` above.
+`check_data_dir_was_migrated` refuses to run when the old directory is present
+and the new one is not, and prints the `mv` above.
+
+It refuses `stop` as well, which looks unhelpful and is not: `process.csv`
+lives inside the data directory, so a `stop` allowed through would bootstrap
+the NEW directory into existence, leave both present, silence the check for
+good and orphan the old HDB. The block stays; the message is what had to give,
+and it no longer tells you to stop first.
 
 `--force` is what re-generates the scripts. The same applies to any entry
 point added or renamed later.

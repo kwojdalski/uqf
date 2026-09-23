@@ -1346,6 +1346,31 @@ def test_the_old_data_dir_alone_is_refused_with_the_command_that_fixes_it(tmp_pa
     assert "empty HDB" in message
 
 
+def test_the_refusal_does_not_tell_you_to_stop_the_stack_first(tmp_path):
+    """The first version of this message said "Stop the stack, then: mv ...",
+    which is an order this guard makes impossible.
+
+    `stop` reaches the guard through `bootstrap`, so it is refused like
+    everything else - and that is deliberate, because `process.csv` lives
+    inside the data directory and a bootstrap allowed through would CREATE the
+    new one, leaving both present, the guard permanently quiet and the old HDB
+    orphaned in silence.
+
+    Since the block cannot move, the instruction has to. The move needs no
+    downtime: both paths are under `scripts/output/`, so `mv` is a rename on
+    one filesystem and every running process keeps its open files.
+    """
+    paths = _data_dir_paths(tmp_path)
+    (paths.torqdata.parent / "uqf-stack").mkdir(parents=True)
+    with pytest.raises(UqsError) as exc:
+        check_data_dir_was_migrated(paths)
+    message = str(exc.value).lower()
+    assert "stop the stack" not in message, (
+        "the guard blocks `stop`, so telling the reader to stop first is a deadlock"
+    )
+    assert "safe with the stack up" in message
+
+
 def test_both_present_is_allowed_rather_than_guessed_at(tmp_path):
     """A copy rather than a move is a legitimate thing to have done - keeping
     the old tree as a backup. Refusing would force a choice the tool is not
