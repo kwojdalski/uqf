@@ -558,6 +558,22 @@ rolling/restart-aliasing correctly) and merges them through a queue; without
 printed sorted by the log's own timestamp - not wall-clock arrival order.
 `--level` filters to that level and above (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
 
+`uqs multitail` follows the same files in
+[multitail](https://www.vanheusden.com/multitail/), one pane per file,
+titled with its file name, instead of merging them - so two busy processes
+stay side by side rather than interleaved. It takes the same process names
+and needs the `multitail` binary (`brew install multitail`,
+`apt install multitail`):
+
+```
+uqs multitail "rdb1 fxpositions1"        # a pane for each out_/err_ log, stacked
+uqs multitail all --stream err -c 2      # every process's err_ log, in two columns
+uqs multitail stp1 -n 100 --print        # show the multitail command, run nothing
+```
+
+A process that has never started has no log and gets no pane; a name that is
+not a process is refused. Press `q` to leave multitail.
+
 ### The CLI's own logging, which is a different thing
 
 `logs --level` filters what the *q processes* wrote. It says nothing about
