@@ -15,7 +15,7 @@ Before writing, determine the doc type from `$ARGUMENTS` using this table:
 |---|---|
 | a pricing formula or model (Garman-Kohlhagen, CIRP forwards, VaR, a microstructure feature formula) | **Formula / Pricing Model Overview** |
 | a multi-step flow (cross-book chain resolution, a markout/decomposition workflow, the test suite, doc generation) | **Workflow / Pipeline** |
-| a module or subsystem: `forwards.q`, `execution.q`, `microstructure.q`, the `ts_col`/`col_precedence` config system | **Component / Architecture** |
+| a module or subsystem: `forwards.q`, `execution.q`, `microstructure.q`, the `time_col`/`col_precedence` config system | **Component / Architecture** |
 | setup, howto, guide, running tests, adding a module | **Quick Reference / Guide** |
 
 ## Step 0 — Pre-research
@@ -176,7 +176,7 @@ See `scripts/<relevant_example>.q` for a full worked example with synthetic data
 ### With configuration overrides
 
 ```q
-q).qfwd.ts_col:`target_time    / override the default `ts output column name
+q).qfwd.time_col:`target_time    / override the default `ts output column name
 q).q<abbrev>.<function>[<args>]
 ```
 
@@ -200,7 +200,7 @@ Describe the returned table/dict shape, including column precedence (`` `ts`sym 
 
 ### Template C — Component / Architecture
 
-Use for: `forwards.q`, `execution.q`, `microstructure.q`, `book.q`, the `ts_col`/`col_precedence` config system, or any self-contained subsystem.
+Use for: `forwards.q`, `execution.q`, `microstructure.q`, `book.q`, the `time_col`/`col_precedence` config system, or any self-contained subsystem.
 
 ```markdown
 # <Component> Architecture
@@ -244,7 +244,7 @@ Namespace-level config variables this component reads, if any:
 
 | Variable | Default | Description |
 |---|---|---|
-| `.qfwd.ts_col` | `` `ts `` | output timestamp column name |
+| `.qfwd.time_col` | `` `ts `` | output timestamp column name |
 | `.qfwd.col_precedence` | `` `ts`sym `` | leading column order for output tables |
 
 ## Extension Points

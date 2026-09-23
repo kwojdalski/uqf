@@ -210,8 +210,8 @@ ccy_exposure:{[pos]
 / exposure report, not an executable price.
 / @param pos a position book (see empty_book)
 / @param quotes a depth-aware quotes table - forwards.q's own
-/   `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes shape (require_quotes_cols),
-/   sorted `sym`ts xasc
+/   `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes shape (require_quotes_cols),
+/   sorted `sym`time xasc
 / @param reporting_ccy the currency to convert every leg into, e.g. `USD
 / @param at_time only consider quotes at or before this time
 / @return a table `ccy`amount`reporting_amount - amount is the raw

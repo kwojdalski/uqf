@@ -88,7 +88,7 @@ bind_fixtures:{[]
     / with the docs as though the docs were wrong.
     `tape set .qfeed.demo_events.fixture[];
     `quotes set .forwardstest.mk_ts_quotes_table[::];
-    `trade_time set exec first ts from `quotes;
+    `trade_time set exec first time from `quotes;
     / `b` appeared in five positions.q examples meaning THREE different
     / books, each defined only in a parenthetical gloss. The three that
     / assert a value now build their own book inline, so this binding serves
@@ -111,8 +111,8 @@ bind_fixtures:{[]
     `eurusd_book set books`eurusd;
     `usdjpy_book set books`usdjpy;
     `jpychf_book set books`jpychf;
-    `t0 set min exec ts from `quotes;
-    `t1 set max exec ts from `quotes;
+    `t0 set min exec time from `quotes;
+    `t1 set max exec time from `quotes;
     `tbl set .booktest.wide_book_table[::];
     `prefix_targets set .booktest.level_prefix_targets;
     `rr set .dqcheckstest.mk_reject_ratios[];

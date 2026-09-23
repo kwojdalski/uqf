@@ -5,7 +5,7 @@
 // cross_impact_at_horizons (did a trade in one pair move a DIFFERENT,
 // related pair?). All three build on cross_book_at/cross_ref_price_at,
 // so - like cross_book_chain_example.q - they operate on a `quotes`
-// table (ts, sym, bid_prices, bid_sizes, ask_prices, ask_sizes), not
+// table (time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes), not
 // bare book dicts.
 //
 // Narration/status goes through .qlog (src/etl/core/log.q), the one q
@@ -53,11 +53,11 @@ mk_timestamps:{[n;start_ts]
     start_ts+sums gaps};
 
 / A tick series for one pair: n prices drifting linearly by drift_per_tick,
-/ one row per timestamp in ts.
-mk_tick_series:{[sym;start_spot;drift_per_tick;ts]
-    n:count ts;
+/ one row per timestamp in time.
+mk_tick_series:{[sym;start_spot;drift_per_tick;time]
+    n:count time;
     spots:start_spot+drift_per_tick*til n;
-    ([] ts; sym:n#sym),'(mk_book each spots)};
+    ([] time; sym:n#sym),'(mk_book each spots)};
 
 / 6 ticks per leg over roughly a second: AUDUSD and EURPLN drift up,
 / EURUSD drifts down - so a synthetic AUDPLN move should show up as a
@@ -75,7 +75,7 @@ eurpln_ts:mk_timestamps[n_ticks;start_ts];
 audusd_q:mk_tick_series[`AUDUSD;0.6550;0.00005;audusd_ts];
 eurusd_q:mk_tick_series[`EURUSD;1.0850;-0.00002;eurusd_ts];
 eurpln_q:mk_tick_series[`EURPLN;4.2500;0.0001;eurpln_ts];
-quotes:`sym`ts xasc (audusd_q,eurusd_q,eurpln_q);
+quotes:`sym`time xasc (audusd_q,eurusd_q,eurpln_q);
 .qlog.info[`cross_markout;"quotes - ",.Q.s1[count quotes]," rows, ",.Q.s1[n_ticks]," ticks per leg over ~1s";()!()];
 show quotes;
 
@@ -94,7 +94,7 @@ trade_price:first .qfwd.cross_book_at[quotes;`AUDPLN;trade_time;enlist 1;enlist 
 horizons_r:.qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;trade_price;10000;-500 -300 0 100 300;1];
 .qlog.info[`cross_markout;"horizons_r - markout at each horizon (negative = before the trade):";()!()];
 show horizons_r;
-if[not (first horizons_r[`ts] where horizons_r[`horizon_ms]=0)~trade_time;
+if[not (first horizons_r[`time] where horizons_r[`horizon_ms]=0)~trade_time;
     .qlog.err[`cross_markout;"the 0ms horizon should land exactly on trade_time";()!()];
     exit 1];
 if[0.0<>first horizons_r[`markout_pips] where horizons_r[`horizon_ms]=0;

@@ -267,7 +267,7 @@ vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
         i+:1];
     result};
 
-/ Private: rows of quotes for one sym, sorted `ts xasc, validated to have
+/ Private: rows of quotes for one sym, sorted `time xasc, validated to have
 / every column require_quotes_cols checks - the shared setup every Tier 2
 / rolling function needs. Named target_sym (not sym) to avoid colliding
 / with the `sym` column inside the qSQL where-clause below (a param named
@@ -277,15 +277,15 @@ vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
 / @throws error if quotes is missing a required column (see require_quotes_cols)
 quotes_for_sym:{[fn_name;quotes;target_sym]
     .qfwd.require_quotes_cols[fn_name;quotes];
-    `ts xasc select from quotes where sym=target_sym};
+    `time xasc select from quotes where sym=target_sym};
 
 / First difference of the L0 mid price for one sym's quotes, time-ordered.
 / Index 0 is forced to 0n (no prior snapshot to diff against) - `deltas`
 / keeps a vector's first element as-is rather than nulling it (unlike
 / `prev`), so it's overridden explicitly here.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute velocity for
-/ @return a vector, one velocity value per quote row for target_sym, in ts order
+/ @return a vector, one velocity value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
 / @eg .qmicro.mid_price_velocity[quotes;`EURUSD]
 mid_price_velocity:{[quotes;target_sym]
@@ -299,9 +299,9 @@ mid_price_velocity:{[quotes;target_sym]
 / `deltas`); index 1 comes out null "for free" too, since deltas'
 / real_value-0n arithmetic already propagates null - no manual override
 / needed for either index here.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute acceleration for
-/ @return a vector, one acceleration value per quote row for target_sym, in ts order
+/ @return a vector, one acceleration value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
 / @eg .qmicro.mid_price_acceleration[quotes;`EURUSD]
 mid_price_acceleration:{[quotes;target_sym]
@@ -311,10 +311,10 @@ mid_price_acceleration:{[quotes;target_sym]
 / how much of the prior top-of-book size drained away, floored at 0 (a
 / size increase is not "negative depletion"). Index 0 is forced to 0n (no
 / prior snapshot).
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute depletion for
 / @param side `bid or `ask
-/ @return a vector, one depletion rate per quote row for target_sym, in ts order
+/ @return a vector, one depletion rate per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column, or side isn't `bid or `ask
 / @eg .qmicro.queue_depletion_rate[quotes;`EURUSD;`bid]
 queue_depletion_rate:{[quotes;target_sym;side]
@@ -337,9 +337,9 @@ queue_depletion_rate:{[quotes;target_sym;side]
 / out null (a boolean comparison against 0n is just false, not null), so
 / without this override index 0 would silently pick a branch instead of
 / nulling.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute OFI for
-/ @return a vector, one OFI value per quote row for target_sym, in ts order
+/ @return a vector, one OFI value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
 / @eg .qmicro.ofi[quotes;`EURUSD]
 ofi:{[quotes;target_sym]
@@ -381,10 +381,10 @@ ofi_at_level:{[sub;level]
 / every level 0..n_levels-1 and summed, handling levels that appear or
 / disappear between rows (see ofi_at_level). Index 0 is forced to 0n
 / explicitly, same reason as plain ofi.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute multi-level OFI for
 / @param n_levels how many levels (0..n_levels-1) to sum OFI over
-/ @return a vector, one multi-level OFI value per quote row for target_sym, in ts order
+/ @return a vector, one multi-level OFI value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
 / @eg .qmicro.ofi_multilevel[quotes;`EURUSD;3]
 ofi_multilevel:{[quotes;target_sym;n_levels]
@@ -404,10 +404,10 @@ rolling_ofi:{[ofi_series;window] msum[window;ofi_series]};
 / Ratio of the current quoted spread (spread_bps) to its own rolling mean
 / (kdb+'s builtin mavg, not hand-rolled) over window - >1 means the
 / spread is currently wider than its recent average.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute spread_ratio for
 / @param window the moving-window size, in number of rows
-/ @return a vector, one spread_ratio value per quote row for target_sym, in ts order
+/ @return a vector, one spread_ratio value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
 / @eg .qmicro.spread_ratio[quotes;`EURUSD;5]
 spread_ratio:{[quotes;target_sym;window]
@@ -419,14 +419,14 @@ spread_ratio:{[quotes;target_sym;window]
 / time since the sym's previous quote. Index 0 is null "for free": `prev`
 / nulls the first element of a timestamp vector, and timestamp-minus-null-
 / timestamp is already a null timespan - no manual override needed.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute inter-event time for
-/ @return a vector, one log(1+gap_seconds) value per quote row for target_sym, in ts order
+/ @return a vector, one log(1+gap_seconds) value per quote row for target_sym, in time order
 / @throws error if quotes is missing a required column
 / @eg .qmicro.inter_event_time[quotes;`EURUSD]
 inter_event_time:{[quotes;target_sym]
     sub:quotes_for_sym[`inter_event_time;quotes;target_sym];
-    gaps_ns:"j"$sub[`ts]-prev sub`ts;
+    gaps_ns:"j"$sub[`time]-prev sub`time;
     gap_sec:1e-9*gaps_ns;
     log 1+gap_sec};
 
@@ -501,8 +501,8 @@ require_tape:{[tape]
         '"require_tape: unknown action(s) ",(", " sv string unknown),
          " - expected one of ",(", " sv string tape_actions),
          ". An unmatched action makes every trade-based ratio report on an empty set rather than erroring"];
-    ts:exec time from tape;
-    if[not ts~asc ts;
+    time:exec time from tape;
+    if[not time~asc time;
         '"require_tape: tape is not sorted ascending by time - a rolling window over an unsorted tape returns a plausible wrong number rather than erroring (docs/architecture/event-tape.md)"];
     1b}
 
@@ -735,10 +735,10 @@ vpin:{[tape;bucket_volume;n_buckets]
 / @eg .qmicro.trade_arrival_rate[tape]  ->  0.2
 trade_arrival_rate:{[tape]
     require_tape tape;
-    ts:exec time from tape where action=`trade;
-    if[2>count ts; :0n];
-    span:`float$(last[ts]-first ts)%1000000000;
-    $[span<=0; 0n; (count[ts]-1)%span]}
+    time:exec time from tape where action=`trade;
+    if[2>count time; :0n];
+    span:`float$(last[time]-first time)%1000000000;
+    $[span<=0; 0n; (count[time]-1)%span]}
 
 / Trade arrival rate per time bucket and grouping.
 / .

@@ -30,8 +30,8 @@ Scan for the following, in order of severity:
 - Swapped positional arguments to a function call — especially easy to miss in q's bracket-call syntax `f[a;b;c]` since there's no keyword-argument safety net
 
 ### 3. Namespace-Level Config State Misused
-- A function that should route its output through `ts_col`/`col_precedence` (`forwards.q`'s namespace-level config variables) but hardcodes `` `ts `` or a fixed column order instead, so it silently ignores a caller's configuration change
-- A function reading a config variable's value at the wrong time (e.g. capturing it once at load time instead of at call time, so a later `` .qfwd.ts_col:`target_time `` change doesn't take effect)
+- A function that should route its output through `time_col`/`col_precedence` (`forwards.q`'s namespace-level config variables) but hardcodes `` `ts `` or a fixed column order instead, so it silently ignores a caller's configuration change
+- A function reading a config variable's value at the wrong time (e.g. capturing it once at load time instead of at call time, so a later `` .qfwd.time_col:`target_time `` change doesn't take effect)
 
 ### 4. Silent Wrong-But-Not-Crashing Behavior
 - A protected-eval guard (`@[f;x;{0n}]` or similar) that returns null on *any* failure, masking a real structural bug (wrong column name, malformed table) as if it were the legitimate "no quote yet" case

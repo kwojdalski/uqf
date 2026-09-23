@@ -133,12 +133,12 @@ test_vamp_with_per_row_notional_vector:{[t]
 
 / ---- Tier 2 shared fixture ----
 
-/ 4-row EURUSD quotes fixture: ts 1s apart, both sides equal to the same
+/ 4-row EURUSD quotes fixture: time 1s apart, both sides equal to the same
 / per-row mid value (so mid_price is exactly that value by construction).
 mk_mid_quotes:{[dummy]
     t0:2026.01.01D09:00:00.000000000;
     mids:1.1000 1.1010 1.1005 1.1020;
-    ([] ts:t0+(1000000000*til 4);
+    ([] time:t0+(1000000000*til 4);
         sym:4#`EURUSD;
         bid_prices:enlist each mids;
         bid_sizes:enlist each 4#100;
@@ -162,7 +162,7 @@ test_mid_price_velocity_and_acceleration_known_values:{[t]
 
 test_queue_depletion_rate_depletion_and_replenishment:{[t]
     t0:2026.01.01D09:00:00.000000000;
-    quotes:([] ts:t0+(1000000000*til 3);
+    quotes:([] time:t0+(1000000000*til 3);
         sym:3#`EURUSD;
         bid_prices:enlist each 3#1.10;
         bid_sizes:enlist each 100 60 80;
@@ -175,7 +175,7 @@ test_queue_depletion_rate_depletion_and_replenishment:{[t]
 
 test_queue_depletion_rate_rejects_bad_side:{[t]
     t0:2026.01.01D09:00:00.000000000;
-    quotes:([] ts:enlist t0; sym:enlist `EURUSD;
+    quotes:([] time:enlist t0; sym:enlist `EURUSD;
         bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 100;
         ask_prices:enlist enlist 1.11; ask_sizes:enlist enlist 100);
     wrapper:{[q] .qmicro.queue_depletion_rate[q;`EURUSD;`mid]};
@@ -187,7 +187,7 @@ test_queue_depletion_rate_rejects_bad_side:{[t]
 / (price improves / unchanged / worsens) over three transitions.
 mk_ofi_quotes:{[dummy]
     t0:2026.01.01D09:00:00.000000000;
-    ([] ts:t0+(1000000000*til 4);
+    ([] time:t0+(1000000000*til 4);
         sym:4#`EURUSD;
         bid_prices:enlist each 1.1000 1.1001 1.1000 1.1000;
         bid_sizes:enlist each 100 150 90 120;
@@ -209,7 +209,7 @@ test_ofi_covers_improve_unchanged_worsen_on_both_sides:{[t]
 
 test_ofi_multilevel_level_disappearing_is_negative_flow:{[t]
     t0:2026.01.01D09:00:00.000000000;
-    quotes:([] ts:t0+0 1000000000;
+    quotes:([] time:t0+0 1000000000;
         sym:2#`EURUSD;
         bid_prices:(1.1000 1.0998;enlist 1.1000);
         bid_sizes:(100 50;enlist 100);
@@ -223,7 +223,7 @@ test_ofi_multilevel_level_disappearing_is_negative_flow:{[t]
 
 test_ofi_multilevel_ask_level_disappearing_and_reappearing:{[t]
     t0:2026.01.01D09:00:00.000000000;
-    quotes:([] ts:t0+(1000000000*til 5);
+    quotes:([] time:t0+(1000000000*til 5);
         sym:5#`EURUSD;
         bid_prices:5#enlist 1.1000 1.0998;
         bid_sizes:5#enlist 100 50;
@@ -234,7 +234,7 @@ test_ofi_multilevel_ask_level_disappearing_and_reappearing:{[t]
 
 test_ofi_multilevel_absent_deeper_levels_preserve_l0_flow:{[t]
     t0:2026.01.01D09:00:00.000000000;
-    quotes:([] ts:t0+0 1000000000;
+    quotes:([] time:t0+0 1000000000;
         sym:2#`EURUSD;
         bid_prices:2#enlist enlist 1.1000;
         bid_sizes:2#enlist enlist 100;
@@ -251,7 +251,7 @@ test_rolling_ofi_matches_msum_directly:{[t]
 
 test_spread_ratio_matches_direct_spread_bps_and_mavg:{[t]
     t0:2026.01.01D09:00:00.000000000;
-    quotes:([] ts:t0+(1000000000*til 3);
+    quotes:([] time:t0+(1000000000*til 3);
         sym:3#`EURUSD;
         bid_prices:enlist each 3#1.1000;
         bid_sizes:enlist each 3#100;
@@ -266,7 +266,7 @@ test_spread_ratio_matches_direct_spread_bps_and_mavg:{[t]
 
 test_inter_event_time_known_irregular_gaps:{[t]
     t0:2026.01.01D09:00:00.000000000;
-    quotes:([] ts:t0+0 1000000000 3000000000;
+    quotes:([] time:t0+0 1000000000 3000000000;
         sym:3#`EURUSD;
         bid_prices:enlist each 3#1.10;
         bid_sizes:enlist each 3#100;

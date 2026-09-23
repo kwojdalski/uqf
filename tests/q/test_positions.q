@@ -216,9 +216,9 @@ mk_quotes_table:{[dummy]
     mk_book:{[spot]
         `bid_prices`bid_sizes`ask_prices`ask_sizes!(
             spot-0 0.0001;1000000 2000000;spot+0.0001 0.0002;1000000 2000000)};
-    ts:2026.01.01D00:00:00.000000000+0D 0D00:00:00.001 0D00:00:00.002;
-    unsorted:([] ts;sym:`AUDUSD`EURUSD`EURPLN),'(mk_book each 0.6550 1.0850 4.2500);
-    `sym`ts xasc unsorted};
+    time:2026.01.01D00:00:00.000000000+0D 0D00:00:00.001 0D00:00:00.002;
+    unsorted:([] time;sym:`AUDUSD`EURUSD`EURPLN),'(mk_book each 0.6550 1.0850 4.2500);
+    `sym`time xasc unsorted};
 
 test_ccy_exposure_in_direct_pair_converts_at_the_chains_own_mid:{[t]
     quotes:mk_quotes_table[::];

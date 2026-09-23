@@ -457,13 +457,13 @@ cross_decomp:{[avail_syms;sym]
 
 / Private: one symbol's book, as of a given time, pulled out of a quotes
 / table via an as-of join (aj) - the most recent row at or before at_time.
-/ Requires quotes already sorted `sym`ts xasc - cross_book_at checks that
+/ Requires quotes already sorted `sym`time xasc - cross_book_at checks that
 / once up front (aj on unsorted data doesn't error, it silently returns
 / wrong rows), not repeated here on every leg lookup.
 / @throws error if quotes has no row for target_sym at or before at_time
 leg_book_as_of:{[quotes;at_time;target_sym]
-    lookup:([] sym:enlist target_sym; ts:enlist at_time);
-    joined:aj[`sym`ts;lookup;quotes];
+    lookup:([] sym:enlist target_sym; time:enlist at_time);
+    joined:aj[`sym`time;lookup;quotes];
     if[0=count first joined`bid_prices;
         '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string at_time];
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(first joined`bid_prices;first joined`bid_sizes;first joined`ask_prices;first joined`ask_sizes)};
@@ -495,9 +495,9 @@ single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
 / silently swallowed into a null by cross_ref_price_at's own protective
 / error handling, which exists for the different, genuinely expected
 / case of "no quote yet at this time", not a malformed table.
-/ @throws error naming every column in `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes missing from quotes
+/ @throws error naming every column in `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes missing from quotes
 require_quotes_cols:{[fn_name;quotes]
-    req_cols:`ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
+    req_cols:`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
     missing:req_cols where not req_cols in cols quotes;
     if[count missing; '(string fn_name),": quotes is missing required column(s) ",", " sv string missing]};
 
@@ -511,8 +511,8 @@ require_quotes_cols:{[fn_name;quotes]
 / depth-aware pricing to cross_book_chain_at_sizes - or, if sym (or its
 / inverse) is quoted directly and no chaining is needed at all, prices
 / that single leg directly.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
-/   sorted `sym`ts xasc (required for the as-of leg lookup - see
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
+/   sorted `sym`time xasc (required for the as-of leg lookup - see
 /   leg_book_as_of), any number of rows per sym (the most recent one at
 /   or before at_time is used for each leg) - see the shape
 /   reshape_wide_order_book_*.q's `out` and book_from_wide_levels produce
@@ -522,15 +522,15 @@ require_quotes_cols:{[fn_name;quotes]
 / @param sides subset of `bid`ask`mid to include in the result
 / @return a table, one row per size - see cross_book_chain_at_sizes
 / @throws error if quotes is missing a required column, isn't sorted
-/   `sym`ts xasc, if no chain of pairs currently in quotes connects
+/   `sym`time xasc, if no chain of pairs currently in quotes connects
 /   sym's two currencies, or if some required leg has no quote at or
 /   before at_time
-/ @eg .qfwd.cross_book_at[`sym`ts xasc quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
-/ @eg .qfwd.cross_book_at[`sym`ts xasc quotes;`EURUSD;.z.p;enlist 1000000;enlist `mid]  -> EURUSD is quoted directly in this quotes table, so no chaining is needed
+/ @eg .qfwd.cross_book_at[`sym`time xasc quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
+/ @eg .qfwd.cross_book_at[`sym`time xasc quotes;`EURUSD;.z.p;enlist 1000000;enlist `mid]  -> EURUSD is quoted directly in this quotes table, so no chaining is needed
 cross_book_at:{[quotes;sym;at_time;sizes;sides]
     require_quotes_cols[`cross_book_at;quotes];
-    if[not quotes~`sym`ts xasc quotes;
-        '"cross_book_at: quotes must be sorted `sym`ts xasc for an as-of lookup - try `sym`ts xasc quotes first"];
+    if[not quotes~`sym`time xasc quotes;
+        '"cross_book_at: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
     cross_sym:.qccy.normalize_ccy_pair sym;
     path:cross_decomp[distinct quotes`sym;cross_sym];
     if[0=count path;
@@ -575,7 +575,7 @@ CROSS_SIZE_MAX_HALVINGS:200;
 / size instead, using cross_book_at itself as the price oracle at each
 / candidate (first doubling to find an upper bound, since sym's total
 / tradeable depth isn't known up front either).
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`ts xasc
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
 / @param sym the pair to price, any format ccy.q's normalize_ccy_pair accepts
 / @param at_time only consider quotes at or before this time
 / @param side `bid (how much can be SOLD at avg price at least price_limit) or
@@ -614,23 +614,31 @@ cross_ref_price_at:{[quotes;sym;at_time;ref_size]
 
 / Configurable output column name for the "point in time" a row in
 / cross_markout_at_horizons/cross_impact_at_horizons refers to - defaults
-/ to `ts to match the quotes table's own timestamp column convention
-/ used throughout this file (cross_book_at, leg_book_as_of, ...).
+/ to `time, which is the timestamp column name EVERYWHERE in this tree:
+/ the quotes shape require_quotes_cols demands, the requests shape
+/ hit_ratio_by demands, and every table the tickerplant carries, whose
+/ first column .u.upd requires to be literally `time.
+/ .
+/ It defaulted to `ts until that was made true. The library used `ts for
+/ its book-shaped tables and `time for its trade-shaped ones - in the same
+/ file, in execution.q - while every published table used `time, so
+/ cross_book_at refused a real `quotes` table outright and callers renamed
+/ on the way in. There is nothing left to rename.
 / Override before calling if some downstream consumer expects a
-/ different name, e.g. .qfwd.ts_col:`timestamp.
-ts_col:`ts;
+/ different name, e.g. .qfwd.time_col:`timestamp.
+time_col:`time;
 
 / Configurable column-ordering "precedence" for markout-family output
-/ tables that have both a timestamp column (named per ts_col) and a sym
-/ column: those lead, in this order, whenever BOTH are present - `ts
+/ tables that have both a timestamp column (named per time_col) and a sym
+/ column: those lead, in this order, whenever BOTH are present - `time
 / then `sym by default. A table missing either one (e.g.
 / cross_book_chain_at_sizes's `size`sym`... shape, which has no
 / timestamp column at all) is left in its existing column order -
 / apply_col_precedence only ever reorders when every precedence column
 / is actually there, never a partial reorder. This is independent from
-/ ts_col, not derived from it - update both together if you rename the
+/ time_col, not derived from it - update both together if you rename the
 / timestamp column, or reordering will silently stop matching.
-col_precedence:`ts`sym;
+col_precedence:`time`sym;
 
 / Private: move col_precedence's columns to the front of tbl, in that
 / order, if every one of them is present in tbl - otherwise returns tbl
@@ -647,7 +655,7 @@ apply_col_precedence:{[tbl]
 / quote table). Horizons may be negative (looking backward from the
 / trade, e.g. -500 for "500ms before") the same way markout_at_horizons'
 / do; markout sign convention matches execution.q's markout.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`ts xasc
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
 / @param sym the pair traded, any format ccy.q's normalize_ccy_pair accepts
 / @param trade_time the trade's own timestamp
 / @param side 1 for a buy, -1 for a sell
@@ -661,13 +669,13 @@ apply_col_precedence:{[tbl]
 /   quoted mid, so this is priced the same way any other cross_book_at
 /   call is, not looked up directly
 / @return a table, one row per horizon, columns reordered by
-/   col_precedence (`ts`sym leading by default) when both are present:
-/   `ts`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
-/   named per ts_col, `ts by default) - ref_price/markout_pips are null
+/   col_precedence (`time`sym leading by default) when both are present:
+/   `time`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
+/   named per time_col, `time by default) - ref_price/markout_pips are null
 /   for a horizon with no quote yet for some required leg, rather than
 /   throwing
 / @throws error if quotes is missing a required column, isn't sorted
-/   `sym`ts xasc (checked explicitly here rather than left to leak out of
+/   `sym`time xasc (checked explicitly here rather than left to leak out of
 /   cross_ref_price_at's protective error handling as a misleading null -
 /   see cross_ref_price_at's own comment), or if no chain of pairs
 /   currently in quotes connects sym's two currencies (same check
@@ -677,8 +685,8 @@ apply_col_precedence:{[tbl]
 / @eg .qfwd.cross_markout_at_horizons[quotes;`AUDPLN;trade_time;1;2.5650;10000;enlist -500;1]  -> a single backward-looking horizon, 500ms before the trade
 cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;horizons_ms;ref_size]
     require_quotes_cols[`cross_markout_at_horizons;quotes];
-    if[not quotes~`sym`ts xasc quotes;
-        '"cross_markout_at_horizons: quotes must be sorted `sym`ts xasc for an as-of lookup - try `sym`ts xasc quotes first"];
+    if[not quotes~`sym`time xasc quotes;
+        '"cross_markout_at_horizons: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
     horizons_ms:horizons_ms,();
     cross_sym:.qccy.normalize_ccy_pair sym;
     path:cross_decomp[distinct quotes`sym;cross_sym];
@@ -688,7 +696,7 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
     target_time:trade_time+horizons_ms*1000000;
     ref_price:cross_ref_price_at[quotes;cross_sym;;ref_size] each target_time;
     markout_pips:.qexec.markout[side;trade_price;ref_price;pip_factor];
-    col_names:`horizon_ms,ts_col,`sym`ref_price`markout_pips;
+    col_names:`horizon_ms,time_col,`sym`ref_price`markout_pips;
     apply_col_precedence flip col_names!(horizons_ms;target_time;(count horizons_ms)#cross_sym;ref_price;markout_pips)};
 
 / Decompose a synthetic cross pair's price move between two times into
@@ -704,7 +712,7 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
 / happens to coincide with another leg's move depends on chain order -
 / a well-known property of any sequential/waterfall-style attribution,
 / not a bug.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`ts xasc
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
 / @param sym the pair, any format ccy.q's normalize_ccy_pair accepts
 / @param t0 the earlier reference time
 / @param t1 the later reference time
@@ -716,15 +724,15 @@ cross_markout_at_horizons:{[quotes;sym;trade_time;side;trade_price;pip_factor;ho
 /   convention. Contributions are all null if any endpoint leg mid is
 /   unavailable, because the complete cross cannot then be attributed.
 / @throws error if quotes is missing a required column, isn't sorted
-/   `sym`ts xasc (checked explicitly here rather than left to leak out of
+/   `sym`time xasc (checked explicitly here rather than left to leak out of
 /   cross_ref_price_at's protective error handling as a misleading null -
 /   see cross_ref_price_at's own comment), or if no chain of pairs
 /   currently in quotes connects sym's two currencies
 / @eg .qfwd.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1]
 cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
     require_quotes_cols[`cross_markout_decomp;quotes];
-    if[not quotes~`sym`ts xasc quotes;
-        '"cross_markout_decomp: quotes must be sorted `sym`ts xasc for an as-of lookup - try `sym`ts xasc quotes first"];
+    if[not quotes~`sym`time xasc quotes;
+        '"cross_markout_decomp: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
     cross_sym:.qccy.normalize_ccy_pair sym;
     path:cross_decomp[distinct quotes`sym;cross_sym];
     if[0=count path;
@@ -764,7 +772,7 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 / its "trade_price" is its own reference price at trade_time
 / (cross_ref_price_at), not a supplied execution price - this is a thin
 / wrapper around cross_markout_at_horizons using that as the baseline.
-/ @param quotes table `ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`ts xasc
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
 / @param traded_sym the pair actually traded, any format ccy.q's normalize_ccy_pair accepts - context only, not priced
 / @param impact_sym the different pair to check for impact, same format rules
 / @param trade_time the traded pair's own trade timestamp
@@ -776,9 +784,9 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 / @param ref_size the (typically negligible) size to sweep for
 /   impact_sym's reference price at trade_time and at each horizon
 / @return a table, one row per horizon, columns reordered by
-/   col_precedence (`ts`sym leading by default) when both are present:
-/   `ts`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
-/   named per ts_col, `ts by default; sym here is impact_sym, not
+/   col_precedence (`time`sym leading by default) when both are present:
+/   `time`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
+/   named per time_col, `time by default; sym here is impact_sym, not
 /   traded_sym) - impact_sym's own price drift, signed by traded_sym's side
 / @throws error if impact_sym normalizes to the same pair as traded_sym
 /   (nothing to compare against), or anything cross_ref_price_at/cross_book_at themselves throw

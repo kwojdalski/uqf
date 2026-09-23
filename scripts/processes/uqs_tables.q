@@ -28,20 +28,17 @@
 / Definition order is immaterial to q - these are independent declarations.
 
 / The order book shape every pricing and execution function in src/ expects:
-/ vector-valued price and size columns, one row per (time, sym).
+/ vector-valued price and size columns, one row per (time, sym). Matches
+/ forwards.q's require_quotes_cols exactly, so a row published here is
+/ usable by cross_book_at with no reshaping.
 / .
-/ ONE RENAME SHORT of forwards.q's require_quotes_cols, and it is load
-/ bearing. That function demands `ts`; this table leads with `time` because
-/ the tickerplant's .u.upd requires the first column to be literally that.
-/ So `select ts:time, sym, bid_prices, ... from quotes` is what a caller
-/ hands to cross_book_at - the vector columns match exactly, the instant's
-/ NAME does not.
-/ .
-/ This comment used to claim the table was usable "with no reshaping", which
-/ was false for as long as it stood: cross_book_at refuses it, naming the
-/ missing ts. Nothing caught that because nothing ran a pricing function
-/ against a real tickerplant table - scripts/examples/scenario_example.q now
-/ does, on every commit.
+/ That sentence was FALSE for as long as it stood, and is worth keeping the
+/ history of. require_quotes_cols demanded `ts` while this table led with
+/ `time` - which .u.upd requires of every table's first column - so
+/ cross_book_at refused a real quotes table outright, and the claim of "no
+/ reshaping" went unchallenged because nothing ever called a pricing
+/ function with a tickerplant table. scripts/examples/scenario_example.q
+/ now does, on every commit, and the timestamp column is `time everywhere.
 quotes:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / Direct FX books retain their source and original timestamp across normalization.

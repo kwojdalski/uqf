@@ -4,7 +4,7 @@
 // one vectorized batch the way every other scripts/*.q example does.
 //
 // Adapted from lib/qAutomatedTrading/histTickData/timersvc.q's pattern:
-// load/generate historical data once, then a .z.ts timer callback
+// load/generate historical data once, then a .z.time timer callback
 // advances through it row-by-row on a fixed system timer ("t <ms>"),
 // simulating a live feed. That script publishes each row over IPC to a
 // tickerplant (hopen/neg[h]); this example appends each row directly to
@@ -45,11 +45,11 @@
 // open until you type something). But run non-interactively - stdin
 // closed/redirected from /dev/null, as any CI job or subprocess-launched
 // invocation would do - a genuine, confirmed kdb+ race exists between
-// "stdin hit EOF, exit the process" and the timer's next .z.ts tick,
+// "stdin hit EOF, exit the process" and the timer's next .z.time tick,
 // decided by scheduler timing: sometimes only tick 1 of n_ticks fires
 // before the process exits. Piping an infinite stream of blank lines
 // through stdin (evaluated as harmless no-ops) means it never reaches
-// EOF, so only this script's own explicit `exit 0` inside .z.ts (once
+// EOF, so only this script's own explicit `exit 0` inside .z.time (once
 // every historical row has replayed) ends the process - confirmed
 // reliable across repeated runs; without it, failed non-deterministically
 // (varied 1-5 of 5 ticks firing across identical runs).
@@ -97,7 +97,7 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
-col_order:`ts`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
+col_order:`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
 
 / Command-line params: q scripts/examples/timer_replay_example.q [n_ticks] [tick_ms]
 / - .z.x is the list of args after the script name, always strings; cast
@@ -119,12 +119,12 @@ gaps:min_gap|mean_gap+std_gap*z;
 hist_ts:.z.p+sums gaps;
 hist_spots:1.0850+0.00002*til n_ticks;
 
-/ hist_wide - the wide-form "historical feed", ts/sym plus 20 scalar
+/ hist_wide - the wide-form "historical feed", time/sym plus 20 scalar
 / level columns per row (bid_px_00.._04, ...). sym is deliberately a
 / STRING, not a symbol - the same mis-typed-identifier-column shape
 / book_from_wide_levels/symbolize_columns exist to fix, matching how a
 / real CSV/vendor feed would actually arrive.
-hist_wide:([] ts:hist_ts; sym:n_ticks#enlist "EURUSD"),'(mk_wide_row each hist_spots);
+hist_wide:([] time:hist_ts; sym:n_ticks#enlist "EURUSD"),'(mk_wide_row each hist_spots);
 .qlog.info[`timer_replay;"historical - ",.Q.s1[n_ticks]," pre-generated EURUSD ticks in wide column form, ready to replay";()!()];
 .qlog.dbg[`timer_replay;"running: .qbook.derive_level_groups[cols hist_wide;level_prefix_targets]";()!()];
 level_groups:.qbook.derive_level_groups[cols hist_wide;level_prefix_targets];
@@ -133,10 +133,10 @@ level_groups:.qbook.derive_level_groups[cols hist_wide;level_prefix_targets];
 / quotes starts empty - unlike every other scripts/*.q example, which
 / builds its whole quotes table in one shot before ever calling a uqf
 / function against it.
-quotes:0#([] ts:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:());
+quotes:0#([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:());
 cnt:0;
 
-/ Timer callback: reshape this tick's own wide row (its ts is its own
+/ Timer callback: reshape this tick's own wide row (its time is its own
 / pre-recorded hist_ts, not .z.p - the replay's real-time pacing and the
 / data's own timestamps are independent, exactly like timersvc.q) via
 / book_from_wide_levels - the same function reshape_wide_order_book_
@@ -147,7 +147,7 @@ cnt:0;
 / been replayed - see README's Requirements/Quick start for why every
 / scripts/*.q example ends this way rather than falling into an
 / interactive prompt.
-.z.ts:{
+.z.time:{
     wide_row:1#cnt _ hist_wide;
     .qlog.dbg[`timer_replay;"running: .qbook.book_from_wide_levels[wide_row;level_groups;`sym]";()!()];
     row:col_order#.qbook.book_from_wide_levels[wide_row;level_groups;`sym];

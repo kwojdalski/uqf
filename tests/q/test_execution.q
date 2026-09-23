@@ -8,7 +8,7 @@
 / One buy, and the mid quotes around it at the trade and 1s and 10s after.
 / .
 / The MID-quote shape (sym/time/mid) that markout_at_horizons takes, which is
-/ not the book shape (ts/bid_prices/...) the forwards functions take. The @eg
+/ not the book shape (time/bid_prices/...) the forwards functions take. The @eg
 / for markout_at_horizons binds these as `markout_trades` and `mid_quotes`
 / rather than `trades` and `quotes` for exactly that reason: `quotes` already
 / names the book-shaped table in the other examples, and one name for two
@@ -23,7 +23,7 @@ mk_mid_quotes:{[]
         mid:1.1000 1.1010 1.1005)}
 
 mk_requests:{[]
-    ([] ts:2026.09.15D10:00:00.000000000 2026.09.15D10:30:00.000000000 2026.09.15D11:00:00.000000000 2026.09.15D11:30:00.000000000;
+    ([] time:2026.09.15D10:00:00.000000000 2026.09.15D10:30:00.000000000 2026.09.15D11:00:00.000000000 2026.09.15D11:30:00.000000000;
         sym:`EURUSD`EURUSD`GBPUSD`GBPUSD;
         reject:1001b;
         size:4#1000000f)};
@@ -126,7 +126,7 @@ test_reject_ratio_known:{[t] .testutil.assertApprox[.qexec.reject_ratio[4;100];0
 / window and hourly/daily bucketing all have something real to bite on.
 mk_hit_ratio_requests:{[dummy]
     t0:2026.01.01D08:00:00.000000000;
-    ([] ts:t0+0D00:00:00 0D00:15:00 0D01:00:00 0D01:20:00 1D00:00:00 1D00:30:00;
+    ([] time:t0+0D00:00:00 0D00:15:00 0D01:00:00 0D01:20:00 1D00:00:00 1D00:30:00;
         sym:`EURUSD`EURUSD`EURUSD`EURUSD`USDJPY`USDJPY;
         size:100 200 300 400 500 600;
         hit:110010b)};
@@ -168,9 +168,9 @@ test_hit_ratio_by_hourly_bucket_grouped_by_sym:{[t]
     requests:mk_hit_ratio_requests[::];
     t0:2026.01.01D08:00:00.000000000;
     r:.qexec.hit_ratio_by[requests;t0;t0+2D;0D01:00:00;enlist `sym;`count];
-    .qunit.assertEquals[cols r;`ts`sym`hit_ratio;"ts (the bucket) leads, then sym, then hit_ratio"];
-    hour1:first select from r where ts=t0,sym=`EURUSD;
-    hour2:first select from r where ts=t0+0D01:00:00,sym=`EURUSD;
+    .qunit.assertEquals[cols r;`time`sym`hit_ratio;"time (the bucket) leads, then sym, then hit_ratio"];
+    hour1:first select from r where time=t0,sym=`EURUSD;
+    hour2:first select from r where time=t0+0D01:00:00,sym=`EURUSD;
     .testutil.assertApprox[hour1`hit_ratio;1f;1e-9;"08:00 EURUSD bucket: both requests hit"];
     .testutil.assertApprox[hour2`hit_ratio;0f;1e-9;"09:00 EURUSD bucket: neither request hit"]};
 
@@ -178,8 +178,8 @@ test_hit_ratio_by_daily_bucket_no_other_grouping:{[t]
     requests:mk_hit_ratio_requests[::];
     t0:2026.01.01D08:00:00.000000000;
     r:.qexec.hit_ratio_by[requests;t0;t0+2D;1D;`symbol$();`amount];
-    day1:first select from r where ts=2026.01.01D00:00:00.000000000;
-    day2:first select from r where ts=2026.01.02D00:00:00.000000000;
+    day1:first select from r where time=2026.01.01D00:00:00.000000000;
+    day2:first select from r where time=2026.01.02D00:00:00.000000000;
     .testutil.assertApprox[day1`hit_ratio;0.3;1e-9;"day 1: (100+200 hit)/(100+200+300+400) = 300/1000"];
     .testutil.assertApprox[day2`hit_ratio;500%1100;1e-9;"day 2: 500 hit / (500+600) total"]};
 
@@ -307,7 +307,7 @@ test_reject_ratio_by_count_mode_grouped_by_sym:{[t]
 / Amount mode weights by size, so one large reject outweighs several small
 / fills - a distinction a count-mode ratio hides entirely.
 test_reject_ratio_by_amount_mode_weights_by_size:{[t]
-    reqs:([] ts:4#2026.09.15D10:00:00.000000000; sym:4#`EURUSD;
+    reqs:([] time:4#2026.09.15D10:00:00.000000000; sym:4#`EURUSD;
             reject:1000b; size:9000000 1000000 1000000 1000000f);
     window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
     by_count:first exec reject_ratio from .qexec.reject_ratio_by[reqs;window 0;window 1;0Nn;`symbol$();`count];
@@ -328,6 +328,6 @@ test_reject_ratio_by_rejects_bad_mode:{[t]
 
 test_reject_ratio_by_rejects_requests_missing_a_column:{[t]
     window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
-    .qunit.assertError[{.qexec.reject_ratio_by[([] ts:enlist 2026.09.15D10:00:00.000000000);x 0;x 1;0Nn;`symbol$();`count]};(window 0;window 1);"a missing reject/size column is refused"]};
+    .qunit.assertError[{.qexec.reject_ratio_by[([] time:enlist 2026.09.15D10:00:00.000000000);x 0;x 1;0Nn;`symbol$();`count]};(window 0;window 1);"a missing reject/size column is refused"]};
 
 \d .
