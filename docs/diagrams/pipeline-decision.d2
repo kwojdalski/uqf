@@ -1,0 +1,117 @@
+# pipeline-decision.d2 - which pipeline shape to build, and the command that
+# scaffolds it.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/guides/new-pipeline.md.
+#
+# THE DECISION THIS DRAWS is the first one, and the guide says it is "the only
+# structural mistake here that is expensive to undo": bounded or continuous.
+# Everything after it is a flag on one command. That asymmetry is the point of
+# the drawing - a reader who expects a long decision tree should be able to see
+# in one glance that there are three questions, not thirty, and that only the
+# first one is hard to change later.
+#
+# The kinds are DERIVED, not asked for: a streaming job that subscribes to
+# nothing is a feed, one that subscribes is an etl. scaffold/jobs.py comments
+# that there is no third answer the caller could give which the edges do not
+# already imply - so the diagram shows `--subscribes` deciding it rather than a
+# `--kind feed` that does not exist.
+#
+# What is deliberately NOT here: the transform, the check, the io manager and
+# the partition. Those are declarations you write inside the file the scaffold
+# gives you, not choices about which file to make, and putting them on a
+# decision tree would say they are alternatives when they are ingredients.
+
+direction: down
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  question: {
+    shape: diamond
+    style: {
+      fill: "#f3eefb"
+      stroke: "#6f4aa5"
+      font-color: "#3a1e5f"
+    }
+  }
+  shell: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  command: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  outcome: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+    }
+  }
+  warn: {
+    style: {
+      fill: "#fbeceb"
+      stroke: "#a8342c"
+      font-color: "#6b1e18"
+      border-radius: 6
+    }
+  }
+}
+
+start: "A new pipeline" { class: outcome }
+
+q1: "Do you know the range\nbefore it starts?" { class: question }
+
+bounded: ".qbw - bounded worker\nruns a window range and exits\n\nsrc/etl/sources/ + src/etl/workers/" { class: shell }
+cont: ".qstream - streaming job\nsubscribes, never finishes\n\nsrc/etl/streaming/" { class: shell }
+
+q2: "Does it read another\ntable to do its work?" { class: question }
+feed: "a FEED\ndeclares timer_period + on_timer,\nbuilds its own rows" { class: shell }
+etl: "an ETL\ndeclares subscribes + on_batch" { class: shell }
+
+cmd_b: "uqs new-job NAME --kind backfill\n  --dataset T --columns \"...\" --width 1D" { class: command }
+cmd_f: "uqs new-job NAME\n  --publishes T --columns \"...\"" { class: command }
+cmd_e: "uqs new-job NAME --subscribes A,B\n  --publishes T --columns \"...\"" { class: command }
+
+q3: "Does it publish a\nNEW table?" { class: question }
+newtable: "--publishes / --dataset with --columns\nThe scaffold defines it on the plant.\n\nWithout that .u.upd DISCARDS the rows\nin silence - healthy process, empty table" { class: warn }
+localonly: "omit --publishes\nthe job keeps its output local" { class: outcome }
+
+done: "Then: implement the handler,\nreplace the failing test,\nand write the two prose lines\nnew-job names for you" { class: outcome }
+
+start -> q1
+q1 -> bounded: "yes - a backfill,\na nightly window,\na restatement"
+q1 -> cont: "no - a venue feed,\na poller"
+
+cont -> q2
+q2 -> feed: "no" { style.stroke: "#6f4aa5" }
+q2 -> etl: "yes" { style.stroke: "#6f4aa5" }
+
+bounded -> cmd_b
+feed -> cmd_f
+etl -> cmd_e
+
+cmd_b -> q3
+cmd_f -> q3
+cmd_e -> q3
+
+q3 -> newtable: "yes"
+q3 -> localonly: "no (streaming only)"
+
+newtable -> done
+localonly -> done
