@@ -17,34 +17,29 @@ arrangement, and neither announces itself:
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
 from uqf_stack.model import schemas
 
-EXPECTED_TABLES = {
-    "quotes",
-    "wide_book",
-    "mkt_orderbook",
-    "databento_mbp10",
-    "databento_book",
-    "crypto_book",
-    "crypto_sim_fills",
-    "crypto_trades",
-    "trades",
-    "position",
-    "execution_quality",
-    "executions",
-    "marks",
-    "market_data",
-    "superbook",
-    "arbitrage",
-    "cross_arbitrage",
-    "config_change",
-    "orders",
-    "fx_position",
-    "fx_limit_breach",
-}
+#: The q suite's own list of tickerplant tables - the one hand-kept list,
+#: which `uqf-stack new-job` appends to. Read rather than copied: a second copy
+#: here meant every new table was two edits, and the two could disagree.
+#: Parsed by splitting the `expected:` symbol list, deliberately NOT with the
+#: `schemas` regex under test, so this remains an independent check of it.
+_Q_TABLE_TEST = Path(__file__).resolve().parents[3] / "tests" / "q" / "test_stack_tables.q"
+
+
+def _expected_tables() -> set[str]:
+    lines = [ln for ln in _Q_TABLE_TEST.read_text().splitlines() if ln.startswith("expected:")]
+    assert len(lines) == 1, f"{_Q_TABLE_TEST} should hold exactly one `expected:` line"
+    names = {n for n in lines[0].removeprefix("expected:").strip().split("`") if n}
+    assert names, f"{_Q_TABLE_TEST}'s `expected:` list is empty"
+    return names
+
+
+EXPECTED_TABLES = _expected_tables()
 
 
 def test_the_q_file_is_where_the_reader_expects_it():

@@ -8,6 +8,9 @@ shaped this way.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -20,7 +23,27 @@ from uqf_stack.cli.shared import (
     app,
     console,
 )
+from uqf_stack.paths import OPERATIONAL_DOCS_SCRIPT
 from uqf_stack.scaffold import jobs, wizard
+
+
+def _regenerate_derived(repo_root: Path) -> subprocess.CompletedProcess[str]:
+    """Rewrite the files derived from the registry, after a scaffold changed it.
+
+    `processes.md` and `src/etl/generated/pipeline_dag.q` are generated from
+    PIPELINES and checked in CI with --check, so a scaffold that appended a
+    registry entry and stopped there left the build red on files nobody is
+    meant to edit. A SUBPROCESS rather than a call: this process imported the
+    registry before the scaffold appended to it, so an in-process call would
+    regenerate from the old one.
+    """
+    return subprocess.run(
+        [sys.executable, str(repo_root / OPERATIONAL_DOCS_SCRIPT)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 @app.command("new-job")
@@ -91,15 +114,28 @@ def new_job(
         return
 
     console.print(plan.render())
+    console.print(f"  then regenerate the registry's derived files ({OPERATIONAL_DOCS_SCRIPT})")
     if dry_run:
         console.print("[dim]--dry-run: nothing written[/]")
         return
+    repo_root = _paths().repo_root
     try:
-        written = jobs.apply_plan(plan, _paths().repo_root)
+        written = jobs.apply_plan(plan, repo_root)
     except core.UqfStackError as exc:
         _die(exc)
         return
     console.print(f"\n[green]scaffolded {len(written)} file(s)[/]")
+    # Not fatal: the job's files are already written, and a refusal here (the
+    # generator verifies every declared edge first) is information about the
+    # tree to act on, not a reason to pretend the scaffold did not happen.
+    regen = _regenerate_derived(repo_root)
+    if regen.returncode == 0:
+        console.print("[green]regenerated[/] the registry's derived files")
+    else:
+        console.print(
+            f"[red]could not regenerate[/] - run `python3 {OPERATIONAL_DOCS_SCRIPT}` "
+            f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
+        )
     for note in plan.notes:
         console.print(f"  [yellow]next[/] {note}")
 

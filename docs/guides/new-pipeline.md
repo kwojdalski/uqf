@@ -35,11 +35,15 @@ the registry entry and a test.
 
 ![What uqf-stack new-job writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
-Read it left to right. The two **appends** are the whole reason the middle
-band exists: everything else is picked up by a glob, and those two files hold
-the only two facts the tree cannot derive from itself — a process's port
-offset, which is its position in the registry list, and `nsList`, the one
-hand-kept list of test namespaces.
+Read it left to right. The **appends** are the whole reason the middle band
+exists: everything else is picked up by a glob, and those files hold the facts
+the tree cannot derive from itself — the table definition, a process's port
+offset, which is its position in the registry list, `nsList`, the one
+hand-kept list of test namespaces, and `expected` in
+[`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q), the gate
+every new table passes through. After writing them, `new-job` reruns
+`scripts/generate/generate_operational_docs.py`, so `processes.md` and
+`src/etl/generated/pipeline_dag.q` never lag the registry it just changed.
 
 ```
 uqf-stack new-job markout2 --subscribes trades,quote \
@@ -68,35 +72,28 @@ row of the declared shape. Replace it before trusting a run.
 
 ### What a fresh scaffold leaves red
 
-The generated handler throws and the generated test fails — but today you will
-see **three** failures rather than that one, and the one you want is not among
-them:
+The generated handler throws and the generated test fails, and that is the
+one q failure you see:
 
 ```
 $ uqf-stack new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
 $ q tests/run_tests.q
-  .sjtest.test_every_job_is_registered
-  .tabletest.test_no_undeclared_table_appears
-  .dxprobetest.test_dxprobe_is_implemented     <- yours
+  .dxprobetest.test_dxprobe_is_implemented
 ```
 
-The third is the one you want. The other two are hand-kept lists that have
-nothing to do with your job being unfinished:
+Nothing else in the q suite needs an edit. `test_every_job_is_registered`
+derives its jobs from `src/etl/streaming/` (#352), and the scaffold adds a
+new table to `expected` in `test_stack_tables.q`. That list stays a
+**deliberate gate** — a new table is either a capability nobody wired up or a
+stray definition — and the scaffold passes it by defining the table and
+naming its owner in the same plan. It also registers your test's NAMESPACE in
+`run_tests.q` (#350); without that the stub loaded and never ran, so the one
+red the scaffold exists to leave was the one you could not see.
 
-1. Add the job name to `test_every_job_is_registered` in
-   [`tests/q/test_stream_job.q`](../../tests/q/test_stream_job.q), which keeps
-   the list of jobs by hand. (#352 — it is redundant with a generic check.)
-2. If the job publishes a new table, add it to `expected` in
-   [`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q). This one
-   is a **deliberate gate**: a new table is either a capability nobody wired up
-   or a stray definition, and both deserve a moment's thought.
-
-After those two, `q tests/run_tests.q` fails once, on your stub, which is where
-the work starts.
-
-The scaffold registers your test's NAMESPACE in `run_tests.q` itself (#350) —
-without that the stub loaded and never ran, so the one red the scaffold exists
-to leave was the one you could not see.
+`uv run pytest python/` fails once too, and that one is yours to write:
+`test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
+[`docs/integrations/torq/README.md`](../integrations/torq/README.md) name the
+new process. It is authored prose, so no generator can write it for you.
 
 The rest of this guide is what to write into that skeleton, and why each
 part is shaped the way it is.

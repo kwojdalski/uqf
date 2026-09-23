@@ -52,10 +52,16 @@ d:{[n] 2026.09.17D10:00:00.000000000+n*0D00:00:01}
 / --- the contract ---------------------------------------------------------
 
 test_every_job_is_registered:{[t]
-    / The four feeds publish on a timer and subscribe to nothing; the five
-    / subscribers are the other half. One contract covers both.
-    .qunit.assertEquals[asc .qstream.registered[];
-        `arbitrage`cross`cross_arbitrage`crypto_mock`databento_book`executions`fx_feed`fx_orders_feed`fx_positions`fx_trades_feed`market_data`markout`marks`posbook`quotes_feed`superbook`vectorize`wide_book_feed;
+    / Feeds publish on a timer and subscribe to nothing; subscribers are the
+    / other half. One contract covers both.
+    / .
+    / Derived from the files rather than listed (#352): a job is named after
+    / its file, so every file in the directory must have registered. The hand
+    / list this replaced made every new job an edit here. `except` rather than
+    / equality because other suites register test jobs (.qsub.nt_k and
+    / friends), and whether they ran first is not what this asks.
+    .qunit.assertEquals[.testutil.etl_declaration_names["src/etl/streaming"] except .qstream.registered[];
+        `symbol$();
         "each job file registers itself as it loads"]};
 
 test_a_feed_declares_no_subscription:{[t]

@@ -35,9 +35,17 @@ ETL_INIT = ETL_DIR / "init.q"
 
 TEST_DIR = Path("tests/q")
 RUN_TESTS_FILE = Path("tests/run_tests.q")
+#: The q suite's list of every tickerplant table - the deliberate gate a new
+#: table passes through, and the list the scaffold appends a new table to.
+STACK_TABLES_TEST = TEST_DIR / "test_stack_tables.q"
 
 PROCESS_SCRIPTS_DIR = Path("scripts/processes")
 TABLES_FILE = PROCESS_SCRIPTS_DIR / "uqf_stack_tables.q"
+
+#: Regenerates the files derived from the registry (the process table and
+#: src/etl/generated/pipeline_dag.q). CI runs it with --check, so a registry
+#: edit that is not followed by this fails the build.
+OPERATIONAL_DOCS_SCRIPT = Path("scripts/generate/generate_operational_docs.py")
 
 #: This package, and the registry the scaffold appends to. Spelled here rather
 #: than in `scaffold/jobs.py`, which hardcoded its own location as a string - a

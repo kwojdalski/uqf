@@ -28,6 +28,7 @@ from uqf_stack.paths import (
     REGISTRY_FILE,
     RUN_TESTS_FILE,
     SOURCE_DIR,
+    STACK_TABLES_TEST,
     STREAM_DIR,
     TABLES_FILE,
     TEST_DIR,
@@ -75,6 +76,14 @@ def _nslist_action(namespace: str) -> FileAction:
     writing the file is not enough to make its tests run.
     """
     return FileAction(RUN_TESTS_FILE, f"`.{namespace}", mode=WriteMode.APPEND)
+
+
+def _expected_table_action(table: str) -> FileAction:
+    """Add `table` to test_stack_tables.q's `expected` list - a deliberate
+    gate, but the scaffold defines the table and names its owner in the same
+    plan, which is the thought the gate asks for.
+    """
+    return FileAction(STACK_TABLES_TEST, f"`{table}", mode=WriteMode.APPEND)
 
 
 def _check_name(name: str, what: str) -> str:
@@ -192,6 +201,7 @@ publish:.qstream.unwired `{name};
                 mode=WriteMode.APPEND,
             )
         )
+        actions.append(_expected_table_action(publishes))
     elif columns:
         raise UqfStackError("--columns given with no --publishes: there is no table to define")
 
@@ -250,6 +260,7 @@ def bounded_worker(
             f"{table_definition(dataset, cols)}\n",
             mode=WriteMode.APPEND,
         ),
+        _expected_table_action(dataset),
         FileAction(REGISTRY_FILE, registry_entry_backfill(proc, worker), mode=WriteMode.APPEND),
         FileAction(
             TEST_DIR / f"test_{worker}.q",
@@ -313,9 +324,13 @@ def _appended(existing: str, action: FileAction) -> str:
 
     run_tests.q: the namespace belongs inside the `nsList:` symbol list, before
     its terminating semicolon.
+
+    test_stack_tables.q: the table belongs at the end of the `expected:` list.
     """
     if action.path == RUN_TESTS_FILE:
         return _with_nslist_entry(existing, action.body)
+    if action.path == STACK_TABLES_TEST:
+        return _with_expected_table(existing, action.body)
     if action.path != REGISTRY_FILE:
         return existing.rstrip("\n") + "\n" + action.body
     marker = "\n)\n"
@@ -354,4 +369,31 @@ def _with_nslist_entry(existing: str, entry: str) -> str:
             f"{entry} is already in {RUN_TESTS_FILE}'s nsList - pick another job name"
         )
     lines[index] = line[:-1] + entry + ";\n"
+    return "".join(lines)
+
+
+def _with_expected_table(existing: str, entry: str) -> str:
+    """`test_stack_tables.q` with `entry` added to its `expected:` list.
+
+    One line of backtick symbols with no terminator, so the entry goes at its
+    end. The same refusals as the nsList: exactly one `expected:` line, and
+    the table not already on it - a name the q file already defines means the
+    scaffold would be redefining someone else's table.
+    """
+    lines = existing.splitlines(keepends=True)
+    found = [i for i, line in enumerate(lines) if line.startswith("expected:")]
+    if len(found) != 1:
+        raise UqfStackError(
+            f"{STACK_TABLES_TEST} has {len(found)} lines starting `expected:`, expected 1 - "
+            "this scaffold cannot tell where a table goes, so add it by hand"
+        )
+    index = found[0]
+    line = lines[index].rstrip("\n").rstrip()
+    listed = line.removeprefix("expected:").split("`")
+    if entry.lstrip("`") in listed:
+        raise UqfStackError(
+            f"{entry} is already in {STACK_TABLES_TEST}'s expected list - "
+            "that table exists, so pick another name"
+        )
+    lines[index] = line + entry + "\n"
     return "".join(lines)

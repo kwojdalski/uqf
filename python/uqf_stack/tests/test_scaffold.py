@@ -200,8 +200,13 @@ def test_the_registered_namespace_is_the_one_the_test_file_declares():
     ):
         entry = _body(plan, "run_tests.q").strip()
         # The TEST file, not the job file - both end in .q, and the job file
-        # declares its own `.qsub.<name>` namespace.
-        test_body = next(a.body for a in plan.actions if a.path.name.startswith("test_"))
+        # declares its own `.qsub.<name>` namespace. Nor the q table list,
+        # which the plan appends to and whose name also starts `test_`.
+        test_body = next(
+            a.body
+            for a in plan.actions
+            if a.path.name.startswith("test_") and a.path != jobs.STACK_TABLES_TEST
+        )
         declared = [
             line.split()[1]
             for line in test_body.splitlines()
@@ -245,6 +250,50 @@ def test_a_run_tests_file_that_does_not_look_right_is_refused(content):
 def test_a_namespace_already_listed_is_refused():
     with pytest.raises(UqfStackError, match="already in"):
         jobs._with_nslist_entry("nsList:`.atest`.btest;\n", "`.btest")
+
+
+# ------------------------------------------ registering the owned table
+
+
+def test_a_job_that_owns_a_table_adds_it_to_the_q_table_list():
+    """test_stack_tables.q's `expected` is a gate every new table passes
+    through. Before the scaffold appended to it, every job that owned a table
+    left a red suite that was not about the job."""
+    for plan, table in (
+        (jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates"),
+        (jobs.streaming_job("markout2", ["trades"], "my_metric", "value:float"), "my_metric"),
+    ):
+        assert _body(plan, "test_stack_tables.q") == f"`{table}"
+
+
+def test_a_job_that_owns_no_table_leaves_the_q_table_list_alone():
+    plan = jobs.streaming_job("markout2", ["trades"], None, None)
+    assert jobs.STACK_TABLES_TEST not in [a.path for a in plan.actions]
+
+
+def test_the_table_goes_at_the_end_of_the_expected_list():
+    before = "\\d .tabletest\nexpected:`quotes`trades\nnext:1\n"
+    after = jobs._with_expected_table(before, "`fx_rates")
+    assert "expected:`quotes`trades`fx_rates\n" in after
+    assert after.endswith("next:1\n"), "the rest of the file is untouched"
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["no list here\n", "expected:`a\nexpected:`b\n", "expected:`quotes`fx_rates\n"],
+)
+def test_a_table_list_that_does_not_look_right_is_refused(content):
+    """No list, two lists, or the table already listed - which means the q
+    file already defines it, and the scaffold would be redefining it."""
+    with pytest.raises(UqfStackError):
+        jobs._with_expected_table(content, "`fx_rates")
+
+
+def test_a_table_whose_name_extends_a_listed_one_is_not_a_duplicate():
+    """Matched as a whole symbol, not a substring: `fx_rates_old` being listed
+    says nothing about `fx_rates`."""
+    after = jobs._with_expected_table("expected:`fx_rates_old\n", "`fx_rates")
+    assert after == "expected:`fx_rates_old`fx_rates\n"
 
 
 # --------------------------------------------------------------- write mode

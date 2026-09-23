@@ -45,6 +45,12 @@ def fake_paths(tmp_path: Path) -> core.UqfStackPaths:
     )
 
 
+#: The vendored rows the fake_paths fixture writes. Every other process is a
+#: declared pipeline, so the full set is these plus PIPELINES - derived, so an
+#: appended pipeline is not an edit to three hand-kept sets below.
+_FIXTURE_VENDORED = {"discovery1", "stp1"}
+
+
 def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(
     fake_paths: core.UqfStackPaths, monkeypatch
 ):
@@ -187,16 +193,16 @@ def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
 
 def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPaths):
     # fixture's vendored csv: discovery1 (bare {KDBBASEPORT}), stp1 (+1);
-    # _base_process_rows also appends fxfeed1(+19)/quotesfeed1(+24)/cross1(+25)/
-    # widefeed1(+26)/vectorize1(+27)/tap1(+28)/fxtradesfeed1(+29)/posbook1(+30)/
-    # markout1(+31)
-    # The declared services, including the direct-arbitrage chain, reserve
-    # the offsets immediately after markout1. They
-    # are declared processes like any other, so their ports are reserved
+    # _base_process_rows also appends every declared pipeline at its offset.
+    # They are declared processes like any other, so their ports are reserved
     # even though the backfills and the mock do not start with the stack -
     # two of them sharing a port with a feed would fail at bind time, and
     # only when someone happened to run one.
-    assert core.next_free_port_offset(fake_paths) == 46
+    #
+    # Derived from the registry rather than written as a number: appending a
+    # pipeline moves the answer, and a pinned 46 made every new job an edit
+    # here. test_pipeline_offsets_are_stable is what pins the offsets.
+    assert core.next_free_port_offset(fake_paths) == max(core.PIPELINE_OFFSETS.values()) + 1
 
 
 def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
@@ -250,33 +256,7 @@ def test_list_items_unknown_kind_raises(fake_paths: core.UqfStackPaths):
 def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.UqfStackPaths):
     items = core.list_items(fake_paths, "processes", base_port=7000)
     by_name = {item["procname"]: item for item in items}
-    assert set(by_name) == {
-        "discovery1",
-        "stp1",
-        "fxfeed1",
-        "quotesfeed1",
-        "cross1",
-        "widefeed1",
-        "vectorize1",
-        "tap1",
-        "fxtradesfeed1",
-        "posbook1",
-        "markout1",
-        "deals_backfill1",
-        "events_backfill1",
-        "databento1",
-        "cryptomock1",
-        "executions1",
-        "marks1",
-        "fxordersfeed1",
-        "fxpositions1",
-        "databento_backfill1",
-        "upstream_backfill1",
-        "marketdata1",
-        "superbook1",
-        "arbitrage1",
-        "crossarb1",
-    }
+    assert set(by_name) == _FIXTURE_VENDORED | {p.procname for p in core.PIPELINES}
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + core.FXFEED_PORT_OFFSET)
     assert by_name["quotesfeed1"]["port"] == str(7000 + core.QUOTES_FEED_PORT_OFFSET)
@@ -333,32 +313,8 @@ def test_parse_log_line_returns_none_for_non_matching_line():
 
 
 def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPaths):
-    assert set(core.resolve_procnames(fake_paths, "all")) == {
-        "discovery1",
-        "stp1",
-        "fxfeed1",
-        "quotesfeed1",
-        "cross1",
-        "widefeed1",
-        "vectorize1",
-        "tap1",
-        "fxtradesfeed1",
-        "posbook1",
-        "markout1",
-        "deals_backfill1",
-        "events_backfill1",
-        "databento1",
-        "cryptomock1",
-        "executions1",
-        "marks1",
-        "fxordersfeed1",
-        "fxpositions1",
-        "databento_backfill1",
-        "upstream_backfill1",
-        "marketdata1",
-        "superbook1",
-        "arbitrage1",
-        "crossarb1",
+    assert set(core.resolve_procnames(fake_paths, "all")) == _FIXTURE_VENDORED | {
+        p.procname for p in core.PIPELINES
     }
 
 
@@ -700,10 +656,14 @@ def test_stop_crypto_recorder_raises_without_pidfile(fake_paths: core.UqfStackPa
 def test_pipeline_offsets_are_stable():
     """Offsets are allocated from PIPELINE_BLOCK_START in list order, so
     reordering PIPELINES would renumber ports and move a running demo's
-    processes. Pin every one: an accidental reorder fails here instead of
-    silently breaking someone's running stack.
+    processes. Pin every one that exists today: an accidental reorder fails
+    here instead of silently breaking someone's running stack.
+
+    A pin, not an inventory. A pipeline APPENDED after these moves no pinned
+    offset, so it passes without an edit here - it only has to land above
+    every pinned one, which is what "appended, never inserted" means.
     """
-    assert core.PIPELINE_OFFSETS == {
+    pinned = {
         "fxfeed1": 19,
         "quotesfeed1": 24,
         "cross1": 25,
@@ -730,6 +690,12 @@ def test_pipeline_offsets_are_stable():
         "arbitrage1": 44,
         "crossarb1": 45,
     }
+    actual = core.PIPELINE_OFFSETS
+    moved = {n: (o, actual.get(n)) for n, o in pinned.items() if actual.get(n) != o}
+    assert not moved, f"pinned pipelines moved or vanished (pinned, now): {moved}"
+    ceiling = max(pinned.values())
+    inserted = {n: o for n, o in actual.items() if n not in pinned and o <= ceiling}
+    assert not inserted, f"new pipelines must be appended after offset {ceiling}: {inserted}"
 
 
 def test_pipeline_offsets_are_unique():
@@ -854,21 +820,23 @@ def test_no_pipeline_overrides_the_process_clock():
 
 def test_tap_and_the_on_demand_chain_do_not_autostart():
     """The rows that deviate from the startwithall default, kept honest."""
-    # tap1 is a diagnostic subscriber; the four backfills are bounded jobs
-    # triggered with a range. Neither belongs in `uqf-stack start`.
-    #
-    # cross1, widefeed1, vectorize1 and databento1 are on demand for a
-    # different reason: the licence allows a q process sixteen inbound
+    # Every backfill is a bounded job triggered with a range, so it never
+    # belongs in `uqf-stack start` - held as a RULE over the kind, so a new
+    # worker is covered the moment it is declared.
+    backfills = [p for p in core.PIPELINES if p.kind is PipelineKind.BACKFILL]
+    assert backfills, "no backfill pipelines found - the rule below would hold vacuously"
+    assert all(p.startwithall == "0" for p in backfills), [
+        p.procname for p in backfills if p.startwithall != "0"
+    ]
+    # tap1 is a diagnostic subscriber, cryptomock1 a mock. cross1, widefeed1,
+    # vectorize1, databento1 and the direct-arbitrage chain are on demand for
+    # a different reason: the licence allows a q process sixteen inbound
     # connections and the default start would want more (#285). Each is a
     # leaf or a closed pair, so shedding it strands nothing - which is held
     # by test_every_on_demand_plant_client_still_has_a_producer_to_start_with.
     on_demand = {
         "tap1",
-        "deals_backfill1",
-        "events_backfill1",
         "cryptomock1",
-        "databento_backfill1",
-        "upstream_backfill1",
         "cross1",
         "widefeed1",
         "vectorize1",
@@ -878,8 +846,27 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
         "arbitrage1",
         "crossarb1",
     }
+    # And the ones `uqf-stack start` does bring up. Pinned by name rather than
+    # as "everything else", because a scaffolded job is written with
+    # startwithall="0" - joining the default start is a connection-budget
+    # decision someone makes on purpose, and this is where it gets recorded.
+    always_on = {
+        "fxfeed1",
+        "quotesfeed1",
+        "fxtradesfeed1",
+        "posbook1",
+        "markout1",
+        "executions1",
+        "marks1",
+        "fxordersfeed1",
+        "fxpositions1",
+    }
     assert all(core.PIPELINE_BY_NAME[n].startwithall == "0" for n in on_demand)
-    assert all(p.startwithall == "1" for p in core.PIPELINES if p.procname not in on_demand)
+    assert all(core.PIPELINE_BY_NAME[n].startwithall == "1" for n in always_on)
+    unpinned = {
+        p.procname for p in core.PIPELINES if p.startwithall == "1" and p.procname not in always_on
+    }
+    assert not unpinned, f"these start with the stack but are not in always_on: {unpinned}"
 
 
 def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStackPaths):
