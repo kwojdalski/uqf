@@ -22,10 +22,10 @@ out of what the tree can read fails the build rather than rotting quietly.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from torq_orchestrator.paths import UqfStackError
+from torq_orchestrator.scaffold_plan import FileAction, ScaffoldPlan, WriteMode
 from torq_orchestrator.scaffold_templates import (
     GROUPED,
     Q_TYPES,
@@ -52,44 +52,6 @@ RUN_TESTS_FILE = Path("tests/run_tests.q")
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-@dataclass(frozen=True)
-class FileAction:
-    """One file this scaffold would create, or one block it would append."""
-
-    path: Path
-    body: str
-    #: "create" refuses an existing file; "append" requires one.
-    mode: str = "create"
-
-    def describe(self) -> str:
-        verb = "create" if self.mode == "create" else "append to"
-        n = len(self.body.splitlines())
-        # The nsList entry is a single symbol, so the count is genuinely 1 here
-        # and "1 lines" is what --dry-run would print.
-        return f"{verb} {self.path} ({n} line{'' if n == 1 else 's'})"
-
-
-@dataclass(frozen=True)
-class ScaffoldPlan:
-    """Everything a new job needs, before any of it is written."""
-
-    name: str
-    actions: list[FileAction] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
-
-    def render(self) -> str:
-        lines = [f"scaffold {self.name}:"]
-        lines += [f"  {a.describe()}" for a in self.actions]
-        lines += [f"  note: {n}" for n in self.notes]
-        return "\n".join(lines)
-
-
-#: q type CHARACTERS, as `meta` reports them - which is what a source's
-#: `types` string is compared against at registration. Note `j` for a long,
-#: not `l`: the first draft of demo_events.q wrote "l" and was refused,
-#: correctly.
-
-
 def test_namespace(base: str, *, bounded: bool = False) -> str:
     """The q namespace the generated test file declares, without its leading dot.
 
@@ -111,7 +73,7 @@ def _nslist_action(namespace: str) -> FileAction:
     The runner globs its test FILES but keeps the namespace list by hand, so
     writing the file is not enough to make its tests run.
     """
-    return FileAction(RUN_TESTS_FILE, f"`.{namespace}", mode="append")
+    return FileAction(RUN_TESTS_FILE, f"`.{namespace}", mode=WriteMode.APPEND)
 
 
 def _check_name(name: str, what: str) -> str:
@@ -226,7 +188,7 @@ publish:.qstream.unwired `{name};
             FileAction(
                 TABLES_FILE,
                 f"\n/ {proc}'s output. <one line: what a row means>\n{definition}\n",
-                mode="append",
+                mode=WriteMode.APPEND,
             )
         )
     elif columns:
@@ -236,7 +198,7 @@ publish:.qstream.unwired `{name};
         FileAction(
             REGISTRY_FILE,
             registry_entry_streaming(name, proc, is_feed, publishes),
-            mode="append",
+            mode=WriteMode.APPEND,
         )
     )
     ns = test_namespace(name)
@@ -285,9 +247,9 @@ def bounded_worker(
             TABLES_FILE,
             f"\n/ {proc}'s target. <one line: what a row means>\n"
             f"{table_definition(dataset, cols)}\n",
-            mode="append",
+            mode=WriteMode.APPEND,
         ),
-        FileAction(REGISTRY_FILE, registry_entry_backfill(proc, worker), mode="append"),
+        FileAction(REGISTRY_FILE, registry_entry_backfill(proc, worker), mode=WriteMode.APPEND),
         FileAction(
             TEST_DIR / f"test_{worker}.q",
             test_stub(worker, test_namespace(name, bounded=True), f"the {worker} bounded worker"),
@@ -313,21 +275,27 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
     """
     for action in plan.actions:
         target = repo_root / action.path
-        if action.mode == "create" and target.exists():
+        if action.mode is WriteMode.CREATE and target.exists():
             raise UqfStackError(
                 f"{action.path} already exists - pick another name, or remove it first"
             )
-        if action.mode == "append" and not target.is_file():
+        if action.mode is WriteMode.APPEND and not target.is_file():
             raise UqfStackError(f"{action.path} does not exist, so there is nothing to append to")
 
     written: list[Path] = []
     for action in plan.actions:
         target = repo_root / action.path
-        if action.mode == "create":
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(action.body)
-        else:
-            target.write_text(_appended(target.read_text(), action))
+        match action.mode:
+            case WriteMode.CREATE:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(action.body)
+            case WriteMode.APPEND:
+                target.write_text(_appended(target.read_text(), action))
+            case _:  # pragma: no cover - unreachable while WriteMode has two members
+                # Named rather than folded into the append branch, which is
+                # what the old `else` did: a third mode added later would have
+                # been silently appended instead of refused.
+                raise UqfStackError(f"unknown write mode {action.mode!r} for {action.path}")
         written.append(action.path)
     return written
 

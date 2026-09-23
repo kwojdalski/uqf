@@ -27,6 +27,7 @@ import pytest
 from torq_orchestrator import scaffold
 from torq_orchestrator.paths import UqfStackError
 from torq_orchestrator.pipeline_edges import _REGISTER_RE, _register_fields, _symbol_field
+from torq_orchestrator.scaffold import WriteMode
 from torq_orchestrator.schemas import _DEFINITION
 
 
@@ -244,3 +245,31 @@ def test_a_run_tests_file_that_does_not_look_right_is_refused(content):
 def test_a_namespace_already_listed_is_refused():
     with pytest.raises(UqfStackError, match="already in"):
         scaffold._with_nslist_entry("nsList:`.atest`.btest;\n", "`.btest")
+
+
+# --------------------------------------------------------------- write mode
+
+
+def test_every_action_declares_a_known_write_mode():
+    """`mode` was a bare string, and the branching read `if create ... else
+    append`. A typo therefore did not raise: it fell past the guard that checks
+    the target exists - which tests for "append" exactly - and reached
+    `read_text()` on a file that might not be there."""
+    for plan in (
+        scaffold.streaming_job("markout2", ["trades"], "my_metric", "value:float"),
+        scaffold.bounded_worker("fx_rates", "fx_rates", "mid:float"),
+    ):
+        assert all(a.mode in tuple(WriteMode) for a in plan.actions)
+
+
+def test_the_mode_still_renders_as_its_own_word():
+    """It reaches `describe()`, which --dry-run prints, so a bare Enum would
+    turn the plan into `WriteMode.APPEND`."""
+    action = scaffold.FileAction(Path("x.q"), "body", mode=WriteMode.APPEND)
+    assert action.describe().startswith("append to x.q")
+    assert scaffold.FileAction(Path("x.q"), "body").describe().startswith("create x.q")
+
+
+def test_a_one_line_body_is_described_in_the_singular():
+    """The nsList entry is one symbol, so --dry-run used to print "1 lines"."""
+    assert "(1 line)" in scaffold.FileAction(Path("x"), "`.atest").describe()

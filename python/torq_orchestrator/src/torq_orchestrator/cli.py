@@ -5,14 +5,18 @@ without editing either vendored tree.
 All the actual bootstrapping/config logic lives in core.py, shared with
 uqf_stack_mcp.py's FastMCP server so the two front ends can't drift apart.
 
-Exposed two ways - both call main() below, so they can't drift apart either:
-  - the `uqf-stack` script entry point (pyproject.toml [project.scripts]):
-        uv run --project python/torq_orchestrator uqf-stack start all
-    or, after a one-time `uv tool install --editable python/torq_orchestrator`:
-        uqf-stack start all
-  - the standalone ../../uqf_stack.py shim, kept for the longer invocation
-    some docs/scripts still use:
-        uv run --project python/torq_orchestrator python/torq_orchestrator/uqf_stack.py start all
+Reached through the `uqf-stack` script entry point (pyproject.toml
+[project.scripts]):
+
+    uv run --project python/torq_orchestrator uqf-stack start all
+
+or, after a one-time `uv tool install --editable python/torq_orchestrator`:
+
+    uqf-stack start all
+
+There was also a `uqf_stack.py` shim next to the package, for invoking the CLI
+by path before the entry point existed. Nothing executed it - every reference
+was prose - so it was removed rather than maintained.
 """
 
 from __future__ import annotations
@@ -40,7 +44,7 @@ from torq_orchestrator.cli_shared import _env_log_level, app, configure_logging
 
 
 def main() -> None:
-    """Entry point for both the `uqf-stack` script and the uqf_stack.py shim."""
+    """Entry point for the `uqf-stack` script."""
     configure_logging(component="uqf_stack", level=_env_log_level())
     app()
 
