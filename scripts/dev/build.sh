@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds a distributable release artifact for the uqf q/kdb+ library:
 # runs the full test suite (the build fails if it doesn't pass), stages
-# the runtime library (src/, the optional log4q vendored dep,
+# the runtime library (src/,
 # tests/, scripts/, docs/, README/LICENSE) into dist/uqf-<version>/, and
 # packages it as both dist/uqf-<version>.tar.gz and dist/uqf-<version>.zip
 # with sha256 checksums alongside.
@@ -62,9 +62,6 @@ cp -R src "$STAGE_DIR/src"
 cp -R tests "$STAGE_DIR/tests"
 cp -R scripts "$STAGE_DIR/scripts"
 cp -R docs "$STAGE_DIR/docs"
-mkdir -p "$STAGE_DIR/lib"
-cp lib/log4q.q "$STAGE_DIR/lib/log4q.q"
-cp lib/LICENSE-log4q "$STAGE_DIR/lib/LICENSE-log4q"
 cp README.md LICENSE "$STAGE_DIR/"
 echo "$VERSION" > "$STAGE_DIR/VERSION"
 

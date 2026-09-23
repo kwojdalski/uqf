@@ -30,15 +30,11 @@ process topology, table-level data pipeline, and config-generation flow.
 - [Listing things](#listing-things)
 - [What actually starts](#what-actually-starts)
 - [Changing a process's config](#changing-a-processs-config)
-- [fxfeed1 - adding your own row-generating process](#fxfeed1---adding-your-own-row-generating-process)
-- [quotesfeed1 - a real database for one of uqf's own table shapes](#quotesfeed1---a-real-database-for-one-of-uqfs-own-table-shapes)
 - [Logs](#logs)
-- [Adding a new process interactively](#adding-a-new-process-interactively)
 - [Connecting](#connecting)
 - [Verifying it's alive](#verifying-its-alive)
 - [What lib/torq ships that uqf deliberately does not use](#what-libtorq-ships-that-uqf-deliberately-does-not-use)
-- [databento - a live market-data feed](#databento---a-live-market-data-feed)
-- [crypto recorder (cryptorust) - a proof of concept](#crypto-recorder-cryptorust---a-proof-of-concept)
+- [Services](#services)
 - [MCP server](#mcp-server)
 - [Other commands](#other-commands)
 - [Known harmless warnings](#known-harmless-warnings)
@@ -249,7 +245,6 @@ config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's
 config-set PROCNAME FIELD VALUE       persist a process.csv field override for a process
 logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own colorized
                                        logger instead of raw files (see "Logs" below)
-new-process                           interactive wizard to add a new process (see below)
 crypto start/stop/status              proof of concept: cryptorust (Rust) publishing over
                                        kdb+ IPC (see "crypto recorder" below)
 crypto fills-start/fills-stop/        proof of concept: cryptorust's simulated + real fills
@@ -428,7 +423,7 @@ uqs start marketdata1 superbook1 arbitrage1
 arbitrage question - the direct book against a synthetic route rather than
 two sources on one pair. The chain plus BOTH detectors is four plant
 connections against three spare, so run one or the other unless you stop
-something first. See [the cross-arbitrage guide](cross-arbitrage.md).
+something first. See [the cross-arbitrage service](../services/cross-arbitrage.md).
 
 The graph behind all of this is the `subscribes`/`publishes` pair on each
 `Pipeline`, the same declaration the generated `database.q` and the `.qdag`
@@ -533,78 +528,6 @@ Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `extras`, `qcmd`. A change takes effect on the next `start`/`restart` of
 that process (the running process itself isn't touched).
 
-## fxfeed1 - adding your own row-generating process
-
-`src/etl/streaming/fx_feed.q` is a second, independent feed process publishing
-synthetic top-of-book quotes for `EURUSD`/`GBPUSD`/`USDJPY`/`AUDUSD` (a
-small random walk around a fixed spot, `+/-` 1 pip wide) into the same
-`quote` table the vendored `feed1` already writes equity quotes into -
-`sym` is just a symbol column, so FX pairs and equity tickers coexist in
-one table with no schema change. It's the concrete worked example for "how
-do I add a process that publishes rows".
-
-**It is a declaration, not a process script.** Since #204 a feed says what
-it is and the framework does the rest: the job file declares its timer body
-and the table it publishes, `.qstream.register` records that, and one
-generic runner - `scripts/processes/torq_stream.q` - is what TorQ actually
-starts. Which job a process runs is decided by its procname, so there is no
-per-feed script any more. The three things the job itself still owns:
-
-1. build one row per pair as plain vectors (see the file's own comment on
-   why they must stay vectors, not dicts keyed by pair - a dict here
-   silently produces a `length` error on insert, the hard way to find out)
-2. hand them to its own `publish`, which the runner wires to the
-   tickerplant - the job never calls `.u.upd` or touches discovery itself
-3. declare `timer_period` and `on_timer`, which is what makes it a feed
-   rather than a subscriber
-
-To add your own: write a job file under `src/etl/streaming/` and register it
-with `.qstream.register`. That is the whole registration - the process
-registry is read from the declaration, and a new process is given the next
-free port in `scripts/processes/process_ports.csv`. `uqs new-job`
-scaffolds it; see [adding a pipeline](new-pipeline.md).
-
-## quotesfeed1 - a real database for one of uqf's own table shapes
-
-`src/etl/streaming/quotes_feed.q` is a proof of concept for getting an actual
-on-disk kdb+ database, built with the TorQ Finance Starter Pack's own
-tickerplant/RDB/WDB/HDB machinery, seeded with a table shape uqf's *own*
-pricing code understands - rather than the vendored pack's generic
-`quote`/`trade` tables. It publishes synthetic depth-aware FX quotes (3
-levels per side, level-0-first vectors) into a new `quotes` table:
-`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes - the same shape
-`src/pricing/forwards.q`'s `require_quotes_cols` expects (`ts` there; `time` here,
-since the tickerplant's own `upd` machinery requires the first column
-literally named `time` - rename it back with `select ts:time,... from
-quotes` before handing rows to `.qfwd.cross_book_at`/etc).
-
-Getting this table into a real, on-disk database took no changes to
-`rdb.q`/`wdb.q`/`hdb.q` at all - the vendored RDB's default
-`subscribeto:` `` ` `` already means "every table in the schema", and WDB
-writes down whatever the RDB has, so a brand new table only needs two
-things:
-
-1. **Schema** - `uqs.model.plant_schema._generated_schema_content()`
-   appends the `quotes` table definition to a *copy* of the vendored
-   `database.q` (written to `scripts/output/uqs/database.q` on every
-   `bootstrap()`, same generate-never-edit approach as `process.csv`), and
-   `_base_process_rows()` repoints `stp1`'s `-schemafile` extras arg at
-   that copy instead of the vendored file.
-2. **Feed** - the `quotes_feed` job itself, wired in as a process.csv row
-   exactly like `fxfeed1` (port offset `+24`), running under the shared
-   `torq_stream.q` runner.
-
-```
-uqs query \
-    "select time,sym,bid_prices,ask_prices from quotes" --port 6052        # rdb1
-uqs query \
-    "select ts:time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from quotes" --port 6052
-```
-
-After an EOD writedown (`raw -- eod`/`wdb1`'s own cycle, or just leaving
-the demo running past midnight) `quotes` rows land in the HDB alongside
-`quote`/`trade`, queryable the same way.
-
 ## Logs
 
 Every process writes its own `out_<procname>.log`/`err_<procname>.log` in
@@ -663,75 +586,17 @@ starved process(es): executions1, marks1
 looks short: it is the only place the rows `torq.sh` emitted and the rows the
 parser kept are both visible.
 
-### tap1 - printing every row landing in kdb+
+## Services
 
-`tap1` (`torq_tap.q`) is a generic debug tap: it subscribes to some (or,
-by default, every) table on the tickerplant and logs each incoming batch
-unmodified through the same `logs` pipeline above - the table name lands
-in the log line's `id` field, so `uqs logs -f tap1` shows you
-literally everything being written to kdb+, and `uqs logs -f tap1 |
-grep quotes`-style filtering works even without narrowing the subscription
-itself. `startwithall=0` (debug utility, not part of the standing stack):
+What each running service does, how it is built and why, is one page per
+service in [`docs/services/`](../services/README.md) - this guide covers
+operating the stack as a whole. `tap1`, the diagnostic subscriber that logs
+every batch, is [there too](../services/tap.md).
 
-```
-uqs start tap1
-uqs logs -f tap1
-```
+## Adding a process
 
-Restrict it to specific tables via the same `extras`-as-CLI-flags
-mechanism `sctp1`/others already use - no orchestrator code needed for
-the filtering itself:
-
-```
-uqs config-set -- tap1 extras "-tables quote wide_book"
-uqs restart tap1
-```
-
-(the leading `--` is needed so the CLI doesn't try to parse `-tables` as
-one of its own options). Set `extras` back to `""` to return to "every
-table".
-
-## Adding a new process interactively
-
-`uqs new-process` is a console wizard for adding a process, opening
-with a menu of recipes:
-
-```
-uqs new-process
-```
-
-```
-1. FX quotes feed - publish quotes for currency pairs you pick (ready to run, no q editing)
-2. Cross-rate reprice ETL - watch a quotes table and reprice synthetic cross pairs you pick (ready to run, no q editing)
-3. Blank publisher - write your own row-generating process from scratch (for q/kdb+ users)
-4. Blank subscriber - write your own table-watching process from scratch (for q/kdb+ users)
-```
-
-**1** and **2** are for anyone, no q/kdb+ knowledge needed - answer a few
-prompts (pairs, starting rates, table/port names) and the generated `.q`
-file is a fully working process already, not a stub: a parametrized copy
-of `src/etl/streaming/quotes_feed.q` (1) or `cross.q` (2)'s own working
-shape. **1** also registers its new table's schema
-automatically (see below) - nothing left to do by hand before starting it.
-
-**3** and **4** are for q/kdb+ users who want to write their own
-publish/subscribe logic - the same **Stage 1 only** skeleton the wizard
-always wrote (connects/subscribes and logs - no business logic, per the
-torq-developer skill's PROCESS SETUP GUIDE). If the process you write
-publishes into a brand-new table (not `quote`/`trade`/`quotes`), add its
-schema line to `python/uqs/extra_schema.q` by hand before
-starting it - recipe **1** does this step for you; **3** doesn't, since a
-blank skeleton might not even settle on its final table shape yet.
-
-Every recipe starts it immediately if you ask, running the same
-alive-check either way (checks `err_<proc>.log` is empty and the process
-shows up in `summary`).
-
-Registration goes into `python/uqs/extra_processes.csv` (a
-sibling of `process_overrides.csv` - same never-edit-the-vendored/
-generated-files approach, tracked in git) rather than editing Python
-source - `_base_process_rows()` reads it generically, so adding a process
-this way is a data change, not a code change.
+There is one way: declare a job in q and let `uqs new-job` scaffold
+it. See [adding a pipeline](new-pipeline.md).
 
 ## Connecting
 
@@ -799,143 +664,6 @@ in `uqs` relies on that copy being exact. Unused files cost
 nothing. If a future audience genuinely wants Grafana, the adapter is
 there; the decision to be revisited then is #54's, not this one.
 
-## databento - a live market-data feed
-
-`uqs databento start`/`stop`/`status` subscribe to
-[Databento](https://databento.com) and stream MBP-10 into this stack. It is
-the live counterpart to the ODBC backfill in
-[`new-pipeline.md`](new-pipeline.md): same vendor, same schema, same fold -
-the difference is only whether the rows arrive from a historical query or a
-subscription.
-
-```
-uqs databento start                                  # XNAS.ITCH, AAPL/MSFT
-uqs databento start --dataset XNAS.ITCH --symbols AAPL,TSLA
-uqs databento status
-uqs databento stop
-```
-
-Needs `$DATABENTO_API_KEY` (Databento's own variable, so an existing export
-works). It refuses to start without one rather than failing on its first
-call.
-
-**Two halves, and the split is the point.** A Python handler holds the
-subscription and publishes raw MBP-10 onto `databento_mbp10` - forty
-per-level columns, exactly as Databento sends them. `databento1`, an
-ordinary streaming job, subscribes to that and republishes
-`databento_book`, folding the forty columns into four level-0-first vectors
-with **the same `.qxf` transform the backfill uses**. The fold exists once,
-in q, with its own worked examples; the Python side decides nothing about
-what a book is.
-
-The handler is not a process.csv row, for the same reason cryptorust is
-not: a q process cannot hold a Databento subscription, so it gets a pidfile
-and a subprocess rather than a `torq.sh` entry. `databento1` *is* a normal
-row and starts with the stack.
-
-```
-uqs query "select from databento_book" --port 6052   # rdb1
-uqs query "select time, ts_event, sym, price from databento_book" --port 6052
-```
-
-Rows carry **both** clocks: `time` is stamped by the tickerplant on
-receipt, `ts_event` is Databento's own. Their difference is the feed's
-latency - and a feed whose venue clock is wrong is visible instead of
-silent, which a Binance book stamped 1973 in the crypto recorder was not.
-
-## crypto recorder (cryptorust) - a proof of concept
-
-`uqs crypto start`/`stop`/`status` (a nested command group, not
-flat `crypto-*` commands - these don't drive `torq.sh`/`process.csv` at
-all, a distinct enough concern to read as its own namespace) are a proof
-of concept that this demo's kdb+ infra isn't TorQ/q-specific: anything
-that can speak kdb+ IPC can publish onto the same tickerplant alongside
-the q feeds above, including a process written in an entirely different
-language, in a completely separate project. Specifically, they build and
-launch a sibling checkout of [cryptorust](https://github.com/kwojdalski/cryptorust)
-(a Rust crypto trading system - see `~/github_projects/cryptorust`) - its
-own `kdb-market-data-recorder` binary (`src/bin/kdb_market_data_recorder.rs`
-there) connects live venue order books (Binance, Bybit, ...) straight to
-this demo's `stp1` over raw IPC (via the [`kxkdb`](https://github.com/KxSystems/kxkdb)
-crate) and calls `.u.upd` directly - the exact same wire protocol
-the q feeds use, just from Rust instead of q -
-with its own reconnect-on-drop loop, so a `stp1` restart doesn't take it
-down permanently.
-
-```
-uqs crypto start                    # binance_spot, BTC-USDT/ETH-USDT by default
-uqs crypto start --venues binance_spot,bybit_spot --symbols BTC-USDT
-uqs crypto status
-uqs crypto stop
-```
-
-Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
-`ask_prices`/`ask_sizes` - see its definition in `scripts/processes/uqs_tables.q`),
-flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`quotes`/
-`wide_book`:
-
-```
-uqs query "select from crypto_book" --port <rdb1's port>
-```
-
-Requires a `~/github_projects/cryptorust` checkout (override the path via
-`$CRYPTORUST_ROOT`) with a Rust toolchain on `PATH` - `crypto start` runs
-`cargo build` itself the first time, which can take a while. It also
-reuses this demo's own `feed:pass` credential (see `appconfig/passwords/
-feed.txt`) to authenticate against `stp1`'s access-list, same as any other
-feed process here - no separate cryptorust-side credential to set up.
-
-### crypto fills recorder - simulated AND real fills, two tables
-
-`uqs crypto fills-start`/`fills-stop`/`fills-status` are a separate
-proof of concept, alongside the book recorder above: cryptorust's own
-`kdb-fills-recorder` binary (`src/bin/kdb_fills_recorder.rs`) polls an
-*already-running* cryptorust service's OMS over its own IPC unix socket
-(default `/tmp/beacon.sock`) and republishes new fills onto this demo's
-`stp1`, the bridge role the `posbook` and `markout` streaming jobs play
-inside this repo's own uqf stack - except this one bridges two entirely
-different IPC protocols (cryptorust's JSON-RPC and kdb+'s wire protocol)
-rather than two kdb+ processes. It polls two independent methods each
-tick, into two separate tables:
-
-- **`get_recent_fills` -> `crypto_sim_fills`** - the market-making bot's
-  *simulated* (paper) fill model: a probabilistic fill simulation run
-  against live market data, not a confirmed order that actually executed
-  on an exchange. Traced precisely in that binary's own doc header.
-- **`get_recent_real_fills` -> `crypto_trades`** - real, confirmed
-  exchange fills (cryptorust's `services::trading::execution::Fill`, with
-  `venue`/`symbol`/`exchange_fill_id`/`fee`), fed from `Oms::
-  subscribe_fills()` on the cryptorust side. This method didn't exist
-  until it was added specifically to close this gap - see
-  `connectors/ipc/ipc.rs`'s real-fill listener task and
-  `connectors/ipc/cycle.rs`'s handler on the cryptorust side.
-
-Both are empty/unavailable whenever the polled service has no OMS
-attached or no fills have happened yet - not an error, just nothing to
-publish that tick.
-
-Unlike `crypto start`, this doesn't launch its own exchange connectors -
-it needs a cryptorust service already running (e.g. `helm start beacon`
-inside the cryptorust checkout), with its OMS/trading cycle active before
-either method returns anything.
-
-```
-uqs crypto fills-start                       # polls /tmp/beacon.sock, tags sim rows BTC-USDT
-uqs crypto fills-start --oms-socket-path /tmp/beacon.sock --symbol ETH-USDT
-uqs crypto fills-status
-uqs crypto fills-stop
-```
-
-Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/
-`realized_delta_pnl` - see its definition in `scripts/processes/uqs_tables.q`)
-and `crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
-`fee`/`fee_currency`/`exchange_fill_id` - defined in `scripts/processes/uqs_tables.q`):
-
-```
-uqs query "select from crypto_sim_fills" --port <rdb1's port>
-uqs query "select from crypto_trades" --port <rdb1's port>
-```
-
 ## MCP server
 
 `python/uqs/uqs_mcp.py` exposes the same
@@ -947,9 +675,8 @@ logs/crypto-lifecycle operations as MCP tools (`uqs_start`,
 itself for the full, current list), built with
 [FastMCP](https://gofastmcp.com/), for an MCP client (e.g. Claude) to
 drive the demo directly instead of shelling out to the CLI. Not
-exposed: `new-process` (an interactive terminal wizard - doesn't map to
-a stateless MCP tool as-is) and `raw` (an arbitrary passthrough to
-`torq.sh`, deliberately left off as a scope boundary). Point an MCP
+exposed: `raw` (an arbitrary passthrough to `torq.sh`, deliberately left
+off as a scope boundary). Point an MCP
 client's server command at:
 
 ```

@@ -17,7 +17,7 @@ Direct FX arbitrage flows through `marketdata1` (`quote` and `quotes` into
 `arbitrage1` (gross cross-source price opportunities into `arbitrage`). The
 three are on demand rather than part of `uqs start` - see the
 connection budget below. See
-[the superbook guide](../../guides/superbook.md) for source identity, expiry
+[the superbook guide](../../services/superbook.md) for source identity, expiry
 and the query for currently active opportunities.
 
 `crossarb1` reads the same `superbook` and asks the other arbitrage
@@ -25,7 +25,7 @@ question: not "are two sources crossed on one pair" but "is the direct
 market out of line with a route through other pairs" - EURJPY against
 EURUSD x USDJPY, into `cross_arbitrage`. It is a second CONSUMER of that
 chain rather than a fifth link in it, so it can run with or without
-`arbitrage1`. See [the cross-arbitrage guide](../../guides/cross-arbitrage.md).
+`arbitrage1`. See [the cross-arbitrage guide](../../services/cross-arbitrage.md).
 
 Each backfill process now NAMES the `.qbw` worker it runs. One script
 serves all four and `UQF_BACKFILL_WORKER` picks which at runtime, so until
@@ -90,7 +90,7 @@ a credential and some do not:
   `.qpipe.subscribe_etl` runs `.servers.startup[]` against
   `accesslist.txt`. They borrow the already-credentialed `metrics`
   proctype rather than adding a password file to the vendored tree (see
-  `stack/procs.py`'s `add_extra_process` comments).
+  `model/pipeline.py`'s `_ETL_ACCESS_LIST`).
 
 A job that both subscribes and republishes - `vectorize1`, `posbook1`,
 `markout1` - needs both, and gets both from the same runner. That used to
@@ -268,8 +268,7 @@ Adding a table is therefore two edits and no third: define it in
 
 ## Config generation
 
-Every process/table addition here (`fxfeed1` through `vectorize1`, and
-anything the `new-process` wizard adds) follows the same rule: read the
+Every process/table addition here (`fxfeed1` onwards) follows the same rule: read the
 vendored file fresh, generate an extended copy, point the real process at
 the copy - the vendored `lib/torq-finance-starter-pack/appconfig/process.csv`
 and `database.q` are never written to.

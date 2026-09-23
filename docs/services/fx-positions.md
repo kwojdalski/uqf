@@ -20,6 +20,9 @@ q scripts/processes/run_stream.q -job fx_orders_feed -tp 5010
 q scripts/processes/run_stream.q -job fx_positions  -tp 5010 -port 5011
 ```
 
+On the TorQ stack the same two jobs run as `fxordersfeed1` and
+`fxpositions1`, and `uqs start` brings both up.
+
 Then, from any q session:
 
 ```q

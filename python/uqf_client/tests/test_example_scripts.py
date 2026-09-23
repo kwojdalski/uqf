@@ -18,9 +18,7 @@ load success and not merely "q started". That check matters: the alternative
 would have been a gate that passes on a broken script, which is worse than
 no gate at all.
 
-KDB-X specifically, not any q: three of these scripts say in their own
-headers that they need real kdb+ because ``lib/log4q.q`` uses a
-mid-expression assignment. This tree targets KDB-X alone, so the gate skips
+KDB-X specifically, not any q: this tree targets KDB-X alone, so the gate skips
 rather than substituting another interpreter: a pass obtained from something
 the code is not verified on would be the misleading result.
 """

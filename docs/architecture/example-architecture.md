@@ -75,7 +75,7 @@ runner.
 `posbook` and `fx_positions` answer different questions and are deliberately
 two engines: *what did we make*, per sym, marked; and *what are we holding*,
 along the dimensions a desk reports on, with no marks.
-[`fx-positions-service.md`](fx-positions-service.md) argues why one module
+[`fx-positions.md`](../services/fx-positions.md) argues why one module
 cannot honestly do both.
 
 ## 5 · On demand

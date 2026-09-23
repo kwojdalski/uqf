@@ -112,5 +112,5 @@ run:{[]
 / Run, then leave. exit 0 on a completed run, 1 otherwise - Airflow reads the
 / code, and `partial` is not success: some windows failed and a retry should
 / pick them up, which it can because coverage never claimed them.
-result:@[{.qproc.backfill.run[]};::;{[e] .lg.e[`backfill;"backfill process failed: ",e]; `state`error!(`failed;e)}];
+result:@[{.qproc.backfill.run[]};::;{[e] .qlog.err[`backfill;"backfill process failed";enlist[`error]!enlist e]; `state`error!(`failed;e)}];
 exit $[`completed~result`state; 0; 1];

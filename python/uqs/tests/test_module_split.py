@@ -49,12 +49,8 @@ def test_each_module_exists_and_imports(module):
 #: whole package, and the size each was at. They may SHRINK but not grow: a
 #: ratchet keeps them visible and stops "already over" becoming a licence.
 #:
-#: Both are real splits waiting to happen - scaffold/wizard.py is four recipe templates
-#: beside a prompt loop, and model/pipeline_edges.py is a parser beside a set of
-#: checks - and neither was worth bundling into the change that found them.
-OVERSIZED_BY_HISTORY = {
-    "scaffold.wizard": 683,
-}
+#: Empty: both modules that were listed have since been split or deleted.
+OVERSIZED_BY_HISTORY: dict[str, int] = {}
 
 
 def test_no_module_is_still_oversized():

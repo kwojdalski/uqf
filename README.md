@@ -37,7 +37,7 @@ framework - see [Testing](#testing).
 - [Browser application](#browser-application) — the React desk and operations app
 - [Testing](#testing) — the four lanes, and what each one proves
 - [Documentation](#documentation) — generating browsable API docs from qDoc
-- [Licensing](#licensing) — MIT, plus six vendored dependencies with their own terms
+- [Licensing](#licensing) — MIT, plus five vendored dependencies with their own terms
 
 ## Requirements
 
@@ -216,12 +216,13 @@ for the contract CI holds it to.
 
 ## Further reading
 
-[**`docs/`**](docs/README.md) is the map, and lists every page. Four
+[**`docs/`**](docs/README.md) is the map, and lists every page. Five
 directories, one question each:
 
 | Directory | Answers |
 |---|---|
 | [`docs/guides/`](docs/guides/) | *How do I do this?* — running the stack, adding a pipeline, the CI gates |
+| [`docs/services/`](docs/services/README.md) | *What does this running service do, and how do I run it?* — one page per service |
 | [`docs/architecture/`](docs/architecture/) | *Why is it shaped this way?* |
 | [`docs/reference/`](docs/reference/) | *What is the contract?* — the pages CI holds the code to |
 | [`docs/integrations/`](docs/integrations/torq/README.md) | *How does this meet something external?* |
@@ -415,7 +416,7 @@ backwards. The verified, working order (baked into `gen-docs.sh`) is
 
 This repository's own code is MIT licensed — see [`LICENSE`](LICENSE).
 
-Six vendored dependencies under `lib/` and `tests/lib/` carry their own
+Five vendored dependencies under `lib/` and `tests/lib/` carry their own
 terms, one of which (qUnit, the test framework) is **non-commercial**. See
 [**`LICENSING.md`**](LICENSING.md) for the per-dependency breakdown: the
 license each is under, where its full text lives, whether `src/init.q` loads

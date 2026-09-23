@@ -141,7 +141,7 @@ subscribe_etl:{[nm;sub_tables]
     handles:.sub.getsubscriptionhandles[tp_type;();()!()];
     if[0=count handles; '"qpipe.subscribe_etl: no ",(string tp_type)," found to subscribe to"];
     subproc:first handles;
-    .lg.o[`qpipe;"subscribing ",(string nm)," to ",string subproc`procname];
+    .qlog.info[`qpipe;"subscribing";`tables`publisher!(nm;subproc`procname)];
     .sub.subscribe[sub_tables;`;0b;0b;subproc];
     / safe to acquire now - startupdepcycles above already blocked until the
     / tickerplant was confirmed up. Separate, unauthenticated handle from the
@@ -256,9 +256,9 @@ install_period_handlers:{[]
     /   \d .ns  /  f:{`endofperiod set {..}}  ->  root type 100
     /   \d .ns  /  f:{`.endofday set {..}}    ->  root MISSING, .endofday 100
     `endofperiod set {[current_period;next_period;data]
-        .lg.o[`qpipe;"end of period ",(string current_period)," -> ",string next_period];
+        .qlog.info[`qpipe;"end of period";`from`to!(current_period;next_period)];
         };
-    `endofday set {[dt;data] .lg.o[`qpipe;"end of day ",string dt]; };
+    `endofday set {[dt;data] .qlog.info[`qpipe;"end of day";enlist[`date]!enlist dt]; };
     `endofperiod`endofday}
 
 / Publish rows onto the tickerplant (invariants 1, 2, 3 and 5). The one and
@@ -314,7 +314,7 @@ safe_timer:{[nm;interval;fn;timer_desc]
     / `value` from inside a lambda throws 'nyi on this build (confirmed
     / live while writing this file); parsing a bare lambda and assigning it
     / with `set` is well-defined and does the same job.
-    body:"{[] @[get `",(string fn),";::;{[e] .lg.e[`",(string nm),";\"timer function ",(string fn)," failed: \",e]}]}";
+    body:"{[] @[get `",(string fn),";::;{[e] .qlog.err[`",(string nm),";\"timer function failed\";`fn`error!(`",(string fn),";e)]}]}";
     wrapper set value body;
     .timer.repeat[.proc.cp[];0Wp;interval;(wrapper;`);timer_desc];
     wrapper}

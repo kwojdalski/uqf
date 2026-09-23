@@ -60,7 +60,7 @@ heartbeat liveness, process status, run identity, schema shapes.
 
 **3. Own code beside a vendored tree that already does it.** `lib/torq`
 (process management, EOD), `lib/torq-finance-starter-pack` (feed handlers,
-tickerplant, sample HDB), `lib/log4q.q` (logging), `env/` (table schemas).
+tickerplant, sample HDB), `env/` (table schemas).
 The README already records one such overlap: `env/`'s quote/trade schemas
 against the starter pack's. Report the overlap; see the refusals before
 proposing anything about it.

@@ -28,17 +28,6 @@ from uqs.paths import UqsPaths
 log = get_logger(__name__)
 
 
-def add_extra_table_schema(paths: UqsPaths, table_def: str) -> None:
-    """Append one q table definition line (e.g. 'mytable:([]time:...;
-    sym:...)') to extra_schema.q - _generated_schema_content()'s
-    extension point for the `new-process` wizard, the same
-    generate-never-edit-vendored approach as everything else here.
-    """
-    paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
-    with paths.extra_schema_path.open("a") as f:
-        f.write(table_def.rstrip("\n") + "\n")
-
-
 def _published_tables(pipelines: Iterable[Any]) -> set[str]:
     """Every table any pipeline sends rows to.
 
@@ -96,14 +85,12 @@ def _publishers(pipelines: Iterable[Any]) -> dict[str, set[str]]:
 
 def _generated_schema_content(paths: UqsPaths) -> str:
     """The vendored database.q's tables, plus uqf's own `quotes`/`wide_book`/
-    `mkt_orderbook`/`crypto_book` tables and any add_extra_table_schema()
-    additions (extra_schema.q) appended - never edited in place, always
+    `mkt_orderbook`/`crypto_book` tables appended - never edited in place, always
     read fresh from the vendored file. stp1's process.csv row (see
     _base_process_rows) is pointed at the generated copy this produces
     rather than the vendored file.
     """
     vendored = (paths.torqapphome / "database.q").read_text()
-    extra = paths.extra_schema_path.read_text() if paths.extra_schema_path.is_file() else ""
     # EVERY table uqs_tables.q defines. That file is the list of the
     # tables this tree puts on the plant - what its jobs publish, and what
     # the producers outside it publish (the Databento feed handler into
@@ -117,4 +104,4 @@ def _generated_schema_content(paths: UqsPaths) -> str:
     # q, so they are sorted for a stable file.
     owned = _table_definitions()
     definitions = [owned[t] for t in sorted(owned)]
-    return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions) + extra
+    return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions)

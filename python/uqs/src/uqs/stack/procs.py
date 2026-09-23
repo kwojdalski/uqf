@@ -1,9 +1,9 @@
 """process.csv composition and per-process config overrides.
 
 The precedence, decided as the question bank and asserted by
-test_core.test_the_three_process_csv_layers_compose_in_a_stated_order:
+test_core.test_the_process_csv_layers_compose_in_a_stated_order:
 
-    vendored process.csv  ->  PIPELINES  ->  extra_processes.csv  (appended)
+    vendored process.csv  ->  PIPELINES  (appended)
     then process_overrides.csv applied LAST, per procname, field by field
 
 with one field-level overlay on the vendored rows themselves
@@ -69,7 +69,7 @@ def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
     vendored_procs = paths.torqapphome / "appconfig" / "process.csv"
     with vendored_procs.open(newline="") as f:
         rows = list(csv.DictReader(f))
-    appended = _pipeline_rows() + _read_extra_processes(paths)
+    appended = _pipeline_rows()
     # monitor1's budget is decided against the WHOLE fleet, not just the
     # vendored half - the uqf pipelines are most of what it would dial out
     # to. Built before the loop because the overlay below needs it, and the
@@ -93,54 +93,6 @@ def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
                 row["extras"] = " ".join(x for x in (row["extras"], extras) if x)
     rows.extend(appended)
     return rows
-
-
-def _read_extra_processes(paths: UqsPaths) -> list[dict[str, str]]:
-    """Rows appended via add_extra_process() (the `new-process` wizard, or
-    anything else) - process_overrides.csv's sibling for whole new
-    processes rather than field tweaks on existing ones. Tracked in git
-    like process_overrides.csv (these are meaningful, named demo
-    processes someone chose to add, not scratch state); missing file ->
-    no extra rows.
-    """
-    if not paths.extra_processes_path.is_file():
-        return []
-    with paths.extra_processes_path.open(newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def next_free_port_offset(paths: UqsPaths) -> int:
-    """The smallest `{KDBBASEPORT}+N` offset not already used by any
-    process.csv row - one past the highest one currently taken. Used by
-    the `new-process` wizard so a new process never collides with an
-    existing one, whatever offsets the vendored csv/fxfeed1/quotesfeed1/
-    cross1/earlier wizard runs have already claimed.
-    """
-    taken = [0]  # {KDBBASEPORT} alone (bare stp1) counts as offset 0
-    for row in _base_process_rows(paths):
-        m = _BRACE_ARITH_RE.match(row["port"])
-        if m and m.group(2):
-            taken.append(int(m.group(2)))
-    return max(taken) + 1
-
-
-def add_extra_process(paths: UqsPaths, row: dict[str, str]) -> None:
-    """Append one new process.csv row to extra_processes.csv - the
-    never-edit-the-generated-file counterpart to set_process_config()'s
-    field overrides, for a whole new process rather than a tweak to an
-    existing one.
-    """
-    if row["procname"] in list_process_names(paths):
-        raise UqsError(f"process {row['procname']!r} already exists")
-
-    paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
-    write_header = not paths.extra_processes_path.is_file()
-    with paths.extra_processes_path.open("a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=PROCESS_CSV_FIELDS, lineterminator="\n")
-        if write_header:
-            writer.writeheader()
-        writer.writerow({field: row.get(field, "") for field in PROCESS_CSV_FIELDS})
-    log.info("added process {} ({})", row["procname"], row["proctype"])
 
 
 def _read_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:
@@ -173,7 +125,7 @@ def list_process_choices(paths: UqsPaths) -> list[dict[str, str]]:
     """Every process a lifecycle selector may name, with what a picker shows.
 
     procname, proctype and startwithall, from the same effective rows torq.sh
-    starts from - vendored process.csv, the pipelines, extra_processes.csv -
+    starts from - vendored process.csv and the pipelines -
     with process_overrides.csv applied, so a startwithall a user set through
     config-set is the one reported. Nothing is resolved beyond that: a picker
     needs to know what CAN be started and which are started by "all", not

@@ -5,13 +5,10 @@
 // a row belongs to doesn't matter to it - this is here to show that at a
 // more realistic row count than the single-pair example's 3 rows.
 //
-// Narration/status uses lib/log4q.q's INFO/DEBUG/ERROR (see README's
-// Licensing section) - actual table contents still go through `show`,
-// since log4q's %N message formatting serializes a whole value onto one
-// line rather than the readable grid `show` produces.
-//
-// Requires KDB-X: log4q relies on a mid-expression variable assignment/read
-// pattern (see README's Licensing section).
+// Narration/status goes through .qlog (src/etl/core/log.q), the one q
+// logging layer in this tree - actual table contents still go through
+// `show`, since a log line serializes a whole value onto one line rather
+// than the readable grid `show` produces.
 //
 // Run from the repository root: q scripts/examples/reshape_wide_order_book_multi_pair_example.q [rows_per_pair]
 // rows_per_pair (default 20) is how many rows each of the three pairs
@@ -20,12 +17,10 @@
 
 \c 400 1000
 \l src/init.q
-\l lib/log4q.q
+\l src/etl/core/log.q
 
-/ Default log4q severity is INFO, which silently no-ops DEBUG calls -
-/ lower it so this example's DEBUG lines actually print.
-.log4q.sevl:`DEBUG;
-key[.log4q.snk] set' .log4q.sev .log4q.sevl;
+/ .qlog suppresses DBG lines by default; this example's narration uses them.
+.qlog.debug 1b;
 
 / Overridable via the command line - .z.x is the list of args after the
 / script name, always strings; cast and fall back to the default whenever
@@ -87,7 +82,7 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
-    DEBUG "running: .qstats.inv_ncdf p";
+    .qlog.dbg[`reshape_wide_order_book_multi_pair;"running: .qstats.inv_ncdf p";()!()];
     z:.qstats.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*z;
     start_ts+sums gaps};
@@ -124,7 +119,7 @@ while[i<count pairs;
     pair_table:mk_pair_table[pairs i;base_prices i;ts_slice];
     t:$[i=0;pair_table;t,pair_table];
     i+:1];
-INFO ("t - wide source table: %1 rows, %2 columns, %3 pairs";(count t;count cols t;count pairs));
+.qlog.info[`reshape_wide_order_book_multi_pair;"t - wide source table: ",.Q.s1[count t]," rows, ",.Q.s1[count cols t]," columns, ",.Q.s1[count pairs]," pairs";()!()];
 show t;
 
 / Databento's own MBP-10 naming convention: bid_px_00.._09, bid_sz_00.._09,
@@ -135,9 +130,9 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
-DEBUG "running: .qbook.derive_level_groups[cols t;level_prefix_targets]";
+.qlog.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.derive_level_groups[cols t;level_prefix_targets]";()!()];
 level_groups:.qbook.derive_level_groups[cols t;level_prefix_targets];
-DEBUG "level_groups - target_col -> ordered source_cols:";
+.qlog.dbg[`reshape_wide_order_book_multi_pair;"level_groups - target_col -> ordered source_cols:";()!()];
 show level_groups;
 
 / Advisory only - inspect before deciding what to symbolize. Note action/side
@@ -145,42 +140,42 @@ show level_groups;
 / values ("A"/"B"/...) kdb+ collapses that column into a plain char vector
 / rather than a list of strings, so it isn't a "string column" by
 / candidate_symbol_columns's own type check.
-DEBUG "running: .qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";
+.qlog.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";()!()];
 candidates:.qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
-INFO ("candidates - columns to symbolize: %1";enlist ", " sv string candidates);
+.qlog.info[`reshape_wide_order_book_multi_pair;"candidates - columns to symbolize: ",.Q.s1[", " sv string candidates];()!()];
 
 / Explicit final column order - edit this list to reorder (or drop) columns.
 / `col_order#out` selects/reorders out's columns and stays a table; plain
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
 col_order:`ts`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
-DEBUG "running: .qbook.book_from_wide_levels[t;level_groups;candidates]";
+.qlog.dbg[`reshape_wide_order_book_multi_pair;"running: .qbook.book_from_wide_levels[t;level_groups;candidates]";()!()];
 out:col_order#.qbook.book_from_wide_levels[t;level_groups;candidates];
-INFO ("out - reshaped table: %1 rows, %2 columns";(count out;count cols out));
+.qlog.info[`reshape_wide_order_book_multi_pair;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";()!()];
 show out;
-DEBUG "meta out - column types after reshaping:";
+.qlog.dbg[`reshape_wide_order_book_multi_pair;"meta out - column types after reshaping:";()!()];
 show meta out;
 
 / sym is a real symbol now, so grouping by it works the normal way - one
 / 20-row block per pair, in the order they were stacked.
-DEBUG "select n_rows:count i by sym from out - row count per pair:";
+.qlog.dbg[`reshape_wide_order_book_multi_pair;"select n_rows:count i by sym from out - row count per pair:";()!()];
 show select n_rows:count i by sym from out;
 
 / Hand each pair's first row's book straight to sweep_price, matching
 / forwards.q's `bid_prices`bid_sizes`ask_prices`ask_sizes convention.
 first_row_per_pair:select first bid_prices,first bid_sizes,first ask_prices,first ask_sizes by sym from out;
-DEBUG "first_row_per_pair - one row per pair, for the sweep below:";
+.qlog.dbg[`reshape_wide_order_book_multi_pair;"first_row_per_pair - one row per pair, for the sweep below:";()!()];
 show first_row_per_pair;
 
 sweep_by_pair:{[t;pair]
     row:t pair;
-    DEBUG ("running: .qexec.sweep_price[row`ask_prices;row`ask_sizes;250] for pair %1";pair);
+    .qlog.dbg[`reshape_wide_order_book_multi_pair;"running: .qexec.sweep_price[row`ask_prices;row`ask_sizes;250] for pair ",.Q.s1[pair];()!()];
     result:.qexec.sweep_price[row`ask_prices;row`ask_sizes;250];
     result,enlist[`sym]!enlist pair}[first_row_per_pair;] each exec sym from first_row_per_pair;
-INFO ("sweep_by_pair - swept 250 units against each pair's ask side (%1 pairs)";count sweep_by_pair);
+.qlog.info[`reshape_wide_order_book_multi_pair;"sweep_by_pair - swept 250 units against each pair's ask side (",.Q.s1[count sweep_by_pair]," pairs)";()!()];
 show sweep_by_pair;
 if[not all sweep_by_pair`fully_filled;
-    ERROR "at least one pair did not fully fill - unexpected for this synthetic book's depth";
+    .qlog.err[`reshape_wide_order_book_multi_pair;"at least one pair did not fully fill - unexpected for this synthetic book's depth";()!()];
     exit 1];
 
 // exit 0

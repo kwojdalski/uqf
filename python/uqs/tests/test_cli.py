@@ -777,22 +777,6 @@ def test_clean_delegates(monkeypatch):
     assert len(rec.calls) == 1
 
 
-# ----------------------------------------------------------- new-process
-
-
-def test_new_process_runs_the_wizard(monkeypatch):
-    rec = Recorder()
-    monkeypatch.setattr(create.wizard, "run", rec)
-    result = runner.invoke(cli.app, ["new-process", "--port", "7000"])
-    assert result.exit_code == 0
-    assert rec.kwargs["base_port"] == 7000
-
-
-def test_a_wizard_refusal_exits_one(monkeypatch):
-    monkeypatch.setattr(create.wizard, "run", Recorder(raises=UqsError("no recipe")).__call__)
-    assert runner.invoke(cli.app, ["new-process"]).exit_code == 1
-
-
 # ----------------------------------------------------------------- crypto
 
 

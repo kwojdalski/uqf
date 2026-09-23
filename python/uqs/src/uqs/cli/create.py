@@ -1,9 +1,11 @@
-"""The two commands that WRITE code: `new-job` and `new-process`.
+"""The command that WRITES code: `new-job`, which scaffolds an ETL job into
+the tree. Its own module because it creates files rather than acting on a
+running fleet. See cli/lifecycle.py for why the split is shaped this way.
 
-`new-job` scaffolds an ETL job into the tree; `new-process` is the console
-wizard for a vendored-stack process. Together here because both create files
-rather than act on a running fleet. See cli/lifecycle.py for why the split is
-shaped this way.
+There is one way to add a process: declare a job in q. The `new-process`
+console wizard, which wrote TorQ scripts registered through a separate
+extra_processes.csv with its own port allocation, was a second one and is
+gone.
 """
 
 from __future__ import annotations
@@ -16,14 +18,12 @@ from typing import Annotated
 import typer
 
 from uqs.cli.shared import (
-    PortOpt,
     _die,
     _paths,
     app,
     console,
 )
 from uqs.model.declarations import declaration_calls, symbols
-from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import (
     MAN_REGISTRY_SCRIPT,
@@ -33,7 +33,7 @@ from uqs.paths import (
     WORKER_DIR,
     UqsError,
 )
-from uqs.scaffold import jobs, wizard, write
+from uqs.scaffold import jobs, write
 
 #: What a scaffold makes stale, each checked in CI with --check: the registry's
 #: derived files (processes.md, src/etl/generated/pipeline_dag.q), and
@@ -195,18 +195,3 @@ def new_job(
             )
     for note in plan.notes:
         console.print(f"  [yellow]next[/] {note}")
-
-
-@app.command("new-process")
-def new_process(port: PortOpt = DEFAULT_BASE_PORT) -> None:
-    """Interactive wizard: add a new uqf stack process. Opens with a menu of
-    recipes - "FX quotes feed" and "cross-rate reprice ETL" are fully
-    working (answer a few prompts, no q editing needed), "blank
-    publisher"/"blank subscriber" write a Stage-1-only skeleton .q file for
-    q/kdb+ users to finish by hand (see docs/guides/uqs.md). Registers
-    whatever gets built and optionally starts it to verify it's alive.
-    """
-    try:
-        wizard.run(_paths(), base_port=port)
-    except UqsError as exc:
-        _die(exc)

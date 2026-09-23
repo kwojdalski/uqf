@@ -1,7 +1,7 @@
 # Licensing
 
 Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)), **except**
-the six vendored dependencies below:
+the five vendored dependencies below:
 
 - `tests/lib/qunit.q`, vendored from
   [TimeStored's qUnit](https://github.com/timestored/kdb/blob/master/qunit/qunit.q)
@@ -16,17 +16,6 @@ the six vendored dependencies below:
   and all `test_*.q` files use only qUnit's documented
   `assertThat`/`assertEquals`/`assertTrue`/`assertFalse`/`assertError` API,
   so swapping frameworks should be a small, mechanical change.
-- `lib/log4q.q`, vendored from
-  [prodrive11's log4q](https://github.com/prodrive11/log4q/blob/master/log4q.q),
-  distributed under the Apache License 2.0 (full text at
-  `lib/LICENSE-log4q`) - permissive and fine to combine with this
-  repository's MIT code. Not loaded by `src/init.q` (nothing in `src/`
-  depends on it); load it explicitly (`\l lib/log4q.q`) from whichever
-  script wants logging. **Known gap:** one of its internal helper
-  functions (`.log4q.l`, used to render the log message pattern) relies on
-  a variable being assigned mid-expression and read earlier in that same
-  expression - valid, standard q right-to-left evaluation, and confirmed
-  working under KDB-X.
 - `lib/kdb-parquet/`, vendored from
   [DataIntellectTech/kdb-parquet](https://github.com/DataIntellectTech/kdb-parquet)
   at commit `e5cd641`. **Unlike the vendored files above, upstream has no
