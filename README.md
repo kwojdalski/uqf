@@ -214,7 +214,6 @@ change usually belongs to exactly one.
 | **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
 | **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`python/uqf_client/`](python/uqf_client), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, a q client, and the React desk and operations app |
 | **Database metadata** | [`src/metadata/`](src/metadata) | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable eFX breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md) |
-| **Reference data model** | [`env/`](env/README.md) | Typed table shapes for a broader eFX system — market data, positions, predictions, orders, routing, an economic calendar — as scaffolding this library's functions could sit inside |
 
 Authority is split deliberately between them: q and TorQ own process
 startup, source reads and coverage; Airflow owns ordering, retries and
@@ -257,8 +256,7 @@ Still open, and why: the `decision`-labelled issues.
 Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
 [`python/uqf_frontend/`](python/uqf_frontend/README.md) (the API),
 [`web/`](web/README.md) (the React desk app),
-[`python/uqf_airflow_provider/`](python/uqf_airflow_provider/README.md),
-[`env/`](env/README.md).
+[`python/uqf_airflow_provider/`](python/uqf_airflow_provider/README.md).
 
 ## Browser application
 

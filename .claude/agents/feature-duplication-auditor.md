@@ -60,10 +60,17 @@ heartbeat liveness, process status, run identity, schema shapes.
 
 **3. Own code beside a vendored tree that already does it.** `lib/torq`
 (process management, EOD), `lib/torq-finance-starter-pack` (feed handlers,
-tickerplant, sample HDB), `env/` (table schemas).
-The README already records one such overlap: `env/`'s quote/trade schemas
-against the starter pack's. Report the overlap; see the refusals before
-proposing anything about it.
+tickerplant, sample HDB). The standing example is
+`scripts/processes/uqs_tables.q`'s quote/trade shapes against the starter
+pack's own. Report the overlap; see the refusals before proposing anything
+about it.
+
+Note that one such overlap has already been resolved by DELETION rather
+than unification: `env/` carried eleven reference table schemas under
+`.envschema` for a trading system this tree had not yet built, and by the
+time it had, three of them (`market_data`, `trades`, `orders`) named real
+tickerplant tables while disagreeing with them on columns. Nothing loaded
+or tested it. Do not propose reinstating it.
 
 **4. Two names for one operation inside `src/`.** Use the cross-namespace
 call census as the map — a namespace that is *called* often is the authority

@@ -116,8 +116,7 @@ process table, generated from the job declarations).
   [`python/uqf_frontend/`](../python/uqf_frontend/README.md) (the
   backend-for-frontend over the gateway), [`web/`](../web/README.md) (the
   browser application on top of it),
-  [`python/uqf_airflow_provider/`](../python/uqf_airflow_provider/README.md)
-  (the backfill status files as Airflow sensors) and [`env/`](../env/README.md)
-  (typed schemas for a broader eFX data model, with a seeded scenario).
+  and [`python/uqf_airflow_provider/`](../python/uqf_airflow_provider/README.md)
+  (the backfill status files as Airflow sensors).
   [`python/uqf_client/`](../python/uqf_client/), the Python/Polars client
   over kdb+ IPC, has no README yet.

@@ -83,8 +83,9 @@ apply_fill:{[pos;sym;qty;price;side]
 / single fill. trades only needs to have these four columns (by name, in
 / any order, alongside whatever else the caller's trades table carries -
 / e.g. execution.q's markout_at_horizons shape, or a superset of it like
-/ env/schemas.q's .envschema.trades); positions.q has no dependency on
-/ where the table actually comes from.
+/ the `executions` table posbook1 reads, which adds venue, fee and
+/ fill_id); positions.q has no dependency on where the table actually
+/ comes from.
 / @param pos a position book (see empty_book) to fold trades into - not
 /   mutated, the updated book is returned
 / @param trades a table with at least sym (symbol), size (fill qty, base

@@ -23,9 +23,7 @@
 / .
 / TOP-LEVEL, NOT NAMESPACED, deliberately. These become tables on the
 / tickerplant and in the RDB/HDB, where a name is a bare table name - the
-/ same form the vendored database.q uses. env/schemas.q is a different thing:
-/ reference scaffolding for a broader system under `.envschema`, loaded by
-/ nothing.
+/ same form the vendored database.q uses.
 / .
 / Definition order is immaterial to q - these are independent declarations.
 
@@ -111,8 +109,8 @@ crypto_sim_fills:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_
 crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); fee:`float$(); fee_currency:`symbol$(); exchange_fill_id:`symbol$())
 
 / The trades shape src/execution/execution.q's markout family consumes
-/ (sym/time/side/trade_price/pip_factor), matching env/schemas.q's
-/ .envschema.trades so posbook1 consumes rows with zero reshaping.
+/ (sym/time/side/trade_price/pip_factor), so markout1 and posbook1 read
+/ rows off this table with zero reshaping.
 trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$())
 
 / posbook1's output: weighted-average-cost positions, republished onto the
