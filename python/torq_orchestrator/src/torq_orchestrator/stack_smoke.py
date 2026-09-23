@@ -72,6 +72,11 @@ class FindingKind(StrEnum):
     EMPTY_TABLE = "empty-table"
     #: A process that wrote to its error log while the check watched.
     PROCESS_ERRORS = "process-errors"
+    #: A partition missing a table the generated database.q declares. Not a
+    #: missing column somewhere - one absent directory fails EVERY
+    #: cross-table query against the history, and kdb+ names whichever
+    #: table sorts first rather than the partition that is short (#348).
+    HDB_NOT_RECTANGULAR = "hdb-not-rectangular"
 
 
 @dataclass(frozen=True)
