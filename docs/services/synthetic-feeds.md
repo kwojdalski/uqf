@@ -3,7 +3,7 @@
 The two feeds that invent market data for the demo, and how to add
 another.
 Starting, stopping and inspecting the stack as a whole is in
-[running the uqf stack](../guides/uqf-stack.md).
+[running the uqf stack](../guides/uqs.md).
 
 ## fxfeed1 - adding your own row-generating process
 
@@ -33,7 +33,7 @@ per-feed script any more. The three things the job itself still owns:
 To add your own: write a job file under `src/etl/streaming/` and register it
 with `.qstream.register`. That is the whole registration - the process
 registry is read from the declaration, and a new process is given the next
-free port in `scripts/processes/process_ports.csv`. `uqf-stack new-job`
+free port in `scripts/processes/process_ports.csv`. `uqs new-job`
 scaffolds it; see [adding a pipeline](../guides/new-pipeline.md).
 
 ## quotesfeed1 - a real database for one of uqf's own table shapes
@@ -56,9 +56,9 @@ Getting this table into a real, on-disk database took no changes to
 writes down whatever the RDB has, so a brand new table only needs two
 things:
 
-1. **Schema** - `uqf_stack.model.plant_schema._generated_schema_content()`
+1. **Schema** - `uqs.model.plant_schema._generated_schema_content()`
    appends the `quotes` table definition to a *copy* of the vendored
-   `database.q` (written to `scripts/output/uqf-stack/database.q` on every
+   `database.q` (written to `scripts/output/uqs/database.q` on every
    `bootstrap()`, same generate-never-edit approach as `process.csv`), and
    `_base_process_rows()` repoints `stp1`'s `-schemafile` extras arg at
    that copy instead of the vendored file.
@@ -67,9 +67,9 @@ things:
    `torq_stream.q` runner.
 
 ```
-uqf-stack query \
+uqs query \
     "select time,sym,bid_prices,ask_prices from quotes" --port 6052        # rdb1
-uqf-stack query \
+uqs query \
     "select ts:time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from quotes" --port 6052
 ```
 

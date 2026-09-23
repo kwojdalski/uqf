@@ -69,9 +69,7 @@ def fake_paths(tmp_path: Path) -> UqsPaths:
 _FIXTURE_VENDORED = {"discovery1", "stp1"}
 
 
-def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(
-    fake_paths: UqsPaths, monkeypatch
-):
+def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(fake_paths: UqsPaths, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
     env = runtime.bootstrap(fake_paths, base_port=7000)
@@ -197,9 +195,7 @@ def test_bootstrap_generates_schema_with_quotes_table(fake_paths: UqsPaths, monk
     assert schemas.definition("execution_quality") in generated
 
 
-def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
-    fake_paths: UqsPaths, monkeypatch
-):
+def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(fake_paths: UqsPaths, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
     runtime.bootstrap(fake_paths, base_port=7000)

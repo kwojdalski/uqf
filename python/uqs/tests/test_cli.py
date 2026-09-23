@@ -999,9 +999,7 @@ def test_summary_says_at_debug_why_heartbeats_are_missing(monkeypatch):
     process and chasing a connection."""
     _patch(monkeypatch, runtime, "summary", result=Completed(stdout="raw"))
     _patch(monkeypatch, listing, "configured_ports", result={})
-    _patch(
-        monkeypatch, listing, "heartbeat_states", raises=UqsError("monitor1 is not declared")
-    )
+    _patch(monkeypatch, listing, "heartbeat_states", raises=UqsError("monitor1 is not declared"))
     _patch(monkeypatch, listing, "summary_rows", result=[])
     captured = _debug_log(monkeypatch)
     assert runner.invoke(cli.app, ["summary"]).exit_code == 0

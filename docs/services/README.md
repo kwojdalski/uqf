@@ -3,7 +3,7 @@
 One page per running service: what it computes, what it reads and
 publishes, how it is built and why, and how to run it. Operating the stack
 as a whole - starting, stopping, config, logs - is
-[running the uqf stack](../guides/uqf-stack.md); adding a new service is
+[running the uqf stack](../guides/uqs.md); adding a new service is
 [adding a pipeline](../guides/new-pipeline.md).
 
 | Page | Processes | In one line |

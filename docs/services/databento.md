@@ -3,9 +3,9 @@
 A live market-data feed: an external Python handler publishes raw MBP-10
 rows, and `databento1` folds them into the book shape.
 Starting, stopping and inspecting the stack as a whole is in
-[running the uqf stack](../guides/uqf-stack.md).
+[running the uqf stack](../guides/uqs.md).
 
-`uqf-stack databento start`/`stop`/`status` subscribe to
+`uqs databento start`/`stop`/`status` subscribe to
 [Databento](https://databento.com) and stream MBP-10 into this stack. It is
 the live counterpart to the ODBC backfill in
 [`new-pipeline.md`](../guides/new-pipeline.md): same vendor, same schema, same fold -
@@ -13,10 +13,10 @@ the difference is only whether the rows arrive from a historical query or a
 subscription.
 
 ```
-uqf-stack databento start                                  # XNAS.ITCH, AAPL/MSFT
-uqf-stack databento start --dataset XNAS.ITCH --symbols AAPL,TSLA
-uqf-stack databento status
-uqf-stack databento stop
+uqs databento start                                  # XNAS.ITCH, AAPL/MSFT
+uqs databento start --dataset XNAS.ITCH --symbols AAPL,TSLA
+uqs databento status
+uqs databento stop
 ```
 
 Needs `$DATABENTO_API_KEY` (Databento's own variable, so an existing export
@@ -38,8 +38,8 @@ and a subprocess rather than a `torq.sh` entry. `databento1` *is* a normal
 row and starts with the stack.
 
 ```
-uqf-stack query "select from databento_book" --port 6052   # rdb1
-uqf-stack query "select time, ts_event, sym, price from databento_book" --port 6052
+uqs query "select from databento_book" --port 6052   # rdb1
+uqs query "select time, ts_event, sym, price from databento_book" --port 6052
 ```
 
 Rows carry **both** clocks: `time` is stamped by the tickerplant on

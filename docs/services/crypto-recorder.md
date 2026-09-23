@@ -3,11 +3,11 @@
 cryptorust's kdb recorders publish real venue books and fills onto this
 stack's tickerplant; `cryptomock1` stands in for them.
 Starting, stopping and inspecting the stack as a whole is in
-[running the uqf stack](../guides/uqf-stack.md).
+[running the uqf stack](../guides/uqs.md).
 
 ## The market-data recorder
 
-`uqf-stack crypto start`/`stop`/`status` (a nested command group, not
+`uqs crypto start`/`stop`/`status` (a nested command group, not
 flat `crypto-*` commands - these don't drive `torq.sh`/`process.csv` at
 all, a distinct enough concern to read as its own namespace) are a proof
 of concept that this demo's kdb+ infra isn't TorQ/q-specific: anything
@@ -25,19 +25,19 @@ with its own reconnect-on-drop loop, so a `stp1` restart doesn't take it
 down permanently.
 
 ```
-uqf-stack crypto start                    # binance_spot, BTC-USDT/ETH-USDT by default
-uqf-stack crypto start --venues binance_spot,bybit_spot --symbols BTC-USDT
-uqf-stack crypto status
-uqf-stack crypto stop
+uqs crypto start                    # binance_spot, BTC-USDT/ETH-USDT by default
+uqs crypto start --venues binance_spot,bybit_spot --symbols BTC-USDT
+uqs crypto status
+uqs crypto stop
 ```
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
-`ask_prices`/`ask_sizes` - see its definition in `scripts/processes/uqf_stack_tables.q`),
+`ask_prices`/`ask_sizes` - see its definition in `scripts/processes/uqs_tables.q`),
 flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`quotes`/
 `wide_book`:
 
 ```
-uqf-stack query "select from crypto_book" --port <rdb1's port>
+uqs query "select from crypto_book" --port <rdb1's port>
 ```
 
 Requires a `~/github_projects/cryptorust` checkout (override the path via
@@ -49,7 +49,7 @@ feed process here - no separate cryptorust-side credential to set up.
 
 ## The fills recorder: simulated and real fills, two tables
 
-`uqf-stack crypto fills-start`/`fills-stop`/`fills-status` are a separate
+`uqs crypto fills-start`/`fills-stop`/`fills-status` are a separate
 proof of concept, alongside the book recorder above: cryptorust's own
 `kdb-fills-recorder` binary (`src/bin/kdb_fills_recorder.rs`) polls an
 *already-running* cryptorust service's OMS over its own IPC unix socket
@@ -82,18 +82,18 @@ inside the cryptorust checkout), with its OMS/trading cycle active before
 either method returns anything.
 
 ```
-uqf-stack crypto fills-start                       # polls /tmp/beacon.sock, tags sim rows BTC-USDT
-uqf-stack crypto fills-start --oms-socket-path /tmp/beacon.sock --symbol ETH-USDT
-uqf-stack crypto fills-status
-uqf-stack crypto fills-stop
+uqs crypto fills-start                       # polls /tmp/beacon.sock, tags sim rows BTC-USDT
+uqs crypto fills-start --oms-socket-path /tmp/beacon.sock --symbol ETH-USDT
+uqs crypto fills-status
+uqs crypto fills-stop
 ```
 
 Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/
-`realized_delta_pnl` - see its definition in `scripts/processes/uqf_stack_tables.q`)
+`realized_delta_pnl` - see its definition in `scripts/processes/uqs_tables.q`)
 and `crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
-`fee`/`fee_currency`/`exchange_fill_id` - defined in `scripts/processes/uqf_stack_tables.q`):
+`fee`/`fee_currency`/`exchange_fill_id` - defined in `scripts/processes/uqs_tables.q`):
 
 ```
-uqf-stack query "select from crypto_sim_fills" --port <rdb1's port>
-uqf-stack query "select from crypto_trades" --port <rdb1's port>
+uqs query "select from crypto_sim_fills" --port <rdb1's port>
+uqs query "select from crypto_trades" --port <rdb1's port>
 ```
