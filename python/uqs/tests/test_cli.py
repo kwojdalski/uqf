@@ -43,7 +43,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
-from uqs.cli import create, inspect, lifecycle, shared, summary
+from uqs.cli import config, create, inspect, lifecycle, shared, summary
 from uqs.external import crypto
 from uqs.external.crypto import CRYPTO_FILLS_RECORDER_TABLE, CRYPTO_REAL_FILLS_RECORDER_TABLE
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
@@ -662,43 +662,43 @@ def test_a_numeric_column_sorts_numerically_not_lexicographically():
     """`port` is a string like "6051". Sorted as text, "6100" comes before
     "659" - which looks like the sort silently did nothing on the one column
     most worth sorting."""
-    order = [i["port"] for i in inspect._sorted_items(_procs(), "port", reverse=False)]
+    order = [i["port"] for i in config._sorted_items(_procs(), "port", reverse=False)]
     assert order == ["659", "6067", "6100"]
 
 
 def test_a_text_column_sorts_case_insensitively():
     """ "Arbitrage1" must not sort before every lowercase name just for its
     capital - the reader is looking up a name, not an ordinal."""
-    order = [i["procname"] for i in inspect._sorted_items(_procs(), "procname", reverse=False)]
+    order = [i["procname"] for i in config._sorted_items(_procs(), "procname", reverse=False)]
     assert order == ["Arbitrage1", "sortworker2", "stp1"]
 
 
 def test_reverse_flips_the_order():
-    order = [i["port"] for i in inspect._sorted_items(_procs(), "port", reverse=True)]
+    order = [i["port"] for i in config._sorted_items(_procs(), "port", reverse=True)]
     assert order == ["6100", "6067", "659"]
 
 
 def test_the_column_name_is_matched_case_insensitively():
-    assert inspect._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
+    assert config._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
 
 
 def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
     """A process with no override set is not "before aaa", it is absent -
     and a blank interleaved among real values reads as data."""
     items = [{"v": "b"}, {"v": ""}, {"v": "a"}]
-    assert [i["v"] for i in inspect._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
+    assert [i["v"] for i in config._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
 
 
 def test_sorting_is_a_no_op_without_the_option():
     items = _procs()
-    assert inspect._sorted_items(items, None, reverse=False) == items
+    assert config._sorted_items(items, None, reverse=False) == items
 
 
 def test_sorting_an_empty_listing_does_not_look_up_columns():
     """There is no first row to read column names from, and a kind with no
     items is a legitimate result - `overrides` is empty until something is
     set."""
-    assert inspect._sorted_items([], "anything", reverse=False) == []
+    assert config._sorted_items([], "anything", reverse=False) == []
 
 
 def test_an_unsortable_column_names_the_real_ones(monkeypatch):
@@ -1083,3 +1083,104 @@ def test_every_real_worker_is_read():
         "databento_book": "databento_book_backfill",
     }.items():
         assert create._unpartitioned_workers_filling(root, dataset) == [worker]
+
+
+# ------------------------------------------------- query --console (qcon)
+
+
+def test_qcon_takes_one_colon_joined_target_not_four_arguments():
+    """The mistake this encodes: `qcon host port user pass` does not fail as a
+    usage error. qcon reads the first argument as the whole target and the
+    rest as files, so the symptom is a connection refusal that reads exactly
+    like the process being down."""
+    assert runtime.qcon_command("localhost", 6053, "admin", "admin", rlwrap=False) == [
+        "qcon",
+        "localhost:6053:admin:admin",
+    ]
+
+
+def test_rlwrap_wraps_qcon_when_it_is_available():
+    """Line editing and history, and optional - qcon runs without it, which is
+    why the caller decides rather than this failing when rlwrap is absent."""
+    assert runtime.qcon_command("h", 1, "u", "p", rlwrap=True) == ["rlwrap", "qcon", "h:1:u:p"]
+
+
+class _ErrorLog:
+    """The messages `_die` decided to emit.
+
+    `_die` logs through loguru rather than writing to stdout, so CliRunner's
+    `result.output` is empty for every refusal in this file - asserting on it
+    passes vacuously in one direction and fails confusingly in the other. Same
+    reasoning as _DebugLog above, for the error level.
+    """
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    def error(self, message: str, *args: Any) -> None:
+        self.messages.append(str(message).format(*args))
+
+    def __getattr__(self, _name: str):
+        return lambda *a, **kw: None
+
+
+def _error_log(monkeypatch) -> _ErrorLog:
+    """`_die` lives in `shared`, so that is whose `log` has to be replaced -
+    patching inspect's would leave the message going to the real sink."""
+    captured = _ErrorLog()
+    monkeypatch.setattr(shared, "log", captured)
+    return captured
+
+
+def test_console_execs_qcon_with_the_same_connection_the_query_would_use(monkeypatch):
+    """--console is the same four options pointed at a different transport, so
+    a session must land on the process a plain query would have hit."""
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(inspect.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(inspect.os, "execvp", lambda f, a: seen.update(file=f, argv=a))
+    result = runner.invoke(
+        cli.app,
+        ["query", "--port", "6099", "--console", "--host", "h2", "--user", "u", "--passwd", "p"],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["argv"] == ["rlwrap", "qcon", "h2:6099:u:p"]
+
+
+def test_console_without_qcon_installed_says_what_still_works(monkeypatch):
+    """qcon ships with kdb+, not with this repository, so its absence is an
+    ordinary state rather than a broken install - and the message has to leave
+    the reader with a way to run their query."""
+    errors = _error_log(monkeypatch)
+    monkeypatch.setattr(inspect.shutil, "which", lambda name: None)
+    assert runner.invoke(cli.app, ["query", "--port", "6099", "--console"]).exit_code == 1
+    assert any("not on PATH" in m and "still works over IPC" in m for m in errors.messages), (
+        errors.messages
+    )
+
+
+def test_console_and_an_expression_together_are_refused(monkeypatch):
+    """Silently ignoring one of them would be the bad outcome: running the
+    expression and exiting looks like --console did nothing."""
+    errors = _error_log(monkeypatch)
+    monkeypatch.setattr(inspect.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(inspect.os, "execvp", lambda f, a: pytest.fail("should not exec"))
+    result = runner.invoke(cli.app, ["query", "--port", "6099", "--console", "select 1"])
+    assert result.exit_code == 1
+    assert any("cannot also run" in m for m in errors.messages), errors.messages
+
+
+def test_query_with_neither_an_expression_nor_console_is_refused(monkeypatch):
+    """`expr` had to become optional for --console; without this it would
+    silently connect and print nothing."""
+    errors = _error_log(monkeypatch)
+    assert runner.invoke(cli.app, ["query", "--port", "6099"]).exit_code == 1
+    assert any("--console for a session" in m for m in errors.messages), errors.messages
+
+
+def test_the_port_option_is_still_required():
+    """Giving --port a default was the tempting way to satisfy Python's
+    ordering rule when `expr` gained one. It would have turned "you forgot to
+    say which process" into "silently queried the tickerplant"."""
+    result = runner.invoke(cli.app, ["query", "select 1"])
+    assert result.exit_code != 0
+    assert "port" in result.output.lower()

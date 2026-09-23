@@ -239,6 +239,28 @@ def print_procs(
     return run_torq_sh(paths, ["print", procs], base_port=base_port, capture=capture)
 
 
+def qcon_command(host: str, port: int, user: str, passwd: str, *, rlwrap: bool) -> list[str]:
+    """The argv for an interactive `qcon` session against one process.
+
+    `qcon` takes ONE colon-joined argument - `host:port:user:password` - not
+    four separate ones. Passing them separately does not fail as a usage
+    error; qcon reads the first as the whole target and the rest as files, so
+    the symptom is a connection refusal that looks like the process is down.
+
+    `rlwrap` gives the session line editing and history and is optional -
+    qcon runs without it, which is why it is a caller's decision rather than
+    a hard requirement here. torq.sh makes the same choice through its
+    RLWRAP variable.
+
+    NOTE the password is on the command line, so it is visible in `ps` to
+    anyone on the box. That is qcon's interface, not a choice made here, and
+    it is the same exposure as the documented `uqs raw -- qcon gateway1
+    admin:admin`.
+    """
+    prefix = ["rlwrap"] if rlwrap else []
+    return [*prefix, "qcon", f"{host}:{port}:{user}:{passwd}"]
+
+
 def query(
     expr: str,
     port: int,

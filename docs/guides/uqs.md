@@ -697,10 +697,22 @@ the CLI's `query` command calls), or the raw scalar/dict result otherwise.
 
 Anything `torq.sh` itself supports but isn't wrapped as its own subcommand
 above - `debug <processname>` to run one process in the foreground for
-troubleshooting, `top <processname>`, `qcon <processname> admin:admin` for
-an interactive console (requires `qcon` on `PATH`, not installed by
-default - `query`/`hopen`, as above, work without it) - is available via
-`raw -- <args>`, which passes straight through to `lib/torq/torq.sh`.
+troubleshooting, `top <processname>` - is available via `raw -- <args>`,
+which passes straight through to `lib/torq/torq.sh`.
+
+An interactive console is no longer among them: **`uqs query --console`**
+(`-i`) hands the connection to `qcon` instead of running one expression, and
+takes the same `--port`/`--host`/`--user`/`--passwd` a query does:
+
+```
+uqs query --port 6052 --console        # a session on rdb1
+uqs query --port 6052 "select from quote"   # one expression, as before
+```
+
+It requires `qcon` on `PATH`, which ships with kdb+ rather than with this
+repository; without it the command says so and points back at `--port`/`expr`,
+which works over IPC and needs nothing installed. `rlwrap` is used for line
+editing when present and skipped when not.
 
 ## Known harmless warnings
 

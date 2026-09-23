@@ -6,6 +6,8 @@ cli/lifecycle.py for why the split is shaped this way.
 
 from __future__ import annotations
 
+import os
+import shutil
 from typing import Annotated
 
 import typer
@@ -16,8 +18,6 @@ from uqs.checks import hdb_shape, schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli.shared import (
     ExportOpt,
-    PortOpt,
-    ProcsArg,
     _die,
     _export,
     _paths,
@@ -27,10 +27,7 @@ from uqs.cli.shared import (
 )
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
-from uqs.stack import listing, runtime
-from uqs.stack import logs as stack_logs
-from uqs.stack import procs as stack_procs
-from uqs.stack.listing import LISTABLE_KINDS
+from uqs.stack import runtime
 
 
 @app.command("hdb-check")
@@ -85,18 +82,83 @@ def hdb_check(
 
 @app.command()
 def query(
-    expr: Annotated[
-        str, typer.Argument(help='q expression, e.g. "select count i by sym from quote"')
-    ],
+    # `port` is declared FIRST only because Python forbids a parameter without
+    # a default after one with a default, and `expr` became optional for
+    # --console. Keeping --port required matters: defaulting it would turn
+    # "you forgot to say which process" into "silently queried the
+    # tickerplant". Option order does not affect the command line.
     port: Annotated[
         int, typer.Option(help="port of the process to query, e.g. base_port+2 for rdb1")
     ],
+    expr: Annotated[
+        str | None,
+        typer.Argument(help='q expression, e.g. "select count i by sym from quote"'),
+    ] = None,
+    interactive: Annotated[
+        bool,
+        typer.Option(
+            "--console",
+            "-i",
+            help="open an interactive qcon session instead of running one expression",
+        ),
+    ] = False,
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",
     export: ExportOpt = None,
 ) -> None:
-    """Run a synchronous q expression against a running demo process."""
+    """Run a synchronous q expression against a running demo process.
+
+    With `--console` it hands the same connection to `qcon` and gives you an
+    interactive session instead - the one thing a single expression cannot do,
+    and previously reachable only as `uqs raw -- qcon <procname> admin:admin`.
+    The four connection options mean the same in both modes.
+
+    The parameter is `interactive`, not `console`: this module already binds
+    `console` to the Rich console it prints through, and shadowing it would
+    break every other command in the file at import time.
+    """
+    if interactive:
+        if expr is not None:
+            _die(
+                UqsError(
+                    f"--console opens a session; it cannot also run {expr!r}. "
+                    "Drop the expression, or drop --console to run it and exit."
+                )
+            )
+            return
+        if shutil.which("qcon") is None:
+            _die(
+                UqsError(
+                    "qcon is not on PATH. It ships with kdb+ rather than with this "
+                    "repository (macOS: it is beside q in your KDB-X install). "
+                    'Without it, `uqs query --port <p> "<expr>"` still works over IPC.'
+                )
+            )
+            return
+        argv = runtime.qcon_command(
+            host, port, user, passwd, rlwrap=shutil.which("rlwrap") is not None
+        )
+        log.debug("exec: {}", " ".join(argv))
+        # execvp, not subprocess: qcon owns the terminal from here, and
+        # replacing this process rather than wrapping it is what makes Ctrl-C,
+        # Ctrl-D and the exit code behave as they would if you had typed
+        # `qcon` yourself.
+        #
+        # It does not return on success, but the `return` below is not
+        # decoration: without it a call that DID return would fall through to
+        # the "give a q expression" refusal, and report the wrong problem.
+        try:
+            os.execvp(argv[0], argv)
+        except OSError as exc:
+            # `which` found it a moment ago, so this is a race or a broken
+            # binary - either way a message beats a traceback.
+            _die(UqsError(f"could not start {argv[0]}: {exc}"))
+        return
+
+    if expr is None:
+        _die(UqsError("give a q expression to run, or --console for a session"))
+        return
     try:
         result = runtime.query(expr, port, host=host, user=user, passwd=passwd)
     except Exception as exc:  # kola raises its own exception types on connect/query failure
@@ -211,157 +273,3 @@ def schema(
                 "nothing - normal before a feed publishes, a gap afterwards.[/]"
             )
     _export(rows, export)
-
-
-@app.command("config-get")
-def config_get(
-    procname: str,
-    field: Annotated[str | None, typer.Argument()] = None,
-    port: PortOpt = DEFAULT_BASE_PORT,
-    raw: Annotated[
-        bool, typer.Option("--raw", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
-    ] = False,
-    export: ExportOpt = None,
-) -> None:
-    """Show a process's effective process.csv row (or one field of it), with
-    ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
-    the same env torq.sh itself would use - pass --raw to see them literal.
-    """
-    try:
-        row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
-    except UqsError as exc:
-        _die(exc)
-        return
-    if field is not None:
-        console.print(row.get(field, ""))
-        return
-    table = Table(title=f"{procname} config")
-    table.add_column("field")
-    table.add_column("value")
-    for k, v in row.items():
-        table.add_row(k, v)
-    console.print(table)
-    _export([{"field": k, "value": v} for k, v in row.items()], export)
-
-
-def _sort_key(value: str):
-    """Sort key for one cell, numeric where the whole column is numeric.
-
-    Returned as a tuple so empties group together at one end rather than
-    sorting as the empty string among real values - a process with no
-    override set is not "before aaa", it is absent.
-    """
-    text = (value or "").strip()
-    if not text:
-        return (1, 0.0, "")
-    try:
-        return (0, float(text), "")
-    except ValueError:
-        return (0, 0.0, text.casefold())
-
-
-def _sorted_items(
-    items: list[dict[str, str]], sort: str | None, reverse: bool
-) -> list[dict[str, str]]:
-    """`items` ordered by one column, or untouched when none is named.
-
-    The column is matched case-insensitively against the keys the listing
-    actually produced, because those differ per kind - `processes` has
-    procname/proctype/port/startwithall, `env` has name/value - so there is no
-    fixed set to validate against and an unknown name has to name the real
-    ones back.
-
-    Numeric columns sort numerically. `port` is a string like "6051", and
-    lexicographically "6100" sorts before "659" - which looks like the sort
-    silently did nothing on the one column most worth sorting.
-    """
-    if not sort or not items:
-        return items
-    known = {column.casefold(): column for column in items[0]}
-    column = known.get(sort.strip().casefold())
-    if column is None:
-        _die(UqsError(f"cannot sort by {sort!r}: no such column. Available: {', '.join(items[0])}"))
-        return items
-    return sorted(items, key=lambda item: _sort_key(item.get(column, "")), reverse=reverse)
-
-
-@app.command("list")
-def list_items(
-    kind: Annotated[
-        str | None, typer.Argument(help="'processes', 'fields', 'overrides', or 'env'")
-    ] = None,
-    port: PortOpt = DEFAULT_BASE_PORT,
-    export: ExportOpt = None,
-    sort: Annotated[
-        str | None,
-        typer.Option("--sort", help="Sort by this column (case-insensitive, numeric-aware)."),
-    ] = None,
-    reverse: Annotated[
-        bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
-    ] = False,
-) -> None:
-    """List every item of KIND - run with no argument to see the available
-    kinds. Not just processes: 'fields' lists process.csv's valid config-set
-    columns, 'overrides' lists every process_overrides.csv entry currently
-    set, 'env' lists build_env()'s resolved KDBBASEPORT/KDBHDB/... values.
-
-    `--sort` takes any column the chosen kind produces, which differ between
-    kinds. The order reaches `--export` too, so an exported CSV matches what
-    was on screen.
-    """
-    if kind is None:
-        console.print(f"Available kinds: {', '.join(sorted(LISTABLE_KINDS))}")
-        return
-    try:
-        items = listing.list_items(_paths(), kind, base_port=port)
-    except UqsError as exc:
-        _die(exc)
-        return
-    items = _sorted_items(items, sort, reverse)
-    table = Table(title=f"{kind} ({len(items)})")
-    if items:
-        for col in items[0]:
-            table.add_column(col)
-        for item in items:
-            table.add_row(*item.values())
-    console.print(table)
-    _export(items, export)
-
-
-@app.command("config-set")
-def config_set(procname: str, field: str, value: str) -> None:
-    """Set one process.csv field for *procname* (persisted to
-    process_overrides.csv, applied on every later start/stop/summary/...).
-    """
-    try:
-        stack_procs.set_process_config(_paths(), procname, field, value)
-    except UqsError as exc:
-        _die(exc)
-        return
-    console.print(f"{procname}.{field} = {value}")
-
-
-@app.command()
-def logs(
-    procs: ProcsArg = "all",
-    follow: Annotated[
-        bool, typer.Option("--follow", "-f", help="Keep streaming new lines (Ctrl-C to stop)")
-    ] = False,
-    lines: Annotated[
-        int, typer.Option("--lines", "-n", help="Lines per process log to show (non-follow only)")
-    ] = 20,
-    level: Annotated[
-        str | None, typer.Option(help="Only show this level and above: DEBUG/INFO/WARNING/ERROR")
-    ] = None,
-) -> None:
-    """Tail out_/err_*.log for one or more processes through the same
-    colorized logger the CLI itself uses, instead of raw per-process files -
-    e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
-    """
-    try:
-        if follow:
-            stack_logs.follow_logs(_paths(), procs, min_level=level)
-        else:
-            stack_logs.print_recent_logs(_paths(), procs, lines=lines, min_level=level)
-    except UqsError as exc:
-        _die(exc)
