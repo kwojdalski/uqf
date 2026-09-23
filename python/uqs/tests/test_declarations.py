@@ -152,3 +152,13 @@ def test_two_declarations_claiming_one_process_are_refused(tmp_path):
         )
     with pytest.raises(ValueError, match="same1"):
         registry.build_pipelines(root)
+
+
+def test_a_single_source_normalizer_reads_its_one_source():
+    """`(enlist `a)!enlist `xf` is how one source is written; the parentheses
+    used to reach `symbols`, which returned `(enlist` and `a)`."""
+    (d,) = read_file_text(
+        ".qnorm.define[`n;`procname`output`sources!(`n1;.qsub.n.n;(enlist `quote)!enlist `xf)];",
+        Path("n.q"),
+    )
+    assert d.subscribes == ("quote",)

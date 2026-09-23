@@ -1,6 +1,6 @@
 ---
 name: new-job
-description: Add a new ETL job to this tree end to end - scaffold it with `uqs new-job`, implement the handler, write the test that replaces the failing stub, and verify it against a real q. Covers both shapes `uqs new-job` scaffolds: a streaming job (a feed or an etl under `src/etl/streaming/`; a normalizer's `.qnorm.define` is written by hand) and a bounded worker (a source + worker + transform under `src/etl/sources/` and `src/etl/workers/`). Use when the user asks to add a job, a feed, a backfill, a worker, a source, or a pipeline stage, or says "scaffold" or "new-job". Distinct from the `pipeline-developer` agent, which changes the FRAMEWORK those jobs run on - the lifecycle, the coverage ledger, the job graph. This is for adding one job to a framework that already works.
+description: Add a new ETL job to this tree end to end - scaffold it with `uqs new-job`, implement the handler, write the test that replaces the failing stub, and verify it against a real q. Covers every shape `uqs new-job` scaffolds: a streaming job (a feed, an etl, or a normalizer under `src/etl/streaming/`) and a bounded worker (a source + worker + transform under `src/etl/sources/` and `src/etl/workers/`). Use when the user asks to add a job, a feed, a backfill, a worker, a source, or a pipeline stage, or says "scaffold" or "new-job". Distinct from the `pipeline-developer` agent, which changes the FRAMEWORK those jobs run on - the lifecycle, the coverage ledger, the job graph. This is for adding one job to a framework that already works.
 ---
 
 # Adding an ETL job
@@ -40,7 +40,17 @@ uqs new-job fx_rates --kind backfill --dataset fx_rates \
 # a second worker over that source, into its own dataset: the source is reused
 uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
     --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
+
+# normalizer: several tables carrying one fact, one canonical table out -
+# NAME is that table, and each source gets a .qxf mapping and an example
+uqs new-job ticks --kind normalizer --subscribes quote,trades \
+    --columns "source_time:timestamp, sym:symbol, px:float" --dry-run
 ```
+
+A normalizer's mappings start from each source's whole plant schema and a
+typed example row, so the file loads; each mapping throws until written.
+Narrow each input to the columns its mapping reads, and replace each
+example with a real row and the canonical row it becomes.
 
 **Always `--dry-run` first** and show the user what it would write. It
 appends to `uqs_tables.q` and two test lists, which are files they may

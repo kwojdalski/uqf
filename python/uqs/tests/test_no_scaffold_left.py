@@ -22,22 +22,16 @@ from uqs.paths import repo_root
 #: they - and the tests of those templates - are the only files allowed it.
 MARKER = "SCAFFOLDED"
 
-#: Where a scaffold writes, relative to the repository root.
-SCANNED = ("src", "tests", "scripts", "docs", "python/uqf_frontend")
+#: Where a scaffold writes, relative to the repository root. Not `docs/`: the
+#: only files it touches there are generated, and the guides that explain the
+#: marker have to be able to name it.
+SCANNED = ("src", "tests", "scripts", "python/uqf_frontend")
 
 #: What may mention the marker without being a placeholder: the templates
 #: that write it, their tests, runtime output nothing reviews, and the
-#: GENERATED files - they copy a marker from a source file already listed, and
-#: regenerate clean once that source is edited, so listing them twice would
-#: only lengthen the list with lines nobody should touch.
-EXEMPT = (
-    "python/uqs/src/uqs/scaffold",
-    "python/uqs/tests",
-    "scripts/output",
-    "docs/man.q",
-    "docs/integrations/torq/processes.md",
-    "src/etl/generated",
-)
+#: GENERATED code - it copies a marker from a source file already listed, and
+#: regenerates clean once that source is edited.
+EXEMPT = ("python/uqs/src/uqs/scaffold", "python/uqs/tests", "scripts/output", "src/etl/generated")
 
 SUFFIXES = {".q", ".py", ".md", ".csv"}
 
@@ -75,5 +69,6 @@ def test_the_guard_finds_a_placeholder_and_ignores_the_templates(tmp_path: Path)
     (tmp_path / "scripts" / "output").mkdir(parents=True)
     (tmp_path / "scripts" / "output" / "x.md").write_text("SCAFFOLDED")
     (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "img.svg").write_text("SCAFFOLDED")
+    (tmp_path / "docs" / "guide.md").write_text("the SCAFFOLDED marker, explained")
+    (tmp_path / "src" / "etl" / "img.svg").write_text("SCAFFOLDED")
     assert scaffold_left(tmp_path) == ["src/etl/j.q:2"]

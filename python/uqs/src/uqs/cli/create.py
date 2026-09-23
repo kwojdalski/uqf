@@ -34,7 +34,7 @@ from uqs.paths import (
     UqsError,
     UqsPaths,
 )
-from uqs.scaffold import jobs, write
+from uqs.scaffold import jobs, normalizer, write
 
 #: What a scaffold makes stale, each checked in CI with --check: the registry's
 #: derived files (processes.md, src/etl/generated/pipeline_dag.q), and
@@ -86,6 +86,16 @@ def _defined_tables(repo_root: Path) -> set[str]:
     return {m.group(1) for m in _DEFINITION.finditer((repo_root / TABLES_FILE).read_text())}
 
 
+def _plant_definitions(paths: UqsPaths) -> dict[str, str]:
+    """{table: its one-line `name:([]...)` definition}, this tree's and the
+    vendored starter pack's - what a normalizer's source schemas are read from."""
+    out: dict[str, str] = {}
+    for path in (paths.torqapphome / "database.q", paths.repo_root / TABLES_FILE):
+        if path.is_file():
+            out.update((m.group(1), m.group(0)) for m in _DEFINITION.finditer(path.read_text()))
+    return out
+
+
 def _plant_tables(paths: UqsPaths) -> set[str]:
     """Every table the plant carries: this tree's, plus the vendored starter
     pack's (`quote`, `trade`), which the generated database.q merges in."""
@@ -102,7 +112,7 @@ def _plant_tables(paths: UqsPaths) -> set[str]:
 def new_job(
     name: Annotated[str, typer.Argument(help="Job name: a q namespace and a filename")],
     kind: Annotated[
-        str, typer.Option("--kind", help="'streaming' (default) or 'backfill'")
+        str, typer.Option("--kind", help="'streaming' (default), 'backfill' or 'normalizer'")
     ] = "streaming",
     subscribes: Annotated[
         str | None,
@@ -183,8 +193,27 @@ def new_job(
                 reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
                 define_table=dataset not in _defined_tables(repo_root),
             )
+        elif kind == "normalizer":
+            if publishes:
+                _die(UqsError("a normalizer publishes its own NAME - drop --publishes"))
+                return
+            if not columns:
+                _die(UqsError("--kind normalizer needs --columns: its canonical table"))
+                return
+            definitions = _plant_definitions(_paths())
+            plan = normalizer.normalizer(
+                name,
+                subs,
+                jobs.parse_columns(columns),
+                {
+                    s: normalizer.definition_columns(definitions[s])
+                    for s in subs
+                    if s in definitions
+                },
+                known_tables=_plant_tables(_paths()),
+            )
         else:
-            _die(UqsError(f"--kind must be 'streaming' or 'backfill', not {kind!r}"))
+            _die(UqsError(f"--kind must be 'streaming', 'backfill' or 'normalizer', not {kind!r}"))
             return
     except UqsError as exc:
         _die(exc)
