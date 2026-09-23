@@ -124,6 +124,38 @@ uqf-stack schema --proc hdb1      # the history instead of today
 uqf-stack schema --port 6052      # a port directly, skipping --proc resolution
 ```
 
+### When the history will not answer at all
+
+```
+$ uqf-stack schema --proc hdb1
+could not read the schema from hdb1 (6053):
+  "./2015.01.07/arbitrage. OS reports: No such file or directory"
+```
+
+That is not a missing table. A partitioned kdb+ database requires every
+table to exist in **every** partition, and one absent directory fails the
+whole query - so the error names whichever table sorts first rather than
+the partition that is actually short.
+
+```
+uqf-stack hdb-check         # which partitions are missing what
+uqf-stack hdb-check --fix   # write an empty copy of each into them
+```
+
+`--fix` is additive and idempotent: a table directory that exists is never
+touched, and a table a partition holds that `database.q` no longer declares
+is left alone - that is history. Running it twice changes nothing the
+second time.
+
+It should rarely be needed by hand, because `bootstrap` now does it on
+every `uqf-stack` command. It is there because the situation is easy to
+create: each day's partition holds whatever tables existed when it was
+written, so **every table added leaves every earlier partition short**, and
+the vendored sample partitions ship holding `quote` and `trade` alone. TorQ
+fills only the partition the wdb is currently writing
+(`lib/torq/code/processes/wdb.q`'s `filldb`), so nothing ever goes back
+(#348).
+
 **It reads the live process, not the declarations.**
 `scripts/processes/uqf_stack_tables.q` says what the tickerplant is *configured* to
 carry; that is not evidence a table exists in the process you are about to

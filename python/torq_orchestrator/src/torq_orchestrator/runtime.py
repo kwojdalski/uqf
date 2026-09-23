@@ -27,6 +27,61 @@ from torq_orchestrator.procs import (
 log = get_logger(__name__)
 
 
+#: The q script that writes an empty table into a partition that lacks it.
+#: q rather than Python because an empty table has to be written with its
+#: schema and enumerated against the HDB's sym file; a directory of the
+#: right name is not a table.
+FILL_HDB_SCRIPT = "gates/fill_hdb_partitions.q"
+
+
+def fill_hdb_partitions(paths: UqfStackPaths) -> bool:
+    """Write an empty copy of every declared table into every partition
+    that lacks one. Returns whether the filler ran at all.
+
+    Idempotent and additive: a table directory that exists is never
+    touched, and a table a partition holds that database.q no longer
+    declares is left alone - that is history, and deleting history is not
+    this function's business.
+
+    NEVER FAILS A BOOTSTRAP. Every `uqf-stack` command bootstraps, so a
+    problem here - no q on the path, an HDB mid-write, a permissions
+    fault - must not stop an operator stopping the stack or reading a log.
+    It is reported and stepped over; `uqf-stack hdb-check` says the same
+    thing on demand, and the smoke lane says it about a running stack.
+    """
+    hdb_root = paths.torqdata / "hdb"
+    if not hdb_root.is_dir():
+        return False
+    script = paths.scripts_dir / FILL_HDB_SCRIPT
+    if not script.is_file():  # pragma: no cover - a broken checkout
+        log.warning("HDB partition filler not found at {}", script)
+        return False
+    result = subprocess.run(
+        [
+            os.environ.get("Q", str(Path.home() / ".kx" / "bin" / "q")),
+            str(script),
+            str(hdb_root),
+            str(paths.generated_schema),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=paths.repo_root,
+    )
+    if result.returncode != 0:
+        log.warning(
+            "could not fill HDB partitions ({}) - a query spanning every table "
+            "may fail until `uqf-stack hdb-check` is run: {}",
+            result.returncode,
+            (result.stderr or result.stdout).strip()[:300],
+        )
+        return False
+    for line in result.stdout.splitlines():
+        if "wrote" in line or "filled" in line:
+            log.info("hdb: {}", line.strip())
+    return True
+
+
 def bootstrap(paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, str]:
     """Idempotently set up the writable data dir and generated config, and
     return the full env dict torq.sh should run under.
@@ -64,6 +119,21 @@ def bootstrap(paths: UqfStackPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[
     # Same extend-never-edit approach as process.csv above, for stp1's
     # -schemafile (see _generated_schema_content/_base_process_rows).
     paths.generated_schema.write_text(_generated_schema_content(paths))
+
+    # Make the HDB rectangular, now that database.q says what it should
+    # hold. A partitioned kdb+ database needs every table in every
+    # partition, and this one never has: the vendored sample ships two
+    # partitions holding `quote` and `trade`, this tree declares
+    # twenty-five more, and each day the stack runs bakes in whatever
+    # existed that day. The symptom is not a missing column - it is every
+    # cross-table HDB query failing outright, naming whichever table sorts
+    # first (#348).
+    #
+    # HERE, after the schema is written, because the filler reads it: the
+    # schema for a table no partition holds has to come from somewhere, and
+    # .Q.chk - which copies it from a partition that HAS the table - cannot
+    # help in exactly the case that matters.
+    fill_hdb_partitions(paths)
 
     env = build_env(paths, base_port=base_port)
 

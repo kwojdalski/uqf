@@ -123,6 +123,7 @@ from torq_orchestrator.procs import (  # noqa: F401
 from torq_orchestrator.runtime import (  # noqa: F401
     bootstrap,
     export_table,
+    fill_hdb_partitions,
     print_procs,
     query,
     restart,
@@ -215,6 +216,7 @@ __all__ = [
     "add_extra_process",
     "add_extra_table_schema",
     "bootstrap",
+    "fill_hdb_partitions",
     "build_env",
     "check_prerequisites",
     "clean",

@@ -11,7 +11,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from torq_orchestrator import core
+from torq_orchestrator import core, hdb_shape
 from torq_orchestrator.cli_shared import (
     ExportOpt,
     PortOpt,
@@ -23,6 +23,44 @@ from torq_orchestrator.cli_shared import (
     console,
     log,
 )
+
+
+@app.command("hdb-check")
+def hdb_check(
+    fix: Annotated[
+        bool,
+        typer.Option("--fix", help="write the missing empty tables, not just report them"),
+    ] = False,
+) -> None:
+    """Report HDB partitions missing a declared table, the cause behind
+    "./2015.01.07/arbitrage. OS reports: No such file or directory".
+
+    A partitioned kdb+ database needs every table in every partition, and
+    one missing directory fails the whole query rather than returning an
+    empty result - so the error names whichever table sorts first, not the
+    partition that is actually short. Reads the filesystem, so it needs no
+    running stack.
+    """
+    paths = _paths()
+    hdb_root = paths.torqdata / "hdb"
+    if not hdb_root.is_dir():
+        console.print(f"[yellow]no HDB at {hdb_root}[/] - nothing to check")
+        return
+    if fix:
+        core.fill_hdb_partitions(paths)
+    expected = hdb_shape.declared_tables(paths.generated_schema.read_text())
+    short = hdb_shape.gaps(hdb_root, expected)
+    report = hdb_shape.describe(short)
+    if not short:
+        console.print(f"[green]{report}[/] ({len(expected)} declared)")
+        return
+    console.print(f"[yellow]{report}[/]")
+    console.print(
+        "\n[dim]`uqf-stack hdb-check --fix` writes an empty copy of each into the "
+        "partitions that lack it. Additive: an existing table directory is never "
+        "touched.[/]"
+    )
+    raise typer.Exit(code=1)
 
 
 @app.command()

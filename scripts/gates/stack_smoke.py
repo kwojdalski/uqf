@@ -23,7 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python" / "torq_orchestrator" / "src"))
 
-from torq_orchestrator import core, stack_smoke  # noqa: E402
+from torq_orchestrator import core, hdb_shape, stack_smoke  # noqa: E402
 
 #: How long to let the stack run before looking. The feeds publish on
 #: sub-second timers and the slowest consumer chain is three deep, so this
@@ -113,6 +113,21 @@ def main() -> int:
     counts = _row_counts(set(expected), args.port + 2)
     fresh = stack_smoke.new_error_lines(logs_dir, before, running)
     problems = stack_smoke.findings(counts, expected, fresh)
+
+    # A third thing the running stack can be asked, because it is the one
+    # that fails EVERY cross-table HDB query rather than one of them, and
+    # the kdb+ error names an arbitrary table instead of the short
+    # partition (#348). Cheap: a directory listing per partition.
+    hdb_root = paths.torqdata / "hdb"
+    short = hdb_shape.gaps(hdb_root, hdb_shape.declared_tables(paths.generated_schema.read_text()))
+    if short:
+        problems.append(
+            stack_smoke.SmokeFinding(
+                stack_smoke.FindingKind.HDB_NOT_RECTANGULAR,
+                f"{len(short)} partition(s)",
+                hdb_shape.describe(short).replace("\n", " "),
+            )
+        )
 
     print()
     print("================= stack smoke =================")
