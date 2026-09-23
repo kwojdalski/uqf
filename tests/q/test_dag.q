@@ -140,22 +140,49 @@ test_an_empty_graph_orders_to_nothing:{[t]
 
 / --- rendering ----------------------------------------------------------
 
-test_mermaid_names_each_edge_with_its_table:{[t]
+test_d2_names_each_edge_with_its_table:{[t]
     chain[];
-    m:.qdag.mermaid[];
-    .qunit.assertTrue[m like "*feed -->|quotes| cross*";
+    m:.qdag.d2[];
+    .qunit.assertTrue[m like "*feed -> cross: quotes*";
         "the diagram labels each edge with the table that flows along it"]};
 
-test_mermaid_marks_an_external_input:{[t]
+test_d2_marks_an_external_input:{[t]
     chain[];
-    .qunit.assertTrue[(.qdag.mermaid[]) like "*ext_external_deals*";
+    .qunit.assertTrue[(.qdag.d2[]) like "*ext_external_deals*";
         "data entering the system is drawn as its own node"]};
+
+test_d2_declares_every_external_node_before_using_it:{[t]
+    / d2 takes a node's label from a declaration, not from inside an edge, so
+    / an external input referenced only by an edge would render with its
+    / mangled id ("ext_event_tape_demo_deals") as its visible label. The
+    / mermaid version needed no such line, which is why this test is new
+    / rather than renamed.
+    chain[];
+    lines:"\n" vs .qdag.d2[];
+    / `ss` rather than `like "ext_* -> *"`: on this build a pattern with an
+    / INTERIOR `*` alongside another one returns `nyi`, not false - `"ext_*"`
+    / and `"*->*"` are both fine, `"ext_* -> *"` throws. A `like` inside an
+    / assertion would have surfaced as an errored test rather than a failing
+    / one, which is how it was found.
+    / `like "ext_*"` for the prefix - a single trailing `*` is safe - and not
+    / `4 # l`, which WRAPS rather than truncating on a line shorter than four
+    / characters and would have matched the wrong thing quietly.
+    ext:{[l;pat] (l like "ext_*") and 0 < count l ss pat};
+    used:distinct {first " " vs x} each lines where ext[;" -> "] each lines;
+    declared:{first ":" vs x} each lines where ext[;": "] each lines;
+    / Both, because `except` over an empty left side is 0 either way: without
+    / the first assertion this passes on a diagram that declares nothing at
+    / all, which is the shape of vacuous test this tree keeps finding.
+    .qunit.assertTrue[0<count used;
+        "the chain fixture enters the graph from outside, so there is something to check"];
+    .qunit.assertEquals[count used except declared;0;
+        "every ext_ node an edge points from has its own declaration line"]};
 
 test_json_carries_the_order_and_the_edges:{[t]
     chain[];
     j:.qdag.to_json[];
     .qunit.assertTrue[(j like "*\"order\"*") and j like "*\"external_inputs\"*";
-        "a viz tool gets the order and the entry points without parsing mermaid"]};
+        "a viz tool gets the order and the entry points without parsing d2"]};
 
 / --- adoption -----------------------------------------------------------
 
@@ -215,10 +242,13 @@ test_external_ref_keeps_both_halves:{[t]
     .qunit.assertEquals[.qdag.external_ref[`demo_deals;`event_tape];`$"event_tape@demo_deals";
         "an external node names the table and the source it lives on"]};
 
-test_a_mermaid_id_contains_only_safe_characters:{[t]
+test_a_d2_id_contains_only_safe_characters:{[t]
     / The first safe_id replaced dots and spaces only, then met an `@` from
-    / external_ref and emitted an id mermaid cannot parse - a diagram that
-    / silently fails to render. An allow-list cannot be outgrown that way.
+    / external_ref and emitted an id the renderer cannot parse - a diagram
+    / that silently fails to render. An allow-list cannot be outgrown that
+    / way. Under d2 a dot is worse still: `a.b` is valid there, and means `b`
+    / nested inside `a`, so an unsanitised dot would draw a DIFFERENT graph
+    / rather than refusing to draw.
     .qdag.adopt_all[];
     / Check the generated id directly rather than pattern-matching the whole
     / diagram: safe_id is the thing under test, and a `like` over the joined
@@ -226,7 +256,7 @@ test_a_mermaid_id_contains_only_safe_characters:{[t]
     bad:(.qdag.safe_id `$"event_tape@demo_deals") where not
         (.qdag.safe_id `$"event_tape@demo_deals") in .qdag.id_chars;
     .qunit.assertEquals[count bad;0;
-        "every character of a node id is one mermaid accepts"]};
+        "every character of a node id is one d2 accepts"]};
 
 test_adopted_feeders_are_roots:{[t]
     .qdag.adopt_feeders[];

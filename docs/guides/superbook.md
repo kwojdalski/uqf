@@ -4,16 +4,16 @@ The superbook combines **directly quoted** liquidity for the same currency
 pair across sources. It preserves source identity on every level so an
 arbitrage row can name where to buy and where to sell.
 
-```mermaid
-flowchart LR
-    quote[quote: top of book] --> marketdata1
-    quotes[quotes: depth feed] --> marketdata1
-    marketdata1 --> market_data
-    market_data --> superbook1
-    superbook1 --> superbook
-    superbook --> arbitrage1
-    arbitrage1 --> arbitrage
-```
+<!-- Source: docs/diagrams/superbook-chain.d2. Rendered by
+     scripts/generate/render_diagrams.py, which CI runs with --check. -->
+
+![The chain left to right: the quote and quotes tables into marketdata1, which publishes market_data; superbook1 subscribes to that and publishes superbook; arbitrage1 and crossarb1 both subscribe to superbook and publish arbitrage and cross_arbitrage](../diagrams/superbook-chain.svg)
+
+Every arrow between a process and a table is a publish or a subscribe, never a
+call: `superbook1` does not invoke `marketdata1`, it subscribes to the table
+`marketdata1` publishes. That is what lets any link be restarted on its own,
+and why every intermediate result is queryable in the RDB rather than living
+inside a process.
 
 The three services are registered in `uqf-stack` and publish ordinary
 tickerplant tables, available in the RDB/HDB and the frontend table

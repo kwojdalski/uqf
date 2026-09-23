@@ -11,16 +11,16 @@ different process.
 Is EURJPY trading away from EURUSD × USDJPY, and by how much, at a size you
 could actually work?
 
-```mermaid
-flowchart LR
-    superbook --> crossarb1
-    superbook --> arbitrage1
-    crossarb1 --> cross_arbitrage
-    arbitrage1 --> arbitrage
-```
+<!-- Source: docs/diagrams/superbook-chain.d2, the same diagram the superbook
+     guide embeds. The fan-out from `superbook` is the part this guide is
+     about, and a second diagram of it would be a second thing to keep in
+     step. Rendered by scripts/generate/render_diagrams.py (CI --check). -->
 
-Both read `superbook`, so `crossarb1` is a second consumer of the
-`marketdata1` chain rather than a fifth link in it.
+![The chain left to right, with arbitrage1 and crossarb1 both subscribing to superbook and publishing separate tables](../diagrams/superbook-chain.svg)
+
+Look at the fan-out from `superbook`: both jobs read it, so `crossarb1` is a
+second **consumer** of the `marketdata1` chain rather than a fifth link in
+it. Neither needs the other, and stopping one leaves the other running.
 
 ## The whole algorithm
 

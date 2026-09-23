@@ -24,7 +24,7 @@
 /                   the same reason.
 / .
 / The point of having it in q: `topological[]` gives a runnable order and
-/ `mermaid[]`/`to_json[]` give a drawing, with no Python in the path. A q
+/ `d2[]`/`to_json[]` give a drawing, with no Python in the path. A q
 / process can therefore schedule and render its own graph.
 
 \d .qdag
@@ -182,38 +182,62 @@ layers:{[]
 
 / ----------------------------------------------------------- RENDERING
 
-/ Private: the characters a mermaid node id may contain.
+/ Private: the characters a d2 node id may contain.
 id_chars:.Q.a,.Q.A,.Q.n,"_"
 
-/ Private: a mermaid-safe node id - every other character becomes "_".
+/ Private: a d2-safe node id - every other character becomes "_".
 / .
 / An allow-list rather than a list of replacements, because the first version
 / replaced only dots and spaces and then met `demo_deals@demo_deals`, whose
-/ `@` is invalid in a mermaid id and produced a diagram that silently failed
-/ to render. Enumerating what is permitted cannot be outgrown that way;
+/ `@` is invalid in an id and produced a diagram that silently failed to
+/ render. Enumerating what is permitted cannot be outgrown that way;
 / enumerating what is forbidden always can.
+/ .
+/ A dot is the character that matters most here, and it matters MORE in d2
+/ than it did in mermaid: `a.b` is not an invalid id in d2, it is a valid
+/ reference to `b` nested inside `a`. So a job named with a dot would not
+/ fail to render, it would render as a different graph - which is the worse
+/ of the two failures, and the reason this allow-list is not relaxed.
 safe_id:{[s] c:string s; @[c;where not c in id_chars;:;"_"]}
 
-/ A mermaid flowchart of the whole graph, as a newline-joined string.
+/ A d2 diagram of the whole graph, as a newline-joined string.
 / .
-/ Mermaid rather than an image format: GitHub renders it, a plain clone reads
-/ it as text, and a reviewer sees a diagram change as a readable diff. That is
-/ The same answer applied here.
-mermaid:{[]
+/ d2, and not mermaid, because every committed diagram in this repository is
+/ d2 under docs/diagrams/, rendered by scripts/generate/render_diagrams.py and
+/ held to its source by a --check gate. Emitting the other language would mean
+/ output that cannot be dropped into that directory without being redrawn, and
+/ two diagram languages for a reader to know.
+/ .
+/ What that costs: GitHub renders a mermaid block natively and does not render
+/ d2, so pasting this into an issue no longer draws itself. It is a fair
+/ trade only because this output is produced INSIDE a running q process, where
+/ nothing was rendering it anyway - the previous comment here argued the
+/ committed-diagram case ("GitHub renders it, a reviewer sees a readable
+/ diff") for a function whose output is never committed.
+/ .
+/ Text either way: a plain clone reads it, and a diagram change is a readable
+/ diff. That part was true and still is.
+d2:{[]
     e:edges[];
-    lines:enlist "flowchart LR";
-    lines,:{"    ",x} each distinct
+    lines:enlist "direction: right";
+    / An external input is a table nobody in the graph writes, so it is drawn
+    / as a cylinder like the tables in the committed diagrams - and it needs
+    / its own declaration line, because d2 takes a label from a declaration
+    / rather than from inside an edge.
+    ext:distinct exec tbl from e where null upstream;
+    lines,:{"ext_",safe_id[x],": \"",string[x],"\" { shape: cylinder }"} each ext;
+    lines,:distinct
         {[r] $[null r`upstream;
-                "ext_",safe_id[r`tbl],"[(",string[r`tbl],")] --> ",safe_id r`downstream;
-                safe_id[r`upstream]," -->|",string[r`tbl],"| ",safe_id r`downstream]
+                "ext_",safe_id[r`tbl]," -> ",safe_id r`downstream;
+                safe_id[r`upstream]," -> ",safe_id[r`downstream],": ",string r`tbl]
           } each e;
     / A job with no edges at all would otherwise not appear.
     lonely:key[jobs] where {[j] 0=count ?[edges[];enlist (or;(=;`upstream;enlist j);
                                                             (=;`downstream;enlist j));0b;()]} each key jobs;
-    lines,:{"    ",safe_id[x],"[",string[x],"]"} each lonely;
+    lines,:{safe_id[x],": \"",string[x],"\""} each lonely;
     "\n" sv lines}
 
-/ The graph as JSON, for a viz tool that would rather not parse mermaid.
+/ The graph as JSON, for a viz tool that would rather not parse d2.
 to_json:{[]
     .j.j `jobs`edges`external_inputs`sinks`order!
         (registry[]; edges[]; external_inputs[]; sinks[]; topological[])}

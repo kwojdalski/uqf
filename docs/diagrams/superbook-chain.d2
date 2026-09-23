@@ -1,0 +1,79 @@
+# superbook-chain.d2 - the four-link chain from two quote feeds to arbitrage
+# rows, and where each link's table lands.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/guides/superbook.md.
+#
+# WHAT THIS DRAWS is that each link publishes an ordinary tickerplant table
+# and the next link subscribes to it. Nothing here is a call: superbook1 does
+# not invoke market_data, it subscribes to the table market_data publishes,
+# which is why the two can be restarted independently and why every
+# intermediate result is queryable in the RDB rather than living inside a
+# process.
+#
+# The cylinders are tables in the plant; the rectangles are processes. NO
+# PORT NUMBERS, deliberately: each process's port is derived from its
+# position in the PIPELINES registry, and docs/integrations/torq/processes.md
+# is GENERATED from that registry and held to it by a --check gate. A number
+# copied into this file would be a second copy with no gate on it, and the
+# first draft of this diagram already had one of them wrong.
+
+direction: right
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  producer: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  job: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  table: {
+    shape: cylinder
+    style: {
+      fill: "#eef3fb"
+      stroke: "#4a6fa5"
+      font-color: "#1e3a5f"
+    }
+  }
+}
+
+quote: "quote\ntop of book" { class: table }
+quotes: "quotes\ndepth feed" { class: table }
+
+marketdata1: "marketdata1\nnormalises both feeds\ninto one book shape" { class: job }
+market_data: "market_data" { class: table }
+
+superbook1: "superbook1\ncombines DIRECTLY quoted\nliquidity across sources,\nkeeping source identity" { class: job }
+superbook: "superbook" { class: table }
+
+arbitrage1: "arbitrage1\ntwo sources crossed\non the SAME pair" { class: job }
+arbitrage: "arbitrage" { class: table }
+
+crossarb1: "crossarb1\nthe direct market against a\nroute through other pairs" { class: job }
+cross_arbitrage: "cross_arbitrage" { class: table }
+
+quote -> marketdata1
+quotes -> marketdata1
+marketdata1 -> market_data: "publishes"
+market_data -> superbook1: "subscribes"
+superbook1 -> superbook: "publishes"
+superbook -> arbitrage1: "subscribes"
+superbook -> crossarb1: "subscribes"
+arbitrage1 -> arbitrage: "publishes"
+crossarb1 -> cross_arbitrage: "publishes"

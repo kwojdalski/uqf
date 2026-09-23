@@ -148,6 +148,7 @@ qdag,adopt_pipelines,function,1,
 qdag,adopt_reactions,function,1,
 qdag,adopt_workers,function,1,
 qdag,consumers,function,1,tbl
+qdag,d2,function,1,
 qdag,declaration,function,1,job
 qdag,edges,function,1,
 qdag,external_inputs,function,1,
@@ -157,7 +158,6 @@ qdag,job_edges,function,1,
 qdag,jobs,dict,,
 qdag,kinds,value,,
 qdag,layers,function,1,
-qdag,mermaid,function,1,
 qdag,no_edges,function,1,
 qdag,producers,function,1,tbl
 qdag,reaction_edges,function,1,
