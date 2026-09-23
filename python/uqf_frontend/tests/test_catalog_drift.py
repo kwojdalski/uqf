@@ -1,9 +1,9 @@
 """Guard against the catalog drifting from the generated database.q schemas.
 
 The catalog is hand-written because this package must not depend on
-torq_orchestrator at runtime. This test closes the loop by reading the schema
+uqf_stack at runtime. This test closes the loop by reading the schema
 constants out of core.py as *text* - no import, so no dependency on
-torq_orchestrator's own environment, and no way for this gate to silently
+uqf_stack's own environment, and no way for this gate to silently
 skip itself.
 """
 

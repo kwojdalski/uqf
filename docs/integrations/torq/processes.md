@@ -4,7 +4,7 @@
 
 # uqf stack processes
 
-Derived from `torq_orchestrator.model.pipelines.PIPELINES` and the vendored
+Derived from `uqf_stack.model.pipelines.PIPELINES` and the vendored
 `process.csv`. For how to start, stop and query the stack see
 [docs/guides/uqf-stack.md](../../guides/uqf-stack.md); for the topology diagrams see
 [README.md](README.md).

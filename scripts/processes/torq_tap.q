@@ -8,7 +8,7 @@
 / restart tap1 - no orchestrator-side code needed for the filtering.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - registered
-/ only in the process.csv torq_orchestrator.core.bootstrap() generates on
+/ only in the process.csv uqf_stack.core.bootstrap() generates on
 / the fly (port {KDBBASEPORT}+28 - see TAP_PORT_OFFSET in core.py).
 / startwithall=0 (a debug utility, not part of the standing demo stack) -
 / start it explicitly with `uqf-stack start tap1`, then watch it with

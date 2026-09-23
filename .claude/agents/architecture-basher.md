@@ -36,7 +36,7 @@ signal of how much of this is real.
 
 ## Scope: their code, not the libraries
 
-**In scope**: `src/`, `scripts/`, `python/torq_orchestrator/`,
+**In scope**: `src/`, `scripts/`, `python/uqf_stack/`,
 `python/uqf_frontend/`, `python/uqf_client/`, `python/uqf_airflow_provider/`,
 `web/`, `tests/`, `docs/`, `.claude/`.
 

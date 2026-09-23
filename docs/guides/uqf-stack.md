@@ -8,13 +8,13 @@ Licensing section) but neither is wired into `src/init.q` or anything else
 uqf itself runs - this library has no long-running processes for TorQ's
 machinery to manage.
 
-The `uqf-stack` CLI (`python/torq_orchestrator/`) bridges the two vendored trees so
+The `uqf-stack` CLI (`python/uqf_stack/`) bridges the two vendored trees so
 you can actually start the demo up and poke at it, without editing or
 writing into either `lib/` directory. The actual bootstrapping/config logic
-lives in `python/torq_orchestrator/src/torq_orchestrator/core.py`, shared
+lives in `python/uqf_stack/src/uqf_stack/core.py`, shared
 with `uqf_stack_mcp.py`'s FastMCP server (see "MCP server" below) so the
 CLI and the MCP tools can't drift apart. It's a standalone package
-(`python/torq_orchestrator/`), separate from `python/uqf_client/` (the
+(`python/uqf_stack/`), separate from `python/uqf_client/` (the
 pricing library's q-IPC client) - this has nothing to do with pricing, and
 keeping it separate keeps `uqf_client` itself down to its one real
 dependency (`kola`).
@@ -47,11 +47,11 @@ process topology, table-level data pipeline, and config-generation flow.
 
 The CLI is also a `uqf-stack` script entry point
 (`pyproject.toml`'s `[project.scripts]`), so every command below is
-`uv run --project python/torq_orchestrator uqf-stack ...`. Shorter still,
+`uv run --project python/uqf_stack uqf-stack ...`. Shorter still,
 one-time setup:
 
 ```
-uv tool install --editable python/torq_orchestrator
+uv tool install --editable python/uqf_stack
 ```
 
 installs `uqf-stack` onto your `PATH` as an editable link back to this
@@ -63,34 +63,50 @@ uqf-stack summary        # status table
 uqf-stack stop all       # stop everything
 ```
 
-**Editable updates the code, not the script names.** A `.pth` file points the
-install at `python/torq_orchestrator/src`, so every source edit is live the
-moment it is saved - no reinstall for a new command, option or fix. The
-console scripts in `[project.scripts]` are a different thing: they are
-generated once, at install time. So an install made before this package was
-renamed from `torq-demo` to `uqf-stack` keeps working, keeps picking up new
-code, and still calls itself `torq-demo` - which looks like the rename never
-happened. `uv tool list` shows which you have:
+**Editable updates the code, not the script names, and not the path.** A
+`.pth` file points the install at `python/uqf_stack/src`, so every source edit
+is live the moment it is saved - no reinstall for a new command, option or fix.
+Two things are NOT live, and both bite after a rename:
+
+- **The console scripts** in `[project.scripts]` are generated once, at install
+  time. An install made before this package was renamed from `torq-demo` to
+  `uqf-stack` keeps working, keeps picking up new code, and still calls itself
+  `torq-demo` - which looks like the rename never happened.
+- **The path in the `.pth` file** is written once too. The package directory was
+  `python/torq_orchestrator/` until it was renamed to `python/uqf_stack/`, so an
+  install made before that points at a directory that no longer exists. That one
+  does not degrade gracefully: `uqf-stack` fails to import rather than running
+  old code, which is the better of the two failures but still needs the same fix.
+
+`uv tool list` shows which you have. The generated script names the import
+directly, so the old one reads `from torq_orchestrator.cli import main` no
+matter what the source says now.
+
+The DISTRIBUTION was renamed too (`torq-orchestrator` to `uqf-stack`), so the
+old install is registered under a name `uv tool install` will not replace.
+Uninstall it by that name first, or `uv tool list` keeps showing a
+`torq-orchestrator` that owns a broken `uqf-stack` on your `PATH`:
 
 ```
-uv tool install --force --editable python/torq_orchestrator
+uv tool uninstall torq-orchestrator      # only if `uv tool list` shows it
+uv tool install --force --editable python/uqf_stack
 ```
 
-`--force` is what re-generates them. The same applies to any entry point
-added or renamed later.
+`--force` is what re-generates the scripts. The same applies to any entry
+point added or renamed later.
 
 Without that one-time step, or in CI/a fresh checkout, fall back to `uv
 run`:
 
 ```
-uv run --project python/torq_orchestrator uqf-stack start all
-uv run --project python/torq_orchestrator uqf-stack summary
-uv run --project python/torq_orchestrator uqf-stack stop all
+uv run --project python/uqf_stack uqf-stack start all
+uv run --project python/uqf_stack uqf-stack summary
+uv run --project python/uqf_stack uqf-stack stop all
 ```
 
 Run from anywhere - the command resolves its own location and works out
 `lib/torq`/`lib/torq-finance-starter-pack`'s absolute paths itself; `uv run
---project python/torq_orchestrator` (or the installed `uqf-stack`)
+--project python/uqf_stack` (or the installed `uqf-stack`)
 resolves that package's dependencies (typer, loguru, rich, kola, fastmcp)
 on demand, no separate `uv sync` step needed. First `start` bootstraps a
 data directory at
@@ -216,7 +232,7 @@ raw -- ARGS...                        pass any other torq.sh verb straight throu
 `KDBBASEPORT` (default `6050`, see the port table below). `--export FILE`
 (on `summary`/`query`/`list`/`config-get`) additionally writes the same
 rows to `FILE` as CSV or Parquet, format inferred from the extension - see
-`python/torq_orchestrator/README.md`'s "Exporting output" section. Full
+`python/uqf_stack/README.md`'s "Exporting output" section. Full
 `--help` is available on the command itself and on every subcommand.
 
 ## Listing things
@@ -270,7 +286,7 @@ too, so an exported CSV matches what was on screen.
 By default (`start all`) the processes marked `startwithall=1` come up: the
 vendored rows in `lib/torq-finance-starter-pack/appconfig/process.csv`, plus
 uqf's own pipelines, appended as extra rows to a *copy* of that csv that
-`torq_orchestrator.core.bootstrap()` generates on the fly (never editing the
+`uqf_stack.core.bootstrap()` generates on the fly (never editing the
 vendored file itself). The vendored README explains why the rest stay off:
 the KDB-X community edition's connection limits mean `reporter1`,
 `filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off unless you have a
@@ -461,7 +477,7 @@ not the vendored `process.csv` (never edited) and not the *generated* one
 in `scripts/output/uqf-stack/` either (regenerated from scratch on every
 `bootstrap()` call, i.e. every `start`/`stop`/`summary`/...  - anything
 written directly there would just be clobbered on the next command).
-Overrides persist instead in `python/torq_orchestrator/process_overrides.csv`
+Overrides persist instead in `python/uqf_stack/process_overrides.csv`
 (a small `procname,field,value` csv, created on first `config-set` -
 tracked in git like any other config, not gitignored), and
 `bootstrap()` applies them on top of the vendored+fxfeed1 rows every time
@@ -514,7 +530,7 @@ per-feed script any more. The three things the job itself still owns:
 
 To add your own: write a job file under `src/etl/streaming/`, register it
 with `.qstream.register`, and add a `Pipeline(...)` row in
-`python/torq_orchestrator/src/torq_orchestrator/model/pipelines.py` (pick a free
+`python/uqf_stack/src/uqf_stack/model/pipelines.py` (pick a free
 port offset - the table above lists every offset already taken). Or let
 `uqf-stack wizard` do all three, which is what the next section covers.
 
@@ -538,7 +554,7 @@ Getting this table into a real, on-disk database took no changes to
 writes down whatever the RDB has, so a brand new table only needs two
 things:
 
-1. **Schema** - `torq_orchestrator.core._generated_schema_content()`
+1. **Schema** - `uqf_stack.core._generated_schema_content()`
    appends the `quotes` table definition to a *copy* of the vendored
    `database.q` (written to `scripts/output/uqf-stack/database.q` on every
    `bootstrap()`, same generate-never-edit approach as `process.csv`), and
@@ -673,7 +689,7 @@ publish/subscribe logic - the same **Stage 1 only** skeleton the wizard
 always wrote (connects/subscribes and logs - no business logic, per the
 torq-developer skill's PROCESS SETUP GUIDE). If the process you write
 publishes into a brand-new table (not `quote`/`trade`/`quotes`), add its
-schema line to `python/torq_orchestrator/extra_schema.q` by hand before
+schema line to `python/uqf_stack/extra_schema.q` by hand before
 starting it - recipe **1** does this step for you; **3** doesn't, since a
 blank skeleton might not even settle on its final table shape yet.
 
@@ -681,7 +697,7 @@ Every recipe starts it immediately if you ask, running the same
 alive-check either way (checks `err_<proc>.log` is empty and the process
 shows up in `summary`).
 
-Registration goes into `python/torq_orchestrator/extra_processes.csv` (a
+Registration goes into `python/uqf_stack/extra_processes.csv` (a
 sibling of `process_overrides.csv` - same never-edit-the-vendored/
 generated-files approach, tracked in git) rather than editing `core.py`
 source - `_base_process_rows()` reads it generically, so adding a process
@@ -749,7 +765,7 @@ q-side access layers were designed to replace rather than sit beside.
 They stay in the vendored tree **untouched**, because the standing rule is
 that `lib/torq` is a pristine copy of upstream: removing files would turn
 the next TorQ upgrade from a copy into a three-way merge, and every overlay
-in `torq_orchestrator` relies on that copy being exact. Unused files cost
+in `uqf_stack` relies on that copy being exact. Unused files cost
 nothing. If a future audience genuinely wants Grafana, the adapter is
 there; the decision to be revisited then is #54's, not this one.
 
@@ -892,7 +908,7 @@ uqf-stack query "select from crypto_trades" --port <rdb1's port>
 
 ## MCP server
 
-`python/torq_orchestrator/uqf_stack_mcp.py` exposes the same
+`python/uqf_stack/uqf_stack_mcp.py` exposes the same
 start/stop/restart/summary/print/clean/query/config-get/config-set/list/
 logs/crypto-lifecycle operations as MCP tools (`uqf_stack_start`,
 `uqf_stack_stop`, `uqf_stack_get_config`, `uqf_stack_set_config`,
@@ -907,11 +923,11 @@ a stateless MCP tool as-is) and `raw` (an arbitrary passthrough to
 client's server command at:
 
 ```
-uv run --project python/torq_orchestrator python/torq_orchestrator/uqf_stack_mcp.py
+uv run --project python/uqf_stack python/uqf_stack/uqf_stack_mcp.py
 ```
 
 (stdio transport, the default). `uqf_stack_query` returns a list of row
-dicts for table results (via the same `kola`-backed `torq_orchestrator.core.query`
+dicts for table results (via the same `kola`-backed `uqf_stack.core.query`
 the CLI's `query` command calls), or the raw scalar/dict result otherwise.
 
 ## Other commands

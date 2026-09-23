@@ -123,7 +123,7 @@ def test_a_valid_stack_root_builds_paths_under_it(tmp_path):
 
 def test_an_orchestrator_refusal_becomes_a_validation_error(monkeypatch):
     """A 422 naming the problem, not a 500 with a traceback."""
-    from torq_orchestrator import core
+    from uqf_stack import core
 
     def refuse(*a, **k):
         raise core.UqfStackError("no such process: typo1")
@@ -165,8 +165,8 @@ def _backfill_args() -> dict[str, str]:
 
 
 def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
-    from torq_orchestrator import core
-    from torq_orchestrator.stack import runtime
+    from uqf_stack import core
+    from uqf_stack.stack import runtime
 
     def refuse(paths, base_port):
         raise core.UqfStackError("lib/torq not vendored")
@@ -180,8 +180,8 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
 def test_a_missing_backfill_script_is_refused_before_spawning(monkeypatch, tmp_path):
     """Popen on a missing script would start q with nothing to run and
     report a pid - a backfill that looks launched and never ran."""
-    from torq_orchestrator import core
-    from torq_orchestrator.stack import runtime
+    from uqf_stack import core
+    from uqf_stack.stack import runtime
 
     fake = SimpleNamespace(repo_root=tmp_path, scripts_dir=tmp_path / "scripts")
     monkeypatch.setattr(core, "default_paths", lambda: fake)

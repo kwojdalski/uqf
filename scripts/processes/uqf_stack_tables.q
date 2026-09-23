@@ -1,7 +1,7 @@
 / uqf_stack_tables.q - the tickerplant tables the uqf stack publishes into.
 / .
 / THESE ARE q TABLES, AND THIS IS WHERE THEY LIVE. They used to be Python
-/ string literals in torq_orchestrator/model/schemas.py, which meant q source that
+/ string literals in uqf_stack/model/schemas.py, which meant q source that
 / no q parser ever read until stp1 started: a typo surfaced as a failed
 / tickerplant rather than a failed commit, check_q_traps.py never scanned
 / them (it globs `git ls-files '*.q'`), and the contract surface listed four
@@ -9,7 +9,7 @@
 / .
 / HOW THIS FILE IS USED, which is two ways on purpose:
 / .
-/   read as TEXT  torq_orchestrator's _generated_schema_content() appends
+/   read as TEXT  uqf_stack's _generated_schema_content() appends
 /                 these definitions to a copy of the vendored database.q and
 /                 points stp1's -schemafile at the copy. The vendored file is
 /                 never edited.

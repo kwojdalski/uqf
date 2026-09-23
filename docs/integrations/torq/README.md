@@ -278,7 +278,7 @@ and `database.q` are never written to.
 
 ![The vendored process.csv and database.q read fresh on every command, extended, and written to generated copies the stack actually runs on](../../diagrams/config-generation.svg)
 
-`bootstrap()` (`python/torq_orchestrator/src/torq_orchestrator/core.py`)
+`bootstrap()` (`python/uqf_stack/src/uqf_stack/core.py`)
 regenerates both files on every command - `start`, `stop`, `summary`,
 everything - so nothing here is a one-time setup step; the generated
 files are always a fresh function of the vendored tree plus whatever's
