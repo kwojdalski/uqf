@@ -8,7 +8,6 @@ shaped this way.
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,7 +23,7 @@ from uqf_stack.cli.shared import (
     app,
     console,
 )
-from uqf_stack.model.pipeline_edges import _strip_q_comments, _symbol_list
+from uqf_stack.model.declarations import declaration_calls, symbols
 from uqf_stack.model.schemas import _DEFINITION
 from uqf_stack.paths import (
     MAN_REGISTRY_SCRIPT,
@@ -61,10 +60,6 @@ def _regenerate_derived(repo_root: Path) -> list[subprocess.CompletedProcess[str
     ]
 
 
-#: One `.qbw.define[`name; keys!(values)];` call, as (name, the rest).
-_WORKER_DEFINE = re.compile(r"\.qbw\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S)
-
-
 def _unpartitioned_workers_filling(repo_root: Path, dataset: str) -> list[str]:
     """Workers that already fill `dataset` without declaring a partition.
 
@@ -75,14 +70,10 @@ def _unpartitioned_workers_filling(repo_root: Path, dataset: str) -> list[str]:
     """
     found = []
     for path in sorted((repo_root / WORKER_DIR).glob("*.q")):
-        for name, body in _WORKER_DEFINE.findall(_strip_q_comments(path.read_text())):
-            # `keys!(values)`, with the `(` often on the next line - which is
-            # why this does not reuse pipeline_edges' `!(` split.
-            keys_text, _, values_text = body.partition("!")
-            keys = _symbol_list(keys_text.strip())
-            values = [v.strip() for v in values_text.strip().lstrip("(").split(";")]
-            fields = dict(zip(keys, values, strict=False))
-            if _symbol_list(fields.get("dataset", "")) == (dataset,) and "partition" not in fields:
+        for fn, name, fields in declaration_calls(path.read_text()):
+            if fn != "qbw.define":
+                continue
+            if symbols(fields.get("dataset", "")) == (dataset,) and "partition" not in fields:
                 found.append(name)
     return found
 

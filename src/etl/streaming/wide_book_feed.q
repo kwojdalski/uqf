@@ -53,9 +53,10 @@ on_timer:{[]
 
 \d .
 
-.qstream.register[`wide_book_feed;`procname`subscribes`publishes`timer_period`on_timer!(
+.qstream.register[`wide_book_feed;`procname`subscribes`publishes`timer_period`on_timer`note!(
     `widefeed1;
     `symbol$();
     enlist `wide_book;
     0D00:00:00.500;
-    .qsub.wide_book_feed.on_timer)];
+    .qsub.wide_book_feed.on_timer;
+    "half of a closed pair with vectorize1: it is the only producer of wide_book and vectorize1 the only consumer, so the two start and stop together and no other job notices. startwithall:0 to stay inside PLANT_CONNECTION_BUDGET (#285) - `uqf-stack start widefeed1 vectorize1`")];

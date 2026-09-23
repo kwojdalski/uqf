@@ -24,6 +24,10 @@ PIPELINE_LIB_SCRIPT = "processes/torq_pipeline.q"
 #: were EIGHT near-identical scripts here before, one per job.
 STREAM_RUNNER_SCRIPT = "processes/torq_stream.q"
 
+#: The one process script every bounded worker runs under;
+#: UQF_BACKFILL_WORKER names which worker at runtime.
+BACKFILL_RUNNER_SCRIPT = "processes/torq_backfill.q"
+
 # The access list a real .sub.subscribe subscriber needs: an ETL process
 # borrows an already-credentialed proctype so .servers.startup[] can open an
 # access-listed handle to stp1. Feeds only publish and need no credentials.
@@ -107,7 +111,7 @@ class Pipeline:
     # .qpipe.publish; the check now reads the table at that call site, so
     # every pipeline's declared publishes are verified the same way.
     loads_qpipe: bool = False  # load scripts/processes/torq_pipeline.q ahead of its own script
-    offset: int | None = None  # None = allocate from PIPELINE_BLOCK_START in list order
+    offset: int | None = None  # set by model/registry.py from the port lock
     localtime: str = "1"
     startwithall: str = "1"
     note: str = ""  # why this row deviates from the defaults, if it does

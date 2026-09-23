@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from uqf_stack.paths import REGISTRY_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST, UqfStackError
+from uqf_stack.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, UqfStackError
 from uqf_stack.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
 
@@ -56,9 +56,6 @@ def _appended(existing: str, action: FileAction) -> str:
     rather than guess when they do not look the way this expects - appending to
     the end of either would be syntactically valid and register nothing.
 
-    model/registry.py: the entry belongs INSIDE the PIPELINES tuple, so it goes before
-    the closing paren.
-
     run_tests.q: the namespace belongs inside the `nsList:` symbol list, before
     its terminating semicolon.
 
@@ -68,15 +65,7 @@ def _appended(existing: str, action: FileAction) -> str:
         return _with_nslist_entry(existing, action.body)
     if action.path == STACK_TABLES_TEST:
         return _with_expected_table(existing, action.body)
-    if action.path != REGISTRY_FILE:
-        return existing.rstrip("\n") + "\n" + action.body
-    marker = "\n)\n"
-    if not existing.endswith(marker):
-        raise UqfStackError(
-            "model/registry.py does not end with the PIPELINES tuple's closing paren, so "
-            "this scaffold cannot tell where an entry goes - add it by hand"
-        )
-    return existing[: -len(marker)] + "\n" + action.body + ")\n"
+    return existing.rstrip("\n") + "\n" + action.body
 
 
 def _with_nslist_entry(existing: str, entry: str) -> str:

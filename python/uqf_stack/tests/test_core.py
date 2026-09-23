@@ -654,10 +654,10 @@ def test_stop_crypto_recorder_raises_without_pidfile(fake_paths: core.UqfStackPa
 
 
 def test_pipeline_offsets_are_stable():
-    """Offsets are allocated from PIPELINE_BLOCK_START in list order, so
-    reordering PIPELINES would renumber ports and move a running demo's
-    processes. Pin every one that exists today: an accidental reorder fails
-    here instead of silently breaking someone's running stack.
+    """Offsets come from scripts/processes/process_ports.csv, the generated
+    port lock, and a running demo's processes move if one changes. Pin every
+    one that exists today: an edited or regenerated lock that moved a port
+    fails here instead of silently breaking someone's running stack.
 
     A pin, not an inventory. A pipeline APPENDED after these moves no pinned
     offset, so it passes without an edit here - it only has to land above
@@ -1034,7 +1034,11 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     deferred = next(
         p
         for p in core.PIPELINES
-        if p.subscribes is core.FROM_DECLARATION and p.script == core.STREAM_RUNNER_SCRIPT
+        # ...and SUBSCRIBES: feeds defer too now that every entry is read
+        # from q, and a feed has no subscription to drift.
+        if p.subscribes is core.FROM_DECLARATION
+        and p.script == core.STREAM_RUNNER_SCRIPT
+        and p.subscribed_tables
     )
     target = replace(deferred, subscribes=deferred.subscribed_tables)
     first = target.subscribed_tables[0]

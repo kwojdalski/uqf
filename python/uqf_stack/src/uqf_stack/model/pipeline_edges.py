@@ -49,30 +49,8 @@ _PUB_RE = re.compile(
 #: A streaming job declares its own edges rather than spelling out the calls:
 #: the subscribe, the publish and the timer all happen in the one runner
 #: (scripts/processes/torq_stream.q), which is generic, so reading THAT file back tells
-#: you nothing about any particular job. The declaration is read instead -
-#: from src/etl/streaming/<job>.q, found by the procname it claims.
-#:
-#:     .qstream.register[`markout;`procname`subscribes`publishes`on_batch...!(
-#:         `markout1;
-#:         `trades`quote;
-#:         enlist `execution_quality;
-#:
-#: `enlist `x` and an empty `symbol$()` are both spelled here, because a job
-#: that publishes exactly one table and a job that publishes none are the two
-#: cases this registry most needs to tell apart.
-_REGISTER_RE = re.compile(
-    r"\.qstream\.register\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S
-)
-#: A normalizer registers with .qstream from inside .qnorm.define, so its
-#: file carries no `.qstream.register[` literal to read. Its edges are its
-#: declaration's: subscribes is the key side of `sources`, publishes is the
-#: normalizer's own name.
-#:
-#:     .qnorm.define[`executions;`procname`output`sources!(
-#:         `executions1;
-#:         .qsub.executions.executions;
-#:         `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
-_NORMALIZER_RE = re.compile(r"\.qnorm\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S)
+#: you nothing about any particular job. The declaration is read instead, by
+#: model/declarations.py - the same reader the registry is built from.
 
 #: A bounded worker declares itself the way a streaming job does, and is
 #: found the same way - by reading the declaration rather than a list kept
@@ -148,53 +126,24 @@ def _symbol_field(text: str) -> tuple[str, ...]:
     return _symbol_list(text)
 
 
-def _register_fields(body: str) -> dict[str, str]:
-    """The `key!(value; value; ...)` of one register call, as {key: value}.
-
-    Read by NAME rather than by position: a job that declares a timer has two
-    more values than one that does not, and the whole point of this function
-    is to be indifferent to that.
-    """
-    if "!(" not in body:
-        return {}
-    keys_text, values_text = body.split("!(", 1)
-    keys = [key for key in keys_text.strip().strip("`").split("`") if key]
-    values = [value.strip() for value in values_text.split(";")]
-    return dict(zip(keys, values, strict=False))
-
-
 def _declared_stream_edges(repo_root: Path) -> dict[str, tuple[tuple[str, ...], tuple[str, ...]]]:
     """procname -> (subscribes, publishes), read from the job files.
 
     Every job under src/etl/streaming/ is read, so a job whose file exists but
-    whose registry entry was forgotten is absent here and reported as a
-    mismatch rather than silently agreeing.
+    whose process is missing is absent from nothing and reported as a
+    mismatch rather than silently agreeing. Parsed by model/declarations.py,
+    which the registry itself is built from - one reader of q declarations,
+    and one that honours strings, because a job's note is prose with `;` in it.
     """
+    from uqf_stack.model.declarations import read_file
+
     edges: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
     directory = repo_root / STREAM_DIR
     if not directory.is_dir():
         return edges
     for path in sorted(directory.glob("*.q")):
-        source = _strip_q_comments(path.read_text())
-        for match in _REGISTER_RE.finditer(source):
-            fields = _register_fields(match.group(2))
-            procname = _symbol_field(fields.get("procname", ""))
-            if not procname:
-                continue
-            edges[procname[0]] = (
-                _symbol_field(fields.get("subscribes", "")),
-                _symbol_field(fields.get("publishes", "")),
-            )
-        for match in _NORMALIZER_RE.finditer(source):
-            fields = _normalizer_fields(match.group(2))
-            procname = _symbol_field(fields.get("procname", ""))
-            if not procname:
-                continue
-            sources = fields.get("sources", "")
-            edges[procname[0]] = (
-                _symbol_list(sources.split("!", 1)[0]),
-                (match.group(1),),
-            )
+        for declaration in read_file(path):
+            edges[declaration.procname] = (declaration.subscribes, declaration.publishes)
     return edges
 
 
@@ -253,21 +202,6 @@ def _declared_workers(repo_root: Path) -> set[str]:
     for path in sorted(directory.glob("*.q")):
         found.update(_WORKER_RE.findall(_strip_q_comments(path.read_text())))
     return found
-
-
-def _normalizer_fields(body: str) -> dict[str, str]:
-    """The `key!(value; ...)` of one .qnorm.define call, as {key: value}.
-
-    Unlike _register_fields, a value here may itself contain a `!` - the
-    `sources` dictionary - and its own `;` separators only inside a symbol
-    list, so the split is on the top-level `;` between values.
-    """
-    if "!(" not in body:
-        return {}
-    keys_text, values_text = body.split("!(", 1)
-    keys = [key for key in keys_text.strip().strip("`").split("`") if key]
-    values = [value.strip() for value in values_text.split(";")]
-    return dict(zip(keys, values, strict=False))
 
 
 def _symbol_list(match_text: str) -> tuple[str, ...]:

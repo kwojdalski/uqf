@@ -171,10 +171,12 @@ now:{[] .z.p}
 
 / Score every second - frequent enough that execution_quality stays close to
 / real-time in a demo, cheap enough not to matter at this data volume.
-.qstream.register[`markout;`procname`subscribes`publishes`on_batch`timer_period`on_timer!(
+.qstream.register[`markout;`procname`subscribes`publishes`on_batch`timer_period`on_timer`autostart`note!(
     `markout1;
     `trades`quote;
     enlist `execution_quality;
     .qsub.markout.on_batch;
     0D00:00:01.000;
-    .qsub.markout.on_timer)];
+    .qsub.markout.on_timer;
+    1b;
+    "compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two")];

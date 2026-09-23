@@ -6,13 +6,14 @@
 #
 # THE THING THIS DRAWS is that there is no registration step. Three
 # directories are globbed by src/etl/init.q and one by .testutil.load_suites,
-# so a new file is loaded because it exists. The APPENDS are the facts that
-# are NOT derivable from the tree - the table definition, the registry, where
-# a process's port offset is its position in a list, nsList, the one
-# hand-kept list of test namespaces, and the q suite's list of tables, a
-# deliberate gate - which is why they are the only places the scaffold has to
-# edit rather than create. Everything derived from the registry, new-job
-# regenerates itself before it returns.
+# so a new file is loaded because it exists - and the process registry is
+# READ from the job files' own declarations, so a job needs no entry
+# anywhere else. The APPENDS are the facts that are NOT derivable from the
+# tree - the table definition, nsList, the one hand-kept list of test
+# namespaces, and the q suite's list of tables, a deliberate gate - which is
+# why they are the only places the scaffold has to edit rather than create.
+# Everything derived, new-job regenerates itself before it returns, the port
+# lock included.
 #
 # The other thing worth seeing is the red column. The scaffold writes the
 # SHAPE and never the logic: the generated handler throws and the generated
@@ -101,7 +102,6 @@ appended: "Appended, not created" {
   class: band
 
   tables: "uqf_stack_tables.q\nthe table definition:\nwithout it .u.upd drops\nthe rows in silence" { class: appended }
-  registry: "model/registry.py\nappended, never inserted -\na port offset is a\nposition in this list" { class: appended }
   nslist: "run_tests.q nsList\nthe one hand-kept list;\na suite absent from it\nloads and never runs" { class: appended }
   tablelist: "test_stack_tables.q\nexpected - a gate\nevery new table\npasses through" { class: appended }
 }
@@ -111,7 +111,7 @@ picked_up: "Picked up: no registration step" {
 
   init: "src/etl/init.q\nglobs the three\ndeclaration directories" { class: derived }
   suites: ".testutil.load_suites[]\nglobs tests/q/test_*.q" { class: derived }
-  consumers: "process.csv, processes.md,\npipeline_dag.q, the declared\nedges - all re-derived,\nthe files by new-job itself" { class: derived }
+  consumers: "the process registry,\nread from the declarations;\nprocess.csv, processes.md,\npipeline_dag.q, the port lock -\nre-derived by new-job itself" { class: derived }
 }
 
 todo: "Yours" {
@@ -126,7 +126,6 @@ cmd.plan -> written.source: "backfill" { style.stroke: "#6f4aa5" }
 cmd.plan -> written.worker: "backfill" { style.stroke: "#6f4aa5" }
 cmd.plan -> written.test: "both" { style.stroke: "#6f4aa5" }
 cmd.plan -> appended.tables { style.stroke: "#a8762f" }
-cmd.plan -> appended.registry { style.stroke: "#a8762f" }
 cmd.plan -> appended.nslist { style.stroke: "#a8762f" }
 cmd.plan -> appended.tablelist { style.stroke: "#a8762f" }
 
@@ -136,9 +135,9 @@ written.worker -> picked_up.init
 written.test -> picked_up.suites
 appended.nslist -> picked_up.suites: "names it" { style.stroke: "#a8762f" }
 appended.tablelist -> picked_up.suites: "admits it" { style.stroke: "#a8762f" }
-appended.registry -> picked_up.consumers { style.stroke: "#a8762f" }
 appended.tables -> picked_up.consumers { style.stroke: "#a8762f" }
 written.job -> picked_up.consumers: ".qstream.register re-parsed" { style.stroke: "#3d7a5a" }
+written.worker -> picked_up.consumers: ".qbw.define re-parsed" { style.stroke: "#3d7a5a" }
 
 picked_up.init -> todo.logic
 picked_up.suites -> todo.assertion

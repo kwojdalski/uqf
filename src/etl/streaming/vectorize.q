@@ -70,8 +70,9 @@ on_batch:{[tbl;batch]
             bid_prices:enlist 1.1 1.0999 1.0998 1.0997 1.0996 1.0995 1.0994 1.0993 1.0992 1.0991 1.099;
             ask_prices:enlist 1.1002 1.1003 1.1004 1.1005 1.1006 1.1007 1.1008 1.1009 1.101 1.1011 1.1012)))];
 
-.qstream.register[`vectorize;`procname`subscribes`publishes`on_batch!(
+.qstream.register[`vectorize;`procname`subscribes`publishes`on_batch`note!(
     `vectorize1;
     enlist `wide_book;
     enlist `mkt_orderbook;
-    .qsub.vectorize.on_batch)];
+    .qsub.vectorize.on_batch;
+    "the other half of the widefeed1 pair: nothing subscribes to mkt_orderbook, so this branch of the graph is self-contained. See widefeed1")];

@@ -75,7 +75,9 @@ from_crypto_book:{[batch]
         ([] source_time:enlist 2026.09.17D10:00:01; sym:enlist `$"BTC-USDT";
             venue:enlist `binance_spot; mid:enlist 62000f)))];
 
-.qnorm.define[`marks;`procname`output`sources!(
+.qnorm.define[`marks;`procname`output`sources`autostart`note!(
     `marks1;
     .qsub.marks.marks;
-    `quote`crypto_book!`marks_from_quote`marks_from_crypto_book)];
+    `quote`crypto_book!`marks_from_quote`marks_from_crypto_book;
+    1b;
+    "a mid per instrument from every book: quote and crypto_book -> marks")];

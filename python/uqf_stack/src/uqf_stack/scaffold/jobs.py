@@ -1,9 +1,11 @@
 """Scaffolding a new ETL job: the files, and where each line of it goes.
 
 WHAT THIS IS FOR. Adding a job was six hand-edits before the declaration
-directories were globbed and `schema` became derived; it is three now, and
-two of those three are the actual work. This writes the third - the registry
-entry - and gives the other two a correct skeleton to start from.
+directories were globbed and `schema` became derived, and the process
+registry is now read from the job's own q declaration - so what is left is
+the job file and its test, which are the actual work. This gives both a
+correct skeleton, and makes the few appends the tree cannot derive: the
+table, and the lists that gate a new table and a new test namespace.
 
 WHAT IT DELIBERATELY DOES NOT DO. It does not write the job's logic. The
 generated `on_batch`/`fetch` THROWS, and the generated test asserts real
@@ -24,7 +26,6 @@ from __future__ import annotations
 import re
 
 from uqf_stack.paths import (
-    REGISTRY_FILE,
     RUN_TESTS_FILE,
     SOURCE_DIR,
     STACK_TABLES_TEST,
@@ -39,8 +40,6 @@ from uqf_stack.scaffold.templates import (
     GROUPED,
     Q_TYPES,
     TIME_COLUMN,
-    registry_entry_backfill,
-    registry_entry_streaming,
     source_body,
     table_definition,
     test_stub,
@@ -137,7 +136,7 @@ def streaming_job(
     columns: str | None,
     procname: str | None = None,
 ) -> ScaffoldPlan:
-    """Plan a new streaming job: the q file, its table, its registry entry.
+    """Plan a new streaming job: the q file, its table and its test.
 
     `kind` is derived rather than asked for - a job that subscribes to
     nothing is a feed, and one that subscribes is an etl. There is no third
@@ -182,11 +181,16 @@ publish:.qstream.unwired `{name};
 
 \\d .
 
-.qstream.register[`{name};`procname`subscribes`publishes{timer_key}`{handler}!(
+/ The process registry is read from this declaration: `procname` is the
+/ process that runs it, and `autostart`, absent here, keeps it on demand -
+/ add `autostart with 1b to start it with the stack, once the connection
+/ budget has room.
+.qstream.register[`{name};`procname`subscribes`publishes{timer_key}`{handler}`note!(
     `{proc};
     {sub_literal};
     {pub_literal};{timer}
-    .qsub.{name}.{handler})];
+    .qsub.{name}.{handler};
+    "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
 """
     actions.append(FileAction(STREAM_DIR / f"{name}.q", body))
 
@@ -209,13 +213,6 @@ publish:.qstream.unwired `{name};
     elif columns:
         raise UqfStackError("--columns given with no --publishes: there is no table to define")
 
-    actions.append(
-        FileAction(
-            REGISTRY_FILE,
-            registry_entry_streaming(name, proc, is_feed, publishes),
-            mode=WriteMode.APPEND,
-        )
-    )
     ns = test_namespace(name)
     actions.append(
         FileAction(
@@ -242,7 +239,7 @@ def bounded_worker(
     reuse_source: bool = False,
     define_table: bool = True,
 ) -> ScaffoldPlan:
-    """Plan a new bounded worker: its source, its worker, its registry entry.
+    """Plan a new bounded worker: its source, its worker and its test.
 
     A backfill is three declarations rather than one - the source says what
     the rows are and how to window them, the worker says which source feeds
@@ -281,7 +278,9 @@ def bounded_worker(
     actions: list[FileAction] = []
     if not reuse_source:
         actions.append(FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols)))
-    actions.append(FileAction(WORKER_DIR / f"{worker}.q", worker_body(worker, src, dataset, width)))
+    actions.append(
+        FileAction(WORKER_DIR / f"{worker}.q", worker_body(worker, src, dataset, width, proc))
+    )
     if define_table:
         actions += [
             FileAction(
@@ -293,7 +292,6 @@ def bounded_worker(
             _expected_table_action(dataset),
         ]
     actions += [
-        FileAction(REGISTRY_FILE, registry_entry_backfill(proc, worker), mode=WriteMode.APPEND),
         FileAction(
             TEST_DIR / f"test_{worker}.q",
             test_stub(worker, test_namespace(name, bounded=True), f"the {worker} bounded worker"),

@@ -200,8 +200,9 @@ on_batch:{[tbl;batch]
 .qcfgaudit.watch[`cross_arbitrage;
     `.qsub.cross_arbitrage.notional`.qsub.cross_arbitrage.max_skew];
 
-.qstream.register[`cross_arbitrage;`procname`subscribes`publishes`on_batch!(
+.qstream.register[`cross_arbitrage;`procname`subscribes`publishes`on_batch`note!(
     `crossarb1;
     enlist `superbook;
     `cross_arbitrage`config_change;
-    .qsub.cross_arbitrage.on_batch)];
+    .qsub.cross_arbitrage.on_batch;
+    "the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four plant connections against three spare: stop something first")];

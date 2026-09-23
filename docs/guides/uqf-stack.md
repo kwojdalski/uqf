@@ -528,11 +528,11 @@ per-feed script any more. The three things the job itself still owns:
 3. declare `timer_period` and `on_timer`, which is what makes it a feed
    rather than a subscriber
 
-To add your own: write a job file under `src/etl/streaming/`, register it
-with `.qstream.register`, and add a `Pipeline(...)` row in
-`python/uqf_stack/src/uqf_stack/model/pipelines.py` (pick a free
-port offset - the table above lists every offset already taken). Or let
-`uqf-stack wizard` do all three, which is what the next section covers.
+To add your own: write a job file under `src/etl/streaming/` and register it
+with `.qstream.register`. That is the whole registration - the process
+registry is read from the declaration, and a new process is given the next
+free port in `scripts/processes/process_ports.csv`. `uqf-stack new-job`
+scaffolds it; see [adding a pipeline](new-pipeline.md).
 
 ## quotesfeed1 - a real database for one of uqf's own table shapes
 

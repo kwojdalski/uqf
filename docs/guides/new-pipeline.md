@@ -27,8 +27,9 @@ framework guarantees is [ETL-nn](../reference/etl-framework-requirements.md).
 
 ## Scaffolding it
 
-`uqf-stack new-job` writes the skeleton: the q files, the table definition,
-the registry entry and a test.
+`uqf-stack new-job` writes the skeleton: the q files, the table definition
+and a test. There is no registry entry - the process is read from the job's
+own declaration.
 
 <!-- Source: docs/diagrams/scaffolding.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
@@ -37,13 +38,13 @@ the registry entry and a test.
 
 Read it left to right. The **appends** are the whole reason the middle band
 exists: everything else is picked up by a glob, and those files hold the facts
-the tree cannot derive from itself — the table definition, a process's port
-offset, which is its position in the registry list, `nsList`, the one
+the tree cannot derive from itself — the table definition, `nsList`, the one
 hand-kept list of test namespaces, and `expected` in
 [`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q), the gate
 every new table passes through. After writing them, `new-job` reruns
-`scripts/generate/generate_operational_docs.py`, so `processes.md` and
-`src/etl/generated/pipeline_dag.q` never lag the registry it just changed.
+`scripts/generate/generate_operational_docs.py`, so `processes.md`,
+`src/etl/generated/pipeline_dag.q` and the port lock never lag the job it just
+declared.
 
 ```
 uqf-stack new-job markout2 --subscribes trades,quote \
@@ -65,9 +66,8 @@ coverage would compose, and a range full of gaps would read as complete - so
 `new-job` refuses a dataset another worker already fills without a partition.
 
 `--dry-run` prints what it would write and writes nothing. `kind` is derived
-for a streaming job - one that subscribes to nothing is a feed - and the
-registry entry is APPENDED, because offsets are allocated in list order and
-inserting above an existing entry renumbers every process after it.
+for a streaming job - one that subscribes to nothing is a feed - and the new
+process's port is appended to the port lock, so no existing process moves.
 
 **It writes the shape, never the logic.** The generated handler throws and
 the generated test fails, on purpose: a scaffold that left something green
@@ -376,77 +376,48 @@ inputs | ,`fx_rates@fx_rates
 outputs| ,`fx_rates
 ```
 
-### Give it a process, or the build fails
+### Its process comes from the declaration
 
-One more registration, and it is the one that is easy to miss because
-nothing in q needs it. A backfill process and its worker are joined at
-*runtime* by `UQF_BACKFILL_WORKER` — one script serves every worker, and the
-environment picks which. So a fully declared worker with no process to run it
-is invisible to every grep: it looks finished and can only ever be started by
-hand. Two workers were adrift exactly this way before the rule existed.
+There is no registration to add. The uqf_stack process registry is READ from
+the q declarations - every `.qstream.register`/`.qnorm.define` under
+`src/etl/streaming/` and every `.qbw.define` under `src/etl/workers/` - by
+[`model/declarations.py`](../../python/uqf_stack/src/uqf_stack/model/declarations.py).
+It used to be a hand-kept Python list restating each one, which made a new
+job two edits in two languages and let a fully declared worker sit with no
+process to run it, invisible to every grep.
 
-Add a `Pipeline` to `PIPELINES` in
-[`model/registry.py`](../../python/uqf_stack/src/uqf_stack/model/registry.py)
-naming the worker it runs:
+A worker's declaration names its process, and may say why it exists:
 
-```python
-Pipeline(
-    procname="fx_rates_backfill1",
-    script="processes/torq_backfill.q",
-    kind=PipelineKind.BACKFILL,
-    worker="fx_rates_backfill",
-    startwithall="0",
-    note="bounded: reads the vendor's daily fixings over ODBC",
-),
+```q
+.qbw.define[`fx_rates_backfill;
+    `source`dataset`width`transform`procname`note!
+    (`fx_rates;`fx_rates;1D;`fx_rates_passthrough;
+     `fx_rates_backfill1;
+     "bounded: reads the vendor's daily fixings over ODBC")];
 ```
 
-**A streaming job does not restate its edges here.** Its
-`.qstream.register` already names the tables it subscribes to and publishes,
-so the entry defers to it:
+`procname` defaults to `<worker>1` when absent, in q and in the registry
+alike. A backfill never starts with the stack - it registers with discovery,
+runs its range and exits - so a worker has no `autostart`.
 
-```python
-Pipeline(
-    procname="posbook1",
-    script=STREAM_RUNNER_SCRIPT,
-    kind=PipelineKind.ETL,
-    subscribes=FROM_DECLARATION,   # read from posbook.q's own declaration
-    table="position",
-    schema=POSITION_TABLE_SCHEMA,
-),
-```
+A streaming job already names its `procname`, `subscribes` and `publishes`,
+and those are its process's edges. Two more keys are optional:
 
-Those fields used to be written twice - once in q, once here - and
-`verify_pipeline_edges` existed to check the two agreed. There is one
-declaration now, so there is nothing to drift and nothing to check. What
-still belongs in the entry is what q has no way to know: the port offset,
-whether it starts with the stack, and which table's schema it owns.
+| key | means | absent |
+|---|---|---|
+| `autostart` | `1b` to start with the stack | on demand |
+| `note` | why it is deployed as it is, shown in `processes.md` | no note |
 
-`FROM_DECLARATION` is strict. A pipeline that defers and has no matching
-`.qstream.register`/`.qnorm.define` **raises** rather than resolving to
-nothing - usually because the `procname` in the entry and the one in the q
-file disagree. Resolving to empty would drop the job's tables out of the
-generated `database.q`, and `.u.upd` onto a table the plant does not define
-discards its rows in silence.
+Default on demand, because joining the default start spends one of the
+plant's sixteen licensed connections (#285) - a decision to make on purpose.
 
-A feed that subscribes to nothing keeps `subscribes=()`: there is no second
-copy to remove, and `()` says it more plainly than a pointer to a file.
-
-`verify_pipeline_edges` checks this in both directions — a worker no pipeline
-names, and a pipeline naming a worker no file declares:
-
-```
-fx_rates_backfill: a bounded worker declares itself but no backfill pipeline
-names it, so it can only be run by hand. Add a Pipeline with
-worker='fx_rates_backfill', or add it to WORKERS_WITHOUT_A_PROCESS with a reason
-```
-
-`WORKERS_WITHOUT_A_PROCESS` is empty and meant to stay that way: the publish
-seam means the same file runs under either runner, so an entry there claims
-"this job cannot be started the normal way", which needs a reason.
-
-`startwithall="0"` is the normal choice for a backfill — it registers with
-discovery, runs its range and exits, so starting it with the fleet would run
-it on every `uqf-stack start all`.
+**Ports** are the one fact no declaration can supply, because a port has to
+survive other processes being added around it. Each process's offset lives in
+[`scripts/processes/process_ports.csv`](../../scripts/processes/process_ports.csv),
+a generated, append-only lock: a process not yet in it gets the next free
+offset, and `generate_operational_docs.py` (which `new-job` runs) writes it
+down. A retired process keeps its row, so its offset is never reused, and
+`--check` fails in CI on a process the lock lacks.
 
 ## 4. Run it
 

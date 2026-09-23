@@ -116,7 +116,7 @@ def test_each_module_exists_and_imports(module):
 #: checks - and neither was worth bundling into the change that found them.
 OVERSIZED_BY_HISTORY = {
     "scaffold.wizard": 683,
-    "model.pipeline_edges": 494,
+    "model.pipeline_edges": 418,
 }
 
 

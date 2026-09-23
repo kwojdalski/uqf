@@ -179,7 +179,7 @@ optional_cfg:`check`io`facts`partition
 / loads.
 / @param worker the worker's name
 / @param cfg dict of source, dataset, width, transform, and optionally
-/   check, facts, partition, io
+/   check, facts, partition, io, procname (default `<worker>1) and note
 / @throws error naming every missing or malformed field at once
 define:{[worker;cfg]
     missing:required_cfg where not required_cfg in key cfg;
@@ -230,6 +230,20 @@ define:{[worker;cfg]
     / comparison below is symbol against symbol. Every other optional key can
     / be absent because nothing compares them; this one is compared.
     cfg[`partition]:part;
+    / The process that runs this worker, and a line on why it is deployed the
+    / way it is. Both feed the uqf_stack process registry, which is DERIVED
+    / from these declarations rather than kept as a second list. Resolved
+    / before storage for the reason partition is: worker_cfg's rows share one
+    / shape, and a column that is a symbol on one row and (::) on the next
+    / stops the next assignment fitting.
+    proc:$[`procname in key cfg; cfg`procname; `$string[worker],"1"];
+    if[not -11h=type proc;
+        '"define: ",string[worker],"'s procname must be a symbol naming the process that runs it, e.g. `",string[worker],"1"];
+    cfg[`procname]:proc;
+    note:$[`note in key cfg; cfg`note; ""];
+    if[not 10h=type note;
+        '"define: ",string[worker],"'s note must be a string"];
+    cfg[`note]:note;
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong

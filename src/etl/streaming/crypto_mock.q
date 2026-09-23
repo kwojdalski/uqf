@@ -252,9 +252,10 @@ on_timer:{[]
 
 \d .
 
-.qstream.register[`crypto_mock;`procname`subscribes`publishes`timer_period`on_timer!(
+.qstream.register[`crypto_mock;`procname`subscribes`publishes`timer_period`on_timer`note!(
     `cryptomock1;
     `symbol$();
     `crypto_book`crypto_trades;
     0D00:00:01.000;
-    .qsub.crypto_mock.on_timer)];
+    .qsub.crypto_mock.on_timer;
+    "stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one")];

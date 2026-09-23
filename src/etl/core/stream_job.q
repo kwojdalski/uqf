@@ -85,7 +85,8 @@ namespace:{[job] ` sv job_root,job}
 / one without the other.
 / @param job the job's name, e.g. `markout
 / @param decl dict of procname, subscribes, publishes, and then on_batch
-/   (required when it subscribes), timer_period and on_timer (a pair)
+/   (required when it subscribes), timer_period and on_timer (a pair); optionally
+/   autostart (a boolean, default 0b) and note (a string)
 / @return the job name
 / @throws error naming every missing or malformed field at once
 register:{[job;decl]
@@ -124,6 +125,13 @@ register:{[job;decl]
             '"register: ",string[job],"'s timer_period must be positive"];
         if[not is_callable decl`on_timer;
             '"register: ",string[job],"'s on_timer must be a niladic function"]];
+    / Deployment facts, both optional. uqf_stack derives its process registry
+    / from these declarations, so this is where a job says whether it starts
+    / with the stack (default: on demand) and why it is deployed as it is.
+    if[(`autostart in key decl) and not -1h=type decl`autostart;
+        '"register: ",string[job],"'s autostart must be a boolean, 1b to start with the stack"];
+    if[(`note in key decl) and not 10h=type decl`note;
+        '"register: ",string[job],"'s note must be a string"];
     jobs[job]:enlist decl;
     procnames[decl`procname]:job;
     job}

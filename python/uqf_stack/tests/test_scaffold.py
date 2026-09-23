@@ -24,7 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from uqf_stack.model.pipeline_edges import _REGISTER_RE, _register_fields, _symbol_field
+from uqf_stack.model.declarations import Declaration, read_file_text
+from uqf_stack.model.pipeline import PipelineKind
 from uqf_stack.model.schemas import _DEFINITION
 from uqf_stack.paths import UqfStackError
 from uqf_stack.scaffold import jobs, write
@@ -38,28 +39,46 @@ def _body(plan: jobs.ScaffoldPlan, suffix: str) -> str:
 # ------------------------------------------------------- the parse contract
 
 
+def _declared(plan: jobs.ScaffoldPlan, suffix: str) -> list[Declaration]:
+    """What the registry would read from a scaffolded file - the same reader
+    the process registry is built from, so a template that stopped matching
+    it would generate a job no process runs."""
+    return read_file_text(_body(plan, suffix), Path(suffix))
+
+
 def test_a_scaffolded_job_declares_edges_the_tree_can_read():
-    """The anti-rot test. `_declared_stream_edges` finds a job's procname,
-    subscribes and publishes by regex; a template that stopped matching it
-    would generate a job the registry could never resolve."""
+    """The anti-rot test: the process registry is built by reading these
+    declarations, so the generated one has to read back as what was asked."""
     plan = jobs.streaming_job("markout2", ["trades", "quote"], "my_metric", "value:float")
-    match = _REGISTER_RE.search(_body(plan, "markout2.q"))
-    assert match, "the generated register call does not parse"
-    fields = _register_fields(match.group(2))
-    assert _symbol_field(fields["procname"]) == ("markout21",)
-    assert _symbol_field(fields["subscribes"]) == ("trades", "quote")
-    assert _symbol_field(fields["publishes"]) == ("my_metric",)
+    (d,) = _declared(plan, "markout2.q")
+    assert (d.procname, d.subscribes, d.publishes) == (
+        "markout21",
+        ("trades", "quote"),
+        ("my_metric",),
+    )
+    assert d.kind is PipelineKind.ETL
+    assert not d.autostart, "a scaffolded job is on demand until someone decides otherwise"
 
 
 def test_a_scaffolded_feed_declares_no_subscription():
     """`symbol$()` and a one-table list are the two cases the registry most
     needs to tell apart, so the empty one is spelled explicitly."""
     plan = jobs.streaming_job("tickfeed", [], "ticks", "value:float")
-    match = _REGISTER_RE.search(_body(plan, "tickfeed.q"))
-    assert match
-    fields = _register_fields(match.group(2))
-    assert _symbol_field(fields["subscribes"]) == ()
-    assert "timer_period" in fields, "a feed publishes on a timer, not on a batch"
+    (d,) = _declared(plan, "tickfeed.q")
+    assert d.subscribes == ()
+    assert d.kind is PipelineKind.FEED, "a job that subscribes to nothing is a feed"
+
+
+def test_a_scaffolded_worker_declares_its_process():
+    """A worker's process is read from its own `.qbw.define`, so the
+    scaffolded one must name the process the plan says it runs."""
+    plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
+    (d,) = _declared(plan, "fx_rates_backfill.q")
+    assert (d.procname, d.worker, d.kind) == (
+        "fx_rates_backfill1",
+        "fx_rates_backfill",
+        PipelineKind.BACKFILL,
+    )
 
 
 def test_a_scaffolded_table_parses_as_a_definition():
@@ -127,13 +146,6 @@ def test_a_scaffolded_fixture_carries_a_row():
     assert "not implemented" not in source.split("fixture:")[1].split("register")[0]
 
 
-def test_a_scaffolded_worker_names_the_process_that_runs_it():
-    """Without `worker=`, the link lives only in UQF_BACKFILL_WORKER at
-    runtime and a declared worker with no process is invisible (#283)."""
-    plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
-    assert 'worker="fx_rates_backfill"' in _body(plan, "model/registry.py")
-
-
 # ------------------------------------------------------------- refusing
 
 
@@ -160,19 +172,6 @@ def test_appending_to_a_missing_file_is_refused(tmp_path: Path):
     plan = jobs.streaming_job("j", ["trades"], None, None)
     with pytest.raises(UqfStackError, match="nothing to append to"):
         write.apply_plan(plan, tmp_path)
-
-
-def test_a_registry_that_does_not_end_in_the_tuple_is_refused(tmp_path: Path):
-    """The entry goes INSIDE the PIPELINES tuple. If the file no longer ends
-    with its closing paren, the scaffold cannot tell where - and appending at
-    the end would be valid Python that registers nothing."""
-    action = next(
-        a
-        for a in jobs.streaming_job("j", [], None, None).actions
-        if str(a.path).endswith("model/registry.py")
-    )
-    with pytest.raises(UqfStackError, match="closing paren"):
-        write._appended("PIPELINES = (\n)\nsomething_else = 1\n", action)
 
 
 # ------------------------------------------- registering the test namespace

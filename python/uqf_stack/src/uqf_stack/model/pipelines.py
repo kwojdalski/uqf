@@ -1,10 +1,10 @@
 """What the pipeline registry DERIVES: ports, process.csv rows, offsets.
 
-The registry literal itself is in model/registry.py and the Pipeline dataclass in
-model/pipeline.py; this is the third of the three, and the one that turns entries
-into the numbers and rows the rest of the stack reads. Adding a pipeline
-touches model/registry.py only - the per-process offsets, the process.csv rows and
-the generated schema all derive from that tuple, here.
+The registry is built in model/registry.py, from the q declarations, and the
+Pipeline dataclass is in model/pipeline.py; this is the third of the three, and
+the one that turns entries into the numbers and rows the rest of the stack
+reads. Adding a pipeline touches its q file only - the per-process offsets, the
+process.csv rows and the generated schema all derive from there.
 
 Also holds the dataflow-edge declarations and verify_pipeline_edges, which
 greps each pipeline's own q script and fails if a declaration disagrees with
@@ -25,24 +25,18 @@ from uqf_stack.model.registry import (  # noqa: F401 - re-exported, every caller
     FXFEED_PINNED_OFFSET,
     PIPELINE_BLOCK_START,
     PIPELINES,
+    allocate_offsets,
+    read_port_lock,
 )
 
 log = get_logger(__name__)
 
 
 def _resolved_offsets() -> dict[str, int]:
-    """Each pipeline's `{KDBBASEPORT}+N` offset: explicit where pinned,
-    otherwise allocated contiguously from PIPELINE_BLOCK_START in list order.
+    """Each pipeline's `{KDBBASEPORT}+N` offset, as model/registry.py read it
+    from the port lock (or allocated it, for a process not yet in the lock).
     """
-    offsets: dict[str, int] = {}
-    nxt = PIPELINE_BLOCK_START
-    for pipeline in PIPELINES:
-        if pipeline.offset is not None:
-            offsets[pipeline.procname] = pipeline.offset
-            continue
-        offsets[pipeline.procname] = nxt
-        nxt += 1
-    return offsets
+    return {p.procname: p.offset for p in PIPELINES if p.offset is not None}
 
 
 PIPELINE_OFFSETS = _resolved_offsets()

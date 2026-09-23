@@ -485,7 +485,7 @@
 .man.registerFunc (".qnorm.required_keys";".qnorm";"What every normalizer must declare.";".qnorm.required_keys";"");
 .man.registerFunc (".qnorm.define";".qnorm";"Declare a normalizer: its canonical output and one transform per source. Refuses, by name, a source whose transform is not registered, takes more than one input, or produces anything but the canonical table. The last is the check this kind exists for - and it is exact, not \"has the same columns\": type and order too, because the output is published positionally and a mapping that emits size before price lands as a table whose sizes are prices.";".qnorm.define";"");
 .man.registerArg (".qnorm.define";"param";"name";"the normalizer's name, e.g. `executions - also its output table and its .qsub namespace");
-.man.registerArg (".qnorm.define";"param";"decl";"dict of procname, output (an empty unkeyed table, no `time`), sources (source table -> transform name)");
+.man.registerArg (".qnorm.define";"param";"decl";"dict of procname, output (an empty unkeyed table, no `time`), sources (source table -> transform name), and optionally autostart (boolean) and note (string)");
 .man.registerArg (".qnorm.define";"return";"";"the name");
 .man.registerArg (".qnorm.define";"throws";"";"error naming every problem it finds first");
 .man.registerFunc (".qnorm.check_source";".qnorm";"Private: one source's transform, held to the canonical output.";".qnorm.check_source";"");

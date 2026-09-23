@@ -74,10 +74,14 @@ matching what the tree generates.
 
 Two registry facts that changed under you, and that a job no longer states:
 
-- `subscribes`/`publishes` defer to the q declaration with
-  `FROM_DECLARATION`. The job file's `.qstream.register` is the single
-  declaration; restating it in `registry.py` is the duplication #311 removed.
-- `schema` derives from `table`. There is no `schema=` field.
+- There is no registry entry to write. `model/registry.py` BUILDS `PIPELINES`
+  from the q declarations (`model/declarations.py`): `procname` and the edges
+  from `.qstream.register`/`.qnorm.define`/`.qbw.define`, plus the optional
+  `autostart` and `note` keys, and a worker's `procname` (default
+  `<worker>1`). Only non-job processes (tap1) are listed in Python.
+- Ports live in `scripts/processes/process_ports.csv`, a generated,
+  append-only lock that `generate_operational_docs.py` writes and `--check`
+  holds. Never renumber a row in it.
 
 ## What to read before writing anything
 

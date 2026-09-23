@@ -43,7 +43,7 @@ uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
 ```
 
 **Always `--dry-run` first** and show the user what it would write. It
-appends to `registry.py` and `uqf_stack_tables.q`, which are files they may
+appends to `uqf_stack_tables.q` and two test lists, which are files they may
 have opinions about.
 
 `kind` is derived for a streaming job — no `--subscribes` means a feed — so
@@ -114,7 +114,7 @@ Write in this order, and run the suite between each:
 ```bash
 q tests/run_tests.q                       # the suite; the scaffolded test must be gone
 uv run python scripts/test.py q-examples  # every @eg you wrote actually runs
-uv run pytest python/ -q                  # the registry entry resolves
+uv run pytest python/ -q                  # the declaration reads back as a process
 uv run python scripts/gates/check_q_traps.py
 ```
 
@@ -158,9 +158,12 @@ Say this back to the user, because it is the part that surprises people:
   reused rather than rewritten, and an existing table is not defined again.
   A dataset another worker already fills with no partition is refused:
   `.qbw.define` would refuse the pair at load.
-- **No `schema=` in the registry.** It derives from `table`.
-- **No `subscribes=`/`publishes=` in the registry.** They defer to the q
-  declaration with `FROM_DECLARATION`, which the scaffold writes for you.
+- **No registry entry at all.** The process registry is read from the q
+  declarations (`model/declarations.py`): `procname`, the edges, and the
+  optional `autostart` (default on demand) and `note` all live on the job's
+  own `.qstream.register` / `.qbw.define`. The port is appended to
+  `scripts/processes/process_ports.csv` by the regeneration above, so no
+  existing process moves.
 
 ## When to stop and ask
 
