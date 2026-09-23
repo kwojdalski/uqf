@@ -96,10 +96,10 @@ test_total_pnl_combines_realized_and_unrealized:{[t]
     .testutil.assertApprox[.qpos.total_pnl[b;`EURUSD;1.1100];expected;1e-6;"total = realized + mark-to-market on what's left open"]};
 
 test_apply_fills_folds_a_trades_table_in_time_order:{[t]
-    / env/schemas.q's .envschema.trades shape (trade_id/order_id/time/sym/
-    / side/trade_price/size/pip_factor) - deliberately out of time order
-    / here, to check apply_fills sorts before folding rather than trusting
-    / row order.
+    / A SUPERSET of the four columns apply_fills needs, carrying trade_id
+    / and order_id it has no use for - the point being that it ignores
+    / them. Deliberately out of time order here, to check apply_fills sorts
+    / before folding rather than trusting row order.
     trades:([]
         trade_id:1 2 3; order_id:1 2 3;
         time:2026.01.01D09:00:00.200 2026.01.01D09:00:00.000 2026.01.01D09:00:00.100;
