@@ -6,9 +6,39 @@ import datetime as dt
 
 import pytest
 
-from uqf_frontend.catalog import QType, table
+from uqf_frontend.catalog import QType, Table
 from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.queries import build_filters, coerce
+
+#: Built here rather than fetched from a stack: these tests are about
+#: queries.coerce and build_filters, and a Table is a plain dataclass.
+_TABLES = {
+    "trades": Table(
+        name="trades",
+        columns={
+            "time": QType.TIMESTAMP,
+            "sym": QType.SYMBOL,
+            "side": QType.LONG,
+            "trade_price": QType.FLOAT,
+            "size": QType.FLOAT,
+        },
+        description="Client fills",
+    ),
+    "etl_coverage": Table(
+        name="etl_coverage",
+        columns={
+            "dataset": QType.SYMBOL,
+            "range_from": QType.TIMESTAMP,
+            "rows_published": QType.LONG,
+            "run_id": QType.GUID,
+        },
+        description="Append-only completeness ledger",
+    ),
+}
+
+
+def table(name: str) -> Table:
+    return _TABLES[name]
 
 
 def test_symbol_stays_a_string_because_kola_maps_str_to_symbol():

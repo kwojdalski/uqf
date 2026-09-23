@@ -123,16 +123,18 @@ red the scaffold exists to leave was the one you could not see.
    [`docs/integrations/torq/README.md`](../integrations/torq/README.md) name
    the new process - authored prose, so the one step with no placeholder.
 
-A new table's desk catalog entry is written for you: its columns in
-[`catalog/columns.csv`](../../python/uqf_frontend/catalog/columns.csv), its
-name in `test_catalog_drift.py`'s `_TICKERPLANT_TABLES`, and a SCAFFOLDED
-row in [`catalog/tables.csv`](../../python/uqf_frontend/catalog/tables.csv).
-The description in that row is yours: it is read by someone deciding whether
-your table is the one they want, and the table's own name there would pass
-every test and tell them nothing. If the desk should not see the table,
-delete its catalog rows and add it to `_NOT_IN_CATALOG` with the reason. A
-column type the catalog has no equivalent for (`int`, `date`, ...) gets a
-note instead, and the catalog step is by hand.
+A new table's desk catalog entry is written for you: a SCAFFOLDED line in
+[`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q). The description is
+yours: it is read by someone deciding whether your table is the one they
+want, and the table's own name there would pass every test and tell them
+nothing. If the desk should not see the table, delete that line and add the
+table to `.qcat.hidden` with the reason — `tests/q/test_catalog.q` refuses a
+published table that is in neither list, so "we forgot" cannot pass as
+"deliberately hidden".
+
+Only the prose is written. The columns and their types are `meta`'s answer
+on a running process, not a copy anybody maintains, so a column type with no
+equivalent in the front end no longer blocks the catalog step.
 
 Everything that IS derived - `processes.md`, `src/etl/generated/pipeline_dag.q`
 and `docs/man.q` - it regenerates before it returns.

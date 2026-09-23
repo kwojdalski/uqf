@@ -1416,3 +1416,46 @@ def test_both_present_is_allowed_rather_than_guessed_at(tmp_path):
     paths.torqdata.mkdir(parents=True)
     (paths.torqdata.parent / "uqf-stack").mkdir(parents=True)
     check_data_dir_was_migrated(paths)
+
+
+def test_gateway1_loads_the_desk_catalog_after_its_own_script():
+    """The other vendored overlay: `.qcat` has to be on the gateway, because
+    that is the process the front end's `Gateway.call` reaches.
+
+    Read against the REAL vendored csv, for the reason the startwithall test
+    gives: the point is what upstream ships. Order matters and is asserted -
+    the vendored script must load FIRST, since appending to the `load` column
+    is what makes this an overlay rather than a replacement.
+    """
+    real = stack_paths.default_paths()
+    vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
+    upstream = {row["procname"]: row["load"] for row in csv.DictReader(io.StringIO(vendored))}
+
+    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
+    loaded = composed["gateway1"]["load"].split()
+
+    assert loaded[0] == upstream["gateway1"], (
+        "the vendored gateway script must still load first - this overlay appends"
+    )
+    assert loaded[-1].endswith("processes/uqs_catalog.q")
+    assert "${UQFSCRIPTS}" in loaded[-1], (
+        "pathed through the env var the pipeline rows use, not a literal path"
+    )
+
+
+def test_the_load_overlay_touches_no_other_process():
+    """A vendored row this tree does not mean to change must come through
+    byte-identical - the failure mode of a field-level overlay is reaching
+    one row too many."""
+    real = stack_paths.default_paths()
+    vendored = {
+        row["procname"]: row["load"]
+        for row in csv.DictReader(
+            io.StringIO((real.torqapphome / "appconfig" / "process.csv").read_text())
+        )
+    }
+    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
+    for procname, original in vendored.items():
+        if procname == "gateway1":
+            continue
+        assert composed[procname]["load"] == original, f"{procname}'s load column was altered"

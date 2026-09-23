@@ -108,6 +108,12 @@ def create_app(
     )
     app.state.settings = settings
     app.state.gateway = gateway
+    # One per app, so the two answers it joins are fetched once rather than
+    # per request. Lazily filled: nothing is asked of the stack until the
+    # first browse, so the app still starts against a stopped fleet and the
+    # ops and health views still work.
+    tables = catalog.Catalog(gateway)
+    app.state.catalog = tables
     app.state.fleet = fleet
     app.state.policy = policy
     app.state.capture = scheduler
@@ -205,7 +211,7 @@ def create_app(
                         for c, qt in t.columns.items()
                     ],
                 )
-                for t in catalog.TABLES.values()
+                for t in tables.tables().values()
             ],
             operators=sorted(catalog.OPERATORS),
         )
@@ -346,7 +352,7 @@ def create_app(
 
     @app.post("/query", response_model=QueryResponse)
     def run_query(req: QueryRequest, request: Request) -> QueryResponse:
-        tbl = catalog.table(req.table)
+        tbl = tables.table(req.table)
         # after catalog.table, so an unknown table is a 422 rather than a 403
         authorise(request, table=tbl.name)
         columns, operators, values = queries.build_filters(

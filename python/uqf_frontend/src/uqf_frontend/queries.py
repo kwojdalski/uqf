@@ -48,6 +48,35 @@ from typing import Any
 from uqf_frontend.catalog import LIST_OPERATORS, OPERATORS, QType, Table
 from uqf_frontend.errors import ValidationFailed
 
+#: Every table a data tier holds, with each column's `meta` type character.
+#:
+#: The browsable surface is the INTERSECTION of this and CATALOG below: this
+#: says what exists, that says what a desk is allowed to see and what it is
+#: for. Neither alone is the allowlist.
+#:
+#: Routed to a tier rather than run on the gateway, because the gateway holds
+#: no data and `meta` there would answer about the gateway's own namespace.
+#:
+#: `kind` rather than `type`, which is a q keyword. An untyped column - a
+#: vector-valued one like `bid_prices` - has a BLANK character here, and that
+#: is the LIST type the frontend refuses to filter on.
+#: A plain expression, not a niladic lambda: q returns a `{[] ...}` sent with
+#: no arguments as the FUNCTION, which kola cannot deserialise. See
+#: test_q_programs.py, which has caught this twice.
+SCHEMA = """raze {[nm] m:0!meta nm; ([] table:nm; column:m`c; kind:m`t)} each tables[]"""
+
+#: What each browsable table is for, from `.qcat` on the gateway.
+#:
+#: The prose half of the catalog, and the only half that cannot be derived.
+#: It lives in scripts/processes/uqs_catalog.q, which gateway1 loads via
+#: VENDORED_LOAD_OVERLAY in uqs/stack/procs.py. A table `.qcat` hides, or
+#: never describes, is not in this answer and so is not browsable.
+#:
+#: `call`, not `route`: this runs on the gateway process itself, which is
+#: where .qcat is loaded. Routing it would ask a data tier about a namespace
+#: it does not have.
+CATALOG = ".qcat.surface[]"
+
 #: Filter a whitelisted table by validated (column, operator, value) triples.
 #:
 #: Parameters arrive as IPC arguments: t=table name symbol, fc=column symbols,

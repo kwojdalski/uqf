@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 from uqf_frontend import control, health, queries
-from uqf_frontend.catalog import TABLES, QType
+from uqf_frontend.catalog import QType, Table
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 
@@ -79,12 +79,24 @@ def test_a_timestamp_must_be_a_string_or_datetime():
 # -------------------------------------------------------- queries.build_filters
 
 
+#: A quotes-shaped table, built here rather than fetched: these tests are
+#: about queries.build_filters, not about what the stack happens to carry.
+QUOTES = Table(
+    name="quotes",
+    columns={
+        "time": QType.TIMESTAMP,
+        "sym": QType.SYMBOL,
+        "bid_prices": QType.LIST,
+        "ask_prices": QType.LIST,
+    },
+    description="FX top-of-book and depth as per-row level vectors",
+)
+
+
 def _vector_column_table():
-    for tbl in TABLES.values():
-        vectors = set(tbl.columns) - set(tbl.filterable)
-        if vectors:
-            return tbl, sorted(vectors)[0]
-    pytest.skip("no catalog table has a vector column")
+    vectors = set(QUOTES.columns) - set(QUOTES.filterable)
+    assert vectors, "the fixture must carry a vector column for this to test anything"
+    return QUOTES, sorted(vectors)[0]
 
 
 def test_a_vector_column_cannot_be_filtered_on():
@@ -96,7 +108,7 @@ def test_a_vector_column_cannot_be_filtered_on():
 
 
 def test_an_unknown_operator_is_refused_listing_the_supported_ones():
-    tbl = TABLES["quotes"]
+    tbl = QUOTES
     column = sorted(tbl.filterable)[0]
     with pytest.raises(ValidationFailed, match="supported:"):
         queries.build_filters(tbl, [(column, "like", "x")])

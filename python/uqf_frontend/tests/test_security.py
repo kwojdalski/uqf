@@ -8,6 +8,24 @@ from __future__ import annotations
 
 from uqf_frontend import queries
 
+#: Programs this package sends that carry no caller input: the catalog's own
+#: two questions, asked once to build the whitelist. A refusal test asserts
+#: that nothing ELSE was sent - "no IPC at all" stopped being the property
+#: when the catalog moved to the stack, and was never the one that mattered.
+#: FE-14 is about the caller's bytes, and neither of these carries any.
+CATALOG_PROGRAMS = frozenset({queries.CATALOG, queries.SCHEMA})
+
+
+def _caller_input_reached_q(gw, needle: str) -> bool:
+    """Did anything the caller sent leave this process?"""
+    for program, args in gw.calls:
+        if program not in CATALOG_PROGRAMS and (needle in program or needle in str(args)):
+            return True
+    for program, args, _ in gw.routed:
+        if program not in CATALOG_PROGRAMS and (needle in program or needle in str(args)):
+            return True
+    return False
+
 
 def test_program_text_is_always_a_package_constant(client, gw):
     """Whatever the caller sends, the q program is one of ours verbatim."""
@@ -35,19 +53,25 @@ def test_hostile_symbol_value_travels_as_an_argument_not_as_text(client, gw):
     assert tiers == ["rdb", "hdb"]
 
 
-def test_unknown_table_is_refused_before_any_ipc(client, gw):
-    resp = client.post("/query", json={"table": "sys; exit 0", "filters": []})
+def test_unknown_table_is_refused_without_the_caller_reaching_q(client, gw):
+    hostile = "sys; exit 0"
+    resp = client.post("/query", json={"table": hostile, "filters": []})
     assert resp.status_code == 422
-    assert gw.routed == [], "nothing may be sent to q after a validation failure"
+    assert not _caller_input_reached_q(gw, hostile), (
+        "nothing carrying the caller's input may be sent after a validation failure"
+    )
+    assert queries.SELECT not in [p for p, _, _ in gw.routed]
 
 
-def test_unknown_column_is_refused_before_any_ipc(client, gw):
+def test_unknown_column_is_refused_without_the_caller_reaching_q(client, gw):
+    hostile = "; exit 0"
     resp = client.post(
         "/query",
-        json={"table": "trades", "filters": [{"column": "; exit 0", "op": "eq", "value": "x"}]},
+        json={"table": "trades", "filters": [{"column": hostile, "op": "eq", "value": "x"}]},
     )
     assert resp.status_code == 422
-    assert gw.routed == []
+    assert not _caller_input_reached_q(gw, hostile)
+    assert queries.SELECT not in [p for p, _, _ in gw.routed]
 
 
 def test_unknown_operator_is_refused_by_the_schema(client, gw):
@@ -66,7 +90,8 @@ def test_vector_column_cannot_be_filtered_on(client, gw):
     )
     assert resp.status_code == 422
     assert "vector" in resp.json()["detail"]
-    assert gw.routed == []
+    assert not _caller_input_reached_q(gw, "bid_prices")
+    assert queries.SELECT not in [p for p, _, _ in gw.routed]
 
 
 def test_every_catalog_operator_exists_in_the_q_program():

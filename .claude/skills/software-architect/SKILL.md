@@ -128,8 +128,8 @@ ARCHITECTURE REVIEW (N findings across M files)
 ================================================
  # | Cat | Severity | Finding (truncated)                                        | File(s)
 ---|-----|----------|------------------------------------------------------------|---------------------------
- 1 |  3  | HIGH     | table schema written in 3 places, only 2 pairs gated —     | uqs_tables.q,
-   |     |          | third can drift silently                                   | catalog/columns.csv
+ 1 |  3  | HIGH     | the same fact declared in two trees, with one gate         | <file A>,
+   |     |          | holding only one pair — the third copy drifts silently     | <file B>
  2 |  2  | HIGH     | .qstream shell branches on job name, so a new job needs    | stream_job.q
    |     |          | a shell edit rather than a declaration                     |
  3 |  7  | MEDIUM   | convention stated in prose with no gate; already broken    | docs/..., src/etl/...

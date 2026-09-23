@@ -70,7 +70,7 @@ def test_each_source_gets_its_schema_a_throwing_mapping_and_an_example():
 
 def test_it_gets_a_catalog_entry_and_a_contract_driver():
     plan = _plan()
-    assert _file(plan, "tables.csv").startswith('ticks,"SCAFFOLDED:')
+    assert _file(plan, "uqs_catalog.q").startswith(".qcat.describe[`ticks]:")
     assert "contract_driver:{[]" in _file(plan, "test_ticks.q")
 
 

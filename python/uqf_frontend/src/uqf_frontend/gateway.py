@@ -127,6 +127,56 @@ def _classify(exc: Exception) -> Exception:
     return QueryRejected(f"the gateway rejected the query: {exc}")
 
 
+#: The catalog a FakeGateway answers with unless a test stages its own.
+#:
+#: Hand-written rather than read from the q tree: a test double that loaded
+#: the real declarations would fail for reasons that have nothing to do with
+#: the test, and this package no longer depends on that tree at all - which
+#: was the point of moving the catalog to the stack. The shapes here only
+#: have to be REALISTIC, and the properties tests actually lean on are that
+#: `trades` and `quotes` exist, that `quotes` has vector columns (a blank
+#: `meta` type, which becomes QType.LIST and is unfilterable), and that
+#: `etl_coverage` carries a guid `run_id`.
+#:
+#: tests/q/test_catalog.q is what holds the REAL catalog honest.
+FAKE_CATALOG: list[dict[str, str]] = [
+    {"table": "trades", "description": "Client fills"},
+    {"table": "quotes", "description": "FX top-of-book and depth as per-row level vectors"},
+    {"table": "position", "description": "Running position book marked to the prevailing mid"},
+    {"table": "etl_coverage", "description": "Append-only completeness ledger"},
+]
+
+#: `meta`, as a data tier would report it for FAKE_CATALOG's tables. A blank
+#: `kind` is q's answer for an untyped column, and is what makes
+#: quotes.bid_prices unfilterable.
+FAKE_SCHEMA: list[dict[str, str]] = [
+    {"table": "trades", "column": "time", "kind": "p"},
+    {"table": "trades", "column": "sym", "kind": "s"},
+    {"table": "trades", "column": "side", "kind": "j"},
+    {"table": "trades", "column": "trade_price", "kind": "f"},
+    {"table": "trades", "column": "size", "kind": "f"},
+    {"table": "trades", "column": "pip_factor", "kind": "f"},
+    {"table": "quotes", "column": "time", "kind": "p"},
+    {"table": "quotes", "column": "sym", "kind": "s"},
+    {"table": "quotes", "column": "bid_prices", "kind": " "},
+    {"table": "quotes", "column": "bid_sizes", "kind": " "},
+    {"table": "quotes", "column": "ask_prices", "kind": " "},
+    {"table": "quotes", "column": "ask_sizes", "kind": " "},
+    {"table": "position", "column": "time", "kind": "p"},
+    {"table": "position", "column": "sym", "kind": "s"},
+    {"table": "position", "column": "qty", "kind": "f"},
+    {"table": "etl_coverage", "column": "dataset", "kind": "s"},
+    {"table": "etl_coverage", "column": "partition", "kind": "s"},
+    {"table": "etl_coverage", "column": "source_version", "kind": "s"},
+    {"table": "etl_coverage", "column": "range_from", "kind": "p"},
+    {"table": "etl_coverage", "column": "range_to", "kind": "p"},
+    {"table": "etl_coverage", "column": "rows_published", "kind": "j"},
+    {"table": "etl_coverage", "column": "recorded_at", "kind": "p"},
+    {"table": "etl_coverage", "column": "superseded_at", "kind": "p"},
+    {"table": "etl_coverage", "column": "run_id", "kind": "g"},
+]
+
+
 class FakeGateway:
     """An in-process :class:`Gateway` for tests.
 
@@ -137,9 +187,18 @@ class FakeGateway:
     """
 
     def __init__(self, responses: dict[str, Any] | None = None) -> None:
+        from uqf_frontend import queries
+
         self.calls: list[tuple[str, tuple[Any, ...]]] = []
         self.routed: list[tuple[str, tuple[Any, ...], list[str]]] = []
-        self._responses = responses or {}
+        # The catalog answers are defaults, not overrides: a test that stages
+        # its own - an empty catalog, a table that exists but is undescribed -
+        # still gets exactly what it asked for.
+        self._responses = {
+            queries.CATALOG: FAKE_CATALOG,
+            queries.SCHEMA: FAKE_SCHEMA,
+            **(responses or {}),
+        }
         self.raises: Exception | None = None
 
     def call(self, program: str, *args: Any) -> Any:

@@ -145,9 +145,10 @@ Also affected:
 - **`.qmatz.schema`** gains columns, which collides with **#60**: the shape
   is *already* unverified, and this would change it before the current one
   has ever been checked against the real ledger. See §5.
-- **`python/uqf_frontend`** — `queries.py`'s `COVERAGE` program,
-  `catalog.py`'s `etl_coverage` entry, `coverage.py`'s interval building,
-  and `test_catalog_drift.py`'s q-side cross-check.
+- **`python/uqf_frontend`** — `queries.py`'s `COVERAGE` program and
+  `coverage.py`'s interval building. The catalog's own `etl_coverage` entry
+  is no longer here: its columns come from `meta` at runtime and its
+  description from `.qcat`.
 - **`python/uqf_airflow_provider`** — unaffected. It reads worker *status*,
   not coverage, which is that split working as intended.
 - **16 files total** currently depend on the assumed shape (8 source, 8

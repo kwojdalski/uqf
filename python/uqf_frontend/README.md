@@ -167,9 +167,13 @@ uv run ruff check .
 sent*: that the program text is one of this package's own constants, and that
 a hostile value appears only in the argument list. No q process required.
 
-`test_catalog_drift.py` parses the table definitions out of
-`scripts/processes/uqs_tables.q` as text — no import, so it cannot
-silently skip when uqs's environment is unavailable.
+`FakeGateway` also answers the catalog's two questions by default, so every
+test here runs with no stack: see `FAKE_CATALOG` and `FAKE_SCHEMA` in
+`gateway.py`. They are hand-written rather than read from the q tree — a
+test double that loaded the real declarations would fail for reasons that
+have nothing to do with the test, and this package no longer depends on that
+tree at all. `tests/q/test_catalog.q`, in the q half, is what holds the real
+catalog honest.
 
 ## Tier routing and coverage (B1)
 

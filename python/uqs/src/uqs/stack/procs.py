@@ -56,6 +56,24 @@ log = get_logger(__name__)
 # `uqs config-set monitor1 startwithall 0`.
 VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 
+#: Extra q the gateway loads, appended to its vendored `load` column.
+#:
+#: `.qcat` is the desk catalog's authored half - what each table is for, and
+#: which are deliberately not browsable. It has to answer on the process the
+#: BFF already talks to, and that is the gateway: `Gateway.call` runs a
+#: program on the gateway process itself, while `route` reaches the data
+#: tiers. The columns and types come from the tiers via `meta`; only the
+#: prose lives here.
+#:
+#: Not the generated database.q, which would have been the obvious carrier:
+#: only stp1 is given `-schemafile`, so nothing else would see it.
+#:
+#: The same overlay reasoning as VENDORED_STARTWITHALL_OVERLAY above - the
+#: vendored row says `${KDBCODE}/processes/gateway.q` and this appends to it
+#: rather than replacing it, because the `load` column takes a
+#: space-separated list and the vendored script must still load first.
+VENDORED_LOAD_OVERLAY = {"gateway1": "processes/uqs_catalog.q"}
+
 
 def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
     """The vendored process.csv rows, plus one row per PIPELINES entry
@@ -78,6 +96,9 @@ def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
     for row in rows:
         if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
             row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
+        if row["procname"] in VENDORED_LOAD_OVERLAY:
+            extra = VENDORED_LOAD_OVERLAY[row["procname"]]
+            row["load"] = f"{row['load']} ${{UQFSCRIPTS}}/{extra}".strip()
     for row in rows:
         # stp1 loads its schema via -schemafile in `extras`; point it at the
         # generated copy (vendored database.q + uqf's own `quotes` table -
