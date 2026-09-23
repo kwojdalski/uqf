@@ -99,7 +99,7 @@ of them near-copies.
 
 `databento1` is the newest subscriber and the only one whose input comes
 from outside q entirely: an external Python handler
-(`databento_feed.py`) holds a live Databento subscription and publishes
+(`external/databento_feed.py`) holds a live Databento subscription and publishes
 raw MBP-10 onto `databento_mbp10`, and `databento1` folds it into
 `databento_book` with the same `.qxf` transform the ODBC backfill applies.
 The handler is not a process here, for the reason cryptorust is not: a q
@@ -165,7 +165,7 @@ when `fxpositions1` and `executions1` came up "up" and never subscribed to
 anything (#285).
 
 So the budget is declared rather than discovered. `PLANT_CONNECTION_BUDGET`
-and `PLANT_CONNECTION_RESERVE` in `pipeline_edges.py` hold the cap and the
+and `PLANT_CONNECTION_RESERVE` in `model/pipeline_edges.py` hold the cap and the
 slots kept back for ad-hoc handles (`uqf-stack query`, `uqf-stack schema`,
 the frontend's health view each take one while they run), and
 `verify_pipeline_edges` counts the `startwithall=1` plant clients against

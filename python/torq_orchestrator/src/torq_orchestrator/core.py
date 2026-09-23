@@ -5,18 +5,18 @@ the pipeline registry, filesystem paths, process.csv composition, listing,
 the torq.sh runtime, log tailing and the cryptorust recorders. Each is now
 its own module:
 
-    schemas.py    the q table definitions published into the tickerplant
-    pipelines.py  the Pipeline registry, port allocation, edge verification
+    model/schemas.py    the q table definitions published into the tickerplant
+    model/pipelines.py  the Pipeline registry, port allocation, edge verification
     paths.py      where everything lives, and whether it is runnable
-    env.py        the env bridge torq.sh and process.csv resolve against
-    procs.py      process.csv composition and per-process overrides
-    listing.py    generic listing of processes, fields, overrides, env
-    runtime.py    bootstrap, driving torq.sh, query, export
-    logs.py       reading TorQ's log files through the Python logger
-    crypto.py     the two external cryptorust recorders
+    stack/env.py        the env bridge torq.sh and process.csv resolve against
+    stack/procs.py      process.csv composition and per-process overrides
+    stack/listing.py    generic listing of processes, fields, overrides, env
+    stack/runtime.py    bootstrap, driving torq.sh, query, export
+    stack/logs.py       reading TorQ's log files through the Python logger
+    external/crypto.py     the two external cryptorust recorders
 
 Everything is re-exported here because `from torq_orchestrator import core`
-followed by `core.thing` is how cli.py, wizard.py, uqf_stack_mcp.py and
+followed by `core.thing` is how cli/entry.py, scaffold/wizard.py, uqf_stack_mcp.py and
 test_core.py all reach this code - about seventy distinct names between
 them. Keeping the facade meant the split changed no call site, which is
 what makes the existing test suite a proof that it preserved behaviour
@@ -33,7 +33,23 @@ from __future__ import annotations
 # global patch - it works through the facade exactly as it did before.
 import shutil  # noqa: F401
 
-from torq_orchestrator.crypto import (  # noqa: F401
+from torq_orchestrator.checks.schema_view import (  # noqa: F401
+    DEFAULT_PROC as DEFAULT_SCHEMA_PROC,
+)
+from torq_orchestrator.checks.schema_view import (  # noqa: F401
+    columns as schema_columns,
+)
+from torq_orchestrator.checks.schema_view import (  # noqa: F401
+    match_tables,
+    resolve_port,
+)
+from torq_orchestrator.checks.schema_view import (  # noqa: F401
+    overview as schema_overview,
+)
+from torq_orchestrator.checks.schema_view import (  # noqa: F401
+    table_names as schema_table_names,
+)
+from torq_orchestrator.external.crypto import (  # noqa: F401
     CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
     CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
     CRYPTO_FILLS_RECORDER_TABLE,
@@ -52,41 +68,13 @@ from torq_orchestrator.crypto import (  # noqa: F401
     stop_crypto_fills_recorder,
     stop_crypto_recorder,
 )
-from torq_orchestrator.env import (  # noqa: F401
-    build_env,
-)
-from torq_orchestrator.listing import (
-    LISTABLE_KINDS,
-    MONITOR_PROCNAME,  # noqa: F401  (re-exported for the CLI's heartbeat message)
-    SUMMARY_ALL_COLUMNS,  # noqa: F401
-    SUMMARY_COLUMNS,
-    SUMMARY_GRAPH_COLUMNS,  # noqa: F401
-    configured_ports,
-    heartbeat_states,
-    list_items,
-    summary_rows,  # noqa: F401
-)
-from torq_orchestrator.logs import (  # noqa: F401
-    follow_logs,
-    get_recent_logs,
-    parse_log_line,
-    print_recent_logs,
-    resolve_procnames,
-)
-from torq_orchestrator.paths import (  # noqa: F401
-    UqfStackError,
-    UqfStackPaths,
-    check_prerequisites,
-    clean,
-    default_paths,
-)
-from torq_orchestrator.pipeline import (  # noqa: F401
+from torq_orchestrator.model.pipeline import (  # noqa: F401
     FROM_DECLARATION,
 )
-from torq_orchestrator.pipeline_edges import (  # noqa: F401  (re-exported)
+from torq_orchestrator.model.pipeline_edges import (  # noqa: F401  (re-exported)
     PLANT_CONNECTION_BUDGET,
 )
-from torq_orchestrator.pipelines import (  # noqa: F401
+from torq_orchestrator.model.pipelines import (  # noqa: F401
     CROSS_ETL_PORT_OFFSET,
     DEFAULT_BASE_PORT,
     FX_TRADES_FEED_PORT_OFFSET,
@@ -106,7 +94,47 @@ from torq_orchestrator.pipelines import (  # noqa: F401
     Pipeline,
     verify_pipeline_edges,
 )
-from torq_orchestrator.procs import (  # noqa: F401
+from torq_orchestrator.model.schemas import (  # noqa: F401
+    CRYPTO_BOOK_TABLE_SCHEMA,
+    CRYPTO_SIM_FILLS_TABLE_SCHEMA,
+    CRYPTO_TRADES_TABLE_SCHEMA,
+    EXECUTION_QUALITY_TABLE_SCHEMA,
+    MKT_ORDERBOOK_TABLE_SCHEMA,
+    POSITION_TABLE_SCHEMA,
+    QUOTES_TABLE_SCHEMA,
+    TRADES_TABLE_SCHEMA,
+    WIDE_BOOK_LEVELS,
+    WIDE_BOOK_TABLE_SCHEMA,
+)
+from torq_orchestrator.paths import (  # noqa: F401
+    UqfStackError,
+    UqfStackPaths,
+    check_prerequisites,
+    clean,
+    default_paths,
+)
+from torq_orchestrator.stack.env import (  # noqa: F401
+    build_env,
+)
+from torq_orchestrator.stack.listing import (
+    LISTABLE_KINDS,
+    MONITOR_PROCNAME,  # noqa: F401  (re-exported for the CLI's heartbeat message)
+    SUMMARY_ALL_COLUMNS,  # noqa: F401
+    SUMMARY_COLUMNS,
+    SUMMARY_GRAPH_COLUMNS,  # noqa: F401
+    configured_ports,
+    heartbeat_states,
+    list_items,
+    summary_rows,  # noqa: F401
+)
+from torq_orchestrator.stack.logs import (  # noqa: F401
+    follow_logs,
+    get_recent_logs,
+    parse_log_line,
+    print_recent_logs,
+    resolve_procnames,
+)
+from torq_orchestrator.stack.procs import (  # noqa: F401
     MONITOR_CONNECTION_BUDGET,
     VENDORED_STARTWITHALL_OVERLAY,
     _base_process_rows,
@@ -120,7 +148,7 @@ from torq_orchestrator.procs import (  # noqa: F401
     resolve_process_config,
     set_process_config,
 )
-from torq_orchestrator.runtime import (  # noqa: F401
+from torq_orchestrator.stack.runtime import (  # noqa: F401
     bootstrap,
     export_table,
     fill_hdb_partitions,
@@ -131,34 +159,6 @@ from torq_orchestrator.runtime import (  # noqa: F401
     start,
     stop,
     summary,
-)
-from torq_orchestrator.schema_view import (  # noqa: F401
-    DEFAULT_PROC as DEFAULT_SCHEMA_PROC,
-)
-from torq_orchestrator.schema_view import (  # noqa: F401
-    columns as schema_columns,
-)
-from torq_orchestrator.schema_view import (  # noqa: F401
-    match_tables,
-    resolve_port,
-)
-from torq_orchestrator.schema_view import (  # noqa: F401
-    overview as schema_overview,
-)
-from torq_orchestrator.schema_view import (  # noqa: F401
-    table_names as schema_table_names,
-)
-from torq_orchestrator.schemas import (  # noqa: F401
-    CRYPTO_BOOK_TABLE_SCHEMA,
-    CRYPTO_SIM_FILLS_TABLE_SCHEMA,
-    CRYPTO_TRADES_TABLE_SCHEMA,
-    EXECUTION_QUALITY_TABLE_SCHEMA,
-    MKT_ORDERBOOK_TABLE_SCHEMA,
-    POSITION_TABLE_SCHEMA,
-    QUOTES_TABLE_SCHEMA,
-    TRADES_TABLE_SCHEMA,
-    WIDE_BOOK_LEVELS,
-    WIDE_BOOK_TABLE_SCHEMA,
 )
 
 __all__ = [

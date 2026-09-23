@@ -23,7 +23,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python" / "torq_orchestrator" / "src"))
 
-from torq_orchestrator import core, hdb_shape, stack_smoke  # noqa: E402
+from torq_orchestrator import core  # noqa: E402
+from torq_orchestrator.checks import hdb_shape, stack_smoke  # noqa: E402
 
 #: How long to let the stack run before looking. The feeds publish on
 #: sub-second timers and the slowest consumer chain is three deep, so this
@@ -83,7 +84,7 @@ def main() -> int:
     args = parser.parse_args()
 
     paths = core.default_paths()
-    # Same place logs.py reads them from, rather than a second guess at it.
+    # Same place stack/logs.py reads them from, rather than a second guess at it.
     logs_dir = paths.torqdata / "logs"
 
     if not args.no_restart:

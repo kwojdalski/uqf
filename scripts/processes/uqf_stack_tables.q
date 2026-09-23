@@ -1,7 +1,7 @@
 / uqf_stack_tables.q - the tickerplant tables the uqf stack publishes into.
 / .
 / THESE ARE q TABLES, AND THIS IS WHERE THEY LIVE. They used to be Python
-/ string literals in torq_orchestrator/schemas.py, which meant q source that
+/ string literals in torq_orchestrator/model/schemas.py, which meant q source that
 / no q parser ever read until stp1 started: a typo surfaced as a failed
 / tickerplant rather than a failed commit, check_q_traps.py never scanned
 / them (it globs `git ls-files '*.q'`), and the contract surface listed four
@@ -82,7 +82,7 @@ mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); ask_price
 / Databento MBP-10 as the live feed handler publishes it - the source
 / contract's own fields, so a live row and an ODBC-backfilled row are the
 / same shape by construction. Written by the external Python feed handler
-/ rather than by any q process (see databento_feed.py), the same way
+/ rather than by any q process (see external/databento_feed.py), the same way
 / crypto_book below is written by cryptorust.
 / .
 / Forty per-level columns because that is what Databento sends; folding

@@ -43,7 +43,7 @@ are written against, and the distinction to preserve:
   caller. `.qdag.adopt_feeders` reads `.qcont.feeds` and finds it empty.
 
 **Axis 2 - role: what does it do in the dataflow?** This is what
-`Pipeline.kind` in `torq_orchestrator/pipelines.py` records, and what decides
+`Pipeline.kind` in `torq_orchestrator/model/pipelines.py` records, and what decides
 a process's proctype, port offset and whether it needs credentials:
 
 | `kind` | Does | Driven by | Shared shell |

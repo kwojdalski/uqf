@@ -29,7 +29,7 @@ gen = importlib.util.module_from_spec(_spec)
 sys.modules["gen_ops_docs"] = gen
 _spec.loader.exec_module(gen)
 
-from torq_orchestrator.pipelines import PIPELINE_OFFSETS, PIPELINES  # noqa: E402
+from torq_orchestrator.model.pipelines import PIPELINE_OFFSETS, PIPELINES  # noqa: E402
 
 
 def test_the_generator_and_its_output_both_exist():

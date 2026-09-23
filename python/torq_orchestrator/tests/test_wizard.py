@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from torq_orchestrator import core, wizard
+from torq_orchestrator import core
+from torq_orchestrator.scaffold import wizard
 
 
 @pytest.fixture

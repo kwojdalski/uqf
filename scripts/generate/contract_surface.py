@@ -122,7 +122,7 @@ def export_python_surface() -> dict[str, Any]:
     rather than the contract, and those differ for 8 of 9 processes.
     """
     sys.path.insert(0, str(REPO / "python" / "torq_orchestrator" / "src"))
-    from torq_orchestrator.pipelines import (  # noqa: PLC0415
+    from torq_orchestrator.model.pipelines import (  # noqa: PLC0415
         PIPELINE_OFFSETS,
         PIPELINES,
     )

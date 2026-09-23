@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from torq_orchestrator import databento_feed
-from torq_orchestrator.databento_streamer import contract_fields, rows_from_records
+from torq_orchestrator.external import databento_feed
+from torq_orchestrator.external.databento_streamer import contract_fields, rows_from_records
 from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 
 REPO = Path(__file__).resolve().parents[3]
@@ -210,3 +210,17 @@ def test_status_names_what_folds_the_rows(tmp_path):
     status = databento_feed.databento_feed_status(_paths(tmp_path))
     assert status["publishes"] == "databento_mbp10"
     assert "databento1" in status["folded by"]
+
+
+def test_the_streamer_script_it_launches_exists():
+    """`start_databento_feed` builds the streamer's path from `__file__`, and
+    nothing else in this suite executes that line - it needs an API key and a
+    live tickerplant. So the one thing that can rot about it is unguarded:
+    when the package was foldered, the path briefly became
+    `external/external/databento_streamer.py` and every test still passed.
+
+    The failure it would have produced is the expensive kind: `uv run python
+    <missing path>` exits non-zero with the feed's PID file already written,
+    so the orchestrator reports a running feed that is not running."""
+    runner = Path(databento_feed.__file__).resolve().parent / "databento_streamer.py"
+    assert runner.is_file(), f"the streamer databento_feed launches is missing: {runner}"

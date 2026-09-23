@@ -1,7 +1,7 @@
 """The crypto recorders' lifecycle: build, spawn, track, refuse, stop.
 
 test_core.py covers the easy edges - the root lookup, the YAML, a missing pid
-file. crypto.py still sat at 45%: the start paths themselves, and nearly all
+file. external/crypto.py still sat at 45%: the start paths themselves, and nearly all
 of the fills recorder, had never run.
 
 No Rust is built here. `cargo build` is replaced by a recorded call, and the
@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 
-from torq_orchestrator import crypto
+from torq_orchestrator.external import crypto
 from torq_orchestrator.paths import UqfStackError, UqfStackPaths
 
 

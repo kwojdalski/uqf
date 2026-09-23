@@ -16,14 +16,30 @@ but `kola`) and carries its own dependencies (`typer`, `rich`, `loguru`,
 ```
 uqf_stack_mcp.py    FastMCP server exposing the same operations as MCP tools
 src/torq_orchestrator/
-  cli.py            the Typer CLI itself - also reachable as the `uqf-stack`
-                     script entry point (pyproject.toml [project.scripts])
-  wizard.py         `new-process`'s interactive console wizard - prompts,
-                     writes a Stage-1-only skeleton .q file, registers it
-  core.py           all the actual logic (paths, bootstrap, process.csv
-                     generation, config get/set, torq.sh driving, q query)
-                     - no CLI/MCP framework code, both front ends import
-                     straight from here so they can't drift apart
+  core.py           the facade: ~70 names re-exported from the folders below,
+                     so both front ends import from ONE place and cannot
+                     drift apart. Held in place by tests/test_module_split.py
+  paths.py          where every file in the tree lives, and `repo_root()`,
+                     which searches upward for a marker rather than counting
+                     directory levels - which is what makes the folders safe
+  model/            what the stack DECLARES: the pipeline registry, the edges
+                     between pipelines, the plant's table schemas, the
+                     process dependency graph. Starts nothing, opens nothing
+  stack/            the RUNNING fleet: starting and stopping processes, the
+                     environment they inherit, querying them, reading their
+                     logs, and keeping the process count inside the licence's
+                     connection budget
+  cli/              the `uqf-stack` command line, one module per command
+                     family, all registering onto one shared Typer `app` so
+                     `uqf-stack start` stays spelled that way. `entry.py` is
+                     the `[project.scripts]` entry point
+  scaffold/         `uqf-stack new-job` and `new-process`: the plan, the file
+                     templates, and the interactive wizard that fills them in
+  external/         processes this tree starts but does not own - the crypto
+                     recorder, the Databento feed and its streamer
+  checks/           read-only diagnostics: the smoke test over a running
+                     fleet, the HDB's on-disk shape, the plant schema as the
+                     live processes report it
   logger/           small loguru-based logging package (ported from a
                      sibling project's generic logger, see git history) -
                      used for the CLI/MCP server's own status/error output
@@ -35,11 +51,27 @@ extra_processes.csv     created by `new-process` (or add_extra_process()) -
                          sibling for adding a process rather than tweaking one
 extra_schema.q           created by add_extra_table_schema() - extra table
                          defs appended to the generated stp1 schema copy
-tests/
-  test_core.py      tests core.py's pure logic (paths, process.csv
-                     generation/idempotency, config get/set) against a
-                     fake vendored tree - no real q process needed
+tests/                  flat, one test module per source module, because
+                         pytest discovery and `-k` are easier to aim at a
+                         flat tree than the source is to read as one
 ```
+
+The folders are layers, and the imports only ever point one way:
+
+```
+logger/ paths.py          depend on nothing in this package
+model/           -> paths, logger
+stack/           -> model, paths, logger
+external/ checks/ -> stack, model, paths, logger
+core.py          -> everything above (it is the facade)
+scaffold/ cli/   -> core, and whatever else they need below it
+```
+
+`model/` importing from `stack/` would be the change that breaks this, and
+the reason to care is not tidiness: it would mean the declared shape of the
+stack could no longer be read without the code that starts processes. So it
+is checked rather than asserted - `test_module_split.py::test_the_folders_are_layers`
+fails on any import that points back up.
 
 ## Quick start
 

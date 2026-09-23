@@ -43,7 +43,7 @@ without it:
 | `UQF_SOURCE_CRED_<SOURCE>` | `.qsrc.require_credentials` (`src/etl/core/source_contract.q`) | per live source | `require_credentials` refuses and names the variable. There is deliberately no file and no vault fallback (ETL-07) |
 | `Q` | `scripts/test.py` | no | `~/.kx/bin/q`. The interpreter every q lane runs. Together with `QHOME` this is the deliberate, explicit way to point the suite at another q — there is no automatic fallback, see [the README](../../README.md#requirements). It was invisible to this list until the runner became Python: `check_env_reference.py` reads `.py` and `.q`, never `.sh` |
 | `QLINTER` | `scripts/gates/check_q_traps.py` | no | `qlinter` on `PATH`. The [q linter](https://github.com/kwojdalski/q-lint), which the trap hook delegates thirteen of its fifteen rules to. Set it to point at a build that is not installed — the same escape hatch `Q` gives for the interpreter. The hook refuses rather than skipping when neither finds it: a hook that reports success over checks that did not run is worse than one that fails |
-| `UQFROOT` | `scripts/torq_*.q`, `wizard.py`'s generated q | yes | the `\l` of every repository script fails. Set by `build_env`, not by hand |
+| `UQFROOT` | `scripts/torq_*.q`, `scaffold/wizard.py`'s generated q | yes | the `\l` of every repository script fails. Set by `build_env`, not by hand |
 | `UQFSTATUSDIR` | `.qstatus.status_dir` (`src/etl/core/status.q`) | no | falls back to `$TORQDATA/status`. Pairs with `UQF_FRONTEND_STATUS_DIR` on the reading side |
 | `DATABENTO_DATA_DIR` | `.qdata.databentoDir` (`src/integrations/data.q`) | for that path only | `.qdata.cfg` also accepts it from a `.env` file, then throws naming the key. Note this is a *data directory*, not a credential — ETL-07's no-file rule is about secrets |
 | `UQF_FRONTEND_GATEWAY_HOST` | `uqf_frontend.config.Settings.from_env` | no | `localhost` |
@@ -62,10 +62,10 @@ without it:
 | `UQF_FRONTEND_PROCESSES` | as above | no | the per-process query log reports nothing configured rather than an empty log (FE-04) |
 | `UQF_FRONTEND_WEB_DIST` | as above | no | no built React app is served under `/ui/`; the API still serves |
 | `UQF_API_ORIGIN` | `web/vite.config.ts` | no | `http://127.0.0.1:8000`. Dev proxy only — it has no effect on a built bundle |
-| `LOG_LEVEL` | `torq_orchestrator.cli` (`_env_log_level`), `torq_orchestrator.logger.decorators` | no | `INFO`. Sets the level every `uqf-stack` command logs at, and turns on the `logged_function` call trace at `DEBUG`. An unrecognised value falls back to `INFO` rather than aborting — a typo in a log level must not stop the fleet being started or inspected. `uqf-stack --debug` is the same thing per-invocation, and wins over this |
+| `LOG_LEVEL` | `torq_orchestrator.cli.entry` (`_env_log_level`), `torq_orchestrator.logger.decorators` | no | `INFO`. Sets the level every `uqf-stack` command logs at, and turns on the `logged_function` call trace at `DEBUG`. An unrecognised value falls back to `INFO` rather than aborting — a typo in a log level must not stop the fleet being started or inspected. `uqf-stack --debug` is the same thing per-invocation, and wins over this |
 | `LOG_REGEX` | `torq_orchestrator.logger.core` | no | no name filtering |
-| `DATABENTO_API_KEY` | `torq_orchestrator.databento_feed` | for `uqf-stack databento start` only | Databento's own variable name, so an existing export works unchanged. The live feed refuses to start without it rather than failing on its first call; the ODBC backfill does not read it |
-| `CRYPTORUST_ROOT` | `torq_orchestrator.crypto` | no | the checkout is located by the search path in `cryptorust_root`'s docstring |
+| `DATABENTO_API_KEY` | `torq_orchestrator.external.databento_feed` | for `uqf-stack databento start` only | Databento's own variable name, so an existing export works unchanged. The live feed refuses to start without it rather than failing on its first call; the ODBC backfill does not read it |
+| `CRYPTORUST_ROOT` | `torq_orchestrator.external.crypto` | no | the checkout is located by the search path in `cryptorust_root`'s docstring |
 | `UQF_SMOKE_TARGETS` | `tests/q/smoke_external_metadata.q` | yes, for that script | the smoke check has nothing to connect to and says so |
 | `UQF_SMOKE_TABLES` | as above | yes, for that script | as above |
 | `UQF_SMOKE_TIMEOUT_MS` | as above | no | `5000` |
@@ -79,7 +79,7 @@ listing them would bury the twenty-three above that are.
 
 ## Produced by the orchestrator — do not set these by hand
 
-`torq_orchestrator.env.build_env` computes these from `UqfStackPaths` and
+`torq_orchestrator.stack.env.build_env` computes these from `UqfStackPaths` and
 hands them to `torq.sh`; `process.csv`'s `${VAR}` and `{VAR}+N` placeholders
 resolve against the same dict. Setting one in your shell does not override
 anything — `build_env` wins — but it will make `uqf-stack list` and the

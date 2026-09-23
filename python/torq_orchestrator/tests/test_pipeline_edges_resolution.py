@@ -22,10 +22,11 @@ from dataclasses import replace
 
 import pytest
 
-from torq_orchestrator import core, plant_schema
+from torq_orchestrator import core
+from torq_orchestrator.model import plant_schema
+from torq_orchestrator.model.pipeline import FROM_DECLARATION, STREAM_RUNNER_SCRIPT
+from torq_orchestrator.model.pipeline_edges import _stream_edge_cache, resolve_edges
 from torq_orchestrator.paths import repo_root
-from torq_orchestrator.pipeline import FROM_DECLARATION, STREAM_RUNNER_SCRIPT
-from torq_orchestrator.pipeline_edges import _stream_edge_cache, resolve_edges
 
 
 def _deferred():

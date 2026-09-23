@@ -1,6 +1,6 @@
 """Tests for the logger core and the `uqf-stack logs` readers.
 
-There were none. `logger/core.py` sat at 46% and `logs.py` at 73%, and the
+There were none. `logger/core.py` sat at 46% and `stack/logs.py` at 73%, and the
 untested parts are the ones a reader actually meets: the colouring that tells
 a negative P&L from a positive one at a glance, the LOG_REGEX filter, the
 per-component log file, and `follow_logs` - the live tail behind
@@ -24,12 +24,11 @@ from types import SimpleNamespace
 import pytest
 from loguru import logger
 
-from torq_orchestrator import logs
-
 # Aliased `logcore`, not `core`: test_module_split.py reads every test file
 # for `core.<name>` as a use of the orchestrator's `core` facade, and cannot
 # tell the logger's module of the same name from it.
 from torq_orchestrator.logger import core as logcore
+from torq_orchestrator.stack import logs
 
 
 @pytest.fixture(autouse=True)

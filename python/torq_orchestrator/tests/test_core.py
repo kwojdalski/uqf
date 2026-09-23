@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from torq_orchestrator import core, pipeline_edges, pipelines, plant_schema, schemas
-from torq_orchestrator.pipeline import PipelineKind
+from torq_orchestrator import core
+from torq_orchestrator.model import pipeline_edges, pipelines, plant_schema, schemas
+from torq_orchestrator.model.pipeline import PipelineKind
 
 
 @pytest.fixture
@@ -462,7 +463,7 @@ def test_a_process_can_be_up_by_pid_and_failing_by_heartbeat():
 def test_error_wins_over_warning():
     """A process past the error tolerance is also past the warning one, so
     reporting the lesser would understate it."""
-    from torq_orchestrator import listing
+    from torq_orchestrator.stack import listing
 
     got = listing._heartbeat_by_procname([{"procname": "a", "warning": True, "error": True}])
     assert got == {"a": "error"}
@@ -470,7 +471,7 @@ def test_error_wins_over_warning():
 
 def test_a_heartbeat_row_without_a_procname_is_skipped():
     """A malformed row must not become a process called empty-string."""
-    from torq_orchestrator import listing
+    from torq_orchestrator.stack import listing
 
     got = listing._heartbeat_by_procname(
         [{"procname": "", "error": True}, {"procname": "b", "error": False}]
