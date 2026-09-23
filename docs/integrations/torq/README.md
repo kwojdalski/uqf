@@ -17,7 +17,7 @@ Direct FX arbitrage flows through `marketdata1` (`quote` and `quotes` into
 `arbitrage1` (gross cross-source price opportunities into `arbitrage`). The
 three are on demand rather than part of `uqs start` - see the
 connection budget below. See
-[the superbook guide](../../guides/superbook.md) for source identity, expiry
+[the superbook guide](../../services/superbook.md) for source identity, expiry
 and the query for currently active opportunities.
 
 `crossarb1` reads the same `superbook` and asks the other arbitrage
@@ -25,7 +25,7 @@ question: not "are two sources crossed on one pair" but "is the direct
 market out of line with a route through other pairs" - EURJPY against
 EURUSD x USDJPY, into `cross_arbitrage`. It is a second CONSUMER of that
 chain rather than a fifth link in it, so it can run with or without
-`arbitrage1`. See [the cross-arbitrage guide](../../guides/cross-arbitrage.md).
+`arbitrage1`. See [the cross-arbitrage guide](../../services/cross-arbitrage.md).
 
 Each backfill process now NAMES the `.qbw` worker it runs. One script
 serves all four and `UQF_BACKFILL_WORKER` picks which at runtime, so until

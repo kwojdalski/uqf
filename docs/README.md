@@ -26,13 +26,14 @@ deliberately stops at the shape.
 
 ## Where a document goes
 
-Four directories, one question each. The rule is what a document *is for*,
+Five directories, one question each. The rule is what a document *is for*,
 not what it is about — a page about the ETL framework can be a guide, a
 reference or an architecture note, and only its purpose decides where it goes.
 
 | Directory | Answers | Audience |
 |---|---|---|
 | [`guides/`](guides/) | *How do I do this?* | operators and new developers |
+| [`services/`](services/) | *What does this running service do, and how do I run it?* | operators and developers of that service |
 | [`architecture/`](architecture/) | *Why is it shaped this way?* | developers changing it |
 | [`reference/`](reference/) | *What is the contract?* | anyone integrating, and CI |
 | [`integrations/`](integrations/) | *How does this meet something external?* | operators |
@@ -41,14 +42,18 @@ reference or an architecture note, and only its purpose decides where it goes.
 
 **`guides/`** — [`uqs.md`](guides/uqs.md) (running the stack),
 [`new-pipeline.md`](guides/new-pipeline.md) (adding a source and a bounded
-worker, end to end), [`superbook.md`](guides/superbook.md) (merging quoted
-liquidity across sources, and reading the opportunities that fall out),
-[`cross-arbitrage.md`](guides/cross-arbitrage.md) (the direct book against a
-synthetic route through other pairs),
+worker, end to end),
 [`config-audit.md`](guides/config-audit.md) (recording runtime
 configuration changes, and joining them to who made them),
 [`metatables.md`](guides/metatables.md) (partition profiling),
 [`ci.md`](guides/ci.md) (what the gates do and how to run them locally).
+
+**`services/`** — one page per running service, indexed in
+[`services/README.md`](services/README.md): the synthetic feeds, the
+superbook and its arbitrage, cross-arbitrage, FX positions, Databento, the
+cryptorust recorders and `tap1`. A service page is where its design
+decisions live too; `architecture/` is for decisions that cut across
+services.
 
 **`architecture/`** — [`pipeline-philosophy.md`](architecture/pipeline-philosophy.md)
 (the positions `src/etl/` is built on, and what enforces each),

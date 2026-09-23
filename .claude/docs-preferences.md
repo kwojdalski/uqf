@@ -90,6 +90,18 @@ of them.
 > already drifted — it said five directories where the map said four, and
 > omitted five guides. Collapsed to the four-question table and a link.
 
+**One page per running service, in `docs/services/`.** What a service
+computes, how it is built, why, and how to run it live together on that
+service's page - not split between a guide and an architecture note, and not
+as a section of the stack guide. `architecture/` is for decisions that cut
+across services; `guides/uqf-stack.md` is for operating the stack as a whole.
+
+> *2026-09-23.* Asked: "don't you think that architecture and guides have
+> overlapping items thematically like FX-positions service vs
+> cross-arbitrage". The FX positions page sat in `architecture/`, the
+> superbook and cross-arbitrage pages in `guides/`, and five more services
+> were sections of `uqf-stack.md`. All seven became `docs/services/` pages.
+
 **No prescriptive meta-rules about the documentation process itself.**
 Describe what is, not how future documents must be filed.
 
