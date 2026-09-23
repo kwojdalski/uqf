@@ -24,7 +24,16 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from torq_orchestrator.paths import UqfStackError
+from torq_orchestrator.paths import (
+    REGISTRY_FILE,
+    RUN_TESTS_FILE,
+    SOURCE_DIR,
+    STREAM_DIR,
+    TABLES_FILE,
+    TEST_DIR,
+    WORKER_DIR,
+    UqfStackError,
+)
 from torq_orchestrator.scaffold_plan import FileAction, ScaffoldPlan, WriteMode
 from torq_orchestrator.scaffold_templates import (
     GROUPED,
@@ -38,17 +47,9 @@ from torq_orchestrator.scaffold_templates import (
     worker_body,
 )
 
-#: Where each kind of file lives. Spelled once so a directory move is one
-#: edit here rather than a hunt through format strings.
-STREAM_DIR = Path("src/etl/streaming")
-SOURCE_DIR = Path("src/etl/sources")
-WORKER_DIR = Path("src/etl/workers")
-TEST_DIR = Path("tests/q")
-TABLES_FILE = Path("scripts/processes/uqf_stack_tables.q")
-REGISTRY_FILE = Path("python/torq_orchestrator/src/torq_orchestrator/registry.py")
-RUN_TESTS_FILE = Path("tests/run_tests.q")
-
-
+#: The layout comes from `paths`, which is the one place that knows it - see
+#: its own docstring. `scaffold` previously spelled all seven here, including
+#: its own package path as a string literal.
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 
 

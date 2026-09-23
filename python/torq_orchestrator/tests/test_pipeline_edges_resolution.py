@@ -23,8 +23,9 @@ from dataclasses import replace
 import pytest
 
 from torq_orchestrator import core, plant_schema
+from torq_orchestrator.paths import repo_root
 from torq_orchestrator.pipeline import FROM_DECLARATION, STREAM_RUNNER_SCRIPT
-from torq_orchestrator.pipeline_edges import _repo_root, _stream_edge_cache, resolve_edges
+from torq_orchestrator.pipeline_edges import _stream_edge_cache, resolve_edges
 
 
 def _deferred():
@@ -37,14 +38,14 @@ def test_the_registry_actually_defers():
 
 
 def test_a_deferred_edge_resolves_to_what_the_q_file_declares():
-    edges = _stream_edge_cache(_repo_root())
+    edges = _stream_edge_cache(repo_root())
     for pipeline in _deferred():
         declared = edges[pipeline.procname]
         assert pipeline.subscribed_tables == declared[0]
 
 
 def test_a_deferred_publish_resolves_to_what_the_q_file_declares():
-    edges = _stream_edge_cache(_repo_root())
+    edges = _stream_edge_cache(repo_root())
     for pipeline in core.PIPELINES:
         if pipeline.publishes is FROM_DECLARATION:
             assert pipeline.published_tables == edges[pipeline.procname][1]

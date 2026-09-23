@@ -20,15 +20,17 @@ is unchanged by the move.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from torq_orchestrator.logger import get_logger
+from torq_orchestrator.paths import TABLES_FILE, repo_root
 
 log = get_logger(__name__)
 
-#: The q file that owns these definitions. Resolved from this module rather
-#: than a working directory, so the reader works from anywhere.
-TABLES_Q = Path(__file__).resolve().parents[4] / "scripts" / "processes" / "uqf_stack_tables.q"
+#: The q file that owns these definitions. Resolved from the repository root
+#: rather than a working directory, so the reader works from anywhere - and
+#: from `paths`, so neither the location nor the way of finding it is spelled
+#: twice.
+TABLES_Q = repo_root() / TABLES_FILE
 
 #: `name:([]...)` at the start of a line, to the end of that line. Comments in
 #: the q file start with `/` and never begin a definition, so a line-anchored
