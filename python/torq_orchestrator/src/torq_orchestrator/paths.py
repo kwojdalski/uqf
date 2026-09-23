@@ -40,10 +40,10 @@ PROCESS_SCRIPTS_DIR = Path("scripts/processes")
 TABLES_FILE = PROCESS_SCRIPTS_DIR / "uqf_stack_tables.q"
 
 #: This package, and the registry the scaffold appends to. Spelled here rather
-#: than in `scaffold.py`, which hardcoded its own location as a string - a
+#: than in `scaffold/jobs.py`, which hardcoded its own location as a string - a
 #: self-reference that the package rename would silently break.
 PACKAGE_DIR = Path("python/torq_orchestrator")
-REGISTRY_FILE = PACKAGE_DIR / "src" / "torq_orchestrator" / "registry.py"
+REGISTRY_FILE = PACKAGE_DIR / "src" / "torq_orchestrator" / "model" / "registry.py"
 
 
 class UqfStackError(RuntimeError):
@@ -115,8 +115,8 @@ def repo_root() -> Path:
     """This repository's root, found by searching upward for a marker.
 
     NOT by counting directory levels, which is what three modules did
-    separately - `paths.py` (`parents[2]` then `parents[1]`), `schemas.py`
-    (`parents[4]`) and `pipeline_edges.py` (`parents[4]`). Each count is a fact
+    separately - `paths.py` (`parents[2]` then `parents[1]`), `model/schemas.py`
+    (`parents[4]`) and `model/pipeline_edges.py` (`parents[4]`). Each count is a fact
     about how deep that particular file sits, so moving a module one directory
     changes its count: the path still resolves, to the wrong place, and no type
     checker can see it.
@@ -127,7 +127,11 @@ def repo_root() -> Path:
     went stale unnoticed.
 
     Searching for a marker is indifferent to how deep the caller is, which is
-    what makes moving modules into subdirectories safe.
+    what makes moving modules into subdirectories safe - and that was then
+    done: thirty modules went into six folders, every one of them a directory
+    deeper than the counts above assumed, and nothing here had to change.
+    Three level-counts survived the move in `scripts/` and the tests, and they
+    are correct because neither tree moved.
     """
     here = Path(__file__).resolve()
     for candidate in (here, *here.parents):

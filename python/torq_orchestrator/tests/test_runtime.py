@@ -1,6 +1,6 @@
-"""Tests for runtime.py's process plumbing and schema_view's live reads.
+"""Tests for stack/runtime.py's process plumbing and schema_view's live reads.
 
-runtime.py sat at 61% and schema_view.py at 60%. What was untested is where
+stack/runtime.py sat at 61% and checks/schema_view.py at 60%. What was untested is where
 this package meets something outside Python: the torq.sh subprocess, the kdb+
 IPC in `query`, file export, and schema_view's translation of what a real
 `meta` returns.
@@ -22,8 +22,9 @@ from typing import Any
 import polars as pl
 import pytest
 
-from torq_orchestrator import listing, runtime, schema_view
+from torq_orchestrator.checks import schema_view
 from torq_orchestrator.paths import UqfStackError, UqfStackPaths
+from torq_orchestrator.stack import listing, runtime
 
 #: Tables whose `meta` exercises each translation schema_view makes.
 SCHEMA_SCRIPT = """

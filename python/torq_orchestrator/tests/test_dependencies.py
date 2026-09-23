@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from torq_orchestrator import core, dependencies
+from torq_orchestrator import core
+from torq_orchestrator.model import dependencies
 
 
 def test_every_declared_input_has_a_named_source():

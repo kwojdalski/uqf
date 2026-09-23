@@ -1,7 +1,7 @@
 """Tests for the interactive half of `uqf-stack new-process`.
 
 test_wizard.py covers the pure helpers - pair parsing, pip sizes, the literal
-q a skeleton contains. wizard.py still sat at 31%, because everything a user
+q a skeleton contains. scaffold/wizard.py still sat at 31%, because everything a user
 actually goes through was untested: the prompts that refuse a bad name, the
 two blank skeletons, the decline paths, the check that a started process is
 really up, and the four recipes end to end.
@@ -21,7 +21,8 @@ from typing import Any
 
 import pytest
 
-from torq_orchestrator import core, wizard
+from torq_orchestrator import core
+from torq_orchestrator.scaffold import wizard
 
 
 @pytest.fixture

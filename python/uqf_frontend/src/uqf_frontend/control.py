@@ -271,7 +271,7 @@ def start_backfill(
     import subprocess
 
     from torq_orchestrator import core
-    from torq_orchestrator.runtime import bootstrap
+    from torq_orchestrator.stack.runtime import bootstrap
 
     paths = _paths(settings)
     try:

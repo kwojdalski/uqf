@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from torq_orchestrator import hdb_shape
+from torq_orchestrator.checks import hdb_shape
 
 SCHEMA = """\
 quote:([]time:`timestamp$(); sym:`symbol$(); bid:`float$())
@@ -110,7 +110,7 @@ def test_the_smoke_lane_reports_an_unrectangular_hdb_as_its_own_kind():
     """Not an empty table and not a process error: a partition short of a
     table fails every cross-table query at once, and calling it one of the
     other two would point the reader at the wrong thing."""
-    from torq_orchestrator import stack_smoke
+    from torq_orchestrator.checks import stack_smoke
 
     finding = stack_smoke.SmokeFinding(
         stack_smoke.FindingKind.HDB_NOT_RECTANGULAR,

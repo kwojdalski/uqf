@@ -1,6 +1,6 @@
-"""Tests for the `uqf-stack` command surface (cli.py).
+"""Tests for the `uqf-stack` command surface (cli/entry.py).
 
-WHY THIS FILE EXISTS. `scripts/test.py coverage` reported cli.py at 0% of
+WHY THIS FILE EXISTS. `scripts/test.py coverage` reported cli/entry.py at 0% of
 275 statements - the entire user-facing CLI, executed by nothing. The one
 test that named it, test_module_split.py, reads it as TEXT to scan for
 facade references. (Naming that pattern literally here would make this
@@ -35,17 +35,11 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-# The CLI is split across modules now (see cli.py): `cli` still exposes the
-# assembled `app` and `main`, and each command's own helpers live with it.
-from torq_orchestrator import (
-    cli,
-    cli_inspect,
-    cli_lifecycle,
-    cli_scaffold,
-    cli_shared,
-    cli_summary,
-    core,
-)
+# The CLI is a package of command families now (see cli/entry.py): the `cli`
+# package itself still exposes the assembled `app` and `main`, and each
+# command's own helpers live in the family module that registers it.
+from torq_orchestrator import cli, core
+from torq_orchestrator.cli import create, inspect, lifecycle, shared, summary
 
 runner = CliRunner()
 
@@ -248,8 +242,8 @@ def test_summary_shows_the_graph_by_default(monkeypatch):
 def test_columns_status_gives_back_the_narrow_table(monkeypatch):
     """The escape hatch for an 80-column terminal, and the reason showing the
     graph by default is safe."""
-    assert cli_summary._resolve_columns("status") == list(core.SUMMARY_COLUMNS)
-    assert cli_summary._resolve_columns("STATUS") == list(core.SUMMARY_COLUMNS)
+    assert summary._resolve_columns("status") == list(core.SUMMARY_COLUMNS)
+    assert summary._resolve_columns("STATUS") == list(core.SUMMARY_COLUMNS)
 
 
 def test_columns_all_adds_the_graph(monkeypatch):
@@ -267,12 +261,12 @@ def test_columns_all_adds_the_graph(monkeypatch):
 def test_columns_are_matched_case_insensitively_and_kept_in_order(monkeypatch):
     """The names have a space and a capital in them ("Depends on"), so an
     exact-match-only option would be unusable from a shell."""
-    assert cli_summary._resolve_columns("outputs,process") == ["Outputs", "Process"]
-    assert cli_summary._resolve_columns("PROCESS") == ["Process"]
+    assert summary._resolve_columns("outputs,process") == ["Outputs", "Process"]
+    assert summary._resolve_columns("PROCESS") == ["Process"]
 
 
 def test_a_repeated_column_is_not_rendered_twice(monkeypatch):
-    assert cli_summary._resolve_columns("Process,process,Process") == ["Process"]
+    assert summary._resolve_columns("Process,process,Process") == ["Process"]
 
 
 def test_an_unknown_column_is_refused_with_the_available_ones(monkeypatch):
@@ -288,27 +282,27 @@ def test_a_graph_cell_breaks_between_entries_not_inside_a_name(monkeypatch):
     left over - which splits `fx_limit_breach` across two lines. A reader
     scans these cells by counting entries, so the break belongs at the
     commas."""
-    cell = cli_summary._graph_cell(["a_table", "b_table", "c_table"])
+    cell = summary._graph_cell(["a_table", "b_table", "c_table"])
     lines = cell.split("\n")
     assert lines == ["a_table, b_table,", "c_table"]
     assert all("_" not in line[-1:] for line in lines), "no name split mid-word"
 
 
 def test_a_short_graph_cell_does_not_wrap(monkeypatch):
-    assert "\n" not in cli_summary._graph_cell(["one", "two"])
+    assert "\n" not in summary._graph_cell(["one", "two"])
 
 
 def test_an_empty_graph_cell_is_a_dash_not_a_blank(monkeypatch):
     """ "declares no inputs" and "this column has nothing to say" look
     identical as a blank, and the first is a real fact about a feed."""
-    assert "-" in cli_summary._graph_cell([])
+    assert "-" in summary._graph_cell([])
 
 
 def test_the_graph_columns_come_from_the_declared_pipelines(monkeypatch):
     """Derived from the same Pipeline declarations verify_pipeline_edges
     checks, so a row here cannot claim an edge the build would reject."""
     rows = [_row(Process="posbook1")]
-    cli_summary._attach_graph_columns(rows)
+    summary._attach_graph_columns(rows)
     assert "executions" in rows[0]["Inputs"]
     assert "position" in rows[0]["Outputs"]
     assert "executions1" in rows[0]["Depends on"]
@@ -318,7 +312,7 @@ def test_a_process_with_no_declared_edges_gets_dashes(monkeypatch):
     """A vendored TorQ process has no Pipeline entry and so no declared
     edges. It must render, not raise."""
     rows = [_row(Process="hdb1")]
-    cli_summary._attach_graph_columns(rows)
+    summary._attach_graph_columns(rows)
     assert all(rows[0][c] == "[dim]-[/]" for c in core.SUMMARY_GRAPH_COLUMNS)
 
 
@@ -336,8 +330,8 @@ def test_summary_passes_a_default_timeout_to_both_blocking_calls(monkeypatch):
     _patch(monkeypatch, "summary_rows", result=[])
     assert runner.invoke(cli.app, ["summary"]).exit_code == 0
     assert rec_summary.kwargs["timeout"] is not None
-    assert rec_summary.kwargs["timeout"] <= cli_summary.SUMMARY_TIMEOUT_SECONDS
-    assert 0 < rec_hb.kwargs["timeout"] <= cli_summary.SUMMARY_TIMEOUT_SECONDS
+    assert rec_summary.kwargs["timeout"] <= summary.SUMMARY_TIMEOUT_SECONDS
+    assert 0 < rec_hb.kwargs["timeout"] <= summary.SUMMARY_TIMEOUT_SECONDS
 
 
 def test_the_timeout_is_one_budget_not_one_per_call(monkeypatch):
@@ -351,7 +345,7 @@ def test_the_timeout_is_one_budget_not_one_per_call(monkeypatch):
     # A monotonic clock that jumps 4s per reading, so the budget visibly
     # drains between the two calls without the test sleeping.
     ticks = iter([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])
-    monkeypatch.setattr(cli_summary.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(summary.time, "monotonic", lambda: next(ticks))
     runner.invoke(cli.app, ["summary", "--timeout", "10"])
     assert rec_hb.kwargs["timeout"] < 10, "the heartbeat query gets the remainder"
 
@@ -377,7 +371,7 @@ def test_an_exhausted_budget_never_hands_out_zero(monkeypatch):
     rec_hb = _patch(monkeypatch, "heartbeat_states", result={})
     _patch(monkeypatch, "summary_rows", result=[])
     ticks = iter([0.0, 99.0, 99.0, 99.0, 99.0, 99.0])
-    monkeypatch.setattr(cli_summary.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(summary.time, "monotonic", lambda: next(ticks))
     runner.invoke(cli.app, ["summary", "--timeout", "10"])
     assert rec_hb.kwargs["timeout"] >= 1
 
@@ -651,43 +645,43 @@ def test_a_numeric_column_sorts_numerically_not_lexicographically():
     """`port` is a string like "6051". Sorted as text, "6100" comes before
     "659" - which looks like the sort silently did nothing on the one column
     most worth sorting."""
-    order = [i["port"] for i in cli_inspect._sorted_items(_procs(), "port", reverse=False)]
+    order = [i["port"] for i in inspect._sorted_items(_procs(), "port", reverse=False)]
     assert order == ["659", "6067", "6100"]
 
 
 def test_a_text_column_sorts_case_insensitively():
     """ "Arbitrage1" must not sort before every lowercase name just for its
     capital - the reader is looking up a name, not an ordinal."""
-    order = [i["procname"] for i in cli_inspect._sorted_items(_procs(), "procname", reverse=False)]
+    order = [i["procname"] for i in inspect._sorted_items(_procs(), "procname", reverse=False)]
     assert order == ["Arbitrage1", "sortworker2", "stp1"]
 
 
 def test_reverse_flips_the_order():
-    order = [i["port"] for i in cli_inspect._sorted_items(_procs(), "port", reverse=True)]
+    order = [i["port"] for i in inspect._sorted_items(_procs(), "port", reverse=True)]
     assert order == ["6100", "6067", "659"]
 
 
 def test_the_column_name_is_matched_case_insensitively():
-    assert cli_inspect._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
+    assert inspect._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
 
 
 def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
     """A process with no override set is not "before aaa", it is absent -
     and a blank interleaved among real values reads as data."""
     items = [{"v": "b"}, {"v": ""}, {"v": "a"}]
-    assert [i["v"] for i in cli_inspect._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
+    assert [i["v"] for i in inspect._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
 
 
 def test_sorting_is_a_no_op_without_the_option():
     items = _procs()
-    assert cli_inspect._sorted_items(items, None, reverse=False) == items
+    assert inspect._sorted_items(items, None, reverse=False) == items
 
 
 def test_sorting_an_empty_listing_does_not_look_up_columns():
     """There is no first row to read column names from, and a kind with no
     items is a legitimate result - `overrides` is empty until something is
     set."""
-    assert cli_inspect._sorted_items([], "anything", reverse=False) == []
+    assert inspect._sorted_items([], "anything", reverse=False) == []
 
 
 def test_an_unsortable_column_names_the_real_ones(monkeypatch):
@@ -771,7 +765,7 @@ def test_clean_delegates(monkeypatch):
 
 def test_new_process_runs_the_wizard(monkeypatch):
     rec = Recorder()
-    monkeypatch.setattr(cli_scaffold.wizard, "run", rec)
+    monkeypatch.setattr(create.wizard, "run", rec)
     result = runner.invoke(cli.app, ["new-process", "--port", "7000"])
     assert result.exit_code == 0
     assert rec.kwargs["base_port"] == 7000
@@ -779,7 +773,7 @@ def test_new_process_runs_the_wizard(monkeypatch):
 
 def test_a_wizard_refusal_exits_one(monkeypatch):
     monkeypatch.setattr(
-        cli_scaffold.wizard, "run", Recorder(raises=core.UqfStackError("no recipe")).__call__
+        create.wizard, "run", Recorder(raises=core.UqfStackError("no recipe")).__call__
     )
     assert runner.invoke(cli.app, ["new-process"]).exit_code == 1
 
@@ -891,8 +885,8 @@ def test_main_configures_logging_before_running(monkeypatch):
     """Ordering, not decoration: a command that logged before logging was
     configured would write through a default handler nobody sees."""
     order: list[str] = []
-    monkeypatch.setattr(cli, "configure_logging", lambda **kw: order.append("configure"))
-    monkeypatch.setattr(cli, "app", lambda: order.append("app"))
+    monkeypatch.setattr(cli.entry, "configure_logging", lambda **kw: order.append("configure"))
+    monkeypatch.setattr(cli.entry, "app", lambda: order.append("app"))
     cli.main()
     assert order == ["configure", "app"]
 
@@ -918,12 +912,12 @@ def test_log_level_comes_from_the_environment(monkeypatch, value, expected):
     rather than abort - a typo in a log level must never stop someone
     inspecting the fleet."""
     monkeypatch.setenv("LOG_LEVEL", value)
-    assert cli_shared._env_log_level() == expected
+    assert shared._env_log_level() == expected
 
 
 def test_an_unset_log_level_is_the_default(monkeypatch):
     monkeypatch.delenv("LOG_LEVEL", raising=False)
-    assert cli_shared._env_log_level() == cli_shared.DEFAULT_LOG_LEVEL
+    assert shared._env_log_level() == shared.DEFAULT_LOG_LEVEL
 
 
 def test_main_passes_the_environment_level_to_the_logger(monkeypatch):
@@ -932,8 +926,8 @@ def test_main_passes_the_environment_level_to_the_logger(monkeypatch):
     nothing and the absence of debug output read as 'nothing to see'."""
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     seen: dict[str, Any] = {}
-    monkeypatch.setattr(cli, "configure_logging", lambda **kw: seen.update(kw))
-    monkeypatch.setattr(cli, "app", lambda: None)
+    monkeypatch.setattr(cli.entry, "configure_logging", lambda **kw: seen.update(kw))
+    monkeypatch.setattr(cli.entry, "app", lambda: None)
     cli.main()
     assert seen["level"] == "DEBUG"
 
@@ -944,9 +938,7 @@ def test_the_debug_flag_wins_over_the_environment(monkeypatch):
     a shell profile silently disables the flag."""
     monkeypatch.setenv("LOG_LEVEL", "WARNING")
     levels: list[Any] = []
-    monkeypatch.setattr(
-        cli_shared, "configure_logging", lambda **kw: levels.append(kw.get("level"))
-    )
+    monkeypatch.setattr(shared, "configure_logging", lambda **kw: levels.append(kw.get("level")))
     _summary_ok(monkeypatch)
     assert runner.invoke(cli.app, ["--debug", "summary"]).exit_code == 0
     assert levels == ["DEBUG"], "the callback reconfigures to DEBUG"
@@ -956,9 +948,7 @@ def test_no_debug_flag_leaves_the_level_alone(monkeypatch):
     """Without the flag the callback must not reconfigure: doing so would
     overwrite whatever main() already set from LOG_LEVEL."""
     levels: list[Any] = []
-    monkeypatch.setattr(
-        cli_shared, "configure_logging", lambda **kw: levels.append(kw.get("level"))
-    )
+    monkeypatch.setattr(shared, "configure_logging", lambda **kw: levels.append(kw.get("level")))
     _summary_ok(monkeypatch)
     assert runner.invoke(cli.app, ["summary"]).exit_code == 0
     assert levels == []
@@ -978,11 +968,11 @@ class _DebugLog:
         return lambda *a, **kw: None
 
 
-def _debug_log(monkeypatch, module=cli_summary) -> _DebugLog:
+def _debug_log(monkeypatch, module=summary) -> _DebugLog:
     """Capture the debug lines `module` emits.
 
     The module matters: each command module holds its own `log`, so patching
-    cli_summary's would leave a lifecycle warning writing to the real logger
+    summary's would leave a lifecycle warning writing to the real logger
     and the assertion looking at an empty list.
     """
     captured = _DebugLog()
@@ -1044,7 +1034,7 @@ def test_a_skipped_dependency_warning_keeps_its_reason(monkeypatch):
     why the warning was skipped explained nothing."""
     _patch(monkeypatch, "summary", raises=RuntimeError("fleet unreachable"))
     _patch(monkeypatch, "start", result=Completed())
-    captured = _debug_log(monkeypatch, cli_lifecycle)
+    captured = _debug_log(monkeypatch, lifecycle)
     assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
     assert any("fleet unreachable" in m for m in captured.messages)
     assert not any("%s" in m for m in captured.messages)

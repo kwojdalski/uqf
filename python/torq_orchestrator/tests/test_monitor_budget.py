@@ -1,4 +1,4 @@
-"""Tests for monitor1's connection budget (monitor_budget.py).
+"""Tests for monitor1's connection budget (stack/monitor_budget.py).
 
 WHY THIS FILE EXISTS. monitor1 opens one handle per process it monitors, and
 the licence caps a q process at MONITOR_CONNECTION_BUDGET concurrent
@@ -14,7 +14,7 @@ the part that has to stay right when the fleet grows again.
 
 from __future__ import annotations
 
-from torq_orchestrator.monitor_budget import (
+from torq_orchestrator.stack.monitor_budget import (
     MONITOR_CONNECTION_BUDGET,
     MONITOR_CONNECTION_SACRIFICE_ORDER,
     MONITOR_INBOUND_RESERVE,

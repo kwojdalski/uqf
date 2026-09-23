@@ -410,7 +410,7 @@ Two consequences worth knowing:
   of monitoring failure available: an empty Heartbeat column on a fleet that
   was being monitored perfectly well.
 
-  `monitor_budget.py` therefore trims `.servers.CONNECTIONS` to fit
+  `stack/monitor_budget.py` therefore trims `.servers.CONNECTIONS` to fit
   `MONITOR_CONNECTION_BUDGET` minus `MONITOR_INBOUND_RESERVE`, giving up
   proctypes in `MONITOR_CONNECTION_SACRIFICE_ORDER` - `sortworker`,
   `reporter`, `housekeeping`, `feed`, then `metrics` - until the rest fit.
@@ -514,7 +514,7 @@ per-feed script any more. The three things the job itself still owns:
 
 To add your own: write a job file under `src/etl/streaming/`, register it
 with `.qstream.register`, and add a `Pipeline(...)` row in
-`python/torq_orchestrator/src/torq_orchestrator/pipelines.py` (pick a free
+`python/torq_orchestrator/src/torq_orchestrator/model/pipelines.py` (pick a free
 port offset - the table above lists every offset already taken). Or let
 `uqf-stack wizard` do all three, which is what the next section covers.
 

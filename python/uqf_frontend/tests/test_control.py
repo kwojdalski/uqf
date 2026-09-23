@@ -340,7 +340,8 @@ def _patch_core(monkeypatch, **fns: Any) -> None:
 
 
 def _patch_bootstrap(monkeypatch) -> None:
-    from torq_orchestrator import core, runtime
+    from torq_orchestrator import core
+    from torq_orchestrator.stack import runtime
 
     monkeypatch.setattr(core, "default_paths", lambda: _FakePaths())
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QBIN": "/bin/true"})

@@ -4,7 +4,7 @@
 
 # uqf stack processes
 
-Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
+Derived from `torq_orchestrator.model.pipelines.PIPELINES` and the vendored
 `process.csv`. For how to start, stop and query the stack see
 [docs/guides/uqf-stack.md](../../guides/uqf-stack.md); for the topology diagrams see
 [README.md](README.md).
@@ -50,7 +50,7 @@ Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored
 - **`markout1`** — compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two
 - **`deals_backfill1`** — bounded: runs a window range and exits, so it must not start with the stack
 - **`events_backfill1`** — bounded: see deals_backfill1
-- **`databento1`** — folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler
+- **`databento1`** — folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (external/databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler
 - **`cryptomock1`** — stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one
 - **`executions1`** — every fill table as one: trades and crypto_trades -> executions
 - **`marks1`** — a mid per instrument from every book: quote and crypto_book -> marks

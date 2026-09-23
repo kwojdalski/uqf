@@ -1,4 +1,4 @@
-"""Tests for the reader in `torq_orchestrator.schemas`.
+"""Tests for the reader in `torq_orchestrator.model.schemas`.
 
 The tickerplant table definitions live in `scripts/processes/uqf_stack_tables.q`, and
 this module reads them out by table name. Two things can go wrong with that
@@ -20,7 +20,7 @@ import re
 
 import pytest
 
-from torq_orchestrator import schemas
+from torq_orchestrator.model import schemas
 
 EXPECTED_TABLES = {
     "quotes",

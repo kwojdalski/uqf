@@ -33,7 +33,7 @@ REPO = Path(__file__).resolve().parents[3]
 #: process, so this gate cannot silently skip itself because an environment
 #: was broken.
 #:
-#: They lived in core.py, then in schemas.py when core.py was split, and now
+#: They lived in core.py, then in model/schemas.py when core.py was split, and now
 #: in q - which is where q table definitions belong, and which turns this
 #: check from Python-against-Python into catalog-against-q. That history is
 #: why `test_the_schema_source_is_where_this_test_expects_it` exists below: a
@@ -111,8 +111,8 @@ def _q_contract_columns(path: Path, fields_const: str, types_const: str) -> dict
 def test_the_schema_source_is_where_this_test_expects_it():
     """If the schemas move again, this gate must fail loudly rather than skip.
 
-    They have moved twice: core.py to schemas.py when core.py was split, and
-    schemas.py to q when it became clear that q table definitions living as
+    They have moved twice: core.py to model/schemas.py when core.py was split, and
+    model/schemas.py to q when it became clear that q table definitions living as
     Python string literals were read by no q parser until stp1 started. This
     assertion is what turns the next move into one clear failure instead of
     five confusing ones.

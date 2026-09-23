@@ -12,7 +12,8 @@ from dataclasses import replace
 
 import pytest
 
-from torq_orchestrator import core, stack_smoke
+from torq_orchestrator import core
+from torq_orchestrator.checks import stack_smoke
 
 
 def test_expectations_are_derived_from_the_registry_not_a_list():

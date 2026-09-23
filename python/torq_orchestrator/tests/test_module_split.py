@@ -2,8 +2,8 @@
 
 `core.py` was 1578 lines covering seven unrelated concerns. It is now a
 facade over nine focused modules, and every existing call site still reaches
-it as `core.thing` — about seventy distinct names across `cli.py`,
-`wizard.py`, `uqf_stack_mcp.py` and the tests.
+it as `core.thing` — about seventy distinct names across `cli/entry.py`,
+`scaffold/wizard.py`, `uqf_stack_mcp.py` and the tests.
 
 That facade is the whole reason the split changed no call site, so these
 tests hold it in place. Without them the facade could lose a name and the
@@ -25,25 +25,28 @@ REPO = Path(__file__).resolve().parents[3]
 PKG = REPO / "python" / "torq_orchestrator"
 
 #: Every module the facade is built from, in dependency order. `core` itself
-#: is excluded: it is the facade, not a layer.
+#: is excluded: it is the facade, not a layer. Dotted, because the package is
+#: foldered: `model/` is what the stack declares, `stack/` is the running
+#: fleet, `checks/` reads it and `external/` is the processes we start but do
+#: not own.
 MODULES = (
-    "schemas",
-    "pipeline",
-    "pipelines",
+    "model.schemas",
+    "model.pipeline",
+    "model.pipelines",
     "paths",
-    "env",
-    "procs",
-    "listing",
-    "runtime",
-    "logs",
-    "crypto",
-    "schema_view",
+    "stack.env",
+    "stack.procs",
+    "stack.listing",
+    "stack.runtime",
+    "stack.logs",
+    "external.crypto",
+    "checks.schema_view",
 )
 
 #: Files that reach this code as `core.thing`.
 CONSUMERS = (
-    PKG / "src" / "torq_orchestrator" / "cli.py",
-    PKG / "src" / "torq_orchestrator" / "wizard.py",
+    PKG / "src" / "torq_orchestrator" / "cli" / "main.py",
+    PKG / "src" / "torq_orchestrator" / "scaffold" / "wizard.py",
     PKG / "uqf_stack_mcp.py",
     # This file is excluded from its own scan: its prose says `core.thing`
     # and `core.X` to describe the pattern, and the reference regex cannot
@@ -108,12 +111,12 @@ def test_each_module_exists_and_imports(module):
 #: whole package, and the size each was at. They may SHRINK but not grow: a
 #: ratchet keeps them visible and stops "already over" becoming a licence.
 #:
-#: Both are real splits waiting to happen - wizard.py is four recipe templates
-#: beside a prompt loop, and pipeline_edges.py is a parser beside a set of
+#: Both are real splits waiting to happen - scaffold/wizard.py is four recipe templates
+#: beside a prompt loop, and model/pipeline_edges.py is a parser beside a set of
 #: checks - and neither was worth bundling into the change that found them.
 OVERSIZED_BY_HISTORY = {
-    "wizard": 683,
-    "pipeline_edges": 494,
+    "scaffold.wizard": 683,
+    "model.pipeline_edges": 494,
 }
 
 
@@ -128,12 +131,17 @@ def test_no_module_is_still_oversized():
     the original core.py split. That list was the reason cli.py reached 1270
     lines across twenty-four commands without anything objecting: it was
     never in it, so the rule it appeared to be under never applied to it.
+
+    `rglob`, not `glob`, and that distinction is the whole rule now the
+    package is foldered: a flat glob would go on passing while checking only
+    the two modules left at the top level. Same failure as the eleven-module
+    list, one directory deeper.
     """
     package = PKG / "src" / "torq_orchestrator"
     oversized = {}
-    for path in sorted(package.glob("*.py")):
-        module = path.stem
-        if module == "__init__":
+    for path in sorted(package.rglob("*.py")):
+        module = str(path.relative_to(package).with_suffix("")).replace("/", ".")
+        if path.name == "__init__.py":
             continue
         n = len(path.read_text().splitlines())
         cap = OVERSIZED_BY_HISTORY.get(module, 400)
@@ -154,8 +162,73 @@ def test_every_exempt_module_still_exists_and_is_still_over():
     and left in place it silently exempts whatever later takes that name."""
     package = PKG / "src" / "torq_orchestrator"
     for module, cap in OVERSIZED_BY_HISTORY.items():
-        path = package / f"{module}.py"
+        path = package / (module.replace(".", "/") + ".py")
         assert path.is_file(), f"{module} is exempt but does not exist"
         n = len(path.read_text().splitlines())
         assert n > 400, f"{module} is under the threshold now - remove its exemption"
         assert n <= cap, f"{module} grew: {n} > {cap}"
+
+
+#: What each folder is allowed to import from, and nothing else. The order is
+#: the layering: `model/` is what the stack declares, `stack/` is the fleet
+#: that runs, `external/` and `checks/` act on a running fleet, `core` is the
+#: facade over all of it, and `cli/` and `scaffold/` are front ends.
+#:
+#: `paths` and `logger` are omitted from every list because everything may
+#: import them: they are leaves that import nothing from this package, so they
+#: cannot take part in a cycle.
+ALLOWED_IMPORTS = {
+    "model": set(),
+    "stack": {"model"},
+    "external": {"model", "stack"},
+    "checks": {"model", "stack"},
+    "scaffold": {"core"},
+    "cli": {"core", "model", "scaffold", "external", "checks"},
+}
+
+_IMPORT = re.compile(
+    r"^\s*(?:from|import) torq_orchestrator(?:\.(\w+))?(?: import ([\w, ]+))?", re.M
+)
+
+
+def _folder_imports(folder: str) -> set[str]:
+    """Which other folders (or `core`) the modules in `folder` reach into."""
+    out: set[str] = set()
+    for path in sorted((PKG / "src" / "torq_orchestrator" / folder).glob("*.py")):
+        for match in _IMPORT.finditer(path.read_text()):
+            head, names = match.group(1), match.group(2)
+            # `from torq_orchestrator import core` - the target is in the
+            # name list, not the dotted head, and missing it would make this
+            # check blind to exactly the import the facade is reached by.
+            targets = [head] if head else [n.strip() for n in (names or "").split(",")]
+            out.update(t for t in targets if t and t != folder)
+    return out - {"paths", "logger"}
+
+
+@pytest.mark.parametrize("folder", sorted(ALLOWED_IMPORTS))
+def test_the_folders_are_layers(folder):
+    """The package was thirty-one flat modules; the folders are a claim about
+    which of them may depend on which, and a claim in a README is not a rule.
+
+    The one that matters is `model/` importing nothing: it is the DECLARED
+    shape of the stack - which pipelines exist, what tables they write, what
+    depends on what - and it has to be readable without the code that starts
+    processes. `uqf-stack summary` on a dead fleet, the generated docs and the
+    scaffolder all rely on that, and each would fail in a different confusing
+    way if a `stack/` import crept in.
+    """
+    extra = _folder_imports(folder) - ALLOWED_IMPORTS[folder]
+    assert not extra, (
+        f"{folder}/ imports from {sorted(extra)}, which is above it in the layering - "
+        f"it may only reach {sorted(ALLOWED_IMPORTS[folder]) or ['paths', 'logger']}"
+    )
+
+
+def test_every_folder_is_in_the_layering():
+    """A new folder that nobody added to ALLOWED_IMPORTS would be exempt from
+    the rule, which is how the flat package went 1270 lines unchecked."""
+    package = PKG / "src" / "torq_orchestrator"
+    folders = {
+        d.name for d in package.iterdir() if d.is_dir() and d.name not in {"__pycache__", "logger"}
+    }
+    assert folders == set(ALLOWED_IMPORTS), folders ^ set(ALLOWED_IMPORTS)

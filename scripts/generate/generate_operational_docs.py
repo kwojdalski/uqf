@@ -11,13 +11,13 @@ has no independent authority.
 
 Everything printed here is read from code that already declares it:
 
-    torq_orchestrator.pipelines.PIPELINES   procname, script, kind, port
+    torq_orchestrator.model.pipelines.PIPELINES   procname, script, kind, port
                                             offset, the table it owns, its
                                             subscribe/publish edges
-    torq_orchestrator.procs                 the vendored process.csv rows,
+    torq_orchestrator.stack.procs                 the vendored process.csv rows,
                                             so the vendored stack is counted
                                             rather than remembered
-    torq_orchestrator.schemas               the table definitions, by name
+    torq_orchestrator.model.schemas               the table definitions, by name
 
 Nothing is authored in this script. That is the point: the hand-written
 `docs/integrations/torq/README.md` listed uqf's processes in prose and had already gone
@@ -28,7 +28,7 @@ pipeline was added. Nobody noticed, because prose cannot fail.
 
 `subscribes`/`publishes` are declarations, and a declaration can lie. They
 are checked against each pipeline's own q script by
-`torq_orchestrator.pipelines.verify_pipeline_edges`, which runs in the test
+`torq_orchestrator.model.pipelines.verify_pipeline_edges`, which runs in the test
 suite - so the chain is *q script -> declaration -> document*, with a check
 at each arrow. This script refuses to generate if that check fails, because
 a diagram derived from a wrong declaration is worse than a stale one: it
@@ -51,14 +51,15 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python" / "torq_orchestrator" / "src"))
 
-from torq_orchestrator import procs, schemas  # noqa: E402
-from torq_orchestrator.paths import default_paths  # noqa: E402
-from torq_orchestrator.pipelines import (  # noqa: E402
+from torq_orchestrator.model import schemas  # noqa: E402
+from torq_orchestrator.model.pipelines import (  # noqa: E402
     DEFAULT_BASE_PORT,
     PIPELINE_OFFSETS,
     PIPELINES,
     verify_pipeline_edges,
 )
+from torq_orchestrator.paths import default_paths  # noqa: E402
+from torq_orchestrator.stack import procs  # noqa: E402
 
 OUT = REPO / "docs" / "integrations" / "torq" / "processes.md"
 DAG_OUT = REPO / "src" / "etl" / "generated" / "pipeline_dag.q"
@@ -106,7 +107,7 @@ def render() -> str:
     schema_of = _schema_names()
     lines: list[str] = [BANNER, "# uqf stack processes", ""]
     lines += [
-        "Derived from `torq_orchestrator.pipelines.PIPELINES` and the vendored",
+        "Derived from `torq_orchestrator.model.pipelines.PIPELINES` and the vendored",
         "`process.csv`. For how to start, stop and query the stack see",
         "[docs/guides/uqf-stack.md](../../guides/uqf-stack.md); for the topology diagrams see",
         "[README.md](README.md).",
