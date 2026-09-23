@@ -10,6 +10,33 @@ built on this repository's own machinery instead.
 
 ## Running it
 
+### On the stack, like any other process
+
+This is an ordinary registered process, not a thing you run by hand. It
+declares `autostart`, so `uqs start` brings it and `fxordersfeed1` up with
+everything else — and it can be named on its own:
+
+```bash
+uqs start fxpositions1        # or just `uqs start` for the whole fleet
+uqs summary                   # lists it with its port and heartbeat
+uqs logs -f fxpositions1
+uqs restart fxpositions1
+```
+
+Reading the book needs no handle of your own — `--port` is the one `uqs
+summary` shows for it (`KDBBASEPORT`+39, so 6089 on a default stack):
+
+```bash
+uqs query --port 6089 "0!.qsub.fx_positions.book"
+uqs query --port 6089 "select from fx_limit_breach"
+uqs query --port 6089 --console          # an interactive qcon session
+```
+
+### Without TorQ, on stock kdb+
+
+The same job also runs with no TorQ and no orchestrator, which is what makes
+it portable rather than a demo of this stack:
+
 ```bash
 # Everything in one process: plant, feed and service. No ports needed.
 q scripts/processes/run_stream.q -job fx_positions -feed fx_orders_feed
@@ -20,9 +47,6 @@ q scripts/processes/run_stream.q -job fx_orders_feed -tp 5010
 q scripts/processes/run_stream.q -job fx_positions  -tp 5010 -port 5011
 ```
 
-On the TorQ stack the same two jobs run as `fxordersfeed1` and
-`fxpositions1`, and `uqs start` brings both up.
-
 Then, from any q session:
 
 ```q
@@ -30,11 +54,15 @@ h:hopen `::5011
 h"0!.qsub.fx_positions.book"
 ```
 
-`lib/torq` is never loaded on any of these paths. All four invocations are
+`lib/torq` is never loaded on any of these four invocations, and all four are
 exercised: the single-process one by `tests/q/test_fx_positions.q`, and the
 three-process one live — it did not work until #266, because the runner
 handed `.qstream.wire` a raw handle it refuses, and the subscribe call it
 sent the plant was malformed.
+
+Neither path is the "real" one. A job is TorQ-free code and the runner
+decides the transport, which is the whole point: being runnable without TorQ
+is no reason not to be startable with it.
 
 ## What it is made of
 
