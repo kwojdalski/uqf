@@ -3,7 +3,12 @@
 **This assessment is closed.** It asked two questions — what is missing
 relative to how a modern orchestration framework is structured, and is that
 implementable in q — found three real gaps and four smaller ones, and every
-one of those has since been built or been decided against. What remains
+one of those has since been built or been decided against.
+
+*Reviewed 2026-09-23.* Every file, namespace and `§` citation below still
+resolves, and three of §3's four decisions are unchanged. The fourth, asset
+identity, has narrowed: assets now carry descriptions, kept complete by a
+gate. That bullet says what is left. What remains
 different from Dagster is listed in §3, and each difference is a decision
 with a stated condition for reopening it, not an item waiting for someone.
 
@@ -32,7 +37,7 @@ Dagster's abstractions, against this tree:
 | **Run identity** | `.qrun` — one identity per execution | **yes** — §2.3 |
 | **Resource** — pluggable external connection | `.qsrc` source contract | **source-shaped, by decision** — §3 |
 | **Config** | `.qwcfg` typed getters, stated precedence, accumulated errors | **global, by decision** — §3 |
-| **Asset identity** | an asset is the table a job declares; it has no record of its own | **absent, by decision** — §3 |
+| **Asset identity** | an asset is the table a job declares; it now has a *description* of its own in the desk catalog, but no owner and no freshness policy | **partly closed** — §3 |
 | **Schedules** | *deliberately absent* — Airflow owns ordering (ETL-15) | **by decision** — §3 |
 
 The worker contract, the coverage ledger and the derived DAG are the three
@@ -77,14 +82,23 @@ against, with what would change the decision.
   today the fields are few and `.qbw.define` already refuses a malformed
   declaration at load.*
 
-- **Assets have no identity of their own.** `.qdag` derives edges from
-  declared inputs and outputs, which is asset-shaped thinking, but an asset
-  is just a table name: no description, no owner, no freshness policy
-  attached to the asset rather than to the job that happens to produce it.
-  This is the one with real value left in it. *Reopen when something needs
-  to ask a question of an asset rather than of a job — "who owns this", "is
-  this stale" — because the answer would otherwise be spread across the
-  jobs that write it.*
+- **Assets have partial identity — a description, and nothing else.** This
+  was written as "an asset is just a table name", and half of that has since
+  stopped being true. `python/uqf_frontend/catalog/tables.csv` carries a
+  prose description per table and `columns.csv` its column types, and
+  `test_every_published_table_is_in_the_catalog_or_explicitly_not` fails
+  until a newly published table is described or explicitly excluded — so the
+  set is complete by construction rather than by diligence, which is the part
+  that usually rots. `uqs new-job` names the file among the steps it leaves
+  you.
+
+  What that closed is "what IS this table", asked of the asset rather than of
+  the job. What it did not close: **no owner, no freshness policy**, and the
+  description lives in the front end's catalog rather than on the q
+  declaration — so a q process cannot ask, and the description can disagree
+  with the declaration without anything noticing. *Reopen the rest when
+  something needs "who owns this" or "is this stale"; the shape to copy is
+  the catalog's own gate, which is what made the descriptions complete.*
 
 - **Scheduling stays out.** ETL-15 gives ordering, retries, timeouts and
   alerting to Airflow. Re-implementing any of it here would create a second

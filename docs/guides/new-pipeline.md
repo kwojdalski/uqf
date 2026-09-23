@@ -129,6 +129,19 @@ part is shaped the way it is.
 Two different shells, and picking the wrong one is the only structural
 mistake here that is expensive to undo.
 
+<!-- Source: docs/diagrams/pipeline-decision.d2. Rendered by
+     scripts/generate/render_diagrams.py, which CI runs with --check. -->
+
+![A decision tree: known range or not chooses the bounded worker or the streaming shell; whether it reads another table chooses a feed or an etl; whether it publishes a new table decides if columns must be declared; every path ends at the same new-job command and the same three remaining steps](../diagrams/pipeline-decision.svg)
+
+Three questions, and only the first is hard to change afterwards — the other
+two are flags on one command. The kinds are **derived** rather than asked for:
+a streaming job that subscribes to nothing is a feed, one that subscribes is
+an etl, and there is no `--kind feed` because the edges already say which it
+is. The transform, the check, the io manager and the partition are not on the
+tree: they are declarations you write *inside* the file the scaffold gives
+you, not choices about which file to make.
+
 **Bounded** — you know the range before you start: a backfill, a nightly
 window, a restatement. It runs, it finishes, it exits. `.qbw`, and the rest
 of this guide.
