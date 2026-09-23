@@ -53,7 +53,7 @@ The framework's central bet is that a new instance is a *declaration* and nothin
 ### 3. One fact, two homes
 The highest-value findings in a polyglot repo. Where is the same truth written twice?
 - The q declarations versus the Python pipeline registry (`pipelines.py`) — kept in step by `pipeline_edges.py`; is anything else crossing that boundary unguarded?
-- Table schemas: `scripts/processes/uqf_stack_tables.q`, a job's own declared input shape, the frontend catalog CSVs. Three copies exist on purpose; each pair must have a gate
+- Table schemas: `scripts/processes/uqs_tables.q`, a job's own declared input shape, the frontend catalog CSVs. Three copies exist on purpose; each pair must have a gate
 - A hand-maintained list that duplicates something derivable — a test's hardcoded expectation of what the registry contains, a doc that re-states a schema
 - **Ask of every duplication: which copy is the authority, and what fails when they disagree?** If the answer is "nothing fails, it just goes wrong", that is the finding
 
@@ -87,7 +87,7 @@ The highest-value findings in a polyglot repo. Where is the same truth written t
 
    **The wiring, first — it tells you the shape before you read any module:**
    - `src/init.q` and `src/etl/init.q` — the dependency order, and which orderings the comments say are load-bearing
-   - `python/uqf_stack/src/uqf_stack/pipelines.py` — one entry per process; the Python half of the system's topology
+   - `python/uqs/src/uqs/pipelines.py` — one entry per process; the Python half of the system's topology
    - `src/etl/generated/pipeline_dag.q` — generated; if it disagrees with either of the above, that is the finding
 
    **The framework shells — is each one still generic?**
@@ -128,7 +128,7 @@ ARCHITECTURE REVIEW (N findings across M files)
 ================================================
  # | Cat | Severity | Finding (truncated)                                        | File(s)
 ---|-----|----------|------------------------------------------------------------|---------------------------
- 1 |  3  | HIGH     | table schema written in 3 places, only 2 pairs gated —     | uqf_stack_tables.q,
+ 1 |  3  | HIGH     | table schema written in 3 places, only 2 pairs gated —     | uqs_tables.q,
    |     |          | third can drift silently                                   | catalog/columns.csv
  2 |  2  | HIGH     | .qstream shell branches on job name, so a new job needs    | stream_job.q
    |     |          | a shell edit rather than a declaration                     |

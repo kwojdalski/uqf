@@ -118,17 +118,17 @@ def test_a_valid_stack_root_builds_paths_under_it(tmp_path):
     (tmp_path / "lib" / "torq" / "torq.sh").write_text("#!/bin/sh\n")
     paths = control._paths(Settings(enable_writes=True, stack_root=tmp_path))
     assert paths.torqhome == tmp_path / "lib" / "torq"
-    assert paths.torqdata == tmp_path / "scripts" / "output" / "uqf-stack"
+    assert paths.torqdata == tmp_path / "scripts" / "output" / "uqs"
 
 
 def test_an_orchestrator_refusal_becomes_a_validation_error(monkeypatch):
     """A 422 naming the problem, not a 500 with a traceback."""
-    from uqf_stack import paths as stack_paths
-    from uqf_stack.paths import UqfStackError
-    from uqf_stack.stack import runtime
+    from uqs import paths as stack_paths
+    from uqs.paths import UqsError
+    from uqs.stack import runtime
 
     def refuse(*a, **k):
-        raise UqfStackError("no such process: typo1")
+        raise UqsError("no such process: typo1")
 
     monkeypatch.setattr(runtime, "start", refuse)
     monkeypatch.setattr(stack_paths, "default_paths", lambda: "PATHS")
@@ -167,12 +167,12 @@ def _backfill_args() -> dict[str, str]:
 
 
 def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
-    from uqf_stack import paths as stack_paths
-    from uqf_stack.paths import UqfStackError
-    from uqf_stack.stack import runtime
+    from uqs import paths as stack_paths
+    from uqs.paths import UqsError
+    from uqs.stack import runtime
 
     def refuse(paths, base_port):
-        raise UqfStackError("lib/torq not vendored")
+        raise UqsError("lib/torq not vendored")
 
     monkeypatch.setattr(stack_paths, "default_paths", lambda: SimpleNamespace())
     monkeypatch.setattr(runtime, "bootstrap", refuse)
@@ -183,8 +183,8 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
 def test_a_missing_backfill_script_is_refused_before_spawning(monkeypatch, tmp_path):
     """Popen on a missing script would start q with nothing to run and
     report a pid - a backfill that looks launched and never ran."""
-    from uqf_stack import paths as stack_paths
-    from uqf_stack.stack import runtime
+    from uqs import paths as stack_paths
+    from uqs.stack import runtime
 
     fake = SimpleNamespace(repo_root=tmp_path, scripts_dir=tmp_path / "scripts")
     monkeypatch.setattr(stack_paths, "default_paths", lambda: fake)

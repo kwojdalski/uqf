@@ -4,9 +4,9 @@
 
 # uqf stack processes
 
-Derived from `uqf_stack.model.pipelines.PIPELINES` and the vendored
+Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 `process.csv`. For how to start, stop and query the stack see
-[docs/guides/uqf-stack.md](../../guides/uqf-stack.md); for the topology diagrams see
+[docs/guides/uqs.md](../../guides/uqs.md); for the topology diagrams see
 [README.md](README.md).
 
 **23 vendored processes** plus **23 uqf processes** — 46 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
@@ -42,8 +42,8 @@ Derived from `uqf_stack.model.pipelines.PIPELINES` and the vendored
 ### Why a row deviates from the defaults
 
 - **`fxfeed1`** — pinned below the vendored dqc/dqe block, not part of the contiguous run
-- **`cross1`** — keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); quotesfeed1 runs by default, so `uqf-stack start cross1` is enough
-- **`widefeed1`** — half of a closed pair with vectorize1: it is the only producer of wide_book and vectorize1 the only consumer, so the two start and stop together and no other job notices. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285) - `uqf-stack start widefeed1 vectorize1`
+- **`cross1`** — keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); quotesfeed1 runs by default, so `uqs start cross1` is enough
+- **`widefeed1`** — half of a closed pair with vectorize1: it is the only producer of wide_book and vectorize1 the only consumer, so the two start and stop together and no other job notices. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285) - `uqs start widefeed1 vectorize1`
 - **`vectorize1`** — the other half of the widefeed1 pair: nothing subscribes to mkt_orderbook, so this branch of the graph is self-contained. See widefeed1
 - **`tap1`** — diagnostic subscriber - started on demand, not with the whole stack
 - **`posbook1`** — reads the two normalizers' outputs, not trades and quote, so one book carries FX and crypto and a new market is a mapping, not a job
@@ -58,7 +58,7 @@ Derived from `uqf_stack.model.pipelines.PIPELINES` and the vendored
 - **`fxpositions1`** — net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it
 - **`databento_backfill1`** — bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live
 - **`upstream_backfill1`** — bounded: reads an upstream q process over IPC
-- **`marketdata1`** — direct FX snapshots with source identity and original receipt time. Head of a closed three-process chain - market_data is read only by superbook1, superbook only by arbitrage1, and arbitrage by nothing - so the whole chain is on demand together and no default-start job notices. startwithall:0 because the licence allows a q process sixteen inbound connections and the default start is at thirteen (#285): `uqf-stack start marketdata1 superbook1 arbitrage1` spends the three spare slots, which is what they are for
+- **`marketdata1`** — direct FX snapshots with source identity and original receipt time. Head of a closed three-process chain - market_data is read only by superbook1, superbook only by arbitrage1, and arbitrage by nothing - so the whole chain is on demand together and no default-start job notices. startwithall:0 because the licence allows a q process sixteen inbound connections and the default start is at thirteen (#285): `uqs start marketdata1 superbook1 arbitrage1` spends the three spare slots, which is what they are for
 - **`superbook1`** — latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there
 - **`arbitrage1`** — gross direct cross-source opportunities, including inactive clearing rows. Tail of the marketdata1 chain - see there
 - **`crossarb1`** — the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four plant connections against three spare: stop something first
@@ -67,26 +67,26 @@ Derived from `uqf_stack.model.pipelines.PIPELINES` and the vendored
 
 | table | defined by | published by |
 |---|---|---|
-| `arbitrage` | `uqf_stack_tables.q` | `arbitrage1` |
-| `config_change` | `uqf_stack_tables.q` | `crossarb1`, `superbook1` |
-| `cross_arbitrage` | `uqf_stack_tables.q` | `crossarb1` |
-| `crypto_book` | `uqf_stack_tables.q` | `cryptomock1` |
-| `crypto_trades` | `uqf_stack_tables.q` | `cryptomock1` |
-| `databento_book` | `uqf_stack_tables.q` | `databento1` |
-| `execution_quality` | `uqf_stack_tables.q` | `markout1` |
-| `executions` | `uqf_stack_tables.q` | `executions1` |
-| `fx_limit_breach` | `uqf_stack_tables.q` | `fxpositions1` |
-| `fx_position` | `uqf_stack_tables.q` | `fxpositions1` |
-| `market_data` | `uqf_stack_tables.q` | `marketdata1` |
-| `marks` | `uqf_stack_tables.q` | `marks1` |
-| `mkt_orderbook` | `uqf_stack_tables.q` | `vectorize1` |
-| `orders` | `uqf_stack_tables.q` | `fxordersfeed1` |
-| `position` | `uqf_stack_tables.q` | `posbook1` |
+| `arbitrage` | `uqs_tables.q` | `arbitrage1` |
+| `config_change` | `uqs_tables.q` | `crossarb1`, `superbook1` |
+| `cross_arbitrage` | `uqs_tables.q` | `crossarb1` |
+| `crypto_book` | `uqs_tables.q` | `cryptomock1` |
+| `crypto_trades` | `uqs_tables.q` | `cryptomock1` |
+| `databento_book` | `uqs_tables.q` | `databento1` |
+| `execution_quality` | `uqs_tables.q` | `markout1` |
+| `executions` | `uqs_tables.q` | `executions1` |
+| `fx_limit_breach` | `uqs_tables.q` | `fxpositions1` |
+| `fx_position` | `uqs_tables.q` | `fxpositions1` |
+| `market_data` | `uqs_tables.q` | `marketdata1` |
+| `marks` | `uqs_tables.q` | `marks1` |
+| `mkt_orderbook` | `uqs_tables.q` | `vectorize1` |
+| `orders` | `uqs_tables.q` | `fxordersfeed1` |
+| `position` | `uqs_tables.q` | `posbook1` |
 | `quote` | _vendored_ | `fxfeed1` |
-| `quotes` | `uqf_stack_tables.q` | `quotesfeed1` |
-| `superbook` | `uqf_stack_tables.q` | `superbook1` |
-| `trades` | `uqf_stack_tables.q` | `fxtradesfeed1` |
-| `wide_book` | `uqf_stack_tables.q` | `widefeed1` |
+| `quotes` | `uqs_tables.q` | `quotesfeed1` |
+| `superbook` | `uqs_tables.q` | `superbook1` |
+| `trades` | `uqs_tables.q` | `fxtradesfeed1` |
+| `wide_book` | `uqs_tables.q` | `widefeed1` |
 
 ## The vendored stack
 

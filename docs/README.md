@@ -39,7 +39,7 @@ reference or an architecture note, and only its purpose decides where it goes.
 
 ## What is where
 
-**`guides/`** — [`uqf-stack.md`](guides/uqf-stack.md) (running the stack),
+**`guides/`** — [`uqs.md`](guides/uqs.md) (running the stack),
 [`new-pipeline.md`](guides/new-pipeline.md) (adding a source and a bounded
 worker, end to end), [`superbook.md`](guides/superbook.md) (merging quoted
 liquidity across sources, and reading the opportunities that fall out),

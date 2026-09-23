@@ -1,5 +1,5 @@
 table,description
-crypto_book,"Live venue order books published by cryptorust's kdb-market-data-recorder (uqf-stack crypto start): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. time is stamped by the tickerplant on receipt"
+crypto_book,"Live venue order books published by cryptorust's kdb-market-data-recorder (uqs crypto start): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. time is stamped by the tickerplant on receipt"
 crypto_sim_fills,"Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from"
 crypto_trades,Real confirmed exchange executions recorded from the OMS
 databento_book,"Live Databento MBP-10 folded into the book shape by databento1, using the same .qxf transform the ODBC backfill applies - so a live row and a backfilled one are the same shape"

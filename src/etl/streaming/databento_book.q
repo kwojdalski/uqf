@@ -25,7 +25,7 @@
 / the cryptorust pattern: it opens its own IPC handle to stp1 and calls
 / .u.upd, so it is started by the orchestrator rather than by torq.sh and
 / has no process.csv row of its own. See
-/ python/uqf_stack/src/uqf_stack/external/databento_feed.py.
+/ python/uqs/src/uqs/external/databento_feed.py.
 / .
 / THE VENUE CLOCK IS KEPT, DELIBERATELY
 / .

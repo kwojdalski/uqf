@@ -94,7 +94,7 @@ const command = (action: string, target: string) =>
 it("defaults to torq.sh's own “all”, sent as the word and not spelled out", async () => {
   // "all" means startwithall=1 to torq.sh. Sending every name instead would
   // make the UI's idea of "all" a second definition that can drift from
-  // `uqf-stack start all`.
+  // `uqs start all`.
   const fetcher = mockApi(true, () => command("start", "all"));
   await openControl();
   // three of the four: tap1 has startwithall=0, so "all" does not start it

@@ -8,7 +8,7 @@ through **B3** of
 
 A thin server-side API layer in front of the TorQ `gateway`, reusing the kola
 IPC pattern already proven in this repo by `uqf_client` and by
-`uqf_stack.stack.runtime.query()` rather than introducing a second mechanism
+`uqs.stack.runtime.query()` rather than introducing a second mechanism
 (**FE-16**). REST rather than WebSocket, because the gateway path has no
 push or subscribe mechanism to a browser client — every view is poll-only
 (**FE-10**).
@@ -91,7 +91,7 @@ port" is the whole access control.
 
 `clean` is deliberately **not** exposed. It deletes logs, tplogs, wdb and the
 copied sample data — the one orchestrator verb whose blast radius is data
-rather than process state. `uqf-stack clean` remains, where the person
+rather than process state. `uqs clean` remains, where the person
 running it is at a terminal on the host.
 
 A backfill is launched detached rather than awaited: it runs for as long as
@@ -134,7 +134,7 @@ refuses an empty one:
 export UQF_FRONTEND_GATEWAY_USER=admin UQF_FRONTEND_GATEWAY_PASSWD=admin
 ```
 
-`admin:admin` is what `uqf-stack query` uses against the generated
+`admin:admin` is what `uqs query` uses against the generated
 appconfig. The port needs no setting: it is derived from the base port, and
 a stack on another base only needs `UQF_FRONTEND_BASE_PORT`.
 
@@ -168,8 +168,8 @@ sent*: that the program text is one of this package's own constants, and that
 a hostile value appears only in the argument list. No q process required.
 
 `test_catalog_drift.py` parses the table definitions out of
-`scripts/processes/uqf_stack_tables.q` as text — no import, so it cannot
-silently skip when uqf_stack's environment is unavailable.
+`scripts/processes/uqs_tables.q` as text — no import, so it cannot
+silently skip when uqs's environment is unavailable.
 
 ## Tier routing and coverage (B1)
 

@@ -172,7 +172,7 @@ def lane_stack_smoke() -> None:
     has no rows or a running process wrote to its error log meanwhile.
     """
     _banner("stack-smoke: the running stack publishes and stays quiet")
-    # uv run, not sys.executable: the gate imports uqf_stack, which
+    # uv run, not sys.executable: the gate imports uqs, which
     # needs the workspace environment, the same way lane_python does.
     _run("stack-smoke", ["uv", "run", "python", "scripts/gates/stack_smoke.py"])
 

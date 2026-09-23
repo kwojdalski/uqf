@@ -60,7 +60,7 @@ pricing or execution function, say so and stop rather than adding it here.
 
 ## Adding ONE job is not your job
 
-`uqf-stack new-job` scaffolds a streaming job or a bounded worker — the q
+`uqs new-job` scaffolds a streaming job or a bounded worker — the q
 files, the table definition, the registry entry and a failing test — and the
 `new-job` skill walks the whole loop from scaffold to green. Point the user
 there when the request is "add a feed / a backfill / a job" and the framework

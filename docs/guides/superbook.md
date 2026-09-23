@@ -15,11 +15,11 @@ call: `superbook1` does not invoke `marketdata1`, it subscribes to the table
 and why every intermediate result is queryable in the RDB rather than living
 inside a process.
 
-The three services are registered in `uqf-stack` and publish ordinary
+The three services are registered in `uqs` and publish ordinary
 tickerplant tables, available in the RDB/HDB and the frontend table
 catalog. Existing process ports are unchanged; the new offsets are 42, 43
 and 44 from `KDBBASEPORT`, respectively. On an existing stack, restart
-through `uqf-stack` to load the added table schemas as well as the
+through `uqs` to load the added table schemas as well as the
 services.
 
 A second consumer, `crossarb1`, reads the same `superbook` and compares each
@@ -27,10 +27,10 @@ pair's direct book against a synthetic route through the others - see
 [the cross-arbitrage guide](cross-arbitrage.md). It is independent of
 `arbitrage1`; neither needs the other.
 
-They are **on demand**, not part of `uqf-stack start`:
+They are **on demand**, not part of `uqs start`:
 
 ```bash
-uqf-stack start marketdata1 superbook1 arbitrage1
+uqs start marketdata1 superbook1 arbitrage1
 ```
 
 A q process on the community licence accepts sixteen concurrent inbound

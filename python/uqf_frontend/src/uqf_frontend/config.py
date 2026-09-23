@@ -91,7 +91,7 @@ class Settings:
     #: Empty, and it stays empty: FE-14 puts credentials in the server
     #: environment and never in a default baked into the package, which
     #: test_config.py asserts. The local demo stack does want a credential
-    #: (`admin:admin`, what `uqf-stack query` uses) - that belongs in the
+    #: (`admin:admin`, what `uqs query` uses) - that belongs in the
     #: README's run instructions, not here. A default credential in source
     #: is how a real one ends up committed next to it.
     user: str = ""

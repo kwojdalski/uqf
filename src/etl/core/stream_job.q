@@ -50,7 +50,7 @@ procnames:(`symbol$())!`symbol$();
 / with neither is declared but does nothing, which is refused.
 / .
 / `subscribes` and `publishes` are the wiring the runner performs on the
-/ job's behalf, and they are also what uqf_stack's pipeline_edges
+/ job's behalf, and they are also what uqs's pipeline_edges
 / checks the Python registry against - so the q file and the registry cannot
 / drift. `procname` is the TorQ process that runs this job, and is how the
 / runner knows which job it is: one generic process script, and the name it
@@ -125,7 +125,7 @@ register:{[job;decl]
             '"register: ",string[job],"'s timer_period must be positive"];
         if[not is_callable decl`on_timer;
             '"register: ",string[job],"'s on_timer must be a niladic function"]];
-    / Deployment facts, both optional. uqf_stack derives its process registry
+    / Deployment facts, both optional. uqs derives its process registry
     / from these declarations, so this is where a job says whether it starts
     / with the stack (default: on demand) and why it is deployed as it is.
     if[(`autostart in key decl) and not -1h=type decl`autostart;

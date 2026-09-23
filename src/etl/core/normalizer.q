@@ -70,7 +70,7 @@ define:{[name;decl]
     if[`time in cols out;
         'who,"'s output carries `time` - the plant stamps its own, and a source's own stamp belongs in a column named for what it is"];
     / Deployment facts, as on .qstream.register - optional, and read by the
-    / uqf_stack process registry, which is derived from these declarations.
+    / uqs process registry, which is derived from these declarations.
     if[(`autostart in key decl) and not -1h=type decl`autostart;
         'who,"'s autostart must be a boolean, 1b to start with the stack"];
     if[(`note in key decl) and not 10h=type decl`note; 'who,"'s note must be a string"];

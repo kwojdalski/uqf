@@ -7,6 +7,16 @@ processing** that reshapes raw venue feeds into the shapes analytics
 expects, and the **operational tooling** — process orchestration, an HTTP
 gateway and a browser application — that runs the whole thing as a fleet.
 
+**The names.** `uqf` is the repository and the family - the prefix on every
+Python package in it (`uqf_client`, `uqf_frontend`, `uqf_airflow_provider`).
+`uqs`, the *ultimate q stack*, is one of those components rather than the
+whole: the process orchestrator and its `uqs` command. The distinction is
+what the names are for, so a package named plainly `uqf` would be wrong -
+it would claim to be the project while being one part of it.
+
+The q side uses neither: every namespace there is `.q<area>`, from `.qbook`
+to `.qmatz`.
+
 These are separate components with separate contracts, not one library with
 extras bolted on. See [Components](#components) for what each is and where
 it lives; the quantitative library is described under
@@ -69,21 +79,21 @@ paths relative to it (e.g. `src/foundation/stats.q`).
 | Tool | For | Required? |
 |---|---|---|
 | **KDB-X** | everything in `src/`, `scripts/` and `tests/` | preferred — see [above](#requirements) for what else may work |
-| **[uv](https://docs.astral.sh/uv/)** | the Python packages and every `uqf-stack` command | yes, for the fleet |
-| **`qcon`** | attaching a console to a running process: `uqf-stack raw -- qcon gateway1 admin:admin` | no - only that command |
+| **[uv](https://docs.astral.sh/uv/)** | the Python packages and every `uqs` command | yes, for the fleet |
+| **`qcon`** | attaching a console to a running process: `uqs raw -- qcon gateway1 admin:admin` | no - only that command |
 | **`rlwrap`** | line editing and history inside `qcon` | no - `qcon` runs without it |
 | **Node** | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares | no - only for `web/` |
 | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor | no - suggested when writing or debugging q |
 
 `qcon` is kdb's console client. It ships with some kdb+ distributions and
 **not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q`
-and `pg` - so `uqf-stack raw -- qcon ...` is the one documented command that
+and `pg` - so `uqs raw -- qcon ...` is the one documented command that
 may not work out of the box. Everything else reaches a running process
-through IPC instead: `uqf-stack query`, `uqf-stack summary` and
-`uqf-stack logs` need nothing beyond what is already installed.
+through IPC instead: `uqs query`, `uqs summary` and
+`uqs logs` need nothing beyond what is already installed.
 
 `torq.sh` resolves both through `$QCON` and `$RLWRAP`, which
-`uqf_stack`'s `build_env()` sets, so a differently-named or
+`uqs`'s `build_env()` sets, so a differently-named or
 differently-located binary is a variable to set rather than a patch.
 
 ### `qlinter`, suggested
@@ -132,9 +142,9 @@ feeds and the ETL processes - with generated configuration:
 
 ```
 uv sync
-uv run uqf-stack start all
-uv run uqf-stack summary            # up/down, pid, port and heartbeat per process
-uv run uqf-stack query "count quotes" --port 6052   # 6052 = base port + 2 = rdb1
+uv run uqs start all
+uv run uqs summary            # up/down, pid, port and heartbeat per process
+uv run uqs query "count quotes" --port 6052   # 6052 = base port + 2 = rdb1
 ```
 
 **Run a backfill.** A bounded worker takes its range from the environment
@@ -147,7 +157,7 @@ UQF_BACKFILL_WORKER=demo_deals_backfill \
 UQF_BACKFILL_VERSION=v1 \
 UQF_BACKFILL_FROM=2026.09.13D00:00 \
 UQF_BACKFILL_TO=2026.09.15D00:00 \
-  uv run uqf-stack start deals_backfill1
+  uv run uqs start deals_backfill1
 ```
 
 All four variables are required together: the process refuses to start and
@@ -176,7 +186,7 @@ change usually belongs to exactly one.
 | **Data engineering** | [`src/etl/`](src/etl) | The pipeline framework: bounded and continuous workers, normalizers that spell many sources one way, a bitemporal coverage ledger, run identity, IO managers, source contracts, and a job graph derived from declared inputs and outputs. Asset-oriented, in the sense [the philosophy note](docs/architecture/pipeline-philosophy.md) sets out |
 | **Quant library** | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. [Detailed below](#quant-modules) |
 | **Data processing** | [`src/market_data/`](src/market_data) | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw |
-| **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqf_stack/`](python/uqf_stack) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
+| **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
 | **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`python/uqf_client/`](python/uqf_client), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, a q client, and the React desk and operations app |
 | **Database metadata** | [`src/metadata/`](src/metadata) | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable eFX breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md) |
 | **Reference data model** | [`env/`](env/README.md) | Typed table shapes for a broader eFX system — market data, positions, predictions, orders, routing, an economic calendar — as scaffolding this library's functions could sit inside |
@@ -220,7 +230,7 @@ Still open, and why: the `decision`-labelled issues.
 
 Component READMEs: [`web/`](web/README.md) (the React desk app),
 [`env/`](env/README.md),
-[`python/uqf_stack/`](python/uqf_stack/README.md).
+[`python/uqs/`](python/uqs/README.md).
 
 ## Browser application
 

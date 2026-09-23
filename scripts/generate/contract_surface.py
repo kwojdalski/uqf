@@ -121,9 +121,9 @@ def export_python_surface() -> dict[str, Any]:
     assigned at import. Reading the literal would export the declaration
     rather than the contract, and those differ for 8 of 9 processes.
     """
-    sys.path.insert(0, str(REPO / "python" / "uqf_stack" / "src"))
-    from uqf_stack.model.pipelines import PIPELINE_OFFSETS  # noqa: PLC0415
-    from uqf_stack.model.registry import PIPELINES  # noqa: PLC0415
+    sys.path.insert(0, str(REPO / "python" / "uqs" / "src"))
+    from uqs.model.pipelines import PIPELINE_OFFSETS  # noqa: PLC0415
+    from uqs.model.registry import PIPELINES  # noqa: PLC0415
 
     processes = [
         {

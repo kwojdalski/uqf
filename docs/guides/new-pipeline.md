@@ -27,14 +27,14 @@ framework guarantees is [ETL-nn](../reference/etl-framework-requirements.md).
 
 ## Scaffolding it
 
-`uqf-stack new-job` writes the skeleton: the q files, the table definition
+`uqs new-job` writes the skeleton: the q files, the table definition
 and a test. There is no registry entry - the process is read from the job's
 own declaration.
 
 <!-- Source: docs/diagrams/scaffolding.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
 
-![What uqf-stack new-job writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
+![What uqs new-job writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
 Read it left to right. The **appends** are the whole reason the middle band
 exists: everything else is picked up by a glob, and those files hold the facts
@@ -47,13 +47,13 @@ every new table passes through. After writing them, `new-job` reruns
 declared.
 
 ```
-uqf-stack new-job markout2 --subscribes trades,quote \
+uqs new-job markout2 --subscribes trades,quote \
     --publishes my_metric --columns "sym:symbol, value:float"
 
-uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \
+uqs new-job fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
 
-uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
+uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
     --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
 ```
 
@@ -87,7 +87,7 @@ The generated handler throws and the generated test fails, and that is the
 one q failure you see:
 
 ```
-$ uqf-stack new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
+$ uqs new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
 $ q tests/run_tests.q
   .dxprobetest.test_dxprobe_is_implemented
 ```
@@ -378,10 +378,10 @@ outputs| ,`fx_rates
 
 ### Its process comes from the declaration
 
-There is no registration to add. The uqf_stack process registry is READ from
+There is no registration to add. The uqs process registry is READ from
 the q declarations - every `.qstream.register`/`.qnorm.define` under
 `src/etl/streaming/` and every `.qbw.define` under `src/etl/workers/` - by
-[`model/declarations.py`](../../python/uqf_stack/src/uqf_stack/model/declarations.py).
+[`model/declarations.py`](../../python/uqs/src/uqs/model/declarations.py).
 It used to be a hand-kept Python list restating each one, which made a new
 job two edits in two languages and let a fully declared worker sit with no
 process to run it, invisible to every grep.

@@ -5,7 +5,7 @@ set comes from that file rather than from this package's own configuration -
 otherwise the fleet view can only report on processes someone remembered to
 list twice.
 
-The file is *generated* by ``uqf_stack.stack.runtime.bootstrap()`` from
+The file is *generated* by ``uqs.stack.runtime.bootstrap()`` from
 vendored inputs plus uqf's own additions (ETL-17), and its port column carries
 unresolved placeholders: ``{KDBBASEPORT}`` or ``{KDBBASEPORT}+N``. Resolving
 them here duplicates a few lines of the orchestrator rather than importing it,
@@ -13,7 +13,7 @@ deliberately: the placeholder grammar is two forms wide, and this is the path
 every fleet-health poll takes.
 
 This module's header used to state a stronger rule - that the package must not
-depend on ``uqf_stack`` at all - and that is no longer true.
+depend on ``uqs`` at all - and that is no longer true.
 ``control.py`` depends on it, because starting a process and writing a
 process.csv override are its work and reimplementing them would make a second
 writer to one file. The narrow reason still holds and is why this module keeps
@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 #: ``{NAME}`` optionally followed by ``+N`` or ``-N``. The same grammar
-#: uqf_stack.stack.procs' own _BRACE_ARITH_RE accepts.
+#: uqs.stack.procs' own _BRACE_ARITH_RE accepts.
 _BRACE_ARITH = re.compile(r"^\{(\w+)\}([+-]\d+)?$")
 
 

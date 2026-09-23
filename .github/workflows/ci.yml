@@ -70,7 +70,7 @@ jobs:
         # Where the source and the document disagree the source is right by
         # definition, so this fails the build rather than reconciling.
         if: ${{ !cancelled() }}
-        # `uv run`, not bare python3: this script imports uqf_stack,
+        # `uv run`, not bare python3: this script imports uqs,
         # which imports loguru. Under the runner's system python3 it died with
         # ModuleNotFoundError before checking anything - so the gate had never
         # once run, and master was red for it. Loud rather than silent, but

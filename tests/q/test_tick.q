@@ -87,7 +87,7 @@ test_the_plant_stamps_time_at_the_front:{[t]
     .qtick.publish[`tt_trade;([] sym:`EURUSD`GBPUSD; px:1.085 1.265)];
     batch:.ticktest.received[0;2];
     .qunit.assertEquals[first cols batch;`time;
-        "time leads, matching every schema in scripts/processes/uqf_stack_tables.q"];
+        "time leads, matching every schema in scripts/processes/uqs_tables.q"];
     .qunit.assertEquals[count distinct exec time from batch;1;
         "one stamp for the batch, not one per row - the rows arrived together"]};
 

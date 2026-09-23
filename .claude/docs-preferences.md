@@ -124,7 +124,7 @@ edited, including their own scripts and their own names.
 entry states what shipped on a date; rewriting one makes the record claim
 something that never happened.
 
-> *2026-09-17.* During the `torq-demo` → `uqf-stack` rename the drift ledger
+> *2026-09-17.* During the `torq-demo` → `uqs` rename the drift ledger
 > was rewritten by the first pass and reverted for this reason, while the
 > other historical files were left alone from the start. The maintainer was
 > told which files still carry the old name and why, rather than the boundary

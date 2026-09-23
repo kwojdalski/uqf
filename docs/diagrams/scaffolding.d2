@@ -1,4 +1,4 @@
-# scaffolding.d2 - what `uqf-stack new-job` writes, and what picks each file
+# scaffolding.d2 - what `uqs new-job` writes, and what picks each file
 # up afterwards.
 #
 # Rendered by scripts/generate/render_diagrams.py, which CI runs with
@@ -83,7 +83,7 @@ classes: {
   }
 }
 
-cmd: "uqf-stack new-job" {
+cmd: "uqs new-job" {
   class: band
 
   plan: "a ScaffoldPlan\nrendered first,\nwritten second\n\n--dry-run stops here" { class: command }
@@ -101,7 +101,7 @@ written: "Created" {
 appended: "Appended, not created" {
   class: band
 
-  tables: "uqf_stack_tables.q\nthe table definition:\nwithout it .u.upd drops\nthe rows in silence" { class: appended }
+  tables: "uqs_tables.q\nthe table definition:\nwithout it .u.upd drops\nthe rows in silence" { class: appended }
   nslist: "run_tests.q nsList\nthe one hand-kept list;\na suite absent from it\nloads and never runs" { class: appended }
   tablelist: "test_stack_tables.q\nexpected - a gate\nevery new table\npasses through" { class: appended }
 }

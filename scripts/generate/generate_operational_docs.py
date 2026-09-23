@@ -11,13 +11,13 @@ has no independent authority.
 
 Everything printed here is read from code that already declares it:
 
-    uqf_stack.model.pipelines.PIPELINES   procname, script, kind, port
+    uqs.model.pipelines.PIPELINES   procname, script, kind, port
                                             offset, the table it owns, its
                                             subscribe/publish edges
-    uqf_stack.stack.procs                 the vendored process.csv rows,
+    uqs.stack.procs                 the vendored process.csv rows,
                                             so the vendored stack is counted
                                             rather than remembered
-    uqf_stack.model.schemas               the table definitions, by name
+    uqs.model.schemas               the table definitions, by name
 
 Nothing is authored in this script. That is the point: the hand-written
 `docs/integrations/torq/README.md` listed uqf's processes in prose and had already gone
@@ -28,7 +28,7 @@ pipeline was added. Nobody noticed, because prose cannot fail.
 
 `subscribes`/`publishes` are declarations, and a declaration can lie. They
 are checked against each pipeline's own q script by
-`uqf_stack.model.pipeline_edges.verify_pipeline_edges`, which runs in the test
+`uqs.model.pipeline_edges.verify_pipeline_edges`, which runs in the test
 suite - so the chain is *q script -> declaration -> document*, with a check
 at each arrow. This script refuses to generate if that check fails, because
 a diagram derived from a wrong declaration is worse than a stale one: it
@@ -49,19 +49,19 @@ from pathlib import Path
 # scripts/ was foldered (#241). Getting it wrong does not raise - it
 # resolves to scripts/ and the checker reports over an empty tree.
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "python" / "uqf_stack" / "src"))
+sys.path.insert(0, str(REPO / "python" / "uqs" / "src"))
 
-from uqf_stack.model import schemas  # noqa: E402
-from uqf_stack.model.pipeline_edges import verify_pipeline_edges  # noqa: E402
-from uqf_stack.model.pipelines import PIPELINE_OFFSETS  # noqa: E402
-from uqf_stack.model.registry import (  # noqa: E402
+from uqs.model import schemas  # noqa: E402
+from uqs.model.pipeline_edges import verify_pipeline_edges  # noqa: E402
+from uqs.model.pipelines import PIPELINE_OFFSETS  # noqa: E402
+from uqs.model.registry import (  # noqa: E402
     DEFAULT_BASE_PORT,
     PIPELINES,
     read_port_lock,
     render_port_lock,
 )
-from uqf_stack.paths import PROCESS_PORTS_FILE, TABLES_FILE, default_paths  # noqa: E402
-from uqf_stack.stack import procs  # noqa: E402
+from uqs.paths import PROCESS_PORTS_FILE, TABLES_FILE, default_paths  # noqa: E402
+from uqs.stack import procs  # noqa: E402
 
 OUT = REPO / "docs" / "integrations" / "torq" / "processes.md"
 DAG_OUT = REPO / "src" / "etl" / "generated" / "pipeline_dag.q"
@@ -103,9 +103,9 @@ def render() -> str:
     schema_of = _schema_names()
     lines: list[str] = [BANNER, "# uqf stack processes", ""]
     lines += [
-        "Derived from `uqf_stack.model.pipelines.PIPELINES` and the vendored",
+        "Derived from `uqs.model.pipelines.PIPELINES` and the vendored",
         "`process.csv`. For how to start, stop and query the stack see",
-        "[docs/guides/uqf-stack.md](../../guides/uqf-stack.md); for the topology diagrams see",
+        "[docs/guides/uqs.md](../../guides/uqs.md); for the topology diagrams see",
         "[README.md](README.md).",
         "",
         f"**{len(vendored)} vendored processes** plus **{len(PIPELINES)} uqf processes**"

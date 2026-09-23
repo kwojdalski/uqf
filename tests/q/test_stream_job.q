@@ -80,7 +80,7 @@ test_a_job_that_does_nothing_is_refused:{[t]
         `procname`subscribes`publishes!(`idle1;`symbol$();`symbol$());
         "a job with neither a handler nor a timer runs nothing at all"]};
 
-/ autostart and note are read by uqf_stack's process registry, which is derived
+/ autostart and note are read by uqs's process registry, which is derived
 / from these declarations - so a malformed one is refused here, by name,
 / rather than read later as a registry that quietly disagrees.
 test_an_autostart_that_is_not_a_boolean_is_refused:{[t]

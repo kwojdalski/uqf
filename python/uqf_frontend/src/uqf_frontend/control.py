@@ -8,7 +8,7 @@ and each is a different kind of change with a different way of going wrong:
     worker config       a `.qwcfg` layer value, over IPC, in a live process
     backfill            a bounded worker run for a named range
 
-WHY THIS PACKAGE NOW DEPENDS ON uqf_stack, having deliberately not
+WHY THIS PACKAGE NOW DEPENDS ON uqs, having deliberately not
 before. `procfile.py` states the old rule and its reason: resolving two forms
 of port placeholder is not worth coupling a hot read path to another package.
 That reasoning holds for *reading a CSV column* and does not survive contact
@@ -26,7 +26,7 @@ WHAT IS DELIBERATELY NOT HERE. `clean`, which deletes logs, tplogs, wdb and
 the copied sample data. It is the one orchestrator verb whose blast radius is
 data rather than process state, and an HTTP route for it - reachable by
 anyone who can reach the port, on a deployment whose identity is a header
-anyone can set - is not something this seam should offer. `uqf-stack clean`
+anyone can set - is not something this seam should offer. `uqs clean`
 remains, where the person running it is at a terminal on the host.
 """
 
@@ -89,8 +89,8 @@ def _paths(settings: Settings):
     it names rather than trusted, so a wrong path fails here instead of
     starting the wrong stack.
     """
-    from uqf_stack import paths as stack_paths
-    from uqf_stack.paths import UqfStackPaths
+    from uqs import paths as stack_paths
+    from uqs.paths import UqsPaths
 
     if settings.stack_root is None:
         return stack_paths.default_paths()
@@ -100,13 +100,13 @@ def _paths(settings: Settings):
             f"UQF_FRONTEND_STACK_ROOT={root} does not look like the repository: "
             "lib/torq/torq.sh is not there"
         )
-    return UqfStackPaths(
+    return UqsPaths(
         repo_root=root,
         torqhome=root / "lib" / "torq",
         torqapphome=root / "lib" / "torq-finance-starter-pack",
-        torqdata=root / "scripts" / "output" / "uqf-stack",
+        torqdata=root / "scripts" / "output" / "uqs",
         scripts_dir=root / "scripts",
-        orchestrator_dir=root / "python" / "uqf_stack",
+        orchestrator_dir=root / "python" / "uqs",
     )
 
 
@@ -120,13 +120,13 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
     require_writes(settings)
     if action not in LIFECYCLE_ACTIONS:
         raise ValidationFailed(f"unknown action {action!r} - expected one of {LIFECYCLE_ACTIONS}")
-    from uqf_stack.paths import UqfStackError
-    from uqf_stack.stack import runtime
+    from uqs.paths import UqsError
+    from uqs.stack import runtime
 
     fn = {"start": runtime.start, "stop": runtime.stop, "restart": runtime.restart}[action]
     try:
         result = fn(_paths(settings), procs, base_port=settings.base_port, capture=True)
-    except UqfStackError as exc:
+    except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
     return CommandResult(
         action=action,
@@ -145,14 +145,14 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
     sometimes not bother.
     """
     require_writes(settings)
-    from uqf_stack.paths import UqfStackError
-    from uqf_stack.stack import procs as stack_procs
+    from uqs.paths import UqsError
+    from uqs.stack import procs as stack_procs
 
     paths = _paths(settings)
     try:
         stack_procs.set_process_config(paths, procname, field, value)
         return stack_procs.get_process_config(paths, procname, base_port=settings.base_port)
-    except UqfStackError as exc:
+    except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
 
 
@@ -163,7 +163,7 @@ def settable_fields(settings: Settings) -> list[str]:
     orchestrator's whitelist is the authority; echoing it here means the two
     cannot drift.
     """
-    from uqf_stack.model.pipelines import PROCESS_CSV_FIELDS
+    from uqs.model.pipelines import PROCESS_CSV_FIELDS
 
     return sorted(PROCESS_CSV_FIELDS)
 
@@ -175,9 +175,9 @@ def process_choices(settings: Settings) -> list[dict[str, Any]]:
     list rather than a free-text selector a caller mistypes and learns about
     from torq.sh's exit code. The rows are the orchestrator's effective
     process.csv - vendored, pipelines, extras, overrides - so the list here
-    and the list `uqf-stack start all` acts on cannot differ.
+    and the list `uqs start all` acts on cannot differ.
     """
-    from uqf_stack.stack import procs as stack_procs
+    from uqs.stack import procs as stack_procs
 
     return [
         {
@@ -272,13 +272,13 @@ def start_backfill(
     import os
     import subprocess
 
-    from uqf_stack.paths import UqfStackError
-    from uqf_stack.stack.runtime import bootstrap
+    from uqs.paths import UqsError
+    from uqs.stack.runtime import bootstrap
 
     paths = _paths(settings)
     try:
         overrides = bootstrap(paths, base_port=settings.base_port)
-    except UqfStackError as exc:
+    except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
 
     env = {

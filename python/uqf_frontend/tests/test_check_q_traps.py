@@ -573,7 +573,7 @@ _BAD_COL = "col" + "s"
 
 
 def test_a_builtin_as_a_column_name_in_an_embedded_literal_is_flagged():
-    # The exact shape that shipped in `uqf-stack schema` and threw 'assign
+    # The exact shape that shipped in `uqs schema` and threw 'assign
     # against a live process. `cols` was already in RISKY_PARAM_NAMES; no
     # rule was looking in Python.
     source = 'expr = "([] name:string tables `; ' + _BAD_COL + ':count each x)"\n'

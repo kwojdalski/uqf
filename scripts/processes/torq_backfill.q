@@ -18,7 +18,7 @@
 / is the opposite of every other process in the registry. Two consequences
 / are deliberate:
 / .
-/   startwithall=0   it must not start with the stack. `uqf-stack start` is
+/   startwithall=0   it must not start with the stack. `uqs start` is
 /                    for the streaming fleet; a backfill is a job an operator
 /                    or Airflow triggers with a range (ETL-15).
 /   exit at the end  the process leaves discovery when it finishes, so the
