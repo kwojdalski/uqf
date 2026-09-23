@@ -47,17 +47,23 @@ The CLI is also a `uqs` script entry point
 one-time setup:
 
 ```
-uv tool install --editable python/uqs
+scripts/dev/install.sh
 ```
 
-installs `uqs` onto your `PATH` as an editable link back to this
-repo's source, so from then on, from anywhere:
+installs `uqs` onto your `PATH` as an editable link back to this repo's
+source, so from then on, from anywhere:
 
 ```
 uqs start all      # start every startwithall=1 process
 uqs summary        # status table
 uqs stop all       # stop everything
 ```
+
+The script is `uv tool install --force --editable python/uqs` plus the two
+steps a one-liner skips: removing any install registered under a former
+distribution name, and then checking the command actually runs. Both matter
+for the reason the next paragraph gives. It is idempotent - re-run it after
+pulling, or any time `uqs` behaves like an older copy of itself.
 
 **Editable updates the code, not the script names, and not the path.** A
 `.pth` file points the install at `python/uqs/src`, so every source edit is
