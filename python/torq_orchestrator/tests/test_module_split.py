@@ -229,8 +229,6 @@ def test_every_folder_is_in_the_layering():
     the rule, which is how the flat package went 1270 lines unchecked."""
     package = PKG / "src" / "torq_orchestrator"
     folders = {
-        d.name
-        for d in package.iterdir()
-        if d.is_dir() and d.name not in {"__pycache__", "logger"}
+        d.name for d in package.iterdir() if d.is_dir() and d.name not in {"__pycache__", "logger"}
     }
     assert folders == set(ALLOWED_IMPORTS), folders ^ set(ALLOWED_IMPORTS)
