@@ -132,3 +132,57 @@ def test_the_documented_gateway_port_is_the_one_the_code_actually_defaults_to():
         f"environment.md documents a default the code does not use; "
         f"Settings().port is {Settings().port}, the row reads: {row}"
     )
+
+
+# ----------------------------------------- the producer side, added with #371
+
+
+def test_every_variable_build_env_exports_is_consumed_by_something():
+    """The check itself, against the real tree.
+
+    `build_env` writes every key into the generated setenv.sh, which every
+    process torq.sh starts inherits, so an export nothing reads is pure cost.
+    Nothing verified that until now: produced names were exempted from the
+    stale direction because *we* never read them back, and the exemption was
+    read as "no consumer needed at all". `KDBSTACKID` sat there exporting
+    `-stackid <port>` to nobody, while torq.sh and launchprocess.sh built that
+    flag themselves out of KDBBASEPORT.
+    """
+    produced = cer.produced_names()
+    assert produced, "parsed no keys out of build_env - the dict literal moved"
+    unconsumed = {n for n, files in cer.producer_consumers(produced).items() if not files}
+    assert not unconsumed, f"exported by build_env, consumed by nothing: {sorted(unconsumed)}"
+
+
+def test_the_vendored_process_csv_counts_as_a_consumer():
+    """`.csv` is absent from SCANNED_SUFFIXES, and process.csv is where most of
+    build_env is consumed - every `${KDBHDB}`-style placeholder in a row. The
+    first version of this check scanned the read side's suffixes and reported
+    KDBAPPCODE, whose only consumer is that file, as dead.
+
+    A false positive on a live variable is worse than the hole the check was
+    added to close, because it teaches the reader to disbelieve the gate."""
+    consumers = cer.producer_consumers({"KDBAPPCODE"})
+    assert any(f.endswith("process.csv") for f in consumers["KDBAPPCODE"]), consumers["KDBAPPCODE"]
+
+
+def test_a_variable_used_only_by_the_vendored_test_harness_is_not_consumed():
+    """The distinction the check draws is not "does any file mention it" but
+    "is the consuming file on a path this repository executes".
+
+    lib/torq/tests/**/run.sh is the vendored framework's own harness, which
+    this repository never runs, so a hit there must not keep a variable alive.
+    KDBTESTS is the control: it appears all over that harness AND in
+    lib/torq/torq.q, which every process loads, so it stays consumed."""
+    assert "lib/torq/tests/" in cer.NON_CONSUMERS
+    files = cer.producer_consumers({"KDBTESTS"})["KDBTESTS"]
+    assert files, "KDBTESTS is read by lib/torq/torq.q and must count as consumed"
+    assert not any("lib/torq/tests/" in f for f in files), files
+
+
+def test_the_mac_launcher_is_not_a_consumer_because_it_assigns_the_variable():
+    """start_torq_demo_mac.sh is excluded for a stronger reason than disuse: it
+    ASSIGNS the variables it reads (`KDBSTACKID="-stackid ${KDBBASEPORT}"`), so
+    a hit there could never show that OUR exported value is wanted. Keeping it
+    in scope would have made KDBSTACKID look live for ever."""
+    assert any("start_torq_demo_mac" in skip for skip in cer.NON_CONSUMERS)

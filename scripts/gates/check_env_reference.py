@@ -114,8 +114,51 @@ QWCFG_READ = re.compile(
 )
 
 #: `build_env`'s dict keys: produced for TorQ, never read back by us, so they
-#: are exempt from the stale direction but still required to be documented.
+#: are exempt from the stale direction but still required to be documented -
+#: and, per `producer_consumers` below, required to have a consumer SOMEWHERE.
+#: Exempting them from both directions is what let `KDBSTACKID` sit here for
+#: months exporting `-stackid <port>` to nobody.
 ENV_PRODUCER = REPO / "python" / "uqs" / "src" / "uqs" / "stack" / "env.py"
+
+#: Where a produced variable may legitimately be consumed. Mostly the vendored
+#: trees: `build_env` exists to feed them, so `lib/` is the answer for nearly
+#: every row, and a check that ignored it would call all 22 of them dead.
+CONSUMER_ROOTS = ("lib", "src", "scripts", "python", "web", "tests")
+
+#: Consumers that do not count, each for a stated reason. Excluding one is a
+#: claim that a hit there does not keep the variable alive.
+NON_CONSUMERS = (
+    # The vendored framework's own test harness and docs. We run neither, so a
+    # variable used only by `lib/torq/tests/**/run.sh` is dead FOR US even
+    # though the file is real - which is the whole distinction this check
+    # draws.
+    "lib/torq/tests/",
+    "lib/torq/docs/",
+    # Monit templates: an ops integration this repository does not deploy.
+    "lib/torq/monit/",
+    # The vendored launcher `uqs` replaced. It does not merely go unused - it
+    # ASSIGNS the variables it reads (`KDBSTACKID="-stackid ${KDBBASEPORT}"`),
+    # so a hit here never demonstrates that our value is wanted.
+    "start_torq_demo_mac",
+    # Both vendored setenv.sh files DEFINE these rather than consume them, and
+    # bootstrap() points SETENV at a generated file instead, so neither runs.
+    "lib/torq/setenv.sh",
+    "lib/torq-finance-starter-pack/setenv.sh",
+)
+
+#: The consumer scan needs suffixes the READ scan does not. `process.csv` is
+#: where most of `build_env` is consumed - every `${KDBHDB}`-style placeholder
+#: in a process row - and `.csv` is absent from SCANNED_SUFFIXES, so without
+#: this the check reported `KDBAPPCODE` (consumed only by the vendored
+#: process.csv) as exported to nobody. A false positive on a live variable is
+#: worse than the hole it was added to close: it teaches the reader to
+#: disbelieve the gate.
+CONSUMER_SUFFIXES = SCANNED_SUFFIXES | {".csv", ".txt", ".tsx", ".toml"}
+
+#: A shell or CSV expansion of a variable: `$NAME` or `${NAME}`. process.csv
+#: placeholders and torq.sh both look like this, and between them they are how
+#: most of `build_env` is actually consumed.
+EXPANSION = re.compile(r"\$\{?([A-Z][A-Z0-9_]*)\}?")
 
 #: This file. Its own regexes contain example variable names, and scanning
 #: itself made the first run report a variable called NAME - the same
@@ -173,6 +216,47 @@ def produced_names() -> set[str]:
         return set()
     text = ENV_PRODUCER.read_text(encoding="utf-8")
     return set(re.findall(r'^\s*"([A-Z][A-Z0-9_]*)":\s', text, re.MULTILINE))
+
+
+def producer_consumers(produced: set[str]) -> dict[str, list[str]]:
+    """{produced variable: files that consume it}, excluding NON_CONSUMERS.
+
+    Separate from `read_names` because the scope is different in both
+    directions: this one must include `lib/`, which the read side deliberately
+    excludes ("their surface is not ours to verify"), and must exclude parts of
+    `lib/` that exist but never run here.
+
+    A variable with an empty list is exported to nobody. That is not the same
+    as unused-by-us: `KDBTESTS` is read only by `lib/torq/torq.q`, which every
+    process loads, and is live. The distinction is whether the consuming file
+    is on a path this repository actually executes.
+    """
+    found: dict[str, list[str]] = {name: [] for name in produced}
+    for root_name in CONSUMER_ROOTS:
+        root = REPO / root_name
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.suffix not in CONSUMER_SUFFIXES:
+                continue
+            rel = str(path.relative_to(REPO))
+            if any(skip in rel for skip in NON_CONSUMERS):
+                continue
+            if "node_modules" in path.parts or ".venv" in path.parts:
+                continue
+            if path.resolve() in (SELF, ENV_PRODUCER.resolve()):
+                continue
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            hits = set(EXPANSION.findall(text))
+            for pattern in LITERAL_READS:
+                for match in pattern.finditer(text):
+                    hits.update(re.findall(r"[A-Z][A-Z0-9_]*", match.group(1)))
+            for name in hits & produced:
+                found[name].append(rel)
+    return found
 
 
 def documented() -> tuple[set[str], set[str]]:
@@ -247,6 +331,8 @@ def main() -> int:
         if name not in PREREQUISITES and not is_documented(name)
     }
     missing_produced = sorted(name for name in produced if not is_documented(name))
+    consumers = producer_consumers(produced)
+    unconsumed = sorted(name for name, files in consumers.items() if not files)
     stale = sorted(
         name
         for name in exact
@@ -267,6 +353,22 @@ def main() -> int:
         )
         for name in missing_produced:
             print(f"  {name}", file=sys.stderr)
+    if unconsumed:
+        problems += len(unconsumed)
+        print(
+            "\nExported by build_env, consumed by nothing that runs here:",
+            file=sys.stderr,
+        )
+        for name in unconsumed:
+            print(f"  {name}", file=sys.stderr)
+        print(
+            "\nEvery variable build_env exports is written into the generated "
+            "setenv.sh and\ninherited by every process torq.sh starts, so one "
+            "nothing reads is cost with no\neffect. Delete it from build_env "
+            "and from docs/reference/environment.md - or, if\nsomething really "
+            "does consume it, say where in NON_CONSUMERS' reasoning.",
+            file=sys.stderr,
+        )
     if stale:
         problems += len(stale)
         print("\nListed in docs/reference/environment.md, read by nothing:", file=sys.stderr)
@@ -299,7 +401,7 @@ def main() -> int:
 
     if problems:
         print(
-            f"\n{problems} problem(s). docs/reference/environment.md is the operator-facing listr;",
+            f"\n{problems} problem(s). docs/reference/environment.md is the operator-facing list;",
             file=sys.stderr,
         )
         print("it is only worth having while it is complete.", file=sys.stderr)
@@ -308,7 +410,8 @@ def main() -> int:
     read_count = len(reads) - len(PREREQUISITES & set(reads))
     print(
         f"docs/reference/environment.md matches the code: {read_count} read, "
-        f"{len(produced)} produced, {len(prefixes)} pattern(s)."
+        f"{len(produced)} produced (each consumed somewhere), "
+        f"{len(prefixes)} pattern(s)."
     )
     return 0
 
