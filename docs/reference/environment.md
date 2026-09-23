@@ -106,7 +106,6 @@ spend an afternoon.
 | `KDBDQCDB` | the DQC database |
 | `KDBDQEDB` | the DQE database |
 | `KDBBASEPORT` | the port block base |
-| `KDBSTACKID` | `-stackid <base port>` |
 | `RLWRAP` | `rlwrap` |
 | `QCON` | `qcon` |
 | `QCMD` | `q` |
