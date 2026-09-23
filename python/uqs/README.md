@@ -77,11 +77,12 @@ scripts/dev/install.sh
 (`uv tool install --force --editable python/uqs`, plus removing any install
 under a former distribution name and verifying the command runs.)
 
-If `uv tool list` shows a `torq-orchestrator`, that is an install from before
-this package was renamed; its script still imports `torq_orchestrator` and now
-fails. `uv tool uninstall torq-orchestrator` first - see
-[docs/guides/uqs.md](../../docs/guides/uqs.md) for why an editable
-install picks up source edits but not this.
+The script handles the stale-install case for you: an entry in `uv tool list`
+under a former name (`uqf-stack`, `torq-orchestrator`) is an install from
+before this package was renamed, its script still imports the old module, and
+it owns `uqs` on your `PATH` until it is uninstalled. See
+[docs/guides/uqs.md](../../docs/guides/uqs.md) for why an editable install
+picks up source edits but not that.
 
 then, from anywhere:
 
