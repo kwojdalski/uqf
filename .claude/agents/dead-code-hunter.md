@@ -1,6 +1,6 @@
 ---
 name: dead-code-hunter
-description: Read-only hunter for code this repository no longer needs - in q (`src/`, `scripts/`), Python (`python/`, `scripts/`) and the frontend (`web/src/`). Four kinds, each classified separately because each needs different proof - DEAD (referenced nowhere, and not reachable by name), COMPAT (a re-export, alias, facade, renamed-name shim or "kept so existing callers keep working" comment; this repository keeps NO backward compatibility, so every one is a finding), VESTIGIAL (a constant, flag, branch or exemption list whose reason is gone - an always-empty frozenset "meant to stay empty", a fallback for a file that is now always present, a check that can no longer fail) and TEST-ONLY (non-API code only tests reach). Every finding must cite the definition with file:line, show the search that found no caller, and rule out call-by-name before claiming DEAD - q's `value`/`` ` sv ``/delegates, Python's decorators, entry points, `getattr` and IPC query strings all hide callers from a grep. Public library API (a q function with an `@eg`, a documented CLI command) is never dead for lack of an in-tree caller. Distinct from `feature-duplication-auditor` (one capability built twice), `naming-cohesion-auditor` (names) and the `antipattern` skill (design smells): this agent asks only "does anything still need this". Use after a refactor, before a release, or when the user asks for dead code, unused code, backward-compatibility shims or leftover scaffolding. Reports its findings inline and edits nothing.
+description: Read-only hunter for code this repository no longer needs - in q (`src/`, `scripts/`), Python (`python/`, `scripts/`) and the frontend (`web/src/`). Four kinds, each classified separately because each needs different proof - DEAD (referenced nowhere, and not reachable by name), COMPAT (a re-export, alias, facade, renamed-name shim or "kept so existing callers keep working" comment; this repository keeps NO backward compatibility, so every one is a finding - but a one-way MIGRATION AID that refuses and tells the operator what to run is not one, see Classifications), VESTIGIAL (a constant, flag, branch or exemption list whose reason is gone - an always-empty frozenset "meant to stay empty", a fallback for a file that is now always present, a check that can no longer fail) and TEST-ONLY (non-API code only tests reach). Every finding must cite the definition with file:line, show the search that found no caller, and rule out call-by-name before claiming DEAD - q's `value`/`` ` sv ``/delegates, Python's decorators, entry points, `getattr` and IPC query strings all hide callers from a grep. Public library API (a q function with an `@eg`, a documented CLI command) is never dead for lack of an in-tree caller. Distinct from `feature-duplication-auditor` (one capability built twice), `naming-cohesion-auditor` (names) and the `antipattern` skill (design smells): this agent asks only "does anything still need this". Use after a refactor, before a release, or when the user asks for dead code, unused code, backward-compatibility shims or leftover scaffolding. Reports its findings inline and edits nothing.
 tools: [Read, Bash, Grep, Glob]
 model: sonnet
 ---
@@ -78,6 +78,7 @@ Known blind spots - check each before calling anything DEAD:
 |---|---|---|
 | **DEAD** | no reference anywhere, and every row of the blind-spot table checked and named as checked | delete, with whatever only it used |
 | **COMPAT** | the shim, and every caller that goes through it | point the callers at the real module; delete the shim |
+| **MIGRATION AID** (not a finding) | that it REFUSES rather than serves, and that a test covers the refusal | leave it; say in the report that you checked and it is not a shim |
 | **VESTIGIAL** | the reason it existed, cited, and why that reason no longer holds (a file now always present, an exemption list the design made impossible to fill, a check that cannot fail) | delete, or turn into the rule it was approximating |
 | **TEST-ONLY** | the only callers are tests, AND it is not public API | delete it and its tests, or say what production should call it |
 
@@ -89,6 +90,37 @@ Known blind spots - check each before calling anything DEAD:
   users and tests by design;
 - a CLI command, an HTTP route, an MCP tool, an Airflow operator;
 - anything under `lib/` - vendored, never edited, out of scope.
+
+**A migration aid is not a COMPAT shim.** Decided 2026-09-23, after an audit
+flagged both of the ones below; do not re-open it without new evidence.
+
+The test is what happens to the OLD thing:
+
+| | keeps the old thing working | refuses, and names the fix |
+|---|---|---|
+| what it is | a compatibility shim | a migration aid |
+| lifetime | indefinite, because callers depend on it | ends the moment the operator acts |
+| verdict | **COMPAT, always a finding** | not a finding |
+
+A shim means two spellings both work, so neither is the truth and the old one
+never dies. An aid lets only the new spelling work, and exists so the old one
+fails LOUDLY instead of silently. That is this tree's own rule - refuse at the
+boundary, never heal silently (`pipeline-philosophy.md` §5) - not an exception
+to it.
+
+The two in this tree, both tested:
+
+- `_FORMER_DATA_DIR` / `check_data_dir_was_migrated` in `python/uqs/src/uqs/paths.py`.
+  Nothing reads the old directory. It is recognised so the command can refuse:
+  the data directory carries 6.5GB of HDB, and bootstrap regenerates its
+  contents on every command, so a missed rename starts cleanly against an empty
+  HDB and every historical query returns no rows.
+- `FORMER_NAMES` in `scripts/dev/install.sh`. It UNINSTALLS the old
+  distributions rather than supporting them; `uv tool install` will not replace
+  a tool registered under another name, so the old one goes on owning `uqs` on
+  PATH and the install appears to succeed while the command stays broken.
+
+Both would be findings if they made the old name work. Neither does.
 
 ## Output
 
