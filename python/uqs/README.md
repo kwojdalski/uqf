@@ -71,8 +71,11 @@ One-time, installs the `uqs` command onto your `PATH` as an editable
 link back to this source (edits picked up immediately, no reinstall):
 
 ```
-uv tool install --editable python/uqs
+scripts/dev/install.sh
 ```
+
+(`uv tool install --force --editable python/uqs`, plus removing any install
+under a former distribution name and verifying the command runs.)
 
 If `uv tool list` shows a `torq-orchestrator`, that is an install from before
 this package was renamed; its script still imports `torq_orchestrator` and now
