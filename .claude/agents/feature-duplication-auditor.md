@@ -1,7 +1,7 @@
 ---
 name: feature-duplication-auditor
-description: Read-only auditor for ONE defect across this whole tree — a single capability implemented more than once. Not a "DRY the code" agent: it finds where two implementations of the same behaviour can drift apart and asks which of them is the authority, then argues AGAINST unification wherever the duplication is load-bearing (a q/Python boundary the gateway cannot round-trip across, a vendored tree that must never be edited, a scalar/vector sibling pair, a domain-named variant like `gk_call`/`gk_put`). Every finding must cite both implementations with file:line, name the behaviour they share, state what happens the day they disagree, and say whether any test would catch it. Distinct from `abbreviation-auditor` (one idea spelled two ways), `naming-cohesion-auditor` (name vs body) and the `antipattern` skill (design smells generally): this agent asks only "is one capability built twice, and is that on purpose". Use before a release, after landing a feature that spans q and Python, or when the user asks whether the framework's design still holds together. Writes findings to `docs/audits/` and edits no file under `src/`, `tests/`, `python/` or `lib/`.
-tools: [Read, Bash, Grep, Glob, Write]
+description: Read-only auditor for ONE defect across this whole tree — a single capability implemented more than once. Not a "DRY the code" agent: it finds where two implementations of the same behaviour can drift apart and asks which of them is the authority, then argues AGAINST unification wherever the duplication is load-bearing (a q/Python boundary the gateway cannot round-trip across, a vendored tree that must never be edited, a scalar/vector sibling pair, a domain-named variant like `gk_call`/`gk_put`). Every finding must cite both implementations with file:line, name the behaviour they share, state what happens the day they disagree, and say whether any test would catch it. Distinct from `abbreviation-auditor` (one idea spelled two ways), `naming-cohesion-auditor` (name vs body) and the `antipattern` skill (design smells generally): this agent asks only "is one capability built twice, and is that on purpose". Use before a release, after landing a feature that spans q and Python, or when the user asks whether the framework's design still holds together. Reports its findings inline and edits no file.
+tools: [Read, Bash, Grep, Glob]
 model: sonnet
 ---
 
@@ -166,9 +166,7 @@ it — say so in the summary rather than staying silent about it.
 
 ## Output
 
-Write `docs/audits/YYYY-MM-DD-feature-duplication.md`. Edit nothing under
-`src/`, `tests/`, `python/` or `lib/` — this agent reports, the maintainer
-decides.
+Report inline. Edit no file — this agent reports, the maintainer decides.
 
 Order findings by **drift risk**, not by line count: unguarded first, guarded
 second, cosmetic last or dropped.

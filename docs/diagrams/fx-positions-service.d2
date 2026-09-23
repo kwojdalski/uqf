@@ -17,6 +17,15 @@
 # startup, BEFORE the subscription exists. Drawing it as just another
 # input would hide the ordering the recovery depends on.
 
+#
+# NO grid-columns ON THE BANDS. dagre lays a grid container out as one
+# opaque block, so edges into its cells do not rank anything: the first
+# version gridded every band, came out as a 3427x256 strip with all five
+# bands in one row, and drew every edge along the same horizontal line
+# through the boxes between. The republish edge starts at the service,
+# which is who calls publish (fx_positions.q on_timer), rather than at the
+# two tables - from there it was a back-edge cut through the state band.
+
 direction: down
 
 vars: {
@@ -91,27 +100,21 @@ classes: {
 
 runners: "the publish seam — a job never chooses its own transport" {
   class: band
-  grid-columns: 2
-  grid-gap: 30
 
   standalone: "run_stream.q\n.qproc.standalone\nstock kdb+, no lib/torq" { class: plant }
   torq: "torq_stream.q\n.qproc.stream\nthe TorQ stack" { class: lib }
 }
 
-pipeline: "the service — one file per step, none of them aware of a runner" {
+pipeline: "the service — no step in it knows its runner" {
   class: band
-  grid-columns: 3
-  grid-gap: 26
 
   feed: "fx_orders_feed\norder flow: new, filled,\ncancelled, rejected" { class: feed }
   plant: ".qtick\nsubscribe · publish\nlog · replay" { class: plant }
   service: "fx_positions\nnets FILLED orders\nsnapshots every 5s" { class: job }
 }
 
-state: "what the service holds and what it emits" {
+state: "what it holds and emits" {
   class: band
-  grid-columns: 3
-  grid-gap: 26
 
   book: "the book\nkeyed (sym, book, product)\nbase_qty · quote_qty" { class: table }
   snapshot: "fx_position\nthe whole book,\nnot only what moved" { class: table }
@@ -120,10 +123,8 @@ state: "what the service holds and what it emits" {
 
 log: "tickerplant log — one file a day" { class: store }
 
-modules: "the pure modules underneath — no state, no clock, no sockets" {
+modules: "pure modules — no state, clock or sockets" {
   class: band
-  grid-columns: 2
-  grid-gap: 26
 
   desk: ".qdesk\nnets fills along\ndeclared dimensions" { class: job }
   limit: ".qlimit\ncaps · breaches ·\nalert throttling" { class: job }
@@ -142,8 +143,7 @@ pipeline.service -> state.book: "net the filled ones"
 state.book -> state.snapshot: "on the timer"
 state.book -> state.breach: "when a cap is crossed,\nonce per alert period"
 
-state.snapshot -> pipeline.plant: "republish"
-state.breach -> pipeline.plant: "republish"
+pipeline.service -> pipeline.plant: "republish fx_position\nand fx_limit_breach"
 
 pipeline.service -> modules.desk: "apply_fills"
 pipeline.service -> modules.limit: "measure · evaluate · throttle"

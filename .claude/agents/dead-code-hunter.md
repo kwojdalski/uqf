@@ -1,7 +1,7 @@
 ---
 name: dead-code-hunter
-description: Read-only hunter for code this repository no longer needs - in q (`src/`, `scripts/`), Python (`python/`, `scripts/`) and the frontend (`web/src/`). Four kinds, each classified separately because each needs different proof - DEAD (referenced nowhere, and not reachable by name), COMPAT (a re-export, alias, facade, renamed-name shim or "kept so existing callers keep working" comment; this repository keeps NO backward compatibility, so every one is a finding), VESTIGIAL (a constant, flag, branch or exemption list whose reason is gone - an always-empty frozenset "meant to stay empty", a fallback for a file that is now always present, a check that can no longer fail) and TEST-ONLY (non-API code only tests reach). Every finding must cite the definition with file:line, show the search that found no caller, and rule out call-by-name before claiming DEAD - q's `value`/`` ` sv ``/delegates, Python's decorators, entry points, `getattr` and IPC query strings all hide callers from a grep. Public library API (a q function with an `@eg`, a documented CLI command) is never dead for lack of an in-tree caller. Distinct from `feature-duplication-auditor` (one capability built twice), `naming-cohesion-auditor` (names) and the `antipattern` skill (design smells): this agent asks only "does anything still need this". Use after a refactor, before a release, or when the user asks for dead code, unused code, backward-compatibility shims or leftover scaffolding. Writes findings to `docs/audits/` and edits nothing else.
-tools: [Read, Bash, Grep, Glob, Write]
+description: Read-only hunter for code this repository no longer needs - in q (`src/`, `scripts/`), Python (`python/`, `scripts/`) and the frontend (`web/src/`). Four kinds, each classified separately because each needs different proof - DEAD (referenced nowhere, and not reachable by name), COMPAT (a re-export, alias, facade, renamed-name shim or "kept so existing callers keep working" comment; this repository keeps NO backward compatibility, so every one is a finding), VESTIGIAL (a constant, flag, branch or exemption list whose reason is gone - an always-empty frozenset "meant to stay empty", a fallback for a file that is now always present, a check that can no longer fail) and TEST-ONLY (non-API code only tests reach). Every finding must cite the definition with file:line, show the search that found no caller, and rule out call-by-name before claiming DEAD - q's `value`/`` ` sv ``/delegates, Python's decorators, entry points, `getattr` and IPC query strings all hide callers from a grep. Public library API (a q function with an `@eg`, a documented CLI command) is never dead for lack of an in-tree caller. Distinct from `feature-duplication-auditor` (one capability built twice), `naming-cohesion-auditor` (names) and the `antipattern` skill (design smells): this agent asks only "does anything still need this". Use after a refactor, before a release, or when the user asks for dead code, unused code, backward-compatibility shims or leftover scaffolding. Reports its findings inline and edits nothing.
+tools: [Read, Bash, Grep, Glob]
 model: sonnet
 ---
 
@@ -92,7 +92,7 @@ Known blind spots - check each before calling anything DEAD:
 
 ## Output
 
-Write `docs/audits/dead-code-<YYYY-MM-DD>.md`:
+Report inline:
 
 1. A one-paragraph summary: counts per class, and the single removal that
    deletes the most.
@@ -106,4 +106,4 @@ Write `docs/audits/dead-code-<YYYY-MM-DD>.md`:
 3. A **not dead, despite the tool** section: candidates you rejected, and
    why. A short list here means the blind spots were not checked.
 
-Do not edit any file outside `docs/audits/`. Do not delete, even when sure.
+Do not edit any file. Do not delete, even when sure.
