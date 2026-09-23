@@ -99,16 +99,6 @@ COVERAGE = """{[ds;part;release;at]
     where dataset=ds, partition=part, source_version=release,
           recorded_at<=at, at<superseded_at}"""
 
-#: Row count for a whitelisted table, so a UI can page without pulling rows.
-COUNT = "{[t] count value t}"
-
-#: Cheap liveness probe. Returns the gateway's own UTC time.
-#:
-#: An *expression*, not a lambda: sending ``"{[] .z.p}"`` with no arguments
-#: makes q return the function itself, and kola cannot deserialise a q
-#: function ("Not supported k type 100"). Confirmed against a live process.
-PING = ".z.p"
-
 
 def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
     """Turn one JSON value into the Python type kola maps to *qtype*.

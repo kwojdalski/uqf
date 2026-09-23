@@ -24,6 +24,10 @@ PIPELINE_LIB_SCRIPT = "processes/torq_pipeline.q"
 #: were EIGHT near-identical scripts here before, one per job.
 STREAM_RUNNER_SCRIPT = "processes/torq_stream.q"
 
+#: The one process script every bounded worker runs under;
+#: UQF_BACKFILL_WORKER names which worker at runtime.
+BACKFILL_RUNNER_SCRIPT = "processes/torq_backfill.q"
+
 # The access list a real .sub.subscribe subscriber needs: an ETL process
 # borrows an already-credentialed proctype so .servers.startup[] can open an
 # access-listed handle to stp1. Feeds only publish and need no credentials.
@@ -107,7 +111,7 @@ class Pipeline:
     # .qpipe.publish; the check now reads the table at that call site, so
     # every pipeline's declared publishes are verified the same way.
     loads_qpipe: bool = False  # load scripts/processes/torq_pipeline.q ahead of its own script
-    offset: int | None = None  # None = allocate from PIPELINE_BLOCK_START in list order
+    offset: int | None = None  # set by model/registry.py from the port lock
     localtime: str = "1"
     startwithall: str = "1"
     note: str = ""  # why this row deviates from the defaults, if it does
@@ -164,12 +168,8 @@ class Pipeline:
     def schema(self) -> str | None:
         """The owned table's q definition, read from uqf_stack_tables.q.
 
-        DERIVED, not declared. This was a `schema=X_TABLE_SCHEMA` field sitting
-        beside `table="x"`, and `X_TABLE_SCHEMA` is defined in model/schemas.py as
-        `_DEFS["x"]` - the same lookup, written out by hand in two files.
-        Across the registry: fourteen pipelines carry a table, fourteen carried
-        a schema, and not one of them disagreed, which is what a derived value
-        looks like before anyone derives it.
+        DERIVED, not declared: `table` is read from the job's declaration and
+        its definition from the q table file.
 
         A table the q file does not define RAISES rather than returning None.
         `.u.upd` onto a table the plant has never been told about discards the

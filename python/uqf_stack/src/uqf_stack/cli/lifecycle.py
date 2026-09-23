@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import typer
 
-from uqf_stack import core
+from uqf_stack import paths as stack_paths
 from uqf_stack.cli.shared import (
     PortOpt,
     ProcsArg,
@@ -26,6 +26,10 @@ from uqf_stack.cli.shared import (
     log,
 )
 from uqf_stack.model import dependencies
+from uqf_stack.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
+from uqf_stack.paths import UqfStackError
+from uqf_stack.stack import listing, runtime
 
 
 def _warn_about_unfed_inputs(procs: str, port: int) -> None:
@@ -51,7 +55,9 @@ def _warn_about_unfed_inputs(procs: str, port: int) -> None:
             return  # `start all` brings up every startwithall=1 producer too
         running = {
             row["Process"]
-            for row in core.summary_rows(core.summary(_paths(), base_port=port).stdout, {}, None)
+            for row in listing.summary_rows(
+                runtime.summary(_paths(), base_port=port).stdout, {}, None
+            )
             if row["Status"] == "up"
         }
         warnings = [
@@ -72,7 +78,7 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     """Say so when the fleet this start produces is bigger than the licence
     lets one process hold handles for.
 
-    The licence caps a q process at `PLANT_CONNECTION_BUDGET` concurrent
+    The licence caps a q process at `LICENCE_CONNECTION_LIMIT` concurrent
     connections. Every streaming job opens a handle to stp1 and monitor1
     opens one per process it watches, so past that count the cap - not the
     configuration - decides what works. The plant does not complain: it
@@ -86,13 +92,15 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     try:
         running = {
             row["Process"]
-            for row in core.summary_rows(core.summary(_paths(), base_port=port).stdout, {}, None)
+            for row in listing.summary_rows(
+                runtime.summary(_paths(), base_port=port).stdout, {}, None
+            )
             if row["Status"] == "up"
         }
         if procs.strip() == "all":
             starting = {
                 row["procname"]
-                for row in core.list_items(_paths(), "processes", base_port=port)
+                for row in listing.list_items(_paths(), "processes", base_port=port)
                 if row.get("startwithall") == "1"
             }
         else:
@@ -101,11 +109,11 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
         log.debug("connection-cap warning skipped: {}", exc)
         return
-    if total <= core.PLANT_CONNECTION_BUDGET:
+    if total <= LICENCE_CONNECTION_LIMIT:
         return
     console.print(
         f"[yellow]warning[/] this start leaves {total} processes running, past the "
-        f"{core.PLANT_CONNECTION_BUDGET} concurrent connections this licence allows "
+        f"{LICENCE_CONNECTION_LIMIT} concurrent connections this licence allows "
         "one q process. Handles past the cap are reset, not refused: the process "
         "wedges in its retry loop and still reports `up`, and monitor1 may become "
         "unreachable so the Heartbeat column empties. Start a subset, or stop what "
@@ -114,33 +122,33 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
 
 
 @app.command()
-def start(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
+def start(procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Start every startwithall=1 process (or specific process name(s))."""
     _warn_about_unfed_inputs(procs, port)
     _warn_about_connection_cap(procs, port)
-    _run_streaming(core.start, procs, base_port=port)
+    _run_streaming(runtime.start, procs, base_port=port)
 
 
 @app.command()
-def stop(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
+def stop(procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Stop every running process (or specific process name(s))."""
-    _run_streaming(core.stop, procs, base_port=port)
+    _run_streaming(runtime.stop, procs, base_port=port)
 
 
 @app.command()
-def restart(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
+def restart(procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
     _warn_about_unfed_inputs(procs, port)
     _warn_about_connection_cap(procs, port)
-    _run_streaming(core.restart, procs, base_port=port)
+    _run_streaming(runtime.restart, procs, base_port=port)
 
 
 @app.command("print")
-def print_startlines(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
+def print_startlines(procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Show the exact startup command line(s) without starting anything."""
     try:
-        result = core.print_procs(_paths(), procs, base_port=port)
-    except core.UqfStackError as exc:
+        result = runtime.print_procs(_paths(), procs, base_port=port)
+    except UqfStackError as exc:
         _die(exc)
         return
     console.print(result.stdout)
@@ -150,17 +158,17 @@ def print_startlines(procs: ProcsArg = "all", port: PortOpt = core.DEFAULT_BASE_
 @app.command()
 def clean() -> None:
     """Wipe scripts/output/uqf-stack/ (logs, tplogs, wdb, the copied sample data)."""
-    core.clean(_paths())
+    stack_paths.clean(_paths())
 
 
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-def raw(ctx: typer.Context, port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
+def raw(ctx: typer.Context, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Pass any other torq.sh verb straight through, e.g.:
     `raw -- debug rdb1`, `raw -- qcon gateway1 admin:admin`, `raw -- top feed1`.
     """
     try:
-        result = core.run_torq_sh(_paths(), ctx.args, base_port=port, capture=False)
-    except core.UqfStackError as exc:
+        result = runtime.run_torq_sh(_paths(), ctx.args, base_port=port, capture=False)
+    except UqfStackError as exc:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)

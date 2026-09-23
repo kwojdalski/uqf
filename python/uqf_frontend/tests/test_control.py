@@ -207,10 +207,10 @@ def test_setting_a_field_returns_the_effective_row(writeable, monkeypatch):
 def test_an_unknown_field_is_refused_by_the_orchestrator_whitelist(writeable, monkeypatch):
     """The whitelist lives in the orchestrator and is not re-implemented
     here - one authority, so the two cannot drift."""
-    from uqf_stack import core
+    from uqf_stack.paths import UqfStackError
 
     def refuse(*a, **k):
-        raise core.UqfStackError("unknown process.csv field 'nope'")
+        raise UqfStackError("unknown process.csv field 'nope'")
 
     _patch_core(monkeypatch, set_process_config=refuse)
     resp = writeable.put("/control/process/rdb1/config", json={"field": "nope", "value": "1"})
@@ -331,19 +331,22 @@ def test_a_malformed_range_bound_says_what_it_wanted(writeable):
 
 
 def _patch_core(monkeypatch, **fns: Any) -> None:
-    """Patch orchestrator functions on the module `control` imports lazily."""
-    from uqf_stack import core
+    """Patch orchestrator functions on the module that defines each - where
+    `control`, which imports them lazily, looks them up."""
+    from uqf_stack import paths as stack_paths
+    from uqf_stack.stack import procs, runtime
 
     for name, fn in fns.items():
-        monkeypatch.setattr(core, name, fn)
-    monkeypatch.setattr(core, "default_paths", lambda: "PATHS")
+        (module,) = [m for m in (runtime, procs) if hasattr(m, name)]
+        monkeypatch.setattr(module, name, fn)
+    monkeypatch.setattr(stack_paths, "default_paths", lambda: "PATHS")
 
 
 def _patch_bootstrap(monkeypatch) -> None:
-    from uqf_stack import core
+    from uqf_stack import paths as stack_paths
     from uqf_stack.stack import runtime
 
-    monkeypatch.setattr(core, "default_paths", lambda: _FakePaths())
+    monkeypatch.setattr(stack_paths, "default_paths", lambda: _FakePaths())
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QBIN": "/bin/true"})
 
 

@@ -36,10 +36,14 @@ uqf-stack new-job tickfeed --publishes ticks --columns "sym:symbol, px:float"
 # bounded worker: source + worker + transform together
 uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
+
+# a second worker over that source, into its own dataset: the source is reused
+uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
+    --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
 ```
 
 **Always `--dry-run` first** and show the user what it would write. It
-appends to `registry.py` and `uqf_stack_tables.q`, which are files they may
+appends to `uqf_stack_tables.q` and two test lists, which are files they may
 have opinions about.
 
 `kind` is derived for a streaming job — no `--subscribes` means a feed — so
@@ -57,12 +61,16 @@ a process reporting `up` while publishing nothing.
 So after scaffolding, the tree is in a known state:
 
 - `src/etl/init.q` still LOADS — the one thing the scaffold never breaks
-- `q tests/run_tests.q` fails on your stub, and on two hand-kept lists
+- `q tests/run_tests.q` fails once, on your stub, which is where the work starts
+- `uv run pytest python/` fails once, on
+  `test_the_prose_architecture_doc_is_consistent_with_the_registry`: name the
+  new process in `docs/integrations/torq/README.md`. That file is authored
+  prose, so it is the one registry consequence the scaffold cannot write.
 
-Those two are not about your job (#352): `test_every_job_is_registered` in
-`test_stream_job.q`, and — if you publish a new table — `expected` in
-`test_stack_tables.q`. Close them and the suite fails once, on your stub, which
-is where the work starts.
+The scaffold also appends the job's table (if it owns one) to `expected` in
+`test_stack_tables.q` and regenerates `processes.md` and
+`src/etl/generated/pipeline_dag.q`, so neither CI's `--check` nor a hand-kept
+list goes red on a job that is merely unfinished.
 
 If the tree does not LOAD after scaffolding, that is a bug in the scaffold,
 not in your job. Say so rather than working around it.
@@ -79,8 +87,9 @@ Write in this order, and run the suite between each:
    suite forever.
 3. **The docstrings.** Every function gets a qDoc block with `@param`,
    `@return`, `@throws` if it can throw, and `@eg`. `docs/man.q` is generated
-   from these — run `scripts/generate/generate_man_registry.py` and commit
-   the result.
+   from these. `new-job` regenerates it once for the scaffolded blocks; after
+   you edit them, run `scripts/generate/generate_man_registry.py` again and
+   commit the result.
 
 ### The rules that are not optional
 
@@ -105,7 +114,7 @@ Write in this order, and run the suite between each:
 ```bash
 q tests/run_tests.q                       # the suite; the scaffolded test must be gone
 uv run python scripts/test.py q-examples  # every @eg you wrote actually runs
-uv run pytest python/ -q                  # the registry entry resolves
+uv run pytest python/ -q                  # the declaration reads back as a process
 uv run python scripts/gates/check_q_traps.py
 ```
 
@@ -136,13 +145,25 @@ Say this back to the user, because it is the part that surprises people:
   NAMESPACE to that file's `nsList` (#350). Both halves matter: the list is
   kept by hand, and a namespace missing from it means the file loads and none
   of its tests run.
-- **Two hand-kept lists still fail** on a new job and are not about your job:
-  `test_every_job_is_registered` in `test_stream_job.q`, and - if you publish a
-  new table - `expected` in `test_stack_tables.q`. The second is a deliberate
-  gate; the first is redundant with a generic check (#352).
-- **No `schema=` in the registry.** It derives from `table`.
-- **No `subscribes=`/`publishes=` in the registry.** They defer to the q
-  declaration with `FROM_DECLARATION`, which the scaffold writes for you.
+- **No hand-kept job or table list.** `test_every_job_is_registered` derives
+  its jobs from `src/etl/streaming/` (#352); `expected` in
+  `test_stack_tables.q` is still a deliberate gate, and the scaffold appends
+  the new table to it. The Python tests that used to pin every process and
+  table (`test_core.py`, `test_schemas.py`) derive them from the registry and
+  from that q list.
+- **No regeneration step.** `new-job` reruns
+  `scripts/generate/generate_operational_docs.py` and
+  `scripts/generate/generate_man_registry.py` itself.
+- **No hand-copied source for a second worker.** An existing source is
+  reused rather than rewritten, and an existing table is not defined again.
+  A dataset another worker already fills with no partition is refused:
+  `.qbw.define` would refuse the pair at load.
+- **No registry entry at all.** The process registry is read from the q
+  declarations (`model/declarations.py`): `procname`, the edges, and the
+  optional `autostart` (default on demand) and `note` all live on the job's
+  own `.qstream.register` / `.qbw.define`. The port is appended to
+  `scripts/processes/process_ports.csv` by the regeneration above, so no
+  existing process moves.
 
 ## When to stop and ask
 

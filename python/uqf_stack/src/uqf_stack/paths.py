@@ -31,19 +31,31 @@ ETL_DIR = Path("src/etl")
 STREAM_DIR = ETL_DIR / "streaming"
 SOURCE_DIR = ETL_DIR / "sources"
 WORKER_DIR = ETL_DIR / "workers"
-ETL_INIT = ETL_DIR / "init.q"
 
 TEST_DIR = Path("tests/q")
 RUN_TESTS_FILE = Path("tests/run_tests.q")
+#: The q suite's list of every tickerplant table - the deliberate gate a new
+#: table passes through, and the list the scaffold appends a new table to.
+STACK_TABLES_TEST = TEST_DIR / "test_stack_tables.q"
 
 PROCESS_SCRIPTS_DIR = Path("scripts/processes")
 TABLES_FILE = PROCESS_SCRIPTS_DIR / "uqf_stack_tables.q"
+#: Every process's port offset, append-only. Generated: a process's port is
+#: the one fact about it no declaration can supply, because it has to survive
+#: other processes being added around it.
+PROCESS_PORTS_FILE = PROCESS_SCRIPTS_DIR / "process_ports.csv"
 
-#: This package, and the registry the scaffold appends to. Spelled here rather
-#: than in `scaffold/jobs.py`, which hardcoded its own location as a string - a
-#: self-reference that the package rename would silently break.
+#: Regenerates the files derived from the registry (the process table and
+#: src/etl/generated/pipeline_dag.q). CI runs it with --check, so a registry
+#: edit that is not followed by this fails the build.
+OPERATIONAL_DOCS_SCRIPT = Path("scripts/generate/generate_operational_docs.py")
+#: Regenerates docs/man.q from the qDoc blocks under src/, which a scaffolded
+#: q file adds to. Also run by CI with --check.
+MAN_REGISTRY_SCRIPT = Path("scripts/generate/generate_man_registry.py")
+
+#: This package. Spelled here rather than as a string literal in the modules
+#: that need it, which a package rename would silently break.
 PACKAGE_DIR = Path("python/uqf_stack")
-REGISTRY_FILE = PACKAGE_DIR / "src" / "uqf_stack" / "model" / "registry.py"
 
 
 class UqfStackError(RuntimeError):

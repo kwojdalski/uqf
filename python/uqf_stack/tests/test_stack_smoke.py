@@ -12,8 +12,11 @@ from dataclasses import replace
 
 import pytest
 
-from uqf_stack import core
 from uqf_stack.checks import stack_smoke
+from uqf_stack.model.registry import PIPELINES
+
+#: Every pipeline by procname, for the tests that look one up.
+BY_NAME = {p.procname: p for p in PIPELINES}
 
 
 def test_expectations_are_derived_from_the_registry_not_a_list():
@@ -45,7 +48,7 @@ def test_no_may_be_empty_entry_is_dead():
     """An exemption naming a table nothing publishes excuses nothing, and
     left in place would silently excuse whatever later takes that name —
     the failure mode the other exemption lists here are guarded against."""
-    published = set(stack_smoke._publishers(core.PIPELINES))
+    published = set(stack_smoke._publishers(PIPELINES))
     dead = set(stack_smoke.MAY_BE_EMPTY) - published
     assert not dead, f"MAY_BE_EMPTY entries nothing publishes: {sorted(dead)}"
 
@@ -124,10 +127,10 @@ def test_an_unlisted_publisher_is_still_expected(monkeypatch: pytest.MonkeyPatch
     """Derivation, not enumeration: an invented pipeline is covered without
     touching this module."""
     invented = replace(
-        core.PIPELINE_BY_NAME["cross1"],
+        BY_NAME["cross1"],
         procname="ghost1",
         subscribes=(),
         publishes=("ghost_table",),
     )
-    monkeypatch.setattr(stack_smoke, "PIPELINES", (*core.PIPELINES, invented))
+    monkeypatch.setattr(stack_smoke, "PIPELINES", (*PIPELINES, invented))
     assert stack_smoke.expected_tables({"ghost1"})["ghost_table"] == {"ghost1"}

@@ -1,8 +1,8 @@
 """Guard against the catalog drifting from the generated database.q schemas.
 
 The catalog is hand-written because this package must not depend on
-uqf_stack at runtime. This test closes the loop by reading the schema
-constants out of core.py as *text* - no import, so no dependency on
+uqf_stack at runtime. This test closes the loop by reading the table
+definitions out of the q files as *text* - no import, so no dependency on
 uqf_stack's own environment, and no way for this gate to silently
 skip itself.
 """
@@ -84,7 +84,7 @@ def _parse(schema: str) -> dict[str, QType]:
 def _q_table_schema(path: Path, table: str) -> dict[str, QType]:
     """Parse a ``([]a:`type$(); ...)`` literal out of a q file, by table name.
 
-    Read as text, like core.py above: no q process, so this gate cannot skip
+    Read as text: no q process, so this gate cannot skip
     itself because an interpreter was missing.
     """
     source = (REPO / path).read_text()
@@ -171,7 +171,7 @@ def test_catalog_matches_the_generated_schema(table_name):
     )
 
 
-#: Catalog tables whose schema is owned by a q file rather than by core.py.
+#: Catalog tables whose schema is owned by a q file other than uqf_stack_tables.q.
 #: (table name) -> (q file, how to read the columns out of it)
 _Q_OWNED = {
     "etl_coverage": lambda: _q_table_schema(Path("src/etl/core/materialisation.q"), "etl_coverage"),

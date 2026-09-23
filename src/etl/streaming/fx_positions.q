@@ -228,10 +228,12 @@ on_timer:{[]
             base_qty:250000 600000f; quote_qty:-37387500 -89660000f; fill_count:1 2))
     ))];
 
-.qstream.register[`fx_positions;`procname`subscribes`publishes`on_batch`timer_period`on_timer!(
+.qstream.register[`fx_positions;`procname`subscribes`publishes`on_batch`timer_period`on_timer`autostart`note!(
     `fxpositions1;
     enlist `orders;
     `fx_position`fx_limit_breach;
     .qsub.fx_positions.on_batch;
     0D00:00:05.000;
-    .qsub.fx_positions.on_timer)];
+    .qsub.fx_positions.on_timer;
+    1b;
+    "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it")];

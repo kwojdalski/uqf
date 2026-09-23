@@ -12,7 +12,6 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqf_stack import core
 from uqf_stack.cli.shared import (
     PortOpt,
     _die,
@@ -20,13 +19,24 @@ from uqf_stack.cli.shared import (
     app,
     console,
 )
-from uqf_stack.external import databento_feed
+from uqf_stack.external import crypto, databento_feed
+from uqf_stack.external.crypto import (
+    CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
+    CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
+    CRYPTO_FILLS_RECORDER_TABLE,
+    CRYPTO_REAL_FILLS_RECORDER_TABLE,
+    CRYPTO_RECORDER_DEFAULT_SYMBOLS,
+    CRYPTO_RECORDER_DEFAULT_VENUES,
+    DEFAULT_OMS_SOCKET_PATH,
+)
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
+from uqf_stack.paths import UqfStackError
 
 # Proof of concept: cryptorust (Rust, no TorQ/q involved) publishing live
 # venue order books onto stp1 over kdb+ IPC - a separate sub-app (`uqf-stack
 # crypto start/stop/status`) rather than flat crypto-* commands, since these
-# don't drive torq.sh/process.csv at all (see core.py's start_crypto_recorder
-# docstring) - a distinct enough concern to read as its own namespace.
+# don't drive torq.sh/process.csv at all (see external/crypto.py's
+# start_crypto_recorder docstring) - a distinct enough concern to read as its own namespace.
 # Live Databento. Its own group for the same reason crypto has one: this
 # does not drive torq.sh or process.csv either - the handler is an external
 # publisher, and the q half of it (databento1) is an ordinary pipeline row
@@ -66,7 +76,7 @@ def databento_start(
             symbols=tuple(s.strip() for s in symbols.split(",") if s.strip()),
             api_key=api_key,
         )
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         _die(exc)
     console.print(f"databento feed started (pid {pid})")
 
@@ -102,25 +112,25 @@ app.add_typer(crypto_app, name="crypto")
 def crypto_start(
     venues: Annotated[
         str, typer.Option(help="Comma-separated cryptorust venue names to connect")
-    ] = ",".join(core.CRYPTO_RECORDER_DEFAULT_VENUES),
+    ] = ",".join(CRYPTO_RECORDER_DEFAULT_VENUES),
     symbols: Annotated[
         str, typer.Option(help="Comma-separated symbols, cryptorust's own venue-agnostic format")
-    ] = ",".join(core.CRYPTO_RECORDER_DEFAULT_SYMBOLS),
+    ] = ",".join(CRYPTO_RECORDER_DEFAULT_SYMBOLS),
     top_n_levels: Annotated[
         int, typer.Option(help="Book depth levels to publish per snapshot")
     ] = 5,
     interval_ms: Annotated[int, typer.Option(help="Publish interval in milliseconds")] = 1000,
-    port: PortOpt = core.DEFAULT_BASE_PORT,
+    port: PortOpt = DEFAULT_BASE_PORT,
 ) -> None:
     """Build and launch a sibling cryptorust checkout's own
     kdb-market-data-recorder and point it at this demo's stp1 - publishing
     live venue order books onto the same kdb+ infra everything else here
-    already runs on, into `crypto_book` (see core.py's
-    CRYPTO_BOOK_TABLE_SCHEMA). Requires a cryptorust checkout - see
-    $CRYPTORUST_ROOT in core.cryptorust_root's docstring.
+    already runs on, into `crypto_book` (defined in
+    scripts/processes/uqf_stack_tables.q). Requires a cryptorust checkout - see
+    $CRYPTORUST_ROOT in crypto.cryptorust_root's docstring.
     """
     try:
-        pid = core.start_crypto_recorder(
+        pid = crypto.start_crypto_recorder(
             _paths(),
             base_port=port,
             venues=tuple(v.strip() for v in venues.split(",") if v.strip()),
@@ -128,7 +138,7 @@ def crypto_start(
             top_n_levels=top_n_levels,
             interval_ms=interval_ms,
         )
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         _die(exc)
         return
     console.print(f"crypto recorder started (pid {pid})")
@@ -138,8 +148,8 @@ def crypto_start(
 def crypto_stop() -> None:
     """Stop the cryptorust recorder started by `crypto start`."""
     try:
-        core.stop_crypto_recorder(_paths())
-    except core.UqfStackError as exc:
+        crypto.stop_crypto_recorder(_paths())
+    except UqfStackError as exc:
         _die(exc)
         return
     console.print("crypto recorder stopped")
@@ -149,7 +159,7 @@ def crypto_stop() -> None:
 def crypto_status() -> None:
     """Show whether the cryptorust recorder is running, its pid, and where
     its config/log live."""
-    status = core.crypto_recorder_status(_paths())
+    status = crypto.crypto_recorder_status(_paths())
     table = Table(title="crypto recorder status")
     table.add_column("field")
     table.add_column("value")
@@ -162,40 +172,40 @@ def crypto_status() -> None:
 def crypto_fills_start(
     oms_socket_path: Annotated[
         str, typer.Option(help="Unix socket of an already-running cryptorust OMS to poll")
-    ] = core.DEFAULT_OMS_SOCKET_PATH,
+    ] = DEFAULT_OMS_SOCKET_PATH,
     symbol: Annotated[
         str, typer.Option(help="Symbol to tag published rows with (the OMS's fills carry none)")
-    ] = core.CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
+    ] = CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
     poll_interval_ms: Annotated[int, typer.Option(help="Poll interval in milliseconds")] = (
-        core.CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS
+        CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS
     ),
-    port: PortOpt = core.DEFAULT_BASE_PORT,
+    port: PortOpt = DEFAULT_BASE_PORT,
 ) -> None:
     """Build and launch a sibling cryptorust checkout's own
     kdb-fills-recorder, publishing BOTH the market-making bot's SIMULATED
-    (paper) fills into `crypto_sim_fills` (core.py's
-    CRYPTO_SIM_FILLS_TABLE_SCHEMA) AND real confirmed exchange executions
-    into `crypto_trades` (CRYPTO_TRADES_TABLE_SCHEMA) - see that binary's
+    (paper) fills into `crypto_sim_fills` AND real confirmed exchange
+    executions into `crypto_trades` (both defined in
+    scripts/processes/uqf_stack_tables.q) - see that binary's
     own doc header for how each source differs. Requires an already-running
     cryptorust service (its OMS IPC socket, default /tmp/beacon.sock) -
     this doesn't start one itself, unlike `crypto start` which owns its
     own exchange connectors.
     """
     try:
-        pid = core.start_crypto_fills_recorder(
+        pid = crypto.start_crypto_fills_recorder(
             _paths(),
             base_port=port,
             oms_socket_path=oms_socket_path,
             symbol=symbol,
             poll_interval_ms=poll_interval_ms,
         )
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         _die(exc)
         return
     console.print(
         f"crypto fills recorder started (pid {pid}) - "
-        f"{core.CRYPTO_FILLS_RECORDER_TABLE} is SIMULATED, "
-        f"{core.CRYPTO_REAL_FILLS_RECORDER_TABLE} is real"
+        f"{CRYPTO_FILLS_RECORDER_TABLE} is SIMULATED, "
+        f"{CRYPTO_REAL_FILLS_RECORDER_TABLE} is real"
     )
 
 
@@ -203,8 +213,8 @@ def crypto_fills_start(
 def crypto_fills_stop() -> None:
     """Stop the cryptorust fills recorder started by `crypto fills-start`."""
     try:
-        core.stop_crypto_fills_recorder(_paths())
-    except core.UqfStackError as exc:
+        crypto.stop_crypto_fills_recorder(_paths())
+    except UqfStackError as exc:
         _die(exc)
         return
     console.print("crypto fills recorder stopped")
@@ -214,7 +224,7 @@ def crypto_fills_stop() -> None:
 def crypto_fills_status() -> None:
     """Show whether the cryptorust fills recorder is running, its pid, and
     where its log lives."""
-    status = core.crypto_fills_recorder_status(_paths())
+    status = crypto.crypto_fills_recorder_status(_paths())
     table = Table(
         title="crypto fills recorder status "
         "(sim_table = paper fills, real_table = confirmed executions)"

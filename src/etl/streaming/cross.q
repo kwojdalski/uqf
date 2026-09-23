@@ -139,8 +139,9 @@ now:{[] .z.p}
         2026.09.17D10:00:01);
     1b)];
 
-.qstream.register[`cross;`procname`subscribes`publishes`on_batch!(
+.qstream.register[`cross;`procname`subscribes`publishes`on_batch`note!(
     `cross1;
     enlist `quotes;
     `symbol$();
-    .qsub.cross.on_batch)];
+    .qsub.cross.on_batch;
+    "keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); quotesfeed1 runs by default, so `uqf-stack start cross1` is enough")];

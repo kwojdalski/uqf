@@ -66,5 +66,7 @@ quality_check:{[batch]
 / `check` is optional on the declaration; this worker declares one, which
 / makes it unskippable for every window this worker ever fetches.
 .qbw.define[`demo_deals_backfill;
-    `source`dataset`width`transform`check!
-    (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qwrk.demo_deals_backfill.quality_check)];
+    `source`dataset`width`transform`check`procname`note!
+    (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qwrk.demo_deals_backfill.quality_check;
+     `deals_backfill1;
+     "bounded: runs a window range and exits, so it must not start with the stack")];

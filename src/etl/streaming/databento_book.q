@@ -96,8 +96,9 @@ on_batch:{[tbl;batch]
 \d .
 
 .qstream.register[`databento_book;
-    `procname`subscribes`publishes`on_batch!(
+    `procname`subscribes`publishes`on_batch`note!(
         `databento1;
         enlist `databento_mbp10;
         enlist `databento_book;
-        .qsub.databento_book.on_batch)];
+        .qsub.databento_book.on_batch;
+        "folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (external/databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler")];

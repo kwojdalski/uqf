@@ -56,8 +56,9 @@ on_batch:{[tbl;batch]
 
 \d .
 
-.qstream.register[`arbitrage;`procname`subscribes`publishes`on_batch!(
+.qstream.register[`arbitrage;`procname`subscribes`publishes`on_batch`note!(
     `arbitrage1;
     enlist `superbook;
     enlist `arbitrage;
-    .qsub.arbitrage.on_batch)];
+    .qsub.arbitrage.on_batch;
+    "gross direct cross-source opportunities, including inactive clearing rows. Tail of the marketdata1 chain - see there")];

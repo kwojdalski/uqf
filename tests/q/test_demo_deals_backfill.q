@@ -397,6 +397,28 @@ test_the_clash_error_reads_as_a_sentence:{[t]
     .qunit.assertTrue[err like "*produce coverage rows nothing can tell apart";
         "the explanation survives intact to the end of the message"]};
 
+/ --- the process that runs a worker ---------------------------------------
+
+/ uqf_stack derives its process registry from these declarations, so the
+/ procname a worker declares is the process it runs as.
+test_a_worker_runs_as_the_procname_it_declares:{[t]
+    .qunit.assertEquals[(.qbw.worker_cfg `demo_deals_backfill)`procname;`deals_backfill1;
+        "demo_deals_backfill declares deals_backfill1, its process name before the registry was derived"]};
+
+test_a_worker_declaring_no_procname_runs_as_its_name_and_1:{[t]
+    .qbw.define[`noproc_slice;
+        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`NOPROC)];
+    cfg:.qbw.worker_cfg `noproc_slice;
+    .qbw.worker_cfg:(enlist `noproc_slice) _ .qbw.worker_cfg;
+    .qunit.assertEquals[(cfg`procname;cfg`note);(`noproc_slice1;"");
+        "an undeclared procname defaults to <worker>1 and an undeclared note to empty"]};
+
+test_a_procname_that_is_not_a_symbol_is_refused:{[t]
+    .qunit.assertThrows[{.qbw.define[`badproc_slice;x]};
+        `source`dataset`width`transform`partition`procname!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`BADPROC;"p1");
+        "*procname must be a symbol*";
+        "a process name is a symbol, as everywhere else in the registry"]};
+
 / --- what the partition dimension unlocks (#185) --------------------------
 
 / THE POINT OF THE CHANGE. A backfill could not be parallelised: one worker

@@ -5,7 +5,7 @@ set comes from that file rather than from this package's own configuration -
 otherwise the fleet view can only report on processes someone remembered to
 list twice.
 
-The file is *generated* by ``uqf_stack.core.bootstrap()`` from
+The file is *generated* by ``uqf_stack.stack.runtime.bootstrap()`` from
 vendored inputs plus uqf's own additions (ETL-17), and its port column carries
 unresolved placeholders: ``{KDBBASEPORT}`` or ``{KDBBASEPORT}+N``. Resolving
 them here duplicates a few lines of the orchestrator rather than importing it,
@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 #: ``{NAME}`` optionally followed by ``+N`` or ``-N``. The same grammar
-#: core.py's own _BRACE_ARITH_RE accepts.
+#: uqf_stack.stack.procs' own _BRACE_ARITH_RE accepts.
 _BRACE_ARITH = re.compile(r"^\{(\w+)\}([+-]\d+)?$")
 
 

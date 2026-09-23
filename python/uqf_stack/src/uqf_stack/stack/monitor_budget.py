@@ -6,8 +6,8 @@ process may hold is a different question that had grown its own constants,
 its own ordering policy and its own arithmetic.
 
 The rule this module exists for: monitor1 opens one handle per process it
-monitors, and the licence caps a q process at MONITOR_CONNECTION_BUDGET
-concurrent connections - the same cap PLANT_CONNECTION_BUDGET names for
+monitors, and the licence caps a q process at LICENCE_CONNECTION_LIMIT
+concurrent connections - the same cap LICENCE_CONNECTION_LIMIT names for
 inbound handles on stp1, since it is a per-process limit and not a
 per-direction one. A monitor sized exactly to the cap collects heartbeats
 that nothing can read, because it has no slot left to ACCEPT the query.
@@ -16,6 +16,7 @@ that nothing can read, because it has no slot left to ACCEPT the query.
 from __future__ import annotations
 
 from uqf_stack.logger import get_logger
+from uqf_stack.model.pipeline_edges import INBOUND_RESERVE, LICENCE_CONNECTION_LIMIT
 from uqf_stack.paths import UqfStackPaths
 
 log = get_logger(__name__)
@@ -39,27 +40,14 @@ log = get_logger(__name__)
 # monitor is its run record, not its heartbeat.
 MONITOR_EXTRA_CONNECTIONS = ("metrics",)
 
-#: What the licence lets one q process hold at once, for monitor1's OUTBOUND
-#: handles. The same cap PLANT_CONNECTION_BUDGET names for inbound handles on
-#: stp1, applied at the other end of the same rule: it is a per-process limit,
-#: not a per-direction one.
-#:
-#: Measured rather than assumed - a bare `q -p` on this tree's licence accepts
-#: 17 concurrent connections and resets the 18th with
-#: `Connection reset by peer (os error 54)`. 16 is kept as the working figure
-#: for the same reason PLANT_CONNECTION_BUDGET uses it: one slot of margin
-#: costs nothing and being wrong the other way wedges a process.
-MONITOR_CONNECTION_BUDGET = 16
-
-#: Slots monitor1 must NOT spend on subscriptions, so it can still answer.
-#:
-#: This is the whole point of the budget. monitor1 dials out to every process
-#: it monitors, and a monitor sized exactly to the cap has no slot left to
-#: ACCEPT a connection - so `uqf-stack summary`'s heartbeat query is refused,
-#: `.hb.hb` cannot be read by anything, and the Heartbeat column is empty for
-#: the entire fleet. Collecting heartbeats nobody can read is not monitoring,
-#: so partial coverage that can be queried beats full coverage that cannot.
-MONITOR_INBOUND_RESERVE = 2
+# The licence's per-process connection cap and the inbound slots held back
+# below it are the same two numbers the plant is budgeted with, so they are
+# imported rather than restated: LICENCE_CONNECTION_LIMIT is a per-process
+# limit, not a per-direction one, and monitor1 spends it on OUTBOUND handles.
+# INBOUND_RESERVE is what it must NOT spend on subscriptions, so it can still
+# answer - a monitor sized exactly to the cap has no slot left to accept a
+# connection, `uqf-stack summary`'s heartbeat query is refused, and the
+# Heartbeat column is empty for the entire fleet.
 
 #: The order proctypes are given up in when the budget cannot hold them all,
 #: least valuable first.
@@ -108,13 +96,13 @@ def monitor_connection_plan(
     without a filesystem or a running stack.
 
     monitor1 opens one handle per process it monitors, and the licence caps a
-    q process at MONITOR_CONNECTION_BUDGET concurrent connections. Left
+    q process at LICENCE_CONNECTION_LIMIT concurrent connections. Left
     untrimmed on this tree it wants 32 - so it saturates, and a saturated
     monitor cannot ACCEPT the handle `uqf-stack summary` needs to read
     `.hb.hb`. The failure is silent and total: heartbeats are still collected,
     and nothing can read them.
 
-    So the budget reserves MONITOR_INBOUND_RESERVE slots and gives up
+    So the budget reserves INBOUND_RESERVE slots and gives up
     proctypes in MONITOR_CONNECTION_SACRIFICE_ORDER until the rest fit. Only
     processes that actually start are counted, for the same reason the plant
     budget counts them: a declared-but-stopped process holds no handle.
@@ -124,7 +112,7 @@ def monitor_connection_plan(
     for row in startable:
         per_type[row.get("proctype", "")] = per_type.get(row.get("proctype", ""), 0) + 1
 
-    allowance = MONITOR_CONNECTION_BUDGET - MONITOR_INBOUND_RESERVE
+    allowance = LICENCE_CONNECTION_LIMIT - INBOUND_RESERVE
     kept = list(connections)
     dropped: list[str] = []
 
@@ -148,8 +136,8 @@ def monitor_connection_plan(
             "Heartbeat coverage will be partial and monitor1 may be unqueryable.",
             projected(),
             allowance,
-            MONITOR_CONNECTION_BUDGET,
-            MONITOR_INBOUND_RESERVE,
+            LICENCE_CONNECTION_LIMIT,
+            INBOUND_RESERVE,
         )
     return kept, dropped
 

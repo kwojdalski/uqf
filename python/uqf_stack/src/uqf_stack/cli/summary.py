@@ -15,7 +15,6 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqf_stack import core
 from uqf_stack.cli.shared import (
     ExportOpt,
     PortOpt,
@@ -28,6 +27,16 @@ from uqf_stack.cli.shared import (
     log,
 )
 from uqf_stack.model import dependencies
+from uqf_stack.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
+from uqf_stack.paths import UqfStackError
+from uqf_stack.stack import listing, runtime
+from uqf_stack.stack.listing import (
+    MONITOR_PROCNAME,
+    SUMMARY_ALL_COLUMNS,
+    SUMMARY_COLUMNS,
+    SUMMARY_GRAPH_COLUMNS,
+)
 
 _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 
@@ -86,13 +95,13 @@ def _resolve_columns(requested: str | None) -> list[str]:
     such move.
     """
     if not requested:
-        return list(core.SUMMARY_ALL_COLUMNS)
+        return list(SUMMARY_ALL_COLUMNS)
     if requested.strip().lower() == "all":
-        return list(core.SUMMARY_ALL_COLUMNS)
+        return list(SUMMARY_ALL_COLUMNS)
     if requested.strip().lower() == "status":
-        return list(core.SUMMARY_COLUMNS)
+        return list(SUMMARY_COLUMNS)
     wanted = [c.strip() for c in requested.split(",") if c.strip()]
-    known = {c.lower(): c for c in core.SUMMARY_ALL_COLUMNS}
+    known = {c.lower(): c for c in SUMMARY_ALL_COLUMNS}
     resolved, unknown = [], []
     for column in wanted:
         match = known.get(column.lower())
@@ -102,9 +111,9 @@ def _resolve_columns(requested: str | None) -> list[str]:
             resolved.append(match)
     if unknown:
         _die(
-            core.UqfStackError(
+            UqfStackError(
                 f"unknown summary column(s): {', '.join(unknown)}. "
-                f"Available: {', '.join(core.SUMMARY_ALL_COLUMNS)}, "
+                f"Available: {', '.join(SUMMARY_ALL_COLUMNS)}, "
                 "or `all` / `status`"
             )
         )
@@ -134,7 +143,7 @@ def _attach_graph_columns(rows: list[dict[str, str]]) -> None:
 
 @app.command()
 def summary(
-    port: PortOpt = core.DEFAULT_BASE_PORT,
+    port: PortOpt = DEFAULT_BASE_PORT,
     export: ExportOpt = None,
     columns: Annotated[
         str | None,
@@ -191,8 +200,8 @@ def summary(
     paths = _paths()
     log.debug("summary base_port={} torqdata={}", port, paths.torqdata)
     try:
-        result = core.summary(paths, base_port=port, timeout=remaining())
-    except core.UqfStackError as exc:
+        result = runtime.summary(paths, base_port=port, timeout=remaining())
+    except UqfStackError as exc:
         _die(exc)
         return
     log.debug("torq.sh summary returncode={} stdout_lines={}", result.returncode, _lines(result))
@@ -202,9 +211,9 @@ def summary(
     # most likely looking up. The port is declared in process.csv either way,
     # so fill it from there and mark where it came from.
     try:
-        ports = core.configured_ports(paths, base_port=port)
+        ports = listing.configured_ports(paths, base_port=port)
         log.debug("configured ports for {} process(es)", len(ports))
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         # A summary that still prints beats one that dies because the port
         # map could not be built - the reported ports are unaffected. The
         # reason is worth keeping even so: without it, every `down` row shows
@@ -221,10 +230,10 @@ def summary(
         # UP: rounding down could hand it 0, which kola reads as "wait
         # forever" - the exact opposite of a spent budget.
         left = remaining()
-        heartbeats = core.heartbeat_states(
+        heartbeats = listing.heartbeat_states(
             paths, base_port=port, timeout=0 if left is None else max(1, math.ceil(left))
         )
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         # Two distinct failures reach the same printed sentence below, and it
         # names only the commoner one. This branch is monitor1 missing from
         # the registry entirely; a None return (handled next) is monitor1
@@ -237,7 +246,7 @@ def summary(
     else:
         log.debug("monitor1 reported heartbeats for {} process(es)", len(heartbeats))
 
-    rows = core.summary_rows(result.stdout, ports, heartbeats)
+    rows = listing.summary_rows(result.stdout, ports, heartbeats)
     log.debug(
         "parsed {} row(s): {} up, {} down",
         len(rows),
@@ -245,7 +254,7 @@ def summary(
         sum(1 for r in rows if r["Status"] == "down"),
     )
 
-    if any(col in core.SUMMARY_GRAPH_COLUMNS for col in chosen):
+    if any(col in SUMMARY_GRAPH_COLUMNS for col in chosen):
         _attach_graph_columns(rows)
 
     table = Table(title=f"uqf_stack summary (base port {port})")
@@ -253,7 +262,7 @@ def summary(
         # The graph cells are pre-wrapped at their commas by _graph_cell, so
         # Rich must not wrap them again at whatever width is left over - that
         # is what splits a table name across two lines.
-        table.add_column(col, overflow="fold" if col in core.SUMMARY_GRAPH_COLUMNS else "ellipsis")
+        table.add_column(col, overflow="fold" if col in SUMMARY_GRAPH_COLUMNS else "ellipsis")
 
     for row in rows:
         status_style = _STATUS_STYLE.get(row["Status"], "")
@@ -303,17 +312,15 @@ def summary(
         # and not the common one. Saturation looks identical from here and is
         # what actually happens on a full stack: monitor1 opens a handle to
         # every process it monitors, the licence caps a q process at
-        # MONITOR_CONNECTION_BUDGET concurrent connections, and once it is at
+        # LICENCE_CONNECTION_LIMIT concurrent connections, and once it is at
         # the cap it cannot accept the inbound handle this query needs - so a
         # monitor that is running perfectly, and collecting heartbeats
         # correctly, is unreachable. Telling the reader to restart it then
         # sends them to fix a process that has nothing wrong with it.
-        monitor_up = any(
-            r["Process"] == core.MONITOR_PROCNAME and r["Status"] == "up" for r in rows
-        )
+        monitor_up = any(r["Process"] == MONITOR_PROCNAME and r["Status"] == "up" for r in rows)
         cause = (
             "It is up, so it is most likely at its connection cap "
-            f"({core.MONITOR_CONNECTION_BUDGET} on this licence) and cannot accept "
+            f"({LICENCE_CONNECTION_LIMIT} on this licence) and cannot accept "
             "another handle - check `err_monitor1.log`, which will still be "
             "recording the heartbeats it collected"
             if monitor_up

@@ -11,8 +11,8 @@ machinery to manage.
 The `uqf-stack` CLI (`python/uqf_stack/`) bridges the two vendored trees so
 you can actually start the demo up and poke at it, without editing or
 writing into either `lib/` directory. The actual bootstrapping/config logic
-lives in `python/uqf_stack/src/uqf_stack/core.py`, shared
-with `uqf_stack_mcp.py`'s FastMCP server (see "MCP server" below) so the
+lives in `python/uqf_stack/src/uqf_stack/`'s `model/` and `stack/` modules,
+shared with `uqf_stack_mcp.py`'s FastMCP server (see "MCP server" below) so the
 CLI and the MCP tools can't drift apart. It's a standalone package
 (`python/uqf_stack/`), separate from `python/uqf_client/` (the
 pricing library's q-IPC client) - this has nothing to do with pricing, and
@@ -257,8 +257,8 @@ uqf-stack list processes
 - `dependencies` - each process's input tables and who publishes them, so
   you can see what a process needs before starting it on its own
 
-New kinds are one function + one `core.LISTABLE_KINDS` entry, not a new
-CLI command each time - see `core.py`'s `_list_*` functions.
+New kinds are one function + one `LISTABLE_KINDS` entry, not a new
+CLI command each time - see `stack/listing.py`'s `_list_*` functions.
 
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 
@@ -286,7 +286,7 @@ too, so an exported CSV matches what was on screen.
 By default (`start all`) the processes marked `startwithall=1` come up: the
 vendored rows in `lib/torq-finance-starter-pack/appconfig/process.csv`, plus
 uqf's own pipelines, appended as extra rows to a *copy* of that csv that
-`uqf_stack.core.bootstrap()` generates on the fly (never editing the
+`uqf_stack.stack.runtime.bootstrap()` generates on the fly (never editing the
 vendored file itself). The vendored README explains why the rest stay off:
 the KDB-X community edition's connection limits mean `reporter1`,
 `filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off unless you have a
@@ -427,7 +427,7 @@ Two consequences worth knowing:
   was being monitored perfectly well.
 
   `stack/monitor_budget.py` therefore trims `.servers.CONNECTIONS` to fit
-  `MONITOR_CONNECTION_BUDGET` minus `MONITOR_INBOUND_RESERVE`, giving up
+  `LICENCE_CONNECTION_LIMIT` minus `INBOUND_RESERVE`, giving up
   proctypes in `MONITOR_CONNECTION_SACRIFICE_ORDER` - `sortworker`,
   `reporter`, `housekeeping`, `feed`, then `metrics` - until the rest fit.
   Core infrastructure is never given up: a stack whose `rdb` or plant is
@@ -528,11 +528,11 @@ per-feed script any more. The three things the job itself still owns:
 3. declare `timer_period` and `on_timer`, which is what makes it a feed
    rather than a subscriber
 
-To add your own: write a job file under `src/etl/streaming/`, register it
-with `.qstream.register`, and add a `Pipeline(...)` row in
-`python/uqf_stack/src/uqf_stack/model/pipelines.py` (pick a free
-port offset - the table above lists every offset already taken). Or let
-`uqf-stack wizard` do all three, which is what the next section covers.
+To add your own: write a job file under `src/etl/streaming/` and register it
+with `.qstream.register`. That is the whole registration - the process
+registry is read from the declaration, and a new process is given the next
+free port in `scripts/processes/process_ports.csv`. `uqf-stack new-job`
+scaffolds it; see [adding a pipeline](new-pipeline.md).
 
 ## quotesfeed1 - a real database for one of uqf's own table shapes
 
@@ -554,7 +554,7 @@ Getting this table into a real, on-disk database took no changes to
 writes down whatever the RDB has, so a brand new table only needs two
 things:
 
-1. **Schema** - `uqf_stack.core._generated_schema_content()`
+1. **Schema** - `uqf_stack.model.plant_schema._generated_schema_content()`
    appends the `quotes` table definition to a *copy* of the vendored
    `database.q` (written to `scripts/output/uqf-stack/database.q` on every
    `bootstrap()`, same generate-never-edit approach as `process.csv`), and
@@ -699,7 +699,7 @@ shows up in `summary`).
 
 Registration goes into `python/uqf_stack/extra_processes.csv` (a
 sibling of `process_overrides.csv` - same never-edit-the-vendored/
-generated-files approach, tracked in git) rather than editing `core.py`
+generated-files approach, tracked in git) rather than editing Python
 source - `_base_process_rows()` reads it generically, so adding a process
 this way is a data change, not a code change.
 
@@ -840,7 +840,7 @@ uqf-stack crypto stop
 ```
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
-`ask_prices`/`ask_sizes` - see `core.py`'s `CRYPTO_BOOK_TABLE_SCHEMA`),
+`ask_prices`/`ask_sizes` - see its definition in `scripts/processes/uqf_stack_tables.q`),
 flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`quotes`/
 `wide_book`:
 
@@ -897,9 +897,9 @@ uqf-stack crypto fills-stop
 ```
 
 Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/
-`realized_delta_pnl` - see `core.py`'s `CRYPTO_SIM_FILLS_TABLE_SCHEMA`)
+`realized_delta_pnl` - see its definition in `scripts/processes/uqf_stack_tables.q`)
 and `crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
-`fee`/`fee_currency`/`exchange_fill_id` - `CRYPTO_TRADES_TABLE_SCHEMA`):
+`fee`/`fee_currency`/`exchange_fill_id` - defined in `scripts/processes/uqf_stack_tables.q`):
 
 ```
 uqf-stack query "select from crypto_sim_fills" --port <rdb1's port>
@@ -927,7 +927,7 @@ uv run --project python/uqf_stack python/uqf_stack/uqf_stack_mcp.py
 ```
 
 (stdio transport, the default). `uqf_stack_query` returns a list of row
-dicts for table results (via the same `kola`-backed `uqf_stack.core.query`
+dicts for table results (via the same `kola`-backed `uqf_stack.stack.runtime.query`
 the CLI's `query` command calls), or the raw scalar/dict result otherwise.
 
 ## Other commands

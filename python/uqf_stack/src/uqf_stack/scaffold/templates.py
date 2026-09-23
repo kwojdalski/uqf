@@ -164,7 +164,7 @@ fixture:{{[]
 """
 
 
-def worker_body(worker: str, src: str, dataset: str, width: str) -> str:
+def worker_body(worker: str, src: str, dataset: str, width: str, proc: str) -> str:
     return f"""/ {worker}.q - the {src} bounded worker (.qwrk.{worker}).
 / .
 / SCAFFOLDED. Mostly a declaration: the lifecycle - windowing, retries,
@@ -186,64 +186,14 @@ facts:{{[batch]
 / fetched. The example tables are what .qxf checks the shape against.
 .qxf.passthrough[`{src}_passthrough;`batch;0#.qfeed.{src}.fixture[];.qfeed.{src}.fixture[]];
 
+/ `procname` is the process that runs this worker - the process registry is
+/ read from this declaration, so there is no entry to add anywhere else.
 .qbw.define[`{worker};
-    `source`dataset`width`transform`facts!
-        (`{src};`{dataset};{width};`{src}_passthrough;.qwrk.{worker}.facts)];
+    `source`dataset`width`transform`facts`procname`note!
+        (`{src};`{dataset};{width};`{src}_passthrough;.qwrk.{worker}.facts;
+         `{proc};
+         "SCAFFOLDED: bounded - say what this backfill is for")];
 """
-
-
-def registry_entry_streaming(name: str, proc: str, is_feed: bool, publishes: str | None) -> str:
-    """The Pipeline entry, as text to APPEND to PIPELINES.
-
-    Appended, never inserted, for the reason model/registry.py states itself:
-    offsets are allocated in list order, so an entry above an existing one
-    renumbers every process after it onto other processes' ports.
-
-    `subscribes`/`publishes` defer to the q declaration (FROM_DECLARATION) -
-    the job file has just been written with both, and restating them here is
-    the duplication #311 removed. `schema` is not set at all: it derives from
-    `table`.
-    """
-    kind = "PipelineKind.FEED" if is_feed else "PipelineKind.ETL"
-    lines = [
-        "    Pipeline(",
-        f'        procname="{proc}",',
-        "        script=STREAM_RUNNER_SCRIPT,",
-        f"        kind={kind},",
-        "        loads_qpipe=True,",
-    ]
-    if not is_feed:
-        lines.append("        subscribes=FROM_DECLARATION,")
-    if publishes:
-        lines.append(f'        table="{publishes}",')
-    lines += [
-        '        startwithall="0",',
-        '        note="SCAFFOLDED: say why this exists, and why it does or does not '
-        'start with the stack",',
-        "    ),",
-    ]
-    return "\n".join(lines) + "\n"
-
-
-def registry_entry_backfill(proc: str, worker: str) -> str:
-    """The Pipeline entry for a backfill process.
-
-    `worker=` is what joins this process to the .qbw worker it runs. Without
-    it the link exists only at runtime, through UQF_BACKFILL_WORKER, and a
-    fully declared worker with no process is invisible to every grep - which
-    is how two of them ended up unrunnable (#283).
-    """
-    return (
-        "    Pipeline(\n"
-        f'        procname="{proc}",\n'
-        '        script="processes/torq_backfill.q",\n'
-        "        kind=PipelineKind.BACKFILL,\n"
-        f'        worker="{worker}",\n'
-        '        startwithall="0",\n'
-        '        note="SCAFFOLDED: bounded - runs a window range and exits, so it must '
-        'not start with the stack",\n'
-        "    ),\n"
-    )
 
 
 def table_definition(table: str, columns: list[tuple[str, str]]) -> str:

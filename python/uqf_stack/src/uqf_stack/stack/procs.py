@@ -20,26 +20,12 @@ import re
 from string import Template
 
 from uqf_stack.logger import get_logger
-from uqf_stack.model.pipelines import (
-    DEFAULT_BASE_PORT,
-    PROCESS_CSV_FIELDS,
-    _pipeline_rows,
-)
-from uqf_stack.model.plant_schema import (  # noqa: F401  (re-exported)
-    _generated_schema_content,
-    _published_tables,
-    add_extra_table_schema,
-    undefined_published_tables,
-)
+from uqf_stack.model.pipelines import PROCESS_CSV_FIELDS, _pipeline_rows
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
 from uqf_stack.paths import UqfStackError, UqfStackPaths
 from uqf_stack.stack.env import build_env
-from uqf_stack.stack.monitor_budget import (  # noqa: F401  (re-exported)
-    MONITOR_CONNECTION_BUDGET,
-    MONITOR_CONNECTION_SACRIFICE_ORDER,
-    MONITOR_EXTRA_CONNECTIONS,
-    MONITOR_INBOUND_RESERVE,
+from uqf_stack.stack.monitor_budget import (
     monitor_connection_extras,
-    monitor_connection_plan,
 )
 
 log = get_logger(__name__)
@@ -61,7 +47,7 @@ log = get_logger(__name__)
 #   meant two feeds interleaving rows into one table, and it cost one of the
 #   sixteen inbound connections the licence allows a q process - which is the
 #   budget that decides whether fxpositions1 and executions1 can reach the
-#   plant at all (#285, PLANT_CONNECTION_BUDGET). Start it by hand for a
+#   plant at all (#285, LICENCE_CONNECTION_LIMIT). Start it by hand for a
 #   vendored TorQ demo.
 #
 # This is an overlay, not an edit: the vendored file is never touched,

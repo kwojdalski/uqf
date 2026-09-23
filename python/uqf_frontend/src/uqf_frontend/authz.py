@@ -33,12 +33,9 @@ from dataclasses import dataclass
 
 from uqf_frontend.errors import Forbidden
 
-#: Re-exported for convenience; defined in errors.py with every other
-#: typed failure this layer raises.
 __all__ = [
     "ANONYMOUS",
     "IDENTITY_HEADER",
-    "Forbidden",
     "Policy",
     "Request_",
     "allow_all",

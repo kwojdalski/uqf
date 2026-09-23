@@ -123,13 +123,15 @@ def test_a_valid_stack_root_builds_paths_under_it(tmp_path):
 
 def test_an_orchestrator_refusal_becomes_a_validation_error(monkeypatch):
     """A 422 naming the problem, not a 500 with a traceback."""
-    from uqf_stack import core
+    from uqf_stack import paths as stack_paths
+    from uqf_stack.paths import UqfStackError
+    from uqf_stack.stack import runtime
 
     def refuse(*a, **k):
-        raise core.UqfStackError("no such process: typo1")
+        raise UqfStackError("no such process: typo1")
 
-    monkeypatch.setattr(core, "start", refuse)
-    monkeypatch.setattr(core, "default_paths", lambda: "PATHS")
+    monkeypatch.setattr(runtime, "start", refuse)
+    monkeypatch.setattr(stack_paths, "default_paths", lambda: "PATHS")
     with pytest.raises(ValidationFailed, match="typo1"):
         control.lifecycle(Settings(enable_writes=True), "start", "typo1")
 
@@ -165,13 +167,14 @@ def _backfill_args() -> dict[str, str]:
 
 
 def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
-    from uqf_stack import core
+    from uqf_stack import paths as stack_paths
+    from uqf_stack.paths import UqfStackError
     from uqf_stack.stack import runtime
 
     def refuse(paths, base_port):
-        raise core.UqfStackError("lib/torq not vendored")
+        raise UqfStackError("lib/torq not vendored")
 
-    monkeypatch.setattr(core, "default_paths", lambda: SimpleNamespace())
+    monkeypatch.setattr(stack_paths, "default_paths", lambda: SimpleNamespace())
     monkeypatch.setattr(runtime, "bootstrap", refuse)
     with pytest.raises(ValidationFailed, match="not vendored"):
         control.start_backfill(Settings(enable_writes=True), **_backfill_args())
@@ -180,11 +183,11 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
 def test_a_missing_backfill_script_is_refused_before_spawning(monkeypatch, tmp_path):
     """Popen on a missing script would start q with nothing to run and
     report a pid - a backfill that looks launched and never ran."""
-    from uqf_stack import core
+    from uqf_stack import paths as stack_paths
     from uqf_stack.stack import runtime
 
     fake = SimpleNamespace(repo_root=tmp_path, scripts_dir=tmp_path / "scripts")
-    monkeypatch.setattr(core, "default_paths", lambda: fake)
+    monkeypatch.setattr(stack_paths, "default_paths", lambda: fake)
     monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: {})
     with pytest.raises(ValidationFailed, match="torq_backfill.q not found"):
         control.start_backfill(Settings(enable_writes=True), **_backfill_args())

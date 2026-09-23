@@ -81,5 +81,7 @@ quality_check:{[batch]
 \d .
 
 .qbw.define[`databento_book_backfill;
-    `source`dataset`width`transform`check!
-    (`databento_mbp10;`databento_book;0D00:10:00;`databento_book;.qwrk.databento_book_backfill.quality_check)];
+    `source`dataset`width`transform`check`procname`note!
+    (`databento_mbp10;`databento_book;0D00:10:00;`databento_book;.qwrk.databento_book_backfill.quality_check;
+     `databento_backfill1;
+     "bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live")];

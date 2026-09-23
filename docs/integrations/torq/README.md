@@ -90,7 +90,7 @@ a credential and some do not:
   `.qpipe.subscribe_etl` runs `.servers.startup[]` against
   `accesslist.txt`. They borrow the already-credentialed `metrics`
   proctype rather than adding a password file to the vendored tree (see
-  `core.py`'s `add_extra_process` comments).
+  `stack/procs.py`'s `add_extra_process` comments).
 
 A job that both subscribes and republishes - `vectorize1`, `posbook1`,
 `markout1` - needs both, and gets both from the same runner. That used to
@@ -164,8 +164,8 @@ won the race that boot - which changes every time. It was found the hard way
 when `fxpositions1` and `executions1` came up "up" and never subscribed to
 anything (#285).
 
-So the budget is declared rather than discovered. `PLANT_CONNECTION_BUDGET`
-and `PLANT_CONNECTION_RESERVE` in `model/pipeline_edges.py` hold the cap and the
+So the budget is declared rather than discovered. `LICENCE_CONNECTION_LIMIT`
+and `INBOUND_RESERVE` in `model/pipeline_edges.py` hold the cap and the
 slots kept back for ad-hoc handles (`uqf-stack query`, `uqf-stack schema`,
 the frontend's health view each take one while they run), and
 `verify_pipeline_edges` counts the `startwithall=1` plant clients against
@@ -278,7 +278,7 @@ and `database.q` are never written to.
 
 ![The vendored process.csv and database.q read fresh on every command, extended, and written to generated copies the stack actually runs on](../../diagrams/config-generation.svg)
 
-`bootstrap()` (`python/uqf_stack/src/uqf_stack/core.py`)
+`bootstrap()` (`python/uqf_stack/src/uqf_stack/stack/runtime.py`)
 regenerates both files on every command - `start`, `stop`, `summary`,
 everything - so nothing here is a one-time setup step; the generated
 files are always a fresh function of the vendored tree plus whatever's

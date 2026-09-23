@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import pytest
 
-from uqf_stack import core
-from uqf_stack.checks.schema_view import ATTR_NAMES, TYPE_NAMES, type_name
+from uqf_stack import paths as stack_paths
+from uqf_stack.checks import schema_view
+from uqf_stack.checks.schema_view import ATTR_NAMES, DEFAULT_PROC, TYPE_NAMES, type_name
+from uqf_stack.paths import UqfStackError
 
 
 def test_an_atom_column_is_named_plainly():
@@ -63,27 +65,27 @@ def test_attributes_are_expanded():
 
 
 def test_resolve_port_finds_a_declared_process():
-    paths = core.default_paths()
+    paths = stack_paths.default_paths()
     # rdb1 is base_port+2 in the vendored csv. Asserted through the registry
     # rather than by adding 2 here, which is the point of the function.
-    assert core.resolve_port(paths, "rdb1", 6050) == 6052
+    assert schema_view.resolve_port(paths, "rdb1", 6050) == 6052
 
 
 def test_resolve_port_refuses_an_unknown_process_and_names_the_real_ones():
     # A typo should not produce a connection attempt against a port derived
     # from nothing - and the message has to be actionable, because "not a
     # declared process" alone leaves the reader guessing at spelling.
-    paths = core.default_paths()
-    with pytest.raises(core.UqfStackError, match="known:") as exc:
-        core.resolve_port(paths, "rbd1", 6050)
+    paths = stack_paths.default_paths()
+    with pytest.raises(UqfStackError, match="known:") as exc:
+        schema_view.resolve_port(paths, "rbd1", 6050)
     assert "rdb1" in str(exc.value)
 
 
 def test_the_default_process_is_one_that_exists():
     # DEFAULT_PROC is a string constant; nothing else would catch it going
     # stale if the registry renamed the process.
-    paths = core.default_paths()
-    assert core.resolve_port(paths, core.DEFAULT_SCHEMA_PROC, 6050) > 0
+    paths = stack_paths.default_paths()
+    assert schema_view.resolve_port(paths, DEFAULT_PROC, 6050) > 0
 
 
 def test_an_exact_name_is_a_pattern_that_matches_itself(monkeypatch):

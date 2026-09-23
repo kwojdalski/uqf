@@ -8,12 +8,12 @@
 / restart tap1 - no orchestrator-side code needed for the filtering.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - registered
-/ only in the process.csv uqf_stack.core.bootstrap() generates on
-/ the fly (port {KDBBASEPORT}+28 - see TAP_PORT_OFFSET in core.py).
+/ only in the process.csv uqf_stack.stack.runtime.bootstrap() generates on
+/ the fly (port {KDBBASEPORT}+28 - see scripts/processes/process_ports.csv).
 / startwithall=0 (a debug utility, not part of the standing demo stack) -
 / start it explicitly with `uqf-stack start tap1`, then watch it with
 / `uqf-stack logs -f tap1`. Each line's `id` field (see
-/ core.py's parse_log_line/_LOG_FIELDS) is the table name that ticked, so
+/ stack/logs.py's parse_log_line/_LOG_FIELDS) is the table name that ticked, so
 / `uqf-stack logs -f tap1 | grep quotes`-style filtering works even
 / without narrowing the subscription itself.
 
@@ -70,7 +70,7 @@ upd:{[t;x]
 / same reasoning as torq_cross_etl.q/torq_vectorize_etl.q: a real
 / .sub.subscribe subscriber needs .servers.startup[] to open a live,
 / access-listed handle to stp1 - tap1's proctype "metrics" in process.csv
-/ (core.py) borrows an already-credentialed type for that.
+/ (model/registry.py) borrows an already-credentialed type for that.
 .servers.CONNECTIONS:.qproc.tap.requiredprocs;
 .servers.startup[];
 .qproc.tap.init[];

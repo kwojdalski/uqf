@@ -43,7 +43,7 @@ import subprocess
 from pathlib import Path
 
 from uqf_stack.logger import get_logger
-from uqf_stack.model.pipelines import DEFAULT_BASE_PORT
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
 from uqf_stack.paths import UqfStackError, UqfStackPaths
 from uqf_stack.stack.procs import get_process_config
 
@@ -63,9 +63,6 @@ DATABENTO_API_KEY_ENV = "DATABENTO_API_KEY"
 
 DEFAULT_DATASET = "XNAS.ITCH"
 DEFAULT_SYMBOLS = ("AAPL", "MSFT")
-#: MBP-10 is what the source contract describes; a different schema would
-#: not fold with the transform databento1 applies.
-DATABENTO_SCHEMA = "mbp-10"
 
 
 def _read_pid(paths: UqfStackPaths) -> int | None:

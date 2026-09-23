@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 from uqf_stack.logger import get_logger
-from uqf_stack.model.pipelines import DEFAULT_BASE_PORT
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
 from uqf_stack.paths import UqfStackError, UqfStackPaths
 from uqf_stack.stack.procs import get_process_config
 
@@ -116,8 +116,8 @@ def start_crypto_recorder(
     interval_ms: int = 1000,
 ) -> int:
     """Build (if needed) and launch cryptorust's kdb-market-data-recorder,
-    pointed at this demo's own stp1 - see CRYPTO_BOOK_TABLE_SCHEMA for the
-    destination table. Returns the spawned PID.
+    pointed at this demo's own stp1, publishing into `crypto_book` (defined
+    in scripts/processes/uqf_stack_tables.q). Returns the spawned PID.
     """
     root = cryptorust_root(paths)
     if not (root / "Cargo.toml").is_file():
@@ -267,8 +267,8 @@ def start_crypto_fills_recorder(
 ) -> int:
     """Build (if needed) and launch cryptorust's kdb-fills-recorder,
     pointed at this demo's own stp1 - publishes SIMULATED (paper) fills
-    into `crypto_sim_fills` (CRYPTO_SIM_FILLS_TABLE_SCHEMA) and real
-    confirmed executions into `crypto_trades` (CRYPTO_TRADES_TABLE_SCHEMA)
+    into `crypto_sim_fills` and real confirmed executions into
+    `crypto_trades` (both defined in scripts/processes/uqf_stack_tables.q)
     - see that binary's own doc header for the full trace of how each
     source differs. `oms_socket_path` must point at an already-running
     cryptorust service's IPC socket (its own `ipc.socket_path` config,

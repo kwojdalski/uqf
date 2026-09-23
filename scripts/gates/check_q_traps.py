@@ -221,53 +221,6 @@ def _tracked_q_files() -> list[Path]:
     return [REPO / p for p in paths if not p.startswith(EXCLUDED_PREFIXES)]
 
 
-def _strip_comments(line: str) -> str:
-    """Drop a trailing q comment, so a rule never fires on prose.
-
-    q's comment rule is that `/` starts a comment when preceded by whitespace
-    or at line start - NOT mid-token, or every `%`-style path and every `/`
-    in `sv`/`vs` usage would vanish. `//` at line start is also a comment.
-    """
-    if line.lstrip().startswith(("/", "\\")):
-        return ""
-    return re.split(r"(?:^|\s)/", line, maxsplit=1)[0]
-
-
-def _strip_strings(line: str) -> str:
-    """Blank out q string literals, preserving length.
-
-    A qSQL-looking phrase inside a STRING is prose, not a filter. The
-    generated `docs/man.q` carries a description containing `col=col` - a
-    sentence about indexing a table by a key column - and the self-comparison
-    rule reported it as a filter that matches every row.
-
-    Blanked rather than removed so a finding's column position still lines up
-    with the source. A `\\` escape consumes its second character, so an
-    escaped quote does not flip the state.
-    """
-    out = []
-    in_string = False
-    i = 0
-    while i < len(line):
-        ch = line[i]
-        if ch == '"':
-            in_string = not in_string
-            out.append(" ")
-            i += 1
-            continue
-        if in_string:
-            if ch == "\\" and i + 1 < len(line):
-                out.append("  ")
-                i += 2
-                continue
-            out.append(" ")
-            i += 1
-            continue
-        out.append(ch)
-        i += 1
-    return "".join(out)
-
-
 def _python_files() -> list[Path]:
     """Every `.py` file git knows about, tracked or not yet added.
 

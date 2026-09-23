@@ -48,5 +48,7 @@ facts:{[batch]
 .qxf.passthrough[`demo_events_passthrough;`batch;0#.qfeed.demo_events.fixture[];.qfeed.demo_events.fixture[]];
 
 .qbw.define[`demo_events_backfill;
-    `source`dataset`width`transform`facts!
-        (`demo_events;`event_tape;0D01:00:00;`demo_events_passthrough;.qwrk.demo_events_backfill.facts)];
+    `source`dataset`width`transform`facts`procname`note!
+        (`demo_events;`event_tape;0D01:00:00;`demo_events_passthrough;.qwrk.demo_events_backfill.facts;
+         `events_backfill1;
+         "bounded: see deals_backfill1")];

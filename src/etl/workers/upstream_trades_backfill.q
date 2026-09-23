@@ -91,6 +91,8 @@ facts:{[batch]
 / day is a dozen windows and a partial run leaves something visible to
 / resume from.
 .qbw.define[`upstream_trades_backfill;
-    `source`dataset`width`transform`check`facts!
+    `source`dataset`width`transform`check`facts`procname`note!
     (`upstream_trades;`imported_trades;0D01:00:00;`upstream_trades_to_local;
-     .qwrk.upstream_trades_backfill.quality_check;.qwrk.upstream_trades_backfill.facts)];
+     .qwrk.upstream_trades_backfill.quality_check;.qwrk.upstream_trades_backfill.facts;
+     `upstream_backfill1;
+     "bounded: reads an upstream q process over IPC")];

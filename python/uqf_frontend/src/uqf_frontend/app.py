@@ -147,7 +147,7 @@ def create_app(
         # above, and health.check() in ops_processes would resolve to this
         # function instead. ruff's F811 caught it.
         try:
-            # IDENTITY, not PING: a handle opening proves something is
+            # IDENTITY, not a bare clock read: a handle opening proves something is
             # listening, not that it is the GATEWAY. The default port was
             # rdb1's for a year, and every routed query failed while this
             # endpoint said `up` (#235). IDENTITY already reports proctype
@@ -575,6 +575,3 @@ def _rows(result: Any) -> list[dict[str, Any]]:
     if isinstance(result, list):
         return result
     return [{"value": result}]  # pragma: no cover - scalar result from a table query
-
-
-app = create_app  # re-exported factory; `uvicorn uqf_frontend.app:build` style entrypoints

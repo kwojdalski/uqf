@@ -8,7 +8,7 @@ through **B3** of
 
 A thin server-side API layer in front of the TorQ `gateway`, reusing the kola
 IPC pattern already proven in this repo by `uqf_client` and by
-`uqf_stack.core.query()` rather than introducing a second mechanism
+`uqf_stack.stack.runtime.query()` rather than introducing a second mechanism
 (**FE-16**). REST rather than WebSocket, because the gateway path has no
 push or subscribe mechanism to a browser client — every view is poll-only
 (**FE-10**).
@@ -167,9 +167,9 @@ uv run ruff check .
 sent*: that the program text is one of this package's own constants, and that
 a hostile value appears only in the argument list. No q process required.
 
-`test_catalog_drift.py` parses the schema constants out of
-`uqf_stack/core.py` as text — no import, so it cannot silently skip
-when that package's environment is unavailable.
+`test_catalog_drift.py` parses the table definitions out of
+`scripts/processes/uqf_stack_tables.q` as text — no import, so it cannot
+silently skip when uqf_stack's environment is unavailable.
 
 ## Tier routing and coverage (B1)
 

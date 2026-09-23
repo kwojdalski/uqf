@@ -23,8 +23,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python" / "uqf_stack" / "src"))
 
-from uqf_stack import core  # noqa: E402
+from uqf_stack import paths as stack_paths  # noqa: E402
 from uqf_stack.checks import hdb_shape, stack_smoke  # noqa: E402
+from uqf_stack.model.registry import DEFAULT_BASE_PORT  # noqa: E402
+from uqf_stack.stack import listing, runtime  # noqa: E402
 
 #: How long to let the stack run before looking. The feeds publish on
 #: sub-second timers and the slowest consumer chain is three deep, so this
@@ -45,10 +47,10 @@ def _stack(*args: str) -> subprocess.CompletedProcess[str]:
 
 def _running(paths, base_port: int) -> set[str]:
     """The processes torq.sh reports as up, by the same parse `summary` uses."""
-    result = core.summary(paths, base_port=base_port)
+    result = runtime.summary(paths, base_port=base_port)
     return {
         row["Process"]
-        for row in core.summary_rows(result.stdout, {}, None)
+        for row in listing.summary_rows(result.stdout, {}, None)
         if row["Status"] == "up"
     }
 
@@ -65,7 +67,7 @@ def _row_counts(tables: set[str], port: int) -> dict[str, int]:
     names = "`" + "`".join(sorted(tables))
     expr = f"{{[t] t!{{@[{{count value x}};x;0]}} each t}}[{names}]"
     try:
-        answer = core.query(expr, port=port)
+        answer = runtime.query(expr, port=port)
     except Exception as exc:  # noqa: BLE001 - reported, not raised
         print(f"  could not read row counts from rdb1: {exc}")
         return dict.fromkeys(tables, 0)
@@ -74,7 +76,7 @@ def _row_counts(tables: set[str], port: int) -> dict[str, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=core.DEFAULT_BASE_PORT)
+    parser.add_argument("--port", type=int, default=DEFAULT_BASE_PORT)
     parser.add_argument("--settle", type=int, default=SETTLE_SECONDS, help="seconds to watch")
     parser.add_argument(
         "--no-restart",
@@ -83,7 +85,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    paths = core.default_paths()
+    paths = stack_paths.default_paths()
     # Same place stack/logs.py reads them from, rather than a second guess at it.
     logs_dir = paths.torqdata / "logs"
 

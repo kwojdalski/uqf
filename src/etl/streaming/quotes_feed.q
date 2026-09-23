@@ -53,9 +53,10 @@ on_timer:{[]
 
 \d .
 
-.qstream.register[`quotes_feed;`procname`subscribes`publishes`timer_period`on_timer!(
+.qstream.register[`quotes_feed;`procname`subscribes`publishes`timer_period`on_timer`autostart!(
     `quotesfeed1;
     `symbol$();
     enlist `quotes;
     0D00:00:00.500;
-    .qsub.quotes_feed.on_timer)];
+    .qsub.quotes_feed.on_timer;
+    1b)];

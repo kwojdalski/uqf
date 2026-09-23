@@ -24,10 +24,11 @@ from pathlib import Path
 
 import pytest
 
-from uqf_stack.model.pipeline_edges import _REGISTER_RE, _register_fields, _symbol_field
+from uqf_stack.model.declarations import Declaration, read_file_text
+from uqf_stack.model.pipeline import PipelineKind
 from uqf_stack.model.schemas import _DEFINITION
 from uqf_stack.paths import UqfStackError
-from uqf_stack.scaffold import jobs
+from uqf_stack.scaffold import jobs, write
 from uqf_stack.scaffold.plan import WriteMode
 
 
@@ -38,28 +39,46 @@ def _body(plan: jobs.ScaffoldPlan, suffix: str) -> str:
 # ------------------------------------------------------- the parse contract
 
 
+def _declared(plan: jobs.ScaffoldPlan, suffix: str) -> list[Declaration]:
+    """What the registry would read from a scaffolded file - the same reader
+    the process registry is built from, so a template that stopped matching
+    it would generate a job no process runs."""
+    return read_file_text(_body(plan, suffix), Path(suffix))
+
+
 def test_a_scaffolded_job_declares_edges_the_tree_can_read():
-    """The anti-rot test. `_declared_stream_edges` finds a job's procname,
-    subscribes and publishes by regex; a template that stopped matching it
-    would generate a job the registry could never resolve."""
+    """The anti-rot test: the process registry is built by reading these
+    declarations, so the generated one has to read back as what was asked."""
     plan = jobs.streaming_job("markout2", ["trades", "quote"], "my_metric", "value:float")
-    match = _REGISTER_RE.search(_body(plan, "markout2.q"))
-    assert match, "the generated register call does not parse"
-    fields = _register_fields(match.group(2))
-    assert _symbol_field(fields["procname"]) == ("markout21",)
-    assert _symbol_field(fields["subscribes"]) == ("trades", "quote")
-    assert _symbol_field(fields["publishes"]) == ("my_metric",)
+    (d,) = _declared(plan, "markout2.q")
+    assert (d.procname, d.subscribes, d.publishes) == (
+        "markout21",
+        ("trades", "quote"),
+        ("my_metric",),
+    )
+    assert d.kind is PipelineKind.ETL
+    assert not d.autostart, "a scaffolded job is on demand until someone decides otherwise"
 
 
 def test_a_scaffolded_feed_declares_no_subscription():
     """`symbol$()` and a one-table list are the two cases the registry most
     needs to tell apart, so the empty one is spelled explicitly."""
     plan = jobs.streaming_job("tickfeed", [], "ticks", "value:float")
-    match = _REGISTER_RE.search(_body(plan, "tickfeed.q"))
-    assert match
-    fields = _register_fields(match.group(2))
-    assert _symbol_field(fields["subscribes"]) == ()
-    assert "timer_period" in fields, "a feed publishes on a timer, not on a batch"
+    (d,) = _declared(plan, "tickfeed.q")
+    assert d.subscribes == ()
+    assert d.kind is PipelineKind.FEED, "a job that subscribes to nothing is a feed"
+
+
+def test_a_scaffolded_worker_declares_its_process():
+    """A worker's process is read from its own `.qbw.define`, so the
+    scaffolded one must name the process the plan says it runs."""
+    plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
+    (d,) = _declared(plan, "fx_rates_backfill.q")
+    assert (d.procname, d.worker, d.kind) == (
+        "fx_rates_backfill1",
+        "fx_rates_backfill",
+        PipelineKind.BACKFILL,
+    )
 
 
 def test_a_scaffolded_table_parses_as_a_definition():
@@ -127,13 +146,6 @@ def test_a_scaffolded_fixture_carries_a_row():
     assert "not implemented" not in source.split("fixture:")[1].split("register")[0]
 
 
-def test_a_scaffolded_worker_names_the_process_that_runs_it():
-    """Without `worker=`, the link lives only in UQF_BACKFILL_WORKER at
-    runtime and a declared worker with no process is invisible (#283)."""
-    plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
-    assert 'worker="fx_rates_backfill"' in _body(plan, "model/registry.py")
-
-
 # ------------------------------------------------------------- refusing
 
 
@@ -151,7 +163,7 @@ def test_a_plan_refuses_wholesale_rather_than_half_writing(tmp_path: Path):
     (tmp_path / "src" / "etl" / "streaming").mkdir(parents=True)
     (tmp_path / "src" / "etl" / "streaming" / "j.q").write_text("already here")
     with pytest.raises(UqfStackError, match="already exists"):
-        jobs.apply_plan(plan, tmp_path)
+        write.apply_plan(plan, tmp_path)
     assert (tmp_path / "src" / "etl" / "streaming" / "j.q").read_text() == "already here"
     assert not (tmp_path / "tests").exists(), "nothing else was written"
 
@@ -159,20 +171,7 @@ def test_a_plan_refuses_wholesale_rather_than_half_writing(tmp_path: Path):
 def test_appending_to_a_missing_file_is_refused(tmp_path: Path):
     plan = jobs.streaming_job("j", ["trades"], None, None)
     with pytest.raises(UqfStackError, match="nothing to append to"):
-        jobs.apply_plan(plan, tmp_path)
-
-
-def test_a_registry_that_does_not_end_in_the_tuple_is_refused(tmp_path: Path):
-    """The entry goes INSIDE the PIPELINES tuple. If the file no longer ends
-    with its closing paren, the scaffold cannot tell where - and appending at
-    the end would be valid Python that registers nothing."""
-    action = next(
-        a
-        for a in jobs.streaming_job("j", [], None, None).actions
-        if str(a.path).endswith("model/registry.py")
-    )
-    with pytest.raises(UqfStackError, match="closing paren"):
-        jobs._appended("PIPELINES = (\n)\nsomething_else = 1\n", action)
+        write.apply_plan(plan, tmp_path)
 
 
 # ------------------------------------------- registering the test namespace
@@ -200,8 +199,13 @@ def test_the_registered_namespace_is_the_one_the_test_file_declares():
     ):
         entry = _body(plan, "run_tests.q").strip()
         # The TEST file, not the job file - both end in .q, and the job file
-        # declares its own `.qsub.<name>` namespace.
-        test_body = next(a.body for a in plan.actions if a.path.name.startswith("test_"))
+        # declares its own `.qsub.<name>` namespace. Nor the q table list,
+        # which the plan appends to and whose name also starts `test_`.
+        test_body = next(
+            a.body
+            for a in plan.actions
+            if a.path.name.startswith("test_") and a.path != jobs.STACK_TABLES_TEST
+        )
         declared = [
             line.split()[1]
             for line in test_body.splitlines()
@@ -221,7 +225,7 @@ def test_the_namespace_goes_inside_the_symbol_list():
     """Before the terminating `;`, not after it - appended at the end of the
     file it would be a separate statement that registers nothing."""
     before = "\\l x.q\nnsList:`.atest`.btest;\nres:1\n"
-    after = jobs._with_nslist_entry(before, "`.ctest")
+    after = write._with_nslist_entry(before, "`.ctest")
     assert "nsList:`.atest`.btest`.ctest;" in after
     assert after.endswith("res:1\n"), "the rest of the file is untouched"
 
@@ -239,12 +243,104 @@ def test_a_run_tests_file_that_does_not_look_right_is_refused(content):
     that loads, runs exactly the suites it ran before, and reports nothing
     missing - which is the failure mode being fixed, reintroduced silently."""
     with pytest.raises(UqfStackError):
-        jobs._with_nslist_entry(content, "`.ctest")
+        write._with_nslist_entry(content, "`.ctest")
 
 
 def test_a_namespace_already_listed_is_refused():
     with pytest.raises(UqfStackError, match="already in"):
-        jobs._with_nslist_entry("nsList:`.atest`.btest;\n", "`.btest")
+        write._with_nslist_entry("nsList:`.atest`.btest;\n", "`.btest")
+
+
+# ------------------------------------------ registering the owned table
+
+
+def test_a_job_that_owns_a_table_adds_it_to_the_q_table_list():
+    """test_stack_tables.q's `expected` is a gate every new table passes
+    through. Before the scaffold appended to it, every job that owned a table
+    left a red suite that was not about the job."""
+    for plan, table in (
+        (jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates"),
+        (jobs.streaming_job("markout2", ["trades"], "my_metric", "value:float"), "my_metric"),
+    ):
+        assert _body(plan, "test_stack_tables.q") == f"`{table}"
+
+
+def test_a_job_that_owns_no_table_leaves_the_q_table_list_alone():
+    plan = jobs.streaming_job("markout2", ["trades"], None, None)
+    assert jobs.STACK_TABLES_TEST not in [a.path for a in plan.actions]
+
+
+def test_the_table_goes_at_the_end_of_the_expected_list():
+    before = "\\d .tabletest\nexpected:`quotes`trades\nnext:1\n"
+    after = write._with_expected_table(before, "`fx_rates")
+    assert "expected:`quotes`trades`fx_rates\n" in after
+    assert after.endswith("next:1\n"), "the rest of the file is untouched"
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["no list here\n", "expected:`a\nexpected:`b\n", "expected:`quotes`fx_rates\n"],
+)
+def test_a_table_list_that_does_not_look_right_is_refused(content):
+    """No list, two lists, or the table already listed - which means the q
+    file already defines it, and the scaffold would be redefining it."""
+    with pytest.raises(UqfStackError):
+        write._with_expected_table(content, "`fx_rates")
+
+
+def test_a_table_whose_name_extends_a_listed_one_is_not_a_duplicate():
+    """Matched as a whole symbol, not a substring: `fx_rates_old` being listed
+    says nothing about `fx_rates`."""
+    after = write._with_expected_table("expected:`fx_rates_old\n", "`fx_rates")
+    assert after == "expected:`fx_rates_old`fx_rates\n"
+
+
+# ------------------------------------------- a worker on what already exists
+
+
+def test_a_worker_on_an_existing_source_does_not_rewrite_it():
+    """The second worker over a source someone already wrote - another width,
+    another target - used to be refused: the plan always CREATED the source
+    file, and apply_plan refuses a file that exists."""
+    plan = jobs.bounded_worker(
+        "fx_rates_1h", "fx_rates", None, source="fx_rates", reuse_source=True, define_table=False
+    )
+    paths = [str(a.path) for a in plan.actions]
+    assert not any(p.startswith(str(jobs.SOURCE_DIR)) for p in paths)
+    assert str(jobs.WORKER_DIR / "fx_rates_1h_backfill.q") in paths
+
+
+def test_an_existing_table_is_not_defined_twice():
+    plan = jobs.bounded_worker("fx_rates_1h", "fx_rates", "mid:float", define_table=False)
+    paths = [a.path for a in plan.actions]
+    assert jobs.TABLES_FILE not in paths
+    assert jobs.STACK_TABLES_TEST not in paths
+    assert jobs.SOURCE_DIR / "fx_rates_1h.q" in paths, "a new source still needs its file"
+
+
+def test_columns_are_required_when_something_new_is_written():
+    with pytest.raises(UqfStackError, match="needs --columns"):
+        jobs.bounded_worker("fx_rates", "fx_rates", None)
+    with pytest.raises(UqfStackError, match="needs --columns"):
+        jobs.bounded_worker("fx_rates", "fx_rates", None, reuse_source=True)
+
+
+def test_columns_with_nothing_to_shape_are_refused_not_ignored():
+    with pytest.raises(UqfStackError, match="nothing to shape"):
+        jobs.bounded_worker(
+            "fx_rates", "fx_rates", "mid:float", reuse_source=True, define_table=False
+        )
+
+
+def test_every_plan_names_the_readme_line_it_cannot_write():
+    """docs/integrations/torq/README.md is authored prose and pytest fails until
+    it names the process - so the plan says so, rather than leaving that red to
+    be discovered."""
+    for plan, proc in (
+        (jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates_backfill1"),
+        (jobs.streaming_job("markout2", ["trades"], None, None), "markout21"),
+    ):
+        assert any(proc in n and "README.md" in n for n in plan.notes), plan.notes
 
 
 # --------------------------------------------------------------- write mode

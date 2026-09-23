@@ -259,8 +259,7 @@ def test_no_program_is_a_bare_niladic_lambda(name):
     *function itself*, which kola cannot deserialise ("Not supported k type
     100"). Such a program must be written as a plain expression instead.
 
-    This has bitten twice - queries.PING and ops.IDENTITY - so it is a test
-    rather than a comment.
+    This has bitten twice, so it is a test rather than a comment.
     """
     program = Q_PROGRAMS[name].strip()
     assert not program.startswith("{[]"), (

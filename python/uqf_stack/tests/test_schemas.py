@@ -8,43 +8,36 @@ arrangement, and neither announces itself:
   file changes, the regex finds nothing, every generated `database.q` loses
   uqf's tables, and the first symptom is a feed failing to publish into a
   table the tickerplant does not have.
-* **The Python-side facts drift from the q file.** `WIDE_BOOK_LEVELS` is a
-  claim *about* the q file rather than the thing that produces it, which is
-  the right way round for a schema a person reads - but it means nothing
-  makes the two agree except a test.
+* **A shape a consumer relies on breaks.** The wide book's levels must stay
+  paired and contiguous, and nothing but a test reads them.
 """
 
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
 from uqf_stack.model import schemas
 
-EXPECTED_TABLES = {
-    "quotes",
-    "wide_book",
-    "mkt_orderbook",
-    "databento_mbp10",
-    "databento_book",
-    "crypto_book",
-    "crypto_sim_fills",
-    "crypto_trades",
-    "trades",
-    "position",
-    "execution_quality",
-    "executions",
-    "marks",
-    "market_data",
-    "superbook",
-    "arbitrage",
-    "cross_arbitrage",
-    "config_change",
-    "orders",
-    "fx_position",
-    "fx_limit_breach",
-}
+#: The q suite's own list of tickerplant tables - the one hand-kept list,
+#: which `uqf-stack new-job` appends to. Read rather than copied: a second copy
+#: here meant every new table was two edits, and the two could disagree.
+#: Parsed by splitting the `expected:` symbol list, deliberately NOT with the
+#: `schemas` regex under test, so this remains an independent check of it.
+_Q_TABLE_TEST = Path(__file__).resolve().parents[3] / "tests" / "q" / "test_stack_tables.q"
+
+
+def _expected_tables() -> set[str]:
+    lines = [ln for ln in _Q_TABLE_TEST.read_text().splitlines() if ln.startswith("expected:")]
+    assert len(lines) == 1, f"{_Q_TABLE_TEST} should hold exactly one `expected:` line"
+    names = {n for n in lines[0].removeprefix("expected:").strip().split("`") if n}
+    assert names, f"{_Q_TABLE_TEST}'s `expected:` list is empty"
+    return names
+
+
+EXPECTED_TABLES = _expected_tables()
 
 
 def test_the_q_file_is_where_the_reader_expects_it():
@@ -57,25 +50,6 @@ def test_every_expected_table_is_found():
     assert set(schemas._definitions()) == EXPECTED_TABLES
 
 
-def test_each_constant_resolves_to_its_own_table():
-    # A copy-paste in the constant block would point two names at one
-    # definition, and the generated database.q would be missing a table while
-    # looking complete.
-    pairs = {
-        "quotes": schemas.QUOTES_TABLE_SCHEMA,
-        "wide_book": schemas.WIDE_BOOK_TABLE_SCHEMA,
-        "mkt_orderbook": schemas.MKT_ORDERBOOK_TABLE_SCHEMA,
-        "crypto_book": schemas.CRYPTO_BOOK_TABLE_SCHEMA,
-        "crypto_sim_fills": schemas.CRYPTO_SIM_FILLS_TABLE_SCHEMA,
-        "crypto_trades": schemas.CRYPTO_TRADES_TABLE_SCHEMA,
-        "trades": schemas.TRADES_TABLE_SCHEMA,
-        "position": schemas.POSITION_TABLE_SCHEMA,
-        "execution_quality": schemas.EXECUTION_QUALITY_TABLE_SCHEMA,
-    }
-    for table, definition in pairs.items():
-        assert definition.startswith(f"{table}:([]"), f"{table} resolved to {definition[:40]!r}"
-
-
 def test_definition_refuses_an_unknown_table():
     # Returning None would reach _generated_schema_content and produce a
     # tickerplant without the table; the first symptom would be a feed
@@ -84,23 +58,17 @@ def test_definition_refuses_an_unknown_table():
         schemas.definition("no_such_table")
 
 
-def test_wide_book_levels_matches_the_q_file():
-    # WIDE_BOOK_LEVELS is a fact ABOUT the q file, not the generator of it.
-    # The columns are written out there so a reader can check whether bids10
-    # exists; nothing but this test keeps the constant honest.
-    definition = schemas.WIDE_BOOK_TABLE_SCHEMA
-    bids = re.findall(r"\bbids(\d+):", definition)
-    asks = re.findall(r"\basks(\d+):", definition)
-    assert [int(n) for n in bids] == list(range(schemas.WIDE_BOOK_LEVELS))
-    assert [int(n) for n in asks] == list(range(schemas.WIDE_BOOK_LEVELS))
-
-
-def test_wide_book_levels_are_contiguous_from_zero():
+def test_the_wide_book_levels_are_paired_and_contiguous_from_zero():
     # .qbook.derive_level_groups finds levels by a prefix plus a CONTIGUOUS
-    # digit suffix, so a gap yields a shorter book rather than an error. The
-    # q-side suite asserts this too; it is here as well because this is the
-    # constant a Python caller would reason from.
-    assert schemas.WIDE_BOOK_LEVELS > 0
+    # digit suffix, so a gap yields a shorter book rather than an error, and
+    # a bid level with no ask is a book nothing can price. Read from the q
+    # definition, which is the only place the level count is stated.
+    definition = schemas.definition("wide_book")
+    bids = [int(n) for n in re.findall(r"\bbids(\d+):", definition)]
+    asks = [int(n) for n in re.findall(r"\basks(\d+):", definition)]
+    assert bids, "wide_book declares no bid levels"
+    assert bids == list(range(len(bids)))
+    assert asks == bids
 
 
 def test_a_comment_line_is_never_read_as_a_definition():

@@ -16,9 +16,6 @@ but `kola`) and carries its own dependencies (`typer`, `rich`, `loguru`,
 ```
 uqf_stack_mcp.py    FastMCP server exposing the same operations as MCP tools
 src/uqf_stack/
-  core.py           the facade: ~70 names re-exported from the folders below,
-                     so both front ends import from ONE place and cannot
-                     drift apart. Held in place by tests/test_module_split.py
   paths.py          where every file in the tree lives, and `repo_root()`,
                      which searches upward for a marker rather than counting
                      directory levels - which is what makes the folders safe
@@ -63,8 +60,8 @@ logger/ paths.py          depend on nothing in this package
 model/           -> paths, logger
 stack/           -> model, paths, logger
 external/ checks/ -> stack, model, paths, logger
-core.py          -> everything above (it is the facade)
-scaffold/ cli/   -> core, and whatever else they need below it
+scaffold/ cli/   -> whatever they need below them, imported from the
+                    module that defines it (there is no facade)
 ```
 
 `model/` importing from `stack/` would be the change that breaks this, and
@@ -152,12 +149,12 @@ uqf-stack query "select from quotes" --port 6050 --export quotes.parquet
 ## Listing things
 
 `list` isn't limited to processes - it dispatches on a small registry
-(`core.LISTABLE_KINDS`), currently `processes` (procname/proctype/port/
+(`stack.listing.LISTABLE_KINDS`), currently `processes` (procname/proctype/port/
 startwithall, resolved and with overrides applied - the default), `fields`
 (`process.csv`'s valid `config-set` columns), `overrides` (every
 `config-set` override in effect), and `env` (`build_env()`'s resolved
 `KDBBASEPORT`/`KDBHDB`/... values). Adding a new kind is one function plus
-one registry entry - see `core.py`'s `_list_*` functions.
+one registry entry - see `stack/listing.py`'s `_list_*` functions.
 
 ## Config setters
 

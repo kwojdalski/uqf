@@ -52,10 +52,16 @@ d:{[n] 2026.09.17D10:00:00.000000000+n*0D00:00:01}
 / --- the contract ---------------------------------------------------------
 
 test_every_job_is_registered:{[t]
-    / The four feeds publish on a timer and subscribe to nothing; the five
-    / subscribers are the other half. One contract covers both.
-    .qunit.assertEquals[asc .qstream.registered[];
-        `arbitrage`cross`cross_arbitrage`crypto_mock`databento_book`executions`fx_feed`fx_orders_feed`fx_positions`fx_trades_feed`market_data`markout`marks`posbook`quotes_feed`superbook`vectorize`wide_book_feed;
+    / Feeds publish on a timer and subscribe to nothing; subscribers are the
+    / other half. One contract covers both.
+    / .
+    / Derived from the files rather than listed (#352): a job is named after
+    / its file, so every file in the directory must have registered. The hand
+    / list this replaced made every new job an edit here. `except` rather than
+    / equality because other suites register test jobs (.qsub.nt_k and
+    / friends), and whether they ran first is not what this asks.
+    .qunit.assertEquals[.testutil.etl_declaration_names["src/etl/streaming"] except .qstream.registered[];
+        `symbol$();
         "each job file registers itself as it loads"]};
 
 test_a_feed_declares_no_subscription:{[t]
@@ -73,6 +79,23 @@ test_a_job_that_does_nothing_is_refused:{[t]
     .qunit.assertError[{.qstream.register[`idle;x]};
         `procname`subscribes`publishes!(`idle1;`symbol$();`symbol$());
         "a job with neither a handler nor a timer runs nothing at all"]};
+
+/ autostart and note are read by uqf_stack's process registry, which is derived
+/ from these declarations - so a malformed one is refused here, by name,
+/ rather than read later as a registry that quietly disagrees.
+test_an_autostart_that_is_not_a_boolean_is_refused:{[t]
+    .qunit.assertThrows[{.qstream.register[`badstart;x]};
+        `procname`subscribes`publishes`timer_period`on_timer`autostart!(
+            `badstart1;`symbol$();`symbol$();0D00:00:01;{[] ()};`yes);
+        "*autostart must be a boolean*";
+        "autostart is a flag, not a word that reads like one"]};
+
+test_a_note_that_is_not_a_string_is_refused:{[t]
+    .qunit.assertThrows[{.qstream.register[`badnote;x]};
+        `procname`subscribes`publishes`timer_period`on_timer`note!(
+            `badnote1;`symbol$();`symbol$();0D00:00:01;{[] ()};`why);
+        "*note must be a string*";
+        "a note is prose for the process table, so a symbol is refused"]};
 
 test_a_jobs_namespace_is_derived_from_its_name:{[t]
     .qunit.assertEquals[.qstream.namespace `markout;`.qsub.markout;

@@ -15,14 +15,12 @@ from pathlib import Path
 from typing import Any
 
 from uqf_stack.logger import get_logger
-from uqf_stack.model.pipelines import DEFAULT_BASE_PORT, PROCESS_CSV_FIELDS
+from uqf_stack.model.pipelines import PROCESS_CSV_FIELDS
+from uqf_stack.model.plant_schema import _generated_schema_content
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
 from uqf_stack.paths import UqfStackError, UqfStackPaths, check_prerequisites
 from uqf_stack.stack.env import build_env
-from uqf_stack.stack.procs import (
-    _base_process_rows,
-    _generated_schema_content,
-    _read_overrides,
-)
+from uqf_stack.stack.procs import _base_process_rows, _read_overrides
 
 log = get_logger(__name__)
 

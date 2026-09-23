@@ -2,8 +2,9 @@
 docs/guides/uqf-stack.md). Bridges lib/torq + lib/torq-finance-starter-pack
 without editing either vendored tree.
 
-All the actual bootstrapping/config logic lives in core.py, shared with
-uqf_stack_mcp.py's FastMCP server so the two front ends can't drift apart.
+All the actual bootstrapping/config logic lives in the model/, stack/ and
+external/ modules, which uqf_stack_mcp.py's FastMCP server calls too, so the
+two front ends can't drift apart.
 
 Reached through the `uqf-stack` script entry point (pyproject.toml
 [project.scripts]):
@@ -40,7 +41,8 @@ from uqf_stack.cli import create  # noqa: F401
 from uqf_stack.cli import external  # noqa: F401
 
 # isort: on
-from uqf_stack.cli.shared import _env_log_level, app, configure_logging
+from uqf_stack.cli.shared import _env_log_level, app
+from uqf_stack.logger import configure_logging
 
 
 def main() -> None:

@@ -166,8 +166,10 @@ on_batch:{[tbl;batch]
         ([] sym:enlist `USDJPY; qty:enlist 0f; avg_price:enlist 0f; realized_pnl:enlist 1e6; mark_price:enlist 148.5; unrealized_pnl:enlist 0f; total_pnl:enlist 1e6))
     ))];
 
-.qstream.register[`posbook;`procname`subscribes`publishes`on_batch!(
+.qstream.register[`posbook;`procname`subscribes`publishes`on_batch`autostart`note!(
     `posbook1;
     `executions`marks;
     enlist `position;
-    .qsub.posbook.on_batch)];
+    .qsub.posbook.on_batch;
+    1b;
+    "reads the two normalizers' outputs, not trades and quote, so one book carries FX and crypto and a new market is a mapping, not a job")];

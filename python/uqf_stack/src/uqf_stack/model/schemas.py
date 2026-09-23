@@ -8,13 +8,11 @@ failed commit, `check_q_traps.py` never scanned them (it globs
 the system had thirteen.
 
 So this file is now a *reader*. The q file is the single source of truth, and
-these constants resolve out of it by table name - which is the same
+a caller asks for a table by name with `definition` - which is the same
 generate-or-check discipline the rest of the tree follows: the definition
-exists once, and anything that needs it derives from that one place.
-
-The constants keep their names so every caller - `pipelines.PIPELINES`,
-`procs._generated_schema_content`, and the frontend's catalog drift test -
-is unchanged by the move.
+exists once, and anything that needs it derives from that one place. There
+are deliberately no per-table constants: each was a second spelling of a
+lookup, and a table added to the q file did not get one.
 """
 
 from __future__ import annotations
@@ -74,30 +72,3 @@ def definition(table: str) -> str:
 
 
 _DEFS = _definitions()
-
-#: Levels in the wide book. The columns are written out in the q file rather
-#: than generated from this, so it is a fact ABOUT that file rather than the
-#: thing that produces it - `test_schemas.py` holds the two in agreement.
-WIDE_BOOK_LEVELS = 11
-
-QUOTES_TABLE_SCHEMA = _DEFS["quotes"]
-WIDE_BOOK_TABLE_SCHEMA = _DEFS["wide_book"]
-MKT_ORDERBOOK_TABLE_SCHEMA = _DEFS["mkt_orderbook"]
-DATABENTO_MBP10_TABLE_SCHEMA = _DEFS["databento_mbp10"]
-DATABENTO_BOOK_TABLE_SCHEMA = _DEFS["databento_book"]
-CRYPTO_BOOK_TABLE_SCHEMA = _DEFS["crypto_book"]
-CRYPTO_SIM_FILLS_TABLE_SCHEMA = _DEFS["crypto_sim_fills"]
-CRYPTO_TRADES_TABLE_SCHEMA = _DEFS["crypto_trades"]
-TRADES_TABLE_SCHEMA = _DEFS["trades"]
-POSITION_TABLE_SCHEMA = _DEFS["position"]
-EXECUTION_QUALITY_TABLE_SCHEMA = _DEFS["execution_quality"]
-EXECUTIONS_TABLE_SCHEMA = _DEFS["executions"]
-ORDERS_TABLE_SCHEMA = _DEFS["orders"]
-FX_POSITION_TABLE_SCHEMA = _DEFS["fx_position"]
-FX_LIMIT_BREACH_TABLE_SCHEMA = _DEFS["fx_limit_breach"]
-MARKS_TABLE_SCHEMA = _DEFS["marks"]
-MARKET_DATA_TABLE_SCHEMA = _DEFS["market_data"]
-SUPERBOOK_TABLE_SCHEMA = _DEFS["superbook"]
-ARBITRAGE_TABLE_SCHEMA = _DEFS["arbitrage"]
-CROSS_ARBITRAGE_TABLE_SCHEMA = _DEFS["cross_arbitrage"]
-CONFIG_CHANGE_TABLE_SCHEMA = _DEFS["config_change"]

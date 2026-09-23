@@ -38,7 +38,7 @@ _LOGURU_LEVEL = {"ERROR": "ERROR", "ERR": "ERROR", "WARN": "WARNING", "INF": "IN
 _LEVEL_ORDER = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
 
 # Dedicated format for `logs` output - the record's own {time}/{function}/
-# {line} are Python's (always core.py's _emit, useless here); the kdb
+# {line} are Python's (always logger/core.py's _emit, useless here); the kdb
 # process's own timestamp/procname/proctype (bound as `extra` below) are
 # what's actually informative, so they replace them entirely rather than
 # just prefixing the message.

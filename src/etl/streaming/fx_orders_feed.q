@@ -98,9 +98,11 @@ on_timer:{[]
 
 / Once a second, the same cadence as the fills feed: an order is a rarer
 / event than a quote, and the positions service snapshots every five.
-.qstream.register[`fx_orders_feed;`procname`subscribes`publishes`timer_period`on_timer!(
+.qstream.register[`fx_orders_feed;`procname`subscribes`publishes`timer_period`on_timer`autostart`note!(
     `fxordersfeed1;
     `symbol$();
     enlist `orders;
     0D00:00:01.000;
-    .qsub.fx_orders_feed.on_timer)];
+    .qsub.fx_orders_feed.on_timer;
+    1b;
+    "synthetic order flow, most of which never becomes a fill - fxpositions1's input")];

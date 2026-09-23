@@ -27,19 +27,24 @@ framework guarantees is [ETL-nn](../reference/etl-framework-requirements.md).
 
 ## Scaffolding it
 
-`uqf-stack new-job` writes the skeleton: the q files, the table definition,
-the registry entry and a test.
+`uqf-stack new-job` writes the skeleton: the q files, the table definition
+and a test. There is no registry entry - the process is read from the job's
+own declaration.
 
 <!-- Source: docs/diagrams/scaffolding.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
 
 ![What uqf-stack new-job writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
-Read it left to right. The two **appends** are the whole reason the middle
-band exists: everything else is picked up by a glob, and those two files hold
-the only two facts the tree cannot derive from itself — a process's port
-offset, which is its position in the registry list, and `nsList`, the one
-hand-kept list of test namespaces.
+Read it left to right. The **appends** are the whole reason the middle band
+exists: everything else is picked up by a glob, and those files hold the facts
+the tree cannot derive from itself — the table definition, `nsList`, the one
+hand-kept list of test namespaces, and `expected` in
+[`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q), the gate
+every new table passes through. After writing them, `new-job` reruns
+`scripts/generate/generate_operational_docs.py`, so `processes.md`,
+`src/etl/generated/pipeline_dag.q` and the port lock never lag the job it just
+declared.
 
 ```
 uqf-stack new-job markout2 --subscribes trades,quote \
@@ -47,12 +52,22 @@ uqf-stack new-job markout2 --subscribes trades,quote \
 
 uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
+
+uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
+    --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
 ```
 
+The third is a second worker over the second's source: a source that already
+exists is reused rather than rewritten, and a table that already exists is not
+defined again. `--columns` is required whenever a new source or a new table is
+written, and refused when neither is. Its dataset is its own because
+`.qbw.define` refuses two workers on one dataset and partition - their
+coverage would compose, and a range full of gaps would read as complete - so
+`new-job` refuses a dataset another worker already fills without a partition.
+
 `--dry-run` prints what it would write and writes nothing. `kind` is derived
-for a streaming job - one that subscribes to nothing is a feed - and the
-registry entry is APPENDED, because offsets are allocated in list order and
-inserting above an existing entry renumbers every process after it.
+for a streaming job - one that subscribes to nothing is a feed - and the new
+process's port is appended to the port lock, so no existing process moves.
 
 **It writes the shape, never the logic.** The generated handler throws and
 the generated test fails, on purpose: a scaffold that left something green
@@ -68,35 +83,31 @@ row of the declared shape. Replace it before trusting a run.
 
 ### What a fresh scaffold leaves red
 
-The generated handler throws and the generated test fails — but today you will
-see **three** failures rather than that one, and the one you want is not among
-them:
+The generated handler throws and the generated test fails, and that is the
+one q failure you see:
 
 ```
 $ uqf-stack new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
 $ q tests/run_tests.q
-  .sjtest.test_every_job_is_registered
-  .tabletest.test_no_undeclared_table_appears
-  .dxprobetest.test_dxprobe_is_implemented     <- yours
+  .dxprobetest.test_dxprobe_is_implemented
 ```
 
-The third is the one you want. The other two are hand-kept lists that have
-nothing to do with your job being unfinished:
+Nothing else in the q suite needs an edit. `test_every_job_is_registered`
+derives its jobs from `src/etl/streaming/` (#352), and the scaffold adds a
+new table to `expected` in `test_stack_tables.q`. That list stays a
+**deliberate gate** — a new table is either a capability nobody wired up or a
+stray definition — and the scaffold passes it by defining the table and
+naming its owner in the same plan. It also registers your test's NAMESPACE in
+`run_tests.q` (#350); without that the stub loaded and never ran, so the one
+red the scaffold exists to leave was the one you could not see.
 
-1. Add the job name to `test_every_job_is_registered` in
-   [`tests/q/test_stream_job.q`](../../tests/q/test_stream_job.q), which keeps
-   the list of jobs by hand. (#352 — it is redundant with a generic check.)
-2. If the job publishes a new table, add it to `expected` in
-   [`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q). This one
-   is a **deliberate gate**: a new table is either a capability nobody wired up
-   or a stray definition, and both deserve a moment's thought.
-
-After those two, `q tests/run_tests.q` fails once, on your stub, which is where
-the work starts.
-
-The scaffold registers your test's NAMESPACE in `run_tests.q` itself (#350) —
-without that the stub loaded and never ran, so the one red the scaffold exists
-to leave was the one you could not see.
+`uv run pytest python/` fails once too, and that one is yours to write:
+`test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
+[`docs/integrations/torq/README.md`](../integrations/torq/README.md) name the
+new process. It is authored prose, so no generator can write it for you;
+`new-job` names the line in its output instead. Everything that IS derived -
+`processes.md`, `src/etl/generated/pipeline_dag.q` and `docs/man.q` - it
+regenerates before it returns.
 
 The rest of this guide is what to write into that skeleton, and why each
 part is shaped the way it is.
@@ -365,77 +376,48 @@ inputs | ,`fx_rates@fx_rates
 outputs| ,`fx_rates
 ```
 
-### Give it a process, or the build fails
+### Its process comes from the declaration
 
-One more registration, and it is the one that is easy to miss because
-nothing in q needs it. A backfill process and its worker are joined at
-*runtime* by `UQF_BACKFILL_WORKER` — one script serves every worker, and the
-environment picks which. So a fully declared worker with no process to run it
-is invisible to every grep: it looks finished and can only ever be started by
-hand. Two workers were adrift exactly this way before the rule existed.
+There is no registration to add. The uqf_stack process registry is READ from
+the q declarations - every `.qstream.register`/`.qnorm.define` under
+`src/etl/streaming/` and every `.qbw.define` under `src/etl/workers/` - by
+[`model/declarations.py`](../../python/uqf_stack/src/uqf_stack/model/declarations.py).
+It used to be a hand-kept Python list restating each one, which made a new
+job two edits in two languages and let a fully declared worker sit with no
+process to run it, invisible to every grep.
 
-Add a `Pipeline` to `PIPELINES` in
-[`model/registry.py`](../../python/uqf_stack/src/uqf_stack/model/registry.py)
-naming the worker it runs:
+A worker's declaration names its process, and may say why it exists:
 
-```python
-Pipeline(
-    procname="fx_rates_backfill1",
-    script="processes/torq_backfill.q",
-    kind=PipelineKind.BACKFILL,
-    worker="fx_rates_backfill",
-    startwithall="0",
-    note="bounded: reads the vendor's daily fixings over ODBC",
-),
+```q
+.qbw.define[`fx_rates_backfill;
+    `source`dataset`width`transform`procname`note!
+    (`fx_rates;`fx_rates;1D;`fx_rates_passthrough;
+     `fx_rates_backfill1;
+     "bounded: reads the vendor's daily fixings over ODBC")];
 ```
 
-**A streaming job does not restate its edges here.** Its
-`.qstream.register` already names the tables it subscribes to and publishes,
-so the entry defers to it:
+`procname` defaults to `<worker>1` when absent, in q and in the registry
+alike. A backfill never starts with the stack - it registers with discovery,
+runs its range and exits - so a worker has no `autostart`.
 
-```python
-Pipeline(
-    procname="posbook1",
-    script=STREAM_RUNNER_SCRIPT,
-    kind=PipelineKind.ETL,
-    subscribes=FROM_DECLARATION,   # read from posbook.q's own declaration
-    table="position",
-    schema=POSITION_TABLE_SCHEMA,
-),
-```
+A streaming job already names its `procname`, `subscribes` and `publishes`,
+and those are its process's edges. Two more keys are optional:
 
-Those fields used to be written twice - once in q, once here - and
-`verify_pipeline_edges` existed to check the two agreed. There is one
-declaration now, so there is nothing to drift and nothing to check. What
-still belongs in the entry is what q has no way to know: the port offset,
-whether it starts with the stack, and which table's schema it owns.
+| key | means | absent |
+|---|---|---|
+| `autostart` | `1b` to start with the stack | on demand |
+| `note` | why it is deployed as it is, shown in `processes.md` | no note |
 
-`FROM_DECLARATION` is strict. A pipeline that defers and has no matching
-`.qstream.register`/`.qnorm.define` **raises** rather than resolving to
-nothing - usually because the `procname` in the entry and the one in the q
-file disagree. Resolving to empty would drop the job's tables out of the
-generated `database.q`, and `.u.upd` onto a table the plant does not define
-discards its rows in silence.
+Default on demand, because joining the default start spends one of the
+plant's sixteen licensed connections (#285) - a decision to make on purpose.
 
-A feed that subscribes to nothing keeps `subscribes=()`: there is no second
-copy to remove, and `()` says it more plainly than a pointer to a file.
-
-`verify_pipeline_edges` checks this in both directions — a worker no pipeline
-names, and a pipeline naming a worker no file declares:
-
-```
-fx_rates_backfill: a bounded worker declares itself but no backfill pipeline
-names it, so it can only be run by hand. Add a Pipeline with
-worker='fx_rates_backfill', or add it to WORKERS_WITHOUT_A_PROCESS with a reason
-```
-
-`WORKERS_WITHOUT_A_PROCESS` is empty and meant to stay that way: the publish
-seam means the same file runs under either runner, so an entry there claims
-"this job cannot be started the normal way", which needs a reason.
-
-`startwithall="0"` is the normal choice for a backfill — it registers with
-discovery, runs its range and exits, so starting it with the fleet would run
-it on every `uqf-stack start all`.
+**Ports** are the one fact no declaration can supply, because a port has to
+survive other processes being added around it. Each process's offset lives in
+[`scripts/processes/process_ports.csv`](../../scripts/processes/process_ports.csv),
+a generated, append-only lock: a process not yet in it gets the next free
+offset, and `generate_operational_docs.py` (which `new-job` runs) writes it
+down. A retired process keeps its row, so its offset is never reused, and
+`--check` fails in CI on a process the lock lacks.
 
 ## 4. Run it
 

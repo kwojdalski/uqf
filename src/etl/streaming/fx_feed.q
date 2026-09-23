@@ -56,9 +56,11 @@ on_timer:{[]
 / Twice a second, matching every other feed in this demo: fast enough that
 / the derived jobs downstream have something to do, slow enough to read the
 / tables by hand while it runs.
-.qstream.register[`fx_feed;`procname`subscribes`publishes`timer_period`on_timer!(
+.qstream.register[`fx_feed;`procname`subscribes`publishes`timer_period`on_timer`autostart`note!(
     `fxfeed1;
     `symbol$();
     enlist `quote;
     0D00:00:00.500;
-    .qsub.fx_feed.on_timer)];
+    .qsub.fx_feed.on_timer;
+    1b;
+    "pinned below the vendored dqc/dqe block, not part of the contiguous run")];
