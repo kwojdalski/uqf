@@ -146,9 +146,14 @@ FAKE_CATALOG: list[dict[str, str]] = [
     {"table": "etl_coverage", "description": "Append-only completeness ledger"},
 ]
 
-#: `meta`, as a data tier would report it for FAKE_CATALOG's tables. A blank
-#: `kind` is q's answer for an untyped column, and is what makes
-#: quotes.bid_prices unfilterable.
+#: `meta`, as a data tier would report it for FAKE_CATALOG's tables.
+#:
+#: `quotes.bid_prices` is "F", not a blank, and that is deliberate: q reports
+#: a nested column with an UPPERCASE character once the table has rows, and a
+#: blank only while it is still empty. A fixture carrying the blank tests the
+#: state no live stack is ever in, and hid a bug that made the whole catalog
+#: unbuildable against a populated quotes. `ask_sizes` keeps the blank so both
+#: spellings stay covered.
 FAKE_SCHEMA: list[dict[str, str]] = [
     {"table": "trades", "column": "time", "kind": "p"},
     {"table": "trades", "column": "sym", "kind": "s"},
@@ -158,9 +163,9 @@ FAKE_SCHEMA: list[dict[str, str]] = [
     {"table": "trades", "column": "pip_factor", "kind": "f"},
     {"table": "quotes", "column": "time", "kind": "p"},
     {"table": "quotes", "column": "sym", "kind": "s"},
-    {"table": "quotes", "column": "bid_prices", "kind": " "},
-    {"table": "quotes", "column": "bid_sizes", "kind": " "},
-    {"table": "quotes", "column": "ask_prices", "kind": " "},
+    {"table": "quotes", "column": "bid_prices", "kind": "F"},
+    {"table": "quotes", "column": "bid_sizes", "kind": "F"},
+    {"table": "quotes", "column": "ask_prices", "kind": "F"},
     {"table": "quotes", "column": "ask_sizes", "kind": " "},
     {"table": "position", "column": "time", "kind": "p"},
     {"table": "position", "column": "sym", "kind": "s"},

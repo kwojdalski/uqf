@@ -107,15 +107,57 @@ def test_a_blank_meta_type_is_a_vector_column_and_is_not_filterable():
     assert tbl.filterable == frozenset({"sym"})
 
 
+def test_a_populated_vector_column_is_a_list_not_an_error():
+    """q reports a nested column as UPPERCASE once the table has rows -
+    `quotes.bid_prices` is "F", not a blank. The blank is only what an EMPTY
+    table reports.
+
+    This is the case that matters, and the one an earlier version of this map
+    got wrong: it knew the blank and no uppercase, so it worked against the
+    table declarations and would have raised on the first populated quotes -
+    taking every table down with it, since one unmappable column makes the
+    whole catalog unbuildable.
+    """
+    cat = _catalog(
+        described=[{"table": "quotes", "description": "depth"}],
+        schema=[
+            {"table": "quotes", "column": "sym", "kind": "s"},
+            {"table": "quotes", "column": "bid_prices", "kind": "F"},
+            {"table": "quotes", "column": "notes", "kind": "C"},
+        ],
+    )
+    tbl = cat.table("quotes")
+    assert tbl.columns["bid_prices"] is QType.LIST
+    assert tbl.columns["notes"] is QType.LIST
+    assert tbl.filterable == frozenset({"sym"})
+
+
+def test_one_unmappable_column_does_not_take_the_whole_catalog_down_silently():
+    """It raises, naming the column - the catalog is the allowlist, so it must
+    fail loudly rather than serve a table with a column quietly missing."""
+    cat = _catalog(
+        described=[
+            {"table": "trades", "description": "Client fills"},
+            {"table": "quotes", "description": "depth"},
+        ],
+        schema=[
+            {"table": "trades", "column": "sym", "kind": "s"},
+            {"table": "quotes", "column": "weird", "kind": "x"},
+        ],
+    )
+    with pytest.raises(ValueError, match="quotes.weird"):
+        cat.tables()
+
+
 def test_a_meta_type_this_layer_cannot_coerce_is_refused_by_name():
     """Loudly, rather than by quietly dropping the column - a dropped column
     reads to a caller as "no such column", which blames them for a gap here.
     """
     cat = _catalog(
         described=[{"table": "trades", "description": "Client fills"}],
-        schema=[{"table": "trades", "column": "blob", "kind": "X"}],
+        schema=[{"table": "trades", "column": "blob", "kind": "x"}],
     )
-    with pytest.raises(ValueError, match="'X'"):
+    with pytest.raises(ValueError, match="'x'"):
         cat.tables()
 
 

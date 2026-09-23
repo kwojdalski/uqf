@@ -146,12 +146,23 @@ class Table:
         return None
 
 
-#: A `meta` type character to the type this layer coerces into. A BLANK is
-#: q's answer for an untyped column - a vector-valued one like `bid_prices` -
-#: and becomes LIST, which `Table.filterable` then excludes.
+#: A `meta` type character to the type this layer coerces into.
 #:
-#: Spelled out rather than derived, so a character nothing here knows about
-#: is refused by name instead of silently becoming something filterable.
+#: LOWERCASE ONLY, and that is the whole rule q uses: a lowercase character
+#: means a SIMPLE vector - one atom per row - and an UPPERCASE one means a
+#: nested column, a list per row. `quotes.bid_prices` reports `F` once it
+#: holds float vectors, and a blank only while the table is still empty.
+#:
+#: That distinction is load-bearing and was nearly got wrong: an earlier
+#: version of this map had the blank and no uppercase, which worked against
+#: the empty table declarations and would have raised on the first populated
+#: `quotes` - taking the whole catalog down with it, since one unmappable
+#: column makes every table unbuildable. Tested now against a table with rows
+#: in it, which is the only version of this test that means anything.
+#:
+#: Spelled out rather than derived from QType, so a lowercase character
+#: nothing here knows about is refused by name instead of silently becoming
+#: something filterable.
 _QTYPE_BY_CHAR: dict[str, QType] = {
     "p": QType.TIMESTAMP,
     "n": QType.TIMESPAN,
@@ -160,9 +171,22 @@ _QTYPE_BY_CHAR: dict[str, QType] = {
     "s": QType.SYMBOL,
     "b": QType.BOOLEAN,
     "g": QType.GUID,
-    " ": QType.LIST,
-    "": QType.LIST,
 }
+
+
+def _qtype(char: str) -> QType | None:
+    """One `meta` type character as the type this layer coerces into.
+
+    Nested and empty columns are LIST, which `Table.filterable` excludes -
+    a list per row has no scalar comparison. Everything else must be a
+    lowercase character this layer knows; None means it does not, and the
+    caller refuses it by name rather than guessing.
+    """
+    if char == "" or char.isspace():
+        return QType.LIST
+    if char.isupper():
+        return QType.LIST
+    return _QTYPE_BY_CHAR.get(char)
 
 
 class Catalog:
@@ -249,7 +273,7 @@ class Catalog:
         out: dict[str, dict[str, QType]] = {}
         for row in ops._as_rows(self._gateway.route(queries.SCHEMA, (), ["rdb"])):
             char = _text(row["kind"])
-            qtype = _QTYPE_BY_CHAR.get(char)
+            qtype = _qtype(char)
             if qtype is None:
                 raise ValueError(
                     f"{row['table']}.{row['column']}: meta reports type character "
