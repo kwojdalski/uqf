@@ -51,7 +51,16 @@ uqf-stack new-job markout2 --subscribes trades,quote \
 
 uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
+
+uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates \
+    --source fx_rates --width 0D01
 ```
+
+The third is a second worker over what the second wrote: a source that
+already exists is reused rather than rewritten, and a table that already
+exists is not defined again, so it takes no `--columns`. They are still
+required whenever a new source or a new table is written, and refused when
+neither is.
 
 `--dry-run` prints what it would write and writes nothing. `kind` is derived
 for a streaming job - one that subscribes to nothing is a feed - and the
@@ -93,7 +102,10 @@ red the scaffold exists to leave was the one you could not see.
 `uv run pytest python/` fails once too, and that one is yours to write:
 `test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
 [`docs/integrations/torq/README.md`](../integrations/torq/README.md) name the
-new process. It is authored prose, so no generator can write it for you.
+new process. It is authored prose, so no generator can write it for you;
+`new-job` names the line in its output instead. Everything that IS derived -
+`processes.md`, `src/etl/generated/pipeline_dag.q` and `docs/man.q` - it
+regenerates before it returns.
 
 The rest of this guide is what to write into that skeleton, and why each
 part is shaped the way it is.

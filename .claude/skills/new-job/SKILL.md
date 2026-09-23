@@ -36,6 +36,10 @@ uqf-stack new-job tickfeed --publishes ticks --columns "sym:symbol, px:float"
 # bounded worker: source + worker + transform together
 uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
+
+# a second worker over that source and table: both are reused, no --columns
+uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates \
+    --source fx_rates --width 0D01
 ```
 
 **Always `--dry-run` first** and show the user what it would write. It
@@ -83,8 +87,9 @@ Write in this order, and run the suite between each:
    suite forever.
 3. **The docstrings.** Every function gets a qDoc block with `@param`,
    `@return`, `@throws` if it can throw, and `@eg`. `docs/man.q` is generated
-   from these — run `scripts/generate/generate_man_registry.py` and commit
-   the result.
+   from these. `new-job` regenerates it once for the scaffolded blocks; after
+   you edit them, run `scripts/generate/generate_man_registry.py` again and
+   commit the result.
 
 ### The rules that are not optional
 
@@ -147,7 +152,10 @@ Say this back to the user, because it is the part that surprises people:
   table (`test_core.py`, `test_schemas.py`) derive them from the registry and
   from that q list.
 - **No regeneration step.** `new-job` reruns
-  `scripts/generate/generate_operational_docs.py` itself.
+  `scripts/generate/generate_operational_docs.py` and
+  `scripts/generate/generate_man_registry.py` itself.
+- **No hand-copied source for a second worker.** An existing source is
+  reused rather than rewritten, and an existing table is not defined again.
 - **No `schema=` in the registry.** It derives from `table`.
 - **No `subscribes=`/`publishes=` in the registry.** They defer to the q
   declaration with `FROM_DECLARATION`, which the scaffold writes for you.

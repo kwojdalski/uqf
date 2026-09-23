@@ -22,7 +22,6 @@ out of what the tree can read fails the build rather than rotting quietly.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from uqf_stack.paths import (
     REGISTRY_FILE,
@@ -76,6 +75,11 @@ def _nslist_action(namespace: str) -> FileAction:
     writing the file is not enough to make its tests run.
     """
     return FileAction(RUN_TESTS_FILE, f"`.{namespace}", mode=WriteMode.APPEND)
+
+
+#: The one registry consequence no generator writes: the TorQ README is
+#: authored prose, and test_generated_docs.py fails until it names the process.
+_README_NOTE = "name {proc} in docs/integrations/torq/README.md - authored prose, checked by pytest"
 
 
 def _expected_table_action(table: str) -> FileAction:
@@ -221,6 +225,7 @@ publish:.qstream.unwired `{name};
     )
     actions.append(_nslist_action(ns))
     notes.append(f"implement .qsub.{name}.{handler}, then replace the scaffolded test")
+    notes.append(_README_NOTE.format(proc=proc))
     if not is_feed:
         notes.append("start it with its producers: " + " ".join(sorted(set(subscribes))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)
@@ -229,10 +234,13 @@ publish:.qstream.unwired `{name};
 def bounded_worker(
     name: str,
     dataset: str,
-    columns: str,
+    columns: str | None,
     width: str = "1D",
     source: str | None = None,
     procname: str | None = None,
+    *,
+    reuse_source: bool = False,
+    define_table: bool = True,
 ) -> ScaffoldPlan:
     """Plan a new bounded worker: its source, its worker, its registry entry.
 
@@ -241,6 +249,12 @@ def bounded_worker(
     which dataset how wide, and the transform sits between. They are
     scaffolded together because a worker whose source does not exist aborts
     at load: `.qbw.define` resolves it at define time.
+
+    `reuse_source` plans a worker on a source that already exists - a second
+    window width or target over rows someone has already declared - so the
+    source file is not written. `define_table` is False when the dataset is
+    already a plant table, which then must not be defined a second time.
+    Both are facts about the tree, so the caller, which has one, decides.
     """
     _check_name(name, "worker name")
     src = source or name
@@ -248,19 +262,37 @@ def bounded_worker(
     _check_name(dataset, "dataset")
     worker = f"{name}_backfill"
     proc = procname or f"{name}_backfill1"
-    cols = parse_columns(columns)
-    field_names = [c for c, _ in cols]
+    # Columns shape what is WRITTEN - a new source's fields, a new table - so
+    # they are required when either is, and refused when neither is, rather
+    # than silently ignored.
+    needs_columns = define_table or not reuse_source
+    if needs_columns and not columns:
+        raise UqfStackError(
+            f"--kind backfill needs --columns: they declare the new source {src!r}'s fields "
+            f"and, if {dataset!r} is not yet a plant table, its definition"
+        )
+    if columns and not needs_columns:
+        raise UqfStackError(
+            f"--columns has nothing to shape: source {src!r} and table {dataset!r} both "
+            "exist already - drop --columns"
+        )
+    cols = parse_columns(columns) if columns else []
 
-    actions = [
-        FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols)),
-        FileAction(WORKER_DIR / f"{worker}.q", worker_body(worker, src, dataset, width)),
-        FileAction(
-            TABLES_FILE,
-            f"\n/ {proc}'s target. <one line: what a row means>\n"
-            f"{table_definition(dataset, cols)}\n",
-            mode=WriteMode.APPEND,
-        ),
-        _expected_table_action(dataset),
+    actions: list[FileAction] = []
+    if not reuse_source:
+        actions.append(FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols)))
+    actions.append(FileAction(WORKER_DIR / f"{worker}.q", worker_body(worker, src, dataset, width)))
+    if define_table:
+        actions += [
+            FileAction(
+                TABLES_FILE,
+                f"\n/ {proc}'s target. <one line: what a row means>\n"
+                f"{table_definition(dataset, cols)}\n",
+                mode=WriteMode.APPEND,
+            ),
+            _expected_table_action(dataset),
+        ]
+    actions += [
         FileAction(REGISTRY_FILE, registry_entry_backfill(proc, worker), mode=WriteMode.APPEND),
         FileAction(
             TEST_DIR / f"test_{worker}.q",
@@ -268,132 +300,14 @@ def bounded_worker(
         ),
         _nslist_action(test_namespace(name, bounded=True)),
     ]
-    notes = [
-        f"write .qfeed.{src}.query - parameterised, never concatenated (ETL-08)",
-        f"write .qfeed.{src}.fixture - deterministic, same contract as the live source",
-        f"declared fields: {', '.join(field_names)}",
-        "the window is half-open [from;to): >= on the lower bound, < on the upper",
-    ]
+    if reuse_source:
+        notes = [f"reuses .qfeed.{src}: its query and fixture are already written"]
+    else:
+        notes = [
+            f"write .qfeed.{src}.query - parameterised, never concatenated (ETL-08)",
+            f"write .qfeed.{src}.fixture - deterministic, same contract as the live source",
+            f"declared fields: {', '.join(c for c, _ in cols)}",
+        ]
+    notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
+    notes.append(_README_NOTE.format(proc=proc))
     return ScaffoldPlan(name=worker, actions=actions, notes=notes)
-
-
-def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
-    """Write a plan, or refuse the whole thing.
-
-    Every target is checked BEFORE anything is written: a scaffold that
-    created three files and then refused the fourth would leave a tree that
-    neither loads nor reverts cleanly, and the half of it that did land
-    registers itself on load.
-    """
-    for action in plan.actions:
-        target = repo_root / action.path
-        if action.mode is WriteMode.CREATE and target.exists():
-            raise UqfStackError(
-                f"{action.path} already exists - pick another name, or remove it first"
-            )
-        if action.mode is WriteMode.APPEND and not target.is_file():
-            raise UqfStackError(f"{action.path} does not exist, so there is nothing to append to")
-
-    written: list[Path] = []
-    for action in plan.actions:
-        target = repo_root / action.path
-        match action.mode:
-            case WriteMode.CREATE:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(action.body)
-            case WriteMode.APPEND:
-                target.write_text(_appended(target.read_text(), action))
-            case _:  # pragma: no cover - unreachable while WriteMode has two members
-                # Named rather than folded into the append branch, which is
-                # what the old `else` did: a third mode added later would have
-                # been silently appended instead of refused.
-                raise UqfStackError(f"unknown write mode {action.mode!r} for {action.path}")
-        written.append(action.path)
-    return written
-
-
-def _appended(existing: str, action: FileAction) -> str:
-    """`existing` with the action's body added where that file wants it.
-
-    Two files take their content somewhere other than the end, and both refuse
-    rather than guess when they do not look the way this expects - appending to
-    the end of either would be syntactically valid and register nothing.
-
-    model/registry.py: the entry belongs INSIDE the PIPELINES tuple, so it goes before
-    the closing paren.
-
-    run_tests.q: the namespace belongs inside the `nsList:` symbol list, before
-    its terminating semicolon.
-
-    test_stack_tables.q: the table belongs at the end of the `expected:` list.
-    """
-    if action.path == RUN_TESTS_FILE:
-        return _with_nslist_entry(existing, action.body)
-    if action.path == STACK_TABLES_TEST:
-        return _with_expected_table(existing, action.body)
-    if action.path != REGISTRY_FILE:
-        return existing.rstrip("\n") + "\n" + action.body
-    marker = "\n)\n"
-    if not existing.endswith(marker):
-        raise UqfStackError(
-            "model/registry.py does not end with the PIPELINES tuple's closing paren, so "
-            "this scaffold cannot tell where an entry goes - add it by hand"
-        )
-    return existing[: -len(marker)] + "\n" + action.body + ")\n"
-
-
-def _with_nslist_entry(existing: str, entry: str) -> str:
-    """`run_tests.q` with `entry` added to its nsList.
-
-    The list is one long line of backtick symbols ending in `;`, so the entry
-    goes immediately before that semicolon. Refusals rather than guesses:
-    exactly one `nsList:` line must exist and it must end in a semicolon, since
-    appending anywhere else produces a file that loads, runs the same suites as
-    before, and reports nothing missing.
-    """
-    lines = existing.splitlines(keepends=True)
-    found = [i for i, line in enumerate(lines) if line.startswith("nsList:")]
-    if len(found) != 1:
-        raise UqfStackError(
-            f"{RUN_TESTS_FILE} has {len(found)} lines starting `nsList:`, expected 1 - "
-            "this scaffold cannot tell where a namespace goes, so add it by hand"
-        )
-    index = found[0]
-    line = lines[index].rstrip("\n")
-    if not line.endswith(";"):
-        raise UqfStackError(
-            f"{RUN_TESTS_FILE}'s nsList line does not end in `;` - add the namespace by hand"
-        )
-    if entry in line:
-        raise UqfStackError(
-            f"{entry} is already in {RUN_TESTS_FILE}'s nsList - pick another job name"
-        )
-    lines[index] = line[:-1] + entry + ";\n"
-    return "".join(lines)
-
-
-def _with_expected_table(existing: str, entry: str) -> str:
-    """`test_stack_tables.q` with `entry` added to its `expected:` list.
-
-    One line of backtick symbols with no terminator, so the entry goes at its
-    end. The same refusals as the nsList: exactly one `expected:` line, and
-    the table not already on it - a name the q file already defines means the
-    scaffold would be redefining someone else's table.
-    """
-    lines = existing.splitlines(keepends=True)
-    found = [i for i, line in enumerate(lines) if line.startswith("expected:")]
-    if len(found) != 1:
-        raise UqfStackError(
-            f"{STACK_TABLES_TEST} has {len(found)} lines starting `expected:`, expected 1 - "
-            "this scaffold cannot tell where a table goes, so add it by hand"
-        )
-    index = found[0]
-    line = lines[index].rstrip("\n").rstrip()
-    listed = line.removeprefix("expected:").split("`")
-    if entry.lstrip("`") in listed:
-        raise UqfStackError(
-            f"{entry} is already in {STACK_TABLES_TEST}'s expected list - "
-            "that table exists, so pick another name"
-        )
-    lines[index] = line + entry + "\n"
-    return "".join(lines)

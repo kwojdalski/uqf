@@ -46,6 +46,9 @@ TABLES_FILE = PROCESS_SCRIPTS_DIR / "uqf_stack_tables.q"
 #: src/etl/generated/pipeline_dag.q). CI runs it with --check, so a registry
 #: edit that is not followed by this fails the build.
 OPERATIONAL_DOCS_SCRIPT = Path("scripts/generate/generate_operational_docs.py")
+#: Regenerates docs/man.q from the qDoc blocks under src/, which a scaffolded
+#: q file adds to. Also run by CI with --check.
+MAN_REGISTRY_SCRIPT = Path("scripts/generate/generate_man_registry.py")
 
 #: This package, and the registry the scaffold appends to. Spelled here rather
 #: than in `scaffold/jobs.py`, which hardcoded its own location as a string - a

@@ -23,27 +23,40 @@ from uqf_stack.cli.shared import (
     app,
     console,
 )
-from uqf_stack.paths import OPERATIONAL_DOCS_SCRIPT
-from uqf_stack.scaffold import jobs, wizard
+from uqf_stack.model.schemas import _DEFINITION
+from uqf_stack.paths import MAN_REGISTRY_SCRIPT, OPERATIONAL_DOCS_SCRIPT, SOURCE_DIR, TABLES_FILE
+from uqf_stack.scaffold import jobs, wizard, write
+
+#: What a scaffold makes stale, each checked in CI with --check: the registry's
+#: derived files (processes.md, src/etl/generated/pipeline_dag.q), and
+#: docs/man.q, generated from the qDoc blocks of the q files just written.
+_DERIVED = (OPERATIONAL_DOCS_SCRIPT, MAN_REGISTRY_SCRIPT)
 
 
-def _regenerate_derived(repo_root: Path) -> subprocess.CompletedProcess[str]:
-    """Rewrite the files derived from the registry, after a scaffold changed it.
+def _regenerate_derived(repo_root: Path) -> list[subprocess.CompletedProcess[str]]:
+    """Rewrite every derived file a scaffold makes stale, and return each run.
 
-    `processes.md` and `src/etl/generated/pipeline_dag.q` are generated from
-    PIPELINES and checked in CI with --check, so a scaffold that appended a
-    registry entry and stopped there left the build red on files nobody is
-    meant to edit. A SUBPROCESS rather than a call: this process imported the
-    registry before the scaffold appended to it, so an in-process call would
-    regenerate from the old one.
+    A scaffold that wrote its files and stopped there left the build red on
+    files nobody is meant to edit. SUBPROCESSES rather than calls: this process
+    imported the registry before the scaffold appended to it, so an in-process
+    call would regenerate from the old one.
     """
-    return subprocess.run(
-        [sys.executable, str(repo_root / OPERATIONAL_DOCS_SCRIPT)],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return [
+        subprocess.run(
+            [sys.executable, str(repo_root / script)],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        for script in _DERIVED
+    ]
+
+
+def _defined_tables(repo_root: Path) -> set[str]:
+    """The plant tables the q file defines, read from the tree being written
+    into rather than the one this package was imported from."""
+    return {m.group(1) for m in _DEFINITION.finditer((repo_root / TABLES_FILE).read_text())}
 
 
 @app.command("new-job")
@@ -95,6 +108,7 @@ def new_job(
             --columns "sym:symbol, mid:float" --width 1D
     """
     subs = [s.strip() for s in (subscribes or "").split(",") if s.strip()]
+    repo_root = _paths().repo_root
     try:
         if kind == "streaming":
             plan = jobs.streaming_job(name, subs, publishes, columns)
@@ -102,10 +116,18 @@ def new_job(
             if not dataset:
                 _die(core.UqfStackError("--kind backfill needs --dataset: the table it fills"))
                 return
-            if not columns:
-                _die(core.UqfStackError("--kind backfill needs --columns for its dataset"))
-                return
-            plan = jobs.bounded_worker(name, dataset, columns, width=width, source=source)
+            # An existing source is reused, not rewritten, and an existing
+            # table is not defined twice: a second worker over rows someone
+            # already declared is the common case after the first.
+            plan = jobs.bounded_worker(
+                name,
+                dataset,
+                columns,
+                width=width,
+                source=source,
+                reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
+                define_table=dataset not in _defined_tables(repo_root),
+            )
         else:
             _die(core.UqfStackError(f"--kind must be 'streaming' or 'backfill', not {kind!r}"))
             return
@@ -114,13 +136,12 @@ def new_job(
         return
 
     console.print(plan.render())
-    console.print(f"  then regenerate the registry's derived files ({OPERATIONAL_DOCS_SCRIPT})")
+    console.print(f"  then regenerate: {', '.join(str(p) for p in _DERIVED)}")
     if dry_run:
         console.print("[dim]--dry-run: nothing written[/]")
         return
-    repo_root = _paths().repo_root
     try:
-        written = jobs.apply_plan(plan, repo_root)
+        written = write.apply_plan(plan, repo_root)
     except core.UqfStackError as exc:
         _die(exc)
         return
@@ -128,14 +149,14 @@ def new_job(
     # Not fatal: the job's files are already written, and a refusal here (the
     # generator verifies every declared edge first) is information about the
     # tree to act on, not a reason to pretend the scaffold did not happen.
-    regen = _regenerate_derived(repo_root)
-    if regen.returncode == 0:
-        console.print("[green]regenerated[/] the registry's derived files")
-    else:
-        console.print(
-            f"[red]could not regenerate[/] - run `python3 {OPERATIONAL_DOCS_SCRIPT}` "
-            f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
-        )
+    for script, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
+        if regen.returncode == 0:
+            console.print(f"[green]regenerated[/] via {script}")
+        else:
+            console.print(
+                f"[red]could not regenerate[/] - run `python3 {script}` "
+                f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
+            )
     for note in plan.notes:
         console.print(f"  [yellow]next[/] {note}")
 
