@@ -92,7 +92,19 @@ nErr:sum res[`status]=`error;
 if[(nFail+nErr)>0;
     -1 "";
     -1 "Failures/errors:";
-    show 0!select namespace,name,status,msg from res where status<>`pass;
+    / `detail`, not `msg`. An ERRORED test never reached an assertion, so its
+    / msg comes from qunit's empty assert record and prints as a bare `,
+    / while the error text it threw sits unread in `result` (qunit.q:238
+    / builds status from `ran` and msg from `ar`). Reporting msg alone made
+    / every error in this suite say nothing at all: a scaffolded job's
+    / "write .<job>test.contract_driver" was thrown, captured, and discarded
+    / before anyone saw it.
+    / .
+    / qunit.q is vendored (see LICENSING.md), so the fix belongs here rather
+    / than in it - and the reporter is the right place anyway: the framework
+    / records both fields correctly, and only this select chose one.
+    show 0!select namespace,name,status,
+        detail:{$[x=`error; y; z]}'[status;result;msg] from res where status<>`pass;
     exit 1];
 
 exit 0
