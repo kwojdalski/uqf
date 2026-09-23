@@ -8,6 +8,7 @@ shaped this way.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -23,8 +24,15 @@ from uqf_stack.cli.shared import (
     app,
     console,
 )
+from uqf_stack.model.pipeline_edges import _strip_q_comments, _symbol_list
 from uqf_stack.model.schemas import _DEFINITION
-from uqf_stack.paths import MAN_REGISTRY_SCRIPT, OPERATIONAL_DOCS_SCRIPT, SOURCE_DIR, TABLES_FILE
+from uqf_stack.paths import (
+    MAN_REGISTRY_SCRIPT,
+    OPERATIONAL_DOCS_SCRIPT,
+    SOURCE_DIR,
+    TABLES_FILE,
+    WORKER_DIR,
+)
 from uqf_stack.scaffold import jobs, wizard, write
 
 #: What a scaffold makes stale, each checked in CI with --check: the registry's
@@ -51,6 +59,32 @@ def _regenerate_derived(repo_root: Path) -> list[subprocess.CompletedProcess[str
         )
         for script in _DERIVED
     ]
+
+
+#: One `.qbw.define[`name; keys!(values)];` call, as (name, the rest).
+_WORKER_DEFINE = re.compile(r"\.qbw\.define\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;(.*?)\)\]\s*;", re.S)
+
+
+def _unpartitioned_workers_filling(repo_root: Path, dataset: str) -> list[str]:
+    """Workers that already fill `dataset` without declaring a partition.
+
+    `.qbw.define` refuses two workers on one dataset AND partition (#60,
+    #185), and a scaffolded worker declares none - so a second one on such a
+    dataset is a tree that no longer LOADS. Caught here, before anything is
+    written, rather than as a bare error from inside a declaration.
+    """
+    found = []
+    for path in sorted((repo_root / WORKER_DIR).glob("*.q")):
+        for name, body in _WORKER_DEFINE.findall(_strip_q_comments(path.read_text())):
+            # `keys!(values)`, with the `(` often on the next line - which is
+            # why this does not reuse pipeline_edges' `!(` split.
+            keys_text, _, values_text = body.partition("!")
+            keys = _symbol_list(keys_text.strip())
+            values = [v.strip() for v in values_text.strip().lstrip("(").split(";")]
+            fields = dict(zip(keys, values, strict=False))
+            if _symbol_list(fields.get("dataset", "")) == (dataset,) and "partition" not in fields:
+                found.append(name)
+    return found
 
 
 def _defined_tables(repo_root: Path) -> set[str]:
@@ -115,6 +149,16 @@ def new_job(
         elif kind == "backfill":
             if not dataset:
                 _die(core.UqfStackError("--kind backfill needs --dataset: the table it fills"))
+                return
+            claimed = _unpartitioned_workers_filling(repo_root, dataset)
+            if claimed:
+                _die(
+                    core.UqfStackError(
+                        f"dataset {dataset!r} is already filled by {', '.join(claimed)} with no "
+                        "partition, and .qbw.define refuses two workers on one dataset and "
+                        "partition - pick another --dataset, or give both workers a partition"
+                    )
+                )
                 return
             # An existing source is reused, not rewritten, and an existing
             # table is not defined twice: a second worker over rows someone

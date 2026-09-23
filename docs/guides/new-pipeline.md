@@ -52,15 +52,17 @@ uqf-stack new-job markout2 --subscribes trades,quote \
 uqf-stack new-job fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
 
-uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates \
-    --source fx_rates --width 0D01
+uqf-stack new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
+    --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
 ```
 
-The third is a second worker over what the second wrote: a source that
-already exists is reused rather than rewritten, and a table that already
-exists is not defined again, so it takes no `--columns`. They are still
-required whenever a new source or a new table is written, and refused when
-neither is.
+The third is a second worker over the second's source: a source that already
+exists is reused rather than rewritten, and a table that already exists is not
+defined again. `--columns` is required whenever a new source or a new table is
+written, and refused when neither is. Its dataset is its own because
+`.qbw.define` refuses two workers on one dataset and partition - their
+coverage would compose, and a range full of gaps would read as complete - so
+`new-job` refuses a dataset another worker already fills without a partition.
 
 `--dry-run` prints what it would write and writes nothing. `kind` is derived
 for a streaming job - one that subscribes to nothing is a feed - and the

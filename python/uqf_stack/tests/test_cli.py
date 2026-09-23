@@ -30,6 +30,7 @@ opens a socket or touches scripts/output/.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -1038,3 +1039,49 @@ def test_a_skipped_dependency_warning_keeps_its_reason(monkeypatch):
     assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
     assert any("fleet unreachable" in m for m in captured.messages)
     assert not any("%s" in m for m in captured.messages)
+
+
+# ------------------------------------------- new-job: a dataset already filled
+
+
+def _worker_tree(tmp_path, body: str):
+    workers = tmp_path / "src" / "etl" / "workers"
+    workers.mkdir(parents=True)
+    (workers / "w.q").write_text(body)
+    return tmp_path
+
+
+def test_a_dataset_an_unpartitioned_worker_fills_is_found(tmp_path):
+    """.qbw.define refuses two workers on one dataset and partition, and a
+    scaffolded worker declares no partition - so new-job must refuse first,
+    rather than write a tree that no longer loads."""
+    root = _worker_tree(
+        tmp_path,
+        "/ .qbw.define[`commented;`source`dataset!(`s;`fx)];\n"
+        ".qbw.define[`w;\n    `source`dataset`width`transform!\n"
+        "    (`s;`fx;1D;`s_passthrough)];\n",
+    )
+    assert create._unpartitioned_workers_filling(root, "fx") == ["w"]
+    assert create._unpartitioned_workers_filling(root, "other") == []
+
+
+def test_a_partitioned_worker_leaves_room_for_another(tmp_path):
+    root = _worker_tree(
+        tmp_path,
+        ".qbw.define[`w;`source`dataset`width`transform`partition!"
+        "(`s;`fx;1D;`s_passthrough;`EURUSD)];\n",
+    )
+    assert create._unpartitioned_workers_filling(root, "fx") == []
+
+
+def test_every_real_worker_is_read():
+    """Against the tree itself: each worker file's dataset is found, so the
+    parser has not silently stopped matching the shape the files use."""
+    root = Path(__file__).resolve().parents[3]
+    for dataset, worker in {
+        "demo_deals": "demo_deals_backfill",
+        "event_tape": "demo_events_backfill",
+        "imported_trades": "upstream_trades_backfill",
+        "databento_book": "databento_book_backfill",
+    }.items():
+        assert create._unpartitioned_workers_filling(root, dataset) == [worker]
