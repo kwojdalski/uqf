@@ -65,6 +65,12 @@ written, and refused when neither is. Its dataset is its own because
 coverage would compose, and a range full of gaps would read as complete - so
 `new-job` refuses a dataset another worker already fills without a partition.
 
+A streaming job follows the same rule for what it publishes: `--publishes`
+takes a comma list, a table the plant already defines is published onto
+without `--columns`, and `--columns` shapes the one new table. Its
+`--subscribes` must name tables the plant defines, so a producer is
+scaffolded before its consumer.
+
 `--dry-run` prints what it would write and writes nothing. `kind` is derived
 for a streaming job - one that subscribes to nothing is a feed - and the new
 process's port is appended to the port lock, so no existing process moves.

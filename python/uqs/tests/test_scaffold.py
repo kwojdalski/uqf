@@ -402,3 +402,68 @@ def test_a_bounded_worker_is_told_about_its_dataset():
     plan = jobs.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
     notes = " ".join(plan.notes)
     assert "catalog/tables.csv" in notes and "fx_probe" in notes
+
+
+# ------------------------------------------- publishes, subscribes, the plant
+
+#: What `new-job` passes as the plant's tables: vendored `quote` and this
+#: tree's `trades` and `orders`.
+_PLANT = {"quote", "trades", "orders"}
+
+
+def _writes_to(plan: jobs.ScaffoldPlan, path: Path) -> bool:
+    return any(a.path == path for a in plan.actions)
+
+
+@pytest.mark.parametrize("publishes", ["My_Table", "a b", "1st"])
+def test_a_published_table_name_is_checked_like_every_other_name(publishes):
+    """It was not, and `--publishes a,b` wrote `enlist `a,b` into the job and
+    `a,b:([]...)` into uqs_tables.q - q that does not load."""
+    with pytest.raises(UqsError, match="published table"):
+        jobs.streaming_job("j", ["quote"], publishes, "v:float", known_tables=_PLANT)
+
+
+def test_a_job_publishes_onto_an_existing_table_without_redefining_it():
+    """A second producer of a plant table was refused ("needs --columns") and,
+    given columns, would have defined the table twice."""
+    plan = jobs.streaming_job("orders2", [], "orders", None, known_tables=_PLANT)
+    (d,) = _declared(plan, "orders2.q")
+    assert d.publishes == ("orders",)
+    assert not _writes_to(plan, jobs.TABLES_FILE)
+    assert not _writes_to(plan, jobs.STACK_TABLES_TEST)
+    assert "catalog/tables.csv" not in " ".join(plan.notes), "the table is already described"
+
+
+def test_a_job_can_publish_an_existing_and_a_new_table():
+    plan = jobs.streaming_job(
+        "both", ["quote"], "orders, both_out", "sym:symbol, v:float", known_tables=_PLANT
+    )
+    (d,) = _declared(plan, "both.q")
+    assert d.publishes == ("orders", "both_out")
+    tables = _body(plan, str(jobs.TABLES_FILE))
+    assert "both_out:([]" in tables and "orders:([]" not in tables
+    assert "both_out" in " ".join(plan.notes) and "orders" not in " ".join(plan.notes)
+
+
+def test_two_new_tables_are_refused_because_columns_shapes_one():
+    with pytest.raises(UqsError, match="can shape only one"):
+        jobs.streaming_job("j", ["quote"], "a_out,b_out", "v:float", known_tables=_PLANT)
+
+
+def test_columns_for_a_table_that_already_exists_are_refused_not_ignored():
+    with pytest.raises(UqsError, match="already defined by the plant"):
+        jobs.streaming_job("j", [], "orders", "v:float", known_tables=_PLANT)
+
+
+def test_a_subscription_to_a_table_nothing_defines_is_refused():
+    """It scaffolded happily and the job sat idle after `uqs start`."""
+    with pytest.raises(UqsError) as excinfo:
+        jobs.streaming_job("j", ["quote", "no_such_table"], None, None, known_tables=_PLANT)
+    assert "no_such_table" in str(excinfo.value)
+    assert "quote" not in str(excinfo.value).split(" - ")[0], "only the unknown one is named"
+
+
+def test_without_the_plant_every_published_table_is_new():
+    """The plan-only call, as the tests above this section make it."""
+    plan = jobs.streaming_job("j", ["anything"], "orders", "v:float")
+    assert "orders:([]" in _body(plan, str(jobs.TABLES_FILE))
