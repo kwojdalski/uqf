@@ -15,7 +15,6 @@ from typing import Annotated
 
 import typer
 
-from uqf_stack import core
 from uqf_stack.cli.shared import (
     PortOpt,
     _die,
@@ -24,6 +23,7 @@ from uqf_stack.cli.shared import (
     console,
 )
 from uqf_stack.model.declarations import declaration_calls, symbols
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
 from uqf_stack.model.schemas import _DEFINITION
 from uqf_stack.paths import (
     MAN_REGISTRY_SCRIPT,
@@ -31,6 +31,7 @@ from uqf_stack.paths import (
     SOURCE_DIR,
     TABLES_FILE,
     WORKER_DIR,
+    UqfStackError,
 )
 from uqf_stack.scaffold import jobs, wizard, write
 
@@ -139,12 +140,12 @@ def new_job(
             plan = jobs.streaming_job(name, subs, publishes, columns)
         elif kind == "backfill":
             if not dataset:
-                _die(core.UqfStackError("--kind backfill needs --dataset: the table it fills"))
+                _die(UqfStackError("--kind backfill needs --dataset: the table it fills"))
                 return
             claimed = _unpartitioned_workers_filling(repo_root, dataset)
             if claimed:
                 _die(
-                    core.UqfStackError(
+                    UqfStackError(
                         f"dataset {dataset!r} is already filled by {', '.join(claimed)} with no "
                         "partition, and .qbw.define refuses two workers on one dataset and "
                         "partition - pick another --dataset, or give both workers a partition"
@@ -164,9 +165,9 @@ def new_job(
                 define_table=dataset not in _defined_tables(repo_root),
             )
         else:
-            _die(core.UqfStackError(f"--kind must be 'streaming' or 'backfill', not {kind!r}"))
+            _die(UqfStackError(f"--kind must be 'streaming' or 'backfill', not {kind!r}"))
             return
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         _die(exc)
         return
 
@@ -177,7 +178,7 @@ def new_job(
         return
     try:
         written = write.apply_plan(plan, repo_root)
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         _die(exc)
         return
     console.print(f"\n[green]scaffolded {len(written)} file(s)[/]")
@@ -197,7 +198,7 @@ def new_job(
 
 
 @app.command("new-process")
-def new_process(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
+def new_process(port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Interactive wizard: add a new uqf stack process. Opens with a menu of
     recipes - "FX quotes feed" and "cross-rate reprice ETL" are fully
     working (answer a few prompts, no q editing needed), "blank
@@ -207,5 +208,5 @@ def new_process(port: PortOpt = core.DEFAULT_BASE_PORT) -> None:
     """
     try:
         wizard.run(_paths(), base_port=port)
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         _die(exc)

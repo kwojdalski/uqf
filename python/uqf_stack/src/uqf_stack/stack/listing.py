@@ -9,7 +9,8 @@ from typing import Any
 
 from uqf_stack.logger import get_logger
 from uqf_stack.model.dependencies import dependency_rows
-from uqf_stack.model.pipelines import DEFAULT_BASE_PORT, PROCESS_CSV_FIELDS
+from uqf_stack.model.pipelines import PROCESS_CSV_FIELDS
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
 from uqf_stack.paths import UqfStackError, UqfStackPaths
 from uqf_stack.stack.env import build_env
 from uqf_stack.stack.procs import (

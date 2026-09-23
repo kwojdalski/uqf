@@ -90,7 +90,7 @@ a credential and some do not:
   `.qpipe.subscribe_etl` runs `.servers.startup[]` against
   `accesslist.txt`. They borrow the already-credentialed `metrics`
   proctype rather than adding a password file to the vendored tree (see
-  `core.py`'s `add_extra_process` comments).
+  `stack/procs.py`'s `add_extra_process` comments).
 
 A job that both subscribes and republishes - `vectorize1`, `posbook1`,
 `markout1` - needs both, and gets both from the same runner. That used to
@@ -278,7 +278,7 @@ and `database.q` are never written to.
 
 ![The vendored process.csv and database.q read fresh on every command, extended, and written to generated copies the stack actually runs on](../../diagrams/config-generation.svg)
 
-`bootstrap()` (`python/uqf_stack/src/uqf_stack/core.py`)
+`bootstrap()` (`python/uqf_stack/src/uqf_stack/stack/runtime.py`)
 regenerates both files on every command - `start`, `stop`, `summary`,
 everything - so nothing here is a one-time setup step; the generated
 files are always a fresh function of the vendored tree plus whatever's

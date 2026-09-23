@@ -575,6 +575,3 @@ def _rows(result: Any) -> list[dict[str, Any]]:
     if isinstance(result, list):
         return result
     return [{"value": result}]  # pragma: no cover - scalar result from a table query
-
-
-app = create_app  # re-exported factory; `uvicorn uqf_frontend.app:build` style entrypoints

@@ -1,15 +1,8 @@
-"""Guards on the split of `core.py` into modules.
+"""Guards on the uqf_stack package's shape: module size, and layering.
 
-`core.py` was 1578 lines covering seven unrelated concerns. It is now a
-facade over nine focused modules, and every existing call site still reaches
-it as `core.thing` — about seventy distinct names across `cli/entry.py`,
-`scaffold/wizard.py`, `uqf_stack_mcp.py` and the tests.
-
-That facade is the whole reason the split changed no call site, so these
-tests hold it in place. Without them the facade could lose a name and the
-failure would surface as an `AttributeError` at runtime in whichever
-front end happened to use it — the CLI, or the MCP server, neither of which
-the unit tests exercise end to end.
+The package was once one 1578-line `core.py`. It was split into focused
+modules, and there is no facade over them: a caller imports from the module
+that defines what it needs, so there is one path to each name.
 """
 
 from __future__ import annotations
@@ -19,13 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from uqf_stack import core
-
 REPO = Path(__file__).resolve().parents[3]
 PKG = REPO / "python" / "uqf_stack"
 
-#: Every module the facade is built from, in dependency order. `core` itself
-#: is excluded: it is the facade, not a layer. Dotted, because the package is
+#: Every module that must import on its own. Dotted, because the package is
 #: foldered: `model/` is what the stack declares, `stack/` is the running
 #: fleet, `checks/` reads it and `external/` is the processes we start but do
 #: not own.
@@ -43,64 +33,12 @@ MODULES = (
     "checks.schema_view",
 )
 
-#: Files that reach this code as `core.thing`.
-CONSUMERS = (
-    PKG / "src" / "uqf_stack" / "cli" / "main.py",
-    PKG / "src" / "uqf_stack" / "scaffold" / "wizard.py",
-    PKG / "uqf_stack_mcp.py",
-    # This file is excluded from its own scan: its prose says `core.thing`
-    # and `core.X` to describe the pattern, and the reference regex cannot
-    # tell an example from a call. Scanning itself made it demand that the
-    # facade export `thing` and `X`.
-    *sorted(p for p in (PKG / "tests").glob("*.py") if p.name != "test_module_split.py"),
-)
-
-#: `core.py` appears in prose constantly ("see core.py's start_crypto_recorder"),
-#: and the reference regex cannot tell that from an attribute. Only this one.
-PROSE_FALSE_POSITIVES = frozenset({"py"})
-
-
-def _referenced_names() -> set[str]:
-    names: set[str] = set()
-    for path in CONSUMERS:
-        if not path.is_file():
-            continue
-        names |= set(re.findall(r"\bcore\.([A-Za-z_][\w]*)", path.read_text()))
-    return names - PROSE_FALSE_POSITIVES
-
-
-def test_the_consumers_are_where_this_test_expects_them():
-    """A glob that matched nothing would make the whole check pass vacuously.
-
-    This repository has hit that failure four times — a lint hook scoped to a
-    stale path, a drift test skipping every case, a dormant guard, a verifier
-    nobody ran. The pattern is always the same: the check stays green because
-    it is checking nothing.
-    """
-    present = [p for p in CONSUMERS if p.is_file()]
-    assert len(present) >= 4, f"expected the consumers, found {present}"
-    assert len(_referenced_names()) > 50, "expected ~70 core.X references, found far fewer"
-
-
-def test_every_referenced_name_resolves_on_the_facade():
-    """The property that makes the split safe.
-
-    If this fails, some call site says `core.thing` and the facade does not
-    export `thing` — which is an AttributeError in the CLI or the MCP server
-    at runtime, not a test failure anywhere else.
-    """
-    missing = sorted(n for n in _referenced_names() if not hasattr(core, n))
-    assert not missing, (
-        f"the facade is missing {missing}; add them to the relevant "
-        f"`from uqf_stack.<module> import (...)` block in core.py"
-    )
-
 
 @pytest.mark.parametrize("module", MODULES)
 def test_each_module_exists_and_imports(module):
-    """Each layer must import on its own, without the facade.
+    """Each module must import on its own.
 
-    A module that only works when `core` has already been imported has a
+    A module that only works when another has already been imported has a
     hidden dependency on import order, which is the kind of thing that works
     in the test suite and fails in a fresh process.
     """
@@ -170,8 +108,9 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 
 #: What each folder is allowed to import from, and nothing else. The order is
 #: the layering: `model/` is what the stack declares, `stack/` is the fleet
-#: that runs, `external/` and `checks/` act on a running fleet, `core` is the
-#: facade over all of it, and `cli/` and `scaffold/` are front ends.
+#: that runs, `external/` and `checks/` act on a running fleet, and `cli/` and
+#: `scaffold/` are front ends, which import what they use from where it is
+#: defined.
 #:
 #: `paths` and `logger` are omitted from every list because everything may
 #: import them: they are leaves that import nothing from this package, so they
@@ -181,23 +120,24 @@ ALLOWED_IMPORTS = {
     "stack": {"model"},
     "external": {"model", "stack"},
     "checks": {"model", "stack"},
-    "scaffold": {"core"},
-    "cli": {"core", "model", "scaffold", "external", "checks"},
+    "scaffold": {"model", "stack"},
+    "cli": {"model", "stack", "scaffold", "external", "checks"},
 }
 
 _IMPORT = re.compile(r"^\s*(?:from|import) uqf_stack(?:\.(\w+))?(?: import ([\w, ]+))?", re.M)
 
 
 def _folder_imports(folder: str) -> set[str]:
-    """Which other folders (or `core`) the modules in `folder` reach into."""
+    """Which other folders the modules in `folder` reach into."""
     out: set[str] = set()
     for path in sorted((PKG / "src" / "uqf_stack" / folder).glob("*.py")):
         for match in _IMPORT.finditer(path.read_text()):
             head, names = match.group(1), match.group(2)
-            # `from uqf_stack import core` - the target is in the
-            # name list, not the dotted head, and missing it would make this
-            # check blind to exactly the import the facade is reached by.
-            targets = [head] if head else [n.strip() for n in (names or "").split(",")]
+            # `from uqf_stack import paths as stack_paths` - the target is in
+            # the name list, not the dotted head, and may carry an alias.
+            targets = (
+                [head] if head else [n.split(" as ")[0].strip() for n in (names or "").split(",")]
+            )
             out.update(t for t in targets if t and t != folder)
     return out - {"paths", "logger"}
 

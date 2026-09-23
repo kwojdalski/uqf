@@ -22,15 +22,15 @@ from dataclasses import replace
 
 import pytest
 
-from uqf_stack import core
 from uqf_stack.model import plant_schema
 from uqf_stack.model.pipeline import FROM_DECLARATION, STREAM_RUNNER_SCRIPT
 from uqf_stack.model.pipeline_edges import _stream_edge_cache, resolve_edges
-from uqf_stack.paths import repo_root
+from uqf_stack.model.registry import PIPELINES
+from uqf_stack.paths import UqfStackError, repo_root
 
 
 def _deferred():
-    return [p for p in core.PIPELINES if p.subscribes is FROM_DECLARATION]
+    return [p for p in PIPELINES if p.subscribes is FROM_DECLARATION]
 
 
 def test_the_registry_actually_defers():
@@ -47,7 +47,7 @@ def test_a_deferred_edge_resolves_to_what_the_q_file_declares():
 
 def test_a_deferred_publish_resolves_to_what_the_q_file_declares():
     edges = _stream_edge_cache(repo_root())
-    for pipeline in core.PIPELINES:
+    for pipeline in PIPELINES:
         if pipeline.publishes is FROM_DECLARATION:
             assert pipeline.published_tables == edges[pipeline.procname][1]
 
@@ -57,7 +57,7 @@ def test_a_deferred_edge_with_no_declaration_raises_rather_than_resolving_empty(
     pipeline's tables out of database.q, and a table the plant does not define
     discards its rows without an error - loudly wrong beats silently empty."""
     orphan = replace(_deferred()[0], procname="no_such_process1")
-    with pytest.raises(core.UqfStackError, match="FROM_DECLARATION"):
+    with pytest.raises(UqfStackError, match="FROM_DECLARATION"):
         resolve_edges(orphan)
 
 
@@ -65,7 +65,7 @@ def test_the_refusal_says_what_to_do_about_it():
     """A procname that no job claims is the likeliest cause, and it is not
     obvious from the symptom - so the message names all three."""
     orphan = replace(_deferred()[0], procname="no_such_process1")
-    with pytest.raises(core.UqfStackError) as excinfo:
+    with pytest.raises(UqfStackError) as excinfo:
         resolve_edges(orphan)
     message = str(excinfo.value)
     assert "no_such_process1" in message
@@ -103,8 +103,8 @@ def test_the_plant_schema_sees_every_deferred_publisher():
     """The consumer that matters: `_publishers` feeds the generated
     database.q. A deferred pipeline missing from it is a table the plant
     never defines."""
-    publishers = plant_schema._publishers(core.PIPELINES)
+    publishers = plant_schema._publishers(PIPELINES)
     published = {proc for procs in publishers.values() for proc in procs}
-    for pipeline in core.PIPELINES:
+    for pipeline in PIPELINES:
         if pipeline.published_tables:
             assert pipeline.procname in published

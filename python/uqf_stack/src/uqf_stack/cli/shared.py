@@ -17,8 +17,10 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from uqf_stack import core
+from uqf_stack import paths as stack_paths
 from uqf_stack.logger import configure_logging, get_logger
+from uqf_stack.paths import UqfStackError
+from uqf_stack.stack import runtime
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -80,15 +82,15 @@ def _export(rows, export: Path | None) -> None:
     if export is None:
         return
     try:
-        core.export_table(rows, export)
-    except core.UqfStackError as exc:
+        runtime.export_table(rows, export)
+    except UqfStackError as exc:
         _die(exc)
         return
     console.print(f"[green]exported to {export}[/]")
 
 
 def _paths():
-    return core.default_paths()
+    return stack_paths.default_paths()
 
 
 def _lines(result) -> int:
@@ -96,7 +98,7 @@ def _lines(result) -> int:
     return len((result.stdout or "").strip().splitlines())
 
 
-def _die(exc: core.UqfStackError) -> None:
+def _die(exc: UqfStackError) -> None:
     log.error("{}", exc)
     raise typer.Exit(code=1)
 
@@ -104,7 +106,7 @@ def _die(exc: core.UqfStackError) -> None:
 def _run_streaming(result_fn, *args, **kwargs) -> None:
     try:
         result = result_fn(_paths(), *args, capture=False, **kwargs)
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)

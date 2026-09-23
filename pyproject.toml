@@ -16,8 +16,8 @@
 #
 # The directory layout is deliberately unchanged, because two couplings
 # depend on it and are documented as such at their call sites:
-#   - python/uqf_frontend/tests/test_catalog_drift.py resolves parents[2] to
-#     read uqf_stack's core.py as TEXT (never importing it)
+#   - python/uqf_frontend/tests/test_catalog_drift.py resolves parents[3] to
+#     read scripts/processes/uqf_stack_tables.q as TEXT (never importing uqf_stack)
 #   - python/uqf_client/tests/conftest.py resolves parents[3] to the repo
 #     root so it can launch `q src/init.q`
 # Moving the packages would break both.
@@ -129,7 +129,7 @@ root = [
 #
 # Everything is now clean at full strength, so there is nothing to relax. A
 # third-party gap that genuinely cannot be fixed here gets a narrow
-# `# ty: ignore[rule]` at the line, with the reason - see core.py's
+# `# ty: ignore[rule]` at the line, with the reason - see logger/core.py's
 # deliberate read of loguru's private `_core`.
 
 [tool.ruff]

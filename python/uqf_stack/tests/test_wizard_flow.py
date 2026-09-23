@@ -21,16 +21,19 @@ from typing import Any
 
 import pytest
 
-from uqf_stack import core
+from uqf_stack.model import plant_schema
+from uqf_stack.paths import UqfStackPaths
 from uqf_stack.scaffold import wizard
+from uqf_stack.stack import procs as stack_procs
+from uqf_stack.stack import runtime
 
 
 @pytest.fixture
-def paths(tmp_path: Path) -> core.UqfStackPaths:
+def paths(tmp_path: Path) -> UqfStackPaths:
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
     (tmp_path / "scripts" / "output" / "uqf-stack" / "logs").mkdir(parents=True)
-    return core.UqfStackPaths(
+    return UqfStackPaths(
         repo_root=tmp_path,
         torqhome=tmp_path / "lib" / "torq",
         torqapphome=tmp_path / "lib" / "torq-finance-starter-pack",
@@ -72,17 +75,17 @@ def stack(monkeypatch):
     """Record every call that would touch a real stack."""
     calls: dict[str, list[Any]] = {"start": [], "registered": [], "schema": []}
     state = {"summary": "", "existing": ["rdb1", "hdb1"]}
-    monkeypatch.setattr(core, "list_process_names", lambda paths: state["existing"])
-    monkeypatch.setattr(core, "next_free_port_offset", lambda paths: 40)
-    monkeypatch.setattr(core, "start", lambda paths, **kw: calls["start"].append(kw))
+    monkeypatch.setattr(stack_procs, "list_process_names", lambda paths: state["existing"])
+    monkeypatch.setattr(stack_procs, "next_free_port_offset", lambda paths: 40)
+    monkeypatch.setattr(runtime, "start", lambda paths, **kw: calls["start"].append(kw))
     monkeypatch.setattr(
-        core, "summary", lambda paths, **kw: SimpleNamespace(stdout=state["summary"])
+        runtime, "summary", lambda paths, **kw: SimpleNamespace(stdout=state["summary"])
     )
     monkeypatch.setattr(
-        core, "add_extra_process", lambda paths, row: calls["registered"].append(row)
+        stack_procs, "add_extra_process", lambda paths, row: calls["registered"].append(row)
     )
     monkeypatch.setattr(
-        core, "add_extra_table_schema", lambda paths, schema: calls["schema"].append(schema)
+        plant_schema, "add_extra_table_schema", lambda paths, schema: calls["schema"].append(schema)
     )
     monkeypatch.setattr(wizard.time, "sleep", lambda s: None)
     return SimpleNamespace(calls=calls, state=state)

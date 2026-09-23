@@ -183,10 +183,9 @@ def _strip_q_comments(source: str) -> str:
 def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[str]:
     """Check every pipeline's declared edges against its own q script.
 
-    `pipelines` is passed in rather than imported, because importing it from
-    `model/pipelines.py` - which imports this module - would be the same cycle
-    `stack/env.py` was extracted to break. The caller that has the registry
-    supplies it.
+    `pipelines` is passed in rather than imported, so a test can check a
+    doctored registry. Procnames are already unique: model/registry.py refuses
+    a duplicate before a registry exists.
 
     Returns a list of human-readable mismatches - empty means the registry
     and the code agree, so the generated diagrams describe what actually
@@ -195,25 +194,6 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
     is read at its call site, where the table is still a literal.
     """
     problems: list[str] = []
-
-    # Uniqueness first, because every derived structure below and in this
-    # module keys on procname and a duplicate would not error - it would
-    # collapse. PIPELINE_BY_NAME and PIPELINE_OFFSETS are both dict
-    # comprehensions over PIPELINES, so a repeated name silently drops one
-    # pipeline from the registry and hands the survivor the other's port
-    # offset. add_extra_process already refuses a duplicate at runtime; the
-    # literal below it had no such check, which is the wrong way round.
-    seen: dict[str, int] = {}
-    for index, pipeline in enumerate(pipelines):
-        if pipeline.procname in seen:
-            problems.append(
-                f"{pipeline.procname}: declared twice in PIPELINES "
-                f"(entries {seen[pipeline.procname]} and {index}) - procnames key "
-                "PIPELINE_BY_NAME and PIPELINE_OFFSETS, so a duplicate loses a "
-                "process rather than reporting one"
-            )
-        else:
-            seen[pipeline.procname] = index
 
     # A streaming job's edges are in its own file, not in the runner that
     # starts it - the runner is generic and mentions no table at all.

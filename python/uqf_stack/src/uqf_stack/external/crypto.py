@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 from uqf_stack.logger import get_logger
-from uqf_stack.model.pipelines import DEFAULT_BASE_PORT
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
 from uqf_stack.paths import UqfStackError, UqfStackPaths
 from uqf_stack.stack.procs import get_process_config
 

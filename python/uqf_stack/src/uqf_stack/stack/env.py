@@ -14,7 +14,7 @@ else calls it and only reads.
 from __future__ import annotations
 
 from uqf_stack.logger import get_logger
-from uqf_stack.model.pipelines import DEFAULT_BASE_PORT
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
 from uqf_stack.paths import UqfStackPaths
 
 log = get_logger(__name__)

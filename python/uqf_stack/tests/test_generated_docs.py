@@ -29,7 +29,8 @@ gen = importlib.util.module_from_spec(_spec)
 sys.modules["gen_ops_docs"] = gen
 _spec.loader.exec_module(gen)
 
-from uqf_stack.model.pipelines import PIPELINE_OFFSETS, PIPELINES  # noqa: E402
+from uqf_stack.model.pipelines import PIPELINE_OFFSETS  # noqa: E402
+from uqf_stack.model.registry import PIPELINES  # noqa: E402
 
 
 def test_the_generator_and_its_output_both_exist():
@@ -115,7 +116,9 @@ def test_the_generator_refuses_when_the_edges_disagree(monkeypatch):
     It looks authoritative. So the generator refuses rather than rendering
     unverified edges — verified by making the edge check report a problem.
     """
-    monkeypatch.setattr(gen, "verify_pipeline_edges", lambda _dir: ["cross1: declares nonsense"])
+    monkeypatch.setattr(
+        gen, "verify_pipeline_edges", lambda _dir, _pipelines: ["cross1: declares nonsense"]
+    )
     try:
         gen.render()
     except SystemExit as exc:

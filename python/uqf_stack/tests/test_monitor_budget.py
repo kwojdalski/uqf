@@ -14,9 +14,8 @@ the part that has to stay right when the fleet grows again.
 
 from __future__ import annotations
 
+from uqf_stack.model.pipeline_edges import INBOUND_RESERVE, LICENCE_CONNECTION_LIMIT
 from uqf_stack.stack.monitor_budget import (
-    INBOUND_RESERVE,
-    LICENCE_CONNECTION_LIMIT,
     MONITOR_CONNECTION_SACRIFICE_ORDER,
     monitor_connection_plan,
 )

@@ -1,18 +1,36 @@
 import csv
 import io
 import os
+import shutil
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from uqf_stack import core
-from uqf_stack.model import pipeline_edges, pipelines, plant_schema, schemas
-from uqf_stack.model.pipeline import PipelineKind
+from uqf_stack import paths as stack_paths
+from uqf_stack.external import crypto
+from uqf_stack.external.crypto import CRYPTORUST_ROOT_ENV
+from uqf_stack.model import pipeline_edges, plant_schema, schemas
+from uqf_stack.model.pipeline import (
+    FROM_DECLARATION,
+    PIPELINE_LIB_SCRIPT,
+    STREAM_RUNNER_SCRIPT,
+    PipelineKind,
+)
+from uqf_stack.model.pipelines import PIPELINE_OFFSETS, PROCESS_CSV_FIELDS
+from uqf_stack.model.registry import PIPELINES
+from uqf_stack.paths import UqfStackError, UqfStackPaths
+from uqf_stack.stack import listing, runtime
+from uqf_stack.stack import logs as stack_logs
+from uqf_stack.stack import procs as stack_procs
+from uqf_stack.stack.procs import VENDORED_STARTWITHALL_OVERLAY
+
+#: Every pipeline by procname, for the tests that look one up.
+BY_NAME = {p.procname: p for p in PIPELINES}
 
 
 @pytest.fixture
-def fake_paths(tmp_path: Path) -> core.UqfStackPaths:
+def fake_paths(tmp_path: Path) -> UqfStackPaths:
     """A minimal stand-in for lib/torq + lib/torq-finance-starter-pack, so
     bootstrap()'s process.csv/env generation can be tested without touching
     the real vendored trees or needing envsubst/rlwrap on PATH.
@@ -35,7 +53,7 @@ def fake_paths(tmp_path: Path) -> core.UqfStackPaths:
     (torqapphome / "hdb").mkdir()
     (torqapphome / "dqe").mkdir()
 
-    return core.UqfStackPaths(
+    return UqfStackPaths(
         repo_root=tmp_path,
         torqhome=torqhome,
         torqapphome=torqapphome,
@@ -52,18 +70,18 @@ _FIXTURE_VENDORED = {"discovery1", "stp1"}
 
 
 def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(
-    fake_paths: core.UqfStackPaths, monkeypatch
+    fake_paths: UqfStackPaths, monkeypatch
 ):
-    monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
+    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
-    env = core.bootstrap(fake_paths, base_port=7000)
+    env = runtime.bootstrap(fake_paths, base_port=7000)
 
     vendored = (fake_paths.torqapphome / "appconfig" / "process.csv").read_text()
     assert "fxfeed1" not in vendored
 
     generated = fake_paths.generated_procs.read_text()
     assert "discovery1" in generated
-    assert f"localhost,{{KDBBASEPORT}}+{core.PIPELINE_OFFSETS['fxfeed1']},feed,fxfeed1" in generated
+    assert f"localhost,{{KDBBASEPORT}}+{PIPELINE_OFFSETS['fxfeed1']},feed,fxfeed1" in generated
 
     assert env["KDBBASEPORT"] == "7000"
     assert env["TORQPROCESSES"] == str(fake_paths.generated_procs)
@@ -73,72 +91,72 @@ def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(
     assert (fake_paths.torqdata / "logs").is_dir()
 
 
-def test_bootstrap_is_idempotent(fake_paths: core.UqfStackPaths, monkeypatch):
-    monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
+def test_bootstrap_is_idempotent(fake_paths: UqfStackPaths, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
-    core.bootstrap(fake_paths, base_port=7000)
-    core.bootstrap(fake_paths, base_port=7000)  # must not raise (e.g. copytree onto itself)
+    runtime.bootstrap(fake_paths, base_port=7000)
+    runtime.bootstrap(fake_paths, base_port=7000)  # must not raise (e.g. copytree onto itself)
 
     generated = fake_paths.generated_procs.read_text()
     assert generated.count("fxfeed1") == 1
 
 
-def test_clean_removes_generated_data_dir(fake_paths: core.UqfStackPaths, monkeypatch):
-    monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
+def test_clean_removes_generated_data_dir(fake_paths: UqfStackPaths, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
-    core.bootstrap(fake_paths, base_port=7000)
+    runtime.bootstrap(fake_paths, base_port=7000)
     assert fake_paths.torqdata.exists()
 
-    core.clean(fake_paths)
+    stack_paths.clean(fake_paths)
     assert not fake_paths.torqdata.exists()
 
 
-def test_get_process_config_returns_vendored_row(fake_paths: core.UqfStackPaths):
-    row = core.get_process_config(fake_paths, "discovery1", resolve=False)
+def test_get_process_config_returns_vendored_row(fake_paths: UqfStackPaths):
+    row = stack_procs.get_process_config(fake_paths, "discovery1", resolve=False)
     assert row["proctype"] == "discovery"
     assert row["port"] == "{KDBBASEPORT}"
 
 
-def test_get_process_config_unknown_process_raises(fake_paths: core.UqfStackPaths):
-    with pytest.raises(core.UqfStackError):
-        core.get_process_config(fake_paths, "nope1")
+def test_get_process_config_unknown_process_raises(fake_paths: UqfStackPaths):
+    with pytest.raises(UqfStackError):
+        stack_procs.get_process_config(fake_paths, "nope1")
 
 
-def test_get_process_config_resolves_brace_arith_placeholder(fake_paths: core.UqfStackPaths):
-    row = core.get_process_config(fake_paths, "fxfeed1", base_port=7000)
-    assert row["port"] == str(7000 + core.PIPELINE_OFFSETS["fxfeed1"])
+def test_get_process_config_resolves_brace_arith_placeholder(fake_paths: UqfStackPaths):
+    row = stack_procs.get_process_config(fake_paths, "fxfeed1", base_port=7000)
+    assert row["port"] == str(7000 + PIPELINE_OFFSETS["fxfeed1"])
 
 
-def test_get_process_config_resolves_dollar_brace_placeholder(fake_paths: core.UqfStackPaths):
-    row = core.get_process_config(fake_paths, "discovery1")
+def test_get_process_config_resolves_dollar_brace_placeholder(fake_paths: UqfStackPaths):
+    row = stack_procs.get_process_config(fake_paths, "discovery1")
     assert row["load"] == str(fake_paths.torqhome / "code" / "processes" / "discovery.q")
 
 
 def test_get_process_config_resolve_false_leaves_placeholders_literal(
-    fake_paths: core.UqfStackPaths,
+    fake_paths: UqfStackPaths,
 ):
-    row = core.get_process_config(fake_paths, "discovery1", resolve=False)
+    row = stack_procs.get_process_config(fake_paths, "discovery1", resolve=False)
     assert row["load"] == "${KDBCODE}/processes/discovery.q"
     assert row["port"] == "{KDBBASEPORT}"
 
 
 def test_resolve_process_config_leaves_unknown_var_literal():
     row = {"port": "{NOT_A_REAL_VAR}", "load": "${ALSO_NOT_REAL}/x.q"}
-    resolved = core.resolve_process_config(row, {"KDBBASEPORT": "6010"})
+    resolved = stack_procs.resolve_process_config(row, {"KDBBASEPORT": "6010"})
     assert resolved["port"] == "{NOT_A_REAL_VAR}"
     assert resolved["load"] == "${ALSO_NOT_REAL}/x.q"
 
 
-def test_set_process_config_unknown_field_raises(fake_paths: core.UqfStackPaths):
-    with pytest.raises(core.UqfStackError):
-        core.set_process_config(fake_paths, "discovery1", "not_a_field", "x")
+def test_set_process_config_unknown_field_raises(fake_paths: UqfStackPaths):
+    with pytest.raises(UqfStackError):
+        stack_procs.set_process_config(fake_paths, "discovery1", "not_a_field", "x")
 
 
-def test_set_process_config_persists_and_is_read_back(fake_paths: core.UqfStackPaths):
-    core.set_process_config(fake_paths, "discovery1", "port", "9999")
+def test_set_process_config_persists_and_is_read_back(fake_paths: UqfStackPaths):
+    stack_procs.set_process_config(fake_paths, "discovery1", "port", "9999")
 
     assert fake_paths.overrides_path.is_file()
-    row = core.get_process_config(fake_paths, "discovery1")
+    row = stack_procs.get_process_config(fake_paths, "discovery1")
     assert row["port"] == "9999"
     # vendored file itself is never touched
     vendored = (fake_paths.torqapphome / "appconfig" / "process.csv").read_text()
@@ -146,27 +164,27 @@ def test_set_process_config_persists_and_is_read_back(fake_paths: core.UqfStackP
 
 
 def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
-    fake_paths: core.UqfStackPaths, monkeypatch
+    fake_paths: UqfStackPaths, monkeypatch
 ):
     import csv
 
-    monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
+    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
-    base_rows = {r["procname"]: r for r in core._base_process_rows(fake_paths)}
+    base_rows = {r["procname"]: r for r in stack_procs._base_process_rows(fake_paths)}
     assert base_rows["fxfeed1"]["startwithall"] == "1"  # unaffected by the override below
 
-    core.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
-    core.bootstrap(fake_paths, base_port=7000)
+    stack_procs.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
+    runtime.bootstrap(fake_paths, base_port=7000)
 
     with fake_paths.generated_procs.open(newline="") as f:
         generated_rows = {r["procname"]: r for r in csv.DictReader(f)}
     assert generated_rows["fxfeed1"]["startwithall"] == "0"
 
 
-def test_bootstrap_generates_schema_with_quotes_table(fake_paths: core.UqfStackPaths, monkeypatch):
-    monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
+def test_bootstrap_generates_schema_with_quotes_table(fake_paths: UqfStackPaths, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
-    core.bootstrap(fake_paths, base_port=7000)
+    runtime.bootstrap(fake_paths, base_port=7000)
 
     vendored = (fake_paths.torqapphome / "database.q").read_text()
     assert "quotes:" not in vendored  # vendored file itself is never touched
@@ -180,18 +198,18 @@ def test_bootstrap_generates_schema_with_quotes_table(fake_paths: core.UqfStackP
 
 
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(
-    fake_paths: core.UqfStackPaths, monkeypatch
+    fake_paths: UqfStackPaths, monkeypatch
 ):
-    monkeypatch.setattr(core.shutil, "which", lambda _tool: "/usr/bin/true")
+    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
-    core.bootstrap(fake_paths, base_port=7000)
+    runtime.bootstrap(fake_paths, base_port=7000)
 
     generated_procs = fake_paths.generated_procs.read_text()
     assert "${TORQDATA}/database.q" in generated_procs
     assert "${TORQAPPHOME}/database.q" not in generated_procs
 
 
-def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPaths):
+def test_next_free_port_offset_skips_taken_offsets(fake_paths: UqfStackPaths):
     # fixture's vendored csv: discovery1 (bare {KDBBASEPORT}), stp1 (+1);
     # _base_process_rows also appends every declared pipeline at its offset.
     # They are declared processes like any other, so their ports are reserved
@@ -202,12 +220,12 @@ def test_next_free_port_offset_skips_taken_offsets(fake_paths: core.UqfStackPath
     # Derived from the registry rather than written as a number: appending a
     # pipeline moves the answer, and a pinned 46 made every new job an edit
     # here. test_pipeline_offsets_are_stable is what pins the offsets.
-    assert core.next_free_port_offset(fake_paths) == max(core.PIPELINE_OFFSETS.values()) + 1
+    assert stack_procs.next_free_port_offset(fake_paths) == max(PIPELINE_OFFSETS.values()) + 1
 
 
-def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
-    offset = core.next_free_port_offset(fake_paths)
-    core.add_extra_process(
+def test_add_extra_process_appears_in_base_rows(fake_paths: UqfStackPaths):
+    offset = stack_procs.next_free_port_offset(fake_paths)
+    stack_procs.add_extra_process(
         fake_paths,
         {
             "host": "localhost",
@@ -226,8 +244,8 @@ def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
         },
     )
 
-    assert "wizardfeed1" in core.list_process_names(fake_paths)
-    row = core.get_process_config(fake_paths, "wizardfeed1", base_port=7000)
+    assert "wizardfeed1" in stack_procs.list_process_names(fake_paths)
+    row = stack_procs.get_process_config(fake_paths, "wizardfeed1", base_port=7000)
     assert row["port"] == str(7000 + offset)
 
     # extra_processes.csv is the only file touched - vendored csv untouched
@@ -235,58 +253,60 @@ def test_add_extra_process_appears_in_base_rows(fake_paths: core.UqfStackPaths):
     assert "wizardfeed1" not in vendored
 
 
-def test_add_extra_process_rejects_duplicate_procname(fake_paths: core.UqfStackPaths):
-    with pytest.raises(core.UqfStackError):
-        core.add_extra_process(fake_paths, {"procname": "stp1", "proctype": "x"})
+def test_add_extra_process_rejects_duplicate_procname(fake_paths: UqfStackPaths):
+    with pytest.raises(UqfStackError):
+        stack_procs.add_extra_process(fake_paths, {"procname": "stp1", "proctype": "x"})
 
 
-def test_add_extra_table_schema_appears_in_generated_schema(fake_paths: core.UqfStackPaths):
-    core.add_extra_table_schema(fake_paths, "mytable:([]time:`timestamp$(); sym:`g#`symbol$())")
+def test_add_extra_table_schema_appears_in_generated_schema(fake_paths: UqfStackPaths):
+    plant_schema.add_extra_table_schema(
+        fake_paths, "mytable:([]time:`timestamp$(); sym:`g#`symbol$())"
+    )
 
-    generated = core._generated_schema_content(fake_paths)
+    generated = plant_schema._generated_schema_content(fake_paths)
     assert "mytable:" in generated
     assert "quotes:" in generated  # existing extension point untouched
 
 
-def test_list_items_unknown_kind_raises(fake_paths: core.UqfStackPaths):
-    with pytest.raises(core.UqfStackError):
-        core.list_items(fake_paths, "not_a_kind")
+def test_list_items_unknown_kind_raises(fake_paths: UqfStackPaths):
+    with pytest.raises(UqfStackError):
+        listing.list_items(fake_paths, "not_a_kind")
 
 
-def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: core.UqfStackPaths):
-    items = core.list_items(fake_paths, "processes", base_port=7000)
+def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: UqfStackPaths):
+    items = listing.list_items(fake_paths, "processes", base_port=7000)
     by_name = {item["procname"]: item for item in items}
-    assert set(by_name) == _FIXTURE_VENDORED | {p.procname for p in core.PIPELINES}
+    assert set(by_name) == _FIXTURE_VENDORED | {p.procname for p in PIPELINES}
     assert by_name["discovery1"]["port"] == "7000"
-    assert by_name["fxfeed1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["fxfeed1"])
-    assert by_name["quotesfeed1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["quotesfeed1"])
-    assert by_name["cross1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["cross1"])
-    assert by_name["widefeed1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["widefeed1"])
-    assert by_name["vectorize1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["vectorize1"])
-    assert by_name["tap1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["tap1"])
+    assert by_name["fxfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxfeed1"])
+    assert by_name["quotesfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["quotesfeed1"])
+    assert by_name["cross1"]["port"] == str(7000 + PIPELINE_OFFSETS["cross1"])
+    assert by_name["widefeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["widefeed1"])
+    assert by_name["vectorize1"]["port"] == str(7000 + PIPELINE_OFFSETS["vectorize1"])
+    assert by_name["tap1"]["port"] == str(7000 + PIPELINE_OFFSETS["tap1"])
     assert by_name["tap1"]["startwithall"] == "0"
-    assert by_name["fxtradesfeed1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["fxtradesfeed1"])
-    assert by_name["posbook1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["posbook1"])
-    assert by_name["markout1"]["port"] == str(7000 + core.PIPELINE_OFFSETS["markout1"])
+    assert by_name["fxtradesfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxtradesfeed1"])
+    assert by_name["posbook1"]["port"] == str(7000 + PIPELINE_OFFSETS["posbook1"])
+    assert by_name["markout1"]["port"] == str(7000 + PIPELINE_OFFSETS["markout1"])
 
 
-def test_list_processes_reflects_overrides(fake_paths: core.UqfStackPaths):
-    core.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
-    items = core.list_items(fake_paths, "processes")
+def test_list_processes_reflects_overrides(fake_paths: UqfStackPaths):
+    stack_procs.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
+    items = listing.list_items(fake_paths, "processes")
     by_name = {item["procname"]: item for item in items}
     assert by_name["fxfeed1"]["startwithall"] == "0"
 
 
-def test_list_fields_matches_process_csv_fields(fake_paths: core.UqfStackPaths):
-    items = core.list_items(fake_paths, "fields")
-    assert [item["field"] for item in items] == list(core.PROCESS_CSV_FIELDS)
+def test_list_fields_matches_process_csv_fields(fake_paths: UqfStackPaths):
+    items = listing.list_items(fake_paths, "fields")
+    assert [item["field"] for item in items] == list(PROCESS_CSV_FIELDS)
 
 
-def test_list_overrides_empty_then_populated(fake_paths: core.UqfStackPaths):
-    assert core.list_items(fake_paths, "overrides") == []
+def test_list_overrides_empty_then_populated(fake_paths: UqfStackPaths):
+    assert listing.list_items(fake_paths, "overrides") == []
 
-    core.set_process_config(fake_paths, "discovery1", "port", "9999")
-    items = core.list_items(fake_paths, "overrides")
+    stack_procs.set_process_config(fake_paths, "discovery1", "port", "9999")
+    items = listing.list_items(fake_paths, "overrides")
     assert items == [{"procname": "discovery1", "field": "port", "value": "9999"}]
 
 
@@ -295,7 +315,7 @@ def test_parse_log_line_splits_seven_fields():
         "2026.08.22D14:21:10.644413000|mac.lan|segmentedtickerplant|stp1|"
         "INF|fileload|loading /some/path with | a pipe in it"
     )
-    rec = core.parse_log_line(line)
+    rec = stack_logs.parse_log_line(line)
     assert rec == {
         "time": "2026.08.22D14:21:10.644413000",
         "host": "mac.lan",
@@ -308,21 +328,21 @@ def test_parse_log_line_splits_seven_fields():
 
 
 def test_parse_log_line_returns_none_for_non_matching_line():
-    assert core.parse_log_line("some banner line with no pipes") is None
-    assert core.parse_log_line("a|b|c") is None
+    assert stack_logs.parse_log_line("some banner line with no pipes") is None
+    assert stack_logs.parse_log_line("a|b|c") is None
 
 
-def test_resolve_procnames_all_returns_every_process(fake_paths: core.UqfStackPaths):
-    assert set(core.resolve_procnames(fake_paths, "all")) == _FIXTURE_VENDORED | {
-        p.procname for p in core.PIPELINES
+def test_resolve_procnames_all_returns_every_process(fake_paths: UqfStackPaths):
+    assert set(stack_logs.resolve_procnames(fake_paths, "all")) == _FIXTURE_VENDORED | {
+        p.procname for p in PIPELINES
     }
 
 
-def test_resolve_procnames_specific_splits_on_space(fake_paths: core.UqfStackPaths):
-    assert core.resolve_procnames(fake_paths, "stp1 fxfeed1") == ["stp1", "fxfeed1"]
+def test_resolve_procnames_specific_splits_on_space(fake_paths: UqfStackPaths):
+    assert stack_logs.resolve_procnames(fake_paths, "stp1 fxfeed1") == ["stp1", "fxfeed1"]
 
 
-def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.UqfStackPaths):
+def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: UqfStackPaths):
     """An unknown name used to be returned as given.
 
     This test previously asserted exactly that, using `"stp1 rdb1"` - and
@@ -332,15 +352,15 @@ def test_resolve_procnames_refuses_a_name_no_process_has(fake_paths: core.UqfSta
     had been asked for, and a reader diagnosing a quiet process saw an empty
     section and concluded it was idle.
     """
-    with pytest.raises(core.UqfStackError) as excinfo:
-        core.resolve_procnames(fake_paths, "stp1 rdb1")
+    with pytest.raises(UqfStackError) as excinfo:
+        stack_logs.resolve_procnames(fake_paths, "stp1 rdb1")
     message = str(excinfo.value)
     assert "rdb1" in message, "the refusal must name the offending process"
     assert "stp1" not in message.split(" - ")[0], "only the unknown name is the problem"
 
 
 def test_resolve_procnames_still_allows_a_process_with_no_log_file(
-    fake_paths: core.UqfStackPaths,
+    fake_paths: UqfStackPaths,
 ):
     """The distinction that makes it fixable rather than a trade-off.
 
@@ -350,7 +370,7 @@ def test_resolve_procnames_still_allows_a_process_with_no_log_file(
     downstream. Conflating the two is what the old docstring did by calling
     both "just skipped".
     """
-    assert core.resolve_procnames(fake_paths, "discovery1") == ["discovery1"]
+    assert stack_logs.resolve_procnames(fake_paths, "discovery1") == ["discovery1"]
 
 
 #: TorQ's own `summary` output shape. The load-bearing detail is that a
@@ -371,7 +391,7 @@ def test_summary_fills_the_port_torq_omits_for_a_stopped_process():
     process that is NOT running, so the blank was precisely where the answer
     was wanted.
     """
-    rows = core.summary_rows(_SUMMARY_STDOUT, {"tap1": "6078", "dqc1": "6070"})
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {"tap1": "6078", "dqc1": "6070"})
     by_name = {r["Process"]: r for r in rows}
     assert by_name["tap1"]["Port"] == "6078"
     assert by_name["dqc1"]["Port"] == "6070"
@@ -386,15 +406,15 @@ def test_heartbeat_absent_is_distinguished_from_heartbeat_silent():
     nobody — a fleet-wide outage. Rendering both as a blank column would turn
     a monitoring gap into an all-clear, or an all-clear into a panic.
     """
-    absent = core.summary_rows(_SUMMARY_STDOUT, {}, None)
-    silent = core.summary_rows(_SUMMARY_STDOUT, {}, {})
+    absent = listing.summary_rows(_SUMMARY_STDOUT, {}, None)
+    silent = listing.summary_rows(_SUMMARY_STDOUT, {}, {})
     assert absent[0]["Heartbeat"] == "not collected"
     assert silent[0]["Heartbeat"] == "-"
     assert absent[0]["Heartbeat"] != silent[0]["Heartbeat"]
 
 
 def test_heartbeat_state_is_reported_per_process():
-    rows = core.summary_rows(_SUMMARY_STDOUT, {}, {"markout1": "ok", "tap1": "error"})
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {}, {"markout1": "ok", "tap1": "error"})
     by_name = {r["Process"]: r for r in rows}
     assert by_name["markout1"]["Heartbeat"] == "ok"
     assert by_name["tap1"]["Heartbeat"] == "error"
@@ -410,7 +430,7 @@ def test_a_process_can_be_up_by_pid_and_failing_by_heartbeat():
     PID. A row showing `up` beside `error` is exactly what this is for — and
     it must not be collapsed into one verdict.
     """
-    rows = core.summary_rows(_SUMMARY_STDOUT, {}, {"markout1": "error"})
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {}, {"markout1": "error"})
     markout = next(r for r in rows if r["Process"] == "markout1")
     assert markout["Status"] == "up"
     assert markout["Heartbeat"] == "error"
@@ -442,7 +462,7 @@ def test_summary_marks_a_filled_port_as_configured_not_reported():
     reader could not tell a running process from a planned one by looking at
     the port - worse than the blank it replaced.
     """
-    rows = core.summary_rows(_SUMMARY_STDOUT, {"tap1": "6078", "dqc1": "6070"})
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {"tap1": "6078", "dqc1": "6070"})
     by_name = {r["Process"]: r for r in rows}
     assert by_name["markout1"]["PortSource"] == "reported"
     assert by_name["tap1"]["PortSource"] == "configured"
@@ -454,7 +474,7 @@ def test_summary_never_overwrites_a_reported_port():
     Someone restarting with a different base port is exactly when a summary
     must not tidy the disagreement away.
     """
-    rows = core.summary_rows(_SUMMARY_STDOUT, {"markout1": "9999", "tap1": "6078"})
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {"markout1": "9999", "tap1": "6078"})
     by_name = {r["Process"]: r for r in rows}
     assert by_name["markout1"]["Port"] == "6081"
     assert by_name["markout1"]["PortSource"] == "reported"
@@ -466,17 +486,17 @@ def test_summary_leaves_a_port_blank_when_nothing_declares_one():
     A process TorQ reports but process.csv does not contain gets a blank and
     `unknown`, rather than an invented number.
     """
-    rows = core.summary_rows("2026.09.16 | mystery1 | down\n", {"tap1": "6078"})
+    rows = listing.summary_rows("2026.09.16 | mystery1 | down\n", {"tap1": "6078"})
     assert rows[0]["Port"] == ""
     assert rows[0]["PortSource"] == "unknown"
 
 
 def test_summary_skips_the_header_and_blank_lines():
-    rows = core.summary_rows(_SUMMARY_STDOUT, {})
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {})
     assert [r["Process"] for r in rows] == ["markout1", "tap1", "dqc1"]
 
 
-def test_every_process_has_a_configured_port(fake_paths: core.UqfStackPaths):
+def test_every_process_has_a_configured_port(fake_paths: UqfStackPaths):
     """The fill can only work if every process declares a port.
 
     process.csv carries `{KDBBASEPORT}+N` and `resolve_process_config`
@@ -484,20 +504,20 @@ def test_every_process_has_a_configured_port(fake_paths: core.UqfStackPaths):
     is added without a port, this fails here rather than showing one blank
     cell in a table nobody is diffing.
     """
-    ports = core.configured_ports(fake_paths, base_port=6050)
-    names = core.list_process_names(fake_paths)
+    ports = listing.configured_ports(fake_paths, base_port=6050)
+    names = stack_procs.list_process_names(fake_paths)
     missing = [n for n in names if not ports.get(n)]
     assert not missing, f"no configured port for {missing}"
 
 
-def test_process_choices_cover_every_process_and_apply_overrides(fake_paths: core.UqfStackPaths):
+def test_process_choices_cover_every_process_and_apply_overrides(fake_paths: UqfStackPaths):
     """The list a picker offers is the list `start all` acts on, overrides
     included: a startwithall set through config-set must be the value
     reported, or the picker's "started by all" hint lies about exactly the
     processes someone deliberately changed."""
-    core.set_process_config(fake_paths, "discovery1", "startwithall", "0")
-    choices = {row["procname"]: row for row in core.list_process_choices(fake_paths)}
-    assert set(choices) == set(core.list_process_names(fake_paths))
+    stack_procs.set_process_config(fake_paths, "discovery1", "startwithall", "0")
+    choices = {row["procname"]: row for row in stack_procs.list_process_choices(fake_paths)}
+    assert set(choices) == set(stack_procs.list_process_names(fake_paths))
     assert choices["discovery1"] == {
         "procname": "discovery1",
         "proctype": "discovery",
@@ -506,12 +526,12 @@ def test_process_choices_cover_every_process_and_apply_overrides(fake_paths: cor
     assert all(row["startwithall"] in ("0", "1") for row in choices.values())
 
 
-def test_print_recent_logs_raises_when_no_log_files(fake_paths: core.UqfStackPaths):
-    with pytest.raises(core.UqfStackError):
-        core.print_recent_logs(fake_paths, "discovery1")
+def test_print_recent_logs_raises_when_no_log_files(fake_paths: UqfStackPaths):
+    with pytest.raises(UqfStackError):
+        stack_logs.print_recent_logs(fake_paths, "discovery1")
 
 
-def test_print_recent_logs_emits_sorted_by_time(fake_paths: core.UqfStackPaths, capsys):
+def test_print_recent_logs_emits_sorted_by_time(fake_paths: UqfStackPaths, capsys):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
@@ -519,7 +539,7 @@ def test_print_recent_logs_emits_sorted_by_time(fake_paths: core.UqfStackPaths, 
         "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INF|x|first\n"
     )
 
-    core.print_recent_logs(fake_paths, "discovery1")
+    stack_logs.print_recent_logs(fake_paths, "discovery1")
 
     # print_recent_logs reconfigures loguru's sink onto sys.stdout at call
     # time (see _configure_kdb_log_sink), i.e. after capsys has already
@@ -529,7 +549,7 @@ def test_print_recent_logs_emits_sorted_by_time(fake_paths: core.UqfStackPaths, 
     assert out.index("first") < out.index("second")
 
 
-def test_print_recent_logs_filters_by_min_level(fake_paths: core.UqfStackPaths, capsys):
+def test_print_recent_logs_filters_by_min_level(fake_paths: UqfStackPaths, capsys):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
@@ -537,14 +557,14 @@ def test_print_recent_logs_filters_by_min_level(fake_paths: core.UqfStackPaths, 
         "2026.08.22D14:21:11.000000000|h|discovery|discovery1|ERR|x|loud error\n"
     )
 
-    core.print_recent_logs(fake_paths, "discovery1", min_level="ERROR")
+    stack_logs.print_recent_logs(fake_paths, "discovery1", min_level="ERROR")
 
     out = capsys.readouterr().out
     assert "loud error" in out
     assert "quiet info" not in out
 
 
-def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: core.UqfStackPaths):
+def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: UqfStackPaths):
     # the data source uqf_stack_mcp.py's uqf_stack_logs tool returns
     # directly - print_recent_logs just formats/prints this same data.
     log_dir = fake_paths.torqdata / "logs"
@@ -554,12 +574,12 @@ def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: core.UqfStackPat
         "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INF|x|first\n"
     )
 
-    records = core.get_recent_logs(fake_paths, "discovery1")
+    records = stack_logs.get_recent_logs(fake_paths, "discovery1")
 
     assert [r["message"] for r in records] == ["first", "second"]
 
 
-def test_get_recent_logs_filters_by_min_level(fake_paths: core.UqfStackPaths):
+def test_get_recent_logs_filters_by_min_level(fake_paths: UqfStackPaths):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
@@ -567,38 +587,36 @@ def test_get_recent_logs_filters_by_min_level(fake_paths: core.UqfStackPaths):
         "2026.08.22D14:21:11.000000000|h|discovery|discovery1|ERR|x|loud error\n"
     )
 
-    records = core.get_recent_logs(fake_paths, "discovery1", min_level="ERROR")
+    records = stack_logs.get_recent_logs(fake_paths, "discovery1", min_level="ERROR")
 
     assert [r["message"] for r in records] == ["loud error"]
 
 
-def test_get_recent_logs_raises_when_no_log_files(fake_paths: core.UqfStackPaths):
-    with pytest.raises(core.UqfStackError):
-        core.get_recent_logs(fake_paths, "discovery1")
+def test_get_recent_logs_raises_when_no_log_files(fake_paths: UqfStackPaths):
+    with pytest.raises(UqfStackError):
+        stack_logs.get_recent_logs(fake_paths, "discovery1")
 
 
-def test_list_env_includes_kdbbaseport(fake_paths: core.UqfStackPaths):
-    items = core.list_items(fake_paths, "env", base_port=7000)
+def test_list_env_includes_kdbbaseport(fake_paths: UqfStackPaths):
+    items = listing.list_items(fake_paths, "env", base_port=7000)
     by_name = {item["name"]: item["value"] for item in items}
     assert by_name["KDBBASEPORT"] == "7000"
     assert by_name["KDBHDB"] == str(fake_paths.torqdata / "hdb")
 
 
-def test_cryptorust_root_defaults_to_sibling_dir(fake_paths: core.UqfStackPaths, monkeypatch):
-    monkeypatch.delenv(core.CRYPTORUST_ROOT_ENV, raising=False)
-    assert core.cryptorust_root(fake_paths) == fake_paths.repo_root.parent / "cryptorust"
+def test_cryptorust_root_defaults_to_sibling_dir(fake_paths: UqfStackPaths, monkeypatch):
+    monkeypatch.delenv(CRYPTORUST_ROOT_ENV, raising=False)
+    assert crypto.cryptorust_root(fake_paths) == fake_paths.repo_root.parent / "cryptorust"
 
 
-def test_cryptorust_root_respects_env_override(
-    fake_paths: core.UqfStackPaths, monkeypatch, tmp_path
-):
+def test_cryptorust_root_respects_env_override(fake_paths: UqfStackPaths, monkeypatch, tmp_path):
     override = tmp_path / "elsewhere"
-    monkeypatch.setenv(core.CRYPTORUST_ROOT_ENV, str(override))
-    assert core.cryptorust_root(fake_paths) == override
+    monkeypatch.setenv(CRYPTORUST_ROOT_ENV, str(override))
+    assert crypto.cryptorust_root(fake_paths) == override
 
 
 def test_crypto_recorder_config_yaml_contains_overrides():
-    content = core._crypto_recorder_config_yaml(
+    content = crypto._crypto_recorder_config_yaml(
         stp1_port=7000,
         venues=["binance_spot"],
         symbols=["BTC-USDT", "ETH-USDT"],
@@ -615,35 +633,35 @@ def test_crypto_recorder_config_yaml_contains_overrides():
 
 
 def test_start_crypto_recorder_rejects_non_cryptorust_dir(
-    fake_paths: core.UqfStackPaths, monkeypatch, tmp_path
+    fake_paths: UqfStackPaths, monkeypatch, tmp_path
 ):
-    monkeypatch.setenv(core.CRYPTORUST_ROOT_ENV, str(tmp_path / "not-a-checkout"))
-    with pytest.raises(core.UqfStackError):
-        core.start_crypto_recorder(fake_paths)
+    monkeypatch.setenv(CRYPTORUST_ROOT_ENV, str(tmp_path / "not-a-checkout"))
+    with pytest.raises(UqfStackError):
+        crypto.start_crypto_recorder(fake_paths)
 
 
-def test_crypto_recorder_status_when_never_started(fake_paths: core.UqfStackPaths):
-    status = core.crypto_recorder_status(fake_paths)
+def test_crypto_recorder_status_when_never_started(fake_paths: UqfStackPaths):
+    status = crypto.crypto_recorder_status(fake_paths)
     assert status["running"] == "False"
     assert status["pid"] == ""
 
 
-def test_is_crypto_recorder_running_reflects_live_pid(fake_paths: core.UqfStackPaths):
+def test_is_crypto_recorder_running_reflects_live_pid(fake_paths: UqfStackPaths):
     fake_paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
     fake_paths.crypto_recorder_pid_path.write_text(str(os.getpid()))
-    assert core.is_crypto_recorder_running(fake_paths) is True
+    assert crypto.is_crypto_recorder_running(fake_paths) is True
 
 
-def test_is_crypto_recorder_running_false_for_dead_pid(fake_paths: core.UqfStackPaths):
+def test_is_crypto_recorder_running_false_for_dead_pid(fake_paths: UqfStackPaths):
     fake_paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
     # a pid essentially guaranteed not to be a running process
     fake_paths.crypto_recorder_pid_path.write_text("999999")
-    assert core.is_crypto_recorder_running(fake_paths) is False
+    assert crypto.is_crypto_recorder_running(fake_paths) is False
 
 
-def test_stop_crypto_recorder_raises_without_pidfile(fake_paths: core.UqfStackPaths):
-    with pytest.raises(core.UqfStackError):
-        core.stop_crypto_recorder(fake_paths)
+def test_stop_crypto_recorder_raises_without_pidfile(fake_paths: UqfStackPaths):
+    with pytest.raises(UqfStackError):
+        crypto.stop_crypto_recorder(fake_paths)
 
 
 # --- the PIPELINES registry ------------------------------------------------
@@ -690,7 +708,7 @@ def test_pipeline_offsets_are_stable():
         "arbitrage1": 44,
         "crossarb1": 45,
     }
-    actual = core.PIPELINE_OFFSETS
+    actual = PIPELINE_OFFSETS
     moved = {n: (o, actual.get(n)) for n, o in pinned.items() if actual.get(n) != o}
     assert not moved, f"pinned pipelines moved or vanished (pinned, now): {moved}"
     ceiling = max(pinned.values())
@@ -699,7 +717,7 @@ def test_pipeline_offsets_are_stable():
 
 
 def test_pipeline_offsets_are_unique():
-    offsets = list(core.PIPELINE_OFFSETS.values())
+    offsets = list(PIPELINE_OFFSETS.values())
     assert len(offsets) == len(set(offsets))
 
 
@@ -708,7 +726,7 @@ def test_feed_and_etl_kinds_derive_proctype_and_credentials():
     publishes and needs no credentials, an ETL subscribes and so needs
     .servers.startup[]'s access-listed handle to stp1.
     """
-    for pipeline in core.PIPELINES:
+    for pipeline in PIPELINES:
         if pipeline.kind is PipelineKind.FEED:
             assert pipeline.proctype == "feed"
             assert pipeline.access_list == ""
@@ -733,31 +751,31 @@ def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
     pipeline script calls .qpipe.load_uqf[] at top level, and TorQ's
     .proc.reloadf each loads -load's files in the order given.
     """
-    markout = core.PIPELINE_BY_NAME["markout1"]
+    markout = BY_NAME["markout1"]
     assert markout.loads_qpipe
     loaded = markout.load_column().split()
-    assert loaded[0].endswith(core.PIPELINE_LIB_SCRIPT)
+    assert loaded[0].endswith(PIPELINE_LIB_SCRIPT)
     # The streaming jobs all run under one generic runner now; which job a
     # process runs is decided in q, from its own procname.
-    assert loaded[1].endswith(core.STREAM_RUNNER_SCRIPT)
+    assert loaded[1].endswith(STREAM_RUNNER_SCRIPT)
 
 
 def test_pipelines_not_loading_qpipe_load_only_their_own_script():
-    for pipeline in core.PIPELINES:
+    for pipeline in PIPELINES:
         if not pipeline.loads_qpipe:
             assert pipeline.load_column() == f"${{UQFSCRIPTS}}/{pipeline.script}"
-            assert core.PIPELINE_LIB_SCRIPT not in pipeline.load_column()
+            assert PIPELINE_LIB_SCRIPT not in pipeline.load_column()
 
 
 def test_every_pipeline_script_exists_on_disk():
     """Catches a typo in a Pipeline(script=...) at test time rather than as a
     process that silently fails to start.
     """
-    scripts_dir = core.default_paths().scripts_dir
-    for pipeline in core.PIPELINES:
+    scripts_dir = stack_paths.default_paths().scripts_dir
+    for pipeline in PIPELINES:
         assert (scripts_dir / pipeline.script).is_file(), pipeline.script
         if pipeline.loads_qpipe:
-            assert (scripts_dir / core.PIPELINE_LIB_SCRIPT).is_file()
+            assert (scripts_dir / PIPELINE_LIB_SCRIPT).is_file()
 
 
 def test_table_and_schema_are_declared_together():
@@ -765,7 +783,7 @@ def test_table_and_schema_are_declared_together():
     definition, and vice versa - otherwise it publishes into a table the
     tickerplant has no schema for.
     """
-    for pipeline in core.PIPELINES:
+    for pipeline in PIPELINES:
         assert (pipeline.table is None) == (pipeline.schema is None), pipeline.procname
         if pipeline.table:
             # Restated rather than inferred from the assert above: the
@@ -776,11 +794,11 @@ def test_table_and_schema_are_declared_together():
             assert pipeline.schema.startswith(f"{pipeline.table}:(["), pipeline.procname
 
 
-def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: core.UqfStackPaths):
-    rows = {r["procname"]: r for r in core._base_process_rows(fake_paths)}
-    for pipeline in core.PIPELINES:
+def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: UqfStackPaths):
+    rows = {r["procname"]: r for r in stack_procs._base_process_rows(fake_paths)}
+    for pipeline in PIPELINES:
         row = rows[pipeline.procname]
-        assert row["port"] == f"{{KDBBASEPORT}}+{core.PIPELINE_OFFSETS[pipeline.procname]}"
+        assert row["port"] == f"{{KDBBASEPORT}}+{PIPELINE_OFFSETS[pipeline.procname]}"
         assert row["proctype"] == pipeline.proctype
         assert row["U"] == pipeline.access_list
         assert row["localtime"] == pipeline.localtime
@@ -813,8 +831,8 @@ def test_no_pipeline_overrides_the_process_clock():
     table: markout1 stamped its heartbeat in UTC while the monitor compared
     against local time.
     """
-    assert all(p.localtime == "1" for p in core.PIPELINES), [
-        p.procname for p in core.PIPELINES if p.localtime != "1"
+    assert all(p.localtime == "1" for p in PIPELINES), [
+        p.procname for p in PIPELINES if p.localtime != "1"
     ]
 
 
@@ -823,7 +841,7 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
     # Every backfill is a bounded job triggered with a range, so it never
     # belongs in `uqf-stack start` - held as a RULE over the kind, so a new
     # worker is covered the moment it is declared.
-    backfills = [p for p in core.PIPELINES if p.kind is PipelineKind.BACKFILL]
+    backfills = [p for p in PIPELINES if p.kind is PipelineKind.BACKFILL]
     assert backfills, "no backfill pipelines found - the rule below would hold vacuously"
     assert all(p.startwithall == "0" for p in backfills), [
         p.procname for p in backfills if p.startwithall != "0"
@@ -861,15 +879,15 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
         "fxordersfeed1",
         "fxpositions1",
     }
-    assert all(core.PIPELINE_BY_NAME[n].startwithall == "0" for n in on_demand)
-    assert all(core.PIPELINE_BY_NAME[n].startwithall == "1" for n in always_on)
+    assert all(BY_NAME[n].startwithall == "0" for n in on_demand)
+    assert all(BY_NAME[n].startwithall == "1" for n in always_on)
     unpinned = {
-        p.procname for p in core.PIPELINES if p.startwithall == "1" and p.procname not in always_on
+        p.procname for p in PIPELINES if p.startwithall == "1" and p.procname not in always_on
     }
     assert not unpinned, f"these start with the stack but are not in always_on: {unpinned}"
 
 
-def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStackPaths):
+def test_generated_schema_covers_every_published_table(fake_paths: UqfStackPaths):
     """Both directions, because for a long time this ran only one.
 
     The body used to be `if pipeline.schema: assert pipeline.schema in
@@ -891,10 +909,10 @@ def test_generated_schema_covers_every_published_table(fake_paths: core.UqfStack
         f"would not know the table and the rows would go nowhere: {undefined}"
     )
 
-    generated = core._generated_schema_content(fake_paths)
+    generated = plant_schema._generated_schema_content(fake_paths)
     # and the original direction, so a definition cannot quietly stop being
     # emitted either
-    for pipeline in core.PIPELINES:
+    for pipeline in PIPELINES:
         if pipeline.schema:
             assert pipeline.schema in generated, pipeline.procname
     # and every table uqf_stack_tables.q defines, including the ones only an
@@ -917,7 +935,9 @@ def test_declared_dataflow_edges_match_the_q_scripts():
     protects nothing, and its existence reads as protection to anyone
     auditing the code.
     """
-    problems = core.verify_pipeline_edges(core.default_paths().scripts_dir)
+    problems = pipeline_edges.verify_pipeline_edges(
+        stack_paths.default_paths().scripts_dir, PIPELINES
+    )
     assert not problems, "\n".join(problems)
 
 
@@ -935,7 +955,7 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     exercised here rather than assumed, so a pipeline moving from one to the
     other fails this test rather than quietly skipping the check.
     """
-    real = core.default_paths().scripts_dir
+    real = stack_paths.default_paths().scripts_dir
     scripts = tmp_path / "scripts"
     scripts.mkdir()
 
@@ -947,9 +967,9 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text((real / name).read_text())
 
-    for pipeline in core.PIPELINES:
+    for pipeline in PIPELINES:
         _copy(pipeline.script)
-    _copy(core.PIPELINE_LIB_SCRIPT)
+    _copy(PIPELINE_LIB_SCRIPT)
     real_jobs = real.parent / "src" / "etl" / "streaming"
     jobs = tmp_path / "src" / "etl" / "streaming"
     jobs.mkdir(parents=True)
@@ -964,17 +984,17 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     # the drift path stays exercised rather than quietly covering nothing.
     deferred = next(
         p
-        for p in core.PIPELINES
+        for p in PIPELINES
         # ...and SUBSCRIBES: feeds defer too now that every entry is read
         # from q, and a feed has no subscription to drift.
-        if p.subscribes is core.FROM_DECLARATION
-        and p.script == core.STREAM_RUNNER_SCRIPT
+        if p.subscribes is FROM_DECLARATION
+        and p.script == STREAM_RUNNER_SCRIPT
         and p.subscribed_tables
     )
     target = replace(deferred, subscribes=deferred.subscribed_tables)
     first = target.subscribed_tables[0]
 
-    if target.script == core.STREAM_RUNNER_SCRIPT:
+    if target.script == STREAM_RUNNER_SCRIPT:
         # The job file that claims this process - found the same way the
         # runner finds it, by procname, rather than by guessing the filename.
         job_file = next(
@@ -1009,7 +1029,7 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
     # The spelled-out copy is passed in, not PIPELINES: the real entry defers
     # and would report nothing, which is the point of the copy.
     problems = pipeline_edges.verify_pipeline_edges(
-        scripts, [target, *(p for p in core.PIPELINES if p.procname != target.procname)]
+        scripts, [target, *(p for p in PIPELINES if p.procname != target.procname)]
     )
     assert any(target.procname in problem for problem in problems), problems
 
@@ -1017,37 +1037,15 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
 def test_pipeline_procnames_are_unique():
     """A procname identifies a process, so two entries cannot share one.
 
-    Nothing enforced this. `PIPELINE_BY_NAME` and `PIPELINE_OFFSETS` are both
+    Nothing enforced this. `PIPELINE_OFFSETS` and every lookup by name are
     dict comprehensions over `PIPELINES`, so a repeated name does not raise -
     it drops one pipeline from the registry and hands the survivor the
     other's port offset. `add_extra_process` already refuses a duplicate that
     an operator adds at runtime, which made the unguarded literal the wrong
     way round: the trusted source of truth was the one with no check.
     """
-    names = [pipeline.procname for pipeline in core.PIPELINES]
+    names = [pipeline.procname for pipeline in PIPELINES]
     assert len(names) == len(set(names)), f"duplicate procname in PIPELINES: {names}"
-
-
-def test_the_edge_verifier_detects_a_duplicate_procname(monkeypatch, tmp_path):
-    """And the guard is seen to fire, not merely to exist.
-
-    Duplicating the first pipeline is enough: the verifier should name the
-    procname and both offending positions, because "a duplicate exists"
-    without saying where leaves the reader diffing a nine-entry literal.
-    """
-    duplicated = (*core.PIPELINES, core.PIPELINES[0])
-    monkeypatch.setattr(pipelines, "PIPELINES", duplicated)
-
-    real = core.default_paths().scripts_dir
-    for name in [p.script for p in duplicated] + [core.PIPELINE_LIB_SCRIPT]:
-        # mkdir first: a script name carries its subdirectory since #241.
-        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text((real / name).read_text())
-
-    problems = pipelines.verify_pipeline_edges(tmp_path)
-    duplicate_reports = [p for p in problems if "declared twice" in p]
-    assert duplicate_reports, problems
-    assert core.PIPELINES[0].procname in duplicate_reports[0]
 
 
 def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
@@ -1064,7 +1062,7 @@ def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
     Read against the REAL vendored csv rather than the fixture's two-row
     stand-in, because the whole point is what upstream ships.
     """
-    real = core.default_paths()
+    real = stack_paths.default_paths()
     vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
     upstream = {
         row["procname"]: row["startwithall"] for row in csv.DictReader(io.StringIO(vendored))
@@ -1086,23 +1084,23 @@ def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
         "of VENDORED_STARTWITHALL_OVERLAY is now redundant and should be removed"
     )
 
-    composed = {row["procname"]: row for row in core._base_process_rows(real)}
+    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
     assert composed["monitor1"]["startwithall"] == "1"
     assert composed["feed1"]["startwithall"] == "0"
 
     # Nothing else moved: the overlay changes one field, on the processes it
     # names and no others.
     for procname, value in upstream.items():
-        if procname in core.VENDORED_STARTWITHALL_OVERLAY:
+        if procname in VENDORED_STARTWITHALL_OVERLAY:
             continue
         assert composed[procname]["startwithall"] == value, (
             f"{procname} changed, but the overlay only declares "
-            f"{sorted(core.VENDORED_STARTWITHALL_OVERLAY)}"
+            f"{sorted(VENDORED_STARTWITHALL_OVERLAY)}"
         )
 
 
 def test_an_operator_can_put_monitor1_back_to_the_upstream_default(
-    fake_paths: core.UqfStackPaths,
+    fake_paths: UqfStackPaths,
 ):
     """The overlay is a default, not a decree.
 
@@ -1115,13 +1113,19 @@ def test_an_operator_can_put_monitor1_back_to_the_upstream_default(
         "localhost,{KDBBASEPORT}+9,monitor,monitor1,,1,0,,,"
         "${KDBCODE}/processes/monitor.q,0,,q\n"
     )
-    assert core.get_process_config(fake_paths, "monitor1", base_port=7000)["startwithall"] == "1"
+    assert (
+        stack_procs.get_process_config(fake_paths, "monitor1", base_port=7000)["startwithall"]
+        == "1"
+    )
 
-    core.set_process_config(fake_paths, "monitor1", "startwithall", "0")
-    assert core.get_process_config(fake_paths, "monitor1", base_port=7000)["startwithall"] == "0"
+    stack_procs.set_process_config(fake_paths, "monitor1", "startwithall", "0")
+    assert (
+        stack_procs.get_process_config(fake_paths, "monitor1", base_port=7000)["startwithall"]
+        == "0"
+    )
 
 
-def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core.UqfStackPaths):
+def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: UqfStackPaths):
     """What is the precedence between the vendored `process.csv`,
     `extra_processes.csv` and `process_overrides.csv`?
 
@@ -1135,8 +1139,8 @@ def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core
     machine"; this test sets the same field in two layers and checks which
     one wins, which is the only way an order is observable.
     """
-    offset = core.next_free_port_offset(fake_paths)
-    core.add_extra_process(
+    offset = stack_procs.next_free_port_offset(fake_paths)
+    stack_procs.add_extra_process(
         fake_paths,
         {
             "host": "localhost",
@@ -1155,17 +1159,17 @@ def test_the_three_process_csv_layers_compose_in_a_stated_order(fake_paths: core
         },
     )
     # extra_processes.csv supplied extras="from-extra"; an override says otherwise
-    core.set_process_config(fake_paths, "layered1", "extras", "from-override")
+    stack_procs.set_process_config(fake_paths, "layered1", "extras", "from-override")
 
-    row = core.get_process_config(fake_paths, "layered1", base_port=7000)
+    row = stack_procs.get_process_config(fake_paths, "layered1", base_port=7000)
     assert row["extras"] == "from-override", (
         "process_overrides.csv must outrank extra_processes.csv for the same field"
     )
 
     # ...and an override on a VENDORED process outranks the vendored file too,
     # without the vendored file being touched.
-    core.set_process_config(fake_paths, "stp1", "extras", "vendored-overridden")
-    assert core.get_process_config(fake_paths, "stp1", base_port=7000)["extras"] == (
+    stack_procs.set_process_config(fake_paths, "stp1", "extras", "vendored-overridden")
+    assert stack_procs.get_process_config(fake_paths, "stp1", base_port=7000)["extras"] == (
         "vendored-overridden"
     )
     vendored = (fake_paths.torqapphome / "appconfig" / "process.csv").read_text()
@@ -1190,7 +1194,7 @@ def test_the_default_start_fits_inside_the_licence_connection_budget():
     """
     clients = {
         p.procname
-        for p in core.PIPELINES
+        for p in PIPELINES
         if p.startwithall == "1" and p.kind is not PipelineKind.BACKFILL
     } | pipeline_edges.VENDORED_PLANT_CLIENTS
     allowance = pipeline_edges.LICENCE_CONNECTION_LIMIT - pipeline_edges.INBOUND_RESERVE
@@ -1211,11 +1215,10 @@ def test_the_connection_budget_check_fires_when_the_default_start_grows(
     """
     grown = tuple(
         replace(p, startwithall="1") if p.kind is not PipelineKind.BACKFILL else p
-        for p in core.PIPELINES
+        for p in PIPELINES
     )
-    monkeypatch.setattr(pipelines, "PIPELINES", grown)
 
-    problems = pipelines.verify_pipeline_edges(core.default_paths().scripts_dir)
+    problems = pipeline_edges.verify_pipeline_edges(stack_paths.default_paths().scripts_dir, grown)
     budget = [p for p in problems if "tickerplant connections" in p]
     assert len(budget) == 1, problems
     assert 'startwithall="0"' in budget[0]
@@ -1235,11 +1238,11 @@ def test_every_on_demand_plant_client_still_has_a_producer_to_start_with():
     then consume nothing, which is the failure this guards.
     """
     producers: dict[str, set[str]] = {}
-    for pipeline in core.PIPELINES:
+    for pipeline in PIPELINES:
         for table in pipeline.published_tables:
             producers.setdefault(table, set()).add(pipeline.procname)
-    declared = {p.procname for p in core.PIPELINES}
-    for pipeline in core.PIPELINES:
+    declared = {p.procname for p in PIPELINES}
+    for pipeline in PIPELINES:
         if pipeline.startwithall == "1" or pipeline.subscribes_dynamic:
             continue
         for table in pipeline.subscribed_tables:
@@ -1256,7 +1259,7 @@ def test_every_on_demand_plant_client_still_has_a_producer_to_start_with():
 
 
 def test_a_pipeline_publishing_an_undefined_table_is_reported(
-    fake_paths: core.UqfStackPaths, monkeypatch: pytest.MonkeyPatch
+    fake_paths: UqfStackPaths, monkeypatch: pytest.MonkeyPatch
 ):
     """The gate firing, which is the half #287 never had.
 
@@ -1266,14 +1269,14 @@ def test_a_pipeline_publishing_an_undefined_table_is_reported(
     be told.
     """
     invented = replace(
-        core.PIPELINE_BY_NAME["fxpositions1"],
+        BY_NAME["fxpositions1"],
         procname="ghost1",
         # An invented process has no q file to defer to, so it states its
         # own edges - which is the resolver's strictness working.
         subscribes=(),
         publishes=("fx_position", "a_table_nothing_defines"),
     )
-    monkeypatch.setattr(plant_schema, "PIPELINES", (*core.PIPELINES, invented))
+    monkeypatch.setattr(plant_schema, "PIPELINES", (*PIPELINES, invented))
 
     undefined = plant_schema.undefined_published_tables(fake_paths)
     assert len(undefined) == 1, undefined
@@ -1282,17 +1285,17 @@ def test_a_pipeline_publishing_an_undefined_table_is_reported(
     assert "ghost1" in undefined[0]
 
 
-def test_the_fx_positions_tables_reach_the_tickerplant(fake_paths: core.UqfStackPaths):
+def test_the_fx_positions_tables_reach_the_tickerplant(fake_paths: UqfStackPaths):
     """The regression itself, named so it cannot be quietly undone.
 
     fxpositions1 publishes two tables and owns neither `table` nor
     `schema`. Both were defined in uqf_stack_tables.q and neither reached
     `database.q`, so the whole FX positions service published into nothing.
     """
-    generated = core._generated_schema_content(fake_paths)
+    generated = plant_schema._generated_schema_content(fake_paths)
     assert schemas.definition("fx_position") in generated
     assert schemas.definition("fx_limit_breach") in generated
-    assert plant_schema._published_tables([core.PIPELINE_BY_NAME["fxpositions1"]]) == {
+    assert plant_schema._published_tables([BY_NAME["fxpositions1"]]) == {
         "fx_position",
         "fx_limit_breach",
     }

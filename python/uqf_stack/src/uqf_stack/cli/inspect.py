@@ -11,8 +11,9 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqf_stack import core
-from uqf_stack.checks import hdb_shape
+from uqf_stack import paths as stack_paths
+from uqf_stack.checks import hdb_shape, schema_view
+from uqf_stack.checks.schema_view import DEFAULT_PROC
 from uqf_stack.cli.shared import (
     ExportOpt,
     PortOpt,
@@ -24,6 +25,12 @@ from uqf_stack.cli.shared import (
     console,
     log,
 )
+from uqf_stack.model.registry import DEFAULT_BASE_PORT
+from uqf_stack.paths import UqfStackError
+from uqf_stack.stack import listing, runtime
+from uqf_stack.stack import logs as stack_logs
+from uqf_stack.stack import procs as stack_procs
+from uqf_stack.stack.listing import LISTABLE_KINDS
 
 
 @app.command("hdb-check")
@@ -48,7 +55,7 @@ def hdb_check(
         console.print(f"[yellow]no HDB at {hdb_root}[/] - nothing to check")
         return
     if fix:
-        core.fill_hdb_partitions(paths)
+        runtime.fill_hdb_partitions(paths)
     schema = paths.generated_schema.read_text()
     expected = hdb_shape.declared_tables(schema)
     short = hdb_shape.gaps(hdb_root, expected)
@@ -91,7 +98,7 @@ def query(
 ) -> None:
     """Run a synchronous q expression against a running demo process."""
     try:
-        result = core.query(expr, port, host=host, user=user, passwd=passwd)
+        result = runtime.query(expr, port, host=host, user=user, passwd=passwd)
     except Exception as exc:  # kola raises its own exception types on connect/query failure
         log.error("query failed: {}", exc)
         raise typer.Exit(code=1) from exc
@@ -109,12 +116,12 @@ def schema(
     ] = None,
     proc: Annotated[
         str, typer.Option(help="process to read from, e.g. rdb1 (today) or hdb1 (history)")
-    ] = core.DEFAULT_SCHEMA_PROC,
+    ] = DEFAULT_PROC,
     port: Annotated[
         int | None,
         typer.Option(help="read this port directly, instead of resolving --proc"),
     ] = None,
-    base_port: Annotated[int, typer.Option(help="stack base port")] = core.DEFAULT_BASE_PORT,
+    base_port: Annotated[int, typer.Option(help="stack base port")] = DEFAULT_BASE_PORT,
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",
@@ -127,10 +134,10 @@ def schema(
     from a process that failed to load its schema file, and that is exactly
     when someone runs this.
     """
-    paths = core.default_paths()
+    paths = stack_paths.default_paths()
     try:
-        target = port if port is not None else core.resolve_port(paths, proc, base_port)
-    except core.UqfStackError as exc:
+        target = port if port is not None else schema_view.resolve_port(paths, proc, base_port)
+    except UqfStackError as exc:
         log.error("{}", exc)
         raise typer.Exit(code=1) from exc
 
@@ -141,9 +148,9 @@ def schema(
     # name is just a pattern that matches itself, so there is one code path
     # rather than two - and `schema quotes` behaves identically either way.
     try:
-        matched = core.match_tables(table, target, host=host, **creds) if table else []
+        matched = schema_view.match_tables(table, target, host=host, **creds) if table else []
         if table and not matched:
-            available = core.schema_table_names(target, host=host, **creds)
+            available = schema_view.table_names(target, host=host, **creds)
             log.error(
                 "nothing matches {!r} on {} - it has: {}",
                 table,
@@ -152,13 +159,13 @@ def schema(
             )
             raise typer.Exit(code=1)
         rows = (
-            [r for name in matched for r in core.schema_columns(name, target, host=host, **creds)]
+            [r for name in matched for r in schema_view.columns(name, target, host=host, **creds)]
             if table
-            else core.schema_overview(target, host=host, **creds)
+            else schema_view.overview(target, host=host, **creds)
         )
     except typer.Exit:
         raise
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         log.error("{}", exc)
         raise typer.Exit(code=1) from exc
     except Exception as exc:  # kola raises its own connect/query errors
@@ -172,7 +179,7 @@ def schema(
             rendered.add_column("type")
             rendered.add_column("q", justify="center")
             rendered.add_column("attribute")
-            for row in core.schema_columns(name, target, host=host, **creds):
+            for row in schema_view.columns(name, target, host=host, **creds):
                 # A general column carries no type information at all, so it
                 # is dimmed rather than presented alongside the ones that do.
                 style = "dim" if row["type"] == "general" else ""
@@ -210,7 +217,7 @@ def schema(
 def config_get(
     procname: str,
     field: Annotated[str | None, typer.Argument()] = None,
-    port: PortOpt = core.DEFAULT_BASE_PORT,
+    port: PortOpt = DEFAULT_BASE_PORT,
     raw: Annotated[
         bool, typer.Option("--raw", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
     ] = False,
@@ -221,8 +228,8 @@ def config_get(
     the same env torq.sh itself would use - pass --raw to see them literal.
     """
     try:
-        row = core.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
-    except core.UqfStackError as exc:
+        row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
+    except UqfStackError as exc:
         _die(exc)
         return
     if field is not None:
@@ -274,7 +281,7 @@ def _sorted_items(
     column = known.get(sort.strip().casefold())
     if column is None:
         _die(
-            core.UqfStackError(
+            UqfStackError(
                 f"cannot sort by {sort!r}: no such column. Available: {', '.join(items[0])}"
             )
         )
@@ -287,7 +294,7 @@ def list_items(
     kind: Annotated[
         str | None, typer.Argument(help="'processes', 'fields', 'overrides', or 'env'")
     ] = None,
-    port: PortOpt = core.DEFAULT_BASE_PORT,
+    port: PortOpt = DEFAULT_BASE_PORT,
     export: ExportOpt = None,
     sort: Annotated[
         str | None,
@@ -307,11 +314,11 @@ def list_items(
     was on screen.
     """
     if kind is None:
-        console.print(f"Available kinds: {', '.join(sorted(core.LISTABLE_KINDS))}")
+        console.print(f"Available kinds: {', '.join(sorted(LISTABLE_KINDS))}")
         return
     try:
-        items = core.list_items(_paths(), kind, base_port=port)
-    except core.UqfStackError as exc:
+        items = listing.list_items(_paths(), kind, base_port=port)
+    except UqfStackError as exc:
         _die(exc)
         return
     items = _sorted_items(items, sort, reverse)
@@ -331,8 +338,8 @@ def config_set(procname: str, field: str, value: str) -> None:
     process_overrides.csv, applied on every later start/stop/summary/...).
     """
     try:
-        core.set_process_config(_paths(), procname, field, value)
-    except core.UqfStackError as exc:
+        stack_procs.set_process_config(_paths(), procname, field, value)
+    except UqfStackError as exc:
         _die(exc)
         return
     console.print(f"{procname}.{field} = {value}")
@@ -357,8 +364,8 @@ def logs(
     """
     try:
         if follow:
-            core.follow_logs(_paths(), procs, min_level=level)
+            stack_logs.follow_logs(_paths(), procs, min_level=level)
         else:
-            core.print_recent_logs(_paths(), procs, lines=lines, min_level=level)
-    except core.UqfStackError as exc:
+            stack_logs.print_recent_logs(_paths(), procs, lines=lines, min_level=level)
+    except UqfStackError as exc:
         _die(exc)

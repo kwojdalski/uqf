@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from uqf_stack import core
 from uqf_stack.model import dependencies
+from uqf_stack.model.registry import PIPELINES
+
+#: Every pipeline by procname, for the tests that look one up.
+BY_NAME = {p.procname: p for p in PIPELINES}
 
 
 def test_every_declared_input_has_a_named_source():
@@ -98,12 +101,12 @@ def test_the_graph_is_the_one_the_generated_schema_is_built_from():
     warning would describe a different system from the one running.
     """
     invented = replace(
-        core.PIPELINE_BY_NAME["cross1"],
+        BY_NAME["cross1"],
         procname="ghost1",
         subscribes=(),
         publishes=("market_data",),
     )
-    producers = dependencies.producers_by_table([*core.PIPELINES, invented])
+    producers = dependencies.producers_by_table([*PIPELINES, invented])
     assert producers["market_data"] == {"marketdata1", "ghost1"}
 
 

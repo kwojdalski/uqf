@@ -28,7 +28,7 @@ pipeline was added. Nobody noticed, because prose cannot fail.
 
 `subscribes`/`publishes` are declarations, and a declaration can lie. They
 are checked against each pipeline's own q script by
-`uqf_stack.model.pipelines.verify_pipeline_edges`, which runs in the test
+`uqf_stack.model.pipeline_edges.verify_pipeline_edges`, which runs in the test
 suite - so the chain is *q script -> declaration -> document*, with a check
 at each arrow. This script refuses to generate if that check fails, because
 a diagram derived from a wrong declaration is worse than a stale one: it
@@ -52,14 +52,14 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "python" / "uqf_stack" / "src"))
 
 from uqf_stack.model import schemas  # noqa: E402
-from uqf_stack.model.pipelines import (  # noqa: E402
+from uqf_stack.model.pipeline_edges import verify_pipeline_edges  # noqa: E402
+from uqf_stack.model.pipelines import PIPELINE_OFFSETS  # noqa: E402
+from uqf_stack.model.registry import (  # noqa: E402
     DEFAULT_BASE_PORT,
-    PIPELINE_OFFSETS,
     PIPELINES,
     read_port_lock,
-    verify_pipeline_edges,
+    render_port_lock,
 )
-from uqf_stack.model.registry import render_port_lock  # noqa: E402
 from uqf_stack.paths import PROCESS_PORTS_FILE, TABLES_FILE, default_paths  # noqa: E402
 from uqf_stack.stack import procs  # noqa: E402
 
@@ -91,7 +91,7 @@ def _schema_names() -> dict[str, str]:
 
 
 def render() -> str:
-    problems = verify_pipeline_edges(REPO / "scripts")
+    problems = verify_pipeline_edges(REPO / "scripts", PIPELINES)
     if problems:
         raise SystemExit(
             "refusing to generate: the declared dataflow edges disagree with the "
@@ -214,7 +214,7 @@ def _q_symbol_list(names: tuple[str, ...]) -> str:
 
 def render_dag() -> str:
     """The streaming half of the job graph, as q."""
-    problems = verify_pipeline_edges(default_paths().scripts_dir)
+    problems = verify_pipeline_edges(default_paths().scripts_dir, PIPELINES)
     if problems:
         raise SystemExit(
             "refusing to generate: the registry and the q scripts disagree:\n  "

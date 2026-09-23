@@ -11,8 +11,8 @@ machinery to manage.
 The `uqf-stack` CLI (`python/uqf_stack/`) bridges the two vendored trees so
 you can actually start the demo up and poke at it, without editing or
 writing into either `lib/` directory. The actual bootstrapping/config logic
-lives in `python/uqf_stack/src/uqf_stack/core.py`, shared
-with `uqf_stack_mcp.py`'s FastMCP server (see "MCP server" below) so the
+lives in `python/uqf_stack/src/uqf_stack/`'s `model/` and `stack/` modules,
+shared with `uqf_stack_mcp.py`'s FastMCP server (see "MCP server" below) so the
 CLI and the MCP tools can't drift apart. It's a standalone package
 (`python/uqf_stack/`), separate from `python/uqf_client/` (the
 pricing library's q-IPC client) - this has nothing to do with pricing, and
@@ -257,8 +257,8 @@ uqf-stack list processes
 - `dependencies` - each process's input tables and who publishes them, so
   you can see what a process needs before starting it on its own
 
-New kinds are one function + one `core.LISTABLE_KINDS` entry, not a new
-CLI command each time - see `core.py`'s `_list_*` functions.
+New kinds are one function + one `LISTABLE_KINDS` entry, not a new
+CLI command each time - see `stack/listing.py`'s `_list_*` functions.
 
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 
@@ -286,7 +286,7 @@ too, so an exported CSV matches what was on screen.
 By default (`start all`) the processes marked `startwithall=1` come up: the
 vendored rows in `lib/torq-finance-starter-pack/appconfig/process.csv`, plus
 uqf's own pipelines, appended as extra rows to a *copy* of that csv that
-`uqf_stack.core.bootstrap()` generates on the fly (never editing the
+`uqf_stack.stack.runtime.bootstrap()` generates on the fly (never editing the
 vendored file itself). The vendored README explains why the rest stay off:
 the KDB-X community edition's connection limits mean `reporter1`,
 `filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off unless you have a
@@ -554,7 +554,7 @@ Getting this table into a real, on-disk database took no changes to
 writes down whatever the RDB has, so a brand new table only needs two
 things:
 
-1. **Schema** - `uqf_stack.core._generated_schema_content()`
+1. **Schema** - `uqf_stack.model.plant_schema._generated_schema_content()`
    appends the `quotes` table definition to a *copy* of the vendored
    `database.q` (written to `scripts/output/uqf-stack/database.q` on every
    `bootstrap()`, same generate-never-edit approach as `process.csv`), and
@@ -699,7 +699,7 @@ shows up in `summary`).
 
 Registration goes into `python/uqf_stack/extra_processes.csv` (a
 sibling of `process_overrides.csv` - same never-edit-the-vendored/
-generated-files approach, tracked in git) rather than editing `core.py`
+generated-files approach, tracked in git) rather than editing Python
 source - `_base_process_rows()` reads it generically, so adding a process
 this way is a data change, not a code change.
 
@@ -927,7 +927,7 @@ uv run --project python/uqf_stack python/uqf_stack/uqf_stack_mcp.py
 ```
 
 (stdio transport, the default). `uqf_stack_query` returns a list of row
-dicts for table results (via the same `kola`-backed `uqf_stack.core.query`
+dicts for table results (via the same `kola`-backed `uqf_stack.stack.runtime.query`
 the CLI's `query` command calls), or the raw scalar/dict result otherwise.
 
 ## Other commands

@@ -19,7 +19,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from uqf_stack.logger import get_logger
-from uqf_stack.model.pipelines import PIPELINES
+from uqf_stack.model.registry import PIPELINES
 from uqf_stack.model.schemas import (
     _definitions as _table_definitions,
 )

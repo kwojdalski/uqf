@@ -12,8 +12,8 @@ WHY THIS PACKAGE NOW DEPENDS ON uqf_stack, having deliberately not
 before. `procfile.py` states the old rule and its reason: resolving two forms
 of port placeholder is not worth coupling a hot read path to another package.
 That reasoning holds for *reading a CSV column* and does not survive contact
-with *starting a process*: `core.start` shells out to torq.sh with an
-environment built from the vendored tree, `core.set_process_config` does a
+with *starting a process*: `runtime.start` shells out to torq.sh with an
+environment built from the vendored tree, `stack_procs.set_process_config` does a
 read-modify-write against process_overrides.csv with the field whitelist that
 makes it safe, and reimplementing either here would be a second writer to the
 same file - which is worse than a dependency by any measure this repository
@@ -82,18 +82,18 @@ def _paths(settings: Settings):
     a control route must not fail to start because the orchestrator's own
     imports are unhappy.
 
-    `core.default_paths()` resolves the tree from the orchestrator package's
+    `stack_paths.default_paths()` resolves the tree from the orchestrator package's
     own location, which is right when both are installed from this workspace
     - the single-host deployment FE-22 describes. `UQF_FRONTEND_STACK_ROOT`
     overrides it for the case they are not, and is checked against the tree
     it names rather than trusted, so a wrong path fails here instead of
     starting the wrong stack.
     """
-    from uqf_stack import core
+    from uqf_stack import paths as stack_paths
     from uqf_stack.paths import UqfStackPaths
 
     if settings.stack_root is None:
-        return core.default_paths()
+        return stack_paths.default_paths()
     root = settings.stack_root
     if not (root / "lib" / "torq" / "torq.sh").is_file():
         raise ValidationFailed(
@@ -120,12 +120,13 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
     require_writes(settings)
     if action not in LIFECYCLE_ACTIONS:
         raise ValidationFailed(f"unknown action {action!r} - expected one of {LIFECYCLE_ACTIONS}")
-    from uqf_stack import core
+    from uqf_stack.paths import UqfStackError
+    from uqf_stack.stack import runtime
 
-    fn = {"start": core.start, "stop": core.stop, "restart": core.restart}[action]
+    fn = {"start": runtime.start, "stop": runtime.stop, "restart": runtime.restart}[action]
     try:
         result = fn(_paths(settings), procs, base_port=settings.base_port, capture=True)
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         raise ValidationFailed(str(exc)) from None
     return CommandResult(
         action=action,
@@ -144,13 +145,14 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
     sometimes not bother.
     """
     require_writes(settings)
-    from uqf_stack import core
+    from uqf_stack.paths import UqfStackError
+    from uqf_stack.stack import procs as stack_procs
 
     paths = _paths(settings)
     try:
-        core.set_process_config(paths, procname, field, value)
-        return core.get_process_config(paths, procname, base_port=settings.base_port)
-    except core.UqfStackError as exc:
+        stack_procs.set_process_config(paths, procname, field, value)
+        return stack_procs.get_process_config(paths, procname, base_port=settings.base_port)
+    except UqfStackError as exc:
         raise ValidationFailed(str(exc)) from None
 
 
@@ -161,9 +163,9 @@ def settable_fields(settings: Settings) -> list[str]:
     orchestrator's whitelist is the authority; echoing it here means the two
     cannot drift.
     """
-    from uqf_stack import core
+    from uqf_stack.model.pipelines import PROCESS_CSV_FIELDS
 
-    return sorted(core.PROCESS_CSV_FIELDS)
+    return sorted(PROCESS_CSV_FIELDS)
 
 
 def process_choices(settings: Settings) -> list[dict[str, Any]]:
@@ -175,7 +177,7 @@ def process_choices(settings: Settings) -> list[dict[str, Any]]:
     process.csv - vendored, pipelines, extras, overrides - so the list here
     and the list `uqf-stack start all` acts on cannot differ.
     """
-    from uqf_stack import core
+    from uqf_stack.stack import procs as stack_procs
 
     return [
         {
@@ -183,7 +185,7 @@ def process_choices(settings: Settings) -> list[dict[str, Any]]:
             "proctype": row["proctype"],
             "start_with_all": row["startwithall"] == "1",
         }
-        for row in core.list_process_choices(_paths(settings))
+        for row in stack_procs.list_process_choices(_paths(settings))
     ]
 
 
@@ -270,13 +272,13 @@ def start_backfill(
     import os
     import subprocess
 
-    from uqf_stack import core
+    from uqf_stack.paths import UqfStackError
     from uqf_stack.stack.runtime import bootstrap
 
     paths = _paths(settings)
     try:
         overrides = bootstrap(paths, base_port=settings.base_port)
-    except core.UqfStackError as exc:
+    except UqfStackError as exc:
         raise ValidationFailed(str(exc)) from None
 
     env = {

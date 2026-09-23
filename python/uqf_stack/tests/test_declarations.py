@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from uqf_stack import core
 from uqf_stack.model import registry
 from uqf_stack.model.declarations import (
     dictionary_fields,
@@ -21,6 +20,7 @@ from uqf_stack.model.declarations import (
     split_top_level,
 )
 from uqf_stack.model.pipeline import PipelineKind
+from uqf_stack.model.registry import PIPELINES
 from uqf_stack.paths import PROCESS_PORTS_FILE, STREAM_DIR, TABLES_FILE, WORKER_DIR, UqfStackError
 
 # ------------------------------------------------------------------ parsing
@@ -103,7 +103,7 @@ def test_the_committed_lock_covers_every_process():
     """What generate_operational_docs.py --check enforces in CI, held here too:
     a process the lock lacks has an offset that moves as others are added."""
     locked = registry.read_port_lock(Path(__file__).resolve().parents[3])
-    assert {p.procname for p in core.PIPELINES} <= set(locked)
+    assert {p.procname for p in PIPELINES} <= set(locked)
 
 
 # --------------------------------------------------------- plug and play
@@ -113,7 +113,7 @@ def test_every_declaration_in_the_tree_is_a_process():
     root = Path(__file__).resolve().parents[3]
     declared = {d.procname for d in read_declarations(root)}
     non_job = {p.procname for p in registry.NON_JOB_PIPELINES}
-    assert {p.procname for p in core.PIPELINES} == declared | non_job
+    assert {p.procname for p in PIPELINES} == declared | non_job
 
 
 def _tree(tmp_path: Path) -> Path:
