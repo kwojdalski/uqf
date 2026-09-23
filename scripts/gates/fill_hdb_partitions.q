@@ -17,10 +17,33 @@
 / lib/torq/code/processes/wdb.q's `inittable` does for the partition the
 / wdb is writing.
 / .
-/ ADDITIVE, ALWAYS. A table directory that exists is never touched, whatever
-/ is in it. A table a partition holds and database.q no longer declares is
-/ left alone: that is history, and deleting history is not this script's
-/ business. Running it twice changes nothing the second time.
+/ TWO LEVELS, THE SAME FAULT. A missing TABLE fails a query naming whichever
+/ table sorts first; a missing COLUMN fails it naming that column in the
+/ partition that lacks it - "./2026.01.01/book/venue. OS reports: No such
+/ file or directory". Same cause (the schema grew after the partition was
+/ written), same repair, so both happen here in one pass.
+/ .
+/ A missing column is written as the declared type's null, repeated to the
+/ partition's own row count, and its name appended to `.d`. Symbol columns
+/ are enumerated against the HDB's sym file: a raw symbol vector in a
+/ splayed table is unreadable by anything that maps the database, which is
+/ the same reason fill_one calls .Q.en.
+/ .
+/ This is dbmaint.q's `addcol` in miniature - KX's own utility, which this
+/ tree carries only as orphaned test data inside the vendored TorQ tree
+/ (lib/torq/tests/dataaccess/queryorder/hdb/dbmaint.q, loaded by nothing).
+/ Vendoring 150 lines to call one of them, when the one is six lines built
+/ from the schema this script already loads, would leave castcol, renamecol
+/ and rentable reachable from no live path.
+/ .
+/ ADDITIVE, ALWAYS. A table directory that exists is never emptied and a
+/ column that exists is never rewritten, whatever is in it. A table or a
+/ column a partition holds and database.q no longer declares is left alone:
+/ that is history, and deleting history is not this script's business. A
+/ column whose declared TYPE changed is reported by `uqf-stack hdb-check`
+/ and not touched here - "the declaration changed" and "the bytes on disk
+/ are wrong" are different claims, and only a person can tell which.
+/ Running it twice changes nothing the second time.
 
 hdb_root:hsym `$first .z.x;
 schema_file:hsym `$.z.x 1;
@@ -61,6 +84,39 @@ fill_one:{[root;part;tbl]
     dir set .Q.en[root;0#get tbl];
     1b}
 
+/ Add the declared columns a partition's copy of a table does not have.
+/ .
+/ `.d` is the authority for what a splayed table holds, not the directory
+/ listing: a nested column writes TWO files (`bids` and `bids#`) and appears
+/ in `.d` once, so listing the directory would ask for a column named
+/ `bids#` that no schema declares.
+/ .
+/ The row count comes from a column the partition already has, because that
+/ is the only thing that knows how long this partition is - the schema
+/ carries types, not counts, and a default vector of the wrong length is a
+/ corrupt table that still maps.
+/ @param part the partition as a DATE
+/ @param tbl the table name, whose root-level value carries the declared shape
+/ @return the columns written, empty if the partition was already complete
+fill_cols:{[root;part;tbl]
+    dir:.Q.par[root;part;tbl];
+    dfile:` sv dir,`.d;
+    / no .d means no table directory - fill_one's job, and it ran first
+    if[()~key dfile; :`$()];
+    present:get dfile;
+    absent:(cols value tbl) except present;
+    if[0=count absent; :`$()];
+    rows:count get ` sv dir,first present;
+    {[root;dir;rows;tbl;c]
+        vals:rows#(value tbl)c;
+        / 11h either sign: a symbol column must point into root/sym or the
+        / database cannot be mapped. .Q.en takes a table, so wrap and unwrap.
+        if[11h=abs type vals; vals:(.Q.en[root] ([] c:vals))`c];
+        (` sv dir,c) set vals;
+        @[dir;`.d;,;c];
+        }[root;dir;rows;tbl] each absent;
+    absent}
+
 partitions:parts hdb_root;
 
 -1 "hdb:        ", string hdb_root;
@@ -68,15 +124,25 @@ partitions:parts hdb_root;
 -1 "partitions: ", string[count partitions], " (", (", " sv string partitions), ")";
 
 written:0;
+patched:0;
 {[root;declared;part]
     made:{[root;part;tbl] fill_one[root;part;tbl]}[root;part] each declared;
     n:sum made;
     if[n>0; -1 "  ",string[part],": wrote ",string[n]," missing table(s)"];
     `written set written+n;
+    / Columns AFTER tables, and in the same pass over the partition: a table
+    / this run just created is already complete, so fill_cols finds nothing
+    / in it and the two steps do not fight.
+    grew:raze {[root;part;tbl] fill_cols[root;part;tbl]}[root;part] each declared;
+    if[count grew;
+        -1 "  ",string[part],": added ",string[count grew]," column(s) - ",
+           ", " sv string grew];
+    `patched set patched+count grew;
     }[hdb_root;declared] each partitions;
 
 -1 "";
--1 $[written=0;
+-1 $[(written=0) and patched=0;
     "already rectangular - nothing to do";
-    "filled ",string[written]," table directory(ies)"];
+    "filled ",string[written]," table directory(ies) and ",
+      string[patched]," column(s)"];
 exit 0

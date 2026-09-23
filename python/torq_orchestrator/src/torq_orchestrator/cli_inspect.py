@@ -32,14 +32,14 @@ def hdb_check(
         typer.Option("--fix", help="write the missing empty tables, not just report them"),
     ] = False,
 ) -> None:
-    """Report HDB partitions missing a declared table, the cause behind
-    "./2015.01.07/arbitrage. OS reports: No such file or directory".
+    """Report HDB partitions missing a declared table or column, the cause
+    behind "./2015.01.07/arbitrage. OS reports: No such file or directory".
 
     A partitioned kdb+ database needs every table in every partition, and
-    one missing directory fails the whole query rather than returning an
-    empty result - so the error names whichever table sorts first, not the
-    partition that is actually short. Reads the filesystem, so it needs no
-    running stack.
+    every one of those tables to hold the same columns. Either gap fails the
+    whole query rather than returning an empty result - and the table-level
+    one names whichever table sorts first, not the partition that is
+    actually short. Reads the filesystem, so it needs no running stack.
     """
     paths = _paths()
     hdb_root = paths.torqdata / "hdb"
@@ -48,17 +48,29 @@ def hdb_check(
         return
     if fix:
         core.fill_hdb_partitions(paths)
-    expected = hdb_shape.declared_tables(paths.generated_schema.read_text())
+    schema = paths.generated_schema.read_text()
+    expected = hdb_shape.declared_tables(schema)
     short = hdb_shape.gaps(hdb_root, expected)
-    report = hdb_shape.describe(short)
-    if not short:
-        console.print(f"[green]{report}[/] ({len(expected)} declared)")
+    # Columns are checked even when tables are missing, because --fix repairs
+    # both in one pass and a reader who fixes only what the first report named
+    # would run the command twice to reach the same place.
+    thin = hdb_shape.column_gaps(hdb_root, hdb_shape.declared_columns(schema))
+
+    if not short and not thin:
+        console.print(
+            f"[green]{hdb_shape.describe(short)}, "
+            f"and every declared column[/] ({len(expected)} tables)"
+        )
         return
-    console.print(f"[yellow]{report}[/]")
+    if short:
+        console.print(f"[yellow]{hdb_shape.describe(short)}[/]")
+    if thin:
+        console.print(f"[yellow]{hdb_shape.describe_columns(thin)}[/]")
     console.print(
-        "\n[dim]`uqf-stack hdb-check --fix` writes an empty copy of each into the "
-        "partitions that lack it. Additive: an existing table directory is never "
-        "touched.[/]"
+        "\n[dim]`uqf-stack hdb-check --fix` writes an empty copy of each missing "
+        "table, and each missing column as its declared type's null. Additive: an "
+        "existing table directory or column file is never touched, and a column "
+        "whose declared TYPE changed is not repaired here.[/]"
     )
     raise typer.Exit(code=1)
 

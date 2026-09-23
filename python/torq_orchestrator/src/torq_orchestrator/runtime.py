@@ -27,21 +27,25 @@ from torq_orchestrator.procs import (
 log = get_logger(__name__)
 
 
-#: The q script that writes an empty table into a partition that lacks it.
-#: q rather than Python because an empty table has to be written with its
-#: schema and enumerated against the HDB's sym file; a directory of the
-#: right name is not a table.
+#: The q script that writes an empty table into a partition that lacks it,
+#: and a declared column into a table that lacks it. q rather than Python
+#: because both have to be written with their schema and enumerated against
+#: the HDB's sym file; a directory of the right name is not a table, and a
+#: file of the right name is not a column.
 FILL_HDB_SCRIPT = "gates/fill_hdb_partitions.q"
 
 
 def fill_hdb_partitions(paths: UqfStackPaths) -> bool:
     """Write an empty copy of every declared table into every partition
-    that lacks one. Returns whether the filler ran at all.
+    that lacks one, and every declared column into every table that lacks
+    one. Returns whether the filler ran at all.
 
-    Idempotent and additive: a table directory that exists is never
-    touched, and a table a partition holds that database.q no longer
-    declares is left alone - that is history, and deleting history is not
-    this function's business.
+    Idempotent and additive: a table directory or column file that exists
+    is never touched, and a table or column a partition holds that
+    database.q no longer declares is left alone - that is history, and
+    deleting history is not this function's business. A column whose
+    declared TYPE changed is reported by `uqf-stack hdb-check`, not
+    repaired here.
 
     NEVER FAILS A BOOTSTRAP. Every `uqf-stack` command bootstraps, so a
     problem here - no q on the path, an HDB mid-write, a permissions
@@ -77,7 +81,9 @@ def fill_hdb_partitions(paths: UqfStackPaths) -> bool:
         )
         return False
     for line in result.stdout.splitlines():
-        if "wrote" in line or "filled" in line:
+        # "added" too, or the column half of the repair happens silently and
+        # an operator reading the log believes the database was untouched.
+        if "wrote" in line or "filled" in line or "added" in line:
             log.info("hdb: {}", line.strip())
     return True
 
