@@ -279,7 +279,10 @@ uqs list processes
 - `processes` - every process's `procname`/`proctype`/`port`/`startwithall`,
   resolved and with any `config-set` overrides applied - the full set
   `config-get`/`config-set`/`start <procname>` accept, without already
-  needing to know a name ahead of time
+  needing to know a name ahead of time - plus the `inputs` and `outputs`
+  its job declares: the tables it subscribes to and publishes, or for a
+  backfill worker the dataset it fills. The same declarations `summary`'s
+  graph columns come from, but readable without a running stack
 - `fields` - `process.csv`'s valid columns (what `config-set`'s `FIELD`
   argument accepts)
 - `overrides` - every `config-set` override currently in effect

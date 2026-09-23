@@ -8,10 +8,11 @@ from __future__ import annotations
 from typing import Any
 
 from uqs.logger import get_logger
-from uqs.model.dependencies import dependency_rows
+from uqs.model.declarations import declaration_calls, symbols
+from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_by_process
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
-from uqs.model.registry import DEFAULT_BASE_PORT
-from uqs.paths import UqsError, UqsPaths
+from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES
+from uqs.paths import WORKER_DIR, UqsError, UqsPaths
 from uqs.stack.env import build_env
 from uqs.stack.procs import (
     _base_process_rows,
@@ -31,9 +32,43 @@ log = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
+#: What `list processes` shows for a process that picks its input when it
+#: starts (`tap1`, via `-tables`) - an empty cell would claim it reads nothing.
+RUNTIME_INPUTS = "(chosen at start)"
+
+
+def _worker_datasets(paths: UqsPaths) -> dict[str, str]:
+    """{procname: the dataset it fills} for every bounded worker.
+
+    A worker writes through its IO manager, not the tickerplant, so it has no
+    publish edge and `outputs_by_process` has nothing for it - yet the dataset
+    is exactly what it produces. Read from the `.qbw.define` literal, the name
+    `uqs new-job --dataset` gives it and its coverage is recorded under.
+    """
+    out: dict[str, str] = {}
+    for path in sorted((paths.repo_root / WORKER_DIR).glob("*.q")):
+        for fn, name, fields in declaration_calls(path.read_text()):
+            if fn != "qbw.define" or not (dataset := symbols(fields.get("dataset", ""))):
+                continue
+            procname = symbols(fields["procname"])[0] if "procname" in fields else f"{name}1"
+            out[procname] = dataset[0]
+    return out
+
+
 def _list_processes(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
+    """Every process.csv row, resolved, with the tables it reads and writes.
+
+    Inputs and outputs come from the same declarations `uqs summary`'s graph
+    columns and the generated `database.q` do, so the three cannot disagree.
+    Static: this is what each process is declared to read and write, not
+    whether anything is feeding it. A vendored TorQ process declares no edges
+    and gets empty cells; a bounded worker's output is the dataset it fills.
+    """
     env = build_env(paths, base_port=base_port)
     overrides = _read_overrides(paths)
+    inputs = inputs_by_process()
+    outputs = {**outputs_by_process(), **{p: (d,) for p, d in _worker_datasets(paths).items()}}
+    dynamic = {p.procname for p in PIPELINES if p.subscribes_dynamic}
     items = []
     for row in _base_process_rows(paths):
         eff = dict(row)
@@ -45,6 +80,10 @@ def _list_processes(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
                 "proctype": eff["proctype"],
                 "port": eff["port"],
                 "startwithall": eff["startwithall"],
+                "inputs": RUNTIME_INPUTS
+                if eff["procname"] in dynamic
+                else ", ".join(inputs.get(eff["procname"], ())),
+                "outputs": ", ".join(outputs.get(eff["procname"], ())),
             }
         )
     return items
