@@ -29,13 +29,10 @@
 // demonstrating that the wide-to-vector reshape composes naturally with
 // a live/incremental feed, not only a one-shot batch load.
 //
-// Narration/status uses lib/log4q.q's INFO/DEBUG/ERROR (see README's
-// Licensing section) - actual table contents still go through `show`,
-// since log4q's %N message formatting serializes a whole value onto one
-// line rather than the readable grid `show` produces.
-//
-// Requires KDB-X: log4q relies on a mid-expression variable assignment/read
-// pattern (see README's Licensing section).
+// Narration/status goes through .qlog (src/etl/core/log.q), the one q
+// logging layer in this tree - actual table contents still go through
+// `show`, since a log line serializes a whole value onto one line rather
+// than the readable grid `show` produces.
 //
 // Run from the repository root, with stdin kept open:
 //   yes "" | q scripts/examples/timer_replay_example.q [n_ticks] [tick_ms]
@@ -64,12 +61,10 @@
 
 \c 400 1000
 \l src/init.q
-\l lib/log4q.q
+\l src/etl/core/log.q
 
-/ Default log4q severity is INFO, which silently no-ops DEBUG calls -
-/ lower it so this example's DEBUG lines actually print.
-.log4q.sevl:`DEBUG;
-key[.log4q.snk] set' .log4q.sev .log4q.sevl;
+/ .qlog suppresses DBG lines by default; this example's narration uses them.
+.qlog.debug 1b;
 
 / ==== Step 1: pre-generate the "historical" tick series, once ====
 / Same EURUSD single-pair spot/scale as cross_markout_example.q's
@@ -118,7 +113,7 @@ system "mkdir -p ",output_dir;
 
 mean_gap:0D00:00:00.200; std_gap:0D00:00:00.050; min_gap:0D00:00:00.050;
 p:1e-9+(1-2e-9)*n_ticks?1.0;
-DEBUG "running: .qstats.inv_ncdf p";
+.qlog.dbg[`timer_replay;"running: .qstats.inv_ncdf p";()!()];
 z:.qstats.inv_ncdf p;
 gaps:min_gap|mean_gap+std_gap*z;
 hist_ts:.z.p+sums gaps;
@@ -130,8 +125,8 @@ hist_spots:1.0850+0.00002*til n_ticks;
 / book_from_wide_levels/symbolize_columns exist to fix, matching how a
 / real CSV/vendor feed would actually arrive.
 hist_wide:([] ts:hist_ts; sym:n_ticks#enlist "EURUSD"),'(mk_wide_row each hist_spots);
-INFO ("historical - %1 pre-generated EURUSD ticks in wide column form, ready to replay";n_ticks);
-DEBUG "running: .qbook.derive_level_groups[cols hist_wide;level_prefix_targets]";
+.qlog.info[`timer_replay;"historical - ",.Q.s1[n_ticks]," pre-generated EURUSD ticks in wide column form, ready to replay";()!()];
+.qlog.dbg[`timer_replay;"running: .qbook.derive_level_groups[cols hist_wide;level_prefix_targets]";()!()];
 level_groups:.qbook.derive_level_groups[cols hist_wide;level_prefix_targets];
 
 / ==== Step 2: replay onto a live, growing quotes table on a timer ====
@@ -154,21 +149,21 @@ cnt:0;
 / interactive prompt.
 .z.ts:{
     wide_row:1#cnt _ hist_wide;
-    DEBUG "running: .qbook.book_from_wide_levels[wide_row;level_groups;`sym]";
+    .qlog.dbg[`timer_replay;"running: .qbook.book_from_wide_levels[wide_row;level_groups;`sym]";()!()];
     row:col_order#.qbook.book_from_wide_levels[wide_row;level_groups;`sym];
     quotes,:row;
-    DEBUG "running: .qmicro.mid_price[quotes`bid_prices;quotes`ask_prices]";
+    .qlog.dbg[`timer_replay;"running: .qmicro.mid_price[quotes`bid_prices;quotes`ask_prices]";()!()];
     mid:.qmicro.mid_price[quotes`bid_prices;quotes`ask_prices];
     output_path set quotes;
-    INFO ("tick %1/%2 - quotes has %3 row(s) now, latest mid %4, persisted to %5";(cnt+1;n_ticks;count quotes;last mid;output_path));
+    .qlog.info[`timer_replay;"tick ",.Q.s1[cnt+1],"/",.Q.s1[n_ticks]," - quotes has ",.Q.s1[count quotes]," row(s) now, latest mid ",.Q.s1[last mid],", persisted to ",.Q.s1[output_path];()!()];
     cnt+:1;
     if[cnt>=n_ticks;
         system "t 0";
-        INFO ("replay complete - stopping the timer; final table persisted at %1";output_path);
+        .qlog.info[`timer_replay;"replay complete - stopping the timer; final table persisted at ",.Q.s1[output_path];()!()];
         show quotes;
         exit 0]};
 
-INFO ("starting replay - one historical tick appended every %1ms of wall-clock time";tick_ms);
+.qlog.info[`timer_replay;"starting replay - one historical tick appended every ",.Q.s1[tick_ms],"ms of wall-clock time";()!()];
 system "t ",string tick_ms;
 
 // exit 0

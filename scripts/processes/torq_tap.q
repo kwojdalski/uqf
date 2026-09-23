@@ -17,6 +17,12 @@
 / `uqs logs -f tap1 | grep quotes`-style filtering works even
 / without narrowing the subscription itself.
 
+/ Logging goes through .qlog like every other process's. tap1 runs no job,
+/ so it does not load uqf's tree - only log.q, which has no load-time
+/ dependencies (TorQ's .lg is looked up per call).
+if[0=count getenv`UQFROOT; '"torq_tap: UQFROOT is not set"];
+system"l ",getenv[`UQFROOT],"/src/etl/core/log.q";
+
 \d .qproc.tap
 
 opts:.Q.opt[.z.x];
@@ -37,7 +43,7 @@ subscribe:{
   / flat, string of a vector needs an explicit join, or "," ends up
   / splicing individual characters in among the table names instead of
   / joining them (threw a 'type error the first time this shipped).
-  .lg.o[`subscribe;"tapping ",$[.qproc.tap.tap_tables~`;"all tables";", " sv string .qproc.tap.tap_tables]," on ",string subproc`procname];
+  .qlog.info[`subscribe;"tapping";`tables`publisher!(.qproc.tap.tap_tables;subproc`procname)];
   / setschema=1b (unlike cross1/vectorize1, which pre-define their own
   / namespaced mirror table): tap1 has no local table of its own for any
   / of this - .sub.subscribe's createtables auto-creates a matching empty
@@ -64,7 +70,7 @@ init:{
 / At ROOT, where the tickerplant calls it (scripts/processes/torq_pipeline.q,
 / invariant 5). Everything else this process owns is in .qproc.tap.
 upd:{[t;x]
-  .lg.o[t; .Q.s1 x];
+  .qlog.info[t;.Q.s1 x;()!()];
  }
 
 / same reasoning as torq_cross_etl.q/torq_vectorize_etl.q: a real
@@ -84,7 +90,7 @@ upd:{[t;x]
 / scripts/processes/torq_pipeline.q, invariant 9, for the reasoning behind
 / the empty bodies.
 endofperiod:{[current_period;next_period;data]
-    .lg.o[`qproc;"end of period ",(string current_period)," -> ",string next_period];
+    .qlog.info[`qproc;"end of period";`from`to!(current_period;next_period)];
     }
 
-endofday:{[dt;data] .lg.o[`qproc;"end of day ",string dt]; }
+endofday:{[dt;data] .qlog.info[`qproc;"end of day";enlist[`date]!enlist dt]; }

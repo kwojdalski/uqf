@@ -4,8 +4,8 @@ Vendored from https://github.com/DataIntellectTech/kdb-parquet at commit
 `e5cd641c321e52c0631fb3ef5ea1ec1e56062ef0` (2026-08-21).
 
 **No LICENSE file exists in the upstream repository** (checked the full git
-tree, not just GitHub's license auto-detection). Unlike `lib/log4q.q`
-(Apache-2.0) and `tests/lib/qunit.q` (CC BY-NC-SA, both documented in this
+tree, not just GitHub's license auto-detection). Unlike `tests/lib/qunit.q`
+(CC BY-NC-SA, documented in this
 repo's top-level README under Licensing), there is no explicit grant of
 rights to copy, modify, or redistribute this code - default copyright
 applies. It was vendored here anyway at the repo owner's explicit request;

@@ -22,13 +22,11 @@ loaded by `src/init.q`.
 - **`schemas.q`** - the 11 empty table definitions, one `\d .envschema` block.
   Not loaded by `src/init.q`; `\l env/schemas.q` on its own works under
   KDB-X with no other dependency.
-- **`seed.q`** - loads `src/init.q` + `schemas.q` + `lib/log4q.q`, then
+- **`seed.q`** - loads `src/init.q` + `schemas.q` + `src/etl/core/log.q`, then
   populates every table with a few example rows that reference each other
   (same `order_id`/`trade_id`/`sym`/venue) so the result reads as one small
-  realistic scenario, not ten unrelated tables. Requires real kdb+/KDB-X,
-  for the same log4q reason every
-  `scripts/*.q` example does (see README's Licensing section). Run from
-  the repository root: `q env/seed.q`.
+  realistic scenario, not ten unrelated tables. Run from the repository
+  root: `q env/seed.q`.
 
 ## Tables
 

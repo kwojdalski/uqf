@@ -92,9 +92,8 @@ run:{[job]
         .qpipe.safe_timer[`$(string job),"_config";.qcfgaudit.period;
             `.qcfgaudit.poll_and_publish;
             "Audit ",(string job)," configuration changes"]];
-    .lg.o[`qproc;"streaming job ",(string job),
-        $[count decl`subscribes; " subscribed to ",", " sv string decl`subscribes; " producing"],
-        $[count decl`publishes; ", publishing ",", " sv string decl`publishes; ", publishing nothing"]];
+    .qlog.info[`qproc;"streaming job wired";
+        `job`subscribes`publishes!(job;decl`subscribes;decl`publishes)];
     job}
 
 \d .
