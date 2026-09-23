@@ -49,30 +49,24 @@
 # --- Genuine gaps, worth closing ---------------------------------------
 # Nothing external stands in the way of these; no test calls them.
 #
-# The two workers below are the clearest case. Every worker declares the same
-# one-line delegators, and `fetch:{[from_ts;to_ts] ...}` is the only one with
-# two same-typed arguments - so a swap there is silent. demo_deals_backfill
-# and demo_events_backfill each have a regression test for exactly that
-# (test_demo_deals_backfill.q, test_event_tape.q); these two have none, which
-# is what this list is for.
-.qwrk.databento_book_backfill.checkpoint
-.qwrk.databento_book_backfill.cleanup
+# ONE worker function is left here, and it is worker-specific: an example
+# table used by that worker's own quality check. Everything else that used to
+# be in this block is covered now, and how says something about baselines.
+#
+# Eighteen `.qwrk` names sat here under the heading that these two workers
+# reach "a real database, a real ODBC driver". They do not. A source takes the
+# FIXTURE path whenever no credential is set - `.qsrc.has_credentials` decides
+# it and `fetch_window` branches on a null handle - and both workers run to
+# `completed` on their fixtures, which test_every_worker_runs.q now does for
+# every declared worker. The reason recorded here was not the real one, and it
+# survived long enough to read as settled.
+#
+# The delegator ARGUMENT order is covered separately and structurally, in
+# test_worker_runtime.q: `.qbw.delegate` reads its parameter names off the
+# shell's own function, so a swap cannot happen per worker. That check does not
+# reduce coverage - reading a parse tree never enters the function - which is
+# why the lifecycle test above was still needed to take these names off.
 .qwrk.databento_book_backfill.example_book
-.qwrk.databento_book_backfill.fetch
-.qwrk.databento_book_backfill.init
-.qwrk.databento_book_backfill.plan
-.qwrk.databento_book_backfill.publish
-.qwrk.databento_book_backfill.quality_check
-.qwrk.databento_book_backfill.run
-.qwrk.databento_book_backfill.spec
-.qwrk.upstream_trades_backfill.checkpoint
-.qwrk.upstream_trades_backfill.cleanup
-.qwrk.upstream_trades_backfill.fetch
-.qwrk.upstream_trades_backfill.init
-.qwrk.upstream_trades_backfill.plan
-.qwrk.upstream_trades_backfill.publish
-.qwrk.upstream_trades_backfill.run
-.qwrk.upstream_trades_backfill.spec
 .qdag.reaction_edges
 .qrun.attach
 .qrun.history

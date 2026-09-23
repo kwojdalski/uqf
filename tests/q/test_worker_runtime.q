@@ -234,4 +234,85 @@ test_a_published_upstream_admits_the_run:{[t]
     .qmatz.stage_completion[`trades;`;`v1;.wrttest.d 1;.wrttest.d 2;500];
     .qunit.assertEquals[.qwrt.require_upstream[`trades;`;`v1;.z.p;.wrttest.d 1;.wrttest.d 2];1b;"a fully published upstream lets the run proceed"]};
 
+/ ---------------------------------------------------------------------------
+/ Inherited delegators: every worker, not two of them
+/ ---------------------------------------------------------------------------
+/ `.qbw.define` STAMPS each worker namespace with a delegator per inherited
+/ method - `.qwrk.x.fetch` is `{[from_ts;to_ts] .qbw.fetch[`x;from_ts;to_ts]}`
+/ and so on. `fetch` is the one that matters: two same-typed timestamps, so a
+/ swap is silent and would fetch a window nobody asked for.
+/ .
+/ Two workers carry a hand-written regression test for exactly that
+/ (test_demo_deals_backfill.q, test_event_tape.q), and the other two carry
+/ none - which is why eighteen `.qwrk` names sit in coverage_baseline.txt.
+/ Writing that test twice more would cover those two and leave the fifth
+/ worker, whenever it arrives, uncovered again.
+/ .
+/ So this asserts the PROPERTY instead. `.qbw.delegate` reads the parameter
+/ names off `.qbw`'s own function and passes them through positionally, so
+/ argument order cannot drift per worker - and that is a fact about the
+/ stamping, checkable once for every worker that exists.
+
+/ Each worker's stamped delegator parameter names.
+/ .
+/ NOT dropped: the delegator takes the shell's arguments MINUS `worker`, which
+/ it supplies itself. `.qbw.fetch` is [worker;from_ts;to_ts] and
+/ `.qwrk.x.fetch` is [from_ts;to_ts], so it is the SHELL side that loses its
+/ first name in the comparison below.
+delegator_args:{[worker;nm]
+    .wrttest.drop_niladic (value value ` sv (.qbw.worker_root,worker),nm)[1]}
+
+/ q spells "takes no arguments" two ways, and both appear here: a lambda
+/ written `{[] ...}` parses to `enlist `` (one empty-symbol parameter), while
+/ dropping `worker` off a one-argument shell function leaves `symbol$()`.
+/ They mean the same thing, so the comparison normalises rather than treating
+/ `.qwrk.x.run` as a mismatch against `.qbw.run`.
+drop_niladic:{[args] $[args~enlist `; `symbol$(); args]}
+
+test_every_worker_inherits_every_method:{[t]
+    workers:.testutil.etl_declaration_names["src/etl/workers"];
+    pairs:raze {[w] {[w;nm] (w;nm)}[w] each .qbw.inherited_methods} each workers;
+    missing:pairs where not {[p] p[1] in .qbfstate.ns_names .qbw.namespace p 0} each pairs;
+    .qunit.assertEquals[count missing;0;
+        "every declared worker has every inherited method stamped onto it"]};
+
+test_every_workers_delegator_takes_the_shells_own_arguments:{[t]
+    / The anti-swap property, for all four workers and every method at once.
+    / A delegator built with its arguments reordered - or with a name the
+    / shell does not use - fails here rather than in whichever worker nobody
+    / wrote a regression test for.
+    workers:.testutil.etl_declaration_names["src/etl/workers"];
+    pairs:raze {[w] {[w;nm] (w;nm)}[w] each .qbw.inherited_methods} each workers;
+    wrong:pairs where not {[p]
+        (1_(value value ` sv `.qbw,p 1)[1])~.wrttest.delegator_args[p 0;p 1]} each pairs;
+    .qunit.assertEquals[count wrong;0;
+        "each stamped delegator takes .qbw's own parameter names, in .qbw's own order"]};
+
+test_fetch_is_the_method_this_protects:{[t]
+    / Executable documentation: fetch is the only inherited method with two
+    / same-typed arguments, which is what makes a swap silent rather than a
+    / type error. If another such method is added, this test says so.
+    two_same:.qbw.inherited_methods where {[nm]
+        args:1_(value value ` sv `.qbw,nm)[1];
+        2=count args} each .qbw.inherited_methods;
+    .qunit.assertEquals[two_same;enlist `fetch;
+        "fetch is the two-argument method; a new one needs the same scrutiny"]};
+
+test_every_workers_spec_reads_its_own_state:{[t]
+    / CALLS each delegator rather than only reading its parse tree, which is
+    / what the three tests above do. Both matter and they are not the same
+    / check: a stamped delegator with correct parameter names can still be
+    / wired to the wrong worker, and `spec` is the one inherited method that
+    / is safe to call on every worker unconditionally - it reads state and
+    / writes none.
+    / .
+    / It is also what takes these names OUT of coverage_baseline.txt: a
+    / structural test proves the shape without ever entering the function,
+    / so the coverage lane rightly still called them uncovered.
+    workers:.testutil.etl_declaration_names["src/etl/workers"];
+    shapes:{[w] asc key (` sv (.qbw.worker_root,w),`spec)[]} each workers;
+    want:count[workers]#enlist asc `source_version`range_from`range_to;
+    .qunit.assertEquals[shapes;want;
+        "every worker's spec returns its own three state keys"]};
+
 \d .
