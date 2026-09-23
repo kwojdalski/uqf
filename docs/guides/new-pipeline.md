@@ -101,13 +101,25 @@ naming its owner in the same plan. It also registers your test's NAMESPACE in
 `run_tests.q` (#350); without that the stub loaded and never ran, so the one
 red the scaffold exists to leave was the one you could not see.
 
-`uv run pytest python/` fails once too, and that one is yours to write:
-`test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
-[`docs/integrations/torq/README.md`](../integrations/torq/README.md) name the
-new process. It is authored prose, so no generator can write it for you;
-`new-job` names the line in its output instead. Everything that IS derived -
-`processes.md`, `src/etl/generated/pipeline_dag.q` and `docs/man.q` - it
-regenerates before it returns.
+`uv run pytest python/` fails **twice** if your job publishes a new table,
+once if it does not, and both are prose for you to write rather than anything
+a generator can produce:
+
+1. `test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
+   [`docs/integrations/torq/README.md`](../integrations/torq/README.md) name
+   the new process.
+2. `test_every_published_table_is_in_the_catalog_or_explicitly_not` asks that
+   [`python/uqf_frontend/catalog/tables.csv`](../../python/uqf_frontend/catalog/tables.csv)
+   describe the new table, or that `_NOT_IN_CATALOG` say why it is absent.
+   Until then the desk front end cannot browse it (FE-07).
+
+The second is a *description*, read by someone deciding whether your table is
+the one they want, which is why the scaffold will not write it: the table's own
+name as its description would pass the test and tell that reader nothing.
+`new-job` names both lines in its output instead.
+
+Everything that IS derived - `processes.md`, `src/etl/generated/pipeline_dag.q`
+and `docs/man.q` - it regenerates before it returns.
 
 The rest of this guide is what to write into that skeleton, and why each
 part is shaped the way it is.

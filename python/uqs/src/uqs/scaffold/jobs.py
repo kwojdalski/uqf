@@ -76,9 +76,24 @@ def _nslist_action(namespace: str) -> FileAction:
     return FileAction(RUN_TESTS_FILE, f"`.{namespace}", mode=WriteMode.APPEND)
 
 
-#: The one registry consequence no generator writes: the TorQ README is
-#: authored prose, and test_generated_docs.py fails until it names the process.
+#: The registry consequences no generator writes, because both are authored
+#: prose for a person to read. Each has a test that fails until it is written,
+#: and a note here is what stops that failure being a surprise.
 _README_NOTE = "name {proc} in docs/integrations/torq/README.md - authored prose, checked by pytest"
+
+#: A new table is invisible to the desk front end until the catalog describes
+#: it (FE-07), and test_catalog_drift.py fails until then. This note was
+#: missing, so a scaffold that published a new table left TWO pytest failures
+#: while naming only one of them - and the guide described only one too.
+#:
+#: The row is not written for you, deliberately: the column is a DESCRIPTION,
+#: read by someone deciding whether the table is the one they want. The table's
+#: own name as its description would satisfy the test and tell that reader
+#: nothing, which is worse than the failure it replaced.
+_CATALOG_NOTE = (
+    "describe {table} in python/uqf_frontend/catalog/tables.csv - authored prose, "
+    "checked by pytest (or add it to _NOT_IN_CATALOG with the reason)"
+)
 
 
 def _expected_table_action(table: str) -> FileAction:
@@ -223,6 +238,8 @@ publish:.qstream.unwired `{name};
     actions.append(_nslist_action(ns))
     notes.append(f"implement .qsub.{name}.{handler}, then replace the scaffolded test")
     notes.append(_README_NOTE.format(proc=proc))
+    if publishes:
+        notes.append(_CATALOG_NOTE.format(table=publishes))
     if not is_feed:
         notes.append("start it with its producers: " + " ".join(sorted(set(subscribes))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)
@@ -308,4 +325,5 @@ def bounded_worker(
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
     notes.append(_README_NOTE.format(proc=proc))
+    notes.append(_CATALOG_NOTE.format(table=dataset))
     return ScaffoldPlan(name=worker, actions=actions, notes=notes)

@@ -369,3 +369,36 @@ def test_the_mode_still_renders_as_its_own_word():
 def test_a_one_line_body_is_described_in_the_singular():
     """The nsList entry is one symbol, so --dry-run used to print "1 lines"."""
     assert "(1 line)" in jobs.FileAction(Path("x"), "`.atest").describe()
+
+
+def test_a_job_publishing_a_new_table_is_told_about_the_desk_catalog():
+    """Both pytest failures a scaffold leaves are prose, and the notes are the
+    only warning of either.
+
+    The catalog note was missing, so publishing a new table left TWO pytest
+    failures while `new-job` named one of them - and the guide described one
+    too. An unannounced failure in a tree with 1030 passing tests reads as
+    "the scaffold is broken", not "your turn".
+    """
+    plan = jobs.streaming_job("catprobe", ["quote"], "cat_probe", "sym:symbol, v:float")
+    notes = " ".join(plan.notes)
+    assert "catalog/tables.csv" in notes
+    assert "cat_probe" in notes
+    assert "_NOT_IN_CATALOG" in notes, "the opt-out has to be offered, not just the row"
+
+
+def test_a_job_publishing_nothing_is_not_sent_to_the_catalog():
+    """A job that keeps its output local adds no table, so the catalog has
+    nothing to describe. A note here would be advice that does not apply,
+    which is how notes stop being read."""
+    plan = jobs.streaming_job("localprobe", ["quote"], None, None)
+    assert "catalog/tables.csv" not in " ".join(plan.notes)
+
+
+def test_a_bounded_worker_is_told_about_its_dataset():
+    """A backfill's new table is its `dataset`, not a `publishes`, so it needs
+    the note by a different name - and the first version of this only wired it
+    into the streaming path."""
+    plan = jobs.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
+    notes = " ".join(plan.notes)
+    assert "catalog/tables.csv" in notes and "fx_probe" in notes
