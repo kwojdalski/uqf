@@ -14,7 +14,6 @@ but `kola`) and carries its own dependencies (`typer`, `rich`, `loguru`,
 ## Layout
 
 ```
-uqf_stack.py       thin backward-compatible shim over src/torq_orchestrator/cli.py
 uqf_stack_mcp.py    FastMCP server exposing the same operations as MCP tools
 src/torq_orchestrator/
   cli.py            the Typer CLI itself - also reachable as the `uqf-stack`
@@ -66,8 +65,6 @@ just longer:
 uv run --project python/torq_orchestrator uqf-stack start all
 ```
 
-The full `.../uqf_stack.py` path form still works too (a thin shim over
-the same CLI, kept for anything that already invokes it that way).
 `uv run --project python/torq_orchestrator` resolves this package's
 dependencies on demand, no separate `uv sync` needed - though `uv sync`
 here also works if you want the `.venv` up front.

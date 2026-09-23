@@ -8,7 +8,7 @@ Licensing section) but neither is wired into `src/init.q` or anything else
 uqf itself runs - this library has no long-running processes for TorQ's
 machinery to manage.
 
-`python/torq_orchestrator/uqf_stack.py` bridges the two vendored trees so
+The `uqf-stack` CLI (`python/torq_orchestrator/`) bridges the two vendored trees so
 you can actually start the demo up and poke at it, without editing or
 writing into either `lib/` directory. The actual bootstrapping/config logic
 lives in `python/torq_orchestrator/src/torq_orchestrator/core.py`, shared
@@ -46,10 +46,9 @@ process topology, table-level data pipeline, and config-generation flow.
 ## Quick start
 
 The CLI is also a `uqf-stack` script entry point
-(`pyproject.toml`'s `[project.scripts]`), which shortens every command
-below - `uv run --project python/torq_orchestrator uqf-stack start all`
-instead of spelling out `uqf_stack.py`'s path. Shorter still, one-time
-setup:
+(`pyproject.toml`'s `[project.scripts]`), so every command below is
+`uv run --project python/torq_orchestrator uqf-stack ...`. Shorter still,
+one-time setup:
 
 ```
 uv tool install --editable python/torq_orchestrator
@@ -88,10 +87,6 @@ uv run --project python/torq_orchestrator uqf-stack start all
 uv run --project python/torq_orchestrator uqf-stack summary
 uv run --project python/torq_orchestrator uqf-stack stop all
 ```
-
-The longer `uv run --project python/torq_orchestrator
-python/torq_orchestrator/uqf_stack.py ...` form (a thin shim over the same
-CLI) still works too, for anything that already invokes it by path.
 
 Run from anywhere - the command resolves its own location and works out
 `lib/torq`/`lib/torq-finance-starter-pack`'s absolute paths itself; `uv run
