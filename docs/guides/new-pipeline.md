@@ -60,26 +60,28 @@ them:
 ```
 $ uqf-stack new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
 $ q tests/run_tests.q
-  .nstest.test_the_runner_runs_every_suite_it_loads
   .sjtest.test_every_job_is_registered
   .tabletest.test_no_undeclared_table_appears
+  .dxprobetest.test_dxprobe_is_implemented     <- yours
 ```
 
-Three edits close them, and none is about your job:
+The third is the one you want. The other two are hand-kept lists that have
+nothing to do with your job being unfinished:
 
-1. Add `.<name>test` to `nsList` in [`tests/run_tests.q`](../../tests/run_tests.q).
-   Until you do, the scaffolded test loads and never runs — which is why the
-   stub is missing from the list above. (#350 would have the scaffold do this.)
-2. Add the job name to `test_every_job_is_registered` in
+1. Add the job name to `test_every_job_is_registered` in
    [`tests/q/test_stream_job.q`](../../tests/q/test_stream_job.q), which keeps
    the list of jobs by hand. (#352 — it is redundant with a generic check.)
-3. If the job publishes a new table, add it to `expected` in
+2. If the job publishes a new table, add it to `expected` in
    [`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q). This one
    is a **deliberate gate**: a new table is either a capability nobody wired up
    or a stray definition, and both deserve a moment's thought.
 
-After those three, `q tests/run_tests.q` fails once, on your stub, which is
-where the work starts.
+After those two, `q tests/run_tests.q` fails once, on your stub, which is where
+the work starts.
+
+The scaffold registers your test's NAMESPACE in `run_tests.q` itself (#350) —
+without that the stub loaded and never ran, so the one red the scaffold exists
+to leave was the one you could not see.
 
 The rest of this guide is what to write into that skeleton, and why each
 part is shaped the way it is.

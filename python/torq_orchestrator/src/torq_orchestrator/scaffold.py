@@ -46,6 +46,7 @@ WORKER_DIR = Path("src/etl/workers")
 TEST_DIR = Path("tests/q")
 TABLES_FILE = Path("scripts/processes/uqf_stack_tables.q")
 REGISTRY_FILE = Path("python/torq_orchestrator/src/torq_orchestrator/registry.py")
+RUN_TESTS_FILE = Path("tests/run_tests.q")
 
 
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -62,7 +63,10 @@ class FileAction:
 
     def describe(self) -> str:
         verb = "create" if self.mode == "create" else "append to"
-        return f"{verb} {self.path} ({len(self.body.splitlines())} lines)"
+        n = len(self.body.splitlines())
+        # The nsList entry is a single symbol, so the count is genuinely 1 here
+        # and "1 lines" is what --dry-run would print.
+        return f"{verb} {self.path} ({n} line{'' if n == 1 else 's'})"
 
 
 @dataclass(frozen=True)
@@ -84,6 +88,30 @@ class ScaffoldPlan:
 #: `types` string is compared against at registration. Note `j` for a long,
 #: not `l`: the first draft of demo_events.q wrote "l" and was refused,
 #: correctly.
+
+
+def test_namespace(base: str, *, bounded: bool = False) -> str:
+    """The q namespace the generated test file declares, without its leading dot.
+
+    Computed here and nowhere else, because it is needed TWICE - by the test
+    file's own `\\d` line and by the entry that registers it in
+    `run_tests.q`'s `nsList` - and the two disagreeing is exactly the bug this
+    registration exists to prevent: a namespace the runner does not know about
+    means the file loads, its tests never run, and the suite stays green.
+
+    A bounded worker gets `bf` so that a backfill and a streaming job of the
+    same base name do not claim one namespace.
+    """
+    return f"{base}bftest" if bounded else f"{base}test"
+
+
+def _nslist_action(namespace: str) -> FileAction:
+    """Register `namespace` in run_tests.q's nsList.
+
+    The runner globs its test FILES but keeps the namespace list by hand, so
+    writing the file is not enough to make its tests run.
+    """
+    return FileAction(RUN_TESTS_FILE, f"`.{namespace}", mode="append")
 
 
 def _check_name(name: str, what: str) -> str:
@@ -211,12 +239,14 @@ publish:.qstream.unwired `{name};
             mode="append",
         )
     )
+    ns = test_namespace(name)
     actions.append(
         FileAction(
             TEST_DIR / f"test_{name}.q",
-            test_stub(name, f"{name}test", f"the {name} streaming job"),
+            test_stub(name, ns, f"the {name} streaming job"),
         )
     )
+    actions.append(_nslist_action(ns))
     notes.append(f"implement .qsub.{name}.{handler}, then replace the scaffolded test")
     if not is_feed:
         notes.append("start it with its producers: " + " ".join(sorted(set(subscribes))))
@@ -260,8 +290,9 @@ def bounded_worker(
         FileAction(REGISTRY_FILE, registry_entry_backfill(proc, worker), mode="append"),
         FileAction(
             TEST_DIR / f"test_{worker}.q",
-            test_stub(worker, f"{name}bftest", f"the {worker} bounded worker"),
+            test_stub(worker, test_namespace(name, bounded=True), f"the {worker} bounded worker"),
         ),
+        _nslist_action(test_namespace(name, bounded=True)),
     ]
     notes = [
         f"write .qfeed.{src}.query - parameterised, never concatenated (ETL-08)",
@@ -304,10 +335,18 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
 def _appended(existing: str, action: FileAction) -> str:
     """`existing` with the action's body added where that file wants it.
 
-    registry.py is the special case: its content belongs INSIDE the PIPELINES
-    tuple, so the body goes before the closing paren rather than at the end
-    of the file.
+    Two files take their content somewhere other than the end, and both refuse
+    rather than guess when they do not look the way this expects - appending to
+    the end of either would be syntactically valid and register nothing.
+
+    registry.py: the entry belongs INSIDE the PIPELINES tuple, so it goes before
+    the closing paren.
+
+    run_tests.q: the namespace belongs inside the `nsList:` symbol list, before
+    its terminating semicolon.
     """
+    if action.path == RUN_TESTS_FILE:
+        return _with_nslist_entry(existing, action.body)
     if action.path != REGISTRY_FILE:
         return existing.rstrip("\n") + "\n" + action.body
     marker = "\n)\n"
@@ -317,3 +356,33 @@ def _appended(existing: str, action: FileAction) -> str:
             "this scaffold cannot tell where an entry goes - add it by hand"
         )
     return existing[: -len(marker)] + "\n" + action.body + ")\n"
+
+
+def _with_nslist_entry(existing: str, entry: str) -> str:
+    """`run_tests.q` with `entry` added to its nsList.
+
+    The list is one long line of backtick symbols ending in `;`, so the entry
+    goes immediately before that semicolon. Refusals rather than guesses:
+    exactly one `nsList:` line must exist and it must end in a semicolon, since
+    appending anywhere else produces a file that loads, runs the same suites as
+    before, and reports nothing missing.
+    """
+    lines = existing.splitlines(keepends=True)
+    found = [i for i, line in enumerate(lines) if line.startswith("nsList:")]
+    if len(found) != 1:
+        raise UqfStackError(
+            f"{RUN_TESTS_FILE} has {len(found)} lines starting `nsList:`, expected 1 - "
+            "this scaffold cannot tell where a namespace goes, so add it by hand"
+        )
+    index = found[0]
+    line = lines[index].rstrip("\n")
+    if not line.endswith(";"):
+        raise UqfStackError(
+            f"{RUN_TESTS_FILE}'s nsList line does not end in `;` - add the namespace by hand"
+        )
+    if entry in line:
+        raise UqfStackError(
+            f"{entry} is already in {RUN_TESTS_FILE}'s nsList - pick another job name"
+        )
+    lines[index] = line[:-1] + entry + ";\n"
+    return "".join(lines)

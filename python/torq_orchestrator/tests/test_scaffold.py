@@ -172,3 +172,75 @@ def test_a_registry_that_does_not_end_in_the_tuple_is_refused(tmp_path: Path):
     )
     with pytest.raises(UqfStackError, match="closing paren"):
         scaffold._appended("PIPELINES = (\n)\nsomething_else = 1\n", action)
+
+
+# ------------------------------------------- registering the test namespace
+
+
+def test_a_scaffolded_job_registers_its_test_namespace():
+    """The bug this closes (#350): the runner globs test FILES but keeps their
+    namespaces by hand, so writing the file was not enough. The scaffolded test
+    loaded and none of its tests ran - the one red the scaffold exists to leave
+    was invisible, and the reader saw three unrelated ones instead."""
+    plan = scaffold.streaming_job("markout2", ["trades"], None, None)
+    paths = [str(a.path) for a in plan.actions]
+    assert str(scaffold.RUN_TESTS_FILE) in paths
+
+
+def test_the_registered_namespace_is_the_one_the_test_file_declares():
+    """The drift this guards against is why `test_namespace` exists as one
+    function: the namespace is needed by the stub's own `\\d` line and by the
+    nsList entry, and a mismatch means the runner registers a namespace nothing
+    declares while the real one never runs - the original bug, wearing a
+    different hat."""
+    for plan in (
+        scaffold.streaming_job("markout2", ["trades"], None, None),
+        scaffold.bounded_worker("fx_rates", "fx_rates", "mid:float"),
+    ):
+        entry = _body(plan, "run_tests.q").strip()
+        # The TEST file, not the job file - both end in .q, and the job file
+        # declares its own `.qsub.<name>` namespace.
+        test_body = next(a.body for a in plan.actions if a.path.name.startswith("test_"))
+        declared = [
+            line.split()[1]
+            for line in test_body.splitlines()
+            if line.startswith("\\d .") and line.strip() != "\\d ."
+        ]
+        assert entry == f"`{declared[0]}", (entry, declared)
+
+
+def test_a_bounded_worker_registers_its_own_namespace():
+    """A backfill and a streaming job of the same base name must not claim one
+    namespace, which is what the `bf` suffix is for."""
+    assert scaffold.test_namespace("fx_rates") == "fx_ratestest"
+    assert scaffold.test_namespace("fx_rates", bounded=True) == "fx_ratesbftest"
+
+
+def test_the_namespace_goes_inside_the_symbol_list():
+    """Before the terminating `;`, not after it - appended at the end of the
+    file it would be a separate statement that registers nothing."""
+    before = "\\l x.q\nnsList:`.atest`.btest;\nres:1\n"
+    after = scaffold._with_nslist_entry(before, "`.ctest")
+    assert "nsList:`.atest`.btest`.ctest;" in after
+    assert after.endswith("res:1\n"), "the rest of the file is untouched"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "no list here\n",
+        "nsList:`.atest;\nnsList:`.btest;\n",
+        "nsList:`.atest\n",
+    ],
+)
+def test_a_run_tests_file_that_does_not_look_right_is_refused(content):
+    """Refuse rather than guess. Appending to the wrong place produces a file
+    that loads, runs exactly the suites it ran before, and reports nothing
+    missing - which is the failure mode being fixed, reintroduced silently."""
+    with pytest.raises(UqfStackError):
+        scaffold._with_nslist_entry(content, "`.ctest")
+
+
+def test_a_namespace_already_listed_is_refused():
+    with pytest.raises(UqfStackError, match="already in"):
+        scaffold._with_nslist_entry("nsList:`.atest`.btest;\n", "`.btest")
