@@ -103,3 +103,19 @@ def unused_port() -> int:
     resolves to the importing package's own conftest, not this one.
     """
     return free_port()
+
+
+@pytest.fixture
+def q_binary() -> tuple[str, dict[str, str]]:
+    """`find_q_binary`, as a fixture, skipping the test when there is no q.
+
+    A fixture for the reason `start_q` gives: `from conftest import ...`
+    resolves to the importing package's own conftest, not this one.
+    """
+    return find_q_binary()
+
+
+@pytest.fixture
+def repo_root() -> Path:
+    """The repository root, for a test that runs a script by path."""
+    return REPO_ROOT

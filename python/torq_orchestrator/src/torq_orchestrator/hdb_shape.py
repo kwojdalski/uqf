@@ -21,9 +21,21 @@ which ship holding `quote` and `trade` and nothing else, are never touched
 at all. A fresh checkout is therefore broken before it has run anything
 (#348).
 
+THE SAME FAULT HAS A SECOND LEVEL. A partition can hold every declared
+table and still fail the query, because a table it holds is missing a
+COLUMN added to the schema after that partition was written:
+
+    ./2026.01.01/book/venue. OS reports: No such file or directory
+
+Same cause, and the error is actually kinder here - it names the partition
+and the column - but nothing detected it until now, and `.Q.chk` does not
+address columns at all. `column_gaps` below is the table-level check one
+level down.
+
 This module only LOOKS. Filling the gaps needs q - an empty table has to
-be written with its schema, enumerated against the HDB's sym file - and
-that is `scripts/gates/fill_hdb_partitions.q`.
+be written with its schema, a default column has to carry the declared
+type, and symbol columns have to be enumerated against the HDB's sym file
+- and that is `scripts/gates/fill_hdb_partitions.q`.
 """
 
 from __future__ import annotations
@@ -42,6 +54,13 @@ _PARTITION = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 #: same convention schemas.py and plant_schema.py read by, applied to the
 #: merged file so vendored tables count too.
 _DEFINITION = re.compile(r"^([a-z_0-9]+):\(\[\]", re.MULTILINE)
+
+#: One `name:` inside a table definition's body. Applied to the text BETWEEN
+#: the `([]` and its closing `)`, so it cannot match a table definition.
+#: Tolerates the attribute forms this tree writes - `` sym:`g#`symbol$() ``
+#: and `` time:`p#`timestamp$() `` - because the attribute sits on the value,
+#: after the colon, and this only reads what is before it.
+_COLUMN = re.compile(r"(?:^|[;(\[])\s*([a-z_][a-z_0-9]*)\s*:")
 
 #: Files that live beside the partitions and are not one. `sym` is the
 #: enumeration domain every symbol column points into; par.txt names a
@@ -107,4 +126,97 @@ def describe(short: dict[str, set[str]]) -> str:
         shown = ", ".join(missing[:6])
         more = f" (+{len(missing) - 6} more)" if len(missing) > 6 else ""
         lines.append(f"  {name}: {len(missing)} missing - {shown}{more}")
+    return "\n".join(lines)
+
+
+def declared_columns(generated_schema: str) -> dict[str, list[str]]:
+    """{table: its declared columns, in declaration order}.
+
+    Scans to the matching `)` rather than to the end of the line, so a
+    definition wrapped across lines is read whole. Order is kept because a
+    report that lists columns in schema order is readable beside the file
+    the reader will open next; nothing here depends on it.
+    """
+    out: dict[str, list[str]] = {}
+    for match in _DEFINITION.finditer(generated_schema):
+        start = match.end()  # just past `([]`
+        depth = 1
+        i = start
+        while i < len(generated_schema) and depth:
+            if generated_schema[i] == "(":
+                depth += 1
+            elif generated_schema[i] == ")":
+                depth -= 1
+            i += 1
+        body = generated_schema[start : i - 1]
+        seen: list[str] = []
+        for name in _COLUMN.findall(body):
+            if name not in seen:
+                seen.append(name)
+        out[match.group(1)] = seen
+    return out
+
+
+def table_columns(table_dir: Path) -> set[str]:
+    """The columns a splayed table holds on disk.
+
+    Every column is one file in the table's directory. Two exceptions make
+    a bare listing wrong, and both are why this is a function:
+
+    * `.d` records the column order and is not a column.
+    * A nested column - this tree has several, `bid_prices` and friends -
+      writes TWO files, `bid_prices` and `bid_prices#`. It is one column,
+      and no schema declares `bid_prices#`, so the suffix is stripped and
+      the result de-duplicated by the set.
+    """
+    if not table_dir.is_dir():
+        return set()
+    return {
+        entry.name.removesuffix("#")
+        for entry in table_dir.iterdir()
+        if entry.is_file() and entry.name != ".d"
+    }
+
+
+def column_gaps(hdb_root: Path, declared: dict[str, list[str]]) -> dict[str, dict[str, set[str]]]:
+    """{partition: {table: the declared columns it does not hold}}.
+
+    Only tables the partition actually holds are examined: one it lacks
+    entirely is `gaps`' finding, not this one, and reporting it twice would
+    make a fresh checkout's output twice as long for one fault.
+
+    A column on disk that nothing declares is NOT reported, for the same
+    reason `gaps` ignores an undeclared table: it is history.
+    """
+    short: dict[str, dict[str, set[str]]] = {}
+    for name in partitions(hdb_root):
+        by_table: dict[str, set[str]] = {}
+        for table, columns in declared.items():
+            table_dir = hdb_root / name / table
+            if not table_dir.is_dir():
+                continue
+            missing = set(columns) - table_columns(table_dir)
+            if missing:
+                by_table[table] = missing
+        if by_table:
+            short[name] = by_table
+    return short
+
+
+def describe_columns(short: dict[str, dict[str, set[str]]]) -> str:
+    """The column gaps as a report, oldest partition first.
+
+    One line per (partition, table), because that pair is what the fix acts
+    on and what the kdb+ error names.
+    """
+    if not short:
+        return "every table holds every declared column"
+    total = sum(len(cols) for tables in short.values() for cols in tables.values())
+    lines = [f"{total} column(s) missing across {len(short)} partition(s):"]
+    for name in sorted(short):
+        for table in sorted(short[name]):
+            missing = sorted(short[name][table])
+            shown = ", ".join(missing[:6])
+            more = f" (+{len(missing) - 6} more)" if len(missing) > 6 else ""
+            lines.append(f"  {name}/{table}: {shown}{more}")
     return "\n".join(lines)

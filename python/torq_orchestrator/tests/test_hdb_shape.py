@@ -118,3 +118,84 @@ def test_the_smoke_lane_reports_an_unrectangular_hdb_as_its_own_kind():
         "2015.01.07: 2 missing",
     )
     assert "hdb-not-rectangular" in str(finding)
+
+
+# --- columns: the same fault one level down ------------------------------
+
+COLUMN_SCHEMA = """\
+book:([]time:`timestamp$(); sym:`g#`symbol$(); px:`float$(); venue:`symbol$())
+quotes:([]time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:())
+"""
+
+
+def _splay(table_dir: Path, columns: list[str], nested: tuple[str, ...] = ()) -> Path:
+    """A splayed table on disk: one file per column, plus `.d`.
+
+    `nested` names the columns to write the way kdb+ writes a list of
+    lists — two files, `c` and `c#` — because that shape is the reason
+    `table_columns` cannot be a plain directory listing.
+    """
+    table_dir.mkdir(parents=True)
+    for column in columns:
+        (table_dir / column).write_bytes(b"")
+        if column in nested:
+            (table_dir / f"{column}#").write_bytes(b"")
+    (table_dir / ".d").write_bytes(b"")
+    return table_dir
+
+
+def test_declared_columns_are_read_in_order_with_attributes_tolerated():
+    """`` sym:`g#`symbol$() `` declares a column named sym; the `g#` sits on
+    the value, and a reader that stopped at the backtick would invent one."""
+    declared = hdb_shape.declared_columns(COLUMN_SCHEMA)
+    assert declared["book"] == ["time", "sym", "px", "venue"]
+    assert declared["quotes"] == ["time", "sym", "bid_prices", "bid_sizes"]
+
+
+def test_a_nested_column_is_one_column_not_two(tmp_path):
+    """kdb+ writes `bid_prices` and `bid_prices#` for a list of lists. No
+    schema declares the second, so a bare listing would report a column
+    missing that is present and demand one that cannot exist."""
+    table = _splay(tmp_path / "book", ["time", "bid_prices"], nested=("bid_prices",))
+    assert hdb_shape.table_columns(table) == {"time", "bid_prices"}
+
+
+def test_the_dot_d_file_is_not_a_column(tmp_path):
+    table = _splay(tmp_path / "book", ["time", "px"])
+    assert ".d" not in hdb_shape.table_columns(table)
+
+
+def test_a_partition_short_of_a_column_is_named_with_the_column(tmp_path):
+    """The gap this whole change exists for: every table present, and the
+    query still fails on `./2026.01.01/book/venue`."""
+    _splay(tmp_path / "2026.01.01" / "book", ["time", "sym", "px"])
+    _splay(tmp_path / "2026.01.02" / "book", ["time", "sym", "px", "venue"])
+    thin = hdb_shape.column_gaps(tmp_path, {"book": ["time", "sym", "px", "venue"]})
+    assert thin == {"2026.01.01": {"book": {"venue"}}}
+
+
+def test_a_table_the_partition_lacks_entirely_is_not_a_column_gap(tmp_path):
+    """That is `gaps`' finding. Reporting it here as well would make a fresh
+    checkout print every fault twice, and every column of every table."""
+    _splay(tmp_path / "2026.01.01" / "quote", ["time", "sym"])
+    thin = hdb_shape.column_gaps(tmp_path, {"quote": ["time", "sym"], "book": ["time", "venue"]})
+    assert thin == {}
+
+
+def test_a_column_nobody_declares_any_more_is_not_reported(tmp_path):
+    """Same rule as an undeclared table: it is history, and deleting history
+    is not this check's business."""
+    _splay(tmp_path / "2026.01.01" / "book", ["time", "sym", "old_venue"])
+    thin = hdb_shape.column_gaps(tmp_path, {"book": ["time", "sym"]})
+    assert thin == {}
+
+
+def test_the_column_report_names_partition_and_table_together(tmp_path):
+    """That pair is what the fix acts on and what the kdb+ error names."""
+    report = hdb_shape.describe_columns({"2026.01.01": {"book": {"venue", "fee"}}})
+    assert "2026.01.01/book" in report
+    assert "fee, venue" in report
+
+
+def test_a_complete_database_says_so_plainly():
+    assert hdb_shape.describe_columns({}) == "every table holds every declared column"
