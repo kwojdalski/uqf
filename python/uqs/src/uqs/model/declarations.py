@@ -138,8 +138,16 @@ def dictionary_fields(expr: str) -> dict[str, str]:
 
 
 def symbols(value: str) -> tuple[str, ...]:
-    """A symbol value: `` `a`b ``, `` enlist `a ``, or an empty `` `symbol$() ``."""
+    """A symbol value: `` `a`b ``, `` enlist `a ``, `` (enlist `a) ``, or an empty
+    `` `symbol$() ``.
+
+    The parenthesised form is the one a single-source normalizer's
+    `(enlist `a)!enlist `xf` puts before its `!`; read without stripping them
+    it came back as `(enlist` and `a)`.
+    """
     value = value.strip()
+    if value.startswith("(") and value.endswith(")"):
+        value = value[1:-1].strip()
     if value.startswith("enlist"):
         value = value[len("enlist") :].strip()
     if "symbol$()" in value:

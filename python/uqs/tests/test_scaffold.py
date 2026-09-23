@@ -467,3 +467,85 @@ def test_without_the_plant_every_published_table_is_new():
     """The plan-only call, as the tests above this section make it."""
     plan = jobs.streaming_job("j", ["anything"], "orders", "v:float")
     assert "orders:([]" in _body(plan, str(jobs.TABLES_FILE))
+
+
+# ------------------------------------------------------------ the desk catalog
+
+
+def test_a_new_table_gets_its_catalog_entry_with_a_placeholder_description():
+    plan = jobs.streaming_job("cat2", ["quote"], "cat_two", "sym:symbol, v:float, n:long")
+    assert _body(plan, "tables.csv").startswith('cat_two,"SCAFFOLDED:')
+    assert _body(plan, "columns.csv").splitlines() == [
+        "cat_two,time,timestamp",
+        "cat_two,sym,symbol",
+        "cat_two,v,float",
+        "cat_two,n,long",
+    ]
+    assert _body(plan, "test_catalog_drift.py") == "cat_two"
+
+
+def test_a_worker_dataset_gets_a_catalog_entry_only_when_it_is_new():
+    new = jobs.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
+    assert _body(new, "tables.csv").startswith('fx_probe,"SCAFFOLDED:')
+    old = jobs.bounded_worker("fxprobe", "fx_probe", "mid:float", define_table=False)
+    assert not any(str(a.path).endswith("tables.csv") for a in old.actions)
+
+
+def test_a_type_the_catalog_cannot_hold_leaves_the_note_instead():
+    plan = jobs.streaming_job("cat3", ["quote"], "cat_three", "sym:symbol, d:date")
+    assert not any("catalog" in str(a.path) for a in plan.actions)
+    assert "not scaffolded: d has no catalog type" in " ".join(plan.notes)
+
+
+_DRIFT = 'x = 1\n_TICKERPLANT_TABLES = [\n    "trades",\n    "orders",\n]\ny = 2\n'
+
+
+def test_the_catalog_list_entry_goes_before_the_closing_bracket():
+    out = write._with_catalog_checked_table(_DRIFT, "cat_two")
+    assert out.splitlines()[1:6] == [
+        "_TICKERPLANT_TABLES = [",
+        '    "trades",',
+        '    "orders",',
+        '    "cat_two",',
+        "]",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("content", "table", "message"),
+    [
+        (_DRIFT, "orders", "already in"),
+        ("_TICKERPLANT_TABLES = [\n", "t", "no closing"),
+        ("nothing here\n", "t", "0 `_TICKERPLANT_TABLES"),
+    ],
+)
+def test_a_catalog_list_that_does_not_look_right_is_refused(content, table, message):
+    with pytest.raises(UqsError, match=message):
+        write._with_catalog_checked_table(content, table)
+
+
+# ------------------------------------------------ the output-contract driver
+
+
+def _test_file(plan: jobs.ScaffoldPlan, name: str) -> str:
+    return _body(plan, f"test_{name}.q")
+
+
+def test_a_job_that_subscribes_and_publishes_gets_a_throwing_contract_driver():
+    """test_job_output_contracts.q finds it by this exact name, in this
+    namespace, and it must throw until written rather than pass on nothing."""
+    body = _test_file(jobs.streaming_job("zz", ["quote"], "zz_out", "v:float"), "zz")
+    assert "\\d .zztest" in body and "contract_driver:{[]" in body
+    driver = body[body.index("contract_driver:") :]
+    assert "'\"zz: write .zztest.contract_driver" in driver, "it throws"
+    assert "SCAFFOLDED" in body[body.index("test_zz_is_implemented") :], "and is marked"
+
+
+@pytest.mark.parametrize(
+    ("subscribes", "publishes", "columns"),
+    [([], "feed_out", "v:float"), (["quote"], None, None)],
+    ids=["a-feed-runs-on-its-timer", "a-job-publishing-nothing-has-nothing-to-check"],
+)
+def test_no_driver_where_the_contract_test_needs_none(subscribes, publishes, columns):
+    body = _test_file(jobs.streaming_job("zz", subscribes, publishes, columns), "zz")
+    assert "contract_driver" not in body

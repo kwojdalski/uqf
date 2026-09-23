@@ -89,14 +89,19 @@ row of the declared shape. Replace it before trusting a run.
 
 ### What a fresh scaffold leaves red
 
-The generated handler throws and the generated test fails, and that is the
-one q failure you see:
+The generated handler throws and the generated test fails. For a job that
+subscribes and publishes, its scaffolded test also carries a
+`contract_driver` that throws until written - the batch
+[`tests/q/test_job_output_contracts.q`](../../tests/q/test_job_output_contracts.q)
+drives the job with to hold every table it publishes to its plant table:
 
 ```
-$ uqs new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
-$ q tests/run_tests.q
-  .dxprobetest.test_dxprobe_is_implemented
+uqs new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
+q tests/run_tests.q
 ```
+
+reports `.dxprobetest.test_dxprobe_is_implemented`, and the `.jobouttest`
+tests that drive every publishing job fail on the throwing driver.
 
 Nothing else in the q suite needs an edit. `test_every_job_is_registered`
 derives its jobs from `src/etl/streaming/` (#352), and the scaffold adds a
@@ -107,22 +112,27 @@ naming its owner in the same plan. It also registers your test's NAMESPACE in
 `run_tests.q` (#350); without that the stub loaded and never ran, so the one
 red the scaffold exists to leave was the one you could not see.
 
-`uv run pytest python/` fails **twice** if your job publishes a new table,
-once if it does not, and both are prose for you to write rather than anything
-a generator can produce:
+`uv run pytest python/uqs` fails twice:
 
-1. `test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
+1. `test_no_scaffold_left.py` lists, by `path:line`, every placeholder still
+   marked `SCAFFOLDED` - the handler, the test, the driver, the job's `note`,
+   and for a new table its desk catalog description. That list is the to-do
+   list; each line clears when its placeholder is replaced and the marker
+   deleted with it.
+2. `test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
    [`docs/integrations/torq/README.md`](../integrations/torq/README.md) name
-   the new process.
-2. `test_every_published_table_is_in_the_catalog_or_explicitly_not` asks that
-   [`python/uqf_frontend/catalog/tables.csv`](../../python/uqf_frontend/catalog/tables.csv)
-   describe the new table, or that `_NOT_IN_CATALOG` say why it is absent.
-   Until then the desk front end cannot browse it (FE-07).
+   the new process - authored prose, so the one step with no placeholder.
 
-The second is a *description*, read by someone deciding whether your table is
-the one they want, which is why the scaffold will not write it: the table's own
-name as its description would pass the test and tell that reader nothing.
-`new-job` names both lines in its output instead.
+A new table's desk catalog entry is written for you: its columns in
+[`catalog/columns.csv`](../../python/uqf_frontend/catalog/columns.csv), its
+name in `test_catalog_drift.py`'s `_TICKERPLANT_TABLES`, and a SCAFFOLDED
+row in [`catalog/tables.csv`](../../python/uqf_frontend/catalog/tables.csv).
+The description in that row is yours: it is read by someone deciding whether
+your table is the one they want, and the table's own name there would pass
+every test and tell them nothing. If the desk should not see the table,
+delete its catalog rows and add it to `_NOT_IN_CATALOG` with the reason. A
+column type the catalog has no equivalent for (`int`, `date`, ...) gets a
+note instead, and the catalog step is by hand.
 
 Everything that IS derived - `processes.md`, `src/etl/generated/pipeline_dag.q`
 and `docs/man.q` - it regenerates before it returns.
@@ -197,6 +207,9 @@ column, type and order. Two ship: `executions` (`trades` + `crypto_trades`)
 and `marks` (`quote` + `crypto_book`), which is how `posbook1` holds FX and
 crypto positions in one book without knowing either market's tape format.
 A third market is a mapping in a normalizer, not a branch in a consumer.
+`uqs new-job NAME --kind normalizer --subscribes a,b --columns ...` scaffolds
+one: the canonical table NAME, and per source its schema, a throwing mapping
+and a typed example row, so the file loads while each mapping stays red.
 
 ```q
 .qnorm.define[`executions;`procname`output`sources!(

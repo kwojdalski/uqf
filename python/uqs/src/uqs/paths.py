@@ -40,6 +40,14 @@ STACK_TABLES_TEST = TEST_DIR / "test_stack_tables.q"
 
 PROCESS_SCRIPTS_DIR = Path("scripts/processes")
 TABLES_FILE = PROCESS_SCRIPTS_DIR / "uqs_tables.q"
+
+#: The desk front end's catalog: what a table is for, and its columns. A table
+#: absent from it cannot be browsed, and `test_catalog_drift.py` - whose
+#: `_TICKERPLANT_TABLES` list must name every catalogued plant table - fails.
+CATALOG_DIR = Path("python/uqf_frontend/catalog")
+CATALOG_TABLES = CATALOG_DIR / "tables.csv"
+CATALOG_COLUMNS = CATALOG_DIR / "columns.csv"
+CATALOG_DRIFT_TEST = Path("python/uqf_frontend/tests/test_catalog_drift.py")
 #: Every process's port offset, append-only. Generated: a process's port is
 #: the one fact about it no declaration can supply, because it has to survive
 #: other processes being added around it.
