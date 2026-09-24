@@ -13,7 +13,7 @@
 / WHICH job this process runs comes from the name it was started under:
 / every job declares the procname that runs it, and TorQ sets .proc.procname
 / before this file loads, so process.csv needs nothing beyond the load
-/ column. UQF_STREAM_JOB overrides it for a manual run outside TorQ.
+/ column. `-job` on the command line overrides it for a manual run.
 / .
 / This file is the ONLY place a streaming job meets TorQ: .qpipe for the
 / subscription, the publish handle and the timer. The job files know nothing
@@ -27,19 +27,23 @@
 
 \d .qproc.stream
 
-/ The job this process runs: UQF_STREAM_JOB when set, otherwise whichever
-/ job claims this process's own name.
+/ The job this process runs: the one `-job` names, otherwise whichever job
+/ claims this process's own name - which is how the stack starts every one.
+/ `-job` is for running a job by hand, and is the flag run_stream.q takes for
+/ the same thing. It replaced a UQF_STREAM_JOB environment variable, which
+/ outlived the run it was exported for.
 / @return the job name as a symbol
-/ @throws error when the override names nothing, or no job claims this process
+/ @throws error when -job names nothing registered, or no job claims this process
 which_job:{[]
-    raw:getenv `UQF_STREAM_JOB;
+    opts:.Q.opt .z.x;
+    raw:$[`job in key opts; first opts`job; ""];
     if[count raw;
         job:`$raw;
         if[not job in .qstream.registered[];
-            '"torq_stream: UQF_STREAM_JOB names ",raw,", which is not a registered streaming job - registered: ",", " sv string .qstream.registered[]];
+            '"torq_stream: -job names ",raw,", which is not a registered streaming job - registered: ",", " sv string .qstream.registered[]];
         :job];
     if[()~key `.proc;
-        '"torq_stream: not running under TorQ and UQF_STREAM_JOB is unset - one of the two has to say which job this is"];
+        '"torq_stream: not running under TorQ and no -job given - one of the two has to say which job this is"];
     .qstream.for_procname .proc.procname}
 
 / Subscribe, wire the job's publish seam to the tickerplant, install the

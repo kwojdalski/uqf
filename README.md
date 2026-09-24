@@ -148,22 +148,19 @@ uv run uqs summary            # up/down, pid, port and heartbeat per process
 uv run uqs query "count quotes" --port 6052   # 6052 = base port + 2 = rdb1
 ```
 
-**Run a backfill.** A bounded worker takes its range from the environment
-and exits once the window is covered, which is why it is a job an operator
-or Airflow triggers rather than a process that starts with the stack. It
-registers with discovery, so the fleet above has to be up:
+**Run a backfill.** A bounded worker runs over a range and exits once the
+window is covered, which is why it is a job an operator or Airflow triggers
+rather than a process that starts with the stack. It registers with
+discovery, so the fleet above has to be up:
 
 ```
-UQF_BACKFILL_WORKER=demo_deals_backfill \
-UQF_BACKFILL_VERSION=v1 \
-UQF_BACKFILL_FROM=2026.09.13D00:00 \
-UQF_BACKFILL_TO=2026.09.15D00:00 \
-  uv run uqs start deals_backfill1
+uv run uqs backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15
 ```
 
-All four variables are required together: the process refuses to start and
-names every missing one at once, because a backfill that silently defaulted
-its range would publish the wrong window and record coverage for it.
+`--version`, `--from` and `--to` are all required, and a date without an
+offset is UTC: a backfill that silently defaulted its range would publish the
+wrong window and record coverage for it. `uqs` finds the process that runs
+the worker and passes all four to it as flags on its start line.
 
 **Add a pipeline.** `uqs new-job` scaffolds one of three shapes, and
 `--dry-run` lists every file it would create or append to without writing

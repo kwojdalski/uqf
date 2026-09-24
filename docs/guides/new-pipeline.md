@@ -493,16 +493,12 @@ covered:           1
 
 Five daily windows over a five-day range, each published and recorded.
 
-As a process, which is what an orchestrator starts — the worker and its
-range come from the environment, because a backfill that guessed a range
-would publish the wrong window and record it as covered:
+As a process, which is what an orchestrator starts — the worker, its source
+version and its range are all required flags, because a backfill that
+guessed a range would publish the wrong window and record it as covered:
 
 ```
-UQF_BACKFILL_WORKER=fx_rates_backfill \
-UQF_BACKFILL_VERSION=v1 \
-UQF_BACKFILL_FROM=2026.09.11D00:00 \
-UQF_BACKFILL_TO=2026.09.16D00:00 \
-  q scripts/processes/torq_backfill.q
+uqs backfill fx_rates_backfill --version v1 --from 2026-09-11 --to 2026-09-16
 ```
 
 ## 5. Check what it claims

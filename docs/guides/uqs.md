@@ -258,6 +258,10 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
+backfill WORKER --version V --from T --to T [--port N]
+                                      run a bounded worker over [--from, --to); dates
+                                      without an offset are UTC. Passed to the process
+                                      as flags, never environment variables
 clean                                 wipe output/uqs/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the

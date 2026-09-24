@@ -280,8 +280,9 @@ def test_a_backfill_is_launched_detached_and_reports_where_to_watch(writeable, m
     assert seen["new_session"] is True, "a restart of the API must not kill a running backfill"
 
 
-def test_the_range_reaches_the_process_as_q_timestamps(writeable, monkeypatch):
-    """`scripts/processes/torq_backfill.q` parses its bounds with "P"$, which wants
+def test_the_range_reaches_the_process_as_flags_with_q_timestamps(writeable, monkeypatch):
+    """`scripts/processes/torq_backfill.q` reads -worker, -version, -from and -to
+    off its command line, and parses the bounds with "P"$, which wants
     2026.09.11D00:00:00 rather than ISO-8601. Converting here keeps the HTTP
     surface ISO like every other timestamp it takes."""
     seen: dict[str, Any] = {}
@@ -290,16 +291,28 @@ def test_the_range_reaches_the_process_as_q_timestamps(writeable, monkeypatch):
         pid = 1
 
     monkeypatch.setattr(
-        subprocess, "Popen", lambda cmd, **kw: (seen.update(env=kw["env"]), FakeProc())[1]
+        subprocess,
+        "Popen",
+        lambda cmd, **kw: (seen.update(cmd=cmd, env=kw["env"]), FakeProc())[1],
     )
     _patch_bootstrap(monkeypatch)
     writeable.post("/control/backfill", json=_backfill_body())
 
-    env = seen["env"]
-    assert env["UQF_BACKFILL_WORKER"] == "demo_deals_backfill"
-    assert env["UQF_BACKFILL_VERSION"] == "v1"
-    assert env["UQF_BACKFILL_FROM"].startswith("2026.09.11D00:00:00")
-    assert env["UQF_BACKFILL_TO"].startswith("2026.09.12D00:00:00")
+    cmd = seen["cmd"]
+    flags = dict(zip(cmd[2::2], cmd[3::2], strict=True))
+    assert flags["-worker"] == "demo_deals_backfill"
+    assert flags["-version"] == "v1"
+    assert flags["-from"].startswith("2026.09.11D00:00:00")
+    assert flags["-to"].startswith("2026.09.12D00:00:00")
+    assert not any(k.startswith("UQF_BACKFILL") for k in seen["env"]), "flags, not env"
+
+
+def test_a_backfill_value_a_shell_would_interpret_is_refused(writeable, monkeypatch):
+    """The flags reach q on a start line, so a value like `v1;rm` is refused
+    before any process starts - the same rule `uqs backfill` applies."""
+    _patch_bootstrap(monkeypatch)
+    resp = writeable.post("/control/backfill", json=_backfill_body(source_version="v1;rm"))
+    assert resp.status_code == 422
 
 
 @pytest.mark.parametrize("field", ["worker", "source_version", "range_from", "range_to"])

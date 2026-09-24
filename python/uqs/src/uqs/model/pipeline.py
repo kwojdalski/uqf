@@ -24,8 +24,8 @@ PIPELINE_LIB_SCRIPT = "processes/torq_pipeline.q"
 #: were EIGHT near-identical scripts here before, one per job.
 STREAM_RUNNER_SCRIPT = "processes/torq_stream.q"
 
-#: The one process script every bounded worker runs under;
-#: UQF_BACKFILL_WORKER names which worker at runtime.
+#: The one process script every bounded worker runs under; its -worker flag,
+#: which `uqs backfill` passes, names which worker at runtime.
 BACKFILL_RUNNER_SCRIPT = "processes/torq_backfill.q"
 
 # The access list a real .sub.subscribe subscriber needs: an ETL process
@@ -133,7 +133,7 @@ class Pipeline:
     # edge exists to declare or to verify.
     subscribes_dynamic: bool = False
     # For a backfill: the .qbw worker this process runs. One script serves
-    # every worker and UQF_BACKFILL_WORKER names which at runtime, so
+    # every worker and its -worker flag names which at runtime, so
     # without this the link between a process and its worker exists only
     # in an operator's head - which is how two declared workers ended up
     # with no process at all and nothing noticed (#283).

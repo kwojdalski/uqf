@@ -35,6 +35,7 @@ from __future__ import annotations
 #
 # isort: off
 from uqs.cli import lifecycle  # noqa: F401
+from uqs.cli import backfill  # noqa: F401
 from uqs.cli import summary  # noqa: F401
 from uqs.cli import inspect  # noqa: F401
 from uqs.cli import config  # noqa: F401
