@@ -5,7 +5,7 @@ right for testing the API layer - and means the two classes that actually
 open connections sat at 68% and 72%, their error paths never run. What those
 paths decide is what an operator sees: an unreachable gateway, a q error, the
 EOD reload window and a timeout are four different messages with four
-different next steps (FE-12), told apart only by classifying q's error text.
+different next steps, told apart only by classifying q's error text.
 
 The q process is plain q, not a TorQ gateway. For `route` it defines a
 `.gw.syncexec` that simply evaluates the query list it receives - which is
@@ -89,7 +89,7 @@ def test_a_failing_call_does_not_leak_its_connection(q_port):
     ],
 )
 def test_q_error_text_is_classified_into_what_the_operator_does_next(text, kind):
-    """FE-12: a reload is transient and retried, a timeout says the query is
+    """A reload is transient and retried, a timeout says the query is
     too heavy, anything else is the query's own fault."""
     assert isinstance(_classify(Exception(text)), kind)
 

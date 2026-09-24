@@ -70,7 +70,7 @@ def require_writes(settings: Settings) -> None:
         raise WritesDisabled(
             "control routes are disabled; set UQF_FRONTEND_ENABLE_WRITES=true on the "
             "server to enable them. They are off by default because this deployment "
-            "has one shared credential and a claimed identity (FE-15, FE-20)"
+            "has one shared credential and a claimed identity"
         )
 
 
@@ -84,7 +84,7 @@ def _paths(settings: Settings):
 
     `stack_paths.default_paths()` resolves the tree from the orchestrator package's
     own location, which is right when both are installed from this workspace
-    - the single-host deployment FE-22 describes. `UQF_FRONTEND_STACK_ROOT`
+    - the single-host deployment this tree runs. `UQF_FRONTEND_STACK_ROOT`
     overrides it for the case they are not, and is checked against the tree
     it names rather than trusted, so a wrong path fails here instead of
     starting the wrong stack.
@@ -238,7 +238,7 @@ def start_backfill(
     backfill runs for as long as its range takes; an HTTP request that
     blocked on one would time out somewhere in the middle and tell the caller
     nothing about whether the work continued. The worker writes a status file
-    on every transition (FE-21), and `/ops/backfill` already reads it - so
+    on every transition, and `/ops/backfill` already reads it - so
     the honest answer to "did it work" is that endpoint, not this one's
     response body.
 

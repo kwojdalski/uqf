@@ -4,7 +4,7 @@ Reads the status files `.qstatus.write_status` (`src/etl/core/status.q`)
 writes, and translates them into Airflow's sensor vocabulary — a poke that
 is pending, succeeded, or failed.
 
-This answers FE-21 / issue #55: Airflow/backfill task status reaches the
+This answers issue #55: Airflow/backfill task status reaches the
 frontend (and, here, Airflow itself) by reading the files q writes, not by
 a database table or a q-side call into Airflow's API.
 
@@ -19,7 +19,7 @@ queue position, a timeout, or any other Airflow-owned fact — there is
 nothing in q's status file to manufacture it from, and `translate.py`'s
 tests assert the mapping touches only the fields q actually writes.
 
-## Airflow is optional (FE-22/FE-23)
+## Airflow is optional
 
 This package has **no `apache-airflow` dependency**. `translate.py` and
 `status_reader.py` are plain stdlib and fully testable without Airflow
@@ -31,7 +31,7 @@ into `sys.modules`, the same reason `src/etl/core/source_contract.q`
 requires every source to declare a fixture: the path must be exercisable
 with no driver, or licensed dependency, at all.
 
-## Lineage (FE-04)
+## Lineage
 
 This tree has no reachable canonical `uqf_airflow_provider` to port from.
 The format this package reads is the one `src/etl/core/status.q` and

@@ -75,8 +75,7 @@ tz:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
-/ A PARAMETERISED lambda, never string concatenation (the question bank, answered via
-/ FE-14).
+/ A PARAMETERISED lambda, never string concatenation (the question bank).
 / .
 / The window bounds are arguments to a functional select evaluated on the
 / remote side, so no caller value is ever spliced into query text. The

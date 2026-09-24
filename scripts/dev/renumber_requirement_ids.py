@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Renumber requirement ids E-nn -> ETL-nn and F-nn -> FE-nn (#109).
+"""Renumber requirement ids E-nn -> ETL-nn (#109).
 
 Sixteen ids meant two different things: `E-05` was "publish a nonempty page
 before recording the cursor" in docs/reference/etl-framework-requirements.md
@@ -16,10 +16,14 @@ question stops mattering once answered.
 The bank was removed in #247 along with every citation of it, so a bare
 `E-nn` or `F-nn` no longer means anything at all - which makes this a
 simpler rule than the one it was written for: such an id in `src/`,
-`tests/`, `scripts/`, `python/`, the README or either requirement document
+`tests/`, `scripts/`, `python/`, the README or the requirements document
 is a requirement citation that was never renamed, and `--check` is what
 stops one creeping back in. The ambiguity it was arbitrating is gone; the
 typo it catches is not.
+
+It used to rename `F-nn` to `FE-nn` too. The frontend requirements document
+those ids pointed into was removed, and every `FE-nn` citation with it, so
+there is no `FE-nn` left to rename to - and a bare `F-nn` means nothing.
 
 `--check` reports what would change and exits 1 if anything would.
 """
@@ -42,16 +46,15 @@ RENUMBER_PREFIXES = ("src/", "tests/", "scripts/", "python/")
 RENUMBER_FILES = {
     "README.md",
     "docs/reference/etl-framework-requirements.md",
-    "docs/reference/frontend-requirements.md",
 }
 #: Explicitly excluded even under a renumbered prefix.
 EXCLUDE = {
     "scripts/dev/renumber_requirement_ids.py",  # this file's own docstring
 }
 
-#: The requirement id ranges. E-01..E-24 and F-01..F-23 are what the two
-#: documents define; anything outside those ranges is not a requirement id.
-ETL_MAX, FE_MAX = 24, 23
+#: The requirement id range. E-01..E-24 is what the requirements document
+#: defines; anything outside it is not a requirement id.
+ETL_MAX = 24
 
 #: An id preceded by "bank " or "bank question " is a QUESTION-BANK citation
 #: living in a source file, and must not be renumbered. Those are marked
@@ -60,18 +63,16 @@ ETL_MAX, FE_MAX = 24, 23
 #: citation #109 exists to disambiguate. Five such were found in
 #: source_contract.q, demo_deals.q and coercion.q before the first apply.
 #: A QUOTED id - "E-05" - is a mention of the id as a string, not a citation
-#: of the requirement. The alias line in each requirement document's header
+#: of the requirement. The alias line in the requirements document's header
 #: says `an old citation like "E-05" ... means the question`, and that
 #: example must keep its old spelling or the sentence explains nothing.
-ID_RE = re.compile(r'(?<!bank )(?<!bank question )(?<!")(?<![A-Z-])\b([EF])-(\d{2})\b(?!")')
+ID_RE = re.compile(r'(?<!bank )(?<!bank question )(?<!")(?<![A-Z-])\b(E)-(\d{2})\b(?!")')
 
 
 def new_id(m: re.Match) -> str:
     prefix, num = m.group(1), int(m.group(2))
     if prefix == "E" and 1 <= num <= ETL_MAX:
         return f"ETL-{num:02d}"
-    if prefix == "F" and 1 <= num <= FE_MAX:
-        return f"FE-{num:02d}"
     return m.group(0)
 
 

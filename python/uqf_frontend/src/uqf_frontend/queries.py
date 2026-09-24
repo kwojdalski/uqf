@@ -4,7 +4,7 @@ The whole point of this module: **the q text below is a constant written
 here, never assembled from client input.** A caller's table name, column
 names and operator are validated against the catalog and then passed as
 IPC *arguments*; a caller's values are passed as typed IPC arguments and
-never rendered into text at all. That is what satisfies FE-14, and it is
+never rendered into text at all. That is the security guarantee, and it is
 strictly stronger than escaping or quoting a concatenated string.
 
 Three q details this depends on, all verified against a live KDB-X process

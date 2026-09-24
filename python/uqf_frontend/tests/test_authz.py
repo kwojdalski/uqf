@@ -1,4 +1,4 @@
-"""The authorisation seam (FE-15, FE-20, phase B5).
+"""The authorisation seam.
 
 A seam only proven with a policy that never refuses is not proven at all, so
 these tests install refusing policies and check the seam actually stops the

@@ -1,6 +1,6 @@
 """Settings, read from the environment once at startup.
 
-Credentials live here and nowhere else in the request path: per FE-14 the
+Credentials live here and nowhere else in the request path: the
 browser never receives or sends q credentials, so they are read from the
 process environment on the server and held only in this object.
 """
@@ -45,7 +45,7 @@ class Process:
     """One TorQ process this layer can reach directly.
 
     Needed because ``.usage.usage`` is per-process with **no fleet-wide
-    rollup** (FE-04), so a single query log across the stack has to be
+    rollup**, so a single query log across the stack has to be
     fanned out and merged here.
     """
 
@@ -88,7 +88,7 @@ class Settings:
     #: it when UQF_FRONTEND_BASE_PORT is set and the port is not, so a stack
     #: on a non-default base port still reaches its own gateway.
     port: int = DEFAULT_BASE_PORT + GATEWAY_PORT_OFFSET
-    #: Empty, and it stays empty: FE-14 puts credentials in the server
+    #: Empty, and it stays empty: credentials belong in the server
     #: environment and never in a default baked into the package, which
     #: test_config.py asserts. The local demo stack does want a credential
     #: (`admin:admin`, what `uqs query` uses) - that belongs in the
@@ -96,7 +96,7 @@ class Settings:
     #: is how a real one ends up committed next to it.
     user: str = ""
     passwd: str = ""
-    #: Seconds. Passed to kola, which enforces it per query. FE-11: historical
+    #: Seconds. Passed to kola, which enforces it per query. Historical
     #: HDB queries are legitimately slower than current-session RDB ones.
     timeout: int = 30
     #: Hard cap on rows returned, whatever the caller asks for. A browser
@@ -104,7 +104,7 @@ class Settings:
     #: is how a demo process runs out of memory.
     max_rows: int = DEFAULT_MAX_ROWS
     #: TorQ's generated process.csv - the declared process set for fleet
-    #: health (FE-01). None means fleet health reports itself unconfigured
+    #: health. None means fleet health reports itself unconfigured
     #: rather than returning an empty fleet.
     process_csv: Path | None = None
     #: Base port the {KDBBASEPORT} placeholders in process.csv resolve
@@ -112,26 +112,26 @@ class Settings:
     #: probe targets the wrong port - and, since `port` is derived from it,
     #: so does the gateway connection itself.
     base_port: int = DEFAULT_BASE_PORT
-    #: Directory q writes backfill status files into (FE-06). None means the
+    #: Directory q writes backfill status files into. None means the
     #: backfill view reports itself unconfigured rather than returning an
     #: empty list, which would be indistinguishable from an idle fleet.
     #: Pairs with UQFSTATUSDIR on the q side - see .qstatus.status_dir.
     status_dir: Path | None = None
-    #: Processes to fan out to for the per-process query log (FE-04). Empty by
+    #: Processes to fan out to for the per-process query log. Empty by
     #: default: the fleet view then reports that it has nothing configured,
     #: rather than silently showing an empty log as if the fleet were idle.
     processes: tuple[Process, ...] = ()
     #: Optional built React app, served under /ui/ on the same origin as the API.
     web_dist: Path | None = None
     #: Whether the /control/* routes do anything. OFF by default, and that
-    #: default is the security posture rather than caution: FE-15 ships one
-    #: shared credential and FE-20's identity is CLAIMED through a header
+    #: default is the security posture rather than caution: this deployment
+    #: has one shared credential and an identity CLAIMED through a header
     #: anyone can set, which is defensible while every route is a read. The
     #: moment a route can stop the fleet or rewrite process.csv, "anyone who
     #: can reach the port" is the whole access control - so turning that on
     #: is a deliberate act with a name, not a thing that happens by default.
     enable_writes: bool = False
-    #: Where captured usage rows are written (FE-13). None means capture does
+    #: Where captured usage rows are written. None means capture does
     #: not run - and that is a real choice, not a safe one: `.usage.flushtime`
     #: is one day in a standard stack, so with this unset the usage view can
     #: only ever show the last day and history before that is gone. It is

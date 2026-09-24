@@ -21,7 +21,7 @@ class Filter(BaseModel):
 class CoverageRequirement(BaseModel):
     """An opt-in pre-check: refuse the query unless this range is published.
 
-    FE-09. ``source_version`` is mandatory, not optional, because ETL-09 requires
+    ``source_version`` is mandatory, not optional, because ETL-09 requires
     coverage consumers to filter on it - coverage under one source release
     says nothing about another.
 
@@ -49,7 +49,7 @@ class QueryRequest(BaseModel):
     tier: Literal["rdb", "hdb", "both"] = Field(
         default="both",
         description="rdb = today's session, hdb = completed partitions, both = razed. "
-        "hdb is expected to be slower (FE-11)",
+        "hdb is expected to be slower",
     )
     require_coverage: CoverageRequirement | None = None
 
@@ -122,7 +122,7 @@ class OpsTableResponse(BaseModel):
     """A raw operational table, plus the cadence the UI should poll it at.
 
     The cadence is advisory and served rather than hardcoded in the client,
-    because FE-10 makes polling the only mechanism and the right interval
+    because polling is the only mechanism and the right interval
     depends on how fast the underlying state moves.
     """
 

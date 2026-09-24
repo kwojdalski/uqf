@@ -5,7 +5,7 @@ It is the whole integration point - the thing an Airflow DAG actually
 instantiates - and nothing executed a line of it.
 
 THE AWKWARD PART, and how it is handled. Airflow is deliberately NOT a
-dependency of this package (FE-22/FE-23): the module has no
+dependency of this package: the module has no
 `import airflow` at module scope, so it stays importable without it. That
 also means the sensor CLASS cannot be built in this environment by ordinary
 means, which is presumably why it went untested.

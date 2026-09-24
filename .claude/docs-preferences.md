@@ -124,6 +124,19 @@ generated process table is reference.
 > start commands, which predated start profiles and said "three spare" where
 > the registry has one, gave way to a pointer at `guides/uqs.md`'s profiles.
 
+**A document that says it is frozen and non-authoritative is not kept as the
+thing the code cites.** Remove it, and remove its ids with it, keeping the
+rule each citation stated. A citation should resolve to something that is
+maintained - or to the code that enforces the rule.
+
+> *2026-09-24.* Asked: "could you also remove front end requirements file".
+> `docs/reference/frontend-requirements.md` called itself "frozen and
+> non-authoritative", reconstructed from screen photographs of an unreachable
+> repository, yet ~140 `FE-nn` citations across ~40 files pointed into it.
+> Chosen over leaving them dangling: strip every `FE-nn` and `B0`..`B5`
+> phase label, keep the sentence's own rule, and where a note needs a
+> pointer, point at `src/etl/core/source_contract.q`, which enforces it.
+
 **No prescriptive meta-rules about the documentation process itself.**
 Describe what is, not how future documents must be filed.
 

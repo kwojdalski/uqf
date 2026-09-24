@@ -2,7 +2,7 @@
 
 EVERY OTHER ROUTE IN THIS PACKAGE READS. These four families change
 something, on a deployment whose access control is documented as "one shared
-credential" (FE-15) and whose identity is a header anyone can set (FE-20).
+credential" and whose identity is a header anyone can set.
 That posture is defensible while everything is a read. It is not defensible
 for "stop the fleet", so the whole surface is off unless
 UQF_FRONTEND_ENABLE_WRITES says otherwise.

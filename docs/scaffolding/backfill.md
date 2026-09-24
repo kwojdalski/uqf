@@ -29,7 +29,7 @@ scaffold fxprobe_backfill:
   create tests/q/test_fxprobe_backfill.q (13 lines)
   append to tests/run_tests.q (1 line)
   append to scripts/processes/uqs_catalog.q (2 lines)
-  note: write .qfeed.fxprobe.query - parameterised, never concatenated (FE-14)
+  note: write .qfeed.fxprobe.query - parameterised, never concatenated (see src/etl/core/source_contract.q)
   note: write .qfeed.fxprobe.fixture - deterministic, same contract as the live source
   note: declared fields: time, sym, mid
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
@@ -60,14 +60,14 @@ fields:`time`sym`mid
 
 Two things to write, and both notes are warnings earned the hard way:
 
-**`query` — parameterised, never concatenated (FE-14).** The window bounds
+**`query` — parameterised, never concatenated.** The window bounds
 are *arguments* to a lambda taking `(handle; range_from; range_to)` and
 evaluated remotely, not text spliced into a string. Where a driver genuinely
 cannot parameterise there is exactly one escape function, `.qodbc.literal`
 (`src/etl/core/singlestore_odbc.q`); using anything else is the finding a
 security review exists to make.
 
-FE-14 is the frontend's guarantee that no caller input reaches query text,
+It is the frontend's guarantee that no caller input reaches query text,
 and [`source_contract.q`](../../src/etl/core/source_contract.q) applies it
 here on the grounds that *"a source adapter is the same problem with a less
 friendly input"*. The rule has no `ETL-nn` of its own — the scaffold cited

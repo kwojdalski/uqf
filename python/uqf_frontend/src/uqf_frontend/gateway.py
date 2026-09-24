@@ -1,8 +1,7 @@
 """The q gateway client.
 
 Reuses the kola IPC pattern already proven in this repo by
-``uqs.stack.runtime.query()`` rather than introducing a second mechanism,
-per FE-16.
+``uqs.stack.runtime.query()`` rather than introducing a second mechanism.
 
 ``Gateway`` is a Protocol so that tests run with a fake and no q process.
 That is the same posture ETL-19 takes on the q side: double the adapters at
@@ -22,14 +21,14 @@ from uqf_frontend.errors import (
 )
 
 #: Substrings q/TorQ puts in an error when the gateway is mid-EOD-reload.
-#: FE-12 requires this be surfaced as a transient state, not a failure.
+#: It must be surfaced as a transient state, not a failure.
 _RELOADING_MARKERS = ("eod", "reload", "not available")
 _TIMEOUT_MARKERS = ("timeout", "timed out")
 
 
 #: The backend tiers a query may be routed to. `rdb` holds today's session,
-#: `hdb` the completed partitions - FE-08 requires the split be explicit
-#: rather than hidden, because FE-11 expects hdb to be slower.
+#: `hdb` the completed partitions - the split is explicit rather than
+#: hidden, because hdb is expected to be slower.
 TIERS: dict[str, list[str]] = {
     "rdb": ["rdb"],
     "hdb": ["hdb"],
@@ -62,7 +61,7 @@ class KolaGateway:
     Connects per call rather than holding a long-lived handle. That costs a
     round trip but means a gateway restart, or the EOD reload window, cannot
     leave this process wedged behind a dead handle - which matters more for a
-    poll-only frontend (FE-10) where every view reconnects on a timer anyway.
+    poll-only frontend where every view reconnects on a timer anyway.
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -116,8 +115,8 @@ def _classify(exc: Exception) -> Exception:
     """Map a raw kola/q failure onto the typed error the frontend reacts to.
 
     Matching on message text is unlovely, but q signals errors as strings and
-    the alternative - treating every failure identically - would make FE-12
-    impossible to honour.
+    the alternative - treating every failure identically - would make a reload
+    indistinguishable from a real failure.
     """
     message = str(exc).lower()
     if any(m in message for m in _TIMEOUT_MARKERS):
@@ -186,7 +185,7 @@ class FakeGateway:
     """An in-process :class:`Gateway` for tests.
 
     Records every call so a test can assert on *what was sent*, which is the
-    property that matters for FE-14: the program text must be one of this
+    property that matters for security: the program text must be one of this
     package's own constants, and the caller's values must appear only in the
     argument list.
     """

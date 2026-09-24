@@ -1,7 +1,7 @@
 """Typed failures the API layer distinguishes, because the frontend must
 react differently to each.
 
-The distinction that matters most is transient-versus-fatal: per FE-12 the
+The distinction that matters most is transient-versus-fatal: the
 gateway blocks queries during its EOD reload window, and a UI that renders
 that as an error trains its users to ignore errors.
 """
@@ -19,8 +19,8 @@ class FrontendError(Exception):
 class ValidationFailed(FrontendError):
     """Client input did not pass the catalog whitelist or type coercion.
 
-    Raised *before* anything is sent to q. This is the boundary that FE-14
-    requires: unvalidated client input never reaches query construction.
+    Raised *before* anything is sent to q. This is the security
+    boundary: unvalidated client input never reaches query construction.
     """
 
     status_code = 422
@@ -36,7 +36,7 @@ class GatewayUnavailable(FrontendError):
 class GatewayReloading(FrontendError):
     """The gateway is in its EOD reload window and is refusing queries.
 
-    Transient by definition - see FE-12. The frontend should surface this as a
+    Transient by definition. The frontend should surface this as a
     known state, not a failure.
     """
 
@@ -47,7 +47,7 @@ class GatewayReloading(FrontendError):
 class QueryTimedOut(FrontendError):
     """The gateway's own per-query timeout fired.
 
-    Per FE-11, HDB-backed historical queries are expected to be slower than
+    HDB-backed historical queries are expected to be slower than
     RDB-backed current-session ones, so this is an ordinary outcome for a
     wide historical range rather than a defect.
     """

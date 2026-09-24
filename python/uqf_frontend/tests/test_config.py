@@ -63,14 +63,14 @@ def test_empty_env_value_falls_back_to_the_default(monkeypatch):
 
 
 def test_credentials_are_not_in_the_default_settings():
-    """FE-14: credentials come from the server environment, never a default
+    """Credentials come from the server environment, never a default
     baked into the package.
     """
     s = Settings()
     assert s.user == "" and s.passwd == ""
 
 
-# --- process registry (FE-04 fan-out) --------------------------------------
+# --- process registry (the fan-out) ----------------------------------------
 
 
 def test_processes_default_to_empty():

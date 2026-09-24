@@ -1,12 +1,12 @@
-"""The authorisation seam (FE-15, FE-20, phase B5).
+"""The authorisation seam.
 
 **This is deliberately a seam and not an auth system, and the reason is worth
 stating rather than hiding.** Two answered decisions put a ceiling on what
 B5 can honestly be:
 
-- **FE-20** — the API layer connects to q with *one service credential* and
+- **One service credential.** The API layer connects to q with one credential and
   enforces its own authorisation. So q never sees a per-user identity.
-- **FE-22/FE-23** — local demo, single host. So there is no user directory, no
+- **Local demo, single host.** So there is no user directory, no
   session issuer, and in practice one operator.
 
 Together those mean #59's stated acceptance criterion — "two users with
@@ -17,7 +17,7 @@ Building a login flow here would be inventing a requirement.
 What is genuinely useful now is the *seam*: one place every request passes
 through, which defaults to allowing everything, is exercised by tests, and
 can have a real policy dropped into it the moment there is an identity to
-authorise. That keeps FE-14's actual guarantee — credentials stay server-side
+authorise. That keeps the actual guarantee — credentials stay server-side
 and no client input reaches query text — as the thing carrying the security
 weight, which is already true and already tested.
 
@@ -57,7 +57,7 @@ class Request_:
     """What a policy gets to decide on.
 
     Deliberately small. A policy that needs more than this is probably
-    enforcing something q should enforce instead - see FE-20's rejected
+    enforcing something q should enforce instead - see the rejected
     alternative, per-user q credentials, where entitlements live in one place
     rather than being mirrored in Python.
     """
