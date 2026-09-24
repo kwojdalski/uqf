@@ -20,8 +20,10 @@
 # the kdb-q-conventions skill for the full writeup).
 
 set -euo pipefail
-# ../.. since scripts/ was foldered (#241): this file is scripts/dev/.
-cd "$(dirname "$0")/../.."
+# `git rev-parse`, not a count of `..` from this file: scripts/ has been
+# foldered before (#241), and a hardcoded depth resolves to the wrong
+# directory silently rather than failing.
+cd "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 
 QSTUDIO_JAR="${QSTUDIO_JAR:-qstudio.jar}"
 
