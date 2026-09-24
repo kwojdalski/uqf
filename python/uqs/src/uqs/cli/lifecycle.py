@@ -17,11 +17,13 @@ from typing import Annotated
 import typer
 
 from uqs import paths as stack_paths
+from uqs.cli import completion
 from uqs.cli.shared import (
     PortOpt,
     ProcsArg,
     _die,
     _paths,
+    _procs,
     _run_streaming,
     app,
     console,
@@ -132,6 +134,7 @@ ProfileOpt = Annotated[
             "see `uqs list profiles`. Refused if the total is past the "
             "licence's connection cap."
         ),
+        autocompletion=completion.profiles,
     ),
 ]
 
@@ -167,42 +170,44 @@ def _resolve_profiles(names: str) -> str:
 
 @app.command()
 def start(
-    procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT, profile: ProfileOpt = None
+    procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT, profile: ProfileOpt = None
 ) -> None:
     """Start every startwithall=1 process (or specific process name(s)).
 
     `--profile fx` starts a named set instead: its leaves and everything they
     read, resolved from the dependency graph rather than listed by hand.
     """
+    names = _procs(procs)
     if profile is not None:
-        if procs != "all":
+        if procs:
             _die(UqsError("--profile and explicit process names are mutually exclusive"))
             return
-        procs = _resolve_profiles(profile)
-    _warn_about_unfed_inputs(procs, port)
-    _warn_about_connection_cap(procs, port)
-    _run_streaming(runtime.start, procs, base_port=port)
+        names = _resolve_profiles(profile)
+    _warn_about_unfed_inputs(names, port)
+    _warn_about_connection_cap(names, port)
+    _run_streaming(runtime.start, names, base_port=port)
 
 
 @app.command()
-def stop(procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT) -> None:
+def stop(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Stop every running process (or specific process name(s))."""
-    _run_streaming(runtime.stop, procs, base_port=port)
+    _run_streaming(runtime.stop, _procs(procs), base_port=port)
 
 
 @app.command()
-def restart(procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT) -> None:
+def restart(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
-    _warn_about_unfed_inputs(procs, port)
-    _warn_about_connection_cap(procs, port)
-    _run_streaming(runtime.restart, procs, base_port=port)
+    names = _procs(procs)
+    _warn_about_unfed_inputs(names, port)
+    _warn_about_connection_cap(names, port)
+    _run_streaming(runtime.restart, names, base_port=port)
 
 
 @app.command("print")
-def print_startlines(procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT) -> None:
+def print_startlines(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Show the exact startup command line(s) without starting anything."""
     try:
-        result = runtime.print_procs(_paths(), procs, base_port=port)
+        result = runtime.print_procs(_paths(), _procs(procs), base_port=port)
     except UqsError as exc:
         _die(exc)
         return

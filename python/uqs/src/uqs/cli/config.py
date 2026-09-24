@@ -19,6 +19,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
     PortOpt,
@@ -26,6 +27,7 @@ from uqs.cli.shared import (
     _die,
     _export,
     _paths,
+    _procs,
     app,
     console,
 )
@@ -39,8 +41,8 @@ from uqs.stack.listing import LISTABLE_KINDS
 
 @app.command("config-get")
 def config_get(
-    procname: str,
-    field: Annotated[str | None, typer.Argument()] = None,
+    procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
+    field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
     port: PortOpt = DEFAULT_BASE_PORT,
     raw: Annotated[
         bool, typer.Option("--raw", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
@@ -112,13 +114,21 @@ def _sorted_items(
 @app.command("list")
 def list_items(
     kind: Annotated[
-        str | None, typer.Argument(help="'processes', 'fields', 'overrides', or 'env'")
+        str | None,
+        typer.Argument(
+            help="What to list - run with no argument to see every kind",
+            autocompletion=completion.list_kinds,
+        ),
     ] = None,
     port: PortOpt = DEFAULT_BASE_PORT,
     export: ExportOpt = None,
     sort: Annotated[
         str | None,
-        typer.Option("--sort", help="Sort by this column (case-insensitive, numeric-aware)."),
+        typer.Option(
+            "--sort",
+            help="Sort by this column (case-insensitive, numeric-aware).",
+            autocompletion=completion.list_columns,
+        ),
     ] = None,
     reverse: Annotated[
         bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
@@ -153,7 +163,11 @@ def list_items(
 
 
 @app.command("config-set")
-def config_set(procname: str, field: str, value: str) -> None:
+def config_set(
+    procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
+    field: Annotated[str, typer.Argument(autocompletion=completion.csv_fields)],
+    value: str,
+) -> None:
     """Set one process.csv field for *procname* (persisted to
     process_overrides.csv, applied on every later start/stop/summary/...).
     """
@@ -167,9 +181,14 @@ def config_set(procname: str, field: str, value: str) -> None:
 
 @app.command()
 def multitail(
-    procs: ProcsArg = "all",
+    procs: ProcsArg = None,
     stream: Annotated[
-        str, typer.Option("--stream", help="Which log files get a pane: out, err or both")
+        str,
+        typer.Option(
+            "--stream",
+            help="Which log files get a pane: out, err or both",
+            autocompletion=completion.choices("out", "err", "both"),
+        ),
     ] = "both",
     columns: Annotated[
         int, typer.Option("--columns", "-c", help="Split the panes into this many columns")
@@ -180,12 +199,12 @@ def multitail(
     ] = False,
 ) -> None:
     """Follow process logs in multitail, one pane per out_/err_*.log file -
-    e.g. `multitail "rdb1 fxpositions1"`, `multitail all --stream err -c 2`.
+    e.g. `multitail rdb1 fxpositions1`, `multitail all --stream err -c 2`.
     Needs the `multitail` binary; `logs -f` merges the same files without it.
     """
     try:
         argv = stack_logs.multitail_command(
-            _paths(), procs, stream=stream, columns=columns, lines=lines
+            _paths(), _procs(procs), stream=stream, columns=columns, lines=lines
         )
         if print_only:
             console.print(shlex.join(argv), markup=False, highlight=False, soft_wrap=True)
@@ -197,7 +216,7 @@ def multitail(
 
 @app.command()
 def logs(
-    procs: ProcsArg = "all",
+    procs: ProcsArg = None,
     follow: Annotated[
         bool, typer.Option("--follow", "-f", help="Keep streaming new lines (Ctrl-C to stop)")
     ] = False,
@@ -205,7 +224,11 @@ def logs(
         int, typer.Option("--lines", "-n", help="Lines per process log to show (non-follow only)")
     ] = 20,
     level: Annotated[
-        str | None, typer.Option(help="Only show this level and above: DEBUG/INFO/WARNING/ERROR")
+        str | None,
+        typer.Option(
+            help="Only show this level and above: DEBUG/INFO/WARNING/ERROR",
+            autocompletion=completion.choices("DEBUG", "INFO", "WARNING", "ERROR"),
+        ),
     ] = None,
 ) -> None:
     """Tail out_/err_*.log for one or more processes through the same
@@ -214,8 +237,8 @@ def logs(
     """
     try:
         if follow:
-            stack_logs.follow_logs(_paths(), procs, min_level=level)
+            stack_logs.follow_logs(_paths(), _procs(procs), min_level=level)
         else:
-            stack_logs.print_recent_logs(_paths(), procs, lines=lines, min_level=level)
+            stack_logs.print_recent_logs(_paths(), _procs(procs), lines=lines, min_level=level)
     except UqsError as exc:
         _die(exc)

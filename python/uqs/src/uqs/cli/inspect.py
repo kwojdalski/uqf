@@ -16,6 +16,7 @@ from rich.table import Table
 from uqs import paths as stack_paths
 from uqs.checks import hdb_shape, schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
+from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
     _die,
@@ -88,7 +89,11 @@ def query(
     # "you forgot to say which process" into "silently queried the
     # tickerplant". Option order does not affect the command line.
     port: Annotated[
-        int, typer.Option(help="port of the process to query, e.g. base_port+2 for rdb1")
+        int,
+        typer.Option(
+            help="port of the process to query, e.g. base_port+2 for rdb1",
+            autocompletion=completion.process_ports,
+        ),
     ],
     expr: Annotated[
         str | None,
@@ -173,15 +178,23 @@ def schema(
     table: Annotated[
         str | None,
         typer.Argument(
-            help="a table to describe, or a pattern like 'crypto*'; omit to list every table"
+            help="a table to describe, or a pattern like 'crypto*'; omit to list every table",
+            autocompletion=completion.plant_table,
         ),
     ] = None,
     proc: Annotated[
-        str, typer.Option(help="process to read from, e.g. rdb1 (today) or hdb1 (history)")
+        str,
+        typer.Option(
+            help="process to read from, e.g. rdb1 (today) or hdb1 (history)",
+            autocompletion=completion.procname,
+        ),
     ] = DEFAULT_PROC,
     port: Annotated[
         int | None,
-        typer.Option(help="read this port directly, instead of resolving --proc"),
+        typer.Option(
+            help="read this port directly, instead of resolving --proc",
+            autocompletion=completion.process_ports,
+        ),
     ] = None,
     base_port: Annotated[int, typer.Option(help="stack base port")] = DEFAULT_BASE_PORT,
     host: str = "localhost",

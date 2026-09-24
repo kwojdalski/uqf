@@ -193,7 +193,7 @@ parsed and printed sorted by the log's own timestamp. `--level` filters to
 that level and above.
 
 ```
-uqs logs "stp1 rdb1" -n 50
+uqs logs stp1 rdb1 -n 50
 uqs logs -f --level WARNING
 ```
 
@@ -202,7 +202,7 @@ uqs logs -f --level WARNING
 it needs the `multitail` binary.
 
 ```
-uqs multitail "rdb1 fxpositions1" -c 2
+uqs multitail rdb1 fxpositions1 -c 2
 ```
 
 ## crypto recorder (cryptorust) - a proof of concept

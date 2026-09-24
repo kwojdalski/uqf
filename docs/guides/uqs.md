@@ -65,6 +65,23 @@ distribution name, and then checking the command actually runs. Both matter
 for the reason the next paragraph gives. It is idempotent - re-run it after
 pulling, or any time `uqs` behaves like an older copy of itself.
 
+**Tab completion**, once per shell, after the install above:
+
+```
+uqs --install-completion      # bash, zsh, fish or PowerShell - detected
+```
+
+Open a new shell and TAB completes process names (`uqs start pos<TAB>`,
+`uqs logs rdb1 st<TAB>`), `--profile` names, the kinds `list` takes and the
+columns `--sort` takes for that kind, `config-get`/`config-set` fields,
+`--port` on `query`/`schema` (zsh and fish show which process each port
+belongs to), `--level`, `--stream`, `new-job --kind`, and the plant's tables
+for `--subscribes`/`--publishes`. Every value is read from the same registry
+the command resolves against, so a new pipeline completes as soon as it is
+declared. `uqs --show-completion` prints the script instead of installing it.
+It needs `uqs` on your `PATH`: the `uv run --project python/uqs uqs` form
+has nothing for the shell to call.
+
 **Editable updates the code, not the script names, and not the path.** A
 `.pth` file points the install at `python/uqs/src`, so every source edit is
 live the moment it is saved - no reinstall for a new command, option or fix.
@@ -243,8 +260,8 @@ query EXPR --port N [--export FILE]   run a synchronous q expression against a p
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern
 list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse]  list every item of KIND
-                                       ('processes', 'fields', 'overrides', 'env') - no
-                                       argument shows the kinds
+                                       ('processes', 'profiles', 'fields', 'overrides',
+                                       'env', 'dependencies') - no argument shows the kinds
 config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective
                                                  process.csv row (or one field), with
                                                  placeholders resolved unless --raw
@@ -259,7 +276,9 @@ raw -- ARGS...                        pass any other torq.sh verb straight throu
                                        (e.g. `raw -- debug rdb1`, `raw -- top feed1`)
 ```
 
-`PROCS` is `all` or a space-separated list of process names. `--port` sets
+`PROCS` is `all` (the default) or one or more process names, each its own
+word - `uqs start posbook1 markout1` - which is what lets TAB complete them.
+A single quoted `"posbook1 markout1"` still works. `--port` sets
 `KDBBASEPORT` (default `6050`, see the port table below). `--export FILE`
 (on `summary`/`query`/`list`/`config-get`) additionally writes the same
 rows to `FILE` as CSV or Parquet, format inferred from the extension - see
@@ -608,7 +627,7 @@ through the same colorized logger the rest of the CLI uses, instead of
 
 ```
 uqs logs                          # last 20 lines per process, all processes
-uqs logs "stp1 rdb1" -n 50        # last 50 lines each, merged and time-sorted
+uqs logs stp1 rdb1 -n 50          # last 50 lines each, merged and time-sorted
 uqs logs -f                       # live tail, every process, Ctrl-C to stop
 uqs logs quotesfeed1 -f --level WARNING   # live tail, warnings/errors only
 ```
@@ -627,7 +646,7 @@ and needs the `multitail` binary (`brew install multitail`,
 `apt install multitail`):
 
 ```
-uqs multitail "rdb1 fxpositions1"        # a pane for each out_/err_ log, stacked
+uqs multitail rdb1 fxpositions1          # a pane for each out_/err_ log, stacked
 uqs multitail all --stream err -c 2      # every process's err_ log, in two columns
 uqs multitail stp1 -n 100 --print        # show the multitail command, run nothing
 ```
