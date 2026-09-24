@@ -1,0 +1,208 @@
+# pipeline-architecture-example.d2 - a desk system composed from what this
+# tree implements.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/architecture/pipeline-architecture-example.md.
+#
+# WHAT THIS IS AND IS NOT. Not the running demo - stack-topology.d2 and
+# stack-dataflow.d2 draw that, with ports and every process. This is the
+# SHAPE a desk's system takes when it is built out of these services, and
+# every box names what implements it.
+#
+# THE ONE THING IT EXISTS TO SHOW is that the plant is a narrow waist that
+# everything passes through twice. A job reads a table off it and publishes
+# a table back onto it; nothing reads another job's output directly. That is
+# what makes a new engine a subscriber rather than a change to a producer,
+# and it is why the arrows in the middle band run BOTH ways against one
+# spine instead of chaining box to box.
+#
+# The second waist is the normalizers, which is why they are their own band
+# rather than sitting among the engines: above them every market arrives in
+# its own shape, below them there is one.
+#
+# ON DIRECTION. Down, not right. Six bands left to right rendered 3022x704 -
+# a 4.3:1 strip that a README shows at a width where no label is legible,
+# which is the failure stack-dataflow.d2's own header records hitting from
+# the other side. Down is taller than wide and a reader scrolls.
+#
+# ON WHAT IS LEFT OUT. Every process, every port, every table: those are the
+# stack pages. Here a band is a KIND of thing, and a box inside it names the
+# instances. An earlier version drew superbook and market_data as boxes with
+# no edges at all, which is worse than omitting them - a box with no arrows
+# reads as a thing nothing uses.
+#
+# ON COLOUR. Light fills with dark text in both themes rather than a d2
+# --dark-theme pairing: d2 still applies explicit styles in dark mode
+# (d2lang/d2#831), so a theme pair leaves half the diagram unreadable.
+
+direction: down
+
+# ONE COLUMN, EXPLICITLY. `direction: down` alone does not stack containers -
+# d2 falls back to dagre, which laid these seven bands out side by side at
+# 6113x364, even wider than the 3022x704 that prompted the redraw. A grid is
+# what forces the order, the same fix repo-overview.d2 applies for the same
+# reason.
+grid-columns: 1
+grid-gap: 44
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  source: {
+    style: {
+      fill: "#f6f0e6"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+    }
+  }
+  plant: {
+    style: {
+      fill: "#fbeef0"
+      stroke: "#a54a5c"
+      font-color: "#5f1f2c"
+      border-radius: 6
+      stroke-width: 2
+    }
+  }
+  store: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+    }
+  }
+  job: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  library: {
+    style: {
+      fill: "#eef3fb"
+      stroke: "#4a6fa5"
+      font-color: "#1e3a5f"
+      border-radius: 6
+    }
+  }
+  surface: {
+    style: {
+      fill: "#f3eefb"
+      stroke: "#6f4aa5"
+      font-color: "#3a1e5f"
+      border-radius: 6
+    }
+  }
+  band: {
+    style: {
+      fill: "#fbfcfd"
+      stroke: "#c3c9cf"
+      font-color: "#25323d"
+      stroke-width: 2
+      border-radius: 10
+    }
+  }
+}
+
+sources: "1 · sources — each arrives in its own market's shape" {
+  class: band
+  grid-columns: 4
+  grid-gap: 20
+
+  fx: "FX venues\nfx_feed · quotes_feed\nfx_trades_feed · fx_orders_feed\nsynthetic here, an adapter in production" { class: source }
+  crypto: "crypto venues\ncryptorust's two kdb recorders,\nor crypto_mock standing in" { class: source }
+  databento: "Databento MBP-10\ndatabento_feed.py, in Python\noutside q entirely" { class: source }
+  history: "history\nbounded workers, .qbw\nODBC or an upstream q" { class: source }
+}
+
+plant: "2 · the plant — TorQ's stp1, or .qtick on stock kdb+" {
+  class: band
+  grid-columns: 1
+
+  tp: "every table passes through here, twice\na job SUBSCRIBES to one and PUBLISHES another\n.u.upd stamps time · keyed tables refused" { class: plant }
+}
+
+normalize: "3 · normalizers — the first waist: one shape from many (.qnorm)" {
+  class: band
+  grid-columns: 3
+  grid-gap: 20
+
+  executions: "executions\ntrades + crypto_trades\n→ one fill table" { class: job }
+  marks: "marks\nquote + crypto_book\n→ one mid per instrument" { class: job }
+  marketdata: "market_data\nquote + quotes\n→ one book shape" { class: job }
+}
+
+engines: "4 · engines — subscribe, hold state, republish" {
+  class: band
+  grid-columns: 3
+  grid-gap: 20
+
+  posbook: "posbook\nexecutions + marks → position\n.qpos, FX and crypto in one book" { class: job }
+  fxpos: "fx_positions\norders → fx_position · fx_limit_breach\n.qdesk exposure, .qlimit caps" { class: job }
+  markout: "markout\ntrades + quote → execution_quality\n.qexec, at horizons on a timer" { class: job }
+  superbook: "superbook\nmarket_data → superbook\n.qsuper merges across sources" { class: job }
+  arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
+  reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_book → mkt_orderbook" { class: job }
+}
+
+store: "5 · storage" {
+  class: band
+  grid-columns: 2
+  grid-gap: 20
+
+  db: "rdb · hdb\ntoday in memory,\nEOD writedown to disk" { class: store }
+  ledger: "etl_coverage\nwhat a backfill published, bitemporally\n.qmatz · .qrun" { class: store }
+}
+
+ondemand: "6 · on demand — pure functions over whatever the store holds" {
+  class: band
+  grid-columns: 3
+  grid-gap: 20
+
+  alloc: ".qalloc\nP&L attribution: FIFO / LIFO /\nweighted, carried, as-of" { class: library }
+  risk: ".qrisk · .qpos.ccy_exposure_in\nVaR, carry, per-currency exposure\nin one reporting currency" { class: library }
+  micro: ".qmicro · .qexec\nbook pressure, VPIN, markout -\nover quotes or the event tape" { class: library }
+}
+
+surfaces: "7 · surfaces" {
+  class: band
+  grid-columns: 3
+  grid-gap: 20
+
+  frontend: "uqf_frontend + web\npositions, coverage, fleet, control\nevery query through the gateway" { class: surface }
+  airflow: "uqf_airflow_provider\ntriggers a backfill,\nsenses its status files" { class: surface }
+  client: "uqf_client · MCP\nkola IPC from Python;\nthe stack as tools" { class: surface }
+}
+
+# --- sources reach the plant, except the one that deliberately does not ---
+sources.fx -> plant.tp
+sources.crypto -> plant.tp
+sources.databento -> plant.tp
+sources.history -> store.ledger: "writes through .qio, NEVER via the plant -\nand records what it covered" {
+  style.stroke: "#a8762f"
+  style.stroke-width: 2
+}
+
+# --- the waist, both ways, which is the whole point ---
+plant.tp <-> normalize: "subscribe ⇅ republish" {
+  style.stroke: "#a54a5c"
+  style.stroke-width: 3
+}
+plant.tp <-> engines: "subscribe ⇅ republish" {
+  style.stroke: "#a54a5c"
+  style.stroke-width: 3
+}
+
+plant.tp -> store.db: "every table"
+store.db -> ondemand: "read, never written back"
+store.db -> surfaces.frontend: "through the gateway"
+ondemand -> surfaces.frontend
+store.ledger -> surfaces.airflow: "status files" { style.stroke-dash: 4 }

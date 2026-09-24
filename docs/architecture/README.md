@@ -17,14 +17,14 @@ another is the easiest way to be misled by this directory.
 | **Design notes, kept after the build** | written *before* the work and kept for the reasoning, not as a statement of what is missing | [`event-tape.md`](event-tape.md), [`restatement-design.md`](restatement-design.md) |
 | **Closed assessments** | a question asked, answered, and settled — kept so the answer is not re-derived | [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) |
 | **One decision** | a single yes/no, with the reason it went that way | [`cryptorust-discovery.md`](cryptorust-discovery.md) |
-| **Synthesis** | the implemented pieces seen as one system | [`example-architecture.md`](example-architecture.md) |
+| **Synthesis** | the implemented pieces seen as one system | [`pipeline-architecture-example.md`](pipeline-architecture-example.md) |
 
 ## What is here
 
 | Page | In one line |
 |---|---|
 | [`pipeline-philosophy.md`](pipeline-philosophy.md) | the ten positions `src/etl/` is built on, and what enforces each |
-| [`example-architecture.md`](example-architecture.md) | a desk system composed from the implemented services, in six bands |
+| [`pipeline-architecture-example.md`](pipeline-architecture-example.md) | a desk system composed from the implemented services, in seven bands |
 | [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) | what a Dagster-shaped framework needs, what closed each gap, and what is deliberately absent |
 | [`restatement-design.md`](restatement-design.md) | what answering "yes" to superseding coverage rows cost, and the bitemporal design that answered it |
 | [`event-tape.md`](event-tape.md) | the per-event order/trade tape: which tape this is, which it is not, and the features it unblocked |
