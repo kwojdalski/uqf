@@ -150,6 +150,21 @@ def _make_kv_format(fmt: str) -> Any:
     return _format
 
 
+def _colorize() -> bool | None:
+    """loguru's `colorize` for a console sink that wants colour.
+
+    Not True, which forced escape codes into `uqs ... | grep` and into
+    captured output. None lets loguru colour a terminal and leave a pipe or a
+    file plain. NO_COLOR and FORCE_COLOR (no-color.org, force-color.org) are
+    read here because the loguru this tree pins, 0.7.3, reads neither.
+    """
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    return None
+
+
 def setup_logging(
     level: str = "INFO",
     log_file: str | None = None,
@@ -192,7 +207,7 @@ def setup_logging(
             sys.stdout,
             level=level.upper(),
             format=console_fmt,
-            colorize=use_color,
+            colorize=_colorize() if use_color else False,
             serialize=structured_logging,
             filter=_filter,
         )
@@ -242,11 +257,21 @@ def configure_logging(
         log_file = log_dir_path / f"{component}_{timestamp}.log"
 
     if simplified:
-        fmt = "{function}:{line} - {message}"
+        # The level, coloured, then the message. This used to be
+        # "{function}:{line} - {message}", with no colour markup at all - so
+        # every command configured this way printed plain text however
+        # colourful the rest of this module is - and the location it showed
+        # was the helper's, not the caller's: every refusal read `_die:120`.
+        # The location is worth its width only when debugging.
+        fmt = "<level>{level: <8}</level> | "
+        if effective_level == "DEBUG":
+            fmt += "<cyan>{name}:{function}:{line}</cyan> - "
+        fmt += "<level>{message}</level>"
     else:
         fmt = (
-            "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | "
-            f"{component} | {{name}}:{{function}}:{{line}} - {{message}}"
+            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | "
+            f"{component} | <cyan>{{name}}:{{function}}:{{line}}</cyan> - "
+            "<level>{message}</level>"
         )
 
     return setup_logging(
