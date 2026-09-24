@@ -20,6 +20,18 @@ actual/
 # local qStudio jar kept alongside the repo to run it
 /qstudio.jar
 
+# build output from tools this tree does not build itself - today the q-lint-rs
+# wheels. The rule was removed in #383 along with scripts/dev/build.sh, whose
+# output it had been added for; that was right about the script and wrong
+# about the directory, which another tool was already writing into.
+#
+# Worth knowing what was found there when it stopped being ignored: two
+# release archives build.sh had produced, one of them 538MB because
+# `cp -R scripts` swept in scripts/output/ - the HDB, the tickerplant logs,
+# the write-down database - and packaged 8407 runtime data files as a source
+# release. A gigabyte of it, unnoticed for a month behind this line.
+/dist/
+
 # run artifacts from scripts/examples/timer_replay_example.q - regenerate on demand,
 # don't commit it
 /scripts/output/
