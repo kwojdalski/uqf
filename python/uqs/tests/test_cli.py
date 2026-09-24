@@ -48,7 +48,7 @@ from uqs.external import crypto
 from uqs.external.crypto import CRYPTO_FILLS_RECORDER_TABLE, CRYPTO_REAL_FILLS_RECORDER_TABLE
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError
-from uqs.stack import listing, runtime
+from uqs.stack import listing, probe, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
 from uqs.stack.listing import LISTABLE_KINDS, SUMMARY_COLUMNS, SUMMARY_GRAPH_COLUMNS
@@ -172,6 +172,8 @@ def _summary_ok(monkeypatch, *, rows=None, returncode=0):
     _patch(monkeypatch, runtime, "summary", result=Completed(returncode=returncode, stdout="raw"))
     _patch(monkeypatch, listing, "configured_ports", result={})
     _patch(monkeypatch, listing, "heartbeat_states", result={})
+    # The Responds probe opens a real socket to every up row's port.
+    _patch(monkeypatch, probe, "probe_all", result={})
     rows = rows if rows is not None else []
     _patch(monkeypatch, listing, "summary_rows", result=rows)
 
@@ -253,11 +255,37 @@ def test_summary_shows_the_graph_by_default(monkeypatch):
         assert column in flat
 
 
+def test_a_process_that_does_not_answer_is_shown_and_named(monkeypatch):
+    """Up by PID but silent when asked - the case Status cannot show."""
+    monkeypatch.setenv("COLUMNS", "220")
+    _summary_ok(monkeypatch, rows=[_row(), _row(Process="hdb1", Port="6053")])
+    _patch(
+        monkeypatch,
+        probe,
+        "probe_all",
+        result={"rdb1": probe.ProbeResult("ok", 4.0), "hdb1": probe.ProbeResult("timeout")},
+    )
+    result = runner.invoke(cli.app, ["summary", "--columns", "status"])
+    assert result.exit_code == 0, result.output
+    assert "Responds" in result.output
+    assert "4ms" in result.output
+    assert "did not answer within 0.5s" in result.output and "hdb1" in result.output
+
+
+def test_probe_timeout_zero_skips_the_probe(monkeypatch):
+    _summary_ok(monkeypatch, rows=[_row()])
+    rec = _patch(monkeypatch, probe, "probe_all", result={})
+    result = runner.invoke(cli.app, ["summary", "--columns", "status", "--probe-timeout", "0"])
+    assert result.exit_code == 0, result.output
+    assert rec.calls == []
+
+
 def test_columns_status_gives_back_the_narrow_table(monkeypatch):
     """The escape hatch for an 80-column terminal, and the reason showing the
     graph by default is safe."""
-    assert summary._resolve_columns("status") == list(SUMMARY_COLUMNS)
-    assert summary._resolve_columns("STATUS") == list(SUMMARY_COLUMNS)
+    narrow = [*SUMMARY_COLUMNS, "Responds"]
+    assert summary._resolve_columns("status") == narrow
+    assert summary._resolve_columns("STATUS") == narrow
 
 
 def test_columns_all_adds_the_graph(monkeypatch):

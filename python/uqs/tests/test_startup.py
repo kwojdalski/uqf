@@ -14,7 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.stack import listing, runtime, startup
+from uqs.stack import listing, probe, runtime, startup
 from uqs.stack.startup import BANNER_BORDER, Startup
 
 runner = CliRunner()
@@ -105,6 +105,7 @@ def _summary_with_one_process(monkeypatch) -> list[list[str]]:
     monkeypatch.setattr(runtime, "summary", lambda *_a, **_k: completed)
     monkeypatch.setattr(listing, "configured_ports", lambda *_a, **_k: {})
     monkeypatch.setattr(listing, "heartbeat_states", lambda *_a, **_k: {})
+    monkeypatch.setattr(probe, "probe_all", lambda *_a, **_k: {})
     row = {"Time": "", "Process": "rdb1", "Status": "up", "PID": "1", "Port": "6052",
            "PortSource": "reported", "Heartbeat": "ok"}  # fmt: skip
     monkeypatch.setattr(listing, "summary_rows", lambda *_a, **_k: [row])

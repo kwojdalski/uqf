@@ -181,7 +181,12 @@ SUMMARY_COLUMNS = ("Time", "Process", "Status", "PID", "Port", "Heartbeat")
 #: they are a separate tuple; both are shown by default.
 SUMMARY_GRAPH_COLUMNS = ("Depends on", "Inputs", "Outputs")
 
-SUMMARY_ALL_COLUMNS = SUMMARY_COLUMNS + SUMMARY_GRAPH_COLUMNS
+#: Whether each up process completed the kdb+ handshake within the probe
+#: timeout - see stack/probe.py. Attached after parsing, like the graph
+#: columns, and for the same reason.
+SUMMARY_PROBE_COLUMNS = ("Responds",)
+
+SUMMARY_ALL_COLUMNS = SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS + SUMMARY_GRAPH_COLUMNS
 
 #: The process that aggregates heartbeats. TorQ's `monitor.q` is the only
 #: process type that calls `.hb.storeheartbeat`, so `.hb.hb` is populated there
