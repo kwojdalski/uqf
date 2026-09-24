@@ -248,9 +248,10 @@ filenames first.
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
-summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]  status table
+summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S] [--debug]  status table
                                       plus the declared graph (--columns status for just
-                                      up/down/pid/port; --timeout defaults to 10s)
+                                      up/down/pid/port; --timeout defaults to 10s;
+                                      --debug adds each process's load time)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe scripts/output/uqs/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
@@ -659,6 +660,7 @@ command reports something surprising about a fleet whose own logs look fine.
 
 ```
 uqs --debug summary        # this invocation only
+uqs summary --debug        # the same, spelled on the command
 LOG_LEVEL=DEBUG uqs summary   # same, for a shell session
 ```
 
@@ -684,6 +686,32 @@ starved process(es): executions1, marks1
 `parsed N row(s)` against `stdout_lines` is the one to read when the table
 looks short: it is the only place the rows `torq.sh` emitted and the rows the
 parser kept are both visible.
+
+In debug, `summary` also prints how long each process took to load on its
+latest start, slowest first:
+
+```
+     Load time on each process's latest start, from its own log
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Process      ┃ Started             ┃ Load time ┃ Note                        ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ fxpositions1 │ 2026-09-24 08:00:00 │ 41.70s    │                             │
+│ rdb1         │ 2026-09-24 08:00:00 │ 3.25s     │                             │
+│ posbook1     │ 2026-09-24 08:00:00 │           │ no closing banner yet -     │
+│              │                     │           │ still loading, or it        │
+│              │                     │           │ stopped while loading       │
+└──────────────┴─────────────────────┴───────────┴─────────────────────────────┘
+```
+
+It is read from each process's `out_` log, not asked over IPC, so a process
+at its connection cap cannot make it hang. TorQ prints its banner twice on a
+start: when the log file is created, and again at the very end of torq.q,
+once every code directory, the `-load` file and `.servers.startup[]` have run.
+The load time is the first timestamped line to the last one before that
+second banner, both on the process's own clock. `Started` is on that clock
+too - GMT unless the process runs with `-localtime`. After a daily log roll
+the start is found in the older file that holds it; `python/uqs/src/uqs/stack/startup.py`
+has the details.
 
 ## Services
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import time
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -19,6 +20,7 @@ from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
     PortOpt,
+    _debug_requested,
     _die,
     _export,
     _lines,
@@ -27,11 +29,12 @@ from uqs.cli.shared import (
     console,
     log,
 )
+from uqs.logger import configure_logging
 from uqs.model import dependencies
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
-from uqs.stack import listing, runtime
+from uqs.stack import listing, runtime, startup
 from uqs.stack.listing import (
     MONITOR_PROCNAME,
     SUMMARY_ALL_COLUMNS,
@@ -121,6 +124,25 @@ def _resolve_columns(requested: str | None) -> list[str]:
     return resolved
 
 
+def _print_startups(log_dir: Path, procnames: list[str]) -> None:
+    """How long each process took to load on its latest start, slowest first.
+
+    A second table rather than a column: it is a debug question, and the
+    processes that never finished loading - the ones worth reading about -
+    carry a sentence, not a number.
+    """
+    found = startup.read_startups(log_dir, procnames)
+    found.sort(key=lambda s: (s.seconds is None, -(s.seconds or 0.0)))
+    table = Table(title="Load time on each process's latest start, from its own log")
+    for col in ("Process", "Started", "Load time", "Note"):
+        table.add_column(col)
+    for s in found:
+        started = s.started.strftime("%Y-%m-%d %H:%M:%S") if s.started else ""
+        took = f"{s.seconds:.2f}s" if s.seconds is not None else ""
+        table.add_row(s.procname, started, took, f"[dim]{s.note}[/]" if s.note else "")
+    console.print(table)
+
+
 def _attach_graph_columns(rows: list[dict[str, str]]) -> None:
     """Fill the graph columns on each row, in place.
 
@@ -144,6 +166,7 @@ def _attach_graph_columns(rows: list[dict[str, str]]) -> None:
 
 @app.command()
 def summary(
+    ctx: typer.Context,
     port: PortOpt = DEFAULT_BASE_PORT,
     export: ExportOpt = None,
     columns: Annotated[
@@ -167,6 +190,16 @@ def summary(
             ),
         ),
     ] = SUMMARY_TIMEOUT_SECONDS,
+    debug: Annotated[
+        bool,
+        typer.Option(
+            "--debug",
+            help=(
+                "Log at DEBUG, and add how long each process took to load, "
+                "read from its own log. Same as `uqs --debug summary`."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Status table for every process in process.csv, with its declared graph.
 
@@ -181,8 +214,11 @@ def summary(
     Run with `--debug` (or LOG_LEVEL=DEBUG) to see where each column came
     from: the two lookups below degrade rather than fail, so on the default
     level a missing port map and an unreachable monitor1 look the same as a
-    stack that simply has nothing to report.
+    stack that simply has nothing to report. Debug also prints how long each
+    process took to load - see stack/startup.py for how that is measured.
     """
+    if debug:
+        configure_logging(component="uqs", level="DEBUG")
     chosen = _resolve_columns(columns)
     # One budget shared across both blocking steps, spent in order. `remaining`
     # is what is left when each is reached; 0 means no limit, as it does on
@@ -292,6 +328,8 @@ def summary(
         }
         table.add_row(*(rendered.get(col, "") for col in chosen))
     console.print(table)
+    if _debug_requested(ctx, debug):
+        _print_startups(Path(paths.torqdata) / "logs", [row["Process"] for row in rows])
 
     # Up and fed are different questions, and the table above only answers
     # the first. A process can hold a PID, heartbeat `ok`, and still be
