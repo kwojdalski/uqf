@@ -4,8 +4,8 @@ Daily stable snapshots of this repository. Newest first.
 
 ## stable/2026-09-24
 
-This snapshot covers 74 commits in 52 merged PRs (#354–#410) since `stable/2026-09-22`.
-369 files changed (89 added, 76 deleted, 42 renamed, 162 modified), +19,392 / -15,163 lines.
+This snapshot covers 185 commits in 56 merged PRs (#354–#424) since `stable/2026-09-22`.
+400 files changed, +21,072 / -16,627 lines.
 Most of the work was on the stack's Python side. `uqf-stack` was renamed `uqs`, and adding a job
 now needs no hand-kept list edits. The tree was reorganised into folders named for their layers.
 Legacy parts were removed: `env/`, `uqf_client`, log4q and the old release builder.
@@ -49,6 +49,26 @@ Legacy parts were removed: `env/`, `uqf_client`, log4q and the old release build
 - **Diagrams:** all in one language (d2), with the repo overview and FX positions diagrams redrawn.
 - **Retired:** `ROADMAP.md`, `docs/migrations/`, `docs/audits` and `restatement-design.md`.
 - **Renamed:** `surfaces/uqf-local` is now `surfaces/current`.
+
+### After the entry above was written (#421–#424, 101 files, +1,355 / -1,187)
+
+- **`uqs up`:** start, and stream every started process's log to the console until Ctrl-C —
+  the foreground form of `start` + `logs -f`, the way `docker compose up` is.
+- **One sink, two shapes of record:** the kdb log format needs `extra[kdb_time]`, and loguru
+  formats with `format_map`, so every record `uqs` logged *itself* during a stream raised
+  `KeyError` inside the handler — printing a traceback and dropping the message. Safe while
+  `logs` was a leaf command; `up` is not. A run that hit the moved data directory printed eight
+  tracebacks and none of the instruction explaining what to run. The format is a per-record
+  chooser now.
+- **Start profiles:** an `all` profile, and `UQS_LICENCE_CONNECTIONS` to set the budget rather
+  than edit the constant.
+- **`uqs summary`:** default `--timeout` 120s, not 10s.
+- **`.qdqc` scope:** data quality only — business limits belong to `.qlimit`.
+- **`docs/`:** `frontend-requirements.md` removed with every `FE-nn` citation of it; the stack
+  page is architecture and its generated process table is reference; `docs/README.md` states
+  where a document goes and what is there in one table.
+- **`README.md`:** 458 lines to 307. The `qlinter`, Quant modules and Coverage sections moved to
+  the files that already documented them.
 
 ## stable/2026-09-22
 
