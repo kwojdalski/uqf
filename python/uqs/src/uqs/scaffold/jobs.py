@@ -370,7 +370,7 @@ def bounded_worker(
         notes = [f"reuses .qfeed.{src}: its query and fixture are already written"]
     else:
         notes = [
-            f"write .qfeed.{src}.query - parameterised, never concatenated (ETL-08)",
+            f"write .qfeed.{src}.query - parameterised, never concatenated (FE-14)",
             f"write .qfeed.{src}.fixture - deterministic, same contract as the live source",
             f"declared fields: {', '.join(c for c, _ in cols)}",
         ]

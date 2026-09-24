@@ -148,9 +148,11 @@ row_key:`{TIME_COLUMN}
 / later reader assumes UTC while the source hands over local wall-clock time.
 tz:`UTC
 
-/ Parameterised, NEVER concatenated (ETL-08). The bounds are arguments to a
-/ functional select evaluated on the remote side, so no caller value is ever
-/ spliced into query text. Half-open [range_from;range_to): >= on the lower
+/ Parameterised, NEVER concatenated (FE-14, via src/etl/core/source_contract.q).
+/ The bounds are arguments to a functional select evaluated on the remote
+/ side, so no caller value is ever spliced into query text.
+/ .
+/ Half-open [range_from;range_to) - ETL-08, a DIFFERENT rule: >= on the lower
 / bound and < on the upper, so a boundary row is published exactly once.
 query:{{[h;range_from;range_to]
     '"{src}.query: not implemented";
