@@ -71,7 +71,8 @@ def test_every_leaf_is_a_process_that_exists(name):
 
 @pytest.mark.parametrize("name", NAMES)
 def test_every_profile_names_at_least_one_leaf(name):
-    assert profiles.PROFILES[name], f"profile {name} is empty"
+    """Or is an infrastructure-only profile, which says so in PROFILE_INFRA."""
+    assert profiles.PROFILES[name] or name in profiles.PROFILE_INFRA, f"profile {name} is empty"
 
 
 def test_default_resolves_to_exactly_what_start_all_runs_today():
@@ -88,11 +89,46 @@ def test_default_resolves_to_exactly_what_start_all_runs_today():
 
 
 def test_the_core_infrastructure_is_in_every_profile():
-    """A profile that started jobs and no plant would start nothing useful."""
+    """A profile that started jobs and no plant would start nothing useful.
+    All of CORE_INFRA, unless the profile names a smaller set of its own."""
     for name in NAMES:
         resolved = profiles.resolve([name])
-        assert set(profiles.CORE_INFRA) <= set(resolved)
+        infra = profiles.PROFILE_INFRA.get(name, profiles.CORE_INFRA)
+        assert set(infra) <= set(resolved)
         assert "stp1" in resolved, "the tickerplant is not optional"
+
+
+def test_every_smaller_infrastructure_set_is_part_of_the_core():
+    """A process outside CORE_INFRA would be started by no other profile and
+    dropped by `infrastructure`, which orders by CORE_INFRA."""
+    for name, infra in profiles.PROFILE_INFRA.items():
+        assert set(infra) <= set(profiles.CORE_INFRA), name
+
+
+def test_essential_is_the_torq_stack_and_nothing_else():
+    resolved = profiles.resolve(["essential"])
+    assert set(resolved) == {
+        "discovery1",
+        "stp1",
+        "rdb1",
+        "hdb1",
+        "hdb2",
+        "wdb1",
+        "gateway1",
+        "monitor1",
+        "housekeeping1",
+    }
+    assert not set(resolved) & PROCNAMES, "no uqf job"
+
+
+def test_essential_holds_only_the_slots_of_what_it_starts():
+    """rdb1 and wdb1 subscribe; sctp1 and metrics1 are not started by it."""
+    assert profiles.plant_slots(profiles.resolve(["essential"])) == 2
+
+
+def test_composing_essential_with_a_job_profile_gets_the_full_core():
+    """The union: `fx` needs CORE_INFRA, so `essential,fx` starts all of it."""
+    assert profiles.resolve(["essential", "fx"]) == profiles.resolve(["fx"])
 
 
 def test_core_infrastructure_leads_the_resolved_list():
@@ -129,9 +165,7 @@ def test_a_backfill_holds_no_plant_slot():
         pipeline.procname for pipeline in PIPELINES if pipeline.kind is PipelineKind.BACKFILL
     ]
     assert backfills, "this test is vacuous without a backfill in the registry"
-    assert profiles.plant_slots(backfills) == len(profiles.VENDORED_PLANT_CLIENTS), (
-        "a backfill was counted as a plant client"
-    )
+    assert profiles.plant_slots(backfills) == 0, "a backfill was counted as a plant client"
 
 
 def test_only_the_listed_vendored_processes_hold_a_slot():

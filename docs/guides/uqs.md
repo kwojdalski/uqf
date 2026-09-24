@@ -406,6 +406,7 @@ derived from the same dependency graph `summary`'s **Depends on** column uses:
 uqs list profiles
 uqs start --profile arbitrage
 uqs start --profile depth,crypto
+uqs start --profile essential      # the TorQ stack alone, no uqf jobs
 UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows it
 ```
 
@@ -416,6 +417,7 @@ UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows 
 | `arbitrage` | `arbitrage1`, `crossarb1` | 10/14 |
 | `depth` | `vectorize1`, `cross1` | 8/14 |
 | `crypto` | `cryptomock1` | 5/14 |
+| `essential` | none - the TorQ stack alone (see below) | 2/14 |
 | `all` | every profile's leaves except `crypto`'s | 20/14 - refused on this licence |
 
 **A profile over the cap is refused, not warned.** That is the opposite of a
@@ -449,6 +451,18 @@ at a table fed from outside the stack: `posbook1` needs `crypto_book`, which
 cryptorust's recorder publishes, so the `fx` profile does **not** drag in
 `cryptomock1` - that mock replaces the recorder rather than joining it, which
 is why it is a profile of its own.
+
+**`essential` is the TorQ stack with nothing on top**: `discovery1`,
+`stp1`, `rdb1`, `hdb1`, `hdb2`, `wdb1`, `gateway1`, `monitor1` and
+`housekeeping1` - nine processes, two plant slots. It is the one profile
+that starts less than the full infrastructure: no chained plant (`sctp1`),
+no `metrics1`, and no sort processes (`sort1`, `sortworker1`,
+`sortworker2`). The day still rolls over without them: at end of day `wdb1`
+looks for a sort process, logs `can't connect to the sortandreload - no
+sortandreload process detected` as an error, and sorts the writedown into
+the HDB itself - so expect that error line, and `wdb1` busy while it sorts.
+Composing it with a job profile - `--profile essential,fx` - starts the full
+infrastructure that job profile needs, sort processes included.
 
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`. Each one
 names leaves, never members, so adding a process to a chain does not mean
