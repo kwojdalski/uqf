@@ -420,17 +420,17 @@ connect:{[worker]
 
 empty_windows:{[] ([] range_from:`timestamp$(); range_to:`timestamp$())}
 
-/ Turn a cursor into the windows still to do (ETL-13, ETL-18).
+/ The windows still to do (ETL-13, ETL-18).
 / .
-/ Two narrowings, in this order, and the order matters:
+/ ONE narrowing: coverage. Every gap in the range is planned, at this
+/ source_version, whatever the cursor says - the body below explains what
+/ went wrong when the cursor was a hard lower bound, and `cursor` is now an
+/ unread parameter kept for the signature its callers already pass.
 / .
-/   1. the CURSOR narrows the range to what this run has not yet reached.
-/   2. COVERAGE narrows it further to what is not already published, at this
-/      source_version. A retry after a partial run then redoes only the gaps.
-/ .
-/ Coverage first and cursor second would re-plan windows this run had already
-/ passed, which is merely wasteful. Cursor only would re-fetch windows a
-/ PREVIOUS run published, which is what ETL-13 exists to avoid.
+/ This header used to describe TWO narrowings, cursor first and coverage
+/ second, which is what the function did before a restatement could withdraw
+/ coverage the cursor had already passed. The body changed and the header did
+/ not, so the two disagreed about the thing the function is for.
 plan:{[worker;cursor]
     cfg:declaration worker;
     s:spec worker;
