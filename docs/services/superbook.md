@@ -38,7 +38,7 @@ connections, and every streaming job holds one to `stp1`. The default start
 sits at thirteen with three held back, so this chain spends exactly the
 spare slots - which is what they are for, and why nothing else should be
 started alongside it without stopping something first. See
-[the stack architecture](../integrations/torq/README.md#what-starts-with-the-stack-and-why-not-all-of-it).
+[the stack architecture](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it).
 
 Being a closed chain is what makes that safe. `market_data` is read only by
 `superbook1`, `superbook` only by `arbitrage1`, and `arbitrage` by nothing,

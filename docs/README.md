@@ -21,13 +21,14 @@ against a recorder instead of a tickerplant — and exactly one namespace is
 allowed to, `.qpipe` in `scripts/`. `scripts/gates/check_etl_layering.py` fails
 the build if anything under `src/etl/` reaches for it.
 
-For the *running* stack — who connects to whom, with ports — see
-[`integrations/torq/README.md`](integrations/torq/README.md); this diagram
-deliberately stops at the shape.
+For the *running* stack — who connects to whom — see
+[`architecture/stack.md`](architecture/stack.md), and for ports the generated
+[`reference/processes.md`](reference/processes.md); this diagram deliberately
+stops at the shape.
 
 ## Where a document goes
 
-Six directories, one question each. The rule is what a document *is for*,
+Five directories, one question each. The rule is what a document *is for*,
 not what it is about — a page about the ETL framework can be a guide, a
 reference or an architecture note, and only its purpose decides where it goes.
 
@@ -36,9 +37,8 @@ reference or an architecture note, and only its purpose decides where it goes.
 | [`guides/`](guides/README.md) | *How do I do this?* | operators and new developers | [`uqs.md`](guides/uqs.md) running the stack<br>[`new-pipeline.md`](guides/new-pipeline.md) adding a pipeline, end to end<br>[`ci.md`](guides/ci.md) the gates, run locally<br>[`config-audit.md`](guides/config-audit.md) who changed runtime config<br>[`metatables.md`](guides/metatables.md) partition profiling |
 | [`scaffolding/`](scaffolding/README.md) | *How do I create one of these?* | developers adding a process | one per `uqs new-job` shape: [`feed.md`](scaffolding/feed.md), [`etl.md`](scaffolding/etl.md), [`normalizer.md`](scaffolding/normalizer.md), [`backfill.md`](scaffolding/backfill.md) |
 | [`services/`](services/README.md) | *What does this running service do, and how do I run it?* | operators and developers of that service | one per service: [`synthetic-feeds.md`](services/synthetic-feeds.md), [`superbook.md`](services/superbook.md), [`cross-arbitrage.md`](services/cross-arbitrage.md), [`fx-positions.md`](services/fx-positions.md), [`databento.md`](services/databento.md), [`crypto-recorder.md`](services/crypto-recorder.md), [`tap.md`](services/tap.md) |
-| [`architecture/`](architecture/README.md) | *Why is it shaped this way?* | developers changing it | [`pipeline-philosophy.md`](architecture/pipeline-philosophy.md) what `src/etl/` is built on<br>[`event-tape.md`](architecture/event-tape.md) the order/trade event tape<br>[`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) against a Dagster-shaped framework<br>[`cryptorust-discovery.md`](architecture/cryptorust-discovery.md) a client that never listens<br>[`pipeline-architecture-example.md`](architecture/pipeline-architecture-example.md) a desk system, composed |
-| [`reference/`](reference/README.md) | *What is the contract?* | anyone integrating, and CI | [`quant-modules.md`](reference/quant-modules.md) each `src/` module<br>[`environment.md`](reference/environment.md) every variable, gated<br>[`etl-framework-requirements.md`](reference/etl-framework-requirements.md) ETL-nn<br>[`frontend-requirements.md`](reference/frontend-requirements.md) FE-nn<br>[`surfaces/current/`](reference/surfaces/current/) the exported contract surface, generated |
-| [`integrations/`](integrations/) | *How does this meet something external?* | operators | [`torq/README.md`](integrations/torq/README.md) the running stack<br>[`torq/processes.md`](integrations/torq/processes.md) the process table, generated |
+| [`architecture/`](architecture/README.md) | *Why is it shaped this way?* | developers changing it | [`pipeline-philosophy.md`](architecture/pipeline-philosophy.md) what `src/etl/` is built on<br>[`event-tape.md`](architecture/event-tape.md) the order/trade event tape<br>[`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) against a Dagster-shaped framework<br>[`cryptorust-discovery.md`](architecture/cryptorust-discovery.md) a client that never listens<br>[`pipeline-architecture-example.md`](architecture/pipeline-architecture-example.md) a desk system, composed<br>[`stack.md`](architecture/stack.md) the running stack and how it is wired |
+| [`reference/`](reference/README.md) | *What is the contract?* | anyone integrating, and CI | [`quant-modules.md`](reference/quant-modules.md) each `src/` module<br>[`environment.md`](reference/environment.md) every variable, gated<br>[`etl-framework-requirements.md`](reference/etl-framework-requirements.md) ETL-nn<br>[`frontend-requirements.md`](reference/frontend-requirements.md) FE-nn<br>[`processes.md`](reference/processes.md) every process, its port and edges, generated<br>[`surfaces/current/`](reference/surfaces/current/) the exported contract surface, generated |
 
 ### Also in `docs/`
 

@@ -79,7 +79,7 @@ So after scaffolding, the tree is in a known state:
   and, for a job that subscribes and publishes, on its `contract_driver` too
 - `uv run pytest python/` fails on
   `test_the_prose_architecture_doc_is_consistent_with_the_registry`: name the
-  new process in `docs/integrations/torq/README.md`. That file is authored
+  new process in `docs/architecture/stack.md`. That file is authored
   prose, so the scaffold cannot write it.
 - `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
   every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is

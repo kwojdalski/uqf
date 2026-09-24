@@ -118,7 +118,7 @@ uqs start marketdata1 superbook1 arbitrage1 crossarb1
 **That is four plant connections against three spare.** A q process on the
 community licence accepts sixteen inbound connections, the default start
 holds thirteen, and the chain plus this process wants four
-([the budget](../integrations/torq/README.md#what-starts-with-the-stack-and-why-not-all-of-it)).
+([the budget](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it)).
 Stop something first, or run `crossarb1` without `arbitrage1` — they answer
 different questions and neither depends on the other.
 

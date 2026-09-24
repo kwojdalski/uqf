@@ -6,8 +6,8 @@
 
 Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 `process.csv`. For how to start, stop and query the stack see
-[docs/guides/uqs.md](../../guides/uqs.md); for the topology diagrams see
-[README.md](README.md).
+[docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
+[architecture/stack.md](../architecture/stack.md).
 
 **23 vendored processes** plus **23 uqf processes** — 46 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 

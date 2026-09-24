@@ -332,15 +332,15 @@ def test_columns_with_nothing_to_shape_are_refused_not_ignored():
         )
 
 
-def test_every_plan_names_the_readme_line_it_cannot_write():
-    """docs/integrations/torq/README.md is authored prose and pytest fails until
+def test_every_plan_names_the_stack_page_line_it_cannot_write():
+    """docs/architecture/stack.md is authored prose and pytest fails until
     it names the process - so the plan says so, rather than leaving that red to
     be discovered."""
     for plan, proc in (
         (jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates_backfill1"),
         (jobs.streaming_job("markout2", ["trades"], None, None), "markout21"),
     ):
-        assert any(proc in n and "README.md" in n for n in plan.notes), plan.notes
+        assert any(proc in n and "stack.md" in n for n in plan.notes), plan.notes
 
 
 # --------------------------------------------------------------- write mode

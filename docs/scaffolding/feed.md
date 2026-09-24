@@ -25,7 +25,7 @@ scaffold pulsefeed:
   append to tests/run_tests.q (1 line)
   note: describe pulse: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q ...
   note: implement .qsub.pulsefeed.on_timer, then replace the scaffolded test
-  note: name pulsefeed1 in docs/integrations/torq/README.md - authored prose, checked by pytest
+  note: name pulsefeed1 in docs/architecture/stack.md - authored prose, checked by pytest
   note: add pulsefeed1 to a profile in python/uqs/src/uqs/model/profiles.py ...
 ```
 

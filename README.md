@@ -243,10 +243,10 @@ directories, one question each:
 | Directory | Answers |
 |---|---|
 | [`docs/guides/`](docs/guides/) | *How do I do this?* — running the stack, adding a pipeline, the CI gates |
+| [`docs/scaffolding/`](docs/scaffolding/README.md) | *How do I create one of these?* — one page per shape `uqs new-job` writes |
 | [`docs/services/`](docs/services/README.md) | *What does this running service do, and how do I run it?* — one page per service |
-| [`docs/architecture/`](docs/architecture/) | *Why is it shaped this way?* |
-| [`docs/reference/`](docs/reference/) | *What is the contract?* — the quant modules, environment variables and requirement ids |
-| [`docs/integrations/`](docs/integrations/torq/README.md) | *How does this meet something external?* |
+| [`docs/architecture/`](docs/architecture/) | *Why is it shaped this way?* — including the running stack |
+| [`docs/reference/`](docs/reference/) | *What is the contract?* — the quant modules, environment variables, requirement ids and the process table |
 
 Still open, and why: the `decision`-labelled issues.
 

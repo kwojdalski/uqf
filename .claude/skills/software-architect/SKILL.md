@@ -21,7 +21,7 @@ Not one codebase. Four layers with different rules, and most real architectural 
 Two rules are load-bearing and enforced:
 
 - **No file under `src/` may know TorQ exists.** Exactly one namespace may — `.qpipe`, in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build otherwise. This is what lets a job be tested against a recorder instead of a tickerplant.
-- **Derived artefacts are generated and `--check`ed, never hand-maintained**: `docs/man.q`, the contract surface, `docs/integrations/torq/processes.md`, `src/etl/generated/pipeline_dag.q`, the rendered SVGs, the q-coverage baseline.
+- **Derived artefacts are generated and `--check`ed, never hand-maintained**: `docs/man.q`, the contract surface, `docs/reference/processes.md`, `src/etl/generated/pipeline_dag.q`, the rendered SVGs, the q-coverage baseline.
 
 Apply architectural principles at the level that applies: module boundaries, shell-versus-declaration, function composition, namespace-level state, registry contracts and data-shape agreements — not class hierarchies.
 
