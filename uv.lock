@@ -5,7 +5,6 @@ requires-python = ">=3.14"
 [manifest]
 members = [
     "uqf-airflow-provider",
-    "uqf-client",
     "uqf-frontend",
     "uqf-workspace",
     "uqs",
@@ -1397,29 +1396,6 @@ dev = [
 ]
 
 [[package]]
-name = "uqf-client"
-version = "0.1.0"
-source = { editable = "python/uqf_client" }
-dependencies = [
-    { name = "kola" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "kola", specifier = ">=2.5.0" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "ruff", specifier = ">=0.16.2" },
-]
-
-[[package]]
 name = "uqf-frontend"
 version = "0.1.0"
 source = { editable = "python/uqf_frontend" }
@@ -1460,7 +1436,6 @@ version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "uqf-airflow-provider" },
-    { name = "uqf-client" },
     { name = "uqf-frontend" },
     { name = "uqs" },
 ]
@@ -1477,7 +1452,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "uqf-airflow-provider", editable = "python/uqf_airflow_provider" },
-    { name = "uqf-client", editable = "python/uqf_client" },
     { name = "uqf-frontend", editable = "python/uqf_frontend" },
     { name = "uqs", editable = "python/uqs" },
 ]

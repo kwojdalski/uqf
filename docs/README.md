@@ -128,5 +128,3 @@ process table, generated from the job declarations).
   browser application on top of it),
   and [`python/uqf_airflow_provider/`](../python/uqf_airflow_provider/README.md)
   (the backfill status files as Airflow sensors).
-  [`python/uqf_client/`](../python/uqf_client/), the Python/Polars client
-  over kdb+ IPC, has no README yet.

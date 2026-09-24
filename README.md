@@ -8,7 +8,7 @@ expects, and the **operational tooling** — process orchestration, an HTTP
 gateway and a browser application — that runs the whole thing as a fleet.
 
 **The names.** `uqf` is the repository and the family - the prefix on every
-Python package in it (`uqf_client`, `uqf_frontend`, `uqf_airflow_provider`).
+Python package in it (`uqf_frontend`, `uqf_airflow_provider`).
 `uqs`, the *ultimate q stack*, is one of those components rather than the
 whole: the process orchestrator and its `uqs` command. The distinction is
 what the names are for, so a package named plainly `uqf` would be wrong -
@@ -212,7 +212,7 @@ change usually belongs to exactly one.
 | **Quant library** | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. [Detailed below](#quant-modules) |
 | **Data processing** | [`src/market_data/`](src/market_data) | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw |
 | **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
-| **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`python/uqf_client/`](python/uqf_client), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, a q client, and the React desk and operations app |
+| **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, and the React desk and operations app |
 | **Database metadata** | [`src/metadata/`](src/metadata) | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable eFX breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md) |
 
 Authority is split deliberately between them: q and TorQ own process

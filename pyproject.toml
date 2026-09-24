@@ -18,8 +18,8 @@
 # depend on it and are documented as such at their call sites:
 #   - python/uqf_frontend/tests/test_catalog_drift.py resolves parents[3] to
 #     read scripts/processes/uqs_tables.q as TEXT (never importing uqs)
-#   - python/uqf_client/tests/conftest.py resolves parents[3] to the repo
-#     root so it can launch `q src/init.q`
+#   - python/uqs/tests/test_contract_surface.py and test_example_scripts.py
+#     resolve parents[3] to the repo root, to reach scripts/ and run q there
 # Moving the packages would break both.
 #
 # This root is not itself a distributable package - see [tool.uv] package.
@@ -30,7 +30,6 @@ version = "0.0.0"
 description = "Workspace root aggregating uqf's Python packages; not published"
 requires-python = ">=3.14"
 dependencies = [
-    "uqf-client",
     "uqs",
     "uqf-frontend",
     "uqf-airflow-provider",
@@ -50,7 +49,6 @@ exclude = ["lib/torq/", ".claude/worktrees/"]
 
 [tool.uv.workspace]
 members = [
-    "python/uqf_client",
     "python/uqs",
     "python/uqf_frontend",
     "python/uqf_airflow_provider",
@@ -64,7 +62,6 @@ members = [
 # as missing - which is the same silently-never-runs shape as a pre-commit
 # scope that matches nothing.
 [tool.uv.sources]
-uqf-client = { workspace = true }
 uqs = { workspace = true }
 uqf-frontend = { workspace = true }
 uqf-airflow-provider = { workspace = true }
@@ -112,7 +109,6 @@ exclude = ["lib", ".venv", "build", ".claude/worktrees", "tools"]
 
 [tool.ty.environment]
 root = [
-    "python/uqf_client/src",
     "python/uqs/src",
     "python/uqf_frontend/src",
 ]
@@ -150,7 +146,6 @@ extend-exclude = ["lib", ".claude/worktrees"]
 # run from the workspace root it cannot, and every intra-package import gets
 # treated as third-party - which silently reformats 13 files' import blocks.
 src = [
-    "python/uqf_client/src",
     "python/uqs/src",
     "python/uqf_frontend/src",
 ]
@@ -164,7 +159,6 @@ select = ["E", "F", "I", "UP", "B"]
 # this: before it existed, 229 of the repository's 231 Python tests never ran
 # on commit.
 testpaths = [
-    "python/uqf_client/tests",
     "python/uqs/tests",
     "python/uqf_frontend/tests",
     "python/uqf_airflow_provider/tests",

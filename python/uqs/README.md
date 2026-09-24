@@ -7,8 +7,7 @@ or writing into either. Full writeup: [docs/guides/uqs.md](../../docs/guides/uqs
 at the repo root.
 
 Standalone package on purpose: this is process orchestration, not q
-pricing, so it stays out of `python/uqf_client` (which depends on nothing
-but `kola`) and carries its own dependencies (`typer`, `rich`, `loguru`,
+pricing, and it carries its own dependencies (`typer`, `rich`, `loguru`,
 `fastmcp`, `kola`).
 
 ## Layout

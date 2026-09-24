@@ -14,10 +14,7 @@ writing into either `lib/` directory. The actual bootstrapping/config logic
 lives in `python/uqs/src/uqs/`'s `model/` and `stack/` modules,
 shared with `uqs_mcp.py`'s FastMCP server (see "MCP server" below) so the
 CLI and the MCP tools can't drift apart. It's a standalone package
-(`python/uqs/`), separate from `python/uqf_client/` (the
-pricing library's q-IPC client) - this has nothing to do with pricing, and
-keeping it separate keeps `uqf_client` itself down to its one real
-dependency (`kola`).
+(`python/uqs/`).
 
 See [docs/integrations/torq/README.md](../integrations/torq/README.md) for diagrams of the current
 process topology, table-level data pipeline, and config-generation flow.
@@ -714,8 +711,7 @@ uqs query \
 ```
 
 `query` returns a Polars DataFrame (via `kola`, the same IPC library
-`uqf_client.UqfClient` uses for the pricing library itself) for table
-results. From a plain q session instead: `q)h:hopen
+the frontend gateway uses) for table results. From a plain q session instead: `q)h:hopen
 \`:localhost:6052:admin:admin`, then `h "..."`, then `hclose h`.
 
 The gateway (6057) is the intended single entry point for querying across
