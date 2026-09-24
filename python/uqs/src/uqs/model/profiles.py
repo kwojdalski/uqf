@@ -100,6 +100,38 @@ CORE_INFRA: tuple[str, ...] = (
     "metrics1",
 )
 
+#: The TorQ stack with nothing on top: capture (discovery, the plant), store
+#: (rdb, the intraday writedown, the hdbs), query (the gateway) and keep an
+#: eye on it (monitor, housekeeping). No uqf job, and none of the rest of
+#: CORE_INFRA - the chained plant, metrics, and the sort processes.
+#:
+#: LEAVING OUT sort1 AND ITS WORKERS is safe but not free: at end of day wdb1
+#: hands its intraday writedown to them to sort and move into the HDB. With
+#: none running, TorQ's wdb logs "no sortandreload process detected" as an
+#: ERROR and sorts locally instead (informsortandreload in
+#: lib/torq/code/processes/wdb.q), so the day still lands - on wdb1 itself,
+#: which is busy while it does. Composing with a job profile
+#: (`--profile essential,fx`) starts the full CORE_INFRA, sort processes
+#: included.
+ESSENTIAL_INFRA: tuple[str, ...] = (
+    "discovery1",
+    "stp1",
+    "rdb1",
+    "hdb1",
+    "hdb2",
+    "wdb1",
+    "gateway1",
+    "monitor1",
+    "housekeeping1",
+)
+
+#: Profiles that start a smaller infrastructure set than CORE_INFRA, and
+#: which. Every other profile starts all of CORE_INFRA. Composed profiles take
+#: the union, so `essential,fx` is the full infrastructure `fx` needs.
+PROFILE_INFRA: dict[str, tuple[str, ...]] = {
+    "essential": ESSENTIAL_INFRA,
+}
+
 #: What each profile is FOR, keyed by name, valued by the leaves it wants.
 #:
 #: Leaves, not members: see the module docstring. A leaf is the process whose
@@ -119,6 +151,8 @@ PROFILES: dict[str, tuple[str, ...]] = {
     #: cryptorust's recorders replaced by the in-tree mock. INSTEAD of the
     #: real ones, never alongside - see the module docstring.
     "crypto": ("cryptomock1",),
+    #: No uqf job at all: just ESSENTIAL_INFRA, via PROFILE_INFRA.
+    "essential": (),
 }
 
 #: Profiles `all` leaves out, and why. An exemption carries its reason, the
@@ -217,8 +251,9 @@ def closure(leaves: Iterable[str]) -> set[str]:
     is NOT pulled in - the module docstring says why that matters rather than
     merely being tidy.
 
-    Vendored infrastructure is not here: it is `CORE_INFRA`, needed by every
-    profile and not derivable from a graph that only knows uqf's own jobs.
+    Vendored infrastructure is not here: it is `CORE_INFRA` (or a profile's
+    smaller PROFILE_INFRA set), not derivable from a graph that only knows
+    uqf's own jobs.
     """
     inputs = inputs_by_process()
     producers = producers_by_table()
@@ -245,18 +280,21 @@ def plant_slots(procnames: Iterable[str]) -> int:
       and exits, and never subscribes to the plant. The same distinction
       `verify_pipeline_edges` draws when it counts the default start.
     * A VENDORED process is counted only if it is in
-      `VENDORED_PLANT_CLIENTS`. Most of `CORE_INFRA` opens no plant handle:
-      the gateway queries the databases, discovery is registered WITH, and
-      stp1 is the plant. Counting every infrastructure process as a client
-      put a bare `crypto` profile over a budget it uses five slots of.
+      `VENDORED_PLANT_CLIENTS`, and only when it is one of `procnames`. Most of
+      `CORE_INFRA` opens no plant handle: the gateway queries the databases,
+      discovery is registered WITH, and stp1 is the plant. Counting every
+      infrastructure process as a client put a bare `crypto` profile over a
+      budget it uses five slots of - and counting ones that are not being
+      started would charge `essential` for sctp1 and metrics1.
     """
+    wanted = set(procnames)
     kinds = {pipeline.procname: pipeline.kind for pipeline in PIPELINES}
     subscribers = {
         procname
-        for procname in procnames
+        for procname in wanted
         if procname in kinds and kinds[procname] is not PipelineKind.BACKFILL
     }
-    return len(subscribers | VENDORED_PLANT_CLIENTS)
+    return len(subscribers | (VENDORED_PLANT_CLIENTS & wanted))
 
 
 def resolve(names: Iterable[str]) -> tuple[str, ...]:
@@ -278,7 +316,15 @@ def resolve(names: Iterable[str]) -> tuple[str, ...]:
         )
     leaves = [leaf for name in wanted for leaf in PROFILES[name]]
     members = closure(leaves)
-    return CORE_INFRA + tuple(sorted(members))
+    return infrastructure(wanted) + tuple(sorted(members))
+
+
+def infrastructure(names: Iterable[str]) -> tuple[str, ...]:
+    """The vendored processes `names` start: the union of each profile's
+    PROFILE_INFRA set, or CORE_INFRA for a profile without one. Kept in
+    CORE_INFRA's order, so every profile's list reads the same way."""
+    wanted = {proc for name in names for proc in PROFILE_INFRA.get(name, CORE_INFRA)}
+    return tuple(proc for proc in CORE_INFRA if proc in wanted)
 
 
 def over_budget(names: Iterable[str]) -> str | None:
