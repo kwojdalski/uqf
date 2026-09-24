@@ -394,12 +394,23 @@ init:{[worker;run_spec]
     / explicit statement that this is a demo, NOT a fallback for a failed
     / connection - falling back on failure would turn an outage into
     / silently synthetic data that coverage then records as complete.
-    / Said at INF when it is the fixture, naming the variable that would make
-    / it live - "why is this backfill publishing demo rows" has no other answer.
+    / A WARN that says how to fix it, not just that it happened: the variable
+    / to set, what its value looks like for this source's transport (an ODBC
+    / connection string, or host:port for kdb+ IPC), an example, and where it
+    / has to be exported - the shell `uqs backfill` runs in, whose environment
+    / the process inherits. Not an error: no credential is the declared way
+    / to run on the fixture, and a demo stack runs like that on purpose.
+    / `odbc`, not `var`: var is a q builtin (variance).
     live:.qsrc.has_credentials cfg`source;
     if[not live;
-        .qlog.info[worker;"no credential - running on the source's fixture, not live data";
-            enlist[`set_to_go_live]!enlist .qsrc.credential_var cfg`source]];
+        odbc:`odbc~(.qsrc.declaration cfg`source)`transport;
+        .qlog.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so the secret stays off the command line";
+            `variable`expects`example!(
+                .qsrc.credential_var cfg`source;
+                $[odbc; "an ODBC connection string"; "host:port, or host:port:user:password"];
+                $[odbc;
+                    "DRIVER=SingleStore ODBC Driver;SERVER=<host>;PORT=3306;DATABASE=<db>;UID=<user>;PWD=<password>";
+                    "localhost:5010"])]];
     write_state[worker;`handle;$[live; connect worker; 0Ni]];
 
     .qlog.register[];

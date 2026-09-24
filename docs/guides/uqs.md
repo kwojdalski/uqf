@@ -792,7 +792,7 @@ stall, so the last line in `uqs logs <procname>` says where it stopped:
 | `first batch received` but no `first rows published` | input arrives and the job publishes nothing from it |
 | `on_batch failed` | the job's handler threw, with the table and the error |
 | `backfill process failed` then `backtrace` | a backfill's error, and where it happened |
-| `no credential - running on the source's fixture` | a backfill is publishing the fixture, not live data: set the variable the line names (`UQF_SOURCE_CRED_<SOURCE>`) |
+| `no credential - running on the source's fixture` (WARN) | a backfill is publishing the fixture, not live data. The line names the variable (`UQF_SOURCE_CRED_<SOURCE>`), what its value should be for that source - an ODBC connection string, or `host:port` for kdb+ - and an example. Export it in the shell you run `uqs backfill` from |
 | `idle - every window in the range is already covered` | nothing to do at this `--version`: coverage says the range is done. A new source release is a new version |
 | `checkpoint is for another run - starting from the beginning` | the range or version changed since the last run, so its checkpoint does not apply |
 | `retrying after a transport error` | the source failed transiently; the attempt, backoff and error follow |
