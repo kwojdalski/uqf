@@ -44,12 +44,16 @@ from uqs.cli import external  # noqa: F401
 
 # isort: on
 from uqs.cli.shared import _env_log_level, app
+from uqs.cli.zsh_completion import patch_zsh_completion_script
 from uqs.logger import configure_logging
 
 
 def main() -> None:
     """Entry point for the `uqs` script."""
     configure_logging(component="uqs", level=_env_log_level())
+    # Before app(): --install-completion and --show-completion are handled
+    # inside it, and both read the template this swaps out.
+    patch_zsh_completion_script()
     app()
 
 

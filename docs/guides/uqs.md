@@ -79,6 +79,13 @@ declared. `uqs --show-completion` prints the script instead of installing it.
 It needs `uqs` on your `PATH`: the `uv run --project python/uqs uqs` form
 has nothing for the shell to call.
 
+TAB completes on the **first** press. Typer's own zsh script does not: it
+generates a `#compdef` file whose body defines a helper and registers it,
+so the first TAB in each new shell rebinds `uqs` and offers nothing, and
+only the second completes. `uqs` replaces that script with one whose body
+runs the completion directly (`cli/zsh_completion.py`), so
+`--install-completion` writes the fixed version.
+
 Run it **from an interactive terminal**. The shell is detected by walking the
 process tree with `ps`, which lists only tty-attached processes - so from a
 script, a CI step or an agent's non-interactive shell there is nothing to
