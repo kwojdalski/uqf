@@ -442,6 +442,9 @@ stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_pub
         persist[]};
         enlist (dataset;partition;source_version;range_from;range_to;
                 "j"$rows_published;.z.p;still_current;current_run[])];
+    .[`.qlog.dbg;(dataset;"coverage recorded";
+        `partition`source_version`range_from`range_to`rows!
+            (partition;source_version;range_from;range_to;"j"$rows_published));::];
     count ledger[]}
 
 / ------------------------------------------------------------------ READ
@@ -517,6 +520,8 @@ missing:{[ds;part;version;as_of;from_ts;to_ts]
 / @throws error naming the missing ranges when not fully covered
 require_covered:{[ds;part;version;as_of;from_ts;to_ts]
     m:missing[ds;part;version;as_of;from_ts;to_ts];
+    .[`.qlog.dbg;(ds;"upstream coverage check";
+        `partition`source_version`range_from`range_to`gaps!(part;version;from_ts;to_ts;count m));::];
     if[count m;
         '"require_covered: ",string[ds],"[",string[part],"] at source_version ",
          string[version]," is not fully published for [",

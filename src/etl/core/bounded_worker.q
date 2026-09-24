@@ -372,8 +372,10 @@ init:{[worker;run_spec]
 
     .qbfstate.register[worker;cfg`ns];
     .qbfstate.require_contract worker;
+    .qlog.dbg[worker;"init: worker contract satisfied";enlist[`ns]!enlist cfg`ns];
 
     .qsrc.validate_fixture cfg`source;
+    .qlog.dbg[worker;"init: source fixture satisfies the contract";enlist[`source]!enlist cfg`source];
 
     / Validate the ledger's shape before trusting a read of it (#60). Only
     / bites when the ledger already existed, i.e. when another process
@@ -392,7 +394,13 @@ init:{[worker;run_spec]
     / explicit statement that this is a demo, NOT a fallback for a failed
     / connection - falling back on failure would turn an outage into
     / silently synthetic data that coverage then records as complete.
-    write_state[worker;`handle;$[.qsrc.has_credentials cfg`source; connect worker; 0Ni]];
+    / Said at INF when it is the fixture, naming the variable that would make
+    / it live - "why is this backfill publishing demo rows" has no other answer.
+    live:.qsrc.has_credentials cfg`source;
+    if[not live;
+        .qlog.info[worker;"no credential - running on the source's fixture, not live data";
+            enlist[`set_to_go_live]!enlist .qsrc.credential_var cfg`source]];
+    write_state[worker;`handle;$[live; connect worker; 0Ni]];
 
     .qlog.register[];
     .qlog.info[worker;"initialised";
@@ -410,7 +418,9 @@ init:{[worker;run_spec]
 connect:{[worker]
     source:(declaration worker)`source;
     cred:.qsrc.require_credentials source;
-    opener:$[`odbc~(.qsrc.declaration source)`transport;
+    transport:(.qsrc.declaration source)`transport;
+    .qlog.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
+    opener:$[`odbc~transport;
         {.qodbc.open x};
         {hopen (hsym `$":",x;5000j)}];
     @[opener;cred;
@@ -465,7 +475,9 @@ plan:{[worker;cursor]
     if[0=count todo; :empty_windows[]];
     / one set of windows per uncovered sub-range, then flattened - a gap in
     / the middle must not be bridged by a window spanning it.
-    raze {[width;w] .qwrt.windows[w`range_from;w`range_to;width]}[cfg`width] each todo}
+    ws:raze {[width;w] .qwrt.windows[w`range_from;w`range_to;width]}[cfg`width] each todo;
+    .qlog.dbg[worker;"planned";`gaps`windows`width`cursor!(count todo;count ws;cfg`width;cursor)];
+    ws}
 
 / ------------------------------------------------------- FETCH / PUBLISH
 
@@ -485,6 +497,9 @@ fetch:{[worker;from_ts;to_ts]
     h:read_state[worker;`handle];
     r:.qwrt.with_retry[.qwrt.policy[];
         {[source;h;from_ts;to_ts] last .qsrc.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts]];
+    .qlog.dbg[worker;"fetch attempted";
+        `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
+            $[`ok~r`state; count r`result; 0N])];
     if[`failed~r`state; :r];
     .qsrc.validate[cfg`source;r`result];
     r}
@@ -525,6 +540,10 @@ run:{[worker]
         / "ran, found no work" is a SUCCESS, not a failure. An
         / orchestrator that cannot tell them apart retries a successful
         / no-op forever.
+        / INF, not DBG: "the run did nothing" is the question this answers.
+        s:spec worker;
+        .qlog.info[worker;"idle - every window in the range is already covered at this source_version";
+            `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
         .qhb.beat[worker;`idle];
         end_run[`idle];
         :`state`windows_completed`windows_failed`rows_published`cursor!

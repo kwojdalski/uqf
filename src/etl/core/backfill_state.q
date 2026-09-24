@@ -132,6 +132,7 @@ acquire_lock:{[worker]
     / record who holds it, so a stale lock can be diagnosed rather than just
     / deleted blindly.
     (hsym `$path,"/owner") 0: enlist .j.j `pid`started!(.z.i;.z.p);
+    .[`.qlog.dbg;(worker;"lock acquired";enlist[`path]!enlist path);::];
     path}
 
 / Release the lock. Safe to call when not held, so it can sit in a cleanup
@@ -139,6 +140,7 @@ acquire_lock:{[worker]
 release_lock:{[worker]
     path:lock_path worker;
     system"rm -rf ",path;
+    .[`.qlog.dbg;(worker;"lock released";enlist[`path]!enlist path);::];
     path}
 
 / Is the lock currently held? For diagnostics and tests, not for gating -
@@ -236,6 +238,7 @@ save_checkpoint:{[worker;spec;cursor]
     payload:`source_version`range_from`range_to`cursor`saved_at!
             (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);
     (hsym `$path) 0: enlist .j.j payload;
+    .[`.qlog.dbg;(worker;"checkpoint saved";enlist[`cursor]!enlist cursor);::];
     path}
 
 / Load a cursor, but only if it belongs to THIS run specification (ETL-06).
@@ -252,9 +255,13 @@ save_checkpoint:{[worker;spec;cursor]
 load_checkpoint:{[worker;spec]
     path:checkpoint_path worker;
     raw:@[{first read0 hsym `$x};path;{""}];
-    if[0=count raw; :0Np];
+    if[0=count raw;
+        .[`.qlog.dbg;(worker;"no checkpoint - starting from the beginning";enlist[`path]!enlist path);::];
+        :0Np];
     saved:@[{.j.k x};raw;{()!()}];
-    if[0=count saved; :0Np];
+    if[0=count saved;
+        .[`.qlog.warn;(worker;"checkpoint unreadable - starting from the beginning";enlist[`path]!enlist path);::];
+        :0Np];
     / Compare PARSED values, not strings. .j.j writes a timestamp as ISO
     / ("2026-09-13T00:00:00.000000000") while `string` on a q timestamp
     / gives "2026.09.13D00:00:00.000000000" - so a string comparison fails
@@ -266,7 +273,15 @@ load_checkpoint:{[worker;spec]
         ("P"$saved`range_to)     ~ spec`range_to);
     / every element must match, not just the version: a narrowed or widened
     / range is a different run, and resuming across one skips data.
-    $[matches; "P"$saved`cursor; 0Np]}
+    / Said at INF: a run that silently restarted from the beginning, because
+    / its range or version changed, looks exactly like one that lost its state.
+    if[not matches;
+        .[`.qlog.info;(worker;"checkpoint is for another run - starting from the beginning";
+            `saved_version`saved_from`saved_to!(saved`source_version;saved`range_from;saved`range_to));::];
+        :0Np];
+    cursor:"P"$saved`cursor;
+    .[`.qlog.info;(worker;"resuming from checkpoint";enlist[`cursor]!enlist cursor);::];
+    cursor}
 
 / Remove a worker's checkpoint, for a deliberate restart from the beginning.
 clear_checkpoint:{[worker]
