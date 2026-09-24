@@ -58,10 +58,10 @@ jobs:
           if [ -x "${Q:-$HOME/.kx/bin/q}" ]; then
             echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "SKIP=$SKIP,q-tests,q-coverage" >> "$GITHUB_ENV"
+            echo "SKIP=$SKIP,q-tests,q-coverage,contract-surface" >> "$GITHUB_ENV"
             echo "::warning::No q interpreter on this runner. qUnit, the coverage gate and q-dependent Python IPC tests are not exercised; static q checks still run."
             echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
-            echo "No q interpreter is installed on this hosted runner. The qUnit and coverage hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q and scripts/test.py q-coverage locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
+            echo "No q interpreter is installed on this hosted runner. The qUnit, coverage and contract-surface hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q and scripts/test.py q-coverage locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
@@ -86,13 +86,22 @@ jobs:
         # line diff, because only the former is actionable.
         #
         # Skipped without KDB-X: the exporter loads the full q tree, and a
-        # partial load would export a quietly incomplete surface.
+        # partial load would export a quietly incomplete surface. The skip is
+        # a WARNING and a summary line, not a notice: on a hosted runner it
+        # is every run, and the contract-surface pre-commit hook is then the
+        # only thing verifying the surface.
+        #
+        # The same interpreter rule as contract_surface.py itself ($UQFQ,
+        # else ~/.kx/bin/q). A bare `q` on PATH used to count here too, and
+        # the script would then have refused it anyway.
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          if [ -x "$HOME/.kx/bin/q" ] || command -v q >/dev/null 2>&1; then
+          if [ -x "${UQFQ:-$HOME/.kx/bin/q}" ]; then
             uv run python scripts/generate/contract_surface.py check
           else
-            echo "::notice::No KDB-X on this runner; contract surface check skipped."
+            echo "::warning::No KDB-X on this runner; the contract surface in docs/reference/surfaces/current/ was NOT checked. Run 'uv run python scripts/generate/contract_surface.py check' locally before merging."
+            echo "The contract surface (docs/reference/surfaces/current/) was not checked: no KDB-X on this runner. The contract-surface pre-commit hook checks it locally." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Check docs/man.q matches the source qDoc comments
         # WP8 (#146): the plan says keep source documentation authoritative

@@ -11,7 +11,7 @@ can fail when the code and the page disagree.
 | [`etl-framework-requirements.md`](etl-framework-requirements.md) | ETL-nn — what the pipeline framework must do | prose; cited from the code it constrains |
 | [`frontend-requirements.md`](frontend-requirements.md) | FE-nn — what the desk application must do | cited from `python/uqf_frontend` and its tests |
 | [`quant-modules.md`](quant-modules.md) | each `src/` pricing module, its namespace and its tests | — |
-| [`surfaces/current/`](surfaces/current/) | this tree's exported contract surface: every public function, table, process and variable | `contract_surface.py check` in CI, and `check_doc_references.py` reads it as its list of functions that exist |
+| [`surfaces/current/`](surfaces/current/) | this tree's exported contract surface: every public function, table, process and variable | `contract_surface.py check`, run by the `contract-surface` pre-commit hook (CI runs it only where KDB-X is installed, and hosted runners have none), and `check_doc_references.py` reads it as its list of functions that exist |
 
 **`surfaces/current/` is generated.** Edit the source and regenerate; a
 hand-edit fails the build.
