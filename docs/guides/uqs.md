@@ -251,9 +251,11 @@ filenames first.
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
-summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S] [--debug]  status table
-                                      plus the declared graph (--columns status for just
-                                      up/down/pid/port; --timeout defaults to 10s;
+summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
+        [--probe-timeout S] [--debug]  status table plus the declared graph
+                                      (--columns status for just up/down/pid/port/
+                                      Responds; --timeout defaults to 10s,
+                                      --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 clean                                 wipe output/uqs/
@@ -437,8 +439,8 @@ and `summary` says the same about processes that are already up:
 three columns derived from the same declarations:
 
 ```
-uqs summary                     # all nine columns
-uqs summary --columns status    # the six status ones, for a narrow terminal
+uqs summary                     # all ten columns
+uqs summary --columns status    # the seven status ones, for a narrow terminal
 uqs summary --columns "Process,Depends on,Inputs,Outputs"
 ```
 
@@ -460,11 +462,39 @@ there are more than two entries, so a table name is never split across
 lines, and a process with no declared edges - every vendored TorQ one - shows
 a dash.
 
-Nine columns need a wide terminal; at eighty they squeeze and Rich elides the
-headers. `--columns status` gives the original six back. They are shown by
+Ten columns need a wide terminal; at eighty they squeeze and Rich elides the
+headers. `--columns status` gives the seven status columns back. They are shown by
 default anyway, because a column nobody knows about answers nothing: a reader
 on a narrow terminal can ask for fewer, while one who never learns the graph
 is there has no such move.
+
+### Responds: can each process answer within half a second
+
+`Status` comes from a PID lookup, and a hung process still has a PID.
+`Heartbeat` notices only after a tolerance of missed beats. `Responds` asks
+every `up` process directly, all at once, whether it can complete the kdb+
+handshake within `--probe-timeout` (0.5s by default):
+
+| Responds | Meaning |
+|---|---|
+| `4ms` | it answered, in that long |
+| `timeout` | it accepted the connection but did not answer in time - busy in a long query, a timer or its load. A process at its licence connection cap can look the same |
+| `reset` | it dropped the connection - what a process past its connection cap does to a new handle |
+| `rejected` | it closed the connection without answering: it refused the credentials |
+| `refused` | nothing is listening on its port |
+| `-` | not probed: the process is down, or `summary`'s own budget ran out |
+
+Any `up` process that does not answer is also named in a red line under the
+table.
+
+The probe is the handshake, not a query, so no q code runs on the process;
+q answers the handshake from its main loop, which is exactly what is busy
+when a process is unresponsive. It is done from `uqs` with a plain socket,
+because kola's timeout is whole seconds. It is not q's `-T`, which limits
+how long one client query may run on a process - it says nothing about a
+process stuck in its own timer, and it applies to every client, the
+gateway's long queries included. Each probe briefly holds one inbound
+connection, and TorQ logs it like any other. `--probe-timeout 0` skips it.
 
 ### summary gives up after ten seconds
 

@@ -29,17 +29,19 @@ from uqs.cli.shared import (
     console,
     log,
 )
+from uqs.cli.summary_graph import attach_graph_columns
 from uqs.logger import configure_logging
 from uqs.model import dependencies
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
-from uqs.stack import listing, runtime, startup
+from uqs.stack import listing, probe, runtime, startup
 from uqs.stack.listing import (
     MONITOR_PROCNAME,
     SUMMARY_ALL_COLUMNS,
     SUMMARY_COLUMNS,
     SUMMARY_GRAPH_COLUMNS,
+    SUMMARY_PROBE_COLUMNS,
 )
 
 _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
@@ -59,33 +61,6 @@ _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 #: anyone means by a ten-second timeout.
 SUMMARY_TIMEOUT_SECONDS = 10.0
 
-#: How many table names go on one line of a graph cell before it wraps.
-#:
-#: Rich would wrap these on its own, but on whitespace and at whatever width
-#: is left over - so `fx_position` and `fx_limit_breach` could break as
-#: `fx_position, fx_` / `limit_breach`, splitting a name across lines. These
-#: cells are lists, and a reader scans them by counting entries, so the break
-#: belongs between entries and nowhere else.
-GRAPH_CELL_ITEMS_PER_LINE = 2
-
-
-def _graph_cell(items: tuple[str, ...] | list[str]) -> str:
-    """A list of table or process names, broken across lines at the commas.
-
-    Empty renders as a dim dash rather than blank: "this process declares no
-    inputs" and "this column has nothing to say about it" look identical
-    otherwise, and the first is a real fact about a feed.
-    """
-    if not items:
-        return "[dim]-[/]"
-    lines = [
-        ", ".join(items[i : i + GRAPH_CELL_ITEMS_PER_LINE])
-        for i in range(0, len(items), GRAPH_CELL_ITEMS_PER_LINE)
-    ]
-    # Every line but the last keeps its trailing comma, so a wrapped cell
-    # still reads as one list rather than as separate values per line.
-    return "\n".join(line + "," if i < len(lines) - 1 else line for i, line in enumerate(lines))
-
 
 def _resolve_columns(requested: str | None) -> list[str]:
     """The columns to render, from a comma-separated `--columns` value.
@@ -103,7 +78,7 @@ def _resolve_columns(requested: str | None) -> list[str]:
     if requested.strip().lower() == "all":
         return list(SUMMARY_ALL_COLUMNS)
     if requested.strip().lower() == "status":
-        return list(SUMMARY_COLUMNS)
+        return list(SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS)
     wanted = [c.strip() for c in requested.split(",") if c.strip()]
     known = {c.lower(): c for c in SUMMARY_ALL_COLUMNS}
     resolved, unknown = [], []
@@ -143,27 +118,6 @@ def _print_startups(log_dir: Path, procnames: list[str]) -> None:
     console.print(table)
 
 
-def _attach_graph_columns(rows: list[dict[str, str]]) -> None:
-    """Fill the graph columns on each row, in place.
-
-    Derived from the same `Pipeline` declarations `verify_pipeline_edges`
-    checks and `database.q` is generated from, so a process's row here cannot
-    claim an edge the build would reject.
-
-    A vendored TorQ process has no `Pipeline` entry and so no declared edges;
-    it gets the same dash as a uqf process that genuinely has none, because
-    this table is not the place to explain the difference.
-    """
-    inputs = dependencies.inputs_by_process()
-    outputs = dependencies.outputs_by_process()
-    depends = dependencies.depends_on_by_process()
-    for row in rows:
-        name = row["Process"]
-        row["Depends on"] = _graph_cell(depends.get(name, ()))
-        row["Inputs"] = _graph_cell(inputs.get(name, ()))
-        row["Outputs"] = _graph_cell(outputs.get(name, ()))
-
-
 @app.command()
 def summary(
     ctx: typer.Context,
@@ -190,6 +144,17 @@ def summary(
             ),
         ),
     ] = SUMMARY_TIMEOUT_SECONDS,
+    probe_timeout: Annotated[
+        float,
+        typer.Option(
+            "--probe-timeout",
+            help=(
+                "Seconds each up process gets to complete the kdb+ handshake, "
+                f"for the Responds column (default {probe.DEFAULT_PROBE_TIMEOUT:g}). "
+                "All are probed at once. 0 skips the probe."
+            ),
+        ),
+    ] = probe.DEFAULT_PROBE_TIMEOUT,
     debug: Annotated[
         bool,
         typer.Option(
@@ -208,8 +173,8 @@ def summary(
     behind every `up, but idle` process, from the same declarations
     `verify_pipeline_edges` checks.
 
-    Nine columns need a wide terminal. `--columns status` gives the original
-    six, and any subset can be named explicitly.
+    Ten columns need a wide terminal. `--columns status` gives the seven
+    status columns, and any subset can be named explicitly.
 
     Run with `--debug` (or LOG_LEVEL=DEBUG) to see where each column came
     from: the two lookups below degrade rather than fail, so on the default
@@ -293,11 +258,14 @@ def summary(
     )
 
     if any(col in SUMMARY_GRAPH_COLUMNS for col in chosen):
-        _attach_graph_columns(rows)
+        attach_graph_columns(rows)
+    silent = (
+        probe.attach_probe_column(rows, probe_timeout, deadline) if "Responds" in chosen else []
+    )
 
     table = Table(title=f"uqs summary (base port {port})")
     for col in chosen:
-        # The graph cells are pre-wrapped at their commas by _graph_cell, so
+        # The graph cells are pre-wrapped at their commas by graph_cell, so
         # Rich must not wrap them again at whatever width is left over - that
         # is what splits a table name across two lines.
         table.add_column(col, overflow="fold" if col in SUMMARY_GRAPH_COLUMNS else "ellipsis")
@@ -320,16 +288,27 @@ def summary(
             "error": "[bold red]error[/]",
             "not collected": "[dim]not collected[/]",
         }.get(hb, hb)
+        responds = row.get("Responds", "")
         rendered = {
             **row,
             "Status": f"[{status_style}]{row['Status']}[/]" if status_style else row["Status"],
             "Port": port_cell,
             "Heartbeat": hb_cell,
+            "Responds": responds
+            if responds.endswith("ms") or responds in ("", "-")
+            else f"[bold red]{responds}[/]",
         }
         table.add_row(*(rendered.get(col, "") for col in chosen))
     console.print(table)
     if _debug_requested(ctx, debug):
         _print_startups(Path(paths.torqdata) / "logs", [row["Process"] for row in rows])
+    if silent:
+        # Up by PID, and silent when asked: the case neither Status nor a
+        # heartbeat within its tolerance shows yet.
+        console.print(
+            f"\n[bold red]{len(silent)} up process(es) did not answer within "
+            f"{probe_timeout:g}s:[/] {', '.join(silent)}"
+        )
 
     # Up and fed are different questions, and the table above only answers
     # the first. A process can hold a PID, heartbeat `ok`, and still be
