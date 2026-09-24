@@ -90,7 +90,6 @@ def _paths(settings: Settings):
     starting the wrong stack.
     """
     from uqs import paths as stack_paths
-    from uqs.paths import UqsPaths
 
     if settings.stack_root is None:
         return stack_paths.default_paths()
@@ -100,14 +99,7 @@ def _paths(settings: Settings):
             f"UQF_FRONTEND_STACK_ROOT={root} does not look like the repository: "
             "lib/torq/torq.sh is not there"
         )
-    return UqsPaths(
-        repo_root=root,
-        torqhome=root / "lib" / "torq",
-        torqapphome=root / "lib" / "torq-finance-starter-pack",
-        torqdata=root / "scripts" / "output" / "uqs",
-        scripts_dir=root / "scripts",
-        orchestrator_dir=root / "python" / "uqs",
-    )
+    return stack_paths.paths_for_root(root)
 
 
 def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
