@@ -45,6 +45,9 @@ reference or an architecture note, and only its purpose decides where it goes.
 - [`man.q`](man.q) — the function registry, generated from the qDoc comments
   under `src/` by `scripts/generate/generate_man_registry.py`. CI fails when
   it is out of date.
+- [`presentation/`](presentation/uqf.qmd) — a short Quarto deck, mostly these
+  diagrams, on how uqf differs from running TorQ directly. Render it with
+  `quarto render docs/presentation/uqf.qmd`; the HTML is not committed.
 - [`diagrams/`](diagrams/) — the d2 source of every diagram in these pages
   and its rendered SVG, each embedded in the page it illustrates.
   `scripts/generate/render_diagrams.py --check` reports an SVG that no longer
