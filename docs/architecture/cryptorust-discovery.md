@@ -58,7 +58,7 @@ uses `.gw.clients` — the **gateway's** clients — and cryptorust connects to
 stp1, not the gateway. So it is tracked and invisible.
 
 Closing it is a per-process client view: fan `.clients.clients` out across the
-fleet the way `/ops/usage` already fans out `.usage.usage` (FE-04's shape),
+fleet the way `/ops/usage` already fans out `.usage.usage`,
 and cryptorust appears under `stp1` with its real connection state.
 
 Two things make that better than the discovery route rather than merely

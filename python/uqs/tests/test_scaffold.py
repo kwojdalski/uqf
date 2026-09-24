@@ -332,15 +332,15 @@ def test_columns_with_nothing_to_shape_are_refused_not_ignored():
         )
 
 
-def test_every_plan_names_the_readme_line_it_cannot_write():
-    """docs/integrations/torq/README.md is authored prose and pytest fails until
+def test_every_plan_names_the_stack_page_line_it_cannot_write():
+    """docs/architecture/stack.md is authored prose and pytest fails until
     it names the process - so the plan says so, rather than leaving that red to
     be discovered."""
     for plan, proc in (
         (jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates_backfill1"),
         (jobs.streaming_job("markout2", ["trades"], None, None), "markout21"),
     ):
-        assert any(proc in n and "README.md" in n for n in plan.notes), plan.notes
+        assert any(proc in n and "stack.md" in n for n in plan.notes), plan.notes
 
 
 # --------------------------------------------------------------- write mode
@@ -540,28 +540,27 @@ def test_no_driver_where_the_contract_test_needs_none(subscribes, publishes, col
 
 
 def test_the_query_note_cites_the_rule_that_actually_says_it():
-    """`parameterised, never concatenated` is FE-14, not ETL-08.
+    """`parameterised, never concatenated` is not ETL-08.
 
     It cited ETL-08 for months, and that number resolves - to the wrong rule.
-    The requirements document's ETL-08 is half-open intervals; the
-    parameterised-query rule has no ETL-nn of its own, and
-    `src/etl/core/source_contract.q` records both facts. A reader who
+    ETL-08 is half-open intervals; the parameterised-query rule has no ETL-nn
+    of its own, so the note points at `src/etl/core/source_contract.q`, which
+    refuses a string query. A reader who
     followed the number landed on interval arithmetic while reading about
     query construction.
     """
     plan = jobs.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
     query_notes = [note for note in plan.notes if ".query" in note]
     assert query_notes, "the scaffold no longer tells you to write query"
-    assert "FE-14" in query_notes[0]
+    assert "source_contract.q" in query_notes[0]
     assert "ETL-08" not in query_notes[0], "ETL-08 is the interval rule, not this one"
 
 
 def test_the_source_template_keeps_the_two_rules_apart():
-    """Both apply to `query`, and they are different rules with different
-    numbers. One sentence carrying both invites exactly the confusion the
-    note above had."""
+    """Both apply to `query`, and they are different rules. One sentence
+    carrying both invites exactly the confusion the note above had."""
     plan = jobs.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
     source = _body(plan, "citeprobe.q")
-    assert "FE-14" in source, "the parameterised-query rule"
+    assert "source_contract.q" in source, "the parameterised-query rule"
     assert "ETL-08" in source, "the half-open interval rule"
     assert "DIFFERENT rule" in source, "and the template says they are not the same one"

@@ -1,6 +1,6 @@
 """Read the declared process set from TorQ's ``process.csv``.
 
-FE-01 asks for health "for every process in ``process.csv``", so the declared
+Fleet health covers every process in ``process.csv``, so the declared
 set comes from that file rather than from this package's own configuration -
 otherwise the fleet view can only report on processes someone remembered to
 list twice.

@@ -1,4 +1,4 @@
-"""The FE-14 property, asserted directly: client input never reaches q as text.
+"""The security property, asserted directly: client input never reaches q as text.
 
 These are the tests that matter most in this package. Everything else is
 plumbing; this is the boundary.
@@ -12,7 +12,7 @@ from uqf_frontend import queries
 #: two questions, asked once to build the whitelist. A refusal test asserts
 #: that nothing ELSE was sent - "no IPC at all" stopped being the property
 #: when the catalog moved to the stack, and was never the one that mattered.
-#: FE-14 is about the caller's bytes, and neither of these carries any.
+#: The property is about the caller's bytes, and neither of these carries any.
 CATALOG_PROGRAMS = frozenset({queries.CATALOG, queries.SCHEMA})
 
 

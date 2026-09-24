@@ -1,11 +1,20 @@
 # uqf
 
-A q/kdb+ tree covering the span of an electronic FX (eFX) data platform:
+A q/kdb+ tree covering the span of an electronic trading data platform:
 the **data engineering** that lands and backfills market data, the
 **quantitative library** that prices and measures it, the **data
 processing** that reshapes raw venue feeds into the shapes analytics
 expects, and the **operational tooling** — process orchestration, an HTTP
 gateway and a browser application — that runs the whole thing as a fleet.
+
+**How much of it is FX.** The platform half is not: the feeds and pipelines
+already carry crypto and Databento MBP-10 depth beside the FX ones, and the
+ETL framework, the orchestrator and the gateway move all three the same way
+— asset class reaches them as table names and a display-precision default,
+never as a code path. The pricing library *is* FX:
+[`ccy`](src/foundation/ccy.q), [`forwards`](src/pricing/forwards.q) and
+[`options`](src/pricing/options.q) are written to FX conventions on purpose,
+and are the part to read as eFX rather than as trading generally.
 
 **The names.** `uqf` is the repository and the family - the prefix on every
 Python package in it (`uqf_frontend`, `uqf_airflow_provider`).
@@ -19,8 +28,7 @@ to `.qmatz`.
 
 These are separate components with separate contracts, not one library with
 extras bolted on. See [Components](#components) for what each is and where
-it lives; the quantitative library is described under
-[Quant modules](#quant-modules).
+it lives.
 
 Every function has a corresponding unit test written against the vendored
 [qUnit](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)
@@ -31,11 +39,9 @@ framework - see [Testing](#testing).
 - [Requirements](#requirements) — KDB-X preferred, what else might work, and why nothing falls back automatically
 - [Quick start](#quick-start) — price something, run the fleet, run a backfill, add a pipeline, run the tests
 - [Components](#components) — what this tree contains, and which part owns what
-- [Quant modules](#quant-modules) — each `src/` pricing file, its namespace and tests
-  - [Conventions](#conventions) — quoting, sign, pip factors, naming
 - [Further reading](#further-reading) — the `docs/` map and component READMEs
 - [Browser application](#browser-application) — the React desk and operations app
-- [Testing](#testing) — the four lanes, and what each one proves
+- [Testing](#testing) — the lanes, and what each one proves that the others cannot
 - [Documentation](#documentation) — generating browsable API docs from qDoc
 - [Licensing](#licensing) — MIT, plus five vendored dependencies with their own terms
 
@@ -84,7 +90,7 @@ paths relative to it (e.g. `src/foundation/stats.q`).
 | **`rlwrap`** | line editing and history inside `qcon` | no - `qcon` runs without it |
 | **`multitail`** | `uqs multitail`: following process logs one pane per file | no - `uqs logs -f` follows the same files merged into one stream |
 | **Node** | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares | no - only for `web/` |
-| **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor | no - suggested when writing or debugging q |
+| **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor. `cargo install --git https://github.com/kwojdalski/q-lint --locked`; it reads this repo's `[tool.q-lint]` exclusions | no - never needed to build, test or run |
 
 `qcon` is kdb's console client. It ships with some kdb+ distributions and
 **not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q`
@@ -96,31 +102,6 @@ through IPC instead: `uqs query`, `uqs summary` and
 `torq.sh` resolves both through `$QCON` and `$RLWRAP`, which
 `uqs`'s `build_env()` sets, so a differently-named or
 differently-located binary is a variable to set rather than a patch.
-
-### `qlinter`, suggested
-
-[q-lint](https://github.com/kwojdalski/q-lint) is a separate project - a q
-linter in Rust that **never executes the source it reads**, which is what
-makes it safe to point at a file mid-debug and to run on every keystroke in an
-editor. It is not needed to build, test or run anything here; it is suggested
-because reading a diagnostic is faster than tracing a q bug by hand, and
-because several of this tree's recurring traps are among the things it checks
-for - a builtin used as a parameter name, a bare `/` opening a comment block,
-a legacy `datetime`.
-
-```
-cargo install --git https://github.com/kwojdalski/q-lint --locked
-qlinter src/ tests/q/
-qlinter --explain QF001
-```
-
-It reads this repository's `[tool.q-lint]` section in `pyproject.toml` for
-exclusions, so the vendored TorQ tree and nested agent worktrees are skipped
-without anyone passing `--exclude`.
-
-For diagnostics in an editor rather than a terminal, `qlinter --lsp` is a
-language server; its repository has the VS Code extension and the Neovim and
-Helix configuration.
 
 ## Quick start
 
@@ -206,34 +187,22 @@ change usually belongs to exactly one.
 | Component | Where | What it does |
 |---|---|---|
 | **Data engineering** | [`src/etl/`](src/etl) | The pipeline framework: bounded and continuous workers, normalizers that spell many sources one way, a bitemporal coverage ledger, run identity, IO managers, source contracts, and a job graph derived from declared inputs and outputs. Asset-oriented, in the sense [the philosophy note](docs/architecture/pipeline-philosophy.md) sets out |
-| **Quant library** | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. [Detailed below](#quant-modules) |
+| **Quant library** | [`src/foundation/`](src/foundation), [`pricing/`](src/pricing), [`portfolio/`](src/portfolio), [`execution/`](src/execution) | Pure functions, no I/O: CIRP forwards and swap points, Garman-Kohlhagen options and Greeks, position risk and VaR, execution analytics. Seventeen modules, each in its own flat namespace (`.qfwd`, `.qopt`, `.qrisk`, `.qexec`, …) with a matching test file and a qDoc block per function — the inventory and the conventions they all follow are [`quant-modules.md`](docs/reference/quant-modules.md) |
 | **Data processing** | [`src/market_data/`](src/market_data) | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw |
 | **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
 | **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, and the React desk and operations app |
-| **Database metadata** | [`src/metadata/`](src/metadata) | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable eFX breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md) |
+| **Database metadata** | [`src/metadata/`](src/metadata) | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable group-by breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md) |
+
+How `src/etl/` maps onto a Dagster-shaped framework is
+[pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md);
+the contract CI holds it to is
+[etl-framework-requirements.md](docs/reference/etl-framework-requirements.md).
 
 Authority is split deliberately between them: q and TorQ own process
 startup, source reads and coverage; Airflow owns ordering, retries and
 alerting. Neither infers the other's facts from log text. That rule, and
 the others the tree is built on, are written down in
 [the pipeline philosophy](docs/architecture/pipeline-philosophy.md).
-
-## Quant modules
-
-Seventeen modules under `src/`, each in its own flat namespace (`.qstats`,
-`.qccy`, `.qfwd`, `.qopt`, `.qrisk`, `.qexec`, `.qmicro` and the rest), each
-with a matching test file and a qDoc block per function.
-
-The inventory — what each is for, the namespace convention and the exceptions
-to it, and the conventions all of them follow (BASE/QUOTE quoting, `side`,
-`pip_factor`, `lower_snake_case`) — is
-[**`docs/reference/quant-modules.md`**](docs/reference/quant-modules.md).
-
-The data-engineering component is documented separately: see
-[pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md)
-for how `src/etl/` maps onto a Dagster-shaped framework, and
-[etl-framework-requirements.md](docs/reference/etl-framework-requirements.md)
-for the contract CI holds it to.
 
 ## Further reading
 
@@ -243,10 +212,10 @@ directories, one question each:
 | Directory | Answers |
 |---|---|
 | [`docs/guides/`](docs/guides/) | *How do I do this?* — running the stack, adding a pipeline, the CI gates |
+| [`docs/scaffolding/`](docs/scaffolding/README.md) | *How do I create one of these?* — one page per shape `uqs new-job` writes |
 | [`docs/services/`](docs/services/README.md) | *What does this running service do, and how do I run it?* — one page per service |
-| [`docs/architecture/`](docs/architecture/) | *Why is it shaped this way?* |
-| [`docs/reference/`](docs/reference/) | *What is the contract?* — the quant modules, environment variables and requirement ids |
-| [`docs/integrations/`](docs/integrations/torq/README.md) | *How does this meet something external?* |
+| [`docs/architecture/`](docs/architecture/) | *Why is it shaped this way?* — including the running stack |
+| [`docs/reference/`](docs/reference/) | *What is the contract?* — the quant modules, environment variables, requirement ids and the process table |
 
 Still open, and why: the `decision`-labelled issues.
 
@@ -280,136 +249,37 @@ scripts/test.py stack-smoke         # restart the fleet, watch what it publishes
 scripts/test.py all                 # every lane except coverage, smoke and stack-smoke
 ```
 
-### Coverage
+### Coverage, and what the lanes prove
 
 `scripts/test.py coverage` measures what the suites actually **execute** —
 line coverage for Python, and **statement and branch coverage for q** through
-the [`.cov` library](scripts/dev/coverage.q).
+the [`.cov` library](scripts/dev/coverage.q), which exists because q has no
+coverage tool and follows [KX's own coverage
+API](https://code.kx.com/developer/libraries/code-coverage/). It counts
+characters in tracked ranges, so a long untaken branch weighs more than a
+terse one, and it instruments statement positions only — a `$` arm is
+*wrapped* rather than probed, so laziness survives.
 
-q has no coverage tool, so `.cov` is one, with
-[KX's own coverage API](https://code.kx.com/developer/libraries/code-coverage/):
+`q-coverage` is the gate: it fails when the set of functions nothing enters
+differs from `tests/q/coverage_baseline.txt` **in either direction**, so a
+newly-covered function has to be removed from the baseline deliberately.
 
-```q
-\l scripts/dev/coverage.q
-.cov.format.display .cov.run[.qfwd.fwd_cont; 1.10 0.02 0.01 0.5; (enlist `namespaces)!enlist `.qfwd]
-```
-```
-Coverage: 0.3% of 10913 tracked character(s) in 39 function(s)
-38 function(s) with incomplete coverage
-
-.qfwd.fwd_simple  0%
-X  {[spot;rd;rf;t] <<<spot*.qrates.growth_simple[rd;t]%.qrates.growth_simple[rf;t]>>>}
-
-.qfwd.fwd_cont  100%
-   {[spot;rd;rf;t] spot*.qrates.growth_cont[rd-rf;t]}
-```
-
-Same three entry points (`.cov.run`, `.cov.format.go`,
-`.cov.format.display`), same settings keys (`context`, `functions`,
-`ignoreFunctions`, `namespaces`, `ignoreNamespaces`), same results columns
-and the same `<<<>>>` / `X` marks.
-
-It counts **lines and branches separately**, so an untaken `$` arm shows up
-even though the statement containing it ran, and a loop reports *iterations*
-rather than merely whether it ran. Coverage is the share of *characters* in
-tracked ranges — KX's definition, which weights a long branch more than a
-short one, so a report cannot look green because the untaken paths happen to
-be the terse ones.
-
-Three things it is careful about, each of which would otherwise make the
-number worse than none:
-
-- **It instruments statement positions only.** `if[c;a;b]` is a control
-  statement and its arms take probes; `$[c;a;b]` is a conditional
-  *expression* whose arms must not, or the value changes. A `$` arm is
-  *wrapped* — `.cov.b[i;arm]` returns the arm — so laziness is preserved and
-  an untaken arm is still not evaluated.
-- **It follows captured copies.** `.qio.memory` holds `write_memory`, so
-  every bounded worker writes through a copy taken before instrumentation.
-  Without `.cov.reseed` that function reports as never called while being
-  exercised on every window — and the obvious response to such a number is
-  to write a test that already exists.
-- **It nests.** A suite being measured can contain tests that call
-  `.cov.run`; this one does. Probe ids are allocated monotonically and never
-  reset, so an inner run cannot land on an outer run's counters.
-
-`tests/q/run_coverage.q` drives it over the whole suite, which is what the
-lane runs.
-
-The Python side is gated three ways on every commit, all scoped by *intent*
-(every `.py` file except vendored) rather than by directory:
-
-| gate | hook | what it proves |
-|---|---|---|
-| lint | `ruff`, `ruff-format` | style and a curated rule set (`E F I UP B`) |
-| type | `ty` | types resolve across module boundaries |
-| test | `python-tests` | the whole workspace suite passes |
-
-`scripts/gates/check_hook_scopes.py` asserts all three cover **every** tracked
-Python file, and fails the commit otherwise. That check exists because the
-lint gate silently drifted once: it was scoped to a directory that stayed
-valid while the code moved out from under it, leaving **43 of 47 files
-ungated** with nothing to complain about. A type gate can drift the same way,
-and the symptom is identical — everything passes because almost nothing is
-checked.
-
-`ty` runs with `pass_filenames: false` on purpose: it type-checks a *project*,
-not a file list. Passing only the staged files would check each in isolation
-and miss exactly the cross-module breakage a type checker is for.
-
-Run the lane matching the layer you changed (requirement ETL-21). `q-unit` is
-also runnable directly as `q tests/run_tests.q`: it loads every module and
-every `test_*.q` file, prints a pass/fail summary, and exits non-zero if
-anything failed - safe to wire into CI as-is. As of this writing:
-**1459 tests, all passing**.
-
-The lanes are separate because they prove different things, and two of them
+The lanes are separate because they prove different things, and three of them
 cannot prove what they claim if folded into the first:
 
-- **`q-backfill-process`** checks single-instance locking and resumption
-  across a restart. Both need a real filesystem and a genuinely separate q
-  process: an in-process test can assert `acquire_lock` throws, but that is
-  q refusing itself, not the mutual exclusion the lock exists to provide -
-  and an in-process "resume" never discards its own memory, so it cannot
-  show the state on disk was sufficient.
-- **`q-two-instances`** is the only lane in `all` where a source runs
-  **live**. It starts a plain q process on the starter pack's HDB
-  (`tests/q/upstream_instance.q`), sets that process as the
-  `upstream_trades` credential, and moves trades into this process through
-  the framework: connect, validate the remote `meta`, evaluate the query
-  remotely, transform, record coverage, idle on a second run, re-fetch one
-  window after a restatement, and refuse to start once the upstream is
-  gone. Every other lane runs workers on their fixtures, so this is the
-  only place `.qbw.connect`, a source's `query` and `.qsrc.validate_live`
-  execute at all - which is how a bare table name in a query lambda stayed
-  latent in three sources until this lane ran.
-- **`smoke`** also carries ETL-12's live half: every registered source is
-  validated against **the same declaration** its fixture is validated
-  against in the deterministic suite. That is what makes a fixture
-  meaningful rather than merely present — two separate declarations would
-  let a suite pass while the real source had changed. A source whose
-  credential is unset is skipped, not failed.
-- **`smoke`** is the only lane that touches a live external source
-  (requirement ETL-20), and is excluded from `all` on purpose. Folding it in
-  would make every local run depend on a remote host being up, which trains
-  everyone to read a red suite as "the network again" - which is how a real
-  schema change gets ignored. Unconfigured, it **skips and exits 0**: an
-  unconfigured checkout is not a failure.
+| Lane | Proves what `q-unit` cannot |
+|---|---|
+| `q-order` | no test depends on running after another — it runs the suite reversed and shuffled |
+| `q-backfill-process` | single-instance locking and resumption across a restart, which need a real filesystem and a genuinely separate process |
+| `q-two-instances` | the only lane where a source runs **live**: `.qbw.connect`, a source's `query` and `.qsrc.validate_live` execute nowhere else |
+| `stack-smoke` | the wiring — a declared table with no rows, or a process writing to its error log while we watch |
+| `smoke` | ETL-12's live half, against the **same declaration** the fixture is checked against. Excluded from `all`: a local run that depends on a remote host trains everyone to read red as "the network again" |
 
-Every function is tested against at least one of: a published textbook
-reference value (e.g. Hull's Black-Scholes worked example for
-`gk_call`/`gk_put`), a provable identity (put-call parity, delta-call minus
-delta-put equals the foreign discount factor, day-count-neutral round
-trips), or an explicit round trip through an inverse function (e.g.
-building a forward with `fwd_simple` and recovering the input rate with
-`implied_foreign_rate`). See `.claude/skills/kdb-q-conventions/SKILL.md` for
-why this project leans on identities/round-trips rather than hand-computed
-expected values wherever possible.
-
-`tests/q/test_execution_scale.q` additionally generates a 1,000,000-row
-synthetic trade table (many currency pairs, times of day, bid/ask levels
-and liquidity sizes) and computes `markout` over it as a single vectorized
-call, as a scale/integration check beyond the per-function unit tests.
+Every function is tested against at least one of a published reference value
+(Hull's worked example for `gk_call`), a provable identity (put-call parity,
+a day-count-neutral round trip) or a round trip through an inverse — see
+[`kdb-q-conventions`](.claude/skills/kdb-q-conventions/SKILL.md) for why
+identities are preferred to hand-computed expectations.
 
 ## Documentation
 

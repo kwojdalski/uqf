@@ -148,7 +148,7 @@ row_key:`{TIME_COLUMN}
 / later reader assumes UTC while the source hands over local wall-clock time.
 tz:`UTC
 
-/ Parameterised, NEVER concatenated (FE-14, via src/etl/core/source_contract.q).
+/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).
 / The bounds are arguments to a functional select evaluated on the remote
 / side, so no caller value is ever spliced into query text.
 / .

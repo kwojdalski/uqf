@@ -2,6 +2,74 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-09-24
+
+This snapshot covers 185 commits in 56 merged PRs (#354–#424) since `stable/2026-09-22`.
+400 files changed, +21,072 / -16,627 lines.
+Most of the work was on the stack's Python side. `uqf-stack` was renamed `uqs`, and adding a job
+now needs no hand-kept list edits. The tree was reorganised into folders named for their layers.
+Legacy parts were removed: `env/`, `uqf_client`, log4q and the old release builder.
+
+### `python/` — `uqs`, the stack CLI (138 files, +12,090 / -6,515)
+
+- **Rename:** `uqf-stack`, and before it `torq_orchestrator`, is now `uqs`. The `core.py` facade and its re-exports are gone.
+- **Process registry:** now derived from the q declarations instead of hard-coded Python values.
+- **`uqs new-job`:** now also scaffolds normalizers, output-contract drivers and desk catalog entries.
+  It refuses a dataset another worker already fills, and closes three silent failures.
+- **New commands:** `uqs multitail`, `uqs query --console` (an interactive qcon), named start profiles,
+  tab completion, a `summary` Responds column with a 0.5s probe, and `summary --debug` load timings.
+  `uqs list processes` shows each process's inputs and outputs, and logs are now in colour.
+- **Backfills:** a backfill's worker, version and range are flags, not environment variables.
+- **Data directory:** moved to `output/uqs`.
+- **`uqf_client`:** removed. The repo-wide tests it hosted moved elsewhere.
+
+### `src/` (39 files, +408 / -227)
+
+- **Folders:** the thirty-one flat modules became six folders named for their layers.
+- **Logging:** `.qlog` everywhere; the vendored log4q was removed from `lib/`.
+- **Timestamps:** the timestamp column is `time` everywhere.
+- **Ratios:** a ratio with no denominator is now null, not infinity.
+- **ETL:** fixes to worker procname handling and populated-column meta types. What streaming
+  jobs publish is now checked against what they declare.
+
+### Tests, gates and tooling
+
+- **Tests:** 27 test files changed (+1,258). An errored test now reports what it threw.
+- **New gates:**
+  - `KDBSTACKID` and env-var producers.
+  - Profile slot arithmetic.
+  - A `contract-surface` pre-commit hook, since hosted CI has no KDB-X and never ran that check.
+- **Scripts:** `scripts/dev/install.sh` puts the repo's commands on PATH.
+- **Removed:** the release builder that never built a release, and the new-process wizard.
+
+### `docs/` (68 files, +3,556 / -3,480)
+
+- **Structure:** an index for each `docs/` directory; `docs/services/` has one page per service,
+  and `docs/scaffolding/` one per job shape.
+- **Diagrams:** all in one language (d2), with the repo overview and FX positions diagrams redrawn.
+- **Retired:** `ROADMAP.md`, `docs/migrations/`, `docs/audits` and `restatement-design.md`.
+- **Renamed:** `surfaces/uqf-local` is now `surfaces/current`.
+
+### After the entry above was written (#421–#424, 101 files, +1,355 / -1,187)
+
+- **`uqs up`:** start, and stream every started process's log to the console until Ctrl-C —
+  the foreground form of `start` + `logs -f`, the way `docker compose up` is.
+- **One sink, two shapes of record:** the kdb log format needs `extra[kdb_time]`, and loguru
+  formats with `format_map`, so every record `uqs` logged *itself* during a stream raised
+  `KeyError` inside the handler — printing a traceback and dropping the message. Safe while
+  `logs` was a leaf command; `up` is not. A run that hit the moved data directory printed eight
+  tracebacks and none of the instruction explaining what to run. The format is a per-record
+  chooser now.
+- **Start profiles:** an `all` profile, and `UQS_LICENCE_CONNECTIONS` to set the budget rather
+  than edit the constant.
+- **`uqs summary`:** default `--timeout` 120s, not 10s.
+- **`.qdqc` scope:** data quality only — business limits belong to `.qlimit`.
+- **`docs/`:** `frontend-requirements.md` removed with every `FE-nn` citation of it; the stack
+  page is architecture and its generated process table is reference; `docs/README.md` states
+  where a document goes and what is there in one table.
+- **`README.md`:** 458 lines to 307. The `qlinter`, Quant modules and Coverage sections moved to
+  the files that already documented them.
+
 ## stable/2026-09-22
 
 The largest snapshot so far: 119 commits and 124 PRs since `stable/2026-09-16.1`,

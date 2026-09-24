@@ -1,6 +1,7 @@
 // test_limits.q - tests for src/portfolio/limits.q. Load
 // src/portfolio/limits.q, tests/lib/qunit.q and tests/lib/testutil.q before
-// this file.
+// this file - and, for the section policing other modules' tables,
+// src/portfolio/positions.q and src/execution/execution.q.
 
 \d .limittest
 
@@ -151,6 +152,46 @@ test_a_desk_wide_limit_is_the_same_mechanism_at_a_coarser_scope:{[t]
         ([] book:enlist `london; metric:enlist `base_qty; cap:enlist 1000000f)];
     .qunit.assertEquals[count b;1;"london's 2.5mm across two pairs breaches a 1mm desk limit"];
     .qunit.assertEquals[first exec book from b;`london;"at book scope, with no pair named"]};
+
+/ ----------------------------------------------- OTHER MODULES' TABLES
+
+/ The business limits .qdqc used to check with an engine of its own (#412):
+/ position notional, currency exposure and reject ratio. Each is a keyed
+/ table .qlimit measures like any book - these hold that it can, on the
+/ exact shape each source module produces.
+
+/ reject_ratio_by's own output, rather than a hand-built table - a fixture
+/ would pass even if the two shapes had diverged.
+mk_reject_ratios:{[]
+    reqs:([] time:2026.09.15D10:00:00.000000000 2026.09.15D10:30:00.000000000 2026.09.15D11:00:00.000000000 2026.09.15D11:30:00.000000000;
+            sym:`EURUSD`EURUSD`GBPUSD`GBPUSD;
+            reject:1001b;
+            size:4#1000000f);
+    .qexec.reject_ratio_by[reqs;2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000;0Nn;enlist `sym;`count]}
+
+test_a_qpos_book_is_policed_as_it_stands:{[t]
+    / .qpos keys its book on sym, so it needs no reshaping to be measured.
+    pos:.qpos.apply_fill[.qpos.empty_book[];`EURUSD;1500000;1.1000;-1];
+    b:.qlimit.evaluate[.qlimit.measure[pos;enlist `qty];
+        ([] sym:enlist `EURUSD; metric:enlist `qty; cap:enlist 1000000f)];
+    .qunit.assertEquals[count b;1;"1.5mm short is over a 1mm cap on its size"];
+    .testutil.assertApprox[first b`observed;-1500000f;1e-9;"the breach reports the signed position"]};
+
+test_a_currency_exposure_breaches_on_its_magnitude:{[t]
+    / ccy_exposure_in's shape, keyed on the currency it reports.
+    exposure:([] ccy:`EUR`USD; amount:1000000 -1412500f; reporting_ccy:`USD`USD; reporting_amount:1085000 -1412500f);
+    b:.qlimit.evaluate[.qlimit.measure[`ccy xkey exposure;enlist `reporting_amount];
+        ([] ccy:enlist `USD; metric:enlist `reporting_amount; cap:enlist 1000000f)];
+    .qunit.assertEquals[b`ccy;enlist `USD;
+        "USD is 1,412,500 short against a 1mm cap; EUR has no limit and is unpoliced"]};
+
+test_a_reject_ratio_is_a_limit_like_any_other:{[t]
+    / reject_ratio_by's output keyed on what it was grouped by. The cap is a
+    / ratio in [0,1], matching reject_ratio's own units.
+    b:.qlimit.evaluate[.qlimit.measure[`sym xkey mk_reject_ratios[];enlist `reject_ratio];
+        ([] sym:`EURUSD`GBPUSD; metric:2#`reject_ratio; cap:0.20 0.90)];
+    .qunit.assertEquals[b`sym;enlist `EURUSD;
+        "0.5 over EURUSD's 0.20 cap breaches; the same 0.5 under GBPUSD's 0.90 does not"]};
 
 / ------------------------------------------------------------- THROTTLING
 

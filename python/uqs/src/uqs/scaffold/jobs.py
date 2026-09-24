@@ -80,7 +80,7 @@ def _nslist_action(namespace: str) -> FileAction:
 #: The registry consequences no generator writes, because both are authored
 #: prose for a person to read. Each has a test that fails until it is written,
 #: and a note here is what stops that failure being a surprise.
-_README_NOTE = "name {proc} in docs/integrations/torq/README.md - authored prose, checked by pytest"
+_STACK_PAGE_NOTE = "name {proc} in docs/architecture/stack.md - authored prose, checked by pytest"
 
 #: A new process is reachable by name from the day it is scaffolded, and by
 #: `--profile` never, until someone says which profile it belongs to.
@@ -289,7 +289,7 @@ publish:.qstream.unwired `{name};
     )
     actions.append(_nslist_action(ns))
     notes.append(f"implement .qsub.{name}.{handler}, then replace the scaffolded test")
-    notes.append(_README_NOTE.format(proc=proc))
+    notes.append(_STACK_PAGE_NOTE.format(proc=proc))
     notes.append(_PROFILE_NOTE.format(proc=proc))
     if not is_feed:
         notes.append("start it with its producers: " + " ".join(sorted(set(subscribes))))
@@ -370,12 +370,13 @@ def bounded_worker(
         notes = [f"reuses .qfeed.{src}: its query and fixture are already written"]
     else:
         notes = [
-            f"write .qfeed.{src}.query - parameterised, never concatenated (FE-14)",
+            f"write .qfeed.{src}.query - parameterised, never concatenated"
+            " (see src/etl/core/source_contract.q)",
             f"write .qfeed.{src}.fixture - deterministic, same contract as the live source",
             f"declared fields: {', '.join(c for c, _ in cols)}",
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
-    notes.append(_README_NOTE.format(proc=proc))
+    notes.append(_STACK_PAGE_NOTE.format(proc=proc))
     if define_table:
         actions += catalog_actions(dataset, cols, notes)
     return ScaffoldPlan(name=worker, actions=actions, notes=notes)

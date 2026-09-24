@@ -17,4 +17,4 @@ as a whole - starting, stopping, config, logs - is
 | [`tap.md`](tap.md) | `tap1` | a diagnostic subscriber that logs every batch |
 
 Every process, with its port, what it subscribes to and publishes, is in the
-generated [process table](../integrations/torq/processes.md).
+generated [process table](../reference/processes.md).

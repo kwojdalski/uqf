@@ -1,4 +1,4 @@
-"""Fleet health (FE-01), and the properties that make it honest."""
+"""Fleet health, and the properties that make it honest."""
 
 from __future__ import annotations
 

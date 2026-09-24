@@ -58,6 +58,7 @@ in q would mean parsing it back out for a reader that is only ever the CLI.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 
 from uqs.model.dependencies import (
@@ -120,6 +121,30 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "crypto": ("cryptomock1",),
 }
 
+#: Profiles `all` leaves out, and why. An exemption carries its reason, the
+#: same shape as UNPROFILED below.
+NOT_IN_ALL: dict[str, str] = {
+    "crypto": (
+        "cryptomock1 runs INSTEAD of cryptorust's recorders, never alongside them, "
+        "so it stays something you ask for: `--profile all,crypto`"
+    ),
+}
+
+#: Every standing set at once. DERIVED - the union of the other profiles'
+#: leaves - rather than listed, so a leaf added to any profile is in `all`
+#: without anyone remembering to add it here too.
+PROFILES["all"] = tuple(
+    sorted({leaf for name, leaves in PROFILES.items() if name not in NOT_IN_ALL for leaf in leaves})
+)
+
+#: Profiles that need more plant slots than the community licence has, and
+#: why that is deliberate. Every other profile must fit that licence
+#: (test_profiles holds them to it); these are refused on it, with the
+#: reason, and start once UQS_LICENCE_CONNECTIONS says the licence allows more.
+NEEDS_LARGER_LICENCE: dict[str, str] = {
+    "all": "every standing set at once holds more plant connections than the community licence has",
+}
+
 #: Standing processes no profile reaches, and why each is deliberate.
 #:
 #: The same shape as EXTERNAL_PRODUCERS and the catalog's hidden list: an
@@ -140,8 +165,44 @@ UNPROFILED: dict[str, str] = {
     ),
 }
 
-#: Plant slots a profile may hold.
-ALLOWANCE = LICENCE_CONNECTION_LIMIT - INBOUND_RESERVE
+#: The environment variable saying how many concurrent connections this
+#: machine's q licence allows, when that is not the community licence's
+#: LICENCE_CONNECTION_LIMIT.
+#:
+#: It sets the budget a START is held to - a profile, and the warning on a
+#: positional `uqs start` - and nothing else. verify_pipeline_edges keeps the
+#: committed default start within the community limit whatever this machine's
+#: licence is, because that start has to work on the licence anyone can get.
+LICENCE_CONNECTIONS_ENV = "UQS_LICENCE_CONNECTIONS"
+
+
+def licence_limit() -> int:
+    """Concurrent connections a q process may hold on this machine's licence.
+
+    Read on every call. A value that is not a whole number, or that leaves no
+    slot once INBOUND_RESERVE is held back, is refused rather than ignored: a
+    budget silently back at the default is the wrong budget with no sign of it.
+    """
+    raw = os.environ.get(LICENCE_CONNECTIONS_ENV, "").strip()
+    if not raw:
+        return LICENCE_CONNECTION_LIMIT
+    try:
+        limit = int(raw)
+    except ValueError:
+        raise UqsError(
+            f"{LICENCE_CONNECTIONS_ENV}={raw!r} is not a whole number of connections"
+        ) from None
+    if limit <= INBOUND_RESERVE:
+        raise UqsError(
+            f"{LICENCE_CONNECTIONS_ENV}={limit} leaves no tickerplant slot once "
+            f"{INBOUND_RESERVE} are held back for ad-hoc handles"
+        )
+    return limit
+
+
+def allowance() -> int:
+    """Plant slots a profile may hold on this machine's licence."""
+    return licence_limit() - INBOUND_RESERVE
 
 
 def _procnames() -> set[str]:
@@ -230,13 +291,16 @@ def over_budget(names: Iterable[str]) -> str | None:
     """
     wanted = sorted(names)
     held = plant_slots(resolve(wanted))
-    if held <= ALLOWANCE:
+    slots = allowance()
+    if held <= slots:
         return None
     return (
         f"profile(s) {', '.join(wanted)} need {held} tickerplant connections, "
-        f"and only {ALLOWANCE} are available ({LICENCE_CONNECTION_LIMIT} on this "
+        f"and only {slots} are available ({licence_limit()} on this "
         f"licence, {INBOUND_RESERVE} held back for ad-hoc handles). The plant "
         f"resets the extras rather than refusing them, so the processes past the "
         f"cap wedge in their retry loop while still reporting `up`. Start fewer "
-        f"profiles, or stop what you are not using."
+        f"profiles, or stop what you are not using - or, if your q licence "
+        f"allows more concurrent connections, say how many with "
+        f"{LICENCE_CONNECTIONS_ENV}."
     )

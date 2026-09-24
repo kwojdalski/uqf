@@ -25,9 +25,17 @@ from uqs.paths import UqsError
 
 PROCNAMES = {pipeline.procname for pipeline in PIPELINES}
 NAMES = sorted(profiles.PROFILES)
+FITTING = sorted(set(NAMES) - set(profiles.NEEDS_LARGER_LICENCE))
 
 
-@pytest.mark.parametrize("name", NAMES)
+@pytest.fixture(autouse=True)
+def _community_licence(monkeypatch):
+    """Every test here reads the budget of the licence anyone can get, not of
+    whatever licence the machine running them happens to declare."""
+    monkeypatch.delenv(profiles.LICENCE_CONNECTIONS_ENV, raising=False)
+
+
+@pytest.mark.parametrize("name", FITTING)
 def test_every_profile_fits_the_licence(name):
     """The whole reason profiles exist: the cap, checked at declaration."""
     assert profiles.over_budget([name]) is None, profiles.over_budget([name])
@@ -150,6 +158,55 @@ def test_two_profiles_that_each_fit_can_together_not_fit():
 def test_composing_counts_the_union_not_the_sum():
     """fx and arbitrage share fxfeed1, so 12 + 10 is not 22."""
     assert profiles.plant_slots(profiles.resolve(["fx", "arbitrage"])) < 12 + 10
+
+
+def test_all_is_every_other_profiles_leaves_but_the_exempt():
+    """Derived, so a leaf added to any profile is in `all` without a second edit."""
+    expected = {
+        leaf
+        for name, leaves in profiles.PROFILES.items()
+        if name != "all" and name not in profiles.NOT_IN_ALL
+        for leaf in leaves
+    }
+    assert set(profiles.PROFILES["all"]) == expected
+
+
+def test_all_leaves_the_crypto_mock_to_be_asked_for():
+    """cryptomock1 replaces the real recorders; `all` must never start it
+    alongside them by default."""
+    assert "cryptomock1" not in profiles.resolve(["all"])
+    assert "cryptomock1" in profiles.resolve(["all", "crypto"])
+
+
+def test_a_profile_needing_a_larger_licence_is_refused_on_this_one_and_says_how():
+    message = profiles.over_budget(["all"])
+    assert message is not None
+    assert "20" in message and "14" in message
+    assert profiles.LICENCE_CONNECTIONS_ENV in message, "the refusal names the way out"
+
+
+def test_declaring_a_larger_licence_lets_it_start(monkeypatch):
+    monkeypatch.setenv(profiles.LICENCE_CONNECTIONS_ENV, "24")
+    assert profiles.allowance() == 22
+    assert profiles.over_budget(["all"]) is None
+
+
+@pytest.mark.parametrize("value", ["lots", "2", "-1"])
+def test_a_licence_setting_that_cannot_be_a_budget_is_refused(monkeypatch, value):
+    """Refused rather than ignored: falling back to 16 would be the wrong
+    budget with no sign of it."""
+    monkeypatch.setenv(profiles.LICENCE_CONNECTIONS_ENV, value)
+    with pytest.raises(UqsError, match=profiles.LICENCE_CONNECTIONS_ENV):
+        profiles.allowance()
+
+
+def test_no_larger_licence_exemption_is_stale():
+    """An exemption for a profile that now fits, or no longer exists, is a
+    reason nobody will re-read."""
+    for name, reason in profiles.NEEDS_LARGER_LICENCE.items():
+        assert name in profiles.PROFILES, f"{name} is exempted and is not a profile"
+        assert profiles.over_budget([name]) is not None, f"{name} is exempted and fits"
+        assert reason.strip(), f"{name} is exempted with no reason"
 
 
 def test_an_unknown_profile_is_refused_by_name():

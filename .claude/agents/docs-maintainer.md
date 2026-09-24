@@ -69,7 +69,7 @@ append a rule you inferred; only ones the maintainer actually stated.
 ## Rules
 
 - **Never edit a generated file.** `docs/man.q`,
-  `docs/integrations/torq/processes.md`,
+  `docs/reference/processes.md`,
   `src/etl/generated/pipeline_dag.q` and
   `docs/reference/surfaces/current/` are produced by scripts and gated;
   edit the source and regenerate.

@@ -1,6 +1,6 @@
 """Coverage interval arithmetic: is a requested range actually published?
 
-FE-09 requires that before querying a bounded dataset the caller can confirm
+Before querying a bounded dataset the caller can confirm
 its inputs are covered. The rules come from the ETL framework, not from here:
 
 - **ETL-08** - every coverage interval is half-open ``[range_from, range_to)``,

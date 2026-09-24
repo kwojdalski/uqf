@@ -56,7 +56,7 @@ table below only says what each module is *for*.
 | [`execution/execution.q`](../../src/execution/execution.q) | `.qexec` | markouts, effective spread, slippage, fill/reject ratios, VWAP, sweep pricing | [tests](../../tests/q/test_execution.q) |
 | [`market_data/book.q`](../../src/market_data/book.q) | `.qbook` | reshapes wide/mis-typed order books into the shape the other modules expect | [tests](../../tests/q/test_book.q) |
 | [`market_data/microstructure.q`](../../src/market_data/microstructure.q) | `.qmicro` | LOB signals: book pressure, microprice, order flow imbalance, VAMP | [tests](../../tests/q/test_microstructure.q) |
-| [`market_data/dqchecks.q`](../../src/market_data/dqchecks.q) | `.qdqc` | limit and data-quality checks, reported rather than thrown | [tests](../../tests/q/test_dqchecks.q) |
+| [`market_data/dqchecks.q`](../../src/market_data/dqchecks.q) | `.qdqc` | data-quality checks on quotes, reported rather than thrown; business limits are `.qlimit`'s | [tests](../../tests/q/test_dqchecks.q) |
 | [`integrations/data.q`](../../src/integrations/data.q) | `.qdata` | external data access | [tests](../../tests/q/test_data.q) |
 | [`examples/example_defaults.q`](../../src/examples/example_defaults.q) | `.qexdef` | shared example inputs used by docstrings and demos | — |
 

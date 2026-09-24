@@ -1,4 +1,4 @@
-"""Reading q's backfill status files (FE-06, phase B4).
+"""Reading q's backfill status files.
 
 The load-bearing test here is test_reader_field_set_matches_the_q_writer: the
 format is defined in src/etl/core/status.q and consumed here, and nothing

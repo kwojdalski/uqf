@@ -3,7 +3,7 @@
 Deliberately independent of `uqf_frontend.status`, even though the two
 parse the same file format: this package is meant to run inside Airflow's
 own environment, which need not have `uqf-frontend` (a FastAPI service)
-installed, and per FE-22/FE-23 nothing here may pull in a dependency that
+installed, and nothing here may pull in a dependency that
 narrows where this package is importable. The two readers are kept honest
 against the same q source independently — see `tests/test_status_reader.py`
 and `python/uqf_frontend/tests/test_status.py`, which both parse

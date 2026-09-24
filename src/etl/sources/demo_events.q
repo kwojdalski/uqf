@@ -49,7 +49,7 @@ tz:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
-/ Parameterised, never concatenated (ETL-08 / FE-14). Half-open
+/ Parameterised, never concatenated. Half-open
 / [range_from;range_to) per ETL-08 - >= on the lower bound and < on the
 / upper, so a boundary event is published exactly once.
 query:{[h;range_from;range_to]

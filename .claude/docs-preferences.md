@@ -102,6 +102,41 @@ across services; `guides/uqs.md` is for operating the stack as a whole.
 > superbook and cross-arbitrage pages in `guides/`, and five more services
 > were sections of `uqs.md`. All seven became `docs/services/` pages.
 
+**A directory index is one table: what each directory is for, and what is
+in it, in the same row.** Name each page with a few words, not a sentence;
+the page's own opening says the rest.
+
+> *2026-09-24.* `docs/README.md` had "Where a document goes" (a table of the
+> six directories) and "What is where" (a paragraph per directory, one gloss
+> per page). Asked: "merge where a document goes with what is where ... What
+> is where should be in the table just more concise". Now one table with a
+> Pages column. The table had also said "Five directories" over six rows.
+
+**A page about this tree's own system is not an integration because it
+runs on a vendored platform.** The running stack is uqf's; TorQ is what it
+runs on. What the stack is and why it is wired that way is architecture; its
+generated process table is reference.
+
+> *2026-09-24.* Asked: "don't you think that integrations/torq document could
+> be elsewhere?". `docs/integrations/torq/` held the stack page and the
+> process table and nothing else. They became `architecture/stack.md` and
+> `reference/processes.md`, and `integrations/` went. The stack page's manual
+> start commands, which predated start profiles and said "three spare" where
+> the registry has one, gave way to a pointer at `guides/uqs.md`'s profiles.
+
+**A document that says it is frozen and non-authoritative is not kept as the
+thing the code cites.** Remove it, and remove its ids with it, keeping the
+rule each citation stated. A citation should resolve to something that is
+maintained - or to the code that enforces the rule.
+
+> *2026-09-24.* Asked: "could you also remove front end requirements file".
+> `docs/reference/frontend-requirements.md` called itself "frozen and
+> non-authoritative", reconstructed from screen photographs of an unreachable
+> repository, yet ~140 `FE-nn` citations across ~40 files pointed into it.
+> Chosen over leaving them dangling: strip every `FE-nn` and `B0`..`B5`
+> phase label, keep the sentence's own rule, and where a note needs a
+> pointer, point at `src/etl/core/source_contract.q`, which enforces it.
+
 **No prescriptive meta-rules about the documentation process itself.**
 Describe what is, not how future documents must be filed.
 
@@ -150,6 +185,6 @@ happened.
 > being applied silently.
 
 **Generated files.** `docs/man.q`,
-`docs/integrations/torq/processes.md`, `src/etl/generated/pipeline_dag.q`,
+`docs/reference/processes.md`, `src/etl/generated/pipeline_dag.q`,
 `docs/reference/surfaces/current/`. Edit the source and regenerate; CI
 fails on a hand-edit.

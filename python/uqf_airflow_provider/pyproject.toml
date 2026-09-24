@@ -1,13 +1,13 @@
 [project]
 name = "uqf-airflow-provider"
 version = "0.1.0"
-description = "Translates q's backfill status files into Airflow's sensor vocabulary (FE-21/D10)"
+description = "Translates q's backfill status files into Airflow's sensor vocabulary"
 readme = "README.md"
 authors = [
     { name = "Krzysztof Wojdalski", email = "krzysztof.wojdalski@gmail.com" }
 ]
 requires-python = ">=3.14"
-# Deliberately NO apache-airflow dependency (FE-22/FE-23). This is a
+# Deliberately NO apache-airflow dependency. This is a
 # public repo and a local single-host demo; a licensed or heavy external
 # dependency cannot be required or the whole path becomes undemonstrable
 # outside a real Airflow install - the same reasoning src/etl/core's

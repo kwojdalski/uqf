@@ -1,4 +1,4 @@
-"""Usage-log capture (FE-13).
+"""Usage-log capture.
 
 ``.usage.usage`` rows are flushed to disk and dropped from memory after
 ``.usage.flushtime`` - **one day** in a standard TorQ stack. So any frontend
@@ -165,7 +165,7 @@ class CaptureScheduler:
     """Runs a :class:`UsageCapture` on a fixed interval, in a daemon thread.
 
     WHY THIS EXISTS AT ALL. ``capture_once`` was written, tested and called
-    by nothing. FE-13 is the one requirement whose failure is invisible
+    by nothing. Capture is the one requirement whose failure is invisible
     while it is failing - a view of the last day looks exactly like
     a view of everything, right up to the day someone asks about yesterday -
     which is why the requirements call it "the trap" and why the pipeline

@@ -11,11 +11,14 @@ import logging
 import os
 import re
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+from uqs.logger.floats import CutFloatsLogger
 
 if TYPE_CHECKING:
     # loguru declares Record in its stub but does not export it at runtime,
@@ -135,8 +138,13 @@ def _highlight_kv(msg: str) -> str:
     return _KV_VALUE_RE.sub(_replace, msg)
 
 
-def _make_kv_format(fmt: str) -> Any:
-    """Return a loguru format callable that highlights key=value pairs."""
+def _make_kv_format(fmt: str | Callable[[dict], str]) -> Any:
+    """Return a loguru format callable that highlights key=value pairs.
+
+    `fmt` may be a template string, or a callable choosing one PER RECORD.
+    The second form exists because one sink can receive records of more than
+    one shape - see stack/logs.py's _kdb_or_uqs_format.
+    """
 
     def _format(record: dict) -> str:
         # Escape bare < so loguru's colorizer does not treat them as color tags.
@@ -145,7 +153,8 @@ def _make_kv_format(fmt: str) -> Any:
         highlighted = _highlight_kv(raw)
         # Escape bare braces so format_map doesn't misinterpret message content.
         safe = highlighted.replace("{", "{{").replace("}", "}}")
-        return fmt.replace("{message}", safe, 1) + "\n"
+        template = fmt if isinstance(fmt, str) else fmt(record)
+        return template.replace("{message}", safe, 1) + "\n"
 
     return _format
 
@@ -173,7 +182,7 @@ def setup_logging(
     structured_logging: bool = False,
     max_file_size: int = 10 * 1024 * 1024,  # 10 MB
     backup_count: int = 5,
-    format_string: str | None = None,
+    format_string: str | Callable[[dict], str] | None = None,
     log_regex: str | None = None,
 ) -> Any:
     """Configure loguru sinks and return the logger."""
@@ -202,7 +211,10 @@ def setup_logging(
 
     if console_output:
         use_color = colored_output and not structured_logging
-        console_fmt = _make_kv_format(fmt) if use_color else fmt
+        # _make_kv_format either way when fmt is a chooser: loguru's own
+        # `format=` takes a callable over its Record type, and the wrapper is
+        # what turns a per-record template choice into one.
+        console_fmt = _make_kv_format(fmt) if use_color or callable(fmt) else fmt
         logger.add(
             sys.stdout,
             level=level.upper(),
@@ -232,8 +244,9 @@ def setup_logging(
 
 
 def get_logger(name: str) -> Any:
-    """Return the loguru logger singleton (name is accepted for API compat)."""
-    return logger
+    """Return the loguru logger singleton (name is accepted for API compat),
+    with floats in a log call's arguments cut to LOG_FLOAT_DECIMALS places."""
+    return CutFloatsLogger(logger)
 
 
 def configure_logging(

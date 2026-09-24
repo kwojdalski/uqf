@@ -59,7 +59,7 @@ _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 #: A BUDGET for the whole command rather than a per-call limit, because two
 #: calls each given ten seconds is a twenty-second hang, which is not what
 #: anyone means by a ten-second timeout.
-SUMMARY_TIMEOUT_SECONDS = 10.0
+SUMMARY_TIMEOUT_SECONDS = 120.0
 
 
 def _resolve_columns(requested: str | None) -> list[str]:

@@ -1,7 +1,7 @@
 # uqf stack architecture
 
 Diagrams for the running state of the uqf stack (see
-[docs/guides/uqs.md](../../guides/uqs.md) for how to actually
+[docs/guides/uqs.md](../guides/uqs.md) for how to actually
 start/stop/query it). Reflects what `uqs list processes` shows today:
 the vendored 23-process stack plus uqf's own additions (`fxfeed1`, `quotesfeed1`,
 `widefeed1`, `cross1`, `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`,
@@ -17,7 +17,7 @@ Direct FX arbitrage flows through `marketdata1` (`quote` and `quotes` into
 `arbitrage1` (gross cross-source price opportunities into `arbitrage`). The
 three are on demand rather than part of `uqs start` - see the
 connection budget below. See
-[the superbook guide](../../services/superbook.md) for source identity, expiry
+[the superbook guide](../services/superbook.md) for source identity, expiry
 and the query for currently active opportunities.
 
 `crossarb1` reads the same `superbook` and asks the other arbitrage
@@ -25,7 +25,7 @@ question: not "are two sources crossed on one pair" but "is the direct
 market out of line with a route through other pairs" - EURJPY against
 EURUSD x USDJPY, into `cross_arbitrage`. It is a second CONSUMER of that
 chain rather than a fifth link in it, so it can run with or without
-`arbitrage1`. See [the cross-arbitrage guide](../../services/cross-arbitrage.md).
+`arbitrage1`. See [the cross-arbitrage guide](../services/cross-arbitrage.md).
 
 Each backfill process now NAMES the `.qbw` worker it runs. One script
 serves all four and its `-worker` flag picks which at runtime, so until
@@ -54,7 +54,7 @@ trigger to Airflow), not part of the stack `uqs start` brings up.
 
 For the authoritative per-process table - ports, scripts, the table each
 owns, and its subscribe/publish edges - see
-[processes.md](processes.md), which is **generated** from the pipeline
+[processes.md](../reference/processes.md), which is **generated** from the pipeline
 registry rather than written by hand. The diagrams below are
 authored, because choosing what to show is a judgement; their process
 *names* are checked against the registry by
@@ -71,7 +71,7 @@ discovery/registration only.
      scripts/generate/render_diagrams.py, which CI runs with --check.
      Do not edit the .svg. -->
 
-![Who connects to whom in the running stack: the uqf streaming jobs, the one runner they share, the tickerplant, and storage](../../diagrams/stack-topology.svg)
+![Who connects to whom in the running stack: the uqf streaming jobs, the one runner they share, the tickerplant, and storage](../diagrams/stack-topology.svg)
 
 Two different connection patterns coexist, deliberately - **and since #204
 no job performs either one itself**. A streaming job declares `subscribes`
@@ -183,25 +183,15 @@ keep their schema row and their place in the DAG, and are one command away:
 | `databento1` | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing |
 | `feed1` | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table |
 | `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together |
-| `crossarb1` | the synthetic-versus-direct detector, a second consumer of that chain - and the fourth connection against three spare, so it needs something stopped first |
-| `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in `processes.md` |
+| `crossarb1` | the synthetic-versus-direct detector, a second consumer of that chain, so it runs with it |
+| `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in [`processes.md`](../reference/processes.md) |
 
-```bash
-uqs start widefeed1 vectorize1                 # the vectorize branch
-uqs start cross1                               # quotesfeed1 already runs
-uqs start marketdata1 superbook1 arbitrage1    # direct FX arbitrage
-uqs start marketdata1 superbook1 crossarb1     # cross-currency instead
-```
-
-The last two lines are alternatives, not a sequence: `arbitrage1` and
-`crossarb1` both read `superbook` and answer different questions, and
-running the chain plus BOTH is four plant connections against three spare.
-
-Each of those has its upstream producer either in the default set or shed
-alongside it, so starting one is enough - that property is held by a test,
-not by habit. Starting several at once eats into the reserve; if you need
-the whole graph up at the same time, stop something first or raise the
-budget against a licence that allows it.
+To run them, start a profile - a named set that pulls in what it reads -
+rather than adding processes to the default start:
+[`guides/uqs.md`](../guides/uqs.md#profiles-a-named-start-set-that-fits)
+lists them, and refuses one the licence cannot hold. Each process above has
+its upstream producer either in the default set or shed alongside it, so
+starting one is enough - that property is held by a test, not by habit.
 
 ## Data pipeline: table by table
 
@@ -211,7 +201,7 @@ processes diverge - one publishes its output back onto the tickerplant
 
 <!-- Source: docs/diagrams/stack-dataflow.d2. -->
 
-![Which process writes which table, and which of those tables is persisted rather than private to its process](../../diagrams/stack-dataflow.svg)
+![Which process writes which table, and which of those tables is persisted rather than private to its process](../diagrams/stack-dataflow.svg)
 
 `posbook1` and `markout1` are the two processes in this stack that run
 uqf's actual eFX business logic (position/PnL and execution quality, not
@@ -275,7 +265,7 @@ and `database.q` are never written to.
 
 <!-- Source: docs/diagrams/config-generation.d2. -->
 
-![The vendored process.csv and database.q read fresh on every command, extended, and written to generated copies the stack actually runs on](../../diagrams/config-generation.svg)
+![The vendored process.csv and database.q read fresh on every command, extended, and written to generated copies the stack actually runs on](../diagrams/config-generation.svg)
 
 `bootstrap()` (`python/uqs/src/uqs/stack/runtime.py`)
 regenerates both files on every command - `start`, `stop`, `summary`,

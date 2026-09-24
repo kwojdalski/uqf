@@ -21,7 +21,7 @@
 / .
 /   is the process alive?      the monitor's query either connects or does not
 /   is it making progress?     THIS table's last_seen
-/   what did the last run do?  the status file (FE-06)
+/   what did the last run do?  the status file
 /   is the data complete?      the coverage ledger (ETL-07)
 / .
 / Four questions, four answers, no overlap. Trying to make any one of them

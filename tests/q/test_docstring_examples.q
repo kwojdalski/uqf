@@ -94,10 +94,6 @@ bind_fixtures:{[]
     / assert a value now build their own book inline, so this binding serves
     / only the two that assert nothing - a book with one open position.
     `b set .qpos.apply_fill[.qpos.empty_book[];`EURUSD;600000;1.1000;1];
-    / `value `b`, not `b`: inside \d .egtest a bare name resolves to
-    / .egtest.b, which does not exist. Every read of a root binding below
-    / goes through `value` for the same reason.
-    `pos set value `b;
 
     / Every binding below serves an @eg with no `->` - one that claims no
     / value, and so was never run by anything until tests/q/run_examples.q.
@@ -106,6 +102,9 @@ bind_fixtures:{[]
     `markout_trades set .executiontest.mk_markout_trades[];
     `mid_quotes set .executiontest.mk_mid_quotes[];
     `trades set .positionstest.mk_trades[];
+    / `value `trades`, not `trades`: inside \d .egtest a bare name resolves
+    / to .egtest.trades, which does not exist. Every read of a root binding
+    / below goes through `value` for the same reason.
     `broker_book set .qpos.apply_fills[.qpos.empty_book[];value `trades];
     books:.forwardstest.mk_books[];
     `eurusd_book set books`eurusd;
@@ -115,8 +114,6 @@ bind_fixtures:{[]
     `t1 set max exec time from `quotes;
     `tbl set .booktest.wide_book_table[::];
     `prefix_targets set .booktest.level_prefix_targets;
-    `rr set .dqcheckstest.mk_reject_ratios[];
-    `limits set ([] sym:enlist `EURUSD; limit:enlist 1000000f);
     .metatest.setUp[::];
     `trade set .metatest.source;
     `spec set .qmeta.definition[`trade;`date;enlist `sym;()!()];
