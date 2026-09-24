@@ -1434,6 +1434,78 @@ def test_query_with_neither_an_expression_nor_console_is_refused(monkeypatch):
     assert any("--console for a session" in m for m in errors.messages), errors.messages
 
 
+# ------------------------------------------------------- conn (qcon by name)
+
+
+def _conn(monkeypatch, *, running=("rdb1",), ports=None):
+    """Patch what conn reads - the port map and the up/down check - and
+    capture the exec instead of replacing the test process."""
+    seen: dict[str, Any] = {}
+    ports = ports if ports is not None else {"rdb1": "6052", "hdb1": "6053"}
+    monkeypatch.setattr(
+        inspect.listing,
+        "configured_ports",
+        lambda paths, base_port: seen.update(base=base_port) or ports,
+    )
+    if isinstance(running, Exception):
+
+        def refuse(paths, base_port):
+            raise running
+
+        monkeypatch.setattr(inspect.alive, "running", refuse)
+    else:
+        monkeypatch.setattr(inspect.alive, "running", lambda paths, base_port: set(running))
+    monkeypatch.setattr(inspect.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(inspect.os, "execvp", lambda f, a: seen.update(argv=a))
+    return seen
+
+
+def test_conn_opens_qcon_on_the_named_process_port(monkeypatch):
+    seen = _conn(monkeypatch)
+    result = runner.invoke(cli.app, ["conn", "rdb1"])
+    assert result.exit_code == 0, result.output
+    assert seen["argv"] == ["rlwrap", "qcon", "localhost:6052:admin:admin"]
+
+
+def test_conn_resolves_the_port_at_the_stacks_base_port(monkeypatch):
+    seen = _conn(monkeypatch)
+    runner.invoke(cli.app, ["conn", "rdb1", "--port", "7000", "--user", "u", "--passwd", "p"])
+    assert seen["base"] == 7000
+    assert seen["argv"][-1] == "localhost:6052:u:p"
+
+
+def test_conn_refuses_an_unknown_process_by_name(monkeypatch):
+    errors = _error_log(monkeypatch)
+    seen = _conn(monkeypatch)
+    assert runner.invoke(cli.app, ["conn", "nope1"]).exit_code == 1
+    assert "argv" not in seen
+    assert any("not a declared process" in m for m in errors.messages), errors.messages
+
+
+def test_conn_refuses_a_stopped_process_and_says_how_to_start_it(monkeypatch):
+    """qcon's own refusal reads the same as a wrong port; this names the cause."""
+    errors = _error_log(monkeypatch)
+    seen = _conn(monkeypatch, running=())
+    assert runner.invoke(cli.app, ["conn", "hdb1"]).exit_code == 1
+    assert "argv" not in seen
+    assert any("uqs start hdb1" in m for m in errors.messages), errors.messages
+
+
+def test_conn_still_connects_when_it_cannot_tell_what_is_running(monkeypatch):
+    """The up/down check is advisory; qcon says for itself if nothing listens."""
+    seen = _conn(monkeypatch, running=RuntimeError("ps failed"))
+    assert runner.invoke(cli.app, ["conn", "rdb1"]).exit_code == 0
+    assert seen["argv"][-1] == "localhost:6052:admin:admin"
+
+
+def test_conn_without_qcon_installed_says_what_still_works(monkeypatch):
+    errors = _error_log(monkeypatch)
+    _conn(monkeypatch)
+    monkeypatch.setattr(inspect.shutil, "which", lambda name: None)
+    assert runner.invoke(cli.app, ["conn", "rdb1"]).exit_code == 1
+    assert any("not on PATH" in m for m in errors.messages), errors.messages
+
+
 def test_the_port_option_is_still_required():
     """Giving --port a default was the tempting way to satisfy Python's
     ordering rule when `expr` gained one. It would have turned "you forgot to

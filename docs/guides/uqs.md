@@ -301,6 +301,8 @@ clean [--match REGEX] [--dry-run]     wipe output/uqs/, or part of it
 install-jobs DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs
                                       in DIR into src/etl/ (see "Adding a process")
+conn PROCNAME [--port N]              interactive qcon session on a process, by name: its
+                                      port is looked up, and a stopped one is refused
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern
@@ -967,6 +969,17 @@ uqs query \
 uqs query \
     "select from quote where sym in \`EURUSD\`GBPUSD\`USDJPY\`AUDUSD" --port 6052
 ```
+
+For an interactive session, name the process and let `uqs` find its port:
+
+```
+uqs conn rdb1              # qcon localhost:6052:admin:admin, under rlwrap if installed
+uqs conn gateway1 --port 7000   # a stack started with --port 7000
+```
+
+It refuses a process that is not running - with the `uqs start` to fix it -
+rather than leaving qcon to report a refused connection, which reads the same
+as a wrong port. `qcon` ships with kdb+, not with this repository.
 
 `query` returns a Polars DataFrame (via `kola`, the same IPC library
 the frontend gateway uses) for table results. From a plain q session instead: `q)h:hopen
