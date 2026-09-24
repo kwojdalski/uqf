@@ -104,6 +104,26 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "crypto": ("cryptomock1",),
 }
 
+#: Standing processes no profile reaches, and why each is deliberate.
+#:
+#: The same shape as EXTERNAL_PRODUCERS and the catalog's hidden list: an
+#: exemption carries its reason, so "nobody got round to it" cannot pass as
+#: "deliberately not in a set". A process that is in neither a profile nor
+#: here fails `test_every_standing_process_is_reachable`.
+#:
+#: Backfills are not here and do not need to be: they are bounded, hold no
+#: plant connection and belong to no standing set.
+UNPROFILED: dict[str, str] = {
+    "databento1": (
+        "a live external feed - its rows come from the Databento handler "
+        "(`uqs databento-feed start`), so it is started with that or not at all"
+    ),
+    "tap1": (
+        "a diagnostic subscriber chosen at runtime: which table it taps is an "
+        "argument, so there is no standing set it belongs to"
+    ),
+}
+
 #: Plant slots a profile may hold.
 ALLOWANCE = LICENCE_CONNECTION_LIMIT - INBOUND_RESERVE
 

@@ -115,6 +115,42 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # The two generated artifacts that are pure functions of tracked
+      # source, REGENERATED here rather than checked.
+      #
+      # Both ran in CI only, with `--check`, so forgetting to regenerate cost
+      # a full round trip: commit, push, watch CI go red, run a command that
+      # takes a fifth of a second, commit again. The new-job skill has a
+      # step telling you to remember; a tool that remembers is better than a
+      # document that reminds.
+      #
+      # Modify-and-fail, the contract ruff-format already uses in this file:
+      # the hook rewrites the file and fails the commit, so you `git add` and
+      # commit again with the regenerated artifact in the same change.
+      #
+      # NOT the third one. contract_surface needs KDB-X to load the whole q
+      # tree, so it stays a CI check behind that tree's own availability
+      # guard - a hook that silently skipped for everyone without an
+      # interpreter would be a gate that protects nothing.
+      #
+      # NOT rendered-diagrams either, and that stays `--check` below for the
+      # reason its own header gives: d2 lays out differently between
+      # releases, so regenerating would start a churn war between two
+      # developers on different versions. These two have no such skew.
+      - id: man-registry
+        name: Regenerate docs/man.q from the qDoc comments
+        entry: python3 scripts/generate/generate_man_registry.py
+        language: system
+        pass_filenames: false
+        files: ^src/.*\.q$
+
+      - id: operational-docs
+        name: Regenerate the process table and pipeline DAG from the registry
+        entry: uv run python scripts/generate/generate_operational_docs.py
+        language: system
+        pass_filenames: false
+        files: ^(src/etl/|scripts/processes/|python/uqs/src/uqs/model/)
+
       - id: rendered-diagrams
         name: Check the rendered diagrams match their d2 sources
         entry: python3 scripts/generate/render_diagrams.py --check

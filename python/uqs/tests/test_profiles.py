@@ -160,3 +160,41 @@ def test_an_unknown_profile_is_refused_by_name():
 def test_the_refusal_lists_what_is_available():
     with pytest.raises(UqsError, match="arbitrage"):
         profiles.resolve(["nope"])
+
+
+# ---------------------------------------------------- coverage of the registry
+
+
+def test_every_standing_process_is_reachable_or_exempt_with_a_reason():
+    """A job scaffolded today is startable by name and by no profile, which
+    nothing fails to tell you: `start all` and `start <name>` both keep
+    working. So the set is closed here instead - a process in neither a
+    profile nor UNPROFILED fails, and the exemption carries its reason.
+
+    Backfills are excluded: bounded, no plant connection, no standing set.
+    """
+    standing = {
+        pipeline.procname for pipeline in PIPELINES if pipeline.kind is not PipelineKind.BACKFILL
+    }
+    reached: set[str] = set()
+    for name in NAMES:
+        reached |= set(profiles.resolve([name]))
+    orphans = standing - reached - set(profiles.UNPROFILED)
+    assert not orphans, (
+        f"{sorted(orphans)} are in no profile. Add each to one in "
+        f"profiles.PROFILES, or to UNPROFILED with the reason it belongs to no "
+        f"standing start set."
+    )
+
+
+def test_no_exemption_is_stale():
+    """An UNPROFILED entry for a process a profile now reaches, or for one the
+    registry no longer declares, is a reason nobody will re-read."""
+    procnames = {pipeline.procname for pipeline in PIPELINES}
+    reached: set[str] = set()
+    for name in NAMES:
+        reached |= set(profiles.resolve([name]))
+    for procname, reason in profiles.UNPROFILED.items():
+        assert procname in procnames, f"{procname} is exempted and does not exist"
+        assert procname not in reached, f"{procname} is exempted and a profile reaches it"
+        assert reason.strip(), f"{procname} is exempted with no reason"
