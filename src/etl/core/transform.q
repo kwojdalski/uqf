@@ -264,6 +264,8 @@ run:{[name;d;given;extra]
     out:(d`fn) . args;
     p:problems[d`output;out;1b];
     if[count p; '"transform ",string[name]," output: ","; " sv p];
+    .[`.qlog.dbg;(name;"transform applied";
+        `rows_in`rows_out!(count each given key ins;count out));::];
     out}
 
 / -------------------------------------------------------------- VERIFYING
