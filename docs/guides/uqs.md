@@ -32,6 +32,7 @@ process topology, table-level data pipeline, and config-generation flow.
 - [Verifying it's alive](#verifying-its-alive)
 - [What lib/torq ships that uqf deliberately does not use](#what-libtorq-ships-that-uqf-deliberately-does-not-use)
 - [Services](#services)
+- [Adding a process](#adding-a-process) — including [installing jobs from another folder](#installing-jobs-kept-in-another-folder)
 - [MCP server](#mcp-server)
 - [Other commands](#other-commands)
 - [Known harmless warnings](#known-harmless-warnings)
@@ -296,6 +297,9 @@ backfill WORKER --version V --from T --to T [--port N]
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables
 clean [--match REGEX] [--dry-run]     wipe output/uqs/, or part of it
+install-jobs DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
+                                      install the sources, workers and streaming jobs
+                                      in DIR into src/etl/ (see "Adding a process")
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern
@@ -844,6 +848,61 @@ every batch, is [there too](../services/tap.md).
 
 There is one way: declare a job in q and let `uqs new-job` scaffold
 it. See [adding a pipeline](new-pipeline.md).
+
+### Installing jobs kept in another folder
+
+Jobs written outside the tree - a `sidecars/` folder, another repository -
+are installed with:
+
+```
+uqs install-jobs ../sidecars                        # the wizard
+uqs install-jobs ../sidecars --dry-run              # just the plan
+uqs install-jobs ../sidecars --mode symlink --yes   # no questions, for scripts
+```
+
+A file in `src/etl/sources`, `src/etl/workers` or `src/etl/streaming` is
+already registered - `src/etl/init.q` and the registry glob those folders -
+so installing is putting each file in the right one. Which one is decided by
+what the file declares, not its name or where it sits in the sidecar:
+`.qsrc.register` is a source, `.qbw.define` a worker, `.qstream.register` or
+`.qnorm.define` a streaming job. The plan table shows every `.q` file and
+what will happen to it; these are skipped, with the reason:
+
+- a file declaring nothing (a helper), or more than one kind (split it:
+  the three folders load in a fixed order);
+- a job or worker name the tree already declares - q refuses the second
+  declaration, so the tree would stop loading;
+- `test_*.q` - a q test runs only once its namespace is in `nsList` in
+  `tests/run_tests.q`, which is a decision rather than a copy.
+
+The wizard asks **copy** or **symlink**. A copy is a snapshot the tree owns:
+edit the sidecar and install again. A symlink keeps the sidecar the source
+of truth - edits are live on the next start - but moving or deleting the
+sidecar breaks the tree. A file already in place and identical is left
+alone; one that differs is replaced only if you agree, or with
+`--overwrite` (`--yes` alone keeps it).
+
+After installing it regenerates the derived files (`process_ports.csv`,
+`pipeline_dag.q`, `processes.md`, `docs/man.q`) - a declaration the generators
+refuse is reported here, with what they said - and warns about any table a
+job reads, publishes or fills that `scripts/processes/uqs_tables.q` does not
+define. Then check it is running:
+
+```
+uqs list processes                      # the registry sees the new processes
+uqs print <procname>                    # the exact start line
+uqs start <procname>                    # streaming jobs
+uqs backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02
+uqs summary --columns status            # up, and Responds: yes
+uqs summary --debug                     # how long each took to load
+uqs logs <procname> -f
+q tests/run_tests.q
+```
+
+A process that is `down` or not answering: read
+`output/uqs/logs/err_<procname>.log`, or run it in the foreground with
+`uqs raw -- debug <procname>`. Commit what `git status` shows afterwards,
+derived files included - CI checks they are current.
 
 ## Connecting
 
