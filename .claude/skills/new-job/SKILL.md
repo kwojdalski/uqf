@@ -84,6 +84,12 @@ So after scaffolding, the tree is in a known state:
 - `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
   every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is
   the to-do list: the handler, the test, the job's `note`, and the two below.
+- A new streaming job is in **no profile**, so `uqs start --profile` cannot
+  reach it and only `uqs start <name>` will. The scaffold says so; add it to
+  one in `python/uqs/src/uqs/model/profiles.py`, or to `UNPROFILED` with the
+  reason it belongs to no standing start set. `test_profiles.py` fails until
+  one of the two is true. Bounded workers are exempt - a backfill is
+  triggered, not started with the stack.
 - For a job that defines a NEW table, the scaffold appends a SCAFFOLDED
   `.qcat.describe` line to `scripts/processes/uqs_catalog.q`. The description
   is for someone choosing a table, so it is yours to write. If the desk should
@@ -119,9 +125,9 @@ Write in this order, and run the suite between each:
    suite forever.
 3. **The docstrings.** Every function gets a qDoc block with `@param`,
    `@return`, `@throws` if it can throw, and `@eg`. `docs/man.q` is generated
-   from these. `new-job` regenerates it once for the scaffolded blocks; after
-   you edit them, run `scripts/generate/generate_man_registry.py` again and
-   commit the result.
+   from these, and the `man-registry` pre-commit hook regenerates it when any
+   `src/**/*.q` changes - it rewrites the file and fails the commit, so
+   `git add` and commit again. You no longer have to remember.
 
 ### The rules that are not optional
 

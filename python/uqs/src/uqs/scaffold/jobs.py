@@ -82,6 +82,25 @@ def _nslist_action(namespace: str) -> FileAction:
 #: and a note here is what stops that failure being a surprise.
 _README_NOTE = "name {proc} in docs/integrations/torq/README.md - authored prose, checked by pytest"
 
+#: A new process is reachable by name from the day it is scaffolded, and by
+#: `--profile` never, until someone says which profile it belongs to.
+#:
+#: Always said for a streaming job, because it is always true: a process this
+#: command is about to create is in no profile by construction, and there is
+#: nothing to check. A note rather than a prompt because which named start
+#: set a job belongs to is a judgement about what you would want running
+#: together, and the tool cannot guess it.
+#:
+#: Not said for a bounded worker. A profile is a standing start set and a
+#: backfill is triggered, runs its window and exits - it holds no plant
+#: connection and belongs to no profile, which is the same distinction
+#: `profiles.plant_slots` draws.
+_PROFILE_NOTE = (
+    "add {proc} to a profile in python/uqs/src/uqs/model/profiles.py, or it is "
+    "startable only by name - `uqs list profiles` shows the sets and their "
+    "connection budget"
+)
+
 
 def _expected_table_action(table: str) -> FileAction:
     """Add `table` to test_stack_tables.q's `expected` list - a deliberate
@@ -271,6 +290,7 @@ publish:.qstream.unwired `{name};
     actions.append(_nslist_action(ns))
     notes.append(f"implement .qsub.{name}.{handler}, then replace the scaffolded test")
     notes.append(_README_NOTE.format(proc=proc))
+    notes.append(_PROFILE_NOTE.format(proc=proc))
     if not is_feed:
         notes.append("start it with its producers: " + " ".join(sorted(set(subscribes))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)
