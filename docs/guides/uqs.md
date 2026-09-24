@@ -251,6 +251,8 @@ filenames first.
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
+up [PROCS] [--profile P] [--level L]  start, then stream every started process's log to
+                                      this console; Ctrl-C stops what it started
 summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
         [--probe-timeout S] [--debug]  status table plus the declared graph
                                       (--columns status for just up/down/pid/port/
@@ -701,6 +703,25 @@ uqs multitail stp1 -n 100 --print        # show the multitail command, run nothi
 
 A process that has never started has no log and gets no pane; a name that is
 not a process is refused. Press `q` to leave multitail.
+
+**`uqs up` is the foreground form of all this**: it starts what `start`
+would - the same names, `all`, or `--profile` - then streams those
+processes' logs to this console until Ctrl-C, which stops what it started,
+the way `docker compose up` does. The console is the run.
+
+```
+uqs up                        # the default set, streamed; Ctrl-C stops it
+uqs up rdb1 fxpositions1      # just these
+uqs up --profile fx --level WARNING
+```
+
+It follows the log files from *before* the start runs, so what a process
+prints while it loads is shown - `fxpositions1` spends forty seconds there -
+and a log the start creates, on a first run or after `uqs clean`, is read
+from its first line. Processes that were already running when it began are
+left running at Ctrl-C; if `summary` cannot say which those were, it stops
+everything it was asked to start. To start in the background and watch
+separately instead, `uqs start` and `uqs logs -f` are still there.
 
 ### The CLI's own logging, which is a different thing
 

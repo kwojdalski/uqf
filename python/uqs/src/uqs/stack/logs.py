@@ -10,6 +10,9 @@ import os
 import shlex
 import shutil
 import subprocess
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -125,10 +128,13 @@ def parse_log_line(line: str) -> dict[str, str] | None:
     return dict(zip(_LOG_FIELDS, parts, strict=True))
 
 
-def _log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
+def _expected_log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
     log_dir = paths.torqdata / "logs"
-    files = [log_dir / f"{stream}_{name}.log" for name in procnames for stream in ("out", "err")]
-    return [f for f in files if f.is_file()]
+    return [log_dir / f"{stream}_{name}.log" for name in procnames for stream in ("out", "err")]
+
+
+def _log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
+    return [f for f in _expected_log_files(paths, procnames) if f.is_file()]
 
 
 def _passes_level(level: str, min_level: str | None) -> bool:
@@ -200,9 +206,6 @@ def follow_logs(paths: UqsPaths, procs: str = "all", min_level: str | None = Non
     rolling, no polling/inotify dependency of our own) fanned into a single
     queue by a reader thread each.
     """
-    import queue
-    import threading
-
     procnames = resolve_procnames(paths, procs)
     files = _log_files(paths, procnames)
     if not files:
@@ -210,25 +213,86 @@ def follow_logs(paths: UqsPaths, procs: str = "all", min_level: str | None = Non
             f"no log files found for {procnames} under {paths.torqdata / 'logs'} "
             "- has the demo been started at least once?"
         )
+    _follow(files, min_level)
+
+
+#: How long `follow_during` waits for a log file the start has not created
+#: yet. Generous: a process creates its log as it starts, but a fleet start
+#: brings up dozens one after another.
+AWAIT_LOG_SECONDS = 60.0
+
+
+def follow_during(
+    paths: UqsPaths,
+    procnames: list[str],
+    start: Callable[[], None],
+    min_level: str | None = None,
+) -> None:
+    """Follow `procnames`' logs from BEFORE `start` runs, until Ctrl-C.
+
+    The order is the point: following after the start would miss everything
+    a process prints while it loads, which for fxpositions1 is forty seconds.
+
+    A log that already exists is the previous run's, followed from its end;
+    when the process starts, TorQ points the alias at this run's file and
+    `tail -F` follows it there from its first line. A log that does not exist
+    yet - a first run, or after `uqs clean` - is waited for and read from
+    its first line once it appears, rather than handed to `tail -F` to
+    retry: whether tail waits for a missing file differs between GNU and BSD
+    tail, and this has to work on both.
+    """
+    expected = _expected_log_files(paths, procnames)
+    present = [f for f in expected if f.is_file()]
+    awaited = [f for f in expected if not f.is_file()]
+    _follow(present, min_level, awaited=awaited, before=start)
+
+
+def _follow(
+    present: list[Path],
+    min_level: str | None,
+    *,
+    awaited: list[Path] | None = None,
+    before: Callable[[], None] | None = None,
+) -> None:
+    import queue
 
     log = _configure_kdb_log_sink()
     line_queue: queue.Queue[str] = queue.Queue()
-    tails = [
-        subprocess.Popen(
-            ["tail", "-n", "0", "-F", str(f)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        for f in files
-    ]
-    threads = [
-        threading.Thread(target=_pump, args=(t.stdout, line_queue), daemon=True) for t in tails
-    ]
-    for thread in threads:
-        thread.start()
+    tails: list[subprocess.Popen[str]] = []
+    lock = threading.Lock()
+    done = threading.Event()
+
+    def attach(path: Path, from_start: bool) -> None:
+        # Under the lock, and not once `done` is set: a file that appears as
+        # the command ends must not leave a tail nobody will terminate.
+        with lock:
+            if done.is_set():
+                return
+            tail = subprocess.Popen(
+                ["tail", "-n", "+1" if from_start else "0", "-F", str(path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            tails.append(tail)
+        threading.Thread(target=_pump, args=(tail.stdout, line_queue), daemon=True).start()
+
+    def await_new(pending: list[Path]) -> None:
+        deadline = time.monotonic() + AWAIT_LOG_SECONDS
+        while pending and not done.is_set() and time.monotonic() < deadline:
+            for path in [p for p in pending if p.is_file()]:
+                pending.remove(path)
+                attach(path, from_start=True)
+            done.wait(0.2)
+
+    for path in present:
+        attach(path, from_start=False)
 
     try:
+        if before is not None:
+            before()
+        if awaited:
+            threading.Thread(target=await_new, args=(list(awaited),), daemon=True).start()
         while True:
             rec = parse_log_line(line_queue.get())
             if rec is not None:
@@ -236,8 +300,10 @@ def follow_logs(paths: UqsPaths, procs: str = "all", min_level: str | None = Non
     except KeyboardInterrupt:
         pass
     finally:
-        for t in tails:
-            t.terminate()
+        done.set()
+        with lock:
+            for tail in tails:
+                tail.terminate()
 
 
 # ---------------------------------------------------------------------------

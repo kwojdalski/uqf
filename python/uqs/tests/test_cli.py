@@ -126,6 +126,88 @@ def test_a_lifecycle_command_calls_its_core_function(monkeypatch, command, fn):
     assert rec.args[1] == "all", "the default process selector is 'all'"
 
 
+def _up(monkeypatch, args: list[str], already: set[str] | Exception, rows=()):
+    """Run `uqs up` with the stack faked: the follow starts, then returns as a
+    Ctrl-C would. Returns the start and stop recorders and the follow call."""
+    start = _patch(monkeypatch, runtime, "start", result=Completed())
+    stop = _patch(monkeypatch, runtime, "stop", result=Completed())
+    monkeypatch.setattr(stack_logs, "resolve_procnames", lambda paths, names: names.split())
+    monkeypatch.setattr(listing, "list_items", lambda *a, **kw: list(rows))
+
+    def running(port):
+        if isinstance(already, Exception):
+            raise already
+        return already
+
+    monkeypatch.setattr(lifecycle, "_running", running)
+    follow: dict[str, Any] = {}
+
+    def fake_follow(paths, procnames, start_fn, min_level=None):
+        follow.update(procnames=procnames, min_level=min_level)
+        start_fn()
+
+    monkeypatch.setattr(stack_logs, "follow_during", fake_follow)
+    result = runner.invoke(cli.app, ["up", *args])
+    return result, start, stop, follow
+
+
+def test_up_starts_follows_and_on_ctrl_c_stops_only_what_it_started(monkeypatch):
+    result, start, stop, follow = _up(monkeypatch, ["rdb1", "fxpositions1"], already={"rdb1"})
+    assert result.exit_code == 0, result.output
+    assert start.args[1] == "rdb1 fxpositions1"
+    assert follow["procnames"] == ["rdb1", "fxpositions1"], "follows everything it starts"
+    assert stop.args[1] == "fxpositions1", "rdb1 was already running, so it is left up"
+
+
+def test_up_stops_everything_it_was_asked_for_when_it_cannot_tell_what_ran(monkeypatch):
+    result, _, stop, _ = _up(monkeypatch, ["rdb1", "fxpositions1"], already=UqsError("no stack"))
+    assert result.exit_code == 0, result.output
+    assert stop.args[1] == "rdb1 fxpositions1"
+
+
+def test_up_leaves_a_fleet_that_was_already_running_alone(monkeypatch):
+    result, _, stop, _ = _up(monkeypatch, ["rdb1"], already={"rdb1"})
+    assert result.exit_code == 0, result.output
+    assert stop.calls == []
+
+
+def test_up_all_follows_the_startwithall_processes(monkeypatch):
+    rows = [
+        {"procname": "rdb1", "startwithall": "1"},
+        {"procname": "tap1", "startwithall": "0"},
+        {"procname": "fxfeed1", "startwithall": "1"},
+    ]
+    result, start, stop, follow = _up(monkeypatch, [], already=set(), rows=rows)
+    assert result.exit_code == 0, result.output
+    assert start.args[1] == "all"
+    assert follow["procnames"] == ["rdb1", "fxfeed1"]
+    assert stop.args[1] == "rdb1 fxfeed1", (
+        "never a bare `stop all`: that stops what it did not start"
+    )
+
+
+def test_a_failed_start_still_stops_what_it_started_and_keeps_its_exit_code(monkeypatch):
+    """_run_streaming always exits the command, so `up` must not start through
+    it - the first version did, and never streamed or stopped anything."""
+    start = _patch(monkeypatch, runtime, "start", result=Completed(returncode=3))
+    stop = _patch(monkeypatch, runtime, "stop", result=Completed())
+    monkeypatch.setattr(stack_logs, "resolve_procnames", lambda paths, names: names.split())
+    monkeypatch.setattr(lifecycle, "_running", lambda port: set())
+    monkeypatch.setattr(
+        stack_logs, "follow_during", lambda paths, procnames, start_fn, min_level=None: start_fn()
+    )
+    result = runner.invoke(cli.app, ["up", "rdb1"])
+    assert start.calls, "it started"
+    assert result.exit_code == 3, "the start's own failure is what the command reports"
+    assert stop.args[1] == "rdb1"
+
+
+def test_up_passes_the_level_filter_to_the_stream(monkeypatch):
+    result, _, _, follow = _up(monkeypatch, ["rdb1", "--level", "WARNING"], already=set())
+    assert result.exit_code == 0, result.output
+    assert follow["min_level"] == "WARNING"
+
+
 @pytest.mark.parametrize("command", ["start", "stop", "restart"])
 def test_a_lifecycle_command_passes_the_process_names_through(monkeypatch, command):
     rec = _patch(monkeypatch, runtime, command, result=Completed())

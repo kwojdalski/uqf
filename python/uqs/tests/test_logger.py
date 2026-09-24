@@ -362,6 +362,45 @@ def test_follow_logs_streams_a_line_appended_after_it_starts(tmp_path, monkeypat
     )
 
 
+def _stop_after_first(seen: list[dict[str, str]]):
+    def emit(log, rec, min_level):
+        seen.append(rec)
+        raise KeyboardInterrupt  # how a user stops it; must end cleanly
+
+    return emit
+
+
+def test_follow_during_reads_a_log_the_start_creates_from_its_first_line(tmp_path, monkeypatch):
+    """A first run, or one after `uqs clean`: no log exists until the process
+    starts, and what it prints while it loads is the part worth seeing."""
+    paths = _paths_with_logs(tmp_path, monkeypatch, {})
+    target = tmp_path / "logs" / "out_rdb1.log"
+    seen: list[dict[str, str]] = []
+    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+
+    logs.follow_during(paths, ["rdb1"], lambda: target.write_text(LINE_INF + "\n"))
+
+    assert [rec["message"] for rec in seen] == ["started"]
+
+
+def test_follow_during_is_following_before_the_start_runs(tmp_path, monkeypatch):
+    """The previous run's log is followed from its end, and from BEFORE the
+    start: a line written while starting is shown, the old one is not."""
+    paths = _paths_with_logs(tmp_path, monkeypatch, {"out_rdb1.log": [LINE_INF]})
+    target = tmp_path / "logs" / "out_rdb1.log"
+    seen: list[dict[str, str]] = []
+    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+
+    def start():
+        time.sleep(0.5)  # the tail has the file open by now
+        with target.open("a") as f:
+            f.write(LINE_ERR + "\n")
+
+    logs.follow_during(paths, ["rdb1"], start)
+
+    assert [rec["message"] for rec in seen] == ["lost the tickerplant"]
+
+
 def test_follow_logs_refuses_when_there_is_nothing_to_follow(tmp_path, monkeypatch):
     paths = _paths_with_logs(tmp_path, monkeypatch, {})
     with pytest.raises(logs.UqsError, match="has the demo been started"):
