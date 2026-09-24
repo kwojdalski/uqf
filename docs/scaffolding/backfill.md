@@ -131,20 +131,17 @@ ledger.
 
 ## Running it
 
-A backfill takes its window from the environment and registers with
-discovery, so the fleet has to be up:
+A backfill takes its window as flags and registers with discovery, so the
+fleet has to be up:
 
 ```bash
-UQF_BACKFILL_WORKER=fxprobe_backfill \
-UQF_BACKFILL_VERSION=v1 \
-UQF_BACKFILL_FROM=2026.09.13D00:00 \
-UQF_BACKFILL_TO=2026.09.15D00:00 \
-  uqs start fxprobe_backfill1
+uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15
 ```
 
-All four are required together: the process refuses to start and names every
-missing one at once, because a backfill that silently defaulted its range
-would publish the wrong window and record coverage for it.
+All three are required: `uqs` refuses without them, and the process itself
+refuses and names every missing flag at once, because a backfill that
+silently defaulted its range would publish the wrong window and record
+coverage for it.
 
 ## Then
 

@@ -25,54 +25,61 @@
 /                    fleet view shows running backfills and not a graveyard
 /                    of completed ones.
 / .
-/ WHICH WORKER, AND OVER WHAT RANGE, come from the environment rather than
-/ from this file, so one script serves every worker:
+/ WHICH WORKER, AND OVER WHAT RANGE, come from this process's command line,
+/ so one script serves every worker. `uqs backfill` appends them to TorQ's
+/ start line through torq.sh's own `-extras`:
 / .
-/   UQF_BACKFILL_WORKER   the worker name, e.g. demo_deals_backfill
-/   UQF_BACKFILL_VERSION  the source_version to record coverage under
-/   UQF_BACKFILL_FROM     inclusive lower bound, a q timestamp
-/   UQF_BACKFILL_TO       exclusive upper bound
+/   -worker   the worker name, e.g. demo_deals_backfill
+/   -version  the source_version to record coverage under
+/   -from     inclusive lower bound, a q timestamp
+/   -to       exclusive upper bound
 / .
 / All four are required and refused when absent. A backfill that defaulted a
 / range would publish the wrong window and record it as covered, which is the
 / failure coverage exists to make impossible.
+/ .
+/ FLAGS, NOT ENVIRONMENT VARIABLES. They used to be UQF_BACKFILL_WORKER and
+/ friends, because torq.sh builds the start line from process.csv and the
+/ environment was the one channel that reached the process. torq.sh's
+/ `-extras` is the channel meant for this. An exported variable outlives the
+/ run it was set for, so the next backfill in the same shell silently reused
+/ the last range - the very default this script refuses to have.
 
 \d .qproc.backfill
 
-/ The environment names this process reads. Listed so the refusal below can
-/ report every missing one at once rather than over four restarts (ETL-16).
-required_env:`UQF_BACKFILL_WORKER`UQF_BACKFILL_VERSION`UQF_BACKFILL_FROM`UQF_BACKFILL_TO
+/ The flags this process reads. Listed so the refusal below can report every
+/ missing one at once rather than over four restarts (ETL-16).
+required_flags:`worker`version`from`to
 
-/ Private: read one required variable, or record it as missing.
-missing:()
-
-/ Private: the value, or "" with the name recorded.
-value_of:{[nm]
-    v:getenv nm;
-    if[0=count v; missing,:nm];
-    v}
-
-/ Refuse unless every required variable is set, naming all of them.
-require_env:{[]
-    missing::();
-    vals:value_of each required_env;
+/ Refuse unless every required flag has a value, naming all that do not.
+/ .Q.opt keeps each flag's words as a list of strings, so the value is the
+/ first of them. Missing is either not given at all, or given with nothing
+/ after it - which .Q.opt maps to an empty list - so `-from` with no value is
+/ refused here by name rather than failing later as a type error. Presence is
+/ tested with `in key` rather than by indexing, because what a dictionary
+/ returns for an absent key depends on its value list's prototype.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return flag -> its value, as a string
+require_flags:{[opts]
+    missing:required_flags where not (required_flags in key opts) and 0<count each opts required_flags;
     if[count missing;
-        '"torq_backfill: missing ",(", " sv string missing),
+        '"torq_backfill: missing ",(", " sv "-",/:string missing),
          " - a backfill with no range would publish the wrong window and record it as covered"];
-    required_env!vals}
+    required_flags!first each opts required_flags}
 
 / The run specification, parsed and typed.
+/ @param opts the parsed command line, as .Q.opt returns it
 / @throws error when a bound is not a q timestamp
-spec_from_env:{[]
-    e:require_env[];
-    from_ts:"P"$e`UQF_BACKFILL_FROM;
-    to_ts:"P"$e`UQF_BACKFILL_TO;
-    if[null from_ts; '"torq_backfill: UQF_BACKFILL_FROM is not a timestamp: ",e`UQF_BACKFILL_FROM];
-    if[null to_ts;   '"torq_backfill: UQF_BACKFILL_TO is not a timestamp: ",e`UQF_BACKFILL_TO];
-    `worker`spec!(`$e`UQF_BACKFILL_WORKER;
-        `source_version`range_from`range_to!(`$e`UQF_BACKFILL_VERSION;from_ts;to_ts))}
+spec_from_flags:{[opts]
+    f:require_flags opts;
+    from_ts:"P"$f`from;
+    to_ts:"P"$f`to;
+    if[null from_ts; '"torq_backfill: -from is not a timestamp: ",f`from];
+    if[null to_ts;   '"torq_backfill: -to is not a timestamp: ",f`to];
+    `worker`spec!(`$f`worker;
+        `source_version`range_from`range_to!(`$f`version;from_ts;to_ts))}
 
-/ Run the worker named by the environment, and report what it did.
+/ Run the worker named on the command line, and report what it did.
 / .
 / Errors are caught and logged rather than thrown, so the process exits with
 / a status a caller can read instead of a q error trace. The exit CODE is
@@ -80,7 +87,7 @@ spec_from_env:{[]
 / failed run from a successful one.
 / @return the run's result dictionary
 run:{[]
-    s:spec_from_env[];
+    s:spec_from_flags .Q.opt .z.x;
     worker:s`worker;
     .qlog.info[worker;"backfill process starting";s`spec];
     ns:(.qbw.declaration worker)`ns;

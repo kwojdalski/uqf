@@ -27,7 +27,7 @@ from uqs import paths as stack_paths
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.profiles import PROFILES
 from uqs.model.registry import DEFAULT_BASE_PORT
-from uqs.stack import listing
+from uqs.stack import backfill, listing
 
 Candidates = list[str] | list[tuple[str, str]]
 
@@ -108,6 +108,12 @@ def process_ports(ctx: typer.Context) -> list[tuple[str, str]]:
 @_never_raises
 def profiles(incomplete: str) -> list[str]:
     return _comma_list(PROFILES, incomplete)
+
+
+@_never_raises
+def backfill_workers() -> list[str]:
+    """Every worker a backfill process runs, from the registry."""
+    return sorted(backfill.backfill_workers())
 
 
 @_never_raises

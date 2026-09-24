@@ -31,7 +31,7 @@ def test_only_the_dotenv_reader_s_variables_count_as_read_from_dotenv():
     names = cer.dotenv_read_names()
     assert "DATABENTO_DATA_DIR" in names
     assert "UQF_FRONTEND_GATEWAY_PASSWD" not in names, "read by Settings.from_env, not from .env"
-    assert "UQF_BACKFILL_FROM" not in names, "read by getenv in torq_backfill.q"
+    assert "UQF_SMOKE_TARGETS" not in names, "read by getenv in smoke_external_metadata.q"
 
 
 def test_the_example_file_parses_keys_and_ignores_comments(monkeypatch, tmp_path):
@@ -84,13 +84,13 @@ def test_a_secret_in_the_example_is_refused_naming_its_real_reader(monkeypatch, 
 
 
 def test_a_per_run_argument_in_the_example_is_refused(monkeypatch, tmp_path):
-    """A default range in a file is the guessed range a backfill must never
-    have (ETL-02)."""
+    """A value that changes every run has no business being a default in a
+    file, and the refusal names the script that really reads it."""
     rc, err = _run_with_example(
-        monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nUQF_BACKFILL_FROM=2026.09.11D00:00\n"
+        monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nUQF_SMOKE_TARGETS=localhost:5010\n"
     )
     assert rc == 1
-    assert "UQF_BACKFILL_FROM" in err and "torq_backfill.q" in err
+    assert "UQF_SMOKE_TARGETS" in err and "smoke_external_metadata.q" in err
 
 
 def test_a_key_nothing_reads_is_refused_and_says_so(monkeypatch, tmp_path):

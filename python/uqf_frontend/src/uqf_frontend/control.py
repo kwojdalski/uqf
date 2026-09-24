@@ -244,9 +244,10 @@ def start_backfill(
 
     The range is REQUIRED and has no default, which is ETL-02 reaching the
     HTTP surface: a backfill that guessed a range would publish the wrong
-    window and record it as covered. The four values go to the process as the
-    same environment variables `scripts/processes/torq_backfill.q` already reads - not
-    a second way of starting a worker.
+    window and record it as covered. The four values reach the process as the
+    command-line flags `scripts/processes/torq_backfill.q` reads, built by the
+    same `uqs.stack.backfill.backfill_flags` `uqs backfill` uses - not a second
+    way of spelling them.
     """
     require_writes(settings)
     if not worker:
@@ -265,6 +266,7 @@ def start_backfill(
     import subprocess
 
     from uqs.paths import UqsError
+    from uqs.stack.backfill import backfill_flags
     from uqs.stack.runtime import bootstrap
 
     paths = _paths(settings)
@@ -273,14 +275,16 @@ def start_backfill(
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
 
-    env = {
-        **os.environ,
-        **overrides,
-        "UQF_BACKFILL_WORKER": worker,
-        "UQF_BACKFILL_VERSION": source_version,
-        "UQF_BACKFILL_FROM": _to_q_timestamp(range_from),
-        "UQF_BACKFILL_TO": _to_q_timestamp(range_to),
-    }
+    try:
+        flags = backfill_flags(
+            worker,
+            source_version,
+            dt.datetime.fromisoformat(range_from),
+            dt.datetime.fromisoformat(range_to),
+        )
+    except UqsError as exc:
+        raise ValidationFailed(str(exc)) from None
+    env = {**os.environ, **overrides}
     q = env.get("QBIN") or os.environ.get("Q") or str(Path.home() / ".kx" / "bin" / "q")
     script = paths.scripts_dir.parent / "scripts" / "processes" / "torq_backfill.q"
     if not script.is_file():
@@ -289,7 +293,7 @@ def start_backfill(
     # start_new_session detaches it from this server's process group, so a
     # restart of the API does not take a running backfill down with it.
     proc = subprocess.Popen(  # noqa: S603
-        [q, str(script)],
+        [q, str(script), *flags],
         cwd=paths.repo_root,
         env=env,
         stdout=subprocess.DEVNULL,
@@ -304,17 +308,6 @@ def start_backfill(
         "pid": proc.pid,
         "status_path": "/ops/backfill",
     }
-
-
-def _to_q_timestamp(iso: str) -> str:
-    """ISO-8601 to the q timestamp literal torq_backfill.q parses with "P"$.
-
-    q wants 2026.09.11D00:00:00, not 2026-09-11T00:00:00Z. Converting here
-    rather than asking the caller to send q syntax keeps the HTTP surface
-    ISO-8601 like every other timestamp it takes.
-    """
-    parsed = dt.datetime.fromisoformat(iso).astimezone(dt.UTC)
-    return parsed.strftime("%Y.%m.%dD%H:%M:%S.%f000")
 
 
 def _require_utc(name: str, raw: str) -> None:

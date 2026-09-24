@@ -28,7 +28,7 @@ chain rather than a fifth link in it, so it can run with or without
 `arbitrage1`. See [the cross-arbitrage guide](../../services/cross-arbitrage.md).
 
 Each backfill process now NAMES the `.qbw` worker it runs. One script
-serves all four and `UQF_BACKFILL_WORKER` picks which at runtime, so until
+serves all four and its `-worker` flag picks which at runtime, so until
 that field existed nothing statically joined a process to its worker — and
 two workers (`databento_book_backfill`, `upstream_trades_backfill`) sat
 fully declared with no process able to start them. `verify_pipeline_edges`
