@@ -1,0 +1,5 @@
+# Rendered by `quarto render docs/presentation/uqf.qmd`; rebuilt on demand,
+# so only the source is committed.
+*.html
+*_files/
+.quarto/

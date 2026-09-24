@@ -1,0 +1,103 @@
+# torq-vs-uqf.d2 - what uqf changes about running TorQ, row by row.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/presentation/uqf.qmd.
+#
+# WHAT THIS IS FOR. The one-slide answer to "how is this different from
+# TorQ": the same seven questions asked of a plain TorQ Finance Starter Pack
+# deployment and of uqf running on it. TorQ is not replaced - stp1, the
+# RDB/WDB/HDB, discovery and the gateway are TorQ's, unmodified - so every
+# row is about what sits AROUND those processes, not instead of them.
+#
+# Each uqf cell names the thing that implements it, so a reader can go and
+# open it. Each TorQ cell says what TorQ itself provides, checked against
+# lib/torq: a process is a process.csv row naming its own script under
+# ${KDBCODE}/processes/, and its log levels are ERROR/ERR/INF/WARN.
+#
+# ON COLOUR. The palette of repo-overview.d2: light fills with dark text in
+# both themes, since d2 applies explicit styles over a --dark-theme pairing
+# (d2lang/d2#831).
+
+grid-rows: 8
+grid-columns: 3
+grid-gap: 16
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  head: {
+    style: {
+      fill: "#eef1f4"
+      stroke: "#5a6a78"
+      font-color: "#25323d"
+      border-radius: 6
+      bold: true
+    }
+  }
+  aspect: {
+    style: {
+      fill: "#fbfcfd"
+      stroke: "#c3c9cf"
+      font-color: "#25323d"
+      border-radius: 6
+      bold: true
+    }
+  }
+  torq: {
+    style: {
+      fill: "#f4f1ea"
+      stroke: "#8a7f6a"
+      font-color: "#3d3527"
+      border-radius: 6
+    }
+  }
+  uqf: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+}
+
+# LAYOUT. grid-rows comes before grid-columns on purpose: in d2 0.9.0 the
+# first one declared sets the fill direction, and with grid-columns alone
+# d2 balances column heights instead of aligning rows. So the grid fills
+# row by row, and each group of three below is one row.
+
+h0: "" { class: aspect; style.fill: transparent; style.stroke: transparent }
+h1: "Plain TorQ" { class: head }
+h2: "uqf on TorQ" { class: head }
+
+a1: "A unit of work" { class: aspect }
+t1: "a PROCESS: a process.csv row\nnaming its own q script" { class: torq }
+u1: "a JOB: a declaration in src/etl/\n(.qstream.register · .qbw.define);\none runner script, picked by procname" { class: uqf }
+
+a2: "Configuration" { class: aspect }
+t2: "edit process.csv and\nthe config directories" { class: torq }
+u2: "lib/torq never edited: process.csv and\ndatabase.q regenerated on every command\nfrom the job declarations + uqs_tables.q" { class: uqf }
+
+a3: "Who knows TorQ exists" { class: aspect }
+t3: "every process: code is\nwritten against .servers,\n.u.upd, .lg directly" { class: torq }
+u3: "only .qpipe, in scripts/ - a gate fails the\nbuild otherwise. The same jobs run on\nstock kdb+ via run_stream.q and .qtick" { class: uqf }
+
+a4: "History and backfills" { class: aspect }
+t4: "replay a tickerplant log,\nor write your own loader" { class: torq }
+u4: "bounded workers (.qbw): a window range,\nwritten through .qio - never the plant -\nand recorded in a coverage ledger (.qmatz)" { class: uqf }
+
+a5: "A table on the plant" { class: aspect }
+t5: "define it in database.q;\n.u.upd onto an undefined\none drops rows silently" { class: torq }
+u5: "defined from what jobs declare they\npublish; a job refuses to start when a\ntable it publishes is missing" { class: uqf }
+
+a6: "Adding one" { class: aspect }
+t6: "write the script, add the\nrow, pick a free port" { class: torq }
+u6: "uqs new-job scaffolds it, or install-jobs\nbrings it in; no registration step -\nport, process table and DAG are derived" { class: uqf }
+
+a7: "Operating it" { class: aspect }
+t7: "torq.sh start · stop ·\nsummary, per process" { class: torq }
+u7: "uqs: profiles held to the licence's\nconnection budget, up (streams logs),\nlogs · conn · summary; .qlog adds DBG\nand key=value fields on top of .lg" { class: uqf }
