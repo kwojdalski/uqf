@@ -109,6 +109,83 @@ def test_clean_removes_generated_data_dir(fake_paths: UqsPaths, monkeypatch):
     assert not fake_paths.torqdata.exists()
 
 
+def _tree(root: Path) -> None:
+    """A data directory with the shapes `clean --match` has to tell apart."""
+    (root / "logs").mkdir(parents=True, exist_ok=True)
+    (root / "tplogs").mkdir(parents=True, exist_ok=True)
+    (root / "hdb" / "2026.09.01").mkdir(parents=True, exist_ok=True)
+    (root / "logs" / "out_rdb1.log").write_bytes(b"x" * 300)
+    (root / "logs" / "out_stp1.log").write_bytes(b"x" * 500)
+    (root / "tplogs" / "tp1.log").write_bytes(b"x" * 200)
+    (root / "hdb" / "2026.09.01" / "trade").write_bytes(b"x" * 900)
+
+
+def test_a_dry_run_removes_nothing(fake_paths: UqsPaths):
+    """The whole point of the flag: it reports and does not act."""
+    _tree(fake_paths.torqdata)
+    before = sorted(p.name for p in fake_paths.torqdata.rglob("*"))
+
+    targets = stack_paths.clean(fake_paths, dry_run=True)
+
+    assert targets, "a dry run still reports what it would remove"
+    assert sorted(p.name for p in fake_paths.torqdata.rglob("*")) == before
+
+
+def test_a_dry_run_reports_what_the_real_run_removes(fake_paths: UqsPaths):
+    """Listing and removal come from one walk, so they cannot disagree."""
+    _tree(fake_paths.torqdata)
+    planned = [entry for entry, _size in stack_paths.clean(fake_paths, r"^logs", dry_run=True)]
+    removed = [entry for entry, _size in stack_paths.clean(fake_paths, r"^logs")]
+    assert planned == removed
+
+
+def test_a_matching_directory_goes_whole(fake_paths: UqsPaths):
+    """`^logs$` means the logs, not a list of the files under them."""
+    _tree(fake_paths.torqdata)
+    targets = stack_paths.clean(fake_paths, r"^logs$")
+    assert [e.name for e, _s in targets] == ["logs"]
+    assert not (fake_paths.torqdata / "logs").exists()
+    assert (fake_paths.torqdata / "tplogs" / "tp1.log").exists(), "only logs was asked for"
+
+
+def test_a_non_matching_directory_is_descended(fake_paths: UqsPaths):
+    """`out_rdb1` finds the file although its parent does not match."""
+    _tree(fake_paths.torqdata)
+    targets = stack_paths.clean(fake_paths, "out_rdb1")
+    assert [e.name for e, _s in targets] == ["out_rdb1.log"]
+    assert (fake_paths.torqdata / "logs" / "out_stp1.log").exists()
+    assert (fake_paths.torqdata / "logs").exists(), "the directory itself was not asked for"
+
+
+def test_sizes_are_the_bytes_under_each_entry(fake_paths: UqsPaths):
+    _tree(fake_paths.torqdata)
+    sizes = dict(
+        (entry.name, size) for entry, size in stack_paths.clean_targets(fake_paths, r"^logs$")
+    )
+    assert sizes == {"logs": 800}, "300 + 500, the two files under logs/"
+
+
+def test_a_match_selecting_nothing_removes_nothing(fake_paths: UqsPaths):
+    _tree(fake_paths.torqdata)
+    assert stack_paths.clean(fake_paths, "no_such_thing") == []
+    assert (fake_paths.torqdata / "logs" / "out_rdb1.log").exists()
+
+
+def test_an_invalid_regex_is_refused_before_anything_is_removed(fake_paths: UqsPaths):
+    """A bad pattern must not fall back to removing everything."""
+    _tree(fake_paths.torqdata)
+    with pytest.raises(UqsError, match="not a valid regular expression"):
+        stack_paths.clean(fake_paths, "[unclosed")
+    assert (fake_paths.torqdata / "logs" / "out_rdb1.log").exists()
+
+
+def test_no_match_still_removes_the_whole_directory(fake_paths: UqsPaths):
+    """Unchanged behaviour: `uqs clean` with no flags is the old wipe."""
+    _tree(fake_paths.torqdata)
+    stack_paths.clean(fake_paths)
+    assert not fake_paths.torqdata.exists()
+
+
 def test_get_process_config_returns_vendored_row(fake_paths: UqsPaths):
     row = stack_procs.get_process_config(fake_paths, "discovery1", resolve=False)
     assert row["proctype"] == "discovery"

@@ -180,6 +180,23 @@ copying the app's sample `hdb/`/`dqe/` data there - `logs/`,
 happen inside that directory, never inside `lib/`. Run `uqs clean`
 to wipe it and start fresh next time.
 
+`clean` also takes part of it. `--match REGEX` keeps only the entries whose
+path *under* `output/uqs/` the regex finds - so the pattern reads the way the
+tree does, not as an absolute path:
+
+```
+uqs clean --dry-run                       # what a full wipe would remove
+uqs clean --match '^logs$' --dry-run      # the logs alone, still removing nothing
+uqs clean --match '^(logs|tplogs)$'       # and now actually remove them
+uqs clean --match 'out_rdb1'              # one process's files, wherever they sit
+```
+
+A directory the pattern matches goes whole; one it does not is descended
+into, which is what lets `out_rdb1` be found without naming `logs`. The match
+is a search, not a full match, so anchor with `^`/`$` to be exact. `--dry-run`
+(`-n`) lists what would go, with sizes, and removes nothing - worth doing
+first for anything but a full wipe, because none of this is reversible.
+
 Requires KDB-X (`q` on `PATH`)
 elsewhere in this repo for `src/`/`tests/` - plus `envsubst` and `rlwrap`
 (TorQ's own `torq.sh`, which this still drives under the hood, needs both;
@@ -278,7 +295,7 @@ backfill WORKER --version V --from T --to T [--port N]
                                       run a bounded worker over [--from, --to); dates
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables
-clean                                 wipe output/uqs/
+clean [--match REGEX] [--dry-run]     wipe output/uqs/, or part of it
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern

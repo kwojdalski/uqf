@@ -995,9 +995,35 @@ def test_raw_propagates_the_exit_code(monkeypatch):
 
 
 def test_clean_delegates(monkeypatch):
-    rec = _patch(monkeypatch, stack_paths, "clean")
+    rec = _patch(monkeypatch, stack_paths, "clean", result=[])
     assert runner.invoke(cli.app, ["clean"]).exit_code == 0
     assert len(rec.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        ([], {"match": None, "dry_run": False}),
+        (["--dry-run"], {"match": None, "dry_run": True}),
+        (["-n"], {"match": None, "dry_run": True}),
+        (["--match", "^logs$"], {"match": "^logs$", "dry_run": False}),
+        (["--match", "^logs$", "-n"], {"match": "^logs$", "dry_run": True}),
+    ],
+)
+def test_clean_passes_its_flags_through(monkeypatch, argv, expected):
+    """The flags have to arrive as given - a dropped --dry-run deletes."""
+    rec = _patch(monkeypatch, stack_paths, "clean", result=[])
+    assert runner.invoke(cli.app, ["clean", *argv]).exit_code == 0
+    assert rec.calls[-1][1] == expected
+
+
+def test_clean_reports_what_it_removed(monkeypatch):
+    rec_result = [(Path("/data/logs"), 800), (Path("/data/tplogs"), 200)]
+    _patch(monkeypatch, stack_paths, "clean", result=rec_result)
+    result = runner.invoke(cli.app, ["clean", "--dry-run"])
+    assert result.exit_code == 0
+    assert "would remove 2 entries" in result.output
+    assert "logs" in result.output
 
 
 # ----------------------------------------------------------------- crypto
