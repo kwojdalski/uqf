@@ -237,7 +237,7 @@ register:{[source;decl]
     / because the dict's value list has already settled on a shape. Storing
     / one shape keeps every declaration mutually assignable.
     sources[source]:@[decl;`row_key;:;key_cols];
-    .[`.qlog.dbg;(source;"source registered";
+    .[{.qlog.dbg[x;y;z]};(source;"source registered";
         `fields`time_field`tz`transport`row_key!(decl`fields;decl`time_field;decl`tz;tr;key_cols));::];
     source}
 
@@ -323,7 +323,7 @@ validate:{[source;tbl]
                 flip (string wrong;enlist each expected where not expected=actual;
                       enlist each actual where not expected=actual);
             ""]];
-    .[`.qlog.dbg;(source;"contract satisfied";`rows`fields!(count tbl;count decl`fields));::];
+    .[{.qlog.dbg[x;y;z]};(source;"contract satisfied";`rows`fields!(count tbl;count decl`fields));::];
     1b}
 
 / Validate a source's own fixture (ETL-12's "generated fixtures").
@@ -387,7 +387,7 @@ require_credentials:{[source]
     env_var:credential_var source;
     v:getenv `$env_var;
     / The variable's NAME only - never its value, which is a credential.
-    .[`.qlog.dbg;(source;"credential lookup";`var`present!(env_var;0<count v));::];
+    .[{.qlog.dbg[x;y;z]};(source;"credential lookup";`var`present!(env_var;0<count v));::];
     if[0=count v;
         '"require_credentials: ",string[source]," has no credential - set ",env_var,
          " in the environment. There is deliberately no file or vault fallback: ",
@@ -619,7 +619,7 @@ coerce:{[source;tbl]
     coerced:tbl;
     coerced:{[tb;f;r] @[tb;f;:;r`values]}/[coerced;fields;results];
     failures:fields!results[;`failed];
-    .[`.qlog.dbg;(source;"coerced";`rows`fields`failures!(count tbl;fields;failures));::];
+    .[{.qlog.dbg[x;y;z]};(source;"coerced";`rows`fields`failures!(count tbl;fields;failures));::];
     `table`failures!(coerced;failures)}
 
 / ------------------------------------------------------------- FETCHING
@@ -658,7 +658,7 @@ fetch_window:{[source;h;range_from;range_to]
     t0:.z.p;
     decl:declaration source;
     bounds:source_bounds[decl;range_from;range_to];
-    .[`.qlog.dbg;(source;"fetching";
+    .[{.qlog.dbg[x;y;z]};(source;"fetching";
         `path`range_from`range_to`source_from`source_to`tz!
             ($[null h;`fixture;`live];range_from;range_to;bounds 0;bounds 1;decl`tz));::];
     page:$[null h;
@@ -667,7 +667,7 @@ fetch_window:{[source;h;range_from;range_to]
     out:narrow_to_utc[decl;page 1;range_from;range_to];
     / fetched vs kept differ only for a zoned source, whose bounds are padded:
     / the difference is the neighbouring windows' rows, dropped on purpose.
-    .[`.qlog.dbg;(source;"fetched";
+    .[{.qlog.dbg[x;y;z]};(source;"fetched";
         `path`fetched`kept`ms!(page 0;count page 1;count out;`long$(.z.p-t0)%1000000));::];
     (page 0;out)}
 

@@ -134,7 +134,7 @@ register:{[job;decl]
         '"register: ",string[job],"'s note must be a string"];
     jobs[job]:enlist decl;
     procnames[decl`procname]:job;
-    .[`.qlog.dbg;(job;"streaming job registered";
+    .[{.qlog.dbg[x;y;z]};(job;"streaming job registered";
         `procname`subscribes`publishes`timer!(decl`procname;decl`subscribes;decl`publishes;
             $[has_period; decl`timer_period; 0Nn]));::];
     job}
@@ -181,7 +181,7 @@ wire:{[job;publisher]
     if[not is_callable publisher;
         '"wire: ",string[job],"'s publisher must be callable as (table; rows) - a lambda or a projection over one"];
     (` sv (declaration[job]`ns),`publish) set publisher;
-    .[`.qlog.dbg;(job;"publish seam wired";enlist[`publishes]!enlist declaration[job]`publishes);::];
+    .[{.qlog.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist declaration[job]`publishes);::];
     job}
 
 / ------------------------------------------------------------ THE BUFFER
