@@ -9,6 +9,7 @@ from typing import Any
 from loguru import logger as _loguru_logger
 
 from uqs.logger.core import is_level_enabled
+from uqs.logger.floats import cut_floats
 
 _BANNER_WIDTH = 100
 
@@ -47,7 +48,7 @@ def log_error_with_context(
     """Log an error with additional context information."""
     error_msg = f"Error in {context}: {type(error).__name__}: {error!s}"
     if extra_data:
-        error_msg += f" | {extra_data}"
+        error_msg += f" | {cut_floats(extra_data)}"
     logger.error("{}", error_msg)
     logger.opt(exception=True).debug("error details context={}", context)
 
@@ -66,13 +67,13 @@ def log_function_call(
     call_info = f"Calling function: {func_name}"
 
     if args:
-        args_str = str(args)
+        args_str = str(cut_floats(args))
         if len(args_str) > 200:
             args_str = args_str[:200] + "..."
         call_info += f" with args: {args_str}"
 
     if kwargs:
-        kwargs_str = str(kwargs)
+        kwargs_str = str(cut_floats(kwargs))
         if len(kwargs_str) > 200:
             kwargs_str = kwargs_str[:200] + "..."
         call_info += f" with kwargs: {kwargs_str}"
@@ -89,7 +90,7 @@ def log_performance_metrics(
     """Log performance metrics for operations."""
     perf_msg = f"Performance - {operation}: {duration:.3f}s"
     if extra_metrics:
-        perf_msg += f" | Metrics: {extra_metrics}"
+        perf_msg += f" | Metrics: {cut_floats(extra_metrics)}"
     logger.info("{}", perf_msg)
 
 

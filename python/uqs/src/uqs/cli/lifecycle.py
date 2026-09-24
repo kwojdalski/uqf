@@ -30,10 +30,20 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.model import dependencies, profiles
-from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing, runtime
+from uqs.stack import logs as stack_logs
+
+
+def _running(port: int) -> set[str]:
+    """The processes `summary` reports up. Raises when it cannot say; each
+    caller decides what that means for it."""
+    return {
+        row["Process"]
+        for row in listing.summary_rows(runtime.summary(_paths(), base_port=port).stdout, {}, None)
+        if row["Status"] == "up"
+    }
 
 
 def _warn_about_unfed_inputs(procs: str, port: int) -> None:
@@ -57,13 +67,7 @@ def _warn_about_unfed_inputs(procs: str, port: int) -> None:
         names = [p for p in procs.split() if p != "all"]
         if not names:
             return  # `start all` brings up every startwithall=1 producer too
-        running = {
-            row["Process"]
-            for row in listing.summary_rows(
-                runtime.summary(_paths(), base_port=port).stdout, {}, None
-            )
-            if row["Status"] == "up"
-        }
+        running = _running(port)
         warnings = [
             line for name in names for line in dependencies.unfed_inputs(name, running | set(names))
         ]
@@ -82,8 +86,9 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     """Say so when the fleet this start produces is bigger than the licence
     lets one process hold handles for.
 
-    The licence caps a q process at `LICENCE_CONNECTION_LIMIT` concurrent
-    connections. Every streaming job opens a handle to stp1 and monitor1
+    The licence caps a q process at `profiles.licence_limit()` concurrent
+    connections - the community licence's 16 unless UQS_LICENCE_CONNECTIONS
+    says otherwise. Every streaming job opens a handle to stp1 and monitor1
     opens one per process it watches, so past that count the cap - not the
     configuration - decides what works. The plant does not complain: it
     resets the extra connection, the process wedges in its retry loop, and
@@ -94,13 +99,7 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     want on a full kdb+/KDB-X licence.
     """
     try:
-        running = {
-            row["Process"]
-            for row in listing.summary_rows(
-                runtime.summary(_paths(), base_port=port).stdout, {}, None
-            )
-            if row["Status"] == "up"
-        }
+        running = _running(port)
         if procs.strip() == "all":
             starting = {
                 row["procname"]
@@ -110,14 +109,15 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
         else:
             starting = {p for p in procs.split() if p != "all"}
         total = len(running | starting)
+        limit = profiles.licence_limit()
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
         log.debug("connection-cap warning skipped: {}", exc)
         return
-    if total <= LICENCE_CONNECTION_LIMIT:
+    if total <= limit:
         return
     console.print(
         f"[yellow]warning[/] this start leaves {total} processes running, past the "
-        f"{LICENCE_CONNECTION_LIMIT} concurrent connections this licence allows "
+        f"{limit} concurrent connections this licence allows "
         "one q process. Handles past the cap are reset, not refused: the process "
         "wedges in its retry loop and still reports `up`, and monitor1 may become "
         "unreachable so the Heartbeat column empties. Start a subset, or stop what "
@@ -163,9 +163,36 @@ def _resolve_profiles(names: str) -> str:
         _die(UqsError(problem))
     console.print(
         f"[dim]profile {', '.join(wanted)}: {len(resolved)} process(es), "
-        f"{profiles.plant_slots(resolved)}/{profiles.ALLOWANCE} plant slots[/]"
+        f"{profiles.plant_slots(resolved)}/{profiles.allowance()} plant slots[/]"
     )
     return " ".join(resolved)
+
+
+def _names_to_start(procs: list[str] | None, profile: str | None) -> str:
+    """What torq.sh is asked to start: the names given, `all`, or a profile."""
+    names = _procs(procs)
+    if profile is not None:
+        if procs:
+            _die(UqsError("--profile and explicit process names are mutually exclusive"))
+            return names
+        names = _resolve_profiles(profile)
+    return names
+
+
+def _start(names: str, port: int) -> None:
+    _warn_about_unfed_inputs(names, port)
+    _warn_about_connection_cap(names, port)
+    _run_streaming(runtime.start, names, base_port=port)
+
+
+def _start_in_foreground(names: str, port: int) -> None:
+    """`_start`, minus its ending: _run_streaming always exits the command,
+    and `up` has the whole run still to stream after the start returns."""
+    _warn_about_unfed_inputs(names, port)
+    _warn_about_connection_cap(names, port)
+    result = runtime.start(_paths(), names, base_port=port, capture=False)
+    if result.returncode != 0:
+        raise typer.Exit(code=result.returncode)
 
 
 @app.command()
@@ -177,15 +204,82 @@ def start(
     `--profile fx` starts a named set instead: its leaves and everything they
     read, resolved from the dependency graph rather than listed by hand.
     """
-    names = _procs(procs)
-    if profile is not None:
-        if procs:
-            _die(UqsError("--profile and explicit process names are mutually exclusive"))
-            return
-        names = _resolve_profiles(profile)
-    _warn_about_unfed_inputs(names, port)
-    _warn_about_connection_cap(names, port)
-    _run_streaming(runtime.start, names, base_port=port)
+    _start(_names_to_start(procs, profile), port)
+
+
+LevelOpt = Annotated[
+    str | None,
+    typer.Option(
+        help="Only show this level and above: DEBUG/INFO/WARNING/ERROR",
+        autocompletion=completion.choices("DEBUG", "INFO", "WARNING", "ERROR"),
+    ),
+]
+
+
+def _procnames_started_by(names: str, port: int) -> list[str]:
+    """The processes a start of `names` covers: `all` is every startwithall=1
+    row, anything else is the names themselves - checked, so a typo fails
+    before anything starts rather than as a log nobody ever writes."""
+    if names.strip() == "all":
+        return [
+            row["procname"]
+            for row in listing.list_items(_paths(), "processes", base_port=port)
+            if row.get("startwithall") == "1"
+        ]
+    return stack_logs.resolve_procnames(_paths(), names)
+
+
+@app.command()
+def up(
+    procs: ProcsArg = None,
+    port: PortOpt = DEFAULT_BASE_PORT,
+    profile: ProfileOpt = None,
+    level: LevelOpt = None,
+) -> None:
+    """Start, and stream every started process's log to this console until
+    Ctrl-C - which stops what this started. `up`, `up rdb1 fxpositions1`,
+    `up --profile fx`, `up --level WARNING`.
+
+    The foreground form of `start` + `logs -f`, the way `docker compose up`
+    is: the console is the run. Processes that were already running when it
+    began are left running; if `summary` cannot say which those were, Ctrl-C
+    stops everything this was asked to start.
+    """
+    names = _names_to_start(procs, profile)
+    try:
+        wanted = _procnames_started_by(names, port)
+    except UqsError as exc:
+        _die(exc)
+        return
+    try:
+        already: set[str] | None = _running(port)
+    except Exception as exc:  # noqa: BLE001 - not knowing only widens the stop
+        log.debug("could not tell what was already running: {}", exc)
+        already = None
+    # Ctrl-C ends the stream normally. A failed start ends it early - and
+    # still stops what did start, because the console is the run.
+    exit_code = 0
+    try:
+        stack_logs.follow_during(
+            _paths(), wanted, lambda: _start_in_foreground(names, port), min_level=level
+        )
+    except UqsError as exc:
+        log.error("{}", exc)
+        exit_code = 1
+    except typer.Exit as exc:
+        exit_code = exc.exit_code
+    started = [p for p in wanted if already is None or p not in already]
+    if not started:
+        console.print("[dim]every process was already running; leaving them up[/]")
+    else:
+        console.print(f"[dim]stopping what this started: {' '.join(started)}[/]")
+        try:
+            result = runtime.stop(_paths(), " ".join(started), base_port=port, capture=False)
+            exit_code = exit_code or result.returncode
+        except UqsError as exc:
+            log.error("{}", exc)
+            exit_code = exit_code or 1
+    raise typer.Exit(code=exit_code)
 
 
 @app.command()

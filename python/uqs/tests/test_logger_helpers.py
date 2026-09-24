@@ -148,6 +148,18 @@ def test_performance_is_logged_to_the_millisecond():
     assert seen == [("INFO", "Performance - window: 1.235s | Metrics: {'rows': 10}")]
 
 
+def test_floats_in_metrics_and_call_arguments_are_cut_to_six_places():
+    """These helpers build their text before logging, so they apply the
+    logger's float cutoff themselves - an explicit {:.3f} stays as written."""
+    seen = capture()
+    utils.log_performance_metrics(logger, "window", 1.23456, {"mid": 1.0850000000000002})
+    utils.log_function_call(logger, "fetch", (0.123456789,), {"k": 2.0})
+    assert messages(seen) == [
+        "Performance - window: 1.235s | Metrics: {'mid': 1.085}",
+        "Calling function: fetch with args: (0.123457,) with kwargs: {'k': 2}",
+    ]
+
+
 def test_performance_without_extra_metrics_has_no_trailing_separator():
     seen = capture()
     utils.log_performance_metrics(logger, "window", 0.5)
@@ -322,6 +334,17 @@ def test_trace_calls_logs_entry_with_named_arguments_and_completion():
     entry, done = messages(seen)
     assert entry == ("→ [TRACE] test_logger_helpers.price(sym='EURUSD', qty=1000000, side=-1)")
     assert done.startswith("← [TRACE] test_logger_helpers.price completed (")
+
+
+def test_trace_calls_cuts_a_float_argument_to_six_places():
+    seen = capture()
+
+    @decorators.trace_calls()
+    def mark(px: float) -> float:
+        return px
+
+    mark(1.0850000000000002)
+    assert messages(seen)[0] == "→ [TRACE] test_logger_helpers.mark(px=1.085)"
 
 
 def test_log_level_debug_in_the_environment_turns_tracing_on(monkeypatch):

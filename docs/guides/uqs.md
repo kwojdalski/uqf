@@ -251,10 +251,12 @@ filenames first.
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
+up [PROCS] [--profile P] [--level L]  start, then stream every started process's log to
+                                      this console; Ctrl-C stops what it started
 summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
         [--probe-timeout S] [--debug]  status table plus the declared graph
                                       (--columns status for just up/down/pid/port/
-                                      Responds; --timeout defaults to 10s,
+                                      Responds; --timeout defaults to 120s,
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
@@ -368,6 +370,7 @@ derived from the same dependency graph `summary`'s **Depends on** column uses:
 uqs list profiles
 uqs start --profile arbitrage
 uqs start --profile depth,crypto
+UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows it
 ```
 
 | profile | leaves | slots |
@@ -377,6 +380,7 @@ uqs start --profile depth,crypto
 | `arbitrage` | `arbitrage1`, `crossarb1` | 10/14 |
 | `depth` | `vectorize1`, `cross1` | 8/14 |
 | `crypto` | `cryptomock1` | 5/14 |
+| `all` | every profile's leaves except `crypto`'s | 20/14 - refused on this licence |
 
 **A profile over the cap is refused, not warned.** That is the opposite of a
 positional `start`, deliberately: naming processes yourself is your call, and
@@ -390,6 +394,17 @@ $ uqs start --profile fx,arbitrage
 profile(s) arbitrage, fx need 17 tickerplant connections, and only 14 are
 available (16 on this licence, 2 held back for ad-hoc handles). ...
 ```
+
+**`all` needs a larger licence, and says so.** It is every standing set at
+once - the union of the other profiles' leaves, derived so a new leaf joins it
+automatically - and that holds twenty plant connections, more than the
+community licence has. On that licence it is refused like any profile over
+the cap. On a q licence that allows more concurrent connections, say how many
+with `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every
+start is held to - `--profile`, `uqs list profiles`' `fits` column and the
+positional-start warning. `all` leaves out `crypto`, because the mock
+replaces cryptorust's recorders rather than joining them; ask for it with
+`--profile all,crypto`.
 
 Two things profiles deliberately do **not** do. They do not change
 `startwithall`, so `start all` is untouched - `default` describes that set so
@@ -500,7 +515,7 @@ process stuck in its own timer, and it applies to every client, the
 gateway's long queries included. Each probe briefly holds one inbound
 connection, and TorQ logs it like any other. `--probe-timeout 0` skips it.
 
-### summary gives up after ten seconds
+### summary gives up after two minutes
 
 `summary` is the command you run when something is already wrong, which makes
 it the worst thing in the CLI to hang - and both of its blocking steps could.
@@ -509,8 +524,8 @@ heartbeat lookup talks to `monitor1`, which at its connection cap accepts the
 TCP connection and then never answers.
 
 ```
-uqs summary --timeout 30   # a stack that is genuinely slow to start
-uqs summary --timeout 0    # wait forever, the old behaviour
+uqs summary --timeout 10   # fail fast
+uqs summary --timeout 0    # wait forever
 ```
 
 It is one **budget for the whole command**, not a limit per call - two steps
@@ -521,7 +536,7 @@ step fails on its own terms rather than on an expired clock. Running out is a
 refusal, not a traceback:
 
 ```
-torq.sh summary did not finish within 10s. It is still bootstrapping, or a
+torq.sh summary did not finish within 120s. It is still bootstrapping, or a
 process it queries is not answering - raise --timeout if the stack is simply
 slow to start
 ```
@@ -689,6 +704,25 @@ uqs multitail stp1 -n 100 --print        # show the multitail command, run nothi
 A process that has never started has no log and gets no pane; a name that is
 not a process is refused. Press `q` to leave multitail.
 
+**`uqs up` is the foreground form of all this**: it starts what `start`
+would - the same names, `all`, or `--profile` - then streams those
+processes' logs to this console until Ctrl-C, which stops what it started,
+the way `docker compose up` does. The console is the run.
+
+```
+uqs up                        # the default set, streamed; Ctrl-C stops it
+uqs up rdb1 fxpositions1      # just these
+uqs up --profile fx --level WARNING
+```
+
+It follows the log files from *before* the start runs, so what a process
+prints while it loads is shown - `fxpositions1` spends forty seconds there -
+and a log the start creates, on a first run or after `uqs clean`, is read
+from its first line. Processes that were already running when it began are
+left running at Ctrl-C; if `summary` cannot say which those were, it stops
+everything it was asked to start. To start in the background and watch
+separately instead, `uqs start` and `uqs logs -f` are still there.
+
 ### The CLI's own logging, which is a different thing
 
 `logs --level` filters what the *q processes* wrote. It says nothing about
@@ -703,6 +737,14 @@ LOG_LEVEL=DEBUG uqs summary   # same, for a shell session
 
 `--debug` wins over `LOG_LEVEL`; an unrecognised `LOG_LEVEL` falls back to
 `INFO` rather than refusing to run.
+
+A float in these lines is written with **at most six decimal places**,
+trailing zeros dropped - `1.0850000000000002` prints as `1.085`, `2.5` as
+`2.5`. One global setting, `LOG_FLOAT_DECIMALS` in
+`python/uqs/src/uqs/logger/floats.py`, applies to every `uqs` module's log
+calls. It rounds only float *arguments*: a message that asks for its own
+format (`{:.3f}`) keeps it, and text is never rewritten, so a q timestamp in
+a line from `uqs logs` keeps all nine digits.
 
 This matters most on `summary`, because two of its three lookups degrade
 instead of failing. A port map that cannot be built leaves every `down` row

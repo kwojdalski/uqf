@@ -20,6 +20,7 @@ import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 from loguru import logger
@@ -28,7 +29,12 @@ from loguru import logger
 # for `core.<name>` as a use of the orchestrator's `core` facade, and cannot
 # tell the logger's module of the same name from it.
 from uqs.logger import core as logcore
+from uqs.logger import floats
 from uqs.stack import logs
+
+if TYPE_CHECKING:
+    # Not exported by loguru at runtime; see logger/core.py.
+    from loguru import Record
 
 
 @pytest.fixture(autouse=True)
@@ -220,6 +226,89 @@ def test_colour_follows_the_terminal_not_a_hardcoded_true(capsys, monkeypatch):
     assert "\x1b[" not in capsys.readouterr().out
 
 
+# --------------------------------------------------------- float precision
+
+
+def _records() -> list[Record]:
+    """Every sink replaced by one keeping each record's message and location."""
+    seen: list[Record] = []
+    logger.remove()
+    logger.add(lambda m: seen.append(m.record), level="DEBUG")
+    return seen
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1.0850000000000002, "1.085"),
+        (0.123456789, "0.123457"),
+        (2.5, "2.5"),
+        (3.0, "3"),
+        (-1250.5, "-1250.5"),
+        (-0.0000001, "0"),
+        (1e20, "1e+20"),
+        (float("nan"), "nan"),
+        (float("-inf"), "-inf"),
+    ],
+)
+def test_a_float_is_written_with_at_most_six_places(value, expected):
+    assert floats.format_float(value) == expected
+
+
+def test_a_float_argument_is_cut_and_nothing_else_is():
+    seen = _records()
+    log = logcore.get_logger("t")
+    log.info("mid={} rows={} ok={} id={}", 1.0850000000000002, 7, True, "a.1234567891")
+    assert seen[0]["message"] == "mid=1.085 rows=7 ok=True id=a.1234567891"
+
+
+def test_a_q_timestamp_in_a_message_keeps_every_digit():
+    """The reason the cut is on arguments, not on the finished text: a regex
+    over the message would round the fraction of this timestamp too."""
+    seen = _records()
+    logcore.get_logger("t").info("{}", "2026.09.24D11:21:28.123456789")
+    assert seen[0]["message"] == "2026.09.24D11:21:28.123456789"
+
+
+def test_an_explicit_format_spec_wins_over_the_cutoff():
+    seen = _records()
+    logcore.get_logger("t").info("{:.2f} {:.9f}", 1.23456, 0.123456789123)
+    assert seen[0]["message"] == "1.23 0.123456789"
+
+
+def test_floats_inside_a_list_tuple_or_dict_are_cut():
+    seen = _records()
+    logcore.get_logger("t").info("{} {} {}", [0.1234567891], (2.0,), {"mid": 1.0850000000000002})
+    assert seen[0]["message"] == "[0.123457] (2,) {'mid': 1.085}"
+
+
+def test_the_cutoff_is_one_global_setting(monkeypatch):
+    monkeypatch.setattr(floats, "LOG_FLOAT_DECIMALS", 3)
+    seen = _records()
+    logcore.get_logger("t").info("{}", 0.123456789)
+    assert seen[0]["message"] == "0.123"
+
+
+def test_the_location_is_still_the_callers():
+    """loguru records whoever called it; through the wrapper that would be the
+    wrapper, and --debug would point every line at logger/core.py."""
+    seen = _records()
+    logcore.get_logger("t").warning("{}", 1.5)
+    logcore.get_logger("t").log("INFO", "{}", 1.5)
+    assert [r["function"] for r in seen] == ["test_the_location_is_still_the_callers"] * 2
+    assert all(r["file"].name == "test_logger.py" for r in seen)
+
+
+def test_bind_and_opt_still_work_through_the_wrapper():
+    seen = _records()
+    log = logcore.get_logger("t")
+    log.bind(procname="rdb1").info("{}", 0.123456789)
+    log.opt(lazy=True).info("{}", lambda: 0.123456789)
+    assert [r["message"] for r in seen] == ["0.123457", "0.123457"]
+    assert seen[0]["extra"]["procname"] == "rdb1"
+    assert seen[1]["function"] == "test_bind_and_opt_still_work_through_the_wrapper"
+
+
 # ------------------------------------------------------------ logs readers
 
 
@@ -271,6 +360,45 @@ def test_follow_logs_streams_a_line_appended_after_it_starts(tmp_path, monkeypat
     assert seen[0]["message"] == "lost the tickerplant", (
         "tail -n 0 starts at the end: the line already in the file is not replayed"
     )
+
+
+def _stop_after_first(seen: list[dict[str, str]]):
+    def emit(log, rec, min_level):
+        seen.append(rec)
+        raise KeyboardInterrupt  # how a user stops it; must end cleanly
+
+    return emit
+
+
+def test_follow_during_reads_a_log_the_start_creates_from_its_first_line(tmp_path, monkeypatch):
+    """A first run, or one after `uqs clean`: no log exists until the process
+    starts, and what it prints while it loads is the part worth seeing."""
+    paths = _paths_with_logs(tmp_path, monkeypatch, {})
+    target = tmp_path / "logs" / "out_rdb1.log"
+    seen: list[dict[str, str]] = []
+    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+
+    logs.follow_during(paths, ["rdb1"], lambda: target.write_text(LINE_INF + "\n"))
+
+    assert [rec["message"] for rec in seen] == ["started"]
+
+
+def test_follow_during_is_following_before_the_start_runs(tmp_path, monkeypatch):
+    """The previous run's log is followed from its end, and from BEFORE the
+    start: a line written while starting is shown, the old one is not."""
+    paths = _paths_with_logs(tmp_path, monkeypatch, {"out_rdb1.log": [LINE_INF]})
+    target = tmp_path / "logs" / "out_rdb1.log"
+    seen: list[dict[str, str]] = []
+    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+
+    def start():
+        time.sleep(0.5)  # the tail has the file open by now
+        with target.open("a") as f:
+            f.write(LINE_ERR + "\n")
+
+    logs.follow_during(paths, ["rdb1"], start)
+
+    assert [rec["message"] for rec in seen] == ["lost the tickerplant"]
 
 
 def test_follow_logs_refuses_when_there_is_nothing_to_follow(tmp_path, monkeypatch):
