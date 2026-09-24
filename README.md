@@ -1,11 +1,20 @@
 # uqf
 
-A q/kdb+ tree covering the span of an electronic FX (eFX) data platform:
+A q/kdb+ tree covering the span of an electronic trading data platform:
 the **data engineering** that lands and backfills market data, the
 **quantitative library** that prices and measures it, the **data
 processing** that reshapes raw venue feeds into the shapes analytics
 expects, and the **operational tooling** — process orchestration, an HTTP
 gateway and a browser application — that runs the whole thing as a fleet.
+
+**How much of it is FX.** The platform half is not: the feeds and pipelines
+already carry crypto and Databento MBP-10 depth beside the FX ones, and the
+ETL framework, the orchestrator and the gateway move all three the same way
+— asset class reaches them as table names and a display-precision default,
+never as a code path. The pricing library *is* FX:
+[`ccy`](src/foundation/ccy.q), [`forwards`](src/pricing/forwards.q) and
+[`options`](src/pricing/options.q) are written to FX conventions on purpose,
+and are the part to read as eFX rather than as trading generally.
 
 **The names.** `uqf` is the repository and the family - the prefix on every
 Python package in it (`uqf_frontend`, `uqf_airflow_provider`).
@@ -182,7 +191,7 @@ change usually belongs to exactly one.
 | **Data processing** | [`src/market_data/`](src/market_data) | Reshaping and signal extraction — wide venue books folded into vector columns, LOB microstructure features, data-quality checks that report rather than throw |
 | **Fleet and orchestration** | [`scripts/`](scripts), [`python/uqs/`](python/uqs) | The uqf stack stack: feeds, ETL processes, tap and backfill workers, plus the CLI/MCP orchestrator that generates their configuration and starts, stops and reports on them |
 | **Scheduling and access** | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`web/`](web) | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, and the React desk and operations app |
-| **Database metadata** | [`src/metadata/`](src/metadata) | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable eFX breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md) |
+| **Database metadata** | [`src/metadata/`](src/metadata) | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable group-by breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md) |
 
 How `src/etl/` maps onto a Dagster-shaped framework is
 [pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md);
