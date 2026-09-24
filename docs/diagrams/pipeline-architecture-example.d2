@@ -148,7 +148,7 @@ engines: "4 · engines — subscribe, hold state, republish" {
   posbook: "posbook\nexecutions + marks → position\n.qpos, FX and crypto in one book" { class: job }
   fxpos: "fx_positions\norders → fx_position · fx_limit_breach\n.qdesk exposure, .qlimit caps" { class: job }
   markout: "markout\ntrades + quote → execution_quality\n.qexec, at horizons on a timer" { class: job }
-  superbook: "superbook\nmarket_data → superbook\n.qsuper merges across sources" { class: job }
+  superbook: "superbook\nmarket_data → superbook\n.qsub.superbook merges\nacross sources" { class: job }
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
   reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_book → mkt_orderbook" { class: job }
 }

@@ -21,7 +21,7 @@
 # storage came out 5662px wide, which a README renders as a thumbnail.
 # Vertical was 3714 at twelve jobs and a reader scrolls anyway.
 #
-# It is 4330 at eighteen, and the growth is parallel chains rather than long
+# It is 4552 at nineteen, and the growth is parallel chains rather than long
 # labels - shortening every new label bought 228px of it. The alternative
 # was a second diagram for the market_data -> superbook -> arbitrage half,
 # which was rejected for the reason repo-overview.d2 gives for not redrawing
@@ -90,7 +90,7 @@ widefeed1: "widefeed1" { class: producer }
 fxtradesfeed1: "fxtradesfeed1" { class: producer }
 cryptomock1: "cryptomock1\nstands in for cryptorust's\ntwo recorders" { class: producer }
 fxordersfeed1: "fxordersfeed1\nsynthetic order flow" { class: producer }
-databento_py: "databento1\nPython feed handler" { class: producer }
+databento_py: "databento_feed.py\nexternal Python handler" { class: producer }
 
 # ------------------------------------------------------------- the tables
 
@@ -109,6 +109,7 @@ position: "position\nqty · avg_price · realized_pnl\nmark_price · unrealized_
 execution_quality: "execution_quality\ntrade_time · horizon\ntrade_price · ref_price · markout_pips" { class: table }
 cross_quotes: "cross_quotes\nnever written to stp1 —\nlives in cross1's memory" { class: private }
 
+databento_mbp10: "databento_mbp10\nDatabento's own columns,\nten levels each side" { class: table }
 databento_book: "databento_book\ntime · sym · bid/ask prices+sizes" { class: table }
 orders: "orders\ntime · sym · book · product\nside · qty · price · status" { class: table }
 fx_position: "fx_position\nthe whole book each snapshot" { class: table }
@@ -129,7 +130,8 @@ marks1: "marks1\nnormalizer: a mid from\nevery book" { class: job }
 markout1: "markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
 fxpositions1: "fxpositions1\n.qdesk + .qlimit\nnets FILLED orders, on a timer" { class: job }
 marketdata1: "marketdata1\nnormalizer" { class: job }
-superbook1: "superbook1\n.qsuper merge across sources" { class: job }
+superbook1: "superbook1\n.qsub.superbook merge\nacross sources" { class: job }
+databento1: "databento1\nthe same .qxf fold\nthe backfill declares" { class: job }
 arbitrage1: "arbitrage1\ncrossed levels in the merged book" { class: job }
 crossarb1: "crossarb1\n.qfwd.cross_book_chain_at_sizes" { class: job }
 
@@ -146,7 +148,7 @@ fxtradesfeed1 -> trades
 cryptomock1 -> crypto_book
 cryptomock1 -> crypto_trades: "one message per fill,\nthe recorder's wire shape"
 fxordersfeed1 -> orders
-databento_py -> databento_book: "the same .qxf fold\nthe backfill declares"
+databento_py -> databento_mbp10
 
 # ------------------------------------------------- subscribe, then publish
 
@@ -163,6 +165,8 @@ executions1 -> executions: "one shape out"
 quote -> marks1: "one shape in"
 crypto_book -> marks1: "another"
 marks1 -> marks: "one shape out"
+databento_mbp10 -> databento1: "subscribe"
+databento1 -> databento_book: "republish"
 
 executions -> posbook1: "subscribe"
 marks -> posbook1: "mark to mid"
@@ -205,6 +209,7 @@ marks -> storage
 mkt_orderbook -> storage
 position -> storage
 execution_quality -> storage
+databento_mbp10 -> storage
 databento_book -> storage
 orders -> storage
 fx_position -> storage

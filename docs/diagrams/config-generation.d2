@@ -80,8 +80,10 @@ inputs: "Inputs — read, never written" {
   # Declared in the order they are consumed - the process.csv inputs, then
   # the database.q ones - so dagre keeps each group near the step it feeds.
   vendored_csv: "lib/torq-finance-starter-pack/\nappconfig/process.csv" { class: vendored }
-  overrides: "process_overrides.csv\nwritten by `uqs config set`" { class: tracked }
+  declarations: "src/etl/ job declarations\n.qstream.register · .qbw.define,\nread into PIPELINES" { class: tracked }
+  overrides: "process_overrides.csv\nwritten by `uqs config-set`" { class: tracked }
   vendored_schema: "lib/torq-finance-starter-pack/\ndatabase.q" { class: vendored }
+  tables: "scripts/processes/uqs_tables.q\nevery table uqf puts\non the plant" { class: tracked }
 }
 
 bootstrap: "bootstrap() — every command, not once" {
@@ -116,6 +118,8 @@ torqsh: "lib/torq/torq.sh\nreads the generated csv on\nevery start · stop · su
 
 inputs.vendored_csv -> bootstrap.rows
 inputs.vendored_schema -> bootstrap.schema
+inputs.declarations -> bootstrap.rows
+inputs.tables -> bootstrap.schema
 
 bootstrap.rows -> outputs.gen_csv
 bootstrap.schema -> outputs.gen_schema

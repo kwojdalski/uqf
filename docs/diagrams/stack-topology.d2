@@ -11,7 +11,7 @@
 #
 # WHAT THIS SHOWS THAT THE MERMAID VERSION DID NOT (#245).
 #
-# Eight of the eleven uqf processes run the SAME script. Since #204 a
+# Every uqf streaming process but tap1 runs the SAME script. Since #204 a
 # streaming job is a declaration under src/etl/streaming/ and
 # processes/torq_stream.q is the one runner; which job a process runs is
 # decided by its procname at startup. The old diagram drew a script per
@@ -154,7 +154,7 @@ downstream: "Storage, the gateway, and the bounded half" {
   grid-gap: 26
 
   storage: "rdb1 :6052 — today's ticks\nwdb1 :6055 → sort1 :6056 → sortworker1/2\nhdb1 :6053 · hdb2 :6054 — on disk" { class: store }
-  gw: "gateway1 :6057\nthe only door in\n\nhousekeeping1 :6061 · metrics1 :6068\ndiscovery1 :6051 registers every process" { class: store }
+  gw: "gateway1 :6057\nthe only door in\n\nmonitor1 :6059 - a handle per process it\nwatches, the connection budget's biggest user\nhousekeeping1 :6061 · metrics1 :6068\ndiscovery1 :6051 registers every process" { class: store }
   backfills: "deals_backfill1 :6082 · events_backfill1 :6083\ndatabento_backfill1 :6090 · upstream_backfill1 :6091\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qio writes into their own\nprocess. One worker file each, under\nsrc/etl/workers/." { class: job }
 }
 
