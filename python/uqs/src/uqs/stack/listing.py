@@ -125,6 +125,7 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     together, and this is where an operator sees that before starting one.
     """
     rows = []
+    slots = profiles.allowance()
     for name in sorted(profiles.PROFILES):
         resolved = profiles.resolve([name])
         held = profiles.plant_slots(resolved)
@@ -133,8 +134,8 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
                 "profile": name,
                 "leaves": ", ".join(profiles.PROFILES[name]),
                 "processes": str(len(resolved)),
-                "slots": f"{held}/{profiles.ALLOWANCE}",
-                "fits": "yes" if held <= profiles.ALLOWANCE else "NO",
+                "slots": f"{held}/{slots}",
+                "fits": "yes" if held <= slots else "NO",
             }
         )
     return rows

@@ -368,6 +368,7 @@ derived from the same dependency graph `summary`'s **Depends on** column uses:
 uqs list profiles
 uqs start --profile arbitrage
 uqs start --profile depth,crypto
+UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows it
 ```
 
 | profile | leaves | slots |
@@ -377,6 +378,7 @@ uqs start --profile depth,crypto
 | `arbitrage` | `arbitrage1`, `crossarb1` | 10/14 |
 | `depth` | `vectorize1`, `cross1` | 8/14 |
 | `crypto` | `cryptomock1` | 5/14 |
+| `all` | every profile's leaves except `crypto`'s | 20/14 - refused on this licence |
 
 **A profile over the cap is refused, not warned.** That is the opposite of a
 positional `start`, deliberately: naming processes yourself is your call, and
@@ -390,6 +392,17 @@ $ uqs start --profile fx,arbitrage
 profile(s) arbitrage, fx need 17 tickerplant connections, and only 14 are
 available (16 on this licence, 2 held back for ad-hoc handles). ...
 ```
+
+**`all` needs a larger licence, and says so.** It is every standing set at
+once - the union of the other profiles' leaves, derived so a new leaf joins it
+automatically - and that holds twenty plant connections, more than the
+community licence has. On that licence it is refused like any profile over
+the cap. On a q licence that allows more concurrent connections, say how many
+with `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every
+start is held to - `--profile`, `uqs list profiles`' `fits` column and the
+positional-start warning. `all` leaves out `crypto`, because the mock
+replaces cryptorust's recorders rather than joining them; ask for it with
+`--profile all,crypto`.
 
 Two things profiles deliberately do **not** do. They do not change
 `startwithall`, so `start all` is untouched - `default` describes that set so

@@ -30,7 +30,6 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.model import dependencies, profiles
-from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing, runtime
@@ -82,8 +81,9 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     """Say so when the fleet this start produces is bigger than the licence
     lets one process hold handles for.
 
-    The licence caps a q process at `LICENCE_CONNECTION_LIMIT` concurrent
-    connections. Every streaming job opens a handle to stp1 and monitor1
+    The licence caps a q process at `profiles.licence_limit()` concurrent
+    connections - the community licence's 16 unless UQS_LICENCE_CONNECTIONS
+    says otherwise. Every streaming job opens a handle to stp1 and monitor1
     opens one per process it watches, so past that count the cap - not the
     configuration - decides what works. The plant does not complain: it
     resets the extra connection, the process wedges in its retry loop, and
@@ -110,14 +110,15 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
         else:
             starting = {p for p in procs.split() if p != "all"}
         total = len(running | starting)
+        limit = profiles.licence_limit()
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
         log.debug("connection-cap warning skipped: {}", exc)
         return
-    if total <= LICENCE_CONNECTION_LIMIT:
+    if total <= limit:
         return
     console.print(
         f"[yellow]warning[/] this start leaves {total} processes running, past the "
-        f"{LICENCE_CONNECTION_LIMIT} concurrent connections this licence allows "
+        f"{limit} concurrent connections this licence allows "
         "one q process. Handles past the cap are reset, not refused: the process "
         "wedges in its retry loop and still reports `up`, and monitor1 may become "
         "unreachable so the Heartbeat column empties. Start a subset, or stop what "
@@ -163,7 +164,7 @@ def _resolve_profiles(names: str) -> str:
         _die(UqsError(problem))
     console.print(
         f"[dim]profile {', '.join(wanted)}: {len(resolved)} process(es), "
-        f"{profiles.plant_slots(resolved)}/{profiles.ALLOWANCE} plant slots[/]"
+        f"{profiles.plant_slots(resolved)}/{profiles.allowance()} plant slots[/]"
     )
     return " ".join(resolved)
 
