@@ -190,14 +190,8 @@ qdesk,dimensions,function,1,book
 qdesk,empty_book,function,1,dims
 qdesk,required_cols,value,,
 qdesk,rollup,function,2,book group_cols
-qdqc,check_ccy_exposure_limits,function,2,exposure limits
-qdqc,check_limit,function,3,metrics limits key_col
 qdqc,check_market_data_quality,function,2,quotes max_spread_bps
-qdqc,check_position_notional_limits,function,2,pos limits
-qdqc,check_reject_ratio_limits,function,3,reject_ratios limits key_col
 qdqc,check_stale_quotes,function,3,quotes at_time max_age
-qdqc,limit_for,function,3,limits key_col id
-qdqc,status_for,function,2,metric limit
 qdqc,summarize_checks,function,1,named_checks
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_ratio,function,2,num_fills num_quotes

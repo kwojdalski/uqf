@@ -160,15 +160,16 @@ library with no processes/IPC/tables).
 - **Real KDB-X: inside a `select`/`update` clause's per-row expression, a
   bare (unqualified) call to a function defined in the *same* namespace
   can fail to resolve** - throws an error literally named after the
-  function (e.g. `` 'limit_for ``) - even though the identical bare call
+  function (e.g. `` 'fn ``) - even though the identical bare call
   works everywhere else, including elsewhere in the very same enclosing
   function. Root cause unconfirmed (plausibly: the clause's generated
   per-row lambda evaluates against the root `.` context, not the
   enclosing function's own namespace), but the fix is simple: always
   fully-qualify a same-namespace function call used *inside* a
-  select/update clause (e.g. `.qdqc.limit_for[...]`, not bare
-  `limit_for[...]`) - unusual style anywhere else in this codebase, but
-  required there (found via `src/market_data/dqchecks.q`'s `check_limit`).
+  select/update clause (with its namespace prefix, not bare `fn[...]`) -
+  unusual style anywhere else in this codebase, but required there (found
+  via `check_limit`'s call to `limit_for` in `src/market_data/dqchecks.q`,
+  both since removed in #412).
 
 ## Layout
 
