@@ -79,6 +79,13 @@ declared. `uqs --show-completion` prints the script instead of installing it.
 It needs `uqs` on your `PATH`: the `uv run --project python/uqs uqs` form
 has nothing for the shell to call.
 
+Run it **from an interactive terminal**. The shell is detected by walking the
+process tree with `ps`, which lists only tty-attached processes - so from a
+script, a CI step or an agent's non-interactive shell there is nothing to
+find, and the install fails with `Shell None is not supported.` That message
+names the detection failure, not a missing feature: the same command in a
+real terminal installs normally.
+
 **Editable updates the code, not the script names, and not the path.** A
 `.pth` file points the install at `python/uqs/src`, so every source edit is
 live the moment it is saved - no reinstall for a new command, option or fix.
