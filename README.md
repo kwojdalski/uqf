@@ -275,7 +275,7 @@ scripts/test.py q-two-instances     # a second kdb+ process, data moved across t
 scripts/test.py python              # orchestrator and frontend
 scripts/test.py q-coverage          # what the q suite executes
 scripts/test.py coverage            # the same, q and Python together
-scripts/test.py smoke               # live external metadata check
+scripts/test.py smoke --targets HOST:PORT --tables TABLE:COL,COL   # live external metadata check
 scripts/test.py stack-smoke         # restart the fleet, watch what it publishes
 scripts/test.py all                 # every lane except coverage, smoke and stack-smoke
 ```

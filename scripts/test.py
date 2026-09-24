@@ -61,7 +61,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -194,9 +194,24 @@ def lane_python() -> None:
     _run("python", ["uv", "run", "pytest", "-q"])
 
 
-def lane_smoke() -> None:
+def lane_smoke(flags: Sequence[str] = ()) -> None:
+    """`flags` are the script's own: -targets, -tables, -timeout_ms. With
+    none, it reports SKIP and exits 0 - an unconfigured checkout is not a
+    failure (ETL-20)."""
     _banner("smoke: ETL-20 live external metadata check")
-    _q("smoke", "tests/q/smoke_external_metadata.q")
+    _q("smoke", "tests/q/smoke_external_metadata.q", *flags)
+
+
+def smoke_flags(targets: Sequence[str], tables: Sequence[str], timeout_ms: int | None) -> list[str]:
+    """The smoke lane's options as the q script's own flags."""
+    flags: list[str] = []
+    if targets:
+        flags += ["-targets", *targets]
+    if tables:
+        flags += ["-tables", *tables]
+    if timeout_ms is not None:
+        flags += ["-timeout_ms", str(timeout_ms)]
+    return flags
 
 
 def lane_stack_smoke() -> None:
@@ -318,12 +333,32 @@ def main(argv: list[str] | None = None) -> int:
         choices=[*LANES, "all"],
         help="which suite to run; 'all' is every lane except smoke and coverage",
     )
+    smoke = parser.add_argument_group("smoke lane only")
+    smoke.add_argument(
+        "--targets", nargs="+", default=[], metavar="HOST:PORT", help="sources to check"
+    )
+    smoke.add_argument(
+        "--tables",
+        nargs="+",
+        default=[],
+        metavar="TABLE:COL,COL",
+        help="each table and the columns it must still have",
+    )
+    smoke.add_argument(
+        "--timeout-ms", type=int, default=None, help="per-connection timeout (default 5000)"
+    )
     args = parser.parse_args(argv)
+    flags = smoke_flags(args.targets, args.tables, args.timeout_ms)
+    if flags and args.lane != "smoke":
+        parser.error("--targets, --tables and --timeout-ms apply to the smoke lane only")
 
     lanes = ALL if args.lane == "all" else [args.lane]
     try:
         for name in lanes:
-            LANES[name]()
+            if name == "smoke":
+                lane_smoke(flags)
+            else:
+                LANES[name]()
     except LaneFailed as failure:
         if failure.code == 127:
             print(

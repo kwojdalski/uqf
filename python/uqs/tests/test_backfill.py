@@ -38,6 +38,34 @@ def test_a_bound_without_an_offset_is_utc_and_one_with_is_converted():
     assert backfill.parse_bound("--from", "2026-09-13T02:00+02:00") == FROM
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2026-09-13T00:00",
+        "2026-09-13T00:00:00Z",
+        "2026.09.13",
+        "2026.09.13D00:00",
+        "2026.09.13D00:00:00.000000000",
+    ],
+)
+def test_iso_with_a_t_and_q_literals_are_both_accepted(text):
+    """The `T` form is one shell word, so it needs no quoting; the q form is
+    what someone working in q types."""
+    assert backfill.parse_bound("--from", text) == FROM
+
+
+def test_a_q_literal_finer_than_a_microsecond_is_refused_not_truncated():
+    """datetime stops at the microsecond. A bound silently moved is a
+    different range."""
+    with pytest.raises(UqsError, match="finer than a microsecond"):
+        backfill.parse_bound("--from", "2026.09.13D00:00:00.000000001")
+
+
+def test_a_q_literal_that_is_not_a_real_date_is_refused():
+    with pytest.raises(UqsError, match="not a real date"):
+        backfill.parse_bound("--from", "2026.02.30")
+
+
 def test_a_bound_that_is_not_iso_is_refused_by_name():
     with pytest.raises(UqsError, match="--to must be an ISO-8601"):
         backfill.parse_bound("--to", "13/09/2026")

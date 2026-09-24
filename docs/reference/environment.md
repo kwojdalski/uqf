@@ -63,16 +63,14 @@ without it:
 | `FORCE_COLOR` | as above | no | as above. Set to anything non-empty and `uqs`'s log lines are coloured even when piped - for a pager that renders colour, e.g. `FORCE_COLOR=1 uqs logs \| less -R` |
 | `DATABENTO_API_KEY` | `uqs.external.databento_feed` | for `uqs databento start` only | Databento's own variable name, so an existing export works unchanged. The live feed refuses to start without it rather than failing on its first call; the ODBC backfill does not read it |
 | `CRYPTORUST_ROOT` | `uqs.external.crypto` | no | the checkout is located by the search path in `cryptorust_root`'s docstring |
-| `UQF_SMOKE_TARGETS` | `tests/q/smoke_external_metadata.q` | yes, for that script | the smoke check has nothing to connect to and says so |
-| `UQF_SMOKE_TABLES` | as above | yes, for that script | as above |
-| `UQF_SMOKE_TIMEOUT_MS` | as above | no | `5000` |
+Variables that only a fixture ever sets (`UQF_TEST_CFG_KEY`, `UQF_SHARED`,
+`UQFQ` and the `.qwcfg` precedence fixtures) are deliberately absent: they
+are not an operator's business, and listing them would bury the ones above
+that are.
 
-`UQF_SMOKE_*` sit in `tests/q/` but are listed here because that script is an
-operator tool — it is run by hand against a real source, which is exactly why
-it is not part of the unit lane. Variables that only a fixture ever sets
-(`UQF_TEST_CFG_KEY`, `UQF_SHARED`, `UQFQ` and the `.qwcfg` precedence
-fixtures) are deliberately absent: they are not an operator's business, and
-listing them would bury the twenty-three above that are.
+Per-run arguments are flags, not variables: a backfill's worker, version and
+range are `uqs backfill` options, and the live smoke check's sources are
+`scripts/test.py smoke --targets … --tables … --timeout-ms …`.
 
 ## Produced by the orchestrator — do not set these by hand
 

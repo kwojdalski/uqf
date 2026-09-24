@@ -50,20 +50,63 @@ def procname_for(worker: str) -> str:
     return workers[worker]
 
 
-def parse_bound(name: str, text: str) -> datetime:
-    """An ISO-8601 date or datetime, in UTC.
+#: A q timestamp or date literal: 2026.09.13, 2026.09.13D06:00,
+#: 2026.09.13D06:00:00.123456789. What someone working in q types, and what
+#: the docs showed before the range became flags.
+_Q_TIMESTAMP = re.compile(
+    r"(\d{4})\.(\d{2})\.(\d{2})(?:D(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?"
+)
 
+
+def _from_q_literal(name: str, text: str) -> datetime | None:
+    """A q literal as a UTC datetime, or None when `text` is not one.
+
+    datetime stops at the microsecond, so a value with anything finer is
+    refused rather than truncated: a range whose end moved is a different
+    range.
+    """
+    m = _Q_TIMESTAMP.fullmatch(text)
+    if m is None:
+        return None
+    year, month, day, hour, minute, second, fraction = m.groups()
+    digits = (fraction or "").ljust(9, "0")
+    if digits[6:] != "000":
+        raise UqsError(f"{name} {text!r} is finer than a microsecond, which this cannot carry")
+    try:
+        return datetime(
+            int(year),
+            int(month),
+            int(day),
+            int(hour or 0),
+            int(minute or 0),
+            int(second or 0),
+            int(digits[:6]),
+            tzinfo=UTC,
+        )
+    except ValueError as exc:
+        raise UqsError(f"{name} {text!r} is not a real date or time: {exc}") from None
+
+
+def parse_bound(name: str, text: str) -> datetime:
+    """An ISO-8601 date or datetime, or a q timestamp, in UTC.
+
+    ISO-8601 takes a `T` between date and time - 2026-09-13T06:00 - which is
+    one shell word and needs no quoting; a space works too, but only quoted.
     A value without an offset is taken as UTC, and said so in `--help`,
     rather than as the local time of whatever machine runs the command -
     which would cover a window an offset wide of the one meant. A value with
-    an offset is converted.
+    an offset is converted. A q literal carries no offset, and is UTC.
     """
+    from_q = _from_q_literal(name, text)
+    if from_q is not None:
+        return from_q
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError:
         raise UqsError(
-            f"{name} must be an ISO-8601 date or datetime, e.g. 2026-09-13 or "
-            f"2026-09-13T06:00Z; got {text!r}"
+            f"{name} must be an ISO-8601 date or datetime (2026-09-13, "
+            f"2026-09-13T06:00, 2026-09-13T06:00+02:00) or a q timestamp "
+            f"(2026.09.13D06:00); got {text!r}"
         ) from None
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
