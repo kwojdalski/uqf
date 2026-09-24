@@ -179,7 +179,7 @@ surfaces: "7 · surfaces" {
 
   frontend: "uqf_frontend + web\npositions, coverage, fleet, control\nevery query through the gateway" { class: surface }
   airflow: "uqf_airflow_provider\ntriggers a backfill,\nsenses its status files" { class: surface }
-  client: "uqf_client · MCP\nkola IPC from Python;\nthe stack as tools" { class: surface }
+  client: "uqs MCP server\nthe stack as tools\nan agent can call" { class: surface }
 }
 
 # --- sources reach the plant, except the one that deliberately does not ---

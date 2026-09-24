@@ -44,12 +44,12 @@ Run these first; they produce CANDIDATES only.
 # Python: unused names. Include the tests so a test-only name is not "dead",
 # and ignore the decorators that register functions with a framework.
 uvx vulture python/uqs python/uqf_frontend python/uqf_airflow_provider \
-    python/uqf_client scripts --exclude .venv --min-confidence 60 \
+    scripts --exclude .venv --min-confidence 60 \
     --ignore-decorators "@app.*,@*.command,@*.get,@*.post,@*.put,@*.delete,@*.callback,@pytest.fixture,@*.tool,@*.validator,@field_validator,@model_validator,@*.middleware,@*.exception_handler"
 
 # The same without the tests: what disappears between the two runs is TEST-ONLY.
 uvx vulture python/uqs/src python/uqf_frontend/src python/uqf_airflow_provider/src \
-    python/uqf_client/src scripts --min-confidence 60 --ignore-decorators "..."
+    scripts --min-confidence 60 --ignore-decorators "..."
 
 # q: definitions under src/ nothing references, and those only tests reference.
 python3 scripts/dev/find_unreferenced_q.py

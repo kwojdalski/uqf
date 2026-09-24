@@ -1,8 +1,7 @@
 # Pre-commit configuration for uqf (q/kdb+ quant library).
 # Local hooks are scoped for q/qUnit since the library itself is pure q.
-# python/uqf_client is a small Python/uv subproject (a kola/Polars IPC
-# client), so it gets its own ruff + pytest hooks, scoped to that subtree
-# only.
+# The Python packages under python/ get ruff and pytest hooks over every .py
+# file outside lib/.
 repos:
   # Basic file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -21,7 +20,7 @@ repos:
       - id: mixed-line-ending
         args: ['--fix=lf']
 
-  # uqf_client (python/uqf_client) - Python linting/formatting
+  # Python linting/formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.2
     hooks:
@@ -44,7 +43,6 @@ repos:
 
   - repo: local
     hooks:
-      # uqf_client's own pytest suite - spins up a real q server via kola/IPC.
       # Every Python test in the repository, from the uv workspace root.
       # This replaced a hook scoped to python/uqf_client alone, under which
       # 229 of the repo's 231 Python tests never ran on commit - and no CI
@@ -58,8 +56,9 @@ repos:
           - -c
           - |
             set -euo pipefail
-            # uqf_client's conftest starts a real q process and skips if it
-            # finds no interpreter, so make ~/.kx discoverable when present.
+            # Some suites start a real q process (uqf_frontend's kola IPC
+            # tests, uqs's example-script runs) and skip if they find no
+            # interpreter, so make ~/.kx discoverable when present.
             if [ -x "$HOME/.kx/bin/q" ]; then
               export QHOME="${QHOME:-$HOME/.kx}"
               export PATH="$HOME/.kx/bin:$PATH"

@@ -108,8 +108,8 @@ assumed.
 ## Architecture recommendation
 
 - **FE-16** — Build a thin server-side Python backend-for-frontend in front of
-  the gateway, reusing the kola-based IPC pattern already proven twice in this
-  repo (`uqf_client`, and the orchestrator's own `query()`), rather than
+  the gateway, reusing the kola-based IPC pattern already proven in this
+  repo by the orchestrator's own `query()`, rather than
   Grafana or the vendored access-layer bridge. Not a new IPC mechanism.
 
 - **FE-17** — Three vendored options exist in `lib/torq` but are wired into
@@ -131,7 +131,7 @@ requiring new backend work.
 
 | Requirement | Access path | Status |
 |---|---|---|
-| Domain table query / filter | Gateway sync or async exec, reusing the orchestrator's `query()` and the `uqf_client` pattern | Exists today |
+| Domain table query / filter | Gateway sync or async exec, reusing the orchestrator's `query()` pattern | Exists today |
 | ETL coverage | Same gateway path, against `etl_coverage` | Exists today |
 | Gateway queue / backend connections | Direct connection to the gateway, reading its own `.gw.getqueue[]`, `.gw.servers`, `.gw.clients` | Exists today |
 | Per-process query and error log | Direct connection to each process's own `.usage.usage` | Exists per-process; no fleet-wide rollup |

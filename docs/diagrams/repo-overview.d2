@@ -231,7 +231,6 @@ surfaces: "" {
     bff: "uqf_frontend\nbackend-for-frontend\ncredentials stay server-side" { class: py }
     provider: "uqf_airflow_provider\nAirflow's sensor: reads the status files" { class: py }
     orch: "uqs\nCLI · MCP server · generates process.csv" { class: py }
-    client: "uqf_client\nkola IPC into a running q session" { class: py }
   }
 
   outside.browser -> py.web: "HTTP"

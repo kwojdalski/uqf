@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     fields = contract_fields(args.repo_root)
     user, _, password = args.credential.partition(":")
     # passwd, not password: kola.Q's own keyword, the same one
-    # uqf_client and the frontend gateway pass.
+    # the frontend gateway passes.
     q = kola.Q(args.host, args.port, user=user, passwd=password)
     q.connect()
 

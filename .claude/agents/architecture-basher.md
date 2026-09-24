@@ -37,7 +37,7 @@ signal of how much of this is real.
 ## Scope: their code, not the libraries
 
 **In scope**: `src/`, `scripts/`, `python/uqs/`,
-`python/uqf_frontend/`, `python/uqf_client/`, `python/uqf_airflow_provider/`,
+`python/uqf_frontend/`, `python/uqf_airflow_provider/`,
 `web/`, `tests/`, `docs/`, `.claude/`.
 
 **Out of scope, absolutely**: `lib/torq`, `lib/torq-finance-starter-pack`,

@@ -7,7 +7,7 @@ through **B3** of
 ## What this is
 
 A thin server-side API layer in front of the TorQ `gateway`, reusing the kola
-IPC pattern already proven in this repo by `uqf_client` and by
+IPC pattern already proven in this repo by
 `uqs.stack.runtime.query()` rather than introducing a second mechanism
 (**FE-16**). REST rather than WebSocket, because the gateway path has no
 push or subscribe mechanism to a browser client — every view is poll-only

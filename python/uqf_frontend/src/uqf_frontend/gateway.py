@@ -1,8 +1,8 @@
 """The q gateway client.
 
-Reuses the kola IPC pattern already proven twice in this repo - by
-``uqf_client.UqfClient`` and by ``uqs.stack.runtime.query()`` - rather
-than introducing a second mechanism, per FE-16.
+Reuses the kola IPC pattern already proven in this repo by
+``uqs.stack.runtime.query()`` rather than introducing a second mechanism,
+per FE-16.
 
 ``Gateway`` is a Protocol so that tests run with a fake and no q process.
 That is the same posture ETL-19 takes on the q side: double the adapters at

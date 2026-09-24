@@ -139,8 +139,8 @@ then.
 - [`uqf_airflow_provider`](../../python/uqf_airflow_provider) — an operator
   that starts a backfill and a sensor that reads the status files
   [`.qstatus`](../../src/etl/core/status.q) writes.
-- [`uqf_client`](../../python/uqf_client) and the MCP server — kola IPC from
-  Python, and the stack as tools an agent can call.
+- The [`uqs` MCP server](../../python/uqs/uqs_mcp.py) — the stack as tools an
+  agent can call.
 
 ## What a day looks like through it
 
