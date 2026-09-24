@@ -589,6 +589,11 @@ contributing_runs:{[ds;part;version]
 / would do the moment a dataset is filled by more than one worker - and it
 / would do it silently, leaving the other partitions reading as uncovered
 / until someone republished them.
+/ .
+/ STILL OPEN, deliberately: whether restatements arrive as a feed or as an
+/ operator action, and whether there is a bound on how far back one may
+/ reach (unbounded means every historical answer is provisional forever).
+/ This is a function either could call, and nothing here assumes either.
 / @param ds the dataset
 / @param part the partition being restated, or ` for an unpartitioned dataset
 / @param version the source_version whose claims are being withdrawn

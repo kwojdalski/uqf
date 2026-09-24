@@ -287,8 +287,7 @@ duplicate surfaces far from here.
 
 **`row_key` is only correct if the source guarantees uniqueness.** A source
 that reuses ids after a purge silently merges unrelated rows. It is declared
-per source for that reason; see
-[the restatement design](../architecture/restatement-design.md).
+per source for that reason.
 
 **`tz` is a claim, not a default.** An unstated zone is the shape of
 the bug: every later reader assumes UTC while the source hands over local

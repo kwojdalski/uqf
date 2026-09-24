@@ -179,7 +179,7 @@ test_the_fetch_path_is_announced:{[t]
 
 / Declared and validated, deliberately unused. The mechanism lands ahead of
 / the semantics because answering "superseded in place" changes what
-/ is_covered MEANS - see docs/architecture/restatement-design.md. A declared key is the
+/ is_covered MEANS - see .qmatz.valid_at in src/etl/core/materialisation.q. A declared key is the
 / one piece that is a prerequisite either way with no blast radius.
 
 test_a_single_column_key_is_accepted:{[t]

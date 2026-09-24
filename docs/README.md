@@ -75,8 +75,6 @@ lands). A service page is where its design decisions live too;
 
 **`architecture/`** — [`pipeline-philosophy.md`](architecture/pipeline-philosophy.md)
 (the positions `src/etl/` is built on, and what enforces each),
-[`restatement-design.md`](architecture/restatement-design.md)
-(the bitemporal design, now built),
 [`event-tape.md`](architecture/event-tape.md) (the order/trade event tape:
 its contract, and the microstructure features it unblocked),
 [`pipeline-framework-gaps.md`](architecture/pipeline-framework-gaps.md) (a

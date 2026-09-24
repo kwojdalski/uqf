@@ -171,7 +171,7 @@ it?"** If yes, demand it. If no, read it.
 
 The coverage ledger is append-only. A restatement does not edit the row it
 replaces — it stamps `superseded_at`, and every read takes an as-of instant
-(see [`restatement-design.md`](restatement-design.md)). A claim is
+(see [`.qmatz.supersede`](../../src/etl/core/materialisation.q)). A claim is
 therefore *true until superseded* rather than *true or gone*, and "what did
 we believe on Tuesday" stays answerable.
 
@@ -304,7 +304,5 @@ the obvious way to mint a unique id returns the same value everywhere.
 - [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) — the closed
   assessment against Dagster: what each piece replaced, and the four
   differences that are decisions.
-- [`restatement-design.md`](restatement-design.md) — the bitemporal coverage
-  design behind §7.
 - [`../reference/etl-framework-requirements.md`](../reference/etl-framework-requirements.md)
   — ETL-01..ETL-24, the contract CI holds the code to.
