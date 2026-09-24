@@ -8,13 +8,15 @@
 # structural mistake here that is expensive to undo": bounded or continuous.
 # Everything after it is a flag on one command. That asymmetry is the point of
 # the drawing - a reader who expects a long decision tree should be able to see
-# in one glance that there are three questions, not thirty, and that only the
+# in one glance that there are four questions, not thirty, and that only the
 # first one is hard to change later.
 #
 # The kinds are DERIVED, not asked for: a streaming job that subscribes to
 # nothing is a feed, one that subscribes is an etl. scaffold/jobs.py comments
 # that there is no third answer the caller could give which the edges do not
-# already imply - so the diagram shows `--subscribes` deciding it rather than a
+# already imply. A NORMALIZER is the one kind named outright (--kind
+# normalizer): its edges look like an etl's, and what differs is its purpose -
+# several differently-shaped tables in, one canonical shape out - so the diagram shows `--subscribes` deciding it rather than a
 # `--kind feed` that does not exist.
 #
 # What is deliberately NOT here: the transform, the check, the io manager and
@@ -83,6 +85,9 @@ cont: ".qstream - streaming job\nsubscribes, never finishes\n\nsrc/etl/streaming
 q2: "Does it read another\ntable to do its work?" { class: question }
 feed: "a FEED\ndeclares timer_period + on_timer,\nbuilds its own rows" { class: shell }
 etl: "an ETL\ndeclares subscribes + on_batch" { class: shell }
+q2b: "Several sources, in different\nshapes, into ONE canonical table?" { class: question }
+normalizer: "a NORMALIZER (.qnorm)\none mapping per source" { class: shell }
+cmd_n: "uqs new-job NAME --kind normalizer\n  --subscribes A,B --publishes T --columns \"...\"" { class: command }
 
 cmd_b: "uqs new-job NAME --kind backfill\n  --dataset T --columns \"...\" --width 1D" { class: command }
 cmd_f: "uqs new-job NAME\n  --publishes T --columns \"...\"" { class: command }
@@ -92,7 +97,7 @@ q3: "Does it publish a\nNEW table?" { class: question }
 newtable: "--publishes / --dataset with --columns\nThe scaffold defines it on the plant.\n\nWithout that .u.upd DISCARDS the rows\nin silence - healthy process, empty table" { class: warn }
 localonly: "omit --publishes\nthe job keeps its output local" { class: outcome }
 
-done: "Then: fill in every SCAFFOLDED\nplaceholder test_no_scaffold_left lists,\nand name the process in the\ntorq README" { class: outcome }
+done: "Then: fill in every SCAFFOLDED\nplaceholder test_no_scaffold_left lists,\nand name the process in\ndocs/architecture/stack.md" { class: outcome }
 
 start -> q1
 q1 -> bounded: "yes - a backfill,\na nightly window,\na restatement"
@@ -100,15 +105,19 @@ q1 -> cont: "no - a venue feed,\na poller"
 
 cont -> q2
 q2 -> feed: "no" { style.stroke: "#6f4aa5" }
-q2 -> etl: "yes" { style.stroke: "#6f4aa5" }
+q2 -> q2b: "yes" { style.stroke: "#6f4aa5" }
+q2b -> etl: "no" { style.stroke: "#6f4aa5" }
+q2b -> normalizer: "yes" { style.stroke: "#6f4aa5" }
 
 bounded -> cmd_b
 feed -> cmd_f
 etl -> cmd_e
+normalizer -> cmd_n
 
 cmd_b -> q3
 cmd_f -> q3
 cmd_e -> q3
+cmd_n -> q3
 
 q3 -> newtable: "yes"
 q3 -> localonly: "no (streaming only)"
