@@ -19,7 +19,13 @@
 # recorder instead of a tickerplant. Exactly one namespace may know TorQ
 # exists - .qpipe, in scripts/ - and scripts/gates/check_etl_layering.py fails the
 # build if anything under src/etl/ reaches for it. So the adapter gets its
-# own band, and every arrow into the stack passes through it.
+# own band, and every arrow into the TorQ stack passes through it.
+#
+# TorQ is not the only way to run a job any more, and the band says so:
+# run_stream.q runs any streaming job on stock kdb+, against .qtick - a
+# plain-q tickerplant in src/etl/core/ - and never loads lib/torq. It sits in
+# scripts/ beside the TorQ runners because it is a runner too, but its arrow
+# stays inside the left column: it goes back to src/, not down to the stack.
 #
 # ON SIZE. A holistic diagram earns its place by being READ, so this is kept
 # to boxes a reader takes in at once: a directory each, one line of what it
@@ -143,23 +149,31 @@ pipeline: "" {
     # edge crossed the band and dropped its label on top of the quant
     # library's.
     quant: "The quant library\nfoundation · pricing · portfolio\nexecution · market_data" { class: lib }
-    core: "src/etl/core/\nthe pipeline framework\n.qbw bounded · .qstream streaming\ncoverage · runs · transforms · status" { class: fw }
+    core: "src/etl/core/\nthe pipeline framework\n.qbw bounded · .qstream streaming · .qnorm\ncoverage · runs · transforms · .qtick plant" { class: fw }
     decls: "Declarations\nsources/ · workers/ · streaming/\none file each, registered on load" { class: decl }
 
     decls -> core
     quant -> core
   }
 
-  scripts: "scripts/ — the only q allowed to know TorQ" {
+  scripts: "scripts/ — the runners, and the only q allowed to know TorQ" {
     class: band
-    grid-columns: 2
+    grid-columns: 3
     grid-gap: 34
 
-    # Same rule: runners on the right, because Airflow triggers them from
-    # there, and .qpipe on the left, because the tickerplant it publishes
-    # into is the left-hand box of the band below.
-    qpipe: ".qpipe — the TorQ adapter\ndiscovery · subscribe · publish · timers" { class: adapter }
-    runners: "torq_backfill.q · torq_stream.q\none process runs one worker or job" { class: adapter }
+    # Same rule: the TorQ runners on the right, because Airflow triggers
+    # them from there, and .qpipe beside the tickerplant it publishes into
+    # in the band below. run_stream.q takes the far left: it has no edge
+    # leaving the band, and on the right Airflow's edge and the status-file
+    # edge both ran straight through it.
+    #
+    # The status-file edge from src/etl/core/ to the Airflow provider leaves
+    # across this band's right-hand gap. With one-line labels the three boxes
+    # spread far enough right to put the runners in its way, so the labels
+    # wrap and the boxes stay narrow enough to leave that gap clear.
+    standalone: "run_stream.q\nany streaming job\non stock kdb+ via .qtick" { class: fw }
+    qpipe: ".qpipe — the TorQ adapter\ndiscovery · subscribe\npublish · timers" { class: adapter }
+    runners: "torq_backfill.q\ntorq_stream.q\none worker or job each" { class: adapter }
 
     runners -> qpipe
   }
@@ -178,6 +192,10 @@ pipeline: "" {
   }
 
   src.core -> scripts.runners: "run" { style.stroke: "#3d7a5a" }
+  src.core -> scripts.standalone: "run, TorQ-free" {
+    style.stroke: "#3d7a5a"
+    style.stroke-dash: 4
+  }
   scripts.qpipe -> stack.tp: "subscribe · .u.upd" {
     style.stroke: "#a54a5c"
     style.stroke-width: 3
@@ -212,7 +230,7 @@ surfaces: "" {
     web: "web/ — React\nDesk · Control · Ops" { class: py }
     bff: "uqf_frontend\nbackend-for-frontend\ncredentials stay server-side" { class: py }
     provider: "uqf_airflow_provider\nAirflow's sensor: reads the status files" { class: py }
-    orch: "uqs\nuqs CLI · generates process.csv" { class: py }
+    orch: "uqs\nCLI · MCP server · generates process.csv" { class: py }
     client: "uqf_client\nkola IPC into a running q session" { class: py }
   }
 
