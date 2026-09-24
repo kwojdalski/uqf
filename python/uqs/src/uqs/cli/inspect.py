@@ -19,6 +19,7 @@ from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
+    PortOpt,
     _die,
     _export,
     _paths,
@@ -28,7 +29,7 @@ from uqs.cli.shared import (
 )
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
-from uqs.stack import runtime
+from uqs.stack import alive, listing, runtime
 
 
 @app.command("hdb-check")
@@ -79,6 +80,82 @@ def hdb_check(
         "whose declared TYPE changed is not repaired here.[/]"
     )
     raise typer.Exit(code=1)
+
+
+def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
+    """Replace this process with an interactive qcon session on host:port.
+
+    Returns only on a refusal (qcon not installed, or it would not start),
+    after `_die` has already exited - so a caller's `return` after it is what
+    stops a call that did return from falling through.
+    """
+    if shutil.which("qcon") is None:
+        _die(
+            UqsError(
+                "qcon is not on PATH. It ships with kdb+ rather than with this "
+                "repository (macOS: it is beside q in your KDB-X install). "
+                'Without it, `uqs query --port <p> "<expr>"` still works over IPC.'
+            )
+        )
+        return
+    argv = runtime.qcon_command(host, port, user, passwd, rlwrap=shutil.which("rlwrap") is not None)
+    log.debug("exec: {}", " ".join(argv))
+    # execvp, not subprocess: qcon owns the terminal from here, and replacing
+    # this process rather than wrapping it is what makes Ctrl-C, Ctrl-D and
+    # the exit code behave as they would if you had typed `qcon` yourself.
+    try:
+        os.execvp(argv[0], argv)
+    except OSError as exc:
+        # `which` found it a moment ago, so this is a race or a broken binary -
+        # either way a message beats a traceback.
+        _die(UqsError(f"could not start {argv[0]}: {exc}"))
+
+
+@app.command()
+def conn(
+    procname: Annotated[
+        str,
+        typer.Argument(
+            help="the process to open a qcon session on, e.g. rdb1",
+            autocompletion=completion.procname,
+        ),
+    ],
+    port: PortOpt = DEFAULT_BASE_PORT,
+    user: str = "admin",
+    passwd: str = "admin",
+) -> None:
+    """Open an interactive qcon session on a process, named rather than numbered.
+
+    `uqs conn rdb1` is `uqs query --console --port <rdb1's port>` without
+    having to know the port: it comes from the registry at the stack's base
+    port (`--port`, as for `start`). A process that is not running is refused
+    with how to start it, rather than left to qcon's bare connection refusal,
+    which reads the same as a wrong port.
+    """
+    paths = _paths()
+    try:
+        ports = listing.configured_ports(paths, base_port=port)
+    except UqsError as exc:
+        _die(exc)
+        return
+    if procname not in ports:
+        _die(
+            UqsError(f"{procname} is not a declared process - `uqs list processes` shows them all")
+        )
+        return
+    # Advisory: a check that cannot answer does not stop the session, since
+    # qcon will say for itself whether anything is listening.
+    try:
+        up = procname in alive.running(paths, base_port=port)
+    except Exception as exc:  # noqa: BLE001 - see comment above
+        log.debug("could not tell whether {} is running: {}", procname, exc)
+        up = True
+    if not up:
+        _die(UqsError(f"{procname} is not running - start it with `uqs start {procname}`"))
+        return
+    target = int(ports[procname])
+    log.debug("conn {} -> localhost:{}", procname, target)
+    _exec_qcon("localhost", target, user, passwd)
 
 
 @app.command()
@@ -132,33 +209,7 @@ def query(
                 )
             )
             return
-        if shutil.which("qcon") is None:
-            _die(
-                UqsError(
-                    "qcon is not on PATH. It ships with kdb+ rather than with this "
-                    "repository (macOS: it is beside q in your KDB-X install). "
-                    'Without it, `uqs query --port <p> "<expr>"` still works over IPC.'
-                )
-            )
-            return
-        argv = runtime.qcon_command(
-            host, port, user, passwd, rlwrap=shutil.which("rlwrap") is not None
-        )
-        log.debug("exec: {}", " ".join(argv))
-        # execvp, not subprocess: qcon owns the terminal from here, and
-        # replacing this process rather than wrapping it is what makes Ctrl-C,
-        # Ctrl-D and the exit code behave as they would if you had typed
-        # `qcon` yourself.
-        #
-        # It does not return on success, but the `return` below is not
-        # decoration: without it a call that DID return would fall through to
-        # the "give a q expression" refusal, and report the wrong problem.
-        try:
-            os.execvp(argv[0], argv)
-        except OSError as exc:
-            # `which` found it a moment ago, so this is a race or a broken
-            # binary - either way a message beats a traceback.
-            _die(UqsError(f"could not start {argv[0]}: {exc}"))
+        _exec_qcon(host, port, user, passwd)
         return
 
     if expr is None:
