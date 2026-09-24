@@ -7,15 +7,6 @@ processing** that reshapes raw venue feeds into the shapes analytics
 expects, and the **operational tooling** — process orchestration, an HTTP
 gateway and a browser application — that runs the whole thing as a fleet.
 
-**How much of it is FX.** The platform half is not: the feeds and pipelines
-already carry crypto and Databento MBP-10 depth beside the FX ones, and the
-ETL framework, the orchestrator and the gateway move all three the same way
-— asset class reaches them as table names and a display-precision default,
-never as a code path. The pricing library *is* FX:
-[`ccy`](src/foundation/ccy.q), [`forwards`](src/pricing/forwards.q) and
-[`options`](src/pricing/options.q) are written to FX conventions on purpose,
-and are the part to read as eFX rather than as trading generally.
-
 **The names.** `uqf` is the repository and the family - the prefix on every
 Python package in it (`uqf_frontend`, `uqf_airflow_provider`).
 `uqs`, the *ultimate q stack*, is one of those components rather than the
