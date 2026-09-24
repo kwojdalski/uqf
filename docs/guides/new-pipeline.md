@@ -120,7 +120,7 @@ red the scaffold exists to leave was the one you could not see.
    list; each line clears when its placeholder is replaced and the marker
    deleted with it.
 2. `test_the_prose_architecture_doc_is_consistent_with_the_registry` asks that
-   [`docs/integrations/torq/README.md`](../integrations/torq/README.md) name
+   [`docs/architecture/stack.md`](../architecture/stack.md) name
    the new process - authored prose, so the one step with no placeholder.
 
 A new table's desk catalog entry is written for you: a SCAFFOLDED line in

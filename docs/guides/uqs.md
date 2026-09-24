@@ -16,7 +16,7 @@ shared with `uqs_mcp.py`'s FastMCP server (see "MCP server" below) so the
 CLI and the MCP tools can't drift apart. It's a standalone package
 (`python/uqs/`).
 
-See [docs/integrations/torq/README.md](../integrations/torq/README.md) for diagrams of the current
+See [docs/architecture/stack.md](../architecture/stack.md) for diagrams of the current
 process topology, table-level data pipeline, and config-generation flow.
 
 ## Contents

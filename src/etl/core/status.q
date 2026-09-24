@@ -140,8 +140,7 @@ status_dir:{[]
 / .
 / This is the q side of the frontend's backfill view. The format is defined
 / HERE rather than inferred, because this tree has no Airflow provider to be
-/ compatible with - see the FE-04 decision to develop the pipeline layer in
-/ this repository.
+/ compatible with - the pipeline layer is developed in this repository.
 / .
 / What belongs in this file is exactly what ETL-15 says q owns: process
 / startup, source reads, query failures, checkpoints, run and window counts,
@@ -150,7 +149,7 @@ status_dir:{[]
 / wants them must ask Airflow. Mixing the two is what ETL-15 forbids.
 / .
 / Written atomically: serialise, write to a temp path, then rename over the
-/ target. A reader polling the directory (the frontend polls, per FE-10) would
+/ target. A reader polling the directory (the frontend polls) would
 / otherwise be able to read a half-written file and see a truncated JSON
 / object as a parse error.
 / @param worker the worker's name, e.g. `markout_backfill

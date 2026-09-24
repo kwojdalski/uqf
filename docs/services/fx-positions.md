@@ -159,7 +159,7 @@ something restarted.
 HDB writedown, no chained plants, no access control. It is the part a single
 service needs to stand on its own: subscribe, publish, log, replay. The TorQ
 path still exists and still works — `scripts/processes/torq_stream.q` runs the
-same jobs, unchanged, and [the stack integration](../integrations/torq/README.md)
+same jobs, unchanged, and [the stack architecture](../architecture/stack.md)
 describes it.
 
 The three tickerplant invariants are TorQ's on purpose, so a job behaves

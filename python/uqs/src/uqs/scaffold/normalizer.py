@@ -20,7 +20,7 @@ import re
 from uqs.paths import STREAM_DIR, TABLES_FILE, TEST_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
 from uqs.scaffold.jobs import (
-    _README_NOTE,
+    _STACK_PAGE_NOTE,
     _check_name,
     _expected_table_action,
     _nslist_action,
@@ -179,6 +179,6 @@ publish:.qstream.unwired `{name};
         ),
         _nslist_action(ns),
     ]
-    notes.append(_README_NOTE.format(proc=proc))
+    notes.append(_STACK_PAGE_NOTE.format(proc=proc))
     notes.append("start it with its producers: " + " ".join(sorted(set(sources))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)

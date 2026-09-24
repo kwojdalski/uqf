@@ -82,7 +82,7 @@ holds the two together.
 Configuration lives in each process's own memory. A central poller would
 need a handle to every watched process — and connections are the scarce
 resource here, sixteen per process on the community licence
-([the budget](../integrations/torq/README.md#what-starts-with-the-stack-and-why-not-all-of-it))
+([the budget](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it))
 — and it could only ever see what it thought to ask for.
 
 In-process costs no new connection, sees a change whatever caused it, and

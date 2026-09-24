@@ -1,9 +1,10 @@
 # An example pipeline architecture, composed from what is here
 
 What a trading desk's system looks like when it is built out of the services
-this tree implements. Not the running demo — [the stack pages](../integrations/torq/README.md)
-draw that, with ports and every process — but the *shape*, so the pieces can
-be seen as one system rather than as a list of files.
+this tree implements. Not the running demo — [the stack page](stack.md) and
+the generated [process table](../reference/processes.md) draw that, with ports
+and every process — but the *shape*, so the pieces can be seen as one system
+rather than as a list of files.
 
 ![A desk system in seven bands, top to bottom: sources, the plant, normalizers, engines, storage, on-demand analytics, surfaces](../diagrams/pipeline-architecture-example.svg)
 

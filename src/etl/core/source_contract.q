@@ -20,14 +20,14 @@
 /     driver, or the whole backfill path is undemonstrable. Every source
 /     declares a fixture, so the path is exercisable with no driver at all.
 / .
-/   the question bank (answered by the maintainer + the FE-20 precedent) - credentials come from the
+/   the question bank (answered by the maintainer) - credentials come from the
 /     ENVIRONMENT only. Nothing secret lives in this tree, and the YAML layer
 /     must never carry one. `require_credentials` enforces that rather than
 /     documenting it.
 / .
-/   the question bank (answered via FE-14) - source queries are PARAMETERISED q lambdas,
-/     never built by string concatenation. FE-14's guarantee is that no caller
-/     input reaches query text; uqf_frontend/queries.py already honours it,
+/   the question bank - source queries are PARAMETERISED q lambdas,
+/     never built by string concatenation. The frontend's guarantee is that no
+/     caller input reaches query text; uqf_frontend/queries.py already honours it,
 /     and a source adapter is the same problem with a less friendly input.
 / .
 /   the question bank - bank-internal business logic is not

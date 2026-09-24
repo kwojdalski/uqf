@@ -1,4 +1,4 @@
-"""Reading the backfill status files q writes (FE-06, phase B4).
+"""Reading the backfill status files q writes.
 
 Backfill and Airflow task status is the one frontend requirement with no
 gateway path: q writes it to disk and the Airflow operators read it there.
@@ -18,7 +18,7 @@ ask Airflow.
 
 The format is defined by ``.qstatus.write_status`` in
 ``src/etl/core/status.q``, not inherited from canonical: this tree has no
-Airflow provider to be compatible with (the FE-04 decision). The two sides
+Airflow provider to be compatible with. The two sides
 are kept honest by ``test_status.py``, which asserts this reader's field set
 against the writer's.
 """

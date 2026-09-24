@@ -1,4 +1,4 @@
-"""Ops views (FE-02, FE-03, FE-04) and the poll-only consequence of FE-10."""
+"""Ops views, and the consequence of the frontend being poll-only."""
 
 from __future__ import annotations
 
@@ -24,8 +24,9 @@ def client_with(gw=None, fleet=None) -> TestClient:
 
 
 def test_queue_reads_the_gateway_itself_not_a_backend_tier():
-    """FE-02/FE-03 query the gateway process about its own state, which still
-    respects the gateway-only boundary - so these must not be routed.
+    """The queue and connection views query the gateway process about its own
+    state, which still respects the gateway-only boundary - so these must not
+    be routed.
     """
     gw = FakeGateway({ops.QUEUE: [{"queryid": 1, "status": "running"}]})
     body = client_with(gw).get("/ops/queue").json()
@@ -54,7 +55,7 @@ def test_servers_is_unkeyed_and_drops_the_unserialisable_column():
 
 
 def test_every_view_serves_a_poll_cadence():
-    """FE-10: polling is the only mechanism, so the cadence is part of the
+    """Polling is the only mechanism, so the cadence is part of the
     contract rather than a number hardcoded in the client.
     """
     gw = FakeGateway({ops.QUEUE: [], ops.SERVERS: [], ops.CLIENTS: []})

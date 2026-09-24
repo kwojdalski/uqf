@@ -1,8 +1,8 @@
 """Fleet health: what process.csv declares, against what actually answers.
 
-FE-01. The requirements note that this exists today only as the
-``uqs summary`` CLI, which shells out to ``torq.sh`` and inspects
-**local OS processes** - and that exposing it over HTTP is new backend work.
+Before this, fleet health existed only as the ``uqs summary`` CLI, which
+shells out to ``torq.sh`` and inspects **local OS processes**; exposing it
+over HTTP needed backend work of its own.
 
 The design choice worth stating: liveness is determined by an **IPC probe**,
 not by OS process inspection. Two reasons, and the second is the interesting
@@ -11,9 +11,9 @@ one:
 1. It does not shell out per request, which is the actual objection to
    wrapping the CLI.
 2. It works whether or not the process is on this machine. OS inspection only
-   ever works locally, which is why FE-22 (local demo versus production-shaped
-   deployment) reads like a blocker for this phase. Probing over IPC largely
-   dissolves that gate: the same mechanism answers both deployments, and a
+   ever works locally, so it would tie fleet health to one deployment shape
+   (local demo versus production-shaped). Probing over IPC largely
+   removes that tie: the same mechanism answers both deployments, and a
    process that answers IPC is up in the only sense a frontend cares about.
 
 What a probe cannot tell you is whether a *declared* process was never

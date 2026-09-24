@@ -144,8 +144,8 @@ jobs:
         # substitute for this page.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_env_reference.py --check
-      - name: Check no bare E-/F- requirement citation has crept back in
-        # Requirements are ETL-nn / FE-nn since #109; a bare E-nn in source
+      - name: Check no bare E- requirement citation has crept back in
+        # Requirements are ETL-nn since #109; a bare E-nn in source
         # is now the question bank's id, and must be marked as such. The
         # very first run after the rename caught four in a file written the
         # same day - by the author of the rename.

@@ -1,5 +1,5 @@
-"""HTTP surface behaviour, including the transient/fatal distinction FE-12
-requires the UI to be able to make.
+"""HTTP surface behaviour, including the transient/fatal distinction the UI
+has to be able to make.
 """
 
 from __future__ import annotations

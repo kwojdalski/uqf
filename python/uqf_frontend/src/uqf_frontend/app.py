@@ -1,6 +1,6 @@
 """HTTP surface.
 
-REST rather than WebSocket, because FE-10 is explicit that the gateway path
+REST rather than WebSocket, because the gateway path
 has no push or subscribe mechanism to a browser client - every view is
 poll-only, so a socket would add a moving part without adding liveness.
 """
@@ -67,7 +67,7 @@ def create_app(
     """Build the app. Every dependency is injectable so tests need no q
     process and no environment.
 
-    *policy* is the authorisation seam (FE-15/FE-20). It defaults to
+    *policy* is the authorisation seam. It defaults to
     ``allow_all``, which is the correct policy for a single-host demo with
     one shared credential - see authz.py on why this is a seam rather than an
     auth system.
@@ -77,7 +77,7 @@ def create_app(
     fleet = fleet or KolaFleet(settings)
     policy = policy or allow_all
 
-    # FE-13's capture, started with the app and stopped with it. Off unless
+    # Usage capture, started with the app and stopped with it. Off unless
     # a destination is configured - see Settings.capture_dir on why "off" is
     # a real choice and not a safe one.
     scheduler: CaptureScheduler | None = None
@@ -136,7 +136,7 @@ def create_app(
     @app.exception_handler(FrontendError)
     async def _handle(_: Request, exc: FrontendError) -> JSONResponse:
         """Render a typed failure, keeping the transient flag the UI needs to
-        tell an EOD reload window apart from a real error (FE-12).
+        tell an EOD reload window apart from a real error.
         """
         return JSONResponse(
             status_code=exc.status_code,
@@ -218,7 +218,7 @@ def create_app(
 
     @app.get("/ops/queue", response_model=OpsTableResponse)
     def ops_queue(request: Request) -> OpsTableResponse:
-        """Pending and running queries on the gateway (FE-02)."""
+        """Pending and running queries on the gateway."""
         authorise(request)
         return OpsTableResponse(
             rows=_rows(gateway.call(ops.QUEUE)), poll_seconds=ops.POLL_SECONDS["queue"]
@@ -226,7 +226,7 @@ def create_app(
 
     @app.get("/ops/connections", response_model=ConnectionsResponse)
     def ops_connections(request: Request) -> ConnectionsResponse:
-        """Which backend handles the gateway has, and who is connected (FE-03)."""
+        """Which backend handles the gateway has, and who is connected."""
         authorise(request)
         return ConnectionsResponse(
             servers=_rows(gateway.call(ops.SERVERS)),
@@ -236,7 +236,7 @@ def create_app(
 
     @app.get("/ops/usage", response_model=UsageResponse)
     def ops_usage(request: Request, limit: int = 500) -> UsageResponse:
-        """Fleet-wide query log, assembled here because none exists in q (FE-04).
+        """Fleet-wide query log, assembled here because none exists in q.
 
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
@@ -284,11 +284,11 @@ def create_app(
 
     @app.get("/ops/processes", response_model=FleetHealthResponse)
     def ops_processes(request: Request) -> FleetHealthResponse:
-        """Fleet health for every process process.csv declares (FE-01).
+        """Fleet health for every process process.csv declares.
 
         Liveness comes from an IPC probe rather than OS process inspection,
         so the same mechanism works whether or not the process is on this
-        machine - see health.py for why that matters to FE-22.
+        machine - see health.py for why that matters.
         """
         authorise(request)
         if settings.process_csv is None:
@@ -316,7 +316,7 @@ def create_app(
 
     @app.get("/ops/backfill", response_model=BackfillStatusResponse)
     def ops_backfill(request: Request) -> BackfillStatusResponse:
-        """Backfill and Airflow task status, read from the files q writes (FE-06).
+        """Backfill and Airflow task status, read from the files q writes.
 
         Read from disk rather than from the gateway because q writes these
         and nothing publishes them over IPC. Carries only q's own facts -
@@ -341,7 +341,7 @@ def create_app(
         range_to: str | None = None,
     ) -> CoverageResponse:
         """Composed coverage for one dataset, partition and source release,
-        plus the gaps in a requested range if one is given (FE-09).
+        plus the gaps in a requested range if one is given.
 
         `partition` has no default on purpose. FastAPI makes a parameter with
         no default REQUIRED, so omitting it is a 422 naming the field rather

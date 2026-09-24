@@ -57,8 +57,8 @@ test_a_type_per_field_is_required:{[t]
     bad:@[.srctest.decl[];`types;:;"p"];
     .qunit.assertError[{.qsrc.register[`t;x]};bad;"two fields and one type is a declaration bug, not a default"]};
 
-/ ETL-08: a source query must be a parameterised lambda. A string would mean
-/ concatenation, which is the injection path FE-14 forbids.
+/ A source query must be a parameterised lambda. A string would mean
+/ concatenation - the injection path source_contract.q exists to refuse.
 test_a_string_query_is_refused:{[t]
     bad:@[.srctest.decl[];`query;:;"select from ext"];
     .qunit.assertError[{.qsrc.register[`t;x]};bad;"a string query implies concatenation, which ETL-08 forbids"]};

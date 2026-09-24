@@ -6,7 +6,7 @@ reading after the code it describes has been rewritten — if it goes stale the
 moment a function is renamed, it belongs in [`reference/`](../reference/) or
 beside the code as a qDoc block.
 
-## Six pages, four kinds
+## Kinds of page
 
 They are not all the same sort of document, and reading one as though it were
 another is the easiest way to be misled by this directory.
@@ -18,6 +18,7 @@ another is the easiest way to be misled by this directory.
 | **Closed assessments** | a question asked, answered, and settled — kept so the answer is not re-derived | [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) |
 | **One decision** | a single yes/no, with the reason it went that way | [`cryptorust-discovery.md`](cryptorust-discovery.md) |
 | **Synthesis** | the implemented pieces seen as one system | [`pipeline-architecture-example.md`](pipeline-architecture-example.md) |
+| **The running stack** | what runs, how it is wired, and why not all of it starts - its process names checked against the registry by a test | [`stack.md`](stack.md) |
 
 ## What is here
 
@@ -28,6 +29,7 @@ another is the easiest way to be misled by this directory.
 | [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) | what a Dagster-shaped framework needs, what closed each gap, and what is deliberately absent |
 | [`event-tape.md`](event-tape.md) | the per-event order/trade tape: which tape this is, which it is not, and the features it unblocked |
 | [`cryptorust-discovery.md`](cryptorust-discovery.md) | why a non-listening process belongs in TorQ's client table and not its server one |
+| [`stack.md`](stack.md) | the running stack: process topology, the connection budget, the data pipeline table by table, and config generation |
 
 ## A page states its own status, and the two kinds that need one differ
 
@@ -40,9 +42,10 @@ code* will look for something that was never built — or, worse, rebuild it:
 - **`pipeline-framework-gaps.md`** — **closed**. Every gap it found has been
   built or decided against.
 
-The other three carry no status and should not: positions are held until
+The others carry no status and should not: positions are held until
 they are argued out of, a single decision is true or it is revisited, and a
-synthesis describes whatever is implemented when you read it.
+synthesis or the stack page describes whatever is implemented when you read
+it.
 
 ## Where a page does not belong here
 
@@ -51,8 +54,9 @@ synthesis describes whatever is implemented when you read it.
 - *What is the contract, and what does CI hold the code to?* →
   [`reference/`](../reference/)
 - *How do I create one of these?* → [`scaffolding/`](../scaffolding/)
-- *Who connects to whom, with ports?* →
-  [`integrations/torq/`](../integrations/torq/README.md)
+- *Which process listens on which port?* →
+  [`reference/processes.md`](../reference/processes.md), generated from the
+  registry
 
 A design note here is kept *current*: where it and the code disagree, the
 code is right and the note is corrected. That is the opposite of a migration

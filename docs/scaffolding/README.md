@@ -55,7 +55,7 @@ how you get a process that is `up`, heartbeating, and publishing nothing.
 | the handler body | `test_<name>_is_implemented` |
 | the test | the same one — delete it when you write a real test |
 | the catalog description | `test_no_scaffold_left.py` |
-| one line of README prose | a pytest check on `docs/integrations/torq/README.md` |
+| one line of stack-page prose | a pytest check on `docs/architecture/stack.md` |
 
 A streaming job also lands in **no profile**, so `uqs start --profile` cannot
 reach it. The scaffold says so; `test_profiles.py` fails until it is in one or
