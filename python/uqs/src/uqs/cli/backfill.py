@@ -13,7 +13,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
-from uqs.cli.shared import PortOpt, _die, _paths, app
+from uqs.cli.shared import PortOpt, _debug_requested, _die, _paths, app
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
@@ -26,6 +26,7 @@ _BOUND_HELP = (
 
 @app.command()
 def backfill(
+    ctx: typer.Context,
     worker: Annotated[
         str,
         typer.Argument(
@@ -43,6 +44,14 @@ def backfill(
         str, typer.Option("--to", help=f"Exclusive end of the range. {_BOUND_HELP}")
     ],
     port: PortOpt = DEFAULT_BASE_PORT,
+    debug: Annotated[
+        bool,
+        typer.Option(
+            "--debug",
+            help="Log at DEBUG inside the backfill process too: parsed flags, the "
+            "worker's declaration, every window, each stage's timing",
+        ),
+    ] = False,
 ) -> None:
     """Run a bounded worker over [--from, --to), recording coverage under --version.
 
@@ -52,6 +61,9 @@ def backfill(
     done - follow it with `uqs logs <process> -f`.
 
     e.g. `uqs backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15`
+
+    `--debug` (or `uqs --debug backfill ...`) starts the process with
+    `-verbose`, so its log - `uqs logs <process>` - carries DBG lines.
     """
     try:
         result = stack_backfill.start(
@@ -61,6 +73,7 @@ def backfill(
             stack_backfill.parse_bound("--from", range_from),
             stack_backfill.parse_bound("--to", range_to),
             base_port=port,
+            verbose=_debug_requested(ctx, debug),
         )
     except UqsError as exc:
         _die(exc)

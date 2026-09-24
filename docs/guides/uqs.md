@@ -292,10 +292,11 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
-backfill WORKER --version V --from T --to T [--port N]
+backfill WORKER --version V --from T --to T [--port N] [--debug]
                                       run a bounded worker over [--from, --to); dates
                                       without an offset are UTC. Passed to the process
-                                      as flags, never environment variables
+                                      as flags, never environment variables. --debug
+                                      starts it with -verbose: DBG lines in its log
 clean [--match REGEX] [--dry-run]     wipe output/uqs/, or part of it
 install-jobs DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs

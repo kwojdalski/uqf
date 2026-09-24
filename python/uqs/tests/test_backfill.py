@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
+from uqs.cli import shared
 from uqs.paths import UqsError
 from uqs.stack import backfill, runtime
 
@@ -118,8 +119,9 @@ def test_start_passes_the_flags_through_torq_sh_extras(monkeypatch):
 def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port):
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose):
         seen.update(worker=worker, version=version, range=(range_from, range_to), port=base_port)
+        seen["verbose"] = verbose
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
@@ -132,7 +134,35 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
         "version": "v1",
         "range": (FROM, TO),
         "port": 7000,
+        "verbose": False,
     }
+
+
+@pytest.mark.parametrize("argv_debug", [["--debug"], []])
+def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
+    """Both spellings: the command's own --debug, and the global one."""
+    seen = {}
+
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose):
+        seen["verbose"] = verbose
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr(backfill, "start", fake)
+    # The global flag reconfigures logging for the whole process, which would
+    # leak DEBUG output into every later test's captured stdout.
+    monkeypatch.setattr(shared, "configure_logging", lambda **kw: None)
+    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv += ["--from", "2026-09-13", "--to", "2026-09-15", *argv_debug]
+    prefix = [] if argv_debug else ["--debug"]
+    result = runner.invoke(cli.app, [*prefix, *argv])
+    assert result.exit_code == 0, result.output
+    assert seen["verbose"] is True
+
+
+def test_verbose_adds_the_flag_torq_backfill_reads():
+    plain = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO)
+    loud = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, verbose=True)
+    assert loud == [*plain, "-verbose"]
 
 
 @pytest.mark.parametrize("missing", ["--version", "--from", "--to"])
