@@ -46,11 +46,22 @@ from typing import Any, Literal
 REPO = Path(__file__).resolve().parents[2]
 Q_EXPORTER = REPO / "scripts" / "generate" / "export_contract_surface.q"
 
-#: The committed export of this tree's own surface. Checked in so a
-#: comparison against the authority needs only the authority's half, and
-#: gated below so it cannot quietly go stale - a committed baseline nothing
-#: verifies is the `.qmatz.require_schema` shape, where a file's existence
-#: reads as protection it is not providing.
+#: The committed export of this tree's own surface, gated below so it cannot
+#: quietly go stale - a committed baseline nothing verifies is the
+#: `.qmatz.require_schema` shape, where a file's existence reads as
+#: protection it is not providing.
+#:
+#: `current/`, not `uqf-local/`. The old name distinguished this tree's
+#: surface from the canonical authority's, which WP2 meant to export the same
+#: way and diff against. That authority is frozen and this tree is the
+#: primary lineage, so the sibling it was named against cannot now exist and
+#: the suffix asked a question with no answer.
+#:
+#: The `diff` subcommand still takes two surface directories, so a comparison
+#: against another checkout remains possible - it simply has no standing
+#: counterpart to compare with. What keeps this file honest today is a
+#: different job it acquired: check_doc_references.py reads functions.csv as
+#: its list of the functions that exist.
 #:
 #: A DIRECTORY OF CSVs rather than one JSON file, and the reason is review.
 #: The surface is read by people comparing two trees, and JSON at indent=2
@@ -65,7 +76,7 @@ Q_EXPORTER = REPO / "scripts" / "generate" / "export_contract_surface.q"
 #: loads is the shape this tree keeps finding and deleting. `docs/man.q` is a
 #: q artifact because a q session loads it; this is not that. CSV keeps the
 #: door open anyway: q reads it natively with `0:` if a consumer appears.
-BASELINE = REPO / "docs" / "reference" / "surfaces" / "uqf-local"
+BASELINE = REPO / "docs" / "reference" / "surfaces" / "current"
 
 
 def _kdbx() -> tuple[str, dict[str, str]]:

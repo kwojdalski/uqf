@@ -151,5 +151,5 @@ happened.
 
 **Generated files.** `docs/man.q`,
 `docs/integrations/torq/processes.md`, `src/etl/generated/pipeline_dag.q`,
-`docs/reference/surfaces/uqf-local/`. Edit the source and regenerate; CI
+`docs/reference/surfaces/current/`. Edit the source and regenerate; CI
 fails on a hand-edit.

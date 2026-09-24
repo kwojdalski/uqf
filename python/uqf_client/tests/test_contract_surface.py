@@ -27,7 +27,7 @@ import pytest
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = UQF_ROOT / "scripts" / "generate" / "contract_surface.py"
-BASELINE = UQF_ROOT / "docs" / "migrations" / "surfaces" / "uqf-local"
+BASELINE = UQF_ROOT / "docs" / "reference" / "surfaces" / "current"
 
 # Loaded by path rather than imported, because `scripts/` is not a package on
 # any search root - the same approach test_generated_docs.py takes to its own
@@ -46,8 +46,23 @@ def _diff(a: dict, b: dict) -> list[str]:
 
 @pytest.fixture(scope="module")
 def baseline() -> dict:
-    if not BASELINE.is_dir():
-        pytest.skip(f"{BASELINE} not present")
+    """The committed surface, which is tracked and therefore always there.
+
+    FAILS rather than skips when it is absent, and that is the point. This
+    skipped instead until 2026-09-24, and when the directory moved out of
+    `docs/migrations/` the path here was missed: thirteen of this file's
+    fifteen tests skipped silently for a day, green the whole time, while
+    the thing they exist to check went unchecked.
+
+    A skip is right for an interpreter or a driver that a machine may not
+    have. It is wrong for a file in this repository - absent means the path
+    is stale or the file was deleted, and both are failures.
+    """
+    assert BASELINE.is_dir(), (
+        f"{BASELINE} is missing. It is tracked, so this means the path here is "
+        f"stale - not that the baseline is optional. Regenerate with "
+        f"`contract_surface.py export` if it was genuinely deleted."
+    )
     return contract_surface.read_surface(BASELINE)
 
 
