@@ -113,8 +113,16 @@ gettext rlwrap`).
 start [PROCS] [--port N]              start (default: all startwithall=1 processes)
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
-summary [--port N] [--export FILE]    rich status table (up/down, pid, port)
+summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
+        [--probe-timeout S] [--debug]  status table: up/down, pid, port, heartbeat,
+                                      whether each process answers within 0.5s
+                                      (Responds), and its declared graph; --debug
+                                      adds each process's load time
 print [PROCS] [--port N]              show exact startup command line(s)
+backfill WORKER --version V --from T --to T [--port N]
+                                      run a bounded worker over [--from, --to);
+                                      2026-09-13, 2026-09-13T06:00 or 2026.09.13D06:00,
+                                      no offset means UTC
 clean                                 wipe ../../output/uqs/
 query EXPR --port N [--export FILE]   run a synchronous q expression
 list [KIND] [--export FILE]           list every item of KIND - no argument shows the kinds
@@ -125,7 +133,9 @@ crypto start/stop/status              proof of concept: cryptorust (Rust) publis
 raw -- ARGS...                        anything else torq.sh supports
 ```
 
-`--help` on the command itself or any subcommand has the full picture.
+`--help` on the command itself or any subcommand has the full picture, and
+`uqs --install-completion` adds tab completion for process names, workers,
+profiles and option values.
 
 ## Exporting output
 

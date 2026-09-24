@@ -503,10 +503,11 @@ connection, and TorQ logs it like any other. `--probe-timeout 0` skips it.
 ### summary gives up after ten seconds
 
 `summary` is the command you run when something is already wrong, which makes
-it the worst thing in the CLI to hang - and both of its blocking steps could.
-`torq.sh summary` is a subprocess that had no timeout at all, and the
-heartbeat lookup talks to `monitor1`, which at its connection cap accepts the
-TCP connection and then never answers.
+it the worst thing in the CLI to hang - and each of its blocking steps could.
+`torq.sh summary` is a subprocess that had no timeout at all, the heartbeat
+lookup talks to `monitor1`, which at its connection cap accepts the TCP
+connection and then never answers, and the `Responds` probe connects to every
+process that is up.
 
 ```
 uqs summary --timeout 30   # a stack that is genuinely slow to start
@@ -517,7 +518,9 @@ It is one **budget for the whole command**, not a limit per call - two steps
 given ten seconds each is a twenty-second hang, which is not what anyone
 means by a ten-second timeout. The subprocess is asked first and the
 heartbeat query gets whatever is left, with a floor of one second so the last
-step fails on its own terms rather than on an expired clock. Running out is a
+step fails on its own terms rather than on an expired clock. The probe runs
+last and takes the smaller of `--probe-timeout` and what remains; with
+nothing left it is skipped and the column shows `-`. Running out is a
 refusal, not a traceback:
 
 ```
@@ -703,6 +706,13 @@ LOG_LEVEL=DEBUG uqs summary   # same, for a shell session
 
 `--debug` wins over `LOG_LEVEL`; an unrecognised `LOG_LEVEL` falls back to
 `INFO` rather than refusing to run.
+
+Each line is the level, then the message - `ERROR    | unknown process(es)
+...` - with the level and message coloured on a terminal and plain in a pipe
+or a file. At `DEBUG` the line also names where it came from
+(`uqs.cli.shared:_die:132`). `NO_COLOR=1` turns colour off and
+`FORCE_COLOR=1` keeps it through a pipe, e.g. for `less -R`; `NO_COLOR` wins
+if both are set.
 
 This matters most on `summary`, because two of its three lookups degrade
 instead of failing. A port map that cannot be built leaves every `down` row
