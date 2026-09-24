@@ -254,7 +254,7 @@ restart [PROCS] [--port N]            restart
 summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
         [--probe-timeout S] [--debug]  status table plus the declared graph
                                       (--columns status for just up/down/pid/port/
-                                      Responds; --timeout defaults to 10s,
+                                      Responds; --timeout defaults to 120s,
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
@@ -500,7 +500,7 @@ process stuck in its own timer, and it applies to every client, the
 gateway's long queries included. Each probe briefly holds one inbound
 connection, and TorQ logs it like any other. `--probe-timeout 0` skips it.
 
-### summary gives up after ten seconds
+### summary gives up after two minutes
 
 `summary` is the command you run when something is already wrong, which makes
 it the worst thing in the CLI to hang - and both of its blocking steps could.
@@ -509,8 +509,8 @@ heartbeat lookup talks to `monitor1`, which at its connection cap accepts the
 TCP connection and then never answers.
 
 ```
-uqs summary --timeout 30   # a stack that is genuinely slow to start
-uqs summary --timeout 0    # wait forever, the old behaviour
+uqs summary --timeout 10   # fail fast
+uqs summary --timeout 0    # wait forever
 ```
 
 It is one **budget for the whole command**, not a limit per call - two steps
@@ -521,7 +521,7 @@ step fails on its own terms rather than on an expired clock. Running out is a
 refusal, not a traceback:
 
 ```
-torq.sh summary did not finish within 10s. It is still bootstrapping, or a
+torq.sh summary did not finish within 120s. It is still bootstrapping, or a
 process it queries is not answering - raise --timeout if the stack is simply
 slow to start
 ```
