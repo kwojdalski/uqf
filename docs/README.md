@@ -84,8 +84,8 @@ closed assessment against a Dagster-shaped framework: what closed each gap,
 and what is deliberately absent),
 [`cryptorust-discovery.md`](architecture/cryptorust-discovery.md) (why a
 non-listening process belongs in the client table, not the server one),
-[`example-architecture.md`](architecture/example-architecture.md) (a desk
-system composed from the implemented services, in six bands).
+[`pipeline-architecture-example.md`](architecture/pipeline-architecture-example.md) (a desk
+system composed from the implemented services, in seven bands).
 
 **`reference/`** — [`quant-modules.md`](reference/quant-modules.md) (what
 each module under `src/` is for, its namespace, and the conventions all of

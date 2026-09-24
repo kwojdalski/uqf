@@ -1,17 +1,25 @@
-# An example architecture, composed from what is here
+# An example pipeline architecture, composed from what is here
 
 What a trading desk's system looks like when it is built out of the services
 this tree implements. Not the running demo — [the stack pages](../integrations/torq/README.md)
-draw that, with ports — but the *shape*, so that the pieces can be seen as
-one system rather than as a list of files.
+draw that, with ports and every process — but the *shape*, so the pieces can
+be seen as one system rather than as a list of files.
 
-![A desk system in six bands, left to right: sources, the plant, normalizers, engines, on-demand analytics, surfaces](../diagrams/example-architecture.svg)
+![A desk system in seven bands, top to bottom: sources, the plant, normalizers, engines, storage, on-demand analytics, surfaces](../diagrams/pipeline-architecture-example.svg)
 
-Read it left to right. Everything to the left of the normalizers arrives in
-its own market's format; everything to the right sees one. Every engine reads
-from the plant and republishes onto it, so a new engine is a subscriber and
-never a change to a producer. Dashed boxes are in an open pull request rather
-than on master.
+Read it top to bottom, and read the **middle** first. The plant is a narrow
+waist that everything passes through *twice*: a job subscribes to one table
+and publishes another back onto it, and **nothing reads another job's output
+directly**. That is why those arrows run both ways against a single spine
+instead of chaining box to box — and it is what makes a new engine a
+subscriber rather than a change to a producer.
+
+The normalizers are the second waist. Above them each market arrives in its
+own shape; below them there is one.
+
+One arrow deliberately bypasses the plant: a bounded worker writes through
+`.qio` straight into storage and records what it covered. Its rows are
+history, not ticks, and a plant appends.
 
 ## 1 · Sources
 
@@ -42,11 +50,13 @@ it — and the three invariants a job must respect are the same on both:
 2. keyed tables are refused, because a plant appends;
 3. the row count comes from column length, so every column is a list.
 
-`rdb1` holds the day, `hdb1` holds what the EOD wrote down.
+A job never calls `.u.upd`. It calls `publish` in its own namespace, and
+that is what lets the same file run under TorQ, under `.qtick`, or against a
+recorder in a test — the runner decides the transport.
 
 ## 3 · Normalizers
 
-The narrow waist. [`.qnorm`](../../src/etl/core/normalizer.q) is a job kind
+The second waist. [`.qnorm`](../../src/etl/core/normalizer.q) is a job kind
 whose instances take several tables carrying the same fact in different
 shapes and publish one canonical table, with one declared `.qxf` transform
 per source — refused at load if its output drifts from the canonical schema.
@@ -55,6 +65,7 @@ per source — refused at load if its output drifts from the canonical schema.
 |---|---|---|
 | [`executions`](../../src/etl/streaming/executions.q) | `trades`, `crypto_trades` | one fill table: source_time, sym, venue, side, size, price, fee, fee_ccy, fill_id |
 | [`marks`](../../src/etl/streaming/marks.q) | `quote`, `crypto_book` | one mid per instrument: source_time, sym, venue, mid |
+| [`market_data`](../../src/etl/streaming/market_data.q) | `quote`, `quotes` | one book shape: source and source_time preserved, so a merge can tell whose liquidity it is |
 
 A third market — a new venue, a futures feed — is a mapping in one of these,
 not a change to anything downstream.
@@ -71,6 +82,8 @@ runner.
 | [`fx_positions`](../../src/etl/streaming/fx_positions.q) | `orders` | a `.qdesk` book: net exposure by (sym, book, product); `.qlimit` caps | `fx_position` snapshots, `fx_limit_breach` throttled alerts |
 | [`markout`](../../src/etl/streaming/markout.q) | `trades`, `quote` | buffered fills awaiting their horizons | `execution_quality` |
 | [`cross`](../../src/etl/streaming/cross.q), [`vectorize`](../../src/etl/streaming/vectorize.q) | `quotes`, `wide_book` | mirrors | synthetic crosses; a reshaped book |
+| [`superbook`](../../src/etl/streaming/superbook.q) | `market_data` | the freshest ladder per source, expiring | `superbook` — quoted liquidity merged across sources |
+| [`arbitrage`](../../src/etl/streaming/arbitrage.q), [`crossarb`](../../src/etl/streaming/cross_arbitrage.q) | `superbook` | — | crossed levels within the merged book; the direct book against a synthetic route |
 
 `posbook` and `fx_positions` answer different questions and are deliberately
 two engines: *what did we make*, per sym, marked; and *what are we holding*,
@@ -78,7 +91,26 @@ along the dimensions a desk reports on, with no marks.
 [`fx-positions.md`](../services/fx-positions.md) argues why one module
 cannot honestly do both.
 
-## 5 · On demand
+## 5 · Storage
+
+Two things, and the split is the point.
+
+`rdb` holds today in memory and `hdb` holds what the EOD wrote down — every
+table the plant carries, because a table not written down cannot be asked
+about tomorrow.
+
+[`etl_coverage`](../../src/etl/core/materialisation.q) holds something
+different: not rows, but **what was claimed about them**. Which window of
+which dataset was published, at which `source_version`, by which run — and
+bitemporally, so a window re-run later does not erase what it replaced. A
+window that produced zero rows is still recorded as covered, because "ran,
+found nothing" and "never ran" must not look alike.
+
+That ledger is why the history arrow on the diagram bypasses the plant. A
+backfill's rows are history rather than ticks, so they go through `.qio` into
+storage directly — and the claim goes in the ledger beside them.
+
+## 6 · On demand
 
 Pure functions over whatever the store holds — no state, no clock, no
 sockets — called from a query, a notebook or a surface.
@@ -90,11 +122,17 @@ sockets — called from a query, a notebook or a surface.
   — VaR, carry, and per-currency exposure revalued into one reporting
   currency through [`.qfwd`](../../src/pricing/forwards.q)'s cross-rate
   chaining.
-- Restatement — the coverage ledger is bitemporal, so a window can be
-  re-run and the answer it replaced is still there. [The design note](restatement-design.md)
-  is the argument; `.qmatz` is the implementation.
+- [`.qmicro`](../../src/market_data/microstructure.q),
+  [`.qexec`](../../src/execution/execution.q) — book pressure, microprice,
+  VPIN, markout: over a `quotes` snapshot series or the
+  [event tape](event-tape.md), whichever the metric needs.
 
-## 6 · Surfaces
+Restatement belongs here too, and its argument is [its own
+page](restatement-design.md): because the ledger in §5 is bitemporal, any of
+these can be asked *as of* a past instant and get the answer that was true
+then.
+
+## 7 · Surfaces
 
 - [`uqf_frontend`](../../python/uqf_frontend) — FastAPI and a web app:
   positions, coverage, the fleet, and a control view that can start the
