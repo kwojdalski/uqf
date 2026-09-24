@@ -32,7 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from typer.testing import CliRunner
@@ -47,13 +47,17 @@ from uqs.cli import config, create, inspect, lifecycle, shared, summary, summary
 from uqs.external import crypto
 from uqs.external.crypto import CRYPTO_FILLS_RECORDER_TABLE, CRYPTO_REAL_FILLS_RECORDER_TABLE
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsPaths
 from uqs.stack import listing, probe, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
 from uqs.stack.listing import LISTABLE_KINDS, SUMMARY_COLUMNS, SUMMARY_GRAPH_COLUMNS
 
 runner = CliRunner()
+
+#: Grabbed at import so `_known_procs` can restore it after the autouse
+#: fixture stubs the name out.
+_real_assert_known_procnames = stack_procs.assert_known_procnames
 
 
 @dataclass
@@ -101,8 +105,17 @@ class _Paths:
 @pytest.fixture(autouse=True)
 def _no_real_paths(monkeypatch):
     """`_paths()` reads the filesystem and the vendored tree. Every command
-    calls it, and no test here cares what it returns."""
+    calls it, and no test here cares what it returns.
+
+    The lifecycle guard is stubbed out for the same reason. It reads the real
+    process table, which `_Paths` cannot stand in for, and most tests here
+    drive commands with invented names (`p0`, `p1`, ... for the cap
+    arithmetic) that no registry would know. Tests that are ABOUT the guard
+    take the `_known_procs` fixture, which puts the real one back against a
+    small stub registry.
+    """
     monkeypatch.setattr(stack_paths, "default_paths", _Paths)
+    monkeypatch.setattr(stack_procs, "assert_known_procnames", lambda _paths, _procs: None)
 
 
 def _patch(monkeypatch, module: ModuleType, name: str, **kw) -> Recorder:
@@ -124,6 +137,77 @@ def test_a_lifecycle_command_calls_its_core_function(monkeypatch, command, fn):
     result = runner.invoke(cli.app, [command])
     assert result.exit_code == 0
     assert rec.args[1] == "all", "the default process selector is 'all'"
+
+
+@pytest.fixture
+def _known_procs(monkeypatch):
+    """Put the real guard back, against a two-row stub registry.
+
+    Undoes the autouse stub above. `_Paths` cannot satisfy the real process
+    table reader, so `list_process_names` is what gets faked - the guard's
+    decision is what is under test, not the table's contents.
+    """
+    monkeypatch.setattr(stack_procs, "assert_known_procnames", _real_assert_known_procnames)
+    monkeypatch.setattr(stack_procs, "list_process_names", lambda _paths: ["rdb1", "stp1"])
+
+
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "print", "up"])
+def test_an_unknown_process_is_refused_before_anything_runs(monkeypatch, _known_procs, command):
+    """A typo must not reach torq.sh.
+
+    It used to: `uqs start xyz` printed a licence-cap warning whose count
+    included the nonexistent process, then the vendored script's own
+    `hostname: illegal option` noise, then `xyz failed - unavailable
+    processname` - and exited **0**. The exit code is the part that mattered,
+    because it made a typo indistinguishable from a successful start to
+    anything scripting this.
+
+    The exit code is asserted here; the wording of the refusal is asserted in
+    test_the_refusal_names_the_typo_and_the_alternatives, against the error
+    itself. `_die` reports through loguru, whose handler holds the stderr it
+    was built with, so neither capsys nor capfd sees it through CliRunner's
+    stream swap - asserting on the raise is both simpler and more direct.
+    """
+    for fn in ("start", "stop", "restart", "print_procs"):
+        _patch(monkeypatch, runtime, fn, result=Completed())
+    result = runner.invoke(cli.app, [command, "definitely_not_a_process"])
+    assert result.exit_code == 1, "a typo must be a failure, not a silent success"
+
+
+def test_the_refusal_names_the_typo_and_the_alternatives(_known_procs):
+    """The message has to be actionable: what was wrong, and what was valid."""
+    with pytest.raises(UqsError) as excinfo:
+        # cast: `_known_procs` stubs the only thing that reads `paths`, so the
+        # stub never has to satisfy UqsPaths at runtime.
+        stack_procs.assert_known_procnames(cast("UqsPaths", _Paths()), "rdb1 xyz")
+    message = str(excinfo.value)
+    assert "xyz" in message
+    assert "rdb1" in message, "the known names are what makes the error useful"
+    assert "Nothing was started or stopped" in message
+
+
+@pytest.mark.parametrize("selector", ["all", " all ", "rdb1", "rdb1 stp1"])
+def test_valid_selectors_raise_nothing(_known_procs, selector):
+    """`all` is torq.sh's own word for the startwithall rows, not a process,
+    so it must pass the guard without being looked up."""
+    stack_procs.assert_known_procnames(cast("UqsPaths", _Paths()), selector)
+
+
+@pytest.mark.parametrize("command", ["start", "stop", "restart"])
+def test_the_guard_does_not_reach_the_stack(monkeypatch, _known_procs, command):
+    """Refusal happens before the vendored script is invoked at all."""
+    rec = _patch(monkeypatch, runtime, command, result=Completed())
+    runner.invoke(cli.app, [command, "definitely_not_a_process"])
+    assert rec.calls == [], "nothing should have been handed to torq.sh"
+
+
+@pytest.mark.parametrize("selector", ["all", "rdb1"])
+def test_known_selectors_still_pass_through(monkeypatch, _known_procs, selector):
+    """`all` is torq.sh's own word and must reach it unexpanded."""
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", selector])
+    assert result.exit_code == 0
+    assert rec.args[1] == selector
 
 
 def _up(monkeypatch, args: list[str], already: set[str] | Exception, rows=()):

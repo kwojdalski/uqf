@@ -124,9 +124,9 @@ def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:
     complaining about that on every invocation would be noise. The old
     docstring conflated the two by calling both "just skipped".
 
-    Only the log commands route through here. `start`/`stop`/`restart`/`print`
-    hand `procs` straight to the vendored torq.sh, which owns its own
-    handling of an unknown name and is never edited.
+    Only the log commands route through here, because only they need the
+    names expanded. `start`/`stop`/`restart`/`print` check the same thing
+    without expanding, via `procs.assert_known_procnames`.
     """
     if procs == "all":
         return list_process_names(paths)

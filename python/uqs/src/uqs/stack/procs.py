@@ -142,6 +142,38 @@ def list_process_names(paths: UqsPaths) -> list[str]:
     return [row["procname"] for row in _base_process_rows(paths)]
 
 
+def assert_known_procnames(paths: UqsPaths, procs: str) -> None:
+    """Refuse a lifecycle selector naming a process that does not exist.
+
+    `start`/`stop`/`restart`/`print` used to hand `procs` straight to the
+    vendored torq.sh on the grounds that it owns its own handling of an
+    unknown name. It does, but badly, and the cost is paid before you see it:
+    `uqs start xyz` first printed a licence-cap warning whose arithmetic
+    counted the nonexistent process, then the vendored script's own
+    `hostname: illegal option` noise, then `xyz failed - unavailable
+    processname` - and **exited 0**, so nothing scripting this could tell the
+    typo from a successful start.
+
+    Checking here costs one read of the process table and turns all of that
+    into one line before any work happens. `all` is passed through untouched:
+    it is torq.sh's own selector for the startwithall rows, not a process.
+
+    Deliberately NOT a resolver - it returns nothing and rewrites nothing,
+    because `all` has to reach torq.sh as the literal word. `resolve_procnames`
+    in stack/logs.py is the sibling that DOES expand, because the log commands
+    need a concrete file list.
+    """
+    if procs.strip() == "all":
+        return
+    known = list_process_names(paths)
+    unknown = [name for name in procs.split() if name not in known]
+    if unknown:
+        raise UqsError(
+            f"unknown process(es) {unknown} - known processes are {known}. "
+            "Nothing was started or stopped."
+        )
+
+
 def list_process_choices(paths: UqsPaths) -> list[dict[str, str]]:
     """Every process a lifecycle selector may name, with what a picker shows.
 

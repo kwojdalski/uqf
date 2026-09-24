@@ -34,6 +34,7 @@ from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing, runtime
 from uqs.stack import logs as stack_logs
+from uqs.stack import procs as procs_model
 
 
 def _running(port: int) -> set[str]:
@@ -179,7 +180,21 @@ def _names_to_start(procs: list[str] | None, profile: str | None) -> str:
     return names
 
 
+def _reject_unknown(names: str) -> None:
+    """Stop on a name that is not a process, before anything else runs.
+
+    Must come before the warnings: they aggregate over the requested set, so
+    a typo made `_warn_about_connection_cap` count a process that does not
+    exist and print a licence warning about a fleet nobody asked for.
+    """
+    try:
+        procs_model.assert_known_procnames(_paths(), names)
+    except UqsError as exc:
+        _die(exc)
+
+
 def _start(names: str, port: int) -> None:
+    _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
     _run_streaming(runtime.start, names, base_port=port)
@@ -188,6 +203,7 @@ def _start(names: str, port: int) -> None:
 def _start_in_foreground(names: str, port: int) -> None:
     """`_start`, minus its ending: _run_streaming always exits the command,
     and `up` has the whole run still to stream after the start returns."""
+    _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
     result = runtime.start(_paths(), names, base_port=port, capture=False)
@@ -285,13 +301,16 @@ def up(
 @app.command()
 def stop(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Stop every running process (or specific process name(s))."""
-    _run_streaming(runtime.stop, _procs(procs), base_port=port)
+    names = _procs(procs)
+    _reject_unknown(names)
+    _run_streaming(runtime.stop, names, base_port=port)
 
 
 @app.command()
 def restart(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
     names = _procs(procs)
+    _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
     _run_streaming(runtime.restart, names, base_port=port)
@@ -300,8 +319,10 @@ def restart(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
 @app.command("print")
 def print_startlines(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     """Show the exact startup command line(s) without starting anything."""
+    names = _procs(procs)
+    _reject_unknown(names)
     try:
-        result = runtime.print_procs(_paths(), _procs(procs), base_port=port)
+        result = runtime.print_procs(_paths(), names, base_port=port)
     except UqsError as exc:
         _die(exc)
         return
