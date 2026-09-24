@@ -102,6 +102,16 @@ across services; `guides/uqs.md` is for operating the stack as a whole.
 > superbook and cross-arbitrage pages in `guides/`, and five more services
 > were sections of `uqs.md`. All seven became `docs/services/` pages.
 
+**A directory index is one table: what each directory is for, and what is
+in it, in the same row.** Name each page with a few words, not a sentence;
+the page's own opening says the rest.
+
+> *2026-09-24.* `docs/README.md` had "Where a document goes" (a table of the
+> six directories) and "What is where" (a paragraph per directory, one gloss
+> per page). Asked: "merge where a document goes with what is where ... What
+> is where should be in the table just more concise". Now one table with a
+> Pages column. The table had also said "Five directories" over six rows.
+
 **No prescriptive meta-rules about the documentation process itself.**
 Describe what is, not how future documents must be filed.
 
