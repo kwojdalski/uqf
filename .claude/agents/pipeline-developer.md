@@ -93,8 +93,9 @@ Two registry facts that changed under you, and that a job no longer states:
 - **`docs/architecture/pipeline-framework-gaps.md`** — the closed
   assessment against Dagster: what each piece replaced, and the four
   differences that are decisions rather than gaps.
-- **`docs/architecture/restatement-design.md`** — bitemporal coverage:
-  what `superseded_at` means and why `is_covered` demands an as-of.
+- **`src/etl/core/materialisation.q`'s `still_current`, `valid_at` and
+  `supersede` comments** — bitemporal coverage: what `superseded_at` means
+  and why `is_covered` demands an as-of.
 - **The whole file you are about to edit.** These modules reuse their own
   primitives heavily (`.qmatz.require_interval`, `.qcoer.to_timestamp`,
   `.qwrt.commit`, `.qbw.read_state`/`write_state`). A new function that

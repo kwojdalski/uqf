@@ -127,8 +127,7 @@ sockets — called from a query, a notebook or a surface.
   VPIN, markout: over a `quotes` snapshot series or the
   [event tape](event-tape.md), whichever the metric needs.
 
-Restatement belongs here too, and its argument is [its own
-page](restatement-design.md): because the ledger in §5 is bitemporal, any of
+Restatement belongs here too: because the ledger in §5 is bitemporal, any of
 these can be asked *as of* a past instant and get the answer that was true
 then.
 

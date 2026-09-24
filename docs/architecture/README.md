@@ -14,7 +14,7 @@ another is the easiest way to be misled by this directory.
 | Kind | What it is for | Pages |
 |---|---|---|
 | **Positions** | the beliefs the code is arranged around, still held | [`pipeline-philosophy.md`](pipeline-philosophy.md) |
-| **Design notes, kept after the build** | written *before* the work and kept for the reasoning, not as a statement of what is missing | [`event-tape.md`](event-tape.md), [`restatement-design.md`](restatement-design.md) |
+| **Design notes, kept after the build** | written *before* the work and kept for the reasoning, not as a statement of what is missing | [`event-tape.md`](event-tape.md) |
 | **Closed assessments** | a question asked, answered, and settled — kept so the answer is not re-derived | [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) |
 | **One decision** | a single yes/no, with the reason it went that way | [`cryptorust-discovery.md`](cryptorust-discovery.md) |
 | **Synthesis** | the implemented pieces seen as one system | [`pipeline-architecture-example.md`](pipeline-architecture-example.md) |
@@ -26,20 +26,17 @@ another is the easiest way to be misled by this directory.
 | [`pipeline-philosophy.md`](pipeline-philosophy.md) | the ten positions `src/etl/` is built on, and what enforces each |
 | [`pipeline-architecture-example.md`](pipeline-architecture-example.md) | a desk system composed from the implemented services, in seven bands |
 | [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) | what a Dagster-shaped framework needs, what closed each gap, and what is deliberately absent |
-| [`restatement-design.md`](restatement-design.md) | what answering "yes" to superseding coverage rows cost, and the bitemporal design that answered it |
 | [`event-tape.md`](event-tape.md) | the per-event order/trade tape: which tape this is, which it is not, and the features it unblocked |
 | [`cryptorust-discovery.md`](cryptorust-discovery.md) | why a non-listening process belongs in TorQ's client table and not its server one |
 
-## A page states its own status, and the three kinds that need one differ
+## A page states its own status, and the two kinds that need one differ
 
-The two design notes and the closed assessment each open with where they
+The design note and the closed assessment each open with where they
 stand, because a reader who takes a *design note* for a *description of the
 code* will look for something that was never built — or, worse, rebuild it:
 
 - **`event-tape.md`** — the contract is decided and the shape implemented;
   five of the six features it unblocks exist.
-- **`restatement-design.md`** — **built**. Written before the work; where it
-  and the code disagree, the code is right.
 - **`pipeline-framework-gaps.md`** — **closed**. Every gap it found has been
   built or decided against.
 
