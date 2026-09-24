@@ -64,6 +64,8 @@ without it:
 | `UQF_API_ORIGIN` | `web/vite.config.ts` | no | `http://127.0.0.1:8000`. Dev proxy only — it has no effect on a built bundle |
 | `LOG_LEVEL` | `uqs.cli.entry` (`_env_log_level`), `uqs.logger.decorators` | no | `INFO`. Sets the level every `uqs` command logs at, and turns on the `logged_function` call trace at `DEBUG`. An unrecognised value falls back to `INFO` rather than aborting — a typo in a log level must not stop the fleet being started or inspected. `uqs --debug` is the same thing per-invocation, and wins over this |
 | `LOG_REGEX` | `uqs.logger.core` | no | no name filtering |
+| `NO_COLOR` | `uqs.logger.core` (`_colorize`) | no | colour on a terminal, plain in a pipe or a file. Set to anything non-empty and `uqs`'s own log lines are never coloured; wins over `FORCE_COLOR` ([no-color.org](https://no-color.org)) |
+| `FORCE_COLOR` | as above | no | as above. Set to anything non-empty and `uqs`'s log lines are coloured even when piped - for a pager that renders colour, e.g. `FORCE_COLOR=1 uqs logs \| less -R` |
 | `DATABENTO_API_KEY` | `uqs.external.databento_feed` | for `uqs databento start` only | Databento's own variable name, so an existing export works unchanged. The live feed refuses to start without it rather than failing on its first call; the ODBC backfill does not read it |
 | `CRYPTORUST_ROOT` | `uqs.external.crypto` | no | the checkout is located by the search path in `cryptorust_root`'s docstring |
 | `UQF_SMOKE_TARGETS` | `tests/q/smoke_external_metadata.q` | yes, for that script | the smoke check has nothing to connect to and says so |

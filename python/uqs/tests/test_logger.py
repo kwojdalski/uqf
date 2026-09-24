@@ -177,6 +177,49 @@ def test_the_full_format_names_the_component(capsys):
     assert "rdb_probe" in capsys.readouterr().out
 
 
+def test_the_cli_format_shows_the_level(capsys, monkeypatch):
+    """The simplified format used to be "{function}:{line} - {message}": no
+    level, and no colour markup for a terminal to render."""
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    logcore.configure_logging(component="uqs")
+    logger.error("it broke")
+    out = capsys.readouterr().out
+    assert out.startswith("ERROR")
+    assert "it broke" in out
+
+
+def test_the_location_is_shown_only_when_debugging(capsys, monkeypatch):
+    """Every refusal went through one helper, so an always-on location read
+    `_die:120` for all of them. It earns its width only at DEBUG."""
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    logcore.configure_logging(component="uqs", level="INFO")
+    logger.warning("quiet")
+    assert "test_the_location_is_shown" not in capsys.readouterr().out
+    logcore.configure_logging(component="uqs", level="DEBUG")
+    logger.warning("loud")
+    assert "test_the_location_is_shown_only_when_debugging" in capsys.readouterr().out
+
+
+def test_colour_follows_the_terminal_not_a_hardcoded_true(capsys, monkeypatch):
+    """captured output is not a terminal, so it gets no escape codes - the
+    same as `uqs ... | grep` - unless FORCE_COLOR asks for them."""
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    logcore.configure_logging(component="uqs")
+    logger.error("plain")
+    assert "\x1b[" not in capsys.readouterr().out
+
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    logcore.configure_logging(component="uqs")
+    logger.error("coloured")
+    assert "\x1b[" in capsys.readouterr().out
+
+    monkeypatch.setenv("NO_COLOR", "1")
+    logcore.configure_logging(component="uqs")
+    logger.error("NO_COLOR wins over FORCE_COLOR")
+    assert "\x1b[" not in capsys.readouterr().out
+
+
 # ------------------------------------------------------------ logs readers
 
 
