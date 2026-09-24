@@ -43,7 +43,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
-from uqs.cli import config, create, inspect, lifecycle, shared, summary
+from uqs.cli import config, create, inspect, lifecycle, shared, summary, summary_graph
 from uqs.external import crypto
 from uqs.external.crypto import CRYPTO_FILLS_RECORDER_TABLE, CRYPTO_REAL_FILLS_RECORDER_TABLE
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
@@ -296,27 +296,27 @@ def test_a_graph_cell_breaks_between_entries_not_inside_a_name(monkeypatch):
     left over - which splits `fx_limit_breach` across two lines. A reader
     scans these cells by counting entries, so the break belongs at the
     commas."""
-    cell = summary._graph_cell(["a_table", "b_table", "c_table"])
+    cell = summary_graph.graph_cell(["a_table", "b_table", "c_table"])
     lines = cell.split("\n")
     assert lines == ["a_table, b_table,", "c_table"]
     assert all("_" not in line[-1:] for line in lines), "no name split mid-word"
 
 
 def test_a_short_graph_cell_does_not_wrap(monkeypatch):
-    assert "\n" not in summary._graph_cell(["one", "two"])
+    assert "\n" not in summary_graph.graph_cell(["one", "two"])
 
 
 def test_an_empty_graph_cell_is_a_dash_not_a_blank(monkeypatch):
     """ "declares no inputs" and "this column has nothing to say" look
     identical as a blank, and the first is a real fact about a feed."""
-    assert "-" in summary._graph_cell([])
+    assert "-" in summary_graph.graph_cell([])
 
 
 def test_the_graph_columns_come_from_the_declared_pipelines(monkeypatch):
     """Derived from the same Pipeline declarations verify_pipeline_edges
     checks, so a row here cannot claim an edge the build would reject."""
     rows = [_row(Process="posbook1")]
-    summary._attach_graph_columns(rows)
+    summary_graph.attach_graph_columns(rows)
     assert "executions" in rows[0]["Inputs"]
     assert "position" in rows[0]["Outputs"]
     assert "executions1" in rows[0]["Depends on"]
@@ -326,7 +326,7 @@ def test_a_process_with_no_declared_edges_gets_dashes(monkeypatch):
     """A vendored TorQ process has no Pipeline entry and so no declared
     edges. It must render, not raise."""
     rows = [_row(Process="hdb1")]
-    summary._attach_graph_columns(rows)
+    summary_graph.attach_graph_columns(rows)
     assert all(rows[0][c] == "[dim]-[/]" for c in SUMMARY_GRAPH_COLUMNS)
 
 
