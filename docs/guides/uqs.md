@@ -760,6 +760,37 @@ left running at Ctrl-C; if `summary` cannot say which those were, it stops
 everything it was asked to start. To start in the background and watch
 separately instead, `uqs start` and `uqs logs -f` are still there.
 
+### Why a process is not doing anything: read its own log
+
+Every uqf process script - `torq_stream.q` (every streaming job),
+`torq_backfill.q`, `torq_tap.q`, `run_stream.q` - logs the stages where it can
+stall, so the last line in `uqs logs <procname>` says where it stopped:
+
+| Last line | What it means |
+|---|---|
+| `qpipe: loading uqf tree from ...` with no `loaded in` after it | a q file failed to load - the error follows, or is in `err_<procname>.log` |
+| `starting streaming job` | the job and what it subscribes to and publishes, logged before anything can block |
+| `waiting for the tickerplant - if this is the last line, it is not running` | `stp1` is down: `uqs start stp1`. This used to wait forever in silence |
+| `subscribing` / `streaming job wired - running` | subscribed and running |
+| no `first batch received` for a table | nothing is arriving on it: its publisher is down or publishes nothing |
+| `first batch received` but no `first rows published` | input arrives and the job publishes nothing from it |
+| `on_batch failed` | the job's handler threw, with the table and the error |
+| `backfill process failed` then `backtrace` | a backfill's error, and where it happened |
+
+**More detail - the DBG level** - adds the process's pid, port and cwd, the
+subscription result, the tables the tickerplant defines, every timer
+installed, and every batch and publish with running totals (a backfill adds
+its declaration, stage timings and every window). Two ways to switch it on:
+
+```
+uqs backfill <worker> ... --debug                     # a backfill: passes -verbose
+uqs raw -- start <procname> -extras -verbose          # any process, at start
+uqs query ".qlog.debug 1b" --port <port>              # a process already running, no restart
+```
+
+`-verbose` is uqf's own flag, taken by every process script. It is not TorQ's
+`-debug`, which also stops the log going to its file.
+
 ### The CLI's own logging, which is a different thing
 
 `logs --level` filters what the *q processes* wrote. It says nothing about
