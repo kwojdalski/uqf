@@ -28,7 +28,7 @@ process topology, table-level data pipeline, and config-generation flow.
 - [Reading the database's shape](#reading-the-databases-shape)
 - [Commands](#commands)
 - [Listing things](#listing-things)
-- [What actually starts](#what-actually-starts)
+- [What actually starts](#what-actually-starts) — including [profiles](#profiles-a-named-start-set-that-fits)
 - [Changing a process's config](#changing-a-processs-config)
 - [Logs](#logs)
 - [Connecting](#connecting)
@@ -326,6 +326,56 @@ the KDB-X community edition's connection limits mean `reporter1`,
 `filealerter1`, `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off unless you have a
 fully-licensed kdb+/KDB-X. `killtick` and `tpreplay1` are on-demand utility
 processes, not part of the standing stack, so they also don't auto-start.
+
+### Profiles: a named start set that fits
+
+`start all` is one answer to "what should be running", and on this licence it
+is nearly the only one you can afford. Fourteen tickerplant slots are
+available (sixteen on the licence, two held back for ad-hoc handles) and the
+default start holds **thirteen**. The arbitrage chain needs four, so it cannot
+run until something stops.
+
+A profile names the processes you actually came for; everything they read is
+derived from the same dependency graph `summary`'s **Depends on** column uses:
+
+```
+uqs list profiles
+uqs start --profile arbitrage
+uqs start --profile depth,crypto
+```
+
+| profile | leaves | slots |
+|---|---|---|
+| `default` | what `start all` runs today | 13/14 |
+| `fx` | `posbook1`, `markout1`, `fxpositions1` | 12/14 |
+| `arbitrage` | `arbitrage1`, `crossarb1` | 10/14 |
+| `depth` | `vectorize1`, `cross1` | 8/14 |
+| `crypto` | `cryptomock1` | 5/14 |
+
+**A profile over the cap is refused, not warned.** That is the opposite of a
+positional `start`, deliberately: naming processes yourself is your call, and
+an ordering that briefly exceeds the cap is a legitimate thing to do. A
+profile is a set *this tree* named, so one that cannot run is its mistake to
+report rather than yours to discover when the plant resets a handle. `fx` and
+`arbitrage` each fit and together need seventeen:
+
+```
+$ uqs start --profile fx,arbitrage
+profile(s) arbitrage, fx need 17 tickerplant connections, and only 14 are
+available (16 on this licence, 2 held back for ad-hoc handles). ...
+```
+
+Two things profiles deliberately do **not** do. They do not change
+`startwithall`, so `start all` is untouched - `default` describes that set so
+the two can be compared, and a test fails if they drift. And a closure stops
+at a table fed from outside the stack: `posbook1` needs `crypto_book`, which
+cryptorust's recorder publishes, so the `fx` profile does **not** drag in
+`cryptomock1` - that mock replaces the recorder rather than joining it, which
+is why it is a profile of its own.
+
+Profiles are declared in `python/uqs/src/uqs/model/profiles.py`. Each one
+names leaves, never members, so adding a process to a chain does not mean
+editing whatever profiles contain it.
 
 ### Started is not the same as fed
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from uqs.logger import get_logger
+from uqs.model import profiles
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_by_process
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
@@ -117,8 +118,31 @@ def _list_dependencies(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     return dependency_rows()
 
 
+def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
+    """Each named start set, what it resolves to, and whether it fits.
+
+    `Slots` is the column that matters: two profiles can each fit and not fit
+    together, and this is where an operator sees that before starting one.
+    """
+    rows = []
+    for name in sorted(profiles.PROFILES):
+        resolved = profiles.resolve([name])
+        held = profiles.plant_slots(resolved)
+        rows.append(
+            {
+                "profile": name,
+                "leaves": ", ".join(profiles.PROFILES[name]),
+                "processes": str(len(resolved)),
+                "slots": f"{held}/{profiles.ALLOWANCE}",
+                "fits": "yes" if held <= profiles.ALLOWANCE else "NO",
+            }
+        )
+    return rows
+
+
 LISTABLE_KINDS: dict[str, Any] = {
     "processes": _list_processes,
+    "profiles": _list_profiles,
     "fields": _list_fields,
     "overrides": _list_overrides,
     "env": _list_env,

@@ -1223,3 +1223,64 @@ def test_the_port_option_is_still_required():
     result = runner.invoke(cli.app, ["query", "select 1"])
     assert result.exit_code != 0
     assert "port" in result.output.lower()
+
+
+# ------------------------------------------------------------ start --profile
+
+
+def test_a_profile_expands_to_its_resolved_process_list(monkeypatch):
+    """torq.sh is handed process NAMES, so a profile needs no process.csv
+    change and no startwithall edit - it resolves in the CLI."""
+    from uqs.model import profiles
+
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "--profile", "arbitrage"])
+    assert result.exit_code == 0
+    passed = rec.args[1].split()
+    assert set(passed) == set(profiles.resolve(["arbitrage"]))
+    assert "stp1" in passed, "the plant must be started with the jobs"
+    assert "crossarb1" in passed and "superbook1" in passed, "the chain is resolved"
+
+
+def test_a_profile_over_the_cap_is_refused_rather_than_warned(monkeypatch):
+    """The asymmetry with a positional start: a profile is a set this tree
+    named, so one that cannot run is reported here rather than discovered when
+    the plant resets a handle and the process wedges while reporting `up`."""
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "--profile", "fx,arbitrage"])
+    assert result.exit_code != 0
+    assert not rec.calls, "nothing may be started when the set cannot run"
+
+
+def test_an_unknown_profile_starts_nothing(monkeypatch):
+    """That the refusal NAMES the known profiles is asserted where the message
+    is built, in test_profiles.py - `_die` logs through loguru, which the CLI
+    runner does not capture."""
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "--profile", "nope"])
+    assert result.exit_code != 0
+    assert not rec.calls
+
+
+def test_a_profile_and_positional_names_together_are_refused(monkeypatch):
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "posbook1", "--profile", "fx"])
+    assert result.exit_code != 0
+    assert not rec.calls
+
+
+def test_a_positional_start_over_the_cap_still_only_warns(monkeypatch):
+    """Unchanged on purpose: an operator naming processes is making their own
+    call, and several orderings that exceed the cap briefly are legitimate."""
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    names = " ".join(f"p{i}" for i in range(LICENCE_CONNECTION_LIMIT + 3))
+    result = runner.invoke(cli.app, ["start", names])
+    assert result.exit_code == 0, "a positional start is never blocked"
+    assert rec.calls, "it was started"
+
+
+def test_list_profiles_shows_the_slot_count(monkeypatch):
+    result = runner.invoke(cli.app, ["list", "profiles"])
+    assert result.exit_code == 0
+    assert "arbitrage" in result.output
+    assert "/14" in result.output, "the budget is the column that matters"
