@@ -32,7 +32,7 @@ from uqs.cli.shared import (
 from uqs.model import dependencies, profiles
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
-from uqs.stack import listing, runtime
+from uqs.stack import alive, listing, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as procs_model
 
@@ -40,11 +40,7 @@ from uqs.stack import procs as procs_model
 def _running(port: int) -> set[str]:
     """The processes `summary` reports up. Raises when it cannot say; each
     caller decides what that means for it."""
-    return {
-        row["Process"]
-        for row in listing.summary_rows(runtime.summary(_paths(), base_port=port).stdout, {}, None)
-        if row["Status"] == "up"
-    }
+    return alive.running(_paths(), base_port=port)
 
 
 def _warn_about_unfed_inputs(procs: str, port: int) -> None:

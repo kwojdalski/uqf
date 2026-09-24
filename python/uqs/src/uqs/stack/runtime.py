@@ -19,6 +19,7 @@ from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
+from uqs.stack import alive
 from uqs.stack.env import build_env
 from uqs.stack.procs import _base_process_rows, _read_overrides
 
@@ -224,10 +225,11 @@ def restart(
 def summary(
     paths: UqsPaths,
     base_port: int = DEFAULT_BASE_PORT,
-    capture: bool = True,
     timeout: float | None = None,
-):
-    return run_torq_sh(paths, ["summary"], base_port=base_port, capture=capture, timeout=timeout)
+) -> subprocess.CompletedProcess[str]:
+    """torq.sh summary's table, without torq.sh: see stack/alive.py for why."""
+    table = alive.status_table(paths, base_port=base_port, timeout=timeout)
+    return subprocess.CompletedProcess(["summary"], 0, table, "")
 
 
 def print_procs(

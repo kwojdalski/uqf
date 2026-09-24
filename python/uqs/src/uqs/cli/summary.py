@@ -51,8 +51,8 @@ _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 #: It is a read-only command an operator runs to find out what is going on,
 #: which makes it the worst possible thing to hang: the one time you run it
 #: is when something is already wrong. Both of its blocking steps can hang
-#: indefinitely without this - `torq.sh summary` shells out and had no
-#: timeout at all, and the heartbeat query talks to a process that, at its
+#: indefinitely without this - the process listing shells out to `ps` and
+#: `lsof`, and the heartbeat query talks to a process that, at its
 #: licence connection cap, accepts the TCP connection and then does not
 #: answer.
 #:
@@ -207,7 +207,7 @@ def summary(
     except UqsError as exc:
         _die(exc)
         return
-    log.debug("torq.sh summary returncode={} stdout_lines={}", result.returncode, _lines(result))
+    log.debug("process listing: {} line(s)", _lines(result))
 
     # TorQ reports a port only for a process that is UP, so every `down` row
     # used to show a blank - for exactly the processes whose port a reader is

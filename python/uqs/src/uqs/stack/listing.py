@@ -173,7 +173,7 @@ def list_items(
 #: The columns `uqs summary` shows, in order.
 SUMMARY_COLUMNS = ("Time", "Process", "Status", "PID", "Port", "Heartbeat")
 
-#: Columns derived from the process GRAPH rather than from `torq.sh summary`.
+#: Columns derived from the process GRAPH rather than from the process listing.
 #:
 #: They are not in SUMMARY_COLUMNS because that tuple is load-bearing for
 #: parsing - `summary_rows` zips it against the pipe-separated cells torq.sh
@@ -276,7 +276,8 @@ def summary_rows(
     ports: dict[str, str],
     heartbeats: dict[str, str] | None = None,
 ) -> list[dict[str, str]]:
-    """Parse `torq.sh summary` output into rows, filling in the ports it omits.
+    """Parse the status table (stack/alive.py, in `torq.sh summary`'s format)
+    into rows, filling in the ports it omits.
 
     TorQ prints pid and port only for a process that is UP - a `down` row
     stops after its status field. So the port column was blank for exactly
@@ -310,7 +311,7 @@ def summary_rows(
         row = dict(zip(SUMMARY_COLUMNS, cells[: len(SUMMARY_COLUMNS)], strict=True))
         # Heartbeat state, which is a DIFFERENT question from Status.
         #
-        # torq.sh's summary reports `up` from `findproc` - a PID lookup. A
+        # `up` comes from a PID lookup (torq.sh's `findproc` match). A
         # process that has hung still has a PID, so `up` means "a process
         # exists", not "it is working". The heartbeat is what distinguishes
         # them: TorQ's checkheartbeat flags a process that has not published
