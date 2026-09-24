@@ -94,18 +94,35 @@ eff_spread:{[side;trade_price;mid_at_trade;pip_factor] 2*side*pip_factor*(trade_
 slippage:{[side;arrival_price;exec_price;pip_factor] side*pip_factor*(exec_price-arrival_price)};
 
 / Fraction of quotes/orders that resulted in a fill.
+/ .
+/ NO QUOTES IS NULL, NOT ZERO, and not infinity. q divides by zero without
+/ complaint: 5%0 is 0w, so an unguarded ratio over a window with no quotes
+/ returned +inf while promising [0,1]. 0w is worse than a throw because it
+/ is NOT null - it passes every `null` check and survives into an avg or a
+/ max, where one quiet window turns a whole series infinite.
+/ .
+/ Null rather than 0f, which is the other answer this library gives (see
+/ .qmicro.book_pressure_at_level). The distinction is whether zero is a
+/ MEANINGFUL value for the metric: a signed imbalance centred on zero really
+/ is neutral when both sides are empty, but a 0% fill rate is a claim about
+/ quotes that were never sent.
 / @param num_fills number of filled orders
 / @param num_quotes number of quotes/orders sent
-/ @return the fill ratio, in [0,1]
+/ @return the fill ratio in [0,1], or null when no quotes were sent
 / @eg .qexec.fill_ratio[73;100]  -> 0.73
-fill_ratio:{[num_fills;num_quotes] num_fills%num_quotes};
+/ @eg .qexec.fill_ratio[0;0]  -> 0n
+fill_ratio:{[num_fills;num_quotes] ?[num_quotes=0;0n;num_fills%num_quotes]};
 
 / Fraction of trade requests rejected (e.g. under last look).
+/ .
+/ No requests is null, not zero - see fill_ratio above for why 0w was the
+/ old answer and why null rather than 0f is the right one.
 / @param num_rejects number of rejected requests
 / @param num_requests total number of requests
-/ @return the reject ratio, in [0,1]
+/ @return the reject ratio in [0,1], or null when no requests were made
 / @eg .qexec.reject_ratio[4;100]  -> 0.04
-reject_ratio:{[num_rejects;num_requests] num_rejects%num_requests};
+/ @eg .qexec.reject_ratio[0;0]  -> 0n
+reject_ratio:{[num_rejects;num_requests] ?[num_requests=0;0n;num_rejects%num_requests]};
 
 / Hit ratio (fraction of requests that resulted in a fill/hit), windowed
 / by time, optionally time-bucketed (hourly, daily, ...), and grouped by

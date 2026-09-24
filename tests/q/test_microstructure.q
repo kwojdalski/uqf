@@ -377,4 +377,35 @@ test_a_malformed_tape_is_refused:{[t]
     .qunit.assertError[{.qmicro.large_trade_ratio[x;0.9]};([] wrong:1 2 3);
         "the tape contract is checked before any size is read"]};
 
+
+/ ---- zero denominators: null, never infinity -----------------------------
+
+test_depth_ratio_with_zero_deeper_levels_is_null_not_infinity:{[t]
+    / Zero size is WITHDRAWAL, not absence - superbook.q says so where it
+    / builds these books - so a book with nothing behind the touch is an
+    / ordinary state. It used to give 0w.
+    r:.qmicro.depth_ratio[enlist 100 0 0 0 0f;enlist 100 0 0 0 0f];
+    .qunit.assertTrue[null first r;
+        "deeper levels present but empty: undefined, not +inf"]};
+
+test_book_slope_with_no_size_is_null_not_infinity:{[t]
+    r:.qmicro.book_slope[enlist 1.1000 1.0998;enlist 0 0f];
+    .qunit.assertTrue[null first r;"a withdrawn book has no slope"]};
+
+test_a_withdrawn_row_does_not_poison_the_series:{[t]
+    / The consequence, which is what makes this a bug rather than a nicety:
+    / one withdrawn snapshot among three used to make avg and max infinite.
+    prices:(1.1000 1.0998 1.0996;1.1000 1.0998 1.0996;1.1000 1.0998 1.0996);
+    sizes:(100 100 100f;0 0 0f;100 100 100f);
+    r:.qmicro.book_slope[prices;sizes];
+    .qunit.assertTrue[not any 0w=r;"no row is infinity"];
+    .qunit.assertEquals[count r where not null r;2;
+        "the withdrawn row nulls out and the other two survive"]};
+
+test_book_slope_and_depth_ratio_are_unchanged_on_normal_books:{[t]
+    .testutil.assertApprox[first .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100f];
+        1.333333e-06;1e-12;"the guard must not move a normal answer"];
+    .testutil.assertApprox[first .qmicro.depth_ratio[enlist 100 20 20 20 20f;enlist 100 20 20 20 20f];
+        1.25;1e-12;"nor this one"]};
+
 \d .

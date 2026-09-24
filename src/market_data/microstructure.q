@@ -142,8 +142,15 @@ spread_bps:{[bid_prices;ask_prices]
 / Fraction of combined top-of-book size relative to the next 4 levels of
 / depth: (Vbid0+Vask0) / sum(Vbid_i+Vask_i for i in 1..4). High means a
 / fragile top of book (most size sits right at the touch); needs 5 levels
-/ present per row - a shallower row nulls out naturally (division by a
-/ null/zero deeper-level sum) rather than throwing.
+/ present per row - a shallower row nulls out rather than throwing.
+/ .
+/ A row whose deeper levels are PRESENT BUT ZERO nulls too, and that case
+/ used to give 0w. Zero size is withdrawal, not absence - src/etl/streaming/
+/ superbook.q says so where it builds these books - so a book with nothing
+/ behind the touch is an ordinary state, not a malformed row. Infinity was
+/ almost defensible for it ("infinitely fragile") and is still the wrong
+/ answer, because 0w is not null: it passes every `null` check and makes the
+/ avg or max of a whole series infinite from one withdrawn snapshot.
 / @param bid_sizes a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @return a vector, depth ratio per row
@@ -152,7 +159,8 @@ depth_ratio:{[bid_sizes;ask_sizes]
     top:(level_at[bid_sizes;0])+level_at[ask_sizes;0];
     deeper_bid:sum level_at[bid_sizes;] each 1 2 3 4;
     deeper_ask:sum level_at[ask_sizes;] each 1 2 3 4;
-    top%(deeper_bid+deeper_ask)};
+    deeper:deeper_bid+deeper_ask;
+    ?[deeper=0;0n;top%deeper]};
 
 / Private: vwmp_skew for a single row - volume-weighted mid over the first
 / n_levels (via execution.q's vwap, concatenating that row's bid and ask
@@ -185,7 +193,14 @@ vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
     result};
 
 / Private: book_slope for a single row - (P0-P_last)/sum(sizes).
-book_slope_one:{[prices;sizes] (first[prices]-last prices)%sum sizes};
+/ .
+/ A row with no size at all - every level zero, which is what a withdrawn
+/ book looks like - is null rather than 0w. See depth_ratio above: infinity
+/ is not null, so it survives a null filter and poisons any aggregate over
+/ the series.
+book_slope_one:{[prices;sizes]
+    total:sum sizes;
+    $[total=0;0n;(first[prices]-last prices)%total]};
 
 / Book slope: (P0-P_last)/sum(sizes), called once per side - pass
 / bid_prices/bid_sizes for the bid-side slope, ask_prices/ask_sizes for
@@ -194,8 +209,9 @@ book_slope_one:{[prices;sizes] (first[prices]-last prices)%sum sizes};
 / so sweep_price's own validation isn't reused, just its argument order.
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param sizes a vector of vectors, one level-0-first vector per row
-/ @return a vector, slope per row
+/ @return a vector, slope per row - null for a row carrying no size
 / @eg .qmicro.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> ,1.333333e-06
+/ @eg .qmicro.book_slope[enlist 1.1000 1.0998;enlist 0 0f]  -> ,0n
 book_slope:{[prices;sizes]
     n:count prices;
     result:n#0n;

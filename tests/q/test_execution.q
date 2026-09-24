@@ -330,4 +330,41 @@ test_reject_ratio_by_rejects_requests_missing_a_column:{[t]
     window:(2026.09.15D00:00:00.000000000;2026.09.16D00:00:00.000000000);
     .qunit.assertError[{.qexec.reject_ratio_by[([] time:enlist 2026.09.15D10:00:00.000000000);x 0;x 1;0Nn;`symbol$();`count]};(window 0;window 1);"a missing reject/size column is refused"]};
 
+
+/ ---- zero denominators: null, never infinity -----------------------------
+/ .
+/ q divides by zero without complaint - 5%0 is 0w - so an unguarded ratio
+/ over a window with no quotes returned +inf while its qDoc promised [0,1].
+/ The reason that is worse than a throw is the reason these tests assert on
+/ `null` rather than on a value: 0w passes every null check and survives
+/ into an avg or a max, so one quiet window turns a whole series infinite.
+
+test_fill_ratio_with_no_quotes_is_null_not_infinity:{[t]
+    .qunit.assertTrue[null .qexec.fill_ratio[5;0];
+        "no quotes sent: the ratio is undefined, not +inf"]};
+
+test_reject_ratio_with_no_requests_is_null_not_infinity:{[t]
+    .qunit.assertTrue[null .qexec.reject_ratio[5;0];
+        "no requests made: the ratio is undefined, not +inf"]};
+
+test_a_zero_denominator_does_not_poison_an_aggregate:{[t]
+    / The failure the guard exists for, stated as the consequence: an
+    / average over three windows, one of them quiet.
+    / `ratios` is a q reserved word (.Q.res) - assigning to it is an `assign
+    / error at LOAD time, which is the trap CLAUDE.md names first.
+    per_window:.qexec.fill_ratio[50 5 50;100 0 100];
+    .testutil.assertApprox[avg 0^per_window;0.3333333;1e-6;
+        "a quiet window nulls out of the average rather than making it 0w"];
+    .qunit.assertTrue[not any 0w=per_window;"no element is infinity"]};
+
+test_a_ratio_still_vectorises_over_rows:{[t]
+    .testutil.assertApprox[.qexec.fill_ratio[73 50;100 200];0.73 0.25;1e-9;
+        "the guard must not break the atom-or-vector convention"]};
+
+test_a_zero_numerator_over_a_real_denominator_is_still_zero:{[t]
+    / Distinct from the guarded case: no fills out of a hundred quotes is a
+    / real 0%, not missing data.
+    .testutil.assertApprox[.qexec.fill_ratio[0;100];0f;1e-12;
+        "zero fills over real quotes is zero, not null"]};
+
 \d .
