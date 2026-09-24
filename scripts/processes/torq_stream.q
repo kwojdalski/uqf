@@ -41,10 +41,28 @@ which_job:{[]
         job:`$raw;
         if[not job in .qstream.registered[];
             '"torq_stream: -job names ",raw,", which is not a registered streaming job - registered: ",", " sv string .qstream.registered[]];
+        .qlog.info[`qproc;"job chosen by -job";enlist[`job]!enlist job];
         :job];
     if[()~key `.proc;
         '"torq_stream: not running under TorQ and no -job given - one of the two has to say which job this is"];
-    .qstream.for_procname .proc.procname}
+    job:.qstream.for_procname .proc.procname;
+    .qlog.info[`qproc;"job chosen by procname";`procname`job!(.proc.procname;job)];
+    job}
+
+/ The root `upd` the tickerplant calls, around the job's own on_batch.
+/ .
+/ Counts what arrives (.qpipe.record_received: the first batch per table at
+/ INF, every one at DBG) and logs an on_batch error with its table before
+/ re-raising it, so the error still reaches the caller exactly as before -
+/ and is now also in this process's own log, which is where someone asking
+/ "why is my output empty" looks.
+/ @param tbl the table the batch is for
+/ @param batch the batch
+upd:{[tbl;batch]
+    .qpipe.record_received[tbl;batch];
+    .[.qproc.stream.on_batch;(tbl;batch);{[tbl;e]
+        .qlog.err[.qproc.stream.job;"on_batch failed";`table`error!(tbl;e)];
+        'e}[tbl]]}
 
 / Subscribe, wire the job's publish seam to the tickerplant, install the
 / root `upd` the tickerplant calls, and start the job's timer if it has one.
@@ -56,6 +74,12 @@ which_job:{[]
 / @return the job name
 run:{[job]
     decl:.qstream.declaration job;
+    `.qproc.stream.job set job;
+    / Before anything that can block, so a process stuck waiting for the
+    / tickerplant has already said what it was about to do.
+    .qlog.info[job;"starting streaming job";
+        `subscribes`publishes`timer`on_batch!(decl`subscribes;decl`publishes;
+            $[`timer_period in key decl; decl`timer_period; 0Nn];`on_batch in key decl)];
     / A feed subscribes to nothing: it takes a publish handle and nothing
     / else. Asking subscribe_etl for one would make it wait for a
     / subscription it never wanted, and then subscribe to an empty list.
@@ -73,7 +97,9 @@ run:{[job]
     if[count decl`publishes;
         .qpipe.assert_publishable[h;decl`publishes];
         .qstream.wire[job;.qpipe.publish[h;;]]];
-    if[`on_batch in key decl; `upd set decl`on_batch];
+    if[`on_batch in key decl;
+        `.qproc.stream.on_batch set decl`on_batch;
+        `upd set .qproc.stream.upd];
     if[`timer_period in key decl;
         `.qproc.stream.tick set decl`on_timer;
         .qpipe.safe_timer[job;decl`timer_period;`.qproc.stream.tick;
@@ -96,7 +122,7 @@ run:{[job]
         .qpipe.safe_timer[`$(string job),"_config";.qcfgaudit.period;
             `.qcfgaudit.poll_and_publish;
             "Audit ",(string job)," configuration changes"]];
-    .qlog.info[`qproc;"streaming job wired";
+    .qlog.info[`qproc;"streaming job wired - running";
         `job`subscribes`publishes!(job;decl`subscribes;decl`publishes)];
     job}
 

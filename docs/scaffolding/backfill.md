@@ -143,6 +143,17 @@ refuses and names every missing flag at once, because a backfill that
 silently defaulted its range would publish the wrong window and record
 coverage for it.
 
+Its log (`uqs logs <procname> -f`) says at INF what it is running and how
+it ended: the parsed range, the window count at the worker's width, the
+result with its run and total time, the exit code, and on failure the error
+with its backtrace. Add `--debug` for the DBG level too - the raw command
+line, the worker's declaration, each stage's timing and every window as it
+starts and publishes:
+
+```bash
+uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --debug
+```
+
 ## Then
 
 Write `query`, then `fixture`, then the test — and check what it claims with

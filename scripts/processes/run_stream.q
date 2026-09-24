@@ -44,6 +44,9 @@
 / The parsed command line: -job, -tp, -port, -plant, -feed, -logdir.
 opts:.Q.opt .z.x
 
+/ -verbose switches DBG on, the same flag every uqf process script takes.
+if[`verbose in key opts; .qlog.debug 1b];
+
 / Private: one option's value, or a default. .Q.opt gives a list per key,
 / so a flag given once is a one-element list and a flag given twice is
 / two - taking `first` quietly accepts the second spelling, which is how
@@ -81,6 +84,8 @@ start_plant:{[port]
     declare_schemas[];
     existing:.qtick.open_log[opt[`logdir;"tplog"];`$"uqf",$[null port;"local";string port];.z.D];
     if[not null port; system "p ",string port];
+    .qlog.info[`run_stream;"plant started";
+        `port`log`existing_messages!(port;.qtick.log_path;existing)];
     / A subscriber that drops must stop receiving, or every publish throws
     / on a dead handle and takes the plant down with it.
     `.z.pc set {[h] .qtick.unsubscribe neg h;};
@@ -112,6 +117,9 @@ recover:{[job]
 / @return the job name
 start_job:{[job;sink]
     decl:.qstream.declaration job;
+    .qlog.info[job;"starting streaming job";
+        `subscribes`publishes`timer!(decl`subscribes;decl`publishes;
+            $[`timer_period in key decl; decl`timer_period; 0Nn])];
     if[count decl`publishes; .qstream.wire[job;sink]];
     if[`timer_period in key decl;
         `.qproc.standalone.timers set .qproc.standalone.timers,enlist (job;decl`on_timer;decl`timer_period;0Np)];
@@ -136,7 +144,7 @@ tick:{[]
         row:.qproc.standalone.timers i;
         if[not (null row 3) or now>=(row 3)+row 2; :()];
         .qproc.standalone.timers[i;3]:now;
-        @[row 1;::;{[job;e] -2 "timer ",string[job]," failed: ",e;}[row 0]];
+        @[row 1;::;{[job;e] .qlog.err[job;"timer function failed";enlist[`error]!enlist e];}[row 0]];
         }[now];
     fire each til count timers;
     }
@@ -156,7 +164,9 @@ connect:{[job;tp]
             .qtick.subscribe[decl`subscribes;
                 {[handler;m] handler . 1_m}[decl`on_batch]]];
         :{[t;r] .qtick.publish[t;r]}];
-    h:hopen tp;
+    .qlog.info[job;"connecting to the plant";enlist[`port]!enlist tp];
+    h:@[hopen;tp;{[tp;e]
+        '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];
     if[count decl`subscribes;
         / The plant has to call US back, so it needs a sink addressed at
         / this process - which only the REMOTE can build, out of its own

@@ -120,9 +120,17 @@ def to_q_timestamp(when: datetime) -> str:
 
 
 def backfill_flags(
-    worker: str, source_version: str, range_from: datetime, range_to: datetime
+    worker: str,
+    source_version: str,
+    range_from: datetime,
+    range_to: datetime,
+    *,
+    verbose: bool = False,
 ) -> list[str]:
-    """The flags torq_backfill.q reads, validated so torq.sh passes them intact."""
+    """The flags torq_backfill.q reads, validated so torq.sh passes them intact.
+
+    `verbose` adds `-verbose`, which switches the process's DBG log level on.
+    """
     if range_from >= range_to:
         raise UqsError(
             f"the range is empty: from {range_from.isoformat()} is not before "
@@ -149,7 +157,7 @@ def backfill_flags(
                 f"{name} {value!r} contains 'csv' or 'extras', which torq.sh "
                 "reads as its own flags wherever they appear"
             )
-    return flags
+    return [*flags, "-verbose"] if verbose else flags
 
 
 def start(
@@ -159,8 +167,10 @@ def start(
     range_from: datetime,
     range_to: datetime,
     base_port: int = DEFAULT_BASE_PORT,
+    *,
+    verbose: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Start the process that runs `worker`, over [range_from, range_to)."""
     procname = procname_for(worker)
-    flags = backfill_flags(worker, source_version, range_from, range_to)
+    flags = backfill_flags(worker, source_version, range_from, range_to, verbose=verbose)
     return runtime.run_torq_sh(paths, ["start", procname, "-extras", *flags], base_port=base_port)

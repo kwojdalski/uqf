@@ -116,15 +116,88 @@ check_cycles:0W
 / pipeline process without them has nothing to call. Restores the cwd even
 / if the load throws, unlike the hand-rolled copies this replaces.
 / @throws error if UQFROOT is unset, or if any of the three files fails to load
+/ .
+/ Says so on stdout before and after, with the time it took: .qlog is one of
+/ the files being loaded, so it cannot report its own load, and a process
+/ that dies here otherwise leaves a log with no line from uqf at all. Then
+/ applies -verbose (see apply_verbose).
 load_uqf:{[]
+    t0:.z.p;
     root:getenv`UQFROOT;
     if[0=count root; '"qpipe.load_uqf: UQFROOT is not set"];
+    -1 string[.z.p]," | qpipe: loading uqf tree from ",root;
     cwd:first system"pwd";
     system"cd ",root;
     outcome:@[{system"l src/init.q"; system"l src/etl/init.q"; `ok};::;{x}];
     system"cd ",cwd;
     if[not outcome~`ok; '"qpipe.load_uqf: could not load uqf and its ETL tree: ",outcome];
+    -1 string[.z.p]," | qpipe: uqf tree loaded in ",string[elapsed_ms t0],"ms";
+    apply_verbose[];
     }
+
+/ Milliseconds since `t0`, for the timing fields the log lines carry.
+/ @param t0 a timestamp, as .z.p returned it
+/ @return elapsed milliseconds as a long
+elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
+
+/ Switch DBG logging on when this process was started with -verbose, and
+/ say who this process is. Every uqf process script takes the same flag, so
+/ `-extras -verbose` on a start line, or `uqs backfill --debug`, is one
+/ spelling for all of them. A process already running can be switched too,
+/ without a restart: `uqs query ".qlog.debug 1b" --port <port>`.
+/ @return 1b when debug logging is now on
+apply_verbose:{[]
+    on:`verbose in key .Q.opt .z.x;
+    if[on; .qlog.debug 1b];
+    .qlog.dbg[`qpipe;"debug logging on";
+        `procname`pid`port`cwd!(@[get;`.proc.procname;`];.z.i;system"p";first system"pwd")];
+    on}
+
+/ Log that this process is about to block until the tickerplant is up, and
+/ block. startupdepcycles with check_cycles 0W waits FOREVER, silently, so
+/ a process whose tickerplant is not running used to look hung with nothing
+/ in its log to say why. Now the last line says what it is waiting for.
+/ @param nm the pipeline's name, for log lines
+/ @return the milliseconds it waited
+wait_for_tickerplant:{[nm]
+    t0:.z.p;
+    .qlog.info[nm;"waiting for the tickerplant - if this is the last line, it is not running";
+        `proctype`retry_s`cycles!(tp_type;con_sleep;check_cycles)];
+    .servers.startupdepcycles[tp_type;con_sleep;check_cycles];
+    ms:elapsed_ms t0;
+    .qlog.info[nm;"tickerplant is up";enlist[`waited_ms]!enlist ms];
+    ms}
+
+/ Rows published so far, per table, and batches received, per table - so
+/ the FIRST of each is logged at INF and every one at DBG. A job whose output
+/ stays empty is then either missing its "first batch received" line (no
+/ input arrives) or its "first rows published" one (input arrives and the
+/ job publishes nothing), which are different problems.
+published:(`symbol$())!`long$()
+received:(`symbol$())!`long$()
+
+/ Record one publish, logging the first per table at INF and every one at DBG.
+/ @param tbl the table published onto
+/ @param n rows published
+/ @return n
+record_published:{[tbl;n]
+    before:0^published tbl;
+    .qpipe.published[tbl]:before+n;
+    if[0=before; .qlog.info[`qpipe;"first rows published";`table`rows!(tbl;n)]];
+    .qlog.dbg[`qpipe;"published";`table`rows`total!(tbl;n;before+n)];
+    n}
+
+/ Record one batch arriving from the tickerplant, the same way.
+/ @param tbl the table the batch is for
+/ @param data the batch: a table, or a list of column vectors
+/ @return the batch's row count
+record_received:{[tbl;data]
+    n:$[98h=type data; count data; count first data];
+    before:0^received tbl;
+    .qpipe.received[tbl]:before+n;
+    if[0=before; .qlog.info[`qpipe;"first batch received";`table`rows!(tbl;n)]];
+    .qlog.dbg[`qpipe;"batch received";`table`rows`total!(tbl;n;before+n)];
+    n}
 
 / Bring this process up as a tickerplant subscriber and hand back a publish
 / handle (invariant 7). Replaces the ~25-line tickerplanttypes/requiredprocs/
@@ -136,13 +209,16 @@ load_uqf:{[]
 / @throws error if no tickerplant can be found to subscribe to
 subscribe_etl:{[nm;sub_tables]
     .servers.CONNECTIONS:tp_type;
+    .qlog.dbg[nm;"registering with discovery";()!()];
     .servers.startup[];
-    .servers.startupdepcycles[tp_type;con_sleep;check_cycles];
+    wait_for_tickerplant nm;
     handles:.sub.getsubscriptionhandles[tp_type;();()!()];
+    .qlog.dbg[nm;"subscription handles";enlist[`count]!enlist count handles];
     if[0=count handles; '"qpipe.subscribe_etl: no ",(string tp_type)," found to subscribe to"];
     subproc:first handles;
-    .qlog.info[`qpipe;"subscribing";`tables`publisher!(nm;subproc`procname)];
-    .sub.subscribe[sub_tables;`;0b;0b;subproc];
+    .qlog.info[`qpipe;"subscribing";`job`tables`publisher!(nm;sub_tables;subproc`procname)];
+    r:.sub.subscribe[sub_tables;`;0b;0b;subproc];
+    .qlog.dbg[nm;"subscribed";enlist[`result]!enlist r];
     / safe to acquire now - startupdepcycles above already blocked until the
     / tickerplant was confirmed up. Separate, unauthenticated handle from the
     / .servers.startup[] subscription handle, same as every ETL did by hand.
@@ -175,7 +251,9 @@ assert_publishable:{[h;pub_tables]
     / failed to start on an assertion meant to protect them.
     tbls:(),pub_tables;
     if[0=count tbls; :pub_tables];
-    missing:tbls except h"tables[]";
+    defined:h"tables[]";
+    .qlog.dbg[`qpipe;"tickerplant tables";`declared`defined!(tbls;defined)];
+    missing:tbls except defined;
     if[count missing;
         '"qpipe.assert_publishable: the tickerplant defines no table ",
             (", " sv string missing),
@@ -188,7 +266,7 @@ assert_publishable:{[h;pub_tables]
 / torq_fx_trades_feed.q all open with exactly these two lines).
 / @return the publish handle to the tickerplant
 feed_handle:{[]
-    .servers.startupdepcycles[tp_type;con_sleep;check_cycles];
+    wait_for_tickerplant `qpipe;
     .servers.gethandlebytype[tp_type;`any]}
 
 / ----------------------------------------------------------------- STATE
@@ -280,14 +358,14 @@ publish:{[h;tbl;data]
         n:count first data;
         if[0=n; :0];
         h (`.u.upd;tbl;data);
-        :n];
+        :record_published[tbl;n]];
     out:as_table data;
     if[0=count out; :0];
     / invariant 1: .u.upd stamps its own `time` - sending ours makes the
     / message one column too wide.
     out:$[`time in cols out; ![out;();0b;enlist `time]; out];
     h (`.u.upd;tbl;value flip out);
-    count out}
+    record_published[tbl;count out]}
 
 / --------------------------------------------------------------- TRIGGER
 
@@ -317,6 +395,7 @@ safe_timer:{[nm;interval;fn;timer_desc]
     body:"{[] @[get `",(string fn),";::;{[e] .qlog.err[`",(string nm),";\"timer function failed\";`fn`error!(`",(string fn),";e)]}]}";
     wrapper set value body;
     .timer.repeat[.proc.cp[];0Wp;interval;(wrapper;`);timer_desc];
+    .qlog.dbg[nm;"timer installed";`fn`interval`wrapper!(fn;interval;wrapper)];
     wrapper}
 
 \d .

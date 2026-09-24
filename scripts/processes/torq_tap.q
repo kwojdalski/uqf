@@ -23,6 +23,9 @@
 if[0=count getenv`UQFROOT; '"torq_tap: UQFROOT is not set"];
 system"l ",getenv[`UQFROOT],"/src/etl/core/log.q";
 
+/ -verbose switches DBG on, the same flag every uqf process script takes.
+if[`verbose in key .Q.opt .z.x; .qlog.debug 1b];
+
 \d .qproc.tap
 
 opts:.Q.opt[.z.x];
@@ -36,7 +39,12 @@ tpconsleep:10;
 tpcheckcycles:0W;
 
 subscribe:{
-  if[0=count s:.sub.getsubscriptionhandles[.qproc.tap.tickerplanttypes;();()!()];:()];
+  / Said rather than returned silently: a tap with nothing to subscribe to
+  / otherwise sits idle with no line in its log to say why.
+  if[0=count s:.sub.getsubscriptionhandles[.qproc.tap.tickerplanttypes;();()!()];
+    .qlog.warn[`subscribe;"no tickerplant to tap - nothing will arrive";
+        enlist[`proctype]!enlist .qproc.tap.tickerplanttypes];
+    :()];
   subproc:first s;
   / tap_tables is either the blank atom `` (subscribe to everything) or a
   / symbol vector (from -tables t1 t2 ...) - string of an atom is already
@@ -52,11 +60,18 @@ subscribe:{
   / without this, subscription "succeeds" and upd works fine when called
   / manually, but never fires for real ticks - no error, just silently
   / dropped).
-  .sub.subscribe[.qproc.tap.tap_tables;`;1b;0b;subproc]
+  r:.sub.subscribe[.qproc.tap.tap_tables;`;1b;0b;subproc];
+  .qlog.dbg[`subscribe;"subscribed";enlist[`result]!enlist r];
+  r
  };
 
 init:{
+  / startupdepcycles with 0W cycles blocks forever and says nothing, so say
+  / what it is waiting for first - see .qpipe.wait_for_tickerplant.
+  .qlog.info[`tap;"waiting for the tickerplant - if this is the last line, it is not running";
+      `proctype`retry_s!(.qproc.tap.requiredprocs;.qproc.tap.tpconsleep)];
   .servers.startupdepcycles[.qproc.tap.requiredprocs;.qproc.tap.tpconsleep;.qproc.tap.tpcheckcycles];
+  .qlog.info[`tap;"tickerplant is up";()!()];
   .qproc.tap.subscribe[];
  };
 

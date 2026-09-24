@@ -34,7 +34,13 @@
 /   -from     inclusive lower bound, a q timestamp
 /   -to       exclusive upper bound
 / .
-/ All four are required and refused when absent. A backfill that defaulted a
+/   -verbose  optional: switch the DBG level on for this process - the parsed
+/             flags, the worker's declaration, the windows it will cut, every
+/             window as it starts and publishes, and each stage's timing.
+/             `uqs backfill --debug` passes it. Not TorQ's own -debug, which
+/             also stops the log going to its file.
+/ .
+/ The first four are required and refused when absent. A backfill that defaulted a
 / range would publish the wrong window and record it as covered, which is the
 / failure coverage exists to make impossible.
 / .
@@ -79,6 +85,27 @@ spec_from_flags:{[opts]
     `worker`spec!(`$f`worker;
         `source_version`range_from`range_to!(`$f`version;from_ts;to_ts))}
 
+/ Milliseconds since `t0`, for the timing fields every stage logs.
+/ @param t0 a timestamp, as .z.p returned it
+/ @return elapsed milliseconds as a long
+elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
+
+/ Whether this process was asked for DBG output.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return 1b when -verbose was given
+verbose:{[opts] `verbose in key opts}
+
+/ How many windows [range_from;range_to) cuts into at the worker's width, for
+/ the log only - so a reader can see progress against a total. Null when the
+/ width is not a timespan rather than failing the run over a log line.
+/ @param spec the run specification
+/ @param width the worker's declared window width
+/ @return the window count, or 0N
+window_count:{[spec;width]
+    .[{[spec;width] `long$ceiling (spec[`range_to]-spec`range_from)%width};
+      (spec;width);
+      {[e] 0N}]}
+
 / Run the worker named on the command line, and report what it did.
 / .
 / Errors are caught and logged rather than thrown, so the process exits with
@@ -87,13 +114,28 @@ spec_from_flags:{[opts]
 / failed run from a successful one.
 / @return the run's result dictionary
 run:{[]
+    t0:.z.p;
+    .qlog.dbg[`backfill;"command line";enlist[`args]!enlist .z.x];
     s:spec_from_flags .Q.opt .z.x;
     worker:s`worker;
-    .qlog.info[worker;"backfill process starting";s`spec];
-    ns:(.qbw.declaration worker)`ns;
-    (` sv ns,`init)[s`spec];
+    spec:s`spec;
+    .qlog.info[worker;"backfill process starting";spec];
+    decl:.qbw.declaration worker;
+    ns:decl`ns;
+    .qlog.dbg[worker;"declaration";
+        `ns`source`dataset`width`partition!
+            (ns;decl`source;decl`dataset;decl`width;.qbw.partition_of worker)];
+    .qlog.info[worker;"range";
+        `range_from`range_to`span`width`windows!
+            (spec`range_from;spec`range_to;spec[`range_to]-spec`range_from;
+             decl`width;window_count[spec;decl`width])];
+    t1:.z.p;
+    (` sv ns,`init)[spec];
+    .qlog.dbg[worker;"init done";enlist[`ms]!enlist elapsed_ms t1];
+    t2:.z.p;
     r:(` sv ns,`run)[];
-    .qlog.info[worker;"backfill process finished";r];
+    .qlog.info[worker;"backfill process finished";
+        r,`run_ms`total_ms!(elapsed_ms t2;elapsed_ms t0)];
     r}
 
 \d .
@@ -103,21 +145,44 @@ run:{[]
 / there and back. system"cd" is q's builtin chdir, not a subshell, so it
 / sticks across the two calls.
 {[uqfroot]
+  t0:.z.p;
   cwd:first system"pwd";
+  if[0=count uqfroot; '"torq_backfill: UQFROOT is unset - cannot find the uqf tree to load"];
+  -1 string[.z.p]," | torq_backfill: loading uqf tree from ",uqfroot;
   system"cd ",uqfroot;
   system"l src/init.q";
   system"l src/etl/init.q";
   system"cd ",cwd;
+  -1 string[.z.p]," | torq_backfill: uqf tree loaded in ",string[`long$(.z.p-t0)%1000000],"ms";
  }[getenv[`UQFROOT]];
+
+/ DBG before anything else logs, so -verbose covers discovery too. .qlog is
+/ only defined once the tree above has loaded.
+if[.qproc.backfill.verbose .Q.opt .z.x; .qlog.debug 1b];
+.qlog.dbg[`backfill;"debug logging on";
+    `procname`pid`port`cwd!(.proc.procname;.z.i;system"p";first system"pwd")];
 
 / Register with discovery before doing any work, so the fleet can see the
 / backfill WHILE it runs rather than only after it finishes. .servers.startup
 / opens and registers the handle using this process's own accesslist
 / credentials, exactly as cross1 does.
-.servers.startup[];
+.qlog.dbg[`backfill;"registering with discovery";()!()];
+{[t0]
+  .servers.startup[];
+  .qlog.dbg[`backfill;"registered with discovery";
+      `ms`servers!(.qproc.backfill.elapsed_ms t0;count .servers.SERVERS)];
+ }[.z.p];
 
 / Run, then leave. exit 0 on a completed run, 1 otherwise - Airflow reads the
 / code, and `partial` is not success: some windows failed and a retry should
 / pick them up, which it can because coverage never claimed them.
-result:@[{.qproc.backfill.run[]};::;{[e] .qlog.err[`backfill;"backfill process failed";enlist[`error]!enlist e]; `state`error!(`failed;e)}];
-exit $[`completed~result`state; 0; 1];
+/ .Q.trp rather than @[], so a failure carries WHERE it happened: the
+/ backtrace is logged with the error, which is the one thing a bare message
+/ like 'type cannot tell you after the process has gone.
+result:.Q.trp[{.qproc.backfill.run[]};::;{[e;bt]
+    .qlog.err[`backfill;"backfill process failed";enlist[`error]!enlist e];
+    .qlog.err[`backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
+    `state`error!(`failed;e)}];
+code:$[`completed~result`state; 0; 1];
+.qlog.info[`backfill;"exiting";`state`code!(result`state;code)];
+exit code;
