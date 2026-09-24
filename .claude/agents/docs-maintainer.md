@@ -71,7 +71,7 @@ append a rule you inferred; only ones the maintainer actually stated.
 - **Never edit a generated file.** `docs/man.q`,
   `docs/integrations/torq/processes.md`,
   `src/etl/generated/pipeline_dag.q` and
-  `docs/reference/surfaces/uqf-local/` are produced by scripts and gated;
+  `docs/reference/surfaces/current/` are produced by scripts and gated;
   edit the source and regenerate.
 - **Never edit the vendored trees** (`lib/torq`,
   `lib/torq-finance-starter-pack`), including their prose and their own

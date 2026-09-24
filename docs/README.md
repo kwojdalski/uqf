@@ -111,7 +111,7 @@ process table, generated from the job declarations).
   `scripts/generate/render_diagrams.py --check` reports an SVG that no longer
   matches its source, but only where the pinned d2 version is installed; CI
   has no d2, so there it skips.
-- [`reference/surfaces/uqf-local/`](reference/surfaces/uqf-local/) — this
+- [`reference/surfaces/current/`](reference/surfaces/current/) — this
   tree's exported contract surface
   (`scripts/generate/contract_surface.py`), which `check_doc_references.py`
   uses as its list of functions that exist. Generated: edit the source and

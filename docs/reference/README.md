@@ -11,12 +11,24 @@ can fail when the code and the page disagree.
 | [`etl-framework-requirements.md`](etl-framework-requirements.md) | ETL-nn — what the pipeline framework must do | prose; cited from the code it constrains |
 | [`frontend-requirements.md`](frontend-requirements.md) | FE-nn — what the desk application must do | cited from `python/uqf_frontend` and its tests |
 | [`quant-modules.md`](quant-modules.md) | each `src/` pricing module, its namespace and its tests | — |
-| [`surfaces/uqf-local/`](surfaces/uqf-local/) | this tree's exported contract surface: every public function, table, process and variable | `contract_surface.py check` in CI, and `check_doc_references.py` reads it as its list of functions that exist |
+| [`surfaces/current/`](surfaces/current/) | this tree's exported contract surface: every public function, table, process and variable | `contract_surface.py check` in CI, and `check_doc_references.py` reads it as its list of functions that exist |
 
-**`surfaces/` is generated.** Edit the source and regenerate; a hand-edit
-fails the build. It lived under `docs/migrations/` while it existed to be
-diffed against a canonical upstream — that upstream is frozen, so what
-remains is a contract reference, and it sits here now.
+**`surfaces/current/` is generated.** Edit the source and regenerate; a
+hand-edit fails the build.
+
+Its name and its home both record the same history. It lived under
+`docs/migrations/` and was called `uqf-local/` because it was one half of a
+two-tree diff: WP2 meant to export the canonical upstream's surface the same
+way and compare them. That upstream is frozen and this tree is the primary
+lineage, so the other half cannot now exist — `-local` distinguished it from
+a sibling nobody can create, and `migrations/` filed it under work that will
+never happen.
+
+What keeps it honest is a second job it acquired along the way:
+`check_doc_references.py` reads `functions.csv` as its list of the functions
+that exist, on every commit. Four of the five files have no reader today;
+they are a real export of a real contract and CI keeps them current, which is
+the cheap half of the bargain.
 
 Function-level documentation is not here: every `src/**/*.q` function carries
 a qDoc block, collected into [`../man.q`](../man.q) by
