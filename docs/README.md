@@ -33,11 +33,11 @@ reference or an architecture note, and only its purpose decides where it goes.
 
 | Directory | Answers | Audience |
 |---|---|---|
-| [`guides/`](guides/) | *How do I do this?* | operators and new developers |
-| [`scaffolding/`](scaffolding/) | *How do I create one of these?* | developers adding a process |
-| [`services/`](services/) | *What does this running service do, and how do I run it?* | operators and developers of that service |
-| [`architecture/`](architecture/) | *Why is it shaped this way?* | developers changing it |
-| [`reference/`](reference/) | *What is the contract?* | anyone integrating, and CI |
+| [`guides/`](guides/README.md) | *How do I do this?* | operators and new developers |
+| [`scaffolding/`](scaffolding/README.md) | *How do I create one of these?* | developers adding a process |
+| [`services/`](services/README.md) | *What does this running service do, and how do I run it?* | operators and developers of that service |
+| [`architecture/`](architecture/README.md) | *Why is it shaped this way?* | developers changing it |
+| [`reference/`](reference/README.md) | *What is the contract?* | anyone integrating, and CI |
 | [`integrations/`](integrations/) | *How does this meet something external?* | operators |
 
 ## What is where
@@ -111,10 +111,11 @@ process table, generated from the job declarations).
   `scripts/generate/render_diagrams.py --check` reports an SVG that no longer
   matches its source, but only where the pinned d2 version is installed; CI
   has no d2, so there it skips.
-- [`migrations/`](migrations/) — migration plans, written before the work
-  they plan and kept as its reasoning, and `surfaces/uqf-local/`, this tree's exported
-  contract surface (`scripts/generate/contract_surface.py`), which
-  `check_doc_references.py` uses as its list of functions that exist.
+- [`reference/surfaces/uqf-local/`](reference/surfaces/uqf-local/) — this
+  tree's exported contract surface
+  (`scripts/generate/contract_surface.py`), which `check_doc_references.py`
+  uses as its list of functions that exist. Generated: edit the source and
+  regenerate, never the CSVs.
 
 ### Outside `docs/`
 
