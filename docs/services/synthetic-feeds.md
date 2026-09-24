@@ -58,7 +58,7 @@ things:
 
 1. **Schema** - `uqs.model.plant_schema._generated_schema_content()`
    appends the `quotes` table definition to a *copy* of the vendored
-   `database.q` (written to `scripts/output/uqs/database.q` on every
+   `database.q` (written to `output/uqs/database.q` on every
    `bootstrap()`, same generate-never-edit approach as `process.csv`), and
    `_base_process_rows()` repoints `stp1`'s `-schemafile` extras arg at
    that copy instead of the vendored file.

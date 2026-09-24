@@ -157,12 +157,12 @@ def test_a_record_with_no_levels_still_produces_every_column():
 def _paths(tmp_path: Path) -> UqsPaths:
     orch = tmp_path / "python" / "uqs"
     orch.mkdir(parents=True)
-    (tmp_path / "scripts" / "output" / "uqs" / "logs").mkdir(parents=True)
+    (tmp_path / "output" / "uqs" / "logs").mkdir(parents=True)
     return UqsPaths(
         repo_root=tmp_path,
         torqhome=tmp_path / "lib" / "torq",
         torqapphome=tmp_path / "app",
-        torqdata=tmp_path / "scripts" / "output" / "uqs",
+        torqdata=tmp_path / "output" / "uqs",
         scripts_dir=tmp_path / "scripts",
         orchestrator_dir=orch,
     )

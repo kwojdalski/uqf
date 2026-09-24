@@ -57,7 +57,7 @@ def fake_paths(tmp_path: Path) -> UqsPaths:
         repo_root=tmp_path,
         torqhome=torqhome,
         torqapphome=torqapphome,
-        torqdata=tmp_path / "scripts" / "output" / "uqs",
+        torqdata=tmp_path / "output" / "uqs",
         scripts_dir=tmp_path / "scripts",
         orchestrator_dir=tmp_path / "python" / "uqs",
     )
@@ -1343,7 +1343,7 @@ def _data_dir_paths(tmp_path):
         repo_root=tmp_path,
         torqhome=tmp_path / "lib" / "torq",
         torqapphome=tmp_path / "lib" / "starter",
-        torqdata=tmp_path / "scripts" / "output" / "uqs",
+        torqdata=tmp_path / "output" / "uqs",
         scripts_dir=tmp_path / "scripts",
         orchestrator_dir=tmp_path / "python" / "uqs",
     )
@@ -1374,13 +1374,37 @@ def test_the_old_data_dir_alone_is_refused_with_the_command_that_fixes_it(tmp_pa
     no reason to know the directory was renamed at all.
     """
     paths = _data_dir_paths(tmp_path)
-    (paths.torqdata.parent / "uqf-stack").mkdir(parents=True)
+    (tmp_path / "scripts" / "output" / "uqf-stack").mkdir(parents=True)
     with pytest.raises(UqsError) as exc:
         check_data_dir_was_migrated(paths)
     message = str(exc.value)
     assert "mv " in message
     assert "uqf-stack" in message and str(paths.torqdata) in message
     assert "empty HDB" in message
+
+
+def test_the_data_dir_under_scripts_is_refused_with_the_command_that_moves_it(tmp_path):
+    """The second move: out of scripts/ into output/. Same silent failure
+    if it is skipped, so the same refusal - and the `mkdir -p`, because
+    output/ does not exist on a checkout that has only ever used scripts/."""
+    paths = _data_dir_paths(tmp_path)
+    old = tmp_path / "scripts" / "output" / "uqs"
+    old.mkdir(parents=True)
+    with pytest.raises(UqsError) as exc:
+        check_data_dir_was_migrated(paths)
+    message = str(exc.value)
+    assert f"mkdir -p {paths.torqdata.parent} && mv {old} {paths.torqdata}" in message
+
+
+def test_the_newer_old_location_is_the_one_moved_when_both_remain(tmp_path):
+    """scripts/output/uqs holds the data the stack last wrote; uqf-stack is
+    what was left behind by a copy rather than a move the first time."""
+    paths = _data_dir_paths(tmp_path)
+    (tmp_path / "scripts" / "output" / "uqs").mkdir(parents=True)
+    (tmp_path / "scripts" / "output" / "uqf-stack").mkdir(parents=True)
+    with pytest.raises(UqsError) as exc:
+        check_data_dir_was_migrated(paths)
+    assert f"mv {tmp_path / 'scripts' / 'output' / 'uqs'} " in str(exc.value)
 
 
 def test_the_refusal_does_not_tell_you_to_stop_the_stack_first(tmp_path):
@@ -1394,11 +1418,11 @@ def test_the_refusal_does_not_tell_you_to_stop_the_stack_first(tmp_path):
     orphaned in silence.
 
     Since the block cannot move, the instruction has to. The move needs no
-    downtime: both paths are under `scripts/output/`, so `mv` is a rename on
+    downtime: every location is inside the one checkout, so `mv` is a rename on
     one filesystem and every running process keeps its open files.
     """
     paths = _data_dir_paths(tmp_path)
-    (paths.torqdata.parent / "uqf-stack").mkdir(parents=True)
+    (tmp_path / "scripts" / "output" / "uqf-stack").mkdir(parents=True)
     with pytest.raises(UqsError) as exc:
         check_data_dir_was_migrated(paths)
     message = str(exc.value).lower()
@@ -1414,7 +1438,7 @@ def test_both_present_is_allowed_rather_than_guessed_at(tmp_path):
     entitled to make."""
     paths = _data_dir_paths(tmp_path)
     paths.torqdata.mkdir(parents=True)
-    (paths.torqdata.parent / "uqf-stack").mkdir(parents=True)
+    (tmp_path / "scripts" / "output" / "uqf-stack").mkdir(parents=True)
     check_data_dir_was_migrated(paths)
 
 

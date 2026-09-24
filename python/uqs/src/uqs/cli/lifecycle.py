@@ -217,7 +217,7 @@ def print_startlines(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) 
 
 @app.command()
 def clean() -> None:
-    """Wipe scripts/output/uqs/ (logs, tplogs, wdb, the copied sample data)."""
+    """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample data)."""
     stack_paths.clean(_paths())
 
 

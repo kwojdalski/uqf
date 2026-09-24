@@ -54,10 +54,10 @@
 // reliable across repeated runs; without it, failed non-deterministically
 // (varied 1-5 of 5 ticks firing across identical runs).
 //
-// The growing quotes table is persisted to scripts/output/timer_replay_quotes
+// The growing quotes table is persisted to output/timer_replay_quotes
 // (gitignored - a run artifact, not source) after every tick, so it
 // survives the process exiting rather than only living in memory - reload
-// it in any q session with `quotes:get \`:scripts/output/timer_replay_quotes`.
+// it in any q session with `quotes:get \`:output/timer_replay_quotes`.
 
 \c 400 1000
 \l src/init.q
@@ -107,7 +107,7 @@ default_tick_ms:50;
 n_ticks:$[0<count .z.x; "J"$first .z.x; default_n_ticks];
 tick_ms:$[1<count .z.x; "J"$.z.x 1; default_tick_ms];
 
-output_dir:"scripts/output";
+output_dir:"output";
 output_path:`$":",output_dir,"/timer_replay_quotes";
 system "mkdir -p ",output_dir;
 

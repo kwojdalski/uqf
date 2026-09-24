@@ -24,7 +24,7 @@ them returned 0 while torq.sh failed, CI would go green on a stack that
 never came up, and nothing else in this repository would notice.
 
 Every test monkeypatches `core`, so nothing here starts a process,
-opens a socket or touches scripts/output/.
+opens a socket or touches output/.
 """
 
 from __future__ import annotations
