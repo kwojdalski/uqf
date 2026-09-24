@@ -56,6 +56,7 @@ def _env_log_level() -> str:
 
 @app.callback()
 def _configure(
+    ctx: typer.Context,
     debug: Annotated[
         bool,
         typer.Option("--debug", help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it."),
@@ -68,6 +69,17 @@ def _configure(
     # environment because it is the more deliberate of the two.
     if debug:
         configure_logging(component="uqs", level="DEBUG")
+    # Kept for commands that do more than log louder in debug mode - `summary`
+    # adds a section - so `uqs --debug summary` and `uqs summary --debug` are
+    # the same request.
+    ctx.obj = {"debug": debug}
+
+
+def _debug_requested(ctx: typer.Context, flag: bool) -> bool:
+    """Whether debug was asked for in any of the three ways it can be: the
+    command's own `--debug`, the global one, or LOG_LEVEL=DEBUG."""
+    parent = ctx.parent.obj if ctx.parent is not None else None
+    return flag or bool((parent or {}).get("debug")) or _env_log_level() == "DEBUG"
 
 
 PortOpt = Annotated[int, typer.Option("--port", help="KDBBASEPORT - shifts every process's port")]
