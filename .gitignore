@@ -32,13 +32,17 @@ actual/
 # release. A gigabyte of it, unnoticed for a month behind this line.
 /dist/
 
-# run artifacts from scripts/examples/timer_replay_example.q - regenerate on demand,
-# don't commit it
-/scripts/output/
-
-# test databases built from external data by scripts/dev/dump_databento_duckdb.py -
-# large, derived, and rebuilt on demand
+# Everything the repository generates at runtime: the stack's data directory
+# (output/uqs - HDB, tickerplant logs, write-down database), the test databases
+# scripts/dev/dump_databento_duckdb.py builds, the ODBC build, and
+# scripts/examples/timer_replay_example.q's run artifacts. Large, derived, and
+# rebuilt on demand.
 /output/
+
+# Where the stack's data directory lived until it moved to output/uqs. Still
+# ignored so a checkout that has not moved it yet does not show gigabytes of
+# HDB as untracked; `uqs` refuses to start until it is moved.
+/scripts/output/
 
 # Python bytecode cache (python/*/'s own .gitignore covers .venv/dist/etc
 # within each package; this is the general fallback)

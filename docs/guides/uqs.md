@@ -113,14 +113,17 @@ uv tool uninstall uqf-stack              # or torq-orchestrator, if older
 uv tool install --force --editable python/uqs
 ```
 
-**The data directory moved with the name.** `scripts/output/uqf-stack/` is
-now `scripts/output/uqs/`, and it holds the HDB, the tickerplant logs and the
-write-down database. Nothing reads the old path any more. No downtime needed -
-both paths are under `scripts/output/`, so this is a rename on one filesystem
+**The data directory has moved twice.** It was `scripts/output/uqf-stack/`,
+became `scripts/output/uqs/` with the package rename, and is now
+`output/uqs/`, beside everything else the repository generates at runtime.
+It holds the HDB, the tickerplant logs and the write-down database, and
+nothing reads the old paths any more - `uqs` refuses to run while an old one
+exists and the new one does not, and prints the command. No downtime needed:
+every path is inside the one checkout, so this is a rename on one filesystem
 and every running process keeps the files it already has open:
 
 ```
-mv scripts/output/uqf-stack scripts/output/uqs
+mkdir -p output && mv scripts/output/uqs output/uqs          # or scripts/output/uqf-stack
 ```
 
 Restart the stack afterwards when convenient, so each process reopens at the
@@ -156,9 +159,9 @@ Run from anywhere - the command resolves its own location and works out
 resolves that package's dependencies (typer, loguru, rich, kola, fastmcp)
 on demand, no separate `uv sync` step needed. First `start` bootstraps a
 data directory at
-`scripts/output/uqs/` (already gitignored, matching
-`scripts/output/`'s existing use for `timer_replay_example.q`'s run
-artifacts) by copying the app's sample `hdb/`/`dqe/` data there - `logs/`,
+`output/uqs/` (gitignored with the rest of `output/`, which also holds
+`timer_replay_example.q`'s run artifacts and the dev tools' databases) by
+copying the app's sample `hdb/`/`dqe/` data there - `logs/`,
 `tplogs/`, `wdbhdb/`, and every process's actual read/write activity all
 happen inside that directory, never inside `lib/`. Run `uqs clean`
 to wipe it and start fresh next time.
@@ -255,7 +258,7 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
 print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
-clean                                 wipe scripts/output/uqs/
+clean                                 wipe output/uqs/
 query EXPR --port N [--export FILE]   run a synchronous q expression against a process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern
@@ -613,7 +616,7 @@ Default ports (base `6050`, override with `--port <n>`):
 
 `config-get`/`config-set` read and write a *process.csv field override* -
 not the vendored `process.csv` (never edited) and not the *generated* one
-in `scripts/output/uqs/` either (regenerated from scratch on every
+in `output/uqs/` either (regenerated from scratch on every
 `bootstrap()` call, i.e. every `start`/`stop`/`summary`/...  - anything
 written directly there would just be clobbered on the next command).
 Overrides persist instead in `python/uqs/process_overrides.csv`
@@ -645,7 +648,7 @@ that process (the running process itself isn't touched).
 ## Logs
 
 Every process writes its own `out_<procname>.log`/`err_<procname>.log` in
-`scripts/output/uqs/logs/` (stable symlink aliases TorQ itself
+`output/uqs/logs/` (stable symlink aliases TorQ itself
 maintains onto the current run's timestamped file - see `torq.q`'s
 `createlog`/`fileredirect`), in a fixed pipe-delimited format:
 `time|host|proctype|procname|loglevel|id|message`. `logs` tails these
@@ -705,7 +708,7 @@ nothing to report. `--debug` prints the reason, and separates `monitor1` not
 being a declared process from `monitor1` being declared but not answering:
 
 ```
-summary base_port=6050 torqdata=.../scripts/output/uqs
+summary base_port=6050 torqdata=.../output/uqs
 torq.sh summary returncode=0 stdout_lines=47
 configured ports for 46 process(es)
 monitor1 not reached; Heartbeat column is a monitoring gap, not a verdict
@@ -787,7 +790,7 @@ uqs summary
 
 prints a status table (`up`/`down`, pid, port, color-coded) for every
 process defined in `process.csv`, not just the ones `start all` brought up.
-Per-process stdout/stderr logs land in `scripts/output/uqs/logs/`
+Per-process stdout/stderr logs land in `output/uqs/logs/`
 (`out_<procname>.log` / `err_<procname>.log`) - check these first if a
 process shows `down` unexpectedly.
 

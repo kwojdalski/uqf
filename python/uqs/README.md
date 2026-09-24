@@ -115,7 +115,7 @@ stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
 summary [--port N] [--export FILE]    rich status table (up/down, pid, port)
 print [PROCS] [--port N]              show exact startup command line(s)
-clean                                 wipe ../../scripts/output/uqs/
+clean                                 wipe ../../output/uqs/
 query EXPR --port N [--export FILE]   run a synchronous q expression
 list [KIND] [--export FILE]           list every item of KIND - no argument shows the kinds
 config-get PROCNAME [FIELD] [--raw] [--export FILE]   show a process's effective process.csv row, resolved
@@ -157,7 +157,7 @@ one registry entry - see `stack/listing.py`'s `_list_*` functions.
 
 `config-get`/`config-set` read and write **`process_overrides.csv`** - not
 the vendored `process.csv` (never edited) and not the *generated* one
-under `scripts/output/uqs/` either, which `bootstrap()` rebuilds
+under `output/uqs/` either, which `bootstrap()` rebuilds
 from scratch on every single command, so anything written there directly
 would just be overwritten by the next `start`/`stop`/`summary`/... call.
 `process_overrides.csv` is what survives instead: a small

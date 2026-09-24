@@ -158,31 +158,48 @@ def repo_root() -> Path:
     )
 
 
-def default_paths() -> UqsPaths:
-    root = repo_root()
+def paths_for_root(root: Path) -> UqsPaths:
+    """Every path the stack uses, for a repository checked out at `root`.
+
+    The one place the layout is spelled. uqf_frontend used to build its own
+    copy for a configured root, which is how a move of the data directory
+    would have left the frontend starting and stopping a stack in the old one.
+    """
     return UqsPaths(
         repo_root=root,
         torqhome=root / "lib" / "torq",
         torqapphome=root / "lib" / "torq-finance-starter-pack",
-        torqdata=root / "scripts" / "output" / "uqs",
+        # output/, with everything else the repository generates at runtime -
+        # not scripts/output/, where it used to live beside the source.
+        torqdata=root / "output" / "uqs",
         scripts_dir=root / "scripts",
         orchestrator_dir=root / PACKAGE_DIR,
     )
 
 
-#: The data directory's name before the package was renamed to `uqs`. Kept
-#: only so the guard below can recognise it; nothing reads from it.
-_FORMER_DATA_DIR = "uqf-stack"
+def default_paths() -> UqsPaths:
+    return paths_for_root(repo_root())
+
+
+#: Where the data directory has lived before, newest first, relative to the
+#: repository root. Kept only so the guard below can recognise them; nothing
+#: reads from them.
+_FORMER_DATA_DIRS = (
+    Path("scripts") / "output" / "uqs",
+    Path("scripts") / "output" / "uqf-stack",
+)
 
 
 def check_data_dir_was_migrated(paths: UqsPaths) -> None:
-    """Refuse to run against a fresh data directory beside the old one.
+    """Refuse to run against a fresh data directory while an old one exists.
 
-    `scripts/output/` holds the HDB, the tickerplant logs and the write-down
-    database - 6.5GB of it on the machine this was written on - and its name
-    carried the package's name, so the rename moved where every process looks.
-    Nothing would have ERRORED: bootstrap regenerates process.csv and
-    database.q on every command, so the stack would have started cleanly
+    The data directory holds the HDB, the tickerplant logs and the write-down
+    database - 6.5GB of it on the machine this was written on - and it has
+    moved twice: renamed with the package (`scripts/output/uqf-stack` to
+    `scripts/output/uqs`), then out of `scripts/` into `output/uqs`. Either
+    move changes where every process looks, and nothing would have ERRORED:
+    bootstrap regenerates process.csv and database.q on every command, so
+    the stack would have started cleanly
     against an empty HDB and every historical query would have returned no
     rows. A silent empty answer is the worst failure this tree has, and it is
     the one a rename of a data path produces by default.
@@ -200,20 +217,24 @@ def check_data_dir_was_migrated(paths: UqsPaths) -> None:
     orphaned in silence - the exact outcome it exists to prevent.
 
     Which is why the message must not say "stop the stack first": that is an
-    order this function makes impossible. The move needs no downtime. Both
-    paths are under `scripts/output/`, so `mv` is a rename on one filesystem -
-    inodes are unchanged and every open file descriptor follows - and a
+    order this function makes impossible. The move needs no downtime. Every
+    location is inside the one checkout, so `mv` is a rename on one filesystem
+    - inodes are unchanged and every open file descriptor follows - and a
     restart afterwards is for reopening at the new path, not for safety.
     """
-    former = paths.torqdata.parent / _FORMER_DATA_DIR
-    if former.is_dir() and not paths.torqdata.exists():
+    if paths.torqdata.exists():
+        return
+    for relative in _FORMER_DATA_DIRS:
+        former = paths.repo_root / relative
+        if not former.is_dir():
+            continue
         raise UqsError(
-            f"{former} exists but {paths.torqdata} does not: this data directory "
-            f"was renamed with the package, and nothing has moved it yet.\n\n"
+            f"{former} exists but {paths.torqdata} does not: the data directory "
+            f"has moved, and nothing has moved it yet.\n\n"
             f"Run this now - it is safe with the stack up, because both paths are "
             f"on one filesystem, so it is a rename and every running process keeps "
             f"the files it already has open:\n"
-            f"    mv {former} {paths.torqdata}\n\n"
+            f"    mkdir -p {paths.torqdata.parent} && mv {former} {paths.torqdata}\n\n"
             f"Then restart the stack when convenient, so each process reopens at "
             f"the new path.\n\n"
             f"Skipping this would not fail - the stack would start against an "

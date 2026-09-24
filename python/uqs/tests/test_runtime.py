@@ -41,7 +41,7 @@ def _paths(root: Path = Path("/repo")) -> UqsPaths:
         repo_root=root,
         torqhome=root / "lib" / "torq",
         torqapphome=root / "lib" / "torq-finance-starter-pack",
-        torqdata=root / "scripts" / "output" / "uqs",
+        torqdata=root / "output" / "uqs",
         scripts_dir=root / "scripts",
         orchestrator_dir=root / "python" / "uqs",
     )

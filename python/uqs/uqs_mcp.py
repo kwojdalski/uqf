@@ -89,11 +89,11 @@ def uqs_summary(port: int = DEFAULT_BASE_PORT) -> str:
 
 @mcp.tool
 def uqs_clean() -> str:
-    """Wipe scripts/output/uqs/ (logs, tplogs, wdb, the copied sample
+    """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample
     data). Stop the demo first - this does not stop running processes.
     """
     stack_paths.clean(stack_paths.default_paths())
-    return "cleaned scripts/output/uqs/"
+    return "cleaned output/uqs/"
 
 
 @mcp.tool
