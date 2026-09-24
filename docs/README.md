@@ -114,17 +114,3 @@ process table, generated from the job declarations).
   (`scripts/generate/contract_surface.py`), which `check_doc_references.py`
   uses as its list of functions that exist. Generated: edit the source and
   regenerate, never the CSVs.
-
-### Outside `docs/`
-
-- At the root: [`README.md`](../README.md) (what the repository is, and a
-  quick start), [`CHANGELOG.md`](../CHANGELOG.md),
-  [`LICENSING.md`](../LICENSING.md) (per-dependency licensing) and
-  [`CLAUDE.md`](../CLAUDE.md) (working rules for coding agents in this repository).
-- Component READMEs: [`python/uqs/`](../python/uqs/README.md) (the `uqs`
-  CLI and MCP server that runs the stack),
-  [`python/uqf_frontend/`](../python/uqf_frontend/README.md) (the
-  backend-for-frontend over the gateway), [`web/`](../web/README.md) (the
-  browser application on top of it),
-  and [`python/uqf_airflow_provider/`](../python/uqf_airflow_provider/README.md)
-  (the backfill status files as Airflow sensors).
