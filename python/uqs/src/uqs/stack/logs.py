@@ -53,6 +53,29 @@ _KDB_LOG_FMT = (
     "<cyan>{extra[procname]}</cyan>/<cyan>{extra[proctype]}</cyan> - <level>{message}</level>"
 )
 
+# uqs's OWN records, which have none of those fields. Short because these
+# interleave with hundreds of kdb lines, where module:function:line is noise.
+_UQS_LOG_FMT = "<level>{level: <8}</level> | <level>{message}</level>"
+
+
+def _kdb_or_uqs_format(record: Any) -> str:
+    """Pick a format per RECORD, because this sink receives two kinds.
+
+    The kdb format needs extra[kdb_time]/[procname]/[proctype], which a line
+    parsed from a TorQ log has and a record uqs logs itself does not. Loguru
+    formats with `format_map`, so a missing key raises inside the handler,
+    which prints the record and a traceback and DROPS the message.
+
+    That was live: replacing the global sink was safe while `logs` was a
+    leaf command, and `up` is `start` plus `logs -f` and keeps logging
+    afterwards. Starting a stack whose data directory needed moving printed
+    eight tracebacks and none of the message saying what to run.
+
+    Returns a TEMPLATE, not a line - _make_kv_format wraps this and keeps
+    the key=value highlighting for both kinds.
+    """
+    return _KDB_LOG_FMT if "kdb_time" in record["extra"] else _UQS_LOG_FMT
+
 
 def _format_kdb_time(t: str) -> str:
     """Trim .lg.format's nanosecond timestamp to millisecond precision for
@@ -70,15 +93,17 @@ def _format_kdb_time(t: str) -> str:
 
 
 def _configure_kdb_log_sink() -> Any:
-    """(Re)configure the shared loguru logger with _KDB_LOG_FMT for the
-    duration of a `logs` command, overriding whatever format main()'s
-    configure_logging(component="uqs") set up for the rest of the
-    CLI - `logs` is always a leaf command, so clobbering the global sink
-    here is safe.
+    """(Re)configure the shared loguru logger for the duration of a `logs`
+    or `up` stream, overriding whatever format main()'s
+    configure_logging(component="uqs") set up for the rest of the CLI.
+
+    The format is a CALLABLE, not a string: this sink receives kdb log lines
+    AND uqs's own records, and only the first kind carries the fields the
+    kdb format needs. See _kdb_or_uqs_format.
     """
     from uqs.logger.core import setup_logging
 
-    return setup_logging(level="DEBUG", format_string=_KDB_LOG_FMT)
+    return setup_logging(level="DEBUG", format_string=_kdb_or_uqs_format)
 
 
 def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:

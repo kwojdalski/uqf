@@ -428,3 +428,72 @@ def test_nanoseconds_are_trimmed_to_milliseconds():
 
 def test_a_value_that_is_not_a_timestamp_passes_through():
     assert logs._format_kdb_time("not-a-time") == "not-a-time"
+
+
+# ------------------------------------ one sink, two shapes of record (`up`)
+
+
+def test_the_kdb_sink_formats_uqs_records_too(capsys):
+    """`up` streams kdb log lines and logs its own progress through ONE sink.
+
+    The kdb format reads extra[kdb_time], extra[procname] and
+    extra[proctype]; a record uqs logs itself has none of them. loguru
+    formats with `format_map`, so a missing key raises inside the handler -
+    which prints the whole record and a traceback to stderr and DROPS the
+    message.
+
+    That was live, and it hid exactly the message worth reading: starting a
+    stack whose data directory needed moving printed eight tracebacks and
+    not one word of the instruction explaining what to run.
+    """
+    from uqs.logger import get_logger
+    from uqs.stack.logs import _configure_kdb_log_sink
+
+    _configure_kdb_log_sink()
+    log = get_logger(__name__)
+    try:
+        log.error("{}", "the data directory has moved")
+        out = capsys.readouterr()
+        assert "the data directory has moved" in (out.err + out.out)
+        assert "KeyError" not in (out.err + out.out)
+        assert "Logging error in Loguru" not in (out.err + out.out)
+    finally:
+        from uqs.logger.core import setup_logging
+
+        setup_logging()
+
+
+def test_the_kdb_sink_still_formats_kdb_records_as_kdb(capsys):
+    """The other half: a bound record keeps the kdb layout, timestamp and
+    procname first, because that is what is informative when hundreds of
+    them stream past."""
+    from uqs.logger import get_logger
+    from uqs.logger.core import setup_logging
+    from uqs.stack.logs import _configure_kdb_log_sink
+
+    _configure_kdb_log_sink()
+    log = get_logger(__name__)
+    try:
+        log.bind(kdb_time="2026.09.24D13:28:55.853", procname="cross1", proctype="metrics").info(
+            "creating alias"
+        )
+        out = capsys.readouterr()
+        text = out.err + out.out
+        assert "2026.09.24D13:28:55.853" in text
+        assert "cross1" in text and "metrics" in text
+        assert "Logging error in Loguru" not in text
+    finally:
+        setup_logging()
+
+
+def test_a_format_chooser_is_accepted_where_a_template_is():
+    """_make_kv_format takes either, and keeps the key=value highlighting
+    for both - the reason the chooser returns a TEMPLATE rather than a
+    finished line."""
+    from uqs.logger.core import _make_kv_format
+
+    record = {"message": "budget=14", "extra": {}}
+    from_template = _make_kv_format("{level} | {message}")(record)
+    from_chooser = _make_kv_format(lambda _r: "{level} | {message}")(record)
+    assert from_template == from_chooser
+    assert "budget=" in from_chooser
