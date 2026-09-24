@@ -31,7 +31,7 @@ def test_only_the_dotenv_reader_s_variables_count_as_read_from_dotenv():
     names = cer.dotenv_read_names()
     assert "DATABENTO_DATA_DIR" in names
     assert "UQF_FRONTEND_GATEWAY_PASSWD" not in names, "read by Settings.from_env, not from .env"
-    assert "UQF_SMOKE_TARGETS" not in names, "read by getenv in smoke_external_metadata.q"
+    assert "UQFSTATUSDIR" not in names, "read by getenv in status.q"
 
 
 def test_the_example_file_parses_keys_and_ignores_comments(monkeypatch, tmp_path):
@@ -83,14 +83,15 @@ def test_a_secret_in_the_example_is_refused_naming_its_real_reader(monkeypatch, 
     assert "config.py" in err
 
 
-def test_a_per_run_argument_in_the_example_is_refused(monkeypatch, tmp_path):
-    """A value that changes every run has no business being a default in a
-    file, and the refusal names the script that really reads it."""
+def test_an_environment_only_variable_in_the_example_is_refused(monkeypatch, tmp_path):
+    """A variable read straight from the environment is ignored in .env, so
+    the refusal names the file that really reads it - here status.q, for
+    wiring build_env sets on every TorQ process."""
     rc, err = _run_with_example(
-        monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nUQF_SMOKE_TARGETS=localhost:5010\n"
+        monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nUQFSTATUSDIR=/tmp/status\n"
     )
     assert rc == 1
-    assert "UQF_SMOKE_TARGETS" in err and "smoke_external_metadata.q" in err
+    assert "UQFSTATUSDIR" in err and "status.q" in err
 
 
 def test_a_key_nothing_reads_is_refused_and_says_so(monkeypatch, tmp_path):

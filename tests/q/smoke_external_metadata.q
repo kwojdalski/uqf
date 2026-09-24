@@ -39,28 +39,33 @@
 
 / --- configuration ------------------------------------------------------
 
-/ UQF_SMOKE_TARGETS is a semicolon-separated list of host:port entries, and
-/ UQF_SMOKE_TABLES of table:col,col,col expectations. Both through plain
-/ getenv rather than .qwcfg: this script runs outside a worker, so there are
-/ no config layers to resolve, and pretending otherwise would suggest the
-/ YAML has a say here when it does not.
-targets_raw:getenv `UQF_SMOKE_TARGETS;
-tables_raw:getenv `UQF_SMOKE_TABLES;
+/ Command-line flags, one word per entry:
+/ .
+/   q tests/q/smoke_external_metadata.q -targets host:port [host:port ...]
+/       -tables table:col,col [table:col,col ...] [-timeout_ms 5000]
+/ .
+/ scripts/test.py smoke passes them as --targets, --tables and --timeout-ms.
+/ They were UQF_SMOKE_* environment variables, with ';' between entries -
+/ which needed quoting in any shell, and outlived the run they were set for.
+/ Read straight off the command line rather than through .qwcfg: this
+/ script runs outside a worker, so there are no config layers to resolve.
+opts:.Q.opt .z.x;
+targets:$[`targets in key opts; opts`targets; ()];
+table_specs:$[`tables in key opts; opts`tables; ()];
 
-if[(0=count targets_raw) or 0=count tables_raw;
-    -1 "SKIP  nothing configured - set UQF_SMOKE_TARGETS (host:port;...) and";
-    -1 "      UQF_SMOKE_TABLES (table:col,col;...) to run this check.";
+if[(0=count targets) or 0=count table_specs;
+    -1 "SKIP  nothing configured - pass -targets host:port ... and";
+    -1 "      -tables table:col,col ... to run this check.";
     -1 "";
     -1 "      ETL-20 keeps this lane separate precisely so an unconfigured";
     -1 "      checkout is not reported as a failure.";
     exit 0];
 
-targets:";" vs targets_raw;
 expectations:{[spec]
     parts:":" vs spec;
     if[2<>count parts;
         '"smoke: expected table:col,col, got \"",spec,"\""];
-    (`$first parts;`$"," vs last parts)} each ";" vs tables_raw;
+    (`$first parts;`$"," vs last parts)} each table_specs;
 
 failures:0;
 note:{[label;ok]
@@ -73,7 +78,8 @@ note:{[label;ok]
 / hopen with a TIMEOUT. An untimed hopen against a dead host blocks until the
 / OS gives up, which on some networks is minutes - long enough that a CI run
 / looks hung rather than failed.
-timeout_ms:$[0=count getenv `UQF_SMOKE_TIMEOUT_MS; 5000j; "J"$getenv `UQF_SMOKE_TIMEOUT_MS];
+timeout_ms:$[`timeout_ms in key opts; "J"$first opts`timeout_ms; 5000j];
+if[null timeout_ms; '"smoke: -timeout_ms is not a whole number of milliseconds"];
 
 connect:{[target] @[{hopen (hsym `$":",x;timeout_ms)};target;{[e] 0Ni}]}
 

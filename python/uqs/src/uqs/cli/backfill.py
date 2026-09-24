@@ -18,7 +18,10 @@ from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 
-_BOUND_HELP = "ISO-8601 date or datetime; one without an offset is UTC"
+_BOUND_HELP = (
+    "A date or datetime: 2026-09-13, 2026-09-13T06:00, 2026-09-13T06:00+02:00, "
+    "or a q timestamp such as 2026.09.13D06:00. No offset means UTC"
+)
 
 
 @app.command()

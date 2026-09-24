@@ -1,7 +1,7 @@
 # Scaffolding a bounded worker
 
 A backfill fills a **past window** from a source outside the stack. It takes
-its range from the environment, fetches, transforms, publishes, records
+its range as flags (`uqs backfill`), fetches, transforms, publishes, records
 coverage, and **exits**. It is not a long-running process and it never
 subscribes to the tickerplant.
 
