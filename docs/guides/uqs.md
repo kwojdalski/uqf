@@ -377,6 +377,14 @@ Profiles are declared in `python/uqs/src/uqs/model/profiles.py`. Each one
 names leaves, never members, so adding a process to a chain does not mean
 editing whatever profiles contain it.
 
+**The slot count has been checked against the wire**, not just computed. On a
+stack running the default set, `lsof -nP -iTCP:6050 -sTCP:ESTABLISHED` showed
+thirteen client connections — exactly the thirteen this predicts, name for
+name — plus `stp1` itself as the listener and one external process
+(cryptorust's recorder) that is in no `Pipeline` and so in no profile. The
+budget is blind to anything outside the registry that opens a handle, which
+is part of what the two reserved slots absorb.
+
 ### Started is not the same as fed
 
 A subscriber started without its producer subscribes **successfully**. The

@@ -33,6 +33,22 @@ interleaving. So a table in `dependencies.EXTERNAL_PRODUCERS` counts as
 satisfied, and the mock is reachable only by naming it - which is the
 documented workflow, and why `crypto` is a profile of its own.
 
+VERIFIED AGAINST A RUNNING STACK, 2026-09-24. The arithmetic here is
+computed from the registry, so it was worth checking against the wire before
+anyone relied on it. `lsof -nP -iTCP:6050 -sTCP:ESTABLISHED` on a stack
+running the default set showed fifteen established connections against a
+predicted thirteen, and both extras are outside what this counts:
+
+    13  the clients this module predicts - name for name, no difference
+     1  stp1 itself, which is the LISTENER rather than a client
+     1  cryptorust's kdb-market-data-recorder, an external process that is
+        in no Pipeline and so in no profile
+
+So `plant_slots` is right about the processes it knows, and blind to
+anything outside `PIPELINES` that opens a handle. That is a real limit
+rather than a rounding error: an external recorder holds a slot the budget
+cannot see, and the two held back by INBOUND_RESERVE are what absorb it.
+
 WHY PYTHON AND NOT q. Every other fact about a process is declared in its q
 file and read back by model/declarations.py, `autostart` included - so
 "does this start by default" already lives in q. A profile does not: it spans

@@ -29,7 +29,7 @@ scaffold fxprobe_backfill:
   create tests/q/test_fxprobe_backfill.q (13 lines)
   append to tests/run_tests.q (1 line)
   append to scripts/processes/uqs_catalog.q (2 lines)
-  note: write .qfeed.fxprobe.query - parameterised, never concatenated (ETL-08)
+  note: write .qfeed.fxprobe.query - parameterised, never concatenated (FE-14)
   note: write .qfeed.fxprobe.fixture - deterministic, same contract as the live source
   note: declared fields: time, sym, mid
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
@@ -60,18 +60,27 @@ fields:`time`sym`mid
 
 Two things to write, and both notes are warnings earned the hard way:
 
-**`query` — parameterised, never concatenated (ETL-08).** The window bounds
-are *arguments* to a functional select evaluated remotely, not text spliced
-into a string. Where a driver cannot parameterise there is exactly one escape
-function, `.qodbc.literal`, and using anything else is the finding a security
-review exists to make.
+**`query` — parameterised, never concatenated (FE-14).** The window bounds
+are *arguments* to a lambda taking `(handle; range_from; range_to)` and
+evaluated remotely, not text spliced into a string. Where a driver genuinely
+cannot parameterise there is exactly one escape function, `.qodbc.literal`
+(`src/etl/core/singlestore_odbc.q`); using anything else is the finding a
+security review exists to make.
 
-**The window is half-open `[from;to)`** — `>=` on the lower bound, `<` on the
-upper. This is the requirements document's ETL-08: include the start, exclude
-the end, reject empty and reversed intervals, compose adjacent windows only
-at their common boundary. One wrong operator double-publishes every boundary
-row, and the duplicate surfaces far from here, in a number that is quietly
-too big.
+FE-14 is the frontend's guarantee that no caller input reaches query text,
+and [`source_contract.q`](../../src/etl/core/source_contract.q) applies it
+here on the grounds that *"a source adapter is the same problem with a less
+friendly input"*. The rule has no `ETL-nn` of its own — the scaffold cited
+one for months, and it resolved to the interval rule below.
+
+**The window is half-open `[from;to)` (ETL-08)** — `>=` on the lower bound,
+`<` on the upper. Include the start, exclude the end, reject empty and
+reversed intervals, compose adjacent windows only at their common boundary.
+One wrong operator double-publishes every boundary row, and the duplicate
+surfaces far from here, in a number that is quietly too big.
+
+Two rules, two numbers, both on `query`. Keeping them apart is why the
+generated file states them in separate paragraphs.
 
 ## The fixture is neither a throw nor empty
 
