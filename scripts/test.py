@@ -171,7 +171,9 @@ def lane_q_scripts() -> None:
     output is the report.
     """
     _banner("q-scripts: every worked example under scripts/examples/")
-    scripts = sorted(Path("scripts/examples").glob("*.q"))
+    # From REPO, not the current directory: `python3 scripts/test.py` run
+    # from anywhere else would otherwise find no examples and stop here.
+    scripts = sorted(p.relative_to(REPO) for p in (REPO / "scripts" / "examples").glob("*.q"))
     if not scripts:  # pragma: no cover - the directory is not empty
         raise SystemExit("q-scripts: no examples found under scripts/examples/")
     for script in scripts:

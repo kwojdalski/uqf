@@ -15,6 +15,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
     PortOpt,
@@ -153,6 +154,7 @@ def summary(
                 "Comma-separated columns, `all` (the default), or `status` for "
                 "just up/down/pid/port - narrower, for an 80-column terminal."
             ),
+            autocompletion=completion.summary_columns,
         ),
     ] = None,
     timeout: Annotated[

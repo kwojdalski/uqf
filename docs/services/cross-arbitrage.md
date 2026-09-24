@@ -112,7 +112,7 @@ reading the best one.
 On demand, like the rest of the chain:
 
 ```bash
-uqs start "marketdata1 superbook1 arbitrage1 crossarb1"
+uqs start marketdata1 superbook1 arbitrage1 crossarb1
 ```
 
 **That is four plant connections against three spare.** A q process on the

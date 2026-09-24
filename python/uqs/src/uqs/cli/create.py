@@ -17,6 +17,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import completion
 from uqs.cli.shared import (
     _die,
     _paths,
@@ -112,17 +113,27 @@ def _plant_tables(paths: UqsPaths) -> set[str]:
 def new_job(
     name: Annotated[str, typer.Argument(help="Job name: a q namespace and a filename")],
     kind: Annotated[
-        str, typer.Option("--kind", help="'streaming' (default), 'backfill' or 'normalizer'")
+        str,
+        typer.Option(
+            "--kind",
+            help="'streaming' (default), 'backfill' or 'normalizer'",
+            autocompletion=completion.choices("streaming", "backfill", "normalizer"),
+        ),
     ] = "streaming",
     subscribes: Annotated[
         str | None,
-        typer.Option("--subscribes", help="Comma-separated tables it reads. Omit for a feed."),
+        typer.Option(
+            "--subscribes",
+            help="Comma-separated tables it reads. Omit for a feed.",
+            autocompletion=completion.plant_tables,
+        ),
     ] = None,
     publishes: Annotated[
         str | None,
         typer.Option(
             "--publishes",
             help="Comma-separated tables it writes (streaming); an existing one is published onto",
+            autocompletion=completion.plant_tables,
         ),
     ] = None,
     dataset: Annotated[

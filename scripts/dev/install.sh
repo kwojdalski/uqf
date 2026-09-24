@@ -49,6 +49,19 @@ if ! command -v uv >/dev/null 2>&1; then
     exit 1
 fi
 
+# Every uv call below goes through this, so it can reach PyPI from behind a
+# proxy that re-signs TLS with a certificate uv does not trust. The cost is
+# real: certificate checks are OFF for these two hosts, so anything that can
+# intercept the connection can serve a different package. Defined AFTER the
+# check above on purpose - once `uv` is a function, `command -v uv` finds the
+# function and would pass even with no uv installed.
+uv() {
+    command uv \
+        --allow-insecure-host pypi.org \
+        --allow-insecure-host files.pythonhosted.org \
+        "$@"
+}
+
 if [[ ! -f "$PACKAGE/pyproject.toml" ]]; then
     echo "error: $PACKAGE/pyproject.toml not found under $REPO." >&2
     echo "       If the package moved, update PACKAGE in this script." >&2

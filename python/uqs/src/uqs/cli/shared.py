@@ -18,13 +18,13 @@ import typer
 from rich.console import Console
 
 from uqs import paths as stack_paths
+from uqs.cli import completion
 from uqs.logger import configure_logging, get_logger
 from uqs.paths import UqsError
 from uqs.stack import runtime
 
 app = typer.Typer(
     no_args_is_help=True,
-    add_completion=False,
     help="Bridges lib/torq + lib/torq-finance-starter-pack into a runnable demo.",
 )
 console = Console()
@@ -71,7 +71,14 @@ def _configure(
 
 
 PortOpt = Annotated[int, typer.Option("--port", help="KDBBASEPORT - shifts every process's port")]
-ProcsArg = Annotated[str, typer.Argument(help="'all', or space-separated process name(s)")]
+ProcsArg = Annotated[
+    list[str] | None,
+    typer.Argument(
+        help="'all' (the default), or one or more process names",
+        autocompletion=completion.procnames,
+        show_default=False,
+    ),
+]
 ExportOpt = Annotated[
     Path | None,
     typer.Option("--export", help="Also write output to FILE as .csv or .parquet"),
@@ -87,6 +94,17 @@ def _export(rows, export: Path | None) -> None:
         _die(exc)
         return
     console.print(f"[green]exported to {export}[/]")
+
+
+def _procs(names: list[str] | None) -> str:
+    """ProcsArg's words as the one space-separated string the stack takes.
+
+    The argument is variadic so that each name is its own word - which is what
+    lets TAB complete it, and what `logs stp1 rdb1` always claimed to accept.
+    A single quoted "stp1 rdb1" still works: it arrives as one word and the
+    stack splits it the same way.
+    """
+    return " ".join(names) if names else "all"
 
 
 def _paths():
