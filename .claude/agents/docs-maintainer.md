@@ -71,14 +71,13 @@ append a rule you inferred; only ones the maintainer actually stated.
 - **Never edit a generated file.** `docs/man.q`,
   `docs/integrations/torq/processes.md`,
   `src/etl/generated/pipeline_dag.q` and
-  `docs/migrations/surfaces/uqf-local/` are produced by scripts and gated;
+  `docs/reference/surfaces/uqf-local/` are produced by scripts and gated;
   edit the source and regenerate.
 - **Never edit the vendored trees** (`lib/torq`,
   `lib/torq-finance-starter-pack`), including their prose and their own
   script names.
 - **Never rewrite a historical record** to match the present.
-  `CHANGELOG.md` and `docs/migrations/` state what was
-  true on a date. If a rename or a decision makes them read oddly, say so in
+  `CHANGELOG.md` states what was true on a date. If a rename or a decision makes them read oddly, say so in
   your report and let the maintainer decide — do not quietly correct them.
 - **This repository is public.** No bank table names, hostnames,
   schema shapes or business logic, in prose or examples. Generic analogues

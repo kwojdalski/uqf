@@ -77,7 +77,7 @@ State all five, or do not report it:
    easy to skip.
 4. **Whether the name is public API.** A renamed exported function breaks
    callers outside this tree, and `docs/man.q` and
-   `docs/migrations/surfaces/uqf-local/functions.csv` both record it.
+   `docs/reference/surfaces/uqf-local/functions.csv` both record it.
 5. **A recommendation, including "keep both".** DECL and MESSAGE above are
    near-even splits where the right answer may be to pick one by fiat rather
    than by count — say which and why.

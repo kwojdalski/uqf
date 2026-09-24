@@ -132,9 +132,16 @@ are missing, rather than assuming the reader has them.
 **Vendored trees.** `lib/torq`, `lib/torq-finance-starter-pack` — never
 edited, including their own scripts and their own names.
 
-**Historical records.** `CHANGELOG.md` and `docs/migrations/`. A changelog
-entry states what shipped on a date; rewriting one makes the record claim
-something that never happened.
+**Historical records.** `CHANGELOG.md`. A changelog entry states what
+shipped on a date; rewriting one makes the record claim something that never
+happened.
+
+> *2026-09-24.* `docs/migrations/` was also on this list and is gone. It held
+> two plans for aligning with a canonical upstream that has since been
+> frozen, so they planned a migration that will never happen - a historical
+> record of a future, which is the one kind this rule was not written for.
+> Its `surfaces/` baseline was never historical at all and moved to
+> `docs/reference/surfaces/`, where its being gated makes sense.
 
 > *2026-09-17.* During the `torq-demo` → `uqs` rename the drift ledger
 > was rewritten by the first pass and reverted for this reason, while the
@@ -144,5 +151,5 @@ something that never happened.
 
 **Generated files.** `docs/man.q`,
 `docs/integrations/torq/processes.md`, `src/etl/generated/pipeline_dag.q`,
-`docs/migrations/surfaces/uqf-local/`. Edit the source and regenerate; CI
+`docs/reference/surfaces/uqf-local/`. Edit the source and regenerate; CI
 fails on a hand-edit.

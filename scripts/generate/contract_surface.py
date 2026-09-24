@@ -65,7 +65,7 @@ Q_EXPORTER = REPO / "scripts" / "generate" / "export_contract_surface.q"
 #: loads is the shape this tree keeps finding and deleting. `docs/man.q` is a
 #: q artifact because a q session loads it; this is not that. CSV keeps the
 #: door open anyway: q reads it natively with `0:` if a consumer appears.
-BASELINE = REPO / "docs" / "migrations" / "surfaces" / "uqf-local"
+BASELINE = REPO / "docs" / "reference" / "surfaces" / "uqf-local"
 
 
 def _kdbx() -> tuple[str, dict[str, str]]:
