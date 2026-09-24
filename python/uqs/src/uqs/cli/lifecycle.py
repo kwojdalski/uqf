@@ -330,10 +330,57 @@ def print_startlines(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) 
     raise typer.Exit(code=result.returncode)
 
 
+DryRunOpt = Annotated[
+    bool,
+    typer.Option("--dry-run", "-n", help="List what would be removed and remove nothing"),
+]
+MatchOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--match",
+        metavar="REGEX",
+        help="Only remove entries whose path under output/uqs/ matches this regex",
+    ),
+]
+
+
+def _human_bytes(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "K", "M", "G"):
+        if value < 1024 or unit == "G":
+            return f"{value:.0f}{unit}" if unit == "B" else f"{value:.1f}{unit}"
+        value /= 1024
+    return f"{value:.1f}G"
+
+
 @app.command()
-def clean() -> None:
-    """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample data)."""
-    stack_paths.clean(_paths())
+def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
+    """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample data).
+
+    `--match` narrows it to the entries whose path under output/uqs/ matches a
+    regex - `clean --match '^logs$'` for the logs alone, `clean --match
+    'out_rdb1'` for one process's files wherever they sit. A directory that
+    matches goes whole; one that does not is descended into.
+
+    `--dry-run` lists what would go, with sizes, and removes nothing. Worth
+    doing first for anything but a full wipe, because this is not reversible.
+    """
+    try:
+        targets = stack_paths.clean(_paths(), match=match, dry_run=dry_run)
+    except UqsError as exc:
+        _die(exc)
+        return
+    if not targets:
+        console.print("[dim]nothing to remove[/]")
+        return
+    total = sum(size for _entry, size in targets)
+    verb = "would remove" if dry_run else "removed"
+    for entry, size in targets:
+        console.print(f"  {_human_bytes(size):>7}  {entry}")
+    console.print(
+        f"[dim]{verb} {len(targets)} entr{'y' if len(targets) == 1 else 'ies'}, "
+        f"{_human_bytes(total)}[/]"
+    )
 
 
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})

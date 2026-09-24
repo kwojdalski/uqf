@@ -123,7 +123,7 @@ backfill WORKER --version V --from T --to T [--port N]
                                       run a bounded worker over [--from, --to);
                                       2026-09-13, 2026-09-13T06:00 or 2026.09.13D06:00,
                                       no offset means UTC
-clean                                 wipe ../../output/uqs/
+clean [--match REGEX] [--dry-run]     wipe ../../output/uqs/, or part of it
 query EXPR --port N [--export FILE]   run a synchronous q expression
 list [KIND] [--export FILE]           list every item of KIND - no argument shows the kinds
 config-get PROCNAME [FIELD] [--raw] [--export FILE]   show a process's effective process.csv row, resolved
