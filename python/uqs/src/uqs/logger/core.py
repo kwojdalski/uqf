@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from uqs.logger.floats import CutFloatsLogger
+
 if TYPE_CHECKING:
     # loguru declares Record in its stub but does not export it at runtime,
     # so this import has to be type-checking-only. Annotating the filter
@@ -232,8 +234,9 @@ def setup_logging(
 
 
 def get_logger(name: str) -> Any:
-    """Return the loguru logger singleton (name is accepted for API compat)."""
-    return logger
+    """Return the loguru logger singleton (name is accepted for API compat),
+    with floats in a log call's arguments cut to LOG_FLOAT_DECIMALS places."""
+    return CutFloatsLogger(logger)
 
 
 def configure_logging(

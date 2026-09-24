@@ -11,6 +11,7 @@ from typing import Any
 from loguru import logger
 
 from uqs.logger.core import is_level_enabled
+from uqs.logger.floats import format_float
 
 # Thread-local storage for call depth tracking
 _call_depth = threading.local()
@@ -151,7 +152,10 @@ def _format_arg_value(value: Any, max_length: int = 60) -> str:
                 return f"'{value[:max_length]}...'"
             return f"'{value}'"
 
-        if isinstance(value, int | float | bool | type(None)):
+        if isinstance(value, float):
+            return format_float(value)
+
+        if isinstance(value, int | bool | type(None)):
             return str(value)
 
         if hasattr(value, "__class__"):

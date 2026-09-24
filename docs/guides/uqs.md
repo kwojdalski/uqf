@@ -704,6 +704,14 @@ LOG_LEVEL=DEBUG uqs summary   # same, for a shell session
 `--debug` wins over `LOG_LEVEL`; an unrecognised `LOG_LEVEL` falls back to
 `INFO` rather than refusing to run.
 
+A float in these lines is written with **at most six decimal places**,
+trailing zeros dropped - `1.0850000000000002` prints as `1.085`, `2.5` as
+`2.5`. One global setting, `LOG_FLOAT_DECIMALS` in
+`python/uqs/src/uqs/logger/floats.py`, applies to every `uqs` module's log
+calls. It rounds only float *arguments*: a message that asks for its own
+format (`{:.3f}`) keeps it, and text is never rewritten, so a q timestamp in
+a line from `uqs logs` keeps all nine digits.
+
 This matters most on `summary`, because two of its three lookups degrade
 instead of failing. A port map that cannot be built leaves every `down` row
 with a blank port, and an unreachable `monitor1` leaves the whole Heartbeat
