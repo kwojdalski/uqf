@@ -554,7 +554,7 @@ connection, and TorQ logs it like any other. `--probe-timeout 0` skips it.
 
 `summary` is the command you run when something is already wrong, which makes
 it the worst thing in the CLI to hang - and each of its blocking steps could.
-`torq.sh summary` is a subprocess that had no timeout at all, the heartbeat
+the process listing (`ps`, then `lsof`) is a subprocess, the heartbeat
 lookup talks to `monitor1`, which at its connection cap accepts the TCP
 connection and then never answers, and the `Responds` probe connects to every
 process that is up.
@@ -566,7 +566,7 @@ uqs summary --timeout 0    # wait forever
 
 It is one **budget for the whole command**, not a limit per call - two steps
 given ten seconds each is a twenty-second hang, which is not what anyone
-means by a ten-second timeout. The subprocess is asked first and the
+means by a ten-second timeout. The process listing is asked first and the
 heartbeat query gets whatever is left, with a floor of one second so the last
 step fails on its own terms rather than on an expired clock. The probe runs
 last and takes the smaller of `--probe-timeout` and what remains; with
@@ -574,9 +574,7 @@ nothing left it is skipped and the column shows `-`. Running out is a
 refusal, not a traceback:
 
 ```
-torq.sh summary did not finish within 120s. It is still bootstrapping, or a
-process it queries is not answering - raise --timeout if the stack is simply
-slow to start
+listing processes did not finish within 120s
 ```
 
 A heartbeat lookup that runs out is not fatal: it degrades to the same
@@ -800,16 +798,23 @@ being a declared process from `monitor1` being declared but not answering:
 
 ```
 summary base_port=6050 torqdata=.../output/uqs
-torq.sh summary returncode=0 stdout_lines=47
+process listing: 47 line(s)
 configured ports for 46 process(es)
 monitor1 not reached; Heartbeat column is a monitoring gap, not a verdict
 parsed 46 row(s): 23 up, 23 down
 starved process(es): executions1, marks1
 ```
 
-`parsed N row(s)` against `stdout_lines` is the one to read when the table
-looks short: it is the only place the rows `torq.sh` emitted and the rows the
-parser kept are both visible.
+`parsed N row(s)` against the process listing's line count is the one to
+read when the table looks short: it is the only place the rows the listing
+emitted and the rows the parser kept are both visible.
+
+The listing asks the operating system once - one `ps` for every command
+line, one `lsof` for the ports of the ones that matched - rather than running
+`torq.sh summary`, which checked the processes one at a time with some twenty
+forks each and bootstrapped (starting q to fill the HDB) on every call. It
+matches exactly what torq.sh's `findproc` matches, so the two agree on what
+is up; `uqs raw -- summary` still runs torq.sh's own.
 
 In debug, `summary` also prints how long each process took to load on its
 latest start, slowest first:

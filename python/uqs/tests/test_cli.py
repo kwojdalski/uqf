@@ -48,7 +48,7 @@ from uqs.external import crypto
 from uqs.external.crypto import CRYPTO_FILLS_RECORDER_TABLE, CRYPTO_REAL_FILLS_RECORDER_TABLE
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import listing, probe, runtime
+from uqs.stack import alive, listing, probe, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
 from uqs.stack.listing import LISTABLE_KINDS, SUMMARY_COLUMNS, SUMMARY_GRAPH_COLUMNS
@@ -597,9 +597,8 @@ def test_a_start_past_the_licence_cap_warns(monkeypatch):
     and it does so silently: the extra handle is reset, the process wedges in
     its retry loop, and `summary` still reports it `up` because that is a PID
     check."""
-    over = [_row(Process=f"p{i}") for i in range(LICENCE_CONNECTION_LIMIT + 1)]
-    _patch(monkeypatch, runtime, "summary", result=Completed(stdout="raw"))
-    _patch(monkeypatch, listing, "summary_rows", result=over)
+    over = {f"p{i}" for i in range(LICENCE_CONNECTION_LIMIT + 1)}
+    _patch(monkeypatch, alive, "running", result=over)
     _patch(monkeypatch, runtime, "start", result=Completed())
     result = runner.invoke(cli.app, ["start", "rdb1"])
     assert result.exit_code == 0
@@ -610,8 +609,7 @@ def test_a_start_past_the_licence_cap_warns(monkeypatch):
 def test_a_start_inside_the_cap_is_silent(monkeypatch):
     """A warning on every start would be noise, and noise is how a real one
     gets missed."""
-    _patch(monkeypatch, runtime, "summary", result=Completed(stdout="raw"))
-    _patch(monkeypatch, listing, "summary_rows", result=[_row(Process="rdb1")])
+    _patch(monkeypatch, alive, "running", result={"rdb1"})
     _patch(monkeypatch, runtime, "start", result=Completed())
     result = runner.invoke(cli.app, ["start", "rdb1"])
     assert "concurrent connections" not in result.stdout
@@ -620,7 +618,7 @@ def test_a_start_inside_the_cap_is_silent(monkeypatch):
 def test_the_cap_warning_never_blocks_a_start(monkeypatch):
     """Advisory only. A warning that cannot be produced - the fleet is
     unreachable, the registry cannot be read - must not stop a start."""
-    _patch(monkeypatch, runtime, "summary", raises=RuntimeError("fleet unreachable"))
+    _patch(monkeypatch, alive, "running", raises=RuntimeError("fleet unreachable"))
     _patch(monkeypatch, runtime, "start", result=Completed())
     assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
 
@@ -1290,7 +1288,7 @@ def test_a_skipped_dependency_warning_keeps_its_reason(monkeypatch):
     """loguru formats with str.format, so the `%s` this line used to carry
     printed literally and dropped the exception - the one line explaining
     why the warning was skipped explained nothing."""
-    _patch(monkeypatch, runtime, "summary", raises=RuntimeError("fleet unreachable"))
+    _patch(monkeypatch, alive, "running", raises=RuntimeError("fleet unreachable"))
     _patch(monkeypatch, runtime, "start", result=Completed())
     captured = _debug_log(monkeypatch, lifecycle)
     assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0

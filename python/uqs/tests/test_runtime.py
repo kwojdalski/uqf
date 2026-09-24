@@ -79,7 +79,6 @@ def test_run_torq_sh_extends_the_environment_rather_than_replacing_it(monkeypatc
         (runtime.start, {"procs": "rdb1"}, ["start", "rdb1"]),
         (runtime.stop, {"procs": "all"}, ["stop", "all"]),
         (runtime.restart, {"procs": "hdb1"}, ["restart", "hdb1"]),
-        (runtime.summary, {}, ["summary"]),
         (runtime.print_procs, {"procs": "rdb1"}, ["print", "rdb1"]),
     ],
 )
@@ -93,17 +92,16 @@ def test_each_verb_passes_torq_sh_its_own_arguments(monkeypatch, fn, extra, argv
     assert seen["base_port"] == 6100
 
 
-def test_summary_and_print_capture_by_default_and_lifecycle_verbs_stream(monkeypatch):
-    """summary and print are parsed or shown by the caller, so their output
-    is captured; start/stop/restart stream live to the terminal."""
+def test_print_captures_by_default_and_lifecycle_verbs_stream(monkeypatch):
+    """print is shown by the caller, so its output is captured;
+    start/stop/restart stream live to the terminal."""
     seen: dict[str, bool] = {}
     monkeypatch.setattr(
         runtime, "run_torq_sh", lambda paths, args, **kw: seen.__setitem__(args[0], kw["capture"])
     )
-    runtime.summary(_paths())
     runtime.print_procs(_paths())
     runtime.start(_paths())
-    assert seen == {"summary": True, "print": True, "start": False}
+    assert seen == {"print": True, "start": False}
 
 
 # --------------------------------------------------------------------- query
