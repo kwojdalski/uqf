@@ -12,6 +12,8 @@ code lives, not about what anyone types.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 
 from uqs import paths as stack_paths
@@ -25,7 +27,7 @@ from uqs.cli.shared import (
     console,
     log,
 )
-from uqs.model import dependencies
+from uqs.model import dependencies, profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
@@ -121,9 +123,62 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     )
 
 
+ProfileOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--profile",
+        help=(
+            "Comma-separated named start set(s) instead of process names - "
+            "see `uqs list profiles`. Refused if the total is past the "
+            "licence's connection cap."
+        ),
+    ),
+]
+
+
+def _resolve_profiles(names: str) -> str:
+    """The space-separated process list `names` stands for, or exit.
+
+    A REFUSAL where a positional start only warns, and the asymmetry is
+    deliberate. A positional start is an operator naming processes they chose;
+    over the cap is their call, and several orderings that exceed it briefly
+    are legitimate. A profile is a set THIS TREE defined and named, so one
+    that cannot run is this tree's mistake to report - not theirs to discover
+    when the plant resets a handle and the process wedges while reporting
+    `up`.
+    """
+    wanted = [name.strip() for name in names.split(",") if name.strip()]
+    if not wanted:
+        _die(UqsError("--profile needs at least one name"))
+    try:
+        resolved = profiles.resolve(wanted)
+        problem = profiles.over_budget(wanted)
+    except UqsError as exc:
+        _die(exc)
+        raise  # unreachable: _die exits. Keeps the type checker honest.
+    if problem:
+        _die(UqsError(problem))
+    console.print(
+        f"[dim]profile {', '.join(wanted)}: {len(resolved)} process(es), "
+        f"{profiles.plant_slots(resolved)}/{profiles.ALLOWANCE} plant slots[/]"
+    )
+    return " ".join(resolved)
+
+
 @app.command()
-def start(procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT) -> None:
-    """Start every startwithall=1 process (or specific process name(s))."""
+def start(
+    procs: ProcsArg = "all", port: PortOpt = DEFAULT_BASE_PORT, profile: ProfileOpt = None
+) -> None:
+    """Start every startwithall=1 process (or specific process name(s)).
+
+    `--profile fx` starts a named set instead: its leaves and everything they
+    read, resolved from the dependency graph rather than listed by hand.
+    """
+    if profile is not None:
+        if procs != "all":
+            _die(UqsError("--profile and explicit process names are mutually exclusive"))
+            return
+        procs = _resolve_profiles(profile)
     _warn_about_unfed_inputs(procs, port)
     _warn_about_connection_cap(procs, port)
     _run_streaming(runtime.start, procs, base_port=port)
