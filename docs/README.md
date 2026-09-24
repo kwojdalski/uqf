@@ -34,6 +34,7 @@ reference or an architecture note, and only its purpose decides where it goes.
 | Directory | Answers | Audience |
 |---|---|---|
 | [`guides/`](guides/) | *How do I do this?* | operators and new developers |
+| [`scaffolding/`](scaffolding/) | *How do I create one of these?* | developers adding a process |
 | [`services/`](services/) | *What does this running service do, and how do I run it?* | operators and developers of that service |
 | [`architecture/`](architecture/) | *Why is it shaped this way?* | developers changing it |
 | [`reference/`](reference/) | *What is the contract?* | anyone integrating, and CI |
@@ -48,6 +49,16 @@ reference or an architecture note, and only its purpose decides where it goes.
 configuration changes, and joining them to who made them),
 [`metatables.md`](guides/metatables.md) (partition profiling),
 [`ci.md`](guides/ci.md) (what the gates do and how to run them locally).
+
+**`scaffolding/`** — one page per shape `uqs new-job` writes, indexed in
+[`scaffolding/README.md`](scaffolding/README.md):
+[`feed.md`](scaffolding/feed.md) (rows from a timer),
+[`etl.md`](scaffolding/etl.md) (rows from a subscription),
+[`normalizer.md`](scaffolding/normalizer.md) (several tables into one shape),
+[`backfill.md`](scaffolding/backfill.md) (a past window from outside the
+stack). Distinct from `guides/new-pipeline.md`, which walks ONE pipeline end
+to end including the implementation: these four are about choosing a shape
+and what the scaffold hands you.
 
 **`services/`** — one page per running service, indexed in
 [`services/README.md`](services/README.md):
