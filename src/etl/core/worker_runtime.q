@@ -144,14 +144,14 @@ with_retry:{[pol;f]
         if[`ok~first outcome;
             :`state`kind`attempts`result`error!(`ok;`none;attempt;last outcome;"")];
         kind:classify last outcome;
-        .[`.qlog.dbg;(`qwrt;"attempt failed";
+        .[{.qlog.dbg[x;y;z]};(`qwrt;"attempt failed";
             `attempt`of`kind`error!(attempt;cap;kind;last outcome));::];
         if[kind=`data;
             :`state`kind`attempts`result`error!(`failed;`data;attempt;::;last outcome)];
         if[attempt=cap;
             :`state`kind`attempts`result`error!(`failed;`transport;attempt;::;last outcome)];
         wait:backoff_ms[pol;attempt];
-        .[`.qlog.warn;(`qwrt;"retrying after a transport error";
+        .[{.qlog.warn[x;y;z]};(`qwrt;"retrying after a transport error";
             `attempt`of`backoff_ms`error!(attempt;cap;wait;last outcome));::];
         sleep_ms wait;
         attempt+:1];
@@ -197,7 +197,7 @@ commit:{[dry;effect;action;args]
     / `f . ()` is a TYPE error rather than a niladic call; the unary-null
     / argument list is what actually applies a niladic function.
     applied:$[0=count args; enlist(::); args];
-    if[dry; .[`.qlog.dbg;(`qwrt;"dry run - skipped";enlist[`effect]!enlist effect);::]];
+    if[dry; .[{.qlog.dbg[x;y;z]};(`qwrt;"dry run - skipped";enlist[`effect]!enlist effect);::]];
     $[dry; (`skipped;effect); (`done;effect;action . applied)]}
 
 / ----------------------------------------------------------- WINDOWS
@@ -280,7 +280,7 @@ remaining:{[ds;part;version;as_of;from_ts;to_ts]
     m:.qmatz.missing[ds;part;version;as_of;from_ts;to_ts];
     / The answer to "why did the run do nothing": every window already covered
     / at this version, so there is nothing left to fetch.
-    .[`.qlog.dbg;(ds;"coverage gaps";
+    .[{.qlog.dbg[x;y;z]};(ds;"coverage gaps";
         `partition`source_version`range_from`range_to`gaps!(part;version;from_ts;to_ts;count m));::];
     m}
 
@@ -311,7 +311,7 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
         (ds;part;spec`source_version;from_ts;to_ts;rows)];
     checkpointed:commit[dry;`write_checkpoint;.qbfstate.save_checkpoint;
         (worker;spec;to_ts)];
-    .[`.qlog.dbg;(worker;"window finished";
+    .[{.qlog.dbg[x;y;z]};(worker;"window finished";
         `range_from`range_to`rows`dry_run!(from_ts;to_ts;rows;dry));::];
     `dry_run`rows_published`published`covered`checkpointed!
         (dry;rows;published;covered;checkpointed)}
@@ -362,7 +362,7 @@ require_dependencies:{[worker]
     if[0=count needed; :worker];
     live:connected[];
     missing:needed where not needed in live;
-    .[`.qlog.dbg;(worker;"dependencies";`needed`connected`missing!(needed;live;missing));::];
+    .[{.qlog.dbg[x;y;z]};(worker;"dependencies";`needed`connected`missing!(needed;live;missing));::];
     if[count missing;
         '"require_dependencies: ",string[worker]," cannot start - no connection to ",
          (", " sv string missing),
