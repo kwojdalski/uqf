@@ -77,6 +77,8 @@ website:
     contents:
       - text: "Introduction"
         href: README.md
+      - text: "FAQ"
+        href: faq.md
       - section: "Guides"
         contents:
           - guides/uqs.md

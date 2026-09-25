@@ -41,6 +41,9 @@ or an architecture note, and only its purpose decides where it goes.
 
 ### Also in `docs/`
 
+- [`faq.md`](faq.md) --- short answers to the questions asked most, starting
+  with how this differs from plain TorQ, each pointing to the page that has the
+  long one.
 - [`man.q`](man.q) --- the function registry, generated from the qDoc comments
   under `src/` by `scripts/generate/generate_man_registry.py`. CI fails when it
   is out of date.
