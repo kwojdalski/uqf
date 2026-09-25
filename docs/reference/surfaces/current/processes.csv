@@ -2,6 +2,7 @@ procname,proctype,offset,subscribe_to,publishes
 arbitrage1,metrics,44,superbook,arbitrage
 cross1,metrics,25,quotes,
 crossarb1,metrics,45,superbook,config_change cross_arbitrage
+crypto_market_data_backfill1,backfill,48,,
 cryptomock1,feed,35,,crypto_book crypto_trades
 databento1,metrics,34,databento_mbp10,databento_book
 databento_backfill1,backfill,40,,

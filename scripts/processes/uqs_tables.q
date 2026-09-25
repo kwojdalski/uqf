@@ -239,3 +239,10 @@ duckdb_deals:([]time:`timestamp$(); deal_time:`timestamp$(); deal_id:`long$(); s
 
 / kafka_flow1's output. <one line: what a row means>
 client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$(); partition:`long$(); offset:`long$())
+
+/ crypto_market_data_backfill1's target: one recorded crypto book-and-trade
+/ update, replayed from cryptorust's data/market_data.duckdb. Carries BOTH
+/ clocks - source_time is the venue's stamp, local_time the recorder's, and
+/ `time` is the plant's - because the lag between them is what a recorded
+/ capture exists to measure, and crypto_book above has room for none of it.
+crypto_market_data:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); is_snapshot:`boolean$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); latency_ms:`float$(); latency_min_ms:`float$(); latency_count:`long$(); trade_price:`float$(); trade_size:`float$(); trade_side:`symbol$())

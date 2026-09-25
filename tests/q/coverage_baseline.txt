@@ -27,6 +27,7 @@
 .qetl.io.odbc.table_names
 .qetl.io.odbc.window_query
 .qetl.io.odbc.with_connection
+.qpipe.source.crypto_market_data.query
 .qpipe.source.databento_mbp10.adapt
 .qpipe.source.databento_mbp10.epoch_ns_literal
 .qpipe.source.databento_mbp10.query

@@ -30,3 +30,4 @@ arbitrage1,44
 crossarb1,45
 duckdb_deals_backfill1,46
 kafka_flow1,47
+crypto_market_data_backfill1,48

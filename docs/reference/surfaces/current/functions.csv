@@ -673,6 +673,22 @@ qpipe.job.cross_arbitrage,opportunity,function,5,state avail sym size as_of
 qpipe.job.cross_arbitrage,publish,value,,
 qpipe.job.cross_arbitrage,quotable,function,1,state
 qpipe.job.cross_arbitrage,route_for,function,2,avail sym
+qpipe.job.crypto_market_data_backfill,checkpoint,function,1,cursor
+qpipe.job.crypto_market_data_backfill,cleanup,function,1,
+qpipe.job.crypto_market_data_backfill,facts,function,1,batch
+qpipe.job.crypto_market_data_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.crypto_market_data_backfill,handle,value,,
+qpipe.job.crypto_market_data_backfill,init,function,1,run_spec
+qpipe.job.crypto_market_data_backfill,last_batch,value,,
+qpipe.job.crypto_market_data_backfill,plan,function,1,cursor
+qpipe.job.crypto_market_data_backfill,progress,dict,,
+qpipe.job.crypto_market_data_backfill,publish,function,1,batch
+qpipe.job.crypto_market_data_backfill,quality_check,function,1,batch
+qpipe.job.crypto_market_data_backfill,range_from,value,,
+qpipe.job.crypto_market_data_backfill,range_to,value,,
+qpipe.job.crypto_market_data_backfill,run,function,1,
+qpipe.job.crypto_market_data_backfill,source_version,value,,
+qpipe.job.crypto_market_data_backfill,spec,function,1,
 qpipe.job.crypto_mock,beta_draw,function,2,a b
 qpipe.job.crypto_mock,book_rows,function,1,mkt
 qpipe.job.crypto_mock,decide,function,3,row horizon draws
@@ -905,6 +921,24 @@ qpipe.job.wide_book_feed,on_timer,function,1,
 qpipe.job.wide_book_feed,publish,value,,
 qpipe.job.wide_book_feed,spot,value,,
 qpipe.job.wide_book_feed,tick_rows,function,1,mids
+qpipe.source.crypto_market_data,adapt,function,1,raw
+qpipe.source.crypto_market_data,columns,value,,
+qpipe.source.crypto_market_data,epoch_ms_bound,function,1,ts
+qpipe.source.crypto_market_data,fixture,function,1,
+qpipe.source.crypto_market_data,fixture_levels,function,4,bid ask tick sz
+qpipe.source.crypto_market_data,level_fields,value,,
+qpipe.source.crypto_market_data,levels,value,,
+qpipe.source.crypto_market_data,query,function,3,h range_from range_to
+qpipe.source.crypto_market_data,row_key,value,,
+qpipe.source.crypto_market_data,select_list,function,1,
+qpipe.source.crypto_market_data,source_name,value,,
+qpipe.source.crypto_market_data,sql_for,function,2,range_from range_to
+qpipe.source.crypto_market_data,table_name,value,,
+qpipe.source.crypto_market_data,target,value,,
+qpipe.source.crypto_market_data,time_column,value,,
+qpipe.source.crypto_market_data,transport,value,,
+qpipe.source.crypto_market_data,types,value,,
+qpipe.source.crypto_market_data,tz,value,,
 qpipe.source.databento_mbp10,adapt,function,1,raw
 qpipe.source.databento_mbp10,columns,value,,
 qpipe.source.databento_mbp10,epoch_ns_literal,function,1,ts
@@ -963,6 +997,11 @@ qpipe.source.upstream_trades,target,value,,
 qpipe.source.upstream_trades,time_column,value,,
 qpipe.source.upstream_trades,types,value,,
 qpipe.source.upstream_trades,tz,value,,
+qpipe.transform.crypto_market_data,book,table,,
+qpipe.transform.crypto_market_data,contract,table,,
+qpipe.transform.crypto_market_data,example_book,function,1,
+qpipe.transform.crypto_market_data,fold,function,2,batch prefix
+qpipe.transform.crypto_market_data,to_book,function,1,batch
 qpipe.transform.databento_book,book,table,,
 qpipe.transform.databento_book,contract,table,,
 qpipe.transform.databento_book,example_book,function,1,

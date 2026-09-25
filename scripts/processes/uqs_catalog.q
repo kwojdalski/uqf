@@ -135,3 +135,5 @@ surface:{[]
     "one mock FX deal - pair, side, notional and rate - backfilled from a DuckDB file over ODBC";
 .qcat.describe[`client_flow]:
     "One client FX trade consumed off a Kafka topic, deduplicated by kafka_flow1 on the (partition;offset) the record carries - so a broker redelivery does not show the desk the same trade twice. Carries those coordinates, so any row can be traced back to the exact Kafka record";
+.qcat.describe[`crypto_market_data]:
+    "One moment of a crypto pair on one venue, replayed out of cryptorust's own recorded DuckDB capture: five book levels a side as vectors, the trade printed alongside them, and both clocks - the venue's source_time and the recorder's local_time, whose difference is the wire lag. The repeatable counterpart to crypto_book, which the same recorder fills live and which carries neither clock";
