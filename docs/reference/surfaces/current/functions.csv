@@ -194,6 +194,15 @@ qdqc,check_market_data_quality,function,2,quotes max_spread_bps
 qdqc,check_stale_quotes,function,3,quotes as_of max_age
 qdqc,summarize_checks,function,1,named_checks
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
+qexec,fill_order_time_cols,value,,
+qexec,fill_outcome,function,4,event_time cancel_time horizon_end known_by
+qexec,fill_outcome_rows,function,3,grouping tgt outcome
+qexec,fill_probability_by,function,5,orders horizons bucket_cols as_of opts
+qexec,fill_probability_cols,value,,
+qexec,fill_probability_defaults,dict,,
+qexec,fill_probability_opts,function,1,opts
+qexec,fill_probability_require_args,function,4,orders hs bucket_cols as_of
+qexec,fill_probability_require_consistent,function,1,orders
 qexec,fill_ratio,function,2,num_fills num_quotes
 qexec,hit_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,markout,function,4,side trade_price ref_price pip_factor
@@ -389,6 +398,8 @@ qmicro,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_size
 qmicro,mid_price,function,2,bid_prices ask_prices
 qmicro,mid_price_acceleration,function,2,quotes target_sym
 qmicro,mid_price_velocity,function,2,quotes target_sym
+qmicro,odd_lot_imbalance,function,2,tape threshold
+qmicro,odd_lot_trade_ratio,function,2,tape threshold
 qmicro,ofi,function,2,quotes target_sym
 qmicro,ofi_at_level,function,2,sub level
 qmicro,ofi_autocorrelation,function,2,ofi_series window
@@ -396,6 +407,7 @@ qmicro,ofi_multilevel,function,3,quotes target_sym n_levels
 qmicro,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
 qmicro,queue_depletion_rate,function,3,quotes target_sym side
 qmicro,quotes_for_sym,function,3,fn_name quotes target_sym
+qmicro,require_odd_lot_threshold,function,2,fn_name threshold
 qmicro,require_tape,function,1,tape
 qmicro,rolling_ofi,function,2,ofi_series window
 qmicro,signed_trade_flow,function,1,tape
