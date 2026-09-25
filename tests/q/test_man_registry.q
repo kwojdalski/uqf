@@ -79,12 +79,12 @@ test_the_resolver_accepts_a_name_that_does_exist:{[t]
 test_the_registry_covers_the_etl_tree:{[t]
     / The gap that prompted generating this file. Before the generator,
     / man.q registered 78 of 348 public functions and FIFTEEN NAMESPACES had
-    / zero coverage - .qmicro, .qsrc, .qdag, .qbw, .qmatz and every other ETL
+    / zero coverage - .qmicro, .qetl.source, .qetl.dag, .qetl.job.bounded, .qetl.coverage and every other ETL
     / namespace. `.man.getDocs[]` is the programmatic documentation API, so a
-    / caller asking about .qmatz.is_covered got nothing back and could not tell
+    / caller asking about .qetl.coverage.is_covered got nothing back and could not tell
     / "undocumented" from "does not exist".
     names:exec fullname from .man.funcs;
-    .qunit.assertTrue[any names like ".qmatz.*";
+    .qunit.assertTrue[any names like ".qetl.coverage.*";
         "the coverage namespace is documented, not just the original library"]};
 
 / The coverage ratchet. A FLOOR, not a target.
@@ -104,7 +104,7 @@ test_the_registry_covers_the_etl_tree:{[t]
 test_documentation_coverage_does_not_regress:{[t]
     documented:exec fullname from .man.funcs;
     / .qns.functional, not a root-level `like "q*"` scan: worker instances
-    / live under .qwrk (.qwrk.demo_deals_backfill and so on), and a root
+    / live under .qpipe.job (.qpipe.job.demo_deals_backfill and so on), and a root
     / scan sees one namespace holding no functions - so every worker's
     / public surface would leave this count without lowering it, which is
     / the opposite of a ratchet.
@@ -113,16 +113,16 @@ test_documentation_coverage_does_not_regress:{[t]
     / counts functions that actually exist; declared, because the process
     / running this suite holds a great deal that is not the tree.
     / .
-    / This replaced a hand-kept deny-list - `.q`.qunit`.qetldbl`.qrefw`.qpipe -
+    / This replaced a hand-kept deny-list - `.q`.qunit`.qetldbl`.qrefw`.qtorq -
     / which could not hold, because suites create whole namespaces at RUN
     / time: `.qcompletetest` and `.qmethodsonly` are fixture workers built
-    / inside assertions, `.qsub.nt_k`/`.qsub.nt_l` are streaming jobs a test
+    / inside assertions, `.qpipe.job.nt_k`/`.qpipe.job.nt_l` are streaming jobs a test
     / registers. Every new one would have to be remembered here, and until it
     / was, this count depended on which suites had already run rather than on
     / the tree.
     / .
     / .qns.functional, not a root-level `like "q*"` scan: worker instances
-    / live under .qwrk (.qwrk.demo_deals_backfill and so on), and a root scan
+    / live under .qpipe.job (.qpipe.job.demo_deals_backfill and so on), and a root scan
     / sees one namespace holding no functions - so every worker's public
     / surface would leave this count without lowering it, which is the
     / opposite of a ratchet.
@@ -131,22 +131,22 @@ test_documentation_coverage_does_not_regress:{[t]
         ks:key full;
         ks:ks where not ks in `;
         ks:ks where not (string ks) like "_*";
-        / A worker's inherited methods are stamped into .qwrk.<worker> by
-        / .qbw.define (#227), not written in its file, so man.q's generator
-        / never sees them. Their documentation is the shell's - .qbw.fetch
-        / documents .qwrk.x.fetch - and counting them here would fail every
+        / A worker's inherited methods are stamped into .qpipe.job.<worker> by
+        / .qetl.job.bounded.define (#227), not written in its file, so man.q's generator
+        / never sees them. Their documentation is the shell's - .qetl.job.bounded.fetch
+        / documents .qpipe.job.x.fetch - and counting them here would fail every
         / worker, including the ones the tests define, eight names at a time.
-        if[(string full) like ".qwrk.*"; ks:ks except .qbw.inherited_methods];
+        if[(string full) like ".qpipe.job.*"; ks:ks except .qetl.job.bounded.inherited_methods];
         / A streaming job's `publish` is the framework's seam, not the job's
-        / API: the file assigns `.qstream.unwired`, and the runner (or a test)
-        / replaces it through `.qstream.wire`. Its documentation is
-        / .qstream.wire's, the same standing as a worker's inherited methods.
+        / API: the file assigns `.qetl.job.stream.unwired`, and the runner (or a test)
+        / replaces it through `.qetl.job.stream.wire`. Its documentation is
+        / .qetl.job.stream.wire's, the same standing as a worker's inherited methods.
         / .
         / It also has to be excluded to make this count STABLE. `unwired`
         / hands back a projection and `wire` usually installs a lambda, so
         / the type test below sees a function only for jobs some suite
         / happened to wire - which made this ratchet depend on run order.
-        if[(string full) like ".qsub.*"; ks:ks except `publish];
+        if[(string full) like ".qpipe.job.*"; ks:ks except `publish];
         ks:ks where {[f;k] 100h=type value ` sv f,k}[full] each ks;
         string ` sv/: full,/:ks} each nss;
     undocumented:public where not public in documented;

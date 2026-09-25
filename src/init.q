@@ -22,8 +22,8 @@
 //
 //      The ETL tree (src/etl/, loaded separately) makes two deliberate
 //      exceptions, both for INSTANCES rather than modules: bounded workers
-//      nest under .qwrk (.qwrk.<worker name>, derived by .qbw.define) and
-//      source declarations under .qfeed (.qfeed.<source name>, checked
+//      nest under .qpipe.job (.qpipe.job.<worker name>, derived by .qetl.job.bounded.define) and
+//      source declarations under .qpipe.source (.qpipe.source.<source name>, checked
 //      against each file's own source_name). src/namespaces.q (.qns) is the
 //      one enumeration that knows this, and every tool that lists
 //      namespaces goes through it.

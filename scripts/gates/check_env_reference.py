@@ -96,7 +96,7 @@ DOTENV_READ = LITERAL_READS[-1]
 ENV_EXAMPLE = REPO / ".env.example"
 
 #: A whole-line q comment. `worker_config.q`'s own `@eg` line reads
-#: `.qwcfg.explain[`backfill_from]`, which made the first run of this gate
+#: `.qetl.cfg.explain[`backfill_from]`, which made the first run of this gate
 #: demand a row for UQF_BACKFILL_FROM - a variable nothing sets, illustrating
 #: the mechanical mapping rather than configuring anything. Documentation is
 #: not a call site. Trailing comments are deliberately left alone: a `/`
@@ -105,12 +105,12 @@ ENV_EXAMPLE = REPO / ".env.example"
 #: read.
 Q_COMMENT_LINE = re.compile(r"^\s*/.*$", re.MULTILINE)
 
-#: `.qwcfg` maps a config key to UQF_ plus the upper-cased key, so a
+#: `.qetl.cfg` maps a config key to UQF_ plus the upper-cased key, so a
 #: production read of `dry_run` means UQF_DRY_RUN is live with that string
 #: appearing in no file. This is the one case grep cannot answer and the
 #: strongest reason the doc exists.
 QWCFG_READ = re.compile(
-    r"\.qwcfg\.(?:get_timestamp|get_positive|get_symbol|get_flag|raw|explain)\s*\[?\s*`([a-z_]+)"
+    r"\.qetl\.cfg\.(?:get_timestamp|get_positive|get_symbol|get_flag|raw|explain)\s*\[?\s*`([a-z_]+)"
 )
 
 #: `build_env`'s dict keys: produced for TorQ, never read back by us, so they

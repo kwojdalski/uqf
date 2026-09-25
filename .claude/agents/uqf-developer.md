@@ -106,8 +106,9 @@ library, deliberately left in its original camelCase, don't touch it.
   even if q makes them easy to bolt on.
 - Don't introduce a new namespace nested more than one level deep
   (` \d .qfwd.sub `) --- every namespace in the quant library is flat by
-  convention. (The ETL tree nests its instances --- workers under `.qwrk`,
-  sources under `.qfeed`; those are the exceptions, and they are not yours.)
+  convention. (The ETL tree nests its instances --- workers under `.qpipe.job`,
+  sources under `.qpipe.source`; those are the exceptions, and they are not
+  yours.)
 - Don't silently swallow structural errors in a protected-eval wrapper meant
   only for a legitimate "no data yet" case --- that class of bug (a malformed
   table producing null results with no error) has bitten this codebase before.

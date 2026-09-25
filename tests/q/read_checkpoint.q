@@ -5,5 +5,5 @@
 \l src/etl/core/backfill_state.q
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D};
 spec:`source_version`range_from`range_to!(`v1;d 1;d 4);
--1 "CURSOR:",.Q.s1 .qbfstate.load_checkpoint[`restartproc;spec];
+-1 "CURSOR:",.Q.s1 .qetl.job.bounded.state.load_checkpoint[`restartproc;spec];
 exit 0;

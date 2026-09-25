@@ -1,5 +1,5 @@
 / duckdb_deals.q - mock FX deals read from DuckDB over ODBC
-/ (.qfeed.duckdb_deals).
+/ (.qpipe.source.duckdb_deals).
 / .
 / The demo_deals dataset, reached the other way. demo_deals reads its deals
 / from a q process over IPC; this reads the same shape - deal_id, deal_time,
@@ -24,17 +24,17 @@
 / The window bounds are compared as make_timestamp_ns(<epoch ns>), not by
 / applying epoch_ns() to the column: a function on the column stops DuckDB
 / skipping row groups by their min/max. Each bound is a long rendered
-/ through .qodbc.literal, the one escape function, so no caller value is
+/ through .qetl.io.odbc.literal, the one escape function, so no caller value is
 / spliced into SQL any other way - and a long, not a timestamp, because
-/ .qodbc.literal's timestamp form drops the sub-second part.
+/ .qetl.io.odbc.literal's timestamp form drops the sub-second part.
 / .
 / The deal's own time stays `deal_time`, NOT `time`. `time` is the
-/ tickerplant's: .qpipe.publish drops any `time` a publisher sends and the
+/ tickerplant's: .qtorq.publish drops any `time` a publisher sends and the
 / plant stamps its receipt time, so a deal time carried in `time` would be
 / overwritten the day these rows are published. uqs_tables.q defines the
 / plant table as time plus deal_time, as databento_book keeps ts_event.
 
-\d .qfeed.duckdb_deals
+\d .qpipe.source.duckdb_deals
 
 source_name:`duckdb_deals
 
@@ -57,18 +57,18 @@ row_key:`deal_id
 tz:`UTC
 transport:`odbc
 
-/ A timestamp as DuckDB epoch nanoseconds, through .qodbc.literal.
+/ A timestamp as DuckDB epoch nanoseconds, through .qetl.io.odbc.literal.
 / @param ts a timestamp
 / @return SQL text for the same instant, to the nanosecond
-/ @eg .qfeed.duckdb_deals.epoch_ns_literal[2026.09.11D09:00:00.000000001]  ->  "make_timestamp_ns(1789117200000000001)"
-epoch_ns_literal:{[ts] "make_timestamp_ns(",.qodbc.literal["j"$ts-1970.01.01D00:00],")"}
+/ @eg .qpipe.source.duckdb_deals.epoch_ns_literal[2026.09.11D09:00:00.000000001]  ->  "make_timestamp_ns(1789117200000000001)"
+epoch_ns_literal:{[ts] "make_timestamp_ns(",.qetl.io.odbc.literal["j"$ts-1970.01.01D00:00],")"}
 
 / The SQL for one window: half-open [range_from;range_to) on deal_time,
 / ordered so a window is the same table on every fetch.
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the SELECT statement text
-/ @eg .qfeed.duckdb_deals.sql_for[2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]
+/ @eg .qpipe.source.duckdb_deals.sql_for[2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]
 sql_for:{[range_from;range_to]
     "SELECT epoch_ns(deal_time) AS deal_time, deal_id, sym, side, notional, rate",
     " FROM deals",
@@ -77,20 +77,20 @@ sql_for:{[range_from;range_to]
     " ORDER BY deal_time, deal_id"}
 
 / The driver's table in the declared types and column order.
-/ @param raw the table .qodbc.run_sql returns for sql_for's statement
+/ @param raw the table .qetl.io.odbc.run_sql returns for sql_for's statement
 / @return the same rows as the contract declares them
-/ @eg .qfeed.duckdb_deals.adapt[([] deal_time:enlist 1789117200000000000; deal_id:enlist 1; sym:enlist "EURUSD"; side:enlist "buy"; notional:enlist 1e6; rate:enlist 1.0842)]
+/ @eg .qpipe.source.duckdb_deals.adapt[([] deal_time:enlist 1789117200000000000; deal_id:enlist 1; sym:enlist "EURUSD"; side:enlist "buy"; notional:enlist 1e6; rate:enlist 1.0842)]
 adapt:{[raw]
     t:update deal_time:1970.01.01D00:00+deal_time from raw;
     t:@[t;`sym`side;{`$x}];
     columns xcols t}
 
 / One window of deals from DuckDB.
-/ @param h an ODBC handle from .qodbc.open
+/ @param h an ODBC handle from .qetl.io.odbc.open
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the deals in the window, in the contract's shape
-query:{[h;range_from;range_to] adapt .qodbc.run_sql[h;sql_for[range_from;range_to]]}
+query:{[h;range_from;range_to] adapt .qetl.io.odbc.run_sql[h;sql_for[range_from;range_to]]}
 
 / demo_deals' five deals, one a day from 2026.09.11 - the same rows that open
 / the DuckDB file - in this source's column names.
@@ -102,7 +102,7 @@ fixture:{[]
         notional:1000000 2500000 750000 3000000 1250000f;
         rate:1.0842 1.2631 1.0847 149.82 1.0851)}
 
-.qsrc.define[source_name;
+.qetl.source.define[source_name;
     `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
     (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport)];
 

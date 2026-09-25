@@ -34,39 +34,6 @@ qalloc,step,function,3,m state row
 qalloc,summary,function,2,matches group_cols
 qalloc,unrealised,function,2,lots marks
 qalloc,with_by,function,3,out kv bys
-qaudit,config_change,table,,
-qaudit,forget,function,1,
-qaudit,max_render,value,,
-qaudit,owner_here,value,,
-qaudit,period,value,,
-qaudit,poll,function,2,owner as_of
-qaudit,poll_and_publish,function,1,
-qaudit,render,function,1,name
-qaudit,seen,dict,,
-qaudit,watch,function,2,owner names
-qaudit,watched,dict,,
-qaudit,watching,function,1,owner
-qbfstate,acquire_lock,function,1,worker
-qbfstate,bounded_worker_globals,value,,
-qbfstate,bounded_worker_methods,value,,
-qbfstate,bounded_workers,dict,,
-qbfstate,checkpoint_path,function,1,worker
-qbfstate,clear_checkpoint,function,1,worker
-qbfstate,fail,function,4,worker spec progress err
-qbfstate,file_lock_path,function,1,name
-qbfstate,file_lock_wait,value,,
-qbfstate,load_checkpoint,function,2,worker spec
-qbfstate,lock_dir,function,1,
-qbfstate,lock_held,function,1,worker
-qbfstate,lock_path,function,1,worker
-qbfstate,ns_names,function,1,ns
-qbfstate,register,function,2,worker ns
-qbfstate,registered,function,1,
-qbfstate,release_lock,function,1,worker
-qbfstate,require_contract,function,1,worker
-qbfstate,run_pass,function,3,worker spec pass
-qbfstate,save_checkpoint,function,3,worker spec cursor
-qbfstate,with_file_lock,function,3,name f args
 qbook,all_digit_string,function,1,s
 qbook,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qbook,candidate_symbol_columns,function,3,tbl allowlist cardinality_ratio
@@ -76,101 +43,11 @@ qbook,is_string_column,function,2,tbl col
 qbook,sorted_source_cols_for_prefix,function,3,col_names col_strs prefix_target
 qbook,starts_with,function,2,prefix s
 qbook,symbolize_columns,function,2,tbl sym_cols
-qbw,advanced_to,function,3,worker current next_cursor
-qbw,begin_run,function,1,worker
-qbw,checkpoint,function,2,worker cursor
-qbw,cleanup,function,1,worker
-qbw,connect,function,1,worker
-qbw,def,function,1,worker
-qbw,define,function,2,worker decl
-qbw,delegate,function,2,worker nm
-qbw,do_window,function,2,worker w
-qbw,empty_windows,function,1,
-qbw,end_run,function,1,state
-qbw,fetch,function,3,worker from_ts to_ts
-qbw,inherit,function,2,worker ns
-qbw,inherited_methods,value,,
-qbw,init,function,2,worker run_spec
-qbw,initial_state,dict,,
-qbw,namespace,function,1,worker
-qbw,no_failures,function,1,
-qbw,normalised,function,1,cfg
-qbw,optional_cfg,value,,
-qbw,own,function,2,worker nm
-qbw,partition_of,function,1,worker
-qbw,plan,function,2,worker cursor
-qbw,publish,function,2,worker batch
-qbw,publish_last_batch,function,2,worker unused
-qbw,publish_pending,function,1,worker
-qbw,read_state,function,2,worker nm
-qbw,record_facts,function,5,worker cfg w batch r
-qbw,require_transform,function,2,worker cfg
-qbw,required_cfg,value,,
-qbw,run,function,1,worker
-qbw,run_check,function,2,worker batch
-qbw,spec,function,1,worker
-qbw,transform_batch,function,2,worker batch
-qbw,unpartitioned,value,,
-qbw,worker_cfg,dict,,
-qbw,worker_root,value,,
-qbw,write_state,function,3,worker nm v
 qccy,ccy_pair_legs,function,1,pair
 qccy,ccy_pair_symbol,function,2,base quote
 qccy,ccy_to_str,function,1,x
 qccy,is_ccy_pair,function,1,x
 qccy,normalize_ccy_pair,function,1,x
-qcoer,coerce_column,function,2,f col
-qcoer,is_date_only,function,1,str
-qcoer,numeric_chars,value,,
-qcoer,require_present,function,2,field v
-qcoer,to_date_as_midnight,function,1,str
-qcoer,to_float,function,1,str
-qcoer,to_long,function,1,str
-qcoer,to_symbol,function,1,str
-qcoer,to_symbol_cased,function,1,str
-qcoer,to_timestamp,function,1,str
-qcont,advance,function,3,worker current next_cursor
-qcont,clear_cursor,function,1,worker
-qcont,cursor_path,function,1,worker
-qcont,dataset_freshness,function,1,dataset
-qcont,dataset_is_fresh,function,2,dataset tolerance
-qcont,feeders_of,function,1,dataset
-qcont,feeds,dict,,
-qcont,freshness,function,1,worker
-qcont,is_fresh,function,2,worker tolerance
-qcont,load_cursor,function,1,worker
-qcont,poll_once,function,4,worker fetch_page publish_page next_cursor
-qcont,register_feeder,function,2,worker dataset
-qcont,save_cursor,function,2,worker cursor
-qdag,adopt_all,function,1,
-qdag,adopt_feeders,function,1,
-qdag,adopt_pipelines,function,1,
-qdag,adopt_reactions,function,1,
-qdag,adopt_workers,function,1,
-qdag,consumers,function,1,table_name
-qdag,d2,function,1,
-qdag,def,function,1,job
-qdag,edges,function,1,
-qdag,external_inputs,function,1,
-qdag,external_ref,function,2,source table_name
-qdag,id_chars,value,,
-qdag,job_edges,function,1,
-qdag,jobs,dict,,
-qdag,kinds,value,,
-qdag,layers,function,1,
-qdag,no_edges,function,1,
-qdag,producers,function,1,table_name
-qdag,reaction_edges,function,1,
-qdag,reaction_job,function,2,dataset name
-qdag,register,function,2,job decl
-qdag,register_pipelines,function,1,
-qdag,registry,function,1,
-qdag,required_spec,value,,
-qdag,reset,function,1,
-qdag,safe_id,function,1,s
-qdag,sinks,function,1,
-qdag,to_json,function,1,
-qdag,topological,function,1,
 qdata,cfg,function,2,k dflt
 qdata,databentoDir,function,1,
 qdata,databentoFile,function,2,sym date
@@ -193,6 +70,417 @@ qdesk,rollup,function,2,book group_cols
 qdqc,check_market_data_quality,function,2,quotes max_spread_bps
 qdqc,check_stale_quotes,function,3,quotes as_of max_age
 qdqc,summarize_checks,function,1,named_checks
+qetl.cfg,audit,dict,,
+qetl.cfg,default_values,dict,,
+qetl.cfg,env_name,function,1,k
+qetl.cfg,env_values,dict,,
+qetl.cfg,errors,value,,
+qetl.cfg,explain,function,1,k
+qetl.cfg,falsy,value,,
+qetl.cfg,get_flag,function,1,k
+qetl.cfg,get_positive,function,1,k
+qetl.cfg,get_symbol,function,1,k
+qetl.cfg,get_timestamp,function,1,k
+qetl.cfg,note,function,2,msg null_value
+qetl.cfg,override_values,dict,,
+qetl.cfg,raw,function,1,k
+qetl.cfg,raw_from,function,2,source k
+qetl.cfg,require_valid,function,1,
+qetl.cfg,reset,function,1,
+qetl.cfg,set_layers,function,3,overrides yaml defaults
+qetl.cfg,sources,value,,
+qetl.cfg,truthy,value,,
+qetl.cfg,yaml_values,dict,,
+qetl.cfg.audit,config_change,table,,
+qetl.cfg.audit,forget,function,1,
+qetl.cfg.audit,max_render,value,,
+qetl.cfg.audit,owner_here,value,,
+qetl.cfg.audit,period,value,,
+qetl.cfg.audit,poll,function,2,owner as_of
+qetl.cfg.audit,poll_and_publish,function,1,
+qetl.cfg.audit,render,function,1,name
+qetl.cfg.audit,seen,dict,,
+qetl.cfg.audit,watch,function,2,owner names
+qetl.cfg.audit,watched,dict,,
+qetl.cfg.audit,watching,function,1,owner
+qetl.coerce,coerce_column,function,2,f col
+qetl.coerce,is_date_only,function,1,str
+qetl.coerce,numeric_chars,value,,
+qetl.coerce,require_present,function,2,field v
+qetl.coerce,to_date_as_midnight,function,1,str
+qetl.coerce,to_float,function,1,str
+qetl.coerce,to_long,function,1,str
+qetl.coerce,to_symbol,function,1,str
+qetl.coerce,to_symbol_cased,function,1,str
+qetl.coerce,to_timestamp,function,1,str
+qetl.coverage,attach,function,1,
+qetl.coverage,compose,function,1,intervals
+qetl.coverage,contributing_runs,function,3,ds part version
+qetl.coverage,current_run,function,1,
+qetl.coverage,gaps,function,3,from_ts to_ts covered
+qetl.coverage,history,function,3,ds part version
+qetl.coverage,init_ledger,function,1,
+qetl.coverage,intervals,function,4,ds part version as_of
+qetl.coverage,is_covered,function,6,ds part version as_of from_ts to_ts
+qetl.coverage,ledger,function,1,
+qetl.coverage,ledger_path,function,1,
+qetl.coverage,lock_path,function,1,
+qetl.coverage,materialisations_of,function,1,id
+qetl.coverage,missing,function,6,ds part version as_of from_ts to_ts
+qetl.coverage,persist,function,1,
+qetl.coverage,reload,function,1,
+qetl.coverage,require_covered,function,6,ds part version as_of from_ts to_ts
+qetl.coverage,require_interval,function,2,range_from range_to
+qetl.coverage,require_schema,function,1,
+qetl.coverage,schema,value,,
+qetl.coverage,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
+qetl.coverage,still_current,value,,
+qetl.coverage,supersede,function,5,ds part version from_ts to_ts
+qetl.coverage,supersede_locked,function,5,ds part version from_ts to_ts
+qetl.coverage,valid_at,function,4,ds part version as_of
+qetl.coverage,with_lock,function,2,f args
+qetl.dag,adopt_all,function,1,
+qetl.dag,adopt_feeders,function,1,
+qetl.dag,adopt_pipelines,function,1,
+qetl.dag,adopt_reactions,function,1,
+qetl.dag,adopt_workers,function,1,
+qetl.dag,consumers,function,1,table_name
+qetl.dag,d2,function,1,
+qetl.dag,def,function,1,job
+qetl.dag,edges,function,1,
+qetl.dag,external_inputs,function,1,
+qetl.dag,external_ref,function,2,source table_name
+qetl.dag,id_chars,value,,
+qetl.dag,job_edges,function,1,
+qetl.dag,jobs,dict,,
+qetl.dag,kinds,value,,
+qetl.dag,layers,function,1,
+qetl.dag,no_edges,function,1,
+qetl.dag,producers,function,1,table_name
+qetl.dag,reaction_edges,function,1,
+qetl.dag,reaction_job,function,2,dataset name
+qetl.dag,register,function,2,job decl
+qetl.dag,register_pipelines,function,1,
+qetl.dag,registry,function,1,
+qetl.dag,required_spec,value,,
+qetl.dag,reset,function,1,
+qetl.dag,safe_id,function,1,s
+qetl.dag,sinks,function,1,
+qetl.dag,to_json,function,1,
+qetl.dag,topological,function,1,
+qetl.hb,attach,function,1,
+qetl.hb,beat,function,2,worker state
+qetl.hb,beat_window,function,1,worker
+qetl.hb,columns,value,,
+qetl.hb,has_beaten,function,1,worker
+qetl.hb,init_table,function,1,
+qetl.hb,ledger,function,1,
+qetl.hb,never_started,function,1,
+qetl.hb,report,function,1,
+qetl.hb,require_schema,function,1,
+qetl.hb,stale,function,1,max_age
+qetl.io,callable,function,1,v
+qetl.io,default,dict,,
+qetl.io,discard,dict,,
+qetl.io,finish,function,1,mgr
+qetl.io,finish_hdb,function,2,root ignored
+qetl.io,for_cfg,function,1,cfg
+qetl.io,hdb,function,2,root partition_col
+qetl.io,memory,dict,,
+qetl.io,odbc,dict,,
+qetl.io,optional,value,,
+qetl.io,require_manager,function,1,mgr
+qetl.io,required,value,,
+qetl.io,touched,table,,
+qetl.io,write,function,3,mgr target batch
+qetl.io,write_discard,function,2,target batch
+qetl.io,write_hdb,function,4,root partition_col target batch
+qetl.io,write_memory,function,2,target batch
+qetl.io.odbc,available,function,1,
+qetl.io.odbc,build_connection_string,function,5,host port database user password
+qetl.io.odbc,close,function,1,h
+qetl.io.odbc,escape_text,function,1,s
+qetl.io.odbc,literal,function,1,v
+qetl.io.odbc,loaded,function,1,
+qetl.io.odbc,open,function,1,conn
+qetl.io.odbc,require_available,function,1,
+qetl.io.odbc,run_sql,function,2,h sql
+qetl.io.odbc,table_names,function,1,h
+qetl.io.odbc,window_query,function,6,h table_name time_column columns range_from range_to
+qetl.io.odbc,with_connection,function,2,conn f
+qetl.job.bounded,advanced_to,function,3,worker current next_cursor
+qetl.job.bounded,begin_run,function,1,worker
+qetl.job.bounded,checkpoint,function,2,worker cursor
+qetl.job.bounded,cleanup,function,1,worker
+qetl.job.bounded,connect,function,1,worker
+qetl.job.bounded,def,function,1,worker
+qetl.job.bounded,define,function,2,worker decl
+qetl.job.bounded,delegate,function,2,worker nm
+qetl.job.bounded,do_window,function,2,worker w
+qetl.job.bounded,empty_windows,function,1,
+qetl.job.bounded,end_run,function,1,state
+qetl.job.bounded,fetch,function,3,worker from_ts to_ts
+qetl.job.bounded,inherit,function,2,worker ns
+qetl.job.bounded,inherited_methods,value,,
+qetl.job.bounded,init,function,2,worker run_spec
+qetl.job.bounded,initial_state,dict,,
+qetl.job.bounded,namespace,function,1,worker
+qetl.job.bounded,no_failures,function,1,
+qetl.job.bounded,normalised,function,1,cfg
+qetl.job.bounded,optional_cfg,value,,
+qetl.job.bounded,own,function,2,worker nm
+qetl.job.bounded,partition_of,function,1,worker
+qetl.job.bounded,plan,function,2,worker cursor
+qetl.job.bounded,publish,function,2,worker batch
+qetl.job.bounded,publish_last_batch,function,2,worker unused
+qetl.job.bounded,publish_pending,function,1,worker
+qetl.job.bounded,read_state,function,2,worker nm
+qetl.job.bounded,record_facts,function,5,worker cfg w batch r
+qetl.job.bounded,require_transform,function,2,worker cfg
+qetl.job.bounded,required_cfg,value,,
+qetl.job.bounded,run,function,1,worker
+qetl.job.bounded,run_check,function,2,worker batch
+qetl.job.bounded,runtime,dict,,
+qetl.job.bounded,spec,function,1,worker
+qetl.job.bounded,state,dict,,
+qetl.job.bounded,transform_batch,function,2,worker batch
+qetl.job.bounded,unpartitioned,value,,
+qetl.job.bounded,worker_cfg,dict,,
+qetl.job.bounded,worker_root,value,,
+qetl.job.bounded,write_state,function,3,worker nm v
+qetl.job.bounded.runtime,airflow_owned,value,,
+qetl.job.bounded.runtime,backoff_ms,function,2,pol attempt
+qetl.job.bounded.runtime,classify,function,1,err
+qetl.job.bounded.runtime,commit,function,4,dry effect action args
+qetl.job.bounded.runtime,connected,function,1,
+qetl.job.bounded.runtime,connected_override,value,,
+qetl.job.bounded.runtime,data_patterns,value,,
+qetl.job.bounded.runtime,declare_dependencies,function,2,worker procs
+qetl.job.bounded.runtime,declared_dependencies,dict,,
+qetl.job.bounded.runtime,default_policy,dict,,
+qetl.job.bounded.runtime,finish_window,function,7,worker ds part spec from_ts to_ts publish
+qetl.job.bounded.runtime,is_dry_run,function,1,
+qetl.job.bounded.runtime,needs_fetch,function,6,ds part version as_of from_ts to_ts
+qetl.job.bounded.runtime,owner,function,1,concern
+qetl.job.bounded.runtime,policy,function,1,
+qetl.job.bounded.runtime,q_owned,value,,
+qetl.job.bounded.runtime,remaining,function,6,ds part version as_of from_ts to_ts
+qetl.job.bounded.runtime,require_dependencies,function,1,worker
+qetl.job.bounded.runtime,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts
+qetl.job.bounded.runtime,retry_boundary,value,,
+qetl.job.bounded.runtime,retryable,function,1,err
+qetl.job.bounded.runtime,sleep_ms,function,1,ms
+qetl.job.bounded.runtime,suppressed_in_dry_run,value,,
+qetl.job.bounded.runtime,transport_patterns,value,,
+qetl.job.bounded.runtime,windows,function,3,from_ts to_ts width
+qetl.job.bounded.runtime,with_retry,function,2,pol f
+qetl.job.bounded.state,acquire_lock,function,1,worker
+qetl.job.bounded.state,bounded_worker_globals,value,,
+qetl.job.bounded.state,bounded_worker_methods,value,,
+qetl.job.bounded.state,bounded_workers,dict,,
+qetl.job.bounded.state,checkpoint_path,function,1,worker
+qetl.job.bounded.state,clear_checkpoint,function,1,worker
+qetl.job.bounded.state,fail,function,4,worker spec progress err
+qetl.job.bounded.state,file_lock_path,function,1,name
+qetl.job.bounded.state,file_lock_wait,value,,
+qetl.job.bounded.state,load_checkpoint,function,2,worker spec
+qetl.job.bounded.state,lock_dir,function,1,
+qetl.job.bounded.state,lock_held,function,1,worker
+qetl.job.bounded.state,lock_path,function,1,worker
+qetl.job.bounded.state,ns_names,function,1,ns
+qetl.job.bounded.state,register,function,2,worker ns
+qetl.job.bounded.state,registered,function,1,
+qetl.job.bounded.state,release_lock,function,1,worker
+qetl.job.bounded.state,require_contract,function,1,worker
+qetl.job.bounded.state,run_pass,function,3,worker spec pass
+qetl.job.bounded.state,save_checkpoint,function,3,worker spec cursor
+qetl.job.bounded.state,with_file_lock,function,3,name f args
+qetl.job.continuous,advance,function,3,worker current next_cursor
+qetl.job.continuous,clear_cursor,function,1,worker
+qetl.job.continuous,cursor_path,function,1,worker
+qetl.job.continuous,dataset_freshness,function,1,dataset
+qetl.job.continuous,dataset_is_fresh,function,2,dataset tolerance
+qetl.job.continuous,feeders_of,function,1,dataset
+qetl.job.continuous,feeds,dict,,
+qetl.job.continuous,freshness,function,1,worker
+qetl.job.continuous,is_fresh,function,2,worker tolerance
+qetl.job.continuous,load_cursor,function,1,worker
+qetl.job.continuous,poll_once,function,4,worker fetch_page publish_page next_cursor
+qetl.job.continuous,register_feeder,function,2,worker dataset
+qetl.job.continuous,save_cursor,function,2,worker cursor
+qetl.job.stream,def,function,1,job
+qetl.job.stream,define,function,2,job decl
+qetl.job.stream,defined,function,1,
+qetl.job.stream,drain,function,2,table_name mask
+qetl.job.stream,evict,function,2,table_name mask
+qetl.job.stream,for_procname,function,1,procname
+qetl.job.stream,is_callable,function,1,v
+qetl.job.stream,job_root,value,,
+qetl.job.stream,jobs,dict,,
+qetl.job.stream,namespace,function,1,job
+qetl.job.stream,normalize,function,2,name decl
+qetl.job.stream,normalizer,dict,,
+qetl.job.stream,procnames,dict,,
+qetl.job.stream,required_declarations,value,,
+qetl.job.stream,unwired,function,1,job
+qetl.job.stream,wire,function,2,job publisher
+qetl.job.stream.normalizer,check_source,function,4,who out src xf
+qetl.job.stream.normalizer,def,function,1,name
+qetl.job.stream.normalizer,define,function,2,name decl
+qetl.job.stream.normalizer,defined,function,1,
+qetl.job.stream.normalizer,dispatch,function,3,name t x
+qetl.job.stream.normalizer,normalize,function,3,name src batch
+qetl.job.stream.normalizer,registry,dict,,
+qetl.job.stream.normalizer,required_keys,value,,
+qetl.log,dbg,function,3,id text fields
+qetl.log,debug,function,1,on
+qetl.log,debug_enabled,value,,
+qetl.log,emit,function,3,level id msg
+qetl.log,enabled,function,1,level
+qetl.log,err,function,3,id text fields
+qetl.log,info,function,3,id text fields
+qetl.log,levels,value,,
+qetl.log,line,function,4,level id text fields
+qetl.log,register,function,1,
+qetl.log,render,function,1,fields
+qetl.log,torq_loaded,function,1,
+qetl.log,warn,function,3,id text fields
+qetl.reaction,audit,function,1,
+qetl.reaction,dag_consumers,function,1,dataset
+qetl.reaction,depth_now,value,,
+qetl.reaction,dispatch,function,1,item
+qetl.reaction,drain,function,1,
+qetl.reaction,draining,value,,
+qetl.reaction,empty_history,function,1,
+qetl.reaction,empty_queue,function,1,
+qetl.reaction,enqueue,function,4,dataset range_from range_to depth
+qetl.reaction,for_dataset,function,1,dataset
+qetl.reaction,history,table,,
+qetl.reaction,history_limit,value,,
+qetl.reaction,log_failure,function,3,item nm e
+qetl.reaction,max_depth,value,,
+qetl.reaction,no_reactions,function,1,
+qetl.reaction,notify,function,3,dataset range_from range_to
+qetl.reaction,notify_from_here,function,3,dataset range_from range_to
+qetl.reaction,off,function,2,dataset nm
+qetl.reaction,on,function,3,dataset nm handler
+qetl.reaction,on_worker,function,3,dataset worker spec_fn
+qetl.reaction,on_writing,function,4,dataset nm outputs handler
+qetl.reaction,queue,table,,
+qetl.reaction,reactions,dict,,
+qetl.reaction,record,function,7,dataset name depth range_from range_to outcome detail
+qetl.reaction,register,function,5,dataset nm handler outputs derived
+qetl.reaction,require_handler,function,3,dataset nm handler
+qetl.reaction,reset,function,1,
+qetl.reaction,run_one,function,3,item nm h
+qetl.run,as_text,function,1,v
+qetl.run,attach,function,1,
+qetl.run,begin,function,1,worker
+qetl.run,current,function,1,
+qetl.run,current_run,value,,
+qetl.run,facts_about,function,3,dataset range_from range_to
+qetl.run,facts_of,function,1,id
+qetl.run,finish,function,1,status
+qetl.run,history,function,1,
+qetl.run,in_flight,value,,
+qetl.run,init_meta,function,1,
+qetl.run,init_runs,function,1,
+qetl.run,is_running,function,1,
+qetl.run,meta_schema,value,,
+qetl.run,meta_table,function,1,
+qetl.run,mint,function,1,
+qetl.run,not_ended,value,,
+qetl.run,of_run,function,1,id
+qetl.run,persist,function,1,
+qetl.run,proc_name,function,1,
+qetl.run,record,function,4,dataset range_from range_to facts
+qetl.run,release,function,1,
+qetl.run,reload,function,1,
+qetl.run,require_current,function,1,
+qetl.run,require_run_schema,function,1,
+qetl.run,run_schema,value,,
+qetl.run,runs,function,1,
+qetl.run,table_path,function,1,name
+qetl.run,under_lock,function,2,f args
+qetl.run,unfinished,function,1,
+qetl.source,ambiguous_message,function,3,tz bad cs
+qetl.source,bound_padding,value,,
+qetl.source,coerce,function,2,source tbl
+qetl.source,coercers,dict,,
+qetl.source,column_names,function,1,tbl
+qetl.source,credential_var,function,1,source
+qetl.source,def,function,1,source
+qetl.source,default_transport,value,,
+qetl.source,define,function,2,source decl
+qetl.source,defined,function,1,
+qetl.source,fetch_window,function,4,source h range_from range_to
+qetl.source,has_credentials,function,1,source
+qetl.source,load_zone_table,function,1,path
+qetl.source,local_candidates,function,2,tz tsv
+qetl.source,local_to_utc,function,2,tz ts
+qetl.source,narrow_to_utc,function,4,decl tbl range_from range_to
+qetl.source,nonexistent_message,function,2,tz bad
+qetl.source,offset_at,function,2,tz ts
+qetl.source,offsets_for,function,1,tz
+qetl.source,require_credentials,function,1,source
+qetl.source,require_zone_table,function,1,tz
+qetl.source,required_declarations,value,,
+qetl.source,row_key,function,1,source
+qetl.source,source_bounds,function,3,decl range_from range_to
+qetl.source,sources,dict,,
+qetl.source,transports,value,,
+qetl.source,type_chars,function,1,tbl
+qetl.source,utc_to_local,function,2,tz ts
+qetl.source,validate,function,2,source tbl
+qetl.source,validate_fixture,function,1,source
+qetl.source,validate_live,function,2,source h
+qetl.source,window_fixture,function,3,decl range_from range_to
+qetl.source,zone_names,value,,
+qetl.source,zone_table,table,,
+qetl.status,legal_transitions,dict,,
+qetl.status,previous_state,function,1,instance_id
+qetl.status,require_transition,function,2,from_state to
+qetl.status,status_dir,function,1,
+qetl.status,status_states,value,,
+qetl.status,write_status,function,6,worker instance_id state spec progress err
+qetl.tick,can_send,function,1,sink
+qetl.tick,fan_out,function,2,name batch
+qetl.tick,learn,function,2,table_name stamped
+qetl.tick,log_handle,value,,
+qetl.tick,log_path,value,,
+qetl.tick,msg_count,value,,
+qetl.tick,open_log,function,3,dir name dt
+qetl.tick,publish,function,2,t x
+qetl.tick,record,function,1,msg
+qetl.tick,replay,function,2,path handler
+qetl.tick,require_batch,function,2,t x
+qetl.tick,reset,function,1,
+qetl.tick,schema,function,2,table_name empty
+qetl.tick,schemas,dict,,
+qetl.tick,subscribe,function,2,want sink
+qetl.tick,subscribers,table,,
+qetl.tick,unsubscribe,function,1,sink
+qetl.transform,apply,function,2,name given
+qetl.transform,apply_as_of,function,3,name given as_of
+qetl.transform,check_example,function,5,name ins output clock ex
+qetl.transform,col_equal,function,3,typ e a
+qetl.transform,col_types,function,1,tbl
+qetl.transform,def,function,1,name
+qetl.transform,define,function,2,name decl
+qetl.transform,differences,function,2,expected actual
+qetl.transform,float_tolerance,value,,
+qetl.transform,input_names,function,1,name
+qetl.transform,output_schema,function,1,name
+qetl.transform,passthrough,function,4,name input_name schema rows
+qetl.transform,problems,function,3,schema tbl ordered
+qetl.transform,registry,dict,,
+qetl.transform,require_verified,function,1,name
+qetl.transform,required_keys,value,,
+qetl.transform,run,function,4,name d given extra
+qetl.transform,type_ok,function,3,declared actual n
+qetl.transform,verify,function,1,name
+qetl.transform,verify_all,function,1,
+qetl.transform,verify_example,function,3,name d ex
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_order_time_cols,value,,
 qexec,fill_outcome,function,4,event_time cancel_time horizon_end known_by
@@ -213,64 +501,6 @@ qexec,slippage,function,4,side arrival_price exec_price pip_factor
 qexec,sweep_price,function,3,prices sizes target_size
 qexec,vwap,function,2,prices sizes
 qexec,vwap_expanding,function,2,prices sizes
-qfeed.databento_mbp10,adapt,function,1,raw
-qfeed.databento_mbp10,columns,value,,
-qfeed.databento_mbp10,epoch_ns_literal,function,1,ts
-qfeed.databento_mbp10,fixture,function,1,
-qfeed.databento_mbp10,fixture_levels,function,3,bid ask sz
-qfeed.databento_mbp10,level_fields,value,,
-qfeed.databento_mbp10,levels,value,,
-qfeed.databento_mbp10,query,function,3,h range_from range_to
-qfeed.databento_mbp10,row_key,value,,
-qfeed.databento_mbp10,select_list,function,1,
-qfeed.databento_mbp10,source_name,value,,
-qfeed.databento_mbp10,table_name,value,,
-qfeed.databento_mbp10,target,value,,
-qfeed.databento_mbp10,time_column,value,,
-qfeed.databento_mbp10,transport,value,,
-qfeed.databento_mbp10,types,value,,
-qfeed.databento_mbp10,tz,value,,
-qfeed.demo_deals,columns,value,,
-qfeed.demo_deals,fixture,function,1,
-qfeed.demo_deals,query,function,3,h range_from range_to
-qfeed.demo_deals,row_key,value,,
-qfeed.demo_deals,source_name,value,,
-qfeed.demo_deals,target,value,,
-qfeed.demo_deals,time_column,value,,
-qfeed.demo_deals,types,value,,
-qfeed.demo_deals,tz,value,,
-qfeed.demo_events,columns,value,,
-qfeed.demo_events,fixture,function,1,
-qfeed.demo_events,query,function,3,h range_from range_to
-qfeed.demo_events,row_key,value,,
-qfeed.demo_events,source_name,value,,
-qfeed.demo_events,target,value,,
-qfeed.demo_events,time_column,value,,
-qfeed.demo_events,types,value,,
-qfeed.demo_events,tz,value,,
-qfeed.duckdb_deals,adapt,function,1,raw
-qfeed.duckdb_deals,columns,value,,
-qfeed.duckdb_deals,epoch_ns_literal,function,1,ts
-qfeed.duckdb_deals,fixture,function,1,
-qfeed.duckdb_deals,query,function,3,h range_from range_to
-qfeed.duckdb_deals,row_key,value,,
-qfeed.duckdb_deals,source_name,value,,
-qfeed.duckdb_deals,sql_for,function,2,range_from range_to
-qfeed.duckdb_deals,table_name,value,,
-qfeed.duckdb_deals,target,value,,
-qfeed.duckdb_deals,time_column,value,,
-qfeed.duckdb_deals,transport,value,,
-qfeed.duckdb_deals,types,value,,
-qfeed.duckdb_deals,tz,value,,
-qfeed.upstream_trades,columns,value,,
-qfeed.upstream_trades,fixture,function,1,
-qfeed.upstream_trades,query,function,3,h range_from range_to
-qfeed.upstream_trades,row_key,value,,
-qfeed.upstream_trades,source_name,value,,
-qfeed.upstream_trades,target,value,,
-qfeed.upstream_trades,time_column,value,,
-qfeed.upstream_trades,types,value,,
-qfeed.upstream_trades,tz,value,,
 qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
 qfwd,CROSS_SIZE_MAX_HALVINGS,value,,
 qfwd,CROSS_SIZE_REL_TOL,value,,
@@ -315,33 +545,6 @@ qfwd,side_cols,function,1,s
 qfwd,single_leg_at_one_size,function,4,cross_sym leg_book invert size
 qfwd,single_leg_at_sizes,function,5,cross_sym leg_book invert sizes sides
 qfwd,time_col,value,,
-qhb,attach,function,1,
-qhb,beat,function,2,worker state
-qhb,beat_window,function,1,worker
-qhb,columns,value,,
-qhb,has_beaten,function,1,worker
-qhb,init_table,function,1,
-qhb,ledger,function,1,
-qhb,never_started,function,1,
-qhb,report,function,1,
-qhb,require_schema,function,1,
-qhb,stale,function,1,max_age
-qio,callable,function,1,v
-qio,default,dict,,
-qio,discard,dict,,
-qio,finish,function,1,mgr
-qio,finish_hdb,function,2,root ignored
-qio,for_cfg,function,1,cfg
-qio,hdb,function,2,root partition_col
-qio,memory,dict,,
-qio,optional,value,,
-qio,require_manager,function,1,mgr
-qio,required,value,,
-qio,touched,table,,
-qio,write,function,3,mgr target batch
-qio,write_discard,function,2,target batch
-qio,write_hdb,function,4,root partition_col target batch
-qio,write_memory,function,2,target batch
 qlimit,evaluate,function,2,measured limits
 qlimit,identity,function,1,scopes
 qlimit,measure,function,2,book metrics
@@ -353,45 +556,6 @@ qlimit,required_measured_cols,value,,
 qlimit,scope_cols,function,1,limits
 qlimit,throttle,function,4,state breaches now period
 qlimit,unmatched_limits,function,2,measured limits
-qlog,dbg,function,3,id text fields
-qlog,debug,function,1,on
-qlog,debug_enabled,value,,
-qlog,emit,function,3,level id msg
-qlog,enabled,function,1,level
-qlog,err,function,3,id text fields
-qlog,info,function,3,id text fields
-qlog,levels,value,,
-qlog,line,function,4,level id text fields
-qlog,register,function,1,
-qlog,render,function,1,fields
-qlog,torq_loaded,function,1,
-qlog,warn,function,3,id text fields
-qmatz,attach,function,1,
-qmatz,compose,function,1,intervals
-qmatz,contributing_runs,function,3,ds part version
-qmatz,current_run,function,1,
-qmatz,gaps,function,3,from_ts to_ts covered
-qmatz,history,function,3,ds part version
-qmatz,init_ledger,function,1,
-qmatz,intervals,function,4,ds part version as_of
-qmatz,is_covered,function,6,ds part version as_of from_ts to_ts
-qmatz,ledger,function,1,
-qmatz,ledger_path,function,1,
-qmatz,lock_path,function,1,
-qmatz,materialisations_of,function,1,id
-qmatz,missing,function,6,ds part version as_of from_ts to_ts
-qmatz,persist,function,1,
-qmatz,reload,function,1,
-qmatz,require_covered,function,6,ds part version as_of from_ts to_ts
-qmatz,require_interval,function,2,range_from range_to
-qmatz,require_schema,function,1,
-qmatz,schema,value,,
-qmatz,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
-qmatz,still_current,value,,
-qmatz,supersede,function,5,ds part version from_ts to_ts
-qmatz,supersede_locked,function,5,ds part version from_ts to_ts
-qmatz,valid_at,function,4,ds part version as_of
-qmatz,with_lock,function,2,f args
 qmeta,collect,function,2,spec partitions
 qmeta,collect_partition,function,3,spec part observed_at
 qmeta,count_bad,function,2,violations row_count
@@ -447,31 +611,11 @@ qmicro,volume_buckets,function,2,tape bucket_volume
 qmicro,vpin,function,3,tape bucket_volume n_buckets
 qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
 qmicro,vwmp_skew_one,function,5,n_levels bid_prices bid_sizes ask_prices ask_sizes
-qnorm,check_source,function,4,who out src xf
-qnorm,def,function,1,name
-qnorm,define,function,2,name decl
-qnorm,defined,function,1,
-qnorm,dispatch,function,3,name t x
-qnorm,normalize,function,3,name src batch
-qnorm,registry,dict,,
-qnorm,required_keys,value,,
 qns,children,function,1,ns
 qns,descend,function,1,ns
 qns,functional,function,1,
 qns,is_namespace,function,1,v
 qns,owned,function,1,
-qodbc,available,function,1,
-qodbc,build_connection_string,function,5,host port database user password
-qodbc,close,function,1,h
-qodbc,escape_text,function,1,s
-qodbc,literal,function,1,v
-qodbc,loaded,function,1,
-qodbc,open,function,1,conn
-qodbc,require_available,function,1,
-qodbc,run_sql,function,2,h sql
-qodbc,table_names,function,1,h
-qodbc,window_query,function,6,h table_name time_column columns range_from range_to
-qodbc,with_connection,function,2,conn f
 qopt,BISECT_VOL_HI,value,,
 qopt,BISECT_VOL_LO,value,,
 qopt,BISECT_VOL_MAX_ITER,value,,
@@ -501,6 +645,329 @@ qopt,gk_vanna,function,6,s k rd rf sigma t
 qopt,gk_vega,function,6,s k rd rf sigma t
 qopt,gk_volga,function,6,s k rd rf sigma t
 qopt,implied_vol,function,7,price s k rd rf t is_call
+qpipe.job.arbitrage,arbitrage,table,,
+qpipe.job.arbitrage,evaluate,function,1,batch
+qpipe.job.arbitrage,on_batch,function,2,t x
+qpipe.job.arbitrage,opportunity,function,1,book
+qpipe.job.arbitrage,publish,value,,
+qpipe.job.cross,cross_pairs,value,,
+qpipe.job.cross,cross_quotes,table,,
+qpipe.job.cross,crosses,table,,
+qpipe.job.cross,now,function,1,
+qpipe.job.cross,on_batch,function,2,t x
+qpipe.job.cross,publish,value,,
+qpipe.job.cross,quotes,table,,
+qpipe.job.cross,quotes_in,table,,
+qpipe.job.cross,reprice,function,1,now
+qpipe.job.cross,reprice_crosses,function,2,quotes as_of
+qpipe.job.cross_arbitrage,books,dict,,
+qpipe.job.cross_arbitrage,cross_arbitrage,table,,
+qpipe.job.cross_arbitrage,direct_side,function,3,row side size
+qpipe.job.cross_arbitrage,evaluate,function,3,state size as_of
+qpipe.job.cross_arbitrage,leg_book,function,1,row
+qpipe.job.cross_arbitrage,leg_times,function,2,state route
+qpipe.job.cross_arbitrage,max_skew,value,,
+qpipe.job.cross_arbitrage,notional,value,,
+qpipe.job.cross_arbitrage,on_batch,function,2,t x
+qpipe.job.cross_arbitrage,opportunity,function,5,state avail sym size as_of
+qpipe.job.cross_arbitrage,publish,value,,
+qpipe.job.cross_arbitrage,quotable,function,1,state
+qpipe.job.cross_arbitrage,route_for,function,2,avail sym
+qpipe.job.crypto_mock,beta_draw,function,2,a b
+qpipe.job.crypto_mock,book_rows,function,1,mkt
+qpipe.job.crypto_mock,decide,function,3,row horizon draws
+qpipe.job.crypto_mock,draws,function,1,
+qpipe.job.crypto_mock,drift_toxicity,function,1,toxicity
+qpipe.job.crypto_mock,fill_alpha,value,,
+qpipe.job.crypto_mock,fill_beta,value,,
+qpipe.job.crypto_mock,fill_rows,function,6,venue s side price size id
+qpipe.job.crypto_mock,half_spread,value,,
+qpipe.job.crypto_mock,hazard_per_s,value,,
+qpipe.job.crypto_mock,hazard_to_prob,function,2,hazard horizon
+qpipe.job.crypto_mock,last_id,dict,,
+qpipe.job.crypto_mock,level_step,value,,
+qpipe.job.crypto_mock,maker_fee_bps,value,,
+qpipe.job.crypto_mock,market,table,,
+qpipe.job.crypto_mock,max_fill_fraction,value,,
+qpipe.job.crypto_mock,mid0,value,,
+qpipe.job.crypto_mock,n_levels,value,,
+qpipe.job.crypto_mock,n_market,value,,
+qpipe.job.crypto_mock,next_id,function,1,venue
+qpipe.job.crypto_mock,on_timer,function,1,
+qpipe.job.crypto_mock,publish,value,,
+qpipe.job.crypto_mock,publish_fills,function,2,horizon row
+qpipe.job.crypto_mock,quote_ccy,function,1,s
+qpipe.job.crypto_mock,quote_share,value,,
+qpipe.job.crypto_mock,quote_size,value,,
+qpipe.job.crypto_mock,skewed,function,2,p tox
+qpipe.job.crypto_mock,syms,value,,
+qpipe.job.crypto_mock,tick_seconds,value,,
+qpipe.job.crypto_mock,touch,function,1,mid
+qpipe.job.crypto_mock,toxicity_factor,value,,
+qpipe.job.crypto_mock,venues,value,,
+qpipe.job.crypto_mock,walk,function,1,m
+qpipe.job.databento_book,book,table,,
+qpipe.job.databento_book,on_batch,function,2,t x
+qpipe.job.databento_book,publish,value,,
+qpipe.job.databento_book,raw,table,,
+qpipe.job.databento_book_backfill,checkpoint,function,1,cursor
+qpipe.job.databento_book_backfill,cleanup,function,1,
+qpipe.job.databento_book_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.databento_book_backfill,handle,value,,
+qpipe.job.databento_book_backfill,init,function,1,run_spec
+qpipe.job.databento_book_backfill,last_batch,value,,
+qpipe.job.databento_book_backfill,plan,function,1,cursor
+qpipe.job.databento_book_backfill,progress,dict,,
+qpipe.job.databento_book_backfill,publish,function,1,batch
+qpipe.job.databento_book_backfill,quality_check,function,1,batch
+qpipe.job.databento_book_backfill,range_from,value,,
+qpipe.job.databento_book_backfill,range_to,value,,
+qpipe.job.databento_book_backfill,run,function,1,
+qpipe.job.databento_book_backfill,source_version,value,,
+qpipe.job.databento_book_backfill,spec,function,1,
+qpipe.job.demo_deals_backfill,checkpoint,function,1,cursor
+qpipe.job.demo_deals_backfill,cleanup,function,1,
+qpipe.job.demo_deals_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.demo_deals_backfill,handle,value,,
+qpipe.job.demo_deals_backfill,init,function,1,run_spec
+qpipe.job.demo_deals_backfill,last_batch,value,,
+qpipe.job.demo_deals_backfill,plan,function,1,cursor
+qpipe.job.demo_deals_backfill,progress,dict,,
+qpipe.job.demo_deals_backfill,publish,function,1,batch
+qpipe.job.demo_deals_backfill,quality_check,function,1,batch
+qpipe.job.demo_deals_backfill,range_from,value,,
+qpipe.job.demo_deals_backfill,range_to,value,,
+qpipe.job.demo_deals_backfill,run,function,1,
+qpipe.job.demo_deals_backfill,source_version,value,,
+qpipe.job.demo_deals_backfill,spec,function,1,
+qpipe.job.demo_events_backfill,checkpoint,function,1,cursor
+qpipe.job.demo_events_backfill,cleanup,function,1,
+qpipe.job.demo_events_backfill,facts,function,1,batch
+qpipe.job.demo_events_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.demo_events_backfill,handle,value,,
+qpipe.job.demo_events_backfill,init,function,1,run_spec
+qpipe.job.demo_events_backfill,last_batch,value,,
+qpipe.job.demo_events_backfill,plan,function,1,cursor
+qpipe.job.demo_events_backfill,progress,dict,,
+qpipe.job.demo_events_backfill,publish,function,1,batch
+qpipe.job.demo_events_backfill,range_from,value,,
+qpipe.job.demo_events_backfill,range_to,value,,
+qpipe.job.demo_events_backfill,run,function,1,
+qpipe.job.demo_events_backfill,source_version,value,,
+qpipe.job.demo_events_backfill,spec,function,1,
+qpipe.job.duckdb_deals_backfill,checkpoint,function,1,cursor
+qpipe.job.duckdb_deals_backfill,cleanup,function,1,
+qpipe.job.duckdb_deals_backfill,facts,function,1,batch
+qpipe.job.duckdb_deals_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.duckdb_deals_backfill,handle,value,,
+qpipe.job.duckdb_deals_backfill,init,function,1,run_spec
+qpipe.job.duckdb_deals_backfill,last_batch,value,,
+qpipe.job.duckdb_deals_backfill,plan,function,1,cursor
+qpipe.job.duckdb_deals_backfill,progress,dict,,
+qpipe.job.duckdb_deals_backfill,publish,function,1,batch
+qpipe.job.duckdb_deals_backfill,quality_check,function,1,batch
+qpipe.job.duckdb_deals_backfill,range_from,value,,
+qpipe.job.duckdb_deals_backfill,range_to,value,,
+qpipe.job.duckdb_deals_backfill,run,function,1,
+qpipe.job.duckdb_deals_backfill,source_version,value,,
+qpipe.job.duckdb_deals_backfill,spec,function,1,
+qpipe.job.executions,crypto_trades,table,,
+qpipe.job.executions,executions,table,,
+qpipe.job.executions,from_crypto_trades,function,1,batch
+qpipe.job.executions,from_trades,function,1,batch
+qpipe.job.executions,fx_venue,value,,
+qpipe.job.executions,on_batch,value,,
+qpipe.job.executions,publish,value,,
+qpipe.job.executions,trades,table,,
+qpipe.job.fx_feed,on_timer,function,1,
+qpipe.job.fx_feed,publish,value,,
+qpipe.job.fx_feed,spot,value,,
+qpipe.job.fx_feed,tick_rows,function,1,levels
+qpipe.job.fx_orders_feed,books,value,,
+qpipe.job.fx_orders_feed,last_id,value,,
+qpipe.job.fx_orders_feed,on_timer,function,1,
+qpipe.job.fx_orders_feed,order_rows,function,8,id i bk pr side size status slip_pips
+qpipe.job.fx_orders_feed,pip_factor,value,,
+qpipe.job.fx_orders_feed,products,value,,
+qpipe.job.fx_orders_feed,publish,value,,
+qpipe.job.fx_orders_feed,sizes,value,,
+qpipe.job.fx_orders_feed,statuses,value,,
+qpipe.job.fx_positions,alert_period,value,,
+qpipe.job.fx_positions,alerts,dict,,
+qpipe.job.fx_positions,book,dict,,
+qpipe.job.fx_positions,desk_book,table,,
+qpipe.job.fx_positions,dimensions,value,,
+qpipe.job.fx_positions,filled_status,value,,
+qpipe.job.fx_positions,fresh_breaches,function,1,now
+qpipe.job.fx_positions,fx_limit_breach,table,,
+qpipe.job.fx_positions,fx_position,table,,
+qpipe.job.fx_positions,limits,table,,
+qpipe.job.fx_positions,load_limits,function,1,limits
+qpipe.job.fx_positions,net_orders,function,2,book batch
+qpipe.job.fx_positions,on_batch,function,2,t x
+qpipe.job.fx_positions,on_timer,function,1,
+qpipe.job.fx_positions,orders,table,,
+qpipe.job.fx_positions,policed,value,,
+qpipe.job.fx_positions,publish,value,,
+qpipe.job.fx_trades_feed,fill_rows,function,4,i side size slip_pips
+qpipe.job.fx_trades_feed,on_timer,function,1,
+qpipe.job.fx_trades_feed,pip_factor,value,,
+qpipe.job.fx_trades_feed,publish,value,,
+qpipe.job.fx_trades_feed,sizes,value,,
+qpipe.job.fx_trades_feed,spot,value,,
+qpipe.job.kafka_flow,above_high_water,function,1,rows
+qpipe.job.kafka_flow,advance,function,1,rows
+qpipe.job.kafka_flow,first_per_coordinate,function,1,rows
+qpipe.job.kafka_flow,high_water,dict,,
+qpipe.job.kafka_flow,on_batch,function,2,t x
+qpipe.job.kafka_flow,publish,value,,
+qpipe.job.market_data,from_quote,function,1,batch
+qpipe.job.market_data,from_quotes,function,1,batch
+qpipe.job.market_data,market_data,table,,
+qpipe.job.market_data,on_batch,value,,
+qpipe.job.market_data,publish,value,,
+qpipe.job.market_data,quote,table,,
+qpipe.job.market_data,quotes,table,,
+qpipe.job.markout,execution_quality,table,,
+qpipe.job.markout,horizons,value,,
+qpipe.job.markout,max_horizon,value,,
+qpipe.job.markout,now,function,1,
+qpipe.job.markout,on_batch,function,2,t x
+qpipe.job.markout,on_timer,function,1,
+qpipe.job.markout,pending,table,,
+qpipe.job.markout,publish,value,,
+qpipe.job.markout,quote_hist,table,,
+qpipe.job.markout,quotes,table,,
+qpipe.job.markout,score_markouts,function,2,trades quotes
+qpipe.job.markout,score_ready,function,1,now
+qpipe.job.markout,trades,table,,
+qpipe.job.marks,crypto_book,table,,
+qpipe.job.marks,from_crypto_book,function,1,batch
+qpipe.job.marks,from_quote,function,1,batch
+qpipe.job.marks,fx_venue,value,,
+qpipe.job.marks,marks,table,,
+qpipe.job.marks,on_batch,value,,
+qpipe.job.marks,publish,value,,
+qpipe.job.marks,quote,table,,
+qpipe.job.posbook,book,dict,,
+qpipe.job.posbook,executions,table,,
+qpipe.job.posbook,last_mid,dict,,
+qpipe.job.posbook,mark_positions,function,3,book trades marks
+qpipe.job.posbook,marks,table,,
+qpipe.job.posbook,next_book,function,2,book positions
+qpipe.job.posbook,on_batch,function,2,t x
+qpipe.job.posbook,position,table,,
+qpipe.job.posbook,position_book,table,,
+qpipe.job.posbook,position_marks,table,,
+qpipe.job.posbook,position_trades,table,,
+qpipe.job.posbook,publish,value,,
+qpipe.job.quotes_feed,n_levels,value,,
+qpipe.job.quotes_feed,on_timer,function,1,
+qpipe.job.quotes_feed,publish,value,,
+qpipe.job.quotes_feed,spot,value,,
+qpipe.job.quotes_feed,tick_rows,function,1,mids
+qpipe.job.superbook,books,dict,,
+qpipe.job.superbook,levels,function,2,prices sizes
+qpipe.job.superbook,max_age,value,,
+qpipe.job.superbook,on_batch,function,2,t x
+qpipe.job.superbook,on_timer,function,1,
+qpipe.job.superbook,publish,value,,
+qpipe.job.superbook,refresh,function,1,as_of
+qpipe.job.superbook,replace_books,function,3,state batch as_of
+qpipe.job.superbook,side_levels,function,2,rows side
+qpipe.job.superbook,snapshot,function,3,state as_of age
+qpipe.job.superbook,superbook,table,,
+qpipe.job.upstream_trades_backfill,checkpoint,function,1,cursor
+qpipe.job.upstream_trades_backfill,cleanup,function,1,
+qpipe.job.upstream_trades_backfill,facts,function,1,batch
+qpipe.job.upstream_trades_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.upstream_trades_backfill,handle,value,,
+qpipe.job.upstream_trades_backfill,init,function,1,run_spec
+qpipe.job.upstream_trades_backfill,last_batch,value,,
+qpipe.job.upstream_trades_backfill,plan,function,1,cursor
+qpipe.job.upstream_trades_backfill,progress,dict,,
+qpipe.job.upstream_trades_backfill,publish,function,1,batch
+qpipe.job.upstream_trades_backfill,quality_check,function,1,batch
+qpipe.job.upstream_trades_backfill,range_from,value,,
+qpipe.job.upstream_trades_backfill,range_to,value,,
+qpipe.job.upstream_trades_backfill,run,function,1,
+qpipe.job.upstream_trades_backfill,source_version,value,,
+qpipe.job.upstream_trades_backfill,spec,function,1,
+qpipe.job.vectorize,fold_wide_book,function,1,book
+qpipe.job.vectorize,mkt_orderbook,table,,
+qpipe.job.vectorize,on_batch,function,2,t x
+qpipe.job.vectorize,publish,value,,
+qpipe.job.vectorize,wide_book,table,,
+qpipe.job.vectorize,wide_level_groups,dict,,
+qpipe.job.vectorize,wide_level_names,value,,
+qpipe.job.wide_book_feed,n_levels,value,,
+qpipe.job.wide_book_feed,on_timer,function,1,
+qpipe.job.wide_book_feed,publish,value,,
+qpipe.job.wide_book_feed,spot,value,,
+qpipe.job.wide_book_feed,tick_rows,function,1,mids
+qpipe.source.databento_mbp10,adapt,function,1,raw
+qpipe.source.databento_mbp10,columns,value,,
+qpipe.source.databento_mbp10,epoch_ns_literal,function,1,ts
+qpipe.source.databento_mbp10,fixture,function,1,
+qpipe.source.databento_mbp10,fixture_levels,function,3,bid ask sz
+qpipe.source.databento_mbp10,level_fields,value,,
+qpipe.source.databento_mbp10,levels,value,,
+qpipe.source.databento_mbp10,query,function,3,h range_from range_to
+qpipe.source.databento_mbp10,row_key,value,,
+qpipe.source.databento_mbp10,select_list,function,1,
+qpipe.source.databento_mbp10,source_name,value,,
+qpipe.source.databento_mbp10,table_name,value,,
+qpipe.source.databento_mbp10,target,value,,
+qpipe.source.databento_mbp10,time_column,value,,
+qpipe.source.databento_mbp10,transport,value,,
+qpipe.source.databento_mbp10,types,value,,
+qpipe.source.databento_mbp10,tz,value,,
+qpipe.source.demo_deals,columns,value,,
+qpipe.source.demo_deals,fixture,function,1,
+qpipe.source.demo_deals,query,function,3,h range_from range_to
+qpipe.source.demo_deals,row_key,value,,
+qpipe.source.demo_deals,source_name,value,,
+qpipe.source.demo_deals,target,value,,
+qpipe.source.demo_deals,time_column,value,,
+qpipe.source.demo_deals,types,value,,
+qpipe.source.demo_deals,tz,value,,
+qpipe.source.demo_events,columns,value,,
+qpipe.source.demo_events,fixture,function,1,
+qpipe.source.demo_events,query,function,3,h range_from range_to
+qpipe.source.demo_events,row_key,value,,
+qpipe.source.demo_events,source_name,value,,
+qpipe.source.demo_events,target,value,,
+qpipe.source.demo_events,time_column,value,,
+qpipe.source.demo_events,types,value,,
+qpipe.source.demo_events,tz,value,,
+qpipe.source.duckdb_deals,adapt,function,1,raw
+qpipe.source.duckdb_deals,columns,value,,
+qpipe.source.duckdb_deals,epoch_ns_literal,function,1,ts
+qpipe.source.duckdb_deals,fixture,function,1,
+qpipe.source.duckdb_deals,query,function,3,h range_from range_to
+qpipe.source.duckdb_deals,row_key,value,,
+qpipe.source.duckdb_deals,source_name,value,,
+qpipe.source.duckdb_deals,sql_for,function,2,range_from range_to
+qpipe.source.duckdb_deals,table_name,value,,
+qpipe.source.duckdb_deals,target,value,,
+qpipe.source.duckdb_deals,time_column,value,,
+qpipe.source.duckdb_deals,transport,value,,
+qpipe.source.duckdb_deals,types,value,,
+qpipe.source.duckdb_deals,tz,value,,
+qpipe.source.upstream_trades,columns,value,,
+qpipe.source.upstream_trades,fixture,function,1,
+qpipe.source.upstream_trades,query,function,3,h range_from range_to
+qpipe.source.upstream_trades,row_key,value,,
+qpipe.source.upstream_trades,source_name,value,,
+qpipe.source.upstream_trades,target,value,,
+qpipe.source.upstream_trades,time_column,value,,
+qpipe.source.upstream_trades,types,value,,
+qpipe.source.upstream_trades,tz,value,,
+qpipe.transform.databento_book,book,table,,
+qpipe.transform.databento_book,contract,table,,
+qpipe.transform.databento_book,example_book,function,1,
+qpipe.transform.databento_book,fold,function,2,batch prefix
+qpipe.transform.databento_book,to_book,function,1,batch
 qpos,apply_fill,function,5,pos sym qty price side
 qpos,apply_fills,function,2,pos trades
 qpos,ccy_exposure,function,1,pos
@@ -516,313 +983,18 @@ qrates,df_simple,function,2,r t
 qrates,growth_cont,function,2,r t
 qrates,growth_simple,function,2,r t
 qrates,simple_to_cont,function,2,r t
-qreact,audit,function,1,
-qreact,dag_consumers,function,1,dataset
-qreact,depth_now,value,,
-qreact,dispatch,function,1,item
-qreact,drain,function,1,
-qreact,draining,value,,
-qreact,empty_history,function,1,
-qreact,empty_queue,function,1,
-qreact,enqueue,function,4,dataset range_from range_to depth
-qreact,for_dataset,function,1,dataset
-qreact,history,table,,
-qreact,history_limit,value,,
-qreact,log_failure,function,3,item nm e
-qreact,max_depth,value,,
-qreact,no_reactions,function,1,
-qreact,notify,function,3,dataset range_from range_to
-qreact,notify_from_here,function,3,dataset range_from range_to
-qreact,off,function,2,dataset nm
-qreact,on,function,3,dataset nm handler
-qreact,on_worker,function,3,dataset worker spec_fn
-qreact,on_writing,function,4,dataset nm outputs handler
-qreact,queue,table,,
-qreact,reactions,dict,,
-qreact,record,function,7,dataset name depth range_from range_to outcome detail
-qreact,register,function,5,dataset nm handler outputs derived
-qreact,require_handler,function,3,dataset nm handler
-qreact,reset,function,1,
-qreact,run_one,function,3,item nm h
 qrisk,carry_pnl,function,3,notional spot fwd
 qrisk,carry_return,function,2,spot fwd
 qrisk,pip_value,function,2,notional pip_factor
 qrisk,pnl,function,4,notional entry_rate exit_rate side
 qrisk,var_historical,function,2,pnl_series confidence
 qrisk,var_parametric,function,4,notional vol t confidence
-qrun,as_text,function,1,v
-qrun,attach,function,1,
-qrun,begin,function,1,worker
-qrun,current,function,1,
-qrun,current_run,value,,
-qrun,facts_about,function,3,dataset range_from range_to
-qrun,facts_of,function,1,id
-qrun,finish,function,1,status
-qrun,history,function,1,
-qrun,in_flight,value,,
-qrun,init_meta,function,1,
-qrun,init_runs,function,1,
-qrun,is_running,function,1,
-qrun,meta_schema,value,,
-qrun,meta_table,function,1,
-qrun,mint,function,1,
-qrun,not_ended,value,,
-qrun,of_run,function,1,id
-qrun,persist,function,1,
-qrun,proc_name,function,1,
-qrun,record,function,4,dataset range_from range_to facts
-qrun,release,function,1,
-qrun,reload,function,1,
-qrun,require_current,function,1,
-qrun,require_run_schema,function,1,
-qrun,run_schema,value,,
-qrun,runs,function,1,
-qrun,table_path,function,1,name
-qrun,under_lock,function,2,f args
-qrun,unfinished,function,1,
 qschema,require_cols,function,4,fn_name table_name tbl req
-qsrc,ambiguous_message,function,3,tz bad cs
-qsrc,bound_padding,value,,
-qsrc,coerce,function,2,source tbl
-qsrc,coercers,dict,,
-qsrc,column_names,function,1,tbl
-qsrc,credential_var,function,1,source
-qsrc,def,function,1,source
-qsrc,default_transport,value,,
-qsrc,define,function,2,source decl
-qsrc,defined,function,1,
-qsrc,fetch_window,function,4,source h range_from range_to
-qsrc,has_credentials,function,1,source
-qsrc,load_zone_table,function,1,path
-qsrc,local_candidates,function,2,tz tsv
-qsrc,local_to_utc,function,2,tz ts
-qsrc,narrow_to_utc,function,4,decl tbl range_from range_to
-qsrc,nonexistent_message,function,2,tz bad
-qsrc,offset_at,function,2,tz ts
-qsrc,offsets_for,function,1,tz
-qsrc,require_credentials,function,1,source
-qsrc,require_zone_table,function,1,tz
-qsrc,required_declarations,value,,
-qsrc,row_key,function,1,source
-qsrc,source_bounds,function,3,decl range_from range_to
-qsrc,sources,dict,,
-qsrc,transports,value,,
-qsrc,type_chars,function,1,tbl
-qsrc,utc_to_local,function,2,tz ts
-qsrc,validate,function,2,source tbl
-qsrc,validate_fixture,function,1,source
-qsrc,validate_live,function,2,source h
-qsrc,window_fixture,function,3,decl range_from range_to
-qsrc,zone_names,value,,
-qsrc,zone_table,table,,
 qstats,PI,value,,
 qstats,horner_eval,function,2,coeffs x
 qstats,inv_ncdf,function,1,p
 qstats,ncdf,function,1,x
 qstats,npdf,function,1,x
-qstatus,legal_transitions,dict,,
-qstatus,previous_state,function,1,instance_id
-qstatus,require_transition,function,2,from_state to
-qstatus,status_dir,function,1,
-qstatus,status_states,value,,
-qstatus,write_status,function,6,worker instance_id state spec progress err
-qstream,def,function,1,job
-qstream,define,function,2,job decl
-qstream,defined,function,1,
-qstream,drain,function,2,table_name mask
-qstream,evict,function,2,table_name mask
-qstream,for_procname,function,1,procname
-qstream,is_callable,function,1,v
-qstream,job_root,value,,
-qstream,jobs,dict,,
-qstream,namespace,function,1,job
-qstream,procnames,dict,,
-qstream,required_declarations,value,,
-qstream,unwired,function,1,job
-qstream,wire,function,2,job publisher
-qsub.arbitrage,arbitrage,table,,
-qsub.arbitrage,evaluate,function,1,batch
-qsub.arbitrage,on_batch,function,2,t x
-qsub.arbitrage,opportunity,function,1,book
-qsub.arbitrage,publish,value,,
-qsub.cross,cross_pairs,value,,
-qsub.cross,cross_quotes,table,,
-qsub.cross,crosses,table,,
-qsub.cross,now,function,1,
-qsub.cross,on_batch,function,2,t x
-qsub.cross,publish,value,,
-qsub.cross,quotes,table,,
-qsub.cross,quotes_in,table,,
-qsub.cross,reprice,function,1,now
-qsub.cross,reprice_crosses,function,2,quotes as_of
-qsub.cross_arbitrage,books,dict,,
-qsub.cross_arbitrage,cross_arbitrage,table,,
-qsub.cross_arbitrage,direct_side,function,3,row side size
-qsub.cross_arbitrage,evaluate,function,3,state size as_of
-qsub.cross_arbitrage,leg_book,function,1,row
-qsub.cross_arbitrage,leg_times,function,2,state route
-qsub.cross_arbitrage,max_skew,value,,
-qsub.cross_arbitrage,notional,value,,
-qsub.cross_arbitrage,on_batch,function,2,t x
-qsub.cross_arbitrage,opportunity,function,5,state avail sym size as_of
-qsub.cross_arbitrage,publish,value,,
-qsub.cross_arbitrage,quotable,function,1,state
-qsub.cross_arbitrage,route_for,function,2,avail sym
-qsub.crypto_mock,beta_draw,function,2,a b
-qsub.crypto_mock,book_rows,function,1,mkt
-qsub.crypto_mock,decide,function,3,row horizon draws
-qsub.crypto_mock,draws,function,1,
-qsub.crypto_mock,drift_toxicity,function,1,toxicity
-qsub.crypto_mock,fill_alpha,value,,
-qsub.crypto_mock,fill_beta,value,,
-qsub.crypto_mock,fill_rows,function,6,venue s side price size id
-qsub.crypto_mock,half_spread,value,,
-qsub.crypto_mock,hazard_per_s,value,,
-qsub.crypto_mock,hazard_to_prob,function,2,hazard horizon
-qsub.crypto_mock,last_id,dict,,
-qsub.crypto_mock,level_step,value,,
-qsub.crypto_mock,maker_fee_bps,value,,
-qsub.crypto_mock,market,table,,
-qsub.crypto_mock,max_fill_fraction,value,,
-qsub.crypto_mock,mid0,value,,
-qsub.crypto_mock,n_levels,value,,
-qsub.crypto_mock,n_market,value,,
-qsub.crypto_mock,next_id,function,1,venue
-qsub.crypto_mock,on_timer,function,1,
-qsub.crypto_mock,publish,value,,
-qsub.crypto_mock,publish_fills,function,2,horizon row
-qsub.crypto_mock,quote_ccy,function,1,s
-qsub.crypto_mock,quote_share,value,,
-qsub.crypto_mock,quote_size,value,,
-qsub.crypto_mock,skewed,function,2,p tox
-qsub.crypto_mock,syms,value,,
-qsub.crypto_mock,tick_seconds,value,,
-qsub.crypto_mock,touch,function,1,mid
-qsub.crypto_mock,toxicity_factor,value,,
-qsub.crypto_mock,venues,value,,
-qsub.crypto_mock,walk,function,1,m
-qsub.databento_book,book,table,,
-qsub.databento_book,on_batch,function,2,t x
-qsub.databento_book,publish,value,,
-qsub.databento_book,raw,table,,
-qsub.executions,crypto_trades,table,,
-qsub.executions,executions,table,,
-qsub.executions,from_crypto_trades,function,1,batch
-qsub.executions,from_trades,function,1,batch
-qsub.executions,fx_venue,value,,
-qsub.executions,on_batch,value,,
-qsub.executions,publish,value,,
-qsub.executions,trades,table,,
-qsub.fx_feed,on_timer,function,1,
-qsub.fx_feed,publish,value,,
-qsub.fx_feed,spot,value,,
-qsub.fx_feed,tick_rows,function,1,levels
-qsub.fx_orders_feed,books,value,,
-qsub.fx_orders_feed,last_id,value,,
-qsub.fx_orders_feed,on_timer,function,1,
-qsub.fx_orders_feed,order_rows,function,8,id i bk pr side size status slip_pips
-qsub.fx_orders_feed,pip_factor,value,,
-qsub.fx_orders_feed,products,value,,
-qsub.fx_orders_feed,publish,value,,
-qsub.fx_orders_feed,sizes,value,,
-qsub.fx_orders_feed,statuses,value,,
-qsub.fx_positions,alert_period,value,,
-qsub.fx_positions,alerts,dict,,
-qsub.fx_positions,book,dict,,
-qsub.fx_positions,desk_book,table,,
-qsub.fx_positions,dimensions,value,,
-qsub.fx_positions,filled_status,value,,
-qsub.fx_positions,fresh_breaches,function,1,now
-qsub.fx_positions,fx_limit_breach,table,,
-qsub.fx_positions,fx_position,table,,
-qsub.fx_positions,limits,table,,
-qsub.fx_positions,load_limits,function,1,limits
-qsub.fx_positions,net_orders,function,2,book batch
-qsub.fx_positions,on_batch,function,2,t x
-qsub.fx_positions,on_timer,function,1,
-qsub.fx_positions,orders,table,,
-qsub.fx_positions,policed,value,,
-qsub.fx_positions,publish,value,,
-qsub.fx_trades_feed,fill_rows,function,4,i side size slip_pips
-qsub.fx_trades_feed,on_timer,function,1,
-qsub.fx_trades_feed,pip_factor,value,,
-qsub.fx_trades_feed,publish,value,,
-qsub.fx_trades_feed,sizes,value,,
-qsub.fx_trades_feed,spot,value,,
-qsub.kafka_flow,above_high_water,function,1,rows
-qsub.kafka_flow,advance,function,1,rows
-qsub.kafka_flow,first_per_coordinate,function,1,rows
-qsub.kafka_flow,high_water,dict,,
-qsub.kafka_flow,on_batch,function,2,t x
-qsub.kafka_flow,publish,value,,
-qsub.market_data,from_quote,function,1,batch
-qsub.market_data,from_quotes,function,1,batch
-qsub.market_data,market_data,table,,
-qsub.market_data,on_batch,value,,
-qsub.market_data,publish,value,,
-qsub.market_data,quote,table,,
-qsub.market_data,quotes,table,,
-qsub.markout,execution_quality,table,,
-qsub.markout,horizons,value,,
-qsub.markout,max_horizon,value,,
-qsub.markout,now,function,1,
-qsub.markout,on_batch,function,2,t x
-qsub.markout,on_timer,function,1,
-qsub.markout,pending,table,,
-qsub.markout,publish,value,,
-qsub.markout,quote_hist,table,,
-qsub.markout,quotes,table,,
-qsub.markout,score_markouts,function,2,trades quotes
-qsub.markout,score_ready,function,1,now
-qsub.markout,trades,table,,
-qsub.marks,crypto_book,table,,
-qsub.marks,from_crypto_book,function,1,batch
-qsub.marks,from_quote,function,1,batch
-qsub.marks,fx_venue,value,,
-qsub.marks,marks,table,,
-qsub.marks,on_batch,value,,
-qsub.marks,publish,value,,
-qsub.marks,quote,table,,
-qsub.posbook,book,dict,,
-qsub.posbook,executions,table,,
-qsub.posbook,last_mid,dict,,
-qsub.posbook,mark_positions,function,3,book trades marks
-qsub.posbook,marks,table,,
-qsub.posbook,next_book,function,2,book positions
-qsub.posbook,on_batch,function,2,t x
-qsub.posbook,position,table,,
-qsub.posbook,position_book,table,,
-qsub.posbook,position_marks,table,,
-qsub.posbook,position_trades,table,,
-qsub.posbook,publish,value,,
-qsub.quotes_feed,n_levels,value,,
-qsub.quotes_feed,on_timer,function,1,
-qsub.quotes_feed,publish,value,,
-qsub.quotes_feed,spot,value,,
-qsub.quotes_feed,tick_rows,function,1,mids
-qsub.superbook,books,dict,,
-qsub.superbook,levels,function,2,prices sizes
-qsub.superbook,max_age,value,,
-qsub.superbook,on_batch,function,2,t x
-qsub.superbook,on_timer,function,1,
-qsub.superbook,publish,value,,
-qsub.superbook,refresh,function,1,as_of
-qsub.superbook,replace_books,function,3,state batch as_of
-qsub.superbook,side_levels,function,2,rows side
-qsub.superbook,snapshot,function,3,state as_of age
-qsub.superbook,superbook,table,,
-qsub.vectorize,fold_wide_book,function,1,book
-qsub.vectorize,mkt_orderbook,table,,
-qsub.vectorize,on_batch,function,2,t x
-qsub.vectorize,publish,value,,
-qsub.vectorize,wide_book,table,,
-qsub.vectorize,wide_level_groups,dict,,
-qsub.vectorize,wide_level_names,value,,
-qsub.wide_book_feed,n_levels,value,,
-qsub.wide_book_feed,on_timer,function,1,
-qsub.wide_book_feed,publish,value,,
-qsub.wide_book_feed,spot,value,,
-qsub.wide_book_feed,tick_rows,function,1,mids
 qsynth,drift_one,function,1,s
 qsynth,levels_one,function,4,mid step dir levels
 qsynth,levels_size,function,1,levels
@@ -830,169 +1002,3 @@ qsynth,pairs,value,,
 qsynth,pip,value,,
 qsynth,size_unit,value,,
 qsynth,spot,value,,
-qtick,can_send,function,1,sink
-qtick,fan_out,function,2,name batch
-qtick,learn,function,2,table_name stamped
-qtick,log_handle,value,,
-qtick,log_path,value,,
-qtick,msg_count,value,,
-qtick,open_log,function,3,dir name dt
-qtick,publish,function,2,t x
-qtick,record,function,1,msg
-qtick,replay,function,2,path handler
-qtick,require_batch,function,2,t x
-qtick,reset,function,1,
-qtick,schema,function,2,table_name empty
-qtick,schemas,dict,,
-qtick,subscribe,function,2,want sink
-qtick,subscribers,table,,
-qtick,unsubscribe,function,1,sink
-qwcfg,default_values,dict,,
-qwcfg,env_name,function,1,k
-qwcfg,env_values,dict,,
-qwcfg,errors,value,,
-qwcfg,explain,function,1,k
-qwcfg,falsy,value,,
-qwcfg,get_flag,function,1,k
-qwcfg,get_positive,function,1,k
-qwcfg,get_symbol,function,1,k
-qwcfg,get_timestamp,function,1,k
-qwcfg,note,function,2,msg null_value
-qwcfg,override_values,dict,,
-qwcfg,raw,function,1,k
-qwcfg,raw_from,function,2,source k
-qwcfg,require_valid,function,1,
-qwcfg,reset,function,1,
-qwcfg,set_layers,function,3,overrides yaml defaults
-qwcfg,sources,value,,
-qwcfg,truthy,value,,
-qwcfg,yaml_values,dict,,
-qwrk.databento_book_backfill,book,table,,
-qwrk.databento_book_backfill,checkpoint,function,1,cursor
-qwrk.databento_book_backfill,cleanup,function,1,
-qwrk.databento_book_backfill,contract,table,,
-qwrk.databento_book_backfill,example_book,function,1,
-qwrk.databento_book_backfill,fetch,function,2,from_ts to_ts
-qwrk.databento_book_backfill,fold,function,2,batch prefix
-qwrk.databento_book_backfill,handle,value,,
-qwrk.databento_book_backfill,init,function,1,run_spec
-qwrk.databento_book_backfill,last_batch,value,,
-qwrk.databento_book_backfill,plan,function,1,cursor
-qwrk.databento_book_backfill,progress,dict,,
-qwrk.databento_book_backfill,publish,function,1,batch
-qwrk.databento_book_backfill,quality_check,function,1,batch
-qwrk.databento_book_backfill,range_from,value,,
-qwrk.databento_book_backfill,range_to,value,,
-qwrk.databento_book_backfill,run,function,1,
-qwrk.databento_book_backfill,source_version,value,,
-qwrk.databento_book_backfill,spec,function,1,
-qwrk.databento_book_backfill,to_book,function,1,batch
-qwrk.demo_deals_backfill,checkpoint,function,1,cursor
-qwrk.demo_deals_backfill,cleanup,function,1,
-qwrk.demo_deals_backfill,fetch,function,2,from_ts to_ts
-qwrk.demo_deals_backfill,handle,value,,
-qwrk.demo_deals_backfill,init,function,1,run_spec
-qwrk.demo_deals_backfill,last_batch,value,,
-qwrk.demo_deals_backfill,plan,function,1,cursor
-qwrk.demo_deals_backfill,progress,dict,,
-qwrk.demo_deals_backfill,publish,function,1,batch
-qwrk.demo_deals_backfill,quality_check,function,1,batch
-qwrk.demo_deals_backfill,range_from,value,,
-qwrk.demo_deals_backfill,range_to,value,,
-qwrk.demo_deals_backfill,run,function,1,
-qwrk.demo_deals_backfill,source_version,value,,
-qwrk.demo_deals_backfill,spec,function,1,
-qwrk.demo_events_backfill,checkpoint,function,1,cursor
-qwrk.demo_events_backfill,cleanup,function,1,
-qwrk.demo_events_backfill,facts,function,1,batch
-qwrk.demo_events_backfill,fetch,function,2,from_ts to_ts
-qwrk.demo_events_backfill,handle,value,,
-qwrk.demo_events_backfill,init,function,1,run_spec
-qwrk.demo_events_backfill,last_batch,value,,
-qwrk.demo_events_backfill,plan,function,1,cursor
-qwrk.demo_events_backfill,progress,dict,,
-qwrk.demo_events_backfill,publish,function,1,batch
-qwrk.demo_events_backfill,range_from,value,,
-qwrk.demo_events_backfill,range_to,value,,
-qwrk.demo_events_backfill,run,function,1,
-qwrk.demo_events_backfill,source_version,value,,
-qwrk.demo_events_backfill,spec,function,1,
-qwrk.duckdb_deals_backfill,checkpoint,function,1,cursor
-qwrk.duckdb_deals_backfill,cleanup,function,1,
-qwrk.duckdb_deals_backfill,facts,function,1,batch
-qwrk.duckdb_deals_backfill,fetch,function,2,from_ts to_ts
-qwrk.duckdb_deals_backfill,handle,value,,
-qwrk.duckdb_deals_backfill,init,function,1,run_spec
-qwrk.duckdb_deals_backfill,last_batch,value,,
-qwrk.duckdb_deals_backfill,plan,function,1,cursor
-qwrk.duckdb_deals_backfill,progress,dict,,
-qwrk.duckdb_deals_backfill,publish,function,1,batch
-qwrk.duckdb_deals_backfill,quality_check,function,1,batch
-qwrk.duckdb_deals_backfill,range_from,value,,
-qwrk.duckdb_deals_backfill,range_to,value,,
-qwrk.duckdb_deals_backfill,run,function,1,
-qwrk.duckdb_deals_backfill,source_version,value,,
-qwrk.duckdb_deals_backfill,spec,function,1,
-qwrk.upstream_trades_backfill,checkpoint,function,1,cursor
-qwrk.upstream_trades_backfill,cleanup,function,1,
-qwrk.upstream_trades_backfill,facts,function,1,batch
-qwrk.upstream_trades_backfill,fetch,function,2,from_ts to_ts
-qwrk.upstream_trades_backfill,handle,value,,
-qwrk.upstream_trades_backfill,init,function,1,run_spec
-qwrk.upstream_trades_backfill,last_batch,value,,
-qwrk.upstream_trades_backfill,plan,function,1,cursor
-qwrk.upstream_trades_backfill,progress,dict,,
-qwrk.upstream_trades_backfill,publish,function,1,batch
-qwrk.upstream_trades_backfill,quality_check,function,1,batch
-qwrk.upstream_trades_backfill,range_from,value,,
-qwrk.upstream_trades_backfill,range_to,value,,
-qwrk.upstream_trades_backfill,run,function,1,
-qwrk.upstream_trades_backfill,source_version,value,,
-qwrk.upstream_trades_backfill,spec,function,1,
-qwrt,airflow_owned,value,,
-qwrt,backoff_ms,function,2,pol attempt
-qwrt,classify,function,1,err
-qwrt,commit,function,4,dry effect action args
-qwrt,connected,function,1,
-qwrt,connected_override,value,,
-qwrt,data_patterns,value,,
-qwrt,declare_dependencies,function,2,worker procs
-qwrt,declared_dependencies,dict,,
-qwrt,default_policy,dict,,
-qwrt,finish_window,function,7,worker ds part spec from_ts to_ts publish
-qwrt,is_dry_run,function,1,
-qwrt,needs_fetch,function,6,ds part version as_of from_ts to_ts
-qwrt,owner,function,1,concern
-qwrt,policy,function,1,
-qwrt,q_owned,value,,
-qwrt,remaining,function,6,ds part version as_of from_ts to_ts
-qwrt,require_dependencies,function,1,worker
-qwrt,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts
-qwrt,retry_boundary,value,,
-qwrt,retryable,function,1,err
-qwrt,sleep_ms,function,1,ms
-qwrt,suppressed_in_dry_run,value,,
-qwrt,transport_patterns,value,,
-qwrt,windows,function,3,from_ts to_ts width
-qwrt,with_retry,function,2,pol f
-qxf,apply,function,2,name given
-qxf,apply_as_of,function,3,name given as_of
-qxf,check_example,function,5,name ins output clock ex
-qxf,col_equal,function,3,typ e a
-qxf,col_types,function,1,tbl
-qxf,def,function,1,name
-qxf,define,function,2,name decl
-qxf,differences,function,2,expected actual
-qxf,float_tolerance,value,,
-qxf,input_names,function,1,name
-qxf,output_schema,function,1,name
-qxf,passthrough,function,4,name input_name schema rows
-qxf,problems,function,3,schema tbl ordered
-qxf,registry,dict,,
-qxf,require_verified,function,1,name
-qxf,required_keys,value,,
-qxf,run,function,4,name d given extra
-qxf,type_ok,function,3,declared actual n
-qxf,verify,function,1,name
-qxf,verify_all,function,1,
-qxf,verify_example,function,3,name d ex

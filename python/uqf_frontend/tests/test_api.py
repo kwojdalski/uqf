@@ -336,7 +336,7 @@ def test_the_empty_partition_is_the_sentinel_not_a_wildcard(client_for):
     """ "" is a VALUE, and it reaches q as one.
 
     It must not be dropped or turned into a match-anything filter on the way:
-    q maps it to the null symbol, which is .qmatz's "no partition dimension"
+    q maps it to the null symbol, which is .qetl.coverage's "no partition dimension"
     sentinel and matches only rows recorded under it.
     """
     gw = _cov([])

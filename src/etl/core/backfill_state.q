@@ -1,4 +1,4 @@
-/ backfill_state.q - the bounded worker lifecycle contract (.qbfstate).
+/ backfill_state.q - the bounded worker lifecycle contract (.qetl.job.bounded.state).
 / .
 / The distinction this file exists to enforce:
 /   a BOUNDED worker takes an explicit [range_from;range_to) request, a
@@ -11,7 +11,7 @@
 / "A bounded worker must not silently become an unbounded tailer" is the
 / sentence the whole contract exists to make true.
 
-\d .qbfstate
+\d .qetl.job.bounded.state
 
 / ---------------------------------------------------------------- CONTRACT
 
@@ -43,10 +43,10 @@ ns_names:{[ns] @[{key x};ns;`symbol$()]}
 / loads, so validating at registration would force declaration order.
 / @param worker the worker's name, e.g. `markout_backfill
 / @param ns the namespace symbol holding its implementation, e.g.
-/   `.qwrk.markout_backfill - .qbw.define derives it, so only a worker
+/   `.qpipe.job.markout_backfill - .qetl.job.bounded.define derives it, so only a worker
 /   built without the shell passes one by hand
 / @return the worker name
-/ @eg .qbfstate.register[`demo_deals_backfill;`.qwrk.demo_deals_backfill]
+/ @eg .qetl.job.bounded.state.register[`demo_deals_backfill;`.qpipe.job.demo_deals_backfill]
 register:{[worker;ns]
     bounded_workers[worker]:ns;
     worker}
@@ -69,10 +69,10 @@ registered:{[] key bounded_workers}
 / @return the worker name, so it can be used inline in an init chain
 / @throws error if the worker is unregistered, its namespace is absent, or
 /   any contract method or global is missing
-/ @eg .qbfstate.require_contract[`demo_deals_backfill]
+/ @eg .qetl.job.bounded.state.require_contract[`demo_deals_backfill]
 require_contract:{[worker]
     if[not worker in key bounded_workers;
-        '"require_contract: ",string[worker]," is not registered - call .qbfstate.register first"];
+        '"require_contract: ",string[worker]," is not registered - call .qetl.job.bounded.state.register first"];
     ns:bounded_workers worker;
     names:ns_names ns;
     if[0=count names;
@@ -87,13 +87,13 @@ require_contract:{[worker]
 
 / -------------------------------------------------------------------- LOCK
 
-/ Where lock files live. Shares the status directory, since .qstatus.status_dir
+/ Where lock files live. Shares the status directory, since .qetl.status.status_dir
 / already establishes one per deployment and a lock is the same kind of
 / per-deployment runtime state. A plain call: status.q is loaded by this
 / tree's own init.q, so there is nothing to guard against - the try-with-
 / fallback this used to carry existed because status_dir lived in scripts/
 / and might not have been loaded (#229).
-lock_dir:{[] .qstatus.status_dir[]}
+lock_dir:{[] .qetl.status.status_dir[]}
 
 lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
 
@@ -113,7 +113,7 @@ lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
 / @param worker the worker's name
 / @return the lock path
 / @throws error if another instance already holds the lock
-/ @eg .qbfstate.acquire_lock[`markout_backfill]
+/ @eg .qetl.job.bounded.state.acquire_lock[`markout_backfill]
 acquire_lock:{[worker]
     dir:lock_dir[];
     system"mkdir -p ",dir;
@@ -127,7 +127,7 @@ acquire_lock:{[worker]
     / record who holds it, so a stale lock can be diagnosed rather than just
     / deleted blindly.
     (hsym `$path,"/owner") 0: enlist .j.j `pid`started!(.z.i;.z.p);
-    .[{.qlog.dbg[x;y;z]};(worker;"lock acquired";enlist[`path]!enlist path);::];
+    .[{.qetl.log.dbg[x;y;z]};(worker;"lock acquired";enlist[`path]!enlist path);::];
     path}
 
 / Release the lock. Safe to call when not held, so it can sit in a cleanup
@@ -135,7 +135,7 @@ acquire_lock:{[worker]
 release_lock:{[worker]
     path:lock_path worker;
     system"rm -rf ",path;
-    .[{.qlog.dbg[x;y;z]};(worker;"lock released";enlist[`path]!enlist path);::];
+    .[{.qetl.log.dbg[x;y;z]};(worker;"lock released";enlist[`path]!enlist path);::];
     path}
 
 / Is the lock currently held? For diagnostics and tests, not for gating -
@@ -154,7 +154,7 @@ file_lock_wait:0D00:00:05
 / Where a named ledger's mutex lives.
 / @param name the ledger's name, e.g. `etl_coverage
 / @return the lock directory path
-/ @eg .qbfstate.file_lock_path `etl_coverage
+/ @eg .qetl.job.bounded.state.file_lock_path `etl_coverage
 file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
 
 / Run `f . args` holding a named ledger's mutex, releasing it however f ends.
@@ -185,7 +185,7 @@ file_lock_path:{[name] (lock_dir[]),"/",string[name],".lock"}
 / @param args its arguments, as a list
 / @return whatever f returns
 / @throws error when the lock cannot be taken within file_lock_wait
-/ @eg .qbfstate.with_file_lock[`etl_coverage;{[n] n};enlist 1]
+/ @eg .qetl.job.bounded.state.with_file_lock[`etl_coverage;{[n] n};enlist 1]
 with_file_lock:{[name;f;args]
     dir:lock_dir[];
     system"mkdir -p ",dir;
@@ -233,7 +233,7 @@ save_checkpoint:{[worker;spec;cursor]
     payload:`source_version`range_from`range_to`cursor`saved_at!
             (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);
     (hsym `$path) 0: enlist .j.j payload;
-    .[{.qlog.dbg[x;y;z]};(worker;"checkpoint saved";enlist[`cursor]!enlist cursor);::];
+    .[{.qetl.log.dbg[x;y;z]};(worker;"checkpoint saved";enlist[`cursor]!enlist cursor);::];
     path}
 
 / Load a cursor, but only if it belongs to THIS run specification.
@@ -251,11 +251,11 @@ load_checkpoint:{[worker;spec]
     path:checkpoint_path worker;
     raw:@[{first read0 hsym `$x};path;{""}];
     if[0=count raw;
-        .[{.qlog.dbg[x;y;z]};(worker;"no checkpoint - starting from the beginning";enlist[`path]!enlist path);::];
+        .[{.qetl.log.dbg[x;y;z]};(worker;"no checkpoint - starting from the beginning";enlist[`path]!enlist path);::];
         :0Np];
     saved:@[{.j.k x};raw;{()!()}];
     if[0=count saved;
-        .[{.qlog.warn[x;y;z]};(worker;"checkpoint unreadable - starting from the beginning";enlist[`path]!enlist path);::];
+        .[{.qetl.log.warn[x;y;z]};(worker;"checkpoint unreadable - starting from the beginning";enlist[`path]!enlist path);::];
         :0Np];
     / Compare PARSED values, not strings. .j.j writes a timestamp as ISO
     / ("2026-09-13T00:00:00.000000000") while `string` on a q timestamp
@@ -271,11 +271,11 @@ load_checkpoint:{[worker;spec]
     / Said at INF: a run that silently restarted from the beginning, because
     / its range or version changed, looks exactly like one that lost its state.
     if[not matches;
-        .[{.qlog.info[x;y;z]};(worker;"checkpoint is for another run - starting from the beginning";
+        .[{.qetl.log.info[x;y;z]};(worker;"checkpoint is for another run - starting from the beginning";
             `saved_version`saved_from`saved_to!(saved`source_version;saved`range_from;saved`range_to));::];
         :0Np];
     cursor:"P"$saved`cursor;
-    .[{.qlog.info[x;y;z]};(worker;"resuming from checkpoint";enlist[`cursor]!enlist cursor);::];
+    .[{.qetl.log.info[x;y;z]};(worker;"resuming from checkpoint";enlist[`cursor]!enlist cursor);::];
     cursor}
 
 / Remove a worker's checkpoint, for a deliberate restart from the beginning.
@@ -305,7 +305,7 @@ clear_checkpoint:{[worker]
 / @param err the caught error string
 / @return the status file path written
 fail:{[worker;spec;progress;err]
-    .qstatus.write_status[worker;worker;`failed;spec;progress;err]}
+    .qetl.status.write_status[worker;worker;`failed;spec;progress;err]}
 
 / Run a worker's pass under the shell contract: trap, convert, release.
 / .

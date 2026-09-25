@@ -95,11 +95,11 @@ def test_example_script_runs_clean(script: Path) -> None:
 
 
 #: Two lines, then ask the graph a question. If the ETL tree's load order is
-#: wrong this exits non-zero, and if .qdag is unreachable the count is absent.
+#: wrong this exits non-zero, and if .qetl.dag is unreachable the count is absent.
 _ETL_STANDALONE = """\\l src/init.q
 \\l src/etl/init.q
-.qdag.adopt_all[];
--1 "JOBS:",string count .qdag.topological[];
+.qetl.dag.adopt_all[];
+-1 "JOBS:",string count .qetl.dag.topological[];
 """
 
 
@@ -108,7 +108,7 @@ def test_the_etl_tree_loads_outside_the_test_harness(tmp_path: Path) -> None:
 
     Until `src/etl/init.q` existed, nothing loaded the ETL tree as a whole:
     each worker was loaded piecemeal and `tests/run_tests.q` held the only
-    complete, correctly-ordered list in the repository. So `.qdag`'s job
+    complete, correctly-ordered list in the repository. So `.qetl.dag`'s job
     graph - whose entire point is that a q PROCESS can order and draw its own
     DAG - existed only inside the test runner. A capability that works only
     under the test harness is not a capability.
@@ -118,8 +118,8 @@ def test_the_etl_tree_loads_outside_the_test_harness(tmp_path: Path) -> None:
     it cannot notice that no one else can.
 
     The order is load-bearing and not obvious - `coercion.q` must precede
-    `source_contract.q`, whose type table names `.qcoer.to_timestamp` at LOAD
-    TIME. Getting it wrong aborts the file with a bare `.qcoer.to_symbol,
+    `source_contract.q`, whose type table names `.qetl.coerce.to_timestamp` at LOAD
+    TIME. Getting it wrong aborts the file with a bare `.qetl.coerce.to_symbol,
     which is how this was found while writing the loader.
     """
     qbin, env = _kdbx()

@@ -215,7 +215,7 @@ it("says a backfill was started and where to watch it, not that it finished", as
 });
 
 it("tells the operator a worker-config override is not durable", async () => {
-  // A .qwcfg override lives in the process's memory; a process.csv override
+  // A .qetl.cfg override lives in the process's memory; a process.csv override
   // survives a restart. The two look identical in a UI and are not.
   mockApi(true, () =>
     ok({

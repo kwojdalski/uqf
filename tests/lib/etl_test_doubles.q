@@ -10,12 +10,12 @@
 // That warning is ENFORCED here rather than repeated as a comment. The set of
 // doubleable adapters is closed, and asking to double a transform or the
 // coverage ledger throws, saying why. The failure it prevents is
-// specific and plausible: a suite where .qmatz.stage_completion is a double
+// specific and plausible: a suite where .qetl.coverage.stage_completion is a double
 // passes whatever the real ledger does, so the interval arithmetic that
 // decides whether a range is complete goes untested while the test names all
 // say "coverage".
 //
-// So: the EDGES are doubled here; the MIDDLE (.qmatz's arithmetic, and any
+// So: the EDGES are doubled here; the MIDDLE (.qetl.coverage's arithmetic, and any
 // transform) is tested against the real implementation in test_materialisation.q.
 
 \d .qetldbl
@@ -54,7 +54,7 @@ install:{[adapter;impl]
 / Call a doubled adapter, recording the call.
 / .
 / Arguments are passed as a LIST and applied with `.`, for the reason
-/ .qwrt.commit documents: a fully-applied projection in q is a call, not a
+/ .qetl.job.bounded.runtime.commit documents: a fully-applied projection in q is a call, not a
 / deferred one, so building the argument would perform the effect. And
 / `enlist(::)` rather than `()`, because `f . ()` is a type error.
 / @throws error when nothing is installed for the adapter

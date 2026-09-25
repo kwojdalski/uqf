@@ -23,7 +23,7 @@ scaffold pulsefeed:
   create tests/q/test_pulsefeed.q (13 lines)
   append to tests/run_tests.q (1 line)
   note: describe pulse: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q ...
-  note: implement .qsub.pulsefeed.on_timer, then replace the scaffolded test
+  note: implement .qpipe.job.pulsefeed.on_timer, then replace the scaffolded test
   note: name pulsefeed1 in docs/architecture/stack.md - authored prose, checked by pytest
   note: add pulsefeed1 to a profile in python/uqs/src/uqs/model/profiles.py ...
 ```
@@ -31,11 +31,11 @@ scaffold pulsefeed:
 ## What you get
 
 ```q
-\d .qsub.pulsefeed
+\d .qpipe.job.pulsefeed
 
-/ Where rows go. A stub until .qstream.wire points it at the tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
-publish:.qstream.unwired `pulsefeed;
+publish:.qetl.job.stream.unwired `pulsefeed;
 
 on_timer:{[]
     '"pulsefeed.on_timer: not implemented";
@@ -43,12 +43,12 @@ on_timer:{[]
 
 \d .
 
-.qstream.define[`pulsefeed;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`pulsefeed;`procname`subscribe_to`publishes`period`on_timer`note!(
     `pulsefeed1;
     `symbol$();                    / subscribes to nothing - this is what makes it a feed
     enlist `pulse;
     0D00:00:01;                    / the timer period, one second by default
-    .qsub.pulsefeed.on_timer;
+    .qpipe.job.pulsefeed.on_timer;
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
 ```
 
@@ -67,7 +67,7 @@ the past arrives stamped now.
 it to the tickerplant; a test wires it to a recorder and reads your output as
 data. That is what lets the job be tested with no TorQ present, and
 `scripts/gates/check_etl_layering.py` fails the build if anything under `src/`
-reaches for `.qpipe`.
+reaches for `.qtorq`.
 
 **Keep the randomness in `on_timer`, and nowhere else.** This is the convention
 every feed in the tree follows, and it is not about seeding --- it is about

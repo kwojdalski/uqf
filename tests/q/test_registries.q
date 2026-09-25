@@ -19,8 +19,8 @@
 /   half, and it is the half nobody expects.
 / .
 / Five registries in this tree store dictionaries, and each defends
-/ differently: .qstream and .qnorm ENLIST every declaration, which is
-/ shape-independent; .qsrc, .qxf, .qalloc and .qbw NORMALISE to a fixed key
+/ differently: .qetl.job.stream and .qetl.job.stream.normalizer ENLIST every declaration, which is
+/ shape-independent; .qetl.source, .qetl.transform, .qalloc and .qetl.job.bounded NORMALISE to a fixed key
 / set, which works only while that set stays closed. Both are correct. A
 / sixth registry copying the second kind and then accepting an optional key
 / would reintroduce the bug, so this file checks the defences rather than
@@ -30,7 +30,7 @@
 / Every test here registers into a LIVE registry, so every test has to
 / take it back out. Without this the suite passes only while this file's
 / namespace happens to run after the contract tests that enumerate what is
-/ registered - .srctest's "every source has a .qfeed namespace" and
+/ registered - .srctest's "every source has a .qpipe.source namespace" and
 / .sjtest's "every job is registered" both fail if it runs first.
 forget:{[reg;names]
     r:get reg;
@@ -38,9 +38,9 @@ forget:{[reg;names]
     }
 
 forget_job:{[job]
-    forget[`.qstream.jobs;enlist job];
-    pn:key[.qstream.procnames] where job=value .qstream.procnames;
-    forget[`.qstream.procnames;pn];
+    forget[`.qetl.job.stream.jobs;enlist job];
+    pn:key[.qetl.job.stream.procnames] where job=value .qetl.job.stream.procnames;
+    forget[`.qetl.job.stream.procnames;pn];
     }
 
 / Executable documentation: the trap itself, on a registry with no guard.
@@ -64,7 +64,7 @@ test_the_trap_is_real_and_has_two_halves:{[t]
 / of DIFFERENT shape through the public API. Shape variation is the whole
 / point - registering twice with the same keys proves nothing, because that
 / is the case the collapse handles fine.
-covered:`.qstream.jobs`.qxf.registry`.qalloc.methods`.qnorm.registry`.qsrc.sources`.qbw.worker_cfg`.qdag.jobs
+covered:`.qetl.job.stream.jobs`.qetl.transform.registry`.qalloc.methods`.qetl.job.stream.normalizer.registry`.qetl.source.sources`.qetl.job.bounded.worker_cfg`.qetl.dag.jobs
 
 empty_in:([] time:`timestamp$(); x:`long$())
 rows_in:([] time:enlist 2026.01.01D00:00:00; x:enlist 1)
@@ -74,12 +74,12 @@ test_a_streaming_job_without_a_timer_does_not_gain_one:{[t]
     / with identical fields, so `jobs` became a keyed table, and markout's
     / declaration - which carries an on_batch the feeds do not - was
     / refused with a bare `mismatch. It is enlisted now.
-    .qstream.define[`regtest_feed;`procname`subscribe_to`publishes`period`on_timer!(
+    .qetl.job.stream.define[`regtest_feed;`procname`subscribe_to`publishes`period`on_timer!(
         `regtest_feed1;`symbol$();enlist `regtest_out;0D00:00:01;{[] })];
-    .qstream.define[`regtest_sub;`procname`subscribe_to`publishes`on_batch!(
+    .qetl.job.stream.define[`regtest_sub;`procname`subscribe_to`publishes`on_batch!(
         `regtest_sub1;enlist `regtest_in;enlist `regtest_out2;{[a;b] })];
-    feed:.qstream.def `regtest_feed;
-    sub:.qstream.def `regtest_sub;
+    feed:.qetl.job.stream.def `regtest_feed;
+    sub:.qetl.job.stream.def `regtest_sub;
     .qunit.assertFalse[`on_batch in key feed;
         "a feed has no on_batch, and must not acquire one as a null"];
     .qunit.assertFalse[`period in key sub;
@@ -87,19 +87,19 @@ test_a_streaming_job_without_a_timer_does_not_gain_one:{[t]
     forget_job each `regtest_feed`regtest_sub};
 
 test_a_transform_without_as_of_does_not_gain_one:{[t]
-    / .qxf normalises instead of enlisting: as_of is always stored, false
+    / .qetl.transform normalises instead of enlisting: as_of is always stored, false
     / when undeclared. The registry HAS collapsed to a table - that is
     / fine, because every entry goes in with the same five keys.
-    .qxf.define[`regtest_plain;`inputs`output`fn`examples!(
+    .qetl.transform.define[`regtest_plain;`inputs`output`fn`examples!(
         (enlist `i)!enlist empty_in;empty_in;{[i] i};
         enlist `inputs`expected!((enlist `i)!enlist rows_in;rows_in))];
-    .qxf.define[`regtest_clocked;`inputs`output`fn`examples`as_of!(
+    .qetl.transform.define[`regtest_clocked;`inputs`output`fn`examples`as_of!(
         (enlist `i)!enlist empty_in;empty_in;{[i;a] i};
         enlist `inputs`expected`as_of!((enlist `i)!enlist rows_in;rows_in;2026.01.01D00:00:00);1b)];
-    .qunit.assertEquals[.qxf.def[`regtest_plain]`as_of;0b;
+    .qunit.assertEquals[.qetl.transform.def[`regtest_plain]`as_of;0b;
         "an undeclared as_of is FALSE, not a null - normalising means choosing the default explicitly"];
-    .qunit.assertEquals[.qxf.def[`regtest_clocked]`as_of;1b;"and a declared one survives"];
-    forget[`.qxf.registry;`regtest_plain`regtest_clocked]};
+    .qunit.assertEquals[.qetl.transform.def[`regtest_clocked]`as_of;1b;"and a declared one survives"];
+    forget[`.qetl.transform.registry;`regtest_plain`regtest_clocked]};
 
 test_an_allocation_method_without_a_description_does_not_gain_a_null:{[t]
     / The case that would have reintroduced the bug: an optional key on a
@@ -112,7 +112,7 @@ test_an_allocation_method_without_a_description_does_not_gain_a_null:{[t]
     forget[`.qalloc.methods;`regtest_described`regtest_bare]};
 
 test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
-    / .qsrc's guard is a NORMALISATION with a stated mechanical reason:
+    / .qetl.source's guard is a NORMALISATION with a stated mechanical reason:
     / one declaration's row_key an atom and another's a vector makes the
     / second assignment throw, because the value list has already settled
     / on a shape. Both spellings must land as vectors.
@@ -123,20 +123,20 @@ test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
     / silent until the day it is used.
     base:`table_name`target`time_column`columns`types`query`fixture`tz!(`regtest_t;`regtest_out;`time;`time`sym;"ps";
         {[a;b] ([] time:`timestamp$(); sym:`symbol$())};{[] ([] time:`timestamp$(); sym:`symbol$())};`$"UTC");
-    .qsrc.define[`regtest_scalar;(`source`row_key!(`regtest_scalar;`sym)),base];
-    .qsrc.define[`regtest_vector;(`source`row_key!(`regtest_vector;`time`sym)),base];
-    .qunit.assertEquals[.qsrc.def[`regtest_scalar]`row_key;enlist `sym;
+    .qetl.source.define[`regtest_scalar;(`source`row_key!(`regtest_scalar;`sym)),base];
+    .qetl.source.define[`regtest_vector;(`source`row_key!(`regtest_vector;`time`sym)),base];
+    .qunit.assertEquals[.qetl.source.def[`regtest_scalar]`row_key;enlist `sym;
         "a scalar row_key is stored enlisted, so every stored declaration has one shape"];
-    .qunit.assertEquals[.qsrc.def[`regtest_vector]`row_key;`time`sym;"and a vector is unchanged"];
-    forget[`.qsrc.sources;`regtest_scalar`regtest_vector]};
+    .qunit.assertEquals[.qetl.source.def[`regtest_vector]`row_key;`time`sym;"and a vector is unchanged"];
+    forget[`.qetl.source.sources;`regtest_scalar`regtest_vector]};
 
 test_a_worker_config_without_an_optional_key_gets_the_documented_default:{[t]
-    / .qbw normalises the four optional keys to (::) rather than leaving
+    / .qetl.job.bounded normalises the four optional keys to (::) rather than leaving
     / them absent, which is what keeps every stored cfg one shape. The
     / point of the test is that the DEFAULT is chosen, not inherited from
     / a collapse: a missing `check` is (::), not a null of whatever type
     / the first worker's check happened to be.
-    cfg:.qbw.normalised `source`dataset`width`transform!(`regtest_src;`regtest_ds;1D;`regtest_xf);
+    cfg:.qetl.job.bounded.normalised `source`dataset`width`transform!(`regtest_src;`regtest_ds;1D;`regtest_xf);
     .qunit.assertTrue[all `check`io`facts`partition in key cfg;
         "every optional key is present after normalisation"];
     .qunit.assertEquals[cfg`check;(::);
@@ -147,7 +147,7 @@ test_a_worker_config_without_an_optional_key_gets_the_documented_default:{[t]
 / .
 / The obvious general check is "no stored declaration carries a null under
 / a key its caller never supplied" - scan every registry, flag every null.
-/ It was written, and it fails on .qbw.worker_cfg, where four workers have
+/ It was written, and it fails on .qetl.job.bounded.worker_cfg, where four workers have
 / a null `partition`. That is not a collapse artefact: ` is .qcov's
 / documented "this dataset has no partition dimension" sentinel
 / (bounded_worker.q's `unpartitioned`), a legitimate declared value.
@@ -168,7 +168,7 @@ test_every_dict_valued_registry_is_covered_here:{[t]
     .qunit.assertTrue[0<count covered;"the coverage list is not empty"];
     / dict_registries[] finds registries whose values have COLLAPSED into a
     / table - which is exactly the set that relies on normalising to a
-    / fixed key set. One that enlists (.qstream, .qnorm) keeps a general
+    / fixed key set. One that enlists (.qetl.job.stream, .qetl.job.stream.normalizer) keeps a general
     / list and is safe whatever shape arrives, so it does not appear here
     / and does not need to.
     missing:.regtest.dict_registries[] except covered;
@@ -176,7 +176,7 @@ test_every_dict_valued_registry_is_covered_here:{[t]
         "every registry relying on normalisation is listed in `covered` and has a test above registering two declarations of different shape - copying another registry's guard is not evidence, because the guards are not interchangeable"]};
 
 test_a_job_graph_declaration_normalises_its_edges:{[t]
-    / .qdag normalises instead of enlisting: every registration writes the
+    / .qetl.dag normalises instead of enlisting: every registration writes the
     / same three keys, so `jobs` collapses into a table. That is safe only
     / because `inputs` and `outputs` are forced to VECTORS with `(),` on the
     / way in - an atom stored in one row's column and vectors in the rest
@@ -189,10 +189,10 @@ test_a_job_graph_declaration_normalises_its_edges:{[t]
     / leave `jobs` populated, because an empty dict has not collapsed and
     / does not look like a registry that normalises. With the suite order
     / derived rather than hand-written, that stopped being luck.
-    .qdag.register[`regtest_one;`kind`inputs`outputs!(`stream;`regtest_a;`regtest_out)];
-    .qdag.register[`regtest_many;`kind`inputs`outputs!(`stream;`regtest_a`regtest_b;`symbol$())];
-    one:.qdag.def `regtest_one;
-    many:.qdag.def `regtest_many;
+    .qetl.dag.register[`regtest_one;`kind`inputs`outputs!(`stream;`regtest_a;`regtest_out)];
+    .qetl.dag.register[`regtest_many;`kind`inputs`outputs!(`stream;`regtest_a`regtest_b;`symbol$())];
+    one:.qetl.dag.def `regtest_one;
+    many:.qetl.dag.def `regtest_many;
     .qunit.assertEquals[count one`inputs;1;
         "a scalar input is stored as a one-element vector, not as an atom"];
     .qunit.assertEquals[abs type one`inputs;11h;
@@ -200,7 +200,7 @@ test_a_job_graph_declaration_normalises_its_edges:{[t]
     .qunit.assertEquals[count many`inputs;2;"a vector keeps its length"];
     .qunit.assertEquals[count many`outputs;0;
         "an empty output stays empty rather than becoming a one-element null"];
-    forget[`.qdag.jobs;`regtest_one`regtest_many]};
+    forget[`.qetl.dag.jobs;`regtest_one`regtest_many]};
 
 / Every symbol-keyed registry in src/ whose values are dictionaries, read
 / from the live namespaces rather than from a list kept by hand.

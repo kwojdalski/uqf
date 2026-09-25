@@ -1,5 +1,5 @@
 / status.q - the process-status file a worker writes and an orchestrator
-/ reads (.qstatus).
+/ reads (.qetl.status).
 / .
 / One file per worker instance, airflow_status_<instance_id>.txt in
 / status_dir, one JSON object per file: the state, the run specification,
@@ -19,19 +19,19 @@
 / so they need no q to run. Renaming a key, adding a state or moving the
 / file is therefore a change to three trees, not one. The status directory
 / is also where bounded workers keep their locks and checkpoints and
-/ continuous workers their cursors (.qbfstate.lock_dir, .qcont.cursor_path),
+/ continuous workers their cursors (.qetl.job.bounded.state.lock_dir, .qetl.job.continuous.cursor_path),
 / so status_dir is the one spelling of "this deployment's runtime state".
 / .
 / WHY THIS IS ITS OWN FILE (#229). These functions lived in
 / scripts/processes/torq_pipeline.q, the TorQ adapter, and they have nothing to do
 / with TorQ - env vars, .j.j, mkdir and mv. Worse, backfill_state.q in src/
 / called them, which put src/ downstream of scripts/ and is why lock_dir was
-/ wrapped in a try-with-fallback: the author knew .qpipe might not be
+/ wrapped in a try-with-fallback: the author knew .qtorq might not be
 / loaded. Here, under src/etl/core/, the dependency points the right way and
 / the guard is gone. Same convention as materialisation.q, run.q and heartbeat.q:
 / one file per persisted artefact that something outside this process reads.
 
-\d .qstatus
+\d .qetl.status
 
 / The lifecycle states a worker may report. Three of them are terminal, and
 / the distinction between the first two is the important one - "nothing
@@ -66,7 +66,7 @@ status_states:`starting`running`idle`completed`failed
 /   -> starting  a worker beginning a genuinely new run.
 /   -> failed    a failure, which must ALWAYS be recordable.
 / .
-/ That second one matters more than it looks. .qbfstate.fail is the shell's
+/ That second one matters more than it looks. .qetl.job.bounded.state.fail is the shell's
 / error path, so refusing `failed -> failed` made a second consecutive
 / failure THROW INSIDE THE ERROR HANDLER - masking the original error with a
 / complaint about state transitions. A rule that exists to stop a failure
@@ -97,7 +97,7 @@ legal_transitions:(!). flip (
 / `starting` should still be able to record `failed`. Being strict at entry
 / would trade a real diagnostic for a rule with nothing to protect.
 / @throws error when the transition is forbidden
-/ @eg .qstatus.require_transition[`completed;`running]  -> throws
+/ @eg .qetl.status.require_transition[`completed;`running]  -> throws
 / `from_state`, not `from`: `from` is a qSQL keyword, and a lambda that takes
 / it cannot run `select ... from ...` in its own body - `{[from] select x from
 / t where x>from}` throws a bare 'type. Nothing here runs qSQL today, so this
@@ -165,7 +165,7 @@ status_dir:{[]
 / @return the path written
 / @throws error if state is unknown, if the range is empty or reversed, if
 /   source_version is missing, or if a failed state carries no error
-/ @eg .qstatus.write_status[`markout_backfill;`markout1;`completed;
+/ @eg .qetl.status.write_status[`markout_backfill;`markout1;`completed;
 /       `source_version`range_from`range_to!(`v1;2026.09.13D00:00;2026.09.14D00:00);
 /       `cursor`rows_published`windows_completed!(2026.09.14D00:00;1234;1);
 /       ""]

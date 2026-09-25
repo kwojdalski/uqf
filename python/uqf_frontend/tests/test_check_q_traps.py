@@ -223,7 +223,7 @@ def test_the_rename_is_not_flagged():
 
 def test_a_namespace_level_definition_is_not_flagged():
     """Outside a lambda the same name is legal - it defines `.ns.var`."""
-    assert not _flagged("\\d .qsrc\nvar:1\n", "QF003")
+    assert not _flagged("\\d .qetl.source\nvar:1\n", "QF003")
 
 
 def test_a_qsql_column_alias_is_not_flagged():

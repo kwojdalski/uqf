@@ -179,22 +179,19 @@ no processes/IPC/tables).
   `src/integrations/data.q` is `.qdata`, out of scope for this library, see
   below). Every one of these is single-level (not nested under a shared `.q`
   parent) by convention - the filename-to-namespace tie is what the naming
-  auditor checks and what `docs/man.q` is generated against. THREE families
-  nest, on purpose, and all hold INSTANCES rather than modules: bounded workers
-  under a single `.qwrk` root (`.qwrk.demo_deals_backfill`, derived by
-  `.qbw.define` from the registered worker name), source declarations under
-  `.qfeed` (`.qfeed.demo_deals`, checked against the file's own `source_name`)
-  the continuous jobs under `.qsub` (`.qsub.fx_feed`, `.qsub.markout` and six
-  more - one file each under `src/etl/streaming/`, holding every step of the
-  job, feeds included), and each process script's own wiring state under
-  `.qproc` (`.qproc.stream`, `.qproc.backfill`, `.qproc.tap`). A namespace
-  outside the `.q` prefix entirely is a bug unless it is one of the three listed
-  in `tests/q/test_namespaces.q`'s `outside_the_prefix` - `.dqe` (TorQ's own),
-  `.cov` (KX's API shape) and `.surface` (the exporter) - and that test fails on
-  a new one. Code that enumerates namespaces must therefore go through
-  `.qns.owned` / `.qns.functional` (`src/namespaces.q`): a root-level `(key `)
-  where like
-  "q\*"` scan sees `.qwrk`, `.qfeed` and `.qsub` as namespaces holding no functions and drops every worker, source and subscriber process without saying so. A function calling another module's function must qualify it explicitly (e.g. `forwards.q`'s `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a bare, unqualified name) - there is no shared namespace for cross-file calls to resolve into implicitly, and (see the real-KDB-X gotcha further down) even a *same*-namespace call from inside a select/update clause's per-row expression needs to be qualified too. Load order doesn't matter for function *definitions* (q resolves names at call time, and every namespace is fully loaded before any cross-module call actually runs), but `src/init.q\`
+  auditor checks and what `docs/man.q` is generated against. The ETL framework
+  nests under `.qetl` (for example `.qetl.job.bounded`, `.qetl.cfg.audit`);
+  concrete implementations live under `.qpipe.source`, `.qpipe.transform` and
+  `.qpipe.job`. Both bounded and streaming jobs share the job root and must have
+  distinct names. Shared transforms load from `src/etl/transforms/` before jobs.
+  The TorQ adapter is `.qtorq`, and runner-local state stays under `.qproc`. A
+  namespace outside the `.q` prefix entirely is a bug unless it is one of the
+  three listed in `tests/q/test_namespaces.q`'s `outside_the_prefix` - `.dqe`
+  (TorQ's own), `.cov` (KX's API shape) and `.surface` (the exporter) - and that
+  test fails on a new one. Code that enumerates namespaces must therefore go
+  through `.qns.owned` / `.qns.functional` (`src/namespaces.q`): a root-level
+  `(key `) where like
+  "q\*"` scan sees `.qpipe.job`, `.qpipe.source` and `.qpipe.job` as namespaces holding no functions and drops every worker, source and subscriber process without saying so. A function calling another module's function must qualify it explicitly (e.g. `forwards.q`'s `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a bare, unqualified name) - there is no shared namespace for cross-file calls to resolve into implicitly, and (see the real-KDB-X gotcha further down) even a *same*-namespace call from inside a select/update clause's per-row expression needs to be qualified too. Load order doesn't matter for function *definitions* (q resolves names at call time, and every namespace is fully loaded before any cross-module call actually runs), but `src/init.q\`
   loads them in a sensible dependency order (stats -> ccy -> daycount -> rates
   -> forwards -> options -> risk -> positions -> execution -> book ->
   microstructure -> dqchecks -> example_defaults) anyway, for readability.
@@ -261,8 +258,9 @@ One word per concept, so a signature reads the same in every module:
   | a function to run (under a lock, retry, timer)            | `f`                       | `fn`                 |
 
 A registry's three verbs are `define` (declare one), `defined[]` (list them) and
-`def[x]` (read one back) - `.qsrc`, `.qstream`, `.qbw`, `.qnorm`, `.qxf`,
-`.qdag` and `.qalloc` alike. The lookup is `def` and not `decl` on purpose:
+`def[x]` (read one back) - `.qetl.source`, `.qetl.job.stream`,
+`.qetl.job.bounded`, `.qetl.job.stream.normalizer`, `.qetl.transform`,
+`.qetl.dag` and `.qalloc` alike. The lookup is `def` and not `decl` on purpose:
 callers write `decl:def x`, and a function named `decl` would be shadowed by
 that local for the whole body - the right-hand side would read the unset local
 instead of calling the lookup (the `d1v` trap above).
@@ -282,7 +280,8 @@ avoid exactly that, and must not be "tidied" into the long ones:
 - `nm` in `react.q`'s `on`/`on_writing`/`register`/`off` - a reaction table has
   a `name` column (`where not name=nm`).
 - `target_sym` in `forwards.q`/`microstructure.q` - quote tables have `sym`.
-- `.qtick`'s `fan_out[name;batch]` - the subscriber table has a `tbl` column.
+- `.qetl.tick`'s `fan_out[name;batch]` - the subscriber table has a `tbl`
+  column.
 
 Where the preferred long name IS a column somewhere, bind it to a local before
 the query: `check_stale_quotes` takes `as_of` but queries `where time<=cutoff`,

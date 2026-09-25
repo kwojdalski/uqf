@@ -122,7 +122,7 @@ def _report_undefined_tables(items: list[Item], declarations: list[Declaration])
     for item in items:
         if item.kind is Kind.WORKER and item.destination is not None:
             for fn, name, fields in declaration_calls(item.destination.read_text()):
-                if fn == "qbw.define":
+                if fn == "qetl.job.bounded.define":
                     uses.append((name, "fills", symbols(fields.get("dataset", ""))))
     for name, verb, used in uses:
         missing = [t for t in used if t not in known]
@@ -217,7 +217,8 @@ def install_jobs(
 
     Each .q file goes where src/etl/init.q and the registry look for its kind -
     src/etl/sources, src/etl/workers or src/etl/streaming - decided by what it
-    declares (.qsrc.define, .qbw.define, .qstream.define/.qnorm.define), so
+    declares (.qetl.source.define, .qetl.job.bounded.define,
+    .qetl.job.stream.define/.qetl.job.stream.normalize), so
     the sidecar can be laid out any way. Then the derived files are
     regenerated, and the next steps say how to check the jobs are running.
 

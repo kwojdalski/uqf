@@ -1,4 +1,4 @@
-/ posbook.q - the whole of the position-book job (.qsub.posbook).
+/ posbook.q - the whole of the position-book job (.qpipe.job.posbook).
 / .
 / Subscribes to `executions` and `marks`, folds every fill through .qpos
 / into a running book, marks each result to the last mid seen for that
@@ -22,7 +22,7 @@
 / The output schema is the published table in scripts/processes/uqs_tables.q
 / WITHOUT `time`, which .u.upd stamps on receipt (invariant 1).
 
-\d .qsub.posbook
+\d .qpipe.job.posbook
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -48,14 +48,14 @@ position:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`f
 / trade_price, size. It used to carry pip_factor too, which nothing here
 / touched - and a transform that demands a column it does not read cannot
 / serve a fill table that lacks it. crypto_trades lacks it (a crypto price
-/ is in quote units, there is no pip), and .qsub.crypto_posbook runs this
+/ is in quote units, there is no pip), and .qpipe.job.crypto_posbook runs this
 / same transform over those fills. Declare what you read.
 / @param book the current positions, unkeyed
 / @param trades the batch of fills, in arrival order
 / @param marks the last mid per sym
 / @return one position row per fill
 mark_positions:{[book;trades;marks]
-    if[0=count trades; :.qsub.posbook.position];
+    if[0=count trades; :.qpipe.job.posbook.position];
     mids:(exec sym from marks)!exec mid from marks;
     step:{[mids;acc;trade]
         s:trade`sym;
@@ -65,7 +65,7 @@ mark_positions:{[book;trades;marks]
         unrealized:.qrisk.pnl[abs row`qty;row`avg_price;mark;signum row`qty];
         (b;acc[1],enlist `sym`qty`avg_price`realized_pnl`mark_price`unrealized_pnl`total_pnl!
             (s;row`qty;row`avg_price;row`realized_pnl;mark;unrealized;unrealized+row`realized_pnl))}[mids];
-    last step/[(1!book;.qsub.posbook.position);trades]}
+    last step/[(1!book;.qpipe.job.posbook.position);trades]}
 
 / The book a position batch leaves behind: the last row per sym, over the
 / book it started from.
@@ -77,9 +77,9 @@ next_book:{[book;positions]
 
 / --------------------------------------------------------------- THE JOB
 
-/ Where rows go. A stub until .qstream.wire points it at the tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `posbook;
+publish:.qetl.job.stream.unwired `posbook;
 
 / The running book - .qpos's own keyed shape (sym -> qty/avg_price/
 / realized_pnl). The transform takes it as an input and the batch handler
@@ -117,23 +117,23 @@ marks:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); venue:`
 / @return nothing
 on_batch:{[t;x]
     $[t=`executions;
-        [out:.qxf.apply[`position;`book`trades`marks!(
-            0!.qsub.posbook.book;
+        [out:.qetl.transform.apply[`position;`book`trades`marks!(
+            0!.qpipe.job.posbook.book;
             select time:source_time, sym, side, trade_price:price, size from x;
-            ([] sym:key .qsub.posbook.last_mid; mid:value .qsub.posbook.last_mid))];
-         `.qsub.posbook.book set 1!.qsub.posbook.next_book[0!.qsub.posbook.book;out];
-         .qsub.posbook.publish[`position;out]];
+            ([] sym:key .qpipe.job.posbook.last_mid; mid:value .qpipe.job.posbook.last_mid))];
+         `.qpipe.job.posbook.book set 1!.qpipe.job.posbook.next_book[0!.qpipe.job.posbook.book;out];
+         .qpipe.job.posbook.publish[`position;out]];
       t=`marks;
-        .qsub.posbook.last_mid[x`sym]:x`mid;
+        .qpipe.job.posbook.last_mid[x`sym]:x`mid;
       ()];
     }
 
 \d .
 
-.qxf.define[`position;`inputs`output`fn`examples!(
-    `book`trades`marks!(.qsub.posbook.position_book;.qsub.posbook.position_trades;.qsub.posbook.position_marks);
-    .qsub.posbook.position;
-    .qsub.posbook.mark_positions;
+.qetl.transform.define[`position;`inputs`output`fn`examples!(
+    `book`trades`marks!(.qpipe.job.posbook.position_book;.qpipe.job.posbook.position_trades;.qpipe.job.posbook.position_marks);
+    .qpipe.job.posbook.position;
+    .qpipe.job.posbook.mark_positions;
     (
     / From flat: buy 1mm EURUSD at 1.10, marked at 1.104 -> 1e6*0.004 = 4000
     / unrealized. Sell 400k at 1.105 -> 400000*0.005 = 2000 realized, 600k
@@ -141,7 +141,7 @@ on_batch:{[t;x]
     / is marked at its own price, so nothing unrealized.
     `inputs`expected!(
         `book`trades`marks!(
-            .qsub.posbook.position_book;
+            .qpipe.job.posbook.position_book;
             ([] time:2026.09.17D10:00:00 2026.09.17D10:00:01 2026.09.17D10:00:02;
                 sym:`EURUSD`EURUSD`USDJPY;
                 side:1 -1 -1;
@@ -166,10 +166,10 @@ on_batch:{[t;x]
         ([] sym:enlist `USDJPY; qty:enlist 0f; avg_price:enlist 0f; realized_pnl:enlist 1e6; mark_price:enlist 148.5; unrealized_pnl:enlist 0f; total_pnl:enlist 1e6))
     ))];
 
-.qstream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`note!(
+.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`note!(
     `posbook1;
     `executions`marks;
     enlist `position;
-    .qsub.posbook.on_batch;
+    .qpipe.job.posbook.on_batch;
     1b;
     "reads the two normalizers' outputs, not trades and quote, so one book carries FX and crypto and a new market is a mapping, not a job")];

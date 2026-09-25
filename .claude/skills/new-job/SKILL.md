@@ -17,8 +17,8 @@ description: >-
 
 You are adding one job to a framework that already handles windowing, retries,
 coverage, checkpoints and the job graph. **You do not write any of that.** If
-you find yourself writing a loop over days, you are rebuilding `.qbw` and should
-stop.
+you find yourself writing a loop over days, you are rebuilding
+`.qetl.job.bounded` and should stop.
 
 Read `docs/guides/new-pipeline.md` before writing q. It is the long form of
 everything below, and it argues the shape rather than just stating it.
@@ -28,12 +28,12 @@ everything below, and it argues the shape rather than just stating it.
 Two shells, and picking wrong is the only structural mistake here that is
 expensive to undo.
 
-  |                                     | Bounded                                     | Continuous                   |
-  | ---                                 | ---                                         | ---                          |
-  | You know the range before you start | yes                                         | no                           |
-  | It finishes and exits               | yes                                         | never                        |
-  | Examples                            | a backfill, a nightly window, a restatement | a tickerplant feed, a poller |
-  | Shell                               | `.qbw`                                      | `.qstream` / `.qcont`        |
+  |                                     | Bounded                                                  | Continuous                                         |
+  | ---                                 | ---                                                      | ---                                                |
+  | You know the range before you start | yes                                                      | no                                                 |
+  | It finishes and exits               | yes                                                      | never                                              |
+  | Examples                            | a backfill, a nightly window, a restatement              | a tickerplant feed, a poller                       |
+  | Shell                               | `.qetl.job.bounded`                                      | `.qetl.job.stream` / `.qetl.job.continuous`        |
 
 ```bash
 # continuous: subscribes to two tables, publishes one
@@ -52,7 +52,7 @@ uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
     --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
 
 # normalizer: several tables carrying one fact, one canonical table out -
-# NAME is that table, and each source gets a .qxf mapping and an example
+# NAME is that table, and each source gets a .qetl.transform mapping and an example
 uqs new-job ticks --kind normalizer --subscribe-to quote,trades \
     --columns "source_time:timestamp, sym:symbol, px:float" --dry-run
 ```
@@ -112,7 +112,7 @@ So after scaffolding, the tree is in a known state:
   scaffolded test file, which throws until written: the batch
   `tests/q/test_job_output_contracts.q` pushes through the job to hold every
   table it publishes to its plant table by name, order and type -
-  `.qpipe.publish` sends columns positionally, so a reordered `select` is
+  `.qtorq.publish` sends columns positionally, so a reordered `select` is
   otherwise silent. A feed needs no driver; it runs on its own timer.
 
 The scaffold also appends the job's table (if it owns one) to `expected` in
@@ -148,7 +148,7 @@ Write in this order, and run the suite between each:
 - **Never publish `time`.** `.u.upd` stamps its own (invariant 1).
 - **Parameterised queries, never concatenation.** The window bounds are
   arguments to a functional select evaluated remotely. Where a driver cannot
-  parameterise, there is exactly one escape function, `.qodbc.literal`.
+  parameterise, there is exactly one escape function, `.qetl.io.odbc.literal`.
 - **Half-open windows `[from;to)`** --- `>=` on the lower bound, `<` on the
   upper. One wrong operator double-publishes every boundary row, and the
   duplicate surfaces far from here.
@@ -171,7 +171,7 @@ Then load the tree on its own, because the unit suite is not the same thing:
 q -q <<'EOF'
 \l src/init.q
 \l src/etl/init.q
--1 "loaded, registered: ",string `<name> in key .qstream.jobs;
+-1 "loaded, registered: ",string `<name> in key .qetl.job.stream.jobs;
 exit 0
 EOF
 ```
@@ -186,7 +186,7 @@ Say this back to the user, because it is the part that surprises people:
 - **No `\l` line.** `src/etl/init.q` globs its three declaration directories.
   Only add a name to its `lead` list if your file reads another job's table at
   load time --- and you will know, because the tree stops loading with a bare
-  `` `.qsub.<name> ``.
+  `` `.qpipe.job.<name> ``.
 - **No test registration at all.** `tests/run_tests.q` globs `tests/q/test_*.q`
   for the file, and the scaffold appends the test's NAMESPACE to that file's
   `nsList` (#350). Both halves matter: the list is kept by hand, and a namespace
@@ -201,14 +201,14 @@ Say this back to the user, because it is the part that surprises people:
   `scripts/generate/generate_man_registry.py` itself.
 - **No hand-copied source for a second worker.** An existing source is reused
   rather than rewritten, and an existing table is not defined again. A dataset
-  another worker already fills with no partition is refused: `.qbw.define` would
-  refuse the pair at load.
+  another worker already fills with no partition is refused:
+  `.qetl.job.bounded.define` would refuse the pair at load.
 - **No registry entry at all.** The process registry is read from the q
   declarations (`model/declarations.py`): `procname`, the edges, and the
   optional `start_with_all` (default on demand) and `note` all live on the job's
-  own `.qstream.define` / `.qbw.define`. The port is appended to
-  `scripts/processes/process_ports.csv` by the regeneration above, so no
-  existing process moves.
+  own `.qetl.job.stream.define` / `.qetl.job.bounded.define`. The port is
+  appended to `scripts/processes/process_ports.csv` by the regeneration above,
+  so no existing process moves.
 
 ## When to stop and ask
 

@@ -1,4 +1,4 @@
-/ fx_feed.q - the whole of the top-of-book FX quote feed (.qsub.fx_feed).
+/ fx_feed.q - the whole of the top-of-book FX quote feed (.qpipe.job.fx_feed).
 / .
 / Subscribes to nothing and publishes `quote` twice a second: one row per
 / pair, bid and ask one pip either side of a level that walks on every tick.
@@ -17,11 +17,11 @@
 / among them: .u.upd stamps its own on receipt (scripts/processes/torq_pipeline.q,
 / invariant 1).
 
-\d .qsub.fx_feed
+\d .qpipe.job.fx_feed
 
-/ Where rows go. A stub until .qstream.wire points it at the tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `fx_feed;
+publish:.qetl.job.stream.unwired `fx_feed;
 
 / This process's own moving level per pair, walked on every tick. Plain
 / parallel VECTORS, aligned with .qsynth.pairs: a dict here would silently
@@ -39,7 +39,7 @@ spot:.qsynth.spot
 / venue name.
 / @param levels one mid per pair, in .qsynth.pairs order
 / @return the tick's rows, in the vendored quote table's column order
-/ @eg count .qsub.fx_feed.tick_rows .qsynth.spot  ->  8
+/ @eg count .qpipe.job.fx_feed.tick_rows .qsynth.spot  ->  8
 tick_rows:{[levels]
     n:count .qsynth.pairs;
     (.qsynth.pairs;levels-.qsynth.pip;levels+.qsynth.pip;
@@ -47,8 +47,8 @@ tick_rows:{[levels]
 
 / Walk every pair's level, then publish the tick built from it.
 on_timer:{[]
-    `.qsub.fx_feed.spot set .qsynth.drift_one each .qsub.fx_feed.spot;
-    .qsub.fx_feed.publish[`quote;.qsub.fx_feed.tick_rows .qsub.fx_feed.spot];
+    `.qpipe.job.fx_feed.spot set .qsynth.drift_one each .qpipe.job.fx_feed.spot;
+    .qpipe.job.fx_feed.publish[`quote;.qpipe.job.fx_feed.tick_rows .qpipe.job.fx_feed.spot];
     }
 
 \d .
@@ -56,11 +56,11 @@ on_timer:{[]
 / Twice a second, matching every other feed in this demo: fast enough that
 / the derived jobs downstream have something to do, slow enough to read the
 / tables by hand while it runs.
-.qstream.define[`fx_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all`note!(
+.qetl.job.stream.define[`fx_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all`note!(
     `fxfeed1;
     `symbol$();
     enlist `quote;
     0D00:00:00.500;
-    .qsub.fx_feed.on_timer;
+    .qpipe.job.fx_feed.on_timer;
     1b;
     "pinned below the vendored dqc/dqe block, not part of the contiguous run")];

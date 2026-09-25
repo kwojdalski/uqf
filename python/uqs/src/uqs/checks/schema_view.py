@@ -202,7 +202,7 @@ def columns(table: str, port: int, host: str = "localhost", **creds: Any) -> lis
     `meta` takes a symbol, not a string, and there is no bind-parameter form
     over this transport. It is validated against the live table list first,
     so the only names that reach the expression are ones the process already
-    reported - which is the same one-escape-path discipline `.qodbc` follows
+    reported - which is the same one-escape-path discipline `.qetl.io.odbc` follows
     where a driver cannot parameterise.
     """
     available = table_names(port, host=host, **creds)

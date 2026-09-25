@@ -29,8 +29,8 @@ scaffold fxprobe_backfill:
   create tests/q/test_fxprobe_backfill.q (13 lines)
   append to tests/run_tests.q (1 line)
   append to scripts/processes/uqs_catalog.q (2 lines)
-  note: write .qfeed.fxprobe.query - parameterised, never concatenated (see src/etl/core/source_contract.q)
-  note: write .qfeed.fxprobe.fixture - deterministic, same contract as the live source
+  note: write .qpipe.source.fxprobe.query - parameterised, never concatenated (see src/etl/core/source_contract.q)
+  note: write .qpipe.source.fxprobe.fixture - deterministic, same contract as the live source
   note: declared columns: time, sym, mid
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
 ```
@@ -47,7 +47,7 @@ the same distinction `profiles.plant_slots` draws when it counts the budget.
 ## Source
 
 ```q
-\d .qfeed.fxprobe
+\d .qpipe.source.fxprobe
 
 source_name:`fxprobe
 
@@ -62,7 +62,7 @@ Two things to write, and both notes are warnings earned the hard way:
 **`query` --- parameterised, never concatenated.** The window bounds are
 *arguments* to a lambda taking `(handle; range_from; range_to)` and evaluated
 remotely, not text spliced into a string. Where a driver genuinely cannot
-parameterise there is exactly one escape function, `.qodbc.literal`
+parameterise there is exactly one escape function, `.qetl.io.odbc.literal`
 (`src/etl/core/singlestore_odbc.q`); using anything else is the finding a
 security review exists to make.
 
@@ -90,11 +90,11 @@ fixture:{[]
 The generated file explains itself, and it is worth reading before replacing it.
 Every other scaffolded body throws; this one cannot:
 
-- the worker's `.qxf.passthrough` call reads it **at load time**, so a fixture
-  that threw would stop the whole ETL tree from loading --- you could not run
-  the suite to see what was unfinished;
-- empty does not work either, because `.qxf.define` refuses a transform whose
-  examples are all empty.
+- the worker's `.qetl.transform.passthrough` call reads it **at load time**, so
+  a fixture that threw would stop the whole ETL tree from loading --- you could
+  not run the suite to see what was unfinished;
+- empty does not work either, because `.qetl.transform.define` refuses a
+  transform whose examples are all empty.
 
 So it is one deterministic row of the declared shape, which loads and asserts
 nothing. **Replace it before trusting a run** --- a fixture that does not
@@ -103,23 +103,24 @@ exercise what the source actually does makes the suite green for no reason.
 ## Worker
 
 Mostly a declaration. The lifecycle --- windowing, retries, coverage,
-checkpoints, dry-run --- is `.qbw`'s:
+checkpoints, dry-run --- is `.qetl.job.bounded`'s:
 
 ```q
 facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     (enlist `rows)!enlist count batch}
 
-.qxf.passthrough[`fxprobe_passthrough;`batch;0#.qfeed.fxprobe.fixture[];.qfeed.fxprobe.fixture[]];
+.qetl.transform.passthrough[`fxprobe_passthrough;`batch;0#.qpipe.source.fxprobe.fixture[];.qpipe.source.fxprobe.fixture[]];
 
-.qbw.define[`fxprobe_backfill;
+.qetl.job.bounded.define[`fxprobe_backfill;
     `source`dataset`width`transform`facts`procname`note!
-        (`fxprobe;`fx_probe;1D;`fxprobe_passthrough;.qwrk.fxprobe_backfill.facts;
+        (`fxprobe;`fx_probe;1D;`fxprobe_passthrough;.qpipe.job.fxprobe_backfill.facts;
          `fxprobe_backfill1;
          "SCAFFOLDED: bounded - say what this backfill is for")];
 ```
 
-**If you find yourself writing a loop over days, you are rebuilding `.qbw`.**
+**If you find yourself writing a loop over days, you are rebuilding
+`.qetl.job.bounded`.**
 
 `facts` is what the run saw beyond its row count --- a row count alone reads a
 partial extract as success. **Every aggregate must survive an empty batch**: a
@@ -153,6 +154,6 @@ uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --d
 ## Then
 
 Write `query`, then `fixture`, then the test --- and check what it claims with
-`.qmatz` coverage reads rather than by trusting the row count.
+`.qetl.coverage` coverage reads rather than by trusting the row count.
 [new-pipeline.md](../guides/new-pipeline.md) walks the whole bounded lifecycle
 end to end with a real worked example.

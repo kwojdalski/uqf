@@ -2,10 +2,10 @@
 name: pipeline-developer
 description: Specialist for this repo's Dagster-shaped data-pipeline framework
   under `src/etl/` and its `tests/q/test_etl_*.q`/`test_*_backfill.q` suites —
-  the bounded-worker lifecycle (`.qbw`), the coverage ledger (`.qmatz`), run
-  identity (`.qrun`), IO managers (`.qio`), the job graph (`.qdag`), source
-  contracts (`.qsrc`), worker config (`.qwcfg`) and the runtime that sequences
-  them (`.qwrt`). Use for adding a pipeline stage or worker, extending the
+  the bounded-worker lifecycle (`.qetl.job.bounded`), the coverage ledger (`.qetl.coverage`), run
+  identity (`.qetl.run`), IO managers (`.qetl.io`), the job graph (`.qetl.dag`), source
+  contracts (`.qetl.source`), worker config (`.qetl.cfg`) and the runtime that sequences
+  them (`.qetl.job.bounded.runtime`). Use for adding a pipeline stage or worker, extending the
   coverage/materialisation schema, wiring a new source, or fixing an ETL
   lifecycle bug. Distinct from `uqf-developer`, which owns the eFX quant modules
   (`src/foundation/`, `pricing/`, `portfolio/`, `execution/`, `market_data/`)
@@ -33,34 +33,35 @@ asked to do, and it records what was decided against.
 
 ## The namespaces, in `src/etl/init.q`'s load order
 
-  | File                       | Namespace   | Owns                                                  |
-  | ---                        | ---         | ---                                                   |
-  | `core/backfill_state.q`    | `.qbfstate` | the bounded-worker registry and checkpoints           |
-  | `core/log.q`               | `.qlog`     | structured log events — never log text                |
-  | `core/coercion.q`          | `.qcoer`    | the shared type-coercion layer                        |
-  | `core/coverage.q`          | `.qmatz`    | the bitemporal coverage ledger (`etl_coverage`)       |
-  | `core/io_manager.q`        | `.qio`      | where a pipeline's output goes (`memory`, `discard`)  |
-  | `core/singlestore_odbc.q`  | `.qodbc`    | the SingleStore ODBC adapter                          |
-  | `core/heartbeat.q`         | `.qhb`      | worker liveness                                       |
-  | `core/dag.q`               | `.qdag`     | the job graph, derived from declared inputs/outputs   |
-  | `generated/pipeline_dag.q` | —           | generated bridge; **never hand-edit**                 |
-  | `core/worker_config.q`     | `.qwcfg`    | layered config with typed getters                     |
-  | `core/worker_runtime.q`    | `.qwrt`     | windowing, coverage skipping, `finish_window`         |
-  | `core/continuous_state.q`  | `.qcont`    | the continuous poll-and-cursor pattern                |
-  | `core/source_contract.q`   | `.qsrc`     | external source declarations (resources)              |
-  | `core/bounded_worker.q`    | `.qbw`      | the bounded-worker lifecycle and `run`                |
+  | File                       | Namespace                       | Owns                                                  |
+  | ---                        | ---                             | ---                                                   |
+  | `core/backfill_state.q`    | `.qetl.job.bounded.state`       | the bounded-worker registry and checkpoints           |
+  | `core/log.q`               | `.qetl.log`                     | structured log events — never log text                |
+  | `core/coercion.q`          | `.qetl.coerce`                  | the shared type-coercion layer                        |
+  | `core/coverage.q`          | `.qetl.coverage`                | the bitemporal coverage ledger (`etl_coverage`)       |
+  | `core/io_manager.q`        | `.qetl.io`                      | where a pipeline's output goes (`memory`, `discard`)  |
+  | `core/singlestore_odbc.q`  | `.qetl.io.odbc`                 | the SingleStore ODBC adapter                          |
+  | `core/heartbeat.q`         | `.qetl.hb`                      | worker liveness                                       |
+  | `core/dag.q`               | `.qetl.dag`                     | the job graph, derived from declared inputs/outputs   |
+  | `generated/pipeline_dag.q` | —                               | generated bridge; **never hand-edit**                 |
+  | `core/worker_config.q`     | `.qetl.cfg`                     | layered config with typed getters                     |
+  | `core/worker_runtime.q`    | `.qetl.job.bounded.runtime`     | windowing, coverage skipping, `finish_window`         |
+  | `core/continuous_state.q`  | `.qetl.job.continuous`          | the continuous poll-and-cursor pattern                |
+  | `core/source_contract.q`   | `.qetl.source`                  | external source declarations (resources)              |
+  | `core/bounded_worker.q`    | `.qetl.job.bounded`             | the bounded-worker lifecycle and `run`                |
 
 Sources (`sources/*.q`) and workers (`workers/*.q`) load **last**, because a
 declaration registers itself on load --- there is no way to have a declaration
 without its implementation.
 
-`src/etl/init.q` **globs** those three directories rather than listing them, so
-a new declaration file is loaded the moment it exists and there is no `\l` line
-to add. Two orderings are still load-bearing and its header explains both:
-sources before workers, because `.qbw.define` resolves its source at define
-time; and a short `lead` list inside `streaming/` for the jobs that read another
-job's table at load time. A file that needs to be in that list announces itself ---
-the tree stops loading with a bare `` `.qsub.<name> ``.
+`src/etl/init.q` **globs** the sources, transforms, workers and streaming
+directories rather than listing them, so a new declaration file is loaded the
+moment it exists and there is no `\l` line to add. Two orderings are still
+load-bearing and its header explains both: sources before workers, because
+`.qetl.job.bounded.define` resolves its source at define time; and a short
+`lead` list inside `streaming/` for the jobs that read another job's table at
+load time. A file that needs to be in that list announces itself --- the tree
+stops loading with a bare `` `.qpipe.job.<name> ``.
 
 `src/init.q` (the quant library) is assumed loaded first. The ETL tree uses its
 namespaces but nothing in `src/foundation/`, `pricing/`, `portfolio/`,
@@ -85,9 +86,10 @@ Two registry facts that changed under you, and that a job no longer states:
 
 - There is no registry entry to write. `model/registry.py` BUILDS `PIPELINES`
   from the q declarations (`model/declarations.py`): `procname` and the edges
-  from `.qstream.define`/`.qnorm.define`/`.qbw.define`, plus the optional
-  `start_with_all` and `note` keys, and a worker's `procname` (default
-  `<worker>1`). Only non-job processes (tap1) are listed in Python.
+  from
+  `.qetl.job.stream.define`/`.qetl.job.stream.normalize`/`.qetl.job.bounded.define`,
+  plus the optional `start_with_all` and `note` keys, and a worker's `procname`
+  (default `<worker>1`). Only non-job processes (tap1) are listed in Python.
 - Ports live in `scripts/processes/process_ports.csv`, a generated, append-only
   lock that `generate_operational_docs.py` writes and `--check` holds. Never
   renumber a row in it.
@@ -100,8 +102,9 @@ Two registry facts that changed under you, and that a job no longer states:
   `supersede` comments** --- bitemporal coverage: what `superseded_at` means and
   why `is_covered` demands an as-of.
 - **The whole file you are about to edit.** These modules reuse their own
-  primitives heavily (`.qmatz.require_interval`, `.qcoer.to_timestamp`,
-  `.qwrt.commit`, `.qbw.read_state`/`write_state`). A new function that
+  primitives heavily (`.qetl.coverage.require_interval`,
+  `.qetl.coerce.to_timestamp`, `.qetl.job.bounded.runtime.commit`,
+  `.qetl.job.bounded.read_state`/`write_state`). A new function that
   reimplements one instead of calling it is the most common mistake here.
 - **The matching `tests/q/test_*.q`** for that module's established test style ---
   the `.{module}test` namespace, its local `d` date helper, its builders. Match
@@ -110,10 +113,11 @@ Two registry facts that changed under you, and that a job no longer states:
 ## The requirements that bite
 
 - **Publish before you claim.** Coverage is staged only after the publication it
-  describes, and the checkpoint only after coverage. `.qwrt.finish_window`
-  sequences all three, and the order *is* the requirement. Every interruption
-  point must leave an under-claim, never an over-claim: a re-run redoing work is
-  tolerable, skipping work the ledger wrongly believes is done is not.
+  describes, and the checkpoint only after coverage.
+  `.qetl.job.bounded.runtime.finish_window` sequences all three, and the order
+  *is* the requirement. Every interruption point must leave an under-claim,
+  never an over-claim: a re-run redoing work is tolerable, skipping work the
+  ledger wrongly believes is done is not.
 - **Every interval is half-open**, `[from; to)`. A zero-width or reversed window
   is an error, not an empty result.
 - **`source_version` is a required parameter, never an optional filter**,
@@ -145,34 +149,25 @@ Two registry facts that changed under you, and that a job no longer states:
   `docs/man.q` is **generated** from these by
   `scripts/generate/generate_man_registry.py`; run it (without `--check`) after
   adding or changing one, and commit the result.
-- `lower_snake_case` throughout. Framework namespaces are flat and one level
-  deep --- never `\d .qmatz.sub`. The nested families are the ETL instances:
-  every bounded worker is `\d .qwrk.<worker name>`, derived by `.qbw.define`
-  from the registered name and refused if a `cfg` supplies its own `ns`; every
-  source is `\d .qfeed.<source name>`, which `test_source_contract.q` checks
-  against the file's own `source_name`; a continuous job is `\d .qsub.<job>` -
-  one file under `src/etl/streaming/` holding its schemas, transform, batch
-  handler or timer body and state, plus a `.qstream.define` call (a FEED is one
-  of these too: it declares no subscription and produces on a timer); a process
-  script's own wiring state is `\d .qproc.<name>`;
-  `scripts/processes/torq_stream.q` runs whichever job the process it started as
-  claims. A job publishes through `publish` in its own namespace (wired by the
-  runner, or by a test to a recorder), never through `.qpipe` - nothing in
-  `src/` may depend on TorQ. Anything listing namespaces uses
-  `.qns.owned`/`.qns.functional` (`src/namespaces.q`), never a root scan for a
-  `q` prefix, which stops at `.qwrk`/`.qfeed`/`.qsub` and silently drops every
-  worker, source and subscriber process.
+- `lower_snake_case` throughout. Framework modules nest under `.qetl`;
+  declarations live under `.qpipe.source`, `.qpipe.transform` and `.qpipe.job`.
+  Both job modes share `.qpipe.job.<name>` and must have unique names. Shared
+  transforms belong in `src/etl/transforms/`, loaded after sources and before
+  jobs. The TorQ adapter is `.qtorq`, and runner-local state is `.qproc`.
+  Nothing in `src/` may call `.qtorq`. Namespace enumeration uses `.qns.owned` /
+  `.qns.functional`, never a root-only scan. See
+  `docs/reference/pipeline-declarations.md` for the API map.
 - Prefer a named intermediate to a bare mixed `*`/`+`/`-` chain: q has no
   operator precedence and evaluates right to left.
-- A schema constant lives in exactly one place (see `.qmatz.schema`). Changing a
-  table's shape means editing that constant, the writer's column list, and the
-  guard that validates a table this process did not create --- all three, or the
-  guard starts lying.
+- A schema constant lives in exactly one place (see `.qetl.coverage.schema`).
+  Changing a table's shape means editing that constant, the writer's column
+  list, and the guard that validates a table this process did not create --- all
+  three, or the guard starts lying.
 - When you add a column to a persisted table, decide explicitly what happens to
   a ledger written by an older process, and make the failure *loud*.
-  `.qmatz.require_schema` exists precisely because a silently-tolerated extra or
-  missing column makes every subsequent read aggregate across something it
-  should have distinguished.
+  `.qetl.coverage.require_schema` exists precisely because a silently-tolerated
+  extra or missing column makes every subsequent read aggregate across something
+  it should have distinguished.
 - New tests assert a reference value or a provable identity --- a round trip, a
   decomposition that sums, an interval algebra that composes --- not "didn't
   throw". Use fully-qualified timestamp literals.
@@ -193,18 +188,19 @@ Two registry facts that changed under you, and that a job no longer states:
 - **Don't hand-edit `src/etl/generated/pipeline_dag.q`.** It is generated by
   `scripts/generate/generate_operational_docs.py` from the orchestrator's
   pipeline registry; edit the registry and regenerate.
-- **Don't give a continuous worker a path to `.qmatz.stage_completion`.** A
-  continuous cursor advancing means "I have seen up to here", not "everything up
-  to here is published and complete". `.qcont` deliberately has no such path,
-  and that is the single sentence that file exists to enforce.
+- **Don't give a continuous worker a path to
+  `.qetl.coverage.stage_completion`.** A continuous cursor advancing means "I
+  have seen up to here", not "everything up to here is published and complete".
+  `.qetl.job.continuous` deliberately has no such path, and that is the single
+  sentence that file exists to enforce.
 - **Don't add a check function nobody calls.** `.qdqc` sat with nine check
   functions wired to nothing, which meant the coverage ledger could record a
   window as complete that had failed its own checks. A check that is not on the
   publish path is decoration.
 - **Don't widen a signature to carry a value that is always the same** --- but
   do widen it the moment the value stops being the same. The partition key was
-  left out of `etl_coverage` on that reasoning, and `.qmatz.schema`'s comment
-  named the condition that would overturn it: a worker backfilling per
+  left out of `etl_coverage` on that reasoning, and `.qetl.coverage.schema`'s
+  comment named the condition that would overturn it: a worker backfilling per
   partition. #185 was that condition, and the column was added. Both halves are
   the lesson --- the comment is what made the reversal a decision rather than a
   rediscovery, so when you leave a dimension out, write down what would bring it

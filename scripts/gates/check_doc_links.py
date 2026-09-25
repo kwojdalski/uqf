@@ -130,7 +130,7 @@ def slug(heading: str) -> str:
 
     Lowercase, drop everything that is not a word character, a space or a
     hyphen, then spaces to hyphens. Inline code and emphasis markers go
-    first, so `` `.qbw` and the plant `` and ".qbw and the plant" agree.
+    first, so `` `.qetl.job.bounded` and the plant `` and ".qetl.job.bounded and the plant" agree.
     """
     text = re.sub(r"`([^`]*)`", r"\1", heading)
     text = re.sub(r"[*_]{1,2}([^*_]+)[*_]{1,2}", r"\1", text)

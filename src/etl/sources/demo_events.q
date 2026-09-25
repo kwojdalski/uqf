@@ -1,5 +1,5 @@
 / demo_events.q - a generic analogue of a venue order/trade event tape
-/ (.qfeed.demo_events).
+/ (.qpipe.source.demo_events).
 / .
 / The ingestion half of issue #46. Shape and rationale in docs/architecture/event-tape.md;
 / this file is the source declaration for it.
@@ -20,7 +20,7 @@
 / largely already served by hit_ratio_by and markout_at_horizons. See
 / docs/architecture/event-tape.md for the comparison.
 
-\d .qfeed.demo_events
+\d .qpipe.source.demo_events
 
 source_name:`demo_events
 
@@ -84,7 +84,7 @@ fixture:{[]
         pip_factor:10#10000j)}
 
 / Register on load, so the declaration and the implementation cannot drift.
-.qsrc.define[source_name;
+.qetl.source.define[source_name;
     `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
     (source_name;`event_tape;target;time_column;row_key;columns;types;query;fixture;tz)];
 

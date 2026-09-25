@@ -30,10 +30,10 @@ opts:.Q.opt .z.x;
 range_from:$[`from in key opts; "P"$first opts`from; 2026.02.25D14:30:00];
 range_to:$[`to in key opts; "P"$first opts`to; 2026.02.25D15:30:00];
 
-if[not .qsrc.has_credentials `databento_mbp10;
-    -1 "SKIP  ",.qsrc.credential_var[`databento_mbp10]," is not set - run through scripts/dev/odbc_rosetta.sh databento";
+if[not .qetl.source.has_credentials `databento_mbp10;
+    -1 "SKIP  ",.qetl.source.credential_var[`databento_mbp10]," is not set - run through scripts/dev/odbc_rosetta.sh databento";
     exit 0];
-if[not .qodbc.available[];
+if[not .qetl.io.odbc.available[];
     -1 "SKIP  the q ODBC client is not loadable in this process - run through scripts/dev/odbc_rosetta.sh";
     exit 0];
 
@@ -53,19 +53,19 @@ check:{[name;ok;detail]
 / --- run ---------------------------------------------------------------------
 
 -1 "range ",string[range_from]," .. ",string range_to;
-.qwrk.databento_book_backfill.init[`source_version`range_from`range_to!(`smoke;range_from;range_to)];
+.qpipe.job.databento_book_backfill.init[`source_version`range_from`range_to!(`smoke;range_from;range_to)];
 t0:.z.p;
-r:.qwrk.databento_book_backfill.run[];
+r:.qpipe.job.databento_book_backfill.run[];
 -1 "run took ",string .z.p-t0;
 check["run completed";`completed~r`state;.Q.s1 r];
 check["no failed window";0=r`windows_failed;string r`windows_failed];
 
 / --- reconcile against DuckDB -------------------------------------------------
 
-h:.qodbc.open .qsrc.require_credentials `databento_mbp10;
-between_sql:" WHERE ts_event >= ",.qfeed.databento_mbp10.epoch_ns_literal[range_from]," AND ts_event < ",.qfeed.databento_mbp10.epoch_ns_literal[range_to];
+h:.qetl.io.odbc.open .qetl.source.require_credentials `databento_mbp10;
+between_sql:" WHERE ts_event >= ",.qpipe.source.databento_mbp10.epoch_ns_literal[range_from]," AND ts_event < ",.qpipe.source.databento_mbp10.epoch_ns_literal[range_to];
 
-source_rows:first exec n from .qodbc.run_sql[h;"SELECT count(*) AS n FROM mbp10",between_sql];
+source_rows:first exec n from .qetl.io.odbc.run_sql[h;"SELECT count(*) AS n FROM mbp10",between_sql];
 check["every source row published";source_rows=r`rows_published;
     "source ",string[source_rows],", published ",string r`rows_published];
 check["target holds what was published";(count databento_book)=r`rows_published;string count databento_book];
@@ -76,9 +76,9 @@ check["no row published twice";(count keyed)=count databento_book;
 
 check["every row inside the range";all databento_book[`time] within (range_from;range_to-1);""];
 check["range recorded as covered";
-    .qmatz.is_covered[`databento_book;`;`smoke;.z.p;range_from;range_to];""];
+    .qetl.coverage.is_covered[`databento_book;`;`smoke;.z.p;range_from;range_to];""];
 
-per_sym_source:.qodbc.run_sql[h;"SELECT symbol, count(*) AS n FROM mbp10",between_sql," GROUP BY symbol ORDER BY symbol"];
+per_sym_source:.qetl.io.odbc.run_sql[h;"SELECT symbol, count(*) AS n FROM mbp10",between_sql," GROUP BY symbol ORDER BY symbol"];
 per_sym_book:select n:count i by sym from databento_book;
 check["row count per symbol matches";
     ((`$per_sym_source`symbol)!per_sym_source`n)~exec sym!n from per_sym_book;
@@ -88,32 +88,32 @@ check["row count per symbol matches";
 / the range, re-read its ten levels straight from DuckDB and compare.
 sample:select from databento_book where i=(last;i) fby sym;
 level_sql:{[h;row]
-    sql:"SELECT ",(", " sv string .qfeed.databento_mbp10.level_fields)," FROM mbp10",
-        " WHERE symbol = ",.qodbc.literal[string row`sym],
-        " AND ts_event = ",.qfeed.databento_mbp10.epoch_ns_literal[row`time],
-        " AND sequence = ",.qodbc.literal[row`sequence],
-        " AND action = ",.qodbc.literal[string row`action],
-        " AND side = ",.qodbc.literal[string row`side],
-        " AND price = ",.qodbc.literal[row`price],
-        " AND size = ",.qodbc.literal[row`size];
-    src:.qodbc.run_sql[h;sql];
+    sql:"SELECT ",(", " sv string .qpipe.source.databento_mbp10.level_fields)," FROM mbp10",
+        " WHERE symbol = ",.qetl.io.odbc.literal[string row`sym],
+        " AND ts_event = ",.qpipe.source.databento_mbp10.epoch_ns_literal[row`time],
+        " AND sequence = ",.qetl.io.odbc.literal[row`sequence],
+        " AND action = ",.qetl.io.odbc.literal[string row`action],
+        " AND side = ",.qetl.io.odbc.literal[string row`side],
+        " AND price = ",.qetl.io.odbc.literal[row`price],
+        " AND size = ",.qetl.io.odbc.literal[row`size];
+    src:.qetl.io.odbc.run_sql[h;sql];
     if[not 1=count src; :0b];
-    lv:{[src;p] "f"$raze src `$p,/:.qfeed.databento_mbp10.levels}[src];
+    lv:{[src;p] "f"$raze src `$p,/:.qpipe.source.databento_mbp10.levels}[src];
     (row[`bid_prices]~lv "bid_px_") and (row[`ask_prices]~lv "ask_px_") and
         (("f"$row`bid_sizes)~lv "bid_sz_") and ("f"$row`ask_sizes)~lv "ask_sz_"}[h];
 matches:level_sql each sample;
 check["folded levels match the source";all matches;
     "mismatched sym(s): ",", " sv string exec sym from sample where not matches];
 
-.qodbc.close h;
+.qetl.io.odbc.close h;
 
 / --- idempotence ---------------------------------------------------------------
 
-r2:.qwrk.databento_book_backfill.run[];
+r2:.qpipe.job.databento_book_backfill.run[];
 check["second run is idle";`idle~r2`state;.Q.s1 r2];
 check["second run published nothing";(count databento_book)=r`rows_published;string count databento_book];
 
-.qwrk.databento_book_backfill.cleanup[];
+.qpipe.job.databento_book_backfill.cleanup[];
 
 -1 "";
 -1 $[failures=0;"PASS  ";"FAIL  "],string[failures]," check(s) failed; ",string[count databento_book]," rows in databento_book";

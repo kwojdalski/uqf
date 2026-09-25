@@ -27,7 +27,7 @@ Reading the book needs no handle of your own --- `--port` is the one
 `uqs summary` shows for it (`KDBBASEPORT`+39, so 6089 on a default stack):
 
 ```bash
-uqs query --port 6089 "0!.qsub.fx_positions.book"
+uqs query --port 6089 "0!.qpipe.job.fx_positions.book"
 uqs query --port 6089 "select from fx_limit_breach"
 uqs query --port 6089                    # an interactive qcon session
 ```
@@ -51,14 +51,14 @@ Then, from any q session:
 
 ```q
 h:hopen `::5011
-h"0!.qsub.fx_positions.book"
+h"0!.qpipe.job.fx_positions.book"
 ```
 
 `lib/torq` is never loaded on any of these four invocations, and all four are
 exercised: the single-process one by `tests/q/test_fx_positions.q`, and the
 three-process one live --- it did not work until #266, because the runner handed
-`.qstream.wire` a raw handle it refuses, and the subscribe call it sent the
-plant was malformed.
+`.qetl.job.stream.wire` a raw handle it refuses, and the subscribe call it sent
+the plant was malformed.
 
 Neither path is the "real" one. A job is TorQ-free code and the runner decides
 the transport, which is the whole point: being runnable without TorQ is no
@@ -66,14 +66,14 @@ reason not to be startable with it.
 
 ## What it is made of
 
-  | Piece                                                                            | Namespace              | What it does                               |
-  | ---                                                                              | ---                    | ---                                        |
-  | [`src/portfolio/desk_positions.q`](../../src/portfolio/desk_positions.q)         | `.qdesk`               | Net FX exposure along declared dimensions  |
-  | [`src/portfolio/limits.q`](../../src/portfolio/limits.q)                         | `.qlimit`              | Limits, breach detection, alert throttling |
-  | [`src/etl/core/tick.q`](../../src/etl/core/tick.q)                               | `.qtick`               | A pub/sub tickerplant in stock kdb+        |
-  | [`src/etl/streaming/fx_positions.q`](../../src/etl/streaming/fx_positions.q)     | `.qsub.fx_positions`   | The service                                |
-  | [`src/etl/streaming/fx_orders_feed.q`](../../src/etl/streaming/fx_orders_feed.q) | `.qsub.fx_orders_feed` | Synthetic order flow                       |
-  | [`scripts/processes/run_stream.q`](../../scripts/processes/run_stream.q)         | `.qproc.standalone`    | Runs any registered job with no TorQ       |
+  | Piece                                                                            | Namespace                   | What it does                               |
+  | ---                                                                              | ---                         | ---                                        |
+  | [`src/portfolio/desk_positions.q`](../../src/portfolio/desk_positions.q)         | `.qdesk`                    | Net FX exposure along declared dimensions  |
+  | [`src/portfolio/limits.q`](../../src/portfolio/limits.q)                         | `.qlimit`                   | Limits, breach detection, alert throttling |
+  | [`src/etl/core/tick.q`](../../src/etl/core/tick.q)                               | `.qetl.tick`                | A pub/sub tickerplant in stock kdb+        |
+  | [`src/etl/streaming/fx_positions.q`](../../src/etl/streaming/fx_positions.q)     | `.qpipe.job.fx_positions`   | The service                                |
+  | [`src/etl/streaming/fx_orders_feed.q`](../../src/etl/streaming/fx_orders_feed.q) | `.qpipe.job.fx_orders_feed` | Synthetic order flow                       |
+  | [`scripts/processes/run_stream.q`](../../scripts/processes/run_stream.q)         | `.qproc.standalone`         | Runs any registered job with no TorQ       |
 
 ![The FX positions service](../diagrams/fx-positions-service.svg)
 
@@ -82,9 +82,9 @@ reason not to be startable with it.
 ### 1. Risk, not P&L
 
 `.qpos` already tracks a book per sym at weighted-average cost, carrying
-realised P&L, and `.qsub.posbook` already publishes it. This service answers a
-different question --- *what are we holding* --- along dimensions `.qpos` cannot
-be keyed on, and it deliberately has **no marks and no P&L**.
+realised P&L, and `.qpipe.job.posbook` already publishes it. This service
+answers a different question --- *what are we holding* --- along dimensions
+`.qpos` cannot be keyed on, and it deliberately has **no marks and no P&L**.
 
 Marking needs a price source, a convention for a pair never quoted, and a
 decision about which currency the answer is in. `posbook` makes all three. Two
@@ -155,11 +155,12 @@ restarted.
 
 ## What this is not
 
-`.qtick` is not a replacement for TorQ. No discovery, no process manager, no HDB
-writedown, no chained plants, no access control. It is the part a single service
-needs to stand on its own: subscribe, publish, log, replay. The TorQ path still
-exists and still works --- `scripts/processes/torq_stream.q` runs the same jobs,
-unchanged, and [the stack architecture](../architecture/stack.md) describes it.
+`.qetl.tick` is not a replacement for TorQ. No discovery, no process manager, no
+HDB writedown, no chained plants, no access control. It is the part a single
+service needs to stand on its own: subscribe, publish, log, replay. The TorQ
+path still exists and still works --- `scripts/processes/torq_stream.q` runs the
+same jobs, unchanged, and [the stack architecture](../architecture/stack.md)
+describes it.
 
 The three tickerplant invariants are TorQ's on purpose, so a job behaves
 identically whichever plant carries it:

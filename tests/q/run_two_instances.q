@@ -9,8 +9,8 @@
 / reads, and runs a bounded backfill of trades across the wire.
 / .
 / WHAT THIS PROVES that nothing else does. Every other lane runs a worker on
-/ its FIXTURE - a credential is never set, so .qbw.connect, a source's live
-/ `query` and .qsrc.validate_live have never executed anywhere, and the
+/ its FIXTURE - a credential is never set, so .qetl.job.bounded.connect, a source's live
+/ `query` and .qetl.source.validate_live have never executed anywhere, and the
 / coverage tool reports them as never entered. They run here, against a
 / genuine second process: the connection is opened, the schema is validated
 / against the real `meta`, the query is evaluated remotely, the rows come
@@ -65,15 +65,15 @@ if[not ready; [stop_upstream pid; -1 "upstream never came up; log:"; -1 each rea
 
 / The credential is the address, and it is set HERE, in the environment,
 / because that is the only place the framework reads it from.
-/ With it set, .qbw.init opens a live handle instead of using the fixture.
+/ With it set, .qetl.job.bounded.init opens a live handle instead of using the fixture.
 setenv[`UQF_SOURCE_CRED_UPSTREAM_TRADES;"localhost:",string port];
-check["the framework sees a credential for the source";.qsrc.has_credentials `upstream_trades];
+check["the framework sees a credential for the source";.qetl.source.has_credentials `upstream_trades];
 
 / --- the live schema check, against the real meta ----------------
 
 h:hopen `$":localhost:",string port;
 check["validate_live accepts the declaration against the upstream's real meta";
-    1b~@[{.qsrc.validate_live[`upstream_trades;x]};h;{[e] -1 "  ",e; 0b}]];
+    1b~@[{.qetl.source.validate_live[`upstream_trades;x]};h;{[e] -1 "  ",e; 0b}]];
 / The same half-open window the worker will ask for, counted the same way
 / the source's query selects it - so the expected count and the delivered
 / count come from one definition of the window.
@@ -91,9 +91,9 @@ check["and some zero-size rows for the transform to drop, or that rule is untest
 / --- move two hours of trades across --------------------------------------
 
 from_ts:2015.01.07D09:00:00; to_ts:2015.01.07D11:00:00;
-.qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
-check["init opened a live handle rather than falling back to the fixture";not null .qwrk.upstream_trades_backfill.handle];
-r:.qwrk.upstream_trades_backfill.run[];
+.qpipe.job.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
+check["init opened a live handle rather than falling back to the fixture";not null .qpipe.job.upstream_trades_backfill.handle];
+r:.qpipe.job.upstream_trades_backfill.run[];
 check["the run completed";`completed~r`state];
 check["two one-hour windows";2=r`windows_completed];
 check["no window failed";0=r`windows_failed];
@@ -104,39 +104,39 @@ check["the transform reshaped them: long size, 1/-1 side, venue symbol";
 check["no zero-size trade was imported";all (exec size from imported_trades)>0];
 check["no side other than 1 or -1 came through";all (exec side from imported_trades) in 1 -1];
 check["coverage records the range as complete";
-    .qmatz.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
-.qwrk.upstream_trades_backfill.cleanup[];
+    .qetl.coverage.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
+.qpipe.job.upstream_trades_backfill.cleanup[];
 
 / --- a second run is idle, and moves nothing twice -------------------------
 
-.qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
-r2:.qwrk.upstream_trades_backfill.run[];
+.qpipe.job.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
+r2:.qpipe.job.upstream_trades_backfill.run[];
 check["a second run over a covered range is idle";`idle~r2`state];
 check["and publishes nothing further";expected_rows=count imported_trades];
-.qwrk.upstream_trades_backfill.cleanup[];
+.qpipe.job.upstream_trades_backfill.cleanup[];
 
 / --- a restatement withdraws one hour, and only that hour is re-fetched ----
 
-n_withdrawn:.qmatz.supersede[`imported_trades;`;`v1;2015.01.07D10:00:00;to_ts];
--1 "  supersede withdrew ",string[n_withdrawn]," claim(s); missing now: ",.Q.s1 .qmatz.missing[`imported_trades;`;`v1;.z.p;from_ts;to_ts];
-.qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
-r3:.qwrk.upstream_trades_backfill.run[];
+n_withdrawn:.qetl.coverage.supersede[`imported_trades;`;`v1;2015.01.07D10:00:00;to_ts];
+-1 "  supersede withdrew ",string[n_withdrawn]," claim(s); missing now: ",.Q.s1 .qetl.coverage.missing[`imported_trades;`;`v1;.z.p;from_ts;to_ts];
+.qpipe.job.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;from_ts;to_ts)];
+r3:.qpipe.job.upstream_trades_backfill.run[];
 -1 "  re-run: state ",string[r3`state],", windows ",string[r3`windows_completed],", cursor ",string r3`cursor;
 check["after superseding one window, exactly one window is re-run";1=r3`windows_completed];
-check["the range reads as covered again";.qmatz.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
-.qwrk.upstream_trades_backfill.cleanup[];
+check["the range reads as covered again";.qetl.coverage.is_covered[`imported_trades;`;`v1;.z.p;from_ts;to_ts]];
+.qpipe.job.upstream_trades_backfill.cleanup[];
 
 / --- an unreachable upstream is refused, not silently substituted ---------
 
 stop_upstream pid;
 system"sleep 0.3";
 setenv[`UQF_SOURCE_CRED_UPSTREAM_TRADES;"localhost:",string port];
-err:@[{[a;b] .qwrk.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;a;b)]; ""}[from_ts];to_ts;{x}];
+err:@[{[a;b] .qpipe.job.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;a;b)]; ""}[from_ts];to_ts;{x}];
 check["with the upstream gone, init refuses rather than using the fixture";err like "*cannot reach*"];
 check["the refusal says what it is refusing to do";err like "*refusing to start*"];
 / init acquired the single-instance lock before it tried to connect, so it
 / is still held; release it the way a crashed process's successor would.
-.qbfstate.release_lock `upstream_trades_backfill;
+.qetl.job.bounded.state.release_lock `upstream_trades_backfill;
 
 -1 "";
 -1 $[failures=0; "two instances: all checks passed"; "two instances: ",string[failures]," check(s) FAILED"];

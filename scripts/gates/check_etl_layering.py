@@ -18,17 +18,17 @@ into `core/` - that is what a declaration over a generic shell means - so
 this checks only that the arrow never points back.
 
 The second rule is the same arrow one level out (#229): nothing under
-`src/etl/` may call `.qpipe`, the TorQ adapter in `scripts/processes/torq_pipeline.q`.
+`src/etl/` may call `.qtorq`, the TorQ adapter in `scripts/processes/torq_pipeline.q`.
 The ETL tree must load in a plain q process with no TorQ present,
-and `.qpipe` is the one namespace allowed to know TorQ exists. The status
+and `.qtorq` is the one namespace allowed to know TorQ exists. The status
 writer used to live there and `backfill_state.q` called it, which is why
 `lock_dir` carried a try-with-fallback - the author knew the namespace might
 not be loaded. A dependency that has to be guarded against being absent is
 pointing the wrong way, and this stops it coming back.
 
 STRING AND COMMENT AWARE, and it has to be. `bounded_worker.q` names
-`.qwrk.demo_deals_backfill` inside an error message ("ns must be a namespace symbol such as
-`.qwrk.demo_deals_backfill"), which is documentation, not a dependency. A naive search reports
+`.qpipe.job.demo_deals_backfill` inside an error message ("ns must be a namespace symbol such as
+`.qpipe.job.demo_deals_backfill"), which is documentation, not a dependency. A naive search reports
 it on the first run, and a checker that is wrong the day it lands gets
 suppressed rather than fixed - after which it protects nothing.
 """
@@ -46,13 +46,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 CORE = REPO / "src" / "etl" / "core"
 ETL = REPO / "src" / "etl"
-DECLARING_DIRS = ("sources", "workers", "streaming")
+DECLARING_DIRS = ("sources", "transforms", "workers", "streaming")
 
 #: The TorQ adapter. Lives in scripts/ because it is the one place TorQ is
 #: allowed; nothing under src/etl/ may reach it.
-ADAPTER_NS = ".qpipe"
+ADAPTER_NS = ".qtorq"
 
-#: A namespace declaration, e.g. `\d .qwrk.demo_deals_backfill`.
+#: A namespace declaration, e.g. `\d .qpipe.job.demo_deals_backfill`.
 NAMESPACE_RE = re.compile(
     r"^\\d\s+(\.[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*)\s*$", re.MULTILINE
 )
@@ -156,7 +156,7 @@ def main() -> int:
             print(f"  {v}", file=sys.stderr)
         print(
             "\nB-09: the ETL tree loads in a plain q process with no TorQ. Anything\n"
-            "src/ needs from .qpipe is not TorQ plumbing and belongs under src/etl/core/.",
+            "src/ needs from .qtorq is not TorQ plumbing and belongs under src/etl/core/.",
             file=sys.stderr,
         )
         return 1

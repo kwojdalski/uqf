@@ -21,10 +21,10 @@ from uqs.paths import SOURCE_DIR, STREAM_DIR, TABLES_FILE, WORKER_DIR
 from uqs.stack import install
 from uqs.stack.install import Kind, Mode, Status
 
-SOURCE = "source_name:`acme\n.qsrc.define[source_name;`columns!enlist `time];\n"
-WORKER = ".qbw.define[`acme_backfill;`source`dataset`width!(`acme;`acme_tape;1D)];\n"
+SOURCE = "source_name:`acme\n.qetl.source.define[source_name;`columns!enlist `time];\n"
+WORKER = ".qetl.job.bounded.define[`acme_backfill;`source`dataset`width!(`acme;`acme_tape;1D)];\n"
 STREAM = (
-    ".qstream.define[`acme_spread;"
+    ".qetl.job.stream.define[`acme_spread;"
     "`procname`subscribe_to`publishes!(`acme_spread1;enlist `quote;enlist `acme_spread)];\n"
 )
 
@@ -35,7 +35,7 @@ def repo(tmp_path: Path) -> Path:
     for directory in (SOURCE_DIR, WORKER_DIR, STREAM_DIR):
         (root / directory).mkdir(parents=True)
     (root / STREAM_DIR / "quotes.q").write_text(
-        ".qstream.define[`quotes;`procname`publishes!(`quotes1;enlist `quote)];\n"
+        ".qetl.job.stream.define[`quotes;`procname`publishes!(`quotes1;enlist `quote)];\n"
     )
     (root / TABLES_FILE).parent.mkdir(parents=True)
     (root / TABLES_FILE).write_text("quote:([]time:`timestamp$();sym:`symbol$())\n")
@@ -63,7 +63,7 @@ def test_classify_reads_the_declaration_not_the_filename() -> None:
     assert install.classify(WORKER) == ({Kind.WORKER}, ("acme_backfill",))
     assert install.classify(STREAM) == ({Kind.STREAMING}, ("acme_spread",))
     # A commented-out call declares nothing.
-    assert install.classify("/ .qsrc.define[x;y]\n") == (set(), ())
+    assert install.classify("/ .qetl.source.define[x;y]\n") == (set(), ())
 
 
 def test_plan_places_each_file_by_kind(sidecar: Path, repo: Path) -> None:

@@ -328,10 +328,10 @@ def test_list_processes_gives_a_bounded_worker_its_dataset_as_output(fake_paths:
     workers = fake_paths.repo_root / "src" / "etl" / "workers"
     workers.mkdir(parents=True)
     (workers / "w.q").write_text(
-        "/ .qbw.define[`commented;`source`dataset!(`s;`nope)];\n"
-        ".qbw.define[`demo_deals_backfill;`source`dataset`width`procname!(\n"
+        "/ .qetl.job.bounded.define[`commented;`source`dataset!(`s;`nope)];\n"
+        ".qetl.job.bounded.define[`demo_deals_backfill;`source`dataset`width`procname!(\n"
         "    `demo_deals;`demo_deals;1D;`deals_backfill1)];\n"
-        ".qbw.define[`x_backfill;`source`dataset`width!(`x;`x_rows;1D)];\n"
+        ".qetl.job.bounded.define[`x_backfill;`source`dataset`width!(`x;`x_rows;1D)];\n"
     )
     assert listing._worker_datasets(fake_paths) == {
         "deals_backfill1": "demo_deals",
@@ -879,11 +879,11 @@ def test_feed_and_etl_kinds_derive_proctype_and_credentials():
 
 def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
     """scripts/processes/torq_pipeline.q must come FIRST in the load column: the
-    pipeline script calls .qpipe.load_uqf[] at top level, and TorQ's
+    pipeline script calls .qtorq.load_uqf[] at top level, and TorQ's
     .proc.reloadf each loads -load's files in the order given.
     """
     markout = BY_NAME["markout1"]
-    assert markout.loads_qpipe
+    assert markout.loads_qtorq
     loaded = markout.load_column().split()
     assert loaded[0].endswith(PIPELINE_LIB_SCRIPT)
     # The streaming jobs all run under one generic runner now; which job a
@@ -893,7 +893,7 @@ def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
 
 def test_pipelines_not_loading_qpipe_load_only_their_own_script():
     for pipeline in PIPELINES:
-        if not pipeline.loads_qpipe:
+        if not pipeline.loads_qtorq:
             assert pipeline.load_column() == f"${{UQFSCRIPTS}}/{pipeline.script}"
             assert PIPELINE_LIB_SCRIPT not in pipeline.load_column()
 
@@ -905,7 +905,7 @@ def test_every_pipeline_script_exists_on_disk():
     scripts_dir = stack_paths.default_paths().scripts_dir
     for pipeline in PIPELINES:
         assert (scripts_dir / pipeline.script).is_file(), pipeline.script
-        if pipeline.loads_qpipe:
+        if pipeline.loads_qtorq:
             assert (scripts_dir / PIPELINE_LIB_SCRIPT).is_file()
 
 
@@ -1055,13 +1055,13 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
 
 def test_declared_dataflow_edges_match_the_q_scripts():
     """Every pipeline's `subscribe_to`/`publishes` declaration agrees with the
-    `.sub.subscribe` / `.qpipe.subscribe_etl` / `.u.upd` calls in its own
+    `.sub.subscribe` / `.qtorq.subscribe_etl` / `.u.upd` calls in its own
     script.
 
     `verify_pipeline_edges` existed and passed - when someone ran it by hand.
     Nothing exercised it in the suite, so a declaration could drift from the
     script it describes and the diagrams derived from it would go stale with
-    no signal. That is the same dormant-guard shape as `.qmatz.require_schema`
+    no signal. That is the same dormant-guard shape as `.qetl.coverage.require_schema`
     before it was wired into a worker's init: a check that cannot fire
     protects nothing, and its existence reads as protection to anyone
     auditing the code.
@@ -1137,16 +1137,16 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
         # before it declares them, and drifting one of those would leave the
         # declaration intact and this "negative" test passing over an
         # unmodified file.
-        head, _, tail = original.partition(".qstream.define[")
-        assert tail, f"no .qstream.define call in {job_file.name}"
+        head, _, tail = original.partition(".qetl.job.stream.define[")
+        assert tail, f"no .qetl.job.stream.define call in {job_file.name}"
         drifted_tail = tail.replace(f"`{first}", "`not_a_declared_table", 1)
         assert drifted_tail != tail
-        job_file.write_text(head + ".qstream.define[" + drifted_tail)
+        job_file.write_text(head + ".qetl.job.stream.define[" + drifted_tail)
     else:
         original = (scripts / target.script).read_text()
         for prefix in (
             ".sub.subscribe[`",
-            f".qpipe.subscribe_etl[`{target.procname[:-1]};`",
+            f".qtorq.subscribe_etl[`{target.procname[:-1]};`",
         ):
             call = f"{prefix}{first}"
             if call in original:

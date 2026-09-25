@@ -72,7 +72,7 @@ def build_sensor_class() -> type[Any]:
     class QWorkerStatusSensor(BaseSensorOperator):
         """Waits for one q worker instance to reach a terminal state.
 
-        Reads `.qstatus.write_status`'s output directly (the chosen
+        Reads `.qetl.status.write_status`'s output directly (the chosen
         mechanism — see the package README) and never queries q or
         Airflow's own metadata database for the worker's state: the file
         is the single source of truth this sensor trusts.

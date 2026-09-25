@@ -10,9 +10,9 @@ would leave the tree unable to load.
 WHICH FOLDER is decided by what a file declares, never by its name or where
 it sat in the sidecar, so a sidecar can be laid out any way its owner likes:
 
-    .qsrc.define                  a source     -> src/etl/sources
-    .qbw.define                     a worker     -> src/etl/workers
-    .qstream.define, .qnorm.define a streaming job -> src/etl/streaming
+    .qetl.source.define                  a source     -> src/etl/sources
+    .qetl.job.bounded.define                     a worker     -> src/etl/workers
+    .qetl.job.stream.define, .qetl.job.stream.normalize a streaming job -> src/etl/streaming
 
 A file declaring more than one kind is refused: the directories load in a
 fixed order - a worker's source must already exist when the worker defines
@@ -37,10 +37,10 @@ from pathlib import Path
 from uqs.model.declarations import declaration_calls, strip_q_comments
 from uqs.paths import SOURCE_DIR, STREAM_DIR, WORKER_DIR
 
-#: A source registers itself through .qsrc.define, whose name argument is
+#: A source registers itself through .qetl.source.define, whose name argument is
 #: usually a variable (`source_name`) rather than a literal - so a source is
 #: recognised by the call, not by parsing the name out of it.
-_SOURCE_CALL = re.compile(r"\.qsrc\.define\[")
+_SOURCE_CALL = re.compile(r"\.qetl\.source\.define\[")
 
 #: Files a sidecar may carry that are not jobs: its tests. Recognised and
 #: reported, never installed - a q test runs only once its namespace is listed
@@ -91,7 +91,7 @@ def classify(text: str) -> tuple[set[Kind], tuple[str, ...]]:
     kinds: set[Kind] = set()
     names: list[str] = []
     for fn, name, _fields in declaration_calls(text):
-        kinds.add(Kind.WORKER if fn == "qbw.define" else Kind.STREAMING)
+        kinds.add(Kind.WORKER if fn == "qetl.job.bounded.define" else Kind.STREAMING)
         names.append(name)
     if _SOURCE_CALL.search(strip_q_comments(text)):
         kinds.add(Kind.SOURCE)

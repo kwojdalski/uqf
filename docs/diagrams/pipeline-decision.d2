@@ -79,14 +79,14 @@ start: "A new pipeline" { class: outcome }
 
 q1: "Do you know the range\nbefore it starts?" { class: question }
 
-bounded: ".qbw - bounded worker\nruns a window range and exits\n\nsrc/etl/sources/ + src/etl/workers/" { class: shell }
-cont: ".qstream - streaming job\nsubscribes, never finishes\n\nsrc/etl/streaming/" { class: shell }
+bounded: ".qetl.job.bounded - bounded worker\nruns a window range and exits\n\nsrc/etl/sources/ + src/etl/workers/" { class: shell }
+cont: ".qetl.job.stream - streaming job\nsubscribes, never finishes\n\nsrc/etl/streaming/" { class: shell }
 
 q2: "Does it read another\ntable to do its work?" { class: question }
 feed: "a FEED\ndeclares period + on_timer,\nbuilds its own rows" { class: shell }
 etl: "an ETL\ndeclares subscribe_to + on_batch" { class: shell }
 q2b: "Several sources, in different\nshapes, into ONE canonical table?" { class: question }
-normalizer: "a NORMALIZER (.qnorm)\none mapping per source" { class: shell }
+normalizer: "a NORMALIZER (.qetl.job.stream.normalizer)\none mapping per source" { class: shell }
 cmd_n: "uqs new-job NAME --kind normalizer\n  --subscribe-to A,B --publishes T --columns \"...\"" { class: command }
 
 cmd_b: "uqs new-job NAME --kind backfill\n  --dataset T --columns \"...\" --width 1D" { class: command }

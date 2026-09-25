@@ -116,7 +116,8 @@ FX rather than on effort.
 `demo_events` is a registered source under the fetch-validation contract
 (`src/etl/sources/demo_events.q`). That declaration **is** the ingestion
 contract: it is validated at registration, its fixture is checked against it on
-every commit, and `.qsrc.fetch_window` windows it identically to a live source.
+every commit, and `.qetl.source.fetch_window` windows it identically to a live
+source.
 
 **No dedicated worker file was written at first, and that was a finding rather
 than an omission.** `demo_deals_backfill.q` was then 238 lines of which exactly
@@ -126,13 +127,14 @@ its window width); the other 234 were framework glue --- `init`, `plan`,
 would have duplicated 234 lines to change four, and the duplicate would then
 have needed keeping in step by hand every time the framework moved.
 
-**That is what `.qbw` is, and it is built.** #124 made the shell generic and
-both workers declarations over it; #227 went further and had `.qbw.define`
-*stamp* the contract's names into the worker's namespace, so the four delegating
-lines each worker still pasted are gone too. A worker file today is its
-transform, an optional check, and one `define` call --- the event-tape worker is
-52 lines. See [`../guides/new-pipeline.md`](../guides/new-pipeline.md) for what
-writing one now looks like.
+**That is what `.qetl.job.bounded` is, and it is built.** #124 made the shell
+generic and both workers declarations over it; #227 went further and had
+`.qetl.job.bounded.define` *stamp* the contract's names into the worker's
+namespace, so the four delegating lines each worker still pasted are gone too. A
+worker file today is its transform, an optional check, and one `define` call ---
+the event-tape worker is 52 lines. See
+[`../guides/new-pipeline.md`](../guides/new-pipeline.md) for what writing one
+now looks like.
 
 The source is **synthetic**: every column is one any venue's tape would carry,
 and the fixture's values are invented. Nothing about a real venue's schema or a

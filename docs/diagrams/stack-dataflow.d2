@@ -130,8 +130,8 @@ marks1: "marks1\nnormalizer: a mid from\nevery book" { class: job }
 markout1: "markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
 fxpositions1: "fxpositions1\n.qdesk + .qlimit\nnets FILLED orders, on a timer" { class: job }
 marketdata1: "marketdata1\nnormalizer" { class: job }
-superbook1: "superbook1\n.qsub.superbook merge\nacross sources" { class: job }
-databento1: "databento1\nthe same .qxf fold\nthe backfill declares" { class: job }
+superbook1: "superbook1\n.qpipe.job.superbook merge\nacross sources" { class: job }
+databento1: "databento1\nthe same .qetl.transform fold\nthe backfill declares" { class: job }
 arbitrage1: "arbitrage1\ncrossed levels in the merged book" { class: job }
 crossarb1: "crossarb1\n.qfwd.cross_book_chain_at_sizes" { class: job }
 

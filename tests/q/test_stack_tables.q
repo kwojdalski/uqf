@@ -44,7 +44,7 @@ declared:{[]
 / .
 / Exists because inside \d .tabletest a BARE `quotes` resolves to
 / .tabletest.quotes, which does not exist - the same namespace trap
-/ .qmatz.ledger[] exists to avoid, and one this file hit on its first run.
+/ .qetl.coverage.ledger[] exists to avoid, and one this file hit on its first run.
 / .
 / `value nm`, not `value ` sv `,nm`: joining an empty symbol yields `.quotes`
 / with a LEADING DOT, which is a different name again and resolves to
@@ -123,7 +123,7 @@ test_every_table_is_empty_as_declared:{[t]
 / --- every job's declared shapes against the plant's ----------------------
 
 / A streaming job declares the shape of each table it exchanges with the
-/ plant, so .qxf can refuse a mismatched batch at the boundary. When the
+/ plant, so .qetl.transform can refuse a mismatched batch at the boundary. When the
 / plant's column list changes and the job's declaration does not, the job
 / starts, subscribes, reports healthy and refuses every batch - which is
 / the failure the declaration exists to prevent, arriving silently.
@@ -161,13 +161,13 @@ excused:{[] pair .' 2#/:not_exchanged}
 / implies.
 job_tables:{[]
     raze {[job]
-        ns:.qstream.namespace job;
-        d:.qstream.def job;
+        ns:.qetl.job.stream.namespace job;
+        d:.qetl.job.stream.def job;
         nms:key[ns] except `;
         nms:nms where {[ns;nm] 98h=type get ` sv ns,nm}[ns] each nms;
         ([] job:(count nms)#job; tbl:nms;
             role:{[d;nm] $[nm in d`subscribe_to;`subscribe_to;nm in d`publishes;`publishes;`internal]}[d] each nms)
-      } each .qstream.defined[]}
+      } each .qetl.job.stream.defined[]}
 
 test_every_job_declares_the_shape_the_plant_actually_carries:{[t]
     rows:select from .tabletest.job_tables[] where tbl in .tabletest.declared[];
@@ -175,7 +175,7 @@ test_every_job_declares_the_shape_the_plant_actually_carries:{[t]
     `.tabletest.bad set ();
     {[row]
         plant:cols .tabletest.tbl row`tbl;
-        theirs:cols get ` sv (.qstream.namespace row`job),row`tbl;
+        theirs:cols get ` sv (.qetl.job.stream.namespace row`job),row`tbl;
         want:$[row[`role]=`publishes; 1_plant; plant];
         if[not theirs~want;
             `.tabletest.bad set .tabletest.bad,enlist

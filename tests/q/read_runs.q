@@ -14,13 +14,13 @@ system"l src/etl/core/materialisation.q";
 system"l src/etl/core/run.q";
 system"l src/etl/core/status.q";
 
-.qrun.attach[];
--1 "RUNS:",string count .qrun.history[];
--1 "UNFINISHED:",string count .qrun.unfinished[];
+.qetl.run.attach[];
+-1 "RUNS:",string count .qetl.run.history[];
+-1 "UNFINISHED:",string count .qetl.run.unfinished[];
 / The question run identity exists to answer, asked from a process that did
 / not do the work: given a coverage row, what execution produced it?
-.qmatz.attach[];
-rid:first exec run_id from .qmatz.ledger[] where dataset=`run_ds;
--1 "RESOLVES:",$[0<count .qrun.of_run[rid];"yes";"no"];
--1 "WORKER:",$[0<count .qrun.of_run[rid];string first exec worker from .qrun.of_run[rid];"none"];
+.qetl.coverage.attach[];
+rid:first exec run_id from .qetl.coverage.ledger[] where dataset=`run_ds;
+-1 "RESOLVES:",$[0<count .qetl.run.of_run[rid];"yes";"no"];
+-1 "WORKER:",$[0<count .qetl.run.of_run[rid];string first exec worker from .qetl.run.of_run[rid];"none"];
 exit 0

@@ -1,5 +1,5 @@
 / executions.q - the `executions` normalizer: every fill table the stack
-/ carries, published as one (.qsub.executions).
+/ carries, published as one (.qpipe.job.executions).
 / .
 / Named `executions` and not `fills` because `fills` is a q builtin - the
 / forward-fill verb - and a table by that name on the plant would shadow it
@@ -36,11 +36,11 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qsub.executions
+\d .qpipe.job.executions
 
-/ Where rows go. A stub until .qstream.wire points it at a tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `executions;
+publish:.qetl.job.stream.unwired `executions;
 
 / The canonical output. No `time`: the plant stamps it.
 executions:([] source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); side:`long$();
@@ -63,7 +63,7 @@ fx_venue:`fx
 / @param batch a trades batch
 / @return canonical executions
 from_trades:{[batch]
-    select source_time:time, sym, venue:.qsub.executions.fx_venue, side, size, price:trade_price,
+    select source_time:time, sym, venue:.qpipe.job.executions.fx_venue, side, size, price:trade_price,
         fee:0f, fee_ccy:`, fill_id:` from batch}
 
 / A crypto fill as a canonical execution: a rename, because the recorder's shape
@@ -76,10 +76,10 @@ from_crypto_trades:{[batch]
 
 \d .
 
-.qxf.define[`executions_from_trades;`inputs`output`fn`examples!(
-    (enlist `trades)!enlist .qsub.executions.trades;
-    .qsub.executions.executions;
-    .qsub.executions.from_trades;
+.qetl.transform.define[`executions_from_trades;`inputs`output`fn`examples!(
+    (enlist `trades)!enlist .qpipe.job.executions.trades;
+    .qpipe.job.executions.executions;
+    .qpipe.job.executions.from_trades;
     enlist `inputs`expected!(
         (enlist `trades)!enlist ([] time:2026.09.17D10:00:00 2026.09.17D10:00:01;
             sym:`EURUSD`USDJPY; side:1 -1; trade_price:1.085 149.5; size:1e6 5e5;
@@ -88,10 +88,10 @@ from_crypto_trades:{[batch]
             venue:`fx`fx; side:1 -1; size:1e6 5e5; price:1.085 149.5; fee:0 0f;
             fee_ccy:``; fill_id:``)))];
 
-.qxf.define[`executions_from_crypto_trades;`inputs`output`fn`examples!(
-    (enlist `crypto_trades)!enlist .qsub.executions.crypto_trades;
-    .qsub.executions.executions;
-    .qsub.executions.from_crypto_trades;
+.qetl.transform.define[`executions_from_crypto_trades;`inputs`output`fn`examples!(
+    (enlist `crypto_trades)!enlist .qpipe.job.executions.crypto_trades;
+    .qpipe.job.executions.executions;
+    .qpipe.job.executions.from_crypto_trades;
     enlist `inputs`expected!(
         (enlist `crypto_trades)!enlist ([] time:enlist 2026.09.17D10:00:02;
             sym:enlist `$"BTC-USDT"; venue:enlist `binance_spot; side:enlist -1;
@@ -102,9 +102,9 @@ from_crypto_trades:{[batch]
             price:enlist 62000f; fee:enlist 15.5; fee_ccy:enlist `USDT;
             fill_id:enlist `$"binance_spot-1")))];
 
-.qnorm.define[`executions;`procname`output`input`start_with_all`note!(
+.qetl.job.stream.normalize[`executions;`procname`output`input`start_with_all`note!(
     `executions1;
-    .qsub.executions.executions;
+    .qpipe.job.executions.executions;
     `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades;
     1b;
     "every fill table as one: trades and crypto_trades -> executions")];

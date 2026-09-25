@@ -17,7 +17,7 @@ right is everything that talks to that pipeline without being part of it.
 The line worth knowing is the one between the first two bands. **No q file under
 `src/` knows TorQ exists** --- that is what lets a worker be tested against a
 recorder instead of a tickerplant --- and exactly one namespace is allowed to,
-`.qpipe` in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build if
+`.qtorq` in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build if
 anything under `src/etl/` reaches for it.
 
 For the *running* stack --- who connects to whom --- see

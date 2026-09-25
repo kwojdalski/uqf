@@ -1,5 +1,5 @@
 / demo_deals.q - a generic analogue of an external relational deal source
-/ (.qfeed.demo_deals).
+/ (.qpipe.source.demo_deals).
 / .
 / WHY THIS IS AN ANALOGUE AND NOT A PORT (an analogue, not a port)
 / .
@@ -22,14 +22,14 @@
 /      external metadata be validated against the same declaration as the
 /      fixture, and the machinery for that is built - but the declaration
 /      itself is a guess at a shape nobody here can see. Running
-/      `.qsrc.validate_live` against the real source is the only thing that
+/      `.qetl.source.validate_live` against the real source is the only thing that
 /      would settle it, and that has to happen on the work machine.
 / .
 /   2. A worker built on this is a real worker with a synthetic source, not a
 /      demo of a worker. The lifecycle, coverage and retry behaviour it
 /      exercises are the production ones.
 
-\d .qfeed.demo_deals
+\d .qpipe.source.demo_deals
 
 source_name:`demo_deals
 
@@ -45,7 +45,7 @@ types:"jpssff"
 target:`demo_deals
 
 / The column the bounded window is taken on. Declared rather than assumed so
-/ .qsrc can window the fixture exactly as the live query windows the source.
+/ .qetl.source can window the fixture exactly as the live query windows the source.
 time_column:`deal_time
 
 / What identifies a row uniquely. `deal_id` is the natural key for a
@@ -64,12 +64,12 @@ row_key:`deal_id
 / the shape of the bug: every later reader assumes UTC while the source may
 / have been handing over wall-clock local time all along, and the two differ
 / by an offset that changes twice a year. `UTC` here is a claim about this
-/ source that .qsrc.validate_live can be run against - not an absence of
+/ source that .qetl.source.validate_live can be run against - not an absence of
 / information.
 / .
 / It is also the only value that needs no zone table at all, which is why a
 / real integration should push the conversion upstream rather than declare a
-/ zone: see .qsrc.local_to_utc for the hour of local timestamps that is
+/ zone: see .qetl.source.local_to_utc for the hour of local timestamps that is
 / irrecoverable in any other arrangement.
 tz:`UTC
 
@@ -113,7 +113,7 @@ fixture:{[]
 
 / Register on load, so the declaration and the implementation cannot drift:
 / there is no way to have one without the other.
-.qsrc.define[source_name;
+.qetl.source.define[source_name;
     `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
     (source_name;`demo_deals;target;time_column;row_key;columns;types;query;fixture;tz)];
 

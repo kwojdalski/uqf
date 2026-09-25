@@ -5,7 +5,7 @@
 // forwards.q's cross_book/cross_book_at_sizes/sweep_price expect, then
 // feeds one row straight into sweep_price.
 //
-// Narration/status goes through .qlog (src/etl/core/log.q), the one q
+// Narration/status goes through .qetl.log (src/etl/core/log.q), the one q
 // logging layer in this tree - actual table contents still go through
 // `show`, since a log line serializes a whole value onto one line rather
 // than the readable grid `show` produces.
@@ -19,8 +19,8 @@
 \l src/init.q
 \l src/etl/core/log.q
 
-/ .qlog suppresses DBG lines by default; this example's narration uses them.
-.qlog.debug 1b;
+/ .qetl.log suppresses DBG lines by default; this example's narration uses them.
+.qetl.log.debug 1b;
 
 / Overridable via the command line - .z.x is the list of args after the
 / script name, always strings; cast and fall back to the default whenever
@@ -85,7 +85,7 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
-    .qlog.dbg[`reshape_wide_order_book;"running: .qstats.inv_ncdf p";()!()];
+    .qetl.log.dbg[`reshape_wide_order_book;"running: .qstats.inv_ncdf p";()!()];
     z:.qstats.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*z;
     start_ts+sums gaps};
@@ -111,7 +111,7 @@ meta_table:flip `time`sym`venue`exchange`action`side!(
     sides);
 
 t:meta_table,'level_table;
-.qlog.info[`reshape_wide_order_book;"t - wide source table: ",.Q.s1[count t]," rows, ",.Q.s1[count cols t]," columns";()!()];
+.qetl.log.info[`reshape_wide_order_book;"t - wide source table: ",.Q.s1[count t]," rows, ",.Q.s1[count cols t]," columns";()!()];
 show t;
 
 / Databento's own MBP-10 naming convention: bid_px_00.._09, bid_sz_00.._09,
@@ -122,9 +122,9 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
-.qlog.dbg[`reshape_wide_order_book;"running: .qbook.derive_level_groups[cols t;level_prefix_targets]";()!()];
+.qetl.log.dbg[`reshape_wide_order_book;"running: .qbook.derive_level_groups[cols t;level_prefix_targets]";()!()];
 level_groups:.qbook.derive_level_groups[cols t;level_prefix_targets];
-.qlog.dbg[`reshape_wide_order_book;"level_groups - target_col -> ordered source_cols:";()!()];
+.qetl.log.dbg[`reshape_wide_order_book;"level_groups - target_col -> ordered source_cols:";()!()];
 show level_groups;
 
 / Advisory only - inspect before deciding what to symbolize. Note action/side
@@ -132,38 +132,38 @@ show level_groups;
 / single-letter values ("A"/"B"/...) kdb+ collapses that column into a plain
 / char vector rather than a list of strings, so it isn't a "string column"
 / by candidate_symbol_columns's own type check.
-.qlog.dbg[`reshape_wide_order_book;"running: .qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";()!()];
+.qetl.log.dbg[`reshape_wide_order_book;"running: .qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";()!()];
 candidates:.qbook.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
-.qlog.info[`reshape_wide_order_book;"candidates - columns to symbolize: ",.Q.s1[", " sv string candidates];()!()];
+.qetl.log.info[`reshape_wide_order_book;"candidates - columns to symbolize: ",.Q.s1[", " sv string candidates];()!()];
 
 / Explicit final column order - edit this list to reorder (or drop) columns.
 / `col_order#out` selects/reorders out's columns and stays a table; plain
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
 col_order:`time`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
-.qlog.dbg[`reshape_wide_order_book;"running: .qbook.book_from_wide_levels[t;level_groups;candidates]";()!()];
+.qetl.log.dbg[`reshape_wide_order_book;"running: .qbook.book_from_wide_levels[t;level_groups;candidates]";()!()];
 out:col_order#.qbook.book_from_wide_levels[t;level_groups;candidates];
-.qlog.info[`reshape_wide_order_book;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";()!()];
+.qetl.log.info[`reshape_wide_order_book;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";()!()];
 show out;
-.qlog.dbg[`reshape_wide_order_book;"meta out - column types after reshaping:";()!()];
+.qetl.log.dbg[`reshape_wide_order_book;"meta out - column types after reshaping:";()!()];
 show meta out;
 
 / Hand row 0's book straight to sweep_price, matching forwards.q's
 / `bid_prices`bid_sizes`ask_prices`ask_sizes convention.
 row:out 0;
-.qlog.dbg[`reshape_wide_order_book;"row - out's row 0 as a dict:";()!()];
+.qetl.log.dbg[`reshape_wide_order_book;"row - out's row 0 as a dict:";()!()];
 show row;
 
 book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(row`bid_prices;row`bid_sizes;row`ask_prices;row`ask_sizes);
-.qlog.dbg[`reshape_wide_order_book;"book - row 0's book dict, forwards.q's sweep_price/cross_book shape:";()!()];
+.qetl.log.dbg[`reshape_wide_order_book;"book - row 0's book dict, forwards.q's sweep_price/cross_book shape:";()!()];
 show book;
 
-.qlog.dbg[`reshape_wide_order_book;"running: .qexec.sweep_price[book`ask_prices;book`ask_sizes;250]";()!()];
+.qetl.log.dbg[`reshape_wide_order_book;"running: .qexec.sweep_price[book`ask_prices;book`ask_sizes;250]";()!()];
 sweep_result:.qexec.sweep_price[book`ask_prices;book`ask_sizes;250];
-.qlog.info[`reshape_wide_order_book;"sweep_result - swept 250 units against row 0's ask side: avg_price=",.Q.s1[sweep_result`avg_price]," filled_size=",.Q.s1[sweep_result`filled_size]," fully_filled=",.Q.s1[sweep_result`fully_filled];()!()];
+.qetl.log.info[`reshape_wide_order_book;"sweep_result - swept 250 units against row 0's ask side: avg_price=",.Q.s1[sweep_result`avg_price]," filled_size=",.Q.s1[sweep_result`filled_size]," fully_filled=",.Q.s1[sweep_result`fully_filled];()!()];
 show sweep_result;
 if[not sweep_result`fully_filled;
-    .qlog.err[`reshape_wide_order_book;"sweep did not fully fill - unexpected for this synthetic book's depth";()!()];
+    .qetl.log.err[`reshape_wide_order_book;"sweep did not fully fill - unexpected for this synthetic book's depth";()!()];
     exit 1];
 
 // exit 0

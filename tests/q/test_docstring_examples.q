@@ -22,7 +22,7 @@
 /      worth knowing rather than rounding away.
 /   3. FIVE were notation or TYPE errors - `(`EURJPY;165;165.052)` documents
 /      a long where the function returns a float.
-/   4. ONE was genuinely unverifiable: .qwcfg.explain[`backfill_from] claimed
+/   4. ONE was genuinely unverifiable: .qetl.cfg.explain[`backfill_from] claimed
 /      (`env;"2026.09.01"), but nothing sets UQF_BACKFILL_FROM and an example
 /      whose value depends on the caller's environment cannot be checked at
 /      all. It now documents `dry_run`, the key production actually reads.
@@ -86,7 +86,7 @@ bind_fixtures:{[]
     / microstructure @eg values were written against this one - binding
     / anything else would make the gate report the fixture's disagreement
     / with the docs as though the docs were wrong.
-    `tape set .qfeed.demo_events.fixture[];
+    `tape set .qpipe.source.demo_events.fixture[];
     `quotes set .forwardstest.mk_ts_quotes_table[::];
     `trade_time set exec first time from `quotes;
     / `b` appeared in five positions.q examples meaning THREE different
@@ -123,7 +123,7 @@ bind_fixtures:{[]
     / out of scripts/torq_markout_etl.q as TEXT and re-evaluated, because
     / that file could not be loaded outside TorQ; the job is a src/ file now,
     / so the real table is simply here.
-    `.qsub.markout.pending set .qsub.markout.pending upsert
+    `.qpipe.job.markout.pending set .qpipe.job.markout.pending upsert
         ([] time:2026.01.01D00:00:00.000000000 2026.01.01D00:00:01.000000000;
             sym:`EURUSD`GBPUSD; side:1 -1; trade_price:1.1 1.25;
             size:1000000 500000f; pip_factor:10000 10000);
@@ -184,12 +184,12 @@ assertions:{[] e:examples[]; e where 0<count each e[;3]}
 / tickerplant, a TorQ process, a licensed driver or downloaded market data,
 / none of which a test process has.
 needs_live:([] expr:(
-        ".qpipe.publish[h;`execution_quality;out]";
-        ".qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
-        ".qpipe.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
-        ".qpipe.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
-        ".qpipe.reload_hdb[]";
-        ".qodbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
+        ".qtorq.publish[h;`execution_quality;out]";
+        ".qtorq.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
+        ".qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
+        ".qtorq.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
+        ".qtorq.reload_hdb[]";
+        ".qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]");
     reason:(
         "sends .u.upd over a tickerplant handle";
@@ -308,9 +308,9 @@ test_prose_mentioning_eg_is_not_an_example:{[t]
 test_a_multi_line_example_is_read_whole:{[t]
     f:"build/test-status/eg_probe.q";
     system"mkdir -p build/test-status";
-    (hsym `$f) 0: ("/ @eg .qlog.info[`w;\"msg\";";"/        `a`b!(1;2)]";"/ @return nothing";"f:{[] 1}");
+    (hsym `$f) 0: ("/ @eg .qetl.log.info[`w;\"msg\";";"/        `a`b!(1;2)]";"/ @return nothing";"f:{[] 1}");
     r:first extract f;
-    .qunit.assertEquals[r 2;".qlog.info[`w;\"msg\"; `a`b!(1;2)]";"both lines, joined, and nothing after"]};
+    .qunit.assertEquals[r 2;".qetl.log.info[`w;\"msg\"; `a`b!(1;2)]";"both lines, joined, and nothing after"]};
 
 test_a_tag_line_is_not_a_continuation:{[t]
     .qunit.assertEquals[is_continuation "/ @return the total";0b;"a following tag ends the example"];

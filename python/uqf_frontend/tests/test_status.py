@@ -25,7 +25,7 @@ STATUS_Q = Path(__file__).resolve().parents[3] / "src" / "etl" / "core" / "statu
 
 
 def write_status_file(directory: Path, instance: str, **overrides) -> Path:
-    """Build a file in exactly the shape .qstatus.write_status emits."""
+    """Build a file in exactly the shape .qetl.status.write_status emits."""
     payload = {
         "worker": "markout_backfill",
         "instance_id": instance,

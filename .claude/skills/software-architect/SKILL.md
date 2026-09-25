@@ -24,17 +24,17 @@ looking for the kind of problems that experienced architects spot when they ask
 Not one codebase. Four layers with different rules, and most real architectural
 findings live on the seams between them:
 
-  | Layer                     | Where                                                                                                 | Shape                                                                                                                                                                                                      |
-  | ---                       | ---                                                                                                   | ---                                                                                                                                                                                                        |
-  | **Quant library**         | `src/foundation/`, `src/pricing/`, `src/portfolio/`, `src/execution/`, `src/market_data/`             | pure functions, one flat namespace per file (`.qfwd`, `.qexec`, `.qpos`, `.qalloc`, …), no state, no I/O                                                                                                   |
-  | **Pipeline framework**    | `src/etl/core/` (18 files)                                                                            | shells and contracts: `.qbw` bounded workers, `.qstream` streaming jobs, `.qnorm` normalizers, `.qxf` transforms, `.qsrc` source contracts, `.qmatz` coverage, `.qio`, `.qdag`, `.qwrt`, `.qrun`, `.qtick` |
-  | **Declarations**          | `src/etl/sources/`, `workers/`, `streaming/`                                                          | one file per instance; registers itself on load                                                                                                                                                            |
-  | **Adapters and surfaces** | `scripts/processes/` (`.qpipe`), `python/` (orchestrator, frontend, airflow provider, client), `web/` | the only places that know TorQ, HTTP, Airflow or a browser exist                                                                                                                                           |
+  | Layer                     | Where                                                                                                 | Shape                                                                                                                                                                                                                                                                                                              |
+  | ---                       | ---                                                                                                   | ---                                                                                                                                                                                                                                                                                                                |
+  | **Quant library**         | `src/foundation/`, `src/pricing/`, `src/portfolio/`, `src/execution/`, `src/market_data/`             | pure functions, one flat namespace per file (`.qfwd`, `.qexec`, `.qpos`, `.qalloc`, …), no state, no I/O                                                                                                                                                                                                           |
+  | **Pipeline framework**    | `src/etl/core/` (18 files)                                                                            | shells and contracts: `.qetl.job.bounded` bounded workers, `.qetl.job.stream` streaming jobs, `.qetl.job.stream.normalizer` normalizers, `.qetl.transform` transforms, `.qetl.source` source contracts, `.qetl.coverage` coverage, `.qetl.io`, `.qetl.dag`, `.qetl.job.bounded.runtime`, `.qetl.run`, `.qetl.tick` |
+  | **Declarations**          | `src/etl/sources/`, `workers/`, `streaming/`                                                          | one file per instance; registers itself on load                                                                                                                                                                                                                                                                    |
+  | **Adapters and surfaces** | `scripts/processes/` (`.qtorq`), `python/` (orchestrator, frontend, airflow provider, client), `web/` | the only places that know TorQ, HTTP, Airflow or a browser exist                                                                                                                                                                                                                                                   |
 
 Two rules are load-bearing and enforced:
 
 - **No file under `src/` may know TorQ exists.** Exactly one namespace may ---
-  `.qpipe`, in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build
+  `.qtorq`, in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build
   otherwise. This is what lets a job be tested against a recorder instead of a
   tickerplant.
 - **Derived artefacts are generated and `--check`ed, never hand-maintained**:
@@ -62,7 +62,7 @@ are specific to this repository's shape and are where the real findings are.
 
 ### 1. The layer boundaries, and what leaks across them
 
-- Anything under `src/` reaching for TorQ, a tickerplant, a handle, or `.qpipe` ---
+- Anything under `src/` reaching for TorQ, a tickerplant, a handle, or `.qtorq` ---
   the gate catches the namespace, not the *idea*: a src/ file that assumes a
   `time` column will be stamped for it, or that its publisher is asynchronous,
   has taken a dependency the gate cannot see
@@ -82,7 +82,7 @@ nothing else. Test it: - Would a new source / worker / streaming job /
 normalizer / venue require editing a shell, a runner, a registry and a test ---
 or adding one file? - Does a shell branch on which instance it is running? Every
 `$[job=\`x;
-...\]` inside `src/etl/core/` is a shell that has stopped being generic - Does a declaration have to repeat something the shell could derive? (`.qbw.define` stamping inherited methods, `.qnorm.define` performing its own `.qstream.define\`,
+...\]` inside `src/etl/core/` is a shell that has stopped being generic - Does a declaration have to repeat something the shell could derive? (`.qetl.job.bounded.define` stamping inherited methods, `.qetl.job.stream.normalize` performing its own `.qetl.job.stream.define\`,
 are the pattern working) - Is validation at **declaration** time or first use?
 This tree consistently chooses declaration time, and says why: a malformed thing
 should fail on the line that declares it, not halfway through a backfill
@@ -103,15 +103,16 @@ it just goes wrong", that is the finding
 ### 4. Coupling and cohesion
 
 - High fan-in *and* volatile is the highest-risk combination --- find those in
-  `.qxf`, `.qmatz` and `forwards.q`'s orientation helpers
+  `.qetl.transform`, `.qetl.coverage` and `forwards.q`'s orientation helpers
 - Namespace-level mutable config (`.qfwd.time_col`, `.qfwd.col_precedence`,
-  `.qwcfg` layers) is global state: is it read at call time or captured once,
+  `.qetl.cfg` layers) is global state: is it read at call time or captured once,
   and is its blast radius contained?
-- Registries (`.qsrc.sources`, `.qxf.registry`, `.qstream.jobs`,
-  `.qnorm.registry`, `.qio`, `.qalloc.methods`) are shared mutable state too.
-  Same shape, same trap: q collapses a dict of same-keyed dicts into a table, so
-  a later differently-shaped entry is refused with a bare `type`. Check each
-  registry normalises what it stores
+- Registries (`.qetl.source.sources`, `.qetl.transform.registry`,
+  `.qetl.job.stream.jobs`, `.qetl.job.stream.normalizer.registry`, `.qetl.io`,
+  `.qalloc.methods`) are shared mutable state too. Same shape, same trap: q
+  collapses a dict of same-keyed dicts into a table, so a later
+  differently-shaped entry is refused with a bare `type`. Check each registry
+  normalises what it stores
 - Temporal coupling with no structural enforcement --- "call
   `require_quotes_cols` first", "publish before checkpointing", "replay before
   subscribing"
@@ -119,8 +120,8 @@ it just goes wrong", that is the finding
 ### 5. Abstraction and composition
 
 - A new feature built bespoke instead of composing existing primitives
-  (`sweep_price`, `cross_book_at`, `apply_fill`, `.qxf.apply`) the way the
-  library consistently does
+  (`sweep_price`, `cross_book_at`, `apply_fill`, `.qetl.transform.apply`) the
+  way the library consistently does
 - Wrong abstraction level --- a helper grouping the wrong things, forcing
   unrelated call sites to change together
 - Two implementations of one capability. Sometimes deliberate (a q/Python
@@ -135,8 +136,8 @@ it just goes wrong", that is the finding
 
 ### 6. Configuration, dependencies and load order
 
-- Hardcoded defaults scattered where `.qwcfg`, `time_col` or a settings module
-  already centralise that kind of thing
+- Hardcoded defaults scattered where `.qetl.cfg`, `time_col` or a settings
+  module already centralise that kind of thing
 - A function silently depending on load order without `src/init.q` or
   `src/etl/init.q` guaranteeing it --- the ETL init file documents *which*
   orderings are load-bearing and which are readability; a new dependency that is
@@ -169,17 +170,19 @@ it just goes wrong", that is the finding
      either of the above, that is the finding
 
    **The framework shells --- is each one still generic?**
-   - `src/etl/core/bounded_worker.q` (`.qbw`) and `src/etl/core/stream_job.q`
-     (`.qstream`) --- the two shells an instance plugs into. A third,
-     `normalizer.q` (`.qnorm`), lands with PR #260; if it is present, read it
-     too --- it is the newest and cleanest example of a shell that absorbs
+   - `src/etl/core/bounded_worker.q` (`.qetl.job.bounded`) and
+     `src/etl/core/stream_job.q` (`.qetl.job.stream`) --- the two shells an
+     instance plugs into. A third, `normalizer.q`
+     (`.qetl.job.stream.normalizer`), lands with PR #260; if it is present, read
+     it too --- it is the newest and cleanest example of a shell that absorbs
      instance knowledge
-   - `src/etl/core/transform.q` (`.qxf`) --- the highest fan-in file in the
-     tree; almost everything declares one
-   - `src/etl/core/source_contract.q` (`.qsrc`),
-     `src/etl/core/materialisation.q` (`.qmatz`), `src/etl/core/io_manager.q`
-     (`.qio`) --- the contracts around a worker. Note `scripts/dev/coverage.q`
-     is a different file; the framework one is under `src/etl/core/`
+   - `src/etl/core/transform.q` (`.qetl.transform`) --- the highest fan-in file
+     in the tree; almost everything declares one
+   - `src/etl/core/source_contract.q` (`.qetl.source`),
+     `src/etl/core/materialisation.q` (`.qetl.coverage`),
+     `src/etl/core/io_manager.q` (`.qetl.io`) --- the contracts around a worker.
+     Note `scripts/dev/coverage.q` is a different file; the framework one is
+     under `src/etl/core/`
 
    **A sample of declarations --- do they carry only what is theirs?**
    - two or three under `src/etl/streaming/` and `src/etl/workers/`. Compare the
@@ -187,7 +190,7 @@ it just goes wrong", that is the finding
      knowledge the shell failed to absorb
 
    **The boundaries:**
-   - `scripts/processes/torq_pipeline.q` (`.qpipe`) --- everything TorQ, in one
+   - `scripts/processes/torq_pipeline.q` (`.qtorq`) --- everything TorQ, in one
      place. Is it still the only place?
    - `python/uqf_frontend/src/uqf_frontend/catalog.py` and the CSVs --- the
      security boundary; anything client-supplied that is not checked against it
@@ -231,7 +234,7 @@ ARCHITECTURE REVIEW (N findings across M files)
 ---|-----|----------|------------------------------------------------------------|---------------------------
  1 |  3  | HIGH     | the same fact declared in two trees, with one gate         | <file A>,
    |     |          | holding only one pair — the third copy drifts silently     | <file B>
- 2 |  2  | HIGH     | .qstream shell branches on job name, so a new job needs    | stream_job.q
+ 2 |  2  | HIGH     | .qetl.job.stream shell branches on job name, so a new job needs    | stream_job.q
    |     |          | a shell edit rather than a declaration                     |
  3 |  7  | MEDIUM   | convention stated in prose with no gate; already broken    | docs/..., src/etl/...
    |     |          | once in <file>                                             |

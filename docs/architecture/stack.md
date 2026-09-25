@@ -26,13 +26,13 @@ with a route through other pairs" - EURJPY against EURUSD x USDJPY, into
 link in it, so it can run with or without `arbitrage1`. See [the cross-arbitrage
 guide](../services/cross-arbitrage.md).
 
-Each backfill process now NAMES the `.qbw` worker it runs. One script serves all
-four and its `-worker` flag picks which at runtime, so until that field existed
-nothing statically joined a process to its worker --- and two workers
-(`databento_book_backfill`, `upstream_trades_backfill`) sat fully declared with
-no process able to start them. `verify_pipeline_edges` now refuses a worker with
-no process, a process with no worker, and a process naming a worker that does
-not exist.
+Each backfill process now NAMES the `.qetl.job.bounded` worker it runs. One
+script serves all four and its `-worker` flag picks which at runtime, so until
+that field existed nothing statically joined a process to its worker --- and two
+workers (`databento_book_backfill`, `upstream_trades_backfill`) sat fully
+declared with no process able to start them. `verify_pipeline_edges` now refuses
+a worker with no process, a process with no worker, and a process naming a
+worker that does not exist.
 
 **The backfills are on the topology diagram but have no edge to the tickerplant,
 and that is the point.** They were left off entirely at first, on the reasoning
@@ -72,17 +72,17 @@ discovery/registration only.
 
 Two different connection patterns coexist, deliberately - **and since #204 no
 job performs either one itself**. A streaming job declares `subscribe_to` and
-`publishes`; `.qpipe` opens whichever handle that implies, and
+`publishes`; `.qtorq` opens whichever handle that implies, and
 `scripts/processes/torq_stream.q` wires the job's `publish` to it. The patterns
 are still worth knowing, because they are why some processes need a credential
 and some do not:
 
 - **Publish only** (`fxfeed1`/`quotesfeed1`/`widefeed1`/`fxtradesfeed1`, and the
-  vendored `feed1`) needs no credential: `.qpipe.feed_handle` finds the
+  vendored `feed1`) needs no credential: `.qtorq.feed_handle` finds the
   tickerplant with
   `.servers.gethandlebytype[\`segmentedtickerplant;\`any\]` and that is a self-managed handle, no `.servers.startup\[\]\`.
 - **Subscribing** (`cross1`/`vectorize1`/`posbook1`/`markout1`) needs a real
-  `.servers`-managed, access-listed handle - `.qpipe.subscribe_etl` runs
+  `.servers`-managed, access-listed handle - `.qtorq.subscribe_etl` runs
   `.servers.startup[]` against `accesslist.txt`. They borrow the
   already-credentialed `metrics` proctype rather than adding a password file to
   the vendored tree (see `model/pipeline.py`'s `_ETL_ACCESS_LIST`).
@@ -96,9 +96,10 @@ near-copies.
 outside q entirely: an external Python handler (`external/databento_feed.py`)
 holds a live Databento subscription and publishes raw MBP-10 onto
 `databento_mbp10`, and `databento1` folds it into `databento_book` with the same
-`.qxf` transform the ODBC backfill applies. The handler is not a process here,
-for the reason cryptorust is not: a q process cannot hold that subscription, so
-it is started by `uqs databento start` rather than by `torq.sh`.
+`.qetl.transform` transform the ODBC backfill applies. The handler is not a
+process here, for the reason cryptorust is not: a q process cannot hold that
+subscription, so it is started by `uqs databento start` rather than by
+`torq.sh`.
 
 `kafka_flow1` is the second subscriber fed from outside q, and it exists to
 answer a question `databento1` never has to. Its input comes from an external
@@ -127,30 +128,32 @@ real ones. Neither it nor anything downstream reads `crypto_sim_fills`; those
 are the paper strategy's own fills and are not a position.
 
 `executions1` and `marks1` are **normalizers** - a job kind of their own
-(`.qnorm`, `src/etl/core/normalizer.q`). A normalizer subscribes to several
-tables that carry the same fact in different shapes and publishes one canonical
-table, with one declared `.qxf` transform per source; `define` refuses a mapping
-whose output drifts from the canonical schema. `executions1` maps `trades` and
-`crypto_trades` onto `executions`; `marks1` maps `quote` and `crypto_book` onto
-`marks`. `posbook1` reads those two and nothing else, so one position book
-carries FX and crypto from one subscription each, and a new market is a mapping
-in a normalizer rather than a branch in the position job. (Note `executions`,
-not `fills`: `fills` is a q builtin, and a table by that name would shadow the
-verb in every process holding it.)
+(`.qetl.job.stream.normalizer`, `src/etl/core/normalizer.q`). A normalizer
+subscribes to several tables that carry the same fact in different shapes and
+publishes one canonical table, with one declared `.qetl.transform` transform per
+source; `define` refuses a mapping whose output drifts from the canonical
+schema. `executions1` maps `trades` and `crypto_trades` onto `executions`;
+`marks1` maps `quote` and `crypto_book` onto `marks`. `posbook1` reads those two
+and nothing else, so one position book carries FX and crypto from one
+subscription each, and a new market is a mapping in a normalizer rather than a
+branch in the position job. (Note `executions`, not `fills`: `fills` is a q
+builtin, and a table by that name would shadow the verb in every process holding
+it.)
 
 `fxordersfeed1` and `fxpositions1` are the FX positions service: synthetic order
 flow in, net exposure by (sym, book, product) out, with limit breaches throttled
 so a standing breach does not republish every tick. They are worth a note
 because they are the one pair that runs **two** ways. `torq_stream.q` starts
 them here like any other streaming job; `run_stream.q` starts the same two job
-files on stock kdb+ against `.qtick`, with `lib/torq` never loaded. That is the
-publish seam working as intended - a job is TorQ-free code and the runner
+files on stock kdb+ against `.qetl.tick`, with `lib/torq` never loaded. That is
+the publish seam working as intended - a job is TorQ-free code and the runner
 decides the transport - and being runnable without TorQ was never a reason not
 to be startable with it.
 
 `tap1` is the one process still running its own script
 (`scripts/processes/torq_tap.q`): it chooses its tables at runtime rather than
-declaring them, which is exactly what a `.qstream` declaration cannot express.
+declaring them, which is exactly what a `.qetl.job.stream` declaration cannot
+express.
 
 ### What starts, and why not all of it
 
@@ -210,23 +213,23 @@ table), the other keeps it private to the process.
 
 `posbook1` and `markout1` are the two processes in this stack that run uqf's
 actual eFX business logic (position/PnL and execution quality, not just
-market-data reshaping) against live data. `posbook1`'s `.qsub.posbook.book` (a
-private, in-process `.qpos`-shaped keyed table, same "wrap a pure function with
-local mutable state" pattern `cross1`'s `.qsub.cross.quotes` mirror uses)
-accumulates fills via `.qpos.apply_fill`, marked to a live mid tracked off its
-own `quote` subscription; `position` is a snapshot republished per fill.
+market-data reshaping) against live data. `posbook1`'s `.qpipe.job.posbook.book`
+(a private, in-process `.qpos`-shaped keyed table, same "wrap a pure function
+with local mutable state" pattern `cross1`'s `.qpipe.job.cross.quotes` mirror
+uses) accumulates fills via `.qpos.apply_fill`, marked to a live mid tracked off
+its own `quote` subscription; `position` is a snapshot republished per fill.
 `markout1` can't score a fill the instant it arrives -
 `.qexec.markout_at_horizons` needs a reference quote at trade_time+horizon,
 which by definition hasn't happened yet - so it buffers trades/quotes in
-`.qsub.markout.pending`/`.qsub.markout.quote_hist` and scores+drains them on a
-1s repeating timer once each trade is old enough that its furthest horizon's
-quote should already exist. Unlike `cross_quotes`, both `position` and
+`.qpipe.job.markout.pending`/`.qpipe.job.markout.quote_hist` and scores+drains
+them on a 1s repeating timer once each trade is old enough that its furthest
+horizon's quote should already exist. Unlike `cross_quotes`, both `position` and
 `execution_quality` are real, persisted tables (round-trip through
 `rdb1`/`wdb1`/`hdb`, same as `mkt_orderbook`), since this history is worth
 keeping.
 
 `cross_quotes` is drawn dashed because it never becomes a real database table -
-it's `.qsub.cross.crosses`, a plain in-memory table inside `cross1`'s own
+it's `.qpipe.job.cross.crosses`, a plain in-memory table inside `cross1`'s own
 process, queryable only by connecting to `cross1` directly
 (`uqs query "select from cross_quotes" --port 6075`). `mkt_orderbook` is a full
 round trip instead: `vectorize1` folds `wide_book` and republishes onto `stp1`,
@@ -252,7 +255,7 @@ The rule now holds from both ends:
   about, and there is no second field to forget.
   `plant_schema.undefined_published_tables` reports any that slip through, and
   the Python suite fails on a non-empty answer.
-- **At startup.** `.qpipe.assert_publishable` asks the plant for `tables[]`
+- **At startup.** `.qtorq.assert_publishable` asks the plant for `tables[]`
   before wiring a job's publish seam, and refuses to start when a declared table
   is absent - naming every missing one, so a single restart fixes them all.
 

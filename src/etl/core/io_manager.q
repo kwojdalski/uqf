@@ -1,9 +1,9 @@
 / io_manager.q - where a worker's output goes, as a declaration rather than a
-/ hardcoded table insert (.qio).
+/ hardcoded table insert (.qetl.io).
 / .
-/ Before this, .qbw.publish was four lines and they decided everything:
+/ Before this, .qetl.job.bounded.publish was four lines and they decided everything:
 / .
-/     t:.qsrc.def[(.qbw.def worker)`source]`target;
+/     t:.qetl.source.def[(.qetl.job.bounded.def worker)`source]`target;
 /     if[not t in tables `.; t set 0#batch];
 /     t insert batch;
 / .
@@ -15,7 +15,7 @@
 / times, which is the whole argument for separating them.
 / .
 / WHAT A MANAGER IS. A dictionary carrying a `write` function - the same
-/ shape .qsrc already uses for a source, and for the same reason: a dict of
+/ shape .qetl.source already uses for a source, and for the same reason: a dict of
 / functions is a first-class value in q, so a pluggable component needs no
 / new language mechanism, only a second instance of a pattern already
 / shipped here.
@@ -24,11 +24,11 @@
 / in this framework reads a target back through an abstraction - downstream
 / workers read the q table directly, in-process - so a `read` here would be a
 / capability reached from no live path. This repository has found four of
-/ those in as many days (docs/man.q, .qmatz.require_schema, .qwcfg.set_layers,
+/ those in as many days (docs/man.q, .qetl.coverage.require_schema, .qetl.cfg.set_layers,
 / .qdqc), and each read as protection it was not providing. They go in when
 / something calls them.
 
-\d .qio
+\d .qetl.io
 
 / The keys a manager must carry. One, for now, and the list exists so that
 / adding a second is a change to this line rather than to every validator.
@@ -71,8 +71,8 @@ require_manager:{[mgr]
 / Private: append a batch to a root table, creating it from the batch's own
 / shape when absent.
 / .
-/ Backtick form (`target set / insert), because inside \d .qio a bare name
-/ resolves to .qio.<name> rather than the root table - the trap materialisation.q
+/ Backtick form (`target set / insert), because inside \d .qetl.io a bare name
+/ resolves to .qetl.io.<name> rather than the root table - the trap materialisation.q
 / documents at length, and the reason every write here is explicit.
 write_memory:{[target;batch]
     if[not target in tables `.; target set 0#batch];
@@ -136,7 +136,7 @@ discard:(enlist `write)!enlist write_discard
 / schema-driven repair (scripts/gates/fill_hdb_partitions.q) runs on every
 / uqs command's bootstrap. finish does NOT tell a running HDB to reload:
 / that needs the stack, so scripts/processes/torq_backfill.q does it through
-/ .qpipe.
+/ .qtorq.
 / .
 / Not safe to run beside end-of-day: both append to the HDB's sym file.
 
@@ -149,7 +149,7 @@ touched:([] hdb_root:`symbol$(); dt:`date$(); tbl:`symbol$())
 /   the partition, for a batch that has no `time` of its own, e.g. `deal_time
 / @return a manager carrying write and finish
 / @throws error when root is not a file symbol or partition_col not a symbol
-/ @eg .qio.hdb[`:/tmp/qio_eg_hdb;`deal_time]
+/ @eg .qetl.io.hdb[`:/tmp/qio_eg_hdb;`deal_time]
 hdb:{[root;partition_col]
     if[not (-11h=type root) and ":"=first string root;
         '"hdb: root must be a file symbol, e.g. `:/data/hdb"];
@@ -181,7 +181,7 @@ write_hdb:{[root;partition_col;target;batch]
         / finish sorts and puts it back.
         if[`sym in existing; @[part;`sym;`#]];
         $[()~existing; part set rows; part upsert rows];
-        `.qio.touched upsert (root;d;target);
+        `.qetl.io.touched upsert (root;d;target);
         }[root;target;data;days] each distinct days;
     count batch}
 
@@ -198,7 +198,7 @@ finish_hdb:{[root;ignored]
         if[`sym in c; @[part;`sym;`p#]];
         }[root]'[todo`dt;todo`tbl];
     if[count todo; .Q.chk root];
-    `.qio.touched set select from touched where not hdb_root=root;
+    `.qetl.io.touched set select from touched where not hdb_root=root;
     count todo}
 
 / ---------------------------------------------------------------- USE
@@ -220,7 +220,7 @@ default:memory
 / @param cfg a worker's configuration dictionary
 / @return the manager dict
 / @throws error, via require_manager, when a declared manager is malformed
-/ @eg .qio.for_cfg[`source`dataset`width!(`s;`d;1D)]  ->  .qio.memory
+/ @eg .qetl.io.for_cfg[`source`dataset`width!(`s;`d;1D)]  ->  .qetl.io.memory
 for_cfg:{[cfg]
     if[not `io in key cfg; :default];
     m:cfg`io;
@@ -233,13 +233,13 @@ for_cfg:{[cfg]
 / @param target the table symbol the source declaration names
 / @param batch the rows to store
 / @return the number of rows written, as the manager reports them
-/ @eg .qio.write[.qio.memory;`demo_deals;.qfeed.demo_deals.fixture[]]
+/ @eg .qetl.io.write[.qetl.io.memory;`demo_deals;.qpipe.source.demo_deals.fixture[]]
 write:{[mgr;target;batch] (mgr`write)[target;batch]}
 
 / Run a manager's end-of-run step, when it has one.
 / @param mgr the manager
 / @return the manager's finish result, or (::) when it has none
-/ @eg .qio.finish .qio.memory
+/ @eg .qetl.io.finish .qetl.io.memory
 finish:{[mgr] $[`finish in key mgr; (mgr`finish)[]; (::)]}
 
 \d .

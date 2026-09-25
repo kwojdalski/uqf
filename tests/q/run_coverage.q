@@ -8,7 +8,7 @@
 / .
 / WHAT MAKES ONE TOOL ENOUGH. In-memory instrumentation has an obvious hole -
 / a function whose VALUE was captured into a registry before instrumentation
-/ is called through that copy and never counted. `.qio.memory` holds
+/ is called through that copy and never counted. `.qetl.io.memory` holds
 / `write_memory`, so every bounded worker writes through a captured copy.
 / `.cov.reseed` closes it by swapping those copies too, which is why this
 / driver can replace file-level instrumentation rather than merely
@@ -38,8 +38,8 @@ nsList:.testutil.suite_namespaces[];
 
 / Every namespace this tree declares, from the one enumeration in
 / src/namespaces.q - fully qualified already, and INCLUDING the nested
-/ worker namespaces under .qwrk, which a root-level `like "q*"` scan
-/ reported as the single name `qwrk` holding no functions. Four workers
+/ worker namespaces under .qpipe.job, which a root-level `like "q*"` scan
+/ reported as the single name `qpipe.job` holding no functions. Four workers
 / vanished from this report the day they nested, silently, which is exactly
 / the failure this tool exists to reveal. `qunit` is the vendored test
 / framework, not this library's code.

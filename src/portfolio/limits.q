@@ -4,7 +4,7 @@
 / exposure, a P&L drawdown or a fill count.
 / .
 / WHAT A LIMIT IS HERE. A row in a table, not a registered function. The
-/ registry pattern the rest of this tree uses (.qsrc, .qio, .qxf, .qalloc)
+/ registry pattern the rest of this tree uses (.qetl.source, .qetl.io, .qetl.transform, .qalloc)
 / is right when the thing being declared is BEHAVIOUR - a way of fetching,
 / writing, transforming, matching. A limit is data: a scope, a metric and
 / a cap. Desks change them daily, and they arrive from a spreadsheet or a

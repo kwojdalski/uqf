@@ -1,7 +1,7 @@
 """Who feeds whom: the process graph, and whether it is actually satisfied.
 
 The graph already existed in three places before this module - the
-`subscribe_to`/`publishes` fields on each `Pipeline`, the `.qdag` registry in
+`subscribe_to`/`publishes` fields on each `Pipeline`, the `.qetl.dag` registry in
 q that `src/etl/generated/pipeline_dag.q` feeds, and the diagrams derived
 from both. What none of them did was answer the question an operator
 actually has, which is not "what is the shape of the graph" but "is the

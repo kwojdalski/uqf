@@ -37,7 +37,7 @@
 / .
 / NO MARKS AND NO P&L, deliberately. Marking needs a price source, a
 / convention for a pair never quoted, and a decision about which currency
-/ the answer is in - all of which .qsub.posbook already makes for the P&L
+/ the answer is in - all of which .qpipe.job.posbook already makes for the P&L
 / view. Two modules marking the same book two ways would drift. Exposure
 / is a fact about the fills alone, and that is what this file computes.
 

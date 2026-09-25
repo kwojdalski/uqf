@@ -9,7 +9,7 @@ a q process cannot hold a Databento subscription, and TorQ only drives q.
 **It carries bytes and decides nothing.** Databento's MBP-10 records go onto
 the tickerplant in the source contract's own field order, unfolded and
 unrenamed, and ``databento1`` (``src/etl/streaming/databento_book.q``)
-applies ``.qxf.apply[`databento_book;...]`` - the same transform the ODBC
+applies ``.qetl.transform.apply[`databento_book;...]`` - the same transform the ODBC
 backfill uses - to fold forty per-level columns into four vectors.
 
 That split is the whole point. The fold is forty columns of index
@@ -103,7 +103,7 @@ def start_databento_feed(
     Refuses rather than starting a second one, and refuses without an API
     key rather than starting a process that will fail its first call - the
     same "resolve what can fail before any work happens" order
-    ``.qbw.init`` follows.
+    ``.qetl.job.bounded.init`` follows.
     """
     if is_databento_feed_running(paths):
         raise UqsError("the databento feed is already running - stop it first")

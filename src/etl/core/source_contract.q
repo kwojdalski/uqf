@@ -1,4 +1,4 @@
-/ source_contract.q - the centralised external-source contract (.qsrc).
+/ source_contract.q - the centralised external-source contract (.qetl.source).
 / .
 / The source contract: "register every external source table, target
 / mapping, required field and required type in the centralised source
@@ -90,13 +90,13 @@
 /     PRESENCE is, and this tree has no legitimate use for it.
 / .
 /   DST in windowed backfills. Windows are cut in UTC by
-/     .qwrt.windows, so a "daily" window is always exactly 24h of elapsed
+/     .qetl.job.bounded.runtime.windows, so a "daily" window is always exactly 24h of elapsed
 /     time: never short, never long, and the coverage ledger keeps tiling
 /     exactly across a transition. The variable thing is the LOCAL span, and
 /     that is handled here rather than by warping window widths - see
 /     source_bounds and local_to_utc for the two traps that produces.
 
-\d .qsrc
+\d .qetl.source
 
 / ---------------------------------------------------------------- SCHEMA
 
@@ -115,10 +115,10 @@ required_declarations:`source`table_name`target`time_column`row_key`columns`type
 /         the query callback calls the handle with a lambda. The default,
 /         because every source before ODBC was one.
 /   odbc  anything with an ODBC driver: the credential is the connection
-/         string, opened with .qodbc.open, and the query callback builds SQL
-/         through .qodbc's one escape function.
+/         string, opened with .qetl.io.odbc.open, and the query callback builds SQL
+/         through .qetl.io.odbc's one escape function.
 / .
-/ A source's transport decides how .qbw.connect opens a handle and how
+/ A source's transport decides how .qetl.job.bounded.connect opens a handle and how
 / cleanup closes one, so it belongs to the source rather than the worker: two
 / workers over one source cannot disagree about how to reach it.
 transports:`ipc`odbc
@@ -129,7 +129,7 @@ sources:(`symbol$())!();
 
 / Register an external source table.
 / .
-/ Registration VALIDATES immediately, unlike .qbfstate.register which
+/ Registration VALIDATES immediately, unlike .qetl.job.bounded.state.register which
 / deliberately defers. The asymmetry is deliberate and worth stating: a
 / bounded worker's methods appear as its file loads, so validating early
 / would force declaration order. A source declaration is a single literal
@@ -224,7 +224,7 @@ define:{[source;decl]
         '"define: ",string[source],"'s transport must be one of ",(", " sv string transports)];
     / Stored on EVERY declaration, declared or not: `sources` holds dicts, and
     / a key present on one and absent on another stops later assignments
-    / fitting - the shape .qbw's optional_cfg normalisation exists for.
+    / fitting - the shape .qetl.job.bounded's optional_cfg normalisation exists for.
     decl[`transport]:tr;
     / Store row_key NORMALISED to a vector, always.
     / .
@@ -235,7 +235,7 @@ define:{[source;decl]
     / because the dict's value list has already settled on a shape. Storing
     / one shape keeps every declaration mutually assignable.
     sources[source]:@[decl;`row_key;:;key_cols];
-    .[{.qlog.dbg[x;y;z]};(source;"source registered";
+    .[{.qetl.log.dbg[x;y;z]};(source;"source registered";
         `columns`time_column`tz`transport`row_key!(decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
 
@@ -245,7 +245,7 @@ define:{[source;decl]
 / exist, which is what makes the question bank true: adding a source is a file plus a
 / registration, with no core change.
 / @return a symbol vector, empty when nothing has registered yet
-/ @eg .qsrc.defined[]
+/ @eg .qetl.source.defined[]
 defined:{[] key sources}
 
 / The column(s) identifying a row uniquely, always as a vector.
@@ -268,7 +268,7 @@ row_key:{[source] (),(def source)`row_key}
 / @return the declaration dict (source, table, target, time_column, row_key,
 /   columns, types, query, fixture, tz)
 / @throws error naming the source when it was never registered
-/ @eg .qsrc.def `demo_deals
+/ @eg .qetl.source.def `demo_deals
 def:{[source]
     if[not source in key sources;
         '"def: ",string[source]," is not a registered source - sources register centrally, so an unregistered source is a wiring bug rather than a lookup miss"];
@@ -321,7 +321,7 @@ validate:{[source;tbl]
                 flip (string wrong;enlist each expected where not expected=actual;
                       enlist each actual where not expected=actual);
             ""]];
-    .[{.qlog.dbg[x;y;z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
+    .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
     1b}
 
 / Validate a source's own fixture against the same contract as live data.
@@ -364,7 +364,7 @@ validate_live:{[source;h]
 / The environment variable holding a source's credential.
 / .
 / Mechanical from the source name, so an operator can guess it. Deliberately
-/ a separate prefix from .qwcfg's UQF_: a credential is not configuration,
+/ a separate prefix from .qetl.cfg's UQF_: a credential is not configuration,
 / and keeping the namespaces apart means a credential can never arrive
 / through the YAML or overrides layer by accident.
 credential_var:{[source] "UQF_SOURCE_CRED_",upper string source}
@@ -385,7 +385,7 @@ require_credentials:{[source]
     env_var:credential_var source;
     v:getenv `$env_var;
     / The variable's NAME only - never its value, which is a credential.
-    .[{.qlog.dbg[x;y;z]};(source;"credential lookup";`var`present!(env_var;0<count v));::];
+    .[{.qetl.log.dbg[x;y;z]};(source;"credential lookup";`var`present!(env_var;0<count v));::];
     if[0=count v;
         '"require_credentials: ",string[source]," has no credential - set ",env_var,
          " in the environment. There is deliberately no file or vault fallback: ",
@@ -570,7 +570,7 @@ ambiguous_message:{[tz;bad;cs]
 / `p` deliberately maps to to_timestamp, which REFUSES a date-only value
 / rather than widening it to midnight. A source whose column really is a
 / date, and for which midnight is correct, has to say so by coercing with
-/ .qcoer.to_date_as_midnight explicitly - which is greppable, unlike an
+/ .qetl.coerce.to_date_as_midnight explicitly - which is greppable, unlike an
 / accident of q's casting rules.
 / A KNOWN LIMITATION, recorded rather than shipped silently: this maps every
 / `s` column to to_symbol, which UPPER-CASES. That is right for currency
@@ -587,10 +587,10 @@ ambiguous_message:{[tz;bad;cs]
 / inventing the override mechanism before a source needs it would be
 / guessing at its shape.
 coercers:(!). flip (
-    ("f";.qcoer.to_float);
-    ("j";.qcoer.to_long);
-    ("p";.qcoer.to_timestamp);
-    ("s";.qcoer.to_symbol))
+    ("f";.qetl.coerce.to_float);
+    ("j";.qetl.coerce.to_long);
+    ("p";.qetl.coerce.to_timestamp);
+    ("s";.qetl.coerce.to_symbol))
 
 / Coerce a table of TEXT columns into the declared types.
 / .
@@ -612,12 +612,12 @@ coerce:{[source;tbl]
     unknown:distinct chars where not chars in key coercers;
     if[count unknown;
         '"coerce: no coercer for declared type(s) \"",unknown,"\" in ",string[source],
-         " - add one to .qsrc.coercers deliberately rather than casting privately"];
-    results:{[tb;f;c] .qcoer.coerce_column[coercers c;tb f]}[tbl;;] .' flip (columns;chars);
+         " - add one to .qetl.source.coercers deliberately rather than casting privately"];
+    results:{[tb;f;c] .qetl.coerce.coerce_column[coercers c;tb f]}[tbl;;] .' flip (columns;chars);
     coerced:tbl;
     coerced:{[tb;f;r] @[tb;f;:;r`values]}/[coerced;columns;results];
     failures:columns!results[;`failed];
-    .[{.qlog.dbg[x;y;z]};(source;"coerced";`rows`columns`failures!(count tbl;columns;failures));::];
+    .[{.qetl.log.dbg[x;y;z]};(source;"coerced";`rows`columns`failures!(count tbl;columns;failures));::];
     `table`failures!(coerced;failures)}
 
 / ------------------------------------------------------------- FETCHING
@@ -656,7 +656,7 @@ fetch_window:{[source;h;range_from;range_to]
     t0:.z.p;
     decl:def source;
     bounds:source_bounds[decl;range_from;range_to];
-    .[{.qlog.dbg[x;y;z]};(source;"fetching";
+    .[{.qetl.log.dbg[x;y;z]};(source;"fetching";
         `path`range_from`range_to`source_from`source_to`tz!
             ($[null h;`fixture;`live];range_from;range_to;bounds 0;bounds 1;decl`tz));::];
     page:$[null h;
@@ -665,7 +665,7 @@ fetch_window:{[source;h;range_from;range_to]
     out:narrow_to_utc[decl;page 1;range_from;range_to];
     / fetched vs kept differ only for a zoned source, whose bounds are padded:
     / the difference is the neighbouring windows' rows, dropped on purpose.
-    .[{.qlog.dbg[x;y;z]};(source;"fetched";
+    .[{.qetl.log.dbg[x;y;z]};(source;"fetched";
         `path`fetched`kept`ms!(page 0;count page 1;count out;`long$(.z.p-t0)%1000000));::];
     (page 0;out)}
 

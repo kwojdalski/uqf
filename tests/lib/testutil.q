@@ -14,7 +14,7 @@ assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];exp
 
 // A genuinely empty etl_coverage ledger, whatever shape it currently has.
 //
-// The DELETE is the point. `.qmatz.init_ledger` creates the table only when
+// The DELETE is the point. `.qetl.coverage.init_ledger` creates the table only when
 // absent, which is the right contract - but it means a test that replaced the
 // ledger with a differently-shaped one cannot restore it by calling
 // init_ledger again: the wrong-shaped table exists, so init_ledger leaves it,
@@ -28,12 +28,12 @@ assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;approx[tol];exp
 // `tables` and init_ledger then re-created the table - silent, and invisible
 // until something called `meta` directly.
 // An empty coverage ledger built column by column, independently of
-// .qmatz.init_ledger - so a test asserting "a foreign ledger of the right
+// .qetl.coverage.init_ledger - so a test asserting "a foreign ledger of the right
 // shape is accepted" asserts something, rather than comparing init_ledger's
 // output against itself.
 //
 // It exists as ONE fixture because it was three hardcoded column lists, and
-// every addition to .qmatz.schema broke all three at once in a way that read
+// every addition to .qetl.coverage.schema broke all three at once in a way that read
 // like a bug in require_schema. superseded_at did it; run_id did it
 // again. test_coverage's test_the_foreign_fixture_tracks_the_declared_schema
 // now fails FIRST, and by name, so the next one is a one-line fix here.
@@ -50,8 +50,8 @@ reset_coverage_ledger:{[]
     // the last suite left on disk. Remove the file too, or tests leak rows
     // into each other in run order - which is the same silent cross-test
     // dependency this helper was written to prevent.
-    @[{system"rm -f ",x};.qmatz.ledger_path[];{[e] (::)}];
-    .qmatz.init_ledger[];
+    @[{system"rm -f ",x};.qetl.coverage.ledger_path[];{[e] (::)}];
+    .qetl.coverage.init_ledger[];
     value `etl_coverage};
 
 // ---------------------------------------------------------------------------
@@ -110,9 +110,9 @@ suite_namespaces:{[]
 // What the TREE declares, as opposed to what a test registered
 // ---------------------------------------------------------------------------
 // Several suites check a live registry against the namespaces it should have
-// produced - every registered source has a `.qfeed.<name>`, every registered
-// worker a `.qwrk.<name>`. Those registries also hold entries the TESTS put
-// there: `.qbw` fixture workers named `reference`, `partial` and `fixture_*`,
+// produced - every registered source has a `.qpipe.source.<name>`, every registered
+// worker a `.qpipe.job.<name>`. Those registries also hold entries the TESTS put
+// there: `.qetl.job.bounded` fixture workers named `reference`, `partial` and `fixture_*`,
 // and sources registered by `etl_test_doubles.q`. None has a declaration
 // file, so none has a namespace, and a test that reads the registry alone
 // fails or passes on whether the suite that registered them ran first.
@@ -148,18 +148,18 @@ q_files:{[dir]
 // The alternative - a live scan filtered by a hand-kept deny-list of test
 // scaffolding - cannot hold, because suites create whole namespaces at run
 // time: `.qcompletetest` and `.qmethodsonly` are fixture workers built
-// inside assertions, and `.qsub.nt_k`/`.qsub.nt_l` are streaming jobs
+// inside assertions, and `.qpipe.job.nt_k`/`.qpipe.job.nt_l` are streaming jobs
 // registered by a test. Each new one would have to be remembered, and until
 // it was, whichever suite ran first decided the answer.
 //
-// Worker instances are appended because no file declares them: `.qbw.define`
-// stamps `.qwrk.<name>` from the registered name (#227).
+// Worker instances are appended because no file declares them: `.qetl.job.bounded.define`
+// stamps `.qpipe.job.<name>` from the registered name (#227).
 tree_namespaces:{[]
     decls:raze {[f]
         src:read0 hsym `$f;
         3_/:src where src like "\\d .*"} each .testutil.q_files["src"];
     ns:`$decls where 1<count each decls;
-    ns:ns,`$".qwrk.",/:string .testutil.etl_declaration_names["src/etl/workers"];
+    ns:ns,`$".qpipe.job.",/:string .testutil.etl_declaration_names["src/etl/workers"];
     asc distinct ns}
 
 \d .

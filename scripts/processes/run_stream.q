@@ -32,7 +32,7 @@
 / the half of a tickerplant that matters most and the half a demo usually
 / skips.
 / .
-/ This file may know about .qtick, sockets and the clock. The job files may
+/ This file may know about .qetl.tick, sockets and the clock. The job files may
 / not, and do not.
 
 \l src/init.q
@@ -45,7 +45,7 @@
 opts:.Q.opt .z.x
 
 / -verbose switches DBG on, the same flag every uqf process script takes.
-if[`verbose in key opts; .qlog.debug 1b];
+if[`verbose in key opts; .qetl.log.debug 1b];
 
 / Private: one option's value, or a default. .Q.opt gives a list per key,
 / so a flag given once is a one-element list and a flag given twice is
@@ -70,7 +70,7 @@ stack_tables:{[] (tables `) where {[t] `time = first cols get t} each tables `}
 / @return the table names declared
 declare_schemas:{[]
     t:stack_tables[];
-    .qtick.schema'[t;get each t];
+    .qetl.tick.schema'[t;get each t];
     t}
 
 / Start a tickerplant in this process: schemas, a log for today, and a
@@ -82,13 +82,13 @@ declare_schemas:{[]
 / @return the number of messages already in today's log
 start_plant:{[port]
     declare_schemas[];
-    existing:.qtick.open_log[opt[`logdir;"tplog"];`$"uqf",$[null port;"local";string port];.z.D];
+    existing:.qetl.tick.open_log[opt[`logdir;"tplog"];`$"uqf",$[null port;"local";string port];.z.D];
     if[not null port; system "p ",string port];
-    .qlog.info[`run_stream;"plant started";
-        `port`log`existing_messages!(port;.qtick.log_path;existing)];
+    .qetl.log.info[`run_stream;"plant started";
+        `port`log`existing_messages!(port;.qetl.tick.log_path;existing)];
     / A subscriber that drops must stop receiving, or every publish throws
     / on a dead handle and takes the plant down with it.
-    `.z.pc set {[h] .qtick.unsubscribe neg h;};
+    `.z.pc set {[h] .qetl.tick.unsubscribe neg h;};
     existing}
 
 / Rebuild a job's state from the plant's log before it sees live traffic.
@@ -101,7 +101,7 @@ start_plant:{[port]
 / @param job the job's name
 / @return the number of messages replayed
 recover:{[job]
-    decl:.qstream.def job;
+    decl:.qetl.job.stream.def job;
     if[0=count decl`subscribe_to; :0];
     if[not `on_batch in key decl; :0];
     wanted:decl`subscribe_to;
@@ -109,18 +109,18 @@ recover:{[job]
     / table the plant ever saw, and handing a job a batch it never asked
     / for is a bug the live path cannot produce.
     handler:{[wanted;h;t;r] if[t in wanted; h[t;r]];}[wanted;decl`on_batch];
-    .qtick.replay[.qtick.log_path;handler]}
+    .qetl.tick.replay[.qetl.tick.log_path;handler]}
 
 / Wire a job's publish seam and start its timer.
 / @param job the job's name
 / @param sink where its output goes - the local plant, or a handle to a remote one
 / @return the job name
 start_job:{[job;sink]
-    decl:.qstream.def job;
-    .qlog.info[job;"starting streaming job";
+    decl:.qetl.job.stream.def job;
+    .qetl.log.info[job;"starting streaming job";
         `subscribe_to`publishes`timer!(decl`subscribe_to;decl`publishes;
             $[`period in key decl; decl`period; 0Nn])];
-    if[count decl`publishes; .qstream.wire[job;sink]];
+    if[count decl`publishes; .qetl.job.stream.wire[job;sink]];
     if[`period in key decl;
         `.qproc.standalone.timers set .qproc.standalone.timers,enlist (job;decl`on_timer;decl`period;0Np)];
     job}
@@ -144,7 +144,7 @@ tick:{[]
         row:.qproc.standalone.timers i;
         if[not (null row 3) or now>=(row 3)+row 2; :()];
         .qproc.standalone.timers[i;3]:now;
-        @[row 1;::;{[job;e] .qlog.err[job;"timer function failed";enlist[`error]!enlist e];}[row 0]];
+        @[row 1;::;{[job;e] .qetl.log.err[job;"timer function failed";enlist[`error]!enlist e];}[row 0]];
         }[now];
     fire each til count timers;
     }
@@ -154,17 +154,17 @@ tick:{[]
 / @param tp the plant's port, or 0N for the plant in this process
 / @return the sink
 connect:{[job;tp]
-    decl:.qstream.def job;
+    decl:.qetl.job.stream.def job;
     if[null tp;
         / `1_m`, dropping the `upd` the message leads with - NOT `1 2#m`,
         / which is a RESHAPE: it yields a one-element list, so `.` applies
         / on_batch to a single argument, which makes a projection rather
         / than an error. The job then receives nothing and reports healthy.
         if[count decl`subscribe_to;
-            .qtick.subscribe[decl`subscribe_to;
+            .qetl.tick.subscribe[decl`subscribe_to;
                 {[handler;m] handler . 1_m}[decl`on_batch]]];
-        :{[t;r] .qtick.publish[t;r]}];
-    .qlog.info[job;"connecting to the plant";enlist[`port]!enlist tp];
+        :{[t;r] .qetl.tick.publish[t;r]}];
+    .qetl.log.info[job;"connecting to the plant";enlist[`port]!enlist tp];
     h:@[hopen;tp;{[tp;e]
         '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];
     if[count decl`subscribe_to;
@@ -172,18 +172,18 @@ connect:{[job;tp]
         / this process - which only the REMOTE can build, out of its own
         / .z.w. Send it a lambda to apply: a local function would arrive
         / as a value the plant cannot route anywhere.
-        h({[want] .qtick.subscribe[want;neg .z.w]};decl`subscribe_to);
+        h({[want] .qetl.tick.subscribe[want;neg .z.w]};decl`subscribe_to);
         / What comes back is (`upd;table;rows), which q evaluates here as
         / upd[table;rows] - so the job's handler has to BE root upd.
         `upd set decl`on_batch];
     / NOT a bare `neg h`. Two reasons, and the first is why the three-process
-    / mode never ran: a handle is an integer, and .qstream.wire rejects it
-    / (.qstream.is_callable is 100-112h, functions only - unlike
-    / .qtick.can_send, which does accept a handle). The second is that even
+    / mode never ran: a handle is an integer, and .qetl.job.stream.wire rejects it
+    / (.qetl.job.stream.is_callable is 100-112h, functions only - unlike
+    / .qetl.tick.can_send, which does accept a handle). The second is that even
     / had it passed, `(neg h)[tbl;rows]` sends a two-element message, which
     / the remote evaluates as `tbl[rows]` - indexing a table NAME by the
     / rows. The wrapper names the function to call over there.
-    {[send;t;x] send(`.qtick.publish;t;x)}[neg h]}
+    {[send;t;x] send(`.qetl.tick.publish;t;x)}[neg h]}
 
 / Start everything this process was asked to run.
 / @return the jobs started
@@ -204,7 +204,7 @@ start:{[]
     if[not null job;
         replayed:$[local; recover job; 0];
         if[0<replayed;
-            -1 "run_stream: recovered ",string[replayed]," message(s) from ",string .qtick.log_path];
+            -1 "run_stream: recovered ",string[replayed]," message(s) from ",string .qetl.tick.log_path];
         started,:start_job[job;connect[job;tp]]];
     if[not null feed; started,:start_job[feed;connect[feed;tp]]];
     if[count timers;

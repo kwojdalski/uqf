@@ -434,7 +434,7 @@ def create_app(
 
     @app.put("/control/worker-config", response_model=WorkerConfigResponse)
     def control_worker_config(req: WorkerConfigRequest, request: Request) -> WorkerConfigResponse:
-        """Set a `.qwcfg` override in the live process the gateway addresses."""
+        """Set a `.qetl.cfg` override in the live process the gateway addresses."""
         authorise(request)
         out = control.set_worker_config(gateway, settings, req.key, req.value)
         return WorkerConfigResponse(key=out["key"], value=out["value"], explain=out["explain"])

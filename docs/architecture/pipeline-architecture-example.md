@@ -20,19 +20,19 @@ The normalizers are the second waist. Above them each market arrives in its own
 shape; below them there is one.
 
 One arrow deliberately bypasses the plant: a bounded worker writes through
-`.qio` straight into storage and records what it covered. Its rows are history,
-not ticks, and a plant appends.
+`.qetl.io` straight into storage and records what it covered. Its rows are
+history, not ticks, and a plant appends.
 
 ## 1 · Sources
 
 Four kinds of thing put rows on the plant, and they are deliberately not alike:
 
-  | Source           | Implemented by                                                                                                                                                                                                       | Shape it arrives in                                                           |
-  | ---              | ---                                                                                                                                                                                                                  | ---                                                                           |
-  | FX venue feeds   | [`fx_feed`](../../src/etl/streaming/fx_feed.q), [`quotes_feed`](../../src/etl/streaming/quotes_feed.q), [`fx_trades_feed`](../../src/etl/streaming/fx_trades_feed.q) — synthetic here, a venue adapter in production | `quote` (one bid, one ask), `trades` (sym, side, price, size, pip_factor)     |
-  | Crypto venues    | cryptorust's two kdb recorders, or [`crypto_mock`](../../src/etl/streaming/crypto_mock.q) standing in                                                                                                                | `crypto_book` (a ladder per venue), `crypto_trades` (venue, fee, exchange id) |
-  | Databento MBP-10 | [`external/databento_feed.py`](../../python/uqs/src/uqs/external/databento_feed.py) → [`databento_book`](../../src/etl/streaming/databento_book.q)                                                                   | raw MBP-10, folded by the same `.qxf` transform the ODBC backfill applies     |
-  | History          | bounded workers under [`src/etl/workers/`](../../src/etl/workers), run by [`.qbw`](../../src/etl/core/bounded_worker.q)                                                                                              | whatever the upstream holds, written through `.qio` — never via the plant     |
+  | Source           | Implemented by                                                                                                                                                                                                                    | Shape it arrives in                                                                      |
+  | ---              | ---                                                                                                                                                                                                                               | ---                                                                                      |
+  | FX venue feeds   | [`fx_feed`](../../src/etl/streaming/fx_feed.q), [`quotes_feed`](../../src/etl/streaming/quotes_feed.q), [`fx_trades_feed`](../../src/etl/streaming/fx_trades_feed.q) — synthetic here, a venue adapter in production              | `quote` (one bid, one ask), `trades` (sym, side, price, size, pip_factor)                |
+  | Crypto venues    | cryptorust's two kdb recorders, or [`crypto_mock`](../../src/etl/streaming/crypto_mock.q) standing in                                                                                                                             | `crypto_book` (a ladder per venue), `crypto_trades` (venue, fee, exchange id)            |
+  | Databento MBP-10 | [`external/databento_feed.py`](../../python/uqs/src/uqs/external/databento_feed.py) → [`databento_book`](../../src/etl/streaming/databento_book.q)                                                                                | raw MBP-10, folded by the same `.qetl.transform` transform the ODBC backfill applies     |
+  | History          | bounded workers under [`src/etl/workers/`](../../src/etl/workers), run by [`.qetl.job.bounded`](../../src/etl/core/bounded_worker.q)                                                                                              | whatever the upstream holds, written through `.qetl.io` — never via the plant            |
 
 The last row is the one to notice. A backfill writes into storage directly and
 records what it covered in the [coverage
@@ -43,24 +43,25 @@ code and take different paths in the diagram.
 ## 2 · The tickerplant
 
 One tickerplant, every table. In the stack it is TorQ's `stp1`; on stock kdb+ it
-is [`.qtick`](../../src/etl/core/tick.q). The jobs do not know which --- they
-call `publish` in their own namespace and a runner wires it --- and the three
-invariants a job must respect are the same on both:
+is [`.qetl.tick`](../../src/etl/core/tick.q). The jobs do not know which ---
+they call `publish` in their own namespace and a runner wires it --- and the
+three invariants a job must respect are the same on both:
 
 1. the **plant** stamps `time`, never the publisher;
 2. keyed tables are refused, because a plant appends;
 3. the row count comes from column length, so every column is a list.
 
 A job never calls `.u.upd`. It calls `publish` in its own namespace, and that is
-what lets the same file run under TorQ, under `.qtick`, or against a recorder in
-a test --- the runner decides the transport.
+what lets the same file run under TorQ, under `.qetl.tick`, or against a
+recorder in a test --- the runner decides the transport.
 
 ## 3 · Normalizers
 
-The second waist. [`.qnorm`](../../src/etl/core/normalizer.q) is a job kind
+The second waist.
+[`.qetl.job.stream.normalizer`](../../src/etl/core/normalizer.q) is a job kind
 whose instances take several tables carrying the same fact in different shapes
-and publish one canonical table, with one declared `.qxf` transform per source ---
-refused at load if its output drifts from the canonical schema.
+and publish one canonical table, with one declared `.qetl.transform` transform
+per source --- refused at load if its output drifts from the canonical schema.
 
   | Normalizer                                             | Sources                   | Output                                                                                      |
   | ---                                                    | ---                       | ---                                                                                         |
@@ -108,8 +109,8 @@ that produced zero rows is still recorded as covered, because "ran, found
 nothing" and "never ran" must not look alike.
 
 That ledger is why the history arrow on the diagram bypasses the plant. A
-backfill's rows are history rather than ticks, so they go through `.qio` into
-storage directly --- and the claim goes in the ledger beside them.
+backfill's rows are history rather than ticks, so they go through `.qetl.io`
+into storage directly --- and the claim goes in the ledger beside them.
 
 ## 6 · On demand
 
@@ -138,7 +139,7 @@ these can be asked *as of* a past instant and get the answer that was true then.
   Every query goes through the gateway, never to a process directly.
 - [`uqf_airflow_provider`](../../python/uqf_airflow_provider) --- an operator
   that starts a backfill and a sensor that reads the status files
-  [`.qstatus`](../../src/etl/core/status.q) writes.
+  [`.qetl.status`](../../src/etl/core/status.q) writes.
 - The [`uqs` MCP server](../../python/uqs/uqs_mcp.py) --- the stack as tools an
   agent can call.
 

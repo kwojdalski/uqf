@@ -31,19 +31,19 @@ from uqs.paths import repo_root as find_repo_root
 # so these three patterns read the edges back out of the q scripts:
 #
 #   .sub.subscribe[`trades`quote;...]        direct subscribe
-#   .qpipe.subscribe_etl[`markout;`trades`quote]  subscribe via the library
+#   .qtorq.subscribe_etl[`markout;`trades`quote]  subscribe via the library
 #   h (`.u.upd;`position;...)                publish directly
-#   .qpipe.publish[h;`position;...]          publish via the library
+#   .qtorq.publish[h;`position;...]          publish via the library
 #
 # A q symbol-vector literal is backtick-joined with no separator
 # (`trades`quote), which is why one regex yields the whole list and it is
 # split afterwards.
 _SUB_DIRECT_RE = re.compile(r"^\s*\.sub\.subscribe\[\s*((?:`[a-zA-Z_][a-zA-Z0-9_]*)+)\s*;", re.M)
 _SUB_QPIPE_RE = re.compile(
-    r"\.qpipe\.subscribe_etl\[\s*`[a-zA-Z0-9_]*\s*;\s*((?:`[a-zA-Z_][a-zA-Z0-9_]*)+)\s*\]"
+    r"\.qtorq\.subscribe_etl\[\s*`[a-zA-Z0-9_]*\s*;\s*((?:`[a-zA-Z_][a-zA-Z0-9_]*)+)\s*\]"
 )
 _PUB_RE = re.compile(
-    r"(?:h\s*\(\s*`\.u\.upd|\.qpipe\.publish\[\s*h)\s*;\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;"
+    r"(?:h\s*\(\s*`\.u\.upd|\.qtorq\.publish\[\s*h)\s*;\s*`([a-zA-Z_][a-zA-Z0-9_]*)\s*;"
 )
 
 #: A streaming job declares its own edges rather than spelling out the calls:
@@ -146,7 +146,8 @@ def resolve_edges(
         if declared is None:
             raise UqsError(
                 f"{pipeline.procname}: declares its edges in q (FROM_DECLARATION) but no "
-                f"`.qstream.define`/`.qnorm.define` naming that process was found under "
+                f"`.qetl.job.stream.define`/`.qetl.job.stream.normalize` "
+                f"naming that process was found under "
                 f"{STREAM_DIR}. Either the job file is missing, its procname disagrees "
                 f"with the registry, or the edges belong back in the Pipeline entry"
             )
@@ -190,7 +191,7 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
     Returns a list of human-readable mismatches - empty means the registry
     and the code agree, so the generated diagrams describe what actually
     runs. Pipelines whose edges are chosen at runtime
-    (``subscribes_dynamic``) are skipped. A publish through ``.qpipe.publish``
+    (``subscribes_dynamic``) are skipped. A publish through ``.qtorq.publish``
     is read at its call site, where the table is still a literal.
     """
     problems: list[str] = []
@@ -209,7 +210,7 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
             if pipeline.procname not in stream_edges:
                 problems.append(
                     f"{pipeline.procname}: runs {STREAM_RUNNER_SCRIPT} but no job under "
-                    f"{STREAM_DIR} claims that process - .qstream.define's "
+                    f"{STREAM_DIR} claims that process - .qetl.job.stream.define's "
                     "procname is how the runner finds out which job it is, so this "
                     "process would refuse to start"
                 )

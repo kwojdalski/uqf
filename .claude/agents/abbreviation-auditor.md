@@ -112,12 +112,13 @@ Never propose any of these, and say why if asked:
   `src/init.q` entry and every citation. That is a migration, not a spelling
   tidy.
 - **A name whose shortening collides with a local.** Verify by reading the
-  function, not by assuming. Renaming the `.qbw` config registry to `cfg` would
-  have shadowed `define`'s own `cfg` parameter --- it throws `'type`, and in a
-  less lucky arrangement would have written to the local and left the registry
-  silently empty. It was called `cfgs` for that reason - a plural of a
-  contraction, which is not a word - and is now `worker_cfg`: singular, says
-  what it is keyed by, and cannot collide with a local named `cfg`.
+  function, not by assuming. Renaming the `.qetl.job.bounded` config registry to
+  `cfg` would have shadowed `define`'s own `cfg` parameter --- it throws
+  `'type`, and in a less lucky arrangement would have written to the local and
+  left the registry silently empty. It was called `cfgs` for that reason - a
+  plural of a contraction, which is not a word - and is now `worker_cfg`:
+  singular, says what it is keyed by, and cannot collide with a local named
+  `cfg`.
 
 ## Output
 
@@ -131,7 +132,7 @@ Structure each finding as:
   dominant  `ts`         40 uses   src/etl/core/materialisation.q:173, ...
   outlier   `timestamp`   2 uses   src/etl/core/coercion.q:88
 
-  Public API: yes (.qcoer.to_timestamp)
+  Public API: yes (.qetl.coerce.to_timestamp)
   If renamed, a reader loses: the target type, which is the function's
     entire subject.
   Recommendation: KEEP. This is not a synonym split; the long word is the

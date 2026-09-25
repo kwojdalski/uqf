@@ -1,4 +1,4 @@
-/ cross.q - the whole of the cross-rate reprice job (.qsub.cross).
+/ cross.q - the whole of the cross-rate reprice job (.qpipe.job.cross).
 / .
 / Subscribes to `quotes`, mirrors it, and after every batch reprices four
 / synthetic cross pairs through USD, keeping the result as private process
@@ -16,7 +16,7 @@
 / how much history a cross chain may need, which is a real question this
 / demo does not answer.
 
-\d .qsub.cross
+\d .qpipe.job.cross
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -48,14 +48,14 @@ cross_quotes:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(
 / @param as_of price every pair from quotes at or before this instant
 / @return one row per pair that could be priced, in cross_pairs order
 reprice_crosses:{[quotes;as_of]
-    if[0=count quotes; :.qsub.cross.cross_quotes];
+    if[0=count quotes; :.qpipe.job.cross.cross_quotes];
     q:`sym`time xasc select time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from quotes where time<=as_of;
-    if[0=count q; :.qsub.cross.cross_quotes];
+    if[0=count q; :.qpipe.job.cross.cross_quotes];
     rows:{[q;as_of;pair]
         r:.[.qfwd.cross_book_at;(q;pair;as_of;enlist .qsynth.size_unit;`bid`ask`mid);{[e] ()}];
-        $[0=count r; .qsub.cross.cross_quotes;
+        $[0=count r; .qpipe.job.cross.cross_quotes;
             ([] time:enlist as_of; sym:enlist pair; bid:r`bid; ask:r`ask; mid:r`mid)]
-      }[q;as_of] each .qsub.cross.cross_pairs;
+      }[q;as_of] each .qpipe.job.cross.cross_pairs;
     raze rows}
 
 / --------------------------------------------------------------- THE JOB
@@ -63,7 +63,7 @@ reprice_crosses:{[quotes;as_of]
 / Where rows go. This job publishes nothing, so nothing wires this - it
 / stays a stub, and a future edit that starts publishing without declaring
 / it gets an error naming the job rather than silent rows.
-publish:.qstream.unwired `cross;
+publish:.qetl.job.stream.unwired `cross;
 
 / The quote mirror, grouped on sym for the as-of lookups the chain does.
 quotes:update `g#sym from quotes_in;
@@ -82,8 +82,8 @@ crosses:cross_quotes;
 / @return nothing
 on_batch:{[t;x]
     if[not t=`quotes; :()];
-    `.qsub.cross.quotes insert x;
-    .qsub.cross.reprice .qsub.cross.now[];
+    `.qpipe.job.cross.quotes insert x;
+    .qpipe.job.cross.reprice .qpipe.job.cross.now[];
     }
 
 / Reprice from the current mirror as of `now`, append, and log any pair that
@@ -92,12 +92,12 @@ on_batch:{[t;x]
 / @param now the instant to price as of
 / @return the rows appended
 reprice:{[now]
-    if[0=count .qsub.cross.quotes; :.qsub.cross.cross_quotes];
-    out:.qxf.apply_as_of[`cross_quotes;enlist[`quotes]!enlist .qsub.cross.quotes;now];
-    missing:.qsub.cross.cross_pairs except out`sym;
+    if[0=count .qpipe.job.cross.quotes; :.qpipe.job.cross.cross_quotes];
+    out:.qetl.transform.apply_as_of[`cross_quotes;enlist[`quotes]!enlist .qpipe.job.cross.quotes;now];
+    missing:.qpipe.job.cross.cross_pairs except out`sym;
     if[count missing;
-        .qlog.info[`cross;"pairs could not be priced";enlist[`pairs]!enlist missing]];
-    if[count out; `.qsub.cross.crosses insert out];
+        .qetl.log.info[`cross;"pairs could not be priced";enlist[`pairs]!enlist missing]];
+    if[count out; `.qpipe.job.cross.crosses insert out];
     out}
 
 / The clock, as a function so a test can replace it.
@@ -120,10 +120,10 @@ now:{[] .z.p}
 
 \d .
 
-.qxf.define[`cross_quotes;`inputs`output`fn`examples`as_of!(
-    enlist[`quotes]!enlist .qsub.cross.quotes_in;
-    .qsub.cross.cross_quotes;
-    .qsub.cross.reprice_crosses;
+.qetl.transform.define[`cross_quotes;`inputs`output`fn`examples`as_of!(
+    enlist[`quotes]!enlist .qpipe.job.cross.quotes_in;
+    .qpipe.job.cross.cross_quotes;
+    .qpipe.job.cross.reprice_crosses;
     / EURUSD and USDJPY are quoted, so only EURJPY can be built:
     / bid 1.10*150 = 165, ask 1.1002*150.02 = 165.052004, mid their average.
     / The EURUSD quote AFTER as_of must not move the price - that is the
@@ -139,9 +139,9 @@ now:{[] .z.p}
         2026.09.17D10:00:01);
     1b)];
 
-.qstream.define[`cross;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`cross;`procname`subscribe_to`publishes`on_batch`note!(
     `cross1;
     enlist `quotes;
     `symbol$();
-    .qsub.cross.on_batch;
+    .qpipe.job.cross.on_batch;
     "keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); quotesfeed1 runs by default, so `uqs start cross1` is enough")];

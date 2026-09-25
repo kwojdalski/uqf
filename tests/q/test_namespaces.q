@@ -3,20 +3,36 @@
 / Worth its own suite because the failure this file exists to prevent is
 / SILENT. A root-level `(key `) where like "q*"` scan - what the contract
 / surface export, the coverage driver and the documentation ratchet each
-/ carried privately - reports `.qwrk` as one namespace and never looks
+/ carried privately - reports `.qpipe.job` as one namespace and never looks
 / inside it, so every worker's public surface disappears from all three at
 / once while each keeps printing a passing line over a smaller set.
 / .
 / The nested case is therefore asserted directly rather than through the
-/ tools, and so is the char-keyed dictionary (.qsrc.coercers) that made the
+/ tools, and so is the char-keyed dictionary (.qetl.source.coercers) that made the
 / first version of is_namespace throw a bare 'type from four frames down.
 
 \d .nstest
 
+/ Framework and declarations must both remain visible to exporters and coverage.
+test_nested_framework_and_shared_transform_are_enumerated:{[t]
+    want:`.qetl.cfg.audit`.qetl.job.stream.normalizer`.qetl.job.bounded.runtime`.qpipe.transform.databento_book;
+    .qunit.assertTrue[all want in .qns.functional[];
+        "deep framework modules and shared transforms are functional namespaces"]};
+
+test_a_stream_cannot_reuse_a_bounded_job_name:{[t]
+    .qunit.assertThrows[.qetl.job.stream.define[`demo_deals_backfill;];
+        .qetl.job.stream.def `fx_feed;
+        "*already a bounded job*";"execution modes cannot share an instance namespace"]};
+
+test_a_bounded_job_cannot_reuse_a_stream_name:{[t]
+    .qunit.assertThrows[.qetl.job.bounded.define[`fx_feed;];
+        .qetl.job.bounded.def `demo_deals_backfill;
+        "*already a streaming job*";"execution modes cannot share an instance namespace"]};
+
 / --- is_namespace ---------------------------------------------------------
 
 test_a_namespace_is_recognised:{[t]
-    .qunit.assertEquals[.qns.is_namespace value `.qbw;1b;
+    .qunit.assertEquals[.qns.is_namespace value `.qetl.job.bounded;1b;
         "a namespace created by \\d is one"]};
 
 test_the_root_namespace_is_not_recognised:{[t]
@@ -30,16 +46,16 @@ test_the_root_namespace_is_not_recognised:{[t]
         "the root has no empty-symbol back-reference, so it answers 0b"]};
 
 test_an_ordinary_dictionary_is_not_a_namespace:{[t]
-    / .qbw.worker_cfg is a symbol-keyed dictionary that is NOT a namespace,
+    / .qetl.job.bounded.worker_cfg is a symbol-keyed dictionary that is NOT a namespace,
     / which is the case the empty-symbol test exists to separate.
-    .qunit.assertEquals[.qns.is_namespace .qbw.worker_cfg;0b;
+    .qunit.assertEquals[.qns.is_namespace .qetl.job.bounded.worker_cfg;0b;
         "a symbol-keyed dictionary with no empty key is not a namespace"]};
 
 test_a_char_keyed_dictionary_is_not_a_namespace:{[t]
-    / The live trap: .qsrc.coercers is keyed by type CHARS, so `` ` in key v ``
+    / The live trap: .qetl.source.coercers is keyed by type CHARS, so `` ` in key v ``
     / compares a symbol against a char vector and throws 'type. A scan that
     / walks every global meets it, and the error names nothing useful.
-    .qunit.assertEquals[.qns.is_namespace .qsrc.coercers;0b;
+    .qunit.assertEquals[.qns.is_namespace .qetl.source.coercers;0b;
         "a char-keyed dictionary answers 0b rather than throwing 'type"]};
 
 test_a_table_is_not_a_namespace:{[t]
@@ -55,34 +71,34 @@ test_a_function_is_not_a_namespace:{[t]
 / --- owned ----------------------------------------------------------------
 
 test_a_flat_library_namespace_is_owned:{[t]
-    .qunit.assertEquals[`.qbw in .qns.owned[];1b;"the framework's own namespace is listed"]};
+    .qunit.assertEquals[`.qetl.job.bounded in .qns.owned[];1b;"the framework's own namespace is listed"]};
 
 test_the_worker_root_is_owned:{[t]
-    .qunit.assertEquals[`.qwrk in .qns.owned[];1b;
+    .qunit.assertEquals[`.qpipe.job in .qns.owned[];1b;
         "the container is listed too - a caller asking what exists gets it"]};
 
 test_a_nested_worker_namespace_is_owned:{[t]
-    / THE test. A root-level scan finds `.qwrk and stops.
-    .qunit.assertEquals[`.qwrk.demo_deals_backfill in .qns.owned[];1b;
-        "a worker nested under .qwrk is reached, not hidden behind its parent"]};
+    / THE test. A root-level scan finds `.qpipe.job and stops.
+    .qunit.assertEquals[`.qpipe.job.demo_deals_backfill in .qns.owned[];1b;
+        "a worker nested under .qpipe.job is reached, not hidden behind its parent"]};
 
 test_every_registered_worker_has_its_namespace_listed:{[t]
     / Stated against the worker FILES rather than a hard-coded list, so a
     / worker added later is covered without editing this file.
     / .
-    / Files, and not .qbfstate.registered[], because tests register their own
+    / Files, and not .qetl.job.bounded.state.registered[], because tests register their own
     / fixture workers into that registry at RUN time - `reference`, `partial`,
-    / three `fixture_*` - and they have no namespace under .qwrk because they
+    / three `fixture_*` - and they have no namespace under .qpipe.job because they
     / have no declaration file. Reading the registry made this test pass or
     / fail on which suites happened to run first, which is ordering luck
     / rather than a property of the tree.
     / The registry, INTERSECTED with the workers this tree declares in a file.
     / Reading the registry alone made the test order-dependent; reading the
-    / files alone stopped exercising .qbfstate.registered at all, which the
+    / files alone stopped exercising .qetl.job.bounded.state.registered at all, which the
     / coverage lane noticed. Both halves matter: the registry is the thing
     / under test, the files are what separates a real worker from a fixture.
-    registered:.qbfstate.registered[] inter .testutil.etl_declaration_names["src/etl/workers"];
-    missing:registered where not {[w] (.qbw.namespace w) in .qns.owned[]} each registered;
+    registered:.qetl.job.bounded.state.registered[] inter .testutil.etl_declaration_names["src/etl/workers"];
+    missing:registered where not {[w] (.qetl.job.bounded.namespace w) in .qns.owned[]} each registered;
     .qunit.assertEquals[missing;`symbol$();
         "every registered bounded worker's namespace is enumerated"]};
 
@@ -92,7 +108,7 @@ test_kdbs_own_q_namespace_is_not_owned:{[t]
     .qunit.assertEquals[`.q in .qns.owned[];0b;"q's own namespace is not this tree's"]};
 
 test_the_names_are_fully_qualified:{[t]
-    / The root scan produced undotted names (`qbw), and a caller that passed
+    / The root scan produced undotted names (`qetl.job.bounded), and a caller that passed
     / one to `value` got the ROOT GLOBAL of that name, or a null - not the
     / namespace. Fully qualified here so there is nothing to reassemble.
     .qunit.assertEquals[all (string .qns.owned[]) like ".*";1b;
@@ -108,13 +124,13 @@ test_the_listing_is_not_empty:{[t]
 / --- functional -----------------------------------------------------------
 
 test_the_worker_root_holds_no_functions:{[t]
-    / .qwrk holds only namespaces, so a tool that measures coverage or
+    / .qpipe.job holds only namespaces, so a tool that measures coverage or
     / exports a surface has nothing to do with it.
-    .qunit.assertEquals[`.qwrk in .qns.functional[];0b;
+    .qunit.assertEquals[`.qpipe.job in .qns.functional[];0b;
         "a container of namespaces is not a functional namespace"]};
 
 test_a_nested_worker_namespace_is_functional:{[t]
-    .qunit.assertEquals[`.qwrk.demo_deals_backfill in .qns.functional[];1b;
+    .qunit.assertEquals[`.qpipe.job.demo_deals_backfill in .qns.functional[];1b;
         "the worker itself holds functions and is reported"]};
 
 test_functional_is_a_subset_of_owned:{[t]
@@ -131,7 +147,7 @@ test_functional_is_a_subset_of_owned:{[t]
 / .
 / Three namespaces in scripts/ were outside it until this test existed:
 / .cross, .markout and .posbook, the tickerplant subscriber processes, now
-/ .qsub.cross and friends. The prefix is a necessary condition, not a
+/ .qpipe.job.cross and friends. The prefix is a necessary condition, not a
 / sufficient one - those three also subscribe to a tickerplant as they load,
 / so no plain q process can load them and man.q's generator scans src/ only.
 / What the prefix buys is that the moment a tool DOES have them in
@@ -145,7 +161,7 @@ test_functional_is_a_subset_of_owned:{[t]
 / guess whether an entry is a decision or an oversight.
 outside_the_prefix:(`symbol$())!();
 outside_the_prefix[`.dqe]:"TorQ's OWN namespace - torq_metatables.q adds uqf_metatable INTO it so DQE's runquery can transport it. Renaming would break the integration, not tidy it.";
-outside_the_prefix[`.cov]:"the coverage tool, in KX's published .cov API shape. .qmatz is already the ETL coverage LEDGER, so the obvious rename collides with an unrelated namespace.";
+outside_the_prefix[`.cov]:"the coverage tool, in KX's published .cov API shape. .qetl.coverage is already the ETL coverage LEDGER, so the obvious rename collides with an unrelated namespace.";
 outside_the_prefix[`.surface]:"the contract-surface exporter, which enumerates this tree's namespaces. Inside the prefix it would export itself - a tool appearing in the artifact it produces.";
 
 / Private: every namespace declared by a file under src/ or scripts/.
@@ -177,8 +193,8 @@ test_the_subscriber_processes_are_inside_the_prefix:{[t]
     / Named specifically, because these three are what the general rule above
     / was written for and a regression here would otherwise read as a count.
     declared:distinct declared_namespaces[];
-    .qunit.assertEquals[all `.qsub.cross`.qsub.markout`.qsub.posbook in declared;1b;
-        "the tickerplant subscriber processes declare their namespaces under .qsub"]};
+    .qunit.assertEquals[all `.qpipe.job.cross`.qpipe.job.markout`.qpipe.job.posbook in declared;1b;
+        "the tickerplant subscriber processes declare their namespaces under .qpipe.job"]};
 
 / Private: the process scripts - the files TorQ starts as a process, as
 / opposed to the tools and worked examples that also live under scripts/.
@@ -231,36 +247,36 @@ test_the_exception_list_has_not_become_the_rule:{[t]
 / those directories itself, straight from disk, so it agrees with the files
 / whether or not q ever loaded them.
 
-/ Every file registered, checked as a SUBSET rather than by count. .qwrk and
-/ .qfeed are mutable: tests register their own workers and sources into them
+/ Every file registered, checked as a SUBSET rather than by count. .qpipe.job and
+/ .qpipe.source are mutable: tests register their own workers and sources into them
 / (reference_worker.q does it at load time), so a count comparison passes or
 / fails depending on which suites ran first. The property that actually
 / matters is that no file was MISSED.
 missing_declarations:{[names;registered] names except registered}
 
-/ `.qfeed.demo_deals -> `demo_deals. The prefix length is derived from the
-/ root rather than counted by hand: `.qfeed` and `.qwrk` differ by one, and
+/ `.qpipe.source.demo_deals -> `demo_deals. The prefix length is derived from the
+/ root rather than counted by hand: `.qpipe.source` and `.qpipe.job` differ by one, and
 / a hardcoded drop silently yields `feed.demo_deals`, which matches nothing
 / and fails as though the file were unregistered.
 leaf_names:{[root;names] `$(1+count string root)_/:string names}
 
 test_every_streaming_file_is_a_registered_job:{[t]
     missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/streaming"];
-        key .qstream.jobs];
+        key .qetl.job.stream.jobs];
     .qunit.assertEquals[missed; `symbol$();
         "every src/etl/streaming/*.q registers a job - one the glob missed would load nothing"]};
 
 test_every_source_file_is_a_registered_source:{[t]
     missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/sources"];
-        .nstest.leaf_names[`.qfeed; .qns.children `.qfeed]];
+        .nstest.leaf_names[`.qpipe.source; .qns.children `.qpipe.source]];
     .qunit.assertEquals[missed; `symbol$();
-        "every src/etl/sources/*.q registers under .qfeed"]};
+        "every src/etl/sources/*.q registers under .qpipe.source"]};
 
 test_every_worker_file_is_a_registered_worker:{[t]
     missed:.nstest.missing_declarations[.testutil.etl_declaration_names["src/etl/workers"];
-        .nstest.leaf_names[`.qwrk; .qns.children `.qwrk]];
+        .nstest.leaf_names[`.qpipe.job; .qns.children `.qpipe.job]];
     .qunit.assertEquals[missed; `symbol$();
-        "every src/etl/workers/*.q registers under .qwrk"]};
+        "every src/etl/workers/*.q registers under .qpipe.job"]};
 
 / ---------------------------------------------------------------------------
 / The runner's own namespace list

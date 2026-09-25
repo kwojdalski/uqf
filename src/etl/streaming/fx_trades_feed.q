@@ -1,5 +1,5 @@
 / fx_trades_feed.q - the whole of the synthetic fill feed
-/ (.qsub.fx_trades_feed).
+/ (.qpipe.job.fx_trades_feed).
 / .
 / Subscribes to nothing and publishes one `trades` row a second: a random
 / pair, side and size, priced a few pips either side of that pair's current
@@ -14,11 +14,11 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qsub.fx_trades_feed
+\d .qpipe.job.fx_trades_feed
 
-/ Where rows go. A stub until .qstream.wire points it at the tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `fx_trades_feed;
+publish:.qetl.job.stream.unwired `fx_trades_feed;
 
 / This process's own level per pair, aligned with .qsynth.pairs. Not walked:
 / this feed prices around the quote feeds' own starting levels rather than
@@ -45,11 +45,11 @@ sizes:500000 1000000 2000000 5000000f
 / @param size the fill size
 / @param slip_pips how far from the pair's level the fill printed, in pips
 / @return one fill's rows: sym, side, price, size, pip_factor
-/ @eg count .qsub.fx_trades_feed.fill_rows[0;1;1e6;0]  ->  5
+/ @eg count .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0]  ->  5
 fill_rows:{[i;side;size;slip_pips]
-    price:.qsub.fx_trades_feed.spot[i]+slip_pips%.qsub.fx_trades_feed.pip_factor[i];
+    price:.qpipe.job.fx_trades_feed.spot[i]+slip_pips%.qpipe.job.fx_trades_feed.pip_factor[i];
     (enlist .qsynth.pairs i;enlist side;enlist price;enlist size;
-        enlist .qsub.fx_trades_feed.pip_factor i)}
+        enlist .qpipe.job.fx_trades_feed.pip_factor i)}
 
 / Draw one fill and publish it. The draws are here rather than in fill_rows
 / so that the row builder stays deterministic.
@@ -58,18 +58,18 @@ on_timer:{[]
     / 1 or -1, always an atom - indexing `1 -1` with a possibly-empty vector
     / is how this produced a list instead, and .u.upd took it as two rows.
     side:1-2*rand 2;
-    .qsub.fx_trades_feed.publish[`trades;
-        .qsub.fx_trades_feed.fill_rows[i;side;.qsub.fx_trades_feed.sizes rand count .qsub.fx_trades_feed.sizes;-3+rand 7]];
+    .qpipe.job.fx_trades_feed.publish[`trades;
+        .qpipe.job.fx_trades_feed.fill_rows[i;side;.qpipe.job.fx_trades_feed.sizes rand count .qpipe.job.fx_trades_feed.sizes;-3+rand 7]];
     }
 
 \d .
 
 / Once a second, slower than the quote feeds: a fill is a rarer event than a
 / quote, and the markout job's horizons are measured in seconds.
-.qstream.define[`fx_trades_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(
+.qetl.job.stream.define[`fx_trades_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(
     `fxtradesfeed1;
     `symbol$();
     enlist `trades;
     0D00:00:01.000;
-    .qsub.fx_trades_feed.on_timer;
+    .qpipe.job.fx_trades_feed.on_timer;
     1b)];

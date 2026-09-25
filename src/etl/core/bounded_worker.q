@@ -1,9 +1,9 @@
-/ bounded_worker.q - the generic bounded-worker shell (.qbw).
+/ bounded_worker.q - the generic bounded-worker shell (.qetl.job.bounded).
 / .
 / Issue #124. demo_deals_backfill.q was 238 lines of which FOUR were
 / worker-specific - worker_name, source_name, dataset, width - and the other
 / 234 were the same glue any bounded worker needs, because that is exactly
-/ what .qbfstate / .qwrt / .qmatz / .qsrc already define. A second worker
+/ what .qetl.job.bounded.state / .qetl.job.bounded.runtime / .qetl.coverage / .qetl.source already define. A second worker
 / would have duplicated those 234 lines to change four, and then needed
 / keeping in step by hand: the framework moved four times in one day while
 / #46 was being built, and a duplicate would have fallen behind on two of
@@ -14,7 +14,7 @@
 / WHY STATE STILL LIVES IN THE WORKER'S OWN NAMESPACE
 / .
 / The obvious design is for this file to hold the state. It cannot: the contract's
-/ contract, enforced by .qbfstate.require_contract, requires
+/ contract, enforced by .qetl.job.bounded.state.require_contract, requires
 / source_version/range_from/range_to to be names in the WORKER's namespace,
 / so that "is this worker complete" stays a deterministic check rather than
 / a code-review question. Moving them here would make every worker pass the
@@ -32,7 +32,7 @@
 / lines by hand - six globals and eight one-line delegators - which was #124's
 / duplication again at a smaller scale: a fourth worker pasted the block a
 / fourth time, and the delegator list was a second copy of
-/ .qbfstate.bounded_worker_methods that nothing kept in step. Now define
+/ .qetl.job.bounded.state.bounded_worker_methods that nothing kept in step. Now define
 / writes every inherited name the worker has not defined itself into the
 / worker's namespace, from the shell's own signatures (see inherit), and a
 / worker file is its transform, its optional check and facts, and one define.
@@ -43,16 +43,16 @@
 / its define call is left alone, and run and do_window reach plan, fetch and
 / publish through the worker's namespace (see `own`) rather than calling the
 / shell's directly - which is what the first version of this file promised
-/ and did not do: its run loop called .qbw.fetch whatever the worker had
+/ and did not do: its run loop called .qetl.job.bounded.fetch whatever the worker had
 / defined, so an override was reachable from the prompt and from nowhere
 / else. A worker with a genuinely different publish path defines its own,
 / and the shell is a default rather than a framework that owns the worker.
 
-\d .qbw
+\d .qetl.job.bounded
 
-/ worker -> its configuration. `source` is the worker's registered .qsrc
+/ worker -> its configuration. `source` is the worker's registered .qetl.source
 / source, `dataset` the name coverage is recorded under, `width` its window
-/ size, `transform` the registered .qxf transform its rows go through
+/ size, `transform` the registered .qetl.transform transform its rows go through
 / between fetch and publish, and `ns` its namespace - DERIVED by define,
 / never supplied: see worker_root.
 / .
@@ -71,25 +71,25 @@ worker_cfg:(`symbol$())!();
 required_cfg:`source`dataset`width`transform
 
 / Every worker instance lives under this one namespace, as
-/ .qwrk.<worker>: .qwrk.demo_deals_backfill, .qwrk.upstream_trades_backfill.
+/ .qpipe.job.<worker>: .qpipe.job.demo_deals_backfill, .qpipe.job.upstream_trades_backfill.
 / .
 / The library's own modules are flat by convention (one file, one
 / `\d .q<abbrev>`), and workers used to follow suit - .qddbf, .qevbf,
-/ .qupbf, .qdbnbf - which put four instances of one shape beside .qbw,
-/ .qmatz and .qsrc as if they were four more frameworks, and made each
+/ .qupbf, .qdbnbf - which put four instances of one shape beside .qetl.job.bounded,
+/ .qetl.coverage and .qetl.source as if they were four more frameworks, and made each
 / instance's namespace a second name to invent, spell and keep in step with
 / the worker's registered name. Nesting them under one root separates
-/ "the framework" from "what runs on it", lets `key `.qwrk` list every
+/ "the framework" from "what runs on it", lets `key `.qpipe.job` list every
 / loaded worker, and means a worker has exactly ONE name: define derives
 / the namespace from it, so there is nothing to keep in step.
-worker_root:`.qwrk
+worker_root:`.qpipe.job
 
 / The namespace a worker's implementation lives in. The single spelling of
-/ the `.qwrk.<worker>` rule; every caller that needs the namespace goes
+/ the `.qpipe.job.<worker>` rule; every caller that needs the namespace goes
 / through here or through the `ns` key define stores from it.
 / @param worker the worker's name
-/ @return the namespace symbol, e.g. `.qwrk.demo_deals_backfill
-/ @eg .qbw.namespace `demo_deals_backfill  ->  `.qwrk.demo_deals_backfill
+/ @return the namespace symbol, e.g. `.qpipe.job.demo_deals_backfill
+/ @eg .qetl.job.bounded.namespace `demo_deals_backfill  ->  `.qpipe.job.demo_deals_backfill
 namespace:{[worker] ` sv worker_root,worker}
 
 / ------------------------------------------------------- INHERITANCE
@@ -106,21 +106,21 @@ initial_state:`source_version`range_from`range_to`handle`progress`last_batch!
 / The methods every worker gets: the contract's five, taken from the
 / contract itself so the two cannot drift, plus the three the launcher and
 / the tests call through the worker's namespace.
-inherited_methods:.qbfstate.bounded_worker_methods,`spec`run`cleanup
+inherited_methods:.qetl.job.bounded.state.bounded_worker_methods,`spec`run`cleanup
 
 / Private: the delegating lambda for one method, built from the shell
 / function's own parameter list so its signature is the shell's minus
 / `worker`. For `fetch it is
-/   {[from_ts;to_ts] .qbw.fetch[`demo_deals_backfill;from_ts;to_ts]}
-/ which is what the hand-written one used to say, and what `.qwrk.x.fetch`
+/   {[from_ts;to_ts] .qetl.job.bounded.fetch[`demo_deals_backfill;from_ts;to_ts]}
+/ which is what the hand-written one used to say, and what `.qpipe.job.x.fetch`
 / at the prompt still shows. A real lambda rather than a projection for
 / that readability, and because the niladic ones - run[], cleanup[] - have
 / no projection form: a projection with every argument supplied is a call.
 delegate:{[worker;nm]
     / value of the NAME is the function; value of the function is its
     / parse tree, whose second element is the parameter list.
-    args:1_(value value ` sv `.qbw,nm)[1];
-    value "{[",(";" sv string args),"] .qbw.",string[nm],"[",.Q.s1[worker],
+    args:1_(value value ` sv `.qetl.job.bounded,nm)[1];
+    value "{[",(";" sv string args),"] .qetl.job.bounded.",string[nm],"[",.Q.s1[worker],
         $[count args; ";",";" sv string args; ""],"]}"}
 
 / Private: give a worker namespace every inherited name it has not defined.
@@ -130,7 +130,7 @@ delegate:{[worker;nm]
 / what makes a reload safe - a worker file re-runs its own define, and the
 / state its previous run left behind is not reset under it.
 inherit:{[worker;ns]
-    have:.qbfstate.ns_names ns;
+    have:.qetl.job.bounded.state.ns_names ns;
     globals:(key initial_state) except have;
     {[ns;nm;v] (` sv ns,nm) set v}[ns;;]'[globals;initial_state globals];
     methods:inherited_methods except have;
@@ -139,7 +139,7 @@ inherit:{[worker;ns]
 
 / The partition every worker fills when it does not declare one.
 / .
-/ ` is .qmatz's "this dataset has no partition dimension" sentinel, so an
+/ ` is .qetl.coverage's "this dataset has no partition dimension" sentinel, so an
 / existing worker that names no partition keeps recording and reading exactly
 / the rows it always did. Declaring `partition` is what opts a dataset into
 / being filled by several workers at once (#185); not declaring it leaves the
@@ -174,24 +174,27 @@ optional_cfg:`check`io`facts`partition
 / Declare a worker's configuration.
 / .
 / Validated here rather than at first use, because a declaration is one
-/ literal with nothing to defer - the same reasoning .qsrc.define follows
-/ and the opposite of .qbfstate.register, whose methods appear as a file
+/ literal with nothing to defer - the same reasoning .qetl.source.define follows
+/ and the opposite of .qetl.job.bounded.state.register, whose methods appear as a file
 / loads.
 / @param worker the worker's name
 / @param decl dict of source, dataset, width, transform, and optionally
 /   check, facts, partition, io, procname (default `<worker>1) and note
 / @throws error naming every missing or malformed field at once
 define:{[worker;decl]
+    / Both execution modes share .qpipe.job, so a name cannot belong to both.
+    if[worker in key @[value;`.qetl.job.stream.jobs;{()}];
+        '"define: ",string[worker]," is already a streaming job - job names must be unique across execution modes"];
     missing:required_cfg where not required_cfg in key decl;
     if[count missing;
         '"define: ",string[worker]," is missing ",", " sv string missing];
     / The namespace is not configurable, and a supplied one is refused rather
     / than overwritten: a worker declared with `ns`.qddbf would be looked
-    / for under .qwrk.demo_deals_backfill regardless, and the author would
+    / for under .qpipe.job.demo_deals_backfill regardless, and the author would
     / learn that from a contract failure at init naming twelve missing
     / methods rather than from define naming the key.
     if[`ns in key decl;
-        '"define: ",string[worker],"'s namespace is derived - .qwrk.",string[worker]," - not configured; drop the ns key"];
+        '"define: ",string[worker],"'s namespace is derived - .qpipe.job.",string[worker]," - not configured; drop the ns key"];
     decl[`ns]:namespace worker;
     if[not 16h=abs type decl`width;
         '"define: ",string[worker],"'s width must be a timespan, e.g. 1D"];
@@ -200,8 +203,8 @@ define:{[worker;decl]
     / Validate the io manager HERE, not at first write. A worker with a
     / malformed manager should fail at declaration, not halfway through a
     / backfill having already fetched a window it is now unable to store.
-    .qio.for_cfg decl;
-    .qsrc.def decl`source;
+    .qetl.io.for_cfg decl;
+    .qetl.source.def decl`source;
     require_transform[worker;decl];
 
     / Refuse two workers filling one dataset AND PARTITION (#60, #185).
@@ -280,15 +283,15 @@ define:{[worker;decl]
 require_transform:{[worker;cfg]
     who:"define: ",string[worker];
     if[not -11h=type cfg`transform;
-        'who,"'s transform must be the name of a .qxf transform"];
-    d:.qxf.def cfg`transform;
+        'who,"'s transform must be the name of a .qetl.transform transform"];
+    d:.qetl.transform.def cfg`transform;
     if[not 1=count d`inputs;
         'who,"'s transform ",string[cfg`transform]," must read exactly one input, the fetched batch"];
     if[d`as_of;
         'who,"'s transform ",string[cfg`transform]," takes as_of, which a bounded window cannot supply"];
-    src:.qsrc.def cfg`source;
+    src:.qetl.source.def cfg`source;
     contract:flip (src`columns)!{[c] $[c within "AZ"; (); c$()]} each src`types;
-    p:.qxf.problems[contract;first value d`inputs;0b];
+    p:.qetl.transform.problems[contract;first value d`inputs;0b];
     if[count p;
         'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contract: ","; " sv p];
     }
@@ -301,16 +304,16 @@ normalised:{[cfg]
 
 / One worker's configuration, or a refusal naming it.
 / .
-/ Throws rather than returning a null for the same reason .qsrc.def
+/ Throws rather than returning a null for the same reason .qetl.source.def
 / does: a caller handed an empty dict fails later and somewhere else.
 / @param worker the defined worker's name, as a symbol
 / @return the config dict (source, dataset, width, transform, partition,
 /   and the derived ns)
 / @throws error naming the worker when define was never called for it
-/ @eg .qbw.def `demo_deals_backfill
+/ @eg .qetl.job.bounded.def `demo_deals_backfill
 def:{[worker]
     if[not worker in key worker_cfg;
-        '"def: ",string[worker]," has no configuration - call .qbw.define first"];
+        '"def: ",string[worker]," has no configuration - call .qetl.job.bounded.define first"];
     worker_cfg worker}
 
 / One worker's partition, resolved.
@@ -321,7 +324,7 @@ def:{[worker]
 / it is needed, which is what the coverage reads depend on.
 / @param worker the defined worker's name
 / @return its partition symbol, ` when it declared none
-/ @eg .qbw.partition_of `demo_deals_backfill
+/ @eg .qetl.job.bounded.partition_of `demo_deals_backfill
 partition_of:{[worker] (def worker)`partition}
 
 / ------------------------------------------------------- WORKER STATE
@@ -331,7 +334,7 @@ partition_of:{[worker] (def worker)`partition}
 / .
 / Named read_state/write_state, not get/put: `get` is a q BUILTIN (the
 / counterpart of `set`), so defining it in a namespace throws `assign at
-/ load time and aborts the rest of the file - leaving .qbw half-populated
+/ load time and aborts the rest of the file - leaving .qetl.job.bounded half-populated
 / while the enclosing script carries on. Seventh reserved-name collision in
 / this repository, after desc, tables, sv, load, var and save.
 read_state:{[worker;nm] value ` sv ((def worker)`ns),nm}
@@ -368,27 +371,27 @@ init:{[worker;run_spec]
 
     if[null run_spec`source_version;
         '"init: source_version must be set - coverage under one source release says nothing about another"];
-    .qmatz.require_interval[run_spec`range_from;run_spec`range_to];
+    .qetl.coverage.require_interval[run_spec`range_from;run_spec`range_to];
 
-    .qbfstate.register[worker;cfg`ns];
-    .qbfstate.require_contract worker;
-    .qlog.dbg[worker;"init: worker contract satisfied";enlist[`ns]!enlist cfg`ns];
+    .qetl.job.bounded.state.register[worker;cfg`ns];
+    .qetl.job.bounded.state.require_contract worker;
+    .qetl.log.dbg[worker;"init: worker contract satisfied";enlist[`ns]!enlist cfg`ns];
 
-    .qsrc.validate_fixture cfg`source;
-    .qlog.dbg[worker;"init: source fixture satisfies the contract";enlist[`source]!enlist cfg`source];
+    .qetl.source.validate_fixture cfg`source;
+    .qetl.log.dbg[worker;"init: source fixture satisfies the contract";enlist[`source]!enlist cfg`source];
 
     / Validate the ledger's shape before trusting a read of it (#60). Only
     / bites when the ledger already existed, i.e. when another process
     / created it - which is exactly when its shape is evidence rather than
     / our own assumption.
-    .qmatz.attach[];
+    .qetl.coverage.attach[];
 
     / Same reasoning one table over: create it and verify its shape
     / here, in a live path, rather than leaving a checker that never fires.
-    .qhb.attach[];
-    .qhb.beat[worker;`starting];
+    .qetl.hb.attach[];
+    .qetl.hb.beat[worker;`starting];
 
-    .qbfstate.acquire_lock worker;
+    .qetl.job.bounded.state.acquire_lock worker;
 
     / Live only when a credential is configured. An absent credential is an
     / explicit statement that this is a demo, NOT a fallback for a failed
@@ -401,20 +404,20 @@ init:{[worker;run_spec]
     / the process inherits. Not an error: no credential is the declared way
     / to run on the fixture, and a demo stack runs like that on purpose.
     / `odbc`, not `var`: var is a q builtin (variance).
-    live:.qsrc.has_credentials cfg`source;
+    live:.qetl.source.has_credentials cfg`source;
     if[not live;
-        odbc:`odbc~(.qsrc.def cfg`source)`transport;
-        .qlog.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so the secret stays off the command line";
+        odbc:`odbc~(.qetl.source.def cfg`source)`transport;
+        .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so the secret stays off the command line";
             `variable`expects`example!(
-                .qsrc.credential_var cfg`source;
+                .qetl.source.credential_var cfg`source;
                 $[odbc; "an ODBC connection string"; "host:port, or host:port:user:password"];
                 $[odbc;
                     "DRIVER=SingleStore ODBC Driver;SERVER=<host>;PORT=3306;DATABASE=<db>;UID=<user>;PWD=<password>";
                     "localhost:5010"])]];
     write_state[worker;`handle;$[live; connect worker; 0Ni]];
 
-    .qlog.register[];
-    .qlog.info[worker;"initialised";
+    .qetl.log.register[];
+    .qetl.log.info[worker;"initialised";
         `source_version`range_from`range_to`live!
         (run_spec`source_version;run_spec`range_from;run_spec`range_to;
          not null read_state[worker;`handle])];
@@ -428,11 +431,11 @@ init:{[worker;run_spec]
 / an odbc credential is a connection string.
 connect:{[worker]
     source:(def worker)`source;
-    cred:.qsrc.require_credentials source;
-    transport:(.qsrc.def source)`transport;
-    .qlog.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
+    cred:.qetl.source.require_credentials source;
+    transport:(.qetl.source.def source)`transport;
+    .qetl.log.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
     opener:$[`odbc~transport;
-        {.qodbc.open x};
+        {.qetl.io.odbc.open x};
         {hopen (hsym `$":",x;5000j)}];
     @[opener;cred;
         {[source;e] '"connect: cannot reach the ",string[source]," source (",e,") - refusing to start rather than falling back to the fixture, which would record synthetic data as covered"}[source]]}
@@ -482,12 +485,12 @@ plan:{[worker;cursor]
     / gaps all lie at or after it and the plan starts there, exactly as
     / before. When a gap lies behind it, the gap wins, because a gap is a
     / fact about the data and a cursor is a note about a previous run.
-    todo:.qwrt.remaining[cfg`dataset;cfg`partition;s`source_version;as_of;s`range_from;s`range_to];
+    todo:.qetl.job.bounded.runtime.remaining[cfg`dataset;cfg`partition;s`source_version;as_of;s`range_from;s`range_to];
     if[0=count todo; :empty_windows[]];
     / one set of windows per uncovered sub-range, then flattened - a gap in
     / the middle must not be bridged by a window spanning it.
-    ws:raze {[width;w] .qwrt.windows[w`range_from;w`range_to;width]}[cfg`width] each todo;
-    .qlog.dbg[worker;"planned";`gaps`windows`width`cursor!(count todo;count ws;cfg`width;cursor)];
+    ws:raze {[width;w] .qetl.job.bounded.runtime.windows[w`range_from;w`range_to;width]}[cfg`width] each todo;
+    .qetl.log.dbg[worker;"planned";`gaps`windows`width`cursor!(count todo;count ws;cfg`width;cursor)];
     ws}
 
 / ------------------------------------------------------- FETCH / PUBLISH
@@ -506,13 +509,13 @@ plan:{[worker;cursor]
 fetch:{[worker;from_ts;to_ts]
     cfg:def worker;
     h:read_state[worker;`handle];
-    r:.qwrt.with_retry[.qwrt.policy[];
-        {[source;h;from_ts;to_ts] last .qsrc.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts]];
-    .qlog.dbg[worker;"fetch attempted";
+    r:.qetl.job.bounded.runtime.with_retry[.qetl.job.bounded.runtime.policy[];
+        {[source;h;from_ts;to_ts] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts]];
+    .qetl.log.dbg[worker;"fetch attempted";
         `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
             $[`ok~r`state; count r`result; 0N])];
     if[`failed~r`state; :r];
-    .qsrc.validate[cfg`source;r`result];
+    .qetl.source.validate[cfg`source;r`result];
     r}
 
 / Publish a window's rows into the source's declared target.
@@ -522,13 +525,13 @@ fetch:{[worker;from_ts;to_ts]
 / range was examined and held nothing.
 publish:{[worker;batch]
     cfg:def worker;
-    t:.qsrc.def[cfg`source]`target;
-    .qio.write[.qio.for_cfg cfg;t;batch]}
+    t:.qetl.source.def[cfg`source]`target;
+    .qetl.io.write[.qetl.io.for_cfg cfg;t;batch]}
 
 / Save the cursor. Present because the contract requires it; the
-/ write goes through .qbfstate so the checkpoint's spec-binding is not
+/ write goes through .qetl.job.bounded.state so the checkpoint's spec-binding is not
 / re-implemented.
-checkpoint:{[worker;cursor] .qbfstate.save_checkpoint[worker;spec worker;cursor]}
+checkpoint:{[worker;cursor] .qetl.job.bounded.state.save_checkpoint[worker;spec worker;cursor]}
 
 / ------------------------------------------------------------------- RUN
 
@@ -543,9 +546,9 @@ run:{[worker]
     / this run materialises is attributable to it and to each other. Begun
     / before the first window and closed with the run's own outcome, so an
     / execution that dies mid-flight leaves a row reading `running` rather
-    / than leaving no trace - see .qrun's header.
+    / than leaving no trace - see .qetl.run's header.
     begin_run[worker];
-    cursor:.qbfstate.load_checkpoint[worker;spec worker];
+    cursor:.qetl.job.bounded.state.load_checkpoint[worker;spec worker];
     windows:own[worker;`plan][cursor];
     if[0=count windows;
         / "ran, found no work" is a SUCCESS, not a failure. An
@@ -553,9 +556,9 @@ run:{[worker]
         / no-op forever.
         / INF, not DBG: "the run did nothing" is the question this answers.
         s:spec worker;
-        .qlog.info[worker;"idle - every window in the range is already covered at this source_version";
+        .qetl.log.info[worker;"idle - every window in the range is already covered at this source_version";
             `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
-        .qhb.beat[worker;`idle];
+        .qetl.hb.beat[worker;`idle];
         end_run[`idle];
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
@@ -569,7 +572,7 @@ run:{[worker]
     / across two. The run then died after doing the work but before
     / recording it.
     write_state[worker;`progress;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np)];
-    .qhb.beat[worker;`running];
+    .qetl.hb.beat[worker;`running];
     do_window[worker] each windows;
     / The io manager's end-of-run step, after the LAST window and whatever
     / its outcome: a window that failed wrote nothing, but the ones that
@@ -577,36 +580,36 @@ run:{[worker]
     / runs (the HDB writer sorts and attributes its partitions here). A
     / manager with no finish - memory, discard - makes this a no-op, and a
     / dry run, which wrote nothing, gives it nothing to do.
-    .qio.finish .qio.for_cfg def worker;
+    .qetl.io.finish .qetl.io.for_cfg def worker;
     p:read_state[worker;`progress];
     result:`state`windows_completed`windows_failed`rows_published`cursor!
         ($[p[`windows_failed]>0;`partial;`completed];
          p`windows_completed;p`windows_failed;p`rows_published;p`cursor);
     / one summary line per run at INF - the aggregate a fleet view wants,
     / without the per-window noise that stays at DBG.
-    .qlog.info[worker;"run finished";result];
+    .qetl.log.info[worker;"run finished";result];
     / The terminal beat, so a finished worker does not read as wedged. The
     / per-window beat inside do_window is the one that catches a worker
     / stuck mid-window, which is the case a status file cannot show - it
     / says `running` and keeps saying it.
-    .qhb.beat[worker;result`state];
+    .qetl.hb.beat[worker;result`state];
     end_run[result`state];
     result}
 
-/ Private: open this execution's run, tolerating an absent .qrun.
+/ Private: open this execution's run, tolerating an absent .qetl.run.
 / .
-/ Wrapped for the same reason .qmatz.current_run is: run.q is not a load-time
+/ Wrapped for the same reason .qetl.coverage.current_run is: run.q is not a load-time
 / dependency of this file, and a worker loaded by one of the minimal test
 / loaders should still run. Attribution is an addition to what a run records,
 / never a precondition for running one.
-begin_run:{[worker] @[{.qrun.begin x};worker;{[e] (::)}]}
+begin_run:{[worker] @[{.qetl.run.begin x};worker;{[e] (::)}]}
 
 / Private: close this execution's run with its outcome.
 / .
 / The run's state is the worker's own result state - `completed, `partial or
 / `idle - rather than a separate vocabulary, so a reader of etl_runs and a
 / reader of the worker's log see the same word for the same outcome.
-end_run:{[state] @[{.qrun.finish x};state;{[e] (::)}]}
+end_run:{[state] @[{.qetl.run.finish x};state;{[e] (::)}]}
 
 / Private: one window, end to end. Accumulates into the worker's own
 / `progress` rather than returning, because a q lambda does not close over an
@@ -652,17 +655,17 @@ no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 
 / Private: run the worker's transform over one fetched batch.
 / .
-/ Narrowed to the contract's declared fields first. .qsrc.validate accepts a
+/ Narrowed to the contract's declared fields first. .qetl.source.validate accepts a
 / source returning MORE columns than it declares, and the transform declares
 / exactly the contract - so the extra columns are dropped here, where the
 / contract says what the job reads, rather than refused.
 / @return the transformed batch
-/ @throws whatever the transform throws, or a schema refusal from .qxf
+/ @throws whatever the transform throws, or a schema refusal from .qetl.transform
 transform_batch:{[worker;batch]
     cfg:def worker;
-    columns:(.qsrc.def cfg`source)`columns;
+    columns:(.qetl.source.def cfg`source)`columns;
     nm:cfg`transform;
-    .qxf.apply[nm;(.qxf.input_names nm)!enlist columns#batch]}
+    .qetl.transform.apply[nm;(.qetl.transform.input_names nm)!enlist columns#batch]}
 
 / Private: one window, end to end - fetch, transform, check, publish, record.
 / .
@@ -675,14 +678,14 @@ transform_batch:{[worker;batch]
 /   should continue with the next one
 do_window:{[worker;w]
     cfg:def worker;
-    .qlog.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
+    .qetl.log.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
     f:own[worker;`fetch][w`range_from;w`range_to];
     if[`failed~f`state;
         / ERR, not a throw: a failed window is terminal for that
         / window and the run continues. Recording it with the window and the
         / classified kind is what makes "which windows failed and why"
         / answerable from the log rather than from a debugger.
-        .qlog.err[worker;"window failed";
+        .qetl.log.err[worker;"window failed";
             `range_from`range_to`kind`attempts`error!
             (w`range_from;w`range_to;f`kind;f`attempts;f`error)];
         write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
@@ -693,7 +696,7 @@ do_window:{[worker;w]
     / no coverage staged, the window planned again next run.
     out:@[transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
     if[(0h=type out) and `transform_failed~first out;
-        .qlog.err[worker;"window failed transform";
+        .qetl.log.err[worker;"window failed transform";
             `range_from`range_to`transform`error!
             (w`range_from;w`range_to;cfg`transform;last out)];
         write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
@@ -713,7 +716,7 @@ do_window:{[worker;w]
     / and never a gap silently marked complete.
     bad:run_check[worker;out];
     if[count bad;
-        .qlog.err[worker;"window failed data quality";
+        .qetl.log.err[worker;"window failed data quality";
             `range_from`range_to`failures`detail!
             (w`range_from;w`range_to;count bad;.Q.s1 bad)];
         write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
@@ -724,15 +727,15 @@ do_window:{[worker;w]
     / so the batch goes through the worker's own `last_batch` global and the
     / niladic reads it. Building the argument any other way would publish
     / before the dry-run gate could suppress it.
-    r:.qwrt.finish_window[worker;cfg`dataset;cfg`partition;spec worker;
+    r:.qetl.job.bounded.runtime.finish_window[worker;cfg`dataset;cfg`partition;spec worker;
         w`range_from;w`range_to;publish_pending[worker]];
-    .qlog.dbg[worker;"window published";
+    .qetl.log.dbg[worker;"window published";
         `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
     / Materialisation metadata, recorded HERE rather than in
     / finish_window because this is the only place the batch itself is in
     / hand - finish_window receives a niladic publisher, not rows.
     record_facts[worker;cfg;w;out;r];
-    / THE PUBLICATION EVENT (.qreact). One place rows enter a dataset on this
+    / THE PUBLICATION EVENT (.qetl.reaction). One place rows enter a dataset on this
     / path, so this is where downstream work hears about it - with the range
     / in hand, rather than a timer discovering it later by diffing coverage.
     / .
@@ -743,13 +746,13 @@ do_window:{[worker;w]
     / Protected like begin_run for the same reason - react.q is not a load
     / time dependency and a minimal loader must still run a worker.
     if[not r`dry_run;
-        @[{[a] .qreact.notify_from_here . a};
+        @[{[a] .qetl.reaction.notify_from_here . a};
           (cfg`dataset;w`range_from;w`range_to);
           {[e] (::)}]];
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];
           `cursor;advanced_to[worker];w`range_to]];
-    .qhb.beat_window[worker];
+    .qetl.hb.beat_window[worker];
     1b}
 
 / Private: attach this window's metadata to the materialisation.
@@ -780,14 +783,14 @@ record_facts:{[worker;cfg;w;batch;r]
         ()!();
         @[{[f;b] f b}[cfg`facts;];batch;
           {[worker;w;e]
-            .qlog.err[worker;"facts function failed";
+            .qetl.log.err[worker;"facts function failed";
                 `range_from`range_to`error!(w`range_from;w`range_to;e)];
             ()!()}[worker;w]]];
     if[not 99h=type declared;
-        .qlog.err[worker;"facts function returned a non-dictionary";
+        .qetl.log.err[worker;"facts function returned a non-dictionary";
             `range_from`range_to!(w`range_from;w`range_to)];
         declared:()!()];
-    @[{[a] .qrun.record . a};
+    @[{[a] .qetl.run.record . a};
       (cfg`dataset;w`range_from;w`range_to;framework,declared);
       {[e] (::)}]}
 
@@ -806,7 +809,7 @@ record_facts:{[worker;cfg;w;batch;r]
 / out of the order the plan produced, which is a bug worth refusing loudly
 / rather than one the new plan[] happens to survive.
 / .
-/ So the ordering was load-bearing and unenforced. .qcont.advance already
+/ So the ordering was load-bearing and unenforced. .qetl.job.continuous.advance already
 / refuses a non-strictly-forward continuous cursor for a closely related
 / reason; this is the same invariant on the bounded path, which had a plain
 / assignment. One comparison, and the asymmetry is gone.
@@ -836,10 +839,10 @@ publish_last_batch:{[worker;unused] own[worker;`publish] read_state[worker;`last
 / release_lock is a no-op when not held.
 cleanup:{[worker]
     h:read_state[worker;`handle];
-    closer:$[`odbc~(.qsrc.def (def worker)`source)`transport;
-        .qodbc.close;
+    closer:$[`odbc~(.qetl.source.def (def worker)`source)`transport;
+        .qetl.io.odbc.close;
         {[h] @[hclose;h;::]}];
     if[not null h; closer h; write_state[worker;`handle;0Ni]];
-    .qbfstate.release_lock worker}
+    .qetl.job.bounded.state.release_lock worker}
 
 \d .

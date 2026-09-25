@@ -27,7 +27,7 @@ format:
 - `lib/torq` and the starter pack are vendored and **never edited**.
 - uqf changes three things:
   - what you write: a **job declaration**, not a process;
-  - who knows TorQ exists: **one namespace**, `.qpipe`;
+  - who knows TorQ exists: **one namespace**, `.qtorq`;
   - how you run it: **`uqs`**, in place of editing process.csv and calling
     torq.sh.
 :::::
@@ -53,8 +53,8 @@ in `scripts/` → the running stack. No q file under `src/` knows TorQ exists;
 **uqf.** Every streaming job runs the same `scripts/processes/torq_stream.q`. It
 picks its declaration by procname and wires:
 
-- subscriptions (`.qpipe.subscribe_etl`)
-- the publish seam (`.qpipe.publish`)
+- subscriptions (`.qtorq.subscribe_etl`)
+- the publish seam (`.qtorq.publish`)
 - timers and log levels
 
 It refuses to start when a table it publishes isn't defined on the plant, rather
@@ -72,7 +72,7 @@ than dropping the rows silently.
 A job calls a **publish seam**. It never calls `.u.upd`.
 
 - on TorQ, `torq_stream.q` wires the seam to the tickerplant;
-- on stock kdb+, `run_stream.q` wires it to `.qtick`;
+- on stock kdb+, `run_stream.q` wires it to `.qetl.tick`;
 - in a test, a recorder takes its place.
 
 So the business logic can be tested without starting a stack.
@@ -95,17 +95,19 @@ ports, rows and the job DAG are all derived.
 ![](../diagrams/pipeline-decision.svg){height="740"}
 :::::
 ::::: {.column width="55%"}
-**Streaming** (`.qstream.define`) runs on the plant: it subscribes, computes and
-publishes.
+**Streaming** (`.qetl.job.stream.define`) runs on the plant: it subscribes,
+computes and publishes.
 
-**Bounded** (`.qbw.define`) takes a window range, e.g. a backfill or a day's
-reload. It writes through `.qio`, **never the plant**, and records each window
-in a coverage ledger (`.qmatz`, `.qrun`). So it can resume and fill gaps.
+**Bounded** (`.qetl.job.bounded.define`) takes a window range, e.g. a backfill
+or a day's reload. It writes through `.qetl.io`, **never the plant**, and
+records each window in a coverage ledger (`.qetl.coverage`, `.qetl.run`). So it
+can resume and fill gaps.
 
 **Plain TorQ** has no bounded job. It replays the tickerplant log, or you write
 your own loader.
 
-**Normalizers** (`.qnorm`) map one vendor's schema onto the house tables.
+**Normalizers** (`.qetl.job.stream.normalizer`) map one vendor's schema onto the
+house tables.
 :::::
 :::
 
@@ -132,14 +134,14 @@ the tree. The next `uqs` command picks up either.
 
 ## Operating it: `uqs` in place of `torq.sh` {.smaller}
 
-  |             | Plain TorQ                           | uqf                                                                                                                                          |
-  | ---         | ---                                  | ---                                                                                                                                          |
-  | start       | `torq.sh start <proc>` / `start all` | `uqs start --profile fx,arbitrage`: named sets of processes                                                                                  |
-  | connections | found out at runtime                 | every profile is checked against the licence's budget (16 − 2 = 14 on the community licence; set `UQS_LICENCE_CONNECTIONS` for a larger one) |
-  | watch       | tail the log files                   | `uqs up`: starts the processes and streams every log to the console; Ctrl-C stops them                                                       |
-  | inspect     | `torq.sh summary`                    | `uqs summary` · `logs` · `conn`                                                                                                              |
-  | config      | edit the csv                         | `uqs config-set <proc> <key> <value>`, persisted and regenerated                                                                             |
-  | logging     | `.lg`: ERROR / ERR / WARN / INF      | `.qlog` on top of it: adds DBG, and key=value fields                                                                                         |
+  |             | Plain TorQ                           | uqf                                                                                                                                              |
+  | ---         | ---                                  | ---                                                                                                                                              |
+  | start       | `torq.sh start <proc>` / `start all` | `uqs start --profile fx,arbitrage`: named sets of processes                                                                                      |
+  | connections | found out at runtime                 | every profile is checked against the licence's budget (16 − 2 = 14 on the community licence; set `UQS_LICENCE_CONNECTIONS` for a larger one)     |
+  | watch       | tail the log files                   | `uqs up`: starts the processes and streams every log to the console; Ctrl-C stops them                                                           |
+  | inspect     | `torq.sh summary`                    | `uqs summary` · `logs` · `conn`                                                                                                                  |
+  | config      | edit the csv                         | `uqs config-set <proc> <key> <value>`, persisted and regenerated                                                                                 |
+  | logging     | `.lg`: ERROR / ERR / WARN / INF      | `.qetl.log` on top of it: adds DBG, and key=value fields                                                                                         |
 
   : {tbl-colwidths="[12,33,55]"}
 

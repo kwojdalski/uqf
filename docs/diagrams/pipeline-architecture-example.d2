@@ -120,17 +120,17 @@ sources: "1 · sources — each arrives in its own market's shape" {
   fx: "FX venues\nfx_feed · quotes_feed\nfx_trades_feed · fx_orders_feed\nsynthetic here, an adapter in production" { class: source }
   crypto: "crypto venues\ncryptorust's two kdb recorders,\nor crypto_mock standing in" { class: source }
   databento: "Databento MBP-10\ndatabento_feed.py, in Python\noutside q entirely" { class: source }
-  history: "history\nbounded workers, .qbw\nODBC or an upstream q" { class: source }
+  history: "history\nbounded workers, .qetl.job.bounded\nODBC or an upstream q" { class: source }
 }
 
-plant: "2 · the tickerplant — TorQ's stp1, or .qtick on stock kdb+" {
+plant: "2 · the tickerplant — TorQ's stp1, or .qetl.tick on stock kdb+" {
   class: band
   grid-columns: 1
 
   tp: "TICKERPLANT\nevery table passes through here, twice\na job SUBSCRIBES to one and PUBLISHES another\n.u.upd stamps time · keyed tables refused" { class: plant }
 }
 
-normalize: "3 · normalizers — the first waist: one shape from many (.qnorm)" {
+normalize: "3 · normalizers — the first waist: one shape from many (.qetl.job.stream.normalizer)" {
   class: band
   grid-columns: 3
   grid-gap: 20
@@ -148,7 +148,7 @@ engines: "4 · engines — subscribe, hold state, republish" {
   posbook: "posbook\nexecutions + marks → position\n.qpos, FX and crypto in one book" { class: job }
   fxpos: "fx_positions\norders → fx_position · fx_limit_breach\n.qdesk exposure, .qlimit caps" { class: job }
   markout: "markout\ntrades + quote → execution_quality\n.qexec, at horizons on a timer" { class: job }
-  superbook: "superbook\nmarket_data → superbook\n.qsub.superbook merges\nacross sources" { class: job }
+  superbook: "superbook\nmarket_data → superbook\n.qpipe.job.superbook merges\nacross sources" { class: job }
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
   reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_book → mkt_orderbook" { class: job }
 }
@@ -159,7 +159,7 @@ store: "5 · storage" {
   grid-gap: 20
 
   db: "rdb · hdb\ntoday in memory,\nEOD writedown to disk" { class: store }
-  ledger: "etl_coverage\nwhat a backfill published, bitemporally\n.qmatz · .qrun" { class: store }
+  ledger: "etl_coverage\nwhat a backfill published, bitemporally\n.qetl.coverage · .qetl.run" { class: store }
 }
 
 ondemand: "6 · on demand — pure functions over whatever the store holds" {
@@ -186,7 +186,7 @@ surfaces: "7 · surfaces" {
 sources.fx -> plant.tp
 sources.crypto -> plant.tp
 sources.databento -> plant.tp
-sources.history -> store.ledger: "writes through .qio, NEVER via the plant -\nand records what it covered" {
+sources.history -> store.ledger: "writes through .qetl.io, NEVER via the plant -\nand records what it covered" {
   style.stroke: "#a8762f"
   style.stroke-width: 2
 }

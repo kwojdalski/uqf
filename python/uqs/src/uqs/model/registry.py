@@ -1,8 +1,8 @@
 """The process registry: one Pipeline per uqf process, DERIVED from q.
 
 A process is declared where its code is. Every streaming job
-(`.qstream.define`/`.qnorm.define` under src/etl/streaming/) and every
-bounded worker (`.qbw.define` under src/etl/workers/) names the process that
+(`.qetl.job.stream.define`/`.qetl.job.stream.normalize` under src/etl/streaming/) and every
+bounded worker (`.qetl.job.bounded.define` under src/etl/workers/) names the process that
 runs it, the tables it reads and writes, whether it starts with the stack and
 why - see model/declarations.py. This module turns those declarations into
 Pipelines; model/pipelines.py derives the rows, offsets and constants.
@@ -139,8 +139,8 @@ def _pipeline(d: Declaration, table: str | None, offset: int) -> Pipeline:
             procname=d.procname,
             script=BACKFILL_RUNNER_SCRIPT,
             kind=d.kind,
-            # .qpipe.reload_hdb: a backfill writes into the HDB, then tells it.
-            loads_qpipe=True,
+            # .qtorq.reload_hdb: a backfill writes into the HDB, then tells it.
+            loads_qtorq=True,
             worker=d.name,
             startwithall="0",
             offset=offset,
@@ -150,7 +150,7 @@ def _pipeline(d: Declaration, table: str | None, offset: int) -> Pipeline:
         procname=d.procname,
         script=STREAM_RUNNER_SCRIPT,
         kind=d.kind,
-        loads_qpipe=True,
+        loads_qtorq=True,
         table=table,
         # Deferred rather than copied: the edges are resolved from the same
         # declaration by pipeline_edges, which RAISES when there is none to

@@ -66,7 +66,7 @@ def _regenerate_derived(repo_root: Path) -> list[subprocess.CompletedProcess[str
 def _unpartitioned_workers_filling(repo_root: Path, dataset: str) -> list[str]:
     """Workers that already fill `dataset` without declaring a partition.
 
-    `.qbw.define` refuses two workers on one dataset AND partition (#60,
+    `.qetl.job.bounded.define` refuses two workers on one dataset AND partition (#60,
     #185), and a scaffolded worker declares none - so a second one on such a
     dataset is a tree that no longer LOADS. Caught here, before anything is
     written, rather than as a bare error from inside a declaration.
@@ -74,7 +74,7 @@ def _unpartitioned_workers_filling(repo_root: Path, dataset: str) -> list[str]:
     found = []
     for path in sorted((repo_root / WORKER_DIR).glob("*.q")):
         for fn, name, fields in declaration_calls(path.read_text()):
-            if fn != "qbw.define":
+            if fn != "qetl.job.bounded.define":
                 continue
             if symbols(fields.get("dataset", "")) == (dataset,) and "partition" not in fields:
                 found.append(name)
@@ -187,7 +187,8 @@ def new_job(
                 _die(
                     UqsError(
                         f"dataset {dataset!r} is already filled by {', '.join(claimed)} with no "
-                        "partition, and .qbw.define refuses two workers on one dataset and "
+                        "partition, and .qetl.job.bounded.define refuses two workers "
+                        "on one dataset and "
                         "partition - pick another --dataset, or give both workers a partition"
                     )
                 )

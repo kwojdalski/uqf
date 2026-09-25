@@ -16,7 +16,7 @@ Airflow fact — a retry count, a queue position — from them, because that is
 exactly the cross-layer inference the split forbids. A caller wanting those must
 ask Airflow.
 
-The format is defined by ``.qstatus.write_status`` in
+The format is defined by ``.qetl.status.write_status`` in
 ``src/etl/core/status.q``, not inherited from canonical: this tree has no
 Airflow provider to be compatible with. The two sides
 are kept honest by ``test_status.py``, which asserts this reader's field set
@@ -38,7 +38,7 @@ from uqf_frontend.errors import ValidationFailed
 FILENAME_PREFIX = "airflow_status_"
 FILENAME_SUFFIX = ".txt"
 
-#: The lifecycle states ``.qstatus.status_states`` defines. `idle` and
+#: The lifecycle states ``.qetl.status.status_states`` defines. `idle` and
 #: `completed` are both successful terminal outcomes and must not be
 #: conflated: "ran, found no work" is not "ran, did work", and neither is a
 #: failure. An orchestrator that cannot tell them apart retries a successful
@@ -113,7 +113,7 @@ def read_dir(directory: Path | None) -> tuple[list[WorkerStatus], list[dict[str,
     if directory is None:
         raise ValidationFailed(
             "backfill status needs UQF_FRONTEND_STATUS_DIR set to the directory "
-            "q writes status files into (see .qstatus.status_dir in "
+            "q writes status files into (see .qetl.status.status_dir in "
             "src/etl/core/status.q, which honours UQFSTATUSDIR)"
         )
     if not directory.is_dir():

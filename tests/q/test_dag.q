@@ -1,25 +1,25 @@
 / test_dag.q - the job graph: inputs, outputs, ordering and rendering
 / (.dagtest).
 / .
-/ setUp resets the registry before EVERY test, because .qdag.jobs is global
+/ setUp resets the registry before EVERY test, because .qetl.dag.jobs is global
 / and a test that registered a cycle would otherwise leave every later test
 / ordering an unorderable graph. test_source_contract's setUp once wiped the
 / whole source registry and broke 21 tests in other files; the difference
-/ here is that .qdag.jobs belongs to no other suite, so resetting it is
+/ here is that .qetl.dag.jobs belongs to no other suite, so resetting it is
 / contained. The adoption tests rebuild from the real registries and then
 / reset like everything else.
 
 \d .dagtest
 
-setUp_empty_graph:{[] .qdag.reset[];}
+setUp_empty_graph:{[] .qetl.dag.reset[];}
 
 / A small three-job chain used by most tests:
 /   feed -> quotes -> cross -> cross_rates -> report
 / with report also reading external_deals, which nothing produces.
 chain:{[]
-    .qdag.register[`feed;`kind`inputs`outputs!(`stream;`$();`quotes)];
-    .qdag.register[`cross;`kind`inputs`outputs!(`stream;`quotes;`cross_rates)];
-    .qdag.register[`report;
+    .qetl.dag.register[`feed;`kind`inputs`outputs!(`stream;`$();`quotes)];
+    .qetl.dag.register[`cross;`kind`inputs`outputs!(`stream;`quotes;`cross_rates)];
+    .qetl.dag.register[`report;
         `kind`inputs`outputs!(`bounded;`cross_rates`external_deals;`report_tbl)];
     ()}
 
@@ -27,7 +27,7 @@ chain:{[]
 
 test_a_registered_job_reports_its_spec:{[t]
     chain[];
-    .qunit.assertEquals[(.qdag.def[`cross])`inputs;enlist `quotes;
+    .qunit.assertEquals[(.qetl.dag.def[`cross])`inputs;enlist `quotes;
         "a job's declared inputs come back as given"]};
 
 test_an_atom_is_normalised_to_a_vector:{[t]
@@ -35,55 +35,55 @@ test_an_atom_is_normalised_to_a_vector:{[t]
     / a consumer doing `first x` or `count x` on it gets 1 and the symbol
     / itself rather than a one-element list. Normalising once at
     / registration means no consumer has to remember - the same fix
-    / .qsrc.define applies to row_key.
-    .qdag.register[`solo;`kind`inputs`outputs!(`stream;`one_table;`another)];
-    d:.qdag.def `solo;
+    / .qetl.source.define applies to row_key.
+    .qetl.dag.register[`solo;`kind`inputs`outputs!(`stream;`one_table;`another)];
+    d:.qetl.dag.def `solo;
     .qunit.assertEquals[(type d`inputs;count d`inputs);(11h;1);
         "a single input symbol is stored as a one-element symbol vector"]};
 
 test_an_empty_input_list_survives:{[t]
-    .qdag.register[`root;`kind`inputs`outputs!(`continuous;`$();`some_tbl)];
-    .qunit.assertEquals[count (.qdag.def[`root])`inputs;0;
+    .qetl.dag.register[`root;`kind`inputs`outputs!(`continuous;`$();`some_tbl)];
+    .qunit.assertEquals[count (.qetl.dag.def[`root])`inputs;0;
         "a job with no inputs is a root, not an error"]};
 
 test_a_missing_spec_key_is_refused:{[t]
-    .qunit.assertError[{.qdag.register[`broken;x]};
+    .qunit.assertError[{.qetl.dag.register[`broken;x]};
         `kind`inputs!(`stream;`a);
         "a spec without outputs is refused at registration"]};
 
 test_an_unknown_kind_is_refused:{[t]
     / Closed vocabulary: `streaming` for `stream` would otherwise create a
     / silent new category every consumer has to learn about.
-    .qunit.assertError[{.qdag.register[`broken;x]};
+    .qunit.assertError[{.qetl.dag.register[`broken;x]};
         `kind`inputs`outputs!(`streaming;`a;`b);
         "a kind outside the declared set is refused"]};
 
 test_registering_twice_replaces:{[t]
-    .qdag.register[`j;`kind`inputs`outputs!(`stream;`a;`b)];
-    .qdag.register[`j;`kind`inputs`outputs!(`stream;`c;`d)];
-    .qunit.assertEquals[(.qdag.def[`j])`inputs;enlist `c;
+    .qetl.dag.register[`j;`kind`inputs`outputs!(`stream;`a;`b)];
+    .qetl.dag.register[`j;`kind`inputs`outputs!(`stream;`c;`d)];
+    .qunit.assertEquals[(.qetl.dag.def[`j])`inputs;enlist `c;
         "reloading a file replaces its registration rather than failing"]};
 
 test_an_unregistered_job_is_refused:{[t]
-    .qunit.assertError[{.qdag.def x};`no_such_job;
+    .qunit.assertError[{.qetl.dag.def x};`no_such_job;
         "asking for a job nothing registered names it rather than returning a null"]};
 
 / --- the graph ----------------------------------------------------------
 
 test_producers_and_consumers_of_a_table:{[t]
     chain[];
-    .qunit.assertEquals[(.qdag.producers[`quotes];.qdag.consumers[`quotes]);
+    .qunit.assertEquals[(.qetl.dag.producers[`quotes];.qetl.dag.consumers[`quotes]);
         (enlist `feed;enlist `cross);
         "a table knows which job writes it and which reads it"]};
 
 test_a_table_nobody_writes_has_no_producer:{[t]
     chain[];
-    .qunit.assertEquals[count .qdag.producers[`external_deals];0;
+    .qunit.assertEquals[count .qetl.dag.producers[`external_deals];0;
         "an external input has no producer, which is not an error"]};
 
 test_edges_are_derived_not_declared:{[t]
     chain[];
-    e:.qdag.edges[];
+    e:.qetl.dag.edges[];
     real:select upstream, tbl, downstream from e where not null upstream;
     .qunit.assertEquals[count real;2;
         "two producer-to-consumer edges fall out of three jobs' declarations"]};
@@ -93,14 +93,14 @@ test_an_external_input_still_gets_an_edge:{[t]
     / silently omitting it - an omitted row would make `report` look like a
     / root that reads nothing.
     chain[];
-    e:.qdag.edges[];
+    e:.qetl.dag.edges[];
     ext:select from e where null upstream;
     .qunit.assertEquals[(count ext;first ext`tbl);(1;`external_deals);
         "an input nothing produces appears as an edge with no upstream"]};
 
 test_external_inputs_and_sinks:{[t]
     chain[];
-    .qunit.assertEquals[(.qdag.external_inputs[];.qdag.sinks[]);
+    .qunit.assertEquals[(.qetl.dag.external_inputs[];.qetl.dag.sinks[]);
         (enlist `external_deals;enlist `report_tbl);
         "where data enters and where it comes to rest"]};
 
@@ -108,47 +108,47 @@ test_external_inputs_and_sinks:{[t]
 
 test_topological_order_respects_dependencies:{[t]
     chain[];
-    .qunit.assertEquals[.qdag.topological[];`feed`cross`report;
+    .qunit.assertEquals[.qetl.dag.topological[];`feed`cross`report;
         "every job is ordered after everything it reads from"]};
 
 test_layers_group_jobs_that_can_run_together:{[t]
     / Two independent feeds must land in ONE layer, not two - the parallelism
     / is the question a DAG is usually asked, and an order alone hides it.
-    .qdag.register[`feed_a;`kind`inputs`outputs!(`stream;`$();`ta)];
-    .qdag.register[`feed_b;`kind`inputs`outputs!(`stream;`$();`tb)];
-    .qdag.register[`join;`kind`inputs`outputs!(`stream;`ta`tb;`tc)];
-    l:.qdag.layers[];
+    .qetl.dag.register[`feed_a;`kind`inputs`outputs!(`stream;`$();`ta)];
+    .qetl.dag.register[`feed_b;`kind`inputs`outputs!(`stream;`$();`tb)];
+    .qetl.dag.register[`join;`kind`inputs`outputs!(`stream;`ta`tb;`tc)];
+    l:.qetl.dag.layers[];
     .qunit.assertEquals[(count l;count first l;count last l);(2;2;1);
         "two independent roots share a layer, and their consumer follows"]};
 
 test_a_cycle_is_refused_and_names_the_jobs:{[t]
     / A DAG generator that returned SOME order for a cyclic graph would be
     / worse than one that refused: the order would look runnable.
-    .qdag.register[`a;`kind`inputs`outputs!(`stream;`tb;`ta)];
-    .qdag.register[`b;`kind`inputs`outputs!(`stream;`ta;`tb)];
-    .qunit.assertError[{[u] .qdag.topological[]};::;
+    .qetl.dag.register[`a;`kind`inputs`outputs!(`stream;`tb;`ta)];
+    .qetl.dag.register[`b;`kind`inputs`outputs!(`stream;`ta;`tb)];
+    .qunit.assertError[{[u] .qetl.dag.topological[]};::;
         "a cycle is refused rather than silently ordered"]};
 
 test_a_lone_job_orders_fine:{[t]
-    .qdag.register[`only;`kind`inputs`outputs!(`bounded;`$();`out)];
-    .qunit.assertEquals[.qdag.topological[];enlist `only;
+    .qetl.dag.register[`only;`kind`inputs`outputs!(`bounded;`$();`out)];
+    .qunit.assertEquals[.qetl.dag.topological[];enlist `only;
         "a graph with one job and no edges still orders"]};
 
 test_an_empty_graph_orders_to_nothing:{[t]
-    .qunit.assertEquals[count .qdag.topological[];0;
+    .qunit.assertEquals[count .qetl.dag.topological[];0;
         "no jobs means no order, rather than a throw"]};
 
 / --- rendering ----------------------------------------------------------
 
 test_d2_names_each_edge_with_its_table:{[t]
     chain[];
-    m:.qdag.d2[];
+    m:.qetl.dag.d2[];
     .qunit.assertTrue[m like "*feed -> cross: quotes*";
         "the diagram labels each edge with the table that flows along it"]};
 
 test_d2_marks_an_external_input:{[t]
     chain[];
-    .qunit.assertTrue[(.qdag.d2[]) like "*ext_external_deals*";
+    .qunit.assertTrue[(.qetl.dag.d2[]) like "*ext_external_deals*";
         "data entering the system is drawn as its own node"]};
 
 test_d2_declares_every_external_node_before_using_it:{[t]
@@ -158,7 +158,7 @@ test_d2_declares_every_external_node_before_using_it:{[t]
     / mermaid version needed no such line, which is why this test is new
     / rather than renamed.
     chain[];
-    lines:"\n" vs .qdag.d2[];
+    lines:"\n" vs .qetl.dag.d2[];
     / `ss` rather than `like "ext_* -> *"`: on this build a pattern with an
     / INTERIOR `*` alongside another one returns `nyi`, not false - `"ext_*"`
     / and `"*->*"` are both fine, `"ext_* -> *"` throws. A `like` inside an
@@ -180,7 +180,7 @@ test_d2_declares_every_external_node_before_using_it:{[t]
 
 test_json_carries_the_order_and_the_edges:{[t]
     chain[];
-    j:.qdag.to_json[];
+    j:.qetl.dag.to_json[];
     .qunit.assertTrue[(j like "*\"order\"*") and j like "*\"external_inputs\"*";
         "a viz tool gets the order and the entry points without parsing d2"]};
 
@@ -191,11 +191,11 @@ test_workers_are_adopted_from_their_own_declarations:{[t]
     / its remote table and its target, so the worker restates nothing. A
     / worker that declared its own inputs could disagree with the source it
     / actually reads.
-    adopted:.qdag.adopt_workers[];
+    adopted:.qetl.dag.adopt_workers[];
     .qunit.assertTrue[0<count adopted;
         "the shipped bounded workers register themselves into the graph"]};
 
-/ EVERY adopted worker, not `first key .qbw.worker_cfg`.
+/ EVERY adopted worker, not `first key .qetl.job.bounded.worker_cfg`.
 / .
 / Two reasons, and the second is why this test spent a while red. A
 / dictionary's key order is its registration order, so `first` names whichever
@@ -212,18 +212,18 @@ test_workers_are_adopted_from_their_own_declarations:{[t]
 / saying the graph was wrong when the graph was right. A missing key must
 / fail as a missing key.
 test_an_adopted_worker_reads_its_sources_table_and_writes_its_target:{[t]
-    .qdag.adopt_workers[];
-    workers:key .qbw.worker_cfg;
+    .qetl.dag.adopt_workers[];
+    workers:key .qetl.job.bounded.worker_cfg;
     .qunit.assertTrue[0<count workers;"there are adopted workers to check"];
     {[w]
-        cfg:.qbw.worker_cfg w;
-        src:.qsrc.def cfg`source;
+        cfg:.qetl.job.bounded.worker_cfg w;
+        src:.qetl.source.def cfg`source;
         .qunit.assertTrue[all `table_name`target in key src;
             "source ",string[cfg`source]," declares table_name and target - if this",
                 " fails, a rename reached the contract and not this test"];
-        d:.qdag.def w;
+        d:.qetl.dag.def w;
         .qunit.assertEquals[(d`inputs;d`outputs);
-            ((),.qdag.external_ref[cfg`source;src`table_name];(),src`target);
+            ((),.qetl.dag.external_ref[cfg`source;src`table_name];(),src`target);
             string[w]," reads its source's table (source-qualified) and writes its target"]
      } each workers;};
 
@@ -237,12 +237,12 @@ test_the_real_graph_is_acyclic:{[t]
     / among both workers. Correctly, given what it had been told.
     / .
     / A graph nobody has ordered is a graph whose model has not been tested.
-    r:.qdag.adopt_all[];
-    .qunit.assertTrue[0<count .qdag.topological[];
+    r:.qetl.dag.adopt_all[];
+    .qunit.assertTrue[0<count .qetl.dag.topological[];
         "the whole shipped job graph orders, so it is genuinely a DAG"]};
 
 test_the_real_graph_has_every_declaring_registry_in_it:{[t]
-    r:.qdag.adopt_all[];
+    r:.qetl.dag.adopt_all[];
     .qunit.assertTrue[(0<count r`workers) and 0<count r`pipelines;
         "bounded workers and the generated streaming processes both land in one graph"]};
 
@@ -250,8 +250,8 @@ test_a_workers_remote_table_is_a_different_node_from_its_target:{[t]
     / The fix, asserted directly rather than only via the acyclic test - so
     / a future change that reverted the qualification fails HERE, naming the
     / reason, rather than failing as a mysterious cycle.
-    .qdag.adopt_workers[];
-    d:.qdag.def `demo_deals_backfill;
+    .qetl.dag.adopt_workers[];
+    d:.qetl.dag.def `demo_deals_backfill;
     .qunit.assertTrue[not any (d`inputs) in d`outputs;
         "a remote source table and a local target with the same name are distinct nodes"]};
 
@@ -261,7 +261,7 @@ test_external_ref_keeps_both_halves:{[t]
     / `event_tape@demo_deals is NOT a symbol literal: @ is q's APPLY
     / operator, so that parses as `event_tape applied to demo_deals and
     / errors with a bare backtick. The cast form is the only way to write it.
-    .qunit.assertEquals[.qdag.external_ref[`demo_deals;`event_tape];`$"event_tape@demo_deals";
+    .qunit.assertEquals[.qetl.dag.external_ref[`demo_deals;`event_tape];`$"event_tape@demo_deals";
         "an external node names the table and the source it lives on"]};
 
 test_a_d2_id_contains_only_safe_characters:{[t]
@@ -271,20 +271,20 @@ test_a_d2_id_contains_only_safe_characters:{[t]
     / way. Under d2 a dot is worse still: `a.b` is valid there, and means `b`
     / nested inside `a`, so an unsanitised dot would draw a DIFFERENT graph
     / rather than refusing to draw.
-    .qdag.adopt_all[];
+    .qetl.dag.adopt_all[];
     / Check the generated id directly rather than pattern-matching the whole
     / diagram: safe_id is the thing under test, and a `like` over the joined
     / output was both fragile and, in its first form, an error.
-    bad:(.qdag.safe_id `$"event_tape@demo_deals") where not
-        (.qdag.safe_id `$"event_tape@demo_deals") in .qdag.id_chars;
+    bad:(.qetl.dag.safe_id `$"event_tape@demo_deals") where not
+        (.qetl.dag.safe_id `$"event_tape@demo_deals") in .qetl.dag.id_chars;
     .qunit.assertEquals[count bad;0;
         "every character of a node id is one d2 accepts"]};
 
 test_adopted_feeders_are_roots:{[t]
-    .qdag.adopt_feeders[];
-    fs:key .qcont.feeds;
+    .qetl.dag.adopt_feeders[];
+    fs:key .qetl.job.continuous.feeds;
     if[0=count fs; :.qunit.assertTrue[1b;"no feeders registered in this suite"]];
-    .qunit.assertEquals[count (.qdag.def first fs)`inputs;0;
+    .qunit.assertEquals[count (.qetl.dag.def first fs)`inputs;0;
         "a continuous feeder tails a live feed, so it declares no inputs"]};
 
 \d .

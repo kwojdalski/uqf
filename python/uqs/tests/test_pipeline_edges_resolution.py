@@ -1,6 +1,6 @@
 """Tests for edges the registry defers to a job's own q declaration.
 
-WHY THIS FILE EXISTS. A streaming job's `.qstream.define` already names the
+WHY THIS FILE EXISTS. A streaming job's `.qetl.job.stream.define` already names the
 tables it subscribes to and publishes; the `Pipeline` entry used to name them
 again, and `verify_pipeline_edges` existed to check the two copies agreed -
 a check that only had a job to do because the duplication existed.

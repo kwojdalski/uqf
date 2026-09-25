@@ -1,4 +1,4 @@
-/ log.q - the logging contract for ETL workers (.qlog).
+/ log.q - the logging contract for ETL workers (.qetl.log).
 / .
 / Answers the question bank: "bare .lg.o/.lg.e, or a levelled layer on
 / top?" A levelled layer, and a thin one - four functions over TorQ's own
@@ -19,7 +19,7 @@
 /      a fourth. Without one, diagnostic detail is either always on (and a
 /      million-row backfill floods its log with per-window lines) or never
 /      on (and a stuck worker gives you nothing). DBG is registered in
-/      outmap at 0 - off - and switched on per process with .qlog.debug[].
+/      outmap at 0 - off - and switched on per process with .qetl.log.debug[].
 / .
 /   2. Structure. A worker logging "window done" is useless in aggregate;
 /      a worker logging window=[from;to) rows=1234 is greppable across a
@@ -37,7 +37,7 @@
 / in any process that loads this file before torq.q - and q's late binding
 / of names is precisely what makes the call-time check cheap.
 
-\d .qlog
+\d .qetl.log
 
 / Level names, in severity order. DBG is this file's addition; the other
 / three are TorQ's own, kept identical so outmap and pubmap apply unchanged.
@@ -138,7 +138,7 @@ line:{[level;id;text;fields]
 / @param id the worker or component, as a symbol
 / @param text a short fixed message - what happened, not the values
 / @param fields a dict of the values, rendered k=v after the text
-/ @eg .qlog.info[`demo_deals_backfill;"window published";
+/ @eg .qetl.log.info[`demo_deals_backfill;"window published";
 /        `range_from`range_to`rows!(2026.09.11D00:00;2026.09.12D00:00;1234)]
 dbg:{[id;text;fields]  line[`DBG;id;text;fields]}
 info:{[id;text;fields] line[`INF;id;text;fields]}

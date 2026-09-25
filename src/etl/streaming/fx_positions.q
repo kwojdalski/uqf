@@ -1,5 +1,5 @@
 / fx_positions.q - the whole of the FX positions service
-/ (.qsub.fx_positions).
+/ (.qpipe.job.fx_positions).
 / .
 / Subscribes to `orders`, nets every FILLED one into a running book keyed
 / on (sym, book, product), and on a timer publishes two things: a
@@ -8,7 +8,7 @@
 / .
 / Modelled on Data Intellect's TorQ FX positions engine, built on this
 / repository's own machinery instead - and it runs with no TorQ at all,
-/ through .qtick and scripts/processes/run_stream.q.
+/ through .qetl.tick and scripts/processes/run_stream.q.
 / .
 / WHY IT SNAPSHOTS ON A TIMER RATHER THAN PER BATCH. A position is a
 / STATE, and republishing the whole book on every order would write a
@@ -18,7 +18,7 @@
 / is for. Breaches go out on the same timer for the same reason, and are
 / throttled on top of it (see .qlimit.throttle).
 / .
-/ WHY IT IS NOT posbook. .qsub.posbook answers "what did we make", per
+/ WHY IT IS NOT posbook. .qpipe.job.posbook answers "what did we make", per
 / sym, at weighted-average cost, marked to mid. This answers "what are we
 / holding", along the dimensions a desk reports on, with no marks and no
 / P&L. Same fills, different question - see src/portfolio/desk_positions.q
@@ -31,7 +31,7 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - the plant stamps it (invariant 1).
 
-\d .qsub.fx_positions
+\d .qpipe.job.fx_positions
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -71,17 +71,17 @@ filled_status:`filled
 / @param batch the orders that arrived, any statuses
 / @return the new desk book, unkeyed
 net_orders:{[book;batch]
-    filled:select from batch where order_status=.qsub.fx_positions.filled_status;
+    filled:select from batch where order_status=.qpipe.job.fx_positions.filled_status;
     updated:.qdesk.apply_fills[
-        .qsub.fx_positions.dimensions xkey book;
+        .qpipe.job.fx_positions.dimensions xkey book;
         select sym, book, product, side, size, price from filled];
     `sym`book`product xasc 0!updated}
 
 / --------------------------------------------------------------- THE JOB
 
-/ Where rows go. A stub until .qstream.wire points it at a tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (a runner) or at a recorder (a test).
-publish:.qstream.unwired `fx_positions;
+publish:.qetl.job.stream.unwired `fx_positions;
 
 / The running book, keyed on its dimensions. Only ever changed through
 / net_orders, which has expected tables.
@@ -116,7 +116,7 @@ alerts:.qlimit.no_alerts[];
 / @param limits the limits table, scoped on sym, book and product
 / @return the number of limits loaded
 / @throws error naming a malformed limit, or a scope column that is not one of this book's dimensions
-/ @eg .qsub.fx_positions.load_limits[([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6; severity:enlist `hard)] -> 1
+/ @eg .qpipe.job.fx_positions.load_limits[([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6; severity:enlist `hard)] -> 1
 load_limits:{[limits]
     .qlimit.require_limits limits;
     / .qlimit cannot check this: it is not told which columns are meant to
@@ -125,11 +125,11 @@ load_limits:{[limits]
     / and a limit that matches nothing is exactly the failure that looks
     / like a quiet day.
     scope:.qlimit.scope_cols limits;
-    stray:scope where not scope in .qsub.fx_positions.dimensions;
+    stray:scope where not scope in .qpipe.job.fx_positions.dimensions;
     if[count stray;
         '"load_limits: ",(", " sv string stray)," is not a dimension of this book, so a limit carrying it would be scoped on something no position has - the dimensions are ",
-         ", " sv string .qsub.fx_positions.dimensions];
-    `.qsub.fx_positions.limits set limits;
+         ", " sv string .qpipe.job.fx_positions.dimensions];
+    `.qpipe.job.fx_positions.limits set limits;
     count limits}
 
 / Net one batch of orders into the book.
@@ -143,10 +143,10 @@ load_limits:{[limits]
 on_batch:{[t;x]
     if[not t=`orders; :()];
     if[0=count x; :()];
-    updated:.qxf.apply[`fx_positions;`book`batch!(
-        0!.qsub.fx_positions.book;
+    updated:.qetl.transform.apply[`fx_positions;`book`batch!(
+        0!.qpipe.job.fx_positions.book;
         select time, order_id, sym, book, product, side, size, price, order_status from x)];
-    `.qsub.fx_positions.book set `sym`book`product xkey updated;
+    `.qpipe.job.fx_positions.book set `sym`book`product xkey updated;
     }
 
 / The breaches this book is in, as of now, after throttling.
@@ -158,11 +158,11 @@ on_batch:{[t;x]
 / @param now the time to throttle against
 / @return the breaches to publish, possibly none
 fresh_breaches:{[now]
-    if[0=count .qsub.fx_positions.limits; :0#.qsub.fx_positions.fx_limit_breach];
-    measured:.qlimit.measure[.qsub.fx_positions.book;.qsub.fx_positions.policed];
-    breaches:.qlimit.evaluate[measured;.qsub.fx_positions.limits];
-    r:.qlimit.throttle[.qsub.fx_positions.alerts;breaches;now;.qsub.fx_positions.alert_period];
-    `.qsub.fx_positions.alerts set r`state;
+    if[0=count .qpipe.job.fx_positions.limits; :0#.qpipe.job.fx_positions.fx_limit_breach];
+    measured:.qlimit.measure[.qpipe.job.fx_positions.book;.qpipe.job.fx_positions.policed];
+    breaches:.qlimit.evaluate[measured;.qpipe.job.fx_positions.limits];
+    r:.qlimit.throttle[.qpipe.job.fx_positions.alerts;breaches;now;.qpipe.job.fx_positions.alert_period];
+    `.qpipe.job.fx_positions.alerts set r`state;
     r`alerts}
 
 / Publish a snapshot of the whole book, and any newly breached limit.
@@ -174,29 +174,29 @@ fresh_breaches:{[now]
 / product) and a desk has hundreds, not millions.
 / @return nothing
 on_timer:{[]
-    snapshot:0!.qdesk.break_even .qsub.fx_positions.book;
+    snapshot:0!.qdesk.break_even .qpipe.job.fx_positions.book;
     if[count snapshot;
-        .qsub.fx_positions.publish[`fx_position;
+        .qpipe.job.fx_positions.publish[`fx_position;
             select sym, book, product, base_qty, quote_qty, fill_count, break_even from snapshot]];
-    breaches:.qsub.fx_positions.fresh_breaches .z.p;
+    breaches:.qpipe.job.fx_positions.fresh_breaches .z.p;
     if[count breaches;
-        .qsub.fx_positions.publish[`fx_limit_breach;
+        .qpipe.job.fx_positions.publish[`fx_limit_breach;
             select sym, book, product, metric, observed, cap, severity, utilisation from breaches]];
     }
 
 \d .
 
-.qxf.define[`fx_positions;`inputs`output`fn`examples!(
-    `book`batch!(.qsub.fx_positions.desk_book;.qsub.fx_positions.orders);
-    .qsub.fx_positions.desk_book;
-    .qsub.fx_positions.net_orders;
+.qetl.transform.define[`fx_positions;`inputs`output`fn`examples!(
+    `book`batch!(.qpipe.job.fx_positions.desk_book;.qpipe.job.fx_positions.orders);
+    .qpipe.job.fx_positions.desk_book;
+    .qpipe.job.fx_positions.net_orders;
     (
     / From an empty book: a buy and a sell of the same pair on one book net
     / against each other, a cancel moves nothing at all, and a second book
     / is a row of its own rather than being folded into the first.
     `inputs`expected!(
         `book`batch!(
-            .qsub.fx_positions.desk_book;
+            .qpipe.job.fx_positions.desk_book;
             ([] time:2026.09.17D10:00:00+0D00:00:01*til 4;
                 order_id:1 2 3 4;
                 sym:`EURUSD`EURUSD`EURUSD`EURUSD;
@@ -228,12 +228,12 @@ on_timer:{[]
             base_qty:250000 600000f; quote_qty:-37387500 -89660000f; fill_count:1 2))
     ))];
 
-.qstream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
+.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
     `fxpositions1;
     enlist `orders;
     `fx_position`fx_limit_breach;
-    .qsub.fx_positions.on_batch;
+    .qpipe.job.fx_positions.on_batch;
     0D00:00:05.000;
-    .qsub.fx_positions.on_timer;
+    .qpipe.job.fx_positions.on_timer;
     1b;
     "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it")];

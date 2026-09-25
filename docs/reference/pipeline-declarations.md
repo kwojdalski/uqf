@@ -6,13 +6,61 @@ walk-through that builds one of each, read [Adding a data
 pipeline](../guides/new-pipeline.md); for why the blocks are shaped this way,
 [the pipeline philosophy](../architecture/pipeline-philosophy.md).
 
-  | Block             | Declared with            | Lives in                                                  | It says                                                |
-  | ---               | ---                      | ---                                                       | ---                                                    |
-  | source            | `.qsrc.define`           | `src/etl/sources/<source>.q`, namespace `.qfeed.<source>` | what the external rows are and how to fetch a window   |
-  | transform         | `.qxf.define`            | beside the job that uses it                               | what rows become, with worked examples                 |
-  | bounded worker    | `.qbw.define`            | `src/etl/workers/<worker>.q`, namespace `.qwrk.<worker>`  | which source, which transform, which dataset, how wide |
-  | streaming job     | `.qstream.define`        | `src/etl/streaming/<job>.q`, namespace `.qsub.<job>`      | which tables it reads and writes, and its handlers     |
-  | normalizer        | `.qnorm.define`          | `src/etl/streaming/<name>.q`, namespace `.qsub.<name>`    | many sources, one canonical table, a transform each    |
+  | Block             | Declared with                         | Lives in                                                         | It says                                                |
+  | ---               | ---                                   | ---                                                              | ---                                                    |
+  | source            | `.qetl.source.define`                 | `src/etl/sources/<source>.q`, namespace `.qpipe.source.<source>` | what the external rows are and how to fetch a window   |
+  | transform         | `.qetl.transform.define`              | beside the job that uses it                                      | what rows become, with worked examples                 |
+  | bounded worker    | `.qetl.job.bounded.define`            | `src/etl/workers/<worker>.q`, namespace `.qpipe.job.<worker>`    | which source, which transform, which dataset, how wide |
+  | streaming job     | `.qetl.job.stream.define`             | `src/etl/streaming/<job>.q`, namespace `.qpipe.job.<job>`        | which tables it reads and writes, and its handlers     |
+  | normalizer        | `.qetl.job.stream.normalize`          | `src/etl/streaming/<name>.q`, namespace `.qpipe.job.<name>`      | many sources, one canonical table, a transform each    |
+
+The namespaces separate framework machinery from concrete pipelines:
+
+- `.qetl` owns contracts, registries and execution services.
+- `.qpipe` owns concrete sources, jobs and shared transforms.
+- `.qtorq` is the TorQ adapter in `scripts/processes/torq_pipeline.q`.
+
+Bounded and streaming jobs share `.qpipe.job.<name>`, so their names must be
+unique across execution modes. A normalizer is a streaming-job constructor, not
+a third lifecycle. Its dispatcher and mapping registry live under
+`.qetl.job.stream.normalizer`.
+
+A private transform may stay beside its job. A shared transform belongs in
+`src/etl/transforms/<name>.q`, under `.qpipe.transform.<name>`; the loader reads
+sources, shared transforms, bounded workers and streaming jobs in that order.
+For example, both Databento jobs use the `databento_book` transform without
+requiring either job to own the other's computation.
+
+Framework services use the same root: `.qetl.io`, `.qetl.dag`, `.qetl.reaction`,
+`.qetl.coverage`, `.qetl.run`, `.qetl.cfg`, `.qetl.cfg.audit`, `.qetl.hb` and
+`.qetl.status`. Standard IO managers stay under `.qetl.io`; a custom pipeline
+writer can live under `.qpipe.io.<name>`. A custom reaction handler can live
+under `.qpipe.reaction.<name>`. The graph is derived from declarations, so there
+is no separate pipeline graph to maintain.
+
+## Updating callers from the previous names
+
+This is a namespace change without compatibility aliases. Update q scripts, IPC
+expressions and sidecar declarations together. Process names, environment
+variables and persisted table schemas are unchanged.
+
+  | Previous root            | Current namespace                                      |
+  | ---                      | ---                                                    |
+  | `qsrc`, `qxf`            | `.qetl.source`, `.qetl.transform`                      |
+  | `qbw`, `qstream`         | `.qetl.job.bounded`, `.qetl.job.stream`                |
+  | `qnorm.define`           | `.qetl.job.stream.normalize`                           |
+  | `qnorm` helpers          | `.qetl.job.stream.normalizer`                          |
+  | `qfeed`                  | `.qpipe.source`                                        |
+  | `qwrk`, `qsub`           | `.qpipe.job`                                           |
+  | `qpipe` adapter          | `.qtorq`                                               |
+  | `qio`, `qodbc`           | `.qetl.io`, `.qetl.io.odbc`                            |
+  | `qdag`, `qreact`         | `.qetl.dag`, `.qetl.reaction`                          |
+  | `qmatz`, `qrun`          | `.qetl.coverage`, `.qetl.run`                          |
+  | `qwcfg`, `qaudit`        | `.qetl.cfg`, `.qetl.cfg.audit`                         |
+  | `qhb`, `qstatus`         | `.qetl.hb`, `.qetl.status`                             |
+  | `qbfstate`, `qwrt`       | `.qetl.job.bounded.state`, `.qetl.job.bounded.runtime` |
+  | `qcont`                  | `.qetl.job.continuous`                                 |
+  | `qcoer`, `qlog`, `qtick` | `.qetl.coerce`, `.qetl.log`, `.qetl.tick`              |
 
 Every declaring function refuses a bad declaration **when the file loads**,
 naming the key, so a mistake below surfaces the first time the tree is loaded
@@ -35,32 +83,32 @@ A worker's transform often uses its source's fixture as its example input
 mixed up: the fixture is the *source's* stand-in, the example is the
 *transform's* test.
 
-## Source --- `.qsrc.define`
+## Source --- `.qetl.source.define`
 
-`.qsrc.define[source;decl]`, conventionally at the bottom of the source file as
-`.qsrc.define[source_name; ...]`.
+`.qetl.source.define[source;decl]`, conventionally at the bottom of the source
+file as `.qetl.source.define[source_name; ...]`.
 
-  | key           | required | type                                           | meaning                                                                                                                                                                                                                                | refused when                                                                           |
-  | ---           | ---      | ---                                            | ---                                                                                                                                                                                                                                    | ---                                                                                    |
-  | `source`      | yes      | symbol                                         | the source's own name, the same word as its `.qfeed.<source>` namespace and `source_name`                                                                                                                                              | missing                                                                                |
-  | `table_name`  | yes      | symbol                                         | the table's name **on the external side**. `.qsrc.validate_live` reads that table's metadata, and the job graph draws the edge as `<source>@<table>`                                                                                   | missing                                                                                |
-  | `target`      | yes      | symbol                                         | the **local** table the rows land in                                                                                                                                                                                                   | missing                                                                                |
-  | `columns`     | yes      | symbol vector                                  | the columns this adapter READS --- not every column the source has, because a declared column the worker never uses still breaks the run when it changes                                                                               | not symbols                                                                            |
-  | `types`       | yes      | string                                         | one q type character per field, e.g. `"psf"`. An upper-case character declares a column of vectors                                                                                                                                     | not a string, or not one per field                                                     |
-  | `time_column` | yes      | symbol                                         | the column windows are cut on                                                                                                                                                                                                          | not in `columns`, or its type is not `"p"` (a `datetime` rounds sub-second values)     |
-  | `row_key`     | yes      | symbol or symbol vector                        | the column(s) that identify a row uniquely. Only right if the source guarantees it. Validated and stored, not yet used by any read                                                                                                     | not symbols, or names a column not in `columns`                                        |
-  | `query`       | yes      | lambda `{[h;range_from;range_to] ...}`         | fetches one window over the handle `h`. Parameterised, never built by string concatenation, and half-open: `>=` the lower bound, `<` the upper                                                                                         | not a lambda                                                                           |
-  | `fixture`     | yes      | lambda `{[] ...}`                              | a deterministic synthetic table of the same shape. Used when `UQF_SOURCE_CRED_<SOURCE>` is unset, which is the declared demo path and never a fallback for a failed connection; windowed on `time_column` exactly as the live query is | not a lambda                                                                           |
-  | `tz`          | yes      | symbol                                         | the zone `time_column` is expressed in: `` `UTC `` or a tz-database name such as `` `$"Europe/London" ``                                                                                                                               | not a single symbol                                                                    |
-  | `transport`   | no       | `` `ipc `` or `` `odbc ``                      | how the credential is opened. `ipc` (default): `host:port`, opened with `hopen`. `odbc`: a connection string, opened with `.qodbc.open`                                                                                                | anything else                                                                          |
+  | key           | required | type                                           | meaning                                                                                                                                                                                                                                       | refused when                                                                           |
+  | ---           | ---      | ---                                            | ---                                                                                                                                                                                                                                           | ---                                                                                    |
+  | `source`      | yes      | symbol                                         | the source's own name, the same word as its `.qpipe.source.<source>` namespace and `source_name`                                                                                                                                              | missing                                                                                |
+  | `table_name`  | yes      | symbol                                         | the table's name **on the external side**. `.qetl.source.validate_live` reads that table's metadata, and the job graph draws the edge as `<source>@<table>`                                                                                   | missing                                                                                |
+  | `target`      | yes      | symbol                                         | the **local** table the rows land in                                                                                                                                                                                                          | missing                                                                                |
+  | `columns`     | yes      | symbol vector                                  | the columns this adapter READS --- not every column the source has, because a declared column the worker never uses still breaks the run when it changes                                                                                      | not symbols                                                                            |
+  | `types`       | yes      | string                                         | one q type character per field, e.g. `"psf"`. An upper-case character declares a column of vectors                                                                                                                                            | not a string, or not one per field                                                     |
+  | `time_column` | yes      | symbol                                         | the column windows are cut on                                                                                                                                                                                                                 | not in `columns`, or its type is not `"p"` (a `datetime` rounds sub-second values)     |
+  | `row_key`     | yes      | symbol or symbol vector                        | the column(s) that identify a row uniquely. Only right if the source guarantees it. Validated and stored, not yet used by any read                                                                                                            | not symbols, or names a column not in `columns`                                        |
+  | `query`       | yes      | lambda `{[h;range_from;range_to] ...}`         | fetches one window over the handle `h`. Parameterised, never built by string concatenation, and half-open: `>=` the lower bound, `<` the upper                                                                                                | not a lambda                                                                           |
+  | `fixture`     | yes      | lambda `{[] ...}`                              | a deterministic synthetic table of the same shape. Used when `UQF_SOURCE_CRED_<SOURCE>` is unset, which is the declared demo path and never a fallback for a failed connection; windowed on `time_column` exactly as the live query is        | not a lambda                                                                           |
+  | `tz`          | yes      | symbol                                         | the zone `time_column` is expressed in: `` `UTC `` or a tz-database name such as `` `$"Europe/London" ``                                                                                                                                      | not a single symbol                                                                    |
+  | `transport`   | no       | `` `ipc `` or `` `odbc ``                      | how the credential is opened. `ipc` (default): `host:port`, opened with `hopen`. `odbc`: a connection string, opened with `.qetl.io.odbc.open`                                                                                                | anything else                                                                          |
 
 The credential is read from the environment variable `UQF_SOURCE_CRED_` plus the
 source name upper-cased, and from nowhere else.
 
-## Transform --- `.qxf.define`
+## Transform --- `.qetl.transform.define`
 
-`.qxf.define[name;decl]`. A transform is the one deterministic step of a job:
-the fetch before it and the publish after it are effects, it is not.
+`.qetl.transform.define[name;decl]`. A transform is the one deterministic step
+of a job: the fetch before it and the publish after it are effects, it is not.
 
   | key        | required | type                                                   | meaning                                                                                                                                                                                                   | refused when                                                                                          |
   | ---        | ---      | ---                                                    | ---                                                                                                                                                                                                       | ---                                                                                                   |
@@ -78,39 +126,39 @@ draws a random number. It also feeds every transform all-empty inputs and
 expects an empty table of the declared schema.
 
 A job that copies rows unchanged still declares its transform, with
-`.qxf.passthrough[name;input_name;schema;rows]`: one input read under
+`.qetl.transform.passthrough[name;input_name;schema;rows]`: one input read under
 `input_name`, output equal to input, `rows` as the example.
 
-## Bounded worker --- `.qbw.define`
+## Bounded worker --- `.qetl.job.bounded.define`
 
-`.qbw.define[worker;decl]`, at the bottom of the worker file.
+`.qetl.job.bounded.define[worker;decl]`, at the bottom of the worker file.
 
-  | key         | required | type                                   | meaning                                                                                                                                                                                                                                                                                                                                                                                 | refused when                                                                                                                        |
-  | ---         | ---      | ---                                    | ---                                                                                                                                                                                                                                                                                                                                                                                     | ---                                                                                                                                 |
-  | `source`    | yes      | symbol                                 | a source registered with `.qsrc.define`, which must have loaded first (`init.q` loads `sources/` before `workers/`)                                                                                                                                                                                                                                                                     | not registered                                                                                                                      |
-  | `dataset`   | yes      | symbol                                 | the name completeness is recorded under: coverage, materialisation metadata and `.qreact` reactions are all keyed by it. The rows themselves land in the **source's `target`**, which is a different key --- usually the same word, not necessarily                                                                                                                                     | another worker already declares the same `dataset` and `partition`                                                                  |
-  | `width`     | yes      | timespan, e.g. `1D`                    | how wide each window is. A run over `[from;to)` is cut into windows this wide, oldest first, and each is fetched, checked and recorded separately                                                                                                                                                                                                                                       | not a timespan, or not positive                                                                                                     |
-  | `transform` | yes      | symbol                                 | a transform declared with `.qxf.define`. It must read exactly one input, whose schema is the source's `columns` and `types`                                                                                                                                                                                                                                                             | not registered, more than one input, takes `as_of` (a window has no single instant), or its input is not the source's contract      |
-  | `check`     | no       | lambda `{[batch] ...}`                 | the data-quality gate, run on the transformed batch before publish. Returns a table of failures (`check`, `status`, `detail`); empty means the batch passed. A failed batch is not published, its window is not recorded as covered, and the next run plans it again                                                                                                                    | at run time, when it is not a lambda or does not return a table                                                                     |
-  | `io`        | no       | dict with `write`, optionally `finish` | where rows are written. `write` is a function `{[target;batch] ...}` returning the row count; `finish`, if present, runs once after a run's last window. Absent, the process's default applies: `.qio.memory` (an in-process table) in plain q, and `.qio.hdb` - each row into the HDB partition of its own date - in a backfill process. `.qio.discard` counts rows and stores nothing | not a dict carrying a callable `write`, or a `finish` that is not callable                                                          |
-  | `facts`     | no       | function `batch -> dict`               | labels recorded with each window's materialisation, beside the `rows`, `source_version` and `dry_run` the framework records itself --- the min and max time, a null fraction, a checksum. A failing `facts` is logged and does not fail the window                                                                                                                                      | --- (errors are logged, not thrown)                                                                                                 |
-  | `partition` | no       | symbol, default `` ` ``                | lets several workers fill one dataset: each declares a different partition, and coverage is recorded per `(dataset, partition)`. `` ` `` means the dataset has no partition dimension                                                                                                                                                                                                   | not a symbol                                                                                                                        |
-  | `procname`  | no       | symbol, default `` `<worker>1 ``       | the process that runs this worker. The `uqs` process registry is read from it                                                                                                                                                                                                                                                                                                           | not a symbol                                                                                                                        |
-  | `note`      | no       | string, default `""`                   | why it is deployed as it is, shown in [`processes.md`](processes.md)                                                                                                                                                                                                                                                                                                                    | not a string                                                                                                                        |
+  | key         | required | type                                   | meaning                                                                                                                                                                                                                                                                                                                                                                                             | refused when                                                                                                                        |
+  | ---         | ---      | ---                                    | ---                                                                                                                                                                                                                                                                                                                                                                                                 | ---                                                                                                                                 |
+  | `source`    | yes      | symbol                                 | a source registered with `.qetl.source.define`, which must have loaded first (`init.q` loads `sources/` before `workers/`)                                                                                                                                                                                                                                                                          | not registered                                                                                                                      |
+  | `dataset`   | yes      | symbol                                 | the name completeness is recorded under: coverage, materialisation metadata and `.qetl.reaction` reactions are all keyed by it. The rows themselves land in the **source's `target`**, which is a different key --- usually the same word, not necessarily                                                                                                                                          | another worker already declares the same `dataset` and `partition`                                                                  |
+  | `width`     | yes      | timespan, e.g. `1D`                    | how wide each window is. A run over `[from;to)` is cut into windows this wide, oldest first, and each is fetched, checked and recorded separately                                                                                                                                                                                                                                                   | not a timespan, or not positive                                                                                                     |
+  | `transform` | yes      | symbol                                 | a transform declared with `.qetl.transform.define`. It must read exactly one input, whose schema is the source's `columns` and `types`                                                                                                                                                                                                                                                              | not registered, more than one input, takes `as_of` (a window has no single instant), or its input is not the source's contract      |
+  | `check`     | no       | lambda `{[batch] ...}`                 | the data-quality gate, run on the transformed batch before publish. Returns a table of failures (`check`, `status`, `detail`); empty means the batch passed. A failed batch is not published, its window is not recorded as covered, and the next run plans it again                                                                                                                                | at run time, when it is not a lambda or does not return a table                                                                     |
+  | `io`        | no       | dict with `write`, optionally `finish` | where rows are written. `write` is a function `{[target;batch] ...}` returning the row count; `finish`, if present, runs once after a run's last window. Absent, the process's default applies: `.qetl.io.memory` (an in-process table) in plain q, and `.qetl.io.hdb` - each row into the HDB partition of its own date - in a backfill process. `.qetl.io.discard` counts rows and stores nothing | not a dict carrying a callable `write`, or a `finish` that is not callable                                                          |
+  | `facts`     | no       | function `batch -> dict`               | labels recorded with each window's materialisation, beside the `rows`, `source_version` and `dry_run` the framework records itself --- the min and max time, a null fraction, a checksum. A failing `facts` is logged and does not fail the window                                                                                                                                                  | --- (errors are logged, not thrown)                                                                                                 |
+  | `partition` | no       | symbol, default `` ` ``                | lets several workers fill one dataset: each declares a different partition, and coverage is recorded per `(dataset, partition)`. `` ` `` means the dataset has no partition dimension                                                                                                                                                                                                               | not a symbol                                                                                                                        |
+  | `procname`  | no       | symbol, default `` `<worker>1 ``       | the process that runs this worker. The `uqs` process registry is read from it                                                                                                                                                                                                                                                                                                                       | not a symbol                                                                                                                        |
+  | `note`      | no       | string, default `""`                   | why it is deployed as it is, shown in [`processes.md`](processes.md)                                                                                                                                                                                                                                                                                                                                | not a string                                                                                                                        |
 
-`ns` is **not** a key: the namespace is always `.qwrk.<worker>`, and a supplied
-`ns` is refused. `define` writes the lifecycle methods (`init`, `plan`, `fetch`,
-`publish`, `checkpoint`, `spec`, `run`, `cleanup`) and the run state into that
-namespace; a worker overrides a method by defining it there *before* calling
-`define`.
+`ns` is **not** a key: the namespace is always `.qpipe.job.<worker>`, and a
+supplied `ns` is refused. `define` writes the lifecycle methods (`init`, `plan`,
+`fetch`, `publish`, `checkpoint`, `spec`, `run`, `cleanup`) and the run state
+into that namespace; a worker overrides a method by defining it there *before*
+calling `define`.
 
 A worker has no `start_with_all`: a backfill runs its range and exits, so it
 never starts with the stack.
 
 ### Run spec
 
-What one run of a worker is asked to do, passed to `.qwrk.<worker>.init` --- or
-by `uqs backfill <worker> --version V --from F --to T`.
+What one run of a worker is asked to do, passed to `.qpipe.job.<worker>.init` ---
+or by `uqs backfill <worker> --version V --from F --to T`.
 
   | key              | type      | meaning                                                                                                                         | refused when                  |
   | ---              | ---       | ---                                                                                                                             | ---                           |
@@ -121,11 +169,11 @@ by `uqs backfill <worker> --version V --from F --to T`.
 Setting `UQF_DRY_RUN` makes a run publish no rows, record no coverage and write
 no checkpoint.
 
-## Streaming job --- `.qstream.define`
+## Streaming job --- `.qetl.job.stream.define`
 
-`.qstream.define[job;decl]`, at the bottom of the job file. A streaming job runs
-continuously in a TorQ process, reading tickerplant tables and publishing
-others.
+`.qetl.job.stream.define[job;decl]`, at the bottom of the job file. A streaming
+job runs continuously in a TorQ process, reading tickerplant tables and
+publishing others.
 
   | key                 | required                            | type                              | meaning                                                                                                                                                                             | refused when                                                    |
   | ---                 | ---                                 | ---                               | ---                                                                                                                                                                                 | ---                                                             |
@@ -141,41 +189,42 @@ others.
 A job must declare `on_batch`, `on_timer` or both; one with neither would run
 nothing and is refused.
 
-The namespace is always `.qsub.<job>`. A job publishes by calling its own
+The namespace is always `.qpipe.job.<job>`. A job publishes by calling its own
 `publish`, never `.u.upd`: `publish` starts as a stub that throws, and
-`.qstream.wire` points it at the tickerplant (the runner) or at a recorder (a
-test). Never publish a `time` column --- the tickerplant stamps its own.
+`.qetl.job.stream.wire` points it at the tickerplant (the runner) or at a
+recorder (a test). Never publish a `time` column --- the tickerplant stamps its
+own.
 
-## Normalizer --- `.qnorm.define`
+## Normalizer --- `.qetl.job.stream.normalize`
 
-`.qnorm.define[name;decl]`. Several source tables mapped onto one canonical
-table, one declared transform per source. `name` is also the canonical table the
-normalizer publishes and its `.qsub.<name>` namespace.
+`.qetl.job.stream.normalize[name;decl]`. Several source tables mapped onto one
+canonical table, one declared transform per source. `name` is also the canonical
+table the normalizer publishes and its `.qpipe.job.<name>` namespace.
 
-  | key              | required | type                                         | meaning                                                                                                                  | refused when                                                                                                                                     |
-  | ---              | ---      | ---                                          | ---                                                                                                                      | ---                                                                                                                                              |
-  | `procname`       | yes      | symbol                                       | the TorQ process that runs it, as for a streaming job                                                                    | as for a streaming job                                                                                                                           |
-  | `output`         | yes      | empty typed table                            | the canonical table's schema, without `time`                                                                             | not an unkeyed table, no columns, or a `time` column                                                                                             |
-  | `input`          | yes      | dict: source table -> transform name         | for each tickerplant table it reads, the `.qxf` transform that maps a batch of it onto `output`                          | empty; a transform not registered, taking more than one input, or whose `output` is not exactly the canonical table --- columns, order and types |
-  | `start_with_all` | no       | boolean, default `0b`                        | as for a streaming job                                                                                                   | not a boolean                                                                                                                                    |
-  | `note`           | no       | string                                       | as for a streaming job                                                                                                   | not a string                                                                                                                                     |
+  | key              | required | type                                         | meaning                                                                                                                             | refused when                                                                                                                                     |
+  | ---              | ---      | ---                                          | ---                                                                                                                                 | ---                                                                                                                                              |
+  | `procname`       | yes      | symbol                                       | the TorQ process that runs it, as for a streaming job                                                                               | as for a streaming job                                                                                                                           |
+  | `output`         | yes      | empty typed table                            | the canonical table's schema, without `time`                                                                                        | not an unkeyed table, no columns, or a `time` column                                                                                             |
+  | `input`          | yes      | dict: source table -> transform name         | for each tickerplant table it reads, the `.qetl.transform` transform that maps a batch of it onto `output`                          | empty; a transform not registered, taking more than one input, or whose `output` is not exactly the canonical table --- columns, order and types |
+  | `start_with_all` | no       | boolean, default `0b`                        | as for a streaming job                                                                                                              | not a boolean                                                                                                                                    |
+  | `note`           | no       | string                                       | as for a streaming job                                                                                                              | not a string                                                                                                                                     |
 
 `define` registers the streaming job itself: `subscribe_to` is the keys of
 `input`, `publishes` is `name`, and `on_batch` is a dispatcher that trims each
 batch to the columns its transform declares, applies it, and publishes. The
 normalizer's file never handles a batch.
 
-## Reactions --- `.qreact`
+## Reactions --- `.qetl.reaction`
 
 Running something when a dataset is published, rather than on a timer. A
 reaction fires after a bounded worker publishes a window of `dataset` --- the
 one path that notifies, and not on a dry run --- with that window's range.
 
-  | call                                                  | handler                                                          | the job graph learns                                                   |
-  | ---                                                   | ---                                                              | ---                                                                    |
-  | `.qreact.on[dataset;name;handler]`                    | `{[dataset;range_from;range_to] ...}`                            | only that it reads `dataset`                                           |
-  | `.qreact.on_writing[dataset;name;outputs;handler]`    | the same                                                         | that it reads `dataset` and writes `outputs`, as asserted              |
-  | `.qreact.on_worker[dataset;worker;spec_fn]`           | `spec_fn` is `{[range_from;range_to] ...}` returning a run spec  | that it writes the worker's `dataset`, derived from its declaration    |
+  | call                                                         | handler                                                          | the job graph learns                                                   |
+  | ---                                                          | ---                                                              | ---                                                                    |
+  | `.qetl.reaction.on[dataset;name;handler]`                    | `{[dataset;range_from;range_to] ...}`                            | only that it reads `dataset`                                           |
+  | `.qetl.reaction.on_writing[dataset;name;outputs;handler]`    | the same                                                         | that it reads `dataset` and writes `outputs`, as asserted              |
+  | `.qetl.reaction.on_worker[dataset;worker;spec_fn]`           | `spec_fn` is `{[range_from;range_to] ...}` returning a run spec  | that it writes the worker's `dataset`, derived from its declaration    |
 
 Prefer `on_worker` when the downstream work is itself a worker: its edge in the
 graph is read from the worker's declaration rather than asserted. [Recomputing a
@@ -185,15 +234,15 @@ when to use which.
 
 ## Job graph: derived, not declared
 
-`.qdag.register[job;decl]` exists, but no job file calls it. The graph is
+`.qetl.dag.register[job;decl]` exists, but no job file calls it. The graph is
 assembled from the declarations above, so a job's edges cannot disagree with
 what it does:
 
-  | call                      | registers                                                                                                                                                                                 |
-  | ---                       | ---                                                                                                                                                                                       |
-  | `.qdag.adopt_workers[]`   | every bounded worker, reading `<source>@<table>` and writing the source's `target`                                                                                                        |
-  | `.qdag.adopt_pipelines[]` | every streaming job and normalizer, from `src/etl/generated/pipeline_dag.q` --- generated from the `uqs` process registry, which is itself read from their `subscribe_to` and `publishes` |
-  | `.qdag.adopt_feeders[]`   | every continuous feeder                                                                                                                                                                   |
-  | `.qdag.adopt_reactions[]` | every `.qreact` reaction, with the edges its call declares                                                                                                                                |
+  | call                          | registers                                                                                                                                                                                        |
+  | ---                           | ---                                                                                                                                                                                              |
+  | `.qetl.dag.adopt_workers[]`   | every bounded worker, reading `<source>@<table>` and writing the source's `target`                                                                                                               |
+  | `.qetl.dag.adopt_pipelines[]` | every streaming job and normalizer, from `src/etl/generated/pipeline_dag.q` --- generated from the `uqs` process registry, which is itself read from their `subscribe_to` and `publishes`        |
+  | `.qetl.dag.adopt_feeders[]`   | every continuous feeder                                                                                                                                                                          |
+  | `.qetl.dag.adopt_reactions[]` | every `.qetl.reaction` reaction, with the edges its call declares                                                                                                                                |
 
-`.qdag.adopt_all[]` runs all four, reactions last.
+`.qetl.dag.adopt_all[]` runs all four, reactions last.

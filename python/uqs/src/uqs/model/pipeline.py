@@ -37,7 +37,7 @@ _ETL_ACCESS_LIST = "${TORQAPPHOME}/appconfig/passwords/accesslist.txt"
 class _FromDeclaration:
     """Sentinel: this edge is declared in the job's own q file, read it there.
 
-    A streaming job's `.qstream.define` already names its procname, the
+    A streaming job's `.qetl.job.stream.define` already names its procname, the
     tables it subscribes to and the tables it publishes. Restating them here
     made the registry a second copy of a fact the code states - and
     `verify_pipeline_edges` existed to check the two copies agreed, which is
@@ -80,7 +80,7 @@ class PipelineKind(StrEnum):
     #: Subscribes, so it needs the access list.
     ETL = "etl"
     #: An etl of one shape: N source tables in, one canonical table out, one
-    #: declared transform per source (`.qnorm`).
+    #: declared transform per source (`.qetl.job.stream.normalizer`).
     NORMALIZER = "normalizer"
     #: Bounded: registers with discovery, runs a window range, exits.
     BACKFILL = "backfill"
@@ -108,9 +108,9 @@ class Pipeline:
     table: str | None = None  # the table it publishes onto the tickerplant, if any
     # Only whether to LOAD the library. There was once a second flag to skip
     # publish-edge verification for a pipeline publishing through
-    # .qpipe.publish; the check now reads the table at that call site, so
+    # .qtorq.publish; the check now reads the table at that call site, so
     # every pipeline's declared publishes are verified the same way.
-    loads_qpipe: bool = False  # load scripts/processes/torq_pipeline.q ahead of its own script
+    loads_qtorq: bool = False  # load scripts/processes/torq_pipeline.q ahead of its own script
     offset: int | None = None  # set by model/registry.py from the port lock
     localtime: str = "1"
     startwithall: str = "1"
@@ -119,11 +119,11 @@ class Pipeline:
     # --- dataflow edges, for scripts/generate/generate_operational_docs.py ---
     # Declared here so a diagram can be DERIVED rather than drawn, and
     # verified: verify_pipeline_edges() below greps each pipeline's own .q
-    # script for its `.sub.subscribe`/`.qpipe.subscribe_etl`/`.u.upd` calls
+    # script for its `.sub.subscribe`/`.qtorq.subscribe_etl`/`.u.upd` calls
     # and fails if the declaration and the code disagree. A hand-drawn
     # diagram goes stale silently; this one cannot.
-    # FROM_DECLARATION reads it from the job's own .qstream.define / .qnorm
-    # .define instead, which is where a streaming job already states it.
+    # FROM_DECLARATION reads .qetl.job.stream.define / .qetl.job.stream.normalize,
+    # where a streaming job already states its edges.
     subscribe_to: tuple[str, ...] | _FromDeclaration = ()
     # Tables it publishes via `.u.upd`. Defaults to (table,) - set it
     # explicitly only when a pipeline publishes onto a table whose schema it
@@ -132,7 +132,7 @@ class Pipeline:
     # tap1 chooses its subscription at runtime from -tables, so no fixed
     # edge exists to declare or to verify.
     subscribes_dynamic: bool = False
-    # For a backfill: the .qbw worker this process runs. One script serves
+    # For a backfill: the .qetl.job.bounded worker this process runs. One script serves
     # every worker and its -worker flag names which at runtime, so
     # without this the link between a process and its worker exists only
     # in an operator's head - which is how two declared workers ended up
@@ -218,11 +218,11 @@ class Pipeline:
         return self._resolved()[1]
 
     def load_column(self) -> str:
-        """The process.csv `load` value - the .qpipe library first when the
+        """The process.csv `load` value - the .qtorq library first when the
         script needs it, then the script itself. Order matters: see
         PIPELINE_LIB_SCRIPT.
         """
         scripts = [self.script]
-        if self.loads_qpipe:
+        if self.loads_qtorq:
             scripts.insert(0, PIPELINE_LIB_SCRIPT)
         return " ".join(f"${{UQFSCRIPTS}}/{s}" for s in scripts)

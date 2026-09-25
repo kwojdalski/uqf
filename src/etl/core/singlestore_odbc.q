@@ -1,5 +1,5 @@
 / singlestore_odbc.q - a SingleStore source adapter over KX's q client for
-/ ODBC (.qodbc).
+/ ODBC (.qetl.io.odbc).
 / .
 / The "skippable ODBC adapter" half of the question bank. The other half -
 / a generic file fixture - already ships, and that ordering is the whole
@@ -27,7 +27,7 @@
 / goes through it. A second place that builds SQL is the bug this design
 / exists to prevent.
 
-\d .qodbc
+\d .qetl.io.odbc
 
 / ------------------------------------------------------- AVAILABILITY
 
@@ -41,7 +41,7 @@ loaded:{[] @[{`open in key x};`.odbc;{0b}]}
 / CI runner this repository uses - so a caller decides what to do about it
 / rather than being handed an error at load time.
 / @return 1b when .odbc is available, 0b otherwise
-/ @eg .qodbc.available[]
+/ @eg .qetl.io.odbc.available[]
 available:{[]
     if[loaded[]; :1b];
     @[{system"l odbc.k"; loaded[]};::;{[e] 0b}]}
@@ -63,7 +63,7 @@ available:{[]
 / @throws error when the driver is unavailable
 require_available:{[]
     if[not available[];
-        '"qodbc: ODBC driver not loaded - see singlestore_odbc.q's require_available for the install, or use the source's fixture"];
+        '"qetl.io.odbc: ODBC driver not loaded - see singlestore_odbc.q's require_available for the install, or use the source's fixture"];
     1b}
 
 / ---------------------------------------------------------- ESCAPING
@@ -90,7 +90,7 @@ escape_text:{[s] ssr[ssr[s;"\\";"\\\\"];"'";"''"]}
 / @param v a symbol, string, timestamp, date, long, int, float or boolean
 / @return the SQL literal text
 / @throws error naming the type when it is not one this understands
-/ @eg .qodbc.literal[`EURUSD]  ->  "'EURUSD'"
+/ @eg .qetl.io.odbc.literal[`EURUSD]  ->  "'EURUSD'"
 literal:{[v]
     t:abs type v;
     $[t=11h; "'",escape_text[string v],"'";
@@ -115,7 +115,7 @@ literal:{[v]
 / Build a SingleStore connection string from its parts.
 / .
 / The credential is NOT a parameter: it is read from the environment by
-/ .qsrc.require_credentials, because nothing secret lives in this
+/ .qetl.source.require_credentials, because nothing secret lives in this
 / tree and a parameter is something a caller can log.
 / @param host the SingleStore host
 / @param port the port, as a long
@@ -138,7 +138,7 @@ build_connection_string:{[host;port;database;user;password]
 open:{[conn]
     require_available[];
     @[{.odbc.open x};conn;
-      {[e] '"qodbc.open: could not connect - ",e}]}
+      {[e] '"qetl.io.odbc.open: could not connect - ",e}]}
 
 / Close a handle, tolerating one that is already closed.
 / .
@@ -160,7 +160,7 @@ with_connection:{[conn;f]
     h:open conn;
     r:@[f;h;{[e] (`error;e)}];
     close h;
-    if[(0h=type r) and 2=count r; if[`error~first r; '"qodbc: ",last r]];
+    if[(0h=type r) and 2=count r; if[`error~first r; '"qetl.io.odbc: ",last r]];
     r}
 
 / ---------------------------------------------------------- QUERYING
@@ -169,7 +169,7 @@ with_connection:{[conn;f]
 / .
 / `run_sql`, not `eval`: EVAL IS A Q BUILTIN, so defining it in a namespace
 / throws 'assign at LOAD time and aborts the rest of the file - leaving
-/ .qodbc half-populated while the enclosing script carries on. Ninth
+/ .qetl.io.odbc half-populated while the enclosing script carries on. Ninth
 / reserved-name collision in this repository, and the first the trap checker
 / did not already know about; it does now.
 / @param h an ODBC handle
@@ -185,14 +185,14 @@ with_connection:{[conn;f]
 run_sql:{[h;sql]
     require_available[];
     .[{[hd;st] .odbc.eval[hd;st]};(h;sql);
-      {[sql;e] '"qodbc.run_sql: ",e," - statement: ",sql}[sql]]}
+      {[sql;e] '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql]]}
 
 / The tables visible on a connection.
 / .
 / `table_names`, not `tables`: also a q builtin, and this one had already
 / cost this repository a debugging session once before.
 / .
-/ For .qsrc.validate_live, which verifies a DECLARED shape rather than
+/ For .qetl.source.validate_live, which verifies a DECLARED shape rather than
 / discovering one.
 / @param h an ODBC handle
 / @return a symbol vector of table names
@@ -200,7 +200,7 @@ table_names:{[h] require_available[]; .odbc.tables h}
 
 / A windowed SELECT over one table, with the bounds escaped.
 / .
-/ This is the shape a .qsrc source's `query` callback needs: half-open
+/ This is the shape a .qetl.source source's `query` callback needs: half-open
 / [range_from;range_to), so >= on the lower bound and < on the
 / upper. Getting that one operator wrong double-publishes every boundary row,
 / which then appears as a duplicate nobody can explain.
@@ -216,7 +216,7 @@ table_names:{[h] require_available[]; .odbc.tables h}
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the rows in the window
-/ @eg .qodbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]
+/ @eg .qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]
 window_query:{[h;table_name;time_column;columns;range_from;range_to]
     sql:"SELECT ",(", " sv string columns),
         " FROM ",string[table_name],
