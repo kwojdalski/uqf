@@ -97,7 +97,7 @@ test_normalize_projects_the_batch_onto_what_the_mapping_declares:{[t]
 test_normalize_names_a_column_the_batch_lacks:{[t]
     define_ok[`nt_i;`nti1];
     .qunit.assertThrows[.qnorm.normalize[`nt_i;`src;];([] time:enlist 2026.01.01D09:00:00; x:enlist 7);
-        "*missing column(s) y*";"a batch without a declared column is refused by name, not silently mapped"];
+        "*missing required column(s) y*";"a batch without a declared column is refused by name, not silently mapped"];
     forget `nt_i};
 
 test_normalize_refuses_a_table_that_is_not_a_source:{[t]

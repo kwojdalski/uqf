@@ -117,10 +117,7 @@ symbolize_columns:{[tbl;sym_cols]
     / book_from_wide_levels handed back a table without the column it had
     / been asked to cast. Found by running this file's own @eg examples,
     / which passed `side to a table that has none.
-    missing:sym_cols where not sym_cols in cols tbl;
-    if[count missing;
-        '"symbolize_columns: no such column(s) ",(", " sv string missing),
-         " - have ",", " sv string cols tbl];
+    .qschema.require_cols[`symbolize_columns;`tbl;tbl;sym_cols];
     i:0;
     while[i<count sym_cols;
         col:sym_cols i;

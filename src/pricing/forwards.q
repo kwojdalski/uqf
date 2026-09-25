@@ -497,9 +497,7 @@ single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
 / case of "no quote yet at this time", not a malformed table.
 / @throws error naming every column in `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes missing from quotes
 require_quotes_cols:{[fn_name;quotes]
-    req_cols:`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
-    missing:req_cols where not req_cols in cols quotes;
-    if[count missing; '(string fn_name),": quotes is missing required column(s) ",", " sv string missing]};
+    .qschema.require_cols[fn_name;`quotes;quotes;`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes]};
 
 / Depth-aware synthetic book for any pair, found automatically by chaining
 / together whatever quoted pairs are available in `quotes` - unlike

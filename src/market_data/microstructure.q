@@ -508,10 +508,7 @@ tape_cols:`time`sym`action`side`size
 / @eg .qmicro.require_tape[tape]
 require_tape:{[tape]
     if[not .Q.qt tape; '"require_tape: expected a table"];
-    present:cols tape;
-    missing:tape_cols where not tape_cols in present;
-    if[count missing;
-        '"require_tape: tape is missing required column(s) ",", " sv string missing];
+    .qschema.require_cols[`require_tape;`tape;tape;tape_cols];
     unknown:distinct (exec action from tape) except tape_actions;
     if[count unknown;
         '"require_tape: unknown action(s) ",(", " sv string unknown),

@@ -24,9 +24,9 @@ test_a_malformed_limits_table_is_refused_at_load:{[t]
     / At LOAD rather than at the first breach, because a limits table that
     / polices nothing is indistinguishable from a quiet day.
     .qunit.assertThrows[.qlimit.require_limits;([] sym:enlist `EURUSD; cap:enlist 1f);
-        "*missing column(s) metric*";"a limit has to say what it caps"];
+        "*missing required column(s) metric*";"a limit has to say what it caps"];
     .qunit.assertThrows[.qlimit.require_limits;([] sym:enlist `EURUSD; metric:enlist `base_qty);
-        "*missing column(s) cap*";"and how much"];
+        "*missing required column(s) cap*";"and how much"];
     .qunit.assertThrows[.qlimit.require_limits;`notatable;
         "*must be a table*";"limits are data, so they arrive as a table"]};
 
@@ -88,7 +88,7 @@ test_a_key_column_cannot_also_be_a_metric:{[t]
 
 test_measuring_names_a_column_the_book_does_not_have:{[t]
     .qunit.assertThrows[.qlimit.measure[mk_book[];];enlist `delta;
-        "*has no column(s) delta*";"a metric that is not there is a typo, not an empty result"]};
+        "*book is missing required column(s) delta*";"a metric that is not there is a typo, not an empty result"]};
 
 / ------------------------------------------------------------- EVALUATION
 

@@ -96,10 +96,7 @@ dimensions:{[book] keys book}
 apply_fills:{[book;batch]
     dims:dimensions book;
     if[not 98h=type batch; '"apply_fills: fills must be a table"];
-    need:distinct required_cols,dims;
-    missing:need where not need in cols batch;
-    if[count missing;
-        '"apply_fills: fills is missing column(s) ",", " sv string missing];
+    .qschema.require_cols[`apply_fills;`fills;batch;distinct required_cols,dims];
     if[0=count batch; :book];
     netted:?[batch; (); {x!x} dims;
         `base_qty`quote_qty`fill_count!(

@@ -266,7 +266,7 @@ test_a_day_split_in_two_attributes_the_same_as_one_run:{[t]
 
 test_a_malformed_opening_position_is_refused:{[t]
     .qunit.assertThrows[.qalloc.allocate[mk_today[];]; `method`opening!(`fifo;([] sym:enlist `EURUSD));
-        "*opening is missing column*"; "a lot needs a qty, a price and a side"];
+        "*opening is missing required column(s)*"; "a lot needs a qty, a price and a side"];
     .qunit.assertThrows[.qalloc.allocate[mk_today[];]; `method`opening!(`fifo;`notatable);
         "*opening must be a table*"; "and it has to be a table of them"];
     .qunit.assertThrows[.qalloc.allocate[mk_today[];];
@@ -387,7 +387,7 @@ test_an_unregistered_method_names_what_is_available:{[t]
 
 test_a_missing_column_is_named:{[t]
     .qunit.assertThrows[.qalloc.allocate[;`fifo]; ([] time:enlist 2026.01.01D09:00:00; sym:enlist `EURUSD);
-        "*is missing column*"; "the trades table has to carry the columns the engine reads"]};
+        "*trades is missing required column(s)*"; "the trades table has to carry the columns the engine reads"]};
 
 test_an_unknown_option_is_refused:{[t]
     .qunit.assertThrows[.qalloc.allocate[mk_two_lots[];]; `method`filter!(`fifo;.qalloc.all_rows);

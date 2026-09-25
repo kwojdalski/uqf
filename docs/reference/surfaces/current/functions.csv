@@ -546,6 +546,7 @@ qrun,runs,function,1,
 qrun,table_path,function,1,name
 qrun,under_lock,function,2,f args
 qrun,unfinished,function,1,
+qschema,require_cols,function,4,fn_name table_name tbl req
 qsrc,ambiguous_message,function,3,zone bad cs
 qsrc,bound_padding,value,,
 qsrc,coerce,function,2,source tbl

@@ -137,9 +137,7 @@ normalize:{[name;src;batch]
     xf:srcs src;
     ins:.qxf.declaration[xf]`inputs;
     want:cols first value ins;
-    missing:want where not want in cols batch;
-    if[count missing;
-        '"normalize: a ",string[src]," batch for ",string[name]," is missing column(s) ",", " sv string missing];
+    .qschema.require_cols[`normalize;`$(string src)," batch for ",string name;batch;want];
     .qxf.apply[xf;(enlist first key ins)!enlist want#batch]}
 
 / Private: the dispatcher every normalizer registers as its on_batch -
