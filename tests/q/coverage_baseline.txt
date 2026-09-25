@@ -33,6 +33,7 @@
 .qfeed.databento_mbp10.select_list
 .qfeed.demo_deals.query
 .qfeed.demo_events.query
+.qfeed.duckdb_deals.query
 .qfeed.upstream_trades.query
 
 # --- Needs a running TorQ process --------------------------------------
@@ -41,10 +42,25 @@
 # call are tested through .qxf instead, which is the part that computes.
 # publish and as_table are not here: the handle is a seam, and
 # test_stream_job.q hands them a recording one.
+#
+# wait_for_tickerplant and reload_hdb joined this list in #462, and the four
+# that arrived with them did NOT: elapsed_ms, record_received, apply_verbose
+# and record_published need no tickerplant at all and are covered by
+# test_torq_pipeline.q instead. This list means "uncovered on purpose", so
+# the distinction is the whole value of it - a pure millisecond conversion
+# sitting here would be a lie that got cheaper to repeat.
+#
+# These two earn their place: wait_for_tickerplant BLOCKS until a plant
+# answers (startupdepcycles with check_cycles 0W waits forever), so a test
+# that entered it would hang the suite rather than fail it; reload_hdb opens
+# discovered handles and is already listed in .egtest.needs_live for the
+# same reason.
 .qpipe.feed_handle
 .qpipe.load_uqf
+.qpipe.reload_hdb
 .qpipe.safe_timer
 .qpipe.subscribe_etl
+.qpipe.wait_for_tickerplant
 
 # --- Genuine gaps, worth closing ---------------------------------------
 # Nothing external stands in the way of these; no test calls them.

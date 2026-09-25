@@ -98,3 +98,67 @@ test_the_period_handlers_take_what_the_plant_sends:{[t]
 test_installing_them_reports_what_it_defined:{[t]
     .qunit.assertEquals[.qpipe.install_period_handlers[];`endofperiod`endofday;
         "so a caller can see which names were claimed at root"]};
+
+/ --- the bookkeeping the adapter does on every batch -----------------------
+
+/ These need no tickerplant, which is the point: they sat uncovered next to
+/ three .qpipe entries that genuinely do need one (#462), and the tempting
+/ fix was to write all of them into coverage_baseline.txt together. That list
+/ means "nothing covers this ON PURPOSE", so putting a pure millisecond
+/ conversion into it would have been a lie that got harder to notice every
+/ time someone read past it.
+
+test_elapsed_ms_is_milliseconds_not_nanoseconds_or_seconds:{[t]
+    / The unit is the only thing here that can be wrong, and it is wrong
+    / silently: every log line this feeds carries a plausible number either
+    / way. A lower bound with a generous ceiling rather than an equality -
+    / .z.p advances between building t0 and reading it, so an exact match
+    / would be a flake waiting for a slow machine. 2000 <= x < 10000 admits
+    / neither 2 (seconds) nor 2000000000 (nanoseconds).
+    ms:.qpipe.elapsed_ms .z.p-0D00:00:02;
+    .qunit.assertEquals[type ms;-7h;"a long, which is what the log fields take"];
+    .qunit.assertTrue[(ms>=2000) and ms<10000;
+        "two seconds ago reads as ~2000 ms"]};
+
+test_record_received_counts_a_table_batch_by_its_rows:{[t]
+    saved:.qpipe.received;
+    `.qpipe.received set (`symbol$())!`long$();
+    n1:.qpipe.record_received[`trades;([] sym:`EURUSD`GBPUSD)];
+    n2:.qpipe.record_received[`trades;([] sym:enlist `EURUSD)];
+    total:.qpipe.received `trades;
+    `.qpipe.received set saved;
+    .qunit.assertEquals[(n1;n2);(2;1);"each call returns its OWN batch's rows, not the total"];
+    .qunit.assertEquals[total;3;"and the counter accumulates across batches"]};
+
+test_record_received_counts_the_columns_form_by_its_first_column:{[t]
+    / A batch is a table (98h) or a list of column vectors, and the second is
+    / what a feed sends. Counting that with `count x` gives the number of
+    / COLUMNS - a small plausible number, wrong on every batch, and wrong in
+    / a direction nothing downstream would notice.
+    saved:.qpipe.received;
+    `.qpipe.received set (`symbol$())!`long$();
+    n:.qpipe.record_received[`quote;(`EURUSD`GBPUSD`USDJPY;1.1 1.2 150.0;1.2 1.3 150.1)];
+    `.qpipe.received set saved;
+    .qunit.assertEquals[n;3;"three columns of three rows is three rows, not three columns"]};
+
+test_record_received_starts_a_table_at_zero_not_at_null:{[t]
+    / `0^received t` on a table never seen before. The typed empty dictionary
+    / that relies on is the one the coverage tool corrupted in #460, which is
+    / how that bug reached q-unit at all - see test_coverage_tool.q.
+    saved:.qpipe.received;
+    `.qpipe.received set (`symbol$())!`long$();
+    n:.qpipe.record_received[`never_seen_before;([] a:enlist 1)];
+    total:.qpipe.received `never_seen_before;
+    `.qpipe.received set saved;
+    .qunit.assertEquals[(n;total);(1;1);"the first batch counts as one, not as null"]};
+
+test_apply_verbose_reports_the_flag_this_process_was_started_with:{[t]
+    / Restores the logging state it may change: debug_enabled is a process
+    / global, and a suite that left DBG on would change what every later
+    / suite prints.
+    saved:.qlog.debug_enabled;
+    on:.qpipe.apply_verbose[];
+    .qlog.debug saved;
+    .qunit.assertEquals[on;`verbose in key .Q.opt .z.x;
+        "it reports whether -verbose was on this process's own start line"];
+    .qunit.assertEquals[.qlog.debug_enabled;saved;"and this test left the setting as it found it"]};
