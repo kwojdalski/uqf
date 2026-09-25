@@ -51,13 +51,13 @@ def test_a_scaffolded_job_declares_edges_the_tree_can_read():
     declarations, so the generated one has to read back as what was asked."""
     plan = jobs.streaming_job("markout2", ["trades", "quote"], "my_metric", "value:float")
     (d,) = _declared(plan, "markout2.q")
-    assert (d.procname, d.subscribeto, d.publishes) == (
+    assert (d.procname, d.subscribe_to, d.publishes) == (
         "markout21",
         ("trades", "quote"),
         ("my_metric",),
     )
     assert d.kind is PipelineKind.ETL
-    assert not d.startwithall, "a scaffolded job is on demand until someone decides otherwise"
+    assert not d.start_with_all, "a scaffolded job is on demand until someone decides otherwise"
 
 
 def test_a_scaffolded_feed_declares_no_subscription():
@@ -65,7 +65,7 @@ def test_a_scaffolded_feed_declares_no_subscription():
     needs to tell apart, so the empty one is spelled explicitly."""
     plan = jobs.streaming_job("tickfeed", [], "ticks", "value:float")
     (d,) = _declared(plan, "tickfeed.q")
-    assert d.subscribeto == ()
+    assert d.subscribe_to == ()
     assert d.kind is PipelineKind.FEED, "a job that subscribes to nothing is a feed"
 
 
@@ -404,7 +404,7 @@ def test_a_bounded_worker_is_told_about_its_dataset():
     assert "uqs_catalog.q" in notes and "fx_probe" in notes
 
 
-# ------------------------------------------- publishes, subscribeto, the plant
+# ------------------------------------------- publishes, subscribe_to, the plant
 
 #: What `new-job` passes as the plant's tables: vendored `quote` and this
 #: tree's `trades` and `orders`.
@@ -527,12 +527,12 @@ def test_a_job_that_subscribes_and_publishes_gets_a_throwing_contract_driver():
 
 
 @pytest.mark.parametrize(
-    ("subscribeto", "publishes", "columns"),
+    ("subscribe_to", "publishes", "columns"),
     [([], "feed_out", "v:float"), (["quote"], None, None)],
     ids=["a-feed-runs-on-its-timer", "a-job-publishing-nothing-has-nothing-to-check"],
 )
-def test_no_driver_where_the_contract_test_needs_none(subscribeto, publishes, columns):
-    body = _test_file(jobs.streaming_job("zz", subscribeto, publishes, columns), "zz")
+def test_no_driver_where_the_contract_test_needs_none(subscribe_to, publishes, columns):
+    body = _test_file(jobs.streaming_job("zz", subscribe_to, publishes, columns), "zz")
     assert "contract_driver" not in body
 
 

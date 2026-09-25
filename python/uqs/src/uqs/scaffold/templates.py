@@ -138,7 +138,7 @@ types:"{types}"
 target:`{dataset}
 
 / The column the window is taken on.
-timecolumn:`{TIME_COLUMN}
+time_column:`{TIME_COLUMN}
 
 / What identifies a row uniquely. Only correct if the source guarantees it:
 / a source that reuses ids after a purge silently merges unrelated rows.
@@ -175,8 +175,8 @@ fixture:{{[]
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qsrc.define[source_name;
-    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
-    (source_name;`{dataset};target;timecolumn;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`{dataset};target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \\d .
 """

@@ -47,7 +47,7 @@ every new table passes through. After writing them, `new-job` reruns
 declared.
 
 ```
-uqs new-job markout2 --subscribeto trades,quote \
+uqs new-job markout2 --subscribe-to trades,quote \
     --publishes my_metric --columns "sym:symbol, value:float"
 
 uqs new-job fx_rates --kind backfill --dataset fx_rates \
@@ -67,7 +67,7 @@ refuses a dataset another worker already fills without a partition.
 
 A streaming job follows the same rule for what it publishes: `--publishes` takes
 a comma list, a table the plant already defines is published onto without
-`--columns`, and `--columns` shapes the one new table. Its `--subscribeto` must
+`--columns`, and `--columns` shapes the one new table. Its `--subscribe-to` must
 name tables the plant defines, so a producer is scaffolded before its consumer.
 
 `--dry-run` prints what it would write and writes nothing. `kind` is derived for
@@ -89,7 +89,7 @@ until written - the batch
 drives the job with to hold every table it publishes to its plant table:
 
 ```
-uqs new-job dxprobe --subscribeto trades --publishes dx_t --columns "sym:symbol, v:float"
+uqs new-job dxprobe --subscribe-to trades --publishes dx_t --columns "sym:symbol, v:float"
 q tests/run_tests.q
 ```
 
@@ -206,7 +206,7 @@ drifts from the canonical table, column, type and order. Two ship: `executions`
 `posbook1` holds FX and crypto positions in one book without knowing either
 market's tape format. A third market is a mapping in a normalizer, not a branch
 in a consumer.
-`uqs new-job NAME --kind normalizer --subscribeto a,b --columns ...` scaffolds
+`uqs new-job NAME --kind normalizer --subscribe-to a,b --columns ...` scaffolds
 one: the canonical table NAME, and per source its schema, a throwing mapping and
 a typed example row, so the file loads while each mapping stays red.
 
@@ -233,9 +233,9 @@ source_name:`fx_rates
 columns:`rate_time`sym`mid    / the columns this adapter reads
 types:"psf"                    / one q type character per field
 target:`fx_rates               / the local table they land in
-timecolumn:`rate_time          / the column the window is taken on
+time_column:`rate_time         / the column the window is taken on
 row_key:`rate_time`sym         / what identifies a row uniquely
-tz:`UTC                        / what timecolumn is expressed in
+tz:`UTC                        / what time_column is expressed in
 
 query:{[h;range_from;range_to]
     h({[from_ts;to_ts]
@@ -249,8 +249,8 @@ fixture:{[]
         mid:1.0842 1.2631 1.0847 149.82 1.0851)}
 
 .qsrc.define[source_name;
-    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
-    (source_name;`fx_rates;target;timecolumn;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`fx_rates;target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .
 ```
@@ -434,15 +434,15 @@ A worker's declaration names its process, and may say why it exists:
 
 `procname` defaults to `<worker>1` when absent, in q and in the registry alike.
 A backfill never starts with the stack - it registers with discovery, runs its
-range and exits - so a worker has no `startwithall`.
+range and exits - so a worker has no `start_with_all`.
 
-A streaming job already names its `procname`, `subscribeto` and `publishes`, and
-those are its process's edges. Two more keys are optional:
+A streaming job already names its `procname`, `subscribe_to` and `publishes`,
+and those are its process's edges. Two more keys are optional:
 
-  | key            | means                                                | absent    |
-  | ---            | ---                                                  | ---       |
-  | `startwithall` | `1b` to start with the stack                         | on demand |
-  | `note`         | why it is deployed as it is, shown in `processes.md` | no note   |
+  | key              | means                                                | absent    |
+  | ---              | ---                                                  | ---       |
+  | `start_with_all` | `1b` to start with the stack                         | on demand |
+  | `note`           | why it is deployed as it is, shown in `processes.md` | no note   |
 
 Default on demand, because joining the default start spends one of the plant's
 sixteen licensed connections (#285) - a decision to make on purpose.

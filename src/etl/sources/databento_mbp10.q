@@ -44,9 +44,9 @@ level_fields:raze {`$("bid_px_";"bid_sz_";"ask_px_";"ask_sz_"),\:x} each levels
 columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
 types:"psssfjj",raze 10#enlist "fjfj"
 
-tablename:`mbp10
+table_name:`mbp10
 target:`databento_book
-timecolumn:`ts_event
+time_column:`ts_event
 
 / NOT Databento's documented key, and deliberately said so. (symbol,
 / ts_event, sequence) is the obvious candidate and is not unique - one event
@@ -110,7 +110,7 @@ fixture:{[]
     base,'lv}
 
 .qsrc.define[source_name;
-    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz`transport!
-    (source_name;tablename;target;timecolumn;row_key;columns;types;query;fixture;tz;transport)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
+    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport)];
 
 \d .

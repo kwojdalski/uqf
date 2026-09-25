@@ -34,7 +34,7 @@ types:"pssjffjj"
 target:`event_tape
 
 / The window is taken on event time.
-timecolumn:`time
+time_column:`time
 
 / An event is identified by its order and its action: one order_id produces
 / an add and then exactly one terminal event (a cancel or a trade), so the
@@ -85,7 +85,7 @@ fixture:{[]
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qsrc.define[source_name;
-    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
-    (source_name;`event_tape;target;timecolumn;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`event_tape;target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

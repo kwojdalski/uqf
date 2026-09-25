@@ -93,7 +93,7 @@ VENDORED_PLANT_CLIENTS: frozenset[str] = frozenset({"rdb1", "wdb1", "sctp1", "me
 
 
 def _declared_stream_edges(repo_root: Path) -> dict[str, tuple[tuple[str, ...], tuple[str, ...]]]:
-    """procname -> (subscribeto, publishes), read from the job files.
+    """procname -> (subscribe_to, publishes), read from the job files.
 
     Every job under src/etl/streaming/ is read, so a job whose file exists but
     whose process is missing is absent from nothing and reported as a
@@ -109,7 +109,7 @@ def _declared_stream_edges(repo_root: Path) -> dict[str, tuple[tuple[str, ...], 
         return edges
     for path in sorted(directory.glob("*.q")):
         for declaration in read_file(path):
-            edges[declaration.procname] = (declaration.subscribeto, declaration.publishes)
+            edges[declaration.procname] = (declaration.subscribe_to, declaration.publishes)
     return edges
 
 
@@ -127,7 +127,7 @@ def _stream_edge_cache(repo_root: Path) -> dict[str, tuple[tuple[str, ...], tupl
 def resolve_edges(
     pipeline: Any, repo_root: Path | None = None
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """(subscribeto, published_tables) for one pipeline, reading the q file
+    """(subscribe_to, published_tables) for one pipeline, reading the q file
     where the registry defers to it.
 
     STRICT BY DESIGN. A pipeline that says FROM_DECLARATION and has no
@@ -137,9 +137,9 @@ def resolve_edges(
     without an error - which is the failure #288 exists to prevent, and
     exactly the one this indirection could reintroduce.
     """
-    subscribeto = pipeline.subscribeto
+    subscribe_to = pipeline.subscribe_to
     publishes = pipeline.publishes
-    needs = subscribeto is FROM_DECLARATION or publishes is FROM_DECLARATION
+    needs = subscribe_to is FROM_DECLARATION or publishes is FROM_DECLARATION
     if needs:
         root = repo_root or find_repo_root()
         declared = _stream_edge_cache(root).get(pipeline.procname)
@@ -150,13 +150,13 @@ def resolve_edges(
                 f"{STREAM_DIR}. Either the job file is missing, its procname disagrees "
                 f"with the registry, or the edges belong back in the Pipeline entry"
             )
-        if subscribeto is FROM_DECLARATION:
-            subscribeto = declared[0]
+        if subscribe_to is FROM_DECLARATION:
+            subscribe_to = declared[0]
         if publishes is FROM_DECLARATION:
             publishes = declared[1]
     if publishes is None:
         publishes = (pipeline.table,) if pipeline.table else ()
-    return tuple(subscribeto), tuple(publishes)
+    return tuple(subscribe_to), tuple(publishes)
 
 
 def _symbol_list(match_text: str) -> tuple[str, ...]:
@@ -219,13 +219,13 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
             # compare and the check is skipped rather than passed. Only an
             # edge still spelled in the Pipeline entry is checked, which is
             # what this function is for: two copies that could drift.
-            subscribeto, publishes = stream_edges[pipeline.procname]
-            if pipeline.subscribeto is not FROM_DECLARATION and subscribeto != tuple(
-                pipeline.subscribeto
+            subscribe_to, publishes = stream_edges[pipeline.procname]
+            if pipeline.subscribe_to is not FROM_DECLARATION and subscribe_to != tuple(
+                pipeline.subscribe_to
             ):
                 problems.append(
-                    f"{pipeline.procname}: declares subscribeto={pipeline.subscribeto!r} "
-                    f"but its streaming job subscribes to {subscribeto!r}"
+                    f"{pipeline.procname}: declares subscribe_to={pipeline.subscribe_to!r} "
+                    f"but its streaming job subscribes to {subscribe_to!r}"
                 )
             if pipeline.publishes is not FROM_DECLARATION and publishes != tuple(
                 pipeline.published_tables
@@ -244,9 +244,9 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
                 found.extend(_symbol_list(match.group(1)))
             for match in _SUB_QPIPE_RE.finditer(source):
                 found.extend(_symbol_list(match.group(1)))
-            if tuple(found) != tuple(pipeline.subscribeto):
+            if tuple(found) != tuple(pipeline.subscribe_to):
                 problems.append(
-                    f"{pipeline.procname}: declares subscribeto={pipeline.subscribeto!r} "
+                    f"{pipeline.procname}: declares subscribe_to={pipeline.subscribe_to!r} "
                     f"but {pipeline.script} subscribes to {tuple(found)!r}"
                 )
 

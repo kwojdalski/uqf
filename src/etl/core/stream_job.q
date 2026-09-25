@@ -49,13 +49,13 @@ procnames:(`symbol$())!`symbol$();
 / demanding a batch handler of it would mean writing an empty one. A job
 / with neither is declared but does nothing, which is refused.
 / .
-/ `subscribeto` and `publishes` are the wiring the runner performs on the
+/ `subscribe_to` and `publishes` are the wiring the runner performs on the
 / job's behalf, and they are also what uqs's pipeline_edges
 / checks the Python registry against - so the q file and the registry cannot
 / drift. `procname` is the TorQ process that runs this job, and is how the
 / runner knows which job it is: one generic process script, and the name it
 / was started under decides. `on_batch` is the job itself.
-required_declarations:`ns`procname`subscribeto`publishes
+required_declarations:`ns`procname`subscribe_to`publishes
 
 / Private: can this value be called?
 / .
@@ -84,9 +84,9 @@ namespace:{[job] ` sv job_root,job}
 / declaration and its implementation cannot drift - there is no way to have
 / one without the other.
 / @param job the job's name, e.g. `markout
-/ @param decl dict of procname, subscribeto, publishes, and then on_batch
+/ @param decl dict of procname, subscribe_to, publishes, and then on_batch
 /   (required when it subscribes), period and on_timer (a pair); optionally
-/   startwithall (a boolean, default 0b) and note (a string)
+/   start_with_all (a boolean, default 0b) and note (a string)
 / @return the job name
 / @throws error naming every missing or malformed field at once
 define:{[job;decl]
@@ -99,8 +99,8 @@ define:{[job;decl]
         '"define: ",string[job],"'s procname must be a symbol naming the TorQ process that runs it, e.g. `markout1"];
     if[(decl`procname) in key procnames;
         '"define: ",string[job]," claims procname ",string[decl`procname]," which ",(string procnames decl`procname)," already runs - one process runs one job"];
-    if[not 11h=abs type decl`subscribeto;
-        '"define: ",string[job],"'s subscribeto must be a symbol list of table names"];
+    if[not 11h=abs type decl`subscribe_to;
+        '"define: ",string[job],"'s subscribe_to must be a symbol list of table names"];
     if[not 11h=abs type decl`publishes;
         '"define: ",string[job],"'s publishes must be a symbol list, empty for a job that keeps its output local"];
     if[(`on_batch in key decl) and not is_callable decl`on_batch;
@@ -108,8 +108,8 @@ define:{[job;decl]
     / A subscriber with no handler receives every batch and drops it, and a
     / job with neither handler nor timer runs nothing at all - both look
     / healthy from outside, which is why each is refused by name here.
-    if[(count decl`subscribeto) and not `on_batch in key decl;
-        '"define: ",string[job]," subscribes to ",(", " sv string decl`subscribeto)," but declares no on_batch - every batch would arrive and be dropped"];
+    if[(count decl`subscribe_to) and not `on_batch in key decl;
+        '"define: ",string[job]," subscribes to ",(", " sv string decl`subscribe_to)," but declares no on_batch - every batch would arrive and be dropped"];
     if[not any (`on_batch;`on_timer) in \:key decl;
         '"define: ",string[job]," declares neither on_batch nor on_timer - it would subscribe to nothing, publish nothing and run nothing"];
     / A timer is optional, but half a timer is a job whose scoring never runs
@@ -128,14 +128,14 @@ define:{[job;decl]
     / Deployment facts, both optional. uqs derives its process registry
     / from these declarations, so this is where a job says whether it starts
     / with the stack (default: on demand) and why it is deployed as it is.
-    if[(`startwithall in key decl) and not -1h=type decl`startwithall;
-        '"define: ",string[job],"'s startwithall must be a boolean, 1b to start with the stack"];
+    if[(`start_with_all in key decl) and not -1h=type decl`start_with_all;
+        '"define: ",string[job],"'s start_with_all must be a boolean, 1b to start with the stack"];
     if[(`note in key decl) and not 10h=type decl`note;
         '"define: ",string[job],"'s note must be a string"];
     jobs[job]:enlist decl;
     procnames[decl`procname]:job;
     .[{.qlog.dbg[x;y;z]};(job;"streaming job registered";
-        `procname`subscribeto`publishes`timer!(decl`procname;decl`subscribeto;decl`publishes;
+        `procname`subscribe_to`publishes`timer!(decl`procname;decl`subscribe_to;decl`publishes;
             $[has_period; decl`period; 0Nn]));::];
     job}
 
@@ -143,7 +143,7 @@ define:{[job;decl]
 / @param job the job's name
 / @return the declaration dict
 / @throws error naming the job when register was never called for it
-/ @eg .qstream.declaration[`markout]`subscribeto  ->  `trades`quote
+/ @eg .qstream.declaration[`markout]`subscribe_to  ->  `trades`quote
 declaration:{[job]
     if[not job in key jobs;
         '"declaration: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];

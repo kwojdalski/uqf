@@ -143,7 +143,7 @@ lists every file it would create or append to without writing any of them:
 
 ```
 # a streaming job: reads quote, publishes a table of its own
-uv run uqs new-job spread_stats --subscribeto quote \
+uv run uqs new-job spread_stats --subscribe-to quote \
     --publishes spread_stats --columns "sym:symbol, spread_pips:float" --dry-run
 
 # a feed: subscribes to nothing, publishes on a timer

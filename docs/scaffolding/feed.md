@@ -11,7 +11,7 @@ uqs new-job pulsefeed --publishes pulse --columns "sym:symbol, px:float"
 ```
 
 **There is no `--kind feed`.** A streaming job that subscribes to nothing is a
-feed, and the scaffold derives that. Omitting `--subscribeto` is the whole
+feed, and the scaffold derives that. Omitting `--subscribe-to` is the whole
 signal.
 
 ```
@@ -43,7 +43,7 @@ on_timer:{[]
 
 \d .
 
-.qstream.define[`pulsefeed;`procname`subscribeto`publishes`period`on_timer`note!(
+.qstream.define[`pulsefeed;`procname`subscribe_to`publishes`period`on_timer`note!(
     `pulsefeed1;
     `symbol$();                    / subscribes to nothing - this is what makes it a feed
     enlist `pulse;

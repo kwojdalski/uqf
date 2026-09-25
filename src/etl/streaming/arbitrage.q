@@ -56,7 +56,7 @@ on_batch:{[t;x]
 
 \d .
 
-.qstream.define[`arbitrage;`procname`subscribeto`publishes`on_batch`note!(
+.qstream.define[`arbitrage;`procname`subscribe_to`publishes`on_batch`note!(
     `arbitrage1;
     enlist `superbook;
     enlist `arbitrage;

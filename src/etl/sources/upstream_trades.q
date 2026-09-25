@@ -28,7 +28,7 @@ types:"pscfis"
 / Where the rows land locally - a name that says they came from elsewhere.
 target:`imported_trades
 
-timecolumn:`time
+time_column:`time
 
 / THE WHOLE ROW, because nothing smaller identifies one. Measured on the
 / real data: of 196,519 trades on 2015.01.07, only 183,660 (time;sym) pairs
@@ -97,7 +97,7 @@ fixture:{[]
         side:`side`buy`side`side`buy`side`buy`buy`buy`buy)}
 
 .qsrc.define[source_name;
-    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
-    (source_name;`trade;target;timecolumn;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`trade;target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

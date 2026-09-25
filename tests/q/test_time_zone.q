@@ -44,13 +44,13 @@ beforeNamespace_zones:{[]
 setUp_sources:{[]
     .tztest.drop_sources[];
     .qsrc.define[`tz_london;
-        `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
+        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
         (`tz_london;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:2026.10.25D00:30:00.000000000+0D00:30*til 8; px:8#1.5)};
          .tztest.london)];
     .qsrc.define[`tz_summer;
-        `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
+        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
         (`tz_summer;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:enlist 2026.07.15D09:00:00.000000000; px:enlist 1.5)};
@@ -110,7 +110,7 @@ test_a_datetime_column_filters_without_complaint:{[t]
     got:?[tbl;((>=;`ts;2026.09.12D00:00:00.000000000);(<;`ts;2026.09.14D00:00:00.000000000));0b;()];
     .qunit.assertEquals[count got;2;"the filter runs and returns a believable answer, so nothing upstream of the contract will notice the type"]};
 
-/ Guard 1 of 3 against recurrence (register's timecolumn type check is 2,
+/ Guard 1 of 3 against recurrence (register's time_column type check is 2,
 / check_q_traps.py is 3): a source whose time column arrives as a datetime
 / fails the contract, on the same code path the fixture goes through.
 test_a_datetime_time_column_is_refused_by_the_contract:{[t]

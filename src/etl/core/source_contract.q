@@ -80,7 +80,7 @@
 /         carried in the data rather than raised.
 / .
 /     Three things prevent recurrence, all of them enforcement rather than
-/     documentation: (1) register below requires the timecolumn to be one of
+/     documentation: (1) register below requires the time_column to be one of
 /     the declared columns AND to be declared `p`, so a z time column is a
 /     registration failure; (2) validate/validate_live compare declared type
 /     characters against `meta`, so a source that silently changes a column
@@ -107,7 +107,7 @@
 / bug: it reads as a decision downstream while nobody ever made one. Stating
 / `UTC` costs one symbol and makes "this source hands over UTC" a claim
 / somebody wrote, which validate_live can then be run against.
-required_declarations:`source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz
+required_declarations:`source`table_name`target`time_column`row_key`columns`types`query`fixture`tz
 
 / How a source is reached - the one OPTIONAL declaration.
 / .
@@ -139,13 +139,13 @@ sources:(`symbol$())!();
 / @param decl a dict carrying every name in required_declarations:
 /   table   - the external table name, as a symbol
 /   target  - the local table it lands in, as a symbol
-/   timecolumn - the column the window is taken on, as a symbol
+/   time_column - the column the window is taken on, as a symbol
 /   row_key - the column(s) identifying a row uniquely, as a symbol vector
 /   columns  - the columns this adapter READS, as a symbol vector
 /   types   - the expected q type characters, one per field, as a string
 /   query   - a parameterised lambda taking (handle;range_from;range_to)
 /   fixture - a niladic lambda returning a synthetic table of the same shape
-/   tz - the zone the source's timecolumn is expressed in, as a
+/   tz - the zone the source's time_column is expressed in, as a
 /     symbol: `UTC, or a tz-database name such as `$"Europe/London"
 / and optionally:
 /   transport - `ipc (the default) or `odbc, see `transports`
@@ -168,7 +168,7 @@ define:{[source;decl]
         '"define: ",string[source],"'s fixture must be a niladic lambda (the path must be exercisable with no driver)"];
     if[not -11h=type decl`tz;
         '"define: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
-    / The window is taken on timecolumn, so timecolumn must be a field this
+    / The window is taken on time_column, so time_column must be a field this
     / adapter actually READS. Without this check a typo registers happily and
     / surfaces two layers down: validate never checks the column (it is not
     / in `columns`), the live query filters on something the declaration never
@@ -202,8 +202,8 @@ define:{[source;decl]
         '"define: ",string[source],"'s row_key names ",(", " sv string key_absent),
          " which is not among its declared columns - a key this contract cannot see cannot identify a row"];
 
-    if[not (decl`timecolumn) in decl`columns;
-        '"define: ",string[source],"'s timecolumn ",string[decl`timecolumn],
+    if[not (decl`time_column) in decl`columns;
+        '"define: ",string[source],"'s time_column ",string[decl`time_column],
          " is not one of its declared columns (",(", " sv string decl`columns),
          ") - the window is taken on that column, so it must be one the contract describes"];
     / Enforced rather than hoped for: the window column must be a
@@ -212,12 +212,12 @@ define:{[source;decl]
     / nanosecond-spaced instants do not survive it, and whole seconds do,
     / which is why it passes every hand-check. A window cut on such a column
     / produces plausible numbers and misplaced rows rather than an error.
-    time_idx:(decl`columns)?decl`timecolumn;
+    time_idx:(decl`columns)?decl`time_column;
     time_char:(decl`types)[time_idx];
     if[not "p"=time_char;
         / Short by necessity: q truncates a thrown string at 255 bytes, so the
         / long form lives in the comment above rather than in the message.
-        '"define: ",string[source],"'s timecolumn ",string[decl`timecolumn],
+        '"define: ",string[source],"'s time_column ",string[decl`time_column],
          " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently"];
     tr:$[`transport in key decl; decl`transport; default_transport];
     if[not tr in transports;
@@ -236,7 +236,7 @@ define:{[source;decl]
     / one shape keeps every declaration mutually assignable.
     sources[source]:@[decl;`row_key;:;key_cols];
     .[{.qlog.dbg[x;y;z]};(source;"source registered";
-        `columns`timecolumn`tz`transport`row_key!(decl`columns;decl`timecolumn;decl`tz;tr;key_cols));::];
+        `columns`time_column`tz`transport`row_key!(decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
 
 / Every registered source's name.
@@ -265,7 +265,7 @@ row_key:{[source] (),(declaration source)`row_key}
 / that got an empty dict back would fail later, somewhere else, on a missing
 / key.
 / @param source the registered source's name, as a symbol
-/ @return the declaration dict (source, table, target, timecolumn, row_key,
+/ @return the declaration dict (source, table, target, time_column, row_key,
 /   columns, types, query, fixture, tz)
 / @throws error naming the source when it was never registered
 / @eg .qsrc.declaration `demo_deals
@@ -343,20 +343,20 @@ validate_fixture:{[source] validate[source;(declaration[source]`fixture)[]]}
 / @param h an open handle to the external source
 validate_live:{[source;h]
     decl:declaration source;
-    m:@[{[handle;tbl] handle({0!meta x};tbl)}[h];decl`tablename;
-        {[tbl;err] '"validate_live: cannot read metadata for ",string[tbl]," (",err,")"}[decl`tablename;]];
+    m:@[{[handle;tbl] handle({0!meta x};tbl)}[h];decl`table_name;
+        {[tbl;err] '"validate_live: cannot read metadata for ",string[tbl]," (",err,")"}[decl`table_name;]];
     present:exec c from m;
     chars:exec t from m;
     missing:decl[`columns] where not decl[`columns] in present;
     if[count missing;
-        '"validate_live: ",string[decl`tablename]," is missing ",(", " sv string missing),
+        '"validate_live: ",string[decl`table_name]," is missing ",(", " sv string missing),
          " - the external schema has changed, or this declaration was always wrong"];
     checkable:decl`columns;
     expected:decl`types;
     actual:chars present?checkable;
     wrong:checkable where not expected=actual;
     if[count wrong;
-        '"validate_live: ",string[decl`tablename]," type mismatch on ",", " sv string wrong];
+        '"validate_live: ",string[decl`table_name]," type mismatch on ",", " sv string wrong];
     1b}
 
 / ---------------------------------------------------------- CREDENTIALS
@@ -637,7 +637,7 @@ coerce:{[source;tbl]
 / @param h an open handle, or 0Ni when running on the fixture
 / @param range_from window start
 / @param range_to window end, exclusive
-/ The fixture is WINDOWED here, on the declared timecolumn, using the same
+/ The fixture is WINDOWED here, on the declared time_column, using the same
 / half-open [range_from;range_to) bounds the live query uses. Without that
 / the fixture returns every row for every window, so a three-window run
 / publishes the fixture three times - triplicating the data while coverage
@@ -700,7 +700,7 @@ source_bounds:{[decl;range_from;range_to]
     (utc_to_local[tz;range_from-bound_padding];
      utc_to_local[tz;range_to+bound_padding])}
 
-/ Private: convert a fetched page's timecolumn to UTC and narrow it to the
+/ Private: convert a fetched page's time_column to UTC and narrow it to the
 / requested half-open range.
 / .
 / For `UTC this is the identity: the query (or window_fixture) has already
@@ -729,7 +729,7 @@ source_bounds:{[decl;range_from;range_to]
 narrow_to_utc:{[decl;tbl;range_from;range_to]
     tz:decl`tz;
     if[`UTC~tz; :tbl];
-    f:decl`timecolumn;
+    f:decl`time_column;
     local_ts:tbl f;
     if[0=count local_ts; :tbl];
     cs:local_candidates[tz;local_ts];
@@ -746,14 +746,14 @@ narrow_to_utc:{[decl;tbl;range_from;range_to]
     kept:tbl where in_range;
     ![kept;();0b;(enlist f)!enlist enlist first each cs where in_range]}
 
-/ Private: apply the window to a fixture, on its declared timecolumn.
+/ Private: apply the window to a fixture, on its declared time_column.
 / .
 / Functional select (`?[t;where;0b;()]`) rather than qSQL, because the column
-/ name is a variable: `select from t where timecolumn>=from_ts` would compare
+/ name is a variable: `select from t where time_column>=from_ts` would compare
 / the literal symbol, not the column it names.
 window_fixture:{[decl;range_from;range_to]
     t:(decl`fixture)[];
-    f:decl`timecolumn;
+    f:decl`time_column;
     if[not f in column_names t;
         '"window_fixture: ",string[decl`source],"'s fixture has no ",string[f],
          " column, so the window cannot be applied - it would return every row for every window and triplicate the data"];

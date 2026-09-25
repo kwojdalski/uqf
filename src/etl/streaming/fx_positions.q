@@ -228,7 +228,7 @@ on_timer:{[]
             base_qty:250000 600000f; quote_qty:-37387500 -89660000f; fill_count:1 2))
     ))];
 
-.qstream.define[`fx_positions;`procname`subscribeto`publishes`on_batch`period`on_timer`startwithall`note!(
+.qstream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
     `fxpositions1;
     enlist `orders;
     `fx_position`fx_limit_breach;

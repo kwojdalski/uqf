@@ -112,7 +112,7 @@ def test_fixed_choices_complete():
 
 
 def test_plant_tables_complete_for_a_job_s_inputs():
-    offered = complete("uqs new-job x --subscribeto quote,")
+    offered = complete("uqs new-job x --subscribe-to quote,")
     assert "quote,executions" in offered
     assert "quote,quote" not in offered
 

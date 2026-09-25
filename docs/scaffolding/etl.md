@@ -12,11 +12,11 @@ If your rows come from a timer rather than a subscription you want
 ## The command
 
 ```bash
-uqs new-job spreadmon --subscribeto quotes \
+uqs new-job spreadmon --subscribe-to quotes \
     --publishes spread_bps --columns "sym:symbol, spread:float"
 ```
 
-`--subscribeto` is what makes it an etl rather than a feed. It takes a
+`--subscribe-to` is what makes it an etl rather than a feed. It takes a
 comma-separated list --- subscribing to two tables is legal and common
 (`markout1` reads `trades` and `quote`).
 
@@ -50,7 +50,7 @@ on_batch:{[t;x]
 
 \d .
 
-.qstream.define[`spreadmon;`procname`subscribeto`publishes`on_batch`note!(
+.qstream.define[`spreadmon;`procname`subscribe_to`publishes`on_batch`note!(
     `spreadmon1;
     `quotes;
     enlist `spread_bps;

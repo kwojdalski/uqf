@@ -166,7 +166,7 @@ on_batch:{[t;x]
         ([] sym:enlist `USDJPY; qty:enlist 0f; avg_price:enlist 0f; realized_pnl:enlist 1e6; mark_price:enlist 148.5; unrealized_pnl:enlist 0f; total_pnl:enlist 1e6))
     ))];
 
-.qstream.define[`posbook;`procname`subscribeto`publishes`on_batch`startwithall`note!(
+.qstream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`note!(
     `posbook1;
     `executions`marks;
     enlist `position;

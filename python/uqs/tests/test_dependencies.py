@@ -103,7 +103,7 @@ def test_the_graph_is_the_one_the_generated_schema_is_built_from():
     invented = replace(
         BY_NAME["cross1"],
         procname="ghost1",
-        subscribeto=(),
+        subscribe_to=(),
         publishes=("market_data",),
     )
     producers = dependencies.producers_by_table([*PIPELINES, invented])

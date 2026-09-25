@@ -120,10 +120,10 @@ def new_job(
             autocompletion=completion.choices("streaming", "backfill", "normalizer"),
         ),
     ] = "streaming",
-    subscribeto: Annotated[
+    subscribe_to: Annotated[
         str | None,
         typer.Option(
-            "--subscribeto",
+            "--subscribe-to",
             help="Comma-separated tables it reads. Omit for a feed.",
             autocompletion=completion.plant_tables,
         ),
@@ -163,7 +163,7 @@ def new_job(
 
     Streaming, reading two tables and writing one:
 
-        uqs new-job markout2 --subscribeto trades,quote \\
+        uqs new-job markout2 --subscribe-to trades,quote \\
             --publishes my_metric --columns "sym:symbol, value:float"
 
     Bounded worker, with its source and transform:
@@ -171,7 +171,7 @@ def new_job(
         uqs new-job fx_rates --kind backfill --dataset fx_rates \\
             --columns "sym:symbol, mid:float" --width 1D
     """
-    subs = [s.strip() for s in (subscribeto or "").split(",") if s.strip()]
+    subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root
     try:
         if kind == "streaming":

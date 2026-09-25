@@ -12,7 +12,7 @@ registration.
 The deployment facts q has no other use for ride on the same declaration as
 optional keys, validated by the q function that takes them:
 
-    startwithall   1b to start with the stack; absent means on demand. Streaming
+    start_with_all   1b to start with the stack; absent means on demand. Streaming
                 jobs only: a bounded worker never starts with the stack.
     note        why the process is deployed the way it is, for processes.md.
     procname    a worker's process; defaults to `<worker>1`, as in q.
@@ -47,9 +47,9 @@ class Declaration:
     name: str  # the job (.qsub.<name>) or worker (.qwrk.<name>)
     procname: str
     kind: PipelineKind
-    subscribeto: tuple[str, ...]
+    subscribe_to: tuple[str, ...]
     publishes: tuple[str, ...]
-    startwithall: bool
+    start_with_all: bool
     note: str
     path: Path
 
@@ -157,7 +157,7 @@ def symbols(value: str) -> tuple[str, ...]:
 
 def _boolean(value: str, where: str) -> bool:
     if value not in ("1b", "0b"):
-        raise UqsError(f"{where}: startwithall must be 1b or 0b, not {value!r}")
+        raise UqsError(f"{where}: start_with_all must be 1b or 0b, not {value!r}")
     return value == "1b"
 
 
@@ -172,23 +172,32 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
     where = f"{path.name}: {name}"
     note = _string(fields["note"], where) if "note" in fields else ""
     if fn == "qbw.define":
-        if "startwithall" in fields:
+        if "start_with_all" in fields:
             raise UqsError(f"{where}: a bounded worker never starts with the stack")
         proc = symbols(fields["procname"]) if "procname" in fields else (f"{name}1",)
         return Declaration(name, proc[0], PipelineKind.BACKFILL, (), (), False, note, path)
     proc = symbols(fields.get("procname", ""))
     if not proc:
         raise UqsError(f"{where}: declares no procname")
-    startwithall = _boolean(fields["startwithall"], where) if "startwithall" in fields else False
+    start_with_all = (
+        _boolean(fields["start_with_all"], where) if "start_with_all" in fields else False
+    )
     if fn == "qnorm.define":
-        subscribeto = symbols(fields.get("input", "").split("!", 1)[0])
+        subscribe_to = symbols(fields.get("input", "").split("!", 1)[0])
         return Declaration(
-            name, proc[0], PipelineKind.NORMALIZER, subscribeto, (name,), startwithall, note, path
+            name,
+            proc[0],
+            PipelineKind.NORMALIZER,
+            subscribe_to,
+            (name,),
+            start_with_all,
+            note,
+            path,
         )
-    subscribeto = symbols(fields.get("subscribeto", ""))
-    kind = PipelineKind.ETL if subscribeto else PipelineKind.FEED
+    subscribe_to = symbols(fields.get("subscribe_to", ""))
+    kind = PipelineKind.ETL if subscribe_to else PipelineKind.FEED
     publishes = symbols(fields.get("publishes", ""))
-    return Declaration(name, proc[0], kind, subscribeto, publishes, startwithall, note, path)
+    return Declaration(name, proc[0], kind, subscribe_to, publishes, start_with_all, note, path)
 
 
 def declaration_calls(source: str) -> list[tuple[str, str, dict[str, str]]]:

@@ -88,7 +88,7 @@ Two registry facts that changed under you, and that a job no longer states:
 - There is no registry entry to write. `model/registry.py` BUILDS `PIPELINES`
   from the q declarations (`model/declarations.py`): `procname` and the edges
   from `.qstream.define`/`.qnorm.define`/`.qbw.define`, plus the optional
-  `startwithall` and `note` keys, and a worker's `procname` (default
+  `start_with_all` and `note` keys, and a worker's `procname` (default
   `<worker>1`). Only non-job processes (tap1) are listed in Python.
 - Ports live in `scripts/processes/process_ports.csv`, a generated, append-only
   lock that `generate_operational_docs.py` writes and `--check` holds. Never

@@ -46,7 +46,7 @@ target:`demo_deals
 
 / The column the bounded window is taken on. Declared rather than assumed so
 / .qsrc can window the fixture exactly as the live query windows the source.
-timecolumn:`deal_time
+time_column:`deal_time
 
 / What identifies a row uniquely. `deal_id` is the natural key for a
 / deal-shaped source and is obviously right for this synthetic one, where
@@ -114,7 +114,7 @@ fixture:{[]
 / Register on load, so the declaration and the implementation cannot drift:
 / there is no way to have one without the other.
 .qsrc.define[source_name;
-    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
-    (source_name;`demo_deals;target;timecolumn;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`demo_deals;target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

@@ -78,12 +78,12 @@ run:{[job]
     / Before anything that can block, so a process stuck waiting for the
     / tickerplant has already said what it was about to do.
     .qlog.info[job;"starting streaming job";
-        `subscribeto`publishes`timer`on_batch!(decl`subscribeto;decl`publishes;
+        `subscribe_to`publishes`timer`on_batch!(decl`subscribe_to;decl`publishes;
             $[`period in key decl; decl`period; 0Nn];`on_batch in key decl)];
     / A feed subscribes to nothing: it takes a publish handle and nothing
     / else. Asking subscribe_etl for one would make it wait for a
     / subscription it never wanted, and then subscribe to an empty list.
-    h:$[count decl`subscribeto; .qpipe.subscribe_etl[job;decl`subscribeto]; .qpipe.feed_handle[]];
+    h:$[count decl`subscribe_to; .qpipe.subscribe_etl[job;decl`subscribe_to]; .qpipe.feed_handle[]];
     / A job that publishes nothing keeps its unwired stub, so a later edit
     / that starts publishing without declaring it fails loudly instead of
     / sending rows nowhere.
@@ -123,7 +123,7 @@ run:{[job]
             `.qcfgaudit.poll_and_publish;
             "Audit ",(string job)," configuration changes"]];
     .qlog.info[`qproc;"streaming job wired - running";
-        `job`subscribeto`publishes!(job;decl`subscribeto;decl`publishes)];
+        `job`subscribe_to`publishes!(job;decl`subscribe_to;decl`publishes)];
     job}
 
 \d .

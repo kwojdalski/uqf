@@ -70,7 +70,7 @@ on_batch:{[t;x]
             bid_prices:enlist 1.1 1.0999 1.0998 1.0997 1.0996 1.0995 1.0994 1.0993 1.0992 1.0991 1.099;
             ask_prices:enlist 1.1002 1.1003 1.1004 1.1005 1.1006 1.1007 1.1008 1.1009 1.101 1.1011 1.1012)))];
 
-.qstream.define[`vectorize;`procname`subscribeto`publishes`on_batch`note!(
+.qstream.define[`vectorize;`procname`subscribe_to`publishes`on_batch`note!(
     `vectorize1;
     enlist `wide_book;
     enlist `mkt_orderbook;

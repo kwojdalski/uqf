@@ -215,9 +215,9 @@ qfeed.databento_mbp10,query,function,3,h range_from range_to
 qfeed.databento_mbp10,row_key,value,,
 qfeed.databento_mbp10,select_list,function,1,
 qfeed.databento_mbp10,source_name,value,,
-qfeed.databento_mbp10,tablename,value,,
+qfeed.databento_mbp10,table_name,value,,
 qfeed.databento_mbp10,target,value,,
-qfeed.databento_mbp10,timecolumn,value,,
+qfeed.databento_mbp10,time_column,value,,
 qfeed.databento_mbp10,transport,value,,
 qfeed.databento_mbp10,types,value,,
 qfeed.databento_mbp10,tz,value,,
@@ -227,7 +227,7 @@ qfeed.demo_deals,query,function,3,h range_from range_to
 qfeed.demo_deals,row_key,value,,
 qfeed.demo_deals,source_name,value,,
 qfeed.demo_deals,target,value,,
-qfeed.demo_deals,timecolumn,value,,
+qfeed.demo_deals,time_column,value,,
 qfeed.demo_deals,types,value,,
 qfeed.demo_deals,tz,value,,
 qfeed.demo_events,columns,value,,
@@ -236,7 +236,7 @@ qfeed.demo_events,query,function,3,h range_from range_to
 qfeed.demo_events,row_key,value,,
 qfeed.demo_events,source_name,value,,
 qfeed.demo_events,target,value,,
-qfeed.demo_events,timecolumn,value,,
+qfeed.demo_events,time_column,value,,
 qfeed.demo_events,types,value,,
 qfeed.demo_events,tz,value,,
 qfeed.upstream_trades,columns,value,,
@@ -245,7 +245,7 @@ qfeed.upstream_trades,query,function,3,h range_from range_to
 qfeed.upstream_trades,row_key,value,,
 qfeed.upstream_trades,source_name,value,,
 qfeed.upstream_trades,target,value,,
-qfeed.upstream_trades,timecolumn,value,,
+qfeed.upstream_trades,time_column,value,,
 qfeed.upstream_trades,types,value,,
 qfeed.upstream_trades,tz,value,,
 qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
@@ -436,7 +436,7 @@ qodbc,open,function,1,conn
 qodbc,require_available,function,1,
 qodbc,run_sql,function,2,h sql
 qodbc,table_names,function,1,h
-qodbc,window_query,function,6,h tablename timecolumn columns range_from range_to
+qodbc,window_query,function,6,h table_name time_column columns range_from range_to
 qodbc,with_connection,function,2,conn f
 qopt,BISECT_VOL_HI,value,,
 qopt,BISECT_VOL_LO,value,,

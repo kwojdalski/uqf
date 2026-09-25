@@ -25,7 +25,7 @@ SOURCE = "source_name:`acme\n.qsrc.define[source_name;`columns!enlist `time];\n"
 WORKER = ".qbw.define[`acme_backfill;`source`dataset`width!(`acme;`acme_tape;1D)];\n"
 STREAM = (
     ".qstream.define[`acme_spread;"
-    "`procname`subscribeto`publishes!(`acme_spread1;enlist `quote;enlist `acme_spread)];\n"
+    "`procname`subscribe_to`publishes!(`acme_spread1;enlist `quote;enlist `acme_spread)];\n"
 )
 
 

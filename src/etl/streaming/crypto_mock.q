@@ -252,7 +252,7 @@ on_timer:{[]
 
 \d .
 
-.qstream.define[`crypto_mock;`procname`subscribeto`publishes`period`on_timer`note!(
+.qstream.define[`crypto_mock;`procname`subscribe_to`publishes`period`on_timer`note!(
     `cryptomock1;
     `symbol$();
     `crypto_book`crypto_trades;

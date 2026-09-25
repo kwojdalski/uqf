@@ -203,7 +203,7 @@ on_batch:{[t;x]
 .qcfgaudit.watch[`cross_arbitrage;
     `.qsub.cross_arbitrage.notional`.qsub.cross_arbitrage.max_skew];
 
-.qstream.define[`cross_arbitrage;`procname`subscribeto`publishes`on_batch`note!(
+.qstream.define[`cross_arbitrage;`procname`subscribe_to`publishes`on_batch`note!(
     `crossarb1;
     enlist `superbook;
     `cross_arbitrage`config_change;

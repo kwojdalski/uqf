@@ -33,7 +33,7 @@
 / .
 / REGISTERED AS A STREAMING JOB, because it is one: the runner subscribes,
 / wires publish and installs upd exactly as for any other job. define
-/ performs the .qstream.define itself - subscribeto is the source list,
+/ performs the .qstream.define itself - subscribe_to is the source list,
 / publishes is the output, on_batch is the dispatcher - so an instance
 / cannot declare its edges differently from its mappings.
 
@@ -56,7 +56,7 @@ required_keys:`procname`output`input
 / positionally and a mapping that emits size before price lands as a
 / table whose sizes are prices.
 / @param name the normalizer's name, e.g. `executions - also its output table and its .qsub namespace
-/ @param decl dict of procname, output (an empty unkeyed table, no `time`), input (source table -> transform name), and optionally startwithall (boolean) and note (string)
+/ @param decl dict of procname, output (an empty unkeyed table, no `time`), input (source table -> transform name), and optionally start_with_all (boolean) and note (string)
 / @return the name
 / @throws error naming every problem it finds first
 define:{[name;decl]
@@ -71,8 +71,8 @@ define:{[name;decl]
         'who,"'s output carries `time` - the plant stamps its own, and a source's own stamp belongs in a column named for what it is"];
     / Deployment facts, as on .qstream.define - optional, and read by the
     / uqs process registry, which is derived from these declarations.
-    if[(`startwithall in key decl) and not -1h=type decl`startwithall;
-        'who,"'s startwithall must be a boolean, 1b to start with the stack"];
+    if[(`start_with_all in key decl) and not -1h=type decl`start_with_all;
+        'who,"'s start_with_all must be a boolean, 1b to start with the stack"];
     if[(`note in key decl) and not 10h=type decl`note; 'who,"'s note must be a string"];
     srcs:decl`input;
     if[not (99h=type srcs) and (11h=type key srcs) and 11h=type value srcs;
@@ -85,7 +85,7 @@ define:{[name;decl]
     / or the runner reaching for a job's handler finds it in the one place.
     handler:dispatch[name;;];
     (` sv (.qstream.namespace name),`on_batch) set handler;
-    .qstream.define[name;`procname`subscribeto`publishes`on_batch!(
+    .qstream.define[name;`procname`subscribe_to`publishes`on_batch!(
         decl`procname; key srcs; enlist name; handler)];
     name}
 

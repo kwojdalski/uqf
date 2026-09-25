@@ -1,7 +1,7 @@
 """Who feeds whom: the process graph, and whether it is actually satisfied.
 
 The graph already existed in three places before this module - the
-`subscribeto`/`publishes` fields on each `Pipeline`, the `.qdag` registry in
+`subscribe_to`/`publishes` fields on each `Pipeline`, the `.qdag` registry in
 q that `src/etl/generated/pipeline_dag.q` feeds, and the diagrams derived
 from both. What none of them did was answer the question an operator
 actually has, which is not "what is the shape of the graph" but "is the
@@ -81,8 +81,8 @@ def inputs_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tuple[s
     for pipeline in pipelines:
         if pipeline.subscribes_dynamic:
             continue
-        if subscribeto := pipeline.subscribed_tables:
-            out[pipeline.procname] = subscribeto
+        if subscribe_to := pipeline.subscribed_tables:
+            out[pipeline.procname] = subscribe_to
     return out
 
 

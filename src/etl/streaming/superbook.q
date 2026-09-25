@@ -141,7 +141,7 @@ on_timer:{[] refresh .z.p;}
 / change to it changes every snapshot downstream - worth recording (#295).
 .qcfgaudit.watch[`superbook;enlist `.qsub.superbook.max_age];
 
-.qstream.define[`superbook;`procname`subscribeto`publishes`on_batch`period`on_timer`note!(
+.qstream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note!(
     `superbook1;
     enlist `market_data;
     `superbook`config_change;

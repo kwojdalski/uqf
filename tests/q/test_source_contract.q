@@ -14,7 +14,7 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 / rather than reusing the demo source's keeps a test's failure attributable
 / to the thing it changed.
 decl:{[]
-    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
     (`t;`ext;`loc;`ts;`ts;`ts`px;"pf";
      {[h;a;b] ()};
      {([] ts:enlist .srctest.d 1; px:enlist 1.5)};
@@ -46,7 +46,7 @@ test_a_missing_declaration_is_refused_at_registration:{[t]
     .qunit.assertError[{.qsrc.define[`t;x]};(enlist `source)#.srctest.decl[];"an incomplete declaration fails at registration, not at first use"]};
 
 test_every_missing_field_is_named_at_once:{[t]
-    partial:`source`tablename`target!(`t;`ext;`loc);
+    partial:`source`table_name`target!(`t;`ext;`loc);
     err:@[{.qsrc.define[`t;x]; ""};partial;{x}];
     .qunit.assertEquals[all err like/: ("*columns*";"*types*";"*query*";"*fixture*");1b;"four omissions are reported together, not one per attempt"]};
 
@@ -79,11 +79,11 @@ test_a_time_zone_must_be_a_single_symbol:{[t]
     bad:@[.srctest.decl[];`tz;:;"Europe/London"];
     .qunit.assertError[{.qsrc.define[`t;x]};bad;"a string zone would silently fail the zone-table lookup"]};
 
-/ The window is taken on timecolumn, so a timecolumn outside `columns` is
+/ The window is taken on time_column, so a time_column outside `columns` is
 / never type-checked by validate and only surfaces at fetch time, mid-run.
 test_a_time_field_outside_the_declared_fields_is_refused:{[t]
-    bad:@[.srctest.decl[];`timecolumn;:;`nosuch];
-    .qunit.assertError[{.qsrc.define[`t;x]};bad;"a typo in timecolumn must fail at registration, not two layers down"]};
+    bad:@[.srctest.decl[];`time_column;:;`nosuch];
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"a typo in time_column must fail at registration, not two layers down"]};
 
 / q's datetime (`z`) is a FLOAT count of days, so z->p rounding loses
 / sub-second precision silently: measured, 999 of 1000 nanosecond-spaced
@@ -257,7 +257,7 @@ test_a_clean_text_table_reports_no_failures:{[t]
 / would fail validate later with a much less useful message.
 test_an_uncoercible_declared_type_is_refused:{[t]
     .qsrc.define[`weird;
-        `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
+        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
         (`weird;`e;`l;`ts;`ts;`ts`blob;"px";{[h;a;b] ()};{([] ts:enlist .srctest.d 1; blob:enlist 1b)};`UTC)];
     txt:([] ts:enlist "2026-09-15T09:30:00"; blob:enlist "x");
     .qunit.assertError[{.qsrc.coerce[`weird;x]};txt;"a type with no coercer is named rather than passed through as text"]};

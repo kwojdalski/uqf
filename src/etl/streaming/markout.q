@@ -171,7 +171,7 @@ now:{[] .z.p}
 
 / Score every second - frequent enough that execution_quality stays close to
 / real-time in a demo, cheap enough not to matter at this data volume.
-.qstream.define[`markout;`procname`subscribeto`publishes`on_batch`period`on_timer`startwithall`note!(
+.qstream.define[`markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
     `markout1;
     `trades`quote;
     enlist `execution_quality;

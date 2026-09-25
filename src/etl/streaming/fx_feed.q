@@ -56,7 +56,7 @@ on_timer:{[]
 / Twice a second, matching every other feed in this demo: fast enough that
 / the derived jobs downstream have something to do, slow enough to read the
 / tables by hand while it runs.
-.qstream.define[`fx_feed;`procname`subscribeto`publishes`period`on_timer`startwithall`note!(
+.qstream.define[`fx_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all`note!(
     `fxfeed1;
     `symbol$();
     enlist `quote;

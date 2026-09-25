@@ -16,7 +16,7 @@
 # that there is no third answer the caller could give which the edges do not
 # already imply. A NORMALIZER is the one kind named outright (--kind
 # normalizer): its edges look like an etl's, and what differs is its purpose -
-# several differently-shaped tables in, one canonical shape out - so the diagram shows `--subscribeto` deciding it rather than a
+# several differently-shaped tables in, one canonical shape out - so the diagram shows `--subscribe-to` deciding it rather than a
 # `--kind feed` that does not exist.
 #
 # What is deliberately NOT here: the transform, the check, the io manager and
@@ -84,14 +84,14 @@ cont: ".qstream - streaming job\nsubscribes, never finishes\n\nsrc/etl/streaming
 
 q2: "Does it read another\ntable to do its work?" { class: question }
 feed: "a FEED\ndeclares period + on_timer,\nbuilds its own rows" { class: shell }
-etl: "an ETL\ndeclares subscribeto + on_batch" { class: shell }
+etl: "an ETL\ndeclares subscribe_to + on_batch" { class: shell }
 q2b: "Several sources, in different\nshapes, into ONE canonical table?" { class: question }
 normalizer: "a NORMALIZER (.qnorm)\none mapping per source" { class: shell }
-cmd_n: "uqs new-job NAME --kind normalizer\n  --subscribeto A,B --publishes T --columns \"...\"" { class: command }
+cmd_n: "uqs new-job NAME --kind normalizer\n  --subscribe-to A,B --publishes T --columns \"...\"" { class: command }
 
 cmd_b: "uqs new-job NAME --kind backfill\n  --dataset T --columns \"...\" --width 1D" { class: command }
 cmd_f: "uqs new-job NAME\n  --publishes T --columns \"...\"" { class: command }
-cmd_e: "uqs new-job NAME --subscribeto A,B\n  --publishes T --columns \"...\"" { class: command }
+cmd_e: "uqs new-job NAME --subscribe-to A,B\n  --publishes T --columns \"...\"" { class: command }
 
 q3: "Does it publish a\nNEW table?" { class: question }
 newtable: "--publishes / --dataset with --columns\nThe scaffold defines it on the plant.\n\nWithout that .u.upd DISCARDS the rows\nin silence - healthy process, empty table" { class: warn }
