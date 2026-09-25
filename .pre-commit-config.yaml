@@ -28,7 +28,7 @@ repos:
   # nests `::: {.column}` inside `::: {.columns}`, and only a formatter
   # that parses Pandoc gets the colon counts right.
   #
-  # Two exclusions, and each would break something specific:
+  # Three exclusions, and each would break something specific:
   #   lib/          vendored TorQ and the starter pack, which are never
   #                 edited - an edit survives until the next upgrade and is
   #                 then silently lost.
@@ -36,6 +36,10 @@ repos:
   #                 which CI runs with --check. Formatting it here would make
   #                 the two gates fight: panache rewrites it, the generator
   #                 says it no longer matches the registry, forever.
+  #   web/          prettier already owns it - `npm run check` runs
+  #                 `prettier --check .` over the package, web/README.md
+  #                 included, and the CI job for it goes red the moment a
+  #                 second formatter touches that file. One owner per file.
   #
   # Style lives in .panache.toml so a manual `panache format` matches the
   # hook. scripts/gates/check_hook_scopes.py fails a scope that matches
@@ -44,9 +48,9 @@ repos:
     rev: v3.12.0
     hooks:
       - id: panache-format
-        exclude: '^(lib/|docs/reference/processes\.md$)'
+        exclude: '^(lib/|web/|docs/reference/processes\.md$)'
       - id: panache-lint
-        exclude: '^(lib/|docs/reference/processes\.md$)'
+        exclude: '^(lib/|web/|docs/reference/processes\.md$)'
 
   # Python linting/formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
