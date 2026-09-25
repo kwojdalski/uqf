@@ -1135,6 +1135,7 @@
 .man.registerArg (".qsub.cross_arbitrage.direct_side";"param";"side";"`bid or `ask");
 .man.registerArg (".qsub.cross_arbitrage.direct_side";"param";"size";"the notional");
 .man.registerArg (".qsub.cross_arbitrage.direct_side";"return";"";"dict `price`fully_filled");
+.man.registerArg (".qsub.cross_arbitrage.direct_side";"throws";"";"error if side isn't `bid or `ask");
 .man.registerArg (".qsub.cross_arbitrage.direct_side";"eg";"";"(.qsub.cross_arbitrage.direct_side[`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6);`bid;1e6])`price -> 1.1");
 .man.registerFunc (".qsub.cross_arbitrage.opportunity";".qsub.cross_arbitrage";"One pair's status row: the direct book against its synthetic route. Two directions, and they cannot both be genuine: either the synthetic bid is above the direct ask (buy the pair, sell the route) or the direct bid is above the synthetic ask (the reverse). The larger is reported, so a book that is crossed both ways - which means the data is wrong, not that there is free money twice - still yields one row.";".qsub.cross_arbitrage.opportunity";"");
 .man.registerArg (".qsub.cross_arbitrage.opportunity";"param";"state";"the keyed book state");
@@ -1408,11 +1409,13 @@
 .man.registerArg (".qsub.superbook.replace_books";"return";"";"updated keyed snapshots, without mutating state");
 .man.registerArg (".qsub.superbook.replace_books";"throws";"";"when columns, identities, timestamps or level vectors are malformed");
 .man.registerArg (".qsub.superbook.replace_books";"eg";"";"count .qsub.superbook.replace_books[.qsub.superbook.books;.qsub.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0");
-.man.registerFunc (".qsub.superbook.side_levels";".qsub.superbook";"Flatten one side without merging liquidity belonging to different sources.";".qsub.superbook.side_levels";"count .qsub.superbook.side_levels[.qsub.market_data.market_data;1] -> 0");
+.man.registerFunc (".qsub.superbook.side_levels";".qsub.superbook";"Flatten one side without merging liquidity belonging to different sources.";".qsub.superbook.side_levels";"count .qsub.superbook.side_levels[.qsub.market_data.market_data;`bid] -> 0");
 .man.registerArg (".qsub.superbook.side_levels";"param";"rows";"current source snapshots for one pair");
-.man.registerArg (".qsub.superbook.side_levels";"param";"side";"1 for bids, -1 for asks");
+.man.registerArg (".qsub.superbook.side_levels";"param";"rows";"current source snapshots for one pair");
+.man.registerArg (".qsub.superbook.side_levels";"param";"side";"`bid or `ask");
 .man.registerArg (".qsub.superbook.side_levels";"return";"";"price, size, source and source_time sorted best-first");
-.man.registerArg (".qsub.superbook.side_levels";"eg";"";"count .qsub.superbook.side_levels[.qsub.market_data.market_data;1] -> 0");
+.man.registerArg (".qsub.superbook.side_levels";"throws";"";"error if side isn't `bid or `ask");
+.man.registerArg (".qsub.superbook.side_levels";"eg";"";"count .qsub.superbook.side_levels[.qsub.market_data.market_data;`bid] -> 0");
 .man.registerFunc (".qsub.superbook.snapshot";".qsub.superbook";"Aggregate fresh source snapshots. Known pairs with no liquidity get empty ladders, explicitly clearing downstream opportunities even in a quiet market.";".qsub.superbook.snapshot";"count .qsub.superbook.snapshot[`sym`source xkey 0#.qsub.market_data.market_data;2026.09.19D10:00:00.000000000;0D00:00:05] -> 0");
 .man.registerArg (".qsub.superbook.snapshot";"param";"state";"latest source snapshots keyed by sym and source");
 .man.registerArg (".qsub.superbook.snapshot";"param";"as_of";"UTC processing timestamp");
@@ -1865,6 +1868,7 @@
 .man.registerArg (".qmicro.book_convexity";"param";"prices";"a vector of vectors, one level-0-first vector per row");
 .man.registerArg (".qmicro.book_convexity";"param";"side";"`bid or `ask - which side prices belongs to");
 .man.registerArg (".qmicro.book_convexity";"return";"";"a vector, convexity per row");
+.man.registerArg (".qmicro.book_convexity";"throws";"";"error if side isn't `bid or `ask - checked once here, because");
 .man.registerArg (".qmicro.book_convexity";"eg";"";".qmicro.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> ,-0.0001");
 .man.registerFunc (".qmicro.vamp_one";".qmicro";"Private: vamp for a single row - convert notional into a size via each side's own L0 price, sweep each side at that size (execution.q's sweep_price), and average the two avg_price results.";".qmicro.vamp_one";"");
 .man.registerFunc (".qmicro.vamp";".qmicro";"VAMP (volume-adjusted mid price): convert notional into a size via each side's own L0 price, then sweep each side to that size with execution.q's sweep_price directly and average the two resulting avg_price legs - not a fresh notional-walking algorithm, exactly sweep_price reused twice.";".qmicro.vamp";".qmicro.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> ,1.1001");

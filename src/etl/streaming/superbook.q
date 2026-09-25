@@ -61,17 +61,25 @@ replace_books:{[state;batch;as_of]
 
 / Flatten one side without merging liquidity belonging to different sources.
 / @param rows current source snapshots for one pair
-/ @param side 1 for bids, -1 for asks
+/ .
+/ side is a BOOK side, `bid or `ask, as everywhere else in the library. It
+/ was 1/-1 once, which read as trade direction - where 1 is a buy, and a buy
+/ executes against the ASK - and anything but 1 silently meant asks (#415).
+/ @param rows current source snapshots for one pair
+/ @param side `bid or `ask
 / @return price, size, source and source_time sorted best-first
-/ @eg count .qsub.superbook.side_levels[.qsub.market_data.market_data;1] -> 0
+/ @throws error if side isn't `bid or `ask
+/ @eg count .qsub.superbook.side_levels[.qsub.market_data.market_data;`bid] -> 0
 side_levels:{[rows;side]
-    price_col:$[side=1;`bid_prices;`ask_prices];
-    size_col:$[side=1;`bid_sizes;`ask_sizes];
+    if[not $[-11h=type side; side in `bid`ask; 0b];
+        '"side_levels: side must be `bid or `ask, got ",.Q.s1 side];
+    price_col:$[side=`bid;`bid_prices;`ask_prices];
+    size_col:$[side=`bid;`bid_sizes;`ask_sizes];
     n:count each rows price_col;
     ladder:([] price:`float$raze rows price_col; size:`float$raze rows size_col;
         source:`symbol$raze n#'rows`source;
         source_time:`timestamp$raze n#'rows`source_time);
-    $[side=1; `price xdesc ladder; `price xasc ladder]}
+    $[side=`bid; `price xdesc ladder; `price xasc ladder]}
 
 / Aggregate fresh source snapshots. Known pairs with no liquidity get empty
 / ladders, explicitly clearing downstream opportunities even in a quiet market.
@@ -90,8 +98,8 @@ snapshot:{[state;as_of;age]
     while[i<count pairs;
         pair:pairs i;
         current:select from fresh where sym=pair;
-        bids:side_levels[current;1];
-        asks:side_levels[current;-1];
+        bids:side_levels[current;`bid];
+        asks:side_levels[current;`ask];
         result:result upsert (pair;as_of;bids`price;bids`size;bids`source;bids`source_time;
             asks`price;asks`size;asks`source;asks`source_time);
         i+:1];

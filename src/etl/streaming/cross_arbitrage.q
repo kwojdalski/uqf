@@ -105,8 +105,11 @@ leg_times:{[state;route]
 / @param side `bid or `ask
 / @param size the notional
 / @return dict `price`fully_filled
+/ @throws error if side isn't `bid or `ask
 / @eg (.qsub.cross_arbitrage.direct_side[`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6);`bid;1e6])`price -> 1.1
 direct_side:{[row;side;size]
+    if[not $[-11h=type side; side in `bid`ask; 0b];
+        '"direct_side: side must be `bid or `ask, got ",.Q.s1 side];
     prices:$[side=`bid; row`bid_prices; row`ask_prices];
     sizes:$[side=`bid; row`bid_sizes; row`ask_sizes];
     swept:.qexec.sweep_price[prices;sizes;size];
