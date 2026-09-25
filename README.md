@@ -62,14 +62,14 @@ trying for the pure-q modules in `src/`, not as a substitute for a green suite.
 The fleet is a separate question again: the stack under `scripts/` runs on
 vendored TorQ, which has its own compatibility surface.
 
-The tooling will not pick one for you. There is deliberately no *automatic*
-fallback anywhere in it: a suite that passed against something the code is not
-verified on is worse than one that does not run, so every entry point skips
-rather than substituting. Choosing another interpreter is therefore explicit ---
-`scripts/test.py` reads `$Q` and `$QHOME`:
+Every entry point, the running stack included, finds q by TorQ's own rule:
+`$QCMD` if set, otherwise `q` on `PATH` --- the default `torq.sh` itself
+applies. There is no second fallback on top of it (no `~/.kx/bin/q`, no PeachQ):
+one rule, so the stack, its HDB and the test lanes cannot run different
+binaries. To choose an interpreter, set `$QCMD` and `$QHOME`:
 
 ```
-Q=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
+QCMD=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
 ```
 
 Run everything from the repository root - the load scripts use paths relative to
@@ -77,15 +77,15 @@ it (e.g. `src/foundation/stats.q`).
 
 ### Also needed, by component
 
-  | Tool                                                  | For                                                                                                                                                                                     | Required?                                                        |
-  | ---                                                   | ---                                                                                                                                                                                     | ---                                                              |
-  | **KDB-X**                                             | everything in `src/`, `scripts/` and `tests/`                                                                                                                                           | preferred — see [above](#requirements) for what else may work    |
-  | **[uv](https://docs.astral.sh/uv/)**                  | the Python packages and every `uqs` command                                                                                                                                             | yes, for the fleet                                               |
-  | **`qcon`**                                            | attaching a console to a running process: `uqs query --port <p> --console`                                                                                                              | no - only that command                                           |
-  | **`rlwrap`**                                          | line editing and history inside `qcon`                                                                                                                                                  | no - `qcon` runs without it                                      |
-  | **`multitail`**                                       | `uqs multitail`: following process logs one pane per file                                                                                                                               | no - `uqs logs -f` follows the same files merged into one stream |
-  | **Node**                                              | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares                                     | no - only for `web/`                                             |
-  | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor. `cargo install --git https://github.com/kwojdalski/q-lint --locked`; it reads this repo's `[tool.q-lint]` exclusions | no - never needed to build, test or run                          |
+  | Tool                                                  | For                                                                                                                                                                                              | Required?                                                        |
+  | ---                                                   | ---                                                                                                                                                                                              | ---                                                              |
+  | **KDB-X**                                             | everything in `src/`, `scripts/` and `tests/`                                                                                                                                                    | preferred — see [above](#requirements) for what else may work    |
+  | **[uv](https://docs.astral.sh/uv/)**                  | the Python packages and every `uqs` command                                                                                                                                                      | yes, for the fleet                                               |
+  | **`qcon`**                                            | attaching a console to a running process: `uqs query --port <p>` with no expression                                                                                                              | no - only that command                                           |
+  | **`rlwrap`**                                          | line editing and history inside `qcon`                                                                                                                                                           | no - `qcon` runs without it                                      |
+  | **`multitail`**                                       | `uqs multitail`: following process logs one pane per file                                                                                                                                        | no - `uqs logs -f` follows the same files merged into one stream |
+  | **Node**                                              | building and running the [browser application](#browser-application) — `^22.13 \|\| ^24 \|\| >=26`, the intersection of what the toolchain declares                                              | no - only for `web/`                                             |
+  | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source without running it, and diagnostics in an editor. `cargo install --git https://github.com/kwojdalski/q-lint --locked`; it reads this repo's `[tool.q-lint]` exclusions          | no - never needed to build, test or run                          |
 
 `qcon` is kdb's console client. It ships with some kdb+ distributions and
 **not** with the KDB-X personal edition, where `~/.kx/bin/` holds only `q` and

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from uqs.logger import get_logger
 from uqs.model.registry import DEFAULT_BASE_PORT
-from uqs.paths import UqsPaths
+from uqs.paths import UqsPaths, q_command
 
 log = get_logger(__name__)
 
@@ -48,5 +48,8 @@ def build_env(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         "TORQPROCESSES": str(paths.generated_procs),
         "RLWRAP": "rlwrap",
         "QCON": "qcon",
-        "QCMD": "q",
+        # $QCMD, else `q` - the one interpreter rule, which is TorQ's own.
+        # Hardcoding `q` here overrode an operator's QCMD, so the stack ran
+        # whatever PATH found while its HDB filler ran another binary (#414).
+        "QCMD": q_command(),
     }

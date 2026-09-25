@@ -86,16 +86,15 @@ def _kdbx() -> tuple[str, dict[str, str]]:
     exported from anything else would be a quietly incomplete contract - the
     worst kind for this purpose.
     """
+    from uqs.paths import q_interpreter
+
     env = os.environ.copy()
-    override = env.get("UQFQ")
-    if override and Path(override).is_file():
-        return override, env
-    kdbx = Path.home() / ".kx" / "bin" / "q"
-    if kdbx.is_file():
+    q = q_interpreter(env)
+    if q is not None:
         env.setdefault("QHOME", str(Path.home() / ".kx"))
-        return str(kdbx), env
+        return str(q), env
     raise SystemExit(
-        "no KDB-X interpreter (~/.kx/bin/q or $UQFQ). There is deliberately no "
+        "no q interpreter - set $QCMD, or put q on PATH. There is deliberately no "
         "fallback: another interpreter would export a partial surface rather "
         "than fail, which is the one outcome this must not produce."
     )
