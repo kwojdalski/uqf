@@ -214,6 +214,40 @@ test_an_unrelated_global_is_left_alone:{[t]
     .qunit.assertEquals[.covfix.untouched_dict[`g]~.covfix.branch;1b;
         "a dictionary holding a function nobody instrumented is not rewritten"]};
 
+/ An EMPTY typed dictionary must come back with its types, and `~` is the
+/ assertion that matters: (`symbol$())!`long$() and (`symbol$())!() are both
+/ empty and both 99h, so anything weaker passes while the types are gone.
+/ .
+/ The walk used to rebuild every dictionary it visited as
+/ (key v)!f each value v, and `each` over an empty TYPED vector gives a
+/ generic empty list - so this exact shape came back untyped. reseed installs
+/ whatever differs from the original, and a type change differs, so the
+/ corrupted copy was written to the real global. .qpipe.published is one:
+/ record_published's `0^published t` then gave () rather than 0 and the next
+/ comparison threw 'type, which is what made q-unit red and q-order green
+/ (#460).
+test_an_empty_typed_global_keeps_its_types:{[t]
+    `.covfix.empty_typed set (`symbol$())!`long$();
+    .cov.run[{[] 1+1};enlist (::);.covtest.only `.covfix.add];
+    .qunit.assertEquals[.covfix.empty_typed~(`symbol$())!`long$();1b;
+        "an empty typed dictionary is returned identical, types included"];
+    .qunit.assertEquals[0^.covfix.empty_typed `absent;0;
+        "so 0^ on a missing key still fills with 0, not with ()"]};
+
+/ Where the trap STOPS, which is worth pinning even though neither case was
+/ ever broken: swap_value rebuilds only 99h, 98h and 0h, so an empty TYPED
+/ vector is returned by the default arm untouched whether it sits inside a
+/ dictionary or is reached directly. This one characterises that boundary -
+/ it passes with the fix and without it. The test above is the regression.
+test_an_empty_typed_vector_nested_in_a_global_keeps_its_type:{[t]
+    `.covfix.nested_empty set (enlist `counts)!enlist `long$();
+    `.covfix.list_empty set `float$();
+    .cov.run[{[] 1+1};enlist (::);.covtest.only `.covfix.add];
+    .qunit.assertEquals[.covfix.nested_empty[`counts]~`long$();1b;
+        "an empty long vector inside a dictionary is still a long vector"];
+    .qunit.assertEquals[.covfix.list_empty~`float$();1b;
+        "and an empty float vector reached directly is still a float vector"]};
+
 / A suite being MEASURED can contain tests that call .cov.run - this file is
 / proof - and an inner run that simply reallocated the counters left every
 / outer probe indexing past the end of a shorter vector. The whole suite then
