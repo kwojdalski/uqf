@@ -1,4 +1,4 @@
-# Scaffolding an etl
+# ETL
 
 An etl subscribes to one or more plant tables, computes something from each
 batch, and republishes. Most of this stack is etls: `posbook1` folds fills into

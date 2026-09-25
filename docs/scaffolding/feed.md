@@ -1,4 +1,4 @@
-# Scaffolding a feed
+# Feed
 
 A feed invents its own rows on a timer. Nothing upstream of it exists in the
 stack: the synthetic FX quotes, the order flow, the mock crypto recorder are all
