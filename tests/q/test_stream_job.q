@@ -59,10 +59,28 @@ test_every_job_is_registered:{[t]
     / its file, so every file in the directory must have registered. The hand
     / list this replaced made every new job an edit here. `except` rather than
     / equality because other suites register test jobs (.qsub.nt_k and
-    / friends), and whether they ran first is not what this asks.
+    / friends), and whether they ran first is not what this asks. The other
+    / direction is test_every_registered_job_has_a_file, below.
     .qunit.assertEquals[.testutil.etl_declaration_names["src/etl/streaming"] except .qstream.registered[];
         `symbol$();
         "each job file registers itself as it loads"]};
+
+/ The jobs src/ registered, taken as this file LOADS rather than when a test
+/ runs. Every suite loads before any of them runs (.testutil.load_suites),
+/ and test jobs - .qsub.nt_k, regtest_feed and friends - register only inside
+/ test bodies, so this is the tree's own set whatever UQF_TEST_ORDER says.
+/ A suite that registered a job at load time would land here and fail the
+/ test below, which is the right outcome: register fixtures inside a test.
+src_jobs:.qstream.registered[]
+
+test_every_registered_job_has_a_file:{[t]
+    / The direction the hand list used to carry and the file-derived check
+    / above cannot (#352): a job in the registry with no file. One declared
+    / from anywhere but src/etl/streaming/<job>.q is invisible to every check
+    / that reads that directory, while still running in the stack.
+    .qunit.assertEquals[src_jobs except .testutil.etl_declaration_names["src/etl/streaming"];
+        `symbol$();
+        "every registered job lives in src/etl/streaming/<job>.q, named after its file"]};
 
 test_a_feed_declares_no_subscription:{[t]
     .qunit.assertEquals[count .qstream.declaration[`fx_feed]`subscribes;0;

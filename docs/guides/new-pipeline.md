@@ -95,13 +95,15 @@ reports `.dxprobetest.test_dxprobe_is_implemented`, and the `.jobouttest` tests
 that drive every publishing job fail on the throwing driver.
 
 Nothing else in the q suite needs an edit. `test_every_job_is_registered`
-derives its jobs from `src/etl/streaming/` (#352), and the scaffold adds a new
-table to `expected` in `test_stack_tables.q`. That list stays a **deliberate
-gate** --- a new table is either a capability nobody wired up or a stray
-definition --- and the scaffold passes it by defining the table and naming its
-owner in the same plan. It also registers your test's NAMESPACE in `run_tests.q`
-(#350); without that the stub loaded and never ran, so the one red the scaffold
-exists to leave was the one you could not see.
+derives its jobs from `src/etl/streaming/` (#352), and
+`test_every_registered_job_has_a_file` holds the other direction: a job that
+registers anywhere other than its own file in that directory fails it. The
+scaffold adds a new table to `expected` in `test_stack_tables.q`. That list
+stays a **deliberate gate** --- a new table is either a capability nobody wired
+up or a stray definition --- and the scaffold passes it by defining the table
+and naming its owner in the same plan. It also registers your test's NAMESPACE
+in `run_tests.q` (#350); without that the stub loaded and never ran, so the one
+red the scaffold exists to leave was the one you could not see.
 
 `uv run pytest python/uqs` fails twice:
 
