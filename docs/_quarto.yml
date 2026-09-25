@@ -77,21 +77,21 @@ website:
     contents:
       - text: "Documentation map"
         href: README.md
-      - section: "Guides — how do I do this?"
+      - section: "Guides"
         contents:
           - guides/uqs.md
           - guides/new-pipeline.md
           - guides/ci.md
           - guides/config-audit.md
           - guides/metatables.md
-      - section: "Scaffolding — how do I create one?"
+      - section: "Scaffolding"
         contents:
           - scaffolding/README.md
           - scaffolding/feed.md
           - scaffolding/etl.md
           - scaffolding/normalizer.md
           - scaffolding/backfill.md
-      - section: "Services — what does this run?"
+      - section: "Services"
         contents:
           - services/synthetic-feeds.md
           - services/superbook.md
@@ -100,7 +100,7 @@ website:
           - services/databento.md
           - services/crypto-recorder.md
           - services/tap.md
-      - section: "Architecture — why this shape?"
+      - section: "Architecture"
         contents:
           - architecture/pipeline-philosophy.md
           - architecture/stack.md
@@ -108,7 +108,7 @@ website:
           - architecture/pipeline-framework-gaps.md
           - architecture/event-tape.md
           - architecture/cryptorust-discovery.md
-      - section: "Reference — what is the contract?"
+      - section: "Reference"
         contents:
           - reference/quant-modules.md
           - reference/environment.md
