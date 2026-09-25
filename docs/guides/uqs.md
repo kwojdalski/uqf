@@ -611,8 +611,11 @@ uqs start marketdata1 superbook1 arbitrage1
 `crossarb1` is a second consumer of that chain, answering the other
 arbitrage question - the direct book against a synthetic route rather than
 two sources on one pair. The chain plus BOTH detectors is four plant
-connections against three spare, so run one or the other unless you stop
-something first. See [the cross-arbitrage service](../services/cross-arbitrage.md).
+connections on top of whatever is already running, which is what
+[`--profile arbitrage`](#profiles-a-named-start-set-that-fits) exists for: it
+starts that set and is checked against the budget first, where a positional
+start is only warned about. See
+[the cross-arbitrage service](../services/cross-arbitrage.md).
 
 The graph behind all of this is the `subscribes`/`publishes` pair on each
 `Pipeline`, the same declaration the generated `database.q` and the `.qdag`

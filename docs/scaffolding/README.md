@@ -20,7 +20,9 @@ The first three are **streaming**: long-running processes that subscribe,
 compute and republish forever. The fourth is **bounded**: it takes a window
 from the environment, fills it, records coverage and exits. Picking the wrong
 one is the only structural mistake here that is expensive to undo, which is
-why [new-pipeline.md](../guides/new-pipeline.md) opens with the same question.
+why the question is asked here, before anything is written.
+[new-pipeline.md](../guides/new-pipeline.md) takes the two shells apart once
+you have chosen.
 
 `--kind` names three of them — `streaming` (the default), `normalizer`,
 `backfill`. There is no `--kind feed`: a streaming job that subscribes to
