@@ -1,0 +1,12 @@
+# Formatting rules for markdown and Quarto, applied by the panache hooks in
+# .pre-commit-config.yaml. Kept in a file rather than as hook `args` so that
+# a manual `panache format` and the hook produce the same result - panache's
+# own guidance, and the failure it prevents is a contributor "fixing"
+# formatting that the hook then undoes.
+
+[format]
+# Re-wrap prose to 80 columns. The tree was hand-wrapped at roughly 72-76
+# before this, inconsistently; reflow makes the width a property of the
+# formatter rather than of whoever last edited the paragraph.
+wrap = "reflow"
+line-width = 80
