@@ -193,6 +193,10 @@ UNPROFILED: dict[str, str] = {
         "a live external feed - its rows come from the Databento handler "
         "(`uqs databento-feed start`), so it is started with that or not at all"
     ),
+    "kafka_flow1": (
+        "a live external feed - its rows come from the Kafka consumer "
+        "(`uqs kafka start`), so it is started with that or not at all"
+    ),
     "tap1": (
         "a diagnostic subscriber chosen at runtime: which table it taps is an "
         "argument, so there is no standing set it belongs to"

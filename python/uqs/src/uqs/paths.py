@@ -155,6 +155,16 @@ class UqsPaths:
         """
         return self.orchestrator_dir / "databento_feed.pid"
 
+    @property
+    def kafka_feed_pid_path(self) -> Path:
+        """The Kafka consumer's pid file.
+
+        Beside the Databento handler's, and for the same reason: an external
+        publisher this repository starts, which torq.sh knows nothing about
+        and so cannot stop.
+        """
+        return self.orchestrator_dir / "kafka_feed.pid"
+
 
 #: Directories that together identify this repository's root and nothing else.
 #: Both, because either alone is a plausible name inside some other tree.
