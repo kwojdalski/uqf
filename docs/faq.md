@@ -65,6 +65,107 @@ error anywhere. Start it through a profile, or start its producers with it:
 naming a leaf in a profile pulls in everything it reads. See [running the
 stack](guides/uqs.md).
 
+## How do I debug a job that misbehaves?
+
+Work from the outside in. Each step answers a narrower question than the one
+before, and most problems stop at the first two.
+
+**1. Is it running, and is it wired to anything?** `uqs summary` shows every
+process's status next to what it subscribes to, what it publishes, and which
+processes it therefore needs running. A job that is `up` but idle is usually a
+job whose inputs nobody is producing, and this column says so.
+
+**2. What does its log say?** `uqs logs <process> -f` follows it
+(`uqs multitail <process>` gives one pane per log file, and `uqs up <process>`
+starts it and streams its log in the foreground). Three lines tell you where
+rows stop:
+
+  | Last line you see             | Means                                                            |
+  | ---                           | ---                                                              |
+  | `waiting for the tickerplant` | the plant is not up, and the job is blocked until it is          |
+  | no `first batch received`     | the job subscribed but nothing arrives - its producer is missing |
+  | no `first rows published`     | batches arrive, but the handler publishes nothing                |
+
+**3. Turn on DBG for that one process.** Without a restart:
+`uqs query ".qlog.debug 1b" --port <port>`. A backfill takes `--debug`
+(`uqs backfill <worker> --debug ...`), which starts it with `-verbose`. DBG is
+per process on purpose: switched on fleet-wide, it buries the one worker you are
+looking at.
+
+**4. Look inside the running process.** `uqs conn <process>` opens a qcon
+session on it by name. From there,
+`.qstream.def `<job>` is its declaration, `.qsub.<job>` holds its state, and `.qpipe.received` / `.qpipe.published\`
+count the rows in and out per table.
+
+**5. Reproduce it without the stack.** Load the tree in plain q
+(`\l src/init.q`, `\l src/etl/init.q`), point the job's `publish` at a recorder
+with `.qstream.wire`, and call `.qsub.<job>.on_batch` with a batch you build -
+the pattern in [the etl scaffolding
+page](scaffolding/etl.md#testing-it-without-a-stack). To run it as a real
+process on stock kdb+, use `scripts/processes/run_stream.q`.
+
+**A backfill** has exited by the time you look, so read what it left on disk. In
+q, after loading the tree: `.qmatz.attach[]` then `.qmatz.ledger[]` for what was
+covered, `.qrun.attach[]` then `.qrun.history[]` for each run and its outcome,
+and `.qhb.report[]` for heartbeats. All three live in the status directory,
+`$UQFSTATUSDIR`.
+
+**Query errors from the HDB** such as
+`./2026.01.07/arbitrage. OS reports: No such file or directory` mean a partition
+is missing a table or column: `uqs hdb-check` names which.
+
+**Before tracing q by hand**, run
+[`qlinter`](https://github.com/kwojdalski/q-lint) on the file. Several of this
+tree's most expensive bugs are patterns it checks for, such as a builtin used as
+a parameter name, or a line holding only `/`.
+
+## Where do a backfill's rows end up?
+
+In the HDB, in the partition of each row's own date - not through the
+tickerplant. A backfill started by `uqs backfill` writes through `.qio.hdb`: it
+refuses rows dated today or later (the tickerplant's and end-of-day's), gives
+each row a `time` from its own time column, and appends it to
+`<hdb>/<date>/<table>/`. At the end of the run each partition it touched is
+sorted with `p#sym`, and the running HDB is asked to reload. The tickerplant
+would stamp old rows with today's time, file them under today's date, and hand
+them to every subscriber as if they had just happened. In plain q - a test, or a
+prompt - the same worker writes to an in-memory table instead. See
+[`io_manager.q`](../src/etl/core/io_manager.q).
+
+## How is it decided whether rows go to the RDB or the HDB?
+
+Not per row, and not by `.qpipe`: by which kind of process the job runs in. The
+runner that starts the process wires its output once, at startup.
+
+  | Process                                        | Its rows go                                                                                                                                                     | Wired by                                                                                            |
+  | ---                                            | ---                                                                                                                                                             | ---                                                                                                 |
+  | a streaming job (`.qstream`, `.qnorm`)         | to the tickerplant, which stamps `time` and fans them out: `rdb1` holds today in memory, `wdb1` writes the day down and it is sorted into the HDB at end of day | `torq_stream.q`: the job's `publish` becomes `.qpipe.publish`, which calls `.u.upd`                 |
+  | a backfill (`.qbw`, started by `uqs backfill`) | straight into the HDB partition of each row's own date - never the tickerplant, never the RDB                                                                   | `torq_backfill.q`: sets `.qio.default` to `.qio.hdb`, then `.qpipe.reload_hdb` once the run is done |
+
+So the rule is about the data's age, enforced by process type. Live rows go
+through the tickerplant because subscribers must see them and today's partition
+is end-of-day's to write. History goes straight to its own date, because the
+tickerplant would stamp it with today's time. The one hard edge is checked:
+`.qio.hdb` refuses rows dated today or later, so a backfill cannot write into
+the partition end-of-day owns. `.qpipe`'s only part in the HDB path is the
+reload request, because that is the step that needs TorQ.
+
+## Without TorQ, or with no tickerplant running, where does the data end up?
+
+Nowhere silently. Every one of these cases either stops loudly or keeps the rows
+somewhere you can see:
+
+  | Situation                                            | What happens                                                                                                                                                                                                                                                                                   |
+  | ---                                                  | ---                                                                                                                                                                                                                                                                                            |
+  | TorQ stack, but the tickerplant is not running       | A streaming job never starts. `.qpipe.subscribe_etl` blocks until the plant is up, and the job's last log line is `waiting for the tickerplant - if this is the last line, it is not running`. Nothing is published, so nothing is lost.                                                       |
+  | Plain q, no TorQ, job not wired                      | `.qpipe` is not loaded at all - nothing under `src/` uses it - and the job's `publish` is still the stub it starts as, which throws `publish: <job> is not wired`. A job that produces rows fails rather than dropping them.                                                                   |
+  | Plain q, job wired to a recorder (`.qstream.wire`)   | The rows are wherever the recorder puts them, usually a table in that q session. This is how the tests run.                                                                                                                                                                                    |
+  | Stock kdb+, `scripts/processes/run_stream.q`         | `.qtick` stands in for the tickerplant. It stamps `time`, sends each batch to its subscribers, and writes a tick log under `-logdir` (default `tplog/`), which a restarted job replays. There is no RDB, HDB or end-of-day writedown, so rows live in the subscribers' memory and in that log. |
+  | Plain q, a bounded worker                            | The default output is `.qio.memory`, so rows land in a table named after the source's target in that q session. Only a backfill started by `uqs backfill` writes to the HDB.                                                                                                                   |
+
+The rule underneath: `publish` only reaches a tickerplant when a runner wires it
+to one, and a job that is not wired throws instead of running silently.
+
 ## Why doesn't my job start with the stack?
 
 A job starts on demand unless its declaration says `start_with_all` `1b`,
