@@ -10,7 +10,7 @@
 # Every README.md is listed by name on purpose. Quarto's project render skips
 # them - a README is a repository file, not site content, by its default - so
 # the glob alone left all six of this tree's index pages unrendered and
-# therefore unchecked. docs/README.md is the documentation map and the most
+# therefore unchecked. docs/README.md is the introduction and the most
 # link-dense document here, so that omission mattered most exactly where it
 # was least visible.
 project:
@@ -67,7 +67,7 @@ website:
         href: presentation/uqf.qmd
 
   # docs/README.md leads, which is also what makes the site's root land on the
-  # documentation map: with no index.qmd in the project, Quarto redirects "/"
+  # introduction: with no index.qmd in the project, Quarto redirects "/"
   # to the FIRST page in this sidebar. Listed alphabetically before, that was
   # architecture/cryptorust-discovery.html - a single-decision note as the
   # front door.
@@ -75,8 +75,10 @@ website:
     style: floating
     collapse-level: 2
     contents:
-      - text: "Documentation map"
+      - text: "Introduction"
         href: README.md
+      - text: "FAQ"
+        href: faq.md
       - section: "Guides"
         contents:
           - guides/uqs.md

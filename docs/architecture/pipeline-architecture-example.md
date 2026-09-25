@@ -1,4 +1,4 @@
-# A desk system, composed
+# Desk System, composed
 
 What a trading desk's system looks like when it is built out of the services
 this tree implements. Not the running demo --- [the stack page](stack.md) and
@@ -6,14 +6,15 @@ the generated [process table](../reference/processes.md) draw that, with ports
 and every process --- but the *shape*, so the pieces can be seen as one system
 rather than as a list of files.
 
-![A desk system in seven bands, top to bottom: sources, the plant, normalizers, engines, storage, on-demand analytics, surfaces](../diagrams/pipeline-architecture-example.svg)
+![A desk system in seven bands, top to bottom: sources, the tickerplant, normalizers, engines, storage, on-demand analytics, surfaces](../diagrams/pipeline-architecture-example.svg)
 
-Read it top to bottom, and read the **middle** first. The plant is a narrow
-waist that everything passes through *twice*: a job subscribes to one table and
-publishes another back onto it, and **nothing reads another job's output
-directly**. That is why those arrows run both ways against a single spine
-instead of chaining box to box --- and it is what makes a new engine a
-subscriber rather than a change to a producer.
+Read it top to bottom, and read the **middle** first. The tickerplant --- "the
+plant" from here on, band 2 in the diagram --- is a narrow waist that everything
+passes through *twice*: a job subscribes to one table and publishes another back
+onto it, and **nothing reads another job's output directly**. That is why those
+arrows run both ways against a single spine instead of chaining box to box ---
+and it is what makes a new engine a subscriber rather than a change to a
+producer.
 
 The normalizers are the second waist. Above them each market arrives in its own
 shape; below them there is one.
@@ -39,7 +40,7 @@ ledger](../../src/etl/core/materialisation.q), bitemporally. It never traverses
 the tickerplant, which is why the two halves of the ETL tree look alike in the
 code and take different paths in the diagram.
 
-## 2 · The plant
+## 2 · The tickerplant
 
 One tickerplant, every table. In the stack it is TorQ's `stp1`; on stock kdb+ it
 is [`.qtick`](../../src/etl/core/tick.q). The jobs do not know which --- they

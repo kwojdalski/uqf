@@ -145,7 +145,7 @@ the tree. The next `uqs` command picks up either.
 
 ## Where to go next
 
-- [`docs/README.md`](../README.md): the documentation map
+- [`docs/README.md`](../README.md): the introduction
 - [`docs/guides/uqs.md`](../guides/uqs.md): running the stack
 - [`docs/guides/new-pipeline.md`](../guides/new-pipeline.md): adding a pipeline,
   end to end
