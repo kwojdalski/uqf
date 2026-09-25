@@ -1342,7 +1342,7 @@ def test_every_real_worker_is_read():
         assert create._unpartitioned_workers_filling(root, dataset) == [worker]
 
 
-# ------------------------------------------------- query --console (qcon)
+# ------------------------------------------- query with no expression (qcon)
 
 
 def test_qcon_takes_one_colon_joined_target_not_four_arguments():
@@ -1389,49 +1389,47 @@ def _error_log(monkeypatch) -> _ErrorLog:
     return captured
 
 
-def test_console_execs_qcon_with_the_same_connection_the_query_would_use(monkeypatch):
-    """--console is the same four options pointed at a different transport, so
-    a session must land on the process a plain query would have hit."""
+def test_query_with_no_expression_execs_qcon_on_the_same_connection(monkeypatch):
+    """No expression means a session: the same four options pointed at a
+    different transport, so it must land on the process a query would hit."""
     seen: dict[str, Any] = {}
     monkeypatch.setattr(inspect.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(inspect.os, "execvp", lambda f, a: seen.update(file=f, argv=a))
     result = runner.invoke(
         cli.app,
-        ["query", "--port", "6099", "--console", "--host", "h2", "--user", "u", "--passwd", "p"],
+        ["query", "--port", "6099", "--host", "h2", "--user", "u", "--passwd", "p"],
     )
     assert result.exit_code == 0, result.output
     assert seen["argv"] == ["rlwrap", "qcon", "h2:6099:u:p"]
 
 
-def test_console_without_qcon_installed_says_what_still_works(monkeypatch):
+def test_a_session_without_qcon_installed_says_what_still_works(monkeypatch):
     """qcon ships with kdb+, not with this repository, so its absence is an
     ordinary state rather than a broken install - and the message has to leave
     the reader with a way to run their query."""
     errors = _error_log(monkeypatch)
     monkeypatch.setattr(inspect.shutil, "which", lambda name: None)
-    assert runner.invoke(cli.app, ["query", "--port", "6099", "--console"]).exit_code == 1
+    assert runner.invoke(cli.app, ["query", "--port", "6099"]).exit_code == 1
     assert any("not on PATH" in m and "still works over IPC" in m for m in errors.messages), (
         errors.messages
     )
 
 
-def test_console_and_an_expression_together_are_refused(monkeypatch):
-    """Silently ignoring one of them would be the bad outcome: running the
-    expression and exiting looks like --console did nothing."""
-    errors = _error_log(monkeypatch)
-    monkeypatch.setattr(inspect.shutil, "which", lambda name: f"/usr/bin/{name}")
+def test_an_expression_runs_it_and_never_opens_a_session(monkeypatch):
+    rec = _patch(monkeypatch, runtime, "query", result="RESULT")
     monkeypatch.setattr(inspect.os, "execvp", lambda f, a: pytest.fail("should not exec"))
-    result = runner.invoke(cli.app, ["query", "--port", "6099", "--console", "select 1"])
-    assert result.exit_code == 1
-    assert any("cannot also run" in m for m in errors.messages), errors.messages
+    assert runner.invoke(cli.app, ["query", "--port", "6099", "select 1"]).exit_code == 0
+    assert rec.args[0] == "select 1"
 
 
-def test_query_with_neither_an_expression_nor_console_is_refused(monkeypatch):
-    """`expr` had to become optional for --console; without this it would
-    silently connect and print nothing."""
+def test_export_without_an_expression_is_refused(monkeypatch):
+    """A session has no single result to write, so --export would be silently
+    ignored - refused instead, before qcon takes the terminal."""
     errors = _error_log(monkeypatch)
-    assert runner.invoke(cli.app, ["query", "--port", "6099"]).exit_code == 1
-    assert any("--console for a session" in m for m in errors.messages), errors.messages
+    monkeypatch.setattr(inspect.os, "execvp", lambda f, a: pytest.fail("should not exec"))
+    result = runner.invoke(cli.app, ["query", "--port", "6099", "--export", "out.csv"])
+    assert result.exit_code == 1
+    assert any("--export needs an expression" in m for m in errors.messages), errors.messages
 
 
 # ------------------------------------------------------- conn (qcon by name)

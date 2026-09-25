@@ -29,7 +29,7 @@ Reading the book needs no handle of your own --- `--port` is the one
 ```bash
 uqs query --port 6089 "0!.qsub.fx_positions.book"
 uqs query --port 6089 "select from fx_limit_breach"
-uqs query --port 6089 --console          # an interactive qcon session
+uqs query --port 6089                    # an interactive qcon session
 ```
 
 ### Without TorQ, on stock kdb+

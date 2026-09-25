@@ -1,7 +1,7 @@
 """Reading and changing one process's configuration, and reading its output.
 
 Split out of cli/inspect.py when that file passed the 400-line budget adding
-`query --console`. The line it was split on is what each command is ABOUT:
+an interactive qcon session to `query`. The line it was split on is what each command is ABOUT:
 `inspect` answers questions about the DATA in a running stack - the HDB's
 shape, a q expression, a table's columns - while these four are about a
 PROCESS: the row it runs under, the catalogue it comes from, and what it has
