@@ -1,0 +1,60 @@
+# Publishes docs/ to GitHub Pages.
+#
+# The site is the one docs/_quarto.yml already describes - the same project
+# the doc-links gate renders on every push to check that each link and anchor
+# resolves. Deploying it is a second use of a build that was happening anyway,
+# rather than a second documentation toolchain: no .md file is converted, and
+# the revealjs deck renders as a deck rather than being flattened into a page.
+#
+# PAGES MUST BE ENABLED for this repository, with its source set to "GitHub
+# Actions", before the deploy job can succeed. Until then the build job still
+# runs and still fails on a broken link, which is the half that matters.
+name: Documentation site
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one half-way: a cancelled deploy can
+# leave Pages serving a partially-written site.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Quarto
+        # Pinned to the version ci.yml installs, so the published site and the
+        # link gate cannot be produced by two different renderers.
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.10.18"
+      - name: Render docs/
+        working-directory: docs
+        run: quarto render
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
