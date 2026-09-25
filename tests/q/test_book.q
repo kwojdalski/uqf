@@ -62,7 +62,7 @@ test_book_from_wide_levels_no_longer_ignores_an_absent_column:{[t]
     src:wide_book_table[::];
     lg:.qbook.derive_level_groups[cols src;level_prefix_targets];
     r:@[{.qbook.book_from_wide_levels[x;y;`sym`side]; ""}[src];lg;{x}];
-    .qunit.assertTrue[r like "*no such column*";
+    .qunit.assertTrue[r like "*tbl is missing required column(s)*";
         "a requested cast on a column that is not there is an error, not a table quietly missing it"]};
 
 test_symbolize_columns_is_idempotent_on_already_symbol_column:{[t]

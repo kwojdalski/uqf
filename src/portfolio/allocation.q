@@ -249,10 +249,7 @@ required_cols:`time`sym`side`size`trade_price
 / in the ledger still points at a row of the table the caller passed in.
 prepared:{[trades;bys]
     if[not 98h=type trades; '"allocate: trades must be a table"];
-    need:distinct required_cols,bys;
-    missing:need where not need in cols trades;
-    if[count missing;
-        '"allocate: trades is missing column(s) ",", " sv string missing];
+    .qschema.require_cols[`allocate;`trades;trades;distinct required_cols,bys];
     $[`trade_id in cols trades; trades; update trade_id:i from trades]}
 
 / The columns a carried-in lot table must carry, on top of the bucket
@@ -266,10 +263,7 @@ required_lot_cols:`qty`price`side
 prepared_opening:{[opening;bys]
     if[(::)~opening; :()];
     if[not 98h=type opening; '"allocate: opening must be a table of lots"];
-    need:distinct required_lot_cols,bys;
-    missing:need where not need in cols opening;
-    if[count missing;
-        '"allocate: opening is missing column(s) ",", " sv string missing];
+    .qschema.require_cols[`allocate;`opening;opening;distinct required_lot_cols,bys];
     if[not all (exec side from opening) in -1 1;
         '"allocate: every opening lot's side must be 1 (long) or -1 (short)"];
     opening}

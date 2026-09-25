@@ -49,12 +49,8 @@ markout:{[side;trade_price;ref_price;pip_factor] side*pip_factor*(ref_price-trad
 /   table fails loudly here rather than surfacing as a bare `domain error deep inside aj
 / @eg .qexec.markout_at_horizons[markout_trades;mid_quotes;0D00:00:01 0D00:00:10]
 markout_at_horizons:{[trades;quotes;horizons]
-    trades_req:`sym`time`side`trade_price`pip_factor;
-    trades_missing:trades_req where not trades_req in cols trades;
-    if[count trades_missing; '"markout_at_horizons: trades is missing required column(s) ",", " sv string trades_missing];
-    quotes_req:`sym`time`mid;
-    quotes_missing:quotes_req where not quotes_req in cols quotes;
-    if[count quotes_missing; '"markout_at_horizons: quotes is missing required column(s) ",", " sv string quotes_missing];
+    .qschema.require_cols[`markout_at_horizons;`trades;trades;`sym`time`side`trade_price`pip_factor];
+    .qschema.require_cols[`markout_at_horizons;`quotes;quotes;`sym`time`mid];
     horizon_list:$[0>type horizons; enlist horizons; horizons];
     sorted_quotes:`sym`time xasc quotes;
     num_trades:count trades;
@@ -154,9 +150,7 @@ reject_ratio:{[num_rejects;num_requests] ?[num_requests=0;0n;num_rejects%num_req
 / @eg .qexec.hit_ratio_by[requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio, no time-bucketing or grouping
 hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
     group_cols:group_cols,();
-    req_cols:distinct `time`hit`size,group_cols;
-    missing:req_cols where not req_cols in cols requests;
-    if[count missing; '"hit_ratio_by: requests is missing required column(s) ",", " sv string missing];
+    .qschema.require_cols[`hit_ratio_by;`requests;requests;distinct `time`hit`size,group_cols];
     if[not mode in `count`amount; '"hit_ratio_by: mode must be `count or `amount, got ",string mode];
     windowed:select from requests where time within (start_ts;end_ts);
     windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
@@ -199,9 +193,7 @@ hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
 / @eg .qexec.reject_ratio_by[reject_requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio
 reject_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
     group_cols:group_cols,();
-    req_cols:distinct `time`reject`size,group_cols;
-    missing:req_cols where not req_cols in cols requests;
-    if[count missing; '"reject_ratio_by: requests is missing required column(s) ",", " sv string missing];
+    .qschema.require_cols[`reject_ratio_by;`requests;requests;distinct `time`reject`size,group_cols];
     if[not mode in `count`amount; '"reject_ratio_by: mode must be `count or `amount, got ",string mode];
     windowed:select from requests where time within (start_ts;end_ts);
     windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];

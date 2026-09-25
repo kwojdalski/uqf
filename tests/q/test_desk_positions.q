@@ -102,10 +102,10 @@ test_base_qty_agrees_with_the_position_book:{[t]
 test_a_missing_column_is_named:{[t]
     .qunit.assertThrows[.qdesk.apply_fills[.qdesk.empty_book[`sym`book];];
         ([] sym:enlist `EURUSD; side:enlist 1; size:enlist 1f; price:enlist 1f);
-        "*missing column(s) book*"; "the dimensions have to arrive with the fill"];
+        "*missing required column(s) book*"; "the dimensions have to arrive with the fill"];
     .qunit.assertThrows[.qdesk.apply_fills[.qdesk.empty_book[`sym];];
         ([] sym:enlist `EURUSD; side:enlist 1);
-        "*missing column*"; "and so do size and price"];
+        "*missing required column(s)*"; "and so do size and price"];
     .qunit.assertThrows[.qdesk.apply_fills[.qdesk.empty_book[`sym];];
         enlist[`sym]!enlist `EURUSD;
         "*must be a table*"; "one fill is a one-row table, not a dict"]};

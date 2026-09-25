@@ -39,8 +39,7 @@ levels:{[prices;sizes]
 / @eg count .qsub.superbook.replace_books[.qsub.superbook.books;.qsub.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0
 replace_books:{[state;batch;as_of]
     wanted:cols .qsub.market_data.market_data;
-    missing:wanted except cols batch;
-    if[count missing; '"superbook: missing columns ",", " sv string missing];
+    .qschema.require_cols[`superbook;`batch;batch;wanted];
     rows:wanted#batch;
     problems:.qxf.problems[.qsub.market_data.market_data;rows;1b];
     if[count problems; '"superbook: ","; " sv problems];

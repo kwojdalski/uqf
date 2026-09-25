@@ -70,9 +70,7 @@ non_scope_cols:`metric`cap`severity`observed`utilisation
 / @eg .qlimit.require_limits[([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1b
 require_limits:{[limits]
     if[not 98h=type limits; '"require_limits: limits must be a table"];
-    missing:required_limit_cols where not required_limit_cols in cols limits;
-    if[count missing;
-        '"require_limits: limits is missing column(s) ",", " sv string missing];
+    .qschema.require_cols[`require_limits;`limits;limits;required_limit_cols];
     if[not 11h=abs type limits`metric;
         '"require_limits: metric must be a symbol column naming what is capped"];
     if[any null limits`cap; '"require_limits: a null cap polices nothing - remove the row instead"];
@@ -120,9 +118,7 @@ measure:{[book;metrics]
     scope:keys book;
     t:0!book;
     m:(),metrics;
-    missing:m where not m in cols t;
-    if[count missing;
-        '"measure: the book has no column(s) ",", " sv string missing];
+    .qschema.require_cols[`measure;`book;t;m];
     overlap:m where m in scope;
     if[count overlap;
         '"measure: ",(", " sv string overlap)," is part of the book's key, so it identifies a position rather than measuring one"];
@@ -143,9 +139,7 @@ measure:{[book;metrics]
 / @eg count .qlimit.evaluate[([] sym:enlist `EURUSD; metric:enlist `base_qty; observed:enlist 2e6);([] sym:enlist `EURUSD; metric:enlist `base_qty; cap:enlist 1e6)] -> 1
 evaluate:{[measured;limits]
     if[not 98h=type measured; '"evaluate: measured must be a table"];
-    missing:required_measured_cols where not required_measured_cols in cols measured;
-    if[count missing;
-        '"evaluate: measured is missing column(s) ",", " sv string missing];
+    .qschema.require_cols[`evaluate;`measured;measured;required_measured_cols];
     require_limits limits;
     scope:scope_cols limits;
     unknown:scope where not scope in cols measured;

@@ -46,6 +46,7 @@
 // execution/execution.q reads it. Still fine at call time, but it is state
 // rather than code, so it is worth knowing about.
 
+\l src/foundation/schema.q
 \l src/foundation/stats.q
 \l src/foundation/ccy.q
 \l src/foundation/daycount.q

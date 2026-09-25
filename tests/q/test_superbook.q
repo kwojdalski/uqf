@@ -113,7 +113,7 @@ test_malformed_vectors_are_named:{[t]
 
 test_missing_identity_and_timestamp_are_refused:{[t]
     .qunit.assertThrows[{.qsub.superbook.replace_books[.sbtest.empty[];x;.sbtest.d 0]};delete source from fixtures[];
-        "*missing columns source*";"source identity is mandatory"];
+        "*missing required column(s) source*";"source identity is mandatory"];
     .qunit.assertThrows[{.qsub.superbook.replace_books[.sbtest.empty[];x;.sbtest.d 0]};update source:` from fixtures[];
         "*non-null source*";"blank sources cannot be pooled"];
     .qunit.assertThrows[{.qsub.superbook.replace_books[.sbtest.empty[];x;.sbtest.d 0]};update source_time:0Np from fixtures[];
