@@ -164,6 +164,28 @@ a source you will read again - where it matters which ranges are done, under
 which release of the data, and that a failed window is retried rather than
 half-written - use a bounded worker.
 
+## Can jobs be chained before their rows reach the tickerplant?
+
+Not between streaming jobs, by design, and `.qpipe` has no path for it:
+`.qpipe.publish` only ever sends to the tickerplant. What you can chain depends
+on what is being chained.
+
+  | You want                                   | Do this                                                                                                                                                                                                                                                                   |
+  | ---                                        | ---                                                                                                                                                                                                                                                                       |
+  | several steps inside one streaming job     | Compose them in the job's own handler: `on_batch` can call any number of functions, or `.qxf` transforms (which may read several inputs), and `publish` once at the end. A normalizer (`.qnorm`) is this pattern built in: one declared transform per source, one output. |
+  | one streaming job to feed another          | Publish, and have the second subscribe. Every step goes through the tickerplant: nothing reads another job's output directly.                                                                                                                                             |
+  | a backfill to trigger another backfill     | A reaction: `.qreact.on_worker[dataset;worker;spec_fn]` runs `worker` over each range another worker publishes into `dataset`. The chain never touches the tickerplant, because backfills never do, and the job graph draws it.                                           |
+  | several steps inside one backfill          | One worker has exactly one transform (`.qbw.define` refuses more), so put the steps in that transform's function, or split them into two workers chained by a reaction.                                                                                                   |
+
+Why streaming jobs are not chained in-process: each step's output is an ordinary
+tickerplant table, so it is queryable in the RDB. A downstream job can be
+restarted, replaced or added without touching the one upstream, and adding an
+engine means adding a subscriber, not changing a producer. The cost is a hop
+through the plant, and a licensed connection per process - which is why a job
+that is only an intermediate step is often better folded into its consumer's
+handler than run as a process of its own. See the diagram in [Desk System,
+composed](architecture/pipeline-architecture-example.md).
+
 ## How is it decided whether rows go to the RDB or the HDB?
 
 Not per row, and not by `.qpipe`: by which kind of process the job runs in. The
