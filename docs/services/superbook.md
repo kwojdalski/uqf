@@ -7,7 +7,7 @@ can name where to buy and where to sell.
 <!-- Source: docs/diagrams/superbook-chain.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
 
-![The chain left to right: the quote and quotes tables into marketdata1, which publishes market_data; superbook1 subscribes to that and publishes superbook; arbitrage1 and crossarb1 both subscribe to superbook and publish arbitrage and cross_arbitrage](../diagrams/superbook-chain.svg)
+![The chain top to bottom: the quote and quotes tables into marketdata1, which publishes market_data; superbook1 subscribes to that and publishes superbook; arbitrage1 and crossarb1 both subscribe to superbook and publish arbitrage and cross_arbitrage](../diagrams/superbook-chain.svg)
 
 Every arrow between a process and a table is a publish or a subscribe, never a
 call: `superbook1` does not invoke `marketdata1`, it subscribes to the table

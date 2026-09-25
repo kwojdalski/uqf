@@ -16,7 +16,7 @@ could actually work?
      about, and a second diagram of it would be a second thing to keep in
      step. Rendered by scripts/generate/render_diagrams.py (CI --check). -->
 
-![The chain left to right, with arbitrage1 and crossarb1 both subscribing to superbook and publishing separate tables](../diagrams/superbook-chain.svg)
+![The chain top to bottom, with arbitrage1 and crossarb1 both subscribing to superbook and publishing separate tables](../diagrams/superbook-chain.svg)
 
 Look at the fan-out from `superbook`: both jobs read it, so `crossarb1` is a
 second **consumer** of the `marketdata1` chain rather than a fifth link in it.
