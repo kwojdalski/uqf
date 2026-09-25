@@ -403,17 +403,28 @@ init:{[worker;run_spec]
     / has to be exported - the shell `uqs backfill` runs in, whose environment
     / the process inherits. Not an error: no credential is the declared way
     / to run on the fixture, and a demo stack runs like that on purpose.
+    / .
+    / The example comes from .qetl.source.credential_example, which asks the
+    / SOURCE first. It used to be a two-way branch on transport alone, and
+    / that was wrong in a way that wasted an operator's time: every ODBC
+    / source in this tree is a DuckDB file, and all three were shown a
+    / SingleStore string asking for a SERVER, PORT, UID and PWD that DuckDB
+    / has no concept of - for a database no source here connects to.
+    / .
+    / The wording says "a path or a password" rather than "the secret" for
+    / the same reason. A DuckDB credential holds nothing secret; it is a file
+    / path, kept in the environment because an absolute local path is
+    / machine-specific and this repository is public. Calling that a secret
+    / teaches an operator that the rule is theatre.
     / `odbc`, not `var`: var is a q builtin (variance).
     live:.qetl.source.has_credentials cfg`source;
     if[not live;
         odbc:`odbc~(.qetl.source.def cfg`source)`transport;
-        .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so the secret stays off the command line";
+        .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so a machine-specific path or a password stays out of this repository and off the command line";
             `variable`expects`example!(
                 .qetl.source.credential_var cfg`source;
                 $[odbc; "an ODBC connection string"; "host:port, or host:port:user:password"];
-                $[odbc;
-                    "DRIVER=SingleStore ODBC Driver;SERVER=<host>;PORT=3306;DATABASE=<db>;UID=<user>;PWD=<password>";
-                    "localhost:5010"])]];
+                .qetl.source.credential_example cfg`source)]];
     write_state[worker;`handle;$[live; connect worker; 0Ni]];
 
     .qetl.log.register[];
@@ -560,6 +571,7 @@ run:{[worker]
             `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
         .qetl.hb.beat[worker;`idle];
         end_run[`idle];
+        cleanup worker;
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
     / The run's OWN cursor starts null, not at the loaded checkpoint. The
@@ -594,6 +606,25 @@ run:{[worker]
     / says `running` and keeps saying it.
     .qetl.hb.beat[worker;result`state];
     end_run[result`state];
+    / Release what init took, on the way out of a TERMINAL run.
+    / .
+    / Until this line, release_lock was reached on exactly one path - the
+    / failure branch of .qetl.job.bounded.state.run_pass - and `cleanup` had no
+    / caller in src/ or scripts/ at all, only test teardowns. So a run that
+    / FAILED unlocked and a run that SUCCEEDED did not: the lock directory
+    / outlived the process, and every later run of that worker refused to
+    / start with "is already running" against a process that had exited
+    / cleanly hours earlier. The operator's fix, `rm <worker>.lock`, then
+    / failed too - acquire_lock uses mkdir for atomicity, so the lock is a
+    / directory.
+    / .
+    / Here rather than in the process script, because torq_backfill.q is not
+    / the only caller: a test, or an operator at a q prompt, runs init and
+    / run directly and leaked one just as readily. A bounded run has no
+    / state to carry past its terminal state, so the run ending IS the
+    / session ending. cleanup is idempotent, so a caller that also cleans up
+    / (every test teardown does) is unaffected.
+    cleanup worker;
     result}
 
 / Private: open this execution's run, tolerating an absent .qetl.run.

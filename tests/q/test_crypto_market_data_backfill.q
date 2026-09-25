@@ -217,6 +217,28 @@ test_a_full_run_leaves_the_range_covered:{[t]
     .qunit.assertTrue[.qetl.coverage.is_covered[`crypto_market_data;`;`v1;.z.p;.crypto_market_databftest.h 21;.crypto_market_databftest.h 23];
         "the two windows compose into the requested range"]};
 
+test_a_completed_run_releases_the_lock:{[t]
+    / Until 2026-09-25 release_lock was reached on ONE path - the failure
+    / branch of run_pass - so a run that FAILED unlocked and a run that
+    / SUCCEEDED did not. The lock directory outlived the process and every
+    / later run refused to start against a process that had exited cleanly.
+    .qpipe.job.crypto_market_data_backfill.init[.crypto_market_databftest.spec_for[`v1;21;23]];
+    .qunit.assertTrue[.qetl.job.bounded.state.lock_held `crypto_market_data_backfill;"init takes the lock"];
+    r:.qpipe.job.crypto_market_data_backfill.run[];
+    .qunit.assertEquals[r`state;`completed;"the run finished"];
+    .qunit.assertEquals[.qetl.job.bounded.state.lock_held `crypto_market_data_backfill;0b;
+        "and gave the lock back - a second instance may now start"]};
+
+test_an_idle_run_releases_the_lock_too:{[t]
+    / The early return, which is the other terminal exit from run.
+    .qpipe.job.crypto_market_data_backfill.init[.crypto_market_databftest.spec_for[`v1;21;23]];
+    .qpipe.job.crypto_market_data_backfill.run[];
+    .qpipe.job.crypto_market_data_backfill.init[.crypto_market_databftest.spec_for[`v1;21;23]];
+    r:.qpipe.job.crypto_market_data_backfill.run[];
+    .qunit.assertEquals[r`state;`idle;"nothing left to do"];
+    .qunit.assertEquals[.qetl.job.bounded.state.lock_held `crypto_market_data_backfill;0b;
+        "a run that found no work still gives the lock back"]};
+
 test_a_second_run_is_idle:{[t]
     .qpipe.job.crypto_market_data_backfill.init[.crypto_market_databftest.spec_for[`v1;21;23]];
     .qpipe.job.crypto_market_data_backfill.run[];

@@ -115,6 +115,12 @@ row_key:`venue`sym`source_time`latency_count
 tz:`UTC
 transport:`odbc
 
+/ What UQF_SOURCE_CRED_CRYPTO_MARKET_DATA looks like. Declared rather than
+/ left to the per-transport default, which is a networked-database string:
+/ DuckDB is embedded, so this is a file path and a mode, with no host, user
+/ or password to supply.
+credential_example:"DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY"
+
 / The SQL expression selecting each field, in `columns` order. Only four of
 / them need one; the level and latency columns are read as they stand.
 / @return the comma-separated select list
@@ -225,7 +231,7 @@ fixture:{[]
     base,'lv,'tail}
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
+    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
 
 \d .

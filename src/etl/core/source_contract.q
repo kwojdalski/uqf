@@ -149,6 +149,13 @@ sources:(`symbol$())!();
 /     symbol: `UTC, or a tz-database name such as `$"Europe/London"
 / and optionally:
 /   transport - `ipc (the default) or `odbc, see `transports`
+/   credential_example - what this source's credential LOOKS like, as a
+/     string, for the warning a worker logs when none is set. Optional
+/     because a generic one per transport is better than nothing; declared
+/     because per transport is not good enough. Every ODBC source in this
+/     tree is a DuckDB file, whose "connection string" is a path and holds
+/     no secret at all, and the generic ODBC example asked all three of them
+/     for a SERVER, PORT, UID and PWD that DuckDB has no concept of.
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 define:{[source;decl]
@@ -395,6 +402,29 @@ require_credentials:{[source]
 / Is a credential available? For deciding between the live and fixture paths
 / without throwing.
 has_credentials:{[source] 0<count getenv `$credential_var source}
+
+/ What this source's credential looks like, for an operator who has not set
+/ one. The source's own `credential_example` when it declared one, and
+/ otherwise the most that can be said from its transport alone.
+/ @param source a registered source
+/ @return the example, as a string
+/ @eg .qetl.source.credential_example `crypto_market_data  ->  "DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY"
+/ @eg .qetl.source.credential_example `demo_deals  ->  "localhost:5010"
+/ .
+/ Tests the VALUE, not `in key d`, and that is not defensive coding. The
+/ declarations share one stored value list - see `store row_key NORMALISED`
+/ in define - so the moment ONE source declares a twelfth key, q pads every
+/ other declaration with a null of the matching type. `credential_example in
+/ key d` is therefore 1b for every source in the tree, including the ones
+/ that never declared it, and an empty string is what "did not declare" looks
+/ like from here.
+credential_example:{[source]
+    d:def source;
+    ex:$[`credential_example in key d; d`credential_example; ""];
+    if[0<count ex; :ex];
+    $[`odbc~d`transport;
+        "DRIVER=<driver>;<driver-specific settings>";
+        "localhost:5010"]}
 
 / ---------------------------------------------------------------- ZONES
 
