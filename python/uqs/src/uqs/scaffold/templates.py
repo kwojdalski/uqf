@@ -132,13 +132,13 @@ source_name:`{src}
 / The columns this adapter READS - not everything the source has. Declaring
 / one the worker never touches means an upstream change to an unused column
 / breaks the run.
-fields:`{"`".join(names)}
+columns:`{"`".join(names)}
 types:"{types}"
 
 target:`{dataset}
 
 / The column the window is taken on.
-time_field:`{TIME_COLUMN}
+time_column:`{TIME_COLUMN}
 
 / What identifies a row uniquely. Only correct if the source guarantees it:
 / a source that reuses ids after a purge silently merges unrelated rows.
@@ -175,8 +175,8 @@ fixture:{{[]
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qsrc.define[source_name;
-    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
-    (source_name;`{dataset};target;time_field;row_key;fields;types;query;fixture;tz)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`{dataset};target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \\d .
 """

@@ -74,15 +74,15 @@ test_a_streaming_job_without_a_timer_does_not_gain_one:{[t]
     / with identical fields, so `jobs` became a keyed table, and markout's
     / declaration - which carries an on_batch the feeds do not - was
     / refused with a bare `mismatch. It is enlisted now.
-    .qstream.define[`regtest_feed;`procname`subscribes`publishes`timer_period`on_timer!(
+    .qstream.define[`regtest_feed;`procname`subscribe_to`publishes`period`on_timer!(
         `regtest_feed1;`symbol$();enlist `regtest_out;0D00:00:01;{[] })];
-    .qstream.define[`regtest_sub;`procname`subscribes`publishes`on_batch!(
+    .qstream.define[`regtest_sub;`procname`subscribe_to`publishes`on_batch!(
         `regtest_sub1;enlist `regtest_in;enlist `regtest_out2;{[a;b] })];
     feed:.qstream.declaration `regtest_feed;
     sub:.qstream.declaration `regtest_sub;
     .qunit.assertFalse[`on_batch in key feed;
         "a feed has no on_batch, and must not acquire one as a null"];
-    .qunit.assertFalse[`timer_period in key sub;
+    .qunit.assertFalse[`period in key sub;
         "and a subscriber has no timer"];
     forget_job each `regtest_feed`regtest_sub};
 
@@ -121,7 +121,7 @@ test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
     / scope, so `{[] e}` would throw 'e the moment anything called it -
     / which registration does not, making it a fixture that is broken and
     / silent until the day it is used.
-    base:`table`target`time_field`fields`types`query`fixture`tz!(`regtest_t;`regtest_out;`time;`time`sym;"ps";
+    base:`table_name`target`time_column`columns`types`query`fixture`tz!(`regtest_t;`regtest_out;`time;`time`sym;"ps";
         {[a;b] ([] time:`timestamp$(); sym:`symbol$())};{[] ([] time:`timestamp$(); sym:`symbol$())};`$"UTC");
     .qsrc.define[`regtest_scalar;(`source`row_key!(`regtest_scalar;`sym)),base];
     .qsrc.define[`regtest_vector;(`source`row_key!(`regtest_vector;`time`sym)),base];

@@ -236,7 +236,7 @@ publish_fills:{[horizon;row]
     count decided}
 
 / The tick length, in seconds - the horizon the fill hazards are converted
-/ over. Kept beside the declaration's timer_period, which it must match.
+/ over. Kept beside the declaration's period, which it must match.
 tick_seconds:1f
 
 / Walk the market, publish its book, then the fills against it.
@@ -252,7 +252,7 @@ on_timer:{[]
 
 \d .
 
-.qstream.define[`crypto_mock;`procname`subscribes`publishes`timer_period`on_timer`note!(
+.qstream.define[`crypto_mock;`procname`subscribe_to`publishes`period`on_timer`note!(
     `cryptomock1;
     `symbol$();
     `crypto_book`crypto_trades;

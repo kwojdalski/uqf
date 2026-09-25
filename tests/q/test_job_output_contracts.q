@@ -145,7 +145,7 @@ publishing:{[] j where {[j] 0<count (),.qstream.declaration[j]`publishes} each j
 / A feed drives itself: it subscribes to nothing and publishes on a timer.
 / Fifty ticks because crypto_mock's fills are a draw - .sjtest relies on
 / twenty producing one, and this suite needs one every run.
-is_feed:{[j] 0=count (),.qstream.declaration[j]`subscribes}
+is_feed:{[j] 0=count (),.qstream.declaration[j]`subscribe_to}
 
 / The driver `j`'s own test file declares, as .<job>test.contract_driver -
 / where `uqs new-job` scaffolds one - or :: when it declares none.

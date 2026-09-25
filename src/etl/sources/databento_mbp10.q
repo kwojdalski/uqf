@@ -38,15 +38,15 @@ source_name:`databento_mbp10
 levels:{-2#"0",string x} each til 10
 
 / Per level: bid price, bid size, ask price, ask size. Counts (bid_ct_*)
-/ are not read - nothing downstream uses them (fields are what you READ).
+/ are not read - nothing downstream uses them (columns are what you READ).
 level_fields:raze {`$("bid_px_";"bid_sz_";"ask_px_";"ask_sz_"),\:x} each levels
 
-fields:`ts_event`symbol`action`side`price`size`sequence,level_fields
+columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
 types:"psssfjj",raze 10#enlist "fjfj"
 
-table:`mbp10
+table_name:`mbp10
 target:`databento_book
-time_field:`ts_event
+time_column:`ts_event
 
 / NOT Databento's documented key, and deliberately said so. (symbol,
 / ts_event, sequence) is the obvious candidate and is not unique - one event
@@ -60,13 +60,13 @@ row_key:`symbol`ts_event`sequence`action`side`price`size
 tz:`UTC
 transport:`odbc
 
-/ Private: the SQL expression selecting each field, in `fields` order.
+/ Private: the SQL expression selecting each field, in `columns` order.
 select_list:{[]
     exprs:{[f]
         s:string f;
         $[f=`ts_event; "epoch_ns(ts_event) AS ts_event";
           (f in `size`sequence) or s like "*_sz_*"; "CAST(",s," AS BIGINT) AS ",s;
-          s]} each .qfeed.databento_mbp10.fields;
+          s]} each .qfeed.databento_mbp10.columns;
     ", " sv exprs}
 
 / Private: a timestamp as DuckDB epoch nanoseconds, through .qodbc.literal.
@@ -110,7 +110,7 @@ fixture:{[]
     base,'lv}
 
 .qsrc.define[source_name;
-    `source`table`target`time_field`row_key`fields`types`query`fixture`tz`transport!
-    (source_name;table;target;time_field;row_key;fields;types;query;fixture;tz;transport)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
+    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport)];
 
 \d .

@@ -53,7 +53,7 @@ on_timer:{[]
 
 \d .
 
-.qstream.define[`quotes_feed;`procname`subscribes`publishes`timer_period`on_timer`autostart!(
+.qstream.define[`quotes_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(
     `quotesfeed1;
     `symbol$();
     enlist `quotes;

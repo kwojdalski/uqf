@@ -58,7 +58,7 @@ prepare:{[w]
     .qbfstate.release_lock w;
     .qbfstate.clear_checkpoint w;
     (cfg`dataset) set 0#(.qxf.declaration cfg`transform)`output;
-    ts:(src`fixture)[] src`time_field;
+    ts:(src`fixture)[] src`time_column;
     `source_version`range_from`range_to!(`wrunv1;min ts;(max ts)+cfg`width)}
 
 / Call one of a worker's stamped methods.

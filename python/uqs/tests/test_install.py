@@ -21,11 +21,11 @@ from uqs.paths import SOURCE_DIR, STREAM_DIR, TABLES_FILE, WORKER_DIR
 from uqs.stack import install
 from uqs.stack.install import Kind, Mode, Status
 
-SOURCE = "source_name:`acme\n.qsrc.define[source_name;`fields!enlist `time];\n"
+SOURCE = "source_name:`acme\n.qsrc.define[source_name;`columns!enlist `time];\n"
 WORKER = ".qbw.define[`acme_backfill;`source`dataset`width!(`acme;`acme_tape;1D)];\n"
 STREAM = (
     ".qstream.define[`acme_spread;"
-    "`procname`subscribes`publishes!(`acme_spread1;enlist `quote;enlist `acme_spread)];\n"
+    "`procname`subscribe_to`publishes!(`acme_spread1;enlist `quote;enlist `acme_spread)];\n"
 )
 
 

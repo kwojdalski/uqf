@@ -11,7 +11,7 @@ block's key table:
 * every row names a key the q file mentions as a symbol (`` `key ``), so a
   renamed or removed key cannot live on in the page.
 
-Optional keys that no list names (`procname`, `note`, `autostart`, `transport`,
+Optional keys that no list names (`procname`, `note`, `start_with_all`, `transport`,
 `as_of`, the stream handlers) are held by the second direction only: the page
 can describe them, and cannot describe one that no longer exists.
 

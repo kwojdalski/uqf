@@ -131,8 +131,8 @@ test_every_table_is_empty_as_declared:{[t]
 / WHICH COMPARISON APPLIES IS DERIVED, not listed. A job's own declaration
 / already says whether it reads a table or writes one:
 / .
-/   subscribes  it receives rows as the plant delivers them, `time` first
-/   publishes   it sends rows WITHOUT `time` - the plant stamps that
+/   subscribe_to  it receives rows as the plant delivers them, `time` first
+/   publishes     it sends rows WITHOUT `time` - the plant stamps that
 / .
 / So the rule is `cols match` in the first case and `cols match 1_` in the
 / second, and a new job is covered the day it registers. This test used to
@@ -166,7 +166,7 @@ job_tables:{[]
         nms:key[ns] except `;
         nms:nms where {[ns;nm] 98h=type get ` sv ns,nm}[ns] each nms;
         ([] job:(count nms)#job; tbl:nms;
-            role:{[d;nm] $[nm in d`subscribes;`subscribes;nm in d`publishes;`publishes;`internal]}[d] each nms)
+            role:{[d;nm] $[nm in d`subscribe_to;`subscribe_to;nm in d`publishes;`publishes;`internal]}[d] each nms)
       } each .qstream.defined[]}
 
 test_every_job_declares_the_shape_the_plant_actually_carries:{[t]

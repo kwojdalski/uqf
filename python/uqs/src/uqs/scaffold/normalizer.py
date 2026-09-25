@@ -77,7 +77,7 @@ def normalizer(
     proc = procname or f"{name}1"
     _check_name(proc, "procname")
     if not sources:
-        raise UqsError("--kind normalizer needs --subscribes: the source tables it normalizes")
+        raise UqsError("--kind normalizer needs --subscribe-to: the source tables it normalizes")
     if name in known_tables:
         raise UqsError(
             f"{name!r} is already a plant table - a normalizer owns its canonical table, "

@@ -287,7 +287,7 @@ require_transform:{[worker;cfg]
     if[d`as_of;
         'who,"'s transform ",string[cfg`transform]," takes as_of, which a bounded window cannot supply"];
     src:.qsrc.declaration cfg`source;
-    contract:flip (src`fields)!{[c] $[c within "AZ"; (); c$()]} each src`types;
+    contract:flip (src`columns)!{[c] $[c within "AZ"; (); c$()]} each src`types;
     p:.qxf.problems[contract;first value d`inputs;0b];
     if[count p;
         'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contract: ","; " sv p];
@@ -653,9 +653,9 @@ no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 / @throws whatever the transform throws, or a schema refusal from .qxf
 transform_batch:{[worker;batch]
     cfg:declaration worker;
-    fields:(.qsrc.declaration cfg`source)`fields;
+    columns:(.qsrc.declaration cfg`source)`columns;
     nm:cfg`transform;
-    .qxf.apply[nm;(.qxf.input_names nm)!enlist fields#batch]}
+    .qxf.apply[nm;(.qxf.input_names nm)!enlist columns#batch]}
 
 / Private: one window, end to end - fetch, transform, check, publish, record.
 / .

@@ -124,7 +124,7 @@ class Pipeline:
     # diagram goes stale silently; this one cannot.
     # FROM_DECLARATION reads it from the job's own .qstream.define / .qnorm
     # .define instead, which is where a streaming job already states it.
-    subscribes: tuple[str, ...] | _FromDeclaration = ()
+    subscribe_to: tuple[str, ...] | _FromDeclaration = ()
     # Tables it publishes via `.u.upd`. Defaults to (table,) - set it
     # explicitly only when a pipeline publishes onto a table whose schema it
     # does NOT own (fxfeed1 -> the vendored `quote`), or onto more than one.
@@ -192,7 +192,7 @@ class Pipeline:
     def subscribed_tables(self) -> tuple[str, ...]:
         """Tables this pipeline subscribes to, resolved.
 
-        The resolved spelling of `subscribes`, for the same reason
+        The resolved spelling of `subscribe_to`, for the same reason
         `published_tables` is the resolved spelling of `publishes`: a consumer
         that reads the raw field gets the FROM_DECLARATION sentinel instead of
         a tuple, and finds out by iterating it.

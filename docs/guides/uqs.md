@@ -75,7 +75,7 @@ Open a new shell and TAB completes process names (`uqs start pos<TAB>`,
 columns `--sort` takes for that kind, `config-get`/`config-set` fields, `--port`
 on `query`/`schema` (zsh and fish show which process each port belongs to),
 `--level`, `--stream`, `new-job --kind`, and the plant's tables for
-`--subscribes`/`--publishes`. Every value is read from the same registry the
+`--subscribe-to`/`--publishes`. Every value is read from the same registry the
 command resolves against, so a new pipeline completes as soon as it is declared.
 `uqs --show-completion` prints the script instead of installing it. It needs
 `uqs` on your `PATH`: the `uv run --project python/uqs uqs` form has nothing for
@@ -607,7 +607,7 @@ starts that set and is checked against the budget first, where a positional
 start is only warned about. See [the cross-arbitrage
 service](../services/cross-arbitrage.md).
 
-The graph behind all of this is the `subscribes`/`publishes` pair on each
+The graph behind all of this is the `subscribe_to`/`publishes` pair on each
 `Pipeline`, the same declaration the generated `database.q` and the `.qdag` job
 graph are built from - so what you are warned about and what is running cannot
 describe different systems.

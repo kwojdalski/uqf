@@ -11,7 +11,7 @@ uqs new-job pulsefeed --publishes pulse --columns "sym:symbol, px:float"
 ```
 
 **There is no `--kind feed`.** A streaming job that subscribes to nothing is a
-feed, and the scaffold derives that. Omitting `--subscribes` is the whole
+feed, and the scaffold derives that. Omitting `--subscribe-to` is the whole
 signal.
 
 ```
@@ -43,7 +43,7 @@ on_timer:{[]
 
 \d .
 
-.qstream.define[`pulsefeed;`procname`subscribes`publishes`timer_period`on_timer`note!(
+.qstream.define[`pulsefeed;`procname`subscribe_to`publishes`period`on_timer`note!(
     `pulsefeed1;
     `symbol$();                    / subscribes to nothing - this is what makes it a feed
     enlist `pulse;
@@ -53,7 +53,7 @@ on_timer:{[]
 ```
 
 **`on_timer` is niladic.** That is the difference from an etl, whose
-`on_batch[t;data]` is handed the rows that arrived. A feed is handed nothing and
+`on_batch[t;x]` is handed the rows that arrived. A feed is handed nothing and
 must produce everything, so whatever it needs between ticks --- a price level, a
 sequence number, an RNG seed --- is state in its own namespace.
 
@@ -87,7 +87,7 @@ checked for shape.
 
 ## The timer
 
-`timer_period` is `0D00:00:01` by default --- one second. It is a field in the
+`period` is `0D00:00:01` by default --- one second. It is a field in the
 declaration, so changing it is a one-line edit, and a feed that should tick
 faster than the plant can absorb is a decision to make deliberately rather than
 discover.

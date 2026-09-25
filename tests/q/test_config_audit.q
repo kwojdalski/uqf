@@ -158,7 +158,7 @@ test_the_publisher_sends_through_the_jobs_own_seam_when_called:{[t]
     `.cfgatest.sent set ();
     .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
     `.qcfgaudit.owner_here set `cross_arbitrage;
-    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
+    .qstream.wire[`cross_arbitrage;{[t;x] `.cfgatest.sent set (t;x)}];
     / nothing yet - the work must happen on the CALL, not on the wiring
     .qunit.assertEquals[.cfgatest.sent;();"wiring alone publishes nothing"];
     .qcfgaudit.poll_and_publish[];
@@ -170,7 +170,7 @@ test_a_second_call_publishes_nothing_when_nothing_moved:{[t]
     reset[];
     .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
     `.qcfgaudit.owner_here set `cross_arbitrage;
-    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
+    .qstream.wire[`cross_arbitrage;{[t;x] `.cfgatest.sent set (t;x)}];
     .qcfgaudit.poll_and_publish[];
     `.cfgatest.sent set ();
     .qcfgaudit.poll_and_publish[];
@@ -182,7 +182,7 @@ test_a_change_between_two_calls_is_published_by_the_second:{[t]
     reset[];
     .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
     `.qcfgaudit.owner_here set `cross_arbitrage;
-    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
+    .qstream.wire[`cross_arbitrage;{[t;x] `.cfgatest.sent set (t;x)}];
     .qcfgaudit.poll_and_publish[];
     `.cfgatest.a_number set 99;
     `.cfgatest.sent set ();

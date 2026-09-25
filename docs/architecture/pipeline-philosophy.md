@@ -213,13 +213,13 @@ there.
 There are two kinds of ETL process here, and they are deliberately *two*
 frameworks of the same shape rather than one framework with a flag:
 
-  |             | bounded (batch)                                              | streaming                                                                             |
-  | ---         | ---                                                          | ---                                                                                   |
-  | framework   | `.qbw` — `core/bounded_worker.q`                             | `.qstream` — `core/stream_job.q`                                                      |
-  | an instance | `.qwrk.<worker>`, `workers/`                                 | `.qsub.<job>`, `streaming/`                                                           |
-  | declaration | `.qbw.define[name; source dataset width transform …]`        | `.qstream.define[name; procname subscribes publishes on_batch on_timer …]`            |
-  | runner      | `scripts/processes/torq_backfill.q`                          | `scripts/processes/torq_stream.q`                                                     |
-  | lifecycle   | init → plan → fetch → transform → publish → cover → **done** | wire `publish` → subscribe → `on_batch` per tick, `on_timer` per period → **forever** |
+  |             | bounded (batch)                                              | streaming                                                                               |
+  | ---         | ---                                                          | ---                                                                                     |
+  | framework   | `.qbw` — `core/bounded_worker.q`                             | `.qstream` — `core/stream_job.q`                                                        |
+  | an instance | `.qwrk.<worker>`, `workers/`                                 | `.qsub.<job>`, `streaming/`                                                             |
+  | declaration | `.qbw.define[name; source dataset width transform …]`        | `.qstream.define[name; procname subscribe_to publishes on_batch on_timer …]`            |
+  | runner      | `scripts/processes/torq_backfill.q`                          | `scripts/processes/torq_stream.q`                                                       |
+  | lifecycle   | init → plan → fetch → transform → publish → cover → **done** | wire `publish` → subscribe → `on_batch` per tick, `on_timer` per period → **forever**   |
 
 A bounded worker covers a stated range and finishes, so it can carry a contract
 (`.qbfstate.require_contract`) and a coverage claim. A streaming job never

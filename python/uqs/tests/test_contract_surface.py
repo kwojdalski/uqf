@@ -267,7 +267,7 @@ def test_no_list_value_needs_csv_quoting(baseline: dict) -> None:
                 if " " in param or "," in param or '"' in param:
                     offenders.append(f".{ns}.{entry['name']}({param})")
     for process in baseline["processes"]:
-        for table in process["subscribes"] + process["publishes"]:
+        for table in process["subscribe_to"] + process["publishes"]:
             if " " in table or "," in table:
                 offenders.append(f"{process['procname']} -> {table}")
     assert not offenders, f"values that break the space-separated encoding: {offenders}"

@@ -13,8 +13,8 @@ built on this repository's own machinery instead.
 ### On the stack, like any other process
 
 This is an ordinary registered process, not a thing you run by hand. It declares
-`autostart`, so `uqs start` brings it and `fxordersfeed1` up with everything
-else --- and it can be named on its own:
+`start_with_all`, so `uqs start` brings it and `fxordersfeed1` up with
+everything else --- and it can be named on its own:
 
 ```bash
 uqs start fxpositions1        # or just `uqs start` for the whole fleet

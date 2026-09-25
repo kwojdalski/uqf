@@ -26,8 +26,8 @@ more. The three things the job itself still owns:
    produces a `length` error on insert, the hard way to find out)
 2. hand them to its own `publish`, which the runner wires to the tickerplant -
    the job never calls `.u.upd` or touches discovery itself
-3. declare `timer_period` and `on_timer`, which is what makes it a feed rather
-   than a subscriber
+3. declare `period` and `on_timer`, which is what makes it a feed rather than a
+   subscriber
 
 To add your own: write a job file under `src/etl/streaming/` and register it
 with `.qstream.define`. That is the whole registration - the process registry is

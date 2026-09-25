@@ -129,7 +129,7 @@ def test_an_unlisted_publisher_is_still_expected(monkeypatch: pytest.MonkeyPatch
     invented = replace(
         BY_NAME["cross1"],
         procname="ghost1",
-        subscribes=(),
+        subscribe_to=(),
         publishes=("ghost_table",),
     )
     monkeypatch.setattr(stack_smoke, "PIPELINES", (*PIPELINES, invented))

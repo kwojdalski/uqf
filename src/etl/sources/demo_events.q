@@ -28,13 +28,13 @@ source_name:`demo_events
 / p=timestamp, s=symbol, j=long, f=float. Note `j` for a long, not `l`:
 / that is what `meta` reports, and validate compares against meta - the
 / first draft wrote "l" and was refused at registration, correctly.
-fields:`time`sym`action`side`size`price`order_id`pip_factor
+columns:`time`sym`action`side`size`price`order_id`pip_factor
 types:"pssjffjj"
 
 target:`event_tape
 
 / The window is taken on event time.
-time_field:`time
+time_column:`time
 
 / An event is identified by its order and its action: one order_id produces
 / an add and then exactly one terminal event (a cancel or a trade), so the
@@ -85,7 +85,7 @@ fixture:{[]
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qsrc.define[source_name;
-    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
-    (source_name;`event_tape;target;time_field;row_key;fields;types;query;fixture;tz)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`event_tape;target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

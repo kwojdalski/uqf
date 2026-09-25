@@ -26,7 +26,7 @@ pipeline was added. Nobody noticed, because prose cannot fail.
 
 ## Why the edges are trustworthy
 
-`subscribes`/`publishes` are declarations, and a declaration can lie. They
+`subscribe_to`/`publishes` are declarations, and a declaration can lie. They
 are checked against each pipeline's own q script by
 `uqs.model.pipeline_edges.verify_pipeline_edges`, which runs in the test
 suite - so the chain is *q script -> declaration -> document*, with a check

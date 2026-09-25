@@ -77,12 +77,12 @@ crosses:cross_quotes;
 / A pair with no price is logged by name. The reason is not in the line -
 / the transform has no logger - so check that pair's legs are quoted when one
 / keeps appearing.
-/ @param tbl the table the batch arrived on
-/ @param batch the rows, as a table, already carrying `time`
+/ @param t the table the batch arrived on
+/ @param x the rows, as a table, already carrying `time`
 / @return nothing
-on_batch:{[tbl;batch]
-    if[not tbl=`quotes; :()];
-    `.qsub.cross.quotes insert batch;
+on_batch:{[t;x]
+    if[not t=`quotes; :()];
+    `.qsub.cross.quotes insert x;
     .qsub.cross.reprice .qsub.cross.now[];
     }
 
@@ -139,7 +139,7 @@ now:{[] .z.p}
         2026.09.17D10:00:01);
     1b)];
 
-.qstream.define[`cross;`procname`subscribes`publishes`on_batch`note!(
+.qstream.define[`cross;`procname`subscribe_to`publishes`on_batch`note!(
     `cross1;
     enlist `quotes;
     `symbol$();

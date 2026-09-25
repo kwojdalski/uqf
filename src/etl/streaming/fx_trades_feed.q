@@ -66,7 +66,7 @@ on_timer:{[]
 
 / Once a second, slower than the quote feeds: a fill is a rarer event than a
 / quote, and the markout job's horizons are measured in seconds.
-.qstream.define[`fx_trades_feed;`procname`subscribes`publishes`timer_period`on_timer`autostart!(
+.qstream.define[`fx_trades_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(
     `fxtradesfeed1;
     `symbol$();
     enlist `trades;

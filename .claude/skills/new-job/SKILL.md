@@ -37,7 +37,7 @@ expensive to undo.
 
 ```bash
 # continuous: subscribes to two tables, publishes one
-uqs new-job markout2 --subscribes trades,quote \
+uqs new-job markout2 --subscribe-to trades,quote \
     --publishes my_metric --columns "sym:symbol, value:float" --dry-run
 
 # continuous FEED: subscribes to nothing, publishes on a timer
@@ -53,7 +53,7 @@ uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
 
 # normalizer: several tables carrying one fact, one canonical table out -
 # NAME is that table, and each source gets a .qxf mapping and an example
-uqs new-job ticks --kind normalizer --subscribes quote,trades \
+uqs new-job ticks --kind normalizer --subscribe-to quote,trades \
     --columns "source_time:timestamp, sym:symbol, px:float" --dry-run
 ```
 
@@ -66,13 +66,14 @@ and the canonical row it becomes.
 to `uqs_tables.q` and two test lists, which are files they may have opinions
 about.
 
-`kind` is derived for a streaming job --- no `--subscribes` means a feed --- so
-do not ask for it. `--publishes` takes a comma list. A table the plant already
-defines is published onto as it is - no `--columns`, and none is accepted - so
-`--columns` shapes the one NEW table, and two new tables in one scaffold are
-refused. `--subscribes` must name tables the plant defines (`uqs_tables.q` or
-the vendored `quote`/`trade`): a typo is refused rather than scaffolded into a
-job that never receives a row, so scaffold a producer before its consumer.
+`kind` is derived for a streaming job --- no `--subscribe-to` means a feed ---
+so do not ask for it. `--publishes` takes a comma list. A table the plant
+already defines is published onto as it is - no `--columns`, and none is
+accepted - so `--columns` shapes the one NEW table, and two new tables in one
+scaffold are refused. `--subscribe-to` must name tables the plant defines
+(`uqs_tables.q` or the vendored `quote`/`trade`): a typo is refused rather than
+scaffolded into a job that never receives a row, so scaffold a producer before
+its consumer.
 
 ## Step 2 --- what the scaffold deliberately leaves broken
 
@@ -127,7 +128,7 @@ in your job. Say so rather than working around it.
 Write in this order, and run the suite between each:
 
 1. **The transform or handler body.** For a streaming job that is
-   `on_batch[t;data]` or `on_timer[]`; for a bounded worker it is the source's
+   `on_batch[t;x]` or `on_timer[]`; for a bounded worker it is the source's
    `query` and `fixture`.
 2. **The test**, replacing the scaffolded stub entirely. Delete
    `test_<name>_is_implemented` --- leaving it beside a real test means a red
@@ -204,8 +205,8 @@ Say this back to the user, because it is the part that surprises people:
   refuse the pair at load.
 - **No registry entry at all.** The process registry is read from the q
   declarations (`model/declarations.py`): `procname`, the edges, and the
-  optional `autostart` (default on demand) and `note` all live on the job's own
-  `.qstream.define` / `.qbw.define`. The port is appended to
+  optional `start_with_all` (default on demand) and `note` all live on the job's
+  own `.qstream.define` / `.qbw.define`. The port is appended to
   `scripts/processes/process_ports.csv` by the regeneration above, so no
   existing process moves.
 

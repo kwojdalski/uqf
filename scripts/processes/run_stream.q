@@ -102,9 +102,9 @@ start_plant:{[port]
 / @return the number of messages replayed
 recover:{[job]
     decl:.qstream.declaration job;
-    if[0=count decl`subscribes; :0];
+    if[0=count decl`subscribe_to; :0];
     if[not `on_batch in key decl; :0];
-    wanted:decl`subscribes;
+    wanted:decl`subscribe_to;
     / Replay only the tables this job subscribes to. The log carries every
     / table the plant ever saw, and handing a job a batch it never asked
     / for is a bug the live path cannot produce.
@@ -118,11 +118,11 @@ recover:{[job]
 start_job:{[job;sink]
     decl:.qstream.declaration job;
     .qlog.info[job;"starting streaming job";
-        `subscribes`publishes`timer!(decl`subscribes;decl`publishes;
-            $[`timer_period in key decl; decl`timer_period; 0Nn])];
+        `subscribe_to`publishes`timer!(decl`subscribe_to;decl`publishes;
+            $[`period in key decl; decl`period; 0Nn])];
     if[count decl`publishes; .qstream.wire[job;sink]];
-    if[`timer_period in key decl;
-        `.qproc.standalone.timers set .qproc.standalone.timers,enlist (job;decl`on_timer;decl`timer_period;0Np)];
+    if[`period in key decl;
+        `.qproc.standalone.timers set .qproc.standalone.timers,enlist (job;decl`on_timer;decl`period;0Np)];
     job}
 
 / The timers this process runs: (job; body; period; last fired).
@@ -160,19 +160,19 @@ connect:{[job;tp]
         / which is a RESHAPE: it yields a one-element list, so `.` applies
         / on_batch to a single argument, which makes a projection rather
         / than an error. The job then receives nothing and reports healthy.
-        if[count decl`subscribes;
-            .qtick.subscribe[decl`subscribes;
+        if[count decl`subscribe_to;
+            .qtick.subscribe[decl`subscribe_to;
                 {[handler;m] handler . 1_m}[decl`on_batch]]];
         :{[t;r] .qtick.publish[t;r]}];
     .qlog.info[job;"connecting to the plant";enlist[`port]!enlist tp];
     h:@[hopen;tp;{[tp;e]
         '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];
-    if[count decl`subscribes;
+    if[count decl`subscribe_to;
         / The plant has to call US back, so it needs a sink addressed at
         / this process - which only the REMOTE can build, out of its own
         / .z.w. Send it a lambda to apply: a local function would arrive
         / as a value the plant cannot route anywhere.
-        h({[want] .qtick.subscribe[want;neg .z.w]};decl`subscribes);
+        h({[want] .qtick.subscribe[want;neg .z.w]};decl`subscribe_to);
         / What comes back is (`upd;table;rows), which q evaluates here as
         / upd[table;rows] - so the job's handler has to BE root upd.
         `upd set decl`on_batch];
