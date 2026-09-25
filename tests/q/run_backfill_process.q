@@ -35,7 +35,7 @@ statusdir:getenv `UQFSTATUSDIR;
 system"mkdir -p ",statusdir;
 .testutil.reset_coverage_ledger[];
 
-Q:$[""~getenv `UQFQ; (getenv[`HOME]),"/.kx/bin/q"; getenv `UQFQ];
+Q:.testutil.q_interpreter[];
 
 failures:0;
 / `label`, not `desc`: desc is a q BUILTIN (descending sort), so using it as

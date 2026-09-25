@@ -90,7 +90,8 @@ repos:
             set -euo pipefail
             # Some suites start a real q process (uqf_frontend's kola IPC
             # tests, uqs's example-script runs) and skip if they find no
-            # interpreter, so make ~/.kx discoverable when present.
+            # interpreter, so make ~/.kx discoverable when present. They find
+            # it by $QCMD, else ~/.kx/bin/q (uqs.paths.q_interpreter).
             if [ -x "$HOME/.kx/bin/q" ]; then
               export QHOME="${QHOME:-$HOME/.kx}"
               export PATH="$HOME/.kx/bin:$PATH"
@@ -202,7 +203,7 @@ repos:
             # ./peachq/q - which was the third different answer in this repo
             # to "which interpreter", and the only one that fell back to
             # something the tree is not verified on. test.py's rule is the
-            # README's: $Q if you set it, otherwise ~/.kx/bin/q, nothing else.
+            # README's: $QCMD if you set it, otherwise ~/.kx/bin/q, nothing else.
             python3 scripts/test.py q-unit
             python3 scripts/test.py q-examples
             # The worked examples under scripts/examples/, run as scripts.
@@ -247,7 +248,7 @@ repos:
             # stops describing anything.
             #
             # Through scripts/test.py for the same reason the hook above is:
-            # one rule for which interpreter ($Q, else ~/.kx/bin/q), never a
+            # one rule for which interpreter ($QCMD, else ~/.kx/bin/q), never a
             # fallback to something the tree is not verified on.
             #
             # It roughly doubles the time a q commit takes (~14s on top of

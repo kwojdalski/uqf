@@ -131,8 +131,8 @@ not mean the q runtime tests passed.
 
 Run `scripts/test.py q-unit` and `scripts/test.py q-examples` locally before
 merging q changes. The hook, CI and the Python IPC fixtures all find q by the
-same rule `scripts/test.py` applies: `$Q` if set, otherwise `~/.kx/bin/q`, and
-nothing else - no PATH lookup and no PeachQ fallback, because an interpreter
+same rule `scripts/test.py` applies: `$QCMD` if set, otherwise `~/.kx/bin/q`,
+and nothing else - no PATH lookup and no PeachQ fallback, because an interpreter
 chosen for you is one the result was not verified on. If the runner later
 supplies one at that path, CI runs the hook automatically; a failing interpreter
 or test is a failure, not a reason to skip it.

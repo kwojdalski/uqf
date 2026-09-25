@@ -18,7 +18,7 @@ from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.model.registry import DEFAULT_BASE_PORT
-from uqs.paths import UqsError, UqsPaths, check_prerequisites
+from uqs.paths import UqsError, UqsPaths, check_prerequisites, q_interpreter
 from uqs.stack import alive
 from uqs.stack.env import build_env
 from uqs.stack.procs import _base_process_rows, _read_overrides
@@ -61,7 +61,7 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
         return False
     result = subprocess.run(
         [
-            os.environ.get("Q", str(Path.home() / ".kx" / "bin" / "q")),
+            str(q_interpreter()),
             str(script),
             str(hdb_root),
             str(paths.generated_schema),

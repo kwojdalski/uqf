@@ -66,10 +66,10 @@ The tooling will not pick one for you. There is deliberately no *automatic*
 fallback anywhere in it: a suite that passed against something the code is not
 verified on is worse than one that does not run, so every entry point skips
 rather than substituting. Choosing another interpreter is therefore explicit ---
-`scripts/test.py` reads `$Q` and `$QHOME`:
+every entry point, the running stack included, reads `$QCMD` and `$QHOME`:
 
 ```
-Q=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
+QCMD=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
 ```
 
 Run everything from the repository root - the load scripts use paths relative to

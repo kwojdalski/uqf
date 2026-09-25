@@ -6,14 +6,37 @@ rather than recomputing paths, so a relocated demo is one change here."""
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.logger import get_logger
 
 log = get_logger(__name__)
+
+
+#: The variable that chooses the q interpreter, everywhere (#414). It is the
+#: name `torq.sh` already starts every stack process with, so one setting now
+#: reaches the stack, its HDB filler, the backfill launcher and every test
+#: lane. There were four rules before - `Q`, `QBIN`, `UQFQ` and a bare `q` on
+#: PATH - and the stack and its HDB could run different binaries.
+Q_INTERPRETER_ENV = "QCMD"
+
+
+def q_interpreter(env: Mapping[str, str] | None = None) -> Path:
+    """The q interpreter: ``$QCMD`` if set, otherwise ``~/.kx/bin/q``.
+
+    Nothing else - no PATH lookup, because whatever ``q`` is first on PATH
+    would be chosen for you, and the README says choosing an interpreter the
+    tree is not verified on is explicit. Whether it exists is the caller's
+    question: a test skips, a script refuses, the stack reports.
+    """
+    source = os.environ if env is None else env
+    chosen = source.get(Q_INTERPRETER_ENV)
+    return Path(chosen) if chosen else Path.home() / ".kx" / "bin" / "q"
 
 
 #: ---------------------------------------------------------------------------

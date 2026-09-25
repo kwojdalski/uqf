@@ -25,17 +25,20 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def find_q_binary() -> tuple[str, dict[str, str]]:
     """The q interpreter, by the rule scripts/test.py applies.
 
-    $Q if set, otherwise ~/.kx/bin/q, and nothing else - no PATH lookup,
-    because whatever `q` is first on PATH would be chosen for you, and the
-    README says choosing another interpreter is explicit. Skips the calling
-    test when there is none, saying how to choose one.
+    $QCMD if set, otherwise ~/.kx/bin/q (uqs.paths.q_interpreter), and
+    nothing else - no PATH lookup, because whatever `q` is first on PATH
+    would be chosen for you, and the README says choosing another
+    interpreter is explicit. Skips the calling test when there is none,
+    saying how to choose one.
     """
+    from uqs.paths import q_interpreter
+
     env = os.environ.copy()
-    q = Path(env["Q"]) if env.get("Q") else Path.home() / ".kx" / "bin" / "q"
+    q = q_interpreter(env)
     if q.is_file():
         env.setdefault("QHOME", str(Path.home() / ".kx"))
         return str(q), env
-    pytest.skip(f"no q interpreter at {q} - set $Q to choose one (README#requirements)")
+    pytest.skip(f"no q interpreter at {q} - set $QCMD to choose one (README#requirements)")
 
 
 def free_port() -> int:

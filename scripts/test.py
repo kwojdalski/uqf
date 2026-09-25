@@ -68,9 +68,11 @@ REPO = Path(__file__).resolve().parent.parent
 
 #: KDB-X. This tree targets it alone and there is deliberately no fallback
 #: interpreter - a suite that passed on something the code is not verified
-#: against is worse than one that does not run. `Q` and `QHOME` let an
+#: against is worse than one that does not run. `QCMD` and `QHOME` let an
 #: operator point it elsewhere DELIBERATELY; see README.md#requirements.
-Q = Path(os.environ.get("Q", Path.home() / ".kx" / "bin" / "q"))
+#: The rule is uqs.paths.q_interpreter's, restated because this file runs
+#: under a bare python3 that cannot import uqs.
+Q = Path(os.environ.get("QCMD") or Path.home() / ".kx" / "bin" / "q")
 QHOME = os.environ.get("QHOME", str(Path.home() / ".kx"))
 
 
@@ -86,7 +88,9 @@ class LaneFailed(Exception):
 
 def _run(lane: str, argv: list[str], *, env: dict[str, str] | None = None) -> None:
     """Run a command, inheriting stdio so test output streams as it happens."""
-    merged = {**os.environ, "QHOME": QHOME, **(env or {})}
+    # QCMD passed on, so a lane that starts its own q processes
+    # (q-backfill-process, q-two-instances) starts the same interpreter.
+    merged = {**os.environ, "QHOME": QHOME, "QCMD": str(Q), **(env or {})}
     result = subprocess.run(argv, cwd=REPO, env=merged, check=False)
     if result.returncode != 0:
         raise LaneFailed(lane, result.returncode)
@@ -316,7 +320,7 @@ EPILOG = """\
 Run the lane matching the layer you changed. `all` is for a release,
 not for an edit.
 
-The interpreter comes from $Q (default ~/.kx/bin/q) and $QHOME (default
+The interpreter comes from $QCMD (default ~/.kx/bin/q) and $QHOME (default
 ~/.kx). There is no fallback: see README.md#requirements.
 """
 
@@ -362,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     except LaneFailed as failure:
         if failure.code == 127:
             print(
-                f"\nno q interpreter at {Q}. Set $Q to point at one, or see\n"
+                f"\nno q interpreter at {Q}. Set $QCMD to point at one, or see\n"
                 "README.md#requirements.",
                 file=sys.stderr,
             )

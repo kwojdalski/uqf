@@ -360,7 +360,7 @@ def _patch_bootstrap(monkeypatch) -> None:
     from uqs.stack import runtime
 
     monkeypatch.setattr(stack_paths, "default_paths", lambda: _FakePaths())
-    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QBIN": "/bin/true"})
+    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QCMD": "/bin/true"})
 
 
 @dataclass
