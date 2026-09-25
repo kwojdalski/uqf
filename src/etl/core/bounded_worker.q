@@ -571,6 +571,13 @@ run:{[worker]
     write_state[worker;`progress;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np)];
     .qhb.beat[worker;`running];
     do_window[worker] each windows;
+    / The io manager's end-of-run step, after the LAST window and whatever
+    / its outcome: a window that failed wrote nothing, but the ones that
+    / succeeded may have left a store that is not finished data until this
+    / runs (the HDB writer sorts and attributes its partitions here). A
+    / manager with no finish - memory, discard - makes this a no-op, and a
+    / dry run, which wrote nothing, gives it nothing to do.
+    .qio.finish .qio.for_cfg def worker;
     p:read_state[worker;`progress];
     result:`state`windows_completed`windows_failed`rows_published`cursor!
         ($[p[`windows_failed]>0;`partial;`completed];

@@ -106,6 +106,31 @@ window_count:{[spec;width]
       (spec;width);
       {[e] 0N}]}
 
+/ The HDB this backfill writes into: $KDBHDB, which uqs sets for every
+/ process it starts (python/uqs/src/uqs/stack/env.py). Refused when unset
+/ rather than falling back to memory: a backfill whose rows live only in
+/ its own process loses them at exit while coverage records the range as
+/ done, so the next run is idle and the rows never arrive anywhere.
+/ @return the HDB root as a file symbol
+/ @throws error when KDBHDB is unset
+hdb_root:{[]
+    d:getenv `KDBHDB;
+    if[0=count d; '"torq_backfill: KDBHDB is unset - a backfill writes into the HDB, and cannot tell where it is"];
+    hsym `$d}
+
+/ Point every worker that declares no io of its own at the HDB, partitioned
+/ by its source's time column. Here rather than in the worker, because where
+/ rows belong is a fact about the stack, not about the worker - the same
+/ split as a streaming job's publish, which torq_stream.q wires.
+/ @param decl the worker's declaration
+/ @return the manager now in .qio.default
+use_hdb:{[decl]
+    root:hdb_root[];
+    col:(.qsrc.def decl`source)`time_column;
+    .qio.default:.qio.hdb[root;col];
+    .qlog.info[`backfill;"writing into the HDB";`root`partition_col!(root;col)];
+    .qio.default}
+
 / Run the worker named on the command line, and report what it did.
 / .
 / Errors are caught and logged rather than thrown, so the process exits with
@@ -129,6 +154,7 @@ run:{[]
         `range_from`range_to`span`width`windows!
             (spec`range_from;spec`range_to;spec[`range_to]-spec`range_from;
              decl`width;window_count[spec;decl`width])];
+    use_hdb decl;
     t1:.z.p;
     (` sv ns,`init)[spec];
     .qlog.dbg[worker;"init done";enlist[`ms]!enlist elapsed_ms t1];
@@ -136,6 +162,9 @@ run:{[]
     r:(` sv ns,`run)[];
     .qlog.info[worker;"backfill process finished";
         r,`run_ms`total_ms!(elapsed_ms t2;elapsed_ms t0)];
+    / The partitions are sorted and filled by the run's own finish step; a
+    / running HDB still maps the old set until it is told to reload.
+    if[0<r`rows_published; .qpipe.reload_hdb[]];
     r}
 
 \d .

@@ -139,6 +139,8 @@ def _pipeline(d: Declaration, table: str | None, offset: int) -> Pipeline:
             procname=d.procname,
             script=BACKFILL_RUNNER_SCRIPT,
             kind=d.kind,
+            # .qpipe.reload_hdb: a backfill writes into the HDB, then tells it.
+            loads_qpipe=True,
             worker=d.name,
             startwithall="0",
             offset=offset,

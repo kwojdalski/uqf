@@ -188,6 +188,7 @@ needs_live:([] expr:(
         ".qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
         ".qpipe.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
         ".qpipe.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
+        ".qpipe.reload_hdb[]";
         ".qodbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]");
     reason:(
@@ -195,6 +196,7 @@ needs_live:([] expr:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
         "registers a TorQ timer, which needs .timer and .proc from a TorQ process";
+        "finds the HDB through TorQ discovery, which needs .servers from a TorQ process";
         "opens an ODBC connection, which needs a licensed driver this tree does not require";
         "opens a Databento parquet file, which exists only where that data has been downloaded"))
 
