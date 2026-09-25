@@ -12,6 +12,39 @@ dependencies come from `uv.lock`; `UV_LOCKED=true` also keeps the hooks' own
 revisions are pinned. The job token has only content and issue read access,
 and is supplied to the decision check through `GH_TOKEN`.
 
+## The lanes
+
+One per layer. `all` is every lane except `coverage` and the two that reach
+outside the process, so it is what a release runs and not what an edit runs -
+ETL-21 asks for the lane matching the layer you changed.
+
+```
+scripts/test.py q-unit              # deterministic qUnit suite
+scripts/test.py q-order             # the same suite, reversed and shuffled
+scripts/test.py q-metatables-hdb    # metatable queries against a temporary HDB
+scripts/test.py q-examples          # every documented @eg runs, in its own process
+scripts/test.py q-scripts           # every worked example under scripts/examples/
+scripts/test.py q-backfill-process  # bounded lifecycle, real filesystem, child processes
+scripts/test.py q-two-instances     # a second kdb+ process, data moved across the wire
+scripts/test.py python              # orchestrator and frontend
+scripts/test.py q-coverage          # what the q suite executes
+scripts/test.py coverage            # the same, q and Python together
+scripts/test.py smoke --targets HOST:PORT --tables TABLE:COL,COL   # live external metadata check
+scripts/test.py stack-smoke         # restart the fleet, watch what it publishes
+scripts/test.py all                 # every lane except coverage, smoke and stack-smoke
+```
+
+They are separate because they prove different things, and five of them
+cannot prove what they claim if folded into `q-unit`:
+
+| Lane | Proves what `q-unit` cannot |
+|---|---|
+| `q-order` | no test depends on running after another — [below](#the-suite-does-not-depend-on-its-own-order) |
+| `q-backfill-process` | single-instance locking and resumption across a restart, which need a real filesystem and a genuinely separate process |
+| `q-two-instances` | the only lane where a source runs **live**: `.qbw.connect`, a source's `query` and `.qsrc.validate_live` execute nowhere else |
+| `stack-smoke` | the wiring — a declared table with no rows, or a process writing to its error log while we watch. [Below](#what-ci-cannot-check-the-wiring), with the three bugs that motivated it |
+| `smoke` | ETL-12's live half, against the **same declaration** the fixture is checked against. Excluded from `all`: a local run that depends on a remote host trains everyone to read red as "the network again" |
+
 ## What CI cannot check: the wiring
 
 Every ETL bug this tree has had was in the seam between a job and the stack

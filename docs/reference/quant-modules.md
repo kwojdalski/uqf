@@ -5,10 +5,6 @@ conventions every one of them follows. The per-function reference is the
 [qDoc](../../README.md#documentation) block on each function, collected in
 [`man.q`](../man.q) — this page is the inventory above that.
 
-Moved out of the root README, which had grown to 490 lines and opened with
-setup instructions a reader has to scroll past. A module inventory is a
-contract, so it belongs in `reference/`.
-
 Each module loads into its own flat namespace after `src/init.q` -
 `.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
 `.qalloc`, `.qdesk`, `.qlimit`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,

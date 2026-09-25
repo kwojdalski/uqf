@@ -109,18 +109,19 @@ reading the best one.
 
 ## Running it
 
-On demand, like the rest of the chain:
+On demand, like the rest of the chain, and as a set:
 
 ```bash
-uqs start marketdata1 superbook1 arbitrage1 crossarb1
+uqs start --profile arbitrage
 ```
 
-**That is four plant connections against three spare.** A q process on the
-community licence accepts sixteen inbound connections, the default start
-holds thirteen, and the chain plus this process wants four
-([the budget](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it)).
-Stop something first, or run `crossarb1` without `arbitrage1` — they answer
-different questions and neither depends on the other.
+which is `marketdata1`, `superbook1`, `arbitrage1` and this process. Naming
+those four positionally on a running default start instead is four plant
+connections more than it holds, and
+[the budget](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it)
+has no room for them — the profile is checked against it before anything
+starts. `crossarb1` also runs without `arbitrage1`: they answer different
+questions and neither depends on the other.
 
 ## Why the triangle exists at all
 

@@ -48,8 +48,8 @@ a process's proctype, port offset and whether it needs credentials:
 
 | `kind` | Does | Driven by | Shared shell |
 |---|---|---|---|
-| `feed` | publishes onto the tickerplant, subscribes to nothing | `.timer.repeat` | none - each feed wires itself |
-| `etl` | subscribes to tickerplant tables, transforms, republishes | tickerplant subscription | `.qpipe.subscribe_etl` exists; one of five uses it |
+| `feed` | publishes onto the tickerplant, subscribes to nothing | its declared `on_timer` | `.qstream`, fully - a feed is a streaming job with no `subscribes` |
+| `etl` | subscribes to tickerplant tables, transforms, republishes | its declared `on_batch` | `.qstream`, fully |
 | `backfill` | a bounded job: registers, runs a window range, exits | an operator or Airflow, per ETL-15 | `.qbw`, fully |
 
 The two axes are not parallel. Every `backfill` is bounded; `feed` and `etl`
@@ -65,21 +65,25 @@ through it today, and a continuous one would too.
 
 ### What that means for the generics
 
-They are uneven, and the unevenness is worth knowing before adding a job:
+They were uneven, and the one gap is now closed - which is worth knowing
+before adding a job, because the shape of the work is the same whichever
+half you are in:
 
 - **Backfill and source** have full, enforced generics. A new one of either
   is a declaration.
+- **Feed and ETL** do too, since `.qstream` (#204). A job is one file under
+  `src/etl/streaming/` declaring `subscribes`, `publishes`, `on_batch` and
+  `on_timer`, and one runner - `scripts/processes/torq_stream.q` - runs any
+  of them by procname. Eighteen jobs share it today. `.qpipe` did **not**
+  become that shell: it stayed the TorQ adapter the runner calls, which is
+  the layering `check_etl_layering.py` enforces.
 - **Continuous** has primitives but no contract, deliberately, and no
   in-tree user.
-- **Feed and ETL** have no shell at all. A new feed is a new script that
-  wires its own timer and publish path, and a new ETL either uses
-  `.qpipe.subscribe_etl` or hand-rolls the same sequence - four of the five
-  hand-roll it today.
 
-Whether `.qpipe` should become the ETL shell that `.qbw` is for backfills is
-an open design question, recorded in
-[pipeline-framework-gaps.md](../architecture/pipeline-framework-gaps.md), not
-settled here.
+The question of what shell the streaming half should have was asked and
+answered in
+[pipeline-framework-gaps.md](../architecture/pipeline-framework-gaps.md)
+§2.5; that assessment is closed, and this page does not reopen it.
 
 ## Bounded lifecycle contract
 

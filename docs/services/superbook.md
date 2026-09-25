@@ -30,17 +30,18 @@ pair's direct book against a synthetic route through the others - see
 They are **on demand**, not part of `uqs start`:
 
 ```bash
-uqs start marketdata1 superbook1 arbitrage1
+uqs start --profile arbitrage
 ```
 
-A q process on the community licence accepts sixteen concurrent inbound
-connections, and every streaming job holds one to `stp1`. The default start
-sits at thirteen with three held back, so this chain spends exactly the
-spare slots - which is what they are for, and why nothing else should be
-started alongside it without stopping something first. See
-[the stack architecture](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it).
+which is this chain plus `crossarb1`, started as a set. Every streaming job
+holds one connection to `stp1` and the plant is the scarce resource in this
+topology, so the profile is the form to reach for: it is checked against
+[the budget](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it)
+before anything starts, where naming the three processes positionally on top
+of a running default start is not. That budget page has the numbers, and is
+the one place that states them.
 
-Being a closed chain is what makes that safe. `market_data` is read only by
+Being a closed chain is what makes starting and stopping it as a set safe. `market_data` is read only by
 `superbook1`, `superbook` only by `arbitrage1`, and `arbitrage` by nothing,
 so the three start and stop together and no default-start job notices
 either way. Their own inputs, `quote` and `quotes`, are published by

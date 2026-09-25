@@ -72,24 +72,18 @@ without `--columns`, and `--columns` shapes the one new table. Its
 scaffolded before its consumer.
 
 `--dry-run` prints what it would write and writes nothing. `kind` is derived
-for a streaming job - one that subscribes to nothing is a feed - and the new
-process's port is appended to the port lock, so no existing process moves.
+for a streaming job, and the new process's port is appended to the port lock,
+so no existing process moves.
 
-**It writes the shape, never the logic.** The generated handler throws and
-the generated test fails, on purpose: a scaffold that left something green
-behind would make "generated" and "implemented" look the same from outside,
-which is how you get a process that is `up`, heartbeating, and publishing
-nothing.
-
-The one place it does NOT leave a throw is a source's `fixture`, which the
-worker's `.qxf.passthrough` reads at LOAD time - a throw there stops the
-whole ETL tree from loading, and an empty table is refused by `.qxf.define`,
-which needs at least one example with rows. So it writes one deterministic
-row of the declared shape. Replace it before trusting a run.
+The scaffold itself — what each shape gets, why the handler throws, and the
+one generated body that does *not* throw — is
+[`scaffolding/`](../scaffolding/README.md), a page per shape. This guide
+picks up where that leaves off, so what it needs from there is just the
+list of what a fresh scaffold leaves red.
 
 ### What a fresh scaffold leaves red
 
-The generated handler throws and the generated test fails. For a job that
+The handler throws and the test fails, deliberately. For a job that
 subscribes and publishes, its scaffolded test also carries a
 `contract_driver` that throws until written - the batch
 [`tests/q/test_job_output_contracts.q`](../../tests/q/test_job_output_contracts.q)
@@ -144,8 +138,10 @@ part is shaped the way it is.
 
 ## Before you start: is it bounded or continuous?
 
-Two different shells, and picking the wrong one is the only structural
-mistake here that is expensive to undo.
+Two different shells. Which one a job wants is
+[`scaffolding/`](../scaffolding/README.md)'s opening question, asked there
+over all four shapes; what follows here is what the two shells actually are,
+which is what you need before writing into either.
 
 <!-- Source: docs/diagrams/pipeline-decision.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
@@ -153,12 +149,11 @@ mistake here that is expensive to undo.
 ![A decision tree: known range or not chooses the bounded worker or the streaming shell; whether it reads another table chooses a feed or an etl; whether it publishes a new table decides if columns must be declared; every path ends at the same new-job command and the same three remaining steps](../diagrams/pipeline-decision.svg)
 
 Three questions, and only the first is hard to change afterwards — the other
-two are flags on one command. The kinds are **derived** rather than asked for:
-a streaming job that subscribes to nothing is a feed, one that subscribes is
-an etl, and there is no `--kind feed` because the edges already say which it
-is. The transform, the check, the io manager and the partition are not on the
-tree: they are declarations you write *inside* the file the scaffold gives
-you, not choices about which file to make.
+two are flags on one command, and the kinds below them are derived from the
+edges rather than asked for. What is **not** on the tree is the part this
+guide is about: the transform, the check, the io manager and the partition
+are declarations you write *inside* the file the scaffold gives you, not
+choices about which file to make.
 
 **Bounded** — you know the range before you start: a backfill, a nightly
 window, a restatement. It runs, it finishes, it exits. `.qbw`, and the rest

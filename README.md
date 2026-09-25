@@ -32,7 +32,7 @@ framework - see [Testing](#testing).
 - [Components](#components) — what this tree contains, and which part owns what
 - [Further reading](#further-reading) — the `docs/` map and component READMEs
 - [Browser application](#browser-application) — the React desk and operations app
-- [Testing](#testing) — the lanes, and what each one proves that the others cannot
+- [Testing](#testing) — how to run the suites, and what q coverage measures
 - [Documentation](#documentation) — generating browsable API docs from qDoc
 - [Licensing](#licensing) — MIT, plus five vendored dependencies with their own terms
 
@@ -225,22 +225,16 @@ served by the API under `/ui/`.
 ## Testing
 
 ```
-scripts/test.py q-unit              # deterministic qUnit suite
-scripts/test.py q-order             # the same suite, reversed and shuffled
-scripts/test.py q-metatables-hdb    # metatable queries against a temporary HDB
-scripts/test.py q-examples          # every documented @eg runs, in its own process
-scripts/test.py q-scripts           # every worked example under scripts/examples/
-scripts/test.py q-backfill-process  # bounded lifecycle, real filesystem, child processes
-scripts/test.py q-two-instances     # a second kdb+ process, data moved across the wire
-scripts/test.py python              # orchestrator and frontend
-scripts/test.py q-coverage          # what the q suite executes
-scripts/test.py coverage            # the same, q and Python together
-scripts/test.py smoke --targets HOST:PORT --tables TABLE:COL,COL   # live external metadata check
-scripts/test.py stack-smoke         # restart the fleet, watch what it publishes
-scripts/test.py all                 # every lane except coverage, smoke and stack-smoke
+scripts/test.py q-unit    # the deterministic qUnit suite
+scripts/test.py python    # orchestrator and frontend
+scripts/test.py all       # every lane except coverage, smoke and stack-smoke
 ```
 
-### Coverage, and what the lanes prove
+Thirteen lanes in all, one per layer. The full list, and what each proves
+that `q-unit` cannot, is [the CI guide](docs/guides/ci.md#the-lanes) — it is
+the page that also says what the gates check and what CI cannot.
+
+### Coverage
 
 `scripts/test.py coverage` measures what the suites actually **execute** —
 line coverage for Python, and **statement and branch coverage for q** through
@@ -254,17 +248,6 @@ terse one, and it instruments statement positions only — a `$` arm is
 `q-coverage` is the gate: it fails when the set of functions nothing enters
 differs from `tests/q/coverage_baseline.txt` **in either direction**, so a
 newly-covered function has to be removed from the baseline deliberately.
-
-The lanes are separate because they prove different things, and three of them
-cannot prove what they claim if folded into the first:
-
-| Lane | Proves what `q-unit` cannot |
-|---|---|
-| `q-order` | no test depends on running after another — it runs the suite reversed and shuffled |
-| `q-backfill-process` | single-instance locking and resumption across a restart, which need a real filesystem and a genuinely separate process |
-| `q-two-instances` | the only lane where a source runs **live**: `.qbw.connect`, a source's `query` and `.qsrc.validate_live` execute nowhere else |
-| `stack-smoke` | the wiring — a declared table with no rows, or a process writing to its error log while we watch |
-| `smoke` | ETL-12's live half, against the **same declaration** the fixture is checked against. Excluded from `all`: a local run that depends on a remote host trains everyone to read red as "the network again" |
 
 Every function is tested against at least one of a published reference value
 (Hull's worked example for `gk_call`), a provable identity (put-call parity,
