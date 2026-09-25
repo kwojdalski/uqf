@@ -31,6 +31,8 @@ from pathlib import Path
 
 import pytest
 
+from uqs.paths import q_interpreter
+
 UQF_ROOT = Path(__file__).resolve().parents[3]
 
 #: Discovered, never listed. A hardcoded parametrize list is how
@@ -51,14 +53,11 @@ def _kdbx() -> tuple[str, dict[str, str]]:
     repository-root ``./q``: see the module docstring.
     """
     env = os.environ.copy()
-    override = env.get("UQFQ")
-    if override and Path(override).is_file():
-        return override, env
-    kdbx = Path.home() / ".kx" / "bin" / "q"
-    if kdbx.is_file():
+    q = q_interpreter(env)
+    if q is not None:
         env.setdefault("QHOME", str(Path.home() / ".kx"))
-        return str(kdbx), env
-    pytest.skip("no KDB-X interpreter (~/.kx/bin/q or $UQFQ)")
+        return str(q), env
+    pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
 
 
 def test_examples_are_discovered() -> None:

@@ -18,7 +18,7 @@ from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.model.registry import DEFAULT_BASE_PORT
-from uqs.paths import UqsError, UqsPaths, check_prerequisites
+from uqs.paths import UqsError, UqsPaths, check_prerequisites, q_command, q_interpreter
 from uqs.stack import alive
 from uqs.stack.env import build_env
 from uqs.stack.procs import _base_process_rows, _read_overrides
@@ -59,9 +59,15 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     if not script.is_file():  # pragma: no cover - a broken checkout
         log.warning("HDB partition filler not found at {}", script)
         return False
+    q = q_interpreter()
+    if q is None:
+        log.warning(
+            "HDB partition filler skipped: no q interpreter ({!r} is not runnable)", q_command()
+        )
+        return False
     result = subprocess.run(
         [
-            os.environ.get("Q", str(Path.home() / ".kx" / "bin" / "q")),
+            str(q),
             str(script),
             str(hdb_root),
             str(paths.generated_schema),

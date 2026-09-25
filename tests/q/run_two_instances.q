@@ -21,6 +21,8 @@
 / for the reason run_backfill_process is: it needs a second process and a
 / port, which the hermetic suite must not.
 
+\l tests/lib/qunit.q
+\l tests/lib/testutil.q
 \l src/init.q
 \l scripts/processes/torq_pipeline.q
 \l src/etl/init.q
@@ -28,7 +30,7 @@
 statusdir:getenv `UQFSTATUSDIR;
 if[0=count statusdir; '"run_two_instances: set UQFSTATUSDIR to a fresh directory"];
 system"mkdir -p ",statusdir;
-Q:$[""~getenv `UQFQ; (getenv[`HOME]),"/.kx/bin/q"; getenv `UQFQ];
+Q:.testutil.q_interpreter[];
 
 failures:0;
 check:{[label;ok]

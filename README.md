@@ -62,14 +62,14 @@ trying for the pure-q modules in `src/`, not as a substitute for a green suite.
 The fleet is a separate question again: the stack under `scripts/` runs on
 vendored TorQ, which has its own compatibility surface.
 
-The tooling will not pick one for you. There is deliberately no *automatic*
-fallback anywhere in it: a suite that passed against something the code is not
-verified on is worse than one that does not run, so every entry point skips
-rather than substituting. Choosing another interpreter is therefore explicit ---
-`scripts/test.py` reads `$Q` and `$QHOME`:
+Every entry point, the running stack included, finds q by TorQ's own rule:
+`$QCMD` if set, otherwise `q` on `PATH` --- the default `torq.sh` itself
+applies. There is no second fallback on top of it (no `~/.kx/bin/q`, no PeachQ):
+one rule, so the stack, its HDB and the test lanes cannot run different
+binaries. To choose an interpreter, set `$QCMD` and `$QHOME`:
 
 ```
-Q=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
+QCMD=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
 ```
 
 Run everything from the repository root - the load scripts use paths relative to

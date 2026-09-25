@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from uqf_frontend.config import Settings
@@ -265,7 +264,7 @@ def start_backfill(
     import os
     import subprocess
 
-    from uqs.paths import UqsError
+    from uqs.paths import UqsError, q_interpreter
     from uqs.stack.backfill import backfill_flags
     from uqs.stack.runtime import bootstrap
 
@@ -285,15 +284,17 @@ def start_backfill(
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
     env = {**os.environ, **overrides}
-    q = env.get("QBIN") or os.environ.get("Q") or str(Path.home() / ".kx" / "bin" / "q")
     script = paths.scripts_dir.parent / "scripts" / "processes" / "torq_backfill.q"
     if not script.is_file():
         raise ValidationFailed(f"{script} not found - is this the repository root?")
+    q = q_interpreter(env)
+    if q is None:
+        raise ValidationFailed("no q interpreter to run the backfill - set $QCMD, or put q on PATH")
 
     # start_new_session detaches it from this server's process group, so a
     # restart of the API does not take a running backfill down with it.
     proc = subprocess.Popen(  # noqa: S603
-        [q, str(script), *flags],
+        [str(q), str(script), *flags],
         cwd=paths.repo_root,
         env=env,
         stdout=subprocess.DEVNULL,
