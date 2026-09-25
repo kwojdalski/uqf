@@ -132,6 +132,24 @@ them to every subscriber as if they had just happened. In plain q - a test, or a
 prompt - the same worker writes to an in-memory table instead. See
 [`io_manager.q`](../src/etl/core/io_manager.q).
 
+## How is it decided whether rows go to the RDB or the HDB?
+
+Not per row, and not by `.qpipe`: by which kind of process the job runs in. The
+runner that starts the process wires its output once, at startup.
+
+  | Process                                        | Its rows go                                                                                                                                                     | Wired by                                                                                            |
+  | ---                                            | ---                                                                                                                                                             | ---                                                                                                 |
+  | a streaming job (`.qstream`, `.qnorm`)         | to the tickerplant, which stamps `time` and fans them out: `rdb1` holds today in memory, `wdb1` writes the day down and it is sorted into the HDB at end of day | `torq_stream.q`: the job's `publish` becomes `.qpipe.publish`, which calls `.u.upd`                 |
+  | a backfill (`.qbw`, started by `uqs backfill`) | straight into the HDB partition of each row's own date - never the tickerplant, never the RDB                                                                   | `torq_backfill.q`: sets `.qio.default` to `.qio.hdb`, then `.qpipe.reload_hdb` once the run is done |
+
+So the rule is about the data's age, enforced by process type. Live rows go
+through the tickerplant because subscribers must see them and today's partition
+is end-of-day's to write. History goes straight to its own date, because the
+tickerplant would stamp it with today's time. The one hard edge is checked:
+`.qio.hdb` refuses rows dated today or later, so a backfill cannot write into
+the partition end-of-day owns. `.qpipe`'s only part in the HDB path is the
+reload request, because that is the step that needs TorQ.
+
 ## Why doesn't my job start with the stack?
 
 A job starts on demand unless its declaration says `start_with_all` `1b`,
