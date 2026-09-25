@@ -211,6 +211,23 @@ repos:
         files: '\.q$'
         pass_filenames: false
 
+      - id: doc-links
+        name: Check every link and anchor in docs/ resolves
+        # Asks Quarto to resolve each link the way a reader's browser will,
+        # then checks the #fragment Quarto ignores. Nothing else covered
+        # either: check_doc_references.py holds the prose to the q FUNCTIONS
+        # it names, and a path that appears in no generated artifact had
+        # nothing to disagree with.
+        #
+        # --allow-missing, unlike the contract-surface hook below, because
+        # the asymmetry runs the other way: a hosted runner cannot have
+        # KDB-X but installing Quarto is one step, so CI is the environment
+        # that CAN enforce and does - it runs this with no flag. A q
+        # developer without Quarto gets a warning here rather than a block.
+        entry: uv run python scripts/gates/check_doc_links.py --allow-missing
+        language: system
+        pass_filenames: false
+        files: '^docs/.*\.(md|qmd)$|^docs/_quarto\.yml$|^scripts/gates/check_doc_links\.py$'
       - id: contract-surface
         name: Check the committed contract surface matches the tree
         # docs/reference/surfaces/current/ used to be checked in CI alone,

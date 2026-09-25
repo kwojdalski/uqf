@@ -34,6 +34,20 @@ jobs:
           enable-cache: true
       - name: Install workspace dependencies
         run: uv sync --locked
+      - name: Install Quarto
+        # The doc-links hook renders docs/ to resolve every link. Pinned for
+        # the same reason qlinter is: a renderer that changes how it resolves
+        # a link must not turn this repository red without anyone choosing it.
+        #
+        # Installed rather than skipped, which is the whole point. The
+        # contract-surface gate skips here because a hosted runner cannot
+        # have KDB-X, and the cost of that skip is visible in this repository's
+        # history - the surface went stale and the doc-reference gate was
+        # reading it. Quarto costs one step, so there is no reason to repeat
+        # that shape of hole.
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.10.18"
       - name: Install qlinter
         shell: bash
         # The q-traps hook delegates thirteen of its fifteen rules to the
@@ -65,6 +79,14 @@ jobs:
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
+      - name: Check every link and anchor in docs/ resolves
+        # Run again here, WITHOUT --allow-missing, which the pre-commit hook
+        # passes. The hook's flag exists so a q developer without Quarto is
+        # not blocked; on CI a missing Quarto must be a hard error rather
+        # than a gate that quietly checked nothing - the failure mode this
+        # repository already has on the contract surface.
+        if: ${{ !cancelled() }}
+        run: uv run python scripts/gates/check_doc_links.py
       - name: Check the generated operational docs match the registry
         # Operational docs are generated, committed and checked.
         # Where the source and the document disagree the source is right by

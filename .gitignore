@@ -82,3 +82,10 @@ tplog/
 
 # pytest-cov's data file, written by `scripts/test.py coverage`.
 .coverage
+
+/.quarto/
+**/*.quarto_ipynb
+
+# Quarto's rendered docs site. docs/_quarto.yml exists so the link gate can
+# ask a real renderer to resolve every link; the output is a build artifact.
+docs/_site/

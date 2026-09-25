@@ -1,0 +1,36 @@
+# Renders docs/ as a browsable site, and - the reason it is wired into CI -
+# makes Quarto resolve every relative link and cross-reference in the tree.
+# Nothing else checks those: check_doc_references.py verifies the q FUNCTIONS
+# prose names, and no gate verified that a `](../foo.md)` still points at a
+# file until this one.
+#
+# The existing markdown renders as-is. No document had to become a .qmd, and
+# none should need to: the guardrail is the link resolution, not the format.
+#
+# Every README.md is listed by name on purpose. Quarto's project render skips
+# them - a README is a repository file, not site content, by its default - so
+# the glob alone left all six of this tree's index pages unrendered and
+# therefore unchecked. docs/README.md is the documentation map and the most
+# link-dense document here, so that omission mattered most exactly where it
+# was least visible.
+project:
+  type: website
+  output-dir: _site
+  render:
+    - "**/*.md"
+    - "README.md"
+    - "architecture/README.md"
+    - "guides/README.md"
+    - "reference/README.md"
+    - "scaffolding/README.md"
+    - "services/README.md"
+    - "!_site/**"
+
+website:
+  title: "uqf docs"
+  search: true
+
+format:
+  html:
+    theme: cosmo
+    toc: true
