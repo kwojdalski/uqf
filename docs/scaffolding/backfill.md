@@ -9,7 +9,7 @@ That last point is why it is the odd one out here: everything on the
 [feed](feed.md), [etl](etl.md) and [normalizer](normalizer.md) pages is about a
 process that stays up.
 
-## The command
+## Command
 
 ```bash
 uqs new-job fxprobe --kind backfill --dataset fx_probe \
@@ -44,7 +44,7 @@ which dataset, how wide a window. One source can have several workers.
 triggered --- it holds no plant connection and belongs to no profile. That is
 the same distinction `profiles.plant_slots` draws when it counts the budget.
 
-## The source
+## Source
 
 ```q
 \d .qfeed.fxprobe
@@ -80,7 +80,7 @@ in a number that is quietly too big.
 Two rules, two numbers, both on `query`. Keeping them apart is why the generated
 file states them in separate paragraphs.
 
-## The fixture
+## Fixture
 
 ```q
 fixture:{[]
@@ -100,7 +100,7 @@ So it is one deterministic row of the declared shape, which loads and asserts
 nothing. **Replace it before trusting a run** --- a fixture that does not
 exercise what the source actually does makes the suite green for no reason.
 
-## The worker
+## Worker
 
 Mostly a declaration. The lifecycle --- windowing, retries, coverage,
 checkpoints, dry-run --- is `.qbw`'s:

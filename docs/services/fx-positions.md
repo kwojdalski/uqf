@@ -1,4 +1,4 @@
-# The FX positions service
+# FX positions service
 
 A running book of what the desk is holding, along the dimensions the desk
 reports on, with limits and breach alerts --- and it runs on stock kdb+ with no
@@ -77,7 +77,7 @@ reason not to be startable with it.
 
 ![The FX positions service](../diagrams/fx-positions-service.svg)
 
-## The four decisions worth knowing
+## Four decisions worth knowing
 
 ### 1. Risk, not P&L
 

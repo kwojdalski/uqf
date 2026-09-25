@@ -22,7 +22,7 @@ Look at the fan-out from `superbook`: both jobs read it, so `crossarb1` is a
 second **consumer** of the `marketdata1` chain rather than a fifth link in it.
 Neither needs the other, and stopping one leaves the other running.
 
-## The whole algorithm
+## Algorithm
 
 The arithmetic is not written in this job. `src/pricing/forwards.q` already
 walks depth across an arbitrary chain of legs, converting the notional hop by
@@ -57,7 +57,7 @@ first test in `tests/q/test_cross_arbitrage.q`, and every expected number in
 that file is computed by hand on purpose --- see
 [why](#why-hand-computed-test-numbers).
 
-## The output
+## Output
 
 `cross_arbitrage` is an append-only **status history**, like `arbitrage`: an
 opportunity that recovers, expires or is withdrawn publishes `active=0b`. Read

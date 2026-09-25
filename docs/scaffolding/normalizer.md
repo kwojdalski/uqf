@@ -8,7 +8,7 @@ instrument. Downstream reads one shape and never learns there were two.
 It is an [etl](etl.md) with a specific job, and the scaffold knows enough about
 that job to write considerably more of it.
 
-## The command
+## Command
 
 ```bash
 uqs new-job all_fills --kind normalizer \

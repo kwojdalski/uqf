@@ -107,7 +107,7 @@ namespace; a worker overrides a method by defining it there *before* calling
 A worker has no `start_with_all`: a backfill runs its range and exits, so it
 never starts with the stack.
 
-### The run spec
+### Run spec
 
 What one run of a worker is asked to do, passed to `.qwrk.<worker>.init` --- or
 by `uqs backfill <worker> --version V --from F --to T`.
@@ -183,7 +183,7 @@ table when the one it reads is
 published](../guides/new-pipeline.md#recomputing-on-an-upstream-publish) covers
 when to use which.
 
-## The job graph is derived, not declared
+## Job graph: derived, not declared
 
 `.qdag.register[job;decl]` exists, but no job file calls it. The graph is
 assembled from the declarations above, so a job's edges cannot disagree with

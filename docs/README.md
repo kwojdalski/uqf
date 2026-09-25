@@ -1,6 +1,6 @@
 # Documentation map
 
-## The system, on one page
+## System overview
 
 <!-- Source: docs/diagrams/repo-overview.d2. Rendered by
      scripts/generate/render_diagrams.py; edit the .d2 and re-render, never the

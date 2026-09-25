@@ -1,4 +1,4 @@
-# The order/trade event tape
+# Order/trade event tape
 
 **Status:** contract decided 2026-09-16 (issue #46). Shape implemented in
 `src/etl/sources/demo_events.q`; all six features it unblocks are implemented in
@@ -36,7 +36,7 @@ The OMS tape is a separate, legitimate thing this tree does not have. Much of
 execution quality is already covered without it: `hit_ratio_by` and `fill_ratio`
 work off a `requests` table, and `markout_at_horizons` off `trades`.
 
-## The shape
+## Shape
 
 ```q
 event_tape:([] time:`timestamp$();  sym:`symbol$();   action:`symbol$();
@@ -72,7 +72,7 @@ existing markout family keeps working on it. Two divergences, both deliberate:
   | `order_id`   | links an `` `add `` to its later `` `cancel `` or `` `trade ``. Not needed by the counting ratios, needed by anything about order lifetime                                                                                                                                                                                  |
   | `pip_factor` | carried from `trades` so pip conversions work unchanged                                                                                                                                                                                                                                                                     |
 
-### The sortedness contract
+### Sortedness contract
 
 **The tape must be sorted ascending by `time`**, and functions over it say so
 rather than sorting defensively. Two reasons, both learned elsewhere in this

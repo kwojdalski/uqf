@@ -9,7 +9,7 @@ If your rows come from a timer rather than a subscription you want
 [feed.md](feed.md); if you are spelling several tables into one shape,
 [normalizer.md](normalizer.md) does most of the work for you.
 
-## The command
+## Command
 
 ```bash
 uqs new-job spreadmon --subscribe-to quotes \
@@ -74,7 +74,7 @@ why `` `time _ batch `` appears in this tree's history as a bug worth naming: it
 is `_` the drop operator applied to a symbol and a table, which throws `'type`
 on every batch. The process stays `up` and consumes nothing.
 
-## The rules
+## Rules
 
 **Never call `.u.upd`.** Call `publish`. The runner wires it to the plant, a
 test wires it to a recorder, and `check_etl_layering.py` fails the build if

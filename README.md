@@ -231,8 +231,8 @@ scripts/test.py all       # every lane except coverage, smoke and stack-smoke
 ```
 
 Thirteen lanes in all, one per layer. The full list, and what each proves that
-`q-unit` cannot, is [the CI guide](docs/guides/ci.md#the-lanes) --- it is the
-page that also says what the gates check and what CI cannot.
+`q-unit` cannot, is [the CI guide](docs/guides/ci.md#lanes) --- it is the page
+that also says what the gates check and what CI cannot.
 
 ### Coverage
 
