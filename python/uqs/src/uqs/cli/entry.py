@@ -29,13 +29,15 @@ from __future__ import annotations
 # this CLI.
 #
 # The import ORDER is the order `--help` lists commands in, so isort is turned
-# off for it: the fleet first, then the summary of it, then what reads it, then
-# what writes code, then the external recorders. Alphabetical would open the
-# help with `config-get`.
+# off for it: the fleet first, the bounded jobs that run over data it has
+# already written, then the summary of it, then what reads it, then what writes
+# code, then the external recorders. Alphabetical would open the help with
+# `config-get`.
 #
 # isort: off
 from uqs.cli import lifecycle  # noqa: F401
 from uqs.cli import backfill  # noqa: F401
+from uqs.cli import replay  # noqa: F401
 from uqs.cli import summary  # noqa: F401
 from uqs.cli import inspect  # noqa: F401
 from uqs.cli import config  # noqa: F401
