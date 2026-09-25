@@ -5,10 +5,9 @@ Diagrams for the running state of the uqf stack (see
 Reflects what `uqs list processes` shows today: the vendored 23-process stack
 plus uqf's own additions (`fxfeed1`, `quotesfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `markout1`, `databento1`,
-`kafka_flow1`,
-`cryptomock1`, `executions1`, `marks1`, `fxordersfeed1`, `fxpositions1`,
-`marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`), and five bounded
-backfill processes (`deals_backfill1`, `events_backfill1`,
+`kafka_flow1`, `cryptomock1`, `executions1`, `marks1`, `fxordersfeed1`,
+`fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`), and
+five bounded backfill processes (`deals_backfill1`, `events_backfill1`,
 `databento_backfill1`, `upstream_backfill1`, `duckdb_deals_backfill1`). Declared
 is not the same as running here - see [what starts with the
 stack](#what-starts-and-why-not-all-of-it).
@@ -103,9 +102,9 @@ it is started by `uqs databento start` rather than by `torq.sh`.
 
 `kafka_flow1` is the second subscriber fed from outside q, and it exists to
 answer a question `databento1` never has to. Its input comes from an external
-Python consumer (`external/kafka_streamer.py`) holding a Kafka subscription,
-and a Kafka topic is the same kind of object as the tickerplant log it feeds:
-an ordered, replayable record of what happened. Joining the two means choosing
+Python consumer (`external/kafka_streamer.py`) holding a Kafka subscription, and
+a Kafka topic is the same kind of object as the tickerplant log it feeds: an
+ordered, replayable record of what happened. Joining the two means choosing
 where the offset commit sits relative to `.u.upd`. Committing first loses a
 record undetectably if the consumer dies in the gap; committing after replays
 it. The consumer commits after, so every failure is a duplicate rather than a
@@ -181,16 +180,16 @@ quietly costing someone else their slot.
 Declaring a job and running it are separate decisions. These stay declared, keep
 their schema row and their place in the DAG, and are one command away:
 
-  | process                                   | why it is not in the default start                                                                                                                                                  |
-  | ---                                       | ---                                                                                                                                                                                 |
-  | `cross1`                                  | a leaf: it subscribes to `quotes` and publishes no table, so nothing stalls while it is stopped                                                                                     |
-  | `widefeed1`, `vectorize1`                 | a closed pair - the only producer of `wide_book` and its only consumer - so they start and stop together                                                                            |
-  | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                  |
+  | process                                   | why it is not in the default start                                                                                                                                                   |
+  | ---                                       | ---                                                                                                                                                                                  |
+  | `cross1`                                  | a leaf: it subscribes to `quotes` and publishes no table, so nothing stalls while it is stopped                                                                                      |
+  | `widefeed1`, `vectorize1`                 | a closed pair - the only producer of `wide_book` and its only consumer - so they start and stop together                                                                             |
+  | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                   |
   | `kafka_flow1`                             | subscribes to `kafka_client_flow`, which only the external Kafka consumer publishes, so on a default start it consumes nothing                                                       |
-  | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                               |
-  | `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together |
-  | `crossarb1`                               | the synthetic-versus-direct detector, a second consumer of that chain, so it runs with it                                                                                           |
-  | `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in [`processes.md`](../reference/processes.md)                                                                                      |
+  | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                                |
+  | `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together  |
+  | `crossarb1`                               | the synthetic-versus-direct detector, a second consumer of that chain, so it runs with it                                                                                            |
+  | `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in [`processes.md`](../reference/processes.md)                                                                                       |
 
 To run them, start a profile - a named set that pulls in what it reads - rather
 than adding processes to the default start:
