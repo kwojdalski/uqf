@@ -585,7 +585,8 @@ CROSS_SIZE_MAX_HALVINGS:200;
 / @eg .qfwd.cross_size_at_price[quotes;`AUDPLN;.z.p;`bid;2.5650]
 / @eg .qfwd.cross_size_at_price[quotes;`AUDPLN;.z.p;`ask;2.5700]  -> the ask-side (buy) boundary at a different price limit
 cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
-    if[not side in `bid`ask; '"cross_size_at_price: side must be `bid or `ask, got ",string side];
+    if[not $[-11h=type side; side in `bid`ask; 0b];
+        '"cross_size_at_price: side must be `bid or `ask, got ",.Q.s1 side];
     lo:0f;
     hi:1f;
     doublings:0;

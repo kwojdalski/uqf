@@ -340,8 +340,9 @@ mid_price_acceleration:{[quotes;target_sym]
 / @eg .qmicro.queue_depletion_rate[quotes;`EURUSD;`bid]
 queue_depletion_rate:{[quotes;target_sym;side]
     sub:quotes_for_sym[`queue_depletion_rate;quotes;target_sym];
-    sizes_col:$[side=`bid; `bid_sizes; side=`ask; `ask_sizes;
-        '"queue_depletion_rate: side must be `bid or `ask, got ",string side];
+    if[not $[-11h=type side; side in `bid`ask; 0b];
+        '"queue_depletion_rate: side must be `bid or `ask, got ",.Q.s1 side];
+    sizes_col:$[side=`bid; `bid_sizes; `ask_sizes];
     l0:level_at[sub sizes_col;0];
     prev_l0:prev l0;
     depleted:0|prev_l0-l0;
