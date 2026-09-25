@@ -1,12 +1,12 @@
 # Scaffolding a normalizer
 
 A normalizer answers one question from several tables that each answer it
-differently. `executions1` turns FX `trades` and crypto `crypto_trades` into
-one `executions` table; `marks1` turns `quote` and `crypto_book` into one mid
-per instrument. Downstream reads one shape and never learns there were two.
+differently. `executions1` turns FX `trades` and crypto `crypto_trades` into one
+`executions` table; `marks1` turns `quote` and `crypto_book` into one mid per
+instrument. Downstream reads one shape and never learns there were two.
 
-It is an [etl](etl.md) with a specific job, and the scaffold knows enough
-about that job to write considerably more of it.
+It is an [etl](etl.md) with a specific job, and the scaffold knows enough about
+that job to write considerably more of it.
 
 ## The command
 
@@ -16,16 +16,16 @@ uqs new-job all_fills --kind normalizer \
     --columns "sym:symbol, venue:symbol, size:float"
 ```
 
-**Do not pass `--publishes`.** A normalizer publishes the table it is named
-for, and the scaffold refuses the redundancy rather than reconciling it:
+**Do not pass `--publishes`.** A normalizer publishes the table it is named for,
+and the scaffold refuses the redundancy rather than reconciling it:
 
 ```
 $ uqs new-job all_fills --kind normalizer --subscribes trades,crypto_trades --publishes all_fills ...
 a normalizer publishes its own NAME - drop --publishes
 ```
 
-So `--columns` describes the **canonical output**, and each subscribed table
-is an input whose shape is read from the plant schema.
+So `--columns` describes the **canonical output**, and each subscribed table is
+an input whose shape is read from the plant schema.
 
 ```
 scaffold all_fills:
@@ -36,10 +36,10 @@ scaffold all_fills:
   note: start it with its producers: crypto_trades trades
 ```
 
-**One note per source.** That is the shape of the work: a normalizer is not
-one function, it is one function per input, each landing on the same output.
+**One note per source.** That is the shape of the work: a normalizer is not one
+function, it is one function per input, each landing on the same output.
 
-## What you get — 65 lines, not 32
+## What you get --- 65 lines, not 32
 
 The extra bulk is the part you would otherwise write by hand. For each
 subscribed table, the scaffold copies **that table's real plant schema** into
@@ -66,11 +66,11 @@ from_trades:{[batch]
     enlist `inputs`expected!( ... ))];
 ```
 
-**Narrow the input schema.** The comment is the instruction: the scaffold
-copies the *whole* upstream table because it cannot know which columns you
-need, and leaving it whole means an upstream change to a column you never
-read breaks your job. Deleting the columns `from_trades` does not touch is
-part of implementing it, not tidying afterwards.
+**Narrow the input schema.** The comment is the instruction: the scaffold copies
+the *whole* upstream table because it cannot know which columns you need, and
+leaving it whole means an upstream change to a column you never read breaks your
+job. Deleting the columns `from_trades` does not touch is part of implementing
+it, not tidying afterwards.
 
 ## `.qxf.define` is what makes this different
 
@@ -81,13 +81,13 @@ producing the canonical shape fails at load, in the suite, rather than by
 publishing a wrong-shaped row the plant discards silently.
 
 That is why the note says "implement `from_trades` **and its example**". The
-example is not a test you may skip — `.qxf.define` refuses a transform whose
+example is not a test you may skip --- `.qxf.define` refuses a transform whose
 examples are all empty.
 
 ## Then
 
-Implement one mapping at a time and run `scripts/test.py q-unit` between
-each: with several sources it is the only way to know which one broke.
-Replace `tests/q/test_all_fills.q` entirely, and add `all_fills1` to a
-profile — a normalizer is nearly always a dependency rather than a leaf, so
-it usually arrives in one by being what a leaf reads.
+Implement one mapping at a time and run `scripts/test.py q-unit` between each:
+with several sources it is the only way to know which one broke. Replace
+`tests/q/test_all_fills.q` entirely, and add `all_fills1` to a profile --- a
+normalizer is nearly always a dependency rather than a leaf, so it usually
+arrives in one by being what a leaf reads.

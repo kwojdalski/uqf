@@ -124,10 +124,12 @@ def test_the_documented_gateway_port_is_the_one_the_code_actually_defaults_to():
     from uqf_frontend.config import Settings
 
     reference = Path(__file__).resolve().parents[3] / "docs" / "reference" / "environment.md"
+    # `lstrip` because the markdown formatter indents tables by two spaces,
+    # which every renderer still reads as a table and this test did not.
     row = next(
-        line
+        line.lstrip()
         for line in reference.read_text().splitlines()
-        if line.startswith("| `UQF_FRONTEND_GATEWAY_PORT`")
+        if line.lstrip().startswith("| `UQF_FRONTEND_GATEWAY_PORT`")
     )
     assert str(Settings().port) in row, (
         f"environment.md documents a default the code does not use; "

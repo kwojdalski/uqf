@@ -6,11 +6,11 @@ description: Use whenever writing, editing, or reviewing q/kdb+ code in this rep
 # kdb+/q conventions for uqf
 
 uqf is a q/kdb+ library of quantitative-finance functions **strictly scoped to
-electronic FX (eFX)**: FX forwards/swaps (CIRP), Garman-Kohlhagen FX options,
-FX position risk (P&L, carry, VaR), and eFX execution analytics (markouts,
-slippage, effective spread, fill/reject ratios). Do not add generic
-cross-asset or equity-derivatives functions - if it isn't FX pricing, FX
-position risk, or eFX execution quality, it doesn't belong here.
+electronic FX (eFX)**: FX forwards/swaps (CIRP), Garman-Kohlhagen FX options, FX
+position risk (P&L, carry, VaR), and eFX execution analytics (markouts,
+slippage, effective spread, fill/reject ratios). Do not add generic cross-asset
+or equity-derivatives functions - if it isn't FX pricing, FX position risk, or
+eFX execution quality, it doesn't belong here.
 
 ## The most important rule: q has NO operator precedence
 
@@ -24,11 +24,11 @@ neg z*z      ==  neg(z*z)         (fine - neg just grabs the whole rest)
 sqrt 2*PI    ==  sqrt(2*PI)       (fine - same reason)
 ```
 
-This bit us for real while building this repo: a hand-written Horner
-polynomial (`b[0]*r+b[1]`) silently evaluated as `b[0]*(r+b[1])` and produced
-plausible-looking but wrong numbers that only surfaced by tracing
-intermediate values against known references (see git history / PR
-description for `src/foundation/stats.q`).
+This bit us for real while building this repo: a hand-written Horner polynomial
+(`b[0]*r+b[1]`) silently evaluated as `b[0]*(r+b[1])` and produced
+plausible-looking but wrong numbers that only surfaced by tracing intermediate
+values against known references (see git history / PR description for
+`src/foundation/stats.q`).
 
 **Rule for this repo:** never write a bare mixed `*`/`+`/`-` chain and rely on
 implicit grouping. Instead:
@@ -39,220 +39,209 @@ implicit grouping. Instead:
    ratio:scaledSpot%fwd;
    (ratio-1)%t
    ```
-2. When a one-liner is unavoidable, **parenthesize explicitly** even where
-   q's right-to-left rule would happen to give the right answer anyway -
-   don't make the next reader re-derive the evaluation order.
+
+2. When a one-liner is unavoidable, **parenthesize explicitly** even where q's
+   right-to-left rule would happen to give the right answer anyway - don't make
+   the next reader re-derive the evaluation order.
+
 3. Any polynomial evaluation goes through `.qstats.horner_eval[coeffs;x]`
    (defined in `src/foundation/stats.q`) rather than a hand-written Horner chain -
    that arithmetic is tricky exactly once, in one tested place.
+
 4. After writing any new formula, **verify it numerically against a known
    reference value** before trusting it (textbook example, a documented
-   identity, or a round-trip through an inverse function) - see "Testing"
-   below. Do not assume a formula is correct just because it doesn't error.
+   identity, or a round-trip through an inverse function) - see "Testing" below.
+   Do not assume a formula is correct just because it doesn't error.
 
 For deeper q-language edge cases beyond this repo's own gotchas - the type
 system, iterators/adverbs, error-handling scoping, namespace traps, date
-arithmetic - see `q-language-reference.md` in this skill directory (adapted
-from TorQ's own q reference, trimmed to what applies to a plain function
-library with no processes/IPC/tables).
+arithmetic - see `q-language-reference.md` in this skill directory (adapted from
+TorQ's own q reference, trimmed to what applies to a plain function library with
+no processes/IPC/tables).
 
 ## Other q gotchas hit in this repo
 
-- `floor` is the keyword to use. Monadic `_` also floors but reads as drop
-  at a glance, so this codebase spells it out.
+- `floor` is the keyword to use. Monadic `_` also floors but reads as drop at a
+  glance, so this codebase spells it out.
 - `` `year$d ``, `` `mm$d ``, `` `dd$d `` cast a date to its year/month/day
   components as ints.
 - `|` and `&` are max/min on numerics (not just boolean or/and) - e.g.
   `0.0001|sigma` floors sigma at 0.0001.
-- Fold-with-explicit-seed needs **bracket** application:
-  `f[x;]/[seed;list]`, not `(f[x;]/) (seed;list)` (the latter passes a
-  single 2-tuple as one argument and silently does the wrong thing).
-- `]/comment` (no space before `/`) is parsed as an operator, not a
-  comment start - always put a space before an inline `/` comment.
-- A top-level global variable name that shadows a q builtin (e.g. `ss`,
-  q's string-search keyword) can break unrelated code with a confusing
+- Fold-with-explicit-seed needs **bracket** application: `f[x;]/[seed;list]`,
+  not `(f[x;]/) (seed;list)` (the latter passes a single 2-tuple as one argument
+  and silently does the wrong thing).
+- `]/comment` (no space before `/`) is parsed as an operator, not a comment
+  start - always put a space before an inline `/` comment.
+- A top-level global variable name that shadows a q builtin (e.g. `ss`, q's
+  string-search keyword) can break unrelated code with a confusing
   `assign`/`type` error - avoid short variable names without checking they
   aren't builtins.
-- An unnamed lambda only auto-binds `x`, `y`, `z` as implicit parameters.
-  A 4+ arg each-both (`f'[a;b;c;d]`) needs an explicitly named parameter
-  list (`{[w;x;y;z] ...}`), not implicit `x,y,z,u,v,w` - `u`/`v`/`w` are
-  not auto-bound and calling with more than 3 implicit args fails with a
-  `rank` error.
-- `distinct` over a large, high-cardinality vector was pathologically slow
-  on the second interpreter this repo used to target. **That constraint is
-  gone** - KDB-X hashes. The `(max x)-(min x)` spread idiom still appears in
-  `test_execution_scale.q`; it is now a choice rather than a workaround, and
-  a new test may use `count distinct x` freely.
-- Don't pass a huge (e.g. 1mm-element) vector as the `actual`/`expected` of
-  a single qUnit assertion. qUnit embeds whatever you pass into its
-  results table, and razing that row together with every other suite's
-  (scalar-valued) result rows made `.qunit.runTests` throw a bare `type`
-  error once results from all namespaces were combined - with
-  no indication of which assertion caused it. For a large-scale test,
-  reduce a vector comparison to a scalar first (e.g. `max abs a-b` against
-  a tolerance) rather than asserting on the two vectors directly - smaller
-  results table, and a far more readable failure message too.
-- `string` on a value that's **already a string** (type `10h`) does not
-  act as the identity - it maps over each character and returns a list of
-  1-char strings (`string "EURUSD"` gives `("E";"U";"R";...)`, not
-  `"EURUSD"`). Only `string` on a symbol correctly returns the whole thing
-  as one string. `ccy.q`'s `ccy_to_str` exists specifically to paper over
-  this: `$[10h=type x; x; string x]` - check `type` before coercing
-  anything that might already be a string.
+- An unnamed lambda only auto-binds `x`, `y`, `z` as implicit parameters. A 4+
+  arg each-both (`f'[a;b;c;d]`) needs an explicitly named parameter list
+  (`{[w;x;y;z] ...}`), not implicit `x,y,z,u,v,w` - `u`/`v`/`w` are not
+  auto-bound and calling with more than 3 implicit args fails with a `rank`
+  error.
+- `distinct` over a large, high-cardinality vector was pathologically slow on
+  the second interpreter this repo used to target. **That constraint is gone** -
+  KDB-X hashes. The `(max x)-(min x)` spread idiom still appears in
+  `test_execution_scale.q`; it is now a choice rather than a workaround, and a
+  new test may use `count distinct x` freely.
+- Don't pass a huge (e.g. 1mm-element) vector as the `actual`/`expected` of a
+  single qUnit assertion. qUnit embeds whatever you pass into its results table,
+  and razing that row together with every other suite's (scalar-valued) result
+  rows made `.qunit.runTests` throw a bare `type` error once results from all
+  namespaces were combined - with no indication of which assertion caused it.
+  For a large-scale test, reduce a vector comparison to a scalar first (e.g.
+  `max abs a-b` against a tolerance) rather than asserting on the two vectors
+  directly - smaller results table, and a far more readable failure message too.
+- `string` on a value that's **already a string** (type `10h`) does not act as
+  the identity - it maps over each character and returns a list of 1-char
+  strings (`string "EURUSD"` gives `("E";"U";"R";...)`, not `"EURUSD"`). Only
+  `string` on a symbol correctly returns the whole thing as one string.
+  `ccy.q`'s `ccy_to_str` exists specifically to paper over this:
+  `$[10h=type x; x; string x]` - check `type` before coercing anything that
+  might already be a string.
 - **`,` on two symbol atoms does not concatenate their text** - it makes a
   2-element symbol *list*. `` `ask,`Prices `` gives `` `ask`Prices `` (a
-  vector), not `` `askPrices``. Trying to dynamically build a lookup key
-  this way (e.g. `` book[side,`Prices] `` to pick `askPrices`/`bidPrices`
-  by a `side` variable) silently returns a null instead of erroring -
-  broke `cross_book_at_sizes`'s first draft. Build dynamic symbols from
-  *strings* instead (`` `$(string x),"suffix" ``), or better, avoid
-  dynamic key construction entirely and branch explicitly per case (what
-  `forwards.q`'s `oriented_levels` does).
-- Nested lambdas do **not** close over an enclosing function's *local*
-  variables - only globals. `outer:{[] localVar:42; inner:{[d] localVar+d};
-  inner[8]}` throws `localVar` (undefined), even though `inner` is
-  textually nested inside `outer`. This matters most for qUnit's
-  `assertError`/`assertThrows` pattern: a `wrapper` lambda meant to defer
-  a call for `assertError` to invoke must take everything it needs as an
-  **explicit parameter** (e.g. `{[books] ...books 0...books 1...}` called
-  as `assertError[wrapper;(book1;book2);msg]`), never by referencing a
-  same-function local from inside the nested lambda body. Getting this
-  wrong doesn't silently pass - the whole test function throws and shows
-  up as `error` rather than `pass` in the qUnit summary, which is at
-  least how it gets caught.
-- A local variable named `cols` shadows q's `cols` keyword (table column
-  names) - same failure mode as the earlier `ss`-shadowing gotcha
-  (`assign`/`type` errors with no clear cause). Avoid naming a variable
-  after any q keyword; when in doubt, check `` key `. `` or just pick a
-  more specific name (`wantCols`, not `cols`).
-- **qUnit's hook discovery is a hardcoded, case-sensitive name prefix -
-  don't snake_case it.** `.qunit.runNsTests` finds setup/teardown hooks
-  via `findFuncs[ns;"beforeNamespace*";...]` (and `afterNamespace*`,
+  vector), not `` `askPrices``. Trying to dynamically build a lookup key this
+  way (e.g. `` book[side,`Prices] `` to pick `askPrices`/`bidPrices` by a `side`
+  variable) silently returns a null instead of erroring - broke
+  `cross_book_at_sizes`'s first draft. Build dynamic symbols from *strings*
+  instead (`` `$(string x),"suffix" ``), or better, avoid dynamic key
+  construction entirely and branch explicitly per case (what `forwards.q`'s
+  `oriented_levels` does).
+- Nested lambdas do **not** close over an enclosing function's *local* variables -
+  only globals. `outer:{[] localVar:42; inner:{[d] localVar+d}; inner[8]}`
+  throws `localVar` (undefined), even though `inner` is textually nested inside
+  `outer`. This matters most for qUnit's `assertError`/`assertThrows` pattern: a
+  `wrapper` lambda meant to defer a call for `assertError` to invoke must take
+  everything it needs as an **explicit parameter** (e.g.
+  `{[books] ...books 0...books 1...}` called as
+  `assertError[wrapper;(book1;book2);msg]`), never by referencing a
+  same-function local from inside the nested lambda body. Getting this wrong
+  doesn't silently pass - the whole test function throws and shows up as `error`
+  rather than `pass` in the qUnit summary, which is at least how it gets caught.
+- A local variable named `cols` shadows q's `cols` keyword (table column names) -
+  same failure mode as the earlier `ss`-shadowing gotcha (`assign`/`type` errors
+  with no clear cause). Avoid naming a variable after any q keyword; when in
+  doubt, check `` key `. `` or just pick a more specific name (`wantCols`, not
+  `cols`).
+- **qUnit's hook discovery is a hardcoded, case-sensitive name prefix - don't
+  snake_case it.** `.qunit.runNsTests` finds setup/teardown hooks via
+  `findFuncs[ns;"beforeNamespace*";...]` (and `afterNamespace*`,
   `beforeParameters*`, `afterParameters*`, `setUp*`, `tearDown*`) - exact
   literal prefixes baked into the vendored framework. Renaming
-  `beforeNamespaceGenerateTrades` to `before_namespace_generate_trades`
-  during the snake_case pass silently broke discovery (0 matches instead
-  of 1): the hook never ran, the table it was supposed to populate stayed
-  unset, and every test in that namespace that depended on it threw. Fix
-  was `beforeNamespace_generate_trades` - keep the exact
-  `beforeNamespace`/`afterNamespace`/etc. prefix untouched, snake_case
-  only whatever comes after it. This is a case where "rename everything
-  to the house style" and "the third-party framework's naming contract"
-  are in direct conflict, and the framework wins - you won't get an error
-  when you get it wrong, the hook just quietly stops firing.
+  `beforeNamespaceGenerateTrades` to `before_namespace_generate_trades` during
+  the snake_case pass silently broke discovery (0 matches instead of 1): the
+  hook never ran, the table it was supposed to populate stayed unset, and every
+  test in that namespace that depended on it threw. Fix was
+  `beforeNamespace_generate_trades` - keep the exact
+  `beforeNamespace`/`afterNamespace`/etc. prefix untouched, snake_case only
+  whatever comes after it. This is a case where "rename everything to the house
+  style" and "the third-party framework's naming contract" are in direct
+  conflict, and the framework wins - you won't get an error when you get it
+  wrong, the hook just quietly stops firing.
 - **Write a `select`/`update` clause's `by` before `from`** - the canonical
-  order. KDB-X tolerates the reordering, so this is now legibility rather
-  than a parse requirement; a reordered clause reads as a typo. It is worth
-  knowing that a `parse` error at load time carries no line number and
-  silently aborts the rest of that file, so every later function in the
-  same file ends up undefined too (found via `src/market_data/dqchecks.q`'s
-  `check_stale_quotes` - always re-check the whole file loaded cleanly
-  after a `parse` error, not just that one function).
+  order. KDB-X tolerates the reordering, so this is now legibility rather than a
+  parse requirement; a reordered clause reads as a typo. It is worth knowing
+  that a `parse` error at load time carries no line number and silently aborts
+  the rest of that file, so every later function in the same file ends up
+  undefined too (found via `src/market_data/dqchecks.q`'s `check_stale_quotes` -
+  always re-check the whole file loaded cleanly after a `parse` error, not just
+  that one function).
 - **`$[cond;a;b]` with a vector `cond` works under KDB-X.** The second
   interpreter this repo used to target accepted only a scalar, which is why
   `dqchecks.q` builds status columns by boolean-indexing a symbol vector
-  (`` `ok`bad boolvec ``). **That constraint is gone.** The idiom is kept
-  where it already reads well; for
-  3+-way branching, compute a 0/1/2... index via ordinary arithmetic on
-  the condition vectors, then index a symbol vector by that, rather than
-  reaching for `$` on a vector at all (found via `src/market_data/dqchecks.q`'s
-  `check_market_data_quality`).
-- **Real KDB-X: inside a `select`/`update` clause's per-row expression, a
-  bare (unqualified) call to a function defined in the *same* namespace
-  can fail to resolve** - throws an error literally named after the
-  function (e.g. `` 'fn ``) - even though the identical bare call
-  works everywhere else, including elsewhere in the very same enclosing
-  function. Root cause unconfirmed (plausibly: the clause's generated
-  per-row lambda evaluates against the root `.` context, not the
-  enclosing function's own namespace), but the fix is simple: always
-  fully-qualify a same-namespace function call used *inside* a
-  select/update clause (with its namespace prefix, not bare `fn[...]`) -
-  unusual style anywhere else in this codebase, but required there (found
-  via `check_limit`'s call to `limit_for` in `src/market_data/dqchecks.q`,
-  both since removed in #412).
+  (`` `ok`bad boolvec ``). **That constraint is gone.** The idiom is kept where
+  it already reads well; for 3+-way branching, compute a 0/1/2... index via
+  ordinary arithmetic on the condition vectors, then index a symbol vector by
+  that, rather than reaching for `$` on a vector at all (found via
+  `src/market_data/dqchecks.q`'s `check_market_data_quality`).
+- **Real KDB-X: inside a `select`/`update` clause's per-row expression, a bare
+  (unqualified) call to a function defined in the *same* namespace can fail to
+  resolve** - throws an error literally named after the function (e.g. ` 'fn `) -
+  even though the identical bare call works everywhere else, including elsewhere
+  in the very same enclosing function. Root cause unconfirmed (plausibly: the
+  clause's generated per-row lambda evaluates against the root `.` context, not
+  the enclosing function's own namespace), but the fix is simple: always
+  fully-qualify a same-namespace function call used *inside* a select/update
+  clause (with its namespace prefix, not bare `fn[...]`) - unusual style
+  anywhere else in this codebase, but required there (found via `check_limit`'s
+  call to `limit_for` in `src/market_data/dqchecks.q`, both since removed in
+  #412).
 
 ## Layout
 
-- `src/*.q` - one module per topic, each wrapped in its own `\d .q<abbrev>`
-  ... `\d .` block, so each file lands in its own flat namespace rather
-  than sharing one (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`,
-  `.qopt`, `.qrisk`, `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
-  `.qexdef` - `src/integrations/data.q` is `.qdata`, out of scope for this library, see
-  below). Every one of these is single-level (not nested under a shared
-  `.q` parent) by convention - the filename-to-namespace tie is what
-  the naming auditor checks and what `docs/man.q` is generated against.
-  THREE families nest, on purpose, and all hold INSTANCES rather than
-  modules: bounded workers under a single `.qwrk` root
-  (`.qwrk.demo_deals_backfill`, derived by `.qbw.define` from the registered
-  worker name), source declarations under `.qfeed` (`.qfeed.demo_deals`,
-  checked against the file's own `source_name`) the continuous jobs under `.qsub`
-  (`.qsub.fx_feed`, `.qsub.markout` and six more - one file each under
-  `src/etl/streaming/`, holding every step of the job, feeds included), and
-  each process script's own wiring state under `.qproc` (`.qproc.stream`,
-  `.qproc.backfill`, `.qproc.tap`). A namespace outside
-  the `.q` prefix entirely is a bug
-  unless it is one of the three listed in `tests/q/test_namespaces.q`'s
-  `outside_the_prefix` - `.dqe` (TorQ's own), `.cov` (KX's API shape) and
-  `.surface` (the exporter) - and that test fails on a new one. Code that
-  enumerates namespaces must therefore go through `.qns.owned` /
-  `.qns.functional` (`src/namespaces.q`): a root-level
-  `(key `) where like "q*"` scan sees `.qwrk`, `.qfeed` and `.qsub` as
-  namespaces holding no functions and drops every worker, source and
-  subscriber process without saying so. A
-  function calling
-  another module's function must qualify it explicitly (e.g. `forwards.q`'s
-  `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a
-  bare, unqualified name) - there is no shared namespace for cross-file
-  calls to resolve into implicitly, and (see the real-KDB-X gotcha further
-  down) even a *same*-namespace call from inside a select/update clause's
-  per-row expression needs to be qualified too. Load order doesn't matter
-  for function *definitions* (q resolves names at call time, and every
-  namespace is fully loaded before any cross-module call actually runs),
-  but `src/init.q` loads them in a sensible dependency order (stats -> ccy
-  -> daycount -> rates -> forwards -> options -> risk -> positions ->
-  execution -> book -> microstructure -> dqchecks -> example_defaults)
-  anyway, for readability.
+- `src/*.q` - one module per topic, each wrapped in its own `\d .q<abbrev>` ...
+  `\d .` block, so each file lands in its own flat namespace rather than sharing
+  one (`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`,
+  `.qpos`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`, `.qexdef` -
+  `src/integrations/data.q` is `.qdata`, out of scope for this library, see
+  below). Every one of these is single-level (not nested under a shared `.q`
+  parent) by convention - the filename-to-namespace tie is what the naming
+  auditor checks and what `docs/man.q` is generated against. THREE families
+  nest, on purpose, and all hold INSTANCES rather than modules: bounded workers
+  under a single `.qwrk` root (`.qwrk.demo_deals_backfill`, derived by
+  `.qbw.define` from the registered worker name), source declarations under
+  `.qfeed` (`.qfeed.demo_deals`, checked against the file's own `source_name`)
+  the continuous jobs under `.qsub` (`.qsub.fx_feed`, `.qsub.markout` and six
+  more - one file each under `src/etl/streaming/`, holding every step of the
+  job, feeds included), and each process script's own wiring state under
+  `.qproc` (`.qproc.stream`, `.qproc.backfill`, `.qproc.tap`). A namespace
+  outside the `.q` prefix entirely is a bug unless it is one of the three listed
+  in `tests/q/test_namespaces.q`'s `outside_the_prefix` - `.dqe` (TorQ's own),
+  `.cov` (KX's API shape) and `.surface` (the exporter) - and that test fails on
+  a new one. Code that enumerates namespaces must therefore go through
+  `.qns.owned` / `.qns.functional` (`src/namespaces.q`): a root-level `(key `)
+  where like
+  "q\*"` scan sees `.qwrk`, `.qfeed` and `.qsub` as namespaces holding no functions and drops every worker, source and subscriber process without saying so. A function calling another module's function must qualify it explicitly (e.g. `forwards.q`'s `cross_book` calls `.qccy.ccy_pair_legs`/`.qccy.ccy_pair_symbol`, not a bare, unqualified name) - there is no shared namespace for cross-file calls to resolve into implicitly, and (see the real-KDB-X gotcha further down) even a *same*-namespace call from inside a select/update clause's per-row expression needs to be qualified too. Load order doesn't matter for function *definitions* (q resolves names at call time, and every namespace is fully loaded before any cross-module call actually runs), but `src/init.q\`
+  loads them in a sensible dependency order (stats -> ccy -> daycount -> rates
+  -> forwards -> options -> risk -> positions -> execution -> book ->
+  microstructure -> dqchecks -> example_defaults) anyway, for readability.
 - `tests/lib/qunit.q` - vendored TimeStored qUnit framework (CC BY-NC-SA,
-  non-commercial - keep the attribution header intact; see README's
-  Licensing section before using this repo commercially).
-- `tests/test_*.q` - one test file per `src/*.q` module. Each file opens its
-  own namespace ending in `test` (qUnit auto-discovers namespaces by that
-  suffix) and defines `test*`-prefixed unary functions.
+  non-commercial - keep the attribution header intact; see README's Licensing
+  section before using this repo commercially).
+- `tests/test_*.q` - one test file per `src/*.q` module. Each file opens its own
+  namespace ending in `test` (qUnit auto-discovers namespaces by that suffix)
+  and defines `test*`-prefixed unary functions.
 - `tests/run_tests.q` - loads qunit + src + tests, runs everything, prints a
   pass/fail summary, and exits non-zero on any failure (for CI).
 
 ## Conventions used across the library
 
 - **Everything is `lower_snake_case`** - function names (e.g. `gk_call`,
-  `cross_book_at_sizes`, `markout_at_horizons`), parameters, and local
-  variables (e.g. `pip_factor`, `trade_price`, `target_size`) alike, not
-  camelCase. New code should follow it too. Two deliberate exceptions:
-  - `D1`/`D2` in `options.q` are `d1v`/`d2v`, not `d1`/`d2` - several
-    functions do `d1v:d1[...]` (call the public `d1` function to set a
-    local); if that local were also named `d1`, q's scoping rules make
-    any name assigned anywhere in a function local for the *whole*
-    function body, so the call on the right-hand side would try to
-    invoke the not-yet-set local instead of the global function.
-  - `beforeNamespace_generate_trades` in `tests/q/test_execution_scale.q`
-    keeps the literal `beforeNamespace` prefix - see the qUnit hook
-    gotcha below for why.
+  `cross_book_at_sizes`, `markout_at_horizons`), parameters, and local variables
+  (e.g. `pip_factor`, `trade_price`, `target_size`) alike, not camelCase. New
+  code should follow it too. Two deliberate exceptions:
+  - `D1`/`D2` in `options.q` are `d1v`/`d2v`, not `d1`/`d2` - several functions
+    do `d1v:d1[...]` (call the public `d1` function to set a local); if that
+    local were also named `d1`, q's scoping rules make any name assigned
+    anywhere in a function local for the *whole* function body, so the call on
+    the right-hand side would try to invoke the not-yet-set local instead of the
+    global function.
+  - `beforeNamespace_generate_trades` in `tests/q/test_execution_scale.q` keeps
+    the literal `beforeNamespace` prefix - see the qUnit hook gotcha below for
+    why.
 
   `src/integrations/data.q` (not authored as part of this library - see its own
-  header) still uses camelCase throughout and was deliberately left
-  alone.
-- Currency pair quoting: BASE/QUOTE, so `rate` means 1 BASE = `rate` QUOTE
-  (e.g. EURUSD 1.10 -> 1 EUR = 1.10 USD). `rd` is the quote currency's
-  rate, `rf` the base currency's - this matches the Garman-Kohlhagen and
-  CIRP literature.
+  header) still uses camelCase throughout and was deliberately left alone.
+
+- Currency pair quoting: BASE/QUOTE, so `rate` means 1 BASE = `rate` QUOTE (e.g.
+  EURUSD 1.10 -> 1 EUR = 1.10 USD). `rd` is the quote currency's rate, `rf` the
+  base currency's - this matches the Garman-Kohlhagen and CIRP literature.
+
 - `t` is always a year fraction (float), never raw dates - date-to-`t`
   conversion is `daycount.q`'s job, kept separate from pricing/rates math.
-- `side` is `1` for long base currency / a buy, `-1` for short / a sell,
-  used consistently in `risk.q` and `execution.q`.
-- `pipFactor` is `10000` for most pairs, `100` for JPY crosses; nothing in
-  the library hardcodes a pip size - it's always a caller-supplied argument.
-- Cost-style execution metrics (`eff_spread`, `slippage`) are positive when
-  they went against the side that traded; `markout` is positive when the
-  market moved in that side's favour after the trade.
+
+- `side` is `1` for long base currency / a buy, `-1` for short / a sell, used
+  consistently in `risk.q` and `execution.q`.
+
+- `pipFactor` is `10000` for most pairs, `100` for JPY crosses; nothing in the
+  library hardcodes a pip size - it's always a caller-supplied argument.
+
+- Cost-style execution metrics (`eff_spread`, `slippage`) are positive when they
+  went against the side that traded; `markout` is positive when the market moved
+  in that side's favour after the trade.
 
 ## Testing
 
@@ -262,16 +251,16 @@ Run the whole suite from the repo root:
 q tests/run_tests.q
 ```
 
-Every new function needs a qUnit test in the matching
-`tests/test_*.q` file - prefer known reference values or a provable
-identity (put-call parity, a round trip through an inverse function, a
-boundary case) over an assertion that just repeats the implementation.
+Every new function needs a qUnit test in the matching `tests/test_*.q` file -
+prefer known reference values or a provable identity (put-call parity, a round
+trip through an inverse function, a boundary case) over an assertion that just
+repeats the implementation.
 
 ## Documentation (qDoc)
 
-Every function in `src/*.q` has a [qDoc](https://www.timestored.com/qstudio/help/qdoc)
-comment block, immediately above the function, with no blank line in
-between:
+Every function in `src/*.q` has a
+[qDoc](https://www.timestored.com/qstudio/help/qdoc) comment block, immediately
+above the function, with no blank line in between:
 
 ```
 / One-line (or multi-line) description of what the function does.
@@ -283,43 +272,43 @@ between:
 someFunc:{[name;other] ...};
 ```
 
-Verified empirically (not just from TimeStored's docs, which got the CLI
-arg order backwards - see below) by actually downloading `qstudio.jar` and
-running `com.timestored.qdoc.QDocMain` against a scratch file:
+Verified empirically (not just from TimeStored's docs, which got the CLI arg
+order backwards - see below) by actually downloading `qstudio.jar` and running
+`com.timestored.qdoc.QDocMain` against a scratch file:
 
 - qDoc parses lines starting with a **single** `/` as doc content
-  (`@param`/`@return`/`@throws`/`@eg`/`@author`/etc, JavaDoc-style); `//`
-  lines are picked up only as a weak fallback one-line description when no
-  proper `/` block exists. Every doc block in this repo uses single `/`.
-- **Every doc block needs a plain description line before any `@` tag**,
-  even a short one - a block that starts directly with `@param` renders
-  with a blank "short description" in the generated index (this happened
-  to `d1`/`d2` in `options.q` originally; fixed by adding a one-line lead-in).
-- A file-level doc block (single-`/` lines, ending in a lone `/ .` line)
-  goes **before** the file's `\d .q<abbrev>` line at the top of the file
-  and becomes that file's description in the generated docs.
-- The CLI is `java -cp qstudio.jar com.timestored.qdoc.QDocMain <target> <source>`.
-  TimeStored's own help page states the reverse order
-  (`<source> <target>`) - that is wrong; passing it that way silently
-  writes qDoc's own output files into your source folder and finds
-  nothing to document. `scripts/dev/gen-docs.sh` has the verified order baked in.
+  (`@param`/`@return`/`@throws`/`@eg`/`@author`/etc, JavaDoc-style); `//` lines
+  are picked up only as a weak fallback one-line description when no proper `/`
+  block exists. Every doc block in this repo uses single `/`.
+- **Every doc block needs a plain description line before any `@` tag**, even a
+  short one - a block that starts directly with `@param` renders with a blank
+  "short description" in the generated index (this happened to `d1`/`d2` in
+  `options.q` originally; fixed by adding a one-line lead-in).
+- A file-level doc block (single-`/` lines, ending in a lone `/ .` line) goes
+  **before** the file's `\d .q<abbrev>` line at the top of the file and becomes
+  that file's description in the generated docs.
+- The CLI is
+  `java -cp qstudio.jar com.timestored.qdoc.QDocMain <target> <source>`.
+  TimeStored's own help page states the reverse order (`<source> <target>`) -
+  that is wrong; passing it that way silently writes qDoc's own output files
+  into your source folder and finds nothing to document.
+  `scripts/dev/gen-docs.sh` has the verified order baked in.
 - qDoc documents each namespace separately per source file in its nav
-  (`.qopt (options.q)`, `.qrisk (risk.q)`, ...) - one page per file, since
-  each file now has its own distinct namespace.
-- **Never write a literal `<` in doc text** (descriptions, `@return`,
-  `@throws`, etc.) - qDoc drops it and everything after it into the HTML
-  unescaped, so a naive HTML parser treats `<=0` or `<rd` as the start of
-  a tag and the rest of that line silently vanishes from the rendered
-  page (this happened to `ncdf`'s `@return`, `carry_return`'s description,
-  and `sweep_price`'s `@throws` - all originally used `<` or `<=`). A bare
-  `>` is fine (confirmed via `book_crossed`'s "bid>ask" rendering intact).
-  Rephrase in words ("x is at most y", "targetSize is not positive")
-  instead of using the character.
-- qstudio.jar also runs a bundled linter as a side effect
-  (`docs/lint.csv`), which throws a lot of `UNDECLARED_VAR` false
-  positives for this repo specifically, because it lints each file in
-  isolation and can't see that e.g. `.qrates.df_cont` (from `rates.q`) is
-  available once both files are loaded via `src/init.q` and `options.q`
-  calls it qualified. Safe to ignore those; do look at anything else it flags.
+  (`.qopt (options.q)`, `.qrisk (risk.q)`, ...) - one page per file, since each
+  file now has its own distinct namespace.
+- **Never write a literal `<` in doc text** (descriptions, `@return`, `@throws`,
+  etc.) - qDoc drops it and everything after it into the HTML unescaped, so a
+  naive HTML parser treats `<=0` or `<rd` as the start of a tag and the rest of
+  that line silently vanishes from the rendered page (this happened to `ncdf`'s
+  `@return`, `carry_return`'s description, and `sweep_price`'s `@throws` - all
+  originally used `<` or `<=`). A bare `>` is fine (confirmed via
+  `book_crossed`'s "bid>ask" rendering intact). Rephrase in words ("x is at most
+  y", "targetSize is not positive") instead of using the character.
+- qstudio.jar also runs a bundled linter as a side effect (`docs/lint.csv`),
+  which throws a lot of `UNDECLARED_VAR` false positives for this repo
+  specifically, because it lints each file in isolation and can't see that e.g.
+  `.qrates.df_cont` (from `rates.q`) is available once both files are loaded via
+  `src/init.q` and `options.q` calls it qualified. Safe to ignore those; do look
+  at anything else it flags.
 
 See the README's Documentation section for the actual `gen-docs.sh` usage.
