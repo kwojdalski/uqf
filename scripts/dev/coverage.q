@@ -374,6 +374,19 @@ swap_value:{[from_;to_;v;d]
     $[d>reseed_depth; v;
       100h=type v;
         [i:first where {[a;b] a~b}[v] each from_; $[null i; v; to_ i]];
+      / An EMPTY dictionary, table or list captured nothing, so there is
+      / nothing to swap - and REBUILDING one loses the type of its values.
+      / `each` over an empty TYPED vector returns a generic empty list, so
+      / (key v)!... turned .qpipe.published from (`symbol$())!`long$() into
+      / (`symbol$())!(). reseed writes back whenever the result differs from
+      / the original, and a type change is a difference, so the corrupted
+      / copy was installed every time .cov.run walked the globals.
+      / .
+      / What that cost: .qpipe.record_published does `before:0^published t`,
+      / and 0^() is () rather than 0, so the next `0=before` threw 'type -
+      / two .sjtest failures that only appeared when .covtest had run first,
+      / which is why q-unit was red and q-order green (#460).
+      0=count v; v;
       99h=type v; (key v)!swap_value[from_;to_;;d+1] each value v;
       / A table, because q COERCES a dictionary of same-keyed dictionaries
       / into one - which is how `.qbw.worker_cfg` can arrive here as 98h rather
