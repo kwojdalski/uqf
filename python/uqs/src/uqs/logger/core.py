@@ -98,11 +98,23 @@ def _highlight_kv(msg: str) -> str:
     - paths -> bold
     - negative numbers -> red, positive numbers -> magenta
     - strings -> light-cyan
+
+    Literal `<` in the message is escaped as `\\<` HERE rather than by the
+    caller, because the two steps cannot be separated: escaping first leaves
+    a bare `\\` that `_KV_VALUE_RE` matches as a value of its own, and
+    wrapping that backslash in a colour tag divorces it from the `<` it was
+    escaping. `SERVER=<host>` then reached loguru as
+    `<light-cyan>\\</light-cyan><host>`, and loguru raised
+    `Tag "<host>" does not correspond to any known color directive` from
+    inside the handler - which prints a traceback and DROPS the line. The
+    message that hit it was the one telling the operator which environment
+    variable to export, complete with a `DRIVER=...;SERVER=<host>` example.
     """
 
-    def _replace(m: re.Match) -> str:
-        val = m.group(1)
-
+    def _colour(val: str) -> str:
+        """The colour tag for one value. `val` never contains `<` or `>` -
+        _KV_VALUE_RE excludes both - so it needs no escaping of its own.
+        """
         if val == "True":
             return f"<green>{val}</green>"
         if val == "False":
@@ -135,7 +147,14 @@ def _highlight_kv(msg: str) -> str:
         except ValueError:
             return f"<light-cyan>{val}</light-cyan>"
 
-    return _KV_VALUE_RE.sub(_replace, msg)
+    out: list[str] = []
+    pos = 0
+    for m in _KV_VALUE_RE.finditer(msg):
+        out.append(msg[pos : m.start()].replace("<", "\\<"))
+        out.append(_colour(m.group(1)))
+        pos = m.end()
+    out.append(msg[pos:].replace("<", "\\<"))
+    return "".join(out)
 
 
 def _make_kv_format(fmt: str | Callable[[dict], str]) -> Any:
@@ -147,10 +166,11 @@ def _make_kv_format(fmt: str | Callable[[dict], str]) -> Any:
     """
 
     def _format(record: dict) -> str:
-        # Escape bare < so loguru's colorizer does not treat them as color tags.
-        # In a format callable, loguru strips the leading \ and renders plain <.
-        raw = record["message"].replace("<", r"\<")
-        highlighted = _highlight_kv(raw)
+        # _highlight_kv escapes bare < as it colours, so loguru's colorizer
+        # does not treat them as colour tags. (In a format callable, loguru
+        # strips the leading \ and renders a plain <.) It has to do both in
+        # one pass - see its docstring for what splitting them broke.
+        highlighted = _highlight_kv(record["message"])
         # Escape bare braces so format_map doesn't misinterpret message content.
         safe = highlighted.replace("{", "{{").replace("}", "}}")
         template = fmt if isinstance(fmt, str) else fmt(record)
