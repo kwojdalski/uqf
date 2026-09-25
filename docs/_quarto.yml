@@ -2,7 +2,7 @@
 # makes Quarto resolve every relative link and cross-reference in the tree.
 # Nothing else checks those: check_doc_references.py verifies the q FUNCTIONS
 # prose names, and no gate verified that a `](../foo.md)` still points at a
-# file until this one.
+# file until check_doc_links.py.
 #
 # The existing markdown renders as-is. No document had to become a .qmd, and
 # none should need to: the guardrail is the link resolution, not the format.
@@ -21,8 +21,7 @@ project:
     # The Quarto deck, listed because the glob above is .md only. It renders
     # as the revealjs deck it declares - Quarto honours a document's own
     # format inside a website project - so this brings it under the link gate
-    # without flattening it into a page. Its links to ../diagrams/*.svg were
-    # checked by nothing until now.
+    # without flattening it into a page.
     - "presentation/uqf.qmd"
     - "README.md"
     - "architecture/README.md"
@@ -33,10 +32,95 @@ project:
     - "!_site/**"
 
 website:
-  title: "uqf docs"
-  search: true
+  title: "uqf"
+  description: "A q/kdb+ tree covering the span of an electronic trading data platform"
+  site-url: "https://kwojdalski.github.io/uqf/"
+  repo-url: "https://github.com/kwojdalski/uqf"
+  # Both of these are needed or every "view source" link 404s: Quarto assumes
+  # the default branch is `main` and that the project root is the repository
+  # root. Here it is neither - the branch is master, and the Quarto project
+  # lives in docs/, so without repo-subdir the links drop that prefix.
+  repo-branch: master
+  repo-subdir: docs
+  repo-actions: [source, issue]
+  search:
+    location: sidebar
+    type: textbox
+  page-navigation: true
+
+  # The navbar is the five-directory taxonomy docs/README.md defines, in the
+  # same order and with the same question each answers. A sixth entry would
+  # mean the taxonomy had grown without that page saying so.
+  navbar:
+    left:
+      - text: "Guides"
+        href: guides/README.md
+      - text: "Scaffolding"
+        href: scaffolding/README.md
+      - text: "Services"
+        href: services/README.md
+      - text: "Architecture"
+        href: architecture/README.md
+      - text: "Reference"
+        href: reference/README.md
+      - text: "Deck"
+        href: presentation/uqf.qmd
+
+  # docs/README.md leads, which is also what makes the site's root land on the
+  # documentation map: with no index.qmd in the project, Quarto redirects "/"
+  # to the FIRST page in this sidebar. Listed alphabetically before, that was
+  # architecture/cryptorust-discovery.html - a single-decision note as the
+  # front door.
+  sidebar:
+    style: floating
+    collapse-level: 2
+    contents:
+      - text: "Documentation map"
+        href: README.md
+      - section: "Guides — how do I do this?"
+        contents:
+          - guides/uqs.md
+          - guides/new-pipeline.md
+          - guides/ci.md
+          - guides/config-audit.md
+          - guides/metatables.md
+      - section: "Scaffolding — how do I create one?"
+        contents:
+          - scaffolding/README.md
+          - scaffolding/feed.md
+          - scaffolding/etl.md
+          - scaffolding/normalizer.md
+          - scaffolding/backfill.md
+      - section: "Services — what does this run?"
+        contents:
+          - services/synthetic-feeds.md
+          - services/superbook.md
+          - services/cross-arbitrage.md
+          - services/fx-positions.md
+          - services/databento.md
+          - services/crypto-recorder.md
+          - services/tap.md
+      - section: "Architecture — why this shape?"
+        contents:
+          - architecture/pipeline-philosophy.md
+          - architecture/stack.md
+          - architecture/pipeline-architecture-example.md
+          - architecture/pipeline-framework-gaps.md
+          - architecture/event-tape.md
+          - architecture/cryptorust-discovery.md
+      - section: "Reference — what is the contract?"
+        contents:
+          - reference/quant-modules.md
+          - reference/environment.md
+          - reference/processes.md
+          - reference/pipeline-declarations.md
+      - text: "Slide deck"
+        href: presentation/uqf.qmd
 
 format:
   html:
     theme: cosmo
     toc: true
+    toc-depth: 3
+    code-copy: true
+    code-overflow: wrap
