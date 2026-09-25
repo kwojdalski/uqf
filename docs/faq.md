@@ -132,6 +132,38 @@ them to every subscriber as if they had just happened. In plain q - a test, or a
 prompt - the same worker writes to an in-memory table instead. See
 [`io_manager.q`](../src/etl/core/io_manager.q).
 
+## How is a backfill job different from TorQ's dataloader?
+
+TorQ ships a generic loader, `.loader.loadallfiles` in
+`lib/torq/code/common/dataloader.q`. It reads a directory of delimited files in
+chunks (`.Q.fsn`), optionally passes each chunk through a `dataprocessfunc`,
+enumerates it, and appends it to the date partitions picked by a `partitioncol`.
+At the end it re-sorts each partition and sets attributes through
+`.sort.sorttab`, which reads TorQ's `sort.csv`. It is a good tool for what it
+does: a bulk, one-off load of flat files. uqf does not use it.
+
+A bounded worker (`.qbw`) writes into the same kind of partitions but answers a
+different question: not "load these files" but "make this dataset correct for
+this range, and know that it is".
+
+  |                              | TorQ dataloader                                                                                           | uqf backfill (`.qbw`)                                                                                                                   |
+  | ---                          | ---                                                                                                       | ---                                                                                                                                     |
+  | Reads from                   | files in a directory: CSV or other delimited, with headers and types given as parameters                  | any source a declaration describes: a q process over IPC, a database over ODBC (DuckDB, SingleStore), or a fixture with no connection   |
+  | Unit of work                 | every file in the directory, in chunks of bytes                                                           | a time range, cut into windows of the worker's `width`                                                                                  |
+  | Knows what it already loaded | no. Its file and partition lists reset on every call, so loading a directory twice appends its rows twice | yes. A coverage ledger (`.qmatz`) records each window per `source_version`, so a re-run is idle and a partial run redoes only the gaps  |
+  | Contract with the source     | the headers and types you pass it                                                                         | a declared source contract (`.qsrc`): columns, types, time column, row key and zone, checked on every batch and against the live source |
+  | Transform                    | an optional function, untested by the loader                                                              | a declared `.qxf` transform with worked examples, verified on every test run                                                            |
+  | Bad data                     | a failed write is logged and the load goes on                                                             | an optional quality check fails the window: nothing published, no coverage recorded, so the next run plans the window again             |
+  | Failure and restart          | start again from the directory                                                                            | retries per window, a checkpoint to resume from, a single-instance lock, and a run ledger (`.qrun`) of every run and its outcome        |
+  | Today's partition            | not guarded                                                                                               | refused: today belongs to the tickerplant and end-of-day                                                                                |
+  | After the write              | sort and attributes via `sort.csv`; optional compression                                                  | sort by sym and time with `p#sym`, missing tables filled (`.Q.chk`), and the running HDB asked to reload                                |
+  | Where it runs                | any TorQ process that loads it                                                                            | a registered process started by `uqs backfill`, visible to discovery while it runs; or plain q, writing to memory, for tests            |
+
+For a directory of CSVs you need in the HDB once, the dataloader is enough. For
+a source you will read again - where it matters which ranges are done, under
+which release of the data, and that a failed window is retried rather than
+half-written - use a bounded worker.
+
 ## How is it decided whether rows go to the RDB or the HDB?
 
 Not per row, and not by `.qpipe`: by which kind of process the job runs in. The
