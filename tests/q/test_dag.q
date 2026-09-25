@@ -195,21 +195,43 @@ test_workers_are_adopted_from_their_own_declarations:{[t]
     .qunit.assertTrue[0<count adopted;
         "the shipped bounded workers register themselves into the graph"]};
 
+/ EVERY adopted worker, not `first key .qbw.worker_cfg`.
+/ .
+/ Two reasons, and the second is why this test spent a while red. A
+/ dictionary's key order is its registration order, so `first` names whichever
+/ worker src/etl/init.q happens to load first - a test that depends on that is
+/ answering a question nobody asked. And checking one worker leaves the other
+/ four unasserted, so a source whose adoption disagreed with its declaration
+/ would only be caught if it sorted first.
+/ .
+/ The key name is asserted BEFORE it is read, and that is the real lesson
+/ here. `9347b19` renamed the declaration's `table` to `table_name` across the
+/ tree and did not reach this file. q answers a missing dictionary key with a
+/ null rather than an error, so the expectation quietly became
+/ ``\`@<source>`` - a value no adoption can produce - and the test failed
+/ saying the graph was wrong when the graph was right. A missing key must
+/ fail as a missing key.
 test_an_adopted_worker_reads_its_sources_table_and_writes_its_target:{[t]
     .qdag.adopt_workers[];
-    w:first key .qbw.worker_cfg;
-    d:.qdag.def w;
-    cfg:.qbw.worker_cfg w;
-    src:.qsrc.def cfg`source;
-    .qunit.assertEquals[(d`inputs;d`outputs);
-        ((),.qdag.external_ref[cfg`source;src`table];(),src`target);
-        "an adopted worker reads its source's table (source-qualified) and writes its target"]};
+    workers:key .qbw.worker_cfg;
+    .qunit.assertTrue[0<count workers;"there are adopted workers to check"];
+    {[w]
+        cfg:.qbw.worker_cfg w;
+        src:.qsrc.def cfg`source;
+        .qunit.assertTrue[all `table_name`target in key src;
+            "source ",string[cfg`source]," declares table_name and target - if this",
+                " fails, a rename reached the contract and not this test"];
+        d:.qdag.def w;
+        .qunit.assertEquals[(d`inputs;d`outputs);
+            ((),.qdag.external_ref[cfg`source;src`table_name];(),src`target);
+            string[w]," reads its source's table (source-qualified) and writes its target"]
+     } each workers;};
 
 / --- the real graph ------------------------------------------------------
 
 test_the_real_graph_is_acyclic:{[t]
-    / The test that found the bug. Both shipped sources declare `table` and
-    / `target` as the SAME symbol - demo_deals reads a remote `demo_deals`
+    / The test that found the bug. Both shipped sources declare `table_name`
+    / and `target` as the SAME symbol - demo_deals reads a remote `demo_deals`
     / and writes a local `demo_deals` - so keyed on the bare name each worker
     / consumed exactly what it produced, and adopt_all[] reported a cycle
     / among both workers. Correctly, given what it had been told.
