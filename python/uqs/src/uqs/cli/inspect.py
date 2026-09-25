@@ -126,7 +126,7 @@ def conn(
 ) -> None:
     """Open an interactive qcon session on a process, named rather than numbered.
 
-    `uqs conn rdb1` is `uqs query --console --port <rdb1's port>` without
+    `uqs conn rdb1` is `uqs query --port <rdb1's port>` without
     having to know the port: it comes from the registry at the stack's base
     port (`--port`, as for `start`). A process that is not running is refused
     with how to start it, rather than left to qcon's bare connection refusal,
@@ -161,10 +161,10 @@ def conn(
 @app.command()
 def query(
     # `port` is declared FIRST only because Python forbids a parameter without
-    # a default after one with a default, and `expr` became optional for
-    # --console. Keeping --port required matters: defaulting it would turn
-    # "you forgot to say which process" into "silently queried the
-    # tickerplant". Option order does not affect the command line.
+    # a default after one with a default, and `expr` is optional. Keeping
+    # --port required matters: defaulting it would turn "you forgot to say
+    # which process" into "silently queried the tickerplant". Option order
+    # does not affect the command line.
     port: Annotated[
         int,
         typer.Option(
@@ -174,46 +174,27 @@ def query(
     ],
     expr: Annotated[
         str | None,
-        typer.Argument(help='q expression, e.g. "select count i by sym from quote"'),
-    ] = None,
-    interactive: Annotated[
-        bool,
-        typer.Option(
-            "--console",
-            "-i",
-            help="open an interactive qcon session instead of running one expression",
+        typer.Argument(
+            help='q expression, e.g. "select count i by sym from quote"; omit it for an '
+            "interactive qcon session on the process"
         ),
-    ] = False,
+    ] = None,
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",
     export: ExportOpt = None,
 ) -> None:
-    """Run a synchronous q expression against a running demo process.
+    """Run a q expression against a running process - or, with no expression,
+    open an interactive qcon session on it (under rlwrap when installed).
 
-    With `--console` it hands the same connection to `qcon` and gives you an
-    interactive session instead - the one thing a single expression cannot do,
-    and previously reachable only as `uqs raw -- qcon <procname> admin:admin`.
-    The four connection options mean the same in both modes.
-
-    The parameter is `interactive`, not `console`: this module already binds
-    `console` to the Rich console it prints through, and shadowing it would
-    break every other command in the file at import time.
+    The four connection options mean the same in both modes. `uqs conn
+    PROCNAME` is the same session with the port looked up by name.
     """
-    if interactive:
-        if expr is not None:
-            _die(
-                UqsError(
-                    f"--console opens a session; it cannot also run {expr!r}. "
-                    "Drop the expression, or drop --console to run it and exit."
-                )
-            )
+    if expr is None:
+        if export is not None:
+            _die(UqsError("--export needs an expression whose result it can write"))
             return
         _exec_qcon(host, port, user, passwd)
-        return
-
-    if expr is None:
-        _die(UqsError("give a q expression to run, or --console for a session"))
         return
     try:
         result = runtime.query(expr, port, host=host, user=user, passwd=passwd)
