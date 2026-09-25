@@ -49,21 +49,37 @@ available:{[]
 / Refuse, naming what is missing.
 / .
 / Called by every function below that needs the driver, so the message is
-/ written once. Kept SHORT deliberately: q truncates a thrown string at 255
-/ bytes silently, and the first draft of this one ran to 248 characters of
+/ written once. Kept SHORT deliberately: q truncates a thrown string
+/ silently, and the first draft of this one ran to 248 characters of
 / install advice - the tail, where the advice actually was, would have been
-/ the part lost. The long form lives here instead:
+/ the part lost. Short ALSO because .qetl.job.bounded.connect wraps this
+/ message inside its own, and the pair has to fit together - see
+/ connect_error, where the wrap once cost 32 bytes of explanation.
 / .
-/   Install unixODBC and a SingleStore ODBC driver, put odbc.k where q can
-/   load it, and on Linux set LD_LIBRARY_PATH so the driver manager is
+/ The limit is 254 bytes, not the 255 stated here before: measured, a 254
+/ byte string survives a throw intact and a 255 byte one comes back 254.
+/ The long form lives here instead:
+/ .
+/   Install unixODBC and the driver your source needs, put odbc.k where q
+/   can load it, and on Linux set LD_LIBRARY_PATH so the driver manager is
 /   found. See code.kx.com/q/interfaces/q-client-for-odbc.
+/ .
+/   On macOS none of that is enough on its own: KX ships odbc.so for x86_64
+/   only, so q has to run under Rosetta with an overlay QHOME.
+/   scripts/dev/odbc_rosetta.sh setup builds it, and `uqs backfill` - which
+/   launches plain arm64 q from ~/.kx - cannot reach a driver at all until
+/   it does. That is why the message names the script rather than this file.
+/ .
+/   Every ODBC source in this tree is a DuckDB file, not SingleStore. The
+/   module keeps its name for now, but the advice must not send a DuckDB
+/   operator looking for a SingleStore installer.
 / .
 /   You do NOT need any of that to exercise the backfill path - every source
 /   declares a fixture, which is the question bank's whole point.
 / @throws error when the driver is unavailable
 require_available:{[]
     if[not available[];
-        '"qetl.io.odbc: ODBC driver not loaded - see singlestore_odbc.q's require_available for the install, or use the source's fixture"];
+        '"qetl.io.odbc: driver not loaded - macOS: scripts/dev/odbc_rosetta.sh setup; else see this file's header"];
     1b}
 
 / ---------------------------------------------------------- ESCAPING

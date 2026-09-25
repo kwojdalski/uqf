@@ -304,4 +304,47 @@ test_a_failing_fetch_leaves_earlier_windows_covered:{[t]
     }[spec] each .qrefw.plan 0Np;
     .qunit.assertEquals[count value `etl_coverage;1;"the window that completed is covered; the two that failed are not"]};
 
+/ --- what an orchestrator is told ---------------------------------------
+
+test_a_run_that_found_no_work_is_a_success:{[t]
+    / torq_backfill.q read $[`completed~state; 0; 1], so `idle` exited 1 and
+    / Airflow retried a correct no-op forever - the failure run's own comment
+    / warns about, contradicted by the process two files away.
+    .qunit.assertEquals[.qetl.job.bounded.exit_code `idle;0i;
+        "every window already covered is a success, not a failure to retry"];
+    .qunit.assertEquals[.qetl.job.bounded.exit_code `completed;0i;"and so is work done"]};
+
+test_a_partial_run_is_a_failure_an_orchestrator_should_retry:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.exit_code `partial;1i;
+        "some windows failed; coverage never claimed them, so a retry picks them up"];
+    .qunit.assertEquals[.qetl.job.bounded.exit_code `failed;1i;"and an outright failure is one too"]};
+
+/ --- messages that have to survive being thrown ------------------------
+
+test_the_connect_error_survives_a_throw_intact:{[t]
+    / q truncates a thrown string at 254 bytes SILENTLY. connect wrapped
+    / require_available's message inside its own, the pair came to 286, q
+    / threw 254, and the half explaining WHY a backfill refuses was the part
+    / dropped: an operator saw "...which would " and nothing after it.
+    e:@[{.qetl.io.odbc.require_available[]};::;{[x] x}];
+    m:.qetl.job.bounded.connect_error[`crypto_market_data;e];
+    .qunit.assertEquals[m;@[{'x};m;{[x] x}];
+        "what connect throws is what an operator reads - not a prefix of it"]};
+
+test_the_connect_error_leaves_room_for_a_long_source_name:{[t]
+    / The composed length is the driver's message plus ours plus the source
+    / NAME, and a name is the part most likely to grow.
+    e:@[{.qetl.io.odbc.require_available[]};::;{[x] x}];
+    m:.qetl.job.bounded.connect_error[`$40#"a";e];
+    .qunit.assertTrue[255>count m;"still within what q will carry"];
+    .qunit.assertTrue[m like "*record synthetic data as covered";
+        "and the reason is still the part that reaches the reader"]};
+
+test_the_driver_error_does_not_send_a_duckdb_operator_to_singlestore:{[t]
+    / Every ODBC source in this tree is a DuckDB file, and none is
+    / SingleStore. The advice used to name singlestore_odbc.q's installer.
+    e:@[{.qetl.io.odbc.require_available[]};::;{[x] x}];
+    .qunit.assertTrue[e like "*odbc_rosetta.sh setup*";
+        "macOS needs the Rosetta overlay - plain arm64 q has no odbc.so at all"]};
+
 \d .

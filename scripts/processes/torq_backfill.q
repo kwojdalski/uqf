@@ -202,9 +202,10 @@ if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
       `ms`servers!(.qproc.backfill.elapsed_ms t0;count .servers.SERVERS)];
  }[.z.p];
 
-/ Run, then leave. exit 0 on a completed run, 1 otherwise - Airflow reads the
-/ code, and `partial` is not success: some windows failed and a retry should
-/ pick them up, which it can because coverage never claimed them.
+/ Run, then leave. Which terminal states count as success is
+/ .qetl.job.bounded.exit_code's to say, not this file's - the states are the
+/ framework's vocabulary, and holding the mapping here is how `idle` came to
+/ exit 1 while run's own comment called it a success.
 / .Q.trp rather than @[], so a failure carries WHERE it happened: the
 / backtrace is logged with the error, which is the one thing a bare message
 / like 'type cannot tell you after the process has gone.
@@ -212,6 +213,6 @@ result:.Q.trp[{.qproc.backfill.run[]};::;{[e;bt]
     .qetl.log.err[`backfill;"backfill process failed";enlist[`error]!enlist e];
     .qetl.log.err[`backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
     `state`error!(`failed;e)}];
-code:$[`completed~result`state; 0; 1];
+code:.qetl.job.bounded.exit_code result`state;
 .qetl.log.info[`backfill;"exiting";`state`code!(result`state;code)];
 exit code;
