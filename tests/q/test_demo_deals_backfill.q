@@ -347,7 +347,7 @@ test_define_derives_the_workers_namespace:{[t]
     / The worker's name is its only name. Before this, a worker carried two -
     / `demo_deals_backfill` and `.qddbf` - and keeping them in step was a
     / convention nothing checked.
-    .qunit.assertEquals[(.qbw.declaration `demo_deals_backfill)`ns;`.qwrk.demo_deals_backfill;
+    .qunit.assertEquals[(.qbw.def `demo_deals_backfill)`ns;`.qwrk.demo_deals_backfill;
         "the namespace is .qwrk.<worker>, derived rather than declared"]};
 
 test_the_derived_namespace_is_where_the_implementation_actually_is:{[t]
@@ -582,7 +582,7 @@ with_declaration_restored:{[f]
     r};
 
 with_transform:{[nm;f]
-    orig:.qbw.declaration[`demo_deals_backfill]`transform;
+    orig:.qbw.def[`demo_deals_backfill]`transform;
     .qbw.worker_cfg[`demo_deals_backfill;`transform]:nm;
     r:@[f;::;{(`threw;x)}];
     .qbw.worker_cfg[`demo_deals_backfill;`transform]:orig;
@@ -637,7 +637,7 @@ bad_fixture:{[]
     update rate:0f from .qfeed.demo_deals.fixture[] where deal_id=3};
 
 with_bad_fixture:{[f]
-    orig:(.qsrc.declaration[`demo_deals])`fixture;
+    orig:(.qsrc.def[`demo_deals])`fixture;
     .qsrc.sources[`demo_deals;`fixture]:{[] .ddbftest.bad_fixture[]};
     r:@[f;::;{(`threw;x)}];
     .qsrc.sources[`demo_deals;`fixture]:orig;

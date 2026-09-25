@@ -132,8 +132,8 @@ reject_ratio:{[num_rejects;num_requests] ?[num_requests=0;0n;num_rejects%num_req
 / many small misses, and one huge miss can swamp the ratio the way it
 / wouldn't in `count mode).
 / @param requests table with at least `time`hit`size, plus whatever columns group_cols names
-/ @param start_ts only consider requests at or after this time
-/ @param end_ts only consider requests at or before this time
+/ @param range_from only consider requests at or after this time
+/ @param range_to only consider requests at or before this time
 / @param bucket_size a timespan to floor time into buckets by (xbar) and
 /   group by alongside group_cols, e.g. 0D01:00:00 for hourly, 1D for
 /   daily - a null timespan (0Nn) disables time-bucketing entirely (no
@@ -146,13 +146,13 @@ reject_ratio:{[num_rejects;num_requests] ?[num_requests=0;0n;num_rejects%num_req
 /   single row if bucket_size is null and group_cols is empty
 / @throws error if requests is missing a required column (time, hit, size,
 /   or any column named in group_cols), or if mode isn't `count or `amount
-/ @eg .qexec.hit_ratio_by[requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
-/ @eg .qexec.hit_ratio_by[requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio, no time-bucketing or grouping
-hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
+/ @eg .qexec.hit_ratio_by[requests;range_from;range_to;0D01:00:00;enlist `sym;`amount]
+/ @eg .qexec.hit_ratio_by[requests;range_from;range_to;0Nn;`symbol$();`count]  -> one overall count-mode ratio, no time-bucketing or grouping
+hit_ratio_by:{[requests;range_from;range_to;bucket_size;group_cols;mode]
     group_cols:group_cols,();
     .qschema.require_cols[`hit_ratio_by;`requests;requests;distinct `time`hit`size,group_cols];
     if[not mode in `count`amount; '"hit_ratio_by: mode must be `count or `amount, got ",string mode];
-    windowed:select from requests where time within (start_ts;end_ts);
+    windowed:select from requests where time within (range_from;range_to);
     windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
     time_group:$[null bucket_size; `symbol$(); enlist `time];
     effective_group_cols:time_group,group_cols;
@@ -176,8 +176,8 @@ hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
 / (number rejected / number of requests) and `amount (size-weighted, so one
 / large reject counts for more than several small ones).
 / @param requests table with at least `time`reject`size, plus whatever columns group_cols names
-/ @param start_ts only consider requests at or after this time
-/ @param end_ts only consider requests at or before this time
+/ @param range_from only consider requests at or after this time
+/ @param range_to only consider requests at or before this time
 / @param bucket_size a timespan to floor time into buckets by (xbar) and group
 /   by alongside group_cols, e.g. 0D01:00:00 for hourly - a null timespan
 /   (0Nn) disables time-bucketing entirely
@@ -189,13 +189,13 @@ hit_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
 /   single row if bucket_size is null and group_cols is empty
 / @throws error if requests is missing a required column (time, reject, size,
 /   or any column named in group_cols), or if mode isn't `count or `amount
-/ @eg .qexec.reject_ratio_by[reject_requests;start_ts;end_ts;0D01:00:00;enlist `sym;`amount]
-/ @eg .qexec.reject_ratio_by[reject_requests;start_ts;end_ts;0Nn;`symbol$();`count]  -> one overall count-mode ratio
-reject_ratio_by:{[requests;start_ts;end_ts;bucket_size;group_cols;mode]
+/ @eg .qexec.reject_ratio_by[reject_requests;range_from;range_to;0D01:00:00;enlist `sym;`amount]
+/ @eg .qexec.reject_ratio_by[reject_requests;range_from;range_to;0Nn;`symbol$();`count]  -> one overall count-mode ratio
+reject_ratio_by:{[requests;range_from;range_to;bucket_size;group_cols;mode]
     group_cols:group_cols,();
     .qschema.require_cols[`reject_ratio_by;`requests;requests;distinct `time`reject`size,group_cols];
     if[not mode in `count`amount; '"reject_ratio_by: mode must be `count or `amount, got ",string mode];
-    windowed:select from requests where time within (start_ts;end_ts);
+    windowed:select from requests where time within (range_from;range_to);
     windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
     time_group:$[null bucket_size; `symbol$(); enlist `time];
     effective_group_cols:time_group,group_cols;

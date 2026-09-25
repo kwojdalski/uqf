@@ -211,6 +211,6 @@ test_every_watching_job_declares_config_change_as_an_output:{[t]
     `.qcfgaudit.watched set .cfgatest.saved_watched;
     owners:key .qcfgaudit.watched;
     owners:owners where owners in .qstream.defined[];
-    bad:owners where not {[j] `config_change in (.qstream.declaration j)`publishes} each owners;
+    bad:owners where not {[j] `config_change in (.qstream.def j)`publishes} each owners;
     .qunit.assertEquals[count bad;0;
         "a job that audits its config must declare config_change among its publishes"]};

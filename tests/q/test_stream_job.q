@@ -83,7 +83,7 @@ test_every_registered_job_has_a_file:{[t]
         "every registered job lives in src/etl/streaming/<job>.q, named after its file"]};
 
 test_a_feed_declares_no_subscription:{[t]
-    .qunit.assertEquals[count .qstream.declaration[`fx_feed]`subscribe_to;0;
+    .qunit.assertEquals[count .qstream.def[`fx_feed]`subscribe_to;0;
         "a feed produces rows on a timer rather than reacting to a table"]};
 
 test_a_subscriber_with_no_handler_is_refused:{[t]
@@ -122,7 +122,7 @@ test_a_jobs_namespace_is_derived_from_its_name:{[t]
 test_the_declaration_names_the_namespace_that_holds_the_job:{[t]
     / Not a tautology with the test above: this one checks the derived name
     / is where the implementation actually is.
-    .qunit.assertEquals[`on_batch in key .qstream.declaration[`markout]`ns;1b;
+    .qunit.assertEquals[`on_batch in key .qstream.def[`markout]`ns;1b;
         "the derived namespace holds the job's own handler"]};
 
 test_a_process_finds_its_job_by_name:{[t]
@@ -254,7 +254,7 @@ test_the_trades_feed_publishes_one_fill_a_tick:{[t]
 
 / Every registered job that publishes on a timer.
 feeds:{[] .qstream.defined[] where
-    {[j] d:.qstream.declaration j; (`period in key d) and count d`publishes} each .qstream.defined[]}
+    {[j] d:.qstream.def j; (`period in key d) and count d`publishes} each .qstream.defined[]}
 
 / Invariant 3, plus the length agreement it exists to protect: a batch's
 / row count comes from its first column, so a column of a different
@@ -271,7 +271,7 @@ test_every_feed_publishes_columns_that_are_lists:{[t]
     bad:();
     {[job]
         reset[];
-        (.qstream.declaration[job]`on_timer)[];
+        (.qstream.def[job]`on_timer)[];
         {[job;cell]
             problem:.sjtest.columns_are_lists cell;
             if[count problem; `.sjtest.bad set .sjtest.bad,enlist string[job],": ",problem]
@@ -287,7 +287,7 @@ test_no_feed_sends_its_own_time:{[t]
     bad:();
     {[job]
         reset[];
-        (.qstream.declaration[job]`on_timer)[];
+        (.qstream.def[job]`on_timer)[];
         {[job;cell]
             / Nested, not `and`: q's `and` does not short-circuit, so the
             / one-line spelling evaluates `cols` on a list-of-columns
@@ -306,7 +306,7 @@ test_no_feed_publishes_a_keyed_table:{[t]
     bad:();
     {[job]
         reset[];
-        (.qstream.declaration[job]`on_timer)[];
+        (.qstream.def[job]`on_timer)[];
         {[job;cell]
             if[99h=type cell; `.sjtest.bad set .sjtest.bad,enlist string[job]," published a keyed table"]
           }[job] each first each exec rows from .sjtest.published
@@ -687,7 +687,7 @@ test_fill_ids_are_unique_per_venue:{[t]
 test_the_mock_publishes_no_sim_fills:{[t]
     / The paper strategy's table. A mock that published it would tempt a
     / position engine into consuming it.
-    .qunit.assertFalse[`crypto_sim_fills in .qstream.declaration[`crypto_mock]`publishes;
+    .qunit.assertFalse[`crypto_sim_fills in .qstream.def[`crypto_mock]`publishes;
         "crypto_sim_fills is not something this mock claims to publish"]};
 
 / --- the normalizers and posbook over them -------------------------------
@@ -745,7 +745,7 @@ test_posbook_marks_to_whichever_book_the_marks_normalizer_saw:{[t]
     .testutil.assertApprox[.qsub.posbook.last_mid`EURUSD;1.085;1e-9;"and the FX mid is cached alongside it"]};
 
 test_posbook_no_longer_reads_the_raw_tables:{[t]
-    .qunit.assertEquals[.qstream.declaration[`posbook]`subscribe_to;`executions`marks;
+    .qunit.assertEquals[.qstream.def[`posbook]`subscribe_to;`executions`marks;
         "posbook subscribes to the two normalizers and nothing else"];
     reset[];
     .qsub.posbook.on_batch[`trades;fx_fill[`EURUSD;1;1.085;1e6]];

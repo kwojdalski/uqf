@@ -162,7 +162,7 @@ excused:{[] pair .' 2#/:not_exchanged}
 job_tables:{[]
     raze {[job]
         ns:.qstream.namespace job;
-        d:.qstream.declaration job;
+        d:.qstream.def job;
         nms:key[ns] except `;
         nms:nms where {[ns;nm] 98h=type get ` sv ns,nm}[ns] each nms;
         ([] job:(count nms)#job; tbl:nms;

@@ -37,7 +37,7 @@ test_check_stale_quotes_flags_a_gap_past_max_age:{[t]
     r:.qdqc.check_stale_quotes[quotes;at;0D00:00:05];
     row:first r;
     .qunit.assertEquals[row`status;`stale;"10s since the last quote exceeds a 5s max_age -> stale"];
-    .testutil.assertApprox[(`long$row`age)%1e9;10;1e-6;"age is the gap between at_time and the last quote, in nanoseconds"]};
+    .testutil.assertApprox[(`long$row`age)%1e9;10;1e-6;"age is the gap between as_of and the last quote, in nanoseconds"]};
 
 test_check_stale_quotes_within_max_age_is_ok:{[t]
     t0:2026.01.01D00:00:00.000000000;
@@ -46,14 +46,14 @@ test_check_stale_quotes_within_max_age_is_ok:{[t]
     r:.qdqc.check_stale_quotes[quotes;at;0D00:00:05];
     .qunit.assertEquals[first r`status;`ok;"2s since the last quote is within a 5s max_age -> ok"]};
 
-test_check_stale_quotes_ignores_quotes_after_at_time:{[t]
+test_check_stale_quotes_ignores_quotes_after_as_of:{[t]
     t0:2026.01.01D00:00:00.000000000;
     / a later, fresher-looking row must not mask staleness as of an
-    / earlier at_time - only rows at/before at_time count.
+    / earlier as_of - only rows at/before as_of count.
     quotes:`sym`time xasc (enlist mk_quotes_row[t0;`EURUSD;1.0999;1.1001]),(enlist mk_quotes_row[t0+0D00:01:00;`EURUSD;1.0999;1.1001]);
     at:t0+0D00:00:10;
     r:.qdqc.check_stale_quotes[quotes;at;0D00:00:05];
-    .qunit.assertEquals[first r`status;`stale;"the only quote at/before at_time is 10s old, despite a fresher later row existing"]};
+    .qunit.assertEquals[first r`status;`stale;"the only quote at/before as_of is 10s old, despite a fresher later row existing"]};
 
 test_summarize_checks_includes_only_non_ok_rows:{[t]
     t0:2026.01.01D00:00:00.000000000;

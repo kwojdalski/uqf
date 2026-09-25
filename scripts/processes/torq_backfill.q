@@ -120,7 +120,7 @@ run:{[]
     worker:s`worker;
     spec:s`spec;
     .qlog.info[worker;"backfill process starting";spec];
-    decl:.qbw.declaration worker;
+    decl:.qbw.def worker;
     ns:decl`ns;
     .qlog.dbg[worker;"declaration";
         `ns`source`dataset`width`partition!

@@ -78,10 +78,10 @@ parts:{[root]
 /   date, and the directory name is what `key` hands back as a symbol, so
 /   the conversion happens once, in `parts`, rather than at each call site
 / @return 1b if it wrote, 0b if the table was already there
-fill_one:{[root;part;tbl]
-    dir:` sv (.Q.par[root;part;tbl];`);
+fill_one:{[root;part;table_name]
+    dir:` sv (.Q.par[root;part;table_name];`);
     if[not ()~key dir; :0b];
-    dir set .Q.en[root;0#get tbl];
+    dir set .Q.en[root;0#get table_name];
     1b}
 
 / Add the declared columns a partition's copy of a table does not have.
@@ -96,25 +96,25 @@ fill_one:{[root;part;tbl]
 / carries types, not counts, and a default vector of the wrong length is a
 / corrupt table that still maps.
 / @param part the partition as a DATE
-/ @param tbl the table name, whose root-level value carries the declared shape
+/ @param table_name the table name, whose root-level value carries the declared shape
 / @return the columns written, empty if the partition was already complete
-fill_cols:{[root;part;tbl]
-    dir:.Q.par[root;part;tbl];
+fill_cols:{[root;part;table_name]
+    dir:.Q.par[root;part;table_name];
     dfile:` sv dir,`.d;
     / no .d means no table directory - fill_one's job, and it ran first
     if[()~key dfile; :`$()];
     present:get dfile;
-    absent:(cols value tbl) except present;
+    absent:(cols value table_name) except present;
     if[0=count absent; :`$()];
     rows:count get ` sv dir,first present;
-    {[root;dir;rows;tbl;c]
-        vals:rows#(value tbl)c;
+    {[root;dir;rows;table_name;c]
+        vals:rows#(value table_name)c;
         / 11h either sign: a symbol column must point into root/sym or the
         / database cannot be mapped. .Q.en takes a table, so wrap and unwrap.
         if[11h=abs type vals; vals:(.Q.en[root] ([] c:vals))`c];
         (` sv dir,c) set vals;
         @[dir;`.d;,;c];
-        }[root;dir;rows;tbl] each absent;
+        }[root;dir;rows;table_name] each absent;
     absent}
 
 partitions:parts hdb_root;

@@ -99,7 +99,7 @@ test_the_time_field_type_error_names_the_trap:{[t]
     .qunit.assertEquals[err like "*not \"p\"*";1b;"the error says which type was expected, not merely that something is wrong"]};
 
 test_an_unregistered_source_is_an_error_not_a_miss:{[t]
-    .qunit.assertError[{.qsrc.declaration x};`nosuch;"sources register centrally, so an unknown source is a wiring bug"]};
+    .qunit.assertError[{.qsrc.def x};`nosuch;"sources register centrally, so an unknown source is a wiring bug"]};
 
 / --- validation, the one path both fixture and live go through -----------
 

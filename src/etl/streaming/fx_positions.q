@@ -113,24 +113,24 @@ alerts:.qlimit.no_alerts[];
 / Load a limits table, refusing a malformed one at load rather than at the
 / first breach - a limits table that polices nothing looks exactly like a
 / quiet day.
-/ @param t the limits table, scoped on sym, book and product
+/ @param limits the limits table, scoped on sym, book and product
 / @return the number of limits loaded
 / @throws error naming a malformed limit, or a scope column that is not one of this book's dimensions
 / @eg .qsub.fx_positions.load_limits[([] sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; metric:enlist `base_qty; cap:enlist 1e6; severity:enlist `hard)] -> 1
-load_limits:{[t]
-    .qlimit.require_limits t;
+load_limits:{[limits]
+    .qlimit.require_limits limits;
     / .qlimit cannot check this: it is not told which columns are meant to
     / be scope, so a stray column simply becomes one and the limit matches
     / nothing. THIS file knows the dimensions, so it can say so at load -
     / and a limit that matches nothing is exactly the failure that looks
     / like a quiet day.
-    scope:.qlimit.scope_cols t;
+    scope:.qlimit.scope_cols limits;
     stray:scope where not scope in .qsub.fx_positions.dimensions;
     if[count stray;
         '"load_limits: ",(", " sv string stray)," is not a dimension of this book, so a limit carrying it would be scoped on something no position has - the dimensions are ",
          ", " sv string .qsub.fx_positions.dimensions];
-    `.qsub.fx_positions.limits set t;
-    count t}
+    `.qsub.fx_positions.limits set limits;
+    count limits}
 
 / Net one batch of orders into the book.
 / .

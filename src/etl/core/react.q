@@ -151,7 +151,7 @@ on_writing:{[dataset;nm;outputs;handler]
 / @throws error when the worker is not registered, or spec_fn is not binary
 / @eg .qreact.on_worker[`upstream_feed;`demo_deals_backfill;{[f;t] `source_version`range_from`range_to!(`v1;f;t)}]
 on_worker:{[dataset;worker;spec_fn]
-    cfg:.qbw.declaration worker;
+    cfg:.qbw.def worker;
     if[not (type spec_fn) within 100 112h;
         '"on_worker: ",string[worker],"'s spec_fn must be a function taking (range_from;range_to)"];
     if[(100h=type spec_fn) and not 2=count (value spec_fn) 1;
@@ -221,7 +221,7 @@ dag_consumers:{[dataset]
 /   (dataset~reaction names whose output is a claim)
 audit:{[]
     reacting:key reactions;
-    datasets:distinct reacting,$[`qdag in key `; raze {(.qdag.declaration x)`outputs} each key .qdag.jobs; `$()];
+    datasets:distinct reacting,$[`qdag in key `; raze {(.qdag.def x)`outputs} each key .qdag.jobs; `$()];
     unwired:(!). flip {[d] (d;dag_consumers d)} each datasets where 0=count each for_dataset each datasets;
     undeclared:reacting where 0=count each dag_consumers each reacting;
     / `count each value unwired` on an EMPTY dict throws 'type - value of an

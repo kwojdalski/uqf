@@ -406,7 +406,7 @@ The job graph adopts the worker from its own declaration:
 
 ```q
 q).qdag.adopt_workers[];
-q).qdag.declaration `fx_rates_backfill
+q).qdag.def `fx_rates_backfill
 kind   | `bounded
 inputs | ,`fx_rates@fx_rates
 outputs| ,`fx_rates

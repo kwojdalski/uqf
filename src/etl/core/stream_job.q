@@ -143,10 +143,10 @@ define:{[job;decl]
 / @param job the job's name
 / @return the declaration dict
 / @throws error naming the job when register was never called for it
-/ @eg .qstream.declaration[`markout]`subscribe_to  ->  `trades`quote
-declaration:{[job]
+/ @eg .qstream.def[`markout]`subscribe_to  ->  `trades`quote
+def:{[job]
     if[not job in key jobs;
-        '"declaration: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];
+        '"def: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];
     first jobs job}
 
 / The job a TorQ process runs, by the name the process was started under.
@@ -180,8 +180,8 @@ defined:{[] key jobs}
 wire:{[job;publisher]
     if[not is_callable publisher;
         '"wire: ",string[job],"'s publisher must be callable as (table; rows) - a lambda or a projection over one"];
-    (` sv (declaration[job]`ns),`publish) set publisher;
-    .[{.qlog.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist declaration[job]`publishes);::];
+    (` sv (def[job]`ns),`publish) set publisher;
+    .[{.qlog.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist def[job]`publishes);::];
     job}
 
 / ------------------------------------------------------------ THE BUFFER
@@ -195,17 +195,17 @@ wire:{[job;publisher]
 / Lived in scripts/processes/torq_pipeline.q until the jobs moved into src/, where
 / nothing may call .qpipe. It belongs here anyway: buffering is the
 / job's own business, not TorQ's.
-/ @param tblname the buffer table's fully-qualified name, e.g. `.qsub.markout.pending
+/ @param table_name the buffer table's fully-qualified name, e.g. `.qsub.markout.pending
 / @param mask a boolean vector over that table, as long as it is
 / @return the drained rows, in their original order
 / @eg `.qstream.eg_buffer set ([] a:1 2 3); .qstream.drain[`.qstream.eg_buffer;101b]  ->  ([] a:1 3)
 / @see .qstream.evict - use that instead when a failed publish should retry
 /   the batch rather than lose it (drain is at-most-once, evict at-least-once)
-drain:{[tblname;mask]
-    buffer:get tblname;
+drain:{[table_name;mask]
+    buffer:get table_name;
     if[0=count buffer; :buffer];
     ready:buffer where mask;
-    tblname set buffer where not mask;
+    table_name set buffer where not mask;
     ready}
 
 / Remove every row matching mask from a buffer table, keeping the rest, and
@@ -217,14 +217,14 @@ drain:{[tblname;mask]
 / with `evict` they are still buffered and the next tick retries them
 / (at-least-once). Pass the SAME mask to the read and to evict - a
 / recomputed cutoff between the two is the race both helpers prevent.
-/ @param tblname the buffer table's fully-qualified name
+/ @param table_name the buffer table's fully-qualified name
 / @param mask the boolean vector already used to read the batch
 / @return the number of rows removed
 / @eg `.qstream.eg_buffer set ([] a:1 2 3); .qstream.evict[`.qstream.eg_buffer;101b]  ->  2i
-evict:{[tblname;mask]
-    buffer:get tblname;
+evict:{[table_name;mask]
+    buffer:get table_name;
     if[0=count buffer; :0];
-    tblname set buffer where not mask;
+    table_name set buffer where not mask;
     sum mask}
 
 / The stub every job's `publish` starts as.
@@ -235,6 +235,6 @@ evict:{[tblname;mask]
 / @param job the job's name, for the message
 / @return a function that throws when called
 unwired:{[job]
-    {[job;tbl;rows] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qstream.wire first"}[job]}
+    {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qstream.wire first"}[job]}
 
 \d .

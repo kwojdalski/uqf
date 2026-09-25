@@ -80,8 +80,8 @@ bind_fixtures:{[]
     / Wide enough to contain both builders' timestamps. A window that
     / excluded one would make its examples report on an empty selection -
     / which is not an error, and so would be tolerated rather than seen.
-    `start_ts set 2026.01.01D00:00:00.000000000;
-    `end_ts set 2026.12.31D00:00:00.000000000;
+    `range_from set 2026.01.01D00:00:00.000000000;
+    `range_to set 2026.12.31D00:00:00.000000000;
     / The REGISTERED demo_events fixture, not a tape invented here. The
     / microstructure @eg values were written against this one - binding
     / anything else would make the gate report the fixture's disagreement

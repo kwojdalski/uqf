@@ -213,7 +213,7 @@ ccy_exposure:{[pos]
 /   `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes shape (require_quotes_cols),
 /   sorted `sym`time xasc
 / @param reporting_ccy the currency to convert every leg into, e.g. `USD
-/ @param at_time only consider quotes at or before this time
+/ @param as_of only consider quotes at or before this time
 / @return a table `ccy`amount`reporting_amount - amount is the raw
 /   currency-unit exposure (see ccy_exposure), reporting_amount is that
 /   same exposure converted into reporting_ccy at the chain's mid price
@@ -221,13 +221,13 @@ ccy_exposure:{[pos]
 / @throws error (from cross_book_at) if some currency has no chain of
 /   available pairs connecting it to reporting_ccy in quotes
 / @eg .qpos.ccy_exposure_in[b;quotes;`USD;.z.p]
-ccy_exposure_in:{[pos;quotes;reporting_ccy;at_time]
+ccy_exposure_in:{[pos;quotes;reporting_ccy;as_of]
     exposure:ccy_exposure pos;
-    convert_one:{[quotes;reporting_ccy;at_time;ccy;amount]
+    convert_one:{[quotes;reporting_ccy;as_of;ccy;amount]
         if[ccy=reporting_ccy; :amount];
         pair:.qccy.ccy_pair_symbol[ccy;reporting_ccy];
-        mid:first exec mid from .qfwd.cross_book_at[quotes;pair;at_time;enlist abs amount;enlist `mid];
+        mid:first exec mid from .qfwd.cross_book_at[quotes;pair;as_of;enlist abs amount;enlist `mid];
         amount*mid};
-    update reporting_amount:convert_one[quotes;reporting_ccy;at_time]'[ccy;amount] from exposure};
+    update reporting_amount:convert_one[quotes;reporting_ccy;as_of]'[ccy;amount] from exposure};
 
 \d .

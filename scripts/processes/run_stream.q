@@ -101,7 +101,7 @@ start_plant:{[port]
 / @param job the job's name
 / @return the number of messages replayed
 recover:{[job]
-    decl:.qstream.declaration job;
+    decl:.qstream.def job;
     if[0=count decl`subscribe_to; :0];
     if[not `on_batch in key decl; :0];
     wanted:decl`subscribe_to;
@@ -116,7 +116,7 @@ recover:{[job]
 / @param sink where its output goes - the local plant, or a handle to a remote one
 / @return the job name
 start_job:{[job;sink]
-    decl:.qstream.declaration job;
+    decl:.qstream.def job;
     .qlog.info[job;"starting streaming job";
         `subscribe_to`publishes`timer!(decl`subscribe_to;decl`publishes;
             $[`period in key decl; decl`period; 0Nn])];
@@ -154,7 +154,7 @@ tick:{[]
 / @param tp the plant's port, or 0N for the plant in this process
 / @return the sink
 connect:{[job;tp]
-    decl:.qstream.declaration job;
+    decl:.qstream.def job;
     if[null tp;
         / `1_m`, dropping the `upd` the message leads with - NOT `1 2#m`,
         / which is a RESHAPE: it yields a one-element list, so `.` applies
@@ -183,7 +183,7 @@ connect:{[job;tp]
     / had it passed, `(neg h)[tbl;rows]` sends a two-element message, which
     / the remote evaluates as `tbl[rows]` - indexing a table NAME by the
     / rows. The wrapper names the function to call over there.
-    {[send;tbl;rows] send(`.qtick.publish;tbl;rows)}[neg h]}
+    {[send;t;x] send(`.qtick.publish;t;x)}[neg h]}
 
 / Start everything this process was asked to run.
 / @return the jobs started

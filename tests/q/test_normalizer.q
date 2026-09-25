@@ -41,7 +41,7 @@ define_ok:{[name;pn]
 
 test_define_registers_the_job_with_its_edges_derived:{[t]
     define_ok[`nt_a;`nta1];
-    d:.qstream.declaration `nt_a;
+    d:.qstream.def `nt_a;
     .qunit.assertEquals[(d`subscribe_to;d`publishes);(enlist `src;enlist `nt_a);
         "subscribe_to is the source list and publishes is the normalizer's own name - an instance cannot declare them differently from its mappings"];
     .qunit.assertTrue[`nt_a in .qnorm.defined[];"and it is a defined normalizer"];
@@ -107,7 +107,7 @@ test_normalize_refuses_a_table_that_is_not_a_source:{[t]
     forget `nt_j};
 
 test_an_undefined_normalizer_is_named:{[t]
-    .qunit.assertThrows[.qnorm.declaration;`nonesuch;"*is not a defined normalizer*";
+    .qunit.assertThrows[.qnorm.def;`nonesuch;"*is not a defined normalizer*";
         "looking one up that was never defined says so"]};
 
 / ----------------------------------------------------------- DISPATCHING
@@ -134,9 +134,9 @@ test_dispatch_publishes_nothing_for_an_empty_batch:{[t]
 
 test_the_shipped_normalizers_are_defined_and_registered:{[t]
     .qunit.assertEquals[`executions`marks in .qnorm.defined[];11b;"executions and marks are defined"];
-    .qunit.assertEquals[.qstream.declaration[`executions]`subscribe_to;`trades`crypto_trades;
+    .qunit.assertEquals[.qstream.def[`executions]`subscribe_to;`trades`crypto_trades;
         "executions reads both fill tables"];
-    .qunit.assertEquals[.qstream.declaration[`marks]`subscribe_to;`quote`crypto_book;
+    .qunit.assertEquals[.qstream.def[`marks]`subscribe_to;`quote`crypto_book;
         "marks reads both books"];
     .qunit.assertEquals[.qdag.kinds;`bounded`continuous`stream`reaction`normalizer;
         "and normalizer is a kind the job graph knows"]};
@@ -145,7 +145,7 @@ test_every_shipped_mapping_verifies:{[t]
     / The examples in executions.q and marks.q, run - test_transform.q does
     / this for every transform too, but a reader of THIS file should see the
     / four mappings pass here.
-    xfs:raze value each (.qnorm.declaration[`executions]`input;.qnorm.declaration[`marks]`input);
+    xfs:raze value each (.qnorm.def[`executions]`input;.qnorm.def[`marks]`input);
     failed:select from raze .qxf.verify each xfs where not passed;
     .qunit.assertEmpty[failed;"every mapping's examples produce what they say"]};
 

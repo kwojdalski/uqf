@@ -138,7 +138,7 @@ if[not manual_audpln_book~audpln_book;
     .qlog.err[`cross_book_chain;"manual chain result disagrees with cross_book_at - the two paths should always match";()!()];
     exit 1];
 
-/ ==== proof that at_time picks the price as of that specific moment ====
+/ ==== proof that as_of picks the price as of that specific moment ====
 / Three AUDUSD ticks 10ms apart, price drifting 0.6550 -> 0.6555 -> 0.6560.
 / Querying cross_book_at at various times should always return the most
 / recent tick AT OR BEFORE the requested time, never a later one - i.e.
@@ -170,12 +170,12 @@ mid_at_tick3:.qfwd.cross_book_at[audusd_ticks;`AUDUSD;query_times`at_tick3;enlis
 .qlog.info[`cross_book_chain;"mid_at_tick3 - queried at tick3's timestamp: ",.Q.s1[first mid_at_tick3`mid];()!()];
 
 if[not mid_at_tick1[`mid]~mid_between`mid;
-    .qlog.err[`cross_book_chain;"querying between tick1 and tick2 should still return tick1's price - got a different value, at_time is peeking ahead";()!()];
+    .qlog.err[`cross_book_chain;"querying between tick1 and tick2 should still return tick1's price - got a different value, as_of is peeking ahead";()!()];
     exit 1];
 if[mid_at_tick1[`mid]~mid_at_tick3`mid;
-    .qlog.err[`cross_book_chain;"querying at tick3 should return a later, different price than tick1 - got the same value, at_time isn't picking up new ticks";()!()];
+    .qlog.err[`cross_book_chain;"querying at tick3 should return a later, different price than tick1 - got the same value, as_of isn't picking up new ticks";()!()];
     exit 1];
-.qlog.info[`cross_book_chain;"confirmed: between-tick query matches the earlier tick exactly, and the tick3 query differs from it - at_time correctly reflects only information known as of that instant";()!()];
+.qlog.info[`cross_book_chain;"confirmed: between-tick query matches the earlier tick exactly, and the tick3 query differs from it - as_of correctly reflects only information known as of that instant";()!()];
 
 / querying before any tick exists should error, not silently return
 / something (or, worse, the wrong tick).
