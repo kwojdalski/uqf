@@ -66,15 +66,15 @@ grep -rhoE '\{\[[^]]*\]' src/**/*.q
 Known synonym groups in this codebase, with the current counts that made them
 worth listing (re-measure; these age):
 
-  | Concept | Spellings seen | Dominant |
-  | --- | --- | --- |
-  | TIMESTAMP | `ts`×40, `timestamp`×2 | `ts` |
-  | TABLE | `tbl`×17, `table`×4 | `tbl` |
-  | COLUMN | `col`×14, `cols`×10, `columns`×4, `column`×3 | `col`/`cols` |
-  | POSITION | `pos`×8, `position`×1 | `pos` |
-  | REF | `ref`×8, `reference`×1 | `ref` |
-  | DECL | `decl`×4, `declaration`×3 | genuinely split |
-  | MESSAGE | `msg`×2, `message`×2 | genuinely split |
+  | Concept   | Spellings seen                               | Dominant                                                                                 |
+  | ---       | ---                                          | ---                                                                                      |
+  | TIMESTAMP | `ts`×40, `timestamp`×2                       | `ts`                                                                                     |
+  | TABLE     | `tbl`×18, `table_name`×11                    | not a split: a table value vs a symbol naming one (kdb-q-conventions, "Parameter names") |
+  | COLUMN    | `col`×14, `cols`×10, `columns`×4, `column`×3 | `col`/`cols`                                                                             |
+  | POSITION  | `pos`×8, `position`×1                        | `pos`                                                                                    |
+  | REF       | `ref`×8, `reference`×1                       | `ref`                                                                                    |
+  | DECL      | `decl`×11                                    | `decl`; the lookup function is `def`, never `decl`                                       |
+  | MESSAGE   | `msg`×2, `message`×2                         | genuinely split                                                                          |
 
 `col` beside `cols` is **not** a finding --- that is singular and plural, which
 is a real distinction. Only a *synonym* split counts.
