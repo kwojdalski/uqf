@@ -701,8 +701,12 @@ fx_fill:{[s;side;price;size]
     ([] time:enlist d 0; sym:enlist s; side:enlist side; trade_price:enlist price;
         size:enlist size; pip_factor:enlist 10000)}
 
+/ source_time deliberately EARLIER than time: the venue stamped it before
+/ this stack received it, which is the whole reason crypto_book carries both.
+/ A marks normalizer that went back to reading `time` would produce a mark
+/ dated d 0 instead of d[0]-0D00:00:02, and say so here.
 crypto_book_row:{[s;bid;ask]
-    ([] time:enlist d 0; venue:enlist `binance_spot; sym:enlist s;
+    ([] time:enlist d 0; source_time:enlist (d 0)-0D00:00:02; venue:enlist `binance_spot; sym:enlist s;
         bid_prices:enlist bid; bid_sizes:enlist 3#0.5; ask_prices:enlist ask; ask_sizes:enlist 3#0.5)}
 
 / Deliver a normalizer's published rows to posbook the way the plant would:
@@ -759,7 +763,7 @@ test_the_mock_reaches_posbook_through_both_normalizers:{[t]
     .qetl.job.stream.wire[`crypto_mock;{[as_table;tbl;r]
         norm:$[tbl=`crypto_book;`marks;`executions];
         .sjtest.to_posbook[norm;.qetl.job.stream.normalizer.normalize[norm;tbl;`time xcols as_table[
-            $[tbl=`crypto_book;`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
+            $[tbl=`crypto_book;`source_time`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
               `sym`venue`side`trade_price`size`fee`fee_currency`exchange_fill_id];r]]];
         1}[as_table]];
     do[20;.qpipe.job.crypto_mock.on_timer[]];

@@ -39,7 +39,7 @@ describe[`config_change]:
 describe[`cross_arbitrage]:
     "Synthetic-versus-direct cross-currency opportunities: one pair priced against a route through others (EURJPY against EURUSD x USDJPY). route carries the legs, skew how far apart they were quoted, fully_filled whether the notional can be worked through every leg. Like arbitrage, select the latest row per pair before filtering active";
 describe[`crypto_book]:
-    "Live venue order books published by cryptorust's kdb-market-data-recorder (uqs crypto start): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. time is stamped by the tickerplant on receipt";
+    "Live venue order books published by cryptorust's kdb-market-data-recorder (uqs crypto start): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. Two clocks: source_time is the venue's own stamp and time is the tickerplant's, stamped on receipt. Read source_time for when the market was in this state, and their difference for how long it took to get here";
 describe[`crypto_sim_fills]:
     "Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from";
 describe[`crypto_trades]:
@@ -136,4 +136,4 @@ surface:{[]
 .qcat.describe[`client_flow]:
     "One client FX trade consumed off a Kafka topic, deduplicated by kafka_flow1 on the (partition;offset) the record carries - so a broker redelivery does not show the desk the same trade twice. Carries those coordinates, so any row can be traced back to the exact Kafka record";
 .qcat.describe[`crypto_market_data]:
-    "One moment of a crypto pair on one venue, replayed out of cryptorust's own recorded DuckDB capture: five book levels a side as vectors, the trade printed alongside them, and both clocks - the venue's source_time and the recorder's local_time, whose difference is the wire lag. The repeatable counterpart to crypto_book, which the same recorder fills live and which carries neither clock";
+    "One moment of a crypto pair on one venue, replayed out of cryptorust's own recorded DuckDB capture: five book levels a side as vectors, the trade printed alongside them, and both clocks - the venue's source_time and the recorder's local_time, whose difference is the wire lag. The repeatable counterpart to crypto_book, which the same recorder fills live and which carries source_time but not the recorder's local_time";

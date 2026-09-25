@@ -1283,10 +1283,10 @@
 .man.registerArg (".qpipe.job.crypto_mock.drift_toxicity";"param";"toxicity";"the current toxicity");
 .man.registerArg (".qpipe.job.crypto_mock.drift_toxicity";"return";"";"the next, clipped to [-1;1]");
 .man.registerArg (".qpipe.job.crypto_mock.drift_toxicity";"eg";"";"(.qpipe.job.crypto_mock.drift_toxicity 0f) within -1 1f -> 1b");
-.man.registerFunc (".qpipe.job.crypto_mock.book_rows";".qpipe.job.crypto_mock";"One tick's crypto_book rows from the current market: a ladder each side, level-0-first, the shape .qbook and the frontend consume. Takes the market as an argument and returns rows, so a tick's shape is checkable with no tickerplant. Every column is a vector as long as the market has rows; the four ladder columns are lists of vectors.";".qpipe.job.crypto_mock.book_rows";"count first .qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market] 2 -> 3");
+.man.registerFunc (".qpipe.job.crypto_mock.book_rows";".qpipe.job.crypto_mock";"One tick's crypto_book rows from the current market: a ladder each side, level-0-first, the shape .qbook and the frontend consume. Takes the market as an argument and returns rows, so a tick's shape is checkable with no tickerplant. Every column is a vector as long as the market has rows; the four ladder columns are lists of vectors. `source_time` is .z.p, one instant for the whole tick: the mock has no venue to be stamped by, and a healthy live feed is one where the venue's stamp and the plant's are milliseconds apart. It is emitted rather than left out because .u.upd takes columns POSITIONALLY - a publisher one column short of its plant table misaligns every column after the gap, silently, and no contract test covers a feed.";".qpipe.job.crypto_mock.book_rows";"count first .qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market] 3 -> 3");
 .man.registerArg (".qpipe.job.crypto_mock.book_rows";"param";"mkt";"the market table");
-.man.registerArg (".qpipe.job.crypto_mock.book_rows";"return";"";"the rows: venue, sym, bid_prices, bid_sizes, ask_prices, ask_sizes");
-.man.registerArg (".qpipe.job.crypto_mock.book_rows";"eg";"";"count first .qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market] 2 -> 3");
+.man.registerArg (".qpipe.job.crypto_mock.book_rows";"return";"";"the rows: source_time, venue, sym, bid_prices, bid_sizes, ask_prices, ask_sizes");
+.man.registerArg (".qpipe.job.crypto_mock.book_rows";"eg";"";"count first .qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market] 3 -> 3");
 .man.registerFunc (".qpipe.job.crypto_mock.touch";".qpipe.job.crypto_mock";"The maker's quote for one market row, as (bid; ask) prices.";".qpipe.job.crypto_mock.touch";".qpipe.job.crypto_mock.touch 10000f -> 9999 10001f");
 .man.registerArg (".qpipe.job.crypto_mock.touch";"param";"mid";"the mid");
 .man.registerArg (".qpipe.job.crypto_mock.touch";"return";"";"(bid; ask)");
@@ -1465,7 +1465,7 @@
 .man.registerFunc (".qpipe.job.marks.from_quote";".qpipe.job.marks";"An FX quote as a mark: halfway between its one bid and one ask.";".qpipe.job.marks.from_quote";"");
 .man.registerArg (".qpipe.job.marks.from_quote";"param";"batch";"a quote batch");
 .man.registerArg (".qpipe.job.marks.from_quote";"return";"";"canonical marks");
-.man.registerFunc (".qpipe.job.marks.from_crypto_book";".qpipe.job.marks";"A crypto book row as a mark: halfway between the best bid and the best ask, which are level 0 of each ladder.";".qpipe.job.marks.from_crypto_book";"");
+.man.registerFunc (".qpipe.job.marks.from_crypto_book";".qpipe.job.marks";"A crypto book row as a mark: halfway between the best bid and the best ask, which are level 0 of each ladder. Reads crypto_book's `source_time` - the VENUE's stamp. It used to read `time`, the plant's receipt stamp, and publish that as source_time: for a live row the two are milliseconds apart and the lie was invisible, but a row replayed or backfilled hours later would assert the venue quoted that mid at the moment the plant happened to receive it, and posbook would value positions on it. The plant's clock must not reach a consumer wearing the venue's name.";".qpipe.job.marks.from_crypto_book";"");
 .man.registerArg (".qpipe.job.marks.from_crypto_book";"param";"batch";"a crypto_book batch");
 .man.registerArg (".qpipe.job.marks.from_crypto_book";"return";"";"canonical marks");
 
