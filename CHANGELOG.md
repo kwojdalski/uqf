@@ -2,6 +2,69 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-09-25
+
+This snapshot covers 133 commits in 49 merged PRs (#431--#484) since
+`stable/2026-09-24`. 352 files changed, +21,300 / -12,801 lines. Two threads
+dominate: the ETL namespaces were consolidated into one hierarchy, and the four
+test lanes that had been red on master are all green again. Alongside those, the
+tree gained a Kafka subscriber, a DuckDB backfill and tickerlog replay.
+
+### Namespaces --- one hierarchy, and it is a breaking rename
+
+- **`.qsub.<job>` is now `.qpipe.job.<job>`**, `.qstream` is `.qetl.job.stream`,
+  and the old `.qpipe` TorQ adapter is `.qtorq`. Every job, test and doc moved
+  with it; the README says what each name became.
+- **Names converged on TorQ's vocabulary**, in this tree's snake_case: one
+  spelling per argument concept (`table_name` for a symbol naming a table,
+  `decl` for a declaration dict, `as_of`, `range_from`/`range_to`), and one verb
+  for declaring a block (`define`/`defined`/`def`). `.qcfgaudit` became
+  `.qaudit`.
+
+### `src/` (66 files, +2,414 / -1,556)
+
+- **Kafka:** `kafka_flow1` consumes a topic through an external Python consumer
+  and deduplicates on each record's `(partition;offset)`, so a broker redelivery
+  cannot show a trade twice. The offset commit sits *after* the publish,
+  deliberately --- a duplicate is detectable, a lost row is not.
+- **Backfills** write straight into the HDB partition of each row's own date.
+  `duckdb_deals_backfill` adds mock FX deals over ODBC.
+- **Execution/microstructure:** horizon-specific empirical fill probabilities
+  (#323), odd-lot trade ratio and imbalance (#360), and `bid`/`ask` as the one
+  book side everywhere, with a mistyped side refused rather than thrown at
+  (#415).
+- **Options:** `delta`, `theta` and `rho` gained the `is_call` dispatcher
+  `gk_price` already had (#419).
+- **Foundation:** one `require_cols` replaced thirteen hand-written column
+  checks (#418).
+
+### `python/` (88 files, +4,245 / -836)
+
+- **`uqs` gained** `replay tplog` (TorQ's tickerlogreplay, aimed by what is
+  running), `install-jobs`, `conn PROCNAME`, `--profile essential`, and a bare
+  `query` that opens a qcon session.
+- **Liveness** is checked with one `ps` and one `lsof` rather than parsing
+  `torq.sh` output.
+- **One q-interpreter rule** --- `$QCMD`, else a bare `q`, as TorQ does, with no
+  `~/.kx/bin/q` fallback (#414).
+
+### Tests and lanes (61 files, +3,146 / -2,162)
+
+All four red lanes are green: the coverage tool no longer untypes the empty
+containers it rebuilds (#460), the dag adoption test reads `table_name` as the
+contract declares it (#464), the `.qpipe` functions that need no tickerplant are
+covered and only those that do are baselined (#462), and the frontend control
+tests name a q interpreter that exists on macOS (#461).
+
+**1,588 q tests pass, 0 failed.** Every pre-commit hook is green, including
+`contract_surface`, which had drifted.
+
+### `docs/` (65 files, +6,496 / -5,389)
+
+A FAQ, a Quarto deck on how uqf differs from plain TorQ, site navigation and a
+home page that is the map, publishing to GitHub Pages, a gate that resolves
+every link and anchor, and `panache` formatting across the tree.
+
 ## stable/2026-09-24
 
 This snapshot covers 185 commits in 56 merged PRs (#354--#424) since
