@@ -105,6 +105,13 @@ test_book_convexity_too_few_levels_is_null:{[t]
     r:.qmicro.book_convexity[enlist 1.1000 1.0998;`bid];
     .qunit.assertTrue[null first r;"only 2 levels present -> null, not an index error"]};
 
+test_book_convexity_rejects_anything_but_bid_or_ask:{[t]
+    / Each of these used to be read as the bid side and return a number (#415):
+    / a typo, a trade-direction word, and the trade-direction encoding.
+    {[s] .qunit.assertThrows[.qmicro.book_convexity[enlist 1.1000 1.0998 1.0995;];s;
+        "book_convexity: side must be `bid or `ask, got *";
+        "a side that is not a book side is refused by name, not read as `bid"]} each (`aks;`sell;-1)};
+
 / ---- vamp ----
 
 test_vamp_matches_two_explicit_sweep_price_calls:{[t]
@@ -179,7 +186,8 @@ test_queue_depletion_rate_rejects_bad_side:{[t]
         bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 100;
         ask_prices:enlist enlist 1.11; ask_sizes:enlist enlist 100);
     wrapper:{[q] .qmicro.queue_depletion_rate[q;`EURUSD;`mid]};
-    .qunit.assertError[wrapper;quotes;"side other than `bid/`ask is rejected"]};
+    .qunit.assertThrows[wrapper;quotes;"queue_depletion_rate: side must be `bid or `ask, got mid";
+        "side other than `bid/`ask is rejected"]};
 
 / ---- ofi ----
 

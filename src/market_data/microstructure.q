@@ -240,8 +240,13 @@ book_convexity_one:{[prices;side]
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param side `bid or `ask - which side prices belongs to
 / @return a vector, convexity per row
+/ @throws error if side isn't `bid or `ask - checked once here, because
+/   book_convexity_one's `$[side=`ask; ...]` reads anything else as the bid
+/   side and returns a plausible number with the wrong sign (#415)
 / @eg .qmicro.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> ,-0.0001
 book_convexity:{[prices;side]
+    if[not $[-11h=type side; side in `bid`ask; 0b];
+        '"book_convexity: side must be `bid or `ask, got ",.Q.s1 side];
     n:count prices;
     result:n#0n;
     i:0;
