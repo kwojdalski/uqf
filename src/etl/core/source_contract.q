@@ -151,23 +151,23 @@ sources:(`symbol$())!();
 /   transport - `ipc (the default) or `odbc, see `transports`
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
-register:{[source;decl]
+define:{[source;decl]
     missing:required_declarations where not required_declarations in key decl;
     if[count missing;
-        '"register: ",string[source]," is missing declaration(s): ",", " sv string missing];
+        '"define: ",string[source]," is missing declaration(s): ",", " sv string missing];
     if[not 11h=abs type decl`fields;
-        '"register: ",string[source],"'s fields must be a symbol vector"];
+        '"define: ",string[source],"'s fields must be a symbol vector"];
     if[not 10h=abs type decl`types;
-        '"register: ",string[source],"'s types must be a string of q type characters, one per field"];
+        '"define: ",string[source],"'s types must be a string of q type characters, one per field"];
     if[(count decl`fields)<>count decl`types;
-        '"register: ",string[source]," declares ",string[count decl`fields],
+        '"define: ",string[source]," declares ",string[count decl`fields],
          " field(s) but ",string[count decl`types]," type(s) - the source contract requires a type per required field"];
     if[not 100h=type decl`query;
-        '"register: ",string[source],"'s query must be a lambda (parameterised, never concatenated)"];
+        '"define: ",string[source],"'s query must be a lambda (parameterised, never concatenated)"];
     if[not 100h=type decl`fixture;
-        '"register: ",string[source],"'s fixture must be a niladic lambda (the path must be exercisable with no driver)"];
+        '"define: ",string[source],"'s fixture must be a niladic lambda (the path must be exercisable with no driver)"];
     if[not -11h=type decl`tz;
-        '"register: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
+        '"define: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
     / The window is taken on time_field, so time_field must be a field this
     / adapter actually READS. Without this check a typo registers happily and
     / surfaces two layers down: validate never checks the column (it is not
@@ -195,15 +195,15 @@ register:{[source;decl]
     / vector (11h), which is the point - a single-column key should not have
     / to be enlisted at the call site.
     if[not 11h=abs type decl`row_key;
-        '"register: ",string[source],"'s row_key must be a symbol or symbol vector naming the column(s) that identify a row uniquely"];
+        '"define: ",string[source],"'s row_key must be a symbol or symbol vector naming the column(s) that identify a row uniquely"];
     key_cols:(),decl`row_key;
     key_absent:key_cols where not key_cols in decl`fields;
     if[count key_absent;
-        '"register: ",string[source],"'s row_key names ",(", " sv string key_absent),
+        '"define: ",string[source],"'s row_key names ",(", " sv string key_absent),
          " which is not among its declared fields - a key this contract cannot see cannot identify a row"];
 
     if[not (decl`time_field) in decl`fields;
-        '"register: ",string[source],"'s time_field ",string[decl`time_field],
+        '"define: ",string[source],"'s time_field ",string[decl`time_field],
          " is not one of its declared fields (",(", " sv string decl`fields),
          ") - the window is taken on that column, so it must be one the contract describes"];
     / Enforced rather than hoped for: the window column must be a
@@ -217,11 +217,11 @@ register:{[source;decl]
     if[not "p"=time_char;
         / Short by necessity: q truncates a thrown string at 255 bytes, so the
         / long form lives in the comment above rather than in the message.
-        '"register: ",string[source],"'s time_field ",string[decl`time_field],
+        '"define: ",string[source],"'s time_field ",string[decl`time_field],
          " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently"];
     tr:$[`transport in key decl; decl`transport; default_transport];
     if[not tr in transports;
-        '"register: ",string[source],"'s transport must be one of ",(", " sv string transports)];
+        '"define: ",string[source],"'s transport must be one of ",(", " sv string transports)];
     / Stored on EVERY declaration, declared or not: `sources` holds dicts, and
     / a key present on one and absent on another stops later assignments
     / fitting - the shape .qbw's optional_cfg normalisation exists for.
@@ -245,15 +245,15 @@ register:{[source;decl]
 / exist, which is what makes the question bank true: adding a source is a file plus a
 / registration, with no core change.
 / @return a symbol vector, empty when nothing has registered yet
-/ @eg .qsrc.registered[]
-registered:{[] key sources}
+/ @eg .qsrc.defined[]
+defined:{[] key sources}
 
 / The column(s) identifying a row uniquely, always as a vector.
 / .
 / Exported so a future dedupe or restatement path has one place to ask,
 / rather than each caller reaching into the declaration and deciding for
 / itself whether a single symbol needs enlisting.
-/ Stored normalised by `register`, so this is already a vector - the `(),`
+/ Stored normalised by `define`, so this is already a vector - the `(),`
 / is belt-and-braces for a declaration written directly into `sources` by a
 / test rather than through register.
 row_key:{[source] (),(declaration source)`row_key}

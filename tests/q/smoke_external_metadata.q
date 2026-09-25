@@ -152,7 +152,7 @@ check_source:{[source]
     r:@[{.qsrc.validate_live[x;h]; ""};source;{x}];
     note["contract: ",string[source],$[count r;" - ",r;""];0=count r]}
 
-check_source each .qsrc.registered[];
+check_source each .qsrc.defined[];
 
 {@[hclose;x;::]} each live;
 

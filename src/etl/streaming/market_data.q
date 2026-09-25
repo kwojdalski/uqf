@@ -63,7 +63,7 @@ from_quotes:{[batch]
             bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1000 2000f;
             ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f)))];
 
-.qnorm.define[`market_data;`procname`output`sources`note!(
+.qnorm.define[`market_data;`procname`output`input`note!(
     `marketdata1;
     .qsub.market_data.market_data;
     `quote`quotes!`market_data_from_quote`market_data_from_quotes;

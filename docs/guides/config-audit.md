@@ -98,7 +98,7 @@ Two lines, in the file that owns it:
 .qcfgaudit.watch[`my_job;`.qsub.my_job.my_tunable];
 ```
 
-and `config_change` in that job's `.qstream.register` publishes. Nothing else ---
+and `config_change` in that job's `.qstream.define` publishes. Nothing else ---
 the table already exists, the runner already polls anything declared, and
 `tests/q/test_config_audit.q` will fail if the name resolves to nothing or the
 publish is not declared.

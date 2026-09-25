@@ -3,7 +3,7 @@
 Split from scaffold/jobs.py, which crossed the 400-line threshold this package
 holds itself to. The seam is real rather than convenient: everything here
 PRODUCES TEXT and follows the shape of a real job - change it when
-`.qstream.register` grows a field, or when a source declaration gains one.
+`.qstream.define` grows a field, or when a source declaration gains one.
 scaffold/jobs.py plans and writes, and changes when what a job NEEDS changes.
 
 Every template is deliberately unfinished in the same way: the handler
@@ -174,7 +174,7 @@ fixture:{{[]
     ([] {fixture_cols})}}
 
 / Register on load, so the declaration and the implementation cannot drift.
-.qsrc.register[source_name;
+.qsrc.define[source_name;
     `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
     (source_name;`{dataset};target;time_field;row_key;fields;types;query;fixture;tz)];
 

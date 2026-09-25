@@ -92,7 +92,7 @@ cmd: "uqs new-job" {
 written: "Created" {
   class: band
 
-  job: "src/etl/streaming/NAME.q\n.qstream.register, and a\nhandler that THROWS" { class: created }
+  job: "src/etl/streaming/NAME.q\n.qstream.define, and a\nhandler that THROWS" { class: created }
   source: "src/etl/sources/SRC.q\n.qfeed: query, and a\nfixture of one real row" { class: created }
   worker: "src/etl/workers/\nNAME_backfill.q\n.qbw.define" { class: created }
   test: "tests/q/test_NAME.q\nasserts behaviour,\nso it FAILS" { class: created }
@@ -136,7 +136,7 @@ written.test -> picked_up.suites
 appended.nslist -> picked_up.suites: "names it" { style.stroke: "#a8762f" }
 appended.tablelist -> picked_up.suites: "admits it" { style.stroke: "#a8762f" }
 appended.tables -> picked_up.consumers { style.stroke: "#a8762f" }
-written.job -> picked_up.consumers: ".qstream.register re-parsed" { style.stroke: "#3d7a5a" }
+written.job -> picked_up.consumers: ".qstream.define re-parsed" { style.stroke: "#3d7a5a" }
 written.worker -> picked_up.consumers: ".qbw.define re-parsed" { style.stroke: "#3d7a5a" }
 
 picked_up.init -> todo.logic

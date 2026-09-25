@@ -4,7 +4,7 @@ WHAT IS WORTH TESTING HERE. Not that the templates produce a particular
 string - that would pin the prose and break on every wording change. What
 matters is that what they produce is still READABLE BY THE TREE:
 
-  * the generated `.qstream.register` block parses with the same regex
+  * the generated `.qstream.define` block parses with the same regex
     `pipeline_edges` reads real jobs with, so a template that drifts out of
     what the tree can parse fails the build rather than rotting quietly;
   * the generated table definition parses with the same regex `model/schemas.py`
@@ -143,7 +143,7 @@ def test_a_scaffolded_fixture_carries_a_row():
     plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
     source = _body(plan, "sources/fx_rates.q")
     assert "enlist" in source.split("fixture:")[1], "the fixture must carry a row"
-    assert "not implemented" not in source.split("fixture:")[1].split("register")[0]
+    assert "not implemented" not in source.split("fixture:")[1].split(".qsrc.define")[0]
 
 
 # ------------------------------------------------------------- refusing

@@ -96,7 +96,7 @@ fixture:{[]
         size:41 19 1 2 41 47 9 32 7 42i;
         side:`side`buy`side`side`buy`side`buy`buy`buy`buy)}
 
-.qsrc.register[source_name;
+.qsrc.define[source_name;
     `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
     (source_name;`trade;target;time_field;row_key;fields;types;query;fixture;tz)];
 

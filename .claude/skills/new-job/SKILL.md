@@ -205,7 +205,7 @@ Say this back to the user, because it is the part that surprises people:
 - **No registry entry at all.** The process registry is read from the q
   declarations (`model/declarations.py`): `procname`, the edges, and the
   optional `autostart` (default on demand) and `note` all live on the job's own
-  `.qstream.register` / `.qbw.define`. The port is appended to
+  `.qstream.define` / `.qbw.define`. The port is appended to
   `scripts/processes/process_ports.csv` by the regeneration above, so no
   existing process moves.
 

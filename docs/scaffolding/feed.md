@@ -43,7 +43,7 @@ on_timer:{[]
 
 \d .
 
-.qstream.register[`pulsefeed;`procname`subscribes`publishes`timer_period`on_timer`note!(
+.qstream.define[`pulsefeed;`procname`subscribes`publishes`timer_period`on_timer`note!(
     `pulsefeed1;
     `symbol$();                    / subscribes to nothing - this is what makes it a feed
     enlist `pulse;

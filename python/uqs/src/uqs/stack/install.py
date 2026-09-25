@@ -10,9 +10,9 @@ would leave the tree unable to load.
 WHICH FOLDER is decided by what a file declares, never by its name or where
 it sat in the sidecar, so a sidecar can be laid out any way its owner likes:
 
-    .qsrc.register                  a source     -> src/etl/sources
+    .qsrc.define                  a source     -> src/etl/sources
     .qbw.define                     a worker     -> src/etl/workers
-    .qstream.register, .qnorm.define a streaming job -> src/etl/streaming
+    .qstream.define, .qnorm.define a streaming job -> src/etl/streaming
 
 A file declaring more than one kind is refused: the directories load in a
 fixed order - a worker's source must already exist when the worker defines
@@ -37,10 +37,10 @@ from pathlib import Path
 from uqs.model.declarations import declaration_calls, strip_q_comments
 from uqs.paths import SOURCE_DIR, STREAM_DIR, WORKER_DIR
 
-#: A source registers itself through .qsrc.register, whose name argument is
+#: A source registers itself through .qsrc.define, whose name argument is
 #: usually a variable (`source_name`) rather than a literal - so a source is
 #: recognised by the call, not by parsing the name out of it.
-_SOURCE_CALL = re.compile(r"\.qsrc\.register\[")
+_SOURCE_CALL = re.compile(r"\.qsrc\.define\[")
 
 #: Files a sidecar may carry that are not jobs: its tests. Recognised and
 #: reported, never installed - a q test runs only once its namespace is listed

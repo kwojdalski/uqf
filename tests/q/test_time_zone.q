@@ -43,13 +43,13 @@ beforeNamespace_zones:{[]
 / .ddbftest - the cross-suite leak test_source_contract.q already records.
 setUp_sources:{[]
     .tztest.drop_sources[];
-    .qsrc.register[`tz_london;
+    .qsrc.define[`tz_london;
         `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
         (`tz_london;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:2026.10.25D00:30:00.000000000+0D00:30*til 8; px:8#1.5)};
          .tztest.london)];
-    .qsrc.register[`tz_summer;
+    .qsrc.define[`tz_summer;
         `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
         (`tz_summer;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};

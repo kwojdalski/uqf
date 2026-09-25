@@ -50,7 +50,7 @@ on_batch:{[t;data]
 
 \d .
 
-.qstream.register[`spreadmon;`procname`subscribes`publishes`on_batch`note!(
+.qstream.define[`spreadmon;`procname`subscribes`publishes`on_batch`note!(
     `spreadmon1;
     `quotes;
     enlist `spread_bps;

@@ -153,7 +153,7 @@ publish:.qstream.unwired `{name};
 \\d .
 
 {defines}
-.qnorm.define[`{name};`procname`output`sources`note!(
+.qnorm.define[`{name};`procname`output`input`note!(
     `{proc};
     .qsub.{name}.{name};
     {mapping};

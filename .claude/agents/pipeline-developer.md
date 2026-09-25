@@ -87,7 +87,7 @@ Two registry facts that changed under you, and that a job no longer states:
 
 - There is no registry entry to write. `model/registry.py` BUILDS `PIPELINES`
   from the q declarations (`model/declarations.py`): `procname` and the edges
-  from `.qstream.register`/`.qnorm.define`/`.qbw.define`, plus the optional
+  from `.qstream.define`/`.qnorm.define`/`.qbw.define`, plus the optional
   `autostart` and `note` keys, and a worker's `procname` (default `<worker>1`).
   Only non-job processes (tap1) are listed in Python.
 - Ports live in `scripts/processes/process_ports.csv`, a generated, append-only
@@ -157,9 +157,9 @@ Two registry facts that changed under you, and that a job no longer states:
   source is `\d .qfeed.<source name>`, which `test_source_contract.q` checks
   against the file's own `source_name`; a continuous job is `\d .qsub.<job>` -
   one file under `src/etl/streaming/` holding its schemas, transform, batch
-  handler or timer body and state, plus a `.qstream.register` call (a FEED is
-  one of these too: it declares no subscription and produces on a timer); a
-  process script's own wiring state is `\d .qproc.<name>`;
+  handler or timer body and state, plus a `.qstream.define` call (a FEED is one
+  of these too: it declares no subscription and produces on a timer); a process
+  script's own wiring state is `\d .qproc.<name>`;
   `scripts/processes/torq_stream.q` runs whichever job the process it started as
   claims. A job publishes through `publish` in its own namespace (wired by the
   runner, or by a test to a recorder), never through `.qpipe` - nothing in

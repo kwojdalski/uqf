@@ -139,7 +139,7 @@ now:{[] .z.p}
         2026.09.17D10:00:01);
     1b)];
 
-.qstream.register[`cross;`procname`subscribes`publishes`on_batch`note!(
+.qstream.define[`cross;`procname`subscribes`publishes`on_batch`note!(
     `cross1;
     enlist `quotes;
     `symbol$();

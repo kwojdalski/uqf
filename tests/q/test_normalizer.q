@@ -22,7 +22,7 @@ mk_xf:{[name;output;fn]
 
 good:{[batch] select a:x, b:y from batch}
 
-/ .qstream.register refuses a second job on one procname, and a test that
+/ .qstream.define refuses a second job on one procname, and a test that
 / defines the same normalizer twice would trip that - so each test uses a
 / name and procname of its own, and forgets them afterwards.
 forget:{[name]
@@ -35,7 +35,7 @@ forget:{[name]
 define_ok:{[name;pn]
     mk_xf[`normtest_good;canon;good];
     (` sv `.qsub,name,`publish) set .qstream.unwired name;
-    .qnorm.define[name;`procname`output`sources!(pn;canon;(enlist `src)!enlist `normtest_good)]}
+    .qnorm.define[name;`procname`output`input!(pn;canon;(enlist `src)!enlist `normtest_good)]}
 
 / ------------------------------------------------------------- DEFINING
 
@@ -49,16 +49,16 @@ test_define_registers_the_job_with_its_edges_derived:{[t]
 
 test_a_missing_key_is_named:{[t]
     .qunit.assertThrows[.qnorm.define[`nt_b;];`procname`output!(`ntb1;canon);
-        "*is missing sources*";"a normalizer with no sources is refused by the key it lacks"]};
+        "*is missing input*";"a normalizer with no sources is refused by the key it lacks"]};
 
 test_an_output_with_time_is_refused:{[t]
     .qunit.assertThrows[.qnorm.define[`nt_c;];
-        `procname`output`sources!(`ntc1;([] time:`timestamp$(); a:`long$());(enlist `src)!enlist `normtest_good);
+        `procname`output`input!(`ntc1;([] time:`timestamp$(); a:`long$());(enlist `src)!enlist `normtest_good);
         "*carries `time`*";"the plant stamps time; a source's own stamp is a column named for what it is"]};
 
 test_an_unregistered_transform_is_refused:{[t]
     .qunit.assertThrows[.qnorm.define[`nt_d;];
-        `procname`output`sources!(`ntd1;canon;(enlist `src)!enlist `normtest_nonesuch);
+        `procname`output`input!(`ntd1;canon;(enlist `src)!enlist `normtest_nonesuch);
         "*is not registered*";"a mapping is a declared transform, so its examples are verified"]};
 
 test_a_mapping_whose_output_drifts_is_refused:{[t]
@@ -66,11 +66,11 @@ test_a_mapping_whose_output_drifts_is_refused:{[t]
     / drift too: the output is published positionally.
     mk_xf[`normtest_drift;([] b:`symbol$(); a:`long$());{[batch] select b:y, a:x from batch}];
     .qunit.assertThrows[.qnorm.define[`nt_e;];
-        `procname`output`sources!(`nte1;canon;(enlist `src)!enlist `normtest_drift);
+        `procname`output`input!(`nte1;canon;(enlist `src)!enlist `normtest_drift);
         "*does not produce the canonical table*";"a mapping that emits the columns in another order lands as a misaligned table"];
     mk_xf[`normtest_wider;([] a:`long$(); b:`symbol$(); c:`float$());{[batch] select a:x, b:y, c:0f from batch}];
     .qunit.assertThrows[.qnorm.define[`nt_f;];
-        `procname`output`sources!(`ntf1;canon;(enlist `src)!enlist `normtest_wider);
+        `procname`output`input!(`ntf1;canon;(enlist `src)!enlist `normtest_wider);
         "*unexpected column*";"and one that emits an extra column is named for it"]};
 
 test_a_mapping_with_two_inputs_is_refused:{[t]
@@ -80,7 +80,7 @@ test_a_mapping_with_two_inputs_is_refused:{[t]
         {[p;q] ([] a:p`x; b:(count p)#`z)};
         enlist `inputs`expected!(`p`q!(([] x:enlist 1);([] y:enlist 2));([] a:enlist 1; b:enlist `z)))];
     .qunit.assertThrows[.qnorm.define[`nt_g;];
-        `procname`output`sources!(`ntg1;canon;(enlist `src)!enlist `normtest_two);
+        `procname`output`input!(`ntg1;canon;(enlist `src)!enlist `normtest_two);
         "*takes 2 inputs*";"a mapping reads one source"]};
 
 / ---------------------------------------------------------- NORMALIZING
@@ -145,7 +145,7 @@ test_every_shipped_mapping_verifies:{[t]
     / The examples in executions.q and marks.q, run - test_transform.q does
     / this for every transform too, but a reader of THIS file should see the
     / four mappings pass here.
-    xfs:raze value each (.qnorm.declaration[`executions]`sources;.qnorm.declaration[`marks]`sources);
+    xfs:raze value each (.qnorm.declaration[`executions]`input;.qnorm.declaration[`marks]`input);
     failed:select from raze .qxf.verify each xfs where not passed;
     .qunit.assertEmpty[failed;"every mapping's examples produce what they say"]};
 

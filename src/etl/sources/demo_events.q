@@ -84,7 +84,7 @@ fixture:{[]
         pip_factor:10#10000j)}
 
 / Register on load, so the declaration and the implementation cannot drift.
-.qsrc.register[source_name;
+.qsrc.define[source_name;
     `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
     (source_name;`event_tape;target;time_field;row_key;fields;types;query;fixture;tz)];
 

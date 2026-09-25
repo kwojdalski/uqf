@@ -36,18 +36,18 @@ setUp_clean:{[]
 / --- registration validates immediately ---------------------------
 
 test_a_complete_declaration_registers:{[t]
-    .qunit.assertEquals[.qsrc.register[`t;.srctest.decl[]];`t;"a valid declaration is accepted"]};
+    .qunit.assertEquals[.qsrc.define[`t;.srctest.decl[]];`t;"a valid declaration is accepted"]};
 
 / Registration validates NOW, unlike .qbfstate.register which defers. The
 / asymmetry is deliberate: a worker's methods appear as its file loads, so
 / early validation would force declaration order; a declaration is one
 / literal with no such problem.
 test_a_missing_declaration_is_refused_at_registration:{[t]
-    .qunit.assertError[{.qsrc.register[`t;x]};(enlist `source)#.srctest.decl[];"an incomplete declaration fails at registration, not at first use"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};(enlist `source)#.srctest.decl[];"an incomplete declaration fails at registration, not at first use"]};
 
 test_every_missing_field_is_named_at_once:{[t]
     partial:`source`table`target!(`t;`ext;`loc);
-    err:@[{.qsrc.register[`t;x]; ""};partial;{x}];
+    err:@[{.qsrc.define[`t;x]; ""};partial;{x}];
     .qunit.assertEquals[all err like/: ("*fields*";"*types*";"*query*";"*fixture*");1b;"four omissions are reported together, not one per attempt"]};
 
 / The source contract asks for a required TYPE per required field. A mismatched count means
@@ -55,35 +55,35 @@ test_every_missing_field_is_named_at_once:{[t]
 / fewer columns than declared.
 test_a_type_per_field_is_required:{[t]
     bad:@[.srctest.decl[];`types;:;"p"];
-    .qunit.assertError[{.qsrc.register[`t;x]};bad;"two fields and one type is a declaration bug, not a default"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"two fields and one type is a declaration bug, not a default"]};
 
 / A source query must be a parameterised lambda. A string would mean
 / concatenation - the injection path source_contract.q exists to refuse.
 test_a_string_query_is_refused:{[t]
     bad:@[.srctest.decl[];`query;:;"select from ext"];
-    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a string query implies concatenation, which is forbidden"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"a string query implies concatenation, which is forbidden"]};
 
 / Every source must be exercisable with no driver at all.
 test_a_source_without_a_fixture_is_refused:{[t]
     bad:@[.srctest.decl[];`fixture;:;()];
-    .qunit.assertError[{.qsrc.register[`t;x]};bad;"without a fixture the whole backfill path is undemonstrable"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"without a fixture the whole backfill path is undemonstrable"]};
 
 / The zone is a required declaration with no default. A defaulted zone
 / reads as a decision downstream while nobody ever made one, and the failure
 / is silent - every consumer assumes UTC while the source hands over local
 / wall-clock time.
 test_a_source_without_a_time_zone_is_refused:{[t]
-    .qunit.assertError[{.qsrc.register[`t;x]};((enlist `tz) _ .srctest.decl[]);"an unstated zone is the bug, not a default"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};((enlist `tz) _ .srctest.decl[]);"an unstated zone is the bug, not a default"]};
 
 test_a_time_zone_must_be_a_single_symbol:{[t]
     bad:@[.srctest.decl[];`tz;:;"Europe/London"];
-    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a string zone would silently fail the zone-table lookup"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"a string zone would silently fail the zone-table lookup"]};
 
 / The window is taken on time_field, so a time_field outside `fields` is
 / never type-checked by validate and only surfaces at fetch time, mid-run.
 test_a_time_field_outside_the_declared_fields_is_refused:{[t]
     bad:@[.srctest.decl[];`time_field;:;`nosuch];
-    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a typo in time_field must fail at registration, not two layers down"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"a typo in time_field must fail at registration, not two layers down"]};
 
 / q's datetime (`z`) is a FLOAT count of days, so z->p rounding loses
 / sub-second precision silently: measured, 999 of 1000 nanosecond-spaced
@@ -91,11 +91,11 @@ test_a_time_field_outside_the_declared_fields_is_refused:{[t]
 / why it passes every hand-check built from round numbers.
 test_a_non_timestamp_time_field_is_refused:{[t]
     bad:@[.srctest.decl[];`types;:;"zf"];
-    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a datetime window column produces plausible numbers and misplaced rows rather than an error"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"a datetime window column produces plausible numbers and misplaced rows rather than an error"]};
 
 test_the_time_field_type_error_names_the_trap:{[t]
     bad:@[.srctest.decl[];`types;:;"zf"];
-    err:@[{.qsrc.register[`t;x]; ""};bad;{x}];
+    err:@[{.qsrc.define[`t;x]; ""};bad;{x}];
     .qunit.assertEquals[err like "*not \"p\"*";1b;"the error says which type was expected, not merely that something is wrong"]};
 
 test_an_unregistered_source_is_an_error_not_a_miss:{[t]
@@ -104,17 +104,17 @@ test_an_unregistered_source_is_an_error_not_a_miss:{[t]
 / --- validation, the one path both fixture and live go through -----------
 
 test_a_conforming_table_validates:{[t]
-    .qsrc.register[`t;.srctest.decl[]];
+    .qsrc.define[`t;.srctest.decl[]];
     .qunit.assertEquals[.qsrc.validate[`t;([] ts:enlist .srctest.d 1; px:enlist 1.5)];1b;"the declared shape passes"]};
 
 / A source LOSING a column is the silent breakage worth failing on: a missing
 / column reads as a null in most q code rather than as an error.
 test_a_missing_column_is_refused:{[t]
-    .qsrc.register[`t;.srctest.decl[]];
+    .qsrc.define[`t;.srctest.decl[]];
     .qunit.assertError[{.qsrc.validate[`t;x]};([] ts:enlist .srctest.d 1);"a dropped column would otherwise publish nulls and record the window as covered"]};
 
 test_a_wrong_type_is_refused:{[t]
-    .qsrc.register[`t;.srctest.decl[]];
+    .qsrc.define[`t;.srctest.decl[]];
     .qunit.assertError[{.qsrc.validate[`t;x]};([] ts:enlist .srctest.d 1; px:enlist `sym);"a column whose type changed is a contract breach"]};
 
 / The handler's own error text used to reference `decl`, a local of the
@@ -122,19 +122,19 @@ test_a_wrong_type_is_refused:{[t]
 / failure threw a value error about `decl` instead of naming the table and
 / the underlying reason. Found by the linter's nested-local rule (QF005).
 test_live_metadata_failure_preserves_context:{[t]
-    .qsrc.register[`t;.srctest.decl[]];
+    .qsrc.define[`t;.srctest.decl[]];
     err:@[{.qsrc.validate_live[`t;x]};{[request] '"offline"};{x}];
     .qunit.assertEquals[err;"validate_live: cannot read metadata for ext (offline)";"the handler reports the source and underlying error, not an undefined outer local"]};
 
 / An upstream ADDING a column is routine; breaking on it would make every
 / upstream addition an outage.
 test_an_extra_column_is_allowed:{[t]
-    .qsrc.register[`t;.srctest.decl[]];
+    .qsrc.define[`t;.srctest.decl[]];
     got:([] ts:enlist .srctest.d 1; px:enlist 1.5; extra:enlist `new);
     .qunit.assertEquals[.qsrc.validate[`t;got];1b;"a source growing a column does not break its consumers"]};
 
 test_an_empty_table_of_the_right_shape_validates:{[t]
-    .qsrc.register[`t;.srctest.decl[]];
+    .qsrc.define[`t;.srctest.decl[]];
     .qunit.assertEquals[.qsrc.validate[`t;0#([] ts:`timestamp$(); px:`float$())];1b;"an empty window is legal, so its shape must still validate"]};
 
 / --- the demo source's own declaration ----------------------------------
@@ -146,7 +146,7 @@ test_the_demo_fixture_satisfies_its_own_contract:{[t]
     .qunit.assertEquals[.qsrc.validate_fixture `demo_deals;1b;"the demo fixture matches the shape it declares"]};
 
 test_the_demo_source_is_registered_on_load:{[t]
-    .qunit.assertEquals[`demo_deals in .qsrc.registered[];1b;"declaration and implementation cannot drift - loading the file registers it"]};
+    .qunit.assertEquals[`demo_deals in .qsrc.defined[];1b;"declaration and implementation cannot drift - loading the file registers it"]};
 
 / --- windowing the fixture ----------------------------------------------
 
@@ -183,29 +183,29 @@ test_the_fetch_path_is_announced:{[t]
 / one piece that is a prerequisite either way with no blast radius.
 
 test_a_single_column_key_is_accepted:{[t]
-    .qunit.assertEquals[.qsrc.register[`t;.srctest.decl[]];`t;"a symbol atom is a legal key and needs no enlisting"]};
+    .qunit.assertEquals[.qsrc.define[`t;.srctest.decl[]];`t;"a symbol atom is a legal key and needs no enlisting"]};
 
 test_a_composite_key_is_accepted:{[t]
-    .qunit.assertEquals[.qsrc.register[`t;@[.srctest.decl[];`row_key;:;`ts`px]];`t;"a multi-column key is equally legal"]};
+    .qunit.assertEquals[.qsrc.define[`t;@[.srctest.decl[];`row_key;:;`ts`px]];`t;"a multi-column key is equally legal"]};
 
 / `11h=abs type`, not `-11h=abs type`: abs is always positive, so the latter
 / can never be true and rejected every key including correct ones. This
 / pins both shapes so that regression cannot return.
 test_the_key_accessor_always_returns_a_vector:{[t]
-    .qsrc.register[`t;.srctest.decl[]];
+    .qsrc.define[`t;.srctest.decl[]];
     single:.qsrc.row_key `t;
-    .qsrc.register[`t;@[.srctest.decl[];`row_key;:;`ts`px]];
+    .qsrc.define[`t;@[.srctest.decl[];`row_key;:;`ts`px]];
     .qunit.assertEquals[(count single;count .qsrc.row_key `t);(1;2);"one place decides whether an atom needs enlisting, so no caller has to"]};
 
 / A key naming a column the contract cannot see cannot identify a row.
 test_a_key_outside_the_declared_fields_is_refused:{[t]
-    .qunit.assertError[{.qsrc.register[`t;x]};@[.srctest.decl[];`row_key;:;`nosuch];"a key the contract cannot see cannot identify a row"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};@[.srctest.decl[];`row_key;:;`nosuch];"a key the contract cannot see cannot identify a row"]};
 
 test_a_partly_unknown_composite_key_is_refused:{[t]
-    .qunit.assertError[{.qsrc.register[`t;x]};@[.srctest.decl[];`row_key;:;`ts`nosuch];"one bad column in a composite key is still a bad key"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};@[.srctest.decl[];`row_key;:;`ts`nosuch];"one bad column in a composite key is still a bad key"]};
 
 test_a_non_symbol_key_is_refused:{[t]
-    .qunit.assertError[{.qsrc.register[`t;x]};@[.srctest.decl[];`row_key;:;"ts"];"a key must name columns, not be a string"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};@[.srctest.decl[];`row_key;:;"ts"];"a key must name columns, not be a string"]};
 
 test_the_demo_source_declares_its_key:{[t]
     .qunit.assertEquals[.qsrc.row_key `demo_deals;enlist `deal_id;"the natural key for a deal-shaped source"]};
@@ -256,7 +256,7 @@ test_a_clean_text_table_reports_no_failures:{[t]
 / through: a column nobody coerced is a column still holding text, and it
 / would fail validate later with a much less useful message.
 test_an_uncoercible_declared_type_is_refused:{[t]
-    .qsrc.register[`weird;
+    .qsrc.define[`weird;
         `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
         (`weird;`e;`l;`ts;`ts;`ts`blob;"px";{[h;a;b] ()};{([] ts:enlist .srctest.d 1; blob:enlist 1b)};`UTC)];
     txt:([] ts:enlist "2026-09-15T09:30:00"; blob:enlist "x");
@@ -332,7 +332,7 @@ test_a_registered_source_resolves_under_the_feed_root:{[t]
     / Intersecting keeps the registry as the thing under test - the property
     / is still "what .qsrc was told about resolves" - while asking it only
     / about the tree's own sources.
-    names:.qsrc.registered[] inter .testutil.etl_declaration_names["src/etl/sources"];
+    names:.qsrc.defined[] inter .testutil.etl_declaration_names["src/etl/sources"];
     missing:names where not {[n] (` sv `.qfeed,n) in .qns.owned[]} each names;
     .qunit.assertEquals[missing;`symbol$();
         "every registered source has its own namespace under .qfeed"]};

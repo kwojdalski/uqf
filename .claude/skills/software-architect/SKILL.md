@@ -82,7 +82,7 @@ nothing else. Test it: - Would a new source / worker / streaming job /
 normalizer / venue require editing a shell, a runner, a registry and a test ---
 or adding one file? - Does a shell branch on which instance it is running? Every
 `$[job=\`x;
-...\]` inside `src/etl/core/` is a shell that has stopped being generic - Does a declaration have to repeat something the shell could derive? (`.qbw.define` stamping inherited methods, `.qnorm.define` performing its own `.qstream.register\`,
+...\]` inside `src/etl/core/` is a shell that has stopped being generic - Does a declaration have to repeat something the shell could derive? (`.qbw.define` stamping inherited methods, `.qnorm.define` performing its own `.qstream.define\`,
 are the pattern working) - Is validation at **declaration** time or first use?
 This tree consistently chooses declaration time, and says why: a malformed thing
 should fail on the line that declares it, not halfway through a backfill

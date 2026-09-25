@@ -33,7 +33,7 @@
 / .
 / REGISTERED AS A STREAMING JOB, because it is one: the runner subscribes,
 / wires publish and installs upd exactly as for any other job. define
-/ performs the .qstream.register itself - subscribes is the source list,
+/ performs the .qstream.define itself - subscribes is the source list,
 / publishes is the output, on_batch is the dispatcher - so an instance
 / cannot declare its edges differently from its mappings.
 
@@ -45,7 +45,7 @@
 registry:(`symbol$())!();
 
 / What every normalizer must declare.
-required_keys:`procname`output`sources
+required_keys:`procname`output`input
 
 / Declare a normalizer: its canonical output and one transform per source.
 / .
@@ -56,7 +56,7 @@ required_keys:`procname`output`sources
 / positionally and a mapping that emits size before price lands as a
 / table whose sizes are prices.
 / @param name the normalizer's name, e.g. `executions - also its output table and its .qsub namespace
-/ @param decl dict of procname, output (an empty unkeyed table, no `time`), sources (source table -> transform name), and optionally autostart (boolean) and note (string)
+/ @param decl dict of procname, output (an empty unkeyed table, no `time`), input (source table -> transform name), and optionally autostart (boolean) and note (string)
 / @return the name
 / @throws error naming every problem it finds first
 define:{[name;decl]
@@ -69,15 +69,15 @@ define:{[name;decl]
     if[0=count cols out; 'who,"'s output has no columns"];
     if[`time in cols out;
         'who,"'s output carries `time` - the plant stamps its own, and a source's own stamp belongs in a column named for what it is"];
-    / Deployment facts, as on .qstream.register - optional, and read by the
+    / Deployment facts, as on .qstream.define - optional, and read by the
     / uqs process registry, which is derived from these declarations.
     if[(`autostart in key decl) and not -1h=type decl`autostart;
         'who,"'s autostart must be a boolean, 1b to start with the stack"];
     if[(`note in key decl) and not 10h=type decl`note; 'who,"'s note must be a string"];
-    srcs:decl`sources;
+    srcs:decl`input;
     if[not (99h=type srcs) and (11h=type key srcs) and 11h=type value srcs;
-        'who,"'s sources must be a dictionary of source table -> transform name, symbols both"];
-    if[0=count srcs; 'who," has no sources - a normalizer of nothing normalizes nothing"];
+        'who,"'s input must be a dictionary of source table -> transform name, symbols both"];
+    if[0=count srcs; 'who," has no input - a normalizer of nothing normalizes nothing"];
     check_source[who;out]'[key srcs;value srcs];
     registry[name]:enlist decl;
     / The dispatcher is ALSO set as .qsub.<name>.on_batch, so a normalizer
@@ -85,7 +85,7 @@ define:{[name;decl]
     / or the runner reaching for a job's handler finds it in the one place.
     handler:dispatch[name;;];
     (` sv (.qstream.namespace name),`on_batch) set handler;
-    .qstream.register[name;`procname`subscribes`publishes`on_batch!(
+    .qstream.define[name;`procname`subscribes`publishes`on_batch!(
         decl`procname; key srcs; enlist name; handler)];
     name}
 
@@ -105,7 +105,7 @@ check_source:{[who;out;src;xf]
 / @param name the normalizer
 / @return the declaration dict
 / @throws error when nothing was defined under that name
-/ @eg .qnorm.declaration[`executions]`sources
+/ @eg .qnorm.declaration[`executions]`input
 declaration:{[name]
     if[not name in key registry;
         '"declaration: ",string[name]," is not a defined normalizer - defined: ",", " sv string key registry];
@@ -131,7 +131,7 @@ defined:{[] key registry}
 / @eg cols .qnorm.normalize[`executions;`trades;([] time:enlist 2026.09.17D10:00:00; sym:enlist `EURUSD; side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000)]
 normalize:{[name;src;batch]
     d:declaration name;
-    srcs:d`sources;
+    srcs:d`input;
     if[not src in key srcs;
         '"normalize: ",string[src]," is not a source of ",string[name]," - its sources are ",", " sv string key srcs];
     xf:srcs src;
@@ -147,7 +147,7 @@ normalize:{[name;src;batch]
 / the plant delivers only what was subscribed to, so this can only happen
 / from a test or a hand call, and neither should take the job down.
 dispatch:{[name;src;batch]
-    if[not src in key declaration[name]`sources; :()];
+    if[not src in key declaration[name]`input; :()];
     if[0=count batch; :()];
     rows:normalize[name;src;batch];
     if[0=count rows; :()];

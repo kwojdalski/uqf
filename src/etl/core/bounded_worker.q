@@ -174,7 +174,7 @@ optional_cfg:`check`io`facts`partition
 / Declare a worker's configuration.
 / .
 / Validated here rather than at first use, because a declaration is one
-/ literal with nothing to defer - the same reasoning .qsrc.register follows
+/ literal with nothing to defer - the same reasoning .qsrc.define follows
 / and the opposite of .qbfstate.register, whose methods appear as a file
 / loads.
 / @param worker the worker's name

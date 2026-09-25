@@ -35,7 +35,7 @@ test_an_atom_is_normalised_to_a_vector:{[t]
     / a consumer doing `first x` or `count x` on it gets 1 and the symbol
     / itself rather than a one-element list. Normalising once at
     / registration means no consumer has to remember - the same fix
-    / .qsrc.register applies to row_key.
+    / .qsrc.define applies to row_key.
     .qdag.register[`solo;`kind`inputs`outputs!(`stream;`one_table;`another)];
     d:.qdag.declaration `solo;
     .qunit.assertEquals[(type d`inputs;count d`inputs);(11h;1);

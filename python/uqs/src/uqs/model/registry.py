@@ -1,7 +1,7 @@
 """The process registry: one Pipeline per uqf process, DERIVED from q.
 
 A process is declared where its code is. Every streaming job
-(`.qstream.register`/`.qnorm.define` under src/etl/streaming/) and every
+(`.qstream.define`/`.qnorm.define` under src/etl/streaming/) and every
 bounded worker (`.qbw.define` under src/etl/workers/) names the process that
 runs it, the tables it reads and writes, whether it starts with the stack and
 why - see model/declarations.py. This module turns those declarations into

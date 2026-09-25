@@ -25,7 +25,7 @@ tape:{[actions;sides;sizes]
 / --- the shape is a registered source under the source contract -----------
 
 test_the_event_source_is_registered_on_load:{[t]
-    .qunit.assertEquals[`demo_events in .qsrc.registered[];1b;"loading the source file registers it, so declaration and implementation cannot drift"]};
+    .qunit.assertEquals[`demo_events in .qsrc.defined[];1b;"loading the source file registers it, so declaration and implementation cannot drift"]};
 
 test_the_fixture_satisfies_its_own_contract:{[t]
     .qunit.assertEquals[.qsrc.validate_fixture `demo_events;1b;"the synthetic tape matches the shape it declares"]};

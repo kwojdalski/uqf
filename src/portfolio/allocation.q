@@ -69,7 +69,7 @@
 / The keys a matching method must carry. `why is optional and defaults to
 / "", but every STORED method has all three: q collapses a dictionary whose
 / values are same-keyed dicts into a table, after which assigning a
-/ differently-keyed dict throws `type - the same trap .qsrc.register
+/ differently-keyed dict throws `type - the same trap .qsrc.define
 / normalises row_key around. Fixing the shape at registration keeps every
 / method mutually assignable.
 required:`open`pick
@@ -216,7 +216,7 @@ default_opts:`method`by`universe`where`opening`asof!(`fifo; enlist `sym; all_row
 / A bare symbol is accepted in place of the whole dict, because
 / allocate[trades;`lifo] is what a caller reaches for first.
 / .
-/ `by is normalised to a vector for .qsrc.register's reason: storing one
+/ `by is normalised to a vector for .qsrc.define's reason: storing one
 / shape means no consumer downstream has to decide whether a single-column
 / bucket needs enlisting.
 normalised_opts:{[opts]

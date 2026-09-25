@@ -109,7 +109,7 @@ fixture:{[]
     lv:flip level_fields!raze each flip (fixture_levels[271.45;271.66;500];fixture_levels[271.45;271.66;479];fixture_levels[642;643.;100];fixture_levels[642;643.01;100]);
     base,'lv}
 
-.qsrc.register[source_name;
+.qsrc.define[source_name;
     `source`table`target`time_field`row_key`fields`types`query`fixture`tz`transport!
     (source_name;table;target;time_field;row_key;fields;types;query;fixture;tz;transport)];
 

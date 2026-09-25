@@ -127,7 +127,7 @@ without disturbing anything.
 Two things are genuinely harder in q, and both proved manageable:
 
 - **No type system for config schemas**, so validation is a runtime validator ---
-  which `.qwcfg` and `.qsrc.register` both are. Achievable, not free, and the
+  which `.qwcfg` and `.qsrc.define` both are. Achievable, not free, and the
   reason §3's config item is still open.
 - **No decorators, so registration is explicit.** A module registers itself as
   it loads. That is arguably better than Dagster's `@asset`: a declaration and
