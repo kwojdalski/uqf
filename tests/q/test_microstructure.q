@@ -386,6 +386,57 @@ test_a_malformed_tape_is_refused:{[t]
         "the tape contract is checked before any size is read"]};
 
 
+/ --- odd lots (#360) -------------------------------------------------------
+
+/ Six trades: four below 1e6 (three buys of 1e5, 2e5, 3e5 and a sell of 4e5)
+/ and two at or above it. The sell of exactly 1e6 is the boundary case: a
+/ round lot, not an odd one. The add and cancel rows are small on purpose -
+/ if they leaked in they would count as odd lots.
+ol_tape:{[]
+    ([] time:2026.09.11D09:00:00.000000000+0D00:00:01*til 8;
+        sym:8#`EURUSD;
+        action:(6#`trade),`add`cancel;
+        side:1 1 1 -1 -1 1 1 -1;
+        size:1e5 2e5 3e5 4e5 1e6 5e6 1e3 1e3;
+        price:8#1.10)};
+
+test_odd_lot_trade_ratio_counts_trades_strictly_below_the_threshold:{[t]
+    .qunit.assertEquals[.qmicro.odd_lot_trade_ratio[ol_tape[];1e6];4%6;
+        "four of six trades are below 1e6; the trade of exactly 1e6 is a round lot"]};
+
+test_odd_lot_trade_ratio_moves_with_the_threshold:{[t]
+    / The point of taking it as an argument: the caller decides what small means.
+    .qunit.assertEquals[.qmicro.odd_lot_trade_ratio[ol_tape[];2.5e5];2%6;
+        "a lower threshold admits fewer trades"]};
+
+test_odd_lot_imbalance_is_net_volume_over_odd_lot_volume:{[t]
+    / Buys 1e5+2e5+3e5=6e5, sell 4e5: (6e5-4e5)%1e6. The 1e6 sell and 5e6
+    / buy are round lots and must not move it.
+    .testutil.assertApprox[.qmicro.odd_lot_imbalance[ol_tape[];1e6];0.2;1e-12;
+        "signed odd-lot volume over total odd-lot volume"]};
+
+test_odd_lot_imbalance_with_no_odd_lots_is_null:{[t]
+    .qunit.assertEquals[.qmicro.odd_lot_imbalance[ol_tape[];1e4];0n;
+        "no trade below the threshold means no answer, not a balanced zero"]};
+
+test_odd_lot_trade_ratio_of_an_empty_tape_is_null:{[t]
+    .qunit.assertEquals[.qmicro.odd_lot_trade_ratio[0#ol_tape[];1e6];0n;
+        "a tape with no trades reports null rather than zero"]};
+
+test_odd_lot_threshold_must_be_a_positive_number:{[t]
+    / Each would make size<threshold false everywhere and report "no odd
+    / lots" instead of erroring.
+    {[x] .qunit.assertThrows[.qmicro.odd_lot_trade_ratio[ol_tape[];];x;
+        "odd_lot_trade_ratio: threshold must be positive, got *";
+        "a zero or negative threshold is refused"]} each (0f;-1e6);
+    .qunit.assertThrows[.qmicro.odd_lot_imbalance[ol_tape[];];0n;
+        "odd_lot_imbalance: threshold must be positive, got *";
+        "a null threshold is refused"];
+    .qunit.assertThrows[.qmicro.odd_lot_imbalance[ol_tape[];];`big;
+        "odd_lot_imbalance: threshold must be a numeric atom, got type *";
+        "a non-numeric threshold is refused"]};
+
+
 / ---- zero denominators: null, never infinity -----------------------------
 
 test_depth_ratio_with_zero_deeper_levels_is_null_not_infinity:{[t]
