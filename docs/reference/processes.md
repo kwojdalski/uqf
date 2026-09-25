@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **23 uqf processes** — 46 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **24 uqf processes** — 47 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -38,6 +38,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `superbook1` | 6093 | etl | `processes/torq_stream.q` | `superbook` | `market_data` | `superbook`, `config_change` |
 | `arbitrage1` | 6094 | etl | `processes/torq_stream.q` | `arbitrage` | `superbook` | `arbitrage` |
 | `crossarb1` | 6095 | etl | `processes/torq_stream.q` | `cross_arbitrage` | `superbook` | `cross_arbitrage`, `config_change` |
+| `duckdb_deals_backfill1` | 6096 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -62,6 +63,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`superbook1`** — latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there
 - **`arbitrage1`** — gross direct cross-source opportunities, including inactive clearing rows. Tail of the marketdata1 chain - see there
 - **`crossarb1`** — the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default
+- **`duckdb_deals_backfill1`** — bounded: copies mock FX deals from a DuckDB file over ODBC, a day at a time
 
 ## Tables these processes publish
 

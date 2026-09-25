@@ -129,3 +129,5 @@ surface:{[]
 / silently not gain the table - which tests/q/test_catalog.q would then fail
 / on, naming the table as neither described nor hidden. Moving an entry up
 / into the block above is a tidy-up, never a fix.
+.qcat.describe[`duckdb_deals]:
+    "one mock FX deal - pair, side, notional and rate - backfilled from a DuckDB file over ODBC";

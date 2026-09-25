@@ -215,3 +215,7 @@ connections:([]time:`timestamp$(); venue:`g#`symbol$(); host:`symbol$(); port:`l
 / Scheduled macro releases, one row per event. `actual` is null until the
 / event fires, which is what distinguishes a forecast row from a fired one.
 economic_calendar:([]time:`timestamp$(); event_id:`long$(); ccy:`symbol$(); event_name:`symbol$(); importance:`symbol$(); forecast:`float$(); previous:`float$(); actual:`float$())
+
+/ duckdb_deals_backfill1's target: one mock FX deal read from DuckDB over ODBC, `time`
+/ being when it was dealt.
+duckdb_deals:([]time:`timestamp$(); deal_id:`long$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())

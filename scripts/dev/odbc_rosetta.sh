@@ -27,6 +27,10 @@
 #       as `q`, with UQF_SOURCE_CRED_DATABENTO_MBP10 pointing at
 #       output/duckdb/databento.duckdb (build it with
 #       scripts/dev/dump_databento_duckdb.py)
+#   scripts/dev/odbc_rosetta.sh fxdeals <q args...>
+#       as `q`, with UQF_SOURCE_CRED_DUCKDB_DEALS pointing at
+#       output/duckdb/fx_deals.duckdb (build it with
+#       scripts/dev/make_fx_deals_duckdb.py)
 #
 # Requires: Rosetta 2, Xcode command line tools, gh (authenticated), curl,
 # KDB-X at ~/.kx.
@@ -124,6 +128,16 @@ case "${1:-}" in
             exit 1
         fi
         export UQF_SOURCE_CRED_DATABENTO_MBP10="DRIVER=DuckDB;Database=$db;access_mode=READ_ONLY"
+        run_q "$@"
+        ;;
+    fxdeals)
+        shift
+        db="$MAIN_ROOT/output/duckdb/fx_deals.duckdb"
+        if [ ! -f "$db" ]; then
+            echo "no $db - build it with: uv run scripts/dev/make_fx_deals_duckdb.py" >&2
+            exit 1
+        fi
+        export UQF_SOURCE_CRED_DUCKDB_DEALS="DRIVER=DuckDB;Database=$db;access_mode=READ_ONLY"
         run_q "$@"
         ;;
     *)
