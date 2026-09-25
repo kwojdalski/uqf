@@ -45,18 +45,18 @@ evaluate:{[batch]
     result}
 
 / Publish status for every updated pair, including clears.
-/ @param tbl incoming table name
-/ @param batch superbook rows
+/ @param t incoming table name
+/ @param x superbook rows
 / @return nothing
 / @eg .qsub.arbitrage.on_batch[`unrelated;()]
-on_batch:{[tbl;batch]
-    if[not tbl=`superbook; :()];
-    if[count batch; .qsub.arbitrage.publish[`arbitrage;evaluate batch]];
+on_batch:{[t;x]
+    if[not t=`superbook; :()];
+    if[count x; .qsub.arbitrage.publish[`arbitrage;evaluate x]];
     }
 
 \d .
 
-.qstream.define[`arbitrage;`procname`subscribes`publishes`on_batch`note!(
+.qstream.define[`arbitrage;`procname`subscribeto`publishes`on_batch`note!(
     `arbitrage1;
     enlist `superbook;
     enlist `arbitrage;

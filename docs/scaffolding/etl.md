@@ -12,11 +12,11 @@ If your rows come from a timer rather than a subscription you want
 ## The command
 
 ```bash
-uqs new-job spreadmon --subscribes quotes \
+uqs new-job spreadmon --subscribeto quotes \
     --publishes spread_bps --columns "sym:symbol, spread:float"
 ```
 
-`--subscribes` is what makes it an etl rather than a feed. It takes a
+`--subscribeto` is what makes it an etl rather than a feed. It takes a
 comma-separated list --- subscribing to two tables is legal and common
 (`markout1` reads `trades` and `quote`).
 
@@ -44,13 +44,13 @@ table that stays empty.
 
 publish:.qstream.unwired `spreadmon;
 
-on_batch:{[t;data]
+on_batch:{[t;x]
     '"spreadmon.on_batch: not implemented";
     }
 
 \d .
 
-.qstream.define[`spreadmon;`procname`subscribes`publishes`on_batch`note!(
+.qstream.define[`spreadmon;`procname`subscribeto`publishes`on_batch`note!(
     `spreadmon1;
     `quotes;
     enlist `spread_bps;
@@ -63,9 +63,9 @@ out. `t` is the table name the batch arrived on --- a symbol, not the data ---
 so a job subscribing to two tables branches on it:
 
 ```q
-on_batch:{[t;data]
-    $[t=`trades; .qsub.spreadmon.from_trades data;
-      t=`quote;  .qsub.spreadmon.from_quote data;
+on_batch:{[t;x]
+    $[t=`trades; .qsub.spreadmon.from_trades x;
+      t=`quote;  .qsub.spreadmon.from_quote x;
       ()]}
 ```
 
@@ -93,7 +93,7 @@ it to a recorder and reads the job's output as data. Use `.qstream.wire`, not an
 assignment to the namespace's `publish`:
 
 ```q
-.qstream.wire[`spreadmon; {[tbl;rows] `.mytest.published set (tbl;rows); count rows}];
+.qstream.wire[`spreadmon; {[t;x] `.mytest.published set (t;x); count x}];
 .qsub.spreadmon.on_batch[`quotes; fixture];
 .qunit.assertEquals[count last .mytest.published; 3; "one row per quoted pair"];
 ```

@@ -56,13 +56,13 @@ which_job:{[]
 / re-raising it, so the error still reaches the caller exactly as before -
 / and is now also in this process's own log, which is where someone asking
 / "why is my output empty" looks.
-/ @param tbl the table the batch is for
-/ @param batch the batch
-upd:{[tbl;batch]
-    .qpipe.record_received[tbl;batch];
-    .[.qproc.stream.on_batch;(tbl;batch);{[tbl;e]
-        .qlog.err[.qproc.stream.job;"on_batch failed";`table`error!(tbl;e)];
-        'e}[tbl]]}
+/ @param t the table the batch is for
+/ @param x the batch
+upd:{[t;x]
+    .qpipe.record_received[t;x];
+    .[.qproc.stream.on_batch;(t;x);{[t;e]
+        .qlog.err[.qproc.stream.job;"on_batch failed";`table`error!(t;e)];
+        'e}[t]]}
 
 / Subscribe, wire the job's publish seam to the tickerplant, install the
 / root `upd` the tickerplant calls, and start the job's timer if it has one.
@@ -78,12 +78,12 @@ run:{[job]
     / Before anything that can block, so a process stuck waiting for the
     / tickerplant has already said what it was about to do.
     .qlog.info[job;"starting streaming job";
-        `subscribes`publishes`timer`on_batch!(decl`subscribes;decl`publishes;
-            $[`timer_period in key decl; decl`timer_period; 0Nn];`on_batch in key decl)];
+        `subscribeto`publishes`timer`on_batch!(decl`subscribeto;decl`publishes;
+            $[`period in key decl; decl`period; 0Nn];`on_batch in key decl)];
     / A feed subscribes to nothing: it takes a publish handle and nothing
     / else. Asking subscribe_etl for one would make it wait for a
     / subscription it never wanted, and then subscribe to an empty list.
-    h:$[count decl`subscribes; .qpipe.subscribe_etl[job;decl`subscribes]; .qpipe.feed_handle[]];
+    h:$[count decl`subscribeto; .qpipe.subscribe_etl[job;decl`subscribeto]; .qpipe.feed_handle[]];
     / A job that publishes nothing keeps its unwired stub, so a later edit
     / that starts publishing without declaring it fails loudly instead of
     / sending rows nowhere.
@@ -100,9 +100,9 @@ run:{[job]
     if[`on_batch in key decl;
         `.qproc.stream.on_batch set decl`on_batch;
         `upd set .qproc.stream.upd];
-    if[`timer_period in key decl;
+    if[`period in key decl;
         `.qproc.stream.tick set decl`on_timer;
-        .qpipe.safe_timer[job;decl`timer_period;`.qproc.stream.tick;
+        .qpipe.safe_timer[job;decl`period;`.qproc.stream.tick;
             "Run the ",(string job)," streaming job"]];
     / A SECOND timer, when the job declares configuration worth auditing.
     / .
@@ -123,7 +123,7 @@ run:{[job]
             `.qcfgaudit.poll_and_publish;
             "Audit ",(string job)," configuration changes"]];
     .qlog.info[`qproc;"streaming job wired - running";
-        `job`subscribes`publishes!(job;decl`subscribes;decl`publishes)];
+        `job`subscribeto`publishes!(job;decl`subscribeto;decl`publishes)];
     job}
 
 \d .

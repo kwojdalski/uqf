@@ -30,7 +30,7 @@ from uqs.paths import UqsError, repo_root
 
 
 def _deferred():
-    return [p for p in PIPELINES if p.subscribes is FROM_DECLARATION]
+    return [p for p in PIPELINES if p.subscribeto is FROM_DECLARATION]
 
 
 def test_the_registry_actually_defers():
@@ -75,19 +75,19 @@ def test_the_refusal_says_what_to_do_about_it():
 def test_a_spelled_out_edge_is_left_alone():
     """Deferring is opt-in. A pipeline that states its edges - every backfill,
     and the feeds that subscribe to nothing - must not start reading files."""
-    spelled = replace(_deferred()[0], subscribes=("a", "b"), publishes=("c",))
+    spelled = replace(_deferred()[0], subscribeto=("a", "b"), publishes=("c",))
     assert resolve_edges(spelled) == (("a", "b"), ("c",))
 
 
 def test_publishes_none_still_falls_back_to_the_owned_table():
     """`None` predates FROM_DECLARATION and means something else: default to
     `(table,)`. A pipeline owning one table still says nothing."""
-    pipeline = replace(_deferred()[0], subscribes=(), publishes=None, table="one_table")
+    pipeline = replace(_deferred()[0], subscribeto=(), publishes=None, table="one_table")
     assert resolve_edges(pipeline)[1] == ("one_table",)
 
 
 def test_a_pipeline_with_no_table_and_no_publishes_publishes_nothing():
-    pipeline = replace(_deferred()[0], subscribes=(), publishes=None, table=None)
+    pipeline = replace(_deferred()[0], subscribeto=(), publishes=None, table=None)
     assert resolve_edges(pipeline)[1] == ()
 
 

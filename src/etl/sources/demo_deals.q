@@ -34,10 +34,10 @@
 source_name:`demo_deals
 
 / The columns this adapter reads, and their q types. Deliberately a small
-/ subset of what such a table would have: the source contract asks for the required fields,
+/ subset of what such a table would have: the source contract asks for the required columns,
 / not every field, and declaring columns the worker does not read would make
 / an upstream change to an unused column break the run.
-fields:`deal_id`deal_time`sym`side`notional`rate
+columns:`deal_id`deal_time`sym`side`notional`rate
 / j=long, p=timestamp, s=symbol, s=symbol, f=float, f=float
 types:"jpssff"
 
@@ -46,7 +46,7 @@ target:`demo_deals
 
 / The column the bounded window is taken on. Declared rather than assumed so
 / .qsrc can window the fixture exactly as the live query windows the source.
-time_field:`deal_time
+timecolumn:`deal_time
 
 / What identifies a row uniquely. `deal_id` is the natural key for a
 / deal-shaped source and is obviously right for this synthetic one, where
@@ -114,7 +114,7 @@ fixture:{[]
 / Register on load, so the declaration and the implementation cannot drift:
 / there is no way to have one without the other.
 .qsrc.define[source_name;
-    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
-    (source_name;`demo_deals;target;time_field;row_key;fields;types;query;fixture;tz)];
+    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
+    (source_name;`demo_deals;target;timecolumn;row_key;columns;types;query;fixture;tz)];
 
 \d .

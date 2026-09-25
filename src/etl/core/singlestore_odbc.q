@@ -210,18 +210,18 @@ table_names:{[h] require_available[]; .odbc.tables h}
 / are values and go through `literal`. That split is the whole of the question bank
 / here.
 / @param h an ODBC handle
-/ @param tbl the table to read, as a symbol
-/ @param time_field the timestamp column to window on, as a symbol
-/ @param fields the columns to select, as a symbol vector
+/ @param tablename the table to read, as a symbol
+/ @param timecolumn the timestamp column to window on, as a symbol
+/ @param columns the columns to select, as a symbol vector
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the rows in the window
 / @eg .qodbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]
-window_query:{[h;tbl;time_field;fields;range_from;range_to]
-    sql:"SELECT ",(", " sv string fields),
-        " FROM ",string[tbl],
-        " WHERE ",string[time_field],">=",literal[range_from],
-        " AND ",string[time_field],"<",literal[range_to];
+window_query:{[h;tablename;timecolumn;columns;range_from;range_to]
+    sql:"SELECT ",(", " sv string columns),
+        " FROM ",string[tablename],
+        " WHERE ",string[timecolumn],">=",literal[range_from],
+        " AND ",string[timecolumn],"<",literal[range_to];
     run_sql[h;sql]}
 
 \d .

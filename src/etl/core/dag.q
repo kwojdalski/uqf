@@ -12,7 +12,7 @@
 / DERIVE, NEVER RE-DECLARE. Three registries already know their own inputs
 / and outputs, so none of them is asked to restate anything:
 / .
-/   .qbw.worker_cfg     bounded workers. Input is the source's remote `table`,
+/   .qbw.worker_cfg     bounded workers. Input is the source's remote `tablename`,
 /                   output is its `target` - both already on the .qsrc
 /                   declaration, reachable from the worker's `source`.
 /   .qcont.feeds    continuous feeders. Output is the dataset they feed;
@@ -247,7 +247,7 @@ to_json:{[]
 / Register every bounded worker from .qbw.worker_cfg, deriving its inputs and
 / outputs from the source declaration it already names.
 / .
-/ A worker reads the source's remote `table` and writes its `target`, so
+/ A worker reads the source's remote `tablename` and writes its `target`, so
 / neither has to be restated on the worker - which is the whole point: a
 / worker that declared its own inputs could disagree with the source it
 / actually reads.
@@ -255,7 +255,7 @@ to_json:{[]
 / .
 / A table's identity in this graph is (location, name), not name - and the
 / shipped sources make that unavoidable rather than theoretical. Both of them
-/ declare `table` and `target` as the SAME symbol: demo_deals reads a remote
+/ declare `tablename` and `target` as the SAME symbol: demo_deals reads a remote
 / `demo_deals` and writes a local `demo_deals`. Keyed on the bare name, a
 / worker therefore consumed exactly what it produced, and the first run of
 / adopt_all[] reported a cycle among both workers - correctly, given what it
@@ -280,7 +280,7 @@ adopt_workers:{[]
         cfg:.qbw.worker_cfg w;
         d:.qsrc.declaration cfg`source;
         register[w;`kind`inputs`outputs!
-            (`bounded; external_ref[cfg`source;d`table]; d`target)]
+            (`bounded; external_ref[cfg`source;d`tablename]; d`target)]
       } each ws;
     ws}
 

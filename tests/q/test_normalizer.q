@@ -42,8 +42,8 @@ define_ok:{[name;pn]
 test_define_registers_the_job_with_its_edges_derived:{[t]
     define_ok[`nt_a;`nta1];
     d:.qstream.declaration `nt_a;
-    .qunit.assertEquals[(d`subscribes;d`publishes);(enlist `src;enlist `nt_a);
-        "subscribes is the source list and publishes is the normalizer's own name - an instance cannot declare them differently from its mappings"];
+    .qunit.assertEquals[(d`subscribeto;d`publishes);(enlist `src;enlist `nt_a);
+        "subscribeto is the source list and publishes is the normalizer's own name - an instance cannot declare them differently from its mappings"];
     .qunit.assertTrue[`nt_a in .qnorm.defined[];"and it is a defined normalizer"];
     forget `nt_a};
 
@@ -115,7 +115,7 @@ test_an_undefined_normalizer_is_named:{[t]
 test_dispatch_publishes_through_the_instances_own_seam:{[t]
     define_ok[`nt_k;`ntk1];
     `.normtest.got set ();
-    .qstream.wire[`nt_k;{[tbl;rows] `.normtest.got set .normtest.got,enlist (tbl;rows); count rows}];
+    .qstream.wire[`nt_k;{[t;x] `.normtest.got set .normtest.got,enlist (t;x); count x}];
     .qnorm.dispatch[`nt_k;`src;([] time:enlist 2026.01.01D09:00:00; x:enlist 3; y:enlist `m)];
     .qunit.assertEquals[.normtest.got;enlist (`nt_k;([] a:enlist 3; b:enlist `m));
         "one publication, onto the canonical table, of the normalized rows"];
@@ -124,7 +124,7 @@ test_dispatch_publishes_through_the_instances_own_seam:{[t]
 test_dispatch_publishes_nothing_for_an_empty_batch:{[t]
     define_ok[`nt_l;`ntl1];
     `.normtest.got set ();
-    .qstream.wire[`nt_l;{[tbl;rows] `.normtest.got set .normtest.got,enlist (tbl;rows); count rows}];
+    .qstream.wire[`nt_l;{[t;x] `.normtest.got set .normtest.got,enlist (t;x); count x}];
     .qnorm.dispatch[`nt_l;`src;0#([] time:`timestamp$(); x:`long$(); y:`symbol$())];
     .qnorm.dispatch[`nt_l;`not_a_source;([] x:enlist 1)];
     .qunit.assertEmpty[.normtest.got;"an empty batch, and a batch on a foreign table, publish nothing"];
@@ -134,9 +134,9 @@ test_dispatch_publishes_nothing_for_an_empty_batch:{[t]
 
 test_the_shipped_normalizers_are_defined_and_registered:{[t]
     .qunit.assertEquals[`executions`marks in .qnorm.defined[];11b;"executions and marks are defined"];
-    .qunit.assertEquals[.qstream.declaration[`executions]`subscribes;`trades`crypto_trades;
+    .qunit.assertEquals[.qstream.declaration[`executions]`subscribeto;`trades`crypto_trades;
         "executions reads both fill tables"];
-    .qunit.assertEquals[.qstream.declaration[`marks]`subscribes;`quote`crypto_book;
+    .qunit.assertEquals[.qstream.declaration[`marks]`subscribeto;`quote`crypto_book;
         "marks reads both books"];
     .qunit.assertEquals[.qdag.kinds;`bounded`continuous`stream`reaction`normalizer;
         "and normalizer is a kind the job graph knows"]};

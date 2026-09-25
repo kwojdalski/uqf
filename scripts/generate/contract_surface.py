@@ -140,7 +140,7 @@ def export_python_surface() -> dict[str, Any]:
             "procname": p.procname,
             "proctype": p.proctype,
             "offset": PIPELINE_OFFSETS[p.procname],
-            "subscribes": sorted(p.subscribed_tables),
+            "subscribeto": sorted(p.subscribed_tables),
             "publishes": sorted(p.published_tables),
         }
         for p in sorted(PIPELINES, key=lambda p: p.procname)
@@ -247,14 +247,14 @@ def write_surface(out_dir: Path, surface: dict[str, Any]) -> None:
             "procname": p["procname"],
             "proctype": p["proctype"],
             "offset": str(p["offset"]),
-            "subscribes": _join(p["subscribes"]),
+            "subscribeto": _join(p["subscribeto"]),
             "publishes": _join(p["publishes"]),
         }
         for p in sorted(surface.get("processes", []), key=lambda p: p["procname"])
     ]
     _write_csv(
         out_dir / "processes.csv",
-        ["procname", "proctype", "offset", "subscribes", "publishes"],
+        ["procname", "proctype", "offset", "subscribeto", "publishes"],
         rows,
     )
 
@@ -315,7 +315,7 @@ def read_surface(in_dir: Path) -> dict[str, Any]:
             "procname": row["procname"],
             "proctype": row["proctype"],
             "offset": int(row["offset"]),
-            "subscribes": _split(row["subscribes"]),
+            "subscribeto": _split(row["subscribeto"]),
             "publishes": _split(row["publishes"]),
         }
         for row in _read_csv(in_dir / "processes.csv")

@@ -14,7 +14,7 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 / rather than reusing the demo source's keeps a test's failure attributable
 / to the thing it changed.
 decl:{[]
-    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
+    `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
     (`t;`ext;`loc;`ts;`ts;`ts`px;"pf";
      {[h;a;b] ()};
      {([] ts:enlist .srctest.d 1; px:enlist 1.5)};
@@ -46,16 +46,16 @@ test_a_missing_declaration_is_refused_at_registration:{[t]
     .qunit.assertError[{.qsrc.define[`t;x]};(enlist `source)#.srctest.decl[];"an incomplete declaration fails at registration, not at first use"]};
 
 test_every_missing_field_is_named_at_once:{[t]
-    partial:`source`table`target!(`t;`ext;`loc);
+    partial:`source`tablename`target!(`t;`ext;`loc);
     err:@[{.qsrc.define[`t;x]; ""};partial;{x}];
-    .qunit.assertEquals[all err like/: ("*fields*";"*types*";"*query*";"*fixture*");1b;"four omissions are reported together, not one per attempt"]};
+    .qunit.assertEquals[all err like/: ("*columns*";"*types*";"*query*";"*fixture*");1b;"four omissions are reported together, not one per attempt"]};
 
 / The source contract asks for a required TYPE per required field. A mismatched count means
 / some field has no declared type, and the validator would silently check
 / fewer columns than declared.
 test_a_type_per_field_is_required:{[t]
     bad:@[.srctest.decl[];`types;:;"p"];
-    .qunit.assertError[{.qsrc.define[`t;x]};bad;"two fields and one type is a declaration bug, not a default"]};
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"two columns and one type is a declaration bug, not a default"]};
 
 / A source query must be a parameterised lambda. A string would mean
 / concatenation - the injection path source_contract.q exists to refuse.
@@ -79,11 +79,11 @@ test_a_time_zone_must_be_a_single_symbol:{[t]
     bad:@[.srctest.decl[];`tz;:;"Europe/London"];
     .qunit.assertError[{.qsrc.define[`t;x]};bad;"a string zone would silently fail the zone-table lookup"]};
 
-/ The window is taken on time_field, so a time_field outside `fields` is
+/ The window is taken on timecolumn, so a timecolumn outside `columns` is
 / never type-checked by validate and only surfaces at fetch time, mid-run.
 test_a_time_field_outside_the_declared_fields_is_refused:{[t]
-    bad:@[.srctest.decl[];`time_field;:;`nosuch];
-    .qunit.assertError[{.qsrc.define[`t;x]};bad;"a typo in time_field must fail at registration, not two layers down"]};
+    bad:@[.srctest.decl[];`timecolumn;:;`nosuch];
+    .qunit.assertError[{.qsrc.define[`t;x]};bad;"a typo in timecolumn must fail at registration, not two layers down"]};
 
 / q's datetime (`z`) is a FLOAT count of days, so z->p rounding loses
 / sub-second precision silently: measured, 999 of 1000 nanosecond-spaced
@@ -257,7 +257,7 @@ test_a_clean_text_table_reports_no_failures:{[t]
 / would fail validate later with a much less useful message.
 test_an_uncoercible_declared_type_is_refused:{[t]
     .qsrc.define[`weird;
-        `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
+        `source`tablename`target`timecolumn`row_key`columns`types`query`fixture`tz!
         (`weird;`e;`l;`ts;`ts;`ts`blob;"px";{[h;a;b] ()};{([] ts:enlist .srctest.d 1; blob:enlist 1b)};`UTC)];
     txt:([] ts:enlist "2026-09-15T09:30:00"; blob:enlist "x");
     .qunit.assertError[{.qsrc.coerce[`weird;x]};txt;"a type with no coercer is named rather than passed through as text"]};

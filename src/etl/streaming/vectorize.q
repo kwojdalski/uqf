@@ -44,12 +44,12 @@ publish:.qstream.unwired `vectorize;
 
 / Fold the batch and republish it. No state: a wide book row is complete in
 / itself, so there is nothing to accumulate and nothing to evict.
-/ @param tbl the table the batch arrived on
-/ @param batch the rows, as a table
+/ @param t the table the batch arrived on
+/ @param x the rows, as a table
 / @return nothing
-on_batch:{[tbl;batch]
-    if[not tbl=`wide_book; :()];
-    .qsub.vectorize.publish[`mkt_orderbook;.qxf.apply[`mkt_orderbook;enlist[`book]!enlist batch]];
+on_batch:{[t;x]
+    if[not t=`wide_book; :()];
+    .qsub.vectorize.publish[`mkt_orderbook;.qxf.apply[`mkt_orderbook;enlist[`book]!enlist x]];
     }
 
 \d .
@@ -70,7 +70,7 @@ on_batch:{[tbl;batch]
             bid_prices:enlist 1.1 1.0999 1.0998 1.0997 1.0996 1.0995 1.0994 1.0993 1.0992 1.0991 1.099;
             ask_prices:enlist 1.1002 1.1003 1.1004 1.1005 1.1006 1.1007 1.1008 1.1009 1.101 1.1011 1.1012)))];
 
-.qstream.define[`vectorize;`procname`subscribes`publishes`on_batch`note!(
+.qstream.define[`vectorize;`procname`subscribeto`publishes`on_batch`note!(
     `vectorize1;
     enlist `wide_book;
     enlist `mkt_orderbook;

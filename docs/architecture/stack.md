@@ -71,7 +71,7 @@ discovery/registration only.
 ![Who connects to whom in the running stack: the uqf streaming jobs, the one runner they share, the tickerplant, and storage](../diagrams/stack-topology.svg)
 
 Two different connection patterns coexist, deliberately - **and since #204 no
-job performs either one itself**. A streaming job declares `subscribes` and
+job performs either one itself**. A streaming job declares `subscribeto` and
 `publishes`; `.qpipe` opens whichever handle that implies, and
 `scripts/processes/torq_stream.q` wires the job's `publish` to it. The patterns
 are still worth knowing, because they are why some processes need a credential

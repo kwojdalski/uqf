@@ -37,8 +37,8 @@ def contract_fields(repo_root: str) -> list[str]:
     a mismatch is impossible rather than merely unlikely.
     """
     text = open(os.path.join(repo_root, CONTRACT_Q), encoding="utf-8").read()
-    # fields:`ts_event`symbol`action`side`price`size`sequence,level_fields
-    head = next(line for line in text.splitlines() if line.startswith("fields:")).split(":", 1)[1]
+    # columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
+    head = next(line for line in text.splitlines() if line.startswith("columns:")).split(":", 1)[1]
     scalars = [f for f in head.split(",")[0].split("`") if f]
     prefixes = ("bid_px_", "bid_sz_", "ask_px_", "ask_sz_")
     levels = [f"{p}{i:02d}" for i in range(LEVELS) for p in prefixes]

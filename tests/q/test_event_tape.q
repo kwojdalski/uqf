@@ -37,7 +37,7 @@ test_the_row_key_is_composite:{[t]
 
 test_the_tape_is_a_superset_of_the_trades_shape:{[t]
     trades_cols:`time`sym`side`size`pip_factor;
-    .qunit.assertEquals[all trades_cols in .qfeed.demo_events.fields;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
+    .qunit.assertEquals[all trades_cols in .qfeed.demo_events.columns;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
 
 test_the_window_is_taken_on_event_time:{[t]
     one:last .qsrc.fetch_window[`demo_events;0Ni;.evttest.d 0;.evttest.d 1];

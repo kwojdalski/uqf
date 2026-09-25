@@ -138,11 +138,11 @@ test_normalizer_keeps_multiple_quote_sources_and_filters_equities:{[t]
     .qunit.assertEquals[r`ask_sizes;(enlist 200f;enlist 60f);"base quantities retain their meaning"]};
 
 published:([] tbl:`symbol$(); rows:())
-record:{[tbl;rows] `.sbtest.published upsert (tbl;enlist rows);}
-forward:{[tbl;rows]
-    record[tbl;rows];
-    if[tbl=`market_data; .qsub.superbook.on_batch[tbl;rows]];
-    if[tbl=`superbook; .qsub.arbitrage.on_batch[tbl;rows]];
+record:{[t;x] `.sbtest.published upsert (t;enlist x);}
+forward:{[t;x]
+    record[t;x];
+    if[t=`market_data; .qsub.superbook.on_batch[t;x]];
+    if[t=`superbook; .qsub.arbitrage.on_batch[t;x]];
     }
 
 test_live_handlers_and_timer_publish_opportunities_then_clears:{[t]
@@ -193,7 +193,7 @@ test_tickerplant_routes_all_three_processes_using_the_real_schemas:{[t]
         .qtick.schema[job;([] time:`timestamp$()),'output];
         .qstream.wire[job;.qtick.publish];
         d:.qstream.declaration job;
-        .qtick.subscribe[d`subscribes;{[handler;msg] handler . 1_msg}[d`on_batch]];
+        .qtick.subscribe[d`subscribeto;{[handler;msg] handler . 1_msg}[d`on_batch]];
         } each `market_data`superbook`arbitrage;
     .qtick.subscribe[enlist `arbitrage;{[msg] .sbtest.record[msg 1;msg 2]}];
     .qtick.publish[`quote;([] sym:`EURUSD`EURUSD;bid:1.101 1.099;

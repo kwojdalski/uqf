@@ -188,15 +188,15 @@ record_published:{[tbl;n]
     n}
 
 / Record one batch arriving from the tickerplant, the same way.
-/ @param tbl the table the batch is for
-/ @param data the batch: a table, or a list of column vectors
+/ @param t the table the batch is for
+/ @param x the batch: a table, or a list of column vectors
 / @return the batch's row count
-record_received:{[tbl;data]
-    n:$[98h=type data; count data; count first data];
-    before:0^received tbl;
-    .qpipe.received[tbl]:before+n;
-    if[0=before; .qlog.info[`qpipe;"first batch received";`table`rows!(tbl;n)]];
-    .qlog.dbg[`qpipe;"batch received";`table`rows`total!(tbl;n;before+n)];
+record_received:{[t;x]
+    n:$[98h=type x; count x; count first x];
+    before:0^received t;
+    .qpipe.received[t]:before+n;
+    if[0=before; .qlog.info[`qpipe;"first batch received";`table`rows!(t;n)]];
+    .qlog.dbg[`qpipe;"batch received";`table`rows`total!(t;n;before+n)];
     n}
 
 / Bring this process up as a tickerplant subscriber and hand back a publish
@@ -343,29 +343,29 @@ install_period_handlers:{[]
 / only way a pipeline in this demo should send data.
 / @param h the publish handle (passed explicitly, never read from a global -
 /   see invariant 5)
-/ @param tbl the destination table name, e.g. `execution_quality
-/ @param data a table, keyed table, a dict (of atoms for one row, or of
+/ @param t the destination table name, e.g. `execution_quality
+/ @param x a table, keyed table, a dict (of atoms for one row, or of
 /   vectors for many), or a list of column vectors in the table's own order
 / @return the number of rows published
 / @eg .qpipe.publish[h;`execution_quality;out]
 / @eg .qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]
 / @eg .qpipe.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]
-publish:{[h;tbl;data]
-    if[is_columns data;
+publish:{[h;t;x]
+    if[is_columns x;
         / Straight through: this IS .u.upd's shape, and there are no names
         / to strip a `time` from. The count is the first column's, which
         / is where .u.upd takes it from too.
-        n:count first data;
+        n:count first x;
         if[0=n; :0];
-        h (`.u.upd;tbl;data);
-        :record_published[tbl;n]];
-    out:as_table data;
+        h (`.u.upd;t;x);
+        :record_published[t;n]];
+    out:as_table x;
     if[0=count out; :0];
     / invariant 1: .u.upd stamps its own `time` - sending ours makes the
     / message one column too wide.
     out:$[`time in cols out; ![out;();0b;enlist `time]; out];
-    h (`.u.upd;tbl;value flip out);
-    record_published[tbl;count out]}
+    h (`.u.upd;t;value flip out);
+    record_published[t;count out]}
 
 / --------------------------------------------------------------- TRIGGER
 

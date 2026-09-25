@@ -137,15 +137,15 @@ load_limits:{[t]
 / The book is replaced BEFORE anything is published, the way posbook does
 / it: orders will not be redelivered, so a failed publish must not also
 / lose them from the position.
-/ @param tbl the table the batch arrived on
-/ @param batch the rows, as a table
+/ @param t the table the batch arrived on
+/ @param x the rows, as a table
 / @return nothing
-on_batch:{[tbl;batch]
-    if[not tbl=`orders; :()];
-    if[0=count batch; :()];
+on_batch:{[t;x]
+    if[not t=`orders; :()];
+    if[0=count x; :()];
     updated:.qxf.apply[`fx_positions;`book`batch!(
         0!.qsub.fx_positions.book;
-        select time, order_id, sym, book, product, side, size, price, order_status from batch)];
+        select time, order_id, sym, book, product, side, size, price, order_status from x)];
     `.qsub.fx_positions.book set `sym`book`product xkey updated;
     }
 
@@ -228,7 +228,7 @@ on_timer:{[]
             base_qty:250000 600000f; quote_qty:-37387500 -89660000f; fill_count:1 2))
     ))];
 
-.qstream.define[`fx_positions;`procname`subscribes`publishes`on_batch`timer_period`on_timer`autostart`note!(
+.qstream.define[`fx_positions;`procname`subscribeto`publishes`on_batch`period`on_timer`startwithall`note!(
     `fxpositions1;
     enlist `orders;
     `fx_position`fx_limit_breach;

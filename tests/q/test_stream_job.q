@@ -21,9 +21,9 @@
 
 published:([] job:`symbol$(); tbl:`symbol$(); rows:())
 
-recorder:{[job;tbl;rows]
-    `.sjtest.published upsert (job;tbl;enlist rows);
-    count rows}
+recorder:{[job;t;x]
+    `.sjtest.published upsert (job;t;enlist x);
+    count x}
 
 reset:{[]
     `.sjtest.published set 0#.sjtest.published;
@@ -83,34 +83,34 @@ test_every_registered_job_has_a_file:{[t]
         "every registered job lives in src/etl/streaming/<job>.q, named after its file"]};
 
 test_a_feed_declares_no_subscription:{[t]
-    .qunit.assertEquals[count .qstream.declaration[`fx_feed]`subscribes;0;
+    .qunit.assertEquals[count .qstream.declaration[`fx_feed]`subscribeto;0;
         "a feed produces rows on a timer rather than reacting to a table"]};
 
 test_a_subscriber_with_no_handler_is_refused:{[t]
     / It would receive every batch and drop it, and look healthy doing so.
     .qunit.assertError[{.qstream.define[`handlerless;x]};
-        `procname`subscribes`publishes`timer_period`on_timer!(
+        `procname`subscribeto`publishes`period`on_timer!(
             `handlerless1;enlist `trades;`symbol$();0D00:00:01;{[] ()});
         "a job that subscribes must say what to do with a batch"]};
 
 test_a_job_that_does_nothing_is_refused:{[t]
     .qunit.assertError[{.qstream.define[`idle;x]};
-        `procname`subscribes`publishes!(`idle1;`symbol$();`symbol$());
+        `procname`subscribeto`publishes!(`idle1;`symbol$();`symbol$());
         "a job with neither a handler nor a timer runs nothing at all"]};
 
-/ autostart and note are read by uqs's process registry, which is derived
+/ startwithall and note are read by uqs's process registry, which is derived
 / from these declarations - so a malformed one is refused here, by name,
 / rather than read later as a registry that quietly disagrees.
 test_an_autostart_that_is_not_a_boolean_is_refused:{[t]
     .qunit.assertThrows[{.qstream.define[`badstart;x]};
-        `procname`subscribes`publishes`timer_period`on_timer`autostart!(
+        `procname`subscribeto`publishes`period`on_timer`startwithall!(
             `badstart1;`symbol$();`symbol$();0D00:00:01;{[] ()};`yes);
-        "*autostart must be a boolean*";
-        "autostart is a flag, not a word that reads like one"]};
+        "*startwithall must be a boolean*";
+        "startwithall is a flag, not a word that reads like one"]};
 
 test_a_note_that_is_not_a_string_is_refused:{[t]
     .qunit.assertThrows[{.qstream.define[`badnote;x]};
-        `procname`subscribes`publishes`timer_period`on_timer`note!(
+        `procname`subscribeto`publishes`period`on_timer`note!(
             `badnote1;`symbol$();`symbol$();0D00:00:01;{[] ()};`why);
         "*note must be a string*";
         "a note is prose for the process table, so a symbol is refused"]};
@@ -136,21 +136,21 @@ test_an_unclaimed_process_is_refused_by_name:{[t]
 
 test_a_declaration_missing_a_field_is_refused:{[t]
     .qunit.assertError[{.qstream.define[`incomplete;x]};
-        `procname`subscribes`publishes!(`incomplete1;enlist `t;`symbol$());
+        `procname`subscribeto`publishes!(`incomplete1;enlist `t;`symbol$());
         "a job with no on_batch is refused at declaration"]};
 
 test_half_a_timer_is_refused:{[t]
     / A period with no body is a job whose timer never does anything, and
     / every other test still passes.
     .qunit.assertError[{.qstream.define[`halftimer;x]};
-        `procname`subscribes`publishes`on_batch`timer_period!(
-            `halftimer1;enlist `t;`symbol$();{[tbl;batch] ()};0D00:00:01);
-        "a timer_period without an on_timer is refused"]};
+        `procname`subscribeto`publishes`on_batch`period!(
+            `halftimer1;enlist `t;`symbol$();{[t;x] ()};0D00:00:01);
+        "a period without an on_timer is refused"]};
 
 test_two_jobs_may_not_claim_one_process:{[t]
     .qunit.assertError[{.qstream.define[`impostor;x]};
-        `procname`subscribes`publishes`on_batch!(
-            `markout1;enlist `t;`symbol$();{[tbl;batch] ()});
+        `procname`subscribeto`publishes`on_batch!(
+            `markout1;enlist `t;`symbol$();{[t;x] ()});
         "one process runs one job, so a second claim on markout1 is refused"]};
 
 test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
@@ -254,7 +254,7 @@ test_the_trades_feed_publishes_one_fill_a_tick:{[t]
 
 / Every registered job that publishes on a timer.
 feeds:{[] .qstream.defined[] where
-    {[j] d:.qstream.declaration j; (`timer_period in key d) and count d`publishes} each .qstream.defined[]}
+    {[j] d:.qstream.declaration j; (`period in key d) and count d`publishes} each .qstream.defined[]}
 
 / Invariant 3, plus the length agreement it exists to protect: a batch's
 / row count comes from its first column, so a column of a different
@@ -387,7 +387,7 @@ test_markout_keeps_the_batch_when_publishing_throws:{[t]
     / drain-before-publish ordering would lose the batch silently - which is
     / why score_ready evicts only after the publish returns.
     reset[];
-    .qstream.wire[`markout;{[tbl;rows] '"tickerplant is down"}];
+    .qstream.wire[`markout;{[t;x] '"tickerplant is down"}];
     .qsub.markout.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD; side:enlist 1;
         trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
     .qsub.markout.on_batch[`quote;([] time:enlist d 1; sym:enlist `EURUSD;
@@ -707,7 +707,7 @@ crypto_book_row:{[s;bid;ask]
 
 / Deliver a normalizer's published rows to posbook the way the plant would:
 / as a table with `time` stamped in front.
-to_posbook:{[tbl;rows] .qsub.posbook.on_batch[tbl;`time xcols update time:.sjtest.d 0 from rows]; count rows}
+to_posbook:{[t;x] .qsub.posbook.on_batch[t;`time xcols update time:.sjtest.d 0 from x]; count x}
 
 test_the_executions_normalizer_spells_both_fill_tables_one_way:{[t]
     reset[];
@@ -745,7 +745,7 @@ test_posbook_marks_to_whichever_book_the_marks_normalizer_saw:{[t]
     .testutil.assertApprox[.qsub.posbook.last_mid`EURUSD;1.085;1e-9;"and the FX mid is cached alongside it"]};
 
 test_posbook_no_longer_reads_the_raw_tables:{[t]
-    .qunit.assertEquals[.qstream.declaration[`posbook]`subscribes;`executions`marks;
+    .qunit.assertEquals[.qstream.declaration[`posbook]`subscribeto;`executions`marks;
         "posbook subscribes to the two normalizers and nothing else"];
     reset[];
     .qsub.posbook.on_batch[`trades;fx_fill[`EURUSD;1;1.085;1e6]];

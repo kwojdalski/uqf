@@ -157,7 +157,7 @@ def _symbol_list(names: list[str]) -> str:
 
 def streaming_job(
     name: str,
-    subscribes: list[str],
+    subscribeto: list[str],
     publishes: str | None,
     columns: str | None,
     procname: str | None = None,
@@ -181,32 +181,32 @@ def streaming_job(
     _check_name(name, "job name")
     proc = procname or f"{name}1"
     _check_name(proc, "procname")
-    for table in subscribes:
+    for table in subscribeto:
         _check_name(table, "subscribed table")
     pubs = [p.strip() for p in (publishes or "").split(",") if p.strip()]
     for table in pubs:
         _check_name(table, "published table")
     if known_tables is not None:
-        unknown = [t for t in subscribes if t not in known_tables]
+        unknown = [t for t in subscribeto if t not in known_tables]
         if unknown:
             raise UqsError(
-                f"--subscribes names {', '.join(unknown)}, which no plant table defines - a job "
+                f"--subscribeto names {', '.join(unknown)}, which no plant table defines - a job "
                 "subscribed to it would start, heartbeat and never receive a row. Scaffold the "
                 "job that publishes it first, or check the spelling"
             )
     new_tables = [t for t in pubs if known_tables is None or t not in known_tables]
-    is_feed = not subscribes
+    is_feed = not subscribeto
     actions: list[FileAction] = []
     notes: list[str] = []
 
-    sub_literal = "`symbol$()" if is_feed else "`" + "`".join(subscribes)
+    sub_literal = "`symbol$()" if is_feed else "`" + "`".join(subscribeto)
     pub_literal = _symbol_list(pubs) if pubs else "`symbol$()"
     handler = "on_timer" if is_feed else "on_batch"
-    handler_args = "[]" if is_feed else "[t;data]"
+    handler_args = "[]" if is_feed else "[t;x]"
     timer = "\n    0D00:00:01;" if is_feed else ""
-    timer_key = "`timer_period" if is_feed else ""
+    timer_key = "`period" if is_feed else ""
 
-    reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribes)
+    reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribeto)
     writes = ", ".join(f"`{t}`" for t in pubs) if pubs else "nothing - it keeps its output local"
 
     body = f"""/ {name}.q - <one line: what this job is for> (.qsub.{name}).
@@ -232,10 +232,10 @@ publish:.qstream.unwired `{name};
 \\d .
 
 / The process registry is read from this declaration: `procname` is the
-/ process that runs it, and `autostart`, absent here, keeps it on demand -
-/ add `autostart with 1b to start it with the stack, once the connection
+/ process that runs it, and `startwithall`, absent here, keeps it on demand -
+/ add `startwithall with 1b to start it with the stack, once the connection
 / budget has room.
-.qstream.define[`{name};`procname`subscribes`publishes{timer_key}`{handler}`note!(
+.qstream.define[`{name};`procname`subscribeto`publishes{timer_key}`{handler}`note!(
     `{proc};
     {sub_literal};
     {pub_literal};{timer}
@@ -284,7 +284,7 @@ publish:.qstream.unwired `{name};
     actions.append(
         FileAction(
             TEST_DIR / f"test_{name}.q",
-            test_stub(name, ns, f"the {name} streaming job", driver=bool(subscribes and pubs)),
+            test_stub(name, ns, f"the {name} streaming job", driver=bool(subscribeto and pubs)),
         )
     )
     actions.append(_nslist_action(ns))
@@ -292,7 +292,7 @@ publish:.qstream.unwired `{name};
     notes.append(_STACK_PAGE_NOTE.format(proc=proc))
     notes.append(_PROFILE_NOTE.format(proc=proc))
     if not is_feed:
-        notes.append("start it with its producers: " + " ".join(sorted(set(subscribes))))
+        notes.append("start it with its producers: " + " ".join(sorted(set(subscribeto))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)
 
 
@@ -373,7 +373,7 @@ def bounded_worker(
             f"write .qfeed.{src}.query - parameterised, never concatenated"
             " (see src/etl/core/source_contract.q)",
             f"write .qfeed.{src}.fixture - deterministic, same contract as the live source",
-            f"declared fields: {', '.join(c for c, _ in cols)}",
+            f"declared columns: {', '.join(c for c, _ in cols)}",
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
     notes.append(_STACK_PAGE_NOTE.format(proc=proc))

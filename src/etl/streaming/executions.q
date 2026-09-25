@@ -102,7 +102,7 @@ from_crypto_trades:{[batch]
             price:enlist 62000f; fee:enlist 15.5; fee_ccy:enlist `USDT;
             fill_id:enlist `$"binance_spot-1")))];
 
-.qnorm.define[`executions;`procname`output`input`autostart`note!(
+.qnorm.define[`executions;`procname`output`input`startwithall`note!(
     `executions1;
     .qsub.executions.executions;
     `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades;

@@ -12,7 +12,7 @@ that job to write considerably more of it.
 
 ```bash
 uqs new-job all_fills --kind normalizer \
-    --subscribes trades,crypto_trades \
+    --subscribeto trades,crypto_trades \
     --columns "sym:symbol, venue:symbol, size:float"
 ```
 
@@ -20,7 +20,7 @@ uqs new-job all_fills --kind normalizer \
 and the scaffold refuses the redundancy rather than reconciling it:
 
 ```
-$ uqs new-job all_fills --kind normalizer --subscribes trades,crypto_trades --publishes all_fills ...
+$ uqs new-job all_fills --kind normalizer --subscribeto trades,crypto_trades --publishes all_fills ...
 a normalizer publishes its own NAME - drop --publishes
 ```
 

@@ -78,7 +78,7 @@ def test_every_profile_names_at_least_one_leaf(name):
 def test_default_resolves_to_exactly_what_start_all_runs_today():
     """`default` DESCRIBES the current start set rather than redefining it.
 
-    So the two cannot drift: a job whose declaration gains `autostart` and is
+    So the two cannot drift: a job whose declaration gains `startwithall` and is
     not reachable from `default`'s leaves fails here, which is the question
     worth asking - is it part of the default, or did the flag go on by
     accident.

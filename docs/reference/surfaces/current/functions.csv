@@ -205,8 +205,8 @@ qexec,sweep_price,function,3,prices sizes target_size
 qexec,vwap,function,2,prices sizes
 qexec,vwap_expanding,function,2,prices sizes
 qfeed.databento_mbp10,adapt,function,1,raw
+qfeed.databento_mbp10,columns,value,,
 qfeed.databento_mbp10,epoch_ns_literal,function,1,ts
-qfeed.databento_mbp10,fields,value,,
 qfeed.databento_mbp10,fixture,function,1,
 qfeed.databento_mbp10,fixture_levels,function,3,bid ask sz
 qfeed.databento_mbp10,level_fields,value,,
@@ -215,37 +215,37 @@ qfeed.databento_mbp10,query,function,3,h range_from range_to
 qfeed.databento_mbp10,row_key,value,,
 qfeed.databento_mbp10,select_list,function,1,
 qfeed.databento_mbp10,source_name,value,,
-qfeed.databento_mbp10,table,value,,
+qfeed.databento_mbp10,tablename,value,,
 qfeed.databento_mbp10,target,value,,
-qfeed.databento_mbp10,time_field,value,,
+qfeed.databento_mbp10,timecolumn,value,,
 qfeed.databento_mbp10,transport,value,,
 qfeed.databento_mbp10,types,value,,
 qfeed.databento_mbp10,tz,value,,
-qfeed.demo_deals,fields,value,,
+qfeed.demo_deals,columns,value,,
 qfeed.demo_deals,fixture,function,1,
 qfeed.demo_deals,query,function,3,h range_from range_to
 qfeed.demo_deals,row_key,value,,
 qfeed.demo_deals,source_name,value,,
 qfeed.demo_deals,target,value,,
-qfeed.demo_deals,time_field,value,,
+qfeed.demo_deals,timecolumn,value,,
 qfeed.demo_deals,types,value,,
 qfeed.demo_deals,tz,value,,
-qfeed.demo_events,fields,value,,
+qfeed.demo_events,columns,value,,
 qfeed.demo_events,fixture,function,1,
 qfeed.demo_events,query,function,3,h range_from range_to
 qfeed.demo_events,row_key,value,,
 qfeed.demo_events,source_name,value,,
 qfeed.demo_events,target,value,,
-qfeed.demo_events,time_field,value,,
+qfeed.demo_events,timecolumn,value,,
 qfeed.demo_events,types,value,,
 qfeed.demo_events,tz,value,,
-qfeed.upstream_trades,fields,value,,
+qfeed.upstream_trades,columns,value,,
 qfeed.upstream_trades,fixture,function,1,
 qfeed.upstream_trades,query,function,3,h range_from range_to
 qfeed.upstream_trades,row_key,value,,
 qfeed.upstream_trades,source_name,value,,
 qfeed.upstream_trades,target,value,,
-qfeed.upstream_trades,time_field,value,,
+qfeed.upstream_trades,timecolumn,value,,
 qfeed.upstream_trades,types,value,,
 qfeed.upstream_trades,tz,value,,
 qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
@@ -417,7 +417,7 @@ qnorm,check_source,function,4,who out src xf
 qnorm,declaration,function,1,name
 qnorm,define,function,2,name decl
 qnorm,defined,function,1,
-qnorm,dispatch,function,3,name src batch
+qnorm,dispatch,function,3,name t x
 qnorm,normalize,function,3,name src batch
 qnorm,registry,dict,,
 qnorm,required_keys,value,,
@@ -436,7 +436,7 @@ qodbc,open,function,1,conn
 qodbc,require_available,function,1,
 qodbc,run_sql,function,2,h sql
 qodbc,table_names,function,1,h
-qodbc,window_query,function,6,h tbl time_field fields range_from range_to
+qodbc,window_query,function,6,h tablename timecolumn columns range_from range_to
 qodbc,with_connection,function,2,conn f
 qopt,BISECT_VOL_HI,value,,
 qopt,BISECT_VOL_LO,value,,
@@ -547,7 +547,7 @@ qrun,table_path,function,1,name
 qrun,under_lock,function,2,f args
 qrun,unfinished,function,1,
 qschema,require_cols,function,4,fn_name table_name tbl req
-qsrc,ambiguous_message,function,3,zone bad cs
+qsrc,ambiguous_message,function,3,tz bad cs
 qsrc,bound_padding,value,,
 qsrc,coerce,function,2,source tbl
 qsrc,coercers,dict,,
@@ -560,21 +560,21 @@ qsrc,defined,function,1,
 qsrc,fetch_window,function,4,source h range_from range_to
 qsrc,has_credentials,function,1,source
 qsrc,load_zone_table,function,1,path
-qsrc,local_candidates,function,2,zone tsv
-qsrc,local_to_utc,function,2,zone ts
+qsrc,local_candidates,function,2,tz tsv
+qsrc,local_to_utc,function,2,tz ts
 qsrc,narrow_to_utc,function,4,decl tbl range_from range_to
-qsrc,nonexistent_message,function,2,zone bad
-qsrc,offset_at,function,2,zone ts
-qsrc,offsets_for,function,1,zone
+qsrc,nonexistent_message,function,2,tz bad
+qsrc,offset_at,function,2,tz ts
+qsrc,offsets_for,function,1,tz
 qsrc,require_credentials,function,1,source
-qsrc,require_zone_table,function,1,zone
+qsrc,require_zone_table,function,1,tz
 qsrc,required_declarations,value,,
 qsrc,row_key,function,1,source
 qsrc,source_bounds,function,3,decl range_from range_to
 qsrc,sources,dict,,
 qsrc,transports,value,,
 qsrc,type_chars,function,1,tbl
-qsrc,utc_to_local,function,2,zone ts
+qsrc,utc_to_local,function,2,tz ts
 qsrc,validate,function,2,source tbl
 qsrc,validate_fixture,function,1,source
 qsrc,validate_live,function,2,source h
@@ -608,14 +608,14 @@ qstream,unwired,function,1,job
 qstream,wire,function,2,job publisher
 qsub.arbitrage,arbitrage,table,,
 qsub.arbitrage,evaluate,function,1,batch
-qsub.arbitrage,on_batch,function,2,tbl batch
+qsub.arbitrage,on_batch,function,2,t x
 qsub.arbitrage,opportunity,function,1,book
 qsub.arbitrage,publish,value,,
 qsub.cross,cross_pairs,value,,
 qsub.cross,cross_quotes,table,,
 qsub.cross,crosses,table,,
 qsub.cross,now,function,1,
-qsub.cross,on_batch,function,2,tbl batch
+qsub.cross,on_batch,function,2,t x
 qsub.cross,publish,value,,
 qsub.cross,quotes,table,,
 qsub.cross,quotes_in,table,,
@@ -629,7 +629,7 @@ qsub.cross_arbitrage,leg_book,function,1,row
 qsub.cross_arbitrage,leg_times,function,2,state route
 qsub.cross_arbitrage,max_skew,value,,
 qsub.cross_arbitrage,notional,value,,
-qsub.cross_arbitrage,on_batch,function,2,tbl batch
+qsub.cross_arbitrage,on_batch,function,2,t x
 qsub.cross_arbitrage,opportunity,function,5,state avail sym size as_of
 qsub.cross_arbitrage,publish,value,,
 qsub.cross_arbitrage,quotable,function,1,state
@@ -668,7 +668,7 @@ qsub.crypto_mock,toxicity_factor,value,,
 qsub.crypto_mock,venues,value,,
 qsub.crypto_mock,walk,function,1,m
 qsub.databento_book,book,table,,
-qsub.databento_book,on_batch,function,2,tbl batch
+qsub.databento_book,on_batch,function,2,t x
 qsub.databento_book,publish,value,,
 qsub.databento_book,raw,table,,
 qsub.executions,crypto_trades,table,,
@@ -704,7 +704,7 @@ qsub.fx_positions,fx_position,table,,
 qsub.fx_positions,limits,table,,
 qsub.fx_positions,load_limits,function,1,t
 qsub.fx_positions,net_orders,function,2,book batch
-qsub.fx_positions,on_batch,function,2,tbl batch
+qsub.fx_positions,on_batch,function,2,t x
 qsub.fx_positions,on_timer,function,1,
 qsub.fx_positions,orders,table,,
 qsub.fx_positions,policed,value,,
@@ -726,7 +726,7 @@ qsub.markout,execution_quality,table,,
 qsub.markout,horizons,value,,
 qsub.markout,max_horizon,value,,
 qsub.markout,now,function,1,
-qsub.markout,on_batch,function,2,tbl batch
+qsub.markout,on_batch,function,2,t x
 qsub.markout,on_timer,function,1,
 qsub.markout,pending,table,,
 qsub.markout,publish,value,,
@@ -749,7 +749,7 @@ qsub.posbook,last_mid,dict,,
 qsub.posbook,mark_positions,function,3,book trades marks
 qsub.posbook,marks,table,,
 qsub.posbook,next_book,function,2,book positions
-qsub.posbook,on_batch,function,2,tbl batch
+qsub.posbook,on_batch,function,2,t x
 qsub.posbook,position,table,,
 qsub.posbook,position_book,table,,
 qsub.posbook,position_marks,table,,
@@ -763,7 +763,7 @@ qsub.quotes_feed,tick_rows,function,1,mids
 qsub.superbook,books,dict,,
 qsub.superbook,levels,function,2,prices sizes
 qsub.superbook,max_age,value,,
-qsub.superbook,on_batch,function,2,tbl batch
+qsub.superbook,on_batch,function,2,t x
 qsub.superbook,on_timer,function,1,
 qsub.superbook,publish,value,,
 qsub.superbook,refresh,function,1,as_of
@@ -773,7 +773,7 @@ qsub.superbook,snapshot,function,3,state as_of age
 qsub.superbook,superbook,table,,
 qsub.vectorize,fold_wide_book,function,1,book
 qsub.vectorize,mkt_orderbook,table,,
-qsub.vectorize,on_batch,function,2,tbl batch
+qsub.vectorize,on_batch,function,2,t x
 qsub.vectorize,publish,value,,
 qsub.vectorize,wide_book,table,,
 qsub.vectorize,wide_level_groups,dict,,
@@ -797,10 +797,10 @@ qtick,log_handle,value,,
 qtick,log_path,value,,
 qtick,msg_count,value,,
 qtick,open_log,function,3,dir name dt
-qtick,publish,function,2,tbl rows
+qtick,publish,function,2,t x
 qtick,record,function,1,msg
 qtick,replay,function,2,path handler
-qtick,require_batch,function,2,tbl rows
+qtick,require_batch,function,2,t x
 qtick,reset,function,1,
 qtick,schema,function,2,tbl empty
 qtick,schemas,dict,,

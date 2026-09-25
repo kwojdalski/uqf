@@ -153,9 +153,9 @@ def _pipeline(d: Declaration, table: str | None, offset: int) -> Pipeline:
         # Deferred rather than copied: the edges are resolved from the same
         # declaration by pipeline_edges, which RAISES when there is none to
         # read - the guard against a pipeline resolving to no tables (#288).
-        subscribes=FROM_DECLARATION,
+        subscribeto=FROM_DECLARATION,
         publishes=FROM_DECLARATION,
-        startwithall="1" if d.autostart else "0",
+        startwithall="1" if d.startwithall else "0",
         offset=offset,
         note=d.note,
     )
