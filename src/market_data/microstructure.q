@@ -854,4 +854,62 @@ large_trade_volume_share:{[tape;q]
     if[0=total; :0n];
     (sum sizes where sizes>=threshold)%total};
 
+/ --- odd lots (#360) --------------------------------------------------------
+/ .
+/ An odd lot is a trade STRICTLY BELOW a size threshold; a trade of exactly
+/ the threshold is a round lot. In equities that threshold is a market
+/ convention (100 shares). FX has no round-lot convention at all - clip
+/ sizes vary by venue, pair and counterparty tier - so the threshold is an
+/ ARGUMENT the caller chooses, not a declared per-instrument constant, and
+/ nothing here pretends to know it. Pass the size below which a trade is
+/ "small" for the question being asked, e.g. 1e6 for sub-million EURUSD.
+/ .
+/ A size cutoff rather than large_trade_threshold's quantile, on purpose: a
+/ quantile moves with the tape, so "below the 10th percentile" is always
+/ about a tenth of trades, while a fixed size lets the share itself move.
+
+/ Private: refuse a threshold that is not a positive number.
+/ .
+/ A null or non-positive threshold makes `size<threshold` false for every
+/ trade, so both functions would report "no odd lots" rather than erroring.
+require_odd_lot_threshold:{[fn_name;threshold]
+    if[not (type threshold) in -5 -6 -7 -8 -9h;
+        '(string fn_name),": threshold must be a numeric atom, got type ",string type threshold];
+    if[not threshold>0;
+        '(string fn_name),": threshold must be positive, got ",string threshold];
+    1b}
+
+/ Share of trades, by COUNT, whose size is strictly below threshold.
+/ @param tape an event tape table
+/ @param threshold the size below which a trade is an odd lot, e.g. 1e6
+/ @return the fraction of trades that are odd lots, 0n with no trades
+/ @throws error when the tape is malformed, or threshold is not a positive number
+/ @eg .qmicro.odd_lot_trade_ratio[tape;1e6]
+odd_lot_trade_ratio:{[tape;threshold]
+    require_odd_lot_threshold[`odd_lot_trade_ratio;threshold];
+    require_tape tape;
+    sizes:exec size from tape where action=`trade;
+    if[0=count sizes; :0n];
+    (sum sizes<threshold)%count sizes};
+
+/ Signed imbalance of odd-lot trades: their net aggressor volume over their
+/ total volume, in [-1;1].
+/ .
+/ Volume-weighted, like signed_trade_flow, so +1 means every odd-lot unit
+/ was bought by an aggressor and -1 every one sold. 0n, not 0, when no odd
+/ lot traded: 0 would read as "balanced" and average into a series as
+/ though it were a measurement.
+/ @param tape an event tape table
+/ @param threshold the size below which a trade is an odd lot, e.g. 1e6
+/ @return (buy volume - sell volume) % total volume over odd lots, 0n with none
+/ @throws error when the tape is malformed, or threshold is not a positive number
+/ @eg .qmicro.odd_lot_imbalance[tape;1e6]
+odd_lot_imbalance:{[tape;threshold]
+    require_odd_lot_threshold[`odd_lot_imbalance;threshold];
+    require_tape tape;
+    odd:select side, size from tape where action=`trade, size<threshold;
+    total:sum odd`size;
+    if[0=total; :0n];
+    (sum odd[`side]*odd`size)%total};
+
 \d .

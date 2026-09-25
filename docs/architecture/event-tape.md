@@ -1,10 +1,11 @@
 # The order/trade event tape
 
 **Status:** contract decided 2026-09-16 (issue #46). Shape implemented in
-`src/etl/sources/demo_events.q`; five of the six features it unblocks are
-implemented in `src/market_data/microstructure.q` (`vpin`, `signed_trade_flow`,
-`trade_arrival_rate`, `large_trade_ratio`, `cancel_to_trade_ratio`). The sixth,
-the odd-lot ratios, is blocked on a venue convention rather than on the tape.
+`src/etl/sources/demo_events.q`; all six features it unblocks are implemented in
+`src/market_data/microstructure.q` (`vpin`, `signed_trade_flow`,
+`trade_arrival_rate`, `large_trade_ratio`, `cancel_to_trade_ratio`, and the
+odd-lot ratios). FX has no round-lot convention, so the odd-lot size is an
+argument the caller passes rather than a declared venue constant (#360).
 
 ## Why this document exists
 
@@ -95,7 +96,7 @@ unsorted tape **throws**. `.qmicro.require_tape` is that check.
   | `signed_trade_flow` / cumulative delta (#19)         | **implemented** — the canonical flow metric, and what `vpin` builds on |
   | `trade_arrival_rate` (#26)                           | unblocked: a windowed count of `action=`trade``                        |
   | `large_trade_ratio` (#27)                            | unblocked: needs a size threshold decision                             |
-  | `odd_lot_trade_ratio` / `odd_lot_imbalance` (#20-21) | unblocked: needs an odd-lot size definition, which is venue-specific   |
+  | `odd_lot_trade_ratio` / `odd_lot_imbalance` (#20-21) | **implemented** — the odd-lot size is a `threshold` argument (#360)    |
   | `vpin` (#25)                                         | unblocked: volume-bucketed signed flow, built on `signed_trade_flow`   |
 
 **`order_count_imbalance` is NOT unblocked by this.** It needs resting-order

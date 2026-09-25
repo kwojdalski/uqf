@@ -2000,6 +2000,19 @@
 .man.registerArg (".qmicro.large_trade_volume_share";"param";"q";"the quantile in (0;1]");
 .man.registerArg (".qmicro.large_trade_volume_share";"return";"";"the fraction of traded volume in large trades, 0n with no trades");
 .man.registerArg (".qmicro.large_trade_volume_share";"eg";"";".qmicro.large_trade_volume_share[tape;0.9]");
+.man.registerFunc (".qmicro.require_odd_lot_threshold";".qmicro";"Private: refuse a threshold that is not a positive number. A null or non-positive threshold makes `size<threshold` false for every trade, so both functions would report \"no odd lots\" rather than erroring.";".qmicro.require_odd_lot_threshold";"");
+.man.registerFunc (".qmicro.odd_lot_trade_ratio";".qmicro";"Share of trades, by COUNT, whose size is strictly below threshold.";".qmicro.odd_lot_trade_ratio";".qmicro.odd_lot_trade_ratio[tape;1e6]");
+.man.registerArg (".qmicro.odd_lot_trade_ratio";"param";"tape";"an event tape table");
+.man.registerArg (".qmicro.odd_lot_trade_ratio";"param";"threshold";"the size below which a trade is an odd lot, e.g. 1e6");
+.man.registerArg (".qmicro.odd_lot_trade_ratio";"return";"";"the fraction of trades that are odd lots, 0n with no trades");
+.man.registerArg (".qmicro.odd_lot_trade_ratio";"throws";"";"error when the tape is malformed, or threshold is not a positive number");
+.man.registerArg (".qmicro.odd_lot_trade_ratio";"eg";"";".qmicro.odd_lot_trade_ratio[tape;1e6]");
+.man.registerFunc (".qmicro.odd_lot_imbalance";".qmicro";"Signed imbalance of odd-lot trades: their net aggressor volume over their total volume, in [-1;1]. Volume-weighted, like signed_trade_flow, so +1 means every odd-lot unit was bought by an aggressor and -1 every one sold. 0n, not 0, when no odd lot traded: 0 would read as \"balanced\" and average into a series as though it were a measurement.";".qmicro.odd_lot_imbalance";".qmicro.odd_lot_imbalance[tape;1e6]");
+.man.registerArg (".qmicro.odd_lot_imbalance";"param";"tape";"an event tape table");
+.man.registerArg (".qmicro.odd_lot_imbalance";"param";"threshold";"the size below which a trade is an odd lot, e.g. 1e6");
+.man.registerArg (".qmicro.odd_lot_imbalance";"return";"";"(buy volume - sell volume) % total volume over odd lots, 0n with none");
+.man.registerArg (".qmicro.odd_lot_imbalance";"throws";"";"error when the tape is malformed, or threshold is not a positive number");
+.man.registerArg (".qmicro.odd_lot_imbalance";"eg";"";".qmicro.odd_lot_imbalance[tape;1e6]");
 
 .man.registerFile ("metatables.q";"";".qmeta";"Declarative metatables for partitioned eFX data. Pure bounded queries and partition replacement; TorQ DQE owns scheduling, transport and persistence. Definitions are trusted q code, not a query language for untrusted clients.");
 .man.registerFunc (".qmeta.definition";".qmeta";"Construct a metatable definition; an empty aggregate dictionary means row counts.";".qmeta.definition";".qmeta.definition[`trade;`date;`sym`venue;()!()]");
