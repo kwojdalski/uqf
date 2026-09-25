@@ -18,6 +18,12 @@ project:
   output-dir: _site
   render:
     - "**/*.md"
+    # The Quarto deck, listed because the glob above is .md only. It renders
+    # as the revealjs deck it declares - Quarto honours a document's own
+    # format inside a website project - so this brings it under the link gate
+    # without flattening it into a page. Its links to ../diagrams/*.svg were
+    # checked by nothing until now.
+    - "presentation/uqf.qmd"
     - "README.md"
     - "architecture/README.md"
     - "guides/README.md"
