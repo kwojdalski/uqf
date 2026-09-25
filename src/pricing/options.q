@@ -83,7 +83,7 @@ gk_put:{[s;k;rd;rf;sigma;t]
     put_leg2:s*foreign_df*.qstats.ncdf[neg d1v];
     put_leg1-put_leg2};
 
-/ Private: dispatch to gk_call/gk_put by an is_call boolean.
+/ Dispatch to gk_call/gk_put by an is_call boolean.
 / @param s spot rate
 / @param k strike
 / @param rd domestic (quote currency) decimal annual rate
@@ -122,6 +122,19 @@ gk_delta_put:{[s;k;rd;rf;sigma;t]
     d1v:d1[s;k;rd;rf;sigma;t];
     foreign_df:.qrates.df_cont[rf;t];
     foreign_df*(.qstats.ncdf[d1v]-1)};
+
+/ Delta: sensitivity of the premium to a change in spot.
+/ @param s spot rate
+/ @param k strike
+/ @param rd domestic (quote currency) decimal annual rate
+/ @param rf foreign (base currency) decimal annual rate
+/ @param sigma volatility, decimal (0.10 = 10%)
+/ @param t year fraction to expiry
+/ @param is_call 1b for a call, 0b for a put
+/ @return the call or put delta
+/ @eg .qopt.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.512884
+/ @eg .qopt.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4722279
+gk_delta:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_delta_call[s;k;rd;rf;sigma;t];gk_delta_put[s;k;rd;rf;sigma;t]]};
 
 / Gamma: sensitivity of delta to a change in spot. Identical for call and put.
 / @param s spot rate
@@ -235,6 +248,19 @@ gk_theta_put:{[s;k;rd;rf;sigma;t]
     drift_term:(rd*k*domestic_df*.qstats.ncdf[neg d2v])-(rf*s*foreign_df*.qstats.ncdf[neg d1v]);
     drift_term-decay_term};
 
+/ Theta: time decay per year (-dV/dT); divide by 365 for a per-calendar-day figure.
+/ @param s spot rate
+/ @param k strike
+/ @param rd domestic (quote currency) decimal annual rate
+/ @param rf foreign (base currency) decimal annual rate
+/ @param sigma volatility, decimal (0.10 = 10%)
+/ @param t year fraction to expiry
+/ @param is_call 1b for a call, 0b for a put
+/ @return the call or put theta
+/ @eg .qopt.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> -0.03732846
+/ @eg .qopt.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.01027354
+gk_theta:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_theta_call[s;k;rd;rf;sigma;t];gk_theta_put[s;k;rd;rf;sigma;t]]};
+
 / Call rho: sensitivity to the domestic rate rd.
 / @param s spot rate
 / @param k strike
@@ -262,6 +288,19 @@ gk_rho_put:{[s;k;rd;rf;sigma;t]
     d2v:d2[s;k;rd;rf;sigma;t];
     domestic_df:.qrates.df_cont[rd;t];
     neg (k*t*domestic_df*.qstats.ncdf[neg d2v])};
+
+/ Rho: sensitivity to the domestic rate rd.
+/ @param s spot rate
+/ @param k strike
+/ @param rd domestic (quote currency) decimal annual rate
+/ @param rf foreign (base currency) decimal annual rate
+/ @param sigma volatility, decimal (0.10 = 10%)
+/ @param t year fraction to expiry
+/ @param is_call 1b for a call, 0b for a put
+/ @return the call or put rho
+/ @eg .qopt.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.3947712
+/ @eg .qopt.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4173519
+gk_rho:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_rho_call[s;k;rd;rf;sigma;t];gk_rho_put[s;k;rd;rf;sigma;t]]};
 
 / Configurable search bracket/iteration cap for bisect_vol's fallback
 / search - lo/hi should stay well outside any real-world vol (0.001% to

@@ -451,13 +451,16 @@ qopt,d1,function,6,s k rd rf sigma t
 qopt,d1_d2,function,6,s k rd rf sigma t
 qopt,d2,function,6,s k rd rf sigma t
 qopt,gk_call,function,6,s k rd rf sigma t
+qopt,gk_delta,function,7,s k rd rf sigma t is_call
 qopt,gk_delta_call,function,6,s k rd rf sigma t
 qopt,gk_delta_put,function,6,s k rd rf sigma t
 qopt,gk_gamma,function,6,s k rd rf sigma t
 qopt,gk_price,function,7,s k rd rf sigma t is_call
 qopt,gk_put,function,6,s k rd rf sigma t
+qopt,gk_rho,function,7,s k rd rf sigma t is_call
 qopt,gk_rho_call,function,6,s k rd rf sigma t
 qopt,gk_rho_put,function,6,s k rd rf sigma t
+qopt,gk_theta,function,7,s k rd rf sigma t is_call
 qopt,gk_theta_call,function,6,s k rd rf sigma t
 qopt,gk_theta_put,function,6,s k rd rf sigma t
 qopt,gk_vanna,function,6,s k rd rf sigma t
