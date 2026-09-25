@@ -7,12 +7,14 @@ venue feeds into the shapes analytics expects, and the **operational tooling** -
 process orchestration, an HTTP gateway and a browser application --- that runs
 the whole thing as a fleet.
 
-**The names.** `uqf` is the repository and the family - the prefix on every
+**The names.** `uqf` is the repository and the family, the prefix on every
 Python package in it (`uqf_frontend`, `uqf_airflow_provider`). `uqs`, the
-*ultimate q stack*, is one of those components rather than the whole: the
-process orchestrator and its `uqs` command. The distinction is what the names
-are for, so a package named plainly `uqf` would be wrong - it would claim to be
-the project while being one part of it.
+*ultimate q stack*, is the process orchestrator and its `uqs` command: one
+component, not the whole. The naming is deliberate. `uqf` is an opinionated
+project with a wider remit than similar frameworks, gluing together good
+existing tools, filling in what they lack, and building its own layer on top. So
+a package named plainly `uqf` would claim to be the project while being one part
+of it.
 
 The q side uses neither: every namespace there is `.q<area>`, from `.qbook` to
 `.qmatz`.
@@ -20,10 +22,6 @@ The q side uses neither: every namespace there is `.q<area>`, from `.qbook` to
 These are separate components with separate contracts, not one library with
 extras bolted on. See [Components](#components) for what each is and where it
 lives.
-
-Every function has a corresponding unit test written against the vendored
-[qUnit](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)
-framework - see [Testing](#testing).
 
 ## Contents
 
