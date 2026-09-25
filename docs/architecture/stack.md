@@ -6,11 +6,11 @@ Reflects what `uqs list processes` shows today: the vendored 23-process stack
 plus uqf's own additions (`fxfeed1`, `quotesfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `markout1`, `databento1`,
 `kafka_flow1`, `cryptomock1`, `executions1`, `marks1`, `fxordersfeed1`,
-`fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`), and
-five bounded backfill processes (`deals_backfill1`, `events_backfill1`,
-`databento_backfill1`, `upstream_backfill1`, `duckdb_deals_backfill1`). Declared
-is not the same as running here - see [what starts with the
-stack](#what-starts-and-why-not-all-of-it).
+`fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`), and six
+bounded backfill processes (`deals_backfill1`, `events_backfill1`,
+`databento_backfill1`, `upstream_backfill1`, `duckdb_deals_backfill1`,
+`crypto_market_data_backfill1`). Declared is not the same as running here - see
+[what starts with the stack](#what-starts-and-why-not-all-of-it).
 
 Direct FX arbitrage flows through `marketdata1` (`quote` and `quotes` into
 `market_data`), `superbook1` (fresh source books merged into `superbook`), and

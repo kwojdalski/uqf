@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **25 uqf processes** — 48 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **26 uqf processes** — 49 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -40,6 +40,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `crossarb1` | 6095 | etl | `processes/torq_stream.q` | `cross_arbitrage` | `superbook` | `cross_arbitrage`, `config_change` |
 | `duckdb_deals_backfill1` | 6096 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | `client_flow` | `kafka_client_flow` | `client_flow` |
+| `crypto_market_data_backfill1` | 6098 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -66,6 +67,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`crossarb1`** — the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default
 - **`duckdb_deals_backfill1`** — bounded: copies mock FX deals from a DuckDB file over ODBC, a day at a time
 - **`kafka_flow1`** — deduplicates client FX flow consumed off a Kafka topic, on the (partition;offset) the record carries. The raw rows are published by an EXTERNAL Python consumer (external/kafka_feed.py) - a q process cannot hold a Kafka subscription - so kafka_client_flow has a schema row but no producer in this list. That is why it does not start with the stack: on a default start nothing publishes the table it subscribes to, and it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer
+- **`crypto_market_data_backfill1`** — bounded: replays cryptorust's recorded crypto book and trade capture from a DuckDB file over ODBC, an hour at a time
 
 ## Tables these processes publish
 

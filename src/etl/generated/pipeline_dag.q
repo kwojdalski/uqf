@@ -47,4 +47,5 @@
     .qetl.dag.register[`crossarb1;`kind`inputs`outputs!(`stream;`superbook;`cross_arbitrage`config_change)];
     .qetl.dag.register[`duckdb_deals_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
     .qetl.dag.register[`kafka_flow1;`kind`inputs`outputs!(`stream;`kafka_client_flow;`client_flow)];
-    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`executions1`marks1`fxordersfeed1`fxpositions1`databento_backfill1`upstream_backfill1`marketdata1`superbook1`arbitrage1`crossarb1`duckdb_deals_backfill1`kafka_flow1}
+    .qetl.dag.register[`crypto_market_data_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
+    `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`executions1`marks1`fxordersfeed1`fxpositions1`databento_backfill1`upstream_backfill1`marketdata1`superbook1`arbitrage1`crossarb1`duckdb_deals_backfill1`kafka_flow1`crypto_market_data_backfill1}

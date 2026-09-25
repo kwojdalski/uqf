@@ -23,7 +23,7 @@ beforeNamespace_load:{[]
 / Every table the orchestrator's generated database.q is expected to carry.
 / A floor AND a list: a missing name is caught, and so is a new one added to
 / the q file without a thought about who consumes it.
-expected:`quotes`wide_book`mkt_orderbook`databento_mbp10`databento_book`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`execution_quality`executions`marks`orders`fx_position`fx_limit_breach`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow
+expected:`quotes`wide_book`mkt_orderbook`databento_mbp10`databento_book`kafka_client_flow`crypto_book`crypto_sim_fills`crypto_trades`trades`position`execution_quality`executions`marks`orders`fx_position`fx_limit_breach`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`crypto_market_data
 
 / The names THIS FILE declares, read back out of it.
 / .
