@@ -16,7 +16,7 @@ a process that is `up`, heartbeating, and publishing nothing.
 A PLAN, NOT A WRITE. Every entry point returns a `ScaffoldPlan` - a list of
 file actions - which the caller renders (`--dry-run`) or applies. That is
 what lets the templates be tested without a repository to write into, and
-`test_scaffold.py` holds the generated `.qstream.register` block against the
+`test_scaffold.py` holds the generated `.qstream.define` block against the
 same regex `pipeline_edges` parses real jobs with, so a template that drifts
 out of what the tree can read fails the build rather than rotting quietly.
 """
@@ -235,7 +235,7 @@ publish:.qstream.unwired `{name};
 / process that runs it, and `autostart`, absent here, keeps it on demand -
 / add `autostart with 1b to start it with the stack, once the connection
 / budget has room.
-.qstream.register[`{name};`procname`subscribes`publishes{timer_key}`{handler}`note!(
+.qstream.define[`{name};`procname`subscribes`publishes{timer_key}`{handler}`note!(
     `{proc};
     {sub_literal};
     {pub_literal};{timer}

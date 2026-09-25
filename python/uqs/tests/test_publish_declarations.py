@@ -125,7 +125,7 @@ def _file(source: str) -> list[Declaration]:
 
 
 _DECL = (
-    ".qstream.register[`j;`procname`subscribes`publishes`on_batch!("
+    ".qstream.define[`j;`procname`subscribes`publishes`on_batch!("
     "`j1;enlist `a;enlist `out;.qsub.j.on_batch)];\n"
 )
 

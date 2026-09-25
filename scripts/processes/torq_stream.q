@@ -39,8 +39,8 @@ which_job:{[]
     raw:$[`job in key opts; first opts`job; ""];
     if[count raw;
         job:`$raw;
-        if[not job in .qstream.registered[];
-            '"torq_stream: -job names ",raw,", which is not a registered streaming job - registered: ",", " sv string .qstream.registered[]];
+        if[not job in .qstream.defined[];
+            '"torq_stream: -job names ",raw,", which is not a registered streaming job - registered: ",", " sv string .qstream.defined[]];
         .qlog.info[`qproc;"job chosen by -job";enlist[`job]!enlist job];
         :job];
     if[()~key `.proc;
@@ -115,7 +115,7 @@ run:{[job]
     / catches a change whatever caused it.
     / .
     / It publishes through the job's OWN publish seam, so the table is
-    / declared in the job's .qstream.register like any other output and
+    / declared in the job's .qstream.define like any other output and
     / verify_pipeline_edges needs no exemption.
     if[count .qcfgaudit.watching job;
         `.qcfgaudit.owner_here set job;

@@ -16,7 +16,7 @@ publishes rows".
 
 **It is a declaration, not a process script.** Since #204 a feed says what it is
 and the framework does the rest: the job file declares its timer body and the
-table it publishes, `.qstream.register` records that, and one generic runner -
+table it publishes, `.qstream.define` records that, and one generic runner -
 `scripts/processes/torq_stream.q` - is what TorQ actually starts. Which job a
 process runs is decided by its procname, so there is no per-feed script any
 more. The three things the job itself still owns:
@@ -30,8 +30,8 @@ more. The three things the job itself still owns:
    than a subscriber
 
 To add your own: write a job file under `src/etl/streaming/` and register it
-with `.qstream.register`. That is the whole registration - the process registry
-is read from the declaration, and a new process is given the next free port in
+with `.qstream.define`. That is the whole registration - the process registry is
+read from the declaration, and a new process is given the next free port in
 `scripts/processes/process_ports.csv`. `uqs new-job` scaffolds it; see [adding a
 pipeline](../guides/new-pipeline.md).
 

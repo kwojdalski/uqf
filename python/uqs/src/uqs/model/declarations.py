@@ -1,6 +1,6 @@
 """The q declarations the process registry is DERIVED from.
 
-Every streaming job (`.qstream.register`, `.qnorm.define` under
+Every streaming job (`.qstream.define`, `.qnorm.define` under
 src/etl/streaming/) and every bounded worker (`.qbw.define` under
 src/etl/workers/) already declares, in q, the process that runs it and the
 tables it reads and writes - and registers itself on load, so a declaration
@@ -34,7 +34,7 @@ from uqs.paths import STREAM_DIR, WORKER_DIR, UqsError
 
 #: The three calls a job or worker declares itself with, and the start of one.
 _CALL_RE = re.compile(
-    r"\.(qstream\.register|qnorm\.define|qbw\.define)\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
+    r"\.(qstream\.define|qnorm\.define|qbw\.define)\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
 )
 _OPEN = "([{"
 _CLOSE = ")]}"
@@ -181,7 +181,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
         raise UqsError(f"{where}: declares no procname")
     autostart = _boolean(fields["autostart"], where) if "autostart" in fields else False
     if fn == "qnorm.define":
-        subscribes = symbols(fields.get("sources", "").split("!", 1)[0])
+        subscribes = symbols(fields.get("input", "").split("!", 1)[0])
         return Declaration(
             name, proc[0], PipelineKind.NORMALIZER, subscribes, (name,), autostart, note, path
         )

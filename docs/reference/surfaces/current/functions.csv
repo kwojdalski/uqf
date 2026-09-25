@@ -555,6 +555,8 @@ qsrc,column_names,function,1,tbl
 qsrc,credential_var,function,1,source
 qsrc,declaration,function,1,source
 qsrc,default_transport,value,,
+qsrc,define,function,2,source decl
+qsrc,defined,function,1,
 qsrc,fetch_window,function,4,source h range_from range_to
 qsrc,has_credentials,function,1,source
 qsrc,load_zone_table,function,1,path
@@ -564,8 +566,6 @@ qsrc,narrow_to_utc,function,4,decl tbl range_from range_to
 qsrc,nonexistent_message,function,2,zone bad
 qsrc,offset_at,function,2,zone ts
 qsrc,offsets_for,function,1,zone
-qsrc,register,function,2,source decl
-qsrc,registered,function,1,
 qsrc,require_credentials,function,1,source
 qsrc,require_zone_table,function,1,zone
 qsrc,required_declarations,value,,
@@ -593,6 +593,8 @@ qstatus,status_dir,function,1,
 qstatus,status_states,value,,
 qstatus,write_status,function,6,worker instance_id state spec progress err
 qstream,declaration,function,1,job
+qstream,define,function,2,job decl
+qstream,defined,function,1,
 qstream,drain,function,2,tblname mask
 qstream,evict,function,2,tblname mask
 qstream,for_procname,function,1,procname
@@ -601,8 +603,6 @@ qstream,job_root,value,,
 qstream,jobs,dict,,
 qstream,namespace,function,1,job
 qstream,procnames,dict,,
-qstream,register,function,2,job decl
-qstream,registered,function,1,
 qstream,required_declarations,value,,
 qstream,unwired,function,1,job
 qstream,wire,function,2,job publisher

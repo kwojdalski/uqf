@@ -1137,11 +1137,11 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
         # before it declares them, and drifting one of those would leave the
         # declaration intact and this "negative" test passing over an
         # unmodified file.
-        head, _, tail = original.partition(".qstream.register[")
-        assert tail, f"no .qstream.register call in {job_file.name}"
+        head, _, tail = original.partition(".qstream.define[")
+        assert tail, f"no .qstream.define call in {job_file.name}"
         drifted_tail = tail.replace(f"`{first}", "`not_a_declared_table", 1)
         assert drifted_tail != tail
-        job_file.write_text(head + ".qstream.register[" + drifted_tail)
+        job_file.write_text(head + ".qstream.define[" + drifted_tail)
     else:
         original = (scripts / target.script).read_text()
         for prefix in (

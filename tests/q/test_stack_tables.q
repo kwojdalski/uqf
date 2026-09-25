@@ -167,7 +167,7 @@ job_tables:{[]
         nms:nms where {[ns;nm] 98h=type get ` sv ns,nm}[ns] each nms;
         ([] job:(count nms)#job; tbl:nms;
             role:{[d;nm] $[nm in d`subscribes;`subscribes;nm in d`publishes;`publishes;`internal]}[d] each nms)
-      } each .qstream.registered[]}
+      } each .qstream.defined[]}
 
 test_every_job_declares_the_shape_the_plant_actually_carries:{[t]
     rows:select from .tabletest.job_tables[] where tbl in .tabletest.declared[];

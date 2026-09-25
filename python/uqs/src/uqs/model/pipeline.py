@@ -37,7 +37,7 @@ _ETL_ACCESS_LIST = "${TORQAPPHOME}/appconfig/passwords/accesslist.txt"
 class _FromDeclaration:
     """Sentinel: this edge is declared in the job's own q file, read it there.
 
-    A streaming job's `.qstream.register` already names its procname, the
+    A streaming job's `.qstream.define` already names its procname, the
     tables it subscribes to and the tables it publishes. Restating them here
     made the registry a second copy of a fact the code states - and
     `verify_pipeline_edges` existed to check the two copies agreed, which is
@@ -122,7 +122,7 @@ class Pipeline:
     # script for its `.sub.subscribe`/`.qpipe.subscribe_etl`/`.u.upd` calls
     # and fails if the declaration and the code disagree. A hand-drawn
     # diagram goes stale silently; this one cannot.
-    # FROM_DECLARATION reads it from the job's own .qstream.register / .qnorm
+    # FROM_DECLARATION reads it from the job's own .qstream.define / .qnorm
     # .define instead, which is where a streaming job already states it.
     subscribes: tuple[str, ...] | _FromDeclaration = ()
     # Tables it publishes via `.u.upd`. Defaults to (table,) - set it

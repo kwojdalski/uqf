@@ -913,10 +913,10 @@ uqs install-jobs ../sidecars --mode symlink --yes   # no questions, for scripts
 A file in `src/etl/sources`, `src/etl/workers` or `src/etl/streaming` is already
 registered - `src/etl/init.q` and the registry glob those folders - so
 installing is putting each file in the right one. Which one is decided by what
-the file declares, not its name or where it sits in the sidecar:
-`.qsrc.register` is a source, `.qbw.define` a worker, `.qstream.register` or
-`.qnorm.define` a streaming job. The plan table shows every `.q` file and what
-will happen to it; these are skipped, with the reason:
+the file declares, not its name or where it sits in the sidecar: `.qsrc.define`
+is a source, `.qbw.define` a worker, `.qstream.define` or `.qnorm.define` a
+streaming job. The plan table shows every `.q` file and what will happen to it;
+these are skipped, with the reason:
 
 - a file declaring nothing (a helper), or more than one kind (split it: the
   three folders load in a fixed order);

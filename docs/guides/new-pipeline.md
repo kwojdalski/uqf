@@ -168,7 +168,7 @@ whose state is a cursor rather than a range.
 Both have a transform, and both are **one file per job**. A continuous job is a
 file under [`src/etl/streaming/`](../../src/etl/streaming) holding every step ---
 schemas, transform, batch handler, timer body, its own buffers --- and a
-`.qstream.register` call naming the tables it subscribes to, the tables it
+`.qstream.define` call naming the tables it subscribes to, the tables it
 publishes and the TorQ process that runs it. A **feed** is the same thing with
 no subscription: it declares a `timer_period` and an `on_timer` that builds rows
 and publishes them. One generic process script,
@@ -199,7 +199,7 @@ in [`src/etl/core/normalizer.q`](../../src/etl/core/normalizer.q). An instance
 declares its output and one `.qxf` transform per source, and the shell owns the
 rest --- it dispatches on the table a batch arrived on, projects the batch onto
 the columns that source's transform declares, applies it, and publishes. It also
-performs the `.qstream.register` itself, so the job's edges cannot disagree with
+performs the `.qstream.define` itself, so the job's edges cannot disagree with
 its mappings, and it refuses at `define` any mapping whose declared output
 drifts from the canonical table, column, type and order. Two ship: `executions`
 (`trades` + `crypto_trades`) and `marks` (`quote` + `crypto_book`), which is how
@@ -211,7 +211,7 @@ one: the canonical table NAME, and per source its schema, a throwing mapping and
 a typed example row, so the file loads while each mapping stays red.
 
 ```q
-.qnorm.define[`executions;`procname`output`sources!(
+.qnorm.define[`executions;`procname`output`input!(
     `executions1;
     .qsub.executions.executions;
     `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
@@ -248,7 +248,7 @@ fixture:{[]
         sym:`EURUSD`GBPUSD`EURUSD`USDJPY`EURUSD;
         mid:1.0842 1.2631 1.0847 149.82 1.0851)}
 
-.qsrc.register[source_name;
+.qsrc.define[source_name;
     `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
     (source_name;`fx_rates;target;time_field;row_key;fields;types;query;fixture;tz)];
 
@@ -415,7 +415,7 @@ outputs| ,`fx_rates
 ### Its process comes from the declaration
 
 There is no registration to add. The uqs process registry is READ from the q
-declarations - every `.qstream.register`/`.qnorm.define` under
+declarations - every `.qstream.define`/`.qnorm.define` under
 `src/etl/streaming/` and every `.qbw.define` under `src/etl/workers/` - by
 [`model/declarations.py`](../../python/uqs/src/uqs/model/declarations.py). It
 used to be a hand-kept Python list restating each one, which made a new job two

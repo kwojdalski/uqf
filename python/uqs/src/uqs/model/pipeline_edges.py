@@ -146,7 +146,7 @@ def resolve_edges(
         if declared is None:
             raise UqsError(
                 f"{pipeline.procname}: declares its edges in q (FROM_DECLARATION) but no "
-                f"`.qstream.register`/`.qnorm.define` naming that process was found under "
+                f"`.qstream.define`/`.qnorm.define` naming that process was found under "
                 f"{STREAM_DIR}. Either the job file is missing, its procname disagrees "
                 f"with the registry, or the edges belong back in the Pipeline entry"
             )
@@ -209,7 +209,7 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
             if pipeline.procname not in stream_edges:
                 problems.append(
                     f"{pipeline.procname}: runs {STREAM_RUNNER_SCRIPT} but no job under "
-                    f"{STREAM_DIR} claims that process - .qstream.register's "
+                    f"{STREAM_DIR} claims that process - .qstream.define's "
                     "procname is how the runner finds out which job it is, so this "
                     "process would refuse to start"
                 )

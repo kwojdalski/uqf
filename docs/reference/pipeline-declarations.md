@@ -8,10 +8,10 @@ pipeline](../guides/new-pipeline.md); for why the blocks are shaped this way,
 
   | Block             | Declared with            | Lives in                                                  | It says                                                |
   | ---               | ---                      | ---                                                       | ---                                                    |
-  | source            | `.qsrc.register`         | `src/etl/sources/<source>.q`, namespace `.qfeed.<source>` | what the external rows are and how to fetch a window   |
+  | source            | `.qsrc.define`           | `src/etl/sources/<source>.q`, namespace `.qfeed.<source>` | what the external rows are and how to fetch a window   |
   | transform         | `.qxf.define`            | beside the job that uses it                               | what rows become, with worked examples                 |
   | bounded worker    | `.qbw.define`            | `src/etl/workers/<worker>.q`, namespace `.qwrk.<worker>`  | which source, which transform, which dataset, how wide |
-  | streaming job     | `.qstream.register`      | `src/etl/streaming/<job>.q`, namespace `.qsub.<job>`      | which tables it reads and writes, and its handlers     |
+  | streaming job     | `.qstream.define`        | `src/etl/streaming/<job>.q`, namespace `.qsub.<job>`      | which tables it reads and writes, and its handlers     |
   | normalizer        | `.qnorm.define`          | `src/etl/streaming/<name>.q`, namespace `.qsub.<name>`    | many sources, one canonical table, a transform each    |
 
 Every declaring function refuses a bad declaration **when the file loads**,
@@ -35,10 +35,10 @@ A worker's transform often uses its source's fixture as its example input
 mixed up: the fixture is the *source's* stand-in, the example is the
 *transform's* test.
 
-## Source --- `.qsrc.register`
+## Source --- `.qsrc.define`
 
-`.qsrc.register[source;decl]`, conventionally at the bottom of the source file
-as `.qsrc.register[source_name; ...]`.
+`.qsrc.define[source;decl]`, conventionally at the bottom of the source file as
+`.qsrc.define[source_name; ...]`.
 
   | key          | required | type                                           | meaning                                                                                                                                                                                                                               | refused when                                                                          |
   | ---          | ---      | ---                                            | ---                                                                                                                                                                                                                                   | ---                                                                                   |
@@ -87,7 +87,7 @@ A job that copies rows unchanged still declares its transform, with
 
   | key         | required | type                              | meaning                                                                                                                                                                                                                                                              | refused when                                                                                                                        |
   | ---         | ---      | ---                               | ---                                                                                                                                                                                                                                                                  | ---                                                                                                                                 |
-  | `source`    | yes      | symbol                            | a source registered with `.qsrc.register`, which must have loaded first (`init.q` loads `sources/` before `workers/`)                                                                                                                                                | not registered                                                                                                                      |
+  | `source`    | yes      | symbol                            | a source registered with `.qsrc.define`, which must have loaded first (`init.q` loads `sources/` before `workers/`)                                                                                                                                                  | not registered                                                                                                                      |
   | `dataset`   | yes      | symbol                            | the name completeness is recorded under: coverage, materialisation metadata and `.qreact` reactions are all keyed by it. The rows themselves land in the **source's `target`**, which is a different key --- usually the same word, not necessarily                  | another worker already declares the same `dataset` and `partition`                                                                  |
   | `width`     | yes      | timespan, e.g. `1D`               | how wide each window is. A run over `[from;to)` is cut into windows this wide, oldest first, and each is fetched, checked and recorded separately                                                                                                                    | not a timespan, or not positive                                                                                                     |
   | `transform` | yes      | symbol                            | a transform declared with `.qxf.define`. It must read exactly one input, whose schema is the source's `fields` and `types`                                                                                                                                           | not registered, more than one input, takes `as_of` (a window has no single instant), or its input is not the source's contract      |
@@ -121,10 +121,10 @@ by `uqs backfill <worker> --version V --from F --to T`.
 Setting `UQF_DRY_RUN` makes a run publish no rows, record no coverage and write
 no checkpoint.
 
-## Streaming job --- `.qstream.register`
+## Streaming job --- `.qstream.define`
 
-`.qstream.register[job;decl]`, at the bottom of the job file. A streaming job
-runs continuously in a TorQ process, reading tickerplant tables and publishing
+`.qstream.define[job;decl]`, at the bottom of the job file. A streaming job runs
+continuously in a TorQ process, reading tickerplant tables and publishing
 others.
 
   | key            | required                          | type                              | meaning                                                                                                                                                                             | refused when                                                    |
@@ -156,12 +156,12 @@ normalizer publishes and its `.qsub.<name>` namespace.
   | ---         | ---      | ---                                          | ---                                                                                                                      | ---                                                                                                                                              |
   | `procname`  | yes      | symbol                                       | the TorQ process that runs it, as for a streaming job                                                                    | as for a streaming job                                                                                                                           |
   | `output`    | yes      | empty typed table                            | the canonical table's schema, without `time`                                                                             | not an unkeyed table, no columns, or a `time` column                                                                                             |
-  | `sources`   | yes      | dict: source table -> transform name         | for each tickerplant table it reads, the `.qxf` transform that maps a batch of it onto `output`                          | empty; a transform not registered, taking more than one input, or whose `output` is not exactly the canonical table --- columns, order and types |
+  | `input`     | yes      | dict: source table -> transform name         | for each tickerplant table it reads, the `.qxf` transform that maps a batch of it onto `output`                          | empty; a transform not registered, taking more than one input, or whose `output` is not exactly the canonical table --- columns, order and types |
   | `autostart` | no       | boolean, default `0b`                        | as for a streaming job                                                                                                   | not a boolean                                                                                                                                    |
   | `note`      | no       | string                                       | as for a streaming job                                                                                                   | not a string                                                                                                                                     |
 
 `define` registers the streaming job itself: `subscribes` is the keys of
-`sources`, `publishes` is `name`, and `on_batch` is a dispatcher that trims each
+`input`, `publishes` is `name`, and `on_batch` is a dispatcher that trims each
 batch to the columns its transform declares, applies it, and publishes. The
 normalizer's file never handles a batch.
 

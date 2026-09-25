@@ -95,7 +95,7 @@ on_batch:{[tbl;batch]
 
 \d .
 
-.qstream.register[`databento_book;
+.qstream.define[`databento_book;
     `procname`subscribes`publishes`on_batch`note!(
         `databento1;
         enlist `databento_mbp10;

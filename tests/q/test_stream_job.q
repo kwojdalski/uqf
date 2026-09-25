@@ -38,7 +38,7 @@ reset:{[]
     `.qsub.fx_positions.book set `sym`book`product xkey 0#.qsub.fx_positions.desk_book;
     `.qsub.fx_positions.limits set 0#.qsub.fx_positions.limits;
     `.qsub.fx_positions.alerts set .qlimit.no_alerts[];
-    {.qstream.wire[x;.sjtest.recorder x]} each .qstream.registered[];
+    {.qstream.wire[x;.sjtest.recorder x]} each .qstream.defined[];
     }
 
 / The rows of the last publication. The `rows` column holds each batch as
@@ -61,7 +61,7 @@ test_every_job_is_registered:{[t]
     / equality because other suites register test jobs (.qsub.nt_k and
     / friends), and whether they ran first is not what this asks. The other
     / direction is test_every_registered_job_has_a_file, below.
-    .qunit.assertEquals[.testutil.etl_declaration_names["src/etl/streaming"] except .qstream.registered[];
+    .qunit.assertEquals[.testutil.etl_declaration_names["src/etl/streaming"] except .qstream.defined[];
         `symbol$();
         "each job file registers itself as it loads"]};
 
@@ -71,7 +71,7 @@ test_every_job_is_registered:{[t]
 / test bodies, so this is the tree's own set whatever UQF_TEST_ORDER says.
 / A suite that registered a job at load time would land here and fail the
 / test below, which is the right outcome: register fixtures inside a test.
-src_jobs:.qstream.registered[]
+src_jobs:.qstream.defined[]
 
 test_every_registered_job_has_a_file:{[t]
     / The direction the hand list used to carry and the file-derived check
@@ -88,13 +88,13 @@ test_a_feed_declares_no_subscription:{[t]
 
 test_a_subscriber_with_no_handler_is_refused:{[t]
     / It would receive every batch and drop it, and look healthy doing so.
-    .qunit.assertError[{.qstream.register[`handlerless;x]};
+    .qunit.assertError[{.qstream.define[`handlerless;x]};
         `procname`subscribes`publishes`timer_period`on_timer!(
             `handlerless1;enlist `trades;`symbol$();0D00:00:01;{[] ()});
         "a job that subscribes must say what to do with a batch"]};
 
 test_a_job_that_does_nothing_is_refused:{[t]
-    .qunit.assertError[{.qstream.register[`idle;x]};
+    .qunit.assertError[{.qstream.define[`idle;x]};
         `procname`subscribes`publishes!(`idle1;`symbol$();`symbol$());
         "a job with neither a handler nor a timer runs nothing at all"]};
 
@@ -102,14 +102,14 @@ test_a_job_that_does_nothing_is_refused:{[t]
 / from these declarations - so a malformed one is refused here, by name,
 / rather than read later as a registry that quietly disagrees.
 test_an_autostart_that_is_not_a_boolean_is_refused:{[t]
-    .qunit.assertThrows[{.qstream.register[`badstart;x]};
+    .qunit.assertThrows[{.qstream.define[`badstart;x]};
         `procname`subscribes`publishes`timer_period`on_timer`autostart!(
             `badstart1;`symbol$();`symbol$();0D00:00:01;{[] ()};`yes);
         "*autostart must be a boolean*";
         "autostart is a flag, not a word that reads like one"]};
 
 test_a_note_that_is_not_a_string_is_refused:{[t]
-    .qunit.assertThrows[{.qstream.register[`badnote;x]};
+    .qunit.assertThrows[{.qstream.define[`badnote;x]};
         `procname`subscribes`publishes`timer_period`on_timer`note!(
             `badnote1;`symbol$();`symbol$();0D00:00:01;{[] ()};`why);
         "*note must be a string*";
@@ -135,20 +135,20 @@ test_an_unclaimed_process_is_refused_by_name:{[t]
         "a process no job claims is an error naming it, not a job subscribed to nothing"]};
 
 test_a_declaration_missing_a_field_is_refused:{[t]
-    .qunit.assertError[{.qstream.register[`incomplete;x]};
+    .qunit.assertError[{.qstream.define[`incomplete;x]};
         `procname`subscribes`publishes!(`incomplete1;enlist `t;`symbol$());
         "a job with no on_batch is refused at declaration"]};
 
 test_half_a_timer_is_refused:{[t]
     / A period with no body is a job whose timer never does anything, and
     / every other test still passes.
-    .qunit.assertError[{.qstream.register[`halftimer;x]};
+    .qunit.assertError[{.qstream.define[`halftimer;x]};
         `procname`subscribes`publishes`on_batch`timer_period!(
             `halftimer1;enlist `t;`symbol$();{[tbl;batch] ()};0D00:00:01);
         "a timer_period without an on_timer is refused"]};
 
 test_two_jobs_may_not_claim_one_process:{[t]
-    .qunit.assertError[{.qstream.register[`impostor;x]};
+    .qunit.assertError[{.qstream.define[`impostor;x]};
         `procname`subscribes`publishes`on_batch!(
             `markout1;enlist `t;`symbol$();{[tbl;batch] ()});
         "one process runs one job, so a second claim on markout1 is refused"]};
@@ -253,8 +253,8 @@ test_the_trades_feed_publishes_one_fill_a_tick:{[t]
 / class should not be checked one instance at a time.
 
 / Every registered job that publishes on a timer.
-feeds:{[] .qstream.registered[] where
-    {[j] d:.qstream.declaration j; (`timer_period in key d) and count d`publishes} each .qstream.registered[]}
+feeds:{[] .qstream.defined[] where
+    {[j] d:.qstream.declaration j; (`timer_period in key d) and count d`publishes} each .qstream.defined[]}
 
 / Invariant 3, plus the length agreement it exists to protect: a batch's
 / row count comes from its first column, so a column of a different

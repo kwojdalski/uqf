@@ -217,7 +217,7 @@ def install_jobs(
 
     Each .q file goes where src/etl/init.q and the registry look for its kind -
     src/etl/sources, src/etl/workers or src/etl/streaming - decided by what it
-    declares (.qsrc.register, .qbw.define, .qstream.register/.qnorm.define), so
+    declares (.qsrc.define, .qbw.define, .qstream.define/.qnorm.define), so
     the sidecar can be laid out any way. Then the derived files are
     regenerated, and the next steps say how to check the jobs are running.
 

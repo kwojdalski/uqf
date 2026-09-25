@@ -140,7 +140,7 @@ drivers:`markout`posbook`vectorize`databento_book`fx_positions`executions`marks`
     {[] .qsub.cross_arbitrage.on_batch[`superbook;0!.xarbtest.with_direct[164.80;164.90]]})
 
 / Every registered job that declares at least one published table.
-publishing:{[] j where {[j] 0<count (),.qstream.declaration[j]`publishes} each j:.qstream.registered[]}
+publishing:{[] j where {[j] 0<count (),.qstream.declaration[j]`publishes} each j:.qstream.defined[]}
 
 / A feed drives itself: it subscribes to nothing and publishes on a timer.
 / Fifty ticks because crypto_mock's fills are a draw - .sjtest relies on
