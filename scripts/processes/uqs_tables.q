@@ -121,7 +121,14 @@ kafka_client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); partition:`l
 / Written by the external cryptorust recorder rather than by any
 / scripts/torq_*.q process - see start_crypto_recorder. Carries `venue`
 / because a crypto book is venue-specific in a way an FX book here is not.
-crypto_book:([]time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+/ .
+/ `time` is THIS stack's receipt stamp and `source_time` is the venue's own,
+/ as for market_data and kafka_client_flow. They were one column until the
+/ two were found to be conflated: marks read `time` and published it AS
+/ source_time, so the plant's clock reached a downstream consumer wearing the
+/ venue's name, and no reader could tell them apart. cryptorust's BookUpdate
+/ has carried the venue stamp all along - see kdb_market_data_recorder.rs.
+crypto_book:([]time:`timestamp$(); source_time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / Simulated fills from cryptorust's OMS. Distinct from crypto_trades below,
 / which carries real fills: conflating simulated and real execution in one

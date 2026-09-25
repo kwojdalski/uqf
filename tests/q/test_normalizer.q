@@ -141,6 +141,26 @@ test_the_shipped_normalizers_are_defined_and_registered:{[t]
     .qunit.assertEquals[.qetl.dag.kinds;`bounded`continuous`stream`reaction`normalizer;
         "and normalizer is a kind the job graph knows"]};
 
+test_a_crypto_mark_carries_the_venues_clock_not_the_plants:{[t]
+    / The two clocks made to disagree by four hours, so reading the wrong
+    / one cannot pass. marks published the PLANT's `time` as `source_time`
+    / until 2026-09-25: for a live row the two are milliseconds apart and it
+    / was invisible, but a replayed or backfilled row would assert the venue
+    / quoted that mid whenever the plant happened to receive it.
+    row:([] time:enlist 2026.09.17D14:32:09.000000000;
+        source_time:enlist 2026.09.17D10:00:01.000000000;
+        venue:enlist `binance_spot; sym:enlist `$"BTC-USDT";
+        bid_prices:enlist 61999 61998 61997f; bid_sizes:enlist 3#0.5;
+        ask_prices:enlist 62001 62002 62003f; ask_sizes:enlist 3#0.5);
+    m:.qpipe.job.marks.from_crypto_book row;
+    .qunit.assertEquals[first m`source_time;2026.09.17D10:00:01.000000000;
+        "the venue's stamp, not the plant's 14:32:09"];
+    .qunit.assertEquals[first m`mid;62000f;"and the mid is still the touch midpoint"]};
+
+test_a_crypto_mark_never_carries_a_time_of_its_own:{[t]
+    .qunit.assertEquals[`time in cols .qpipe.job.marks.marks;0b;
+        "the plant stamps `time` on what marks publishes - sending one makes the message a column too wide"]};
+
 test_every_shipped_mapping_verifies:{[t]
     / The examples in executions.q and marks.q, run - test_transform.q does
     / this for every transform too, but a reader of THIS file should see the

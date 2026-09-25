@@ -144,14 +144,20 @@ drift_toxicity:{[toxicity] 1&-1|(0.9*toxicity)+0.1*-1+2*rand 1f}
 / Takes the market as an argument and returns rows, so a tick's shape is
 / checkable with no tickerplant. Every column is a vector as long as the
 / market has rows; the four ladder columns are lists of vectors.
+/ `source_time` is .z.p, one instant for the whole tick: the mock has no
+/ venue to be stamped by, and a healthy live feed is one where the venue's
+/ stamp and the plant's are milliseconds apart. It is emitted rather than
+/ left out because .u.upd takes columns POSITIONALLY - a publisher one column
+/ short of its plant table misaligns every column after the gap, silently,
+/ and no contract test covers a feed.
 / @param mkt the market table
-/ @return the rows: venue, sym, bid_prices, bid_sizes, ask_prices, ask_sizes
-/ @eg count first .qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market] 2 -> 3
+/ @return the rows: source_time, venue, sym, bid_prices, bid_sizes, ask_prices, ask_sizes
+/ @eg count first .qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market] 3 -> 3
 book_rows:{[mkt]
     n:.qpipe.job.crypto_mock.n_levels;
     unit:.qpipe.job.crypto_mock.quote_size .qpipe.job.crypto_mock.syms?mkt`sym;
     step:.qpipe.job.crypto_mock.level_step*mkt`mid;
-    (mkt`venue; mkt`sym;
+    (count[mkt]#.z.p; mkt`venue; mkt`sym;
         .qsynth.levels_one[;;-1;n] .' flip (mkt`mid;step);
         {[u;n] u*1+til n}[;n] each unit;
         .qsynth.levels_one[;;1;n] .' flip (mkt`mid;step);

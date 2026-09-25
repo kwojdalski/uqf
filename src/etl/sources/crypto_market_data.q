@@ -141,8 +141,8 @@ select_list:{[]
 / right for any bound is the one written down.
 / @param ts a timestamp
 / @return SQL text for the first millisecond at or after it
-/ @eg .qpipe.source.crypto_market_data.epoch_ms_bound[2026.09.25D21:00:00.000000000]  ->  "1790370000000"
-/ @eg .qpipe.source.crypto_market_data.epoch_ms_bound[2026.09.25D21:00:00.000000001]  ->  "1790370000001"
+/ @eg .qpipe.source.crypto_market_data.epoch_ms_bound[2026.09.11D21:00:00.000000000]  ->  "1789160400000"
+/ @eg .qpipe.source.crypto_market_data.epoch_ms_bound[2026.09.11D21:00:00.000000001]  ->  "1789160400001"
 epoch_ms_bound:{[ts] .qetl.io.odbc.literal neg[(neg "j"$ts-1970.01.01D00:00) div 1000000]}
 
 / The SQL for one window: half-open [range_from;range_to) on timestamp_ms,
@@ -150,7 +150,7 @@ epoch_ms_bound:{[ts] .qetl.io.odbc.literal neg[(neg "j"$ts-1970.01.01D00:00) div
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the SELECT statement text
-/ @eg .qpipe.source.crypto_market_data.sql_for[2026.09.25D21:00:00.000000000;2026.09.25D22:00:00.000000000]
+/ @eg .qpipe.source.crypto_market_data.sql_for[2026.09.11D21:00:00.000000000;2026.09.11D22:00:00.000000000]
 sql_for:{[range_from;range_to]
     "SELECT ",select_list[]," FROM ",string[table_name],
     " WHERE timestamp_ms >= ",epoch_ms_bound[range_from],
@@ -160,7 +160,7 @@ sql_for:{[range_from;range_to]
 / The driver's table in the declared types and column order.
 / @param raw the table .qetl.io.odbc.run_sql returns for sql_for's statement
 / @return the same rows as the contract declares them
-/ @eg .qpipe.source.crypto_market_data.adapt[update source_time:1790370262231,local_time:1790370262231,venue:enlist "coinbase_spot",sym:enlist "BTC-USD",is_snapshot:1i,trade_side:enlist "buy" from 1#.qpipe.source.crypto_market_data.fixture[]]  ->  the same row with source_time 2026.09.25D21:04:22.231000000 and the four text columns as symbols
+/ @eg .qpipe.source.crypto_market_data.adapt[update source_time:1789160662231,local_time:1789160662231,venue:enlist "coinbase_spot",sym:enlist "BTC-USD",is_snapshot:1i,trade_side:enlist "buy" from 1#.qpipe.source.crypto_market_data.fixture[]]  ->  the same row with source_time 2026.09.11D21:04:22.231000000 and the four text columns as symbols
 adapt:{[raw]
     t:@[raw;`source_time`local_time;{1970.01.01D00:00+1000000*x}];
     t:@[t;`venue`sym`trade_side;{`$x}];
@@ -191,16 +191,24 @@ fixture_levels:{[bid;ask;tick;sz]
 / the touch moved. An hour apart because the worker's window is 0D01, so a
 / run over both windows fetches three rows each and neither is empty.
 / .
+/ DATED EARLIER THAN THE CAPTURE THEY CAME FROM, and that is the one liberty
+/ taken with them. .qetl.io.hdb refuses a batch dated today or later - today
+/ belongs to the tickerplant and end-of-day, not to a backfill - so a fixture
+/ carrying the capture's own date would make the HDB path undemonstrable on
+/ the day it was written, and only that day. Every other source's fixture is
+/ past-dated for the same reason. The clock times and every value are the
+/ capture's; only the date moved.
+/ .
 / The capture's own quirks are kept rather than tidied away: is_snapshot is
 / true on every row (this recorder only ever wrote snapshots), and
 / latency_ms/latency_min_ms are 0 throughout (venue and recorder clocks agreed
 / to the millisecond). A fixture that invented variation there would assert
 / something the source has never produced.
 fixture:{[]
-    base:([] source_time:2026.09.25D21:04:21.968000000 2026.09.25D21:04:21.989000000 2026.09.25D21:04:22.231000000
-                          2026.09.25D22:04:21.968000000 2026.09.25D22:04:21.989000000 2026.09.25D22:04:22.231000000;
-        local_time:2026.09.25D21:04:21.968000000 2026.09.25D21:04:21.989000000 2026.09.25D21:04:22.231000000
-                          2026.09.25D22:04:21.968000000 2026.09.25D22:04:21.989000000 2026.09.25D22:04:22.231000000;
+    base:([] source_time:2026.09.11D21:04:21.968000000 2026.09.11D21:04:21.989000000 2026.09.11D21:04:22.231000000
+                          2026.09.11D22:04:21.968000000 2026.09.11D22:04:21.989000000 2026.09.11D22:04:22.231000000;
+        local_time:2026.09.11D21:04:21.968000000 2026.09.11D21:04:21.989000000 2026.09.11D21:04:22.231000000
+                          2026.09.11D22:04:21.968000000 2026.09.11D22:04:21.989000000 2026.09.11D22:04:22.231000000;
         venue:6#`$"coinbase_spot";
         sym:6#`$("SOL-USD";"ETH-USD";"BTC-USD");
         is_snapshot:6#1b);

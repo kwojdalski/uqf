@@ -30,7 +30,7 @@ marks:([] source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); mid:`floa
 / What each mapping reads. `quote` is the vendored schema's first four
 / columns - the rest (sizes, mode, exchange, source) are not a mid.
 quote:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$())
-crypto_book:([] time:`timestamp$(); venue:`symbol$(); sym:`symbol$();
+crypto_book:([] time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); sym:`symbol$();
     bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / The venue an FX quote is attributed to - the same one fills.q gives an
@@ -45,10 +45,18 @@ from_quote:{[batch]
 
 / A crypto book row as a mark: halfway between the best bid and the best
 / ask, which are level 0 of each ladder.
+/ .
+/ Reads crypto_book's `source_time` - the VENUE's stamp. It used to read
+/ `time`, the plant's receipt stamp, and publish that as source_time: for a
+/ live row the two are milliseconds apart and the lie was invisible, but a
+/ row replayed or backfilled hours later would assert the venue quoted that
+/ mid at the moment the plant happened to receive it, and posbook would value
+/ positions on it. The plant's clock must not reach a consumer wearing the
+/ venue's name.
 / @param batch a crypto_book batch
 / @return canonical marks
 from_crypto_book:{[batch]
-    select source_time:time, sym, venue,
+    select source_time, sym, venue,
         mid:((first each bid_prices)+first each ask_prices)%2 from batch}
 
 \d .
@@ -68,11 +76,12 @@ from_crypto_book:{[batch]
     .qpipe.job.marks.marks;
     .qpipe.job.marks.from_crypto_book;
     enlist `inputs`expected!(
-        (enlist `crypto_book)!enlist ([] time:enlist 2026.09.17D10:00:01;
+        (enlist `crypto_book)!enlist ([] time:enlist 2026.09.17D14:32:09.000000000;
+            source_time:enlist 2026.09.17D10:00:01.000000000;
             venue:enlist `binance_spot; sym:enlist `$"BTC-USDT";
             bid_prices:enlist 61999 61998 61997f; bid_sizes:enlist 0.5 1 1.5;
             ask_prices:enlist 62001 62002 62003f; ask_sizes:enlist 0.5 1 1.5);
-        ([] source_time:enlist 2026.09.17D10:00:01; sym:enlist `$"BTC-USDT";
+        ([] source_time:enlist 2026.09.17D10:00:01.000000000; sym:enlist `$"BTC-USDT";
             venue:enlist `binance_spot; mid:enlist 62000f)))];
 
 .qetl.job.stream.normalize[`marks;`procname`output`input`start_with_all`note!(

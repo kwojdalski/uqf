@@ -51,6 +51,7 @@
 "cross_arbitrage","fully_filled","b"
 "cross_arbitrage","skew","n"
 "crypto_book","time","p"
+"crypto_book","source_time","p"
 "crypto_book","venue","s"
 "crypto_book","sym","s"
 "crypto_book","bid_prices"," "
