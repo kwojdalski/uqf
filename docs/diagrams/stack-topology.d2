@@ -132,7 +132,7 @@ runner: "One script for all but tap1 — scripts/processes/torq_stream.q" {
   grid-gap: 26
 
   qpipe: ".qpipe — the TorQ adapter\nfinds the tickerplant, opens the handle,\nreshapes rows for .u.upd, traps the timer" { class: adapter }
-  note: "A job declares subscribes · publishes ·\non_batch · on_timer and nothing else.\nIts procname is what selects it at startup.\ntap1 is the exception: its own script." { class: adapter }
+  note: "A job declares subscribe_to · publishes ·\non_batch · on_timer and nothing else.\nIts procname is what selects it at startup.\ntap1 is the exception: its own script." { class: adapter }
 }
 
 tp: "Tickerplant" {

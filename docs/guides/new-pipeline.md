@@ -22,7 +22,9 @@ be a `\l` line per file --- twenty-six of them, a hand-kept copy of `ls` whose
 failure mode was a file nobody loaded.
 
 Everything else follows from those. Why it is shaped this way is [the pipeline
-philosophy](../architecture/pipeline-philosophy.md).
+philosophy](../architecture/pipeline-philosophy.md). Every key each declaration
+accepts, and what it refuses, is in [the declaration
+reference](../reference/pipeline-declarations.md).
 
 ## Scaffolding it
 
@@ -45,7 +47,7 @@ every new table passes through. After writing them, `new-job` reruns
 declared.
 
 ```
-uqs new-job markout2 --subscribes trades,quote \
+uqs new-job markout2 --subscribe-to trades,quote \
     --publishes my_metric --columns "sym:symbol, value:float"
 
 uqs new-job fx_rates --kind backfill --dataset fx_rates \
@@ -65,7 +67,7 @@ refuses a dataset another worker already fills without a partition.
 
 A streaming job follows the same rule for what it publishes: `--publishes` takes
 a comma list, a table the plant already defines is published onto without
-`--columns`, and `--columns` shapes the one new table. Its `--subscribes` must
+`--columns`, and `--columns` shapes the one new table. Its `--subscribe-to` must
 name tables the plant defines, so a producer is scaffolded before its consumer.
 
 `--dry-run` prints what it would write and writes nothing. `kind` is derived for
@@ -87,7 +89,7 @@ until written - the batch
 drives the job with to hold every table it publishes to its plant table:
 
 ```
-uqs new-job dxprobe --subscribes trades --publishes dx_t --columns "sym:symbol, v:float"
+uqs new-job dxprobe --subscribe-to trades --publishes dx_t --columns "sym:symbol, v:float"
 q tests/run_tests.q
 ```
 
@@ -166,10 +168,10 @@ whose state is a cursor rather than a range.
 Both have a transform, and both are **one file per job**. A continuous job is a
 file under [`src/etl/streaming/`](../../src/etl/streaming) holding every step ---
 schemas, transform, batch handler, timer body, its own buffers --- and a
-`.qstream.register` call naming the tables it subscribes to, the tables it
+`.qstream.define` call naming the tables it subscribes to, the tables it
 publishes and the TorQ process that runs it. A **feed** is the same thing with
-no subscription: it declares a `timer_period` and an `on_timer` that builds rows
-and publishes them. One generic process script,
+no subscription: it declares a `period` and an `on_timer` that builds rows and
+publishes them. One generic process script,
 [`scripts/processes/torq_stream.q`](../../scripts/processes/torq_stream.q), runs
 whichever job the process it was started as claims.
 
@@ -197,19 +199,19 @@ in [`src/etl/core/normalizer.q`](../../src/etl/core/normalizer.q). An instance
 declares its output and one `.qxf` transform per source, and the shell owns the
 rest --- it dispatches on the table a batch arrived on, projects the batch onto
 the columns that source's transform declares, applies it, and publishes. It also
-performs the `.qstream.register` itself, so the job's edges cannot disagree with
+performs the `.qstream.define` itself, so the job's edges cannot disagree with
 its mappings, and it refuses at `define` any mapping whose declared output
 drifts from the canonical table, column, type and order. Two ship: `executions`
 (`trades` + `crypto_trades`) and `marks` (`quote` + `crypto_book`), which is how
 `posbook1` holds FX and crypto positions in one book without knowing either
 market's tape format. A third market is a mapping in a normalizer, not a branch
 in a consumer.
-`uqs new-job NAME --kind normalizer --subscribes a,b --columns ...` scaffolds
+`uqs new-job NAME --kind normalizer --subscribe-to a,b --columns ...` scaffolds
 one: the canonical table NAME, and per source its schema, a throwing mapping and
 a typed example row, so the file loads while each mapping stays red.
 
 ```q
-.qnorm.define[`executions;`procname`output`sources!(
+.qnorm.define[`executions;`procname`output`input!(
     `executions1;
     .qsub.executions.executions;
     `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
@@ -228,12 +230,12 @@ A source declares its **shape**, not its plumbing. Create
 \d .qfeed.fx_rates
 
 source_name:`fx_rates
-fields:`rate_time`sym`mid     / the columns this adapter reads
+columns:`rate_time`sym`mid    / the columns this adapter reads
 types:"psf"                    / one q type character per field
 target:`fx_rates               / the local table they land in
-time_field:`rate_time          / the column the window is taken on
+time_column:`rate_time         / the column the window is taken on
 row_key:`rate_time`sym         / what identifies a row uniquely
-tz:`UTC                        / what time_field is expressed in
+tz:`UTC                        / what time_column is expressed in
 
 query:{[h;range_from;range_to]
     h({[from_ts;to_ts]
@@ -246,9 +248,9 @@ fixture:{[]
         sym:`EURUSD`GBPUSD`EURUSD`USDJPY`EURUSD;
         mid:1.0842 1.2631 1.0847 149.82 1.0851)}
 
-.qsrc.register[source_name;
-    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
-    (source_name;`fx_rates;target;time_field;row_key;fields;types;query;fixture;tz)];
+.qsrc.define[source_name;
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`fx_rates;target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .
 ```
@@ -261,9 +263,9 @@ Sources live under one `.qfeed` root and are named exactly as they register, so
 `\d .qfeed.fx_rates` goes with
 `source_name:`fx_rates` and nothing else — `test_source_contract.q` reads every file under `src/etl/sources/` and fails if the two disagree. Before the root, the namespace was an abbreviation (`.qsdemo` for `demo_deals`) that no check compared with anything. Workers do the same thing under `.qwrk\`.
 
-**`fields` is what you READ, not everything the source has.** Declaring a column
-the worker never touches means an upstream change to an unused column breaks the
-run.
+**`columns` is what you READ, not everything the source has.** Declaring a
+column the worker never touches means an upstream change to an unused column
+breaks the run.
 
 **`query` is a parameterised lambda, never string concatenation.** The bounds
 are arguments to a functional select evaluated on the remote side, so no caller
@@ -364,7 +366,7 @@ prompt and from nowhere else.
 
 **`transform` is required, because it is the job.** It runs between fetch and
 the check, so the check and the target both see its output. Its one input must
-be the source's `fields` and `types` exactly, and `define` refuses a transform
+be the source's `columns` and `types` exactly, and `define` refuses a transform
 written against any other shape. The expected table is written by hand:
 `tests/q/test_transform.q` runs every registered transform's examples on every
 build, calls each twice to catch a clock or a random draw in the output, and
@@ -404,7 +406,7 @@ The job graph adopts the worker from its own declaration:
 
 ```q
 q).qdag.adopt_workers[];
-q).qdag.declaration `fx_rates_backfill
+q).qdag.def `fx_rates_backfill
 kind   | `bounded
 inputs | ,`fx_rates@fx_rates
 outputs| ,`fx_rates
@@ -413,7 +415,7 @@ outputs| ,`fx_rates
 ### Its process comes from the declaration
 
 There is no registration to add. The uqs process registry is READ from the q
-declarations - every `.qstream.register`/`.qnorm.define` under
+declarations - every `.qstream.define`/`.qnorm.define` under
 `src/etl/streaming/` and every `.qbw.define` under `src/etl/workers/` - by
 [`model/declarations.py`](../../python/uqs/src/uqs/model/declarations.py). It
 used to be a hand-kept Python list restating each one, which made a new job two
@@ -432,15 +434,15 @@ A worker's declaration names its process, and may say why it exists:
 
 `procname` defaults to `<worker>1` when absent, in q and in the registry alike.
 A backfill never starts with the stack - it registers with discovery, runs its
-range and exits - so a worker has no `autostart`.
+range and exits - so a worker has no `start_with_all`.
 
-A streaming job already names its `procname`, `subscribes` and `publishes`, and
-those are its process's edges. Two more keys are optional:
+A streaming job already names its `procname`, `subscribe_to` and `publishes`,
+and those are its process's edges. Two more keys are optional:
 
-  | key         | means                                                | absent    |
-  | ---         | ---                                                  | ---       |
-  | `autostart` | `1b` to start with the stack                         | on demand |
-  | `note`      | why it is deployed as it is, shown in `processes.md` | no note   |
+  | key              | means                                                | absent    |
+  | ---              | ---                                                  | ---       |
+  | `start_with_all` | `1b` to start with the stack                         | on demand |
+  | `note`           | why it is deployed as it is, shown in `processes.md` | no note   |
 
 Default on demand, because joining the default start spends one of the plant's
 sixteen licensed connections (#285) - a decision to make on purpose.

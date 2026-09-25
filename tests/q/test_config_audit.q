@@ -158,7 +158,7 @@ test_the_publisher_sends_through_the_jobs_own_seam_when_called:{[t]
     `.cfgatest.sent set ();
     .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
     `.qcfgaudit.owner_here set `cross_arbitrage;
-    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
+    .qstream.wire[`cross_arbitrage;{[t;x] `.cfgatest.sent set (t;x)}];
     / nothing yet - the work must happen on the CALL, not on the wiring
     .qunit.assertEquals[.cfgatest.sent;();"wiring alone publishes nothing"];
     .qcfgaudit.poll_and_publish[];
@@ -170,7 +170,7 @@ test_a_second_call_publishes_nothing_when_nothing_moved:{[t]
     reset[];
     .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
     `.qcfgaudit.owner_here set `cross_arbitrage;
-    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
+    .qstream.wire[`cross_arbitrage;{[t;x] `.cfgatest.sent set (t;x)}];
     .qcfgaudit.poll_and_publish[];
     `.cfgatest.sent set ();
     .qcfgaudit.poll_and_publish[];
@@ -182,7 +182,7 @@ test_a_change_between_two_calls_is_published_by_the_second:{[t]
     reset[];
     .qcfgaudit.watch[`cross_arbitrage;`.cfgatest.a_number];
     `.qcfgaudit.owner_here set `cross_arbitrage;
-    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.cfgatest.sent set (tbl;rows)}];
+    .qstream.wire[`cross_arbitrage;{[t;x] `.cfgatest.sent set (t;x)}];
     .qcfgaudit.poll_and_publish[];
     `.cfgatest.a_number set 99;
     `.cfgatest.sent set ();
@@ -210,7 +210,7 @@ test_every_watching_job_declares_config_change_as_an_output:{[t]
     reset[];
     `.qcfgaudit.watched set .cfgatest.saved_watched;
     owners:key .qcfgaudit.watched;
-    owners:owners where owners in .qstream.registered[];
-    bad:owners where not {[j] `config_change in (.qstream.declaration j)`publishes} each owners;
+    owners:owners where owners in .qstream.defined[];
+    bad:owners where not {[j] `config_change in (.qstream.def j)`publishes} each owners;
     .qunit.assertEquals[count bad;0;
         "a job that audits its config must declare config_change among its publishes"]};

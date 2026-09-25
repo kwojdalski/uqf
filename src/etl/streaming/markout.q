@@ -82,14 +82,14 @@ quote_hist:quotes;
 / .
 / Scoring happens on the timer rather than here: a fill cannot be scored
 / until the quotes at its horizons have arrived.
-/ @param tbl the table the batch arrived on
-/ @param batch the rows, as a table
+/ @param t the table the batch arrived on
+/ @param x the rows, as a table
 / @return nothing - this handler publishes nothing itself
-on_batch:{[tbl;batch]
-    $[tbl=`trades;
-        `.qsub.markout.pending insert select time, sym, side, trade_price, size, pip_factor from batch where sym in .qsynth.pairs;
-      tbl=`quote;
-        `.qsub.markout.quote_hist insert select time, sym, bid, ask from batch where sym in .qsynth.pairs;
+on_batch:{[t;x]
+    $[t=`trades;
+        `.qsub.markout.pending insert select time, sym, side, trade_price, size, pip_factor from x where sym in .qsynth.pairs;
+      t=`quote;
+        `.qsub.markout.quote_hist insert select time, sym, bid, ask from x where sym in .qsynth.pairs;
       ()];
     }
 
@@ -171,7 +171,7 @@ now:{[] .z.p}
 
 / Score every second - frequent enough that execution_quality stays close to
 / real-time in a demo, cheap enough not to matter at this data volume.
-.qstream.register[`markout;`procname`subscribes`publishes`on_batch`timer_period`on_timer`autostart`note!(
+.qstream.define[`markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
     `markout1;
     `trades`quote;
     enlist `execution_quality;

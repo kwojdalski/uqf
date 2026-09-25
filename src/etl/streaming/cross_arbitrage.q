@@ -177,19 +177,19 @@ evaluate:{[state;size;as_of]
     select from result where 0<count each route}
 
 / Replace the snapshots this batch carries, then republish every status.
-/ @param tbl incoming table name
-/ @param batch superbook rows
+/ @param t incoming table name
+/ @param x superbook rows
 / @return nothing
 / @eg .qsub.cross_arbitrage.on_batch[`unrelated;()]
-on_batch:{[tbl;batch]
-    if[not tbl=`superbook; :()];
-    if[0=count batch; :()];
+on_batch:{[t;x]
+    if[not t=`superbook; :()];
+    if[0=count x; :()];
     / `![...;enlist `time]`, not `` `time _ batch ``: `_` drops a key from a
     / DICT, and on a table it is a 'type - which TorQ traps into the error
     / log, so the process stays up, keeps reporting healthy, and silently
     / does nothing on every batch. Guarded on presence because the same job
     / runs under run_stream.q, where the plant has not stamped a `time`.
-    rows:$[`time in cols batch; ![batch;();0b;enlist `time]; batch];
+    rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
     `.qsub.cross_arbitrage.books upsert `sym xkey rows;
     rows:evaluate[books;notional;.z.p];
     if[count rows; .qsub.cross_arbitrage.publish[`cross_arbitrage;rows]];
@@ -203,7 +203,7 @@ on_batch:{[tbl;batch]
 .qcfgaudit.watch[`cross_arbitrage;
     `.qsub.cross_arbitrage.notional`.qsub.cross_arbitrage.max_skew];
 
-.qstream.register[`cross_arbitrage;`procname`subscribes`publishes`on_batch`note!(
+.qstream.define[`cross_arbitrage;`procname`subscribe_to`publishes`on_batch`note!(
     `crossarb1;
     enlist `superbook;
     `cross_arbitrage`config_change;

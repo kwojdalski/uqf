@@ -230,18 +230,67 @@ no processes/IPC/tables).
   EURUSD 1.10 -> 1 EUR = 1.10 USD). `rd` is the quote currency's rate, `rf` the
   base currency's - this matches the Garman-Kohlhagen and CIRP literature.
 
-- `t` is always a year fraction (float), never raw dates - date-to-`t`
-  conversion is `daycount.q`'s job, kept separate from pricing/rates math.
+- In pricing and rates code, `t` is always a year fraction (float), never raw
+  dates - date-to-`t` conversion is `daycount.q`'s job, kept separate from
+  pricing/rates math. Outside it, `t` is a table name, and only in a TorQ-shaped
+  callback (below).
 
 - `side` is `1` for long base currency / a buy, `-1` for short / a sell, used
   consistently in `risk.q` and `execution.q`.
 
-- `pipFactor` is `10000` for most pairs, `100` for JPY crosses; nothing in the
+- `pip_factor` is `10000` for most pairs, `100` for JPY crosses; nothing in the
   library hardcodes a pip size - it's always a caller-supplied argument.
 
 - Cost-style execution metrics (`eff_spread`, `slippage`) are positive when they
   went against the side that traded; `markout` is positive when the market moved
   in that side's favour after the trade.
+
+## Parameter names
+
+One word per concept, so a signature reads the same in every module:
+
+  | concept                                                   | name                      | not                  |
+  | ---                                                       | ---                       | ---                  |
+  | the name of a declared thing (method, reaction, pipeline) | `name`                    | `nm`                 |
+  | a declaration dict, as `define`/`register` take it        | `decl`                    | `cfg`, `spec`, `m`   |
+  | a symbol naming a table                                   | `table_name`              | `tbl`, `tblname`     |
+  | a table value                                             | `tbl`                     |                      |
+  | a TorQ-shaped callback's table and data                   | `[t;x]`, as in `upd[t;x]` | `[tbl;rows]`         |
+  | "use data at or before this instant"                      | `as_of`                   | `at_time`            |
+  | a time window                                             | `range_from`, `range_to`  | `start_ts`, `end_ts` |
+  | a function to run (under a lock, retry, timer)            | `f`                       | `fn`                 |
+
+A registry's three verbs are `define` (declare one), `defined[]` (list them) and
+`def[x]` (read one back) - `.qsrc`, `.qstream`, `.qbw`, `.qnorm`, `.qxf`,
+`.qdag` and `.qalloc` alike. The lookup is `def` and not `decl` on purpose:
+callers write `decl:def x`, and a function named `decl` would be shadowed by
+that local for the whole body - the right-hand side would read the unset local
+instead of calling the lookup (the `d1v` trap above).
+
+`spec` is kept for one thing only: a bounded run's spec (`spec_fn`). `cfg` names
+the stored worker registry (`worker_cfg`, `required_cfg`), not the argument
+`define` takes.
+
+**Where a short name is load-bearing, keep it.** Inside a qSQL clause a column
+shadows a parameter of the same name, so `where dataset=dataset` compares the
+column with itself and is true for every row. The short names below exist to
+avoid exactly that, and must not be "tidied" into the long ones:
+
+- `ds`, `part`, `version`, `from_ts`/`to_ts` in `materialisation.q` - the
+  coverage ledger's columns are `dataset`, `partition`, `source_version`,
+  `range_from`/`range_to` (`where dataset=ds, partition=part, ...`).
+- `nm` in `react.q`'s `on`/`on_writing`/`register`/`off` - a reaction table has
+  a `name` column (`where not name=nm`).
+- `target_sym` in `forwards.q`/`microstructure.q` - quote tables have `sym`.
+- `.qtick`'s `fan_out[name;batch]` - the subscriber table has a `tbl` column.
+
+Where the preferred long name IS a column somewhere, bind it to a local before
+the query: `check_stale_quotes` takes `as_of` but queries `where time<=cutoff`,
+because superbook and arbitrage rows carry an `as_of` column.
+
+Also kept on purpose: `k`, `s`, `rf`, `rd`, `sigma` (the Garman-Kohlhagen
+symbols), and `ts` in the time-zone functions (TorQ's `z` is a leftover from its
+datetime type).
 
 ## Testing
 

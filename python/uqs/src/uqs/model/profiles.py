@@ -50,7 +50,7 @@ rather than a rounding error: an external recorder holds a slot the budget
 cannot see, and the two held back by INBOUND_RESERVE are what absorb it.
 
 WHY PYTHON AND NOT q. Every other fact about a process is declared in its q
-file and read back by model/declarations.py, `autostart` included - so
+file and read back by model/declarations.py, `start_with_all` included - so
 "does this start by default" already lives in q. A profile does not: it spans
 jobs, so no single job can own it, and nothing in q consumes it. Declaring it
 in q would mean parsing it back out for a reader that is only ever the CLI.

@@ -45,7 +45,7 @@ def test_the_scaffolded_normalizer_reads_back_as_one(sources):
     """One source is the case the reader got wrong: `(enlist `quote)` came back
     as two names, `(enlist` and `quote)`."""
     (d,) = read_file_text(_file(_plan(sources), "ticks.q"), Path("ticks.q"))
-    assert (d.kind, d.procname, d.subscribes, d.publishes) == (
+    assert (d.kind, d.procname, d.subscribe_to, d.publishes) == (
         PipelineKind.NORMALIZER,
         "ticks1",
         sources,
@@ -78,7 +78,7 @@ def test_it_gets_a_catalog_entry_and_a_contract_driver():
     ("kwargs", "message"),
     [
         ({"name": "orders"}, "already a plant table"),
-        ({"sources": ()}, "needs --subscribes"),
+        ({"sources": ()}, "needs --subscribe-to"),
         ({"sources": ("quote", "nope")}, "no plant definition to read for source"),
     ],
 )

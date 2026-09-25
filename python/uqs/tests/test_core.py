@@ -1054,7 +1054,7 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
 
 
 def test_declared_dataflow_edges_match_the_q_scripts():
-    """Every pipeline's `subscribes`/`publishes` declaration agrees with the
+    """Every pipeline's `subscribe_to`/`publishes` declaration agrees with the
     `.sub.subscribe` / `.qpipe.subscribe_etl` / `.u.upd` calls in its own
     script.
 
@@ -1118,11 +1118,11 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
         for p in PIPELINES
         # ...and SUBSCRIBES: feeds defer too now that every entry is read
         # from q, and a feed has no subscription to drift.
-        if p.subscribes is FROM_DECLARATION
+        if p.subscribe_to is FROM_DECLARATION
         and p.script == STREAM_RUNNER_SCRIPT
         and p.subscribed_tables
     )
-    target = replace(deferred, subscribes=deferred.subscribed_tables)
+    target = replace(deferred, subscribe_to=deferred.subscribed_tables)
     first = target.subscribed_tables[0]
 
     if target.script == STREAM_RUNNER_SCRIPT:
@@ -1137,11 +1137,11 @@ def test_the_edge_verifier_detects_a_drifted_declaration(tmp_path):
         # before it declares them, and drifting one of those would leave the
         # declaration intact and this "negative" test passing over an
         # unmodified file.
-        head, _, tail = original.partition(".qstream.register[")
-        assert tail, f"no .qstream.register call in {job_file.name}"
+        head, _, tail = original.partition(".qstream.define[")
+        assert tail, f"no .qstream.define call in {job_file.name}"
         drifted_tail = tail.replace(f"`{first}", "`not_a_declared_table", 1)
         assert drifted_tail != tail
-        job_file.write_text(head + ".qstream.register[" + drifted_tail)
+        job_file.write_text(head + ".qstream.define[" + drifted_tail)
     else:
         original = (scripts / target.script).read_text()
         for prefix in (
@@ -1383,7 +1383,7 @@ def test_a_pipeline_publishing_an_undefined_table_is_reported(
         procname="ghost1",
         # An invented process has no q file to defer to, so it states its
         # own edges - which is the resolver's strictness working.
-        subscribes=(),
+        subscribe_to=(),
         publishes=("fx_position", "a_table_nothing_defines"),
     )
     monkeypatch.setattr(plant_schema, "PIPELINES", (*PIPELINES, invented))

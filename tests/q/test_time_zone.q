@@ -43,14 +43,14 @@ beforeNamespace_zones:{[]
 / .ddbftest - the cross-suite leak test_source_contract.q already records.
 setUp_sources:{[]
     .tztest.drop_sources[];
-    .qsrc.register[`tz_london;
-        `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
+    .qsrc.define[`tz_london;
+        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
         (`tz_london;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:2026.10.25D00:30:00.000000000+0D00:30*til 8; px:8#1.5)};
          .tztest.london)];
-    .qsrc.register[`tz_summer;
-        `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
+    .qsrc.define[`tz_summer;
+        `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
         (`tz_summer;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:enlist 2026.07.15D09:00:00.000000000; px:enlist 1.5)};
@@ -110,7 +110,7 @@ test_a_datetime_column_filters_without_complaint:{[t]
     got:?[tbl;((>=;`ts;2026.09.12D00:00:00.000000000);(<;`ts;2026.09.14D00:00:00.000000000));0b;()];
     .qunit.assertEquals[count got;2;"the filter runs and returns a believable answer, so nothing upstream of the contract will notice the type"]};
 
-/ Guard 1 of 3 against recurrence (register's time_field type check is 2,
+/ Guard 1 of 3 against recurrence (register's time_column type check is 2,
 / check_q_traps.py is 3): a source whose time column arrives as a datetime
 / fails the contract, on the same code path the fixture goes through.
 test_a_datetime_time_column_is_refused_by_the_contract:{[t]
@@ -204,7 +204,7 @@ test_the_over_fetch_does_not_publish_neighbouring_rows:{[t]
 
 / The zone is a per-source declaration, because only the source knows it.
 test_the_demo_source_declares_its_zone:{[t]
-    .qunit.assertEquals[(.qsrc.declaration `demo_deals)`tz;`UTC;"the zone is a claim the source makes, which validate_live can be run against"]};
+    .qunit.assertEquals[(.qsrc.def `demo_deals)`tz;`UTC;"the zone is a claim the source makes, which validate_live can be run against"]};
 
 / A UTC source takes the identity path: no table, no lookup, no conversion.
 / That matters because it is the path every source in this tree takes, so a

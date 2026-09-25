@@ -95,8 +95,8 @@ ports, rows and the job DAG are all derived.
 ![](../diagrams/pipeline-decision.svg){height="740"}
 :::::
 ::::: {.column width="55%"}
-**Streaming** (`.qstream.register`) runs on the plant: it subscribes, computes
-and publishes.
+**Streaming** (`.qstream.define`) runs on the plant: it subscribes, computes and
+publishes.
 
 **Bounded** (`.qbw.define`) takes a window range, e.g. a backfill or a day's
 reload. It writes through `.qio`, **never the plant**, and records each window

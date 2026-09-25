@@ -44,24 +44,31 @@ def _one(source: str):
 
 def test_a_feed_is_a_job_that_subscribes_to_nothing():
     d = _one(
-        ".qstream.register[`f;`procname`subscribes`publishes`timer_period`on_timer!(\n"
+        ".qstream.define[`f;`procname`subscribe_to`publishes`period`on_timer!(\n"
         "    `f1;`symbol$();enlist `t;0D00:00:01;.qsub.f.on_timer)];"
     )
-    assert (d.procname, d.kind, d.subscribes, d.publishes) == ("f1", PipelineKind.FEED, (), ("t",))
-    assert not d.autostart, "absent autostart means on demand"
+    assert (d.procname, d.kind, d.subscribe_to, d.publishes) == (
+        "f1",
+        PipelineKind.FEED,
+        (),
+        ("t",),
+    )
+    assert not d.start_with_all, "absent start_with_all means on demand"
 
 
 def test_autostart_and_note_are_read_and_the_note_unescaped():
     d = _one(
-        ".qstream.register[`j;`procname`subscribes`publishes`on_batch`autostart`note!(\n"
+        ".qstream.define[`j;`procname`subscribe_to`publishes`on_batch`start_with_all`note!(\n"
         '    `j1;enlist `a;`symbol$();.qsub.j.on_batch;1b;"says \\"hi\\"; twice")];'
     )
-    assert (d.kind, d.autostart, d.note) == (PipelineKind.ETL, True, 'says "hi"; twice')
+    assert (d.kind, d.start_with_all, d.note) == (PipelineKind.ETL, True, 'says "hi"; twice')
 
 
 def test_an_autostart_that_is_not_a_boolean_is_refused():
-    with pytest.raises(UqsError, match="autostart must be 1b or 0b"):
-        _one(".qstream.register[`j;`procname`subscribes`publishes`autostart!(`j1;`a;`b;`yes)];")
+    with pytest.raises(UqsError, match="start_with_all must be 1b or 0b"):
+        _one(
+            ".qstream.define[`j;`procname`subscribe_to`publishes`start_with_all!(`j1;`a;`b;`yes)];"
+        )
 
 
 def test_a_worker_with_no_procname_runs_as_its_name_and_1():
@@ -72,7 +79,7 @@ def test_a_worker_with_no_procname_runs_as_its_name_and_1():
 
 def test_a_worker_may_not_ask_to_start_with_the_stack():
     with pytest.raises(UqsError, match="never starts with the stack"):
-        _one(".qbw.define[`w;`source`dataset`width`transform`autostart!(`s;`d;1D;`x;1b)];")
+        _one(".qbw.define[`w;`source`dataset`width`transform`start_with_all!(`s;`d;1D;`x;1b)];")
 
 
 def test_a_commented_out_declaration_is_not_a_process():
@@ -130,7 +137,7 @@ def test_a_job_file_is_the_whole_registration(tmp_path):
     are processes, with ports, and nothing else was edited."""
     root = _tree(tmp_path)
     (root / STREAM_DIR / "tick.q").write_text(
-        ".qstream.register[`tick;`procname`subscribes`publishes`timer_period`on_timer`autostart!(\n"
+        ".qstream.define[`tick;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(\n"
         "    `tick1;`symbol$();enlist `ticks;0D00:00:01;.qsub.tick.on_timer;1b)];\n"
     )
     (root / WORKER_DIR / "w.q").write_text(
@@ -147,7 +154,7 @@ def test_two_declarations_claiming_one_process_are_refused(tmp_path):
     root = _tree(tmp_path)
     for name in ("a", "b"):
         (root / STREAM_DIR / f"{name}.q").write_text(
-            f".qstream.register[`{name};`procname`subscribes`publishes`on_batch!("
+            f".qstream.define[`{name};`procname`subscribe_to`publishes`on_batch!("
             f"`same1;enlist `t;`symbol$();.qsub.{name}.on_batch)];\n"
         )
     with pytest.raises(ValueError, match="same1"):
@@ -158,7 +165,7 @@ def test_a_single_source_normalizer_reads_its_one_source():
     """`(enlist `a)!enlist `xf` is how one source is written; the parentheses
     used to reach `symbols`, which returned `(enlist` and `a)`."""
     (d,) = read_file_text(
-        ".qnorm.define[`n;`procname`output`sources!(`n1;.qsub.n.n;(enlist `quote)!enlist `xf)];",
+        ".qnorm.define[`n;`procname`output`input!(`n1;.qsub.n.n;(enlist `quote)!enlist `xf)];",
         Path("n.q"),
     )
-    assert d.subscribes == ("quote",)
+    assert d.subscribe_to == ("quote",)

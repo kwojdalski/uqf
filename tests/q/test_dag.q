@@ -27,7 +27,7 @@ chain:{[]
 
 test_a_registered_job_reports_its_spec:{[t]
     chain[];
-    .qunit.assertEquals[(.qdag.declaration[`cross])`inputs;enlist `quotes;
+    .qunit.assertEquals[(.qdag.def[`cross])`inputs;enlist `quotes;
         "a job's declared inputs come back as given"]};
 
 test_an_atom_is_normalised_to_a_vector:{[t]
@@ -35,15 +35,15 @@ test_an_atom_is_normalised_to_a_vector:{[t]
     / a consumer doing `first x` or `count x` on it gets 1 and the symbol
     / itself rather than a one-element list. Normalising once at
     / registration means no consumer has to remember - the same fix
-    / .qsrc.register applies to row_key.
+    / .qsrc.define applies to row_key.
     .qdag.register[`solo;`kind`inputs`outputs!(`stream;`one_table;`another)];
-    d:.qdag.declaration `solo;
+    d:.qdag.def `solo;
     .qunit.assertEquals[(type d`inputs;count d`inputs);(11h;1);
         "a single input symbol is stored as a one-element symbol vector"]};
 
 test_an_empty_input_list_survives:{[t]
     .qdag.register[`root;`kind`inputs`outputs!(`continuous;`$();`some_tbl)];
-    .qunit.assertEquals[count (.qdag.declaration[`root])`inputs;0;
+    .qunit.assertEquals[count (.qdag.def[`root])`inputs;0;
         "a job with no inputs is a root, not an error"]};
 
 test_a_missing_spec_key_is_refused:{[t]
@@ -61,11 +61,11 @@ test_an_unknown_kind_is_refused:{[t]
 test_registering_twice_replaces:{[t]
     .qdag.register[`j;`kind`inputs`outputs!(`stream;`a;`b)];
     .qdag.register[`j;`kind`inputs`outputs!(`stream;`c;`d)];
-    .qunit.assertEquals[(.qdag.declaration[`j])`inputs;enlist `c;
+    .qunit.assertEquals[(.qdag.def[`j])`inputs;enlist `c;
         "reloading a file replaces its registration rather than failing"]};
 
 test_an_unregistered_job_is_refused:{[t]
-    .qunit.assertError[{.qdag.declaration x};`no_such_job;
+    .qunit.assertError[{.qdag.def x};`no_such_job;
         "asking for a job nothing registered names it rather than returning a null"]};
 
 / --- the graph ----------------------------------------------------------
@@ -198,9 +198,9 @@ test_workers_are_adopted_from_their_own_declarations:{[t]
 test_an_adopted_worker_reads_its_sources_table_and_writes_its_target:{[t]
     .qdag.adopt_workers[];
     w:first key .qbw.worker_cfg;
-    d:.qdag.declaration w;
+    d:.qdag.def w;
     cfg:.qbw.worker_cfg w;
-    src:.qsrc.declaration cfg`source;
+    src:.qsrc.def cfg`source;
     .qunit.assertEquals[(d`inputs;d`outputs);
         ((),.qdag.external_ref[cfg`source;src`table];(),src`target);
         "an adopted worker reads its source's table (source-qualified) and writes its target"]};
@@ -229,7 +229,7 @@ test_a_workers_remote_table_is_a_different_node_from_its_target:{[t]
     / a future change that reverted the qualification fails HERE, naming the
     / reason, rather than failing as a mysterious cycle.
     .qdag.adopt_workers[];
-    d:.qdag.declaration `demo_deals_backfill;
+    d:.qdag.def `demo_deals_backfill;
     .qunit.assertTrue[not any (d`inputs) in d`outputs;
         "a remote source table and a local target with the same name are distinct nodes"]};
 
@@ -262,7 +262,7 @@ test_adopted_feeders_are_roots:{[t]
     .qdag.adopt_feeders[];
     fs:key .qcont.feeds;
     if[0=count fs; :.qunit.assertTrue[1b;"no feeders registered in this suite"]];
-    .qunit.assertEquals[count (.qdag.declaration first fs)`inputs;0;
+    .qunit.assertEquals[count (.qdag.def first fs)`inputs;0;
         "a continuous feeder tails a live feed, so it declares no inputs"]};
 
 \d .

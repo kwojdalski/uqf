@@ -61,7 +61,7 @@ with_direct:{[bid;ask] (legs[]) upsert one .xarbtest.row[`EURJPY;bid;ask;1e9;.xa
 / suite order it no longer did.
 drive_ready:{[]
     `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
-    .qstream.wire[`cross_arbitrage;{[tbl;rows] `.xarbtest.published set (tbl;rows); count rows}];
+    .qstream.wire[`cross_arbitrage;{[t;x] `.xarbtest.published set (t;x); count x}];
     }
 
 beforeNamespace_load:{[] `.xarbtest.saved set .qsub.cross_arbitrage.books;}

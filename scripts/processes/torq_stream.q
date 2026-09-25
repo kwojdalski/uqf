@@ -39,8 +39,8 @@ which_job:{[]
     raw:$[`job in key opts; first opts`job; ""];
     if[count raw;
         job:`$raw;
-        if[not job in .qstream.registered[];
-            '"torq_stream: -job names ",raw,", which is not a registered streaming job - registered: ",", " sv string .qstream.registered[]];
+        if[not job in .qstream.defined[];
+            '"torq_stream: -job names ",raw,", which is not a registered streaming job - registered: ",", " sv string .qstream.defined[]];
         .qlog.info[`qproc;"job chosen by -job";enlist[`job]!enlist job];
         :job];
     if[()~key `.proc;
@@ -56,13 +56,13 @@ which_job:{[]
 / re-raising it, so the error still reaches the caller exactly as before -
 / and is now also in this process's own log, which is where someone asking
 / "why is my output empty" looks.
-/ @param tbl the table the batch is for
-/ @param batch the batch
-upd:{[tbl;batch]
-    .qpipe.record_received[tbl;batch];
-    .[.qproc.stream.on_batch;(tbl;batch);{[tbl;e]
-        .qlog.err[.qproc.stream.job;"on_batch failed";`table`error!(tbl;e)];
-        'e}[tbl]]}
+/ @param t the table the batch is for
+/ @param x the batch
+upd:{[t;x]
+    .qpipe.record_received[t;x];
+    .[.qproc.stream.on_batch;(t;x);{[t;e]
+        .qlog.err[.qproc.stream.job;"on_batch failed";`table`error!(t;e)];
+        'e}[t]]}
 
 / Subscribe, wire the job's publish seam to the tickerplant, install the
 / root `upd` the tickerplant calls, and start the job's timer if it has one.
@@ -73,17 +73,17 @@ upd:{[tbl;batch]
 / @param job the job's name
 / @return the job name
 run:{[job]
-    decl:.qstream.declaration job;
+    decl:.qstream.def job;
     `.qproc.stream.job set job;
     / Before anything that can block, so a process stuck waiting for the
     / tickerplant has already said what it was about to do.
     .qlog.info[job;"starting streaming job";
-        `subscribes`publishes`timer`on_batch!(decl`subscribes;decl`publishes;
-            $[`timer_period in key decl; decl`timer_period; 0Nn];`on_batch in key decl)];
+        `subscribe_to`publishes`timer`on_batch!(decl`subscribe_to;decl`publishes;
+            $[`period in key decl; decl`period; 0Nn];`on_batch in key decl)];
     / A feed subscribes to nothing: it takes a publish handle and nothing
     / else. Asking subscribe_etl for one would make it wait for a
     / subscription it never wanted, and then subscribe to an empty list.
-    h:$[count decl`subscribes; .qpipe.subscribe_etl[job;decl`subscribes]; .qpipe.feed_handle[]];
+    h:$[count decl`subscribe_to; .qpipe.subscribe_etl[job;decl`subscribe_to]; .qpipe.feed_handle[]];
     / A job that publishes nothing keeps its unwired stub, so a later edit
     / that starts publishing without declaring it fails loudly instead of
     / sending rows nowhere.
@@ -100,9 +100,9 @@ run:{[job]
     if[`on_batch in key decl;
         `.qproc.stream.on_batch set decl`on_batch;
         `upd set .qproc.stream.upd];
-    if[`timer_period in key decl;
+    if[`period in key decl;
         `.qproc.stream.tick set decl`on_timer;
-        .qpipe.safe_timer[job;decl`timer_period;`.qproc.stream.tick;
+        .qpipe.safe_timer[job;decl`period;`.qproc.stream.tick;
             "Run the ",(string job)," streaming job"]];
     / A SECOND timer, when the job declares configuration worth auditing.
     / .
@@ -115,7 +115,7 @@ run:{[job]
     / catches a change whatever caused it.
     / .
     / It publishes through the job's OWN publish seam, so the table is
-    / declared in the job's .qstream.register like any other output and
+    / declared in the job's .qstream.define like any other output and
     / verify_pipeline_edges needs no exemption.
     if[count .qcfgaudit.watching job;
         `.qcfgaudit.owner_here set job;
@@ -123,7 +123,7 @@ run:{[job]
             `.qcfgaudit.poll_and_publish;
             "Audit ",(string job)," configuration changes"]];
     .qlog.info[`qproc;"streaming job wired - running";
-        `job`subscribes`publishes!(job;decl`subscribes;decl`publishes)];
+        `job`subscribe_to`publishes!(job;decl`subscribe_to;decl`publishes)];
     job}
 
 \d .

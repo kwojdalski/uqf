@@ -53,7 +53,7 @@ on_timer:{[]
 
 \d .
 
-.qstream.register[`wide_book_feed;`procname`subscribes`publishes`timer_period`on_timer`note!(
+.qstream.define[`wide_book_feed;`procname`subscribe_to`publishes`period`on_timer`note!(
     `widefeed1;
     `symbol$();
     enlist `wide_book;

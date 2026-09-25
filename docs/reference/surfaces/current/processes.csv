@@ -1,4 +1,4 @@
-procname,proctype,offset,subscribes,publishes
+procname,proctype,offset,subscribe_to,publishes
 arbitrage1,metrics,44,superbook,arbitrage
 cross1,metrics,25,quotes,
 crossarb1,metrics,45,superbook,config_change cross_arbitrage

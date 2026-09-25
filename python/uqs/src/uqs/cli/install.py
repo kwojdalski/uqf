@@ -118,7 +118,7 @@ def _report_undefined_tables(items: list[Item], declarations: list[Declaration])
     known = _plant_tables(_paths())
     uses: list[tuple[str, str, tuple[str, ...]]] = []
     for decl in declarations:
-        uses += [(decl.name, "reads", decl.subscribes), (decl.name, "publishes", decl.publishes)]
+        uses += [(decl.name, "reads", decl.subscribe_to), (decl.name, "publishes", decl.publishes)]
     for item in items:
         if item.kind is Kind.WORKER and item.destination is not None:
             for fn, name, fields in declaration_calls(item.destination.read_text()):
@@ -217,7 +217,7 @@ def install_jobs(
 
     Each .q file goes where src/etl/init.q and the registry look for its kind -
     src/etl/sources, src/etl/workers or src/etl/streaming - decided by what it
-    declares (.qsrc.register, .qbw.define, .qstream.register/.qnorm.define), so
+    declares (.qsrc.define, .qbw.define, .qstream.define/.qnorm.define), so
     the sidecar can be laid out any way. Then the derived files are
     regenerated, and the next steps say how to check the jobs are running.
 

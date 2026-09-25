@@ -22,13 +22,13 @@ source_name:`upstream_trades
 / The columns read, and their q types AS THE UPSTREAM HAS THEM. `size` is
 / int (i), not long, and `ex` is a single char - validate_live checks this
 / against the real process and would refuse the declaration if it lied.
-fields:`time`sym`ex`price`size`side
+columns:`time`sym`ex`price`size`side
 types:"pscfis"
 
 / Where the rows land locally - a name that says they came from elsewhere.
 target:`imported_trades
 
-time_field:`time
+time_column:`time
 
 / THE WHOLE ROW, because nothing smaller identifies one. Measured on the
 / real data: of 196,519 trades on 2015.01.07, only 183,660 (time;sym) pairs
@@ -96,8 +96,8 @@ fixture:{[]
         size:41 19 1 2 41 47 9 32 7 42i;
         side:`side`buy`side`side`buy`side`buy`buy`buy`buy)}
 
-.qsrc.register[source_name;
-    `source`table`target`time_field`row_key`fields`types`query`fixture`tz!
-    (source_name;`trade;target;time_field;row_key;fields;types;query;fixture;tz)];
+.qsrc.define[source_name;
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
+    (source_name;`trade;target;time_column;row_key;columns;types;query;fixture;tz)];
 
 \d .

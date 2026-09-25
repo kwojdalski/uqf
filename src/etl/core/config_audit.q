@@ -152,7 +152,7 @@ poll_and_publish:{[]
     if[null owner_here; :()];
     rows:poll[owner_here;.z.p];
     if[0=count rows; :()];
-    (get ` sv (.qstream.declaration[owner_here]`ns),`publish)[`config_change;rows];
+    (get ` sv (.qstream.def[owner_here]`ns),`publish)[`config_change;rows];
     }
 
 / Forget every observation, so the next poll reports each watched name as

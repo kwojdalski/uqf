@@ -112,19 +112,19 @@ marks:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); venue:`
 / not the plant's stamp on the normalized row, which is when it was
 / reshaped. The mark cache is per sym and the last venue to publish wins;
 / .qpos keys a book on sym alone, so that is the resolution it has.
-/ @param tbl the table the batch arrived on
-/ @param batch the rows, as a table
+/ @param t the table the batch arrived on
+/ @param x the rows, as a table
 / @return nothing
-on_batch:{[tbl;batch]
-    $[tbl=`executions;
+on_batch:{[t;x]
+    $[t=`executions;
         [out:.qxf.apply[`position;`book`trades`marks!(
             0!.qsub.posbook.book;
-            select time:source_time, sym, side, trade_price:price, size from batch;
+            select time:source_time, sym, side, trade_price:price, size from x;
             ([] sym:key .qsub.posbook.last_mid; mid:value .qsub.posbook.last_mid))];
          `.qsub.posbook.book set 1!.qsub.posbook.next_book[0!.qsub.posbook.book;out];
          .qsub.posbook.publish[`position;out]];
-      tbl=`marks;
-        .qsub.posbook.last_mid[batch`sym]:batch`mid;
+      t=`marks;
+        .qsub.posbook.last_mid[x`sym]:x`mid;
       ()];
     }
 
@@ -166,7 +166,7 @@ on_batch:{[tbl;batch]
         ([] sym:enlist `USDJPY; qty:enlist 0f; avg_price:enlist 0f; realized_pnl:enlist 1e6; mark_price:enlist 148.5; unrealized_pnl:enlist 0f; total_pnl:enlist 1e6))
     ))];
 
-.qstream.register[`posbook;`procname`subscribes`publishes`on_batch`autostart`note!(
+.qstream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`note!(
     `posbook1;
     `executions`marks;
     enlist `position;

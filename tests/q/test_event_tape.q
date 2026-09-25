@@ -25,7 +25,7 @@ tape:{[actions;sides;sizes]
 / --- the shape is a registered source under the source contract -----------
 
 test_the_event_source_is_registered_on_load:{[t]
-    .qunit.assertEquals[`demo_events in .qsrc.registered[];1b;"loading the source file registers it, so declaration and implementation cannot drift"]};
+    .qunit.assertEquals[`demo_events in .qsrc.defined[];1b;"loading the source file registers it, so declaration and implementation cannot drift"]};
 
 test_the_fixture_satisfies_its_own_contract:{[t]
     .qunit.assertEquals[.qsrc.validate_fixture `demo_events;1b;"the synthetic tape matches the shape it declares"]};
@@ -37,7 +37,7 @@ test_the_row_key_is_composite:{[t]
 
 test_the_tape_is_a_superset_of_the_trades_shape:{[t]
     trades_cols:`time`sym`side`size`pip_factor;
-    .qunit.assertEquals[all trades_cols in .qfeed.demo_events.fields;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
+    .qunit.assertEquals[all trades_cols in .qfeed.demo_events.columns;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
 
 test_the_window_is_taken_on_event_time:{[t]
     one:last .qsrc.fetch_window[`demo_events;0Ni;.evttest.d 0;.evttest.d 1];
@@ -264,7 +264,7 @@ test_the_two_workers_have_separate_state:{[t]
 / window running past the requested range would record coverage for a range
 / nobody asked for.
 test_the_worker_uses_its_own_window_width:{[t]
-    .qunit.assertEquals[.qbw.declaration[`demo_events_backfill]`width;0D01:00:00;"an event tape is denser than a deal feed, so its windows are hourly, not daily"]};
+    .qunit.assertEquals[.qbw.def[`demo_events_backfill]`width;0D01:00:00;"an event tape is denser than a deal feed, so its windows are hourly, not daily"]};
 
 test_a_short_range_gives_one_clipped_window:{[t]
     .qwrk.demo_events_backfill.init .evttest.espec[0;10];

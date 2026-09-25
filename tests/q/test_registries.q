@@ -74,15 +74,15 @@ test_a_streaming_job_without_a_timer_does_not_gain_one:{[t]
     / with identical fields, so `jobs` became a keyed table, and markout's
     / declaration - which carries an on_batch the feeds do not - was
     / refused with a bare `mismatch. It is enlisted now.
-    .qstream.register[`regtest_feed;`procname`subscribes`publishes`timer_period`on_timer!(
+    .qstream.define[`regtest_feed;`procname`subscribe_to`publishes`period`on_timer!(
         `regtest_feed1;`symbol$();enlist `regtest_out;0D00:00:01;{[] })];
-    .qstream.register[`regtest_sub;`procname`subscribes`publishes`on_batch!(
+    .qstream.define[`regtest_sub;`procname`subscribe_to`publishes`on_batch!(
         `regtest_sub1;enlist `regtest_in;enlist `regtest_out2;{[a;b] })];
-    feed:.qstream.declaration `regtest_feed;
-    sub:.qstream.declaration `regtest_sub;
+    feed:.qstream.def `regtest_feed;
+    sub:.qstream.def `regtest_sub;
     .qunit.assertFalse[`on_batch in key feed;
         "a feed has no on_batch, and must not acquire one as a null"];
-    .qunit.assertFalse[`timer_period in key sub;
+    .qunit.assertFalse[`period in key sub;
         "and a subscriber has no timer"];
     forget_job each `regtest_feed`regtest_sub};
 
@@ -96,19 +96,19 @@ test_a_transform_without_as_of_does_not_gain_one:{[t]
     .qxf.define[`regtest_clocked;`inputs`output`fn`examples`as_of!(
         (enlist `i)!enlist empty_in;empty_in;{[i;a] i};
         enlist `inputs`expected`as_of!((enlist `i)!enlist rows_in;rows_in;2026.01.01D00:00:00);1b)];
-    .qunit.assertEquals[.qxf.declaration[`regtest_plain]`as_of;0b;
+    .qunit.assertEquals[.qxf.def[`regtest_plain]`as_of;0b;
         "an undeclared as_of is FALSE, not a null - normalising means choosing the default explicitly"];
-    .qunit.assertEquals[.qxf.declaration[`regtest_clocked]`as_of;1b;"and a declared one survives"];
+    .qunit.assertEquals[.qxf.def[`regtest_clocked]`as_of;1b;"and a declared one survives"];
     forget[`.qxf.registry;`regtest_plain`regtest_clocked]};
 
 test_an_allocation_method_without_a_description_does_not_gain_a_null:{[t]
     / The case that would have reintroduced the bug: an optional key on a
     / registry that normalises rather than enlists.
-    .qalloc.register[`regtest_described;`open`pick`why!(.qalloc.append_lot;.qalloc.pick_first;"a reason")];
-    .qalloc.register[`regtest_bare;`open`pick!(.qalloc.append_lot;.qalloc.pick_first)];
-    .qunit.assertEquals[.qalloc.method[`regtest_bare]`why;"";
+    .qalloc.define[`regtest_described;`open`pick`why!(.qalloc.append_lot;.qalloc.pick_first;"a reason")];
+    .qalloc.define[`regtest_bare;`open`pick!(.qalloc.append_lot;.qalloc.pick_first)];
+    .qunit.assertEquals[.qalloc.def[`regtest_bare]`why;"";
         "an omitted description is an empty string, not a null - and `why` is still present, so every stored method is one shape"];
-    .qunit.assertEquals[.qalloc.method[`regtest_described]`why;"a reason";"and a given one survives"];
+    .qunit.assertEquals[.qalloc.def[`regtest_described]`why;"a reason";"and a given one survives"];
     forget[`.qalloc.methods;`regtest_described`regtest_bare]};
 
 test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
@@ -121,13 +121,13 @@ test_a_source_with_a_scalar_row_key_is_stored_as_a_vector:{[t]
     / scope, so `{[] e}` would throw 'e the moment anything called it -
     / which registration does not, making it a fixture that is broken and
     / silent until the day it is used.
-    base:`table`target`time_field`fields`types`query`fixture`tz!(`regtest_t;`regtest_out;`time;`time`sym;"ps";
+    base:`table_name`target`time_column`columns`types`query`fixture`tz!(`regtest_t;`regtest_out;`time;`time`sym;"ps";
         {[a;b] ([] time:`timestamp$(); sym:`symbol$())};{[] ([] time:`timestamp$(); sym:`symbol$())};`$"UTC");
-    .qsrc.register[`regtest_scalar;(`source`row_key!(`regtest_scalar;`sym)),base];
-    .qsrc.register[`regtest_vector;(`source`row_key!(`regtest_vector;`time`sym)),base];
-    .qunit.assertEquals[.qsrc.declaration[`regtest_scalar]`row_key;enlist `sym;
+    .qsrc.define[`regtest_scalar;(`source`row_key!(`regtest_scalar;`sym)),base];
+    .qsrc.define[`regtest_vector;(`source`row_key!(`regtest_vector;`time`sym)),base];
+    .qunit.assertEquals[.qsrc.def[`regtest_scalar]`row_key;enlist `sym;
         "a scalar row_key is stored enlisted, so every stored declaration has one shape"];
-    .qunit.assertEquals[.qsrc.declaration[`regtest_vector]`row_key;`time`sym;"and a vector is unchanged"];
+    .qunit.assertEquals[.qsrc.def[`regtest_vector]`row_key;`time`sym;"and a vector is unchanged"];
     forget[`.qsrc.sources;`regtest_scalar`regtest_vector]};
 
 test_a_worker_config_without_an_optional_key_gets_the_documented_default:{[t]
@@ -191,8 +191,8 @@ test_a_job_graph_declaration_normalises_its_edges:{[t]
     / derived rather than hand-written, that stopped being luck.
     .qdag.register[`regtest_one;`kind`inputs`outputs!(`stream;`regtest_a;`regtest_out)];
     .qdag.register[`regtest_many;`kind`inputs`outputs!(`stream;`regtest_a`regtest_b;`symbol$())];
-    one:.qdag.declaration `regtest_one;
-    many:.qdag.declaration `regtest_many;
+    one:.qdag.def `regtest_one;
+    many:.qdag.def `regtest_many;
     .qunit.assertEquals[count one`inputs;1;
         "a scalar input is stored as a one-element vector, not as an atom"];
     .qunit.assertEquals[abs type one`inputs;11h;

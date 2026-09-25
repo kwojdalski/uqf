@@ -31,7 +31,7 @@ scaffold fxprobe_backfill:
   append to scripts/processes/uqs_catalog.q (2 lines)
   note: write .qfeed.fxprobe.query - parameterised, never concatenated (see src/etl/core/source_contract.q)
   note: write .qfeed.fxprobe.fixture - deterministic, same contract as the live source
-  note: declared fields: time, sym, mid
+  note: declared columns: time, sym, mid
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
 ```
 
@@ -54,7 +54,7 @@ source_name:`fxprobe
 / The columns this adapter READS - not everything the source has. Declaring
 / one the worker never touches means an upstream change to an unused column
 / breaks the run.
-fields:`time`sym`mid
+columns:`time`sym`mid
 ```
 
 Two things to write, and both notes are warnings earned the hard way:

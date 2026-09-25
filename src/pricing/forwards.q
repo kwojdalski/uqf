@@ -456,16 +456,16 @@ cross_decomp:{[avail_syms;sym]
     ccy_shortest_path[avail_syms;legs`base;legs`quote]};
 
 / Private: one symbol's book, as of a given time, pulled out of a quotes
-/ table via an as-of join (aj) - the most recent row at or before at_time.
+/ table via an as-of join (aj) - the most recent row at or before as_of.
 / Requires quotes already sorted `sym`time xasc - cross_book_at checks that
 / once up front (aj on unsorted data doesn't error, it silently returns
 / wrong rows), not repeated here on every leg lookup.
-/ @throws error if quotes has no row for target_sym at or before at_time
-leg_book_as_of:{[quotes;at_time;target_sym]
-    lookup:([] sym:enlist target_sym; time:enlist at_time);
+/ @throws error if quotes has no row for target_sym at or before as_of
+leg_book_as_of:{[quotes;as_of;target_sym]
+    lookup:([] sym:enlist target_sym; time:enlist as_of);
     joined:aj[`sym`time;lookup;quotes];
     if[0=count first joined`bid_prices;
-        '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string at_time];
+        '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string as_of];
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(first joined`bid_prices;first joined`bid_sizes;first joined`ask_prices;first joined`ask_sizes)};
 
 / Private: bid, ask and mid for a single already-available leg at one
@@ -505,27 +505,27 @@ require_quotes_cols:{[fn_name;quotes]
 / chain yourself. Finds the shortest currency-graph path (ccy_shortest_path)
 / from sym's base to its quote currency using quotes' own distinct `sym`
 / column as the available quoted pairs, looks up each leg's most recent
-/ quote at or before at_time (leg_book_as_of), then delegates the actual
+/ quote at or before as_of (leg_book_as_of), then delegates the actual
 / depth-aware pricing to cross_book_chain_at_sizes - or, if sym (or its
 / inverse) is quoted directly and no chaining is needed at all, prices
 / that single leg directly.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
 /   sorted `sym`time xasc (required for the as-of leg lookup - see
 /   leg_book_as_of), any number of rows per sym (the most recent one at
-/   or before at_time is used for each leg) - see the shape
+/   or before as_of is used for each leg) - see the shape
 /   reshape_wide_order_book_*.q's `out` and book_from_wide_levels produce
 / @param sym the pair to price, any format ccy.q's normalize_ccy_pair accepts
-/ @param at_time only consider quotes at or before this time
+/ @param as_of only consider quotes at or before this time
 / @param sizes list of sizes to price, e.g. 1000000 3000000
 / @param sides subset of `bid`ask`mid to include in the result
 / @return a table, one row per size - see cross_book_chain_at_sizes
 / @throws error if quotes is missing a required column, isn't sorted
 /   `sym`time xasc, if no chain of pairs currently in quotes connects
 /   sym's two currencies, or if some required leg has no quote at or
-/   before at_time
+/   before as_of
 / @eg .qfwd.cross_book_at[`sym`time xasc quotes;`AUDPLN;.z.p;1000000 3000000;`bid`ask`mid]
 / @eg .qfwd.cross_book_at[`sym`time xasc quotes;`EURUSD;.z.p;enlist 1000000;enlist `mid]  -> EURUSD is quoted directly in this quotes table, so no chaining is needed
-cross_book_at:{[quotes;sym;at_time;sizes;sides]
+cross_book_at:{[quotes;sym;as_of;sizes;sides]
     require_quotes_cols[`cross_book_at;quotes];
     if[not quotes~`sym`time xasc quotes;
         '"cross_book_at: quotes must be sorted `sym`time xasc for an as-of lookup - try `sym`time xasc quotes first"];
@@ -535,17 +535,17 @@ cross_book_at:{[quotes;sym;at_time;sizes;sides]
         legs:.qccy.ccy_pair_legs cross_sym;
         '"cross_book_at: no chain of available pairs in quotes connects ",string[legs`base]," and ",string legs`quote];
     $[1=count path;
-        single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;at_time;path 0];not (path 0)~cross_sym;sizes;sides];
-        cross_book_chain_at_sizes[path;leg_book_as_of[quotes;at_time;] each path;sizes;sides]]};
+        single_leg_at_sizes[cross_sym;leg_book_as_of[quotes;as_of;path 0];not (path 0)~cross_sym;sizes;sides];
+        cross_book_chain_at_sizes[path;leg_book_as_of[quotes;as_of;] each path;sizes;sides]]};
 
 / Private: true if sweeping `size` on `side` (via cross_book_at) still
 / lands at an average price at least as good as price_limit, and the
 / sweep is fully filled. `bid` side: good means avg_price>=price_limit
 / (selling at proceeds no worse than wanted); `ask` side: good means
 / avg_price<=price_limit (buying at cost no worse than wanted).
-cross_price_ok_at_size:{[quotes;sym;at_time;side;price_limit;size]
+cross_price_ok_at_size:{[quotes;sym;as_of;side;price_limit;size]
     if[size<=0; :1b];
-    r:cross_book_at[quotes;sym;at_time;enlist size;enlist side];
+    r:cross_book_at[quotes;sym;as_of;enlist size;enlist side];
     px:first r side;
     fully_col:`$(string side),"_fully_filled";
     fully:first r fully_col;
@@ -575,7 +575,7 @@ CROSS_SIZE_MAX_HALVINGS:200;
 / tradeable depth isn't known up front either).
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
 / @param sym the pair to price, any format ccy.q's normalize_ccy_pair accepts
-/ @param at_time only consider quotes at or before this time
+/ @param as_of only consider quotes at or before this time
 / @param side `bid (how much can be SOLD at avg price at least price_limit) or
 /   `ask (how much can be BOUGHT at avg price at most price_limit)
 / @param price_limit the price boundary
@@ -584,31 +584,31 @@ CROSS_SIZE_MAX_HALVINGS:200;
 / @throws error if side isn't `bid or `ask, or anything cross_book_at itself throws
 / @eg .qfwd.cross_size_at_price[quotes;`AUDPLN;.z.p;`bid;2.5650]
 / @eg .qfwd.cross_size_at_price[quotes;`AUDPLN;.z.p;`ask;2.5700]  -> the ask-side (buy) boundary at a different price limit
-cross_size_at_price:{[quotes;sym;at_time;side;price_limit]
+cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
     if[not side in `bid`ask; '"cross_size_at_price: side must be `bid or `ask, got ",string side];
     lo:0f;
     hi:1f;
     doublings:0;
-    while[(cross_price_ok_at_size[quotes;sym;at_time;side;price_limit;hi]) and doublings<CROSS_SIZE_MAX_DOUBLINGS;
+    while[(cross_price_ok_at_size[quotes;sym;as_of;side;price_limit;hi]) and doublings<CROSS_SIZE_MAX_DOUBLINGS;
         hi*:2;
         doublings+:1];
     tol:hi*CROSS_SIZE_REL_TOL;
     halvings:0;
     while[((hi-lo)>tol) and halvings<CROSS_SIZE_MAX_HALVINGS;
         probe:0.5*lo+hi;
-        $[cross_price_ok_at_size[quotes;sym;at_time;side;price_limit;probe]; lo:probe; hi:probe];
+        $[cross_price_ok_at_size[quotes;sym;as_of;side;price_limit;probe]; lo:probe; hi:probe];
         halvings+:1];
     lo};
 
-/ Private: cross_book_at's mid for sym at at_time, at a caller-chosen
+/ Private: cross_book_at's mid for sym at as_of, at a caller-chosen
 / (typically negligible, top-of-book-ish) size - used wherever a "price
 / at a point in time" is needed for a synthetic pair with no quoted mid
 / of its own. Nulls out rather than throwing if no quote exists yet for
-/ some required leg at or before at_time, so a caller sweeping many timestamps
+/ some required leg at or before as_of, so a caller sweeping many timestamps
 / (cross_markout_at_horizons, cross_markout_decomp) can null one bad
 / lookup instead of failing the whole batch.
-cross_ref_price_at:{[quotes;sym;at_time;ref_size]
-    @[{[quotes;sym;ref_size;at_time] first cross_book_at[quotes;sym;at_time;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];at_time;{0n}]};
+cross_ref_price_at:{[quotes;sym;as_of;ref_size]
+    @[{[quotes;sym;ref_size;as_of] first cross_book_at[quotes;sym;as_of;enlist ref_size;enlist `mid]`mid}[quotes;sym;ref_size;];as_of;{0n}]};
 
 / Configurable output column name for the "point in time" a row in
 / cross_markout_at_horizons/cross_impact_at_horizons refers to - defaults

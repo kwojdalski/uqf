@@ -12,7 +12,7 @@
 / DERIVE, NEVER RE-DECLARE. Three registries already know their own inputs
 / and outputs, so none of them is asked to restate anything:
 / .
-/   .qbw.worker_cfg     bounded workers. Input is the source's remote `table`,
+/   .qbw.worker_cfg     bounded workers. Input is the source's remote `table_name`,
 /                   output is its `target` - both already on the .qsrc
 /                   declaration, reachable from the worker's `source`.
 /   .qcont.feeds    continuous feeders. Output is the dataset they feed;
@@ -60,26 +60,26 @@ kinds:`bounded`continuous`stream`reaction`normalizer
 / reloading a file during development is not a failure - the same posture
 / .qbw.define takes for redeclaring a worker.
 / @param job symbol naming the job, e.g. `posbook1 or `demo_deals_backfill
-/ @param spec dict of kind, inputs, outputs
+/ @param decl dict of kind, inputs, outputs
 / @throws error when a required key is missing, or the kind is not known
 / @eg .qdag.register[`cross1;`kind`inputs`outputs!(`stream;`quotes;`symbol$())]
-register:{[job;spec]
-    missing:required_spec where not required_spec in key spec;
+register:{[job;decl]
+    missing:required_spec where not required_spec in key decl;
     if[count missing;
         '"register: ",string[job]," is missing ",", " sv string missing];
-    if[not (spec`kind) in kinds;
-        '"register: ",string[job],"'s kind ",string[spec`kind]," is not one of ",
+    if[not (decl`kind) in kinds;
+        '"register: ",string[job],"'s kind ",string[decl`kind]," is not one of ",
          ", " sv string kinds];
-    jobs[job]:`kind`inputs`outputs!(spec`kind; `$(); `$());
-    jobs[job;`inputs]:(),spec`inputs;
-    jobs[job;`outputs]:(),spec`outputs;
+    jobs[job]:`kind`inputs`outputs!(decl`kind; `$(); `$());
+    jobs[job;`inputs]:(),decl`inputs;
+    jobs[job;`outputs]:(),decl`outputs;
     job}
 
 / A job's spec, or a refusal naming it.
 / @throws error when the job was never registered
-declaration:{[job]
+def:{[job]
     if[not job in key jobs;
-        '"declaration: ",string[job]," is not a registered job"];
+        '"def: ",string[job]," is not a registered job"];
     jobs job}
 
 / Forget every registration. For tests, and for rebuilding the graph after
@@ -90,18 +90,18 @@ reset:{[] jobs::(`symbol$())!(); ()}
 registry:{[]
     js:asc key jobs;
     ([] job:js;
-        kind:{(declaration x)`kind} each js;
-        inputs:{(declaration x)`inputs} each js;
-        outputs:{(declaration x)`outputs} each js)}
+        kind:{(def x)`kind} each js;
+        inputs:{(def x)`inputs} each js;
+        outputs:{(def x)`outputs} each js)}
 
 / ---------------------------------------------------------------- GRAPH
 
 / Which jobs write this table? Empty means nothing here produces it, which
 / makes it an external input rather than an error.
-producers:{[tbl] js:key jobs; js where {[t;j] t in (declaration j)`outputs}[tbl] each js}
+producers:{[table_name] js:key jobs; js where {[t;j] t in (def j)`outputs}[table_name] each js}
 
 / Which jobs read this table?
-consumers:{[tbl] js:key jobs; js where {[t;j] t in (declaration j)`inputs}[tbl] each js}
+consumers:{[table_name] js:key jobs; js where {[t;j] t in (def j)`inputs}[table_name] each js}
 
 / Private: the empty edge table, so every return path has one shape.
 no_edges:{[] ([] upstream:`symbol$(); tbl:`symbol$(); downstream:`symbol$())}
@@ -115,7 +115,7 @@ edges:{[]
     js:key jobs;
     if[0=count js; :no_edges[]];
     e:raze {[j]
-        ins:(declaration j)`inputs;
+        ins:(def j)`inputs;
         if[0=count ins; :no_edges[]];
         raze {[j;t]
             ps:producers t;
@@ -128,12 +128,12 @@ edges:{[]
 
 / Tables read by some job and written by none - where data enters.
 external_inputs:{[]
-    ins:distinct raze {(declaration x)`inputs} each key jobs;
+    ins:distinct raze {(def x)`inputs} each key jobs;
     ins where 0=count each producers each ins}
 
 / Tables written by some job and read by none - where data comes to rest.
 sinks:{[]
-    outs:distinct raze {(declaration x)`outputs} each key jobs;
+    outs:distinct raze {(def x)`outputs} each key jobs;
     outs where 0=count each consumers each outs}
 
 / Private: job-level dependency pairs, with external entry points dropped -
@@ -247,7 +247,7 @@ to_json:{[]
 / Register every bounded worker from .qbw.worker_cfg, deriving its inputs and
 / outputs from the source declaration it already names.
 / .
-/ A worker reads the source's remote `table` and writes its `target`, so
+/ A worker reads the source's remote `table_name` and writes its `target`, so
 / neither has to be restated on the worker - which is the whole point: a
 / worker that declared its own inputs could disagree with the source it
 / actually reads.
@@ -255,7 +255,7 @@ to_json:{[]
 / .
 / A table's identity in this graph is (location, name), not name - and the
 / shipped sources make that unavoidable rather than theoretical. Both of them
-/ declare `table` and `target` as the SAME symbol: demo_deals reads a remote
+/ declare `table_name` and `target` as the SAME symbol: demo_deals reads a remote
 / `demo_deals` and writes a local `demo_deals`. Keyed on the bare name, a
 / worker therefore consumed exactly what it produced, and the first run of
 / adopt_all[] reported a cycle among both workers - correctly, given what it
@@ -268,7 +268,7 @@ to_json:{[]
 / Parseable on purpose, so a viz tool can split it back into source and table
 / rather than having to treat the node as opaque.
 / @eg .qdag.external_ref[`demo_deals;`demo_deals]  ->  `demo_deals@demo_deals
-external_ref:{[source;tbl] `$(string tbl),"@",string source}
+external_ref:{[source;table_name] `$(string table_name),"@",string source}
 
 / Register every bounded worker into the job graph, from .qbw's own registry.
 / @return the worker names registered, empty when .qbw is not loaded
@@ -278,9 +278,9 @@ adopt_workers:{[]
     ws:key .qbw.worker_cfg;
     {[w]
         cfg:.qbw.worker_cfg w;
-        d:.qsrc.declaration cfg`source;
+        d:.qsrc.def cfg`source;
         register[w;`kind`inputs`outputs!
-            (`bounded; external_ref[cfg`source;d`table]; d`target)]
+            (`bounded; external_ref[cfg`source;d`table_name]; d`target)]
       } each ws;
     ws}
 
@@ -331,8 +331,8 @@ adopt_reactions:{[]
     if[not `qreact in key `; :`$()];
     raze {[ds]
         rs:.qreact.for_dataset ds;
-        {[ds;nm;outs]
-            job:reaction_job[ds;nm];
+        {[ds;name;outs]
+            job:reaction_job[ds;name];
             register[job;`kind`inputs`outputs!(`reaction;ds;outs)];
             job}[ds] .' flip (rs`name;rs`outputs)
       } each key .qreact.reactions}
@@ -351,10 +351,10 @@ adopt_reactions:{[]
 / halves. The cost is that it must be constructed rather than typed, which
 / is what this function is for.
 / @param dataset the dataset the reaction watches
-/ @param nm the reaction's name, unique within that dataset
+/ @param name the reaction's name, unique within that dataset
 / @return the job name, as a symbol
 / @eg .qdag.reaction_job[`demo_deals;`rebuild_positions]
-reaction_job:{[dataset;nm] `$(string dataset),"~",string nm}
+reaction_job:{[dataset;name] `$(string dataset),"~",string name}
 
 / Every reaction edge, and whether its output was derived or asserted.
 / .

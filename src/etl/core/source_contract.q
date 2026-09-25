@@ -80,8 +80,8 @@
 /         carried in the data rather than raised.
 / .
 /     Three things prevent recurrence, all of them enforcement rather than
-/     documentation: (1) register below requires the time_field to be one of
-/     the declared fields AND to be declared `p`, so a z time column is a
+/     documentation: (1) register below requires the time_column to be one of
+/     the declared columns AND to be declared `p`, so a z time column is a
 /     registration failure; (2) validate/validate_live compare declared type
 /     characters against `meta`, so a source that silently changes a column
 /     from p to z fails on both the fixture and the live path; (3)
@@ -107,7 +107,7 @@
 / bug: it reads as a decision downstream while nobody ever made one. Stating
 / `UTC` costs one symbol and makes "this source hands over UTC" a claim
 / somebody wrote, which validate_live can then be run against.
-required_declarations:`source`table`target`time_field`row_key`fields`types`query`fixture`tz
+required_declarations:`source`table_name`target`time_column`row_key`columns`types`query`fixture`tz
 
 / How a source is reached - the one OPTIONAL declaration.
 / .
@@ -139,39 +139,39 @@ sources:(`symbol$())!();
 / @param decl a dict carrying every name in required_declarations:
 /   table   - the external table name, as a symbol
 /   target  - the local table it lands in, as a symbol
-/   time_field - the column the window is taken on, as a symbol
+/   time_column - the column the window is taken on, as a symbol
 /   row_key - the column(s) identifying a row uniquely, as a symbol vector
-/   fields  - the columns this adapter READS, as a symbol vector
+/   columns  - the columns this adapter READS, as a symbol vector
 /   types   - the expected q type characters, one per field, as a string
 /   query   - a parameterised lambda taking (handle;range_from;range_to)
 /   fixture - a niladic lambda returning a synthetic table of the same shape
-/   tz - the zone the source's time_field is expressed in, as a
+/   tz - the zone the source's time_column is expressed in, as a
 /     symbol: `UTC, or a tz-database name such as `$"Europe/London"
 / and optionally:
 /   transport - `ipc (the default) or `odbc, see `transports`
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
-register:{[source;decl]
+define:{[source;decl]
     missing:required_declarations where not required_declarations in key decl;
     if[count missing;
-        '"register: ",string[source]," is missing declaration(s): ",", " sv string missing];
-    if[not 11h=abs type decl`fields;
-        '"register: ",string[source],"'s fields must be a symbol vector"];
+        '"define: ",string[source]," is missing declaration(s): ",", " sv string missing];
+    if[not 11h=abs type decl`columns;
+        '"define: ",string[source],"'s columns must be a symbol vector"];
     if[not 10h=abs type decl`types;
-        '"register: ",string[source],"'s types must be a string of q type characters, one per field"];
-    if[(count decl`fields)<>count decl`types;
-        '"register: ",string[source]," declares ",string[count decl`fields],
+        '"define: ",string[source],"'s types must be a string of q type characters, one per field"];
+    if[(count decl`columns)<>count decl`types;
+        '"define: ",string[source]," declares ",string[count decl`columns],
          " field(s) but ",string[count decl`types]," type(s) - the source contract requires a type per required field"];
     if[not 100h=type decl`query;
-        '"register: ",string[source],"'s query must be a lambda (parameterised, never concatenated)"];
+        '"define: ",string[source],"'s query must be a lambda (parameterised, never concatenated)"];
     if[not 100h=type decl`fixture;
-        '"register: ",string[source],"'s fixture must be a niladic lambda (the path must be exercisable with no driver)"];
+        '"define: ",string[source],"'s fixture must be a niladic lambda (the path must be exercisable with no driver)"];
     if[not -11h=type decl`tz;
-        '"register: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
-    / The window is taken on time_field, so time_field must be a field this
+        '"define: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
+    / The window is taken on time_column, so time_column must be a field this
     / adapter actually READS. Without this check a typo registers happily and
     / surfaces two layers down: validate never checks the column (it is not
-    / in `fields`), the live query filters on something the declaration never
+    / in `columns`), the live query filters on something the declaration never
     / described, and only window_fixture notices - at fetch time, mid-run.
     / row_key: declared and VALIDATED, deliberately not yet used.
     / .
@@ -195,16 +195,16 @@ register:{[source;decl]
     / vector (11h), which is the point - a single-column key should not have
     / to be enlisted at the call site.
     if[not 11h=abs type decl`row_key;
-        '"register: ",string[source],"'s row_key must be a symbol or symbol vector naming the column(s) that identify a row uniquely"];
+        '"define: ",string[source],"'s row_key must be a symbol or symbol vector naming the column(s) that identify a row uniquely"];
     key_cols:(),decl`row_key;
-    key_absent:key_cols where not key_cols in decl`fields;
+    key_absent:key_cols where not key_cols in decl`columns;
     if[count key_absent;
-        '"register: ",string[source],"'s row_key names ",(", " sv string key_absent),
-         " which is not among its declared fields - a key this contract cannot see cannot identify a row"];
+        '"define: ",string[source],"'s row_key names ",(", " sv string key_absent),
+         " which is not among its declared columns - a key this contract cannot see cannot identify a row"];
 
-    if[not (decl`time_field) in decl`fields;
-        '"register: ",string[source],"'s time_field ",string[decl`time_field],
-         " is not one of its declared fields (",(", " sv string decl`fields),
+    if[not (decl`time_column) in decl`columns;
+        '"define: ",string[source],"'s time_column ",string[decl`time_column],
+         " is not one of its declared columns (",(", " sv string decl`columns),
          ") - the window is taken on that column, so it must be one the contract describes"];
     / Enforced rather than hoped for: the window column must be a
     / TIMESTAMP. q's datetime (`z`) is a float count of days, so z->p is a
@@ -212,16 +212,16 @@ register:{[source;decl]
     / nanosecond-spaced instants do not survive it, and whole seconds do,
     / which is why it passes every hand-check. A window cut on such a column
     / produces plausible numbers and misplaced rows rather than an error.
-    time_idx:(decl`fields)?decl`time_field;
+    time_idx:(decl`columns)?decl`time_column;
     time_char:(decl`types)[time_idx];
     if[not "p"=time_char;
         / Short by necessity: q truncates a thrown string at 255 bytes, so the
         / long form lives in the comment above rather than in the message.
-        '"register: ",string[source],"'s time_field ",string[decl`time_field],
+        '"define: ",string[source],"'s time_column ",string[decl`time_column],
          " is type \"",time_char,"\", not \"p\" - the window column must be a timestamp; a datetime rounds sub-second values silently"];
     tr:$[`transport in key decl; decl`transport; default_transport];
     if[not tr in transports;
-        '"register: ",string[source],"'s transport must be one of ",(", " sv string transports)];
+        '"define: ",string[source],"'s transport must be one of ",(", " sv string transports)];
     / Stored on EVERY declaration, declared or not: `sources` holds dicts, and
     / a key present on one and absent on another stops later assignments
     / fitting - the shape .qbw's optional_cfg normalisation exists for.
@@ -236,7 +236,7 @@ register:{[source;decl]
     / one shape keeps every declaration mutually assignable.
     sources[source]:@[decl;`row_key;:;key_cols];
     .[{.qlog.dbg[x;y;z]};(source;"source registered";
-        `fields`time_field`tz`transport`row_key!(decl`fields;decl`time_field;decl`tz;tr;key_cols));::];
+        `columns`time_column`tz`transport`row_key!(decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
 
 / Every registered source's name.
@@ -245,18 +245,18 @@ register:{[source;decl]
 / exist, which is what makes the question bank true: adding a source is a file plus a
 / registration, with no core change.
 / @return a symbol vector, empty when nothing has registered yet
-/ @eg .qsrc.registered[]
-registered:{[] key sources}
+/ @eg .qsrc.defined[]
+defined:{[] key sources}
 
 / The column(s) identifying a row uniquely, always as a vector.
 / .
 / Exported so a future dedupe or restatement path has one place to ask,
 / rather than each caller reaching into the declaration and deciding for
 / itself whether a single symbol needs enlisting.
-/ Stored normalised by `register`, so this is already a vector - the `(),`
+/ Stored normalised by `define`, so this is already a vector - the `(),`
 / is belt-and-braces for a declaration written directly into `sources` by a
 / test rather than through register.
-row_key:{[source] (),(declaration source)`row_key}
+row_key:{[source] (),(def source)`row_key}
 
 / One source's full declaration, or a refusal naming it.
 / .
@@ -265,13 +265,13 @@ row_key:{[source] (),(declaration source)`row_key}
 / that got an empty dict back would fail later, somewhere else, on a missing
 / key.
 / @param source the registered source's name, as a symbol
-/ @return the declaration dict (source, table, target, time_field, row_key,
-/   fields, types, query, fixture, tz)
+/ @return the declaration dict (source, table, target, time_column, row_key,
+/   columns, types, query, fixture, tz)
 / @throws error naming the source when it was never registered
-/ @eg .qsrc.declaration `demo_deals
-declaration:{[source]
+/ @eg .qsrc.def `demo_deals
+def:{[source]
     if[not source in key sources;
-        '"declaration: ",string[source]," is not a registered source - sources register centrally, so an unregistered source is a wiring bug rather than a lookup miss"];
+        '"def: ",string[source]," is not a registered source - sources register centrally, so an unregistered source is a wiring bug rather than a lookup miss"];
     sources source}
 
 / ------------------------------------------------------------ VALIDATION
@@ -292,7 +292,7 @@ column_names:{[tbl] exec c from 0!meta tbl}
 / check go through, which is what makes "that same contract" true rather
 / than aspirational.
 / .
-/ Extra columns are ALLOWED, declared fields are not optional. A source
+/ Extra columns are ALLOWED, declared columns are not optional. A source
 / growing a column is routine and breaking on it would make every upstream
 / addition an outage; a source LOSING a declared column, or changing its
 / type, is precisely the silent breakage worth failing on - a missing column
@@ -302,15 +302,15 @@ column_names:{[tbl] exec c from 0!meta tbl}
 / @return 1b when the table satisfies the declaration
 / @throws error naming every missing field and every type mismatch at once
 validate:{[source;tbl]
-    decl:declaration source;
+    decl:def source;
     present:column_names tbl;
     chars:type_chars tbl;
-    missing:decl[`fields] where not decl[`fields] in present;
-    / Report missing fields AND type mismatches together. Reporting only the
+    missing:decl[`columns] where not decl[`columns] in present;
+    / Report missing columns AND type mismatches together. Reporting only the
     / first class means fixing the columns, re-running, and only then
     / learning the types are wrong too.
-    checkable:decl[`fields] where decl[`fields] in present;
-    expected:decl[`types] decl[`fields]?checkable;
+    checkable:decl[`columns] where decl[`columns] in present;
+    expected:decl[`types] decl[`columns]?checkable;
     actual:chars present?checkable;
     wrong:checkable where not expected=actual;
     if[count missing,wrong;
@@ -321,7 +321,7 @@ validate:{[source;tbl]
                 flip (string wrong;enlist each expected where not expected=actual;
                       enlist each actual where not expected=actual);
             ""]];
-    .[{.qlog.dbg[x;y;z]};(source;"contract satisfied";`rows`fields!(count tbl;count decl`fields));::];
+    .[{.qlog.dbg[x;y;z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
     1b}
 
 / Validate a source's own fixture against the same contract as live data.
@@ -329,7 +329,7 @@ validate:{[source;tbl]
 / Runs in the deterministic suite, with no connection anywhere. A fixture
 / that does not satisfy the contract is a broken test double, and finding
 / that out from a failing worker test is a much longer path.
-validate_fixture:{[source] validate[source;(declaration[source]`fixture)[]]}
+validate_fixture:{[source] validate[source;(def[source]`fixture)[]]}
 
 / Validate LIVE external metadata against the same declaration.
 / .
@@ -342,21 +342,21 @@ validate_fixture:{[source] validate[source;(declaration[source]`fixture)[]]}
 / @param source a registered source name
 / @param h an open handle to the external source
 validate_live:{[source;h]
-    decl:declaration source;
-    m:@[{[handle;tbl] handle({0!meta x};tbl)}[h];decl`table;
-        {[tbl;err] '"validate_live: cannot read metadata for ",string[tbl]," (",err,")"}[decl`table;]];
+    decl:def source;
+    m:@[{[handle;table_name] handle({0!meta x};table_name)}[h];decl`table_name;
+        {[table_name;err] '"validate_live: cannot read metadata for ",string[table_name]," (",err,")"}[decl`table_name;]];
     present:exec c from m;
     chars:exec t from m;
-    missing:decl[`fields] where not decl[`fields] in present;
+    missing:decl[`columns] where not decl[`columns] in present;
     if[count missing;
-        '"validate_live: ",string[decl`table]," is missing ",(", " sv string missing),
+        '"validate_live: ",string[decl`table_name]," is missing ",(", " sv string missing),
          " - the external schema has changed, or this declaration was always wrong"];
-    checkable:decl`fields;
+    checkable:decl`columns;
     expected:decl`types;
     actual:chars present?checkable;
     wrong:checkable where not expected=actual;
     if[count wrong;
-        '"validate_live: ",string[decl`table]," type mismatch on ",", " sv string wrong];
+        '"validate_live: ",string[decl`table_name]," type mismatch on ",", " sv string wrong];
     1b}
 
 / ---------------------------------------------------------- CREDENTIALS
@@ -381,7 +381,7 @@ credential_var:{[source] "UQF_SOURCE_CRED_",upper string source}
 / Sixth reserved-name collision here, and the first as a local rather than a
 / parameter - check_q_traps.py now covers both.
 require_credentials:{[source]
-    declaration source;
+    def source;
     env_var:credential_var source;
     v:getenv `$env_var;
     / The variable's NAME only - never its value, which is a credential.
@@ -445,26 +445,26 @@ load_zone_table:{[path]
 / correct for part of the year and an hour wrong for the rest, which puts
 / rows in the wrong window without ever failing - and a coverage ledger then
 / records both windows as complete.
-require_zone_table:{[zone]
+require_zone_table:{[tz]
     if[0=count zone_table;
         / Consequence first, then the fix: the 255-byte truncation would
         / otherwise cut the reason, which is the part that matters.
-        '"require_zone_table: no zone table loaded, and ",string[zone],
+        '"require_zone_table: no zone table loaded, and ",string[tz],
          " needs one - a fixed-offset fallback would be an hour wrong for half the year and never error. See load_zone_table"];
-    if[not zone in zone_names;
-        '"require_zone_table: zone ",string[zone]," is not in the loaded zone table (",
+    if[not tz in zone_names;
+        '"require_zone_table: zone ",string[tz]," is not in the loaded zone table (",
          string[count zone_names]," zones) - check the tz-database spelling, e.g. `$\"Europe/London\""];
-    zone}
+    tz}
 
 / Private: the offsets this zone has ever used. At most 8 in tzdata, so the
 / candidate search in local_to_utc is cheap and fully vectorised.
-offsets_for:{[zone] distinct exec adjustment from zone_table where timezoneID=zone}
+offsets_for:{[tz] distinct exec adjustment from zone_table where timezoneID=tz}
 
 / Private: the offset in effect at each UTC instant. Unambiguous by
 / construction - every UTC instant has exactly one offset.
-offset_at:{[zone;ts]
+offset_at:{[tz;ts]
     exec adjustment from aj[`timezoneID`gmtDateTime;
-        ([] timezoneID:(count ts)#zone; gmtDateTime:ts);
+        ([] timezoneID:(count ts)#tz; gmtDateTime:ts);
         zone_table]}
 
 / UTC -> the source's local wall clock.
@@ -474,12 +474,12 @@ offset_at:{[zone;ts]
 / @throws error when an instant predates the zone table's coverage - a null
 /   offset would otherwise propagate as a null timestamp, which reads as "no
 /   data" rather than as "the lookup missed"
-utc_to_local:{[zone;ts]
+utc_to_local:{[tz;ts]
     tsv:(),ts;
     if[0=count tsv; :ts];
-    a:offset_at[zone;tsv];
+    a:offset_at[tz;tsv];
     if[any null a;
-        '"utc_to_local: ",string[zone]," has no rule covering ",
+        '"utc_to_local: ",string[tz]," has no rule covering ",
          (-3!min tsv where null a)," - it predates the zone table's coverage"];
     $[0>type ts; first; ::] tsv+a}
 
@@ -511,20 +511,20 @@ utc_to_local:{[zone;ts]
 / misplaced hour discovered months later is not. The operator's fix is to
 / have the source hand over UTC, which is why `UTC is the recommended
 / declaration and the only one needing no table at all.
-/ @param zone a zone in the loaded table
+/ @param tz a zone in the loaded table
 / @param ts local wall-clock timestamp(s)
 / @return the corresponding UTC timestamp(s), same shape as ts
 / @throws error on a nonexistent or an ambiguous local time
-local_to_utc:{[zone;ts]
+local_to_utc:{[tz;ts]
     tsv:(),ts;
     if[0=count tsv; :ts];
-    cs:local_candidates[zone;tsv];
+    cs:local_candidates[tz;tsv];
     nvalid:count each cs;
     if[any 0=nvalid;
-        '"local_to_utc: ",nonexistent_message[zone;first tsv where 0=nvalid]];
+        '"local_to_utc: ",nonexistent_message[tz;first tsv where 0=nvalid]];
     if[any 1<nvalid;
         pos:first where 1<nvalid;
-        '"local_to_utc: ",ambiguous_message[zone;tsv pos;cs pos]];
+        '"local_to_utc: ",ambiguous_message[tz;tsv pos;cs pos]];
     $[0>type ts; first; ::] first each cs}
 
 / Private: every UTC instant a local reading could denote, per row.
@@ -535,24 +535,24 @@ local_to_utc:{[zone;ts]
 / row - a backfill window can hold millions.
 / @return a list, one ragged entry per input row: 1 instant normally, 0 in a
 /   spring-forward gap, 2 in an autumn repeated hour
-local_candidates:{[zone;tsv]
-    offs:offsets_for zone;
+local_candidates:{[tz;tsv]
+    offs:offsets_for tz;
     if[0=count offs;
-        '"local_candidates: no offsets for zone ",string zone];
+        '"local_candidates: no offsets for zone ",string tz];
     cands:tsv -\: offs;
-    ok:flip {[zone;tsv;o] tsv = utc_to_local[zone;tsv-o]}[zone;tsv] each offs;
+    ok:flip {[tz;tsv;o] tsv = utc_to_local[tz;tsv-o]}[tz;tsv] each offs;
     cands @' where each ok}
 
 / Private: the two error texts, shared by local_to_utc and narrow_to_utc so
 / the two paths cannot explain the same failure differently.
-nonexistent_message:{[zone;bad]
-    "local time ",(-3!bad)," does not exist in ",string[zone],
+nonexistent_message:{[tz;bad]
+    "local time ",(-3!bad)," does not exist in ",string[tz],
     " - it falls in a spring-forward gap, so no UTC instant maps to it. Either the ",
     "declared tz is wrong for this source, or the source is emitting ",
     "wall-clock readings its own calendar never had"}
 
-ambiguous_message:{[zone;bad;cs]
-    "local time ",(-3!bad)," is ambiguous in ",string[zone],
+ambiguous_message:{[tz;bad;cs]
+    "local time ",(-3!bad)," is ambiguous in ",string[tz],
     " - it occurs twice on an autumn transition, at ",(" and " sv -3!'asc cs),
     " UTC. Refusing to pick: either choice can move the row into a neighbouring ",
     "backfill window, which the ledger would still record as complete. Have the ",
@@ -601,23 +601,23 @@ coercers:(!). flip (
 / entirely means the format changed and the window must not be published.
 / That judgement is the worker's, not this layer's.
 / @param source a registered source name
-/ @param tbl a table whose declared fields hold text
+/ @param tbl a table whose declared columns hold text
 / @return dict of `table (coerced) and `failures (field -> count)
 / @throws error when a declared type has no coercer
 coerce:{[source;tbl]
-    decl:declaration source;
+    decl:def source;
     present:column_names tbl;
-    fields:decl[`fields] where decl[`fields] in present;
-    chars:(decl`types) (decl`fields)?fields;
+    columns:decl[`columns] where decl[`columns] in present;
+    chars:(decl`types) (decl`columns)?columns;
     unknown:distinct chars where not chars in key coercers;
     if[count unknown;
         '"coerce: no coercer for declared type(s) \"",unknown,"\" in ",string[source],
          " - add one to .qsrc.coercers deliberately rather than casting privately"];
-    results:{[tb;f;c] .qcoer.coerce_column[coercers c;tb f]}[tbl;;] .' flip (fields;chars);
+    results:{[tb;f;c] .qcoer.coerce_column[coercers c;tb f]}[tbl;;] .' flip (columns;chars);
     coerced:tbl;
-    coerced:{[tb;f;r] @[tb;f;:;r`values]}/[coerced;fields;results];
-    failures:fields!results[;`failed];
-    .[{.qlog.dbg[x;y;z]};(source;"coerced";`rows`fields`failures!(count tbl;fields;failures));::];
+    coerced:{[tb;f;r] @[tb;f;:;r`values]}/[coerced;columns;results];
+    failures:columns!results[;`failed];
+    .[{.qlog.dbg[x;y;z]};(source;"coerced";`rows`columns`failures!(count tbl;columns;failures));::];
     `table`failures!(coerced;failures)}
 
 / ------------------------------------------------------------- FETCHING
@@ -637,7 +637,7 @@ coerce:{[source;tbl]
 / @param h an open handle, or 0Ni when running on the fixture
 / @param range_from window start
 / @param range_to window end, exclusive
-/ The fixture is WINDOWED here, on the declared time_field, using the same
+/ The fixture is WINDOWED here, on the declared time_column, using the same
 / half-open [range_from;range_to) bounds the live query uses. Without that
 / the fixture returns every row for every window, so a three-window run
 / publishes the fixture three times - triplicating the data while coverage
@@ -654,7 +654,7 @@ coerce:{[source;tbl]
 / has to know about zones. See source_bounds and narrow_to_utc.
 fetch_window:{[source;h;range_from;range_to]
     t0:.z.p;
-    decl:declaration source;
+    decl:def source;
     bounds:source_bounds[decl;range_from;range_to];
     .[{.qlog.dbg[x;y;z]};(source;"fetching";
         `path`range_from`range_to`source_from`source_to`tz!
@@ -694,13 +694,13 @@ bound_padding:1D
 / So: pad the bounds, fetch a superset, and narrow exactly in UTC afterwards
 / where the arithmetic is unambiguous.
 source_bounds:{[decl;range_from;range_to]
-    zone:decl`tz;
-    if[`UTC~zone; :(range_from;range_to)];
-    require_zone_table zone;
-    (utc_to_local[zone;range_from-bound_padding];
-     utc_to_local[zone;range_to+bound_padding])}
+    tz:decl`tz;
+    if[`UTC~tz; :(range_from;range_to)];
+    require_zone_table tz;
+    (utc_to_local[tz;range_from-bound_padding];
+     utc_to_local[tz;range_to+bound_padding])}
 
-/ Private: convert a fetched page's time_field to UTC and narrow it to the
+/ Private: convert a fetched page's time_column to UTC and narrow it to the
 / requested half-open range.
 / .
 / For `UTC this is the identity: the query (or window_fixture) has already
@@ -727,33 +727,33 @@ source_bounds:{[decl;range_from;range_to]
 /     wall-clock time its own calendar never had means the declared zone is
 /     wrong - which is a contract breach, not a windowing question.
 narrow_to_utc:{[decl;tbl;range_from;range_to]
-    zone:decl`tz;
-    if[`UTC~zone; :tbl];
-    f:decl`time_field;
+    tz:decl`tz;
+    if[`UTC~tz; :tbl];
+    f:decl`time_column;
     local_ts:tbl f;
     if[0=count local_ts; :tbl];
-    cs:local_candidates[zone;local_ts];
+    cs:local_candidates[tz;local_ts];
     nvalid:count each cs;
     if[any 0=nvalid;
-        '"narrow_to_utc: ",nonexistent_message[zone;first local_ts where 0=nvalid]];
+        '"narrow_to_utc: ",nonexistent_message[tz;first local_ts where 0=nvalid]];
     in_range:{[lo;hi;c] any (c>=lo) and c<hi}[range_from;range_to] each cs;
     if[any in_range and 1<nvalid;
         pos:first where in_range and 1<nvalid;
-        '"narrow_to_utc: ",ambiguous_message[zone;local_ts pos;cs pos]];
+        '"narrow_to_utc: ",ambiguous_message[tz;local_ts pos;cs pos]];
     / Every surviving row now has exactly one reading, so the conversion is
     / unambiguous and the half-open bound is applied in UTC - the direction
     / where the arithmetic cannot double-count or skip.
     kept:tbl where in_range;
     ![kept;();0b;(enlist f)!enlist enlist first each cs where in_range]}
 
-/ Private: apply the window to a fixture, on its declared time_field.
+/ Private: apply the window to a fixture, on its declared time_column.
 / .
 / Functional select (`?[t;where;0b;()]`) rather than qSQL, because the column
-/ name is a variable: `select from t where time_field>=from_ts` would compare
+/ name is a variable: `select from t where time_column>=from_ts` would compare
 / the literal symbol, not the column it names.
 window_fixture:{[decl;range_from;range_to]
     t:(decl`fixture)[];
-    f:decl`time_field;
+    f:decl`time_column;
     if[not f in column_names t;
         '"window_fixture: ",string[decl`source],"'s fixture has no ",string[f],
          " column, so the window cannot be applied - it would return every row for every window and triplicate the data"];

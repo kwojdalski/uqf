@@ -54,7 +54,7 @@
 / rather than by agreement. Derived from the declaration, not restated -
 / a level added to .qfeed.databento_mbp10 reaches this table with no edit
 / here.
-raw:flip .qfeed.databento_mbp10.fields!{[c] $[c within "AZ"; (); c$()]} each .qfeed.databento_mbp10.types
+raw:flip .qfeed.databento_mbp10.columns!{[c] $[c within "AZ"; (); c$()]} each .qfeed.databento_mbp10.types
 
 / What this job publishes. The backfill's target shape plus `ts_event`:
 / see the header on why the venue clock is a column of its own.
@@ -77,13 +77,13 @@ publish:.qstream.unwired `databento_book;
 / The batch arrives with the tickerplant's own `time` prepended, which the
 / transform's contract does not have; it is dropped before applying, and
 / the venue's ts_event is carried through to the output instead.
-/ @param tbl the table the batch arrived on
-/ @param batch the rows, as a table
+/ @param t the table the batch arrived on
+/ @param x the rows, as a table
 / @return nothing
-on_batch:{[tbl;batch]
-    if[not tbl=`databento_mbp10; :()];
-    if[0=count batch; :()];
-    rows:$[`time in cols batch; ![batch;();0b;enlist `time]; batch];
+on_batch:{[t;x]
+    if[not t=`databento_mbp10; :()];
+    if[0=count x; :()];
+    rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
     folded:.qxf.apply[`databento_book;enlist[`batch]!enlist rows];
     / The transform names the venue clock `time`; rename it rather than
     / leave two columns meaning different instants, and let .u.upd stamp
@@ -95,8 +95,8 @@ on_batch:{[tbl;batch]
 
 \d .
 
-.qstream.register[`databento_book;
-    `procname`subscribes`publishes`on_batch`note!(
+.qstream.define[`databento_book;
+    `procname`subscribe_to`publishes`on_batch`note!(
         `databento1;
         enlist `databento_mbp10;
         enlist `databento_book;

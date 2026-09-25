@@ -52,13 +52,13 @@ workers:{[] .testutil.etl_declaration_names["src/etl/workers"]}
 /   the window is the fixture's own span, widened by one worker width so the
 /   last row falls inside a window rather than on its boundary
 prepare:{[w]
-    cfg:.qbw.declaration w;
-    src:.qsrc.declaration cfg`source;
+    cfg:.qbw.def w;
+    src:.qsrc.def cfg`source;
     setenv[`$.qsrc.credential_var cfg`source;""];
     .qbfstate.release_lock w;
     .qbfstate.clear_checkpoint w;
-    (cfg`dataset) set 0#(.qxf.declaration cfg`transform)`output;
-    ts:(src`fixture)[] src`time_field;
+    (cfg`dataset) set 0#(.qxf.def cfg`transform)`output;
+    ts:(src`fixture)[] src`time_column;
     `source_version`range_from`range_to!(`wrunv1;min ts;(max ts)+cfg`width)}
 
 / Call one of a worker's stamped methods.
@@ -123,7 +123,7 @@ test_a_dry_run_publishes_nothing_for_every_worker:{[t]
     / overrode `publish` could ignore it.
     setenv[`UQF_DRY_RUN;"true"];
     bad:{[w]
-        cfg:.qbw.declaration w;
+        cfg:.qbw.def w;
         spec:.wruntest.prepare w;
         .wruntest.call[w;`init][spec];
         .wruntest.call[w;`run][];

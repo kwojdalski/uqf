@@ -177,26 +177,26 @@ published:(`symbol$())!`long$()
 received:(`symbol$())!`long$()
 
 / Record one publish, logging the first per table at INF and every one at DBG.
-/ @param tbl the table published onto
+/ @param table_name the table published onto
 / @param n rows published
 / @return n
-record_published:{[tbl;n]
-    before:0^published tbl;
-    .qpipe.published[tbl]:before+n;
-    if[0=before; .qlog.info[`qpipe;"first rows published";`table`rows!(tbl;n)]];
-    .qlog.dbg[`qpipe;"published";`table`rows`total!(tbl;n;before+n)];
+record_published:{[table_name;n]
+    before:0^published table_name;
+    .qpipe.published[table_name]:before+n;
+    if[0=before; .qlog.info[`qpipe;"first rows published";`table`rows!(table_name;n)]];
+    .qlog.dbg[`qpipe;"published";`table`rows`total!(table_name;n;before+n)];
     n}
 
 / Record one batch arriving from the tickerplant, the same way.
-/ @param tbl the table the batch is for
-/ @param data the batch: a table, or a list of column vectors
+/ @param t the table the batch is for
+/ @param x the batch: a table, or a list of column vectors
 / @return the batch's row count
-record_received:{[tbl;data]
-    n:$[98h=type data; count data; count first data];
-    before:0^received tbl;
-    .qpipe.received[tbl]:before+n;
-    if[0=before; .qlog.info[`qpipe;"first batch received";`table`rows!(tbl;n)]];
-    .qlog.dbg[`qpipe;"batch received";`table`rows`total!(tbl;n;before+n)];
+record_received:{[t;x]
+    n:$[98h=type x; count x; count first x];
+    before:0^received t;
+    .qpipe.received[t]:before+n;
+    if[0=before; .qlog.info[`qpipe;"first batch received";`table`rows!(t;n)]];
+    .qlog.dbg[`qpipe;"batch received";`table`rows`total!(t;n;before+n)];
     n}
 
 / Bring this process up as a tickerplant subscriber and hand back a publish
@@ -343,29 +343,29 @@ install_period_handlers:{[]
 / only way a pipeline in this demo should send data.
 / @param h the publish handle (passed explicitly, never read from a global -
 /   see invariant 5)
-/ @param tbl the destination table name, e.g. `execution_quality
-/ @param data a table, keyed table, a dict (of atoms for one row, or of
+/ @param t the destination table name, e.g. `execution_quality
+/ @param x a table, keyed table, a dict (of atoms for one row, or of
 /   vectors for many), or a list of column vectors in the table's own order
 / @return the number of rows published
 / @eg .qpipe.publish[h;`execution_quality;out]
 / @eg .qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]
 / @eg .qpipe.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]
-publish:{[h;tbl;data]
-    if[is_columns data;
+publish:{[h;t;x]
+    if[is_columns x;
         / Straight through: this IS .u.upd's shape, and there are no names
         / to strip a `time` from. The count is the first column's, which
         / is where .u.upd takes it from too.
-        n:count first data;
+        n:count first x;
         if[0=n; :0];
-        h (`.u.upd;tbl;data);
-        :record_published[tbl;n]];
-    out:as_table data;
+        h (`.u.upd;t;x);
+        :record_published[t;n]];
+    out:as_table x;
     if[0=count out; :0];
     / invariant 1: .u.upd stamps its own `time` - sending ours makes the
     / message one column too wide.
     out:$[`time in cols out; ![out;();0b;enlist `time]; out];
-    h (`.u.upd;tbl;value flip out);
-    record_published[tbl;count out]}
+    h (`.u.upd;t;value flip out);
+    record_published[t;count out]}
 
 / --------------------------------------------------------------- TRIGGER
 
@@ -379,23 +379,23 @@ publish:{[h;tbl;data]
 / remaining parameters is not the same rank and does not stand in for one.
 / The generated wrapper is a real, inspectable function: call
 / .qpipe.tick_markout[] by hand to test it.
-/ @param nm the pipeline's name - also names the wrapper and tags log lines
+/ @param name the pipeline's name - also names the wrapper and tags log lines
 / @param interval a timespan, e.g. 0D00:00:01.000
-/ @param fn the fully-qualified name of the niladic function to run
+/ @param f the fully-qualified name of the niladic function to run
 / @param timer_desc the description .timer.repeat shows
 / @return the generated wrapper's name
 / @eg .qpipe.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;"Run the markout streaming job"]
-safe_timer:{[nm;interval;fn;timer_desc]
-    wrapper:`$".qpipe.tick_",string nm;
+safe_timer:{[name;interval;f;timer_desc]
+    wrapper:`$".qpipe.tick_",string name;
     / `value` the lambda EXPRESSION only, then `set` the name - not
     / `value "name:{...}"`. Evaluating an assignment statement through
     / `value` from inside a lambda throws 'nyi on this build (confirmed
     / live while writing this file); parsing a bare lambda and assigning it
     / with `set` is well-defined and does the same job.
-    body:"{[] @[get `",(string fn),";::;{[e] .qlog.err[`",(string nm),";\"timer function failed\";`fn`error!(`",(string fn),";e)]}]}";
+    body:"{[] @[get `",(string f),";::;{[e] .qlog.err[`",(string name),";\"timer function failed\";`fn`error!(`",(string f),";e)]}]}";
     wrapper set value body;
     .timer.repeat[.proc.cp[];0Wp;interval;(wrapper;`);timer_desc];
-    .qlog.dbg[nm;"timer installed";`fn`interval`wrapper!(fn;interval;wrapper)];
+    .qlog.dbg[name;"timer installed";`fn`interval`wrapper!(f;interval;wrapper)];
     wrapper}
 
 \d .

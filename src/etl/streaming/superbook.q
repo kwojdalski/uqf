@@ -118,14 +118,14 @@ refresh:{[as_of]
     }
 
 / Consume a canonical market_data batch and publish the recomputed books.
-/ @param tbl incoming table name
-/ @param batch full source snapshots
+/ @param t incoming table name
+/ @param x full source snapshots
 / @return nothing
 / @eg .qsub.superbook.on_batch[`unrelated;()]
-on_batch:{[tbl;batch]
-    if[not tbl=`market_data; :()];
+on_batch:{[t;x]
+    if[not t=`market_data; :()];
     now:.z.p;
-    `.qsub.superbook.books set replace_books[books;batch;now];
+    `.qsub.superbook.books set replace_books[books;x;now];
     refresh now;
     }
 
@@ -141,7 +141,7 @@ on_timer:{[] refresh .z.p;}
 / change to it changes every snapshot downstream - worth recording (#295).
 .qcfgaudit.watch[`superbook;enlist `.qsub.superbook.max_age];
 
-.qstream.register[`superbook;`procname`subscribes`publishes`on_batch`timer_period`on_timer`note!(
+.qstream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note!(
     `superbook1;
     enlist `market_data;
     `superbook`config_change;

@@ -5,10 +5,12 @@ qalloc,append_lot,function,2,lots lot
 qalloc,bucket,function,5,m bys kv seed sub
 qalloc,by_cols,function,1,d
 qalloc,by_trade,function,1,matches
+qalloc,def,function,1,name
 qalloc,default_opts,dict,,
+qalloc,define,function,2,name decl
+qalloc,defined,function,1,
 qalloc,key_table,function,2,t bys
 qalloc,merge_lot,function,2,lots lot
-qalloc,method,function,1,nm
 qalloc,methods,dict,,
 qalloc,new_lots,function,1,trades
 qalloc,new_matches,function,1,trades
@@ -21,9 +23,7 @@ qalloc,position,function,2,lots group_cols
 qalloc,position_at,function,3,trades opts ts
 qalloc,prepared,function,2,trades bys
 qalloc,prepared_opening,function,2,opening bys
-qalloc,register,function,2,nm m
-qalloc,registered,function,1,
-qalloc,require_method,function,1,m
+qalloc,require_method,function,1,decl
 qalloc,required,value,,
 qalloc,required_cols,value,,
 qalloc,required_lot_cols,value,,
@@ -69,8 +69,8 @@ qbw,begin_run,function,1,worker
 qbw,checkpoint,function,2,worker cursor
 qbw,cleanup,function,1,worker
 qbw,connect,function,1,worker
-qbw,declaration,function,1,worker
-qbw,define,function,2,worker cfg
+qbw,def,function,1,worker
+qbw,define,function,2,worker decl
 qbw,delegate,function,2,worker nm
 qbw,do_window,function,2,worker w
 qbw,empty_windows,function,1,
@@ -147,22 +147,22 @@ qdag,adopt_feeders,function,1,
 qdag,adopt_pipelines,function,1,
 qdag,adopt_reactions,function,1,
 qdag,adopt_workers,function,1,
-qdag,consumers,function,1,tbl
+qdag,consumers,function,1,table_name
 qdag,d2,function,1,
-qdag,declaration,function,1,job
+qdag,def,function,1,job
 qdag,edges,function,1,
 qdag,external_inputs,function,1,
-qdag,external_ref,function,2,source tbl
+qdag,external_ref,function,2,source table_name
 qdag,id_chars,value,,
 qdag,job_edges,function,1,
 qdag,jobs,dict,,
 qdag,kinds,value,,
 qdag,layers,function,1,
 qdag,no_edges,function,1,
-qdag,producers,function,1,tbl
+qdag,producers,function,1,table_name
 qdag,reaction_edges,function,1,
-qdag,reaction_job,function,2,dataset nm
-qdag,register,function,2,job spec
+qdag,reaction_job,function,2,dataset name
+qdag,register,function,2,job decl
 qdag,register_pipelines,function,1,
 qdag,registry,function,1,
 qdag,required_spec,value,,
@@ -191,22 +191,22 @@ qdesk,empty_book,function,1,dims
 qdesk,required_cols,value,,
 qdesk,rollup,function,2,book group_cols
 qdqc,check_market_data_quality,function,2,quotes max_spread_bps
-qdqc,check_stale_quotes,function,3,quotes at_time max_age
+qdqc,check_stale_quotes,function,3,quotes as_of max_age
 qdqc,summarize_checks,function,1,named_checks
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_ratio,function,2,num_fills num_quotes
-qexec,hit_ratio_by,function,6,requests start_ts end_ts bucket_size group_cols mode
+qexec,hit_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,markout,function,4,side trade_price ref_price pip_factor
 qexec,markout_at_horizons,function,3,trades quotes horizons
 qexec,reject_ratio,function,2,num_rejects num_requests
-qexec,reject_ratio_by,function,6,requests start_ts end_ts bucket_size group_cols mode
+qexec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,slippage,function,4,side arrival_price exec_price pip_factor
 qexec,sweep_price,function,3,prices sizes target_size
 qexec,vwap,function,2,prices sizes
 qexec,vwap_expanding,function,2,prices sizes
 qfeed.databento_mbp10,adapt,function,1,raw
+qfeed.databento_mbp10,columns,value,,
 qfeed.databento_mbp10,epoch_ns_literal,function,1,ts
-qfeed.databento_mbp10,fields,value,,
 qfeed.databento_mbp10,fixture,function,1,
 qfeed.databento_mbp10,fixture_levels,function,3,bid ask sz
 qfeed.databento_mbp10,level_fields,value,,
@@ -215,37 +215,37 @@ qfeed.databento_mbp10,query,function,3,h range_from range_to
 qfeed.databento_mbp10,row_key,value,,
 qfeed.databento_mbp10,select_list,function,1,
 qfeed.databento_mbp10,source_name,value,,
-qfeed.databento_mbp10,table,value,,
+qfeed.databento_mbp10,table_name,value,,
 qfeed.databento_mbp10,target,value,,
-qfeed.databento_mbp10,time_field,value,,
+qfeed.databento_mbp10,time_column,value,,
 qfeed.databento_mbp10,transport,value,,
 qfeed.databento_mbp10,types,value,,
 qfeed.databento_mbp10,tz,value,,
-qfeed.demo_deals,fields,value,,
+qfeed.demo_deals,columns,value,,
 qfeed.demo_deals,fixture,function,1,
 qfeed.demo_deals,query,function,3,h range_from range_to
 qfeed.demo_deals,row_key,value,,
 qfeed.demo_deals,source_name,value,,
 qfeed.demo_deals,target,value,,
-qfeed.demo_deals,time_field,value,,
+qfeed.demo_deals,time_column,value,,
 qfeed.demo_deals,types,value,,
 qfeed.demo_deals,tz,value,,
-qfeed.demo_events,fields,value,,
+qfeed.demo_events,columns,value,,
 qfeed.demo_events,fixture,function,1,
 qfeed.demo_events,query,function,3,h range_from range_to
 qfeed.demo_events,row_key,value,,
 qfeed.demo_events,source_name,value,,
 qfeed.demo_events,target,value,,
-qfeed.demo_events,time_field,value,,
+qfeed.demo_events,time_column,value,,
 qfeed.demo_events,types,value,,
 qfeed.demo_events,tz,value,,
-qfeed.upstream_trades,fields,value,,
+qfeed.upstream_trades,columns,value,,
 qfeed.upstream_trades,fixture,function,1,
 qfeed.upstream_trades,query,function,3,h range_from range_to
 qfeed.upstream_trades,row_key,value,,
 qfeed.upstream_trades,source_name,value,,
 qfeed.upstream_trades,target,value,,
-qfeed.upstream_trades,time_field,value,,
+qfeed.upstream_trades,time_column,value,,
 qfeed.upstream_trades,types,value,,
 qfeed.upstream_trades,tz,value,,
 qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,
@@ -260,7 +260,7 @@ qfwd,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
 qfwd,col_precedence,value,,
 qfwd,combine_oriented_books,function,2,book_ab book_bc
 qfwd,cross_book,function,4,sym1 book1 sym2 book2
-qfwd,cross_book_at,function,5,quotes sym at_time sizes sides
+qfwd,cross_book_at,function,5,quotes sym as_of sizes sides
 qfwd,cross_book_at_one_size,function,5,sym1 book1 sym2 book2 size
 qfwd,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
 qfwd,cross_book_chain_at_one_size,function,3,syms books size
@@ -269,11 +269,11 @@ qfwd,cross_decomp,function,2,avail_syms sym
 qfwd,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons_ms ref_size
 qfwd,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons_ms ref_size
 qfwd,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
-qfwd,cross_price_ok_at_size,function,6,quotes sym at_time side price_limit size
+qfwd,cross_price_ok_at_size,function,6,quotes sym as_of side price_limit size
 qfwd,cross_rate,function,2,ab_rate bc_rate
 qfwd,cross_rate_shared_base,function,2,rate_ax rate_ay
-qfwd,cross_ref_price_at,function,4,quotes sym at_time ref_size
-qfwd,cross_size_at_price,function,5,quotes sym at_time side price_limit
+qfwd,cross_ref_price_at,function,4,quotes sym as_of ref_size
+qfwd,cross_size_at_price,function,5,quotes sym as_of side price_limit
 qfwd,cross_sweep_chain,function,4,books side size inverts
 qfwd,cross_sweep_side,function,6,book1 book2 side size invert1 invert2
 qfwd,fwd_cont,function,4,spot rd rf t
@@ -284,7 +284,7 @@ qfwd,implied_foreign_rate,function,4,spot fwd rd t
 qfwd,invert_book,function,1,book
 qfwd,invert_book_depth,function,2,prices sizes
 qfwd,invert_rate,function,1,rate
-qfwd,leg_book_as_of,function,3,quotes at_time target_sym
+qfwd,leg_book_as_of,function,3,quotes as_of target_sym
 qfwd,oriented_levels,function,3,side book invert
 qfwd,points_to_outright,function,3,spot points pip_factor
 qfwd,require_quotes_cols,function,2,fn_name quotes
@@ -414,10 +414,10 @@ qmicro,vpin,function,3,tape bucket_volume n_buckets
 qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
 qmicro,vwmp_skew_one,function,5,n_levels bid_prices bid_sizes ask_prices ask_sizes
 qnorm,check_source,function,4,who out src xf
-qnorm,declaration,function,1,name
+qnorm,def,function,1,name
 qnorm,define,function,2,name decl
 qnorm,defined,function,1,
-qnorm,dispatch,function,3,name src batch
+qnorm,dispatch,function,3,name t x
 qnorm,normalize,function,3,name src batch
 qnorm,registry,dict,,
 qnorm,required_keys,value,,
@@ -436,7 +436,7 @@ qodbc,open,function,1,conn
 qodbc,require_available,function,1,
 qodbc,run_sql,function,2,h sql
 qodbc,table_names,function,1,h
-qodbc,window_query,function,6,h tbl time_field fields range_from range_to
+qodbc,window_query,function,6,h table_name time_column columns range_from range_to
 qodbc,with_connection,function,2,conn f
 qopt,BISECT_VOL_HI,value,,
 qopt,BISECT_VOL_LO,value,,
@@ -470,7 +470,7 @@ qopt,implied_vol,function,7,price s k rd rf t is_call
 qpos,apply_fill,function,5,pos sym qty price side
 qpos,apply_fills,function,2,pos trades
 qpos,ccy_exposure,function,1,pos
-qpos,ccy_exposure_in,function,4,pos quotes reporting_ccy at_time
+qpos,ccy_exposure_in,function,4,pos quotes reporting_ccy as_of
 qpos,ccy_legs,function,3,sym qty avg_price
 qpos,empty_book,function,1,
 qpos,reconcile_trades,function,4,reference_book trades qty_tol price_tol
@@ -547,34 +547,34 @@ qrun,table_path,function,1,name
 qrun,under_lock,function,2,f args
 qrun,unfinished,function,1,
 qschema,require_cols,function,4,fn_name table_name tbl req
-qsrc,ambiguous_message,function,3,zone bad cs
+qsrc,ambiguous_message,function,3,tz bad cs
 qsrc,bound_padding,value,,
 qsrc,coerce,function,2,source tbl
 qsrc,coercers,dict,,
 qsrc,column_names,function,1,tbl
 qsrc,credential_var,function,1,source
-qsrc,declaration,function,1,source
+qsrc,def,function,1,source
 qsrc,default_transport,value,,
+qsrc,define,function,2,source decl
+qsrc,defined,function,1,
 qsrc,fetch_window,function,4,source h range_from range_to
 qsrc,has_credentials,function,1,source
 qsrc,load_zone_table,function,1,path
-qsrc,local_candidates,function,2,zone tsv
-qsrc,local_to_utc,function,2,zone ts
+qsrc,local_candidates,function,2,tz tsv
+qsrc,local_to_utc,function,2,tz ts
 qsrc,narrow_to_utc,function,4,decl tbl range_from range_to
-qsrc,nonexistent_message,function,2,zone bad
-qsrc,offset_at,function,2,zone ts
-qsrc,offsets_for,function,1,zone
-qsrc,register,function,2,source decl
-qsrc,registered,function,1,
+qsrc,nonexistent_message,function,2,tz bad
+qsrc,offset_at,function,2,tz ts
+qsrc,offsets_for,function,1,tz
 qsrc,require_credentials,function,1,source
-qsrc,require_zone_table,function,1,zone
+qsrc,require_zone_table,function,1,tz
 qsrc,required_declarations,value,,
 qsrc,row_key,function,1,source
 qsrc,source_bounds,function,3,decl range_from range_to
 qsrc,sources,dict,,
 qsrc,transports,value,,
 qsrc,type_chars,function,1,tbl
-qsrc,utc_to_local,function,2,zone ts
+qsrc,utc_to_local,function,2,tz ts
 qsrc,validate,function,2,source tbl
 qsrc,validate_fixture,function,1,source
 qsrc,validate_live,function,2,source h
@@ -592,30 +592,30 @@ qstatus,require_transition,function,2,from_state to
 qstatus,status_dir,function,1,
 qstatus,status_states,value,,
 qstatus,write_status,function,6,worker instance_id state spec progress err
-qstream,declaration,function,1,job
-qstream,drain,function,2,tblname mask
-qstream,evict,function,2,tblname mask
+qstream,def,function,1,job
+qstream,define,function,2,job decl
+qstream,defined,function,1,
+qstream,drain,function,2,table_name mask
+qstream,evict,function,2,table_name mask
 qstream,for_procname,function,1,procname
 qstream,is_callable,function,1,v
 qstream,job_root,value,,
 qstream,jobs,dict,,
 qstream,namespace,function,1,job
 qstream,procnames,dict,,
-qstream,register,function,2,job decl
-qstream,registered,function,1,
 qstream,required_declarations,value,,
 qstream,unwired,function,1,job
 qstream,wire,function,2,job publisher
 qsub.arbitrage,arbitrage,table,,
 qsub.arbitrage,evaluate,function,1,batch
-qsub.arbitrage,on_batch,function,2,tbl batch
+qsub.arbitrage,on_batch,function,2,t x
 qsub.arbitrage,opportunity,function,1,book
 qsub.arbitrage,publish,value,,
 qsub.cross,cross_pairs,value,,
 qsub.cross,cross_quotes,table,,
 qsub.cross,crosses,table,,
 qsub.cross,now,function,1,
-qsub.cross,on_batch,function,2,tbl batch
+qsub.cross,on_batch,function,2,t x
 qsub.cross,publish,value,,
 qsub.cross,quotes,table,,
 qsub.cross,quotes_in,table,,
@@ -629,7 +629,7 @@ qsub.cross_arbitrage,leg_book,function,1,row
 qsub.cross_arbitrage,leg_times,function,2,state route
 qsub.cross_arbitrage,max_skew,value,,
 qsub.cross_arbitrage,notional,value,,
-qsub.cross_arbitrage,on_batch,function,2,tbl batch
+qsub.cross_arbitrage,on_batch,function,2,t x
 qsub.cross_arbitrage,opportunity,function,5,state avail sym size as_of
 qsub.cross_arbitrage,publish,value,,
 qsub.cross_arbitrage,quotable,function,1,state
@@ -638,7 +638,7 @@ qsub.crypto_mock,beta_draw,function,2,a b
 qsub.crypto_mock,book_rows,function,1,mkt
 qsub.crypto_mock,decide,function,3,row horizon draws
 qsub.crypto_mock,draws,function,1,
-qsub.crypto_mock,drift_toxicity,function,1,t
+qsub.crypto_mock,drift_toxicity,function,1,toxicity
 qsub.crypto_mock,fill_alpha,value,,
 qsub.crypto_mock,fill_beta,value,,
 qsub.crypto_mock,fill_rows,function,6,venue s side price size id
@@ -668,7 +668,7 @@ qsub.crypto_mock,toxicity_factor,value,,
 qsub.crypto_mock,venues,value,,
 qsub.crypto_mock,walk,function,1,m
 qsub.databento_book,book,table,,
-qsub.databento_book,on_batch,function,2,tbl batch
+qsub.databento_book,on_batch,function,2,t x
 qsub.databento_book,publish,value,,
 qsub.databento_book,raw,table,,
 qsub.executions,crypto_trades,table,,
@@ -702,9 +702,9 @@ qsub.fx_positions,fresh_breaches,function,1,now
 qsub.fx_positions,fx_limit_breach,table,,
 qsub.fx_positions,fx_position,table,,
 qsub.fx_positions,limits,table,,
-qsub.fx_positions,load_limits,function,1,t
+qsub.fx_positions,load_limits,function,1,limits
 qsub.fx_positions,net_orders,function,2,book batch
-qsub.fx_positions,on_batch,function,2,tbl batch
+qsub.fx_positions,on_batch,function,2,t x
 qsub.fx_positions,on_timer,function,1,
 qsub.fx_positions,orders,table,,
 qsub.fx_positions,policed,value,,
@@ -726,7 +726,7 @@ qsub.markout,execution_quality,table,,
 qsub.markout,horizons,value,,
 qsub.markout,max_horizon,value,,
 qsub.markout,now,function,1,
-qsub.markout,on_batch,function,2,tbl batch
+qsub.markout,on_batch,function,2,t x
 qsub.markout,on_timer,function,1,
 qsub.markout,pending,table,,
 qsub.markout,publish,value,,
@@ -749,7 +749,7 @@ qsub.posbook,last_mid,dict,,
 qsub.posbook,mark_positions,function,3,book trades marks
 qsub.posbook,marks,table,,
 qsub.posbook,next_book,function,2,book positions
-qsub.posbook,on_batch,function,2,tbl batch
+qsub.posbook,on_batch,function,2,t x
 qsub.posbook,position,table,,
 qsub.posbook,position_book,table,,
 qsub.posbook,position_marks,table,,
@@ -763,7 +763,7 @@ qsub.quotes_feed,tick_rows,function,1,mids
 qsub.superbook,books,dict,,
 qsub.superbook,levels,function,2,prices sizes
 qsub.superbook,max_age,value,,
-qsub.superbook,on_batch,function,2,tbl batch
+qsub.superbook,on_batch,function,2,t x
 qsub.superbook,on_timer,function,1,
 qsub.superbook,publish,value,,
 qsub.superbook,refresh,function,1,as_of
@@ -773,7 +773,7 @@ qsub.superbook,snapshot,function,3,state as_of age
 qsub.superbook,superbook,table,,
 qsub.vectorize,fold_wide_book,function,1,book
 qsub.vectorize,mkt_orderbook,table,,
-qsub.vectorize,on_batch,function,2,tbl batch
+qsub.vectorize,on_batch,function,2,t x
 qsub.vectorize,publish,value,,
 qsub.vectorize,wide_book,table,,
 qsub.vectorize,wide_level_groups,dict,,
@@ -792,17 +792,17 @@ qsynth,size_unit,value,,
 qsynth,spot,value,,
 qtick,can_send,function,1,sink
 qtick,fan_out,function,2,name batch
-qtick,learn,function,2,tbl stamped
+qtick,learn,function,2,table_name stamped
 qtick,log_handle,value,,
 qtick,log_path,value,,
 qtick,msg_count,value,,
 qtick,open_log,function,3,dir name dt
-qtick,publish,function,2,tbl rows
+qtick,publish,function,2,t x
 qtick,record,function,1,msg
 qtick,replay,function,2,path handler
-qtick,require_batch,function,2,tbl rows
+qtick,require_batch,function,2,t x
 qtick,reset,function,1,
-qtick,schema,function,2,tbl empty
+qtick,schema,function,2,table_name empty
 qtick,schemas,dict,,
 qtick,subscribe,function,2,want sink
 qtick,subscribers,table,,
@@ -924,7 +924,7 @@ qxf,apply_as_of,function,3,name given as_of
 qxf,check_example,function,5,name ins output clock ex
 qxf,col_equal,function,3,typ e a
 qxf,col_types,function,1,tbl
-qxf,declaration,function,1,name
+qxf,def,function,1,name
 qxf,define,function,2,name decl
 qxf,differences,function,2,expected actual
 qxf,float_tolerance,value,,

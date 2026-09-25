@@ -140,12 +140,12 @@ drivers:`markout`posbook`vectorize`databento_book`fx_positions`executions`marks`
     {[] .qsub.cross_arbitrage.on_batch[`superbook;0!.xarbtest.with_direct[164.80;164.90]]})
 
 / Every registered job that declares at least one published table.
-publishing:{[] j where {[j] 0<count (),.qstream.declaration[j]`publishes} each j:.qstream.registered[]}
+publishing:{[] j where {[j] 0<count (),.qstream.def[j]`publishes} each j:.qstream.defined[]}
 
 / A feed drives itself: it subscribes to nothing and publishes on a timer.
 / Fifty ticks because crypto_mock's fills are a draw - .sjtest relies on
 / twenty producing one, and this suite needs one every run.
-is_feed:{[j] 0=count (),.qstream.declaration[j]`subscribes}
+is_feed:{[j] 0=count (),.qstream.def[j]`subscribe_to}
 
 / The driver `j`'s own test file declares, as .<job>test.contract_driver -
 / where `uqs new-job` scaffolds one - or :: when it declares none.
@@ -183,7 +183,7 @@ drive:{[j]
       100h=type f:own_driver j;
         @[f;::;{[j;e] `.jobouttest.unimplemented set
             .jobouttest.unimplemented,enlist (j;e); }[j]];
-      is_feed j; do[50; (.qstream.declaration[j]`on_timer)[]];
+      is_feed j; do[50; (.qstream.def[j]`on_timer)[]];
       '"drive: ",string[j]," subscribes and has no driver"];
     select tbl, rows from .sjtest.published where job=j}
 
@@ -233,7 +233,7 @@ test_every_declared_table_is_actually_published:{[t]
     `.jobouttest.bad set ();
     {[r;excused;j]
         seen:distinct exec tbl from r j;
-        owed:((),.qstream.declaration[j]`publishes) except seen;
+        owed:((),.qstream.def[j]`publishes) except seen;
         owed:owed where not ({`$string[x],"/",string y}[j] each owed) in excused;
         if[count owed; `.jobouttest.bad set .jobouttest.bad,enlist string[j]," never published ",", " sv string owed]
       }[r;excused] each key r;
@@ -286,9 +286,9 @@ test_a_column_list_is_held_to_count_and_types:{[t]
 
 test_the_excuses_still_describe_something_real:{[t]
     / So neither list can rot into cover for the next real gap.
-    stale:not_built where not {[p] p[1] in (),.qstream.declaration[p 0]`publishes} each not_built;
+    stale:not_built where not {[p] p[1] in (),.qstream.def[p 0]`publishes} each not_built;
     .qunit.assertEquals[count stale;0;"every not_built pair is still declared by its job"];
-    owners:raze {[j] (),.qstream.declaration[j]`publishes} each publishing[];
+    owners:raze {[j] (),.qstream.def[j]`publishes} each publishing[];
     .qunit.assertEquals[(key unowned) except owners;`symbol$();
         "every unowned table is still published by some job"];
     .qunit.assertEquals[(key unowned) inter key shapes;`symbol$();

@@ -16,7 +16,7 @@
 / --- the transform ---------------------------------------------------------
 
 / The source contract, as the empty table the transform reads.
-contract:flip .qfeed.databento_mbp10.fields!{[c] c$()} each .qfeed.databento_mbp10.types
+contract:flip .qfeed.databento_mbp10.columns!{[c] c$()} each .qfeed.databento_mbp10.types
 
 book:([] time:`timestamp$(); sym:`symbol$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$();
     bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())

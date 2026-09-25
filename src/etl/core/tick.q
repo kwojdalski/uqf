@@ -75,20 +75,20 @@ msg_count:0
 / is told up front can refuse the first bad batch as well as the second,
 / and a subscriber that connects before any data flows gets the schema it
 / needs to build its own empty table.
-/ @param tbl the table name
+/ @param table_name the table name
 / @param empty an empty table of the right shape, `time` first
 / @return the table name
 / @throws error when empty is not a table, or is keyed
 / @eg .qtick.schema[`eg_quote;([] time:`timestamp$(); sym:`symbol$(); bid:`float$())] -> `eg_quote
-schema:{[tbl;empty]
+schema:{[table_name;empty]
     if[not 98h=type empty;
-        '"schema: ",string[tbl],"'s schema must be an unkeyed table"];
+        '"schema: ",string[table_name],"'s schema must be an unkeyed table"];
     if[count empty;
-        '"schema: ",string[tbl],"'s schema must be EMPTY - it declares a shape, not data"];
+        '"schema: ",string[table_name],"'s schema must be EMPTY - it declares a shape, not data"];
     if[not `time=first cols empty;
-        '"schema: ",string[tbl],"'s first column must be `time` - the plant stamps it there, and a schema that omits it describes rows nobody will ever receive"];
-    schemas[tbl]:empty;
-    tbl}
+        '"schema: ",string[table_name],"'s first column must be `time` - the plant stamps it there, and a schema that omits it describes rows nobody will ever receive"];
+    schemas[table_name]:empty;
+    table_name}
 
 / Subscribe a sink to one or more tables.
 / .
@@ -135,14 +135,14 @@ can_send:{[sink] ((type sink) within 100 112h) or (type sink) in -6 -7h}
 
 / Private: refuse a batch that a tickerplant cannot carry, naming the rule
 / it breaks. See the header for why each of these is a rule.
-require_batch:{[tbl;rows]
-    if[99h=type rows;
-        '"publish: ",string[tbl]," was given a KEYED table - a tickerplant appends, and upserting by key would silently drop ticks"];
-    if[98h=type rows; :1b];
-    if[0h<>type rows;
-        '"publish: ",string[tbl],"'s rows must be a table, or a list of one column vector each"];
-    if[not all 0<=type each rows;
-        '"publish: ",string[tbl]," has a column that is an ATOM - the row count comes from column length, so a one-row batch of atoms reads as a one-column batch"];
+require_batch:{[t;x]
+    if[99h=type x;
+        '"publish: ",string[t]," was given a KEYED table - a tickerplant appends, and upserting by key would silently drop ticks"];
+    if[98h=type x; :1b];
+    if[0h<>type x;
+        '"publish: ",string[t],"'s rows must be a table, or a list of one column vector each"];
+    if[not all 0<=type each x;
+        '"publish: ",string[t]," has a column that is an ATOM - the row count comes from column length, so a one-row batch of atoms reads as a one-column batch"];
     1b}
 
 / Publish a batch: stamp it, log it, and fan it out to whoever wants it.
@@ -155,13 +155,13 @@ require_batch:{[tbl;rows]
 / the log cannot be replayed after a restart, so the subscriber's state
 / and the plant's history disagree and nothing says so. The other way
 / round, a crash between the two costs a resend, which recovery handles.
-/ @param tbl the table name
-/ @param rows a table, or a list of one column vector per column
+/ @param t the table name
+/ @param x a table, or a list of one column vector per column
 / @return the number of rows published
 / @throws error naming the invariant a malformed batch breaks
 / @eg .qtick.reset[]; .qtick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; .qtick.publish[`eg_t;enlist enlist 1] -> 1
-publish:{[tbl;rows]
-    require_batch[tbl;rows];
+publish:{[t;x]
+    require_batch[t;x];
     / `time` FIRST, matching every declared schema in
     / scripts/processes/uqs_tables.q and .u.upd's own convention. A
     / plant that appended it instead would build tables whose columns are
@@ -176,13 +176,13 @@ publish:{[tbl;rows]
     / does not short-circuit, so the single-condition spelling evaluates
     / `cols` on every batch, and `cols` of a list of column vectors throws
     / `type`. The $[c;v;c;v;else] form does short-circuit between pairs.
-    rows:$[98h<>type rows; rows;
-        `time in cols rows; ![rows;();0b;enlist `time];
-        rows];
-    stamped:$[98h=type rows;
-        ([] time:(count rows)#now) ,' rows;
-        (enlist (count first rows)#now),rows];
-    if[(not tbl in key schemas) and 98h=type stamped; schemas[tbl]:0#stamped];
+    x:$[98h<>type x; x;
+        `time in cols x; ![x;();0b;enlist `time];
+        x];
+    stamped:$[98h=type x;
+        ([] time:(count x)#now) ,' x;
+        (enlist (count first x)#now),x];
+    if[(not t in key schemas) and 98h=type stamped; schemas[t]:0#stamped];
     / ONE canonical form - a table - logged and sent. The list-of-columns
     / spelling is a convenience for feeds and it stops here.
     / .
@@ -190,18 +190,18 @@ publish:{[tbl;rows]
     / publishes columns would have its columns in the log and its TABLE on
     / the wire, so a subscriber's live path and its recovery path receive
     / different shapes. Everything works until the day something restarts.
-    batch:$[98h=type stamped; stamped; learn[tbl;stamped]];
-    record (`upd;tbl;batch);
-    fan_out[tbl;batch];
+    batch:$[98h=type stamped; stamped; learn[t;stamped]];
+    record (`upd;t;batch);
+    fan_out[t;batch];
     count batch}
 
 / Private: build a table from a declared schema's column names and a list
 / of column vectors, so a plant that was told its schema can hand
 / subscribers a table rather than a bare list.
-learn:{[tbl;stamped]
-    if[not tbl in key schemas;
-        '"publish: ",string[tbl]," was published as a list of columns and has no declared schema, so the plant cannot name them - call .qtick.schema first"];
-    flip (cols schemas tbl)!stamped}
+learn:{[table_name;stamped]
+    if[not table_name in key schemas;
+        '"publish: ",string[table_name]," was published as a list of columns and has no declared schema, so the plant cannot name them - call .qtick.schema first"];
+    flip (cols schemas table_name)!stamped}
 
 / Private: send one batch to every sink subscribed to that table.
 fan_out:{[name;batch]
