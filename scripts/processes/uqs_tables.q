@@ -241,7 +241,7 @@ duckdb_deals:([]time:`timestamp$(); deal_time:`timestamp$(); deal_id:`long$(); s
 client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$(); partition:`long$(); offset:`long$())
 
 / crypto_market_data_backfill1's target: one recorded crypto book-and-trade
-/ update, replayed from cryptorust's data/market_data.duckdb. Carries BOTH
+/ update, replayed from cryptorust's data/live.duckdb. Carries BOTH
 / clocks - source_time is the venue's stamp, local_time the recorder's, and
 / `time` is the plant's - because the lag between them is what a recorded
 / capture exists to measure, and crypto_book above has room for none of it.
