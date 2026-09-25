@@ -89,8 +89,8 @@ Two things to know before reading a failure:
   underneath that one's processes and leave them orphaned - up, and subscribed
   to a tickerplant that no longer exists.
 
-`.qcfgaudit` and the limit-breach table are exempt from check 1, with reasons,
-in `stack_smoke.MAY_BE_EMPTY` - a table that is empty because nothing happened
+`.qaudit` and the limit-breach table are exempt from check 1, with reasons, in
+`stack_smoke.MAY_BE_EMPTY` - a table that is empty because nothing happened
 carries no information. A test holds that list free of dead entries.
 
 ## Order independence

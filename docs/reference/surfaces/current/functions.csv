@@ -34,6 +34,18 @@ qalloc,step,function,3,m state row
 qalloc,summary,function,2,matches group_cols
 qalloc,unrealised,function,2,lots marks
 qalloc,with_by,function,3,out kv bys
+qaudit,config_change,table,,
+qaudit,forget,function,1,
+qaudit,max_render,value,,
+qaudit,owner_here,value,,
+qaudit,period,value,,
+qaudit,poll,function,2,owner as_of
+qaudit,poll_and_publish,function,1,
+qaudit,render,function,1,name
+qaudit,seen,dict,,
+qaudit,watch,function,2,owner names
+qaudit,watched,dict,,
+qaudit,watching,function,1,owner
 qbfstate,acquire_lock,function,1,worker
 qbfstate,bounded_worker_globals,value,,
 qbfstate,bounded_worker_methods,value,,
@@ -107,18 +119,6 @@ qccy,ccy_pair_symbol,function,2,base quote
 qccy,ccy_to_str,function,1,x
 qccy,is_ccy_pair,function,1,x
 qccy,normalize_ccy_pair,function,1,x
-qcfgaudit,config_change,table,,
-qcfgaudit,forget,function,1,
-qcfgaudit,max_render,value,,
-qcfgaudit,owner_here,value,,
-qcfgaudit,period,value,,
-qcfgaudit,poll,function,2,owner as_of
-qcfgaudit,poll_and_publish,function,1,
-qcfgaudit,render,function,1,name
-qcfgaudit,seen,dict,,
-qcfgaudit,watch,function,2,owner names
-qcfgaudit,watched,dict,,
-qcfgaudit,watching,function,1,owner
 qcoer,coerce_column,function,2,f col
 qcoer,is_date_only,function,1,str
 qcoer,numeric_chars,value,,

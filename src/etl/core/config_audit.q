@@ -1,5 +1,5 @@
 / config_audit.q - an audit trail of runtime configuration changes
-/ (.qcfgaudit).
+/ (.qaudit).
 / .
 / WHAT THIS CANNOT BE, and why the shape follows from it: q has no hook on
 / global assignment. There is no .z callback for
@@ -26,7 +26,7 @@
 / variables makes "what counts as configuration here" a fact in the tree
 / rather than a judgement each reader makes again.
 
-\d .qcfgaudit
+\d .qaudit
 
 / owner -> the fully-qualified globals watched on its behalf. Keyed by
 / OWNER, not flat, because src/etl/init.q loads every job into every
@@ -47,7 +47,7 @@ config_change:([] owner:`symbol$(); name:`symbol$(); old:(); new:(); as_of:`time
 / The globals watched for one owner, empty when it declares none.
 / @param owner the job
 / @return the fully-qualified names
-/ @eg .qcfgaudit.watching[`nothing_declares_this] -> `symbol$()
+/ @eg .qaudit.watching[`nothing_declares_this] -> `symbol$()
 watching:{[owner] $[owner in key watched; watched owner; `symbol$()]}
 
 / Declare the configuration an owner wants audited.
@@ -60,12 +60,12 @@ watching:{[owner] $[owner in key watched; watched owner; `symbol$()]}
 / @return the names registered for that owner
 / @throws error if a name is not fully qualified, which would resolve
 /   against whatever namespace happened to be current at poll time
-/ @eg .qcfgaudit.watch[`demo;`.qcfgaudit.max_render] -> enlist `.qcfgaudit.max_render
+/ @eg .qaudit.watch[`demo;`.qaudit.max_render] -> enlist `.qaudit.max_render
 watch:{[owner;names]
     names:(),names;
     bare:names where not (string names) like ".*";
     if[count bare;
-        '"qcfgaudit.watch: ",(", " sv string bare)," must be fully qualified ",
+        '"qaudit.watch: ",(", " sv string bare)," must be fully qualified ",
             "(`.qsub.x.notional, not `notional) - a bare name resolves against ",
             "whatever namespace is current when the poll runs"];
     / Fully qualified on the LEFT. `watched[owner]:x` inside a lambda amends
@@ -75,7 +75,7 @@ watch:{[owner;names]
     / inside a lambda fails at LOAD time - the same trap torq_pipeline.q
     / documents for `desc` and `tables`.
     already:watching owner;
-    .qcfgaudit.watched[owner]:distinct already,names;
+    .qaudit.watched[owner]:distinct already,names;
     watched owner}
 
 / How a value is recorded: its -3! rendering, truncated.
@@ -86,7 +86,7 @@ watch:{[owner;names]
 / turns out to be a large table should make the log ugly, not enormous.
 / @param name a fully-qualified global
 / @return its rendering, or a marker when nothing is defined at that name
-/ @eg .qcfgaudit.render[`.qcfgaudit.nothing.is.here] -> "(undefined)"
+/ @eg .qaudit.render[`.qaudit.nothing.is.here] -> "(undefined)"
 render:{[name]
     v:@[get;name;`undefined];
     $[v~`undefined; "(undefined)"; max_render sublist -3!v]}
@@ -104,7 +104,7 @@ max_render:200
 / @param owner the job whose config to check
 / @param as_of the observation timestamp
 / @return the change rows, empty when nothing moved
-/ @eg count .qcfgaudit.poll[`nothing_declares_this;2026.09.19D12:00:00.0] -> 0
+/ @eg count .qaudit.poll[`nothing_declares_this;2026.09.19D12:00:00.0] -> 0
 poll:{[owner;as_of]
     names:watching owner;
     if[0=count names; :0#config_change];
@@ -117,7 +117,7 @@ poll:{[owner;as_of]
         if[not now~was;
             rows:rows upsert (owner;name;was;now;as_of);
             / fully qualified, for watch's reason
-            .qcfgaudit.seen[name]:now];
+            .qaudit.seen[name]:now];
         i+:1];
     rows}
 
@@ -147,7 +147,7 @@ owner_here:`
 / time: the runner wires that seam after the job registers, so looking it
 / up any earlier captures the unwired stub.
 / @return nothing
-/ @eg .qcfgaudit.poll_and_publish[]
+/ @eg .qaudit.poll_and_publish[]
 poll_and_publish:{[]
     if[null owner_here; :()];
     rows:poll[owner_here;.z.p];
@@ -159,7 +159,7 @@ poll_and_publish:{[]
 / new again. For tests and for a deliberate re-baseline; nothing in a
 / running process calls it.
 / @return nothing
-/ @eg .qcfgaudit.forget[]
+/ @eg .qaudit.forget[]
 forget:{[] seen::(`symbol$())!(); }
 
 \d .
