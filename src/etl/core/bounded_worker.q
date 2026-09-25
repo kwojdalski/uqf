@@ -448,8 +448,31 @@ connect:{[worker]
     opener:$[`odbc~transport;
         {.qetl.io.odbc.open x};
         {hopen (hsym `$":",x;5000j)}];
-    @[opener;cred;
-        {[source;e] '"connect: cannot reach the ",string[source]," source (",e,") - refusing to start rather than falling back to the fixture, which would record synthetic data as covered"}[source]]}
+    @[opener;cred;{[source;e] '.qetl.job.bounded.connect_error[source;e]}[source]]}
+
+/ The error connect throws when it cannot reach a source.
+/ .
+/ SHORT ON PURPOSE, and assembled rather than written inline, because q
+/ SILENTLY truncates a thrown string at 254 bytes - measured, not the 255
+/ this tree said before: a 254-byte string survives a throw intact and a
+/ 255-byte one comes back 254. singlestore_odbc.q's
+/ require_available already keeps its own message short for that reason - and
+/ this one WRAPPED that message inside a longer one, recreating the bug a
+/ layer up. The composed string ran to 286 bytes, q threw 254, and the tail
+/ it dropped was "...record synthetic data as covered" - the half that says
+/ WHY a backfill refuses. Measured on 2026.09.26 against a real run.
+/ .
+/ The driver's own text comes FIRST because it is the actionable half: it
+/ names what is missing and how to install it. Ours follows, and is trimmed
+/ rather than the driver's if the two together still do not fit.
+/ @param source the source that could not be reached
+/ @param e the opener's error text
+/ @return the message to throw, never longer than q will carry
+/ @eg 256>count .qetl.job.bounded.connect_error[`crypto_market_data;"driver not loaded"]  ->  1b
+connect_error:{[source;e]
+    msg:"connect: ",string[source]," unreachable - ",e,
+        ". Not falling back to the fixture: that would record synthetic data as covered";
+    $[254<count msg; 254#msg; msg]}
 
 / ------------------------------------------------------------------ PLAN
 
@@ -626,6 +649,28 @@ run:{[worker]
     / (every test teardown does) is unaffected.
     cleanup worker;
     result}
+
+/ The exit code an orchestrator should see for a terminal run state.
+/ .
+/ HERE, not in scripts/processes/torq_backfill.q, because the states are this
+/ file's vocabulary and this file already states what they mean - see `ran,
+/ found no work is a SUCCESS` in run. Keeping the mapping next to the process
+/ that exits let the two drift, and they did: torq_backfill.q read
+/ `$[`completed~state; 0; 1]`, reasoning carefully about `partial` not being
+/ success and never considering `idle` at all. So a run that correctly found
+/ every window already covered exited 1, and Airflow - which reads the code -
+/ marked it failed and retried it. A no-op retried forever is the exact
+/ failure run's own comment warns about.
+/ .
+/ `partial` IS a failure, and deliberately: some windows failed, coverage
+/ never claimed them, and a retry should pick them up.
+/ @param state a run's terminal state
+/ @return 0i when an orchestrator should read success, 1i otherwise
+/ @eg .qetl.job.bounded.exit_code `completed  ->  0i
+/ @eg .qetl.job.bounded.exit_code `idle  ->  0i
+/ @eg .qetl.job.bounded.exit_code `partial  ->  1i
+/ @eg .qetl.job.bounded.exit_code `failed  ->  1i
+exit_code:{[state] $[state in `completed`idle; 0i; 1i]}
 
 / Private: open this execution's run, tolerating an absent .qetl.run.
 / .

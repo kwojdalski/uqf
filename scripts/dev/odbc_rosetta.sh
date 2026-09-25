@@ -23,6 +23,11 @@
 # Usage:
 #   scripts/dev/odbc_rosetta.sh setup          build/fetch everything (idempotent)
 #   scripts/dev/odbc_rosetta.sh q <q args...>  run q under Rosetta with ODBC wired up
+#   scripts/dev/odbc_rosetta.sh backfill <worker> [-version V -from T -to T [-hdb root]]
+#       run one bounded worker under Rosetta, which is the ONLY way an
+#       ODBC-backed worker reaches a driver on macOS: `uqs backfill` launches
+#       through torq.sh, which starts the system arm64 q, and KX ships
+#       odbc.so for x86_64 only. Export the source's credential first.
 #   scripts/dev/odbc_rosetta.sh databento <q args...>
 #       as `q`, with UQF_SOURCE_CRED_DATABENTO_MBP10 pointing at
 #       output/duckdb/databento.duckdb (build it with
@@ -119,6 +124,16 @@ case "${1:-}" in
     q)
         shift
         run_q "$@"
+        ;;
+    backfill)
+        shift
+        if [ $# -eq 0 ]; then
+            echo "usage: $0 backfill <worker> [-version V -from T -to T [-hdb root]]" >&2
+            exit 2
+        fi
+        worker="$1"
+        shift
+        run_q "$MAIN_ROOT/scripts/dev/run_backfill.q" -worker "$worker" "$@"
         ;;
     databento)
         shift

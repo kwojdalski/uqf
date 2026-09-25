@@ -213,12 +213,14 @@ qetl.job.bounded,begin_run,function,1,worker
 qetl.job.bounded,checkpoint,function,2,worker cursor
 qetl.job.bounded,cleanup,function,1,worker
 qetl.job.bounded,connect,function,1,worker
+qetl.job.bounded,connect_error,function,2,source e
 qetl.job.bounded,def,function,1,worker
 qetl.job.bounded,define,function,2,worker decl
 qetl.job.bounded,delegate,function,2,worker nm
 qetl.job.bounded,do_window,function,2,worker w
 qetl.job.bounded,empty_windows,function,1,
 qetl.job.bounded,end_run,function,1,state
+qetl.job.bounded,exit_code,function,1,state
 qetl.job.bounded,fetch,function,3,worker from_ts to_ts
 qetl.job.bounded,inherit,function,2,worker ns
 qetl.job.bounded,inherited_methods,value,,

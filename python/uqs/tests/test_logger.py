@@ -103,6 +103,25 @@ def test_the_format_callable_escapes_what_loguru_would_misread():
     assert out.endswith("\n")
 
 
+def test_an_angle_bracket_inside_a_value_stays_escaped():
+    """`SERVER=<host>` used to leave loguru with a bare `<host>` to read as a
+    colour tag, because the escaping `\\` was wrapped in a colour tag of its
+    own and separated from its `<`. loguru then raised inside the handler and
+    dropped the line - and the line was the one naming the credential to set.
+    """
+    out = logcore._highlight_kv('example="DRIVER=x;SERVER=<host>;PORT=3306"')
+    assert r"\<host>" in out
+    # Every `<` that is not one of our own colour tags must carry its escape.
+    ours = {"green", "red", "dim", "bold", "magenta", "light-cyan"}
+    for i, ch in enumerate(out):
+        if ch == "<" and out[i - 1 : i] != "\\":
+            assert out[i + 1 :].split(">", 1)[0].lstrip("/") in ours
+
+
+def test_a_message_that_is_only_angle_brackets_still_round_trips():
+    assert logcore._highlight_kv("<a><b>") == r"\<a>\<b>"
+
+
 # ------------------------------------------------------------ setup_logging
 
 
