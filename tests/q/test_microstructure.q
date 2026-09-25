@@ -186,8 +186,14 @@ test_queue_depletion_rate_rejects_bad_side:{[t]
         bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 100;
         ask_prices:enlist enlist 1.11; ask_sizes:enlist enlist 100);
     wrapper:{[q] .qmicro.queue_depletion_rate[q;`EURUSD;`mid]};
-    .qunit.assertThrows[wrapper;quotes;"queue_depletion_rate: side must be `bid or `ask, got mid";
-        "side other than `bid/`ask is rejected"]};
+    .qunit.assertThrows[wrapper;quotes;"queue_depletion_rate: side must be `bid or `ask, got `mid";
+        "side other than `bid/`ask is rejected"];
+    / A non-SYMBOL side used to reach `string` and throw a bare 'type, losing
+    / the message this test exists to assert. #415 fixed that for the three
+    / functions it named; these two kept the old shape.
+    .qunit.assertThrows[{[q] .qmicro.queue_depletion_rate[q;`EURUSD;1]};quotes;
+        "queue_depletion_rate: side must be `bid or `ask, got 1";
+        "an integer side is named too, rather than throwing a bare 'type"]};
 
 / ---- ofi ----
 
