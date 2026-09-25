@@ -1,7 +1,7 @@
-/ tick.q - a pub/sub tickerplant in stock kdb+, with no TorQ (.qtick).
+/ tick.q - a pub/sub tickerplant in stock kdb+, with no TorQ (.qetl.tick).
 / .
 / WHY THIS EXISTS. Every streaming job in this tree is already TorQ-free:
-/ a job calls `publish` in its own namespace and .qstream.wire points that
+/ a job calls `publish` in its own namespace and .qetl.job.stream.wire points that
 / at something. But the only thing that ever wired it was
 / scripts/processes/torq_stream.q, and the only pub/sub in the repository
 / is TorQ's own u.q under lib/. So a job's CODE did not need TorQ while
@@ -21,7 +21,7 @@
 / .
 /   1. the PLANT stamps `time`, never the publisher - and a publisher that
 /      sends one anyway has it STRIPPED and replaced, silently. That is
-/      .qpipe.publish's behaviour, and matching it is the point: a job
+/      .qtorq.publish's behaviour, and matching it is the point: a job
 /      developed against the TorQ stack must not fail on first contact
 /      with this plant, which is the whole reason these invariants are
 /      TorQ's rather than invented here.
@@ -44,7 +44,7 @@
 / integer handle to a message IS the async send in q, so one code path
 / serves both and the tested path is the shipped one.
 
-\d .qtick
+\d .qetl.tick
 
 / ------------------------------------------------------------- THE STATE
 
@@ -79,7 +79,7 @@ msg_count:0
 / @param empty an empty table of the right shape, `time` first
 / @return the table name
 / @throws error when empty is not a table, or is keyed
-/ @eg .qtick.schema[`eg_quote;([] time:`timestamp$(); sym:`symbol$(); bid:`float$())] -> `eg_quote
+/ @eg .qetl.tick.schema[`eg_quote;([] time:`timestamp$(); sym:`symbol$(); bid:`float$())] -> `eg_quote
 schema:{[table_name;empty]
     if[not 98h=type empty;
         '"schema: ",string[table_name],"'s schema must be an unkeyed table"];
@@ -99,7 +99,7 @@ schema:{[table_name;empty]
 / @param sink where batches go - `neg h` for a real subscriber, a function in a test
 / @return a dict of table name -> empty schema, for the tables subscribed to
 / @throws error when the sink is not callable, or a named table is unknown
-/ @eg .qtick.reset[]; .qtick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; key .qtick.subscribe[`eg_t;{[m] m}] -> enlist `eg_t
+/ @eg .qetl.tick.reset[]; .qetl.tick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; key .qetl.tick.subscribe[`eg_t;{[m] m}] -> enlist `eg_t
 subscribe:{[want;sink]
     if[not can_send sink;
         '"subscribe: a sink must be callable as sink[(`upd;table;rows)] - a function, or `neg h` for a real subscriber"];
@@ -107,8 +107,8 @@ subscribe:{[want;sink]
     t:$[t~enlist `; key schemas; t];
     unknown:t where not t in key schemas;
     if[count unknown;
-        '"subscribe: no schema for ",(", " sv string unknown)," - declare it with .qtick.schema before subscribing, so a subscriber cannot wait forever on a typo"];
-    `.qtick.subscribers upsert ([] sink:(count t)#enlist sink; tbl:t; registered:(count t)#.z.p);
+        '"subscribe: no schema for ",(", " sv string unknown)," - declare it with .qetl.tick.schema before subscribing, so a subscriber cannot wait forever on a typo"];
+    `.qetl.tick.subscribers upsert ([] sink:(count t)#enlist sink; tbl:t; registered:(count t)#.z.p);
     t!schemas t}
 
 / Drop every subscription held by a sink - what a process calls from .z.pc
@@ -118,10 +118,10 @@ subscribe:{[want;sink]
 / functions is not a comparison q will do.
 / @param sink the sink to remove
 / @return how many subscriptions went
-/ @eg .qtick.reset[]; .qtick.unsubscribe[{[m] m}] -> 0
+/ @eg .qetl.tick.reset[]; .qetl.tick.unsubscribe[{[m] m}] -> 0
 unsubscribe:{[sink]
     gone:count where {[s;row] row[`sink]~s}[sink] each subscribers;
-    `.qtick.subscribers set subscribers where not {[s;row] row[`sink]~s}[sink] each subscribers;
+    `.qetl.tick.subscribers set subscribers where not {[s;row] row[`sink]~s}[sink] each subscribers;
     gone}
 
 / Private: can this value be applied to a message?
@@ -159,7 +159,7 @@ require_batch:{[t;x]
 / @param x a table, or a list of one column vector per column
 / @return the number of rows published
 / @throws error naming the invariant a malformed batch breaks
-/ @eg .qtick.reset[]; .qtick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; .qtick.publish[`eg_t;enlist enlist 1] -> 1
+/ @eg .qetl.tick.reset[]; .qetl.tick.schema[`eg_t;([] time:`timestamp$(); a:`long$())]; .qetl.tick.publish[`eg_t;enlist enlist 1] -> 1
 publish:{[t;x]
     require_batch[t;x];
     / `time` FIRST, matching every declared schema in
@@ -168,7 +168,7 @@ publish:{[t;x]
     / one position out from everything else in this repository.
     now:.z.p;
     / Invariant 1: strip a publisher-supplied `time` rather than refusing
-    / it, so this plant and .qpipe treat the same mistake the same way.
+    / it, so this plant and .qtorq treat the same mistake the same way.
     / Only the table form can carry one - the list-of-columns form has no
     / names to check.
     / .
@@ -200,7 +200,7 @@ publish:{[t;x]
 / subscribers a table rather than a bare list.
 learn:{[table_name;stamped]
     if[not table_name in key schemas;
-        '"publish: ",string[table_name]," was published as a list of columns and has no declared schema, so the plant cannot name them - call .qtick.schema first"];
+        '"publish: ",string[table_name]," was published as a list of columns and has no declared schema, so the plant cannot name them - call .qetl.tick.schema first"];
     flip (cols schemas table_name)!stamped}
 
 / Private: send one batch to every sink subscribed to that table.
@@ -226,7 +226,7 @@ fan_out:{[name;batch]
 / @param dt the date the log is for
 / @return the number of messages already in the log
 / @throws error when the directory cannot be created
-/ @eg .qtick.reset[] -> `
+/ @eg .qetl.tick.reset[] -> `
 open_log:{[dir;name;dt]
     d:$[10h=abs type dir; dir; string dir];
     system "mkdir -p ",d;
@@ -238,9 +238,9 @@ open_log:{[dir;name;dt]
     / a handler, which is what opening one should do.
     existing:$[() ~ key path; 0; -11!(-2;path)];
     if[() ~ key path; path set ()];
-    `.qtick.log_path set path;
-    `.qtick.log_handle set hopen path;
-    `.qtick.msg_count set existing;
+    `.qetl.tick.log_path set path;
+    `.qetl.tick.log_handle set hopen path;
+    `.qetl.tick.msg_count set existing;
     existing}
 
 / Private: append one message to the log, when there is one to append to.
@@ -251,7 +251,7 @@ open_log:{[dir;name;dt]
 record:{[msg]
     if[null log_handle; :0];
     log_handle enlist msg;
-    `.qtick.msg_count set msg_count+1;
+    `.qetl.tick.msg_count set msg_count+1;
     msg_count}
 
 / Replay a log through a handler, returning how many messages it carried.
@@ -269,7 +269,7 @@ record:{[msg]
 / @param handler a function of (table name; rows), called per message
 / @return the number of messages replayed, or 0 when the log does not exist
 / @throws error when the handler is not callable
-/ @eg .qtick.replay[hsym `$"/nonexistent/log";{[t;r] r}] -> 0
+/ @eg .qetl.tick.replay[hsym `$"/nonexistent/log";{[t;r] r}] -> 0
 replay:{[path;handler]
     if[not can_send handler; '"replay: the handler must be callable as handler[table;rows]"];
     if[() ~ key path; :0];
@@ -290,15 +290,15 @@ replay:{[path;handler]
 / Forget every subscription, schema and log handle - what a test calls
 / between cases, and what a process calls at start of day.
 / @return the log path that was closed, or ` when none was open
-/ @eg .qtick.reset[] -> `
+/ @eg .qetl.tick.reset[] -> `
 reset:{[]
     was:log_path;
     if[not null log_handle; hclose log_handle];
-    `.qtick.subscribers set 0#subscribers;
-    `.qtick.schemas set (`symbol$())!();
-    `.qtick.log_handle set 0N;
-    `.qtick.log_path set `;
-    `.qtick.msg_count set 0;
+    `.qetl.tick.subscribers set 0#subscribers;
+    `.qetl.tick.schemas set (`symbol$())!();
+    `.qetl.tick.log_handle set 0N;
+    `.qetl.tick.log_path set `;
+    `.qetl.tick.msg_count set 0;
     was}
 
 \d .

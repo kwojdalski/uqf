@@ -170,7 +170,7 @@ def _paths(tmp_path: Path) -> UqsPaths:
 
 def test_starting_without_an_api_key_refuses_and_names_the_variable(tmp_path, monkeypatch):
     """Refuse before spawning, not after the first call fails - the order
-    `.qbw.init` follows for the same reason."""
+    `.qetl.job.bounded.init` follows for the same reason."""
     monkeypatch.delenv(databento_feed.DATABENTO_API_KEY_ENV, raising=False)
     with pytest.raises(UqsError) as exc:
         databento_feed.start_databento_feed(_paths(tmp_path))

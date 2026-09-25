@@ -54,7 +54,7 @@ def test_the_scaffolded_normalizer_reads_back_as_one(sources):
 
 
 def test_the_output_has_no_time_and_the_plant_copy_does():
-    """`.qnorm.define` refuses an output carrying `time`; the plant stamps it."""
+    """`.qetl.job.stream.normalize` refuses an output carrying `time`; the plant stamps it."""
     body = _file(_plan(), "ticks.q")
     assert "ticks:([] source_time:`timestamp$(); sym:`symbol$())" in body
     assert "ticks:([]time:`timestamp$()" in _file(_plan(), "uqs_tables.q")
@@ -63,7 +63,7 @@ def test_the_output_has_no_time_and_the_plant_copy_does():
 def test_each_source_gets_its_schema_a_throwing_mapping_and_an_example():
     body = _file(_plan(), "ticks.q")
     for src in ("quote", "trades"):
-        assert f".qxf.define[`ticks_from_{src};" in body
+        assert f".qetl.transform.define[`ticks_from_{src};" in body
         assert f'\'"ticks.from_{src}: not implemented"' in body
         assert f"(enlist `{src})!enlist ([] time:enlist 2026.01.01D" in body, "an example row"
 

@@ -306,7 +306,7 @@ class ProcessConfigResponse(BaseModel):
 
 
 class WorkerConfigRequest(BaseModel):
-    """One `.qwcfg` override, set in a live process."""
+    """One `.qetl.cfg` override, set in a live process."""
 
     key: str = Field(min_length=1)
     value: str

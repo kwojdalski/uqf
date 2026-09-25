@@ -27,12 +27,12 @@
 / Namespaces this tree owns, from the one enumeration in src/namespaces.q.
 / .
 / It used to scan the root for a `q` prefix here. That is right only while
-/ every namespace is single-level: worker instances nest under .qwrk, and a
-/ root scan reports `qwrk` - a namespace holding no functions - while every
+/ every namespace is single-level: worker instances nest under .qpipe.job, and a
+/ root scan reports `qpipe.job` - a namespace holding no functions - while every
 / worker's surface silently disappears from the export the gates diff
 / against. .qns.functional drops the containers and keeps the leaves.
 / .
-/ The names come back fully qualified (`.qbw`); the rest of this file works
+/ The names come back fully qualified (`.qetl.job.bounded`); the rest of this file works
 / in the undotted form the root scan produced, so the dot is trimmed here.
 own_namespaces:{[]
     ns:.qns.functional[];
@@ -84,8 +84,8 @@ functions:{[]
 / none" rather than "none had been created yet".
 / .
 / Discovered by convention rather than listed: a niladic `attach` in an owned
-/ namespace is this tree's create-if-absent-and-verify function (.qmatz.attach,
-/ .qhb.attach), and it is idempotent by design - that is what makes calling it
+/ namespace is this tree's create-if-absent-and-verify function (.qetl.coverage.attach,
+/ .qetl.hb.attach), and it is idempotent by design - that is what makes calling it
 / from an export script safe rather than a side effect.
 / .
 / Errors are swallowed per namespace: an attach that needs an environment this

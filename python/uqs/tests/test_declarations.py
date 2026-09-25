@@ -44,8 +44,8 @@ def _one(source: str):
 
 def test_a_feed_is_a_job_that_subscribes_to_nothing():
     d = _one(
-        ".qstream.define[`f;`procname`subscribe_to`publishes`period`on_timer!(\n"
-        "    `f1;`symbol$();enlist `t;0D00:00:01;.qsub.f.on_timer)];"
+        ".qetl.job.stream.define[`f;`procname`subscribe_to`publishes`period`on_timer!(\n"
+        "    `f1;`symbol$();enlist `t;0D00:00:01;.qpipe.job.f.on_timer)];"
     )
     assert (d.procname, d.kind, d.subscribe_to, d.publishes) == (
         "f1",
@@ -58,8 +58,8 @@ def test_a_feed_is_a_job_that_subscribes_to_nothing():
 
 def test_autostart_and_note_are_read_and_the_note_unescaped():
     d = _one(
-        ".qstream.define[`j;`procname`subscribe_to`publishes`on_batch`start_with_all`note!(\n"
-        '    `j1;enlist `a;`symbol$();.qsub.j.on_batch;1b;"says \\"hi\\"; twice")];'
+        ".qetl.job.stream.define[`j;`procname`subscribe_to`publishes`on_batch`start_with_all`note!(\n"
+        '    `j1;enlist `a;`symbol$();.qpipe.job.j.on_batch;1b;"says \\"hi\\"; twice")];'
     )
     assert (d.kind, d.start_with_all, d.note) == (PipelineKind.ETL, True, 'says "hi"; twice')
 
@@ -67,23 +67,27 @@ def test_autostart_and_note_are_read_and_the_note_unescaped():
 def test_an_autostart_that_is_not_a_boolean_is_refused():
     with pytest.raises(UqsError, match="start_with_all must be 1b or 0b"):
         _one(
-            ".qstream.define[`j;`procname`subscribe_to`publishes`start_with_all!(`j1;`a;`b;`yes)];"
+            ".qetl.job.stream.define[`j;`procname`subscribe_to`publishes`start_with_all!(`j1;`a;`b;`yes)];"
         )
 
 
 def test_a_worker_with_no_procname_runs_as_its_name_and_1():
     """The same default q applies, so the two sides cannot disagree."""
-    d = _one(".qbw.define[`w;`source`dataset`width`transform!(`s;`d;1D;`x)];")
+    d = _one(".qetl.job.bounded.define[`w;`source`dataset`width`transform!(`s;`d;1D;`x)];")
     assert (d.procname, d.worker, d.kind) == ("w1", "w", PipelineKind.BACKFILL)
 
 
 def test_a_worker_may_not_ask_to_start_with_the_stack():
     with pytest.raises(UqsError, match="never starts with the stack"):
-        _one(".qbw.define[`w;`source`dataset`width`transform`start_with_all!(`s;`d;1D;`x;1b)];")
+        _one(
+            ".qetl.job.bounded.define[`w;`source`dataset`width`transform`start_with_all!(`s;`d;1D;`x;1b)];"
+        )
 
 
 def test_a_commented_out_declaration_is_not_a_process():
-    assert read_file_text("/ .qbw.define[`w;`source!(enlist `s)];\n", Path("x.q")) == []
+    assert (
+        read_file_text("/ .qetl.job.bounded.define[`w;`source!(enlist `s)];\n", Path("x.q")) == []
+    )
 
 
 # ------------------------------------------------------------------- ports
@@ -137,11 +141,11 @@ def test_a_job_file_is_the_whole_registration(tmp_path):
     are processes, with ports, and nothing else was edited."""
     root = _tree(tmp_path)
     (root / STREAM_DIR / "tick.q").write_text(
-        ".qstream.define[`tick;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(\n"
-        "    `tick1;`symbol$();enlist `ticks;0D00:00:01;.qsub.tick.on_timer;1b)];\n"
+        ".qetl.job.stream.define[`tick;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(\n"
+        "    `tick1;`symbol$();enlist `ticks;0D00:00:01;.qpipe.job.tick.on_timer;1b)];\n"
     )
     (root / WORKER_DIR / "w.q").write_text(
-        ".qbw.define[`w;`source`dataset`width`transform!(`s;`d;1D;`x)];\n"
+        ".qetl.job.bounded.define[`w;`source`dataset`width`transform!(`s;`d;1D;`x)];\n"
     )
     built = {p.procname: p for p in registry.build_pipelines(root)}
     assert set(built) == {"tap1", "tick1", "w1"}
@@ -154,8 +158,8 @@ def test_two_declarations_claiming_one_process_are_refused(tmp_path):
     root = _tree(tmp_path)
     for name in ("a", "b"):
         (root / STREAM_DIR / f"{name}.q").write_text(
-            f".qstream.define[`{name};`procname`subscribe_to`publishes`on_batch!("
-            f"`same1;enlist `t;`symbol$();.qsub.{name}.on_batch)];\n"
+            f".qetl.job.stream.define[`{name};`procname`subscribe_to`publishes`on_batch!("
+            f"`same1;enlist `t;`symbol$();.qpipe.job.{name}.on_batch)];\n"
         )
     with pytest.raises(ValueError, match="same1"):
         registry.build_pipelines(root)
@@ -165,7 +169,8 @@ def test_a_single_source_normalizer_reads_its_one_source():
     """`(enlist `a)!enlist `xf` is how one source is written; the parentheses
     used to reach `symbols`, which returned `(enlist` and `a)`."""
     (d,) = read_file_text(
-        ".qnorm.define[`n;`procname`output`input!(`n1;.qsub.n.n;(enlist `quote)!enlist `xf)];",
+        ".qetl.job.stream.normalize[`n;`procname`output`input!"
+        "(`n1;.qpipe.job.n.n;(enlist `quote)!enlist `xf)];",
         Path("n.q"),
     )
     assert d.subscribe_to == ("quote",)

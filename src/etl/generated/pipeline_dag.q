@@ -3,7 +3,7 @@
 / Run `uv run python scripts/generate/generate_operational_docs.py` to regenerate; CI runs
 / it with --check, so an edit here fails the build.
 / .
-/ The nine TorQ streaming processes, as .qdag job registrations, so the job
+/ The nine TorQ streaming processes, as .qetl.dag job registrations, so the job
 / graph is complete inside q and a DAG can be ordered or drawn with no
 / Python in the path.
 / .
@@ -13,38 +13,38 @@
 / other way would contradict the registry. A generated
 / bridge is the only option that keeps one authority.
 / .
-/ A FUNCTION rather than bare statements at load time: .qdag.reset[] would
+/ A FUNCTION rather than bare statements at load time: .qetl.dag.reset[] would
 / otherwise wipe these with no way to get them back, and a test that resets
 / the registry could not restore the real graph.
 
 
 / Register the nine TorQ streaming processes into the job graph.
 / @return the process names registered
-/ @eg .qdag.register_pipelines[]
-.qdag.register_pipelines:{[]
-    .qdag.register[`fxfeed1;`kind`inputs`outputs!(`stream;`$();`quote)];
-    .qdag.register[`quotesfeed1;`kind`inputs`outputs!(`stream;`$();`quotes)];
-    .qdag.register[`cross1;`kind`inputs`outputs!(`stream;`quotes;`$())];
-    .qdag.register[`widefeed1;`kind`inputs`outputs!(`stream;`$();`wide_book)];
-    .qdag.register[`vectorize1;`kind`inputs`outputs!(`stream;`wide_book;`mkt_orderbook)];
-    .qdag.register[`tap1;`kind`inputs`outputs!(`stream;`$();`$())];
-    .qdag.register[`fxtradesfeed1;`kind`inputs`outputs!(`stream;`$();`trades)];
-    .qdag.register[`posbook1;`kind`inputs`outputs!(`stream;`executions`marks;`position)];
-    .qdag.register[`markout1;`kind`inputs`outputs!(`stream;`trades`quote;`execution_quality)];
-    .qdag.register[`deals_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
-    .qdag.register[`events_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
-    .qdag.register[`databento1;`kind`inputs`outputs!(`stream;`databento_mbp10;`databento_book)];
-    .qdag.register[`cryptomock1;`kind`inputs`outputs!(`stream;`$();`crypto_book`crypto_trades)];
-    .qdag.register[`executions1;`kind`inputs`outputs!(`normalizer;`trades`crypto_trades;`executions)];
-    .qdag.register[`marks1;`kind`inputs`outputs!(`normalizer;`quote`crypto_book;`marks)];
-    .qdag.register[`fxordersfeed1;`kind`inputs`outputs!(`stream;`$();`orders)];
-    .qdag.register[`fxpositions1;`kind`inputs`outputs!(`stream;`orders;`fx_position`fx_limit_breach)];
-    .qdag.register[`databento_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
-    .qdag.register[`upstream_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
-    .qdag.register[`marketdata1;`kind`inputs`outputs!(`normalizer;`quote`quotes;`market_data)];
-    .qdag.register[`superbook1;`kind`inputs`outputs!(`stream;`market_data;`superbook`config_change)];
-    .qdag.register[`arbitrage1;`kind`inputs`outputs!(`stream;`superbook;`arbitrage)];
-    .qdag.register[`crossarb1;`kind`inputs`outputs!(`stream;`superbook;`cross_arbitrage`config_change)];
-    .qdag.register[`duckdb_deals_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
-    .qdag.register[`kafka_flow1;`kind`inputs`outputs!(`stream;`kafka_client_flow;`client_flow)];
+/ @eg .qetl.dag.register_pipelines[]
+.qetl.dag.register_pipelines:{[]
+    .qetl.dag.register[`fxfeed1;`kind`inputs`outputs!(`stream;`$();`quote)];
+    .qetl.dag.register[`quotesfeed1;`kind`inputs`outputs!(`stream;`$();`quotes)];
+    .qetl.dag.register[`cross1;`kind`inputs`outputs!(`stream;`quotes;`$())];
+    .qetl.dag.register[`widefeed1;`kind`inputs`outputs!(`stream;`$();`wide_book)];
+    .qetl.dag.register[`vectorize1;`kind`inputs`outputs!(`stream;`wide_book;`mkt_orderbook)];
+    .qetl.dag.register[`tap1;`kind`inputs`outputs!(`stream;`$();`$())];
+    .qetl.dag.register[`fxtradesfeed1;`kind`inputs`outputs!(`stream;`$();`trades)];
+    .qetl.dag.register[`posbook1;`kind`inputs`outputs!(`stream;`executions`marks;`position)];
+    .qetl.dag.register[`markout1;`kind`inputs`outputs!(`stream;`trades`quote;`execution_quality)];
+    .qetl.dag.register[`deals_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
+    .qetl.dag.register[`events_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
+    .qetl.dag.register[`databento1;`kind`inputs`outputs!(`stream;`databento_mbp10;`databento_book)];
+    .qetl.dag.register[`cryptomock1;`kind`inputs`outputs!(`stream;`$();`crypto_book`crypto_trades)];
+    .qetl.dag.register[`executions1;`kind`inputs`outputs!(`normalizer;`trades`crypto_trades;`executions)];
+    .qetl.dag.register[`marks1;`kind`inputs`outputs!(`normalizer;`quote`crypto_book;`marks)];
+    .qetl.dag.register[`fxordersfeed1;`kind`inputs`outputs!(`stream;`$();`orders)];
+    .qetl.dag.register[`fxpositions1;`kind`inputs`outputs!(`stream;`orders;`fx_position`fx_limit_breach)];
+    .qetl.dag.register[`databento_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
+    .qetl.dag.register[`upstream_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
+    .qetl.dag.register[`marketdata1;`kind`inputs`outputs!(`normalizer;`quote`quotes;`market_data)];
+    .qetl.dag.register[`superbook1;`kind`inputs`outputs!(`stream;`market_data;`superbook`config_change)];
+    .qetl.dag.register[`arbitrage1;`kind`inputs`outputs!(`stream;`superbook;`arbitrage)];
+    .qetl.dag.register[`crossarb1;`kind`inputs`outputs!(`stream;`superbook;`cross_arbitrage`config_change)];
+    .qetl.dag.register[`duckdb_deals_backfill1;`kind`inputs`outputs!(`stream;`$();`$())];
+    .qetl.dag.register[`kafka_flow1;`kind`inputs`outputs!(`stream;`kafka_client_flow;`client_flow)];
     `fxfeed1`quotesfeed1`cross1`widefeed1`vectorize1`tap1`fxtradesfeed1`posbook1`markout1`deals_backfill1`events_backfill1`databento1`cryptomock1`executions1`marks1`fxordersfeed1`fxpositions1`databento_backfill1`upstream_backfill1`marketdata1`superbook1`arbitrage1`crossarb1`duckdb_deals_backfill1`kafka_flow1}

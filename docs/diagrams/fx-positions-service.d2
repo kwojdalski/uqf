@@ -109,7 +109,7 @@ pipeline: "the service — no step in it knows its runner" {
   class: band
 
   feed: "fx_orders_feed\norder flow: new, filled,\ncancelled, rejected" { class: feed }
-  plant: ".qtick\nsubscribe · publish\nlog · replay" { class: plant }
+  plant: ".qetl.tick\nsubscribe · publish\nlog · replay" { class: plant }
   service: "fx_positions\nnets FILLED orders\nsnapshots every 5s" { class: job }
 }
 

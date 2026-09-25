@@ -1,6 +1,6 @@
 / dag.q - the job graph: every data engineering job's inputs and outputs, in
 / q, so a DAG can be generated and drawn without leaving the interpreter
-/ (.qdag).
+/ (.qetl.dag).
 / .
 / Jobs declare what they READ and what they WRITE; the edges are derived by
 / matching one job's outputs against another's inputs. Nothing declares an
@@ -12,10 +12,10 @@
 / DERIVE, NEVER RE-DECLARE. Three registries already know their own inputs
 / and outputs, so none of them is asked to restate anything:
 / .
-/   .qbw.worker_cfg     bounded workers. Input is the source's remote `table_name`,
-/                   output is its `target` - both already on the .qsrc
+/   .qetl.job.bounded.worker_cfg     bounded workers. Input is the source's remote `table_name`,
+/                   output is its `target` - both already on the .qetl.source
 /                   declaration, reachable from the worker's `source`.
-/   .qcont.feeds    continuous feeders. Output is the dataset they feed;
+/   .qetl.job.continuous.feeds    continuous feeders. Output is the dataset they feed;
 /                   their input is external by definition (a live feed).
 /   PIPELINES       the nine TorQ streaming processes. It was already decided
 /                   the Python Pipeline registry is the source of truth, so
@@ -27,7 +27,7 @@
 / `d2[]`/`to_json[]` give a drawing, with no Python in the path. A q
 / process can therefore schedule and render its own graph.
 
-\d .qdag
+\d .qetl.dag
 
 / ------------------------------------------------------------- REGISTRY
 
@@ -43,12 +43,12 @@ required_spec:`kind`inputs`outputs
 / The kinds a job may declare. Closed on purpose: a typo like `streaming`
 / for `stream` would otherwise silently create a new category that every
 / consumer has to learn about.
-/ `reaction` is a .qreact wiring: it reads the dataset it watches and writes
+/ `reaction` is a .qetl.reaction wiring: it reads the dataset it watches and writes
 / whatever it declared. Unlike the other three it may be ASSERTED rather than
-/ derived - see .qreact.on's header and `reaction_edges` below - which is why
+/ derived - see .qetl.reaction.on's header and `reaction_edges` below - which is why
 / it is a kind of its own rather than being folded into `bounded`.
 / `normalizer` is a stream job of a particular shape - many sources, one
-/ canonical output, one declared transform per source (.qnorm). It runs
+/ canonical output, one declared transform per source (.qetl.job.stream.normalizer). It runs
 / exactly as a `stream` does; it is a kind of its own so that a graph can
 / show where shapes converge, which is the one thing about a normalizer
 / worth seeing.
@@ -58,11 +58,11 @@ kinds:`bounded`continuous`stream`reaction`normalizer
 / .
 / Re-registering the same job REPLACES its spec rather than erroring, so
 / reloading a file during development is not a failure - the same posture
-/ .qbw.define takes for redeclaring a worker.
+/ .qetl.job.bounded.define takes for redeclaring a worker.
 / @param job symbol naming the job, e.g. `posbook1 or `demo_deals_backfill
 / @param decl dict of kind, inputs, outputs
 / @throws error when a required key is missing, or the kind is not known
-/ @eg .qdag.register[`cross1;`kind`inputs`outputs!(`stream;`quotes;`symbol$())]
+/ @eg .qetl.dag.register[`cross1;`kind`inputs`outputs!(`stream;`quotes;`symbol$())]
 register:{[job;decl]
     missing:required_spec where not required_spec in key decl;
     if[count missing;
@@ -244,7 +244,7 @@ to_json:{[]
 
 / ----------------------------------------------------- ADOPTION (derive)
 
-/ Register every bounded worker from .qbw.worker_cfg, deriving its inputs and
+/ Register every bounded worker from .qetl.job.bounded.worker_cfg, deriving its inputs and
 / outputs from the source declaration it already names.
 / .
 / A worker reads the source's remote `table_name` and writes its `target`, so
@@ -267,32 +267,32 @@ to_json:{[]
 / .
 / Parseable on purpose, so a viz tool can split it back into source and table
 / rather than having to treat the node as opaque.
-/ @eg .qdag.external_ref[`demo_deals;`demo_deals]  ->  `demo_deals@demo_deals
+/ @eg .qetl.dag.external_ref[`demo_deals;`demo_deals]  ->  `demo_deals@demo_deals
 external_ref:{[source;table_name] `$(string table_name),"@",string source}
 
-/ Register every bounded worker into the job graph, from .qbw's own registry.
-/ @return the worker names registered, empty when .qbw is not loaded
-/ @eg .qdag.adopt_workers[]
+/ Register every bounded worker into the job graph, from .qetl.job.bounded's own registry.
+/ @return the worker names registered, empty when .qetl.job.bounded is not loaded
+/ @eg .qetl.dag.adopt_workers[]
 adopt_workers:{[]
-    if[not `qbw in key `; :`$()];
-    ws:key .qbw.worker_cfg;
+    if[not `worker_cfg in key @[value;`.qetl.job.bounded;{()}]; :`$()];
+    ws:key .qetl.job.bounded.worker_cfg;
     {[w]
-        cfg:.qbw.worker_cfg w;
-        d:.qsrc.def cfg`source;
+        cfg:.qetl.job.bounded.worker_cfg w;
+        d:.qetl.source.def cfg`source;
         register[w;`kind`inputs`outputs!
             (`bounded; external_ref[cfg`source;d`table_name]; d`target)]
       } each ws;
     ws}
 
-/ Register every continuous feeder from .qcont.feeds.
+/ Register every continuous feeder from .qetl.job.continuous.feeds.
 / .
 / A feeder's input is external by definition - it tails a live feed, which
 / is why there is no coverage ledger on that path - so it declares
 / no inputs and appears as a root.
 adopt_feeders:{[]
-    if[not `qcont in key `; :`$()];
-    fs:key .qcont.feeds;
-    {[f] register[f;`kind`inputs`outputs!(`continuous; `$(); .qcont.feeds f)]} each fs;
+    if[not `feeds in key @[value;`.qetl.job.continuous;{()}]; :`$()];
+    fs:key .qetl.job.continuous.feeds;
+    {[f] register[f;`kind`inputs`outputs!(`continuous; `$(); .qetl.job.continuous.feeds f)]} each fs;
     fs}
 
 / Register the nine TorQ streaming processes, if the generated bridge has
@@ -305,11 +305,11 @@ adopt_feeders:{[]
 / this returns empty rather than throwing, so the graph is simply smaller.
 / @return the process names registered, empty when the generated bridge is
 /   not loaded
-/ @eg .qdag.adopt_pipelines[]
+/ @eg .qetl.dag.adopt_pipelines[]
 adopt_pipelines:{[]
-    $[`register_pipelines in key `.qdag; register_pipelines[]; `$()]}
+    $[`register_pipelines in key `.qetl.dag; register_pipelines[]; `$()]}
 
-/ Register every .qreact reaction as a job.
+/ Register every .qetl.reaction reaction as a job.
 / .
 / A reaction's INPUT is the dataset it watches, which is a fact - it is what
 / fires it. Its OUTPUT is whatever it declared: derived from the worker's own
@@ -325,17 +325,17 @@ adopt_pipelines:{[]
 / The job name is `<dataset>~<reaction>`: a reaction name is unique per
 / dataset rather than globally, so the dataset has to be part of the node's
 / identity or two reactions called `rebuild` would collapse into one node.
-/ @return the job names registered, empty when .qreact is not loaded
-/ @eg .qdag.adopt_reactions[]
+/ @return the job names registered, empty when .qetl.reaction is not loaded
+/ @eg .qetl.dag.adopt_reactions[]
 adopt_reactions:{[]
-    if[not `qreact in key `; :`$()];
+    if[not `reactions in key @[value;`.qetl.reaction;{()}]; :`$()];
     raze {[ds]
-        rs:.qreact.for_dataset ds;
+        rs:.qetl.reaction.for_dataset ds;
         {[ds;name;outs]
             job:reaction_job[ds;name];
             register[job;`kind`inputs`outputs!(`reaction;ds;outs)];
             job}[ds] .' flip (rs`name;rs`outputs)
-      } each key .qreact.reactions}
+      } each key .qetl.reaction.reactions}
 
 / The job name a reaction is registered under.
 / .
@@ -353,7 +353,7 @@ adopt_reactions:{[]
 / @param dataset the dataset the reaction watches
 / @param name the reaction's name, unique within that dataset
 / @return the job name, as a symbol
-/ @eg .qdag.reaction_job[`demo_deals;`rebuild_positions]
+/ @eg .qetl.dag.reaction_job[`demo_deals;`rebuild_positions]
 reaction_job:{[dataset;name] `$(string dataset),"~",string name}
 
 / Every reaction edge, and whether its output was derived or asserted.
@@ -365,11 +365,11 @@ reaction_job:{[dataset;name] `$(string dataset),"~",string name}
 / presenting all of them as equally checked.
 / @return a table of dataset, reaction, outputs, derived
 reaction_edges:{[]
-    if[not `qreact in key `; :([] dataset:`symbol$(); reaction:`symbol$(); outputs:(); derived:`boolean$())];
+    if[not `reactions in key @[value;`.qetl.reaction;{()}]; :([] dataset:`symbol$(); reaction:`symbol$(); outputs:(); derived:`boolean$())];
     raze {[ds]
-        rs:.qreact.for_dataset ds;
+        rs:.qetl.reaction.for_dataset ds;
         ([] dataset:count[rs]#ds; reaction:rs`name; outputs:rs`outputs; derived:rs`derived)
-      } each key .qreact.reactions}
+      } each key .qetl.reaction.reactions}
 
 / Rebuild the whole graph from every registry that declares one.
 / .
@@ -377,7 +377,7 @@ reaction_edges:{[]
 / accumulation - and every registration below is reproducible from a
 / registry, so nothing is lost by clearing.
 / .
-/ Reactions LAST, because adopt_reactions reads .qreact's registry and a
+/ Reactions LAST, because adopt_reactions reads .qetl.reaction's registry and a
 / reaction's output may name a dataset a worker registered above - the order
 / does not matter to `register`, which takes what it is given, but it keeps
 / the graph's own layering readable.

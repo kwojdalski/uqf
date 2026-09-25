@@ -48,7 +48,7 @@ Q_EXPORTER = REPO / "scripts" / "generate" / "export_contract_surface.q"
 
 #: The committed export of this tree's own surface, gated below so it cannot
 #: quietly go stale - a committed baseline nothing verifies is the
-#: `.qmatz.require_schema` shape, where a file's existence reads as
+#: `.qetl.coverage.require_schema` shape, where a file's existence reads as
 #: protection it is not providing.
 #:
 #: `current/`, not `uqf-local/`. The old name distinguished this tree's

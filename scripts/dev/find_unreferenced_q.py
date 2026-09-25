@@ -6,7 +6,7 @@ TEXT scan, so its output is a list of CANDIDATES, never a verdict:
 
 * q binds names at call time, so a function reached by name - `value`,
   `` ` sv ns,name ``, a delegate that looks methods up in a namespace, a
-  TorQ process loading a script - reads here as unreferenced. `.qbw`'s
+  TorQ process loading a script - reads here as unreferenced. `.qetl.job.bounded`'s
   lifecycle methods are the standing example: `delegate[worker;nm]` calls
   them by symbol, and no line names them.
 * "Only tests" is normal for a LIBRARY. Most of src/pricing, src/portfolio

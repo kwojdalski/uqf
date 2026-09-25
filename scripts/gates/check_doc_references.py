@@ -6,7 +6,7 @@ There were already gates keeping the GENERATED documentation honest -
 ``generate_man_registry.py --check`` holds ``docs/man.q`` to the qDoc blocks,
 ``check_env_reference.py`` holds the environment page to the code that reads
 each variable. Nothing held the *prose* to anything. A guide could name
-``.qmatz.stage_coverage``, a function that has never existed, and every gate
+``.qetl.coverage.stage_coverage``, a function that has never existed, and every gate
 would pass: the name appears in no generated artifact, so no generator
 disagrees with it.
 
@@ -34,7 +34,7 @@ TorQ's ``.servers``/``.hb``/``.u``/``.proc``/``.lg``, kdb's ``.Q``/``.z``/
 not ours to verify and a gate that guesses about someone else's API is a
 gate people learn to ignore.
 
-*Namespaces absent from the contract surface.* ``.qpipe`` lives in
+*Namespaces absent from the contract surface.* ``.qtorq`` lives in
 ``scripts/`` rather than ``src/`` and the exporter does not carry it, so its
 names cannot be confirmed OR denied here. Those are reported as skipped
 rather than silently passed, so the blind spot stays visible - and so a
@@ -105,10 +105,6 @@ EXCLUDED_FILES: dict[str, str] = {}
 #: than used. Anything else should be fixed in the prose instead.
 ALLOWED_MISSING = {
     (
-        ".claude/agents/pipeline-developer.md",
-        ".qmatz.sub",
-    ): "an illustration of the nested namespace the convention forbids - it must not exist",
-    (
         ".claude/agents/uqf-developer.md",
         ".qfwd.sub",
     ): "the same nested-namespace illustration, in the rule that forbids it",
@@ -133,13 +129,13 @@ ALLOWED_MISSING = {
     ): "quoted as a reference this gate caught - the real name is require_tape",
     (
         "docs/architecture/pipeline-philosophy.md",
-        ".qcoer.coerce",
+        ".qetl.coerce.coerce",
     ): "quoted as a reference this gate caught - the real name is coerce_column",
 }
 
 #: A reference to this tree's own namespaces: a lowercase `.q` prefix, then a
 #: name. The namespace part may itself be dotted, because worker instances
-#: nest (`.qwrk.demo_deals_backfill.run`); without that, the middle segment
+#: nest (`.qpipe.job.demo_deals_backfill.run`); without that, the middle segment
 #: was read as the FUNCTION and every worker reference in every document
 #: landed in the unverifiable bucket rather than being checked.
 #: The NAMESPACE must be lowercase - `.Q.` is kdb's own and not ours to
@@ -212,6 +208,14 @@ def check() -> tuple[list[str], dict[str, int]]:
     less than its passing line implies.
     """
     surface = load_surface()
+    # A module reference such as .qetl.cfg is a namespace, not a missing
+    # function named cfg on .qetl. Include container ancestors too.
+    namespaces = {
+        ".".join(parts[:depth])
+        for namespace in surface
+        for parts in [namespace.split(".")]
+        for depth in range(1, len(parts) + 1)
+    }
     problems: list[str] = []
     unverifiable: dict[str, int] = {}
 
@@ -224,6 +228,8 @@ def check() -> tuple[list[str], dict[str, int]]:
                 ns, name = match.group(1), match.group(2)
                 ref = f".q{ns}.{name}"
                 if (rel, ref) in ALLOWED_MISSING:
+                    continue
+                if ref[1:] in namespaces:
                     continue
                 if f"q{ns}" not in surface:
                     unverifiable[f".q{ns}"] = unverifiable.get(f".q{ns}", 0) + 1

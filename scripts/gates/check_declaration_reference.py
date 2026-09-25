@@ -6,7 +6,7 @@ refused" is prose no generator can produce. A hand-written reference drifts
 the day a key is added or renamed, so this checks both directions for each
 block's key table:
 
-* every key the q file LISTS - its required keys, and `.qbw`'s optional ones -
+* every key the q file LISTS - its required keys, and `.qetl.job.bounded`'s optional ones -
   has a row;
 * every row names a key the q file mentions as a symbol (`` `key ``), so a
   renamed or removed key cannot live on in the page.

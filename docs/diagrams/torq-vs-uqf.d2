@@ -76,7 +76,7 @@ h2: "uqf on TorQ" { class: head }
 
 a1: "A unit of work" { class: aspect }
 t1: "a PROCESS: a process.csv row\nnaming its own q script" { class: torq }
-u1: "a JOB: a declaration in src/etl/\n(.qstream.define · .qbw.define);\none runner script, picked by procname" { class: uqf }
+u1: "a JOB: a declaration in src/etl/\n(.qetl.job.stream.define · .qetl.job.bounded.define);\none runner script, picked by procname" { class: uqf }
 
 a2: "Configuration" { class: aspect }
 t2: "edit process.csv and\nthe config directories" { class: torq }
@@ -84,11 +84,11 @@ u2: "lib/torq never edited: process.csv and\ndatabase.q regenerated on every com
 
 a3: "Who knows TorQ exists" { class: aspect }
 t3: "every process: code is\nwritten against .servers,\n.u.upd, .lg directly" { class: torq }
-u3: "only .qpipe, in scripts/ - a gate fails the\nbuild otherwise. The same jobs run on\nstock kdb+ via run_stream.q and .qtick" { class: uqf }
+u3: "only .qtorq, in scripts/ - a gate fails the\nbuild otherwise. The same jobs run on\nstock kdb+ via run_stream.q and .qetl.tick" { class: uqf }
 
 a4: "History and backfills" { class: aspect }
 t4: "replay a tickerplant log,\nor write your own loader" { class: torq }
-u4: "bounded workers (.qbw): a window range,\nwritten through .qio - never the plant -\nand recorded in a coverage ledger (.qmatz)" { class: uqf }
+u4: "bounded workers (.qetl.job.bounded): a window range,\nwritten through .qetl.io - never the plant -\nand recorded in a coverage ledger (.qetl.coverage)" { class: uqf }
 
 a5: "A table on the plant" { class: aspect }
 t5: "define it in database.q;\n.u.upd onto an undefined\none drops rows silently" { class: torq }
@@ -100,4 +100,4 @@ u6: "uqs new-job scaffolds it, or install-jobs\nbrings it in; no registration st
 
 a7: "Operating it" { class: aspect }
 t7: "torq.sh start · stop ·\nsummary, per process" { class: torq }
-u7: "uqs: profiles held to the licence's\nconnection budget, up (streams logs),\nlogs · conn · summary; .qlog adds DBG\nand key=value fields on top of .lg" { class: uqf }
+u7: "uqs: profiles held to the licence's\nconnection budget, up (streams logs),\nlogs · conn · summary; .qetl.log adds DBG\nand key=value fields on top of .lg" { class: uqf }

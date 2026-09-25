@@ -17,7 +17,7 @@ a package named plainly `uqf` would claim to be the project while being one part
 of it.
 
 The q side uses neither: every namespace there is `.q<area>`, from `.qbook` to
-`.qmatz`.
+`.qetl.coverage`.
 
 These are separate components with separate contracts, not one library with
 extras bolted on. See [Components](#components) for what each is and where it

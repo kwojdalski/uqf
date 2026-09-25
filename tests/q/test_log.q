@@ -1,4 +1,4 @@
-// test_log.q - tests for src/etl/core/log.q (.qlog), the logging
+// test_log.q - tests for src/etl/core/log.q (.qetl.log), the logging
 // contract. Runs WITHOUT TorQ loaded, which is deliberate: the ETL core is
 // unit-tested standalone, and the layer must behave identically in both
 // transports or a test would pass here and the worker would behave
@@ -17,8 +17,8 @@ captured:()
 
 / The real transport and renderer, saved before any setUp replaces them, so
 / the tests that swap one out can put it back.
-real_emit:.qlog.emit
-real_render:.qlog.render
+real_emit:.qetl.log.emit
+real_render:.qetl.log.render
 
 / Replace the transport's stdout write with a capture. `emit` calls -1 on
 / the fallback path; we shadow it by swapping `emit` itself for a version
@@ -26,45 +26,45 @@ real_render:.qlog.render
 / what is tested, not bypassed.
 setUp_capture:{[]
     `.logtest.captured set ();
-    .qlog.debug[0b];
-    `.qlog.emit set {[level;id;msg]
-        $[(level=`DBG) and not .qlog.debug_enabled; ::;
+    .qetl.log.debug[0b];
+    `.qetl.log.emit set {[level;id;msg]
+        $[(level=`DBG) and not .qetl.log.debug_enabled; ::;
           `.logtest.captured set .logtest.captured,enlist (level;id;msg)]};
     }
 
-tearDown_restore:{[] .qlog.debug[0b];}
+tearDown_restore:{[] .qetl.log.debug[0b];}
 
 last_msg:{[] last .logtest.captured[;2]}
 
 / --- structure: fields render k=v, in order ------------------------------
 
 test_fields_render_as_key_value_pairs:{[t]
-    .qlog.info[`w;"window published";`rows`worker!(1234;`demo)];
+    .qetl.log.info[`w;"window published";`rows`worker!(1234;`demo)];
     .qunit.assertEquals[.logtest.last_msg[];"window published rows=1234 worker=`demo";"values are rendered unambiguously and in declared order"]};
 
 test_a_timestamp_field_renders_readably:{[t]
-    .qlog.info[`w;"at";(enlist `ts)!enlist 2026.09.11D00:00:00.000000000];
+    .qetl.log.info[`w;"at";(enlist `ts)!enlist 2026.09.11D00:00:00.000000000];
     .qunit.assertEquals[.logtest.last_msg[] like "*ts=2026.09.11D00:00:00.000000000*";1b;"a timestamp is not abbreviated or reformatted"]};
 
 test_no_fields_gives_the_bare_text:{[t]
-    .qlog.info[`w;"started";()!()];
+    .qetl.log.info[`w;"started";()!()];
     .qunit.assertEquals[.logtest.last_msg[];"started";"an empty dict adds nothing, not a trailing space"]};
 
 / Field order is preserved so a worker that always logs (worker;window;rows)
 / produces columns a human can scan down. A sorted or hashed order would
 / interleave them differently per line.
 test_field_order_is_preserved:{[t]
-    .qlog.info[`w;"x";`zebra`apple`mid!(1;2;3)];
+    .qetl.log.info[`w;"x";`zebra`apple`mid!(1;2;3)];
     .qunit.assertEquals[.logtest.last_msg[];"x zebra=1 apple=2 mid=3";"declared order, not alphabetical"]};
 
 / --- levels: the id becomes TorQ's id column ----------------------------
 
 test_the_level_is_carried:{[t]
-    .qlog.warn[`w;"careful";()!()];
+    .qetl.log.warn[`w;"careful";()!()];
     .qunit.assertEquals[first last .logtest.captured;`WARN;"warn emits at WARN"]};
 
 test_the_id_is_carried:{[t]
-    .qlog.info[`demo_deals_backfill;"x";()!()];
+    .qetl.log.info[`demo_deals_backfill;"x";()!()];
     .qunit.assertEquals[.logtest.captured[0;1];`demo_deals_backfill;"the worker name is the id, so a published log is filterable by worker"]};
 
 / err records and RETURNS. TorQ's .lg.e throws or exits depending on .proc
@@ -78,7 +78,7 @@ test_err_does_not_throw:{[t]
     / Assert the ABSENCE of a throw, which is the property, rather than a
     / particular return value - the transport's return (-1 from a stdout
     / write, () from .lg.l) is incidental and differs between them.
-    threw:@[{.qlog.err[`w;"window failed";(enlist `err)!enlist "boom"]; 0b};::;{[e] 1b}];
+    threw:@[{.qetl.log.err[`w;"window failed";(enlist `err)!enlist "boom"]; 0b};::;{[e] 1b}];
     .qunit.assertEquals[threw;0b;"err records the failure and returns, leaving the caller to decide whether to abort"]};
 
 / --- debug: off by default, on per process ------------------------------
@@ -86,25 +86,25 @@ test_err_does_not_throw:{[t]
 / The property that matters. A DBG line must NOT appear unless asked for,
 / or a million-row backfill floods its log with per-window detail.
 test_debug_is_suppressed_by_default:{[t]
-    .qlog.dbg[`w;"per-window detail";()!()];
+    .qetl.log.dbg[`w;"per-window detail";()!()];
     .qunit.assertEquals[count .logtest.captured;0;"nothing emitted: debug is opt-in"]};
 
 test_debug_appears_once_enabled:{[t]
-    .qlog.debug[1b];
-    .qlog.dbg[`w;"per-window detail";()!()];
+    .qetl.log.debug[1b];
+    .qetl.log.dbg[`w;"per-window detail";()!()];
     .qunit.assertEquals[(count .logtest.captured;first last .logtest.captured);(1;`DBG);"after debug[1b] the same call emits"]};
 
 test_debug_can_be_switched_off_again:{[t]
-    .qlog.debug[1b];
-    .qlog.debug[0b];
-    .qlog.dbg[`w;"x";()!()];
+    .qetl.log.debug[1b];
+    .qetl.log.debug[0b];
+    .qetl.log.dbg[`w;"x";()!()];
     .qunit.assertEquals[count .logtest.captured;0;"debug[0b] restores suppression"]};
 
 / Suppression is DBG-specific: enabling or disabling debug must not affect
 / the other three levels, or turning debug off would silence errors.
 test_other_levels_are_unaffected_by_debug:{[t]
-    .qlog.debug[0b];
-    .qlog.info[`w;"a";()!()]; .qlog.warn[`w;"b";()!()]; .qlog.err[`w;"c";()!()];
+    .qetl.log.debug[0b];
+    .qetl.log.info[`w;"a";()!()]; .qetl.log.warn[`w;"b";()!()]; .qetl.log.err[`w;"c";()!()];
     .qunit.assertEquals[.logtest.captured[;0];`INF`WARN`ERR;"INF, WARN and ERR emit regardless of the debug switch"]};
 
 / --- lazy rendering -----------------------------------------
@@ -118,27 +118,27 @@ test_other_levels_are_unaffected_by_debug:{[t]
 / before the gate, the throw would escape.
 test_a_suppressed_message_is_not_rendered:{[t]
     `.logtest.rendered set 0b;
-    `.qlog.render set {[fields] `.logtest.rendered set 1b; "x"};
-    .qlog.dbg[`w;"expensive";(enlist `k)!enlist 1];
+    `.qetl.log.render set {[fields] `.logtest.rendered set 1b; "x"};
+    .qetl.log.dbg[`w;"expensive";(enlist `k)!enlist 1];
     r:.logtest.rendered;
-    `.qlog.render set .logtest.real_render;
+    `.qetl.log.render set .logtest.real_render;
     .qunit.assertEquals[r;0b;"debug off means the fields are never rendered, not rendered and discarded"]};
 
 test_an_emitted_message_is_rendered:{[t]
     `.logtest.rendered set 0b;
-    `.qlog.render set {[fields] `.logtest.rendered set 1b; "x"};
-    .qlog.info[`w;"wanted";(enlist `k)!enlist 1];
+    `.qetl.log.render set {[fields] `.logtest.rendered set 1b; "x"};
+    .qetl.log.info[`w;"wanted";(enlist `k)!enlist 1];
     r:.logtest.rendered;
-    `.qlog.render set .logtest.real_render;
+    `.qetl.log.render set .logtest.real_render;
     .qunit.assertEquals[r;1b;"an INF message is rendered, or the gate is refusing everything"]};
 
 test_enabled_reports_the_gate:{[t]
-    .qlog.debug[0b];
-    off:.qlog.enabled `DBG;
-    .qlog.debug[1b];
-    on:.qlog.enabled `DBG;
-    .qlog.debug[0b];
-    .qunit.assertEquals[(off;on;.qlog.enabled `ERR);(0b;1b;1b);"exported so a caller can skip building an expensive field value itself"]};
+    .qetl.log.debug[0b];
+    off:.qetl.log.enabled `DBG;
+    .qetl.log.debug[1b];
+    on:.qetl.log.enabled `DBG;
+    .qetl.log.debug[0b];
+    .qunit.assertEquals[(off;on;.qetl.log.enabled `ERR);(0b;1b;1b);"exported so a caller can skip building an expensive field value itself"]};
 
 / --- transport detection: the bug that made every process use the fallback --
 
@@ -153,23 +153,23 @@ test_torq_is_detected_when_its_logging_namespace_exists:{[t]
     `.lg.l set {[a;b;c;d;e;f] `.logtest.torq_got set (a;d;e)};
     `.lg.outmap set `ERR`INF`WARN!2 1 1;
     `.lg.pubmap set `ERR`INF`WARN!1 0 1;
-    detected:.qlog.torq_loaded[];
+    detected:.qetl.log.torq_loaded[];
     ![`.lg;();0b;`l`outmap`pubmap];
     .qunit.assertEquals[detected;1b;"a populated .lg is detected, so TorQ's transport is used rather than the fallback"]};
 
 test_torq_is_not_detected_when_absent:{[t]
-    .qunit.assertEquals[.qlog.torq_loaded[];0b;"no .lg.l means the fallback, and no error"]};
+    .qunit.assertEquals[.qetl.log.torq_loaded[];0b;"no .lg.l means the fallback, and no error"]};
 
 / With TorQ present the message must reach .lg.l - the whole point of the
 / layer being thin. Uses the real emit (not the capture stub), so this is
 / the transport being exercised, not the gating.
 test_a_message_reaches_torqs_lg_when_present:{[t]
-    `.qlog.emit set .logtest.real_emit;
+    `.qetl.log.emit set .logtest.real_emit;
     `.lg.l set {[level;proctype;proc;id;message;dict] `.logtest.torq_got set (level;id;message)};
     `.lg.outmap set `ERR`INF`WARN!2 1 1;
     `.lg.pubmap set `ERR`INF`WARN!1 0 1;
     `.logtest.torq_got set ();
-    .qlog.info[`w;"routed";(enlist `k)!enlist 1];
+    .qetl.log.info[`w;"routed";(enlist `k)!enlist 1];
     got:.logtest.torq_got;
     ![`.lg;();0b;`l`outmap`pubmap];
     .qunit.assertEquals[got;(`INF;`w;"routed k=1");"level, id and rendered message arrive at .lg.l"]};
@@ -178,7 +178,7 @@ test_register_adds_dbg_to_torqs_routing_tables_when_present:{[t]
     `.lg.l set {[a;b;c;d;e;f] ::};
     `.lg.outmap set `ERR`INF`WARN!2 1 1;
     `.lg.pubmap set `ERR`INF`WARN!1 0 1;
-    r:.qlog.register[];
+    r:.qetl.log.register[];
     outm:.lg.outmap;
     ![`.lg;();0b;`l`outmap`pubmap];
     .qunit.assertEquals[(r;outm`DBG);(1b;0);"DBG is registered, and OFF by default so nothing changes for an existing process"]};
@@ -186,9 +186,9 @@ test_register_adds_dbg_to_torqs_routing_tables_when_present:{[t]
 / --- without TorQ, register is a harmless no-op -------------------------
 
 test_register_without_torq_is_a_no_op:{[t]
-    .qunit.assertEquals[.qlog.register[];0b;"no .lg to register with, and no error either - the core loads standalone"]};
+    .qunit.assertEquals[.qetl.log.register[];0b;"no .lg to register with, and no error either - the core loads standalone"]};
 
 test_the_level_set_matches_torqs_plus_debug:{[t]
-    .qunit.assertEquals[.qlog.levels;`DBG`INF`WARN`ERR;"exactly TorQ's three plus DBG, so outmap and pubmap apply unchanged"]};
+    .qunit.assertEquals[.qetl.log.levels;`DBG`INF`WARN`ERR;"exactly TorQ's three plus DBG, so outmap and pubmap apply unchanged"]};
 
 \d .

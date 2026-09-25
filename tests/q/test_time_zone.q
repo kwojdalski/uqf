@@ -35,21 +35,21 @@ spring:2026.03.29D01:00:00.000000000
 autumn:2026.10.25D01:00:00.000000000
 
 beforeNamespace_zones:{[]
-    .qsrc.load_zone_table .tztest.zone_path;
+    .qetl.source.load_zone_table .tztest.zone_path;
     }
 
 / Register this suite's own sources, and remove ONLY those. Wiping
-/ .qsrc.sources would take the demo source with it and break every test in
+/ .qetl.source.sources would take the demo source with it and break every test in
 / .ddbftest - the cross-suite leak test_source_contract.q already records.
 setUp_sources:{[]
     .tztest.drop_sources[];
-    .qsrc.define[`tz_london;
+    .qetl.source.define[`tz_london;
         `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
         (`tz_london;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
          {([] ts:2026.10.25D00:30:00.000000000+0D00:30*til 8; px:8#1.5)};
          .tztest.london)];
-    .qsrc.define[`tz_summer;
+    .qetl.source.define[`tz_summer;
         `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
         (`tz_summer;`ext;`loc;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
@@ -58,8 +58,8 @@ setUp_sources:{[]
     }
 
 drop_sources:{[]
-    mine:`tz_london`tz_summer where `tz_london`tz_summer in key .qsrc.sources;
-    if[count mine; .qsrc.sources:mine _ .qsrc.sources];
+    mine:`tz_london`tz_summer where `tz_london`tz_summer in key .qetl.source.sources;
+    if[count mine; .qetl.source.sources:mine _ .qetl.source.sources];
     }
 
 / --- the z->p cast bug class -------------------------------------
@@ -115,22 +115,22 @@ test_a_datetime_column_filters_without_complaint:{[t]
 / fails the contract, on the same code path the fixture goes through.
 test_a_datetime_time_column_is_refused_by_the_contract:{[t]
     bad:([] ts:enlist "z"$2026.09.11D09:00:00.000000000; px:enlist 1.5);
-    .qunit.assertError[{.qsrc.validate[`tz_summer;x]};bad;"a datetime where a timestamp was declared is a contract breach, not a coercion"]};
+    .qunit.assertError[{.qetl.source.validate[`tz_summer;x]};bad;"a datetime where a timestamp was declared is a contract breach, not a coercion"]};
 
 / --- what a window's "day" is ------------------------------------
 
 / WHAT THE CANONICAL CODE MEANT BY A TRADING DAY IS NOT KNOWABLE HERE, and
-/ nothing in this tree has a business-date notion: .qwrt.windows cuts
-/ elapsed time, .qmatz composes half-open intervals, and .qdcf counts actual
+/ nothing in this tree has a business-date notion: .qetl.job.bounded.runtime.windows cuts
+/ elapsed time, .qetl.coverage composes half-open intervals, and .qdcf counts actual
 / calendar days. These two tests pin the assumption that is therefore in
 / force, so that whoever adds a venue calendar later has to change a failing
 / test rather than a comment.
 test_a_window_is_elapsed_time_not_a_calendar_day:{[t]
-    w:.qwrt.windows[2026.09.11D17:00:00.000000000;2026.09.14D17:00:00.000000000;1D];
+    w:.qetl.job.bounded.runtime.windows[2026.09.11D17:00:00.000000000;2026.09.14D17:00:00.000000000;1D];
     .qunit.assertEquals[first exec range_from from w;2026.09.11D17:00:00.000000000;"a 1D window starts where the request did - windows are never snapped to a calendar or venue boundary"]};
 
 test_five_days_means_five_windows_not_five_business_days:{[t]
-    w:.qwrt.windows[2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000;1D];
+    w:.qetl.job.bounded.runtime.windows[2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000;1D];
     .qunit.assertEquals[count w;5;"the weekend is not skipped: 'the previous five days' is five 24h windows, and any business-day reading would have to be built on top"]};
 
 / --- DST in windowed backfills -----------------------------------
@@ -140,34 +140,34 @@ test_five_days_means_five_windows_not_five_business_days:{[t]
 / becomes on a transition. Short or long windows would be worse than wrong:
 / coverage would still tile and still report the range complete.
 test_windows_across_a_spring_forward_are_all_exactly_one_day:{[t]
-    w:.qwrt.windows[2026.03.28D00:00:00.000000000;2026.03.31D00:00:00.000000000;1D];
+    w:.qetl.job.bounded.runtime.windows[2026.03.28D00:00:00.000000000;2026.03.31D00:00:00.000000000;1D];
     .qunit.assertEquals[distinct exec range_to-range_from from w;enlist 1D;"the 23-hour local day does not shorten any window"]};
 
 test_windows_across_an_autumn_transition_still_tile_exactly:{[t]
-    w:.qwrt.windows[2026.10.24D00:00:00.000000000;2026.10.27D00:00:00.000000000;1D];
+    w:.qetl.job.bounded.runtime.windows[2026.10.24D00:00:00.000000000;2026.10.27D00:00:00.000000000;1D];
     .qunit.assertEquals[(-1_exec range_to from w)~1_exec range_from from w;1b;"each window ends where the next begins, so the transition introduces neither a gap nor an overlap"]};
 
 / The reading in the skipped hour denotes no instant at all. Converting it
 / anyway would invent one.
 test_a_nonexistent_local_time_is_refused:{[t]
-    .qunit.assertError[{.qsrc.local_to_utc[.tztest.london;x]};.tztest.spring+0D00:30;"a local time in the spring-forward gap has no UTC instant, so any answer would be invented"]};
+    .qunit.assertError[{.qetl.source.local_to_utc[.tztest.london;x]};.tztest.spring+0D00:30;"a local time in the spring-forward gap has no UTC instant, so any answer would be invented"]};
 
 / The reading in the repeated hour denotes two instants an hour apart.
 / Picking either silently moves the row into a neighbouring backfill window,
 / which the ledger would still record as complete.
 test_an_ambiguous_local_time_is_refused:{[t]
-    .qunit.assertError[{.qsrc.local_to_utc[.tztest.london;x]};.tztest.autumn+0D00:30;"an hour that happens twice cannot be resolved from the reading alone"]};
+    .qunit.assertError[{.qetl.source.local_to_utc[.tztest.london;x]};.tztest.autumn+0D00:30;"an hour that happens twice cannot be resolved from the reading alone"]};
 
 test_the_ambiguity_error_names_both_candidate_instants:{[t]
-    err:@[{.qsrc.local_to_utc[.tztest.london;x]; ""};.tztest.autumn+0D00:30;{x}];
+    err:@[{.qetl.source.local_to_utc[.tztest.london;x]; ""};.tztest.autumn+0D00:30;{x}];
     .qunit.assertEquals[all err like/: ("*2026.10.25D00:30*";"*2026.10.25D01:30*");1b;"the operator is told which two instants it could be, not merely that it is ambiguous"]};
 
-/ An ambiguity is a DATA failure, so .qwrt must not retry it: the next
+/ An ambiguity is a DATA failure, so .qetl.job.bounded.runtime must not retry it: the next
 / attempt reads the same unresolvable row and buries the real error under N
 / identical ones.
 test_an_ambiguity_is_a_terminal_failure_not_a_retryable_one:{[t]
-    err:@[{.qsrc.local_to_utc[.tztest.london;x]; ""};.tztest.autumn+0D00:30;{x}];
-    .qunit.assertEquals[(.qwrt.classify err;.qwrt.retryable err);(`data;0b);"retrying an unresolvable local time produces the same unresolvable local time, more slowly"]};
+    err:@[{.qetl.source.local_to_utc[.tztest.london;x]; ""};.tztest.autumn+0D00:30;{x}];
+    .qunit.assertEquals[(.qetl.job.bounded.runtime.classify err;.qetl.job.bounded.runtime.retryable err);(`data;0b);"retrying an unresolvable local time produces the same unresolvable local time, more slowly"]};
 
 / The trap that makes bound conversion unsafe, measured rather than
 / asserted: converting each UTC bound with the offset in effect at that
@@ -175,14 +175,14 @@ test_an_ambiguity_is_a_terminal_failure_not_a_retryable_one:{[t]
 / local instant, so the obvious implementation queries an empty range, gets
 / no rows, and records an hour of missing trades as a complete window.
 test_naive_bound_conversion_collapses_a_window_to_nothing:{[t]
-    lo:.qsrc.utc_to_local[.tztest.london;.tztest.autumn-0D00:30];
-    hi:.qsrc.utc_to_local[.tztest.london;.tztest.autumn+0D00:30];
+    lo:.qetl.source.utc_to_local[.tztest.london;.tztest.autumn-0D00:30];
+    hi:.qetl.source.utc_to_local[.tztest.london;.tztest.autumn+0D00:30];
     .qunit.assertEquals[lo~hi;1b;"[00:30;01:30) UTC becomes [01:30;01:30) local - an empty range that returns no rows and never errors"]};
 
 / And the framework does not do that: it refuses. Zero rows is the answer
 / that would have been silent.
 test_the_framework_refuses_that_window_rather_than_returning_no_rows:{[t]
-    .qunit.assertError[{.qsrc.fetch_window[`tz_london;0Ni;x 0;x 1]};
+    .qunit.assertError[{.qetl.source.fetch_window[`tz_london;0Ni;x 0;x 1]};
         (.tztest.autumn-0D00:30;.tztest.autumn+0D00:30);
         "a window whose rows cannot be placed fails loudly instead of publishing nothing"]};
 
@@ -191,92 +191,92 @@ test_the_framework_refuses_that_window_rather_than_returning_no_rows:{[t]
 / nothing: a clean window is not failed by an ambiguous row it does not
 / want, and the surplus rows are not published.
 test_a_clean_window_is_not_failed_by_a_neighbours_ambiguous_row:{[t]
-    got:last .qsrc.fetch_window[`tz_london;0Ni;.tztest.autumn+0D01:00;.tztest.autumn+0D03:00];
+    got:last .qetl.source.fetch_window[`tz_london;0Ni;.tztest.autumn+0D01:00;.tztest.autumn+0D03:00];
     .qunit.assertEquals[count got;4;"the over-fetch reaches the repeated hour, but only rows that could land in THIS window are judged"]};
 
 test_the_over_fetch_does_not_publish_neighbouring_rows:{[t]
     lo:.tztest.autumn+0D01:00;
     hi:.tztest.autumn+0D03:00;
-    got:last .qsrc.fetch_window[`tz_london;0Ni;lo;hi];
+    got:last .qetl.source.fetch_window[`tz_london;0Ni;lo;hi];
     .qunit.assertEquals[all (got[`ts]>=lo) and got[`ts]<hi;1b;"every returned row is inside the requested half-open range, in UTC"]};
 
 / --- who converts -------------------------------------------------
 
 / The zone is a per-source declaration, because only the source knows it.
 test_the_demo_source_declares_its_zone:{[t]
-    .qunit.assertEquals[(.qsrc.def `demo_deals)`tz;`UTC;"the zone is a claim the source makes, which validate_live can be run against"]};
+    .qunit.assertEquals[(.qetl.source.def `demo_deals)`tz;`UTC;"the zone is a claim the source makes, which validate_live can be run against"]};
 
 / A UTC source takes the identity path: no table, no lookup, no conversion.
 / That matters because it is the path every source in this tree takes, so a
 / regression there would be invisible in a demo.
 test_a_utc_source_is_returned_unconverted:{[t]
-    got:last .qsrc.fetch_window[`demo_deals;0Ni;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000];
+    got:last .qetl.source.fetch_window[`demo_deals;0Ni;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000];
     .qunit.assertEquals[got`deal_time;enlist 2026.09.11D09:00:00.000000000;"a UTC source's timestamps pass through untouched"]};
 
 / The framework converts, once, at fetch - not the worker and not the
 / consumer. Local 09:00 on 2026.07.15 is British Summer Time, so it is
 / 08:00 UTC, and that is what a caller asking in UTC must get back.
 test_a_zoned_source_is_converted_to_utc_at_fetch:{[t]
-    got:last .qsrc.fetch_window[`tz_summer;0Ni;2026.07.15D00:00:00.000000000;2026.07.16D00:00:00.000000000];
+    got:last .qetl.source.fetch_window[`tz_summer;0Ni;2026.07.15D00:00:00.000000000;2026.07.16D00:00:00.000000000];
     .qunit.assertEquals[got`ts;enlist 2026.07.15D08:00:00.000000000;"local 09:00 BST is 08:00 UTC, and the conversion happens in one place"]};
 
 test_the_window_is_applied_to_the_converted_utc_value:{[t]
-    got:last .qsrc.fetch_window[`tz_summer;0Ni;2026.07.15D09:00:00.000000000;2026.07.16D00:00:00.000000000];
+    got:last .qetl.source.fetch_window[`tz_summer;0Ni;2026.07.15D09:00:00.000000000;2026.07.16D00:00:00.000000000];
     .qunit.assertEquals[count got;0;"a window starting at 09:00 UTC excludes an 08:00 UTC row, even though the source stored it as 09:00"]};
 
 / No table, no guess. A fixed offset would be right for part of the year and
 / an hour wrong for the rest, and would never error.
 test_a_zoned_source_without_a_zone_table_fetches_nothing:{[t]
-    saved:.qsrc.zone_table;
-    saved_names:.qsrc.zone_names;
-    .qsrc.zone_table:0#saved;
-    .qsrc.zone_names:`symbol$();
-    err:@[{.qsrc.fetch_window[`tz_summer;0Ni;x 0;x 1]};
+    saved:.qetl.source.zone_table;
+    saved_names:.qetl.source.zone_names;
+    .qetl.source.zone_table:0#saved;
+    .qetl.source.zone_names:`symbol$();
+    err:@[{.qetl.source.fetch_window[`tz_summer;0Ni;x 0;x 1]};
         (2026.07.15D00:00:00.000000000;2026.07.16D00:00:00.000000000);{(`err;x)}];
-    .qsrc.zone_table:saved;
-    .qsrc.zone_names:saved_names;
+    .qetl.source.zone_table:saved;
+    .qetl.source.zone_names:saved_names;
     .qunit.assertEquals[first err;`err;"with no zone table the fetch fails rather than falling back to a fixed offset"]};
 
 test_the_missing_zone_table_error_names_the_loader:{[t]
-    saved:.qsrc.zone_table;
-    saved_names:.qsrc.zone_names;
-    .qsrc.zone_table:0#saved;
-    .qsrc.zone_names:`symbol$();
-    err:@[{.qsrc.require_zone_table x; ""};.tztest.london;{x}];
-    .qsrc.zone_table:saved;
-    .qsrc.zone_names:saved_names;
+    saved:.qetl.source.zone_table;
+    saved_names:.qetl.source.zone_names;
+    .qetl.source.zone_table:0#saved;
+    .qetl.source.zone_names:`symbol$();
+    err:@[{.qetl.source.require_zone_table x; ""};.tztest.london;{x}];
+    .qetl.source.zone_table:saved;
+    .qetl.source.zone_names:saved_names;
     .qunit.assertEquals[err like "*load_zone_table*";1b;"the error says what to call, which is all the operator needs"]};
 
 test_an_unknown_zone_is_refused_rather_than_treated_as_utc:{[t]
-    .qunit.assertError[{.qsrc.require_zone_table x};`$"Mars/Olympus";"a misspelt zone must not silently behave like UTC"]};
+    .qunit.assertError[{.qetl.source.require_zone_table x};`$"Mars/Olympus";"a misspelt zone must not silently behave like UTC"]};
 
 / The conversion is a bijection away from the transitions, and this is the
 / property that makes the two directions trustworthy at all.
 test_utc_and_local_round_trip_away_from_a_transition:{[t]
     ts:2026.01.15D12:00:00.000000000 2026.07.15D12:00:00.000000000;
-    .qunit.assertEquals[.qsrc.local_to_utc[.tztest.london;.qsrc.utc_to_local[.tztest.london;ts]];ts;"winter and summer instants survive both directions"]};
+    .qunit.assertEquals[.qetl.source.local_to_utc[.tztest.london;.qetl.source.utc_to_local[.tztest.london;ts]];ts;"winter and summer instants survive both directions"]};
 
 test_the_offset_differs_between_winter_and_summer:{[t]
     w:2026.01.15D12:00:00.000000000;
     s:2026.07.15D12:00:00.000000000;
-    offsets:(.qsrc.utc_to_local[.tztest.london;w]-w;.qsrc.utc_to_local[.tztest.london;s]-s);
+    offsets:(.qetl.source.utc_to_local[.tztest.london;w]-w;.qetl.source.utc_to_local[.tztest.london;s]-s);
     .qunit.assertEquals[offsets;(0D00:00:00.000000000;0D01:00:00.000000000);"a single fixed offset cannot be right for both, which is why there is a table"]};
 
 / An instant the table does not cover would otherwise produce a null
 / timestamp, which reads downstream as "no data" rather than "the lookup
 / missed".
 test_an_uncovered_instant_is_refused_rather_than_nulled:{[t]
-    .qunit.assertError[{.qsrc.utc_to_local[.tztest.london;x]};1850.01.01D00:00:00.000000000;"a missed lookup must not come back as a null timestamp"]};
+    .qunit.assertError[{.qetl.source.utc_to_local[.tztest.london;x]};1850.01.01D00:00:00.000000000;"a missed lookup must not come back as a null timestamp"]};
 
 test_a_utc_source_needs_no_zone_table_at_all:{[t]
-    saved:.qsrc.zone_table;
-    saved_names:.qsrc.zone_names;
-    .qsrc.zone_table:0#saved;
-    .qsrc.zone_names:`symbol$();
-    got:@[{last .qsrc.fetch_window[`demo_deals;0Ni;x 0;x 1]};
+    saved:.qetl.source.zone_table;
+    saved_names:.qetl.source.zone_names;
+    .qetl.source.zone_table:0#saved;
+    .qetl.source.zone_names:`symbol$();
+    got:@[{last .qetl.source.fetch_window[`demo_deals;0Ni;x 0;x 1]};
         (2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000);{(`err;x)}];
-    .qsrc.zone_table:saved;
-    .qsrc.zone_names:saved_names;
+    .qetl.source.zone_table:saved;
+    .qetl.source.zone_names:saved_names;
     .qunit.assertEquals[count got;1;"the UTC path is table-free, so declaring UTC costs nothing operationally"]};
 
 \d .

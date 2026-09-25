@@ -18,8 +18,8 @@
 / - what the check below still catches is a SECOND partitioning dimension,
 / one this tree does not know it should be slicing on.
 / .
-/ .qmatz.require_schema is the same check inside a worker's init, reached via
-/ .qmatz.attach. This is the standalone form, for looking at a ledger without
+/ .qetl.coverage.require_schema is the same check inside a worker's init, reached via
+/ .qetl.coverage.attach. This is the standalone form, for looking at a ledger without
 / starting a worker.
 / .
 / Usage, on a machine that can reach the real ledger:
@@ -66,7 +66,7 @@ fetch_meta:{[]
 
 m:fetch_meta[];
 present:exec c from m;
-assumed:.qmatz.schema;
+assumed:.qetl.coverage.schema;
 
 -1 "";
 -1 "=================== etl_coverage: live schema ===================";
@@ -100,7 +100,7 @@ if[count partition_like;
     -1 "          covered for one but empty for the others is reported";
     -1 "          COMPLETE. Fix before any consumer trusts is_covered - the";
     -1 "          same four steps #185 followed for `partition` itself:";
-    -1 "            1. add the column to .qmatz.schema and init_ledger";
+    -1 "            1. add the column to .qetl.coverage.schema and init_ledger";
     -1 "            2. add it as a REQUIRED parameter to intervals/";
     -1 "               is_covered/missing/require_covered - required, not";
     -1 "               optional, for the same reason source_version is";

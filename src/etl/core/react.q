@@ -1,4 +1,4 @@
-/ react.q - recompute a dataset when the one it reads is published (.qreact).
+/ react.q - recompute a dataset when the one it reads is published (.qetl.reaction).
 / .
 / "When this table updates, that one should update too." The streaming half of
 / this tree has always worked that way - a tickerplant pushes and a subscriber
@@ -13,7 +13,7 @@
 / the range; and it is late by up to one interval, always.
 / .
 / The writer already knows all of it. There is exactly one place rows enter a
-/ dataset on this path - .qbw.do_window, after finish_window has recorded the
+/ dataset on this path - .qetl.job.bounded.do_window, after finish_window has recorded the
 / materialisation - so that is where a publication announces itself, with the
 / range it covered in hand. Nothing polls and nothing can be missed.
 / .
@@ -26,13 +26,13 @@
 / A reaction is (dataset; name; handler): when `dataset` gains rows over a
 / range, call handler[dataset; range_from; range_to].
 / .
-/ It is NOT "the framework runs the downstream worker for you". .qdag knows
+/ It is NOT "the framework runs the downstream worker for you". .qetl.dag knows
 / which jobs read a dataset, and that is a genuine dependency - but running a
 / bounded worker needs a source_version, which is a DECISION about which
 / release of the upstream data this run claims, and no framework can
 / invent one. So the graph says who is interested and the handler says what to
 / do, and the thing that cannot be derived is written down by the person who
-/ knows it. `.qreact.dag_consumers` is here to make that wiring obvious.
+/ knows it. `.qetl.reaction.dag_consumers` is here to make that wiring obvious.
 / .
 / THREE PROPERTIES THIS FILE EXISTS TO HOLD
 / .
@@ -50,10 +50,10 @@
 / .
 /   A CASCADE TERMINATES. The same (dataset; range) is not dispatched twice
 /   within one drain, and `max_depth` bounds how far a chain may travel. A
-/   cycle in the graph therefore stops rather than spinning - .qdag.topological
+/   cycle in the graph therefore stops rather than spinning - .qetl.dag.topological
 /   refuses a cycle at registration, but a handler can always publish anywhere.
 
-\d .qreact
+\d .qetl.reaction
 
 / ------------------------------------------------------------ REGISTRY
 
@@ -77,7 +77,7 @@ max_depth:8
 / .
 / Re-registering the same (dataset; name) REPLACES its handler rather than
 / adding a second, so reloading a file during development is not a failure -
-/ the posture .qdag.register and .qbw.define already take.
+/ the posture .qetl.dag.register and .qetl.job.bounded.define already take.
 / .
 / WHAT THIS REACTION WRITES IS ASSERTED, NOT DERIVED, and the registry records
 / that. dag.q's rule is "derive, never re-declare", and it holds because a
@@ -94,7 +94,7 @@ max_depth:8
 / @param handler a function taking (dataset; range_from; range_to)
 / @return the reaction's name
 / @throws error when the handler is not a 3-argument function
-/ @eg .qreact.on[`demo_deals;`rebuild_positions;{[ds;f;t] .qpos.rebuild[f;t]}]
+/ @eg .qetl.reaction.on[`demo_deals;`rebuild_positions;{[ds;f;t] .qpos.rebuild[f;t]}]
 / `nm`, not `name`: inside the where-clause below BOTH sides of a comparison
 / written `name~/:name` resolve to the COLUMN, so the filter matched nothing
 / and re-registering appended a second handler instead of replacing the
@@ -126,7 +126,7 @@ require_handler:{[dataset;nm;handler]
 / derived - see `on`.
 / @param outputs the dataset(s) this handler writes, as a symbol or vector
 / @throws error when outputs is not a symbol or symbol vector
-/ @eg .qreact.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time within (f;t-1)}]
+/ @eg .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time within (f;t-1)}]
 on_writing:{[dataset;nm;outputs;handler]
     require_handler[dataset;nm;handler];
     if[not 11h=abs type outputs;
@@ -137,26 +137,26 @@ on_writing:{[dataset;nm;outputs;handler]
 / .
 / The case where the graph edge is derivable, and therefore the one to prefer.
 / A bounded worker already declares its target through its source, so what
-/ this reaction writes is read from .qbw rather than asserted: the entry in
+/ this reaction writes is read from .qetl.job.bounded rather than asserted: the entry in
 / the graph cannot disagree with what the worker does, and `derived` is 1b.
 / .
 / `spec_fn` supplies the one thing that genuinely cannot be derived - the
 / run specification, whose `source_version` is a DECISION about which release
 / of the upstream data this run claims. It is called with the
-/ published range and must return the dict .qbw.init takes.
+/ published range and must return the dict .qetl.job.bounded.init takes.
 / @param dataset the upstream dataset whose publication fires this
-/ @param worker a worker registered with .qbw.define
+/ @param worker a worker registered with .qetl.job.bounded.define
 / @param spec_fn a function (range_from;range_to) -> the run specification
 / @return the reaction's name, which is the worker's name
 / @throws error when the worker is not registered, or spec_fn is not binary
-/ @eg .qreact.on_worker[`upstream_feed;`demo_deals_backfill;{[f;t] `source_version`range_from`range_to!(`v1;f;t)}]
+/ @eg .qetl.reaction.on_worker[`upstream_feed;`demo_deals_backfill;{[f;t] `source_version`range_from`range_to!(`v1;f;t)}]
 on_worker:{[dataset;worker;spec_fn]
-    cfg:.qbw.def worker;
+    cfg:.qetl.job.bounded.def worker;
     if[not (type spec_fn) within 100 112h;
         '"on_worker: ",string[worker],"'s spec_fn must be a function taking (range_from;range_to)"];
     if[(100h=type spec_fn) and not 2=count (value spec_fn) 1;
         '"on_worker: ",string[worker],"'s spec_fn must take exactly 2 arguments (range_from;range_to)"];
-    ns:.qbw.namespace worker;
+    ns:.qetl.job.bounded.namespace worker;
     h:{[worker;ns;spec_fn;ds;range_from;range_to]
         (` sv ns,`init)[spec_fn[range_from;range_to]];
         (` sv ns,`run)[];
@@ -185,25 +185,25 @@ for_dataset:{[dataset] $[dataset in key reactions; reactions dataset; no_reactio
 
 / Forget every reaction, the queue and the history. For tests, and for
 / rebuilding the wiring after the registries change.
-reset:{[] reactions::(`symbol$())!(); `.qreact.queue set empty_queue[]; `.qreact.history set empty_history[]; ()}
+reset:{[] reactions::(`symbol$())!(); `.qetl.reaction.queue set empty_queue[]; `.qetl.reaction.history set empty_history[]; ()}
 
 / ------------------------------------------------------- THE DAG WIRING
 
-/ Which jobs does .qdag say read this dataset?
+/ Which jobs does .qetl.dag say read this dataset?
 / .
 / The answer to "who should react", derived rather than restated - but NOT
 / dispatched automatically, see the header. Wiring a reaction is then:
 / .
-/   .qreact.dag_consumers[`demo_deals]  ->  `positions_backfill
-/   .qreact.on[`demo_deals;`positions_backfill;{[ds;f;t] ...}]
+/   .qetl.reaction.dag_consumers[`demo_deals]  ->  `positions_backfill
+/   .qetl.reaction.on[`demo_deals;`positions_backfill;{[ds;f;t] ...}]
 / .
 / @param dataset the published dataset
-/ @return the job names that declared it as an input, empty when .qdag is
+/ @return the job names that declared it as an input, empty when .qetl.dag is
 /   not loaded or nothing reads it
-/ @eg .qreact.dag_consumers `demo_deals
+/ @eg .qetl.reaction.dag_consumers `demo_deals
 dag_consumers:{[dataset]
-    if[not `qdag in key `; :`$()];
-    @[{.qdag.consumers x};dataset;{[e] `$()}]}
+    if[not `jobs in key @[value;`.qetl.dag;{()}]; :`$()];
+    @[{.qetl.dag.consumers x};dataset;{[e] `$()}]}
 
 / Which registered reactions have no job in the graph behind them, and which
 / graph edges have no reaction wired?
@@ -221,7 +221,7 @@ dag_consumers:{[dataset]
 /   (dataset~reaction names whose output is a claim)
 audit:{[]
     reacting:key reactions;
-    datasets:distinct reacting,$[`qdag in key `; raze {(.qdag.def x)`outputs} each key .qdag.jobs; `$()];
+    datasets:distinct reacting,$[`jobs in key @[value;`.qetl.dag;{()}]; raze {(.qetl.dag.def x)`outputs} each key .qetl.dag.jobs; `$()];
     unwired:(!). flip {[d] (d;dag_consumers d)} each datasets where 0=count each for_dataset each datasets;
     undeclared:reacting where 0=count each dag_consumers each reacting;
     / `count each value unwired` on an EMPTY dict throws 'type - value of an
@@ -230,7 +230,7 @@ audit:{[]
     / empty symbol vector.
     wired_keys:(key unwired) where 0<count each dag_consumers each key unwired;
     asserted:raze {[ds]
-        rs:.qreact.for_dataset ds;
+        rs:.qetl.reaction.for_dataset ds;
         bad:select from rs where not derived, 0<count each outputs;
         {[ds;nm] `$(string ds),"~",string nm}[ds] each bad`name
       } each reacting;
@@ -259,7 +259,7 @@ history_limit:1000
 
 / Private: record one reaction's outcome.
 record:{[dataset;name;depth;range_from;range_to;outcome;detail]
-    `.qreact.history set history_limit sublist history,
+    `.qetl.reaction.history set history_limit sublist history,
         ([] at:enlist .z.p; dataset:enlist dataset; name:enlist name; depth:enlist depth;
             range_from:enlist range_from; range_to:enlist range_to;
             outcome:enlist outcome; detail:enlist detail);
@@ -269,7 +269,7 @@ record:{[dataset;name;depth;range_from;range_to;outcome;detail]
 
 / Announce that `dataset` gained rows over [range_from;range_to).
 / .
-/ Called from the write seam - .qbw.do_window, after the window is recorded -
+/ Called from the write seam - .qetl.job.bounded.do_window, after the window is recorded -
 / and safe to call from anywhere else that publishes.
 / .
 / Returns the number of reactions that RAN, which is zero when nothing is
@@ -282,7 +282,7 @@ record:{[dataset;name;depth;range_from;range_to;outcome;detail]
 / @param range_from inclusive lower bound of what was published
 / @param range_to exclusive upper bound
 / @return the number of reactions run by this call
-/ @eg .qreact.notify[`demo_deals;2026.09.11D00:00;2026.09.12D00:00]
+/ @eg .qetl.reaction.notify[`demo_deals;2026.09.11D00:00;2026.09.12D00:00]
 notify:{[dataset;range_from;range_to] enqueue[dataset;range_from;range_to;0]}
 
 / Private: queue one notification and, unless a drain is already running,
@@ -303,12 +303,12 @@ enqueue:{[dataset;range_from;range_to;depth]
 / rather than global on purpose - the same range published again later is a
 / new event and must fire again.
 drain:{[]
-    `.qreact.draining set 1b;
+    `.qetl.reaction.draining set 1b;
     done:();
     ran:0;
     while[count queue;
         item:first queue;
-        `.qreact.queue set 1_queue;
+        `.qetl.reaction.queue set 1_queue;
         k:(item`dataset;item`range_from;item`range_to);
         / `not any done~\:k`, not `not k in done`: `in` tests ATOM
         / membership, and k is a triple - it throws 'type rather than
@@ -317,7 +317,7 @@ drain:{[]
         if[not any done~\:k;
             done,:enlist k;
             ran+:dispatch item]];
-    `.qreact.draining set 0b;
+    `.qetl.reaction.draining set 0b;
     ran}
 
 / Private: run every reaction registered for one queued item.
@@ -326,7 +326,7 @@ dispatch:{[item]
     if[0=count rs; :0];
     if[item[`depth]>=max_depth;
         {[item;nm] record[item`dataset;nm;item`depth;item`range_from;item`range_to;`refused;
-            "cascade deeper than .qreact.max_depth (",string[max_depth],") - refusing rather than continuing"]
+            "cascade deeper than .qetl.reaction.max_depth (",string[max_depth],") - refusing rather than continuing"]
           }[item] each rs`name;
         :0];
     count {[item;nm;h] run_one[item;nm;h]}[item] .' flip (rs`name;rs`handler)}
@@ -339,27 +339,27 @@ dispatch:{[item]
 / .
 / The handler runs at the item's depth; anything IT publishes notifies at
 / depth+1, which is how max_depth bounds a chain. `depth_now` is a global
-/ rather than an argument because a handler calls .qbw / .qreact.notify
+/ rather than an argument because a handler calls .qetl.job.bounded / .qetl.reaction.notify
 / through the ordinary path and cannot be asked to thread a depth through.
 depth_now:0
 
 run_one:{[item;nm;h]
-    `.qreact.depth_now set item`depth;
+    `.qetl.reaction.depth_now set item`depth;
     r:@[{[h;item] h[item`dataset;item`range_from;item`range_to]; `ok}[h];item;{[e] (`failed;e)}];
-    `.qreact.depth_now set 0;
+    `.qetl.reaction.depth_now set 0;
     $[`ok~r;
         record[item`dataset;nm;item`depth;item`range_from;item`range_to;`ok;""];
         [record[item`dataset;nm;item`depth;item`range_from;item`range_to;`failed;last r];
          log_failure[item;nm;last r]]];
     1b}
 
-/ Private: log a failed reaction, tolerating an absent .qlog.
+/ Private: log a failed reaction, tolerating an absent .qetl.log.
 / .
-/ Protected for the same reason .qbw.begin_run is: several minimal loaders
+/ Protected for the same reason .qetl.job.bounded.begin_run is: several minimal loaders
 / pull in part of the tree, and a reaction must degrade to an unlogged
 / failure rather than an error inside an error handler.
 log_failure:{[item;nm;e]
-    @[{.qlog.err[`qreact;"reaction failed";
+    @[{.qetl.log.err[`qetl.reaction;"reaction failed";
         `dataset`reaction`range_from`range_to`error!
         (x`dataset;y;x`range_from;x`range_to;z)]}[item;nm];e;{[e] (::)}]}
 
@@ -367,7 +367,7 @@ log_failure:{[item;nm;e]
 
 / Announce a publication made BY a reaction, one level deeper.
 / .
-/ .qbw.do_window calls this rather than `notify` directly, so a chain
+/ .qetl.job.bounded.do_window calls this rather than `notify` directly, so a chain
 / triggered by a reaction is counted: at depth 0 the two are identical, and
 / inside a handler this is what makes max_depth bite.
 notify_from_here:{[dataset;range_from;range_to]

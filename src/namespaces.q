@@ -5,17 +5,15 @@
 / and four tools each carried their own copy of the enumeration that rule
 / implied - `(key `) where like "q*"` - in the contract surface export, the
 / coverage driver, the documentation-coverage ratchet and the reseeder.
-/ The ETL tree's instances now nest - workers under .qwrk
-/ (.qwrk.demo_deals_backfill, see .qbw.worker_root) and sources under .qfeed
-/ (.qfeed.demo_deals) - so a flat scan sees `qwrk` and `qfeed` as two
-/ namespaces holding no functions and silently drops every worker and every
-/ source from every one of those tools.
+/ Framework modules nest under .qetl; concrete sources, shared transforms
+/ and jobs nest under .qpipe. A flat scan sees only those two containers
+/ and silently drops the modules and instances from every tool.
 / One enumeration here, that the tools share, is what stops that: a tool
 / that lists namespaces asks this file rather than assuming the shape.
 / .
 / A namespace is a dictionary whose keys include the empty symbol - `\d`
-/ creates that back-reference, and it is what distinguishes .qwrk (a
-/ namespace holding namespaces) from .qbw.worker_cfg (a dictionary holding
+/ creates that back-reference, and it is what distinguishes .qpipe.job (a
+/ namespace holding namespaces) from .qetl.job.bounded.worker_cfg (a dictionary holding
 / configs). The root is the one exception: it has nothing to point back to,
 / so is_namespace answers 0b for it. No walk here starts at root.
 
@@ -24,14 +22,14 @@
 / Is this value a namespace, as `\d` creates them?
 / .
 / The key type is checked BEFORE looking for the empty symbol. A dictionary
-/ is 99h whatever its keys are, and .qsrc.coercers is keyed by type CHARS -
+/ is 99h whatever its keys are, and .qetl.source.coercers is keyed by type CHARS -
 / so `` ` in key v `` on it compares a symbol against a char vector and
 / throws a bare 'type from inside a scan whose caller is nowhere near it.
 / A keyed table is 99h too, and its `key` is a table.
 / @param v any value
 / @return 1b for a namespace dictionary, 0b for anything else
-/ @eg .qns.is_namespace value `.qbw  ->  1b
-/ @eg .qns.is_namespace .qbw.worker_cfg  ->  0b
+/ @eg .qns.is_namespace value `.qetl.job.bounded  ->  1b
+/ @eg .qns.is_namespace .qetl.job.bounded.worker_cfg  ->  0b
 is_namespace:{[v]
     if[not 99h=type v; :0b];
     if[not 11h=type key v; :0b];
@@ -50,7 +48,7 @@ children:{[ns]
 descend:{[ns] ns,raze descend each children ns}
 
 / Every namespace this tree owns, leaves and containers alike, fully
-/ qualified and in depth-first order: `.qbw, `.qwrk, `.qwrk.demo_deals_backfill.
+/ qualified and in depth-first order: `.qetl.job.bounded, `.qpipe.job, `.qpipe.job.demo_deals_backfill.
 / .
 / Ownership is the `.q` prefix the convention ties to filenames, minus q's own `.q`
 / (KX's, 180-odd names that would swamp any listing). Test scaffolding such
@@ -59,8 +57,8 @@ descend:{[ns] ns,raze descend each children ns}
 / it themselves, as the documentation ratchet does; this function reports
 / what exists, not what should be documented.
 / @return symbol list of namespace names, each with its leading dot
-/ @eg `.qbw in .qns.owned[]  ->  1b
-/ @eg `.qwrk.demo_deals_backfill in .qns.owned[]  ->  1b
+/ @eg `.qetl.job.bounded in .qns.owned[]  ->  1b
+/ @eg `.qpipe.job.demo_deals_backfill in .qns.owned[]  ->  1b
 owned:{[]
     top:(key `) where (string key `) like "q*";
     top:asc top except `q;
@@ -68,11 +66,11 @@ owned:{[]
 
 / The namespaces that hold FUNCTIONS: owned[] minus the containers, which is
 / what a coverage tool, a contract export or a documentation scan wants.
-/ .qwrk holds only its workers, so it is a container; a namespace holding
+/ .qpipe.job holds only its workers, so it is a container; a namespace holding
 / both is reported, and its nested children are reported separately.
 / @return symbol list, a subset of owned[]
-/ @eg `.qwrk in .qns.functional[]  ->  0b
-/ @eg `.qwrk.demo_deals_backfill in .qns.functional[]  ->  1b
+/ @eg `.qpipe.job in .qns.functional[]  ->  0b
+/ @eg `.qpipe.job.demo_deals_backfill in .qns.functional[]  ->  1b
 functional:{[]
     nss:owned[];
     nss where {[ns]

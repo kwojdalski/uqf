@@ -1,5 +1,5 @@
 / worker_config.q - typed, validated worker configuration with a stated
-/ precedence (.qwcfg).
+/ precedence (.qetl.cfg).
 / .
 / Implements the configuration checks, and the precedence
 / decision recorded on issue #71:
@@ -38,7 +38,7 @@
 / bad settings should be told about three, not discover them over three
 / restarts.
 
-\d .qwcfg
+\d .qetl.cfg
 
 / ------------------------------------------------------------- PRECEDENCE
 
@@ -64,7 +64,7 @@ default_values:(`symbol$())!();
 / .
 / Named set_layers, not `load`: `load` is a q BUILTIN (the counterpart of
 / `save`), so defining it in a namespace throws `assign at load time and
-/ aborts the rest of the file - leaving .qwcfg half-populated while the
+/ aborts the rest of the file - leaving .qetl.cfg half-populated while the
 / enclosing script carries on. Fourth reserved-name collision in this
 / repository, after desc, tables and sv; scripts/../python's
 / test_q_programs.py checks new files against the full list.
@@ -94,7 +94,7 @@ raw_from:{[source;k]
 / Exported rather than private because "where did this value come from" is
 / the question that actually gets asked when a worker misbehaves, and
 / answering it should not require reading the precedence order off a comment.
-/ @eg .qwcfg.explain[`dry_run]  ->  (`none;"")
+/ @eg .qetl.cfg.explain[`dry_run]  ->  (`none;"")
 / .
 / That is the honest UNSET answer, and it is what the example asserts. Once
 / UQF_DRY_RUN=true is exported the same call returns (`env;"true").
@@ -104,7 +104,7 @@ raw_from:{[source;k]
 / worker's window comes from read_state, not from config), and an
 / example whose documented value depends on the caller's ambient environment
 / cannot be verified by anything. `dry_run` is the one key production really
-/ reads, via .qwrt.is_dry_run.
+/ reads, via .qetl.job.bounded.runtime.is_dry_run.
 explain:{[k]
     hits:sources where 0<count each raw_from[;k] each sources;
     $[0=count hits; (`none;""); (first hits; raw_from[first hits;k])]}

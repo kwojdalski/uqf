@@ -47,7 +47,7 @@
 / scripts/test.py smoke passes them as --targets, --tables and --timeout-ms.
 / They were UQF_SMOKE_* environment variables, with ';' between entries -
 / which needed quoting in any shell, and outlived the run they were set for.
-/ Read straight off the command line rather than through .qwcfg: this
+/ Read straight off the command line rather than through .qetl.cfg: this
 / script runs outside a worker, so there are no config layers to resolve.
 opts:.Q.opt .z.x;
 targets:$[`targets in key opts; opts`targets; ()];
@@ -143,16 +143,16 @@ check_table each expectations;
 / broken. A source whose credential is unset is skipped, not failed: this lane's
 / whole point is that an unconfigured checkout is not a failure.
 check_source:{[source]
-    if[not .qsrc.has_credentials source;
-        -1 "skip  ",string[source]," (",.qsrc.credential_var[source]," unset)";
+    if[not .qetl.source.has_credentials source;
+        -1 "skip  ",string[source]," (",.qetl.source.credential_var[source]," unset)";
         :1b];
-    if[not (.qsrc.require_credentials source)~live_target;
+    if[not (.qetl.source.require_credentials source)~live_target;
         -1 "skip  ",string[source]," (configured for a different target)";
         :1b];
-    r:@[{.qsrc.validate_live[x;h]; ""};source;{x}];
+    r:@[{.qetl.source.validate_live[x;h]; ""};source;{x}];
     note["contract: ",string[source],$[count r;" - ",r;""];0=count r]}
 
-check_source each .qsrc.defined[];
+check_source each .qetl.source.defined[];
 
 {@[hclose;x;::]} each live;
 

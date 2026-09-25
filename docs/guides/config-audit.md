@@ -1,16 +1,16 @@
 # Auditing runtime configuration changes
 
-Someone sets `.qsub.cross_arbitrage.notional` to 5,000,000 over IPC at 14:32. An
-hour later the edges in `cross_arbitrage` look different. Nothing records the
-connection between those two facts.
+Someone sets `.qpipe.job.cross_arbitrage.notional` to 5,000,000 over IPC at
+14:32. An hour later the edges in `cross_arbitrage` look different. Nothing
+records the connection between those two facts.
 
-`.qaudit` records the value side of it, into a `config_change` table.
+`.qetl.cfg.audit` records the value side of it, into a `config_change` table.
 
 ```q
 q) select from config_change where name like "*notional*"
 time                          owner           name                            old       new        as_of
-2026.09.19D14:02:11.084       cross_arbitrage .qsub.cross_arbitrage.notional  ""        "1000000"  ...
-2026.09.19D14:32:47.201       cross_arbitrage .qsub.cross_arbitrage.notional  "1000000" "5000000"  ...
+2026.09.19D14:02:11.084       cross_arbitrage .qpipe.job.cross_arbitrage.notional  ""        "1000000"  ...
+2026.09.19D14:32:47.201       cross_arbitrage .qpipe.job.cross_arbitrage.notional  "1000000" "5000000"  ...
 ```
 
 The first row, with an empty `old`, is written the first time the process sees
@@ -32,7 +32,7 @@ need auditing.
 So the only approach that cannot be bypassed is to look periodically and
 compare. The cost is real and worth stating: **a change made and reverted inside
 one poll interval is never seen**, and a change's timestamp is when it was
-*noticed*, not when it happened. `.qaudit.period` is 5 seconds.
+*noticed*, not when it happened. `.qetl.cfg.audit.period` is 5 seconds.
 
 ## Who changed it
 
@@ -41,7 +41,7 @@ TorQ's `logusage.q` writes every incoming IPC command per process, with the
 user, the host, the handle and the command text:
 
 ```
-2026.09.19D14:32:47.198|32781|10045|`ps|`metrics|`crossarb1|"c"|2130706433i|`krzysztofwojdalski|...|".qsub.cross_arbitrage.notional:5000000"|...
+2026.09.19D14:32:47.198|32781|10045|`ps|`metrics|`crossarb1|"c"|2130706433i|`krzysztofwojdalski|...|".qpipe.job.cross_arbitrage.notional:5000000"|...
 ```
 
 Join a `config_change` row to `usage_<procname>_<date>.log` at the same
@@ -51,14 +51,14 @@ table does not know who was on the handle.
 
 ## Declaring what counts as configuration
 
-Watched, not scanned. `.qsub.cross_arbitrage.books` is state, and large;
+Watched, not scanned. `.qpipe.job.cross_arbitrage.books` is state, and large;
 snapshotting a whole namespace every five seconds would be both wrong and
 expensive. So a job names its own tunables, in its own file, beside their
 definitions:
 
 ```q
-.qaudit.watch[`cross_arbitrage;
-    `.qsub.cross_arbitrage.notional`.qsub.cross_arbitrage.max_skew];
+.qetl.cfg.audit.watch[`cross_arbitrage;
+    `.qpipe.job.cross_arbitrage.notional`.qpipe.job.cross_arbitrage.max_skew];
 ```
 
 Which makes "what counts as configuration here" a fact in the tree rather than a
@@ -95,10 +95,10 @@ that was there.
 Two lines, in the file that owns it:
 
 ```q
-.qaudit.watch[`my_job;`.qsub.my_job.my_tunable];
+.qetl.cfg.audit.watch[`my_job;`.qpipe.job.my_job.my_tunable];
 ```
 
-and `config_change` in that job's `.qstream.define` publishes. Nothing else ---
-the table already exists, the runner already polls anything declared, and
-`tests/q/test_config_audit.q` will fail if the name resolves to nothing or the
-publish is not declared.
+and `config_change` in that job's `.qetl.job.stream.define` publishes. Nothing
+else --- the table already exists, the runner already polls anything declared,
+and `tests/q/test_config_audit.q` will fail if the name resolves to nothing or
+the publish is not declared.

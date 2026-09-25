@@ -1,8 +1,8 @@
 # uqf_airflow_provider
 
-Reads the status files `.qstatus.write_status` (`src/etl/core/status.q`) writes,
-and translates them into Airflow's sensor vocabulary --- a poke that is pending,
-succeeded, or failed.
+Reads the status files `.qetl.status.write_status` (`src/etl/core/status.q`)
+writes, and translates them into Airflow's sensor vocabulary --- a poke that is
+pending, succeeded, or failed.
 
 This answers issue #55: Airflow/backfill task status reaches the frontend (and,
 here, Airflow itself) by reading the files q writes, not by a database table or

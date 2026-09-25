@@ -1,7 +1,7 @@
 / transform.q - the transform building block every ETL job is built from
-/ (.qxf).
+/ (.qetl.transform).
 / .
-/ A job, whether a bounded backfill (.qbw) or a tickerplant subscriber
+/ A job, whether a bounded backfill (.qetl.job.bounded) or a tickerplant subscriber
 / (scripts/torq_*_etl.q), is the same three things: SOURCE rows in, a
 / TRANSFORM, rows out to a SINK. The source and sink are effects - a query, a
 / subscription, a tickerplant publish, a coverage record - and cannot be
@@ -45,7 +45,7 @@
 / tests/q/test_transform.q verifies every registered transform on every run
 / of the suite, so a transform whose examples fail fails the build.
 
-\d .qxf
+\d .qetl.transform
 
 / name -> declaration.
 registry:(`symbol$())!();
@@ -139,7 +139,7 @@ col_equal:{[typ;e;a]
 /   as_of (1b when fn takes the instant as its last argument)
 / @return name
 / @throws error naming what is wrong with the declaration
-/ @eg .qxf.define[`mid_quotes;`inputs`output`fn`examples!(enlist[`quotes]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`quotes]!enlist ([] sym:enlist`EURUSD; bid:1.1; ask:1.2); ([] sym:enlist`EURUSD; mid:1.15)))]
+/ @eg .qetl.transform.define[`mid_quotes;`inputs`output`fn`examples!(enlist[`quotes]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`quotes]!enlist ([] sym:enlist`EURUSD; bid:1.1; ask:1.2); ([] sym:enlist`EURUSD; mid:1.15)))]
 define:{[name;decl]
     who:"define: transform ",string[name];
     if[not 99h=type decl; '"define: a transform declaration must be a dictionary"];
@@ -198,7 +198,7 @@ check_example:{[name;ins;output;clock;ex]
 / @param schema the empty typed table in and out
 / @param rows a non-empty example of that table
 / @return name
-/ @eg .qxf.passthrough[`demo_deals_passthrough;`batch;0#.qfeed.demo_deals.fixture[];.qfeed.demo_deals.fixture[]]
+/ @eg .qetl.transform.passthrough[`demo_deals_passthrough;`batch;0#.qpipe.source.demo_deals.fixture[];.qpipe.source.demo_deals.fixture[]]
 passthrough:{[name;input_name;schema;rows]
     define[name;`inputs`output`fn`examples!(
         (enlist input_name)!enlist schema;
@@ -210,7 +210,7 @@ passthrough:{[name;input_name;schema;rows]
 / @throws error when no such transform is registered
 def:{[name]
     if[not name in key registry;
-        '"transform ",string[name]," is not registered - declare it with .qxf.define"];
+        '"transform ",string[name]," is not registered - declare it with .qetl.transform.define"];
     registry name}
 
 / The input names a transform reads, in the order its fn takes them.
@@ -231,11 +231,11 @@ output_schema:{[name] (def name)`output}
 / @param given dict input name -> table
 / @return the output table
 / @throws error when an input or the output does not match the declaration
-/ @eg .qxf.define[`eg_mid;`inputs`output`fn`examples!(enlist[`q]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`q]!enlist ([] sym:enlist `EURUSD; bid:1.1; ask:1.2); ([] sym:enlist `EURUSD; mid:1.15)))];
-/   .qxf.apply[`eg_mid;enlist[`q]!enlist ([] sym:`EURUSD`GBPUSD; bid:1.10 1.25; ask:1.12 1.27)]  ->  ([] sym:`EURUSD`GBPUSD; mid:1.11 1.26)
+/ @eg .qetl.transform.define[`eg_mid;`inputs`output`fn`examples!(enlist[`q]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`q]!enlist ([] sym:enlist `EURUSD; bid:1.1; ask:1.2); ([] sym:enlist `EURUSD; mid:1.15)))];
+/   .qetl.transform.apply[`eg_mid;enlist[`q]!enlist ([] sym:`EURUSD`GBPUSD; bid:1.10 1.25; ask:1.12 1.27)]  ->  ([] sym:`EURUSD`GBPUSD; mid:1.11 1.26)
 apply:{[name;given]
     d:def name;
-    if[d`as_of; '"apply: transform ",string[name]," takes as_of - use .qxf.apply_as_of"];
+    if[d`as_of; '"apply: transform ",string[name]," takes as_of - use .qetl.transform.apply_as_of"];
     run[name;d;given;()]}
 
 / Run a transform that takes the instant as its last argument.
@@ -246,7 +246,7 @@ apply:{[name;given]
 / @throws error when an input or the output does not match the declaration
 apply_as_of:{[name;given;as_of]
     d:def name;
-    if[not d`as_of; '"apply_as_of: transform ",string[name]," takes no as_of - use .qxf.apply"];
+    if[not d`as_of; '"apply_as_of: transform ",string[name]," takes no as_of - use .qetl.transform.apply"];
     if[not -12h=type as_of; '"apply_as_of: as_of must be a timestamp"];
     run[name;d;given;enlist as_of]}
 
@@ -264,7 +264,7 @@ run:{[name;d;given;extra]
     out:(d`fn) . args;
     p:problems[d`output;out;1b];
     if[count p; '"transform ",string[name]," output: ","; " sv p];
-    .[{.qlog.dbg[x;y;z]};(name;"transform applied";
+    .[{.qetl.log.dbg[x;y;z]};(name;"transform applied";
         `rows_in`rows_out!(count each given key ins;count out));::];
     out}
 
@@ -274,7 +274,7 @@ run:{[name;d;given;extra]
 / @param name the transform
 / @return table of example (index, or `empty), passed and detail - one row
 /   per example plus one for the empty case
-/ @eg .qxf.verify `mid_quotes
+/ @eg .qetl.transform.verify `mid_quotes
 verify:{[name]
     d:def name;
     exs:d`examples;

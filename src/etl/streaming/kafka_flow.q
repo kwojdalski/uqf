@@ -1,5 +1,5 @@
 / kafka_flow.q - client FX flow off a Kafka topic, deduplicated on the
-/ record's own coordinates (.qsub.kafka_flow).
+/ record's own coordinates (.qpipe.job.kafka_flow).
 / .
 / Reads `kafka_client_flow`; publishes `client_flow`.
 / .
@@ -38,17 +38,17 @@
 / this PROCESS's state. Restart kafka_flow1 and they are empty, so a replay
 / that straddles the restart is not caught. Seeding them from the plant on
 / startup is the obvious fix and is deliberately not done here - it needs a
-/ query against rdb1 at wire time, which no other .qstream job does, and
+/ query against rdb1 at wire time, which no other .qetl.job.stream job does, and
 / inventing that seam for an example would be the tail wagging the dog.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qsub.kafka_flow
+\d .qpipe.job.kafka_flow
 
-/ Where rows go. A stub until .qstream.wire points it at the tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
-publish:.qstream.unwired `kafka_flow;
+publish:.qetl.job.stream.unwired `kafka_flow;
 
 / ------------------------------------------------------------- THE STATE
 
@@ -72,7 +72,7 @@ high_water:(`long$())!`long$();
 / @param rows a batch, carrying `partition` and `offset`
 / @return the rows whose offset is above their partition's mark
 above_high_water:{[rows]
-    rows where rows[`offset] > .qsub.kafka_flow.high_water rows`partition}
+    rows where rows[`offset] > .qpipe.job.kafka_flow.high_water rows`partition}
 
 / Private: one row per (partition;offset) in the batch, the first kept.
 / .
@@ -97,8 +97,8 @@ first_per_coordinate:{[rows]
 / @return nothing - it updates `high_water` in place
 advance:{[rows]
     m:exec max offset by partition from rows;
-    hw:.qsub.kafka_flow.high_water;
-    `.qsub.kafka_flow.high_water set hw,(key m)!(hw key m)|value m;
+    hw:.qpipe.job.kafka_flow.high_water;
+    `.qpipe.job.kafka_flow.high_water set hw,(key m)!(hw key m)|value m;
     }
 
 / ---------------------------------------------------------------- THE JOB
@@ -121,18 +121,18 @@ on_batch:{[t;x]
     if[not t=`kafka_client_flow; :()];
     if[0=count x; :()];
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
-    fresh:.qsub.kafka_flow.first_per_coordinate .qsub.kafka_flow.above_high_water rows;
+    fresh:.qpipe.job.kafka_flow.first_per_coordinate .qpipe.job.kafka_flow.above_high_water rows;
     if[0=count fresh; :()];
-    .qsub.kafka_flow.advance fresh;
+    .qpipe.job.kafka_flow.advance fresh;
     out:select broker_time, sym, side, qty, price, client, trade_id, partition, offset from fresh;
-    .qsub.kafka_flow.publish[`client_flow;out];
+    .qpipe.job.kafka_flow.publish[`client_flow;out];
     }
 
 \d .
 
-.qstream.define[`kafka_flow;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`kafka_flow;`procname`subscribe_to`publishes`on_batch`note!(
     `kafka_flow1;
     `kafka_client_flow;
     enlist `client_flow;
-    .qsub.kafka_flow.on_batch;
+    .qpipe.job.kafka_flow.on_batch;
     "deduplicates client FX flow consumed off a Kafka topic, on the (partition;offset) the record carries. The raw rows are published by an EXTERNAL Python consumer (external/kafka_feed.py) - a q process cannot hold a Kafka subscription - so kafka_client_flow has a schema row but no producer in this list. That is why it does not start with the stack: on a default start nothing publishes the table it subscribes to, and it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer")];

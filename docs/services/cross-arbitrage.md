@@ -90,7 +90,7 @@ unfillable "profit" is the main way a detector like this lies.
 **`skew`.** A synthetic price multiplies legs quoted at different moments.
 `superbook`'s own expiry does not prevent a two-second-old EURUSD being combined
 with a fresh USDJPY, which manufactures an edge out of nothing but elapsed time.
-Legs further apart than `.qsub.cross_arbitrage.max_skew` (2 seconds) are
+Legs further apart than `.qpipe.job.cross_arbitrage.max_skew` (2 seconds) are
 published with `active=0b` and their `skew` filled in --- present so it can be
 seen, rather than dropped.
 
@@ -98,8 +98,8 @@ seen, rather than dropped.
 
 Gross quoted edge only. No fees, no brokerage, no credit eligibility, no
 settlement-date matching, no execution, and no attempt to size the trade beyond
-the single configured notional (`.qsub.cross_arbitrage.notional`, 1mm). Nothing
-here is a trading signal.
+the single configured notional (`.qpipe.job.cross_arbitrage.notional`, 1mm).
+Nothing here is a trading signal.
 
 Routes are shortest-path only. A longer route that happened to price better is
 not searched for, because enumerating every route is combinatorial in the number

@@ -26,7 +26,7 @@
 / .
 / THE LIMIT, stated because a coverage number that overstates itself is worse
 / than none: this instruments the functions NAMED AT CALL TIME. A function
-/ whose value was captured into a dictionary earlier - .qio.memory holds
+/ whose value was captured into a dictionary earlier - .qetl.io.memory holds
 / write_memory - is called through that copy and its probes do not fire. For
 / whole-tree coverage where that matters, an instrument-the-source-files
 / approach (rewriting each file before it loads) has no such blind spot.
@@ -358,11 +358,11 @@ set_in:{[nm;txt]
         '"cov: could not instrument ",string[nm],": ",r`msg];
     nm set r}
 
-/ How deep to look for a captured function. Four levels reaches a
-/ dictionary of dictionaries of dictionaries, which is further than
-/ anything in this tree and far enough that a pathological structure cannot
-/ make the walk expensive.
-reseed_depth:4
+/ How deep to look for a captured function. Allow four namespace levels
+/ (for example .qetl.job.stream.normalizer) plus four container levels for
+/ captured callbacks in registries. The former limit of four stopped at
+/ the nested job registry and missed timer callbacks after the namespace move.
+reseed_depth:8
 
 / Namespaces never walked: kdb's own, the vendored test framework, and this
 / library, whose `orig` dictionary holds every original by definition and
@@ -377,19 +377,19 @@ swap_value:{[from_;to_;v;d]
       / An EMPTY dictionary, table or list captured nothing, so there is
       / nothing to swap - and REBUILDING one loses the type of its values.
       / `each` over an empty TYPED vector returns a generic empty list, so
-      / (key v)!... turned .qpipe.published from (`symbol$())!`long$() into
+      / (key v)!... turned .qtorq.published from (`symbol$())!`long$() into
       / (`symbol$())!(). reseed writes back whenever the result differs from
       / the original, and a type change is a difference, so the corrupted
       / copy was installed every time .cov.run walked the globals.
       / .
-      / What that cost: .qpipe.record_published does `before:0^published t`,
+      / What that cost: .qtorq.record_published does `before:0^published t`,
       / and 0^() is () rather than 0, so the next `0=before` threw 'type -
       / two .sjtest failures that only appeared when .covtest had run first,
       / which is why q-unit was red and q-order green (#460).
       0=count v; v;
       99h=type v; (key v)!swap_value[from_;to_;;d+1] each value v;
       / A table, because q COERCES a dictionary of same-keyed dictionaries
-      / into one - which is how `.qbw.worker_cfg` can arrive here as 98h rather
+      / into one - which is how `.qetl.job.bounded.worker_cfg` can arrive here as 98h rather
       / than the 99h it was written as. Missing this case would silently
       / leave every worker's captured `check` unreseeded.
       98h=type v; flip (cols v)!swap_value[from_;to_;;d+1] each value flip v;
@@ -400,12 +400,12 @@ swap_value:{[from_;to_;v;d]
 / .
 / THE BLIND SPOT THIS CLOSES, and the reason the tool is worth more with it
 / than without. Instrumenting a NAME does nothing for a copy of the function
-/ taken before instrumentation: `.qio.memory` is
+/ taken before instrumentation: `.qetl.io.memory` is
 / `(enlist `write)!enlist write_memory`, so every bounded worker in this
-/ repository writes through that captured copy and `.qio.write_memory`
+/ repository writes through that captured copy and `.qetl.io.write_memory`
 / reported as never called while being exercised constantly. Same for a
-/ source's `query` and `fixture`, held in `.qsrc.sources`, and for a
-/ worker's `check`, held in `.qbw.worker_cfg`.
+/ source's `query` and `fixture`, held in `.qetl.source.sources`, and for a
+/ worker's `check`, held in `.qetl.job.bounded.worker_cfg`.
 / .
 / A coverage number that says "never called" about code the suite runs on
 / every window is worse than no number, because the obvious response is to

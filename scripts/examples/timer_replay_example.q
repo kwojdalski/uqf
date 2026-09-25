@@ -29,7 +29,7 @@
 // demonstrating that the wide-to-vector reshape composes naturally with
 // a live/incremental feed, not only a one-shot batch load.
 //
-// Narration/status goes through .qlog (src/etl/core/log.q), the one q
+// Narration/status goes through .qetl.log (src/etl/core/log.q), the one q
 // logging layer in this tree - actual table contents still go through
 // `show`, since a log line serializes a whole value onto one line rather
 // than the readable grid `show` produces.
@@ -63,8 +63,8 @@
 \l src/init.q
 \l src/etl/core/log.q
 
-/ .qlog suppresses DBG lines by default; this example's narration uses them.
-.qlog.debug 1b;
+/ .qetl.log suppresses DBG lines by default; this example's narration uses them.
+.qetl.log.debug 1b;
 
 / ==== Step 1: pre-generate the "historical" tick series, once ====
 / Same EURUSD single-pair spot/scale as cross_markout_example.q's
@@ -113,7 +113,7 @@ system "mkdir -p ",output_dir;
 
 mean_gap:0D00:00:00.200; std_gap:0D00:00:00.050; min_gap:0D00:00:00.050;
 p:1e-9+(1-2e-9)*n_ticks?1.0;
-.qlog.dbg[`timer_replay;"running: .qstats.inv_ncdf p";()!()];
+.qetl.log.dbg[`timer_replay;"running: .qstats.inv_ncdf p";()!()];
 z:.qstats.inv_ncdf p;
 gaps:min_gap|mean_gap+std_gap*z;
 hist_ts:.z.p+sums gaps;
@@ -125,8 +125,8 @@ hist_spots:1.0850+0.00002*til n_ticks;
 / book_from_wide_levels/symbolize_columns exist to fix, matching how a
 / real CSV/vendor feed would actually arrive.
 hist_wide:([] time:hist_ts; sym:n_ticks#enlist "EURUSD"),'(mk_wide_row each hist_spots);
-.qlog.info[`timer_replay;"historical - ",.Q.s1[n_ticks]," pre-generated EURUSD ticks in wide column form, ready to replay";()!()];
-.qlog.dbg[`timer_replay;"running: .qbook.derive_level_groups[cols hist_wide;level_prefix_targets]";()!()];
+.qetl.log.info[`timer_replay;"historical - ",.Q.s1[n_ticks]," pre-generated EURUSD ticks in wide column form, ready to replay";()!()];
+.qetl.log.dbg[`timer_replay;"running: .qbook.derive_level_groups[cols hist_wide;level_prefix_targets]";()!()];
 level_groups:.qbook.derive_level_groups[cols hist_wide;level_prefix_targets];
 
 / ==== Step 2: replay onto a live, growing quotes table on a timer ====
@@ -149,21 +149,21 @@ cnt:0;
 / interactive prompt.
 .z.time:{
     wide_row:1#cnt _ hist_wide;
-    .qlog.dbg[`timer_replay;"running: .qbook.book_from_wide_levels[wide_row;level_groups;`sym]";()!()];
+    .qetl.log.dbg[`timer_replay;"running: .qbook.book_from_wide_levels[wide_row;level_groups;`sym]";()!()];
     row:col_order#.qbook.book_from_wide_levels[wide_row;level_groups;`sym];
     quotes,:row;
-    .qlog.dbg[`timer_replay;"running: .qmicro.mid_price[quotes`bid_prices;quotes`ask_prices]";()!()];
+    .qetl.log.dbg[`timer_replay;"running: .qmicro.mid_price[quotes`bid_prices;quotes`ask_prices]";()!()];
     mid:.qmicro.mid_price[quotes`bid_prices;quotes`ask_prices];
     output_path set quotes;
-    .qlog.info[`timer_replay;"tick ",.Q.s1[cnt+1],"/",.Q.s1[n_ticks]," - quotes has ",.Q.s1[count quotes]," row(s) now, latest mid ",.Q.s1[last mid],", persisted to ",.Q.s1[output_path];()!()];
+    .qetl.log.info[`timer_replay;"tick ",.Q.s1[cnt+1],"/",.Q.s1[n_ticks]," - quotes has ",.Q.s1[count quotes]," row(s) now, latest mid ",.Q.s1[last mid],", persisted to ",.Q.s1[output_path];()!()];
     cnt+:1;
     if[cnt>=n_ticks;
         system "t 0";
-        .qlog.info[`timer_replay;"replay complete - stopping the timer; final table persisted at ",.Q.s1[output_path];()!()];
+        .qetl.log.info[`timer_replay;"replay complete - stopping the timer; final table persisted at ",.Q.s1[output_path];()!()];
         show quotes;
         exit 0]};
 
-.qlog.info[`timer_replay;"starting replay - one historical tick appended every ",.Q.s1[tick_ms],"ms of wall-clock time";()!()];
+.qetl.log.info[`timer_replay;"starting replay - one historical tick appended every ",.Q.s1[tick_ms],"ms of wall-clock time";()!()];
 system "t ",string tick_ms;
 
 // exit 0

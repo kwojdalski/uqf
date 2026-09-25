@@ -43,13 +43,15 @@ def _worker_datasets(paths: UqsPaths) -> dict[str, str]:
 
     A worker writes through its IO manager, not the tickerplant, so it has no
     publish edge and `outputs_by_process` has nothing for it - yet the dataset
-    is exactly what it produces. Read from the `.qbw.define` literal, the name
+    is exactly what it produces. Read from the `.qetl.job.bounded.define` literal, the name
     `uqs new-job --dataset` gives it and its coverage is recorded under.
     """
     out: dict[str, str] = {}
     for path in sorted((paths.repo_root / WORKER_DIR).glob("*.q")):
         for fn, name, fields in declaration_calls(path.read_text()):
-            if fn != "qbw.define" or not (dataset := symbols(fields.get("dataset", ""))):
+            if fn != "qetl.job.bounded.define" or not (
+                dataset := symbols(fields.get("dataset", ""))
+            ):
                 continue
             procname = symbols(fields["procname"])[0] if "procname" in fields else f"{name}1"
             out[procname] = dataset[0]

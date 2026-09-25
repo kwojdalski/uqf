@@ -66,11 +66,11 @@ original plant receipt time as `source_time`. Non-FX symbols on the shared
 `quote` table are filtered out.
 
 A new feed can publish this canonical shape, or add a source mapping to
-`src/etl/streaming/market_data.q` using the existing `.qnorm` framework. Use the
-same source identifier for duplicate transports of the same liquidity. Do not
-interleave another producer into the source-less `quotes` table. Incremental
-feeds must reconstruct a full source snapshot first. Use the exchange event time
-when the feed supplies one.
+`src/etl/streaming/market_data.q` using the existing
+`.qetl.job.stream.normalizer` framework. Use the same source identifier for
+duplicate transports of the same liquidity. Do not interleave another producer
+into the source-less `quotes` table. Incremental feeds must reconstruct a full
+source snapshot first. Use the exchange event time when the feed supplies one.
 
 Pairs must already use the same orientation, product and settlement date.
 `USDEUR` and `EURUSD` remain different books. This version does not invert pairs
@@ -93,10 +93,10 @@ updating state. Bids sort descending and asks ascending. The corresponding
 prices remain separate levels with their source identity intact.
 
 The default maximum age is five seconds, inclusive at the boundary, controlled
-by `.qsub.superbook.max_age`. The process recomputes on updates and every 500ms.
-Known pairs whose sources all expire produce an empty superbook snapshot. Each
-output has an `as_of` calculation timestamp; the plant stamps its own `time`
-independently.
+by `.qpipe.job.superbook.max_age`. The process recomputes on updates and every
+500ms. Known pairs whose sources all expire produce an empty superbook snapshot.
+Each output has an `as_of` calculation timestamp; the plant stamps its own
+`time` independently.
 
 ## Reading opportunities
 

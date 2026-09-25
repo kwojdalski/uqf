@@ -63,9 +63,10 @@ Scan for the following, in order of severity:
 - A new namespace nested more than one level deep (` \d .qfwd.sub `) --- library
   namespaces are flat by convention, and the filename-to-namespace tie depends
   on it. The exceptions are the ETL tree's instances: a bounded worker
-  (` \d .qwrk.<worker name> `), whose namespace `.qbw.define` derives from the
-  registered name, and a source (` \d .qfeed.<source name> `), checked against
-  the file's own `source_name`
+  (` \d .qpipe.job.<worker name> `), whose namespace `.qetl.job.bounded.define`
+  derives from the registered name, and a source
+  (` \d .qpipe.source.<source name> `), checked against the file's own
+  `source_name`
 
 ### 4. Cross-Interpreter Portability Gaps
 

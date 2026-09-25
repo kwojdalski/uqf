@@ -1,10 +1,10 @@
-/ heartbeat.q - a per-worker liveness table monitoring can poll (.qhb).
+/ heartbeat.q - a per-worker liveness table monitoring can poll (.qetl.hb).
 / .
 / Answers the question bank, decided by the maintainer: yes, a heartbeat
 / table.
 / .
 / WHAT IT ADDS OVER THE STATUS FILES. A status file records what a run is
-/ doing, and .qstatus writes one per lifecycle transition. That is enough to see
+/ doing, and .qetl.status writes one per lifecycle transition. That is enough to see
 / a run that finished or failed, and it is what /ops/backfill and the Airflow
 / sensor read. It is NOT enough to see a run that stopped making progress: a
 / worker wedged inside a window - a source that accepted the connection and
@@ -34,10 +34,10 @@
 / already deleted one such flag (shape_is_assumed) that was set by a single
 / call site and read by nothing.
 
-\d .qhb
+\d .qetl.hb
 
 / The table's declared shape. Named so require_schema can check it rather
-/ than assume it - the mistake .qmatz.require_schema exists to prevent.
+/ than assume it - the mistake .qetl.coverage.require_schema exists to prevent.
 columns:`worker`state`last_seen`windows
 
 / Create the root table if it is absent, and return its name.
@@ -47,8 +47,8 @@ columns:`worker`state`last_seen`windows
 / transition, and the coverage ledger per publication - and a third
 / append-only log of the same runs would be a third thing to reconcile.
 / .
-/ Backtick form (`worker_heartbeat set), not a bare name: inside \d .qhb a
-/ bare `worker_heartbeat` resolves to .qhb.worker_heartbeat, NOT the root
+/ Backtick form (`worker_heartbeat set), not a bare name: inside \d .qetl.hb a
+/ bare `worker_heartbeat` resolves to .qetl.hb.worker_heartbeat, NOT the root
 / table. Same trap materialisation.q documents at length.
 init_table:{[]
     if[not `worker_heartbeat in tables `.;
@@ -74,7 +74,7 @@ require_schema:{[]
 
 / Create the table and verify it, returning its name.
 / .
-/ Called from a worker's init. Present because .qmatz.require_schema spent a
+/ Called from a worker's init. Present because .qetl.coverage.require_schema spent a
 / while defined, tested, and reached from no live path - a check that cannot
 / fire protects nothing, and its existence reads as protection.
 attach:{[]
@@ -94,7 +94,7 @@ attach:{[]
 / @param worker the worker's name
 / @param state a lifecycle state symbol, e.g. `running or `idle
 / @return the worker's name
-/ @eg .qhb.beat[`demo_deals_backfill;`running]
+/ @eg .qetl.hb.beat[`demo_deals_backfill;`running]
 / `seen`, not `prior`: prior is a q BUILTIN (in key `.q), so assigning it as
 / a lambda local throws at LOAD time and aborts the rest of the file - the
 / eighth reserved-name collision in this repository, after desc, tables, sv,
@@ -110,7 +110,7 @@ beat:{[worker;state]
 / Separate from beat so the count means "windows finished", not "beats
 / recorded". Conflating them would make the number grow while a worker sat
 / wedged, which is exactly the signal being destroyed.
-/ @eg .qhb.beat_window[`demo_deals_backfill]
+/ @eg .qetl.hb.beat_window[`demo_deals_backfill]
 beat_window:{[worker]
     init_table[];
     seen:$[worker in key ledger[]; first (),(ledger[])[(enlist worker)]`windows; 0j];
@@ -132,7 +132,7 @@ report:{[]
 / stale" is never the whole question - how stale, and in what state, is what
 / decides whether to page someone.
 / @param max_age a timespan, e.g. 0D00:05
-/ @eg .qhb.stale[0D00:05]
+/ @eg .qetl.hb.stale[0D00:05]
 stale:{[max_age]
     if[not 16h=abs type max_age;
         '"stale: max_age must be a timespan, e.g. 0D00:05"];
@@ -144,17 +144,17 @@ stale:{[max_age]
 / NEVER STARTED; a worker with an old row started and stopped. Both are
 / "not beating", and they need different people woken up, so `stale` above
 / deliberately cannot report the first - it has no age to compare.
-/ @eg .qhb.has_beaten[`demo_deals_backfill]
+/ @eg .qetl.hb.has_beaten[`demo_deals_backfill]
 has_beaten:{[worker] worker in exec worker from report[]}
 
-/ Registered workers that have never beaten, from .qbw's registry.
+/ Registered workers that have never beaten, from .qetl.job.bounded's registry.
 / .
 / Derived from the worker registry rather than from a second list, so a
 / worker cannot be missing from monitoring by being forgotten here - the
-/ same reason .qdag adopts rather than asking anyone to re-declare.
+/ same reason .qetl.dag adopts rather than asking anyone to re-declare.
 never_started:{[]
-    if[not `qbw in key `; :`$()];
-    ws:key .qbw.worker_cfg;
+    if[not `worker_cfg in key @[value;`.qetl.job.bounded;{()}]; :`$()];
+    ws:key .qetl.job.bounded.worker_cfg;
     ws where not has_beaten each ws}
 
 \d .

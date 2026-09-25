@@ -15,17 +15,17 @@
 # streaming job is a declaration under src/etl/streaming/ and
 # processes/torq_stream.q is the one runner; which job a process runs is
 # decided by its procname at startup. The old diagram drew a script per
-# process, which is what the stack looked like before .qstream and is the
+# process, which is what the stack looked like before .qetl.job.stream and is the
 # single most misleading thing about it.
 #
 # The two connection patterns are still real and still different - publish
 # only, versus an access-listed subscribe - but a job performs neither
-# itself now. .qpipe does both on its behalf, which is why the adapter is
+# itself now. .qtorq does both on its behalf, which is why the adapter is
 # drawn between the processes and the tickerplant rather than left out.
 #
 # Backfills are on here too, and were not before. They are the other half
 # of the ETL tree and they reach the tickerplant NOT AT ALL: a bounded
-# worker writes through .qio into its own process, so its rows never
+# worker writes through .qetl.io into its own process, so its rows never
 # traverse stp1. Drawing them beside the streaming jobs is the point - the
 # two halves look alike in the code and take completely different paths to
 # storage.
@@ -131,7 +131,7 @@ runner: "One script for all but tap1 — scripts/processes/torq_stream.q" {
   grid-columns: 2
   grid-gap: 26
 
-  qpipe: ".qpipe — the TorQ adapter\nfinds the tickerplant, opens the handle,\nreshapes rows for .u.upd, traps the timer" { class: adapter }
+  qtorq: ".qtorq — the TorQ adapter\nfinds the tickerplant, opens the handle,\nreshapes rows for .u.upd, traps the timer" { class: adapter }
   note: "A job declares subscribe_to · publishes ·\non_batch · on_timer and nothing else.\nIts procname is what selects it at startup.\ntap1 is the exception: its own script." { class: adapter }
 }
 
@@ -155,11 +155,11 @@ downstream: "Storage, the gateway, and the bounded half" {
 
   storage: "rdb1 :6052 — today's ticks\nwdb1 :6055 → sort1 :6056 → sortworker1/2\nhdb1 :6053 · hdb2 :6054 — on disk" { class: store }
   gw: "gateway1 :6057\nthe only door in\n\nmonitor1 :6059 - a handle per process it\nwatches, the connection budget's biggest user\nhousekeeping1 :6061 · metrics1 :6068\ndiscovery1 :6051 registers every process" { class: store }
-  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\ndatabento_backfill1 :6090 · upstream_backfill1 :6091\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qio writes into their own\nprocess. One worker file each, under\nsrc/etl/workers/." { class: job }
+  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\ndatabento_backfill1 :6090 · upstream_backfill1 :6091\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qetl.io writes into their own\nprocess. One worker file each, under\nsrc/etl/workers/." { class: job }
 }
 
-jobs -> runner.qpipe: "run under" { style.stroke: "#3d7a5a" }
-runner.qpipe -> tp.stp: "subscribe · upd" {
+jobs -> runner.qtorq: "run under" { style.stroke: "#3d7a5a" }
+runner.qtorq -> tp.stp: "subscribe · upd" {
   style.stroke: "#a54a5c"
   style.stroke-width: 3
 }

@@ -1,9 +1,9 @@
 / config_audit.q - an audit trail of runtime configuration changes
-/ (.qaudit).
+/ (.qetl.cfg.audit).
 / .
 / WHAT THIS CANNOT BE, and why the shape follows from it: q has no hook on
 / global assignment. There is no .z callback for
-/ `.qsub.cross_arbitrage.notional:5000000`, and a view (x::expr) recomputes
+/ `.qpipe.job.cross_arbitrage.notional:5000000`, and a view (x::expr) recomputes
 / lazily when READ rather than firing when its inputs change. So nothing
 / can observe a change as it happens. The only thing that cannot be
 / bypassed is to look, periodically, and compare - which is what this does.
@@ -21,12 +21,12 @@
 / changed the notional" gets answered; neither half can answer it alone.
 / .
 / WATCHED, NOT SCANNED. Not everything in a namespace is configuration -
-/ .qsub.cross_arbitrage.books is state, and large - and a snapshot of a
+/ .qpipe.job.cross_arbitrage.books is state, and large - and a snapshot of a
 / whole namespace every tick would be both wrong and expensive. Naming the
 / variables makes "what counts as configuration here" a fact in the tree
 / rather than a judgement each reader makes again.
 
-\d .qaudit
+\d .qetl.cfg.audit
 
 / owner -> the fully-qualified globals watched on its behalf. Keyed by
 / OWNER, not flat, because src/etl/init.q loads every job into every
@@ -47,7 +47,7 @@ config_change:([] owner:`symbol$(); name:`symbol$(); old:(); new:(); as_of:`time
 / The globals watched for one owner, empty when it declares none.
 / @param owner the job
 / @return the fully-qualified names
-/ @eg .qaudit.watching[`nothing_declares_this] -> `symbol$()
+/ @eg .qetl.cfg.audit.watching[`nothing_declares_this] -> `symbol$()
 watching:{[owner] $[owner in key watched; watched owner; `symbol$()]}
 
 / Declare the configuration an owner wants audited.
@@ -56,17 +56,17 @@ watching:{[owner] $[owner in key watched; watched owner; `symbol$()]}
 / definitions, so the declaration cannot drift away from the thing it
 / describes.
 / @param owner the job (or other unit) these belong to
-/ @param names fully-qualified globals, e.g. `.qsub.cross_arbitrage.notional
+/ @param names fully-qualified globals, e.g. `.qpipe.job.cross_arbitrage.notional
 / @return the names registered for that owner
 / @throws error if a name is not fully qualified, which would resolve
 /   against whatever namespace happened to be current at poll time
-/ @eg .qaudit.watch[`demo;`.qaudit.max_render] -> enlist `.qaudit.max_render
+/ @eg .qetl.cfg.audit.watch[`demo;`.qetl.cfg.audit.max_render] -> enlist `.qetl.cfg.audit.max_render
 watch:{[owner;names]
     names:(),names;
     bare:names where not (string names) like ".*";
     if[count bare;
-        '"qaudit.watch: ",(", " sv string bare)," must be fully qualified ",
-            "(`.qsub.x.notional, not `notional) - a bare name resolves against ",
+        '"qetl.cfg.audit.watch: ",(", " sv string bare)," must be fully qualified ",
+            "(`.qpipe.job.x.notional, not `notional) - a bare name resolves against ",
             "whatever namespace is current when the poll runs"];
     / Fully qualified on the LEFT. `watched[owner]:x` inside a lambda amends
     / a LOCAL named watched, silently, and the registry outside stays empty -
@@ -75,7 +75,7 @@ watch:{[owner;names]
     / inside a lambda fails at LOAD time - the same trap torq_pipeline.q
     / documents for `desc` and `tables`.
     already:watching owner;
-    .qaudit.watched[owner]:distinct already,names;
+    .qetl.cfg.audit.watched[owner]:distinct already,names;
     watched owner}
 
 / How a value is recorded: its -3! rendering, truncated.
@@ -86,7 +86,7 @@ watch:{[owner;names]
 / turns out to be a large table should make the log ugly, not enormous.
 / @param name a fully-qualified global
 / @return its rendering, or a marker when nothing is defined at that name
-/ @eg .qaudit.render[`.qaudit.nothing.is.here] -> "(undefined)"
+/ @eg .qetl.cfg.audit.render[`.qetl.cfg.audit.nothing.is.here] -> "(undefined)"
 render:{[name]
     v:@[get;name;`undefined];
     $[v~`undefined; "(undefined)"; max_render sublist -3!v]}
@@ -104,7 +104,7 @@ max_render:200
 / @param owner the job whose config to check
 / @param as_of the observation timestamp
 / @return the change rows, empty when nothing moved
-/ @eg count .qaudit.poll[`nothing_declares_this;2026.09.19D12:00:00.0] -> 0
+/ @eg count .qetl.cfg.audit.poll[`nothing_declares_this;2026.09.19D12:00:00.0] -> 0
 poll:{[owner;as_of]
     names:watching owner;
     if[0=count names; :0#config_change];
@@ -117,7 +117,7 @@ poll:{[owner;as_of]
         if[not now~was;
             rows:rows upsert (owner;name;was;now;as_of);
             / fully qualified, for watch's reason
-            .qaudit.seen[name]:now];
+            .qetl.cfg.audit.seen[name]:now];
         i+:1];
     rows}
 
@@ -140,26 +140,26 @@ owner_here:`
 
 / Poll this process's own job and publish whatever moved.
 / .
-/ NILADIC, because that is what .qpipe.safe_timer's `@[f;::;handler]`
+/ NILADIC, because that is what .qtorq.safe_timer's `@[f;::;handler]`
 / wrapper expects - see invariant 4 in scripts/processes/torq_pipeline.q.
 / .
 / It resolves the job's publish seam at CALL time rather than at wiring
 / time: the runner wires that seam after the job registers, so looking it
 / up any earlier captures the unwired stub.
 / @return nothing
-/ @eg .qaudit.poll_and_publish[]
+/ @eg .qetl.cfg.audit.poll_and_publish[]
 poll_and_publish:{[]
     if[null owner_here; :()];
     rows:poll[owner_here;.z.p];
     if[0=count rows; :()];
-    (get ` sv (.qstream.def[owner_here]`ns),`publish)[`config_change;rows];
+    (get ` sv (.qetl.job.stream.def[owner_here]`ns),`publish)[`config_change;rows];
     }
 
 / Forget every observation, so the next poll reports each watched name as
 / new again. For tests and for a deliberate re-baseline; nothing in a
 / running process calls it.
 / @return nothing
-/ @eg .qaudit.forget[]
+/ @eg .qetl.cfg.audit.forget[]
 forget:{[] seen::(`symbol$())!(); }
 
 \d .

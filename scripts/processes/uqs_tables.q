@@ -58,7 +58,7 @@ arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:
 / BEFORE filtering on active.
 cross_arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$(); fully_filled:`boolean$(); skew:`timespan$())
 
-/ An audit trail of runtime configuration changes (.qaudit). `old` is
+/ An audit trail of runtime configuration changes (.qetl.cfg.audit). `old` is
 / empty on a name's first observation, which is the row that says what the
 / process STARTED with. Values are -3! renderings, because one column has to
 / hold a timespan, a float and a symbol list. WHO made a change is not here:
@@ -194,7 +194,7 @@ fx_limit_breach:([]time:`timestamp$(); sym:`g#`symbol$(); book:`symbol$(); produ
 /                    publishes the result - the nearest of the six.
 /   reference_data   .qccy.ccy_pair_legs already derives base/quote. Needs a
 /                    loader, and a decision on where the static data lives.
-/   connections      VENUE connections, not process ones: .qhb and
+/   connections      VENUE connections, not process ones: .qetl.hb and
 /                    `uqs summary` already answer process liveness, and this
 /                    must not become a second spelling of that.
 /   predictions      needs a model. Nothing in this tree produces one.
@@ -225,7 +225,7 @@ reference_data:([]time:`timestamp$(); sym:`g#`symbol$(); base_ccy:`symbol$(); qu
 order_routing:([]time:`timestamp$(); order_id:`long$(); venue:`symbol$(); routed_size:`float$(); routing_reason:`symbol$())
 
 / Venue connection registry - one row per venue link, not per process.
-/ Process liveness is .qhb's heartbeat and `uqs summary`; this is the
+/ Process liveness is .qetl.hb's heartbeat and `uqs summary`; this is the
 / upstream side, which nothing in this tree talks to yet.
 connections:([]time:`timestamp$(); venue:`g#`symbol$(); host:`symbol$(); port:`long$(); status:`symbol$(); last_heartbeat:`timestamp$())
 

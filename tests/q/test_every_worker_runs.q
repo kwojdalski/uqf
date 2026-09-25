@@ -1,11 +1,11 @@
 // test_every_worker_runs.q - every declared bounded worker, driven end to end
 // on its own fixture (.wruntest).
 //
-// WHY THIS FILE EXISTS. coverage_baseline.txt carried eighteen `.qwrk` names -
+// WHY THIS FILE EXISTS. coverage_baseline.txt carried eighteen `.qpipe.job` names -
 // the largest single cluster in it - under the heading that the two workers
 // concerned reach "a real database, a real ODBC driver". They do not. A source
 // takes the FIXTURE path whenever no credential is set, which is exactly what
-// `.qsrc.has_credentials` decides and what `fetch_window` branches on: a null
+// `.qetl.source.has_credentials` decides and what `fetch_window` branches on: a null
 // handle reads the fixture. Both workers run to `completed` on it.
 //
 // So the gap was never external. demo_deals_backfill and demo_events_backfill
@@ -20,7 +20,7 @@
 // cleared by the source's own variable name.
 //
 // WHAT IT DOES NOT PROVE. Anything about a real source's schema - the fixtures
-// are synthetic by design, and only `.qsrc.validate_live` against the real
+// are synthetic by design, and only `.qetl.source.validate_live` against the real
 // thing settles that. What it proves is that the FRAMEWORK carries each
 // declared worker from init to completed: contract, windowing, transform,
 // publication, coverage and cursor.
@@ -36,7 +36,7 @@ beforeNamespace_isolate:{[]
     }
 
 / Every worker the tree declares, from its file rather than from the registry:
-/ the tests register fixture workers into `.qbfstate` at run time, and those
+/ the tests register fixture workers into `.qetl.job.bounded.state` at run time, and those
 / have no declaration, no transform and nothing to drive.
 workers:{[] .testutil.etl_declaration_names["src/etl/workers"]}
 
@@ -52,22 +52,22 @@ workers:{[] .testutil.etl_declaration_names["src/etl/workers"]}
 /   the window is the fixture's own span, widened by one worker width so the
 /   last row falls inside a window rather than on its boundary
 prepare:{[w]
-    cfg:.qbw.def w;
-    src:.qsrc.def cfg`source;
-    setenv[`$.qsrc.credential_var cfg`source;""];
-    .qbfstate.release_lock w;
-    .qbfstate.clear_checkpoint w;
-    (cfg`dataset) set 0#(.qxf.def cfg`transform)`output;
+    cfg:.qetl.job.bounded.def w;
+    src:.qetl.source.def cfg`source;
+    setenv[`$.qetl.source.credential_var cfg`source;""];
+    .qetl.job.bounded.state.release_lock w;
+    .qetl.job.bounded.state.clear_checkpoint w;
+    (cfg`dataset) set 0#(.qetl.transform.def cfg`transform)`output;
     ts:(src`fixture)[] src`time_column;
     `source_version`range_from`range_to!(`wrunv1;min ts;(max ts)+cfg`width)}
 
 / Call one of a worker's stamped methods.
-call:{[w;nm] (` sv (.qbw.worker_root,w),nm)}
+call:{[w;nm] (` sv (.qetl.job.bounded.worker_root,w),nm)}
 
 setUp_fresh:{[]
     .testutil.reset_coverage_ledger[];
-    .qwcfg.reset[];
-    .qwcfg.set_layers[()!();()!();()!()];
+    .qetl.cfg.reset[];
+    .qetl.cfg.set_layers[()!();()!();()!()];
     setenv[`UQF_DRY_RUN;""];
     }
 
@@ -123,7 +123,7 @@ test_a_dry_run_publishes_nothing_for_every_worker:{[t]
     / overrode `publish` could ignore it.
     setenv[`UQF_DRY_RUN;"true"];
     bad:{[w]
-        cfg:.qbw.def w;
+        cfg:.qetl.job.bounded.def w;
         spec:.wruntest.prepare w;
         .wruntest.call[w;`init][spec];
         .wruntest.call[w;`run][];
@@ -135,7 +135,7 @@ test_a_dry_run_publishes_nothing_for_every_worker:{[t]
 
 test_every_worker_checkpoints_through_its_own_delegator:{[t]
     / `run` reaches the shell's checkpoint directly, so the stamped
-    / `.qwrk.<w>.checkpoint` is only entered when a caller uses it - which is
+    / `.qpipe.job.<w>.checkpoint` is only entered when a caller uses it - which is
     / why it stays uncovered by the lifecycle test above. Calling it is also
     / the only way to prove the delegator writes where the shell reads.
     bad:{[w]
@@ -143,7 +143,7 @@ test_every_worker_checkpoints_through_its_own_delegator:{[t]
         .wruntest.call[w;`init][spec];
         cursor:spec`range_from;
         .wruntest.call[w;`checkpoint][cursor];
-        $[cursor~.qbfstate.load_checkpoint[w;spec]; (); enlist w]} each .wruntest.workers[];
+        $[cursor~.qetl.job.bounded.state.load_checkpoint[w;spec]; (); enlist w]} each .wruntest.workers[];
     .qunit.assertEquals[count raze bad;0;
         "the cursor written through each delegator is the cursor the shell stores"]};
 

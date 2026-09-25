@@ -1,5 +1,5 @@
 / quotes_feed.q - the whole of the depth-of-book quote feed
-/ (.qsub.quotes_feed).
+/ (.qpipe.job.quotes_feed).
 / .
 / Subscribes to nothing and publishes `quotes` twice a second: one row per
 / pair carrying three levels a side, level-0-first, as vectors. The ladder's
@@ -14,11 +14,11 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qsub.quotes_feed
+\d .qpipe.job.quotes_feed
 
-/ Where rows go. A stub until .qstream.wire points it at the tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `quotes_feed;
+publish:.qetl.job.stream.unwired `quotes_feed;
 
 / This process's own moving mid per pair. Parallel plain VECTORS, aligned
 / with .qsynth.pairs, for the reason fx_feed.q gives: a dict here turns the
@@ -35,28 +35,28 @@ n_levels:3
 / global and publishing, so a tick's shape is checkable with no tickerplant.
 / @param mids one mid per pair, in .qsynth.pairs order
 / @return the tick's rows: pairs, bid prices, bid sizes, ask prices, ask sizes
-/ @eg count first .qsub.quotes_feed.tick_rows[.qsynth.spot] 1  ->  3
+/ @eg count first .qpipe.job.quotes_feed.tick_rows[.qsynth.spot] 1  ->  3
 tick_rows:{[mids]
     n:count .qsynth.pairs;
-    sizes:.qsynth.levels_size .qsub.quotes_feed.n_levels;
+    sizes:.qsynth.levels_size .qpipe.job.quotes_feed.n_levels;
     (.qsynth.pairs;
-        .qsynth.levels_one[;;-1;.qsub.quotes_feed.n_levels] .' flip (mids;.qsynth.pip);
+        .qsynth.levels_one[;;-1;.qpipe.job.quotes_feed.n_levels] .' flip (mids;.qsynth.pip);
         n#enlist sizes;
-        .qsynth.levels_one[;;1;.qsub.quotes_feed.n_levels] .' flip (mids;.qsynth.pip);
+        .qsynth.levels_one[;;1;.qpipe.job.quotes_feed.n_levels] .' flip (mids;.qsynth.pip);
         n#enlist sizes)}
 
 / Walk every pair's mid, then publish the tick built from it.
 on_timer:{[]
-    `.qsub.quotes_feed.spot set .qsynth.drift_one each .qsub.quotes_feed.spot;
-    .qsub.quotes_feed.publish[`quotes;.qsub.quotes_feed.tick_rows .qsub.quotes_feed.spot];
+    `.qpipe.job.quotes_feed.spot set .qsynth.drift_one each .qpipe.job.quotes_feed.spot;
+    .qpipe.job.quotes_feed.publish[`quotes;.qpipe.job.quotes_feed.tick_rows .qpipe.job.quotes_feed.spot];
     }
 
 \d .
 
-.qstream.define[`quotes_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(
+.qetl.job.stream.define[`quotes_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(
     `quotesfeed1;
     `symbol$();
     enlist `quotes;
     0D00:00:00.500;
-    .qsub.quotes_feed.on_timer;
+    .qpipe.job.quotes_feed.on_timer;
     1b)];

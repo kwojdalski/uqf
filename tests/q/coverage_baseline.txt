@@ -22,24 +22,24 @@
 # These reach a real database, a real ODBC driver or a real qls server. The
 # deterministic suite has no such thing by design, and the smoke
 # lanes that do exercise them are not part of this run.
-.qbw.connect
-.qodbc.close
-.qodbc.table_names
-.qodbc.window_query
-.qodbc.with_connection
-.qfeed.databento_mbp10.adapt
-.qfeed.databento_mbp10.epoch_ns_literal
-.qfeed.databento_mbp10.query
-.qfeed.databento_mbp10.select_list
-.qfeed.demo_deals.query
-.qfeed.demo_events.query
-.qfeed.duckdb_deals.query
-.qfeed.upstream_trades.query
+.qetl.job.bounded.connect
+.qetl.io.odbc.close
+.qetl.io.odbc.table_names
+.qetl.io.odbc.window_query
+.qetl.io.odbc.with_connection
+.qpipe.source.databento_mbp10.adapt
+.qpipe.source.databento_mbp10.epoch_ns_literal
+.qpipe.source.databento_mbp10.query
+.qpipe.source.databento_mbp10.select_list
+.qpipe.source.demo_deals.query
+.qpipe.source.demo_events.query
+.qpipe.source.duckdb_deals.query
+.qpipe.source.upstream_trades.query
 
 # --- Needs a running TorQ process --------------------------------------
-# .qpipe is the TorQ block library and .qsub the subscriber processes. Both
+# .qtorq is the TorQ block library and .qpipe.job the subscriber processes. Both
 # assume a tickerplant, a publish handle and a timer; the transforms they
-# call are tested through .qxf instead, which is the part that computes.
+# call are tested through .qetl.transform instead, which is the part that computes.
 # publish and as_table are not here: the handle is a seam, and
 # test_stream_job.q hands them a recording one.
 #
@@ -55,12 +55,12 @@
 # that entered it would hang the suite rather than fail it; reload_hdb opens
 # discovered handles and is already listed in .egtest.needs_live for the
 # same reason.
-.qpipe.feed_handle
-.qpipe.load_uqf
-.qpipe.reload_hdb
-.qpipe.safe_timer
-.qpipe.subscribe_etl
-.qpipe.wait_for_tickerplant
+.qtorq.feed_handle
+.qtorq.load_uqf
+.qtorq.reload_hdb
+.qtorq.safe_timer
+.qtorq.subscribe_etl
+.qtorq.wait_for_tickerplant
 
 # --- Genuine gaps, worth closing ---------------------------------------
 # Nothing external stands in the way of these; no test calls them.
@@ -69,23 +69,23 @@
 # table used by that worker's own quality check. Everything else that used to
 # be in this block is covered now, and how says something about baselines.
 #
-# Eighteen `.qwrk` names sat here under the heading that these two workers
+# Eighteen `.qpipe.job` names sat here under the heading that these two workers
 # reach "a real database, a real ODBC driver". They do not. A source takes the
-# FIXTURE path whenever no credential is set - `.qsrc.has_credentials` decides
+# FIXTURE path whenever no credential is set - `.qetl.source.has_credentials` decides
 # it and `fetch_window` branches on a null handle - and both workers run to
 # `completed` on their fixtures, which test_every_worker_runs.q now does for
 # every declared worker. The reason recorded here was not the real one, and it
 # survived long enough to read as settled.
 #
 # The delegator ARGUMENT order is covered separately and structurally, in
-# test_worker_runtime.q: `.qbw.delegate` reads its parameter names off the
+# test_worker_runtime.q: `.qetl.job.bounded.delegate` reads its parameter names off the
 # shell's own function, so a swap cannot happen per worker. That check does not
 # reduce coverage - reading a parse tree never enters the function - which is
 # why the lifecycle test above was still needed to take these names off.
-.qwrk.databento_book_backfill.example_book
-.qdag.reaction_edges
-.qrun.attach
-.qrun.history
+.qpipe.transform.databento_book.example_book
+.qetl.dag.reaction_edges
+.qetl.run.attach
+.qetl.run.history
 .qdata.getBySymbolDate
 .qdata.pqModule
 

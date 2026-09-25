@@ -211,8 +211,8 @@ first if only one got done. Then ask for approval.
   instead.
 - Don't propose a new namespace nested more than one level (` \d .qfwd.sub `) ---
   every namespace in this library is deliberately flat. (Nesting resolves fine
-  in q; the ETL tree uses it for its instances --- workers under `.qwrk`,
-  sources under `.qfeed`. It is the quant library that stays flat.)
+  in q; the ETL tree uses it for its instances --- workers under `.qpipe.job`,
+  sources under `.qpipe.source`. It is the quant library that stays flat.)
 - Don't propose work on `src/integrations/data.q` or inside
   `lib/torq`/`lib/torq-finance-starter-pack` (vendored; extend via the
   orchestrator overlay instead).

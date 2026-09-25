@@ -3,7 +3,7 @@
 / .
 / WHAT THIS FIXES. Backfill workers were spawned ad hoc - `system "q ..."`
 / from a test harness - so a running backfill had no presence in
-/ `.servers.SERVERS`. Nothing could find it. That included .qwrt.connected,
+/ `.servers.SERVERS`. Nothing could find it. That included .qetl.job.bounded.runtime.connected,
 / which reads exactly that table to decide whether a worker's declared
 / dependencies are up: a backfill could not be a dependency of anything,
 / and an operator had no way to ask the fleet what was running.
@@ -123,13 +123,13 @@ hdb_root:{[]
 / rows belong is a fact about the stack, not about the worker - the same
 / split as a streaming job's publish, which torq_stream.q wires.
 / @param decl the worker's declaration
-/ @return the manager now in .qio.default
+/ @return the manager now in .qetl.io.default
 use_hdb:{[decl]
     root:hdb_root[];
-    col:(.qsrc.def decl`source)`time_column;
-    .qio.default:.qio.hdb[root;col];
-    .qlog.info[`backfill;"writing into the HDB";`root`partition_col!(root;col)];
-    .qio.default}
+    col:(.qetl.source.def decl`source)`time_column;
+    .qetl.io.default:.qetl.io.hdb[root;col];
+    .qetl.log.info[`backfill;"writing into the HDB";`root`partition_col!(root;col)];
+    .qetl.io.default}
 
 / Run the worker named on the command line, and report what it did.
 / .
@@ -140,31 +140,31 @@ use_hdb:{[decl]
 / @return the run's result dictionary
 run:{[]
     t0:.z.p;
-    .qlog.dbg[`backfill;"command line";enlist[`args]!enlist .z.x];
+    .qetl.log.dbg[`backfill;"command line";enlist[`args]!enlist .z.x];
     s:spec_from_flags .Q.opt .z.x;
     worker:s`worker;
     spec:s`spec;
-    .qlog.info[worker;"backfill process starting";spec];
-    decl:.qbw.def worker;
+    .qetl.log.info[worker;"backfill process starting";spec];
+    decl:.qetl.job.bounded.def worker;
     ns:decl`ns;
-    .qlog.dbg[worker;"declaration";
+    .qetl.log.dbg[worker;"declaration";
         `ns`source`dataset`width`partition!
-            (ns;decl`source;decl`dataset;decl`width;.qbw.partition_of worker)];
-    .qlog.info[worker;"range";
+            (ns;decl`source;decl`dataset;decl`width;.qetl.job.bounded.partition_of worker)];
+    .qetl.log.info[worker;"range";
         `range_from`range_to`span`width`windows!
             (spec`range_from;spec`range_to;spec[`range_to]-spec`range_from;
              decl`width;window_count[spec;decl`width])];
     use_hdb decl;
     t1:.z.p;
     (` sv ns,`init)[spec];
-    .qlog.dbg[worker;"init done";enlist[`ms]!enlist elapsed_ms t1];
+    .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist elapsed_ms t1];
     t2:.z.p;
     r:(` sv ns,`run)[];
-    .qlog.info[worker;"backfill process finished";
+    .qetl.log.info[worker;"backfill process finished";
         r,`run_ms`total_ms!(elapsed_ms t2;elapsed_ms t0)];
     / The partitions are sorted and filled by the run's own finish step; a
     / running HDB still maps the old set until it is told to reload.
-    if[0<r`rows_published; .qpipe.reload_hdb[]];
+    if[0<r`rows_published; .qtorq.reload_hdb[]];
     r}
 
 \d .
@@ -185,20 +185,20 @@ run:{[]
   -1 string[.z.p]," | torq_backfill: uqf tree loaded in ",string[`long$(.z.p-t0)%1000000],"ms";
  }[getenv[`UQFROOT]];
 
-/ DBG before anything else logs, so -verbose covers discovery too. .qlog is
+/ DBG before anything else logs, so -verbose covers discovery too. .qetl.log is
 / only defined once the tree above has loaded.
-if[.qproc.backfill.verbose .Q.opt .z.x; .qlog.debug 1b];
-.qlog.dbg[`backfill;"debug logging on";
+if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
+.qetl.log.dbg[`backfill;"debug logging on";
     `procname`pid`port`cwd!(.proc.procname;.z.i;system"p";first system"pwd")];
 
 / Register with discovery before doing any work, so the fleet can see the
 / backfill WHILE it runs rather than only after it finishes. .servers.startup
 / opens and registers the handle using this process's own accesslist
 / credentials, exactly as cross1 does.
-.qlog.dbg[`backfill;"registering with discovery";()!()];
+.qetl.log.dbg[`backfill;"registering with discovery";()!()];
 {[t0]
   .servers.startup[];
-  .qlog.dbg[`backfill;"registered with discovery";
+  .qetl.log.dbg[`backfill;"registered with discovery";
       `ms`servers!(.qproc.backfill.elapsed_ms t0;count .servers.SERVERS)];
  }[.z.p];
 
@@ -209,9 +209,9 @@ if[.qproc.backfill.verbose .Q.opt .z.x; .qlog.debug 1b];
 / backtrace is logged with the error, which is the one thing a bare message
 / like 'type cannot tell you after the process has gone.
 result:.Q.trp[{.qproc.backfill.run[]};::;{[e;bt]
-    .qlog.err[`backfill;"backfill process failed";enlist[`error]!enlist e];
-    .qlog.err[`backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
+    .qetl.log.err[`backfill;"backfill process failed";enlist[`error]!enlist e];
+    .qetl.log.err[`backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
     `state`error!(`failed;e)}];
 code:$[`completed~result`state; 0; 1];
-.qlog.info[`backfill;"exiting";`state`code!(result`state;code)];
+.qetl.log.info[`backfill;"exiting";`state`code!(result`state;code)];
 exit code;

@@ -54,19 +54,19 @@ def scan(tmp_path, monkeypatch):
 def test_a_renamed_function_is_reported(scan):
     # The failure this gate exists for: prose left behind by a rename. Two
     # of these were in the tree on the gate's first run.
-    problems, _ = scan("see `.qmatz.stage_coverage` for details\n")
+    problems, _ = scan("see `.qetl.coverage.stage_coverage` for details\n")
     assert len(problems) == 1
     assert "stage_coverage" in problems[0]
 
 
 def test_too_many_arguments_is_reported(scan):
-    problems, _ = scan("call `.qmatz.require_interval[a;b;c]`\n")
+    problems, _ = scan("call `.qetl.coverage.require_interval[a;b;c]`\n")
     assert len(problems) == 1
     assert "would throw 'rank" in problems[0]
 
 
 def test_the_line_number_points_at_the_reference(scan):
-    problems, _ = scan("first\nsecond\n`.qmatz.nonexistent_name`\n")
+    problems, _ = scan("first\nsecond\n`.qetl.coverage.nonexistent_name`\n")
     assert ":3:" in problems[0]
 
 
@@ -74,21 +74,21 @@ def test_the_line_number_points_at_the_reference(scan):
 
 
 def test_a_correct_call_is_not_reported(scan):
-    problems, _ = scan("`.qmatz.stage_completion[ds;v;from;to;rows]`\n")
+    problems, _ = scan("`.qetl.coverage.stage_completion[ds;v;from;to;rows]`\n")
     assert problems == []
 
 
 def test_a_projection_is_not_reported(scan):
     # Fewer arguments than the rank is a partially applied function, which is
     # ordinary q and a legitimate thing to write in a document.
-    problems, _ = scan("`.qmatz.require_interval[from]`\n")
+    problems, _ = scan("`.qetl.coverage.require_interval[from]`\n")
     assert problems == []
 
 
 def test_a_niladic_call_is_not_reported(scan):
     # `f[]` passes zero arguments, not one empty argument. Counting the empty
     # body as an argument would flag every niladic call in the docs.
-    problems, _ = scan("`.qmatz.ledger[]`\n")
+    problems, _ = scan("`.qetl.coverage.ledger[]`\n")
     assert problems == []
 
 
@@ -112,9 +112,15 @@ def test_an_unknown_namespace_is_counted_not_flagged(scan):
     # It cannot be confirmed OR denied, so reporting it as missing would be a
     # claim the gate cannot support. It is counted instead, so the blind spot
     # stays visible rather than passing silently.
-    problems, unverifiable = scan("`.qpipe.safe_timer[]` and `.qpipe.publish`\n")
+    problems, unverifiable = scan("`.qtorq.safe_timer[]` and `.qtorq.publish`\n")
     assert problems == []
-    assert unverifiable == {".qpipe": 2}
+    assert unverifiable == {".qtorq": 2}
+
+
+def test_nested_modules_and_their_containers_are_verified(scan):
+    problems, unverifiable = scan("`.qetl.cfg`, `.qetl.cfg.audit`, `.qetl.job`, `.qpipe.job`\n")
+    assert problems == []
+    assert unverifiable == {}
 
 
 # ------------------------------------------------- the real tree stays clean

@@ -102,7 +102,7 @@ jobs:
       - name: Check the committed contract surface is current
         # WP2 (#139): docs/reference/surfaces/current/ is this tree's
         # half of the contract lock. A committed baseline nothing verifies
-        # goes stale silently - the .qmatz.require_schema shape, where a file's
+        # goes stale silently - the .qetl.coverage.require_schema shape, where a file's
         # existence reads as protection it is not providing. Reports the
         # CONTRACT difference ("is_covered gained an argument"), not a JSON
         # line diff, because only the former is actionable.
@@ -152,7 +152,7 @@ jobs:
         # guide could name a function that never existed and every check
         # passed. Its first run found two: a design note citing
         # .qmicro.require_sorted_tape (the function is require_tape) and an
-        # agent citing .qcoer.coerce (it is coerce_column).
+        # agent citing .qetl.coerce.coerce (it is coerce_column).
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_doc_references.py
       - name: Check the environment reference lists every variable
@@ -161,7 +161,7 @@ jobs:
         # judgement, and checked in both directions because a hand-written
         # reference otherwise ends up describing a previous version of the
         # system. One variable (UQF_DRY_RUN) is built mechanically by
-        # .qwcfg.env_name and appears in no source file, so grep is not a
+        # .qetl.cfg.env_name and appears in no source file, so grep is not a
         # substitute for this page.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_env_reference.py --check

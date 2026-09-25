@@ -53,7 +53,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 #: The plant's declaration of the raw table, read at runtime for rule 3.
-#: `uqs_tables.q` rather than a `.qsrc` source contract, because this feed has
+#: `uqs_tables.q` rather than a `.qetl.source` source contract, because this feed has
 #: no ODBC backfill to share a contract with - replaying a topic from offset 0
 #: is Kafka's own answer to backfill, and it needs a broker.
 CONTRACT_Q = "scripts/processes/uqs_tables.q"

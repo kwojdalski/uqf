@@ -7,7 +7,7 @@
 / the job's `publishes`. Neither runs a job, so neither sees the rows it
 / builds - and those rows are what the plant receives.
 / .
-/ That link matters more than it looks. .qpipe.publish sends a table to
+/ That link matters more than it looks. .qtorq.publish sends a table to
 / TorQ as `value flip`, which is POSITIONAL: a job whose select lists
 / quote_qty before base_qty publishes two floats the plant accepts and
 / stores in each other's columns, with no error anywhere. Only fx_positions
@@ -65,9 +65,9 @@ unowned:enlist[`quote]!enlist
 / need the enlist .tabletest.not_exchanged explains.
 not_built:(
     (`superbook;`config_change;
-        "published by .qaudit through the job's own publish when its config changes, not by its handlers");
+        "published by .qetl.cfg.audit through the job's own publish when its config changes, not by its handlers");
     (`cross_arbitrage;`config_change;
-        "the same .qaudit publication"))
+        "the same .qetl.cfg.audit publication"))
 
 / --- the comparison -------------------------------------------------------
 
@@ -78,7 +78,7 @@ not_built:(
 / list has no names, so it is held to count and types, and order is only
 / as good as the types can tell apart. A plant type of " " is a general
 / list column (the vector-per-row book columns), which any column matches.
-/ An empty batch is not checked: .qpipe.publish sends nothing for one.
+/ An empty batch is not checked: .qtorq.publish sends nothing for one.
 problem:{[tbl;cell]
     w:want tbl; wc:w 0; wt:w 1;
     if[99h=type cell; :"a keyed table, where the plant appends rows"];
@@ -116,36 +116,36 @@ last_of:{[j] first last exec rows from .sjtest.published where job=j}
 / runs after .sjtest.reset[], which empties job state and wires every job
 / to .sjtest.recorder.
 drivers:`markout`posbook`vectorize`databento_book`fx_positions`executions`marks`market_data`superbook`arbitrage`cross_arbitrage!(
-    {[] .qsub.markout.on_batch[`trades;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD; side:enlist 1;
+    {[] .qpipe.job.markout.on_batch[`trades;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD; side:enlist 1;
             trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000)];
-        .qsub.markout.on_batch[`quote;([] time:enlist .sjtest.d 1; sym:enlist `EURUSD;
+        .qpipe.job.markout.on_batch[`quote;([] time:enlist .sjtest.d 1; sym:enlist `EURUSD;
             bid:enlist 1.1004; ask:enlist 1.1006)];
-        .qsub.markout.score_ready .sjtest.d 20};
-    {[] .qsub.posbook.on_batch[`marks;.sjtest.a_mark[`EURUSD;1.104]];
-        .qsub.posbook.on_batch[`executions;.sjtest.an_execution[.sjtest.d 0;`EURUSD;1;1.1;1e6]]};
-    {[] .qsub.vectorize.on_batch[`wide_book;.sjtest.wide_row[]]};
-    {[] .qsub.databento_book.on_batch[`databento_mbp10;.sjtest.mbp10_batch[]]};
-    {[] .qsub.fx_positions.load_limits .sjtest.mk_limits[];
-        .qsub.fx_positions.on_batch[`orders;.sjtest.orders_batch[]];
-        .qsub.fx_positions.on_timer[]};
-    {[] .qsub.executions.on_batch[`trades;.sjtest.fx_fill[`EURUSD;1;1.085;1e6]];
-        .qsub.executions.on_batch[`crypto_trades;.sjtest.crypto_fill[`$"BTC-USDT";-1;62000f;0.25]]};
-    {[] .qsub.marks.on_batch[`quote;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD;
+        .qpipe.job.markout.score_ready .sjtest.d 20};
+    {[] .qpipe.job.posbook.on_batch[`marks;.sjtest.a_mark[`EURUSD;1.104]];
+        .qpipe.job.posbook.on_batch[`executions;.sjtest.an_execution[.sjtest.d 0;`EURUSD;1;1.1;1e6]]};
+    {[] .qpipe.job.vectorize.on_batch[`wide_book;.sjtest.wide_row[]]};
+    {[] .qpipe.job.databento_book.on_batch[`databento_mbp10;.sjtest.mbp10_batch[]]};
+    {[] .qpipe.job.fx_positions.load_limits .sjtest.mk_limits[];
+        .qpipe.job.fx_positions.on_batch[`orders;.sjtest.orders_batch[]];
+        .qpipe.job.fx_positions.on_timer[]};
+    {[] .qpipe.job.executions.on_batch[`trades;.sjtest.fx_fill[`EURUSD;1;1.085;1e6]];
+        .qpipe.job.executions.on_batch[`crypto_trades;.sjtest.crypto_fill[`$"BTC-USDT";-1;62000f;0.25]]};
+    {[] .qpipe.job.marks.on_batch[`quote;([] time:enlist .sjtest.d 0; sym:enlist `EURUSD;
             bid:enlist 1.0849; ask:enlist 1.0851)]};
-    {[] .qsub.market_data.on_batch[`quote;.jobouttest.lp_quotes[]]};
+    {[] .qpipe.job.market_data.on_batch[`quote;.jobouttest.lp_quotes[]]};
     {[] .jobouttest.drivers[`market_data][];
-        .qsub.superbook.on_batch[`market_data;.jobouttest.last_of `market_data]};
+        .qpipe.job.superbook.on_batch[`market_data;.jobouttest.last_of `market_data]};
     {[] .jobouttest.drivers[`superbook][];
-        .qsub.arbitrage.on_batch[`superbook;.jobouttest.last_of `superbook]};
-    {[] .qsub.cross_arbitrage.on_batch[`superbook;0!.xarbtest.with_direct[164.80;164.90]]})
+        .qpipe.job.arbitrage.on_batch[`superbook;.jobouttest.last_of `superbook]};
+    {[] .qpipe.job.cross_arbitrage.on_batch[`superbook;0!.xarbtest.with_direct[164.80;164.90]]})
 
 / Every registered job that declares at least one published table.
-publishing:{[] j where {[j] 0<count (),.qstream.def[j]`publishes} each j:.qstream.defined[]}
+publishing:{[] j where {[j] 0<count (),.qetl.job.stream.def[j]`publishes} each j:.qetl.job.stream.defined[]}
 
 / A feed drives itself: it subscribes to nothing and publishes on a timer.
 / Fifty ticks because crypto_mock's fills are a draw - .sjtest relies on
 / twenty producing one, and this suite needs one every run.
-is_feed:{[j] 0=count (),.qstream.def[j]`subscribe_to}
+is_feed:{[j] 0=count (),.qetl.job.stream.def[j]`subscribe_to}
 
 / The driver `j`'s own test file declares, as .<job>test.contract_driver -
 / where `uqs new-job` scaffolds one - or :: when it declares none.
@@ -178,12 +178,12 @@ unimplemented:()
 
 drive:{[j]
     .sjtest.reset[];
-    `.qsub.cross_arbitrage.books set 0#.qsub.cross_arbitrage.books;
+    `.qpipe.job.cross_arbitrage.books set 0#.qpipe.job.cross_arbitrage.books;
     $[j in key .jobouttest.drivers; .jobouttest.drivers[j][];
       100h=type f:own_driver j;
         @[f;::;{[j;e] `.jobouttest.unimplemented set
             .jobouttest.unimplemented,enlist (j;e); }[j]];
-      is_feed j; do[50; (.qstream.def[j]`on_timer)[]];
+      is_feed j; do[50; (.qetl.job.stream.def[j]`on_timer)[]];
       '"drive: ",string[j]," subscribes and has no driver"];
     select tbl, rows from .sjtest.published where job=j}
 
@@ -233,7 +233,7 @@ test_every_declared_table_is_actually_published:{[t]
     `.jobouttest.bad set ();
     {[r;excused;j]
         seen:distinct exec tbl from r j;
-        owed:((),.qstream.def[j]`publishes) except seen;
+        owed:((),.qetl.job.stream.def[j]`publishes) except seen;
         owed:owed where not ({`$string[x],"/",string y}[j] each owed) in excused;
         if[count owed; `.jobouttest.bad set .jobouttest.bad,enlist string[j]," never published ",", " sv string owed]
       }[r;excused] each key r;
@@ -286,9 +286,9 @@ test_a_column_list_is_held_to_count_and_types:{[t]
 
 test_the_excuses_still_describe_something_real:{[t]
     / So neither list can rot into cover for the next real gap.
-    stale:not_built where not {[p] p[1] in (),.qstream.def[p 0]`publishes} each not_built;
+    stale:not_built where not {[p] p[1] in (),.qetl.job.stream.def[p 0]`publishes} each not_built;
     .qunit.assertEquals[count stale;0;"every not_built pair is still declared by its job"];
-    owners:raze {[j] (),.qstream.def[j]`publishes} each publishing[];
+    owners:raze {[j] (),.qetl.job.stream.def[j]`publishes} each publishing[];
     .qunit.assertEquals[(key unowned) except owners;`symbol$();
         "every unowned table is still published by some job"];
     .qunit.assertEquals[(key unowned) inter key shapes;`symbol$();

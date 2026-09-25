@@ -657,9 +657,9 @@ positional start is only warned about. See [the cross-arbitrage
 service](../services/cross-arbitrage.md).
 
 The graph behind all of this is the `subscribe_to`/`publishes` pair on each
-`Pipeline`, the same declaration the generated `database.q` and the `.qdag` job
-graph are built from - so what you are warned about and what is running cannot
-describe different systems.
+`Pipeline`, the same declaration the generated `database.q` and the `.qetl.dag`
+job graph are built from - so what you are warned about and what is running
+cannot describe different systems.
 
 ### monitor1, the one overridden default
 
@@ -824,7 +824,7 @@ stall, so the last line in `uqs logs <procname>` says where it stopped:
 
   | Last line                                                                   | What it means                                                                                                                                                                                                                                                                     |
   | ---                                                                         | ---                                                                                                                                                                                                                                                                               |
-  | `qpipe: loading uqf tree from ...` with no `loaded in` after it             | a q file failed to load - the error follows, or is in `err_<procname>.log`                                                                                                                                                                                                        |
+  | `qtorq: loading uqf tree from ...` with no `loaded in` after it             | a q file failed to load - the error follows, or is in `err_<procname>.log`                                                                                                                                                                                                        |
   | `starting streaming job`                                                    | the job and what it subscribes to and publishes, logged before anything can block                                                                                                                                                                                                 |
   | `waiting for the tickerplant - if this is the last line, it is not running` | `stp1` is down: `uqs start stp1`. This used to wait forever in silence                                                                                                                                                                                                            |
   | `subscribing` / `streaming job wired - running`                             | subscribed and running                                                                                                                                                                                                                                                            |
@@ -850,7 +850,7 @@ Two ways to switch it on:
 ```
 uqs backfill <worker> ... --debug                     # a backfill: passes -verbose
 uqs raw -- start <procname> -extras -verbose          # any process, at start
-uqs query ".qlog.debug 1b" --port <port>              # a process already running, no restart
+uqs query ".qetl.log.debug 1b" --port <port>              # a process already running, no restart
 ```
 
 `-verbose` is uqf's own flag, taken by every process script. It is not TorQ's
@@ -962,10 +962,11 @@ uqs install-jobs ../sidecars --mode symlink --yes   # no questions, for scripts
 A file in `src/etl/sources`, `src/etl/workers` or `src/etl/streaming` is already
 registered - `src/etl/init.q` and the registry glob those folders - so
 installing is putting each file in the right one. Which one is decided by what
-the file declares, not its name or where it sits in the sidecar: `.qsrc.define`
-is a source, `.qbw.define` a worker, `.qstream.define` or `.qnorm.define` a
-streaming job. The plan table shows every `.q` file and what will happen to it;
-these are skipped, with the reason:
+the file declares, not its name or where it sits in the sidecar:
+`.qetl.source.define` is a source, `.qetl.job.bounded.define` a worker,
+`.qetl.job.stream.define` or `.qetl.job.stream.normalize` a streaming job. The
+plan table shows every `.q` file and what will happen to it; these are skipped,
+with the reason:
 
 - a file declaring nothing (a helper), or more than one kind (split it: the
   three folders load in a fixed order);

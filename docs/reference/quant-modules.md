@@ -13,22 +13,17 @@ Each module loads into its own flat namespace after `src/init.q` - `.qschema`,
 convention the tree keeps: the filename-to-namespace tie is what the naming
 auditor checks and what `docs/man.q`'s registry is generated against.
 
-The exceptions, added deliberately, are **instances** rather than modules:
-bounded workers under one `.qwrk` root (`.qwrk.demo_deals_backfill`, derived by
-`.qbw.define` from the registered worker name), source declarations under
-`.qfeed` (`.qfeed.demo_deals`, checked against each file's own `source_name`),
-the continuous jobs under `.qsub` (`.qsub.fx_feed`, `.qsub.markout` and six more ---
-each one file under `src/etl/streaming/` holding every step of that job, feeds
-included, run by the generic `scripts/processes/torq_stream.q`), and each
-process script's own wiring state under `.qproc` (`.qproc.stream`,
-`.qproc.backfill`, `.qproc.tap`). Library modules stay flat. Every namespace in
-`src/` and `scripts/` carries the `.q` prefix or is listed in
-`tests/q/test_namespaces.q`'s `outside_the_prefix` with the reason it cannot:
-`.dqe` is TorQ's own namespace, `.cov` is KX's published coverage API shape and
-matching it is the point, `.surface` is the exporter that would otherwise export
-itself. `src/namespaces.q` (`.qns`) is the one enumeration that knows about the
-nesting; any tool listing namespaces goes through it rather than scanning the
-root for a `q` prefix.
+The ETL framework uses nested modules under `.qetl`, such as `.qetl.source` and
+`.qetl.job.bounded`. Concrete sources, shared transforms and jobs live under
+`.qpipe.source`, `.qpipe.transform` and `.qpipe.job`. The TorQ adapter is
+`.qtorq`; runner-local state stays under `.qproc`. Quant library modules stay
+flat. Every namespace in `src/` and `scripts/` carries the `.q` prefix or is
+listed in `tests/q/test_namespaces.q`'s `outside_the_prefix` with the reason it
+cannot: `.dqe` is TorQ's own namespace, `.cov` is KX's published coverage API
+shape and matching it is the point, `.surface` is the exporter that would
+otherwise export itself. `src/namespaces.q` (`.qns`) is the one enumeration that
+knows about the nesting; any tool listing namespaces goes through it rather than
+scanning the root for a `q` prefix.
 
 Every module has a matching test file, and every function carries a
 [qDoc](../../README.md#documentation) block with `@param`/`@return`/`@eg` ---

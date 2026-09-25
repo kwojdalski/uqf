@@ -1,5 +1,5 @@
 // reference_worker.q - a minimal bounded worker (.qrefw) that satisfies the
-// .qbfstate contract, for driving the lifecycle tests.
+// .qetl.job.bounded.state contract, for driving the lifecycle tests.
 //
 // This is TEST INFRASTRUCTURE, not a production worker. It deliberately does
 // not live in src/etl/workers/: what a real worker looks like is a design
@@ -33,7 +33,7 @@ init:{[run_spec]
     source_version::run_spec`source_version;
     range_from::run_spec`range_from;
     range_to::run_spec`range_to;
-    .qbfstate.require_contract `reference;
+    .qetl.job.bounded.state.require_contract `reference;
     spec[]}
 
 / Turn a cursor into the windows still to do.
@@ -46,7 +46,7 @@ init:{[run_spec]
 plan:{[cursor]
     start:$[null cursor; range_from; cursor];
     if[not start<range_to; :([] range_from:`timestamp$(); range_to:`timestamp$())];
-    .qwrt.windows[start;range_to;width]}
+    .qetl.job.bounded.runtime.windows[start;range_to;width]}
 
 fetch:{[from_ts;to_ts] .qetldbl.call[`fetch;(from_ts;to_ts)]}
 

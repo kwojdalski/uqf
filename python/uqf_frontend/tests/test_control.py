@@ -231,7 +231,7 @@ def test_setting_a_worker_config_key_goes_through_the_gateway(writeable, gw):
 
 
 def test_the_response_says_the_override_is_not_durable(writeable, gw):
-    """A `.qwcfg` override lives in the process's memory; a process.csv
+    """A `.qetl.cfg` override lives in the process's memory; a process.csv
     override survives a restart. The two look identical from a UI and are
     not, so the response says so rather than leaving it to be discovered."""
     gw._responses[control.SET_WORKER_CONFIG] = {}

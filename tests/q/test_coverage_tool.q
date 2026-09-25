@@ -184,9 +184,9 @@ test_a_function_in_a_namespace_still_resolves_its_own_names:{[t]
 / --- captured copies, and nesting ----------------------------------------
 
 / THE BLIND SPOT .cov.reseed CLOSES. Instrumenting a NAME does nothing for a
-/ copy of the function taken before instrumentation. `.qio.memory` is
+/ copy of the function taken before instrumentation. `.qetl.io.memory` is
 / `(enlist `write)!enlist write_memory`, so every bounded worker writes
-/ through a captured copy - and `.qio.write_memory` reported as never called
+/ through a captured copy - and `.qetl.io.write_memory` reported as never called
 / while being exercised on every window. A number that says "never called"
 / about code the suite runs constantly is worse than no number: the obvious
 / response is to write a test that already exists.
@@ -203,7 +203,7 @@ test_a_captured_copy_is_put_back:{[t]
         "the registry holds the original again afterwards"]};
 
 test_a_copy_nested_two_dictionaries_deep_is_counted:{[t]
-    / .qsrc.sources is source -> declaration -> query, which is this shape.
+    / .qetl.source.sources is source -> declaration -> query, which is this shape.
     `.covfix.deep set (enlist `decl)!enlist (enlist `f)!enlist .covfix.add;
     r:.cov.run[{[] .covfix.deep[`decl][`f][1;2]};enlist (::);.covtest.only `.covfix.add];
     .qunit.assertEquals[first r`iterations;1;"the walk reaches a nested capture"]};
@@ -222,7 +222,7 @@ test_an_unrelated_global_is_left_alone:{[t]
 / (key v)!f each value v, and `each` over an empty TYPED vector gives a
 / generic empty list - so this exact shape came back untyped. reseed installs
 / whatever differs from the original, and a type change differs, so the
-/ corrupted copy was written to the real global. .qpipe.published is one:
+/ corrupted copy was written to the real global. .qtorq.published is one:
 / record_published's `0^published t` then gave () rather than 0 and the next
 / comparison threw 'type, which is what made q-unit red and q-order green
 / (#460).

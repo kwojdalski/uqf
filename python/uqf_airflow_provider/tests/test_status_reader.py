@@ -1,5 +1,5 @@
 """Contract tests: this reader's field set and states must match
-`.qstatus.write_status` in src/etl/core/status.q, exactly like
+`.qetl.status.write_status` in src/etl/core/status.q, exactly like
 python/uqf_frontend/tests/test_status.py checks its own reader. The two
 readers are independent by design (see status_reader.py's module docstring)
 so each is checked against the q source directly, never against the other.
@@ -44,7 +44,7 @@ def write_status_file(directory: Path, instance: str, **overrides) -> Path:
 
 
 def test_states_match_the_q_writer():
-    """`.qstatus.status_states` is the single source of truth for what a
+    """`.qetl.status.status_states` is the single source of truth for what a
     worker may ever report; this reader must recognise exactly that set.
     """
     src = STATUS_Q.read_text()

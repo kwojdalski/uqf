@@ -1,4 +1,4 @@
-"""Reads one worker instance's status file, as `.qstatus.write_status` writes it.
+"""Reads one worker instance's status file, as `.qetl.status.write_status` writes it.
 
 Deliberately independent of `uqf_frontend.status`, even though the two
 parse the same file format: this package is meant to run inside Airflow's
@@ -23,11 +23,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-#: Filename shape `.qstatus.write_status` writes — see src/etl/core/status.q.
+#: Filename shape `.qetl.status.write_status` writes — see src/etl/core/status.q.
 FILENAME_PREFIX = "airflow_status_"
 FILENAME_SUFFIX = ".txt"
 
-#: `.qstatus.status_states` in src/etl/core/status.q. Kept as a literal
+#: `.qetl.status.status_states` in src/etl/core/status.q. Kept as a literal
 #: tuple, not derived at import time, so this module never needs a q
 #: process or a checked-out uqf tree to be importable — only the test suite
 #: (which has this whole repository checked out) verifies it still matches.
@@ -38,7 +38,7 @@ TERMINAL_STATES = ("idle", "completed", "failed")
 
 
 class MalformedStatusFile(ValueError):
-    """The file was readable but not what `.qstatus.write_status`'s contract
+    """The file was readable but not what `.qetl.status.write_status`'s contract
     promises — missing field, non-JSON body, or an unrecognised state.
 
     Raised rather than silently coerced, because a sensor that guesses at a
@@ -65,7 +65,7 @@ class WorkerStatus:
 
 def read_status_file(path: Path) -> WorkerStatus:
     """Parse one status file. Raises `MalformedStatusFile` on anything that
-    does not match `.qstatus.write_status`'s contract, rather than guessing.
+    does not match `.qetl.status.write_status`'s contract, rather than guessing.
     """
     try:
         raw: Any = json.loads(path.read_text())
@@ -90,7 +90,7 @@ def read_status_file(path: Path) -> WorkerStatus:
     # make `failure_reason`'s "no error string was recorded" fallback
     # unreachable, since the field would never be None again after parsing.
     #
-    # `.qstatus.write_status` cannot produce that today: it refuses a `failed`
+    # `.qetl.status.write_status` cannot produce that today: it refuses a `failed`
     # state with an empty error, and writes "" rather than null otherwise.
     # This is about a file that did not come from it - hand-edited, or
     # written by a future producer - where the right reading of "no error" is
@@ -107,7 +107,7 @@ def read_status_file(path: Path) -> WorkerStatus:
 
 
 def status_file_path(directory: Path, instance_id: str) -> Path:
-    """The path `.qstatus.write_status` writes for *instance_id* — the one
+    """The path `.qetl.status.write_status` writes for *instance_id* — the one
     piece of the filename contract a sensor must know to find its file
     among a directory of many workers' instances.
     """

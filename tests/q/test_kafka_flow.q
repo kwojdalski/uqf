@@ -46,19 +46,19 @@ calls:{[] count .kafka_flowtest.published}
 / Empty the job's state AND point its publish somewhere, before driving it.
 / .
 / The wiring is the part that matters, and test_cross_arbitrage.q records why
-/ at length: `publish` starts as `.qstream.unwired`, which THROWS, and
+/ at length: `publish` starts as `.qetl.job.stream.unwired`, which THROWS, and
 / on_batch only reaches it when a batch produces output. A test that drove
 / the job and happened to publish nothing would pass while leaving publish
 / unwired - and this suite has more of those than most, since half its cases
 / assert that nothing is published.
 drive_ready:{[]
-    `.qsub.kafka_flow.high_water set (`long$())!`long$();
+    `.qpipe.job.kafka_flow.high_water set (`long$())!`long$();
     `.kafka_flowtest.published set ();
-    .qstream.wire[`kafka_flow;.kafka_flowtest.recorder];
+    .qetl.job.stream.wire[`kafka_flow;.kafka_flowtest.recorder];
     }
 
-beforeNamespace_load:{[] `.kafka_flowtest.saved set .qsub.kafka_flow.high_water;}
-afterNamespace_restore:{[] `.qsub.kafka_flow.high_water set .kafka_flowtest.saved;}
+beforeNamespace_load:{[] `.kafka_flowtest.saved set .qpipe.job.kafka_flow.high_water;}
+afterNamespace_restore:{[] `.qpipe.job.kafka_flow.high_water set .kafka_flowtest.saved;}
 
 t0:2026.09.25D09:00:00.000000000
 
@@ -81,7 +81,7 @@ batch:{[parts;offs]
         client:n#`ACME`BETA;
         trade_id:100+til n)}
 
-push:{[parts;offs] .qsub.kafka_flow.on_batch[`kafka_client_flow;.kafka_flowtest.batch[parts;offs]]}
+push:{[parts;offs] .qpipe.job.kafka_flow.on_batch[`kafka_client_flow;.kafka_flowtest.batch[parts;offs]]}
 
 / --- the happy path --------------------------------------------------------
 
@@ -143,14 +143,14 @@ test_an_out_of_order_batch_does_not_lower_the_mark:{[t]
     drive_ready[];
     push[0 0 0 0 0 0j;0 1 2 3 4 5j];
     push[0 0j;2 3j];
-    .qunit.assertEquals[.qsub.kafka_flow.high_water 0j;5j;"the mark stays at the highest offset ever published"];
+    .qunit.assertEquals[.qpipe.job.kafka_flow.high_water 0j;5j;"the mark stays at the highest offset ever published"];
     push[0 0j;4 5j];
     .qunit.assertEquals[count all_rows[];6;"and 4 and 5 are still refused"]};
 
 test_a_coordinate_repeated_within_one_batch_is_published_once:{[t]
     / The high-water mark cannot catch this one: both copies are above it.
     drive_ready[];
-    .qsub.kafka_flow.on_batch[`kafka_client_flow;
+    .qpipe.job.kafka_flow.on_batch[`kafka_client_flow;
         .kafka_flowtest.batch[0 0 0j;0 0 1j]];
     .qunit.assertEquals[count all_rows[];2;"(0;0) twice in one batch is one record"];
     .qunit.assertEquals[exec offset from all_rows[];0 1j;"the first copy kept, in batch order"]};
@@ -179,12 +179,12 @@ test_the_output_carries_the_kafka_coordinates:{[t]
 
 test_a_batch_on_another_table_is_ignored:{[t]
     drive_ready[];
-    .qsub.kafka_flow.on_batch[`quote;.kafka_flowtest.batch[0 0j;0 1j]];
+    .qpipe.job.kafka_flow.on_batch[`quote;.kafka_flowtest.batch[0 0j;0 1j]];
     .qunit.assertEquals[calls[];0;"a job subscribed to one table acts on one table"]};
 
 test_an_empty_batch_publishes_nothing:{[t]
     drive_ready[];
-    .qsub.kafka_flow.on_batch[`kafka_client_flow;0#.kafka_flowtest.batch[enlist 0j;enlist 0j]];
+    .qpipe.job.kafka_flow.on_batch[`kafka_client_flow;0#.kafka_flowtest.batch[enlist 0j;enlist 0j]];
     .qunit.assertEquals[calls[];0;"an empty batch is legal and produces no write"]};
 
 / --- the output contract ---------------------------------------------------
@@ -197,8 +197,8 @@ test_an_empty_batch_publishes_nothing:{[t]
 / contract suite with no output to check. It does NOT wire publish - that
 / suite owns the wiring.
 contract_driver:{[]
-    `.qsub.kafka_flow.high_water set (`long$())!`long$();
-    .qsub.kafka_flow.on_batch[`kafka_client_flow;.kafka_flowtest.batch[0 0j;0 1j]];
+    `.qpipe.job.kafka_flow.high_water set (`long$())!`long$();
+    .qpipe.job.kafka_flow.on_batch[`kafka_client_flow;.kafka_flowtest.batch[0 0j;0 1j]];
     }
 
 \d .

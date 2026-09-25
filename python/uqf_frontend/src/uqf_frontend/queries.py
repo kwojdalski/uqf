@@ -109,7 +109,7 @@ SELECT = """{[t;fc;fo;fv;lim]
 #:
 #: `recorded_at<=at<superseded_at` — current rows carry `0Wp` rather than a
 #: null precisely so this comparison needs no special case; see
-#: `.qmatz.still_current`.
+#: `.qetl.coverage.still_current`.
 #:
 #: The parameter is `at`, not `asof`: **`asof` is a q builtin**, and a builtin
 #: used as a lambda parameter raises a bare ``'nyi`` when the lambda is
@@ -121,7 +121,7 @@ SELECT = """{[t;fc;fo;fv;lim]
 #: aggregates across every partition, so a range published for EURUSD alone
 #: reports as covered for every symbol - the exact failure the column was
 #: added to prevent, rebuilt on the HTTP side. The empty string maps to the
-#: q null symbol `, which is .qmatz's "this dataset has no partition
+#: q null symbol `, which is .qetl.coverage's "this dataset has no partition
 #: dimension" sentinel and matches only rows recorded under it.
 COVERAGE = """{[ds;part;release;at]
   select range_from, range_to from etl_coverage

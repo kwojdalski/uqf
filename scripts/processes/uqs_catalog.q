@@ -45,7 +45,7 @@ describe[`crypto_sim_fills]:
 describe[`crypto_trades]:
     "Real confirmed exchange executions recorded from the OMS";
 describe[`databento_book]:
-    "Live Databento MBP-10 folded into the book shape by databento1, using the same .qxf transform the ODBC backfill applies - so a live row and a backfilled one are the same shape";
+    "Live Databento MBP-10 folded into the book shape by databento1, using the same .qetl.transform transform the ODBC backfill applies - so a live row and a backfilled one are the same shape";
 describe[`demo_deals]:
     "Generic analogue of an external relational deal source, landed by the demo_deals_backfill bounded worker. Synthetic by design - the real source is bank-internal and out of scope for this repository";
 describe[`etl_coverage]:
@@ -94,7 +94,7 @@ describe[`reference_data]:
 describe[`order_routing]:
     "Routing decisions, one row per (order, venue) - not 1:1 with orders, since an order can split. DECLARED, NOT YET PRODUCED - nothing in this tree routes";
 describe[`connections]:
-    "Venue connection registry, one row per venue link. NOT process liveness, which is .qhb and `uqs summary`. DECLARED, NOT YET PRODUCED";
+    "Venue connection registry, one row per venue link. NOT process liveness, which is .qetl.hb and `uqs summary`. DECLARED, NOT YET PRODUCED";
 describe[`economic_calendar]:
     "Scheduled macro releases, actual null until the event fires. DECLARED, NOT YET PRODUCED - needs an external data source and a licence for it";
 

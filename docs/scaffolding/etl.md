@@ -28,7 +28,7 @@ scaffold spreadmon:
   append to scripts/processes/uqs_catalog.q (2 lines)
   create tests/q/test_spreadmon.q (20 lines)
   append to tests/run_tests.q (1 line)
-  note: implement .qsub.spreadmon.on_batch, then replace the scaffolded test
+  note: implement .qpipe.job.spreadmon.on_batch, then replace the scaffolded test
   note: start it with its producers: quotes
 ```
 
@@ -40,9 +40,9 @@ table that stays empty.
 ## What you get
 
 ```q
-\d .qsub.spreadmon
+\d .qpipe.job.spreadmon
 
-publish:.qstream.unwired `spreadmon;
+publish:.qetl.job.stream.unwired `spreadmon;
 
 on_batch:{[t;x]
     '"spreadmon.on_batch: not implemented";
@@ -50,11 +50,11 @@ on_batch:{[t;x]
 
 \d .
 
-.qstream.define[`spreadmon;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`spreadmon;`procname`subscribe_to`publishes`on_batch`note!(
     `spreadmon1;
     `quotes;
     enlist `spread_bps;
-    .qsub.spreadmon.on_batch;
+    .qpipe.job.spreadmon.on_batch;
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
 ```
 
@@ -64,8 +64,8 @@ so a job subscribing to two tables branches on it:
 
 ```q
 on_batch:{[t;x]
-    $[t=`trades; .qsub.spreadmon.from_trades x;
-      t=`quote;  .qsub.spreadmon.from_quote x;
+    $[t=`trades; .qpipe.job.spreadmon.from_trades x;
+      t=`quote;  .qpipe.job.spreadmon.from_quote x;
       ()]}
 ```
 
@@ -78,7 +78,7 @@ on every batch. The process stays `up` and consumes nothing.
 
 **Never call `.u.upd`.** Call `publish`. The runner wires it to the plant, a
 test wires it to a recorder, and `check_etl_layering.py` fails the build if
-anything under `src/` reaches for `.qpipe`.
+anything under `src/` reaches for `.qtorq`.
 
 **Never publish `time`.** The plant stamps its own (invariant 1).
 
@@ -89,23 +89,23 @@ null propagating into a P&L number.
 ## Testing it without a stack
 
 The reason `publish` is a stub rather than a direct `.u.upd` call: a test wires
-it to a recorder and reads the job's output as data. Use `.qstream.wire`, not an
-assignment to the namespace's `publish`:
+it to a recorder and reads the job's output as data. Use
+`.qetl.job.stream.wire`, not an assignment to the namespace's `publish`:
 
 ```q
-.qstream.wire[`spreadmon; {[t;x] `.mytest.published set (t;x); count x}];
-.qsub.spreadmon.on_batch[`quotes; fixture];
+.qetl.job.stream.wire[`spreadmon; {[t;x] `.mytest.published set (t;x); count x}];
+.qpipe.job.spreadmon.on_batch[`quotes; fixture];
 .qunit.assertEquals[count last .mytest.published; 3; "one row per quoted pair"];
 ```
 
 **Wire it before driving the job, unconditionally.**
 `tests/q/test_cross_arbitrage.q` is the worked example, and its comment records
-why: `publish` starts as `.qstream.unwired`, which *throws*, and `on_batch` only
-reaches it when a batch actually produces output. So a test that drove the job
-and happened to produce nothing **passed while leaving publish unwired** ---
-then threw as soon as another suite's leftover state made the batch produce
-something. It had been another suite's `beforeNamespace` doing the wiring, by
-running first; under a shuffled order it no longer did.
+why: `publish` starts as `.qetl.job.stream.unwired`, which *throws*, and
+`on_batch` only reaches it when a batch actually produces output. So a test that
+drove the job and happened to produce nothing **passed while leaving publish
+unwired** --- then threw as soon as another suite's leftover state made the
+batch produce something. It had been another suite's `beforeNamespace` doing the
+wiring, by running first; under a shuffled order it no longer did.
 
 ## Then
 

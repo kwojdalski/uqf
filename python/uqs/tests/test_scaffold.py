@@ -4,7 +4,7 @@ WHAT IS WORTH TESTING HERE. Not that the templates produce a particular
 string - that would pin the prose and break on every wording change. What
 matters is that what they produce is still READABLE BY THE TREE:
 
-  * the generated `.qstream.define` block parses with the same regex
+  * the generated `.qetl.job.stream.define` block parses with the same regex
     `pipeline_edges` reads real jobs with, so a template that drifts out of
     what the tree can parse fails the build rather than rotting quietly;
   * the generated table definition parses with the same regex `model/schemas.py`
@@ -14,7 +14,7 @@ matters is that what they produce is still READABLE BY THE TREE:
 WHAT THESE CANNOT CATCH. Whether the generated q LOADS. That needs a q
 process and a whole tree, and both templates have already been caught
 failing it once: a fixture that threw stopped src/etl/init.q loading, and an
-empty one was refused by `.qxf.define`, which requires at least one example
+empty one was refused by `.qetl.transform.define`, which requires at least one example
 with rows. The comments in scaffold/templates.py record both.
 """
 
@@ -70,7 +70,7 @@ def test_a_scaffolded_feed_declares_no_subscription():
 
 
 def test_a_scaffolded_worker_declares_its_process():
-    """A worker's process is read from its own `.qbw.define`, so the
+    """A worker's process is read from its own `.qetl.job.bounded.define`, so the
     scaffolded one must name the process the plan says it runs."""
     plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
     (d,) = _declared(plan, "fx_rates_backfill.q")
@@ -131,19 +131,19 @@ def test_columns_without_publishing_is_refused():
 def test_a_scaffolded_worker_declares_its_source_and_dataset():
     plan = jobs.bounded_worker("fx_rates", "fx_rates", "sym:symbol, mid:float")
     worker = _body(plan, "fx_rates_backfill.q")
-    assert ".qbw.define[`fx_rates_backfill;" in worker
+    assert ".qetl.job.bounded.define[`fx_rates_backfill;" in worker
     assert "`fx_rates;`fx_rates;1D;" in worker
 
 
 def test_a_scaffolded_fixture_carries_a_row():
     """Neither a throw nor empty, and both were caught the hard way: a
     throwing fixture stops src/etl/init.q loading, because the worker's
-    .qxf.passthrough reads it AT LOAD TIME - and an empty one is refused by
-    .qxf.define, which requires at least one example with rows."""
+    .qetl.transform.passthrough reads it AT LOAD TIME - and an empty one is refused by
+    .qetl.transform.define, which requires at least one example with rows."""
     plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
     source = _body(plan, "sources/fx_rates.q")
     assert "enlist" in source.split("fixture:")[1], "the fixture must carry a row"
-    assert "not implemented" not in source.split("fixture:")[1].split(".qsrc.define")[0]
+    assert "not implemented" not in source.split("fixture:")[1].split(".qetl.source.define")[0]
 
 
 # ------------------------------------------------------------- refusing
@@ -199,7 +199,7 @@ def test_the_registered_namespace_is_the_one_the_test_file_declares():
     ):
         entry = _body(plan, "run_tests.q").strip()
         # The TEST file, not the job file - both end in .q, and the job file
-        # declares its own `.qsub.<name>` namespace. Nor the q table list,
+        # declares its own `.qpipe.job.<name>` namespace. Nor the q table list,
         # which the plan appends to and whose name also starts `test_`.
         test_body = next(
             a.body

@@ -5,7 +5,7 @@ and each is a different kind of change with a different way of going wrong:
 
     process lifecycle   start/stop/restart - a subprocess, via torq.sh
     process config      a field override persisted to process_overrides.csv
-    worker config       a `.qwcfg` layer value, over IPC, in a live process
+    worker config       a `.qetl.cfg` layer value, over IPC, in a live process
     backfill            a bounded worker run for a named range
 
 WHY THIS PACKAGE NOW DEPENDS ON uqs, having deliberately not
@@ -180,22 +180,22 @@ def process_choices(settings: Settings) -> list[dict[str, Any]]:
     ]
 
 
-#: Set one `.qwcfg` override in a live process.
+#: Set one `.qetl.cfg` override in a live process.
 #:
-#: `.qwcfg.set_layers[overrides;yaml;defaults]` replaces all three layers, so
+#: `.qetl.cfg.set_layers[overrides;yaml;defaults]` replaces all three layers, so
 #: setting one key means reading the current override layer and putting the
 #: key into it - done in q, in one expression, so two concurrent callers
 #: cannot interleave a read and a write and lose one of them.
 SET_WORKER_CONFIG = """{[k;v]
-  cur:$[99h=type .qwcfg.overrides; .qwcfg.overrides; ()!()];
-  .qwcfg.set_layers[cur,(enlist k)!enlist v; .qwcfg.yaml; .qwcfg.defaults];
-  .qwcfg.explain k}"""
+  cur:$[99h=type .qetl.cfg.overrides; .qetl.cfg.overrides; ()!()];
+  .qetl.cfg.set_layers[cur,(enlist k)!enlist v; .qetl.cfg.yaml; .qetl.cfg.defaults];
+  .qetl.cfg.explain k}"""
 
 
 def set_worker_config(gateway: Any, settings: Settings, key: str, value: str) -> dict[str, Any]:
     """Set a worker-config override in the process the gateway addresses.
 
-    RETURNS `.qwcfg.explain`, which names the layer the value now comes from.
+    RETURNS `.qetl.cfg.explain`, which names the layer the value now comes from.
     That matters because an override is not the only layer: a key also set in
     the environment reads from there, and a caller told only "ok" would
     believe a value that is not in effect.

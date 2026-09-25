@@ -25,22 +25,22 @@ tape:{[actions;sides;sizes]
 / --- the shape is a registered source under the source contract -----------
 
 test_the_event_source_is_registered_on_load:{[t]
-    .qunit.assertEquals[`demo_events in .qsrc.defined[];1b;"loading the source file registers it, so declaration and implementation cannot drift"]};
+    .qunit.assertEquals[`demo_events in .qetl.source.defined[];1b;"loading the source file registers it, so declaration and implementation cannot drift"]};
 
 test_the_fixture_satisfies_its_own_contract:{[t]
-    .qunit.assertEquals[.qsrc.validate_fixture `demo_events;1b;"the synthetic tape matches the shape it declares"]};
+    .qunit.assertEquals[.qetl.source.validate_fixture `demo_events;1b;"the synthetic tape matches the shape it declares"]};
 
 / First composite key in this tree: one order_id produces an add and then
 / exactly one terminal event, so the pair is unique where order_id is not.
 test_the_row_key_is_composite:{[t]
-    .qunit.assertEquals[.qsrc.row_key `demo_events;`order_id`action;"order_id alone does not identify an event"]};
+    .qunit.assertEquals[.qetl.source.row_key `demo_events;`order_id`action;"order_id alone does not identify an event"]};
 
 test_the_tape_is_a_superset_of_the_trades_shape:{[t]
     trades_cols:`time`sym`side`size`pip_factor;
-    .qunit.assertEquals[all trades_cols in .qfeed.demo_events.columns;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
+    .qunit.assertEquals[all trades_cols in .qpipe.source.demo_events.columns;1b;"a tape filtered to trades is trade-shaped, so the markout family keeps working on it"]};
 
 test_the_window_is_taken_on_event_time:{[t]
-    one:last .qsrc.fetch_window[`demo_events;0Ni;.evttest.d 0;.evttest.d 1];
+    one:last .qetl.source.fetch_window[`demo_events;0Ni;.evttest.d 0;.evttest.d 1];
     .qunit.assertEquals[count one;1;"one second of a ten-second tape is one event, not ten"]};
 
 / --- require_tape: three silent failures, refused ------------------------
@@ -95,7 +95,7 @@ test_a_tape_with_no_trades_has_zero_flow:{[t]
 / Size is unsigned in the tape and signed by multiplying, per the shape
 / contract. A signed size column would make `sum size` meaningless.
 test_the_fixture_flow_matches_its_trades:{[t]
-    .qunit.assertEquals[.qmicro.signed_trade_flow .qfeed.demo_events.fixture[];-500000f;"the fixture buys 1M and sells 1.5M aggressively"]};
+    .qunit.assertEquals[.qmicro.signed_trade_flow .qpipe.source.demo_events.fixture[];-500000f;"the fixture buys 1M and sells 1.5M aggressively"]};
 
 / --- cumulative_trade_flow ----------------------------------------------
 
@@ -111,7 +111,7 @@ test_cumulative_flow_is_a_running_total:{[t]
     .qunit.assertEquals[exec cum_flow from .qmicro.cumulative_trade_flow tp;100 300 250f;"each row is the net flow up to and including that trade"]};
 
 test_cumulative_flow_ends_at_the_scalar_flow:{[t]
-    tp:.qfeed.demo_events.fixture[];
+    tp:.qpipe.source.demo_events.fixture[];
     .qunit.assertEquals[last exec cum_flow from .qmicro.cumulative_trade_flow tp;.qmicro.signed_trade_flow tp;"the last cumulative value is the total, or one of the two is wrong"]};
 
 / --- cancel_to_trade_ratio (ROADMAP #23) --------------------------------
@@ -133,7 +133,7 @@ test_no_trades_gives_null_not_zero_or_infinity:{[t]
     .qunit.assertEquals[(null r;r=0f;r=0w);(1b;0b;0b);"an empty denominator is undefined, not zero and not infinite"]};
 
 test_the_fixture_ratio_matches_its_counts:{[t]
-    .qunit.assertEquals[.qmicro.cancel_to_trade_ratio .qfeed.demo_events.fixture[];1.5;"three cancels, two trades"]};
+    .qunit.assertEquals[.qmicro.cancel_to_trade_ratio .qpipe.source.demo_events.fixture[];1.5;"three cancels, two trades"]};
 
 / --- cancel_to_trade_ratio_by: the hit_ratio_by shape -------------------
 
@@ -191,7 +191,7 @@ test_undefined_if_zero_is_the_guard_and_only_the_guard:{[t]
     .qunit.assertEquals[.qmicro.undefined_if_zero 0 2 0 5;0n 2 0n 5f;"vectorised, because a functional select hands it one value per group"]};
 
 test_grouped_ratios_match_the_ungrouped_one_for_a_single_group:{[t]
-    tp:.qfeed.demo_events.fixture[];
+    tp:.qpipe.source.demo_events.fixture[];
     r:.qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `sym];
     .qunit.assertEquals[first exec ratio from r;.qmicro.cancel_to_trade_ratio tp;"one sym grouped must equal the whole-tape ratio"]};
 
@@ -211,50 +211,50 @@ beforeNamespace_worker:{[]
 
 setUp_worker:{[]
     .testutil.reset_coverage_ledger[];
-    .qwcfg.reset[];
-    .qwcfg.set_layers[()!();()!();()!()];
+    .qetl.cfg.reset[];
+    .qetl.cfg.set_layers[()!();()!();()!()];
     setenv[`UQF_DRY_RUN;""];
     setenv[`UQF_SOURCE_CRED_DEMO_EVENTS;""];
-    .qbfstate.release_lock `demo_events_backfill;
-    .qbfstate.clear_checkpoint `demo_events_backfill;
-    `event_tape set 0#.qfeed.demo_events.fixture[];
+    .qetl.job.bounded.state.release_lock `demo_events_backfill;
+    .qetl.job.bounded.state.clear_checkpoint `demo_events_backfill;
+    `event_tape set 0#.qpipe.source.demo_events.fixture[];
     }
 
-tearDown_worker:{[] .qwrk.demo_events_backfill.cleanup[];}
+tearDown_worker:{[] .qpipe.job.demo_events_backfill.cleanup[];}
 
 espec:{[from_n;to_n] `source_version`range_from`range_to!(`v1;.evttest.d from_n;.evttest.d to_n)}
 
 test_the_worker_satisfies_the_bounded_contract:{[t]
-    .qunit.assertEquals[.qwrk.demo_events_backfill.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies the contract in full"]};
+    .qunit.assertEquals[.qpipe.job.demo_events_backfill.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies the contract in full"]};
 
 test_the_worker_publishes_the_windowed_events:{[t]
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    r:.qwrk.demo_events_backfill.run[];
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    r:.qpipe.job.demo_events_backfill.run[];
     .qunit.assertEquals[(r`state;r`rows_published;count value `event_tape);(`completed;10;10);"ten seconds of a ten-event tape, published once each"]};
 
 / Inherited from the shell, not restated in the worker: an already-covered
 / range is idle, and idle is a success.
 test_a_second_run_is_idle:{[t]
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    .qwrk.demo_events_backfill.run[];
-    .qunit.assertEquals[(.qwrk.demo_events_backfill.run[])`state;`idle;"coverage skipping comes free with the shell"]};
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    .qpipe.job.demo_events_backfill.run[];
+    .qunit.assertEquals[(.qpipe.job.demo_events_backfill.run[])`state;`idle;"coverage skipping comes free with the shell"]};
 
 test_the_worker_honours_dry_run:{[t]
     setenv[`UQF_DRY_RUN;"true"];
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    .qwrk.demo_events_backfill.run[];
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    .qpipe.job.demo_events_backfill.run[];
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[(count value `event_tape;count value `etl_coverage);(0;0);"dry run comes free too - nothing published, no coverage staged"]};
 
 / The two workers must not share state. They have separate namespaces and
 / separate `progress` globals for exactly this reason - stamped one set per
-/ worker by .qbw.define, so a run of one leaves the other's untouched.
+/ worker by .qetl.job.bounded.define, so a run of one leaves the other's untouched.
 test_the_two_workers_have_separate_state:{[t]
-    other:.qwrk.demo_deals_backfill.progress;
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    .qwrk.demo_events_backfill.run[];
-    .qunit.assertEquals[.qwrk.demo_events_backfill.progress`windows_completed;1;"the run counted its one window"];
-    .qunit.assertEquals[.qwrk.demo_deals_backfill.progress;other;
+    other:.qpipe.job.demo_deals_backfill.progress;
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    .qpipe.job.demo_events_backfill.run[];
+    .qunit.assertEquals[.qpipe.job.demo_events_backfill.progress`windows_completed;1;"the run counted its one window"];
+    .qunit.assertEquals[.qpipe.job.demo_deals_backfill.progress;other;
         "two workers in one process, two sets of accumulators - the other's is untouched"]};
 
 / The declared width is hourly, but the fixture's range is ten SECONDS, so
@@ -264,16 +264,16 @@ test_the_two_workers_have_separate_state:{[t]
 / window running past the requested range would record coverage for a range
 / nobody asked for.
 test_the_worker_uses_its_own_window_width:{[t]
-    .qunit.assertEquals[.qbw.def[`demo_events_backfill]`width;0D01:00:00;"an event tape is denser than a deal feed, so its windows are hourly, not daily"]};
+    .qunit.assertEquals[.qetl.job.bounded.def[`demo_events_backfill]`width;0D01:00:00;"an event tape is denser than a deal feed, so its windows are hourly, not daily"]};
 
 test_a_short_range_gives_one_clipped_window:{[t]
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    w:first .qwrk.demo_events_backfill.plan 0Np;
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    w:first .qpipe.job.demo_events_backfill.plan 0Np;
     .qunit.assertEquals[w`range_to;.evttest.d 10;"the final window is clipped to the range, never extended past it"]};
 
 test_a_long_range_is_split_at_the_declared_width:{[t]
-    .qwrk.demo_events_backfill.init `source_version`range_from`range_to!(`v1;.evttest.d 0;(.evttest.d 0)+0D03:00:00);
-    .qunit.assertEquals[count .qwrk.demo_events_backfill.plan 0Np;3;"three hours at one hour each"]};
+    .qpipe.job.demo_events_backfill.init `source_version`range_from`range_to!(`v1;.evttest.d 0;(.evttest.d 0)+0D03:00:00);
+    .qunit.assertEquals[count .qpipe.job.demo_events_backfill.plan 0Np;3;"three hours at one hour each"]};
 
 / --- volume bucketing (ROADMAP #25's primitive) -------------------------
 
@@ -350,7 +350,7 @@ test_a_perfectly_balanced_tape_gives_vpin_zero:{[t]
     .qunit.assertEquals[exec vpin from v;enlist 0f;"buys exactly offsetting sells is zero imbalance"]};
 
 test_vpin_is_bounded_by_zero_and_one:{[t]
-    v:exec vpin from .qmicro.vpin[.qfeed.demo_events.fixture[];1000000f;1];
+    v:exec vpin from .qmicro.vpin[.qpipe.source.demo_events.fixture[];1000000f;1];
     defined:v where not null v;
     .qunit.assertEquals[all (defined>=0f) and defined<=1f;1b;"a fraction of bucket volume cannot leave 0..1"]};
 
@@ -381,7 +381,7 @@ test_a_tape_with_no_trades_has_no_rate:{[t]
     .qunit.assertEquals[null .qmicro.trade_arrival_rate .evttest.tape[`add`cancel;1 1;100 100f];1b;"undefined, not zero"]};
 
 test_the_grouped_form_counts_trades_per_bucket:{[t]
-    r:.qmicro.trade_arrival_rate_by[.qfeed.demo_events.fixture[];0D01:00:00;enlist `sym];
+    r:.qmicro.trade_arrival_rate_by[.qpipe.source.demo_events.fixture[];0D01:00:00;enlist `sym];
     .qunit.assertEquals[first exec trades from r;2;"the fixture's two trades fall in one hourly bucket"]};
 
 test_the_grouped_form_validates_its_tape:{[t]
@@ -398,33 +398,33 @@ test_the_grouped_form_validates_its_tape:{[t]
 / take min/max over nothing.
 
 test_the_events_worker_declares_a_callable_contract:{[t]
-    ok:all {[nm] 100h=type value ` sv `.qwrk.demo_events_backfill,nm} each .qbfstate.bounded_worker_methods;
+    ok:all {[nm] 100h=type value ` sv `.qpipe.job.demo_events_backfill,nm} each .qetl.job.bounded.state.bounded_worker_methods;
     .qunit.assertEquals[ok;1b;"every required method is a function, not merely a name"]};
 
 / Called, not just declared. Existence is what require_contract checks; that
 / each one reaches the shell with its arguments intact is what nothing did.
 test_the_events_worker_spec_delegates:{[t]
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    .qunit.assertEquals[.qwrk.demo_events_backfill.spec[];.qbw.spec `demo_events_backfill;
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    .qunit.assertEquals[.qpipe.job.demo_events_backfill.spec[];.qetl.job.bounded.spec `demo_events_backfill;
         "the worker's spec is the shell's, not a second copy"]};
 
 test_the_events_worker_fetch_delegates_with_its_window_in_order:{[t]
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    r:.qwrk.demo_events_backfill.fetch[.evttest.d 0;.evttest.d 1];
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    r:.qpipe.job.demo_events_backfill.fetch[.evttest.d 0;.evttest.d 1];
     .qunit.assertEquals[r`state;`ok;"one second of the tape fetches cleanly"];
     .qunit.assertEquals[count r`result;1;
         "one second of a ten-second tape is one event - a swapped window gives none or ten"]};
 
 test_the_events_worker_publish_delegates:{[t]
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    batch:(.qwrk.demo_events_backfill.fetch[.evttest.d 0;.evttest.d 1])`result;
-    .qunit.assertEquals[.qwrk.demo_events_backfill.publish batch;1;"publish reports what it wrote"];
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    batch:(.qpipe.job.demo_events_backfill.fetch[.evttest.d 0;.evttest.d 1])`result;
+    .qunit.assertEquals[.qpipe.job.demo_events_backfill.publish batch;1;"publish reports what it wrote"];
     .qunit.assertEquals[count value `event_tape;1;"and the row reached the target"]};
 
 test_the_events_worker_checkpoint_delegates:{[t]
-    .qwrk.demo_events_backfill.init .evttest.espec[0;10];
-    .qwrk.demo_events_backfill.checkpoint[.evttest.d 2];
-    .qunit.assertEquals[.qbfstate.load_checkpoint[`demo_events_backfill;.evttest.espec[0;10]];
+    .qpipe.job.demo_events_backfill.init .evttest.espec[0;10];
+    .qpipe.job.demo_events_backfill.checkpoint[.evttest.d 2];
+    .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`demo_events_backfill;.evttest.espec[0;10]];
         .evttest.d 2;
         "the cursor written through the delegator is the one the shell stores"]};
 
@@ -432,12 +432,12 @@ test_facts_on_an_empty_window_says_so_rather_than_computing_infinities:{[t]
     / Coverage records a zero-row window deliberately, so `facts` receives one.
     / min/max over an empty column yields infinities, which would be recorded
     / as though they were observations of the data.
-    r:.qwrk.demo_events_backfill.facts[0#.qfeed.demo_events.fixture[]];
+    r:.qpipe.job.demo_events_backfill.facts[0#.qpipe.source.demo_events.fixture[]];
     .qunit.assertEquals[r`event_span;"empty window";"an empty window is reported as empty, not as a span"]};
 
 test_facts_reports_the_span_and_the_trade_count:{[t]
-    tape:.qfeed.demo_events.fixture[];
-    r:.qwrk.demo_events_backfill.facts[tape];
+    tape:.qpipe.source.demo_events.fixture[];
+    r:.qpipe.job.demo_events_backfill.facts[tape];
     .qunit.assertEquals[r`distinct_syms;count distinct tape`sym;"one count per distinct symbol"];
     .qunit.assertEquals[r`trade_events;sum `trade=tape`action;"only trades are counted as trade events"];
     .qunit.assertTrue[(r[`event_span]) like "*/*";"the span is from/to, not a single instant"]};

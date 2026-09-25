@@ -1,4 +1,4 @@
-/ demo_events_backfill.q - the event-tape bounded worker (.qwrk.demo_events_backfill).
+/ demo_events_backfill.q - the event-tape bounded worker (.qpipe.job.demo_events_backfill).
 / .
 / A declaration over the generic shell (#124). This is the file that made
 / #124 worth doing: written against the old copy-the-glue pattern it would
@@ -10,7 +10,7 @@
 / work to a day of deals, and a window that takes an hour of wall-clock to
 / fetch is a window whose failure costs an hour.
 
-\d .qwrk.demo_events_backfill
+\d .qpipe.job.demo_events_backfill
 
 / Materialisation metadata for one window.
 / .
@@ -45,10 +45,10 @@ facts:{[batch]
 
 / Pass-through, like demo_deals_backfill: the tape is published as fetched,
 / and the example is the source's own hand-written fixture.
-.qxf.passthrough[`demo_events_passthrough;`batch;0#.qfeed.demo_events.fixture[];.qfeed.demo_events.fixture[]];
+.qetl.transform.passthrough[`demo_events_passthrough;`batch;0#.qpipe.source.demo_events.fixture[];.qpipe.source.demo_events.fixture[]];
 
-.qbw.define[`demo_events_backfill;
+.qetl.job.bounded.define[`demo_events_backfill;
     `source`dataset`width`transform`facts`procname`note!
-        (`demo_events;`event_tape;0D01:00:00;`demo_events_passthrough;.qwrk.demo_events_backfill.facts;
+        (`demo_events;`event_tape;0D01:00:00;`demo_events_passthrough;.qpipe.job.demo_events_backfill.facts;
          `events_backfill1;
          "bounded: see deals_backfill1")];

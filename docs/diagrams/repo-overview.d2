@@ -17,12 +17,12 @@
 # file under src/ loads in a plain q process with no TorQ present (bank
 # rule), which is what lets a worker or a streaming job be tested against a
 # recorder instead of a tickerplant. Exactly one namespace may know TorQ
-# exists - .qpipe, in scripts/ - and scripts/gates/check_etl_layering.py fails the
+# exists - .qtorq, in scripts/ - and scripts/gates/check_etl_layering.py fails the
 # build if anything under src/etl/ reaches for it. So the adapter gets its
 # own band, and every arrow into the TorQ stack passes through it.
 #
 # TorQ is not the only way to run a job any more, and the band says so:
-# run_stream.q runs any streaming job on stock kdb+, against .qtick - a
+# run_stream.q runs any streaming job on stock kdb+, against .qetl.tick - a
 # plain-q tickerplant in src/etl/core/ - and never loads lib/torq. It sits in
 # scripts/ beside the TorQ runners because it is a runner too, but its arrow
 # stays inside the left column: it goes back to src/, not down to the stack.
@@ -149,7 +149,7 @@ pipeline: "" {
     # edge crossed the band and dropped its label on top of the quant
     # library's.
     quant: "The quant library\nfoundation · pricing · portfolio\nexecution · market_data" { class: lib }
-    core: "src/etl/core/\nthe pipeline framework\n.qbw bounded · .qstream streaming · .qnorm\ncoverage · runs · transforms · .qtick plant" { class: fw }
+    core: "src/etl/core/\nthe pipeline framework\n.qetl.job.bounded bounded · .qetl.job.stream streaming · .qetl.job.stream.normalizer\ncoverage · runs · transforms · .qetl.tick plant" { class: fw }
     decls: "Declarations\nsources/ · workers/ · streaming/\none file each, registered on load" { class: decl }
 
     decls -> core
@@ -162,7 +162,7 @@ pipeline: "" {
     grid-gap: 34
 
     # Same rule: the TorQ runners on the right, because Airflow triggers
-    # them from there, and .qpipe beside the tickerplant it publishes into
+    # them from there, and .qtorq beside the tickerplant it publishes into
     # in the band below. run_stream.q takes the far left: it has no edge
     # leaving the band, and on the right Airflow's edge and the status-file
     # edge both ran straight through it.
@@ -171,11 +171,11 @@ pipeline: "" {
     # across this band's right-hand gap. With one-line labels the three boxes
     # spread far enough right to put the runners in its way, so the labels
     # wrap and the boxes stay narrow enough to leave that gap clear.
-    standalone: "run_stream.q\nany streaming job\non stock kdb+ via .qtick" { class: fw }
-    qpipe: ".qpipe — the TorQ adapter\ndiscovery · subscribe\npublish · timers" { class: adapter }
+    standalone: "run_stream.q\nany streaming job\non stock kdb+ via .qetl.tick" { class: fw }
+    qtorq: ".qtorq — the TorQ adapter\ndiscovery · subscribe\npublish · timers" { class: adapter }
     runners: "torq_backfill.q\ntorq_stream.q\none worker or job each" { class: adapter }
 
-    runners -> qpipe
+    runners -> qtorq
   }
 
   stack: "The running stack — lib/torq, vendored, never edited" {
@@ -196,7 +196,7 @@ pipeline: "" {
     style.stroke: "#3d7a5a"
     style.stroke-dash: 4
   }
-  scripts.qpipe -> stack.tp: "subscribe · .u.upd" {
+  scripts.qtorq -> stack.tp: "subscribe · .u.upd" {
     style.stroke: "#a54a5c"
     style.stroke-width: 3
   }

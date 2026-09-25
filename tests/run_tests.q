@@ -44,9 +44,9 @@
 / Deriving it - `key `` filtered to `*test` - works, and was tried: it
 / produces exactly these namespaces. What it also does is REORDER them, and
 / three suites here measure live global state that other suites mutate.
-/ .qbw fixture workers (`reference`, `partial`, three `fixture_*`) registered
+/ .qetl.job.bounded fixture workers (`reference`, `partial`, three `fixture_*`) registered
 / at run time reach .mantest's documentation ratchet and .nstest's worker
-/ enumeration; .qdag.jobs reaches .regtest's registry scan. Each of those
+/ enumeration; .qetl.dag.jobs reaches .regtest's registry scan. Each of those
 / passed only because this list happened to run it first. That fragility is
 / real and worth fixing on its own terms, not inside the change that found
 / it.
@@ -61,9 +61,9 @@ if[0=count nsList; '"run_tests: no test namespaces listed"];
 / =shuffle runs the same suites in another one.
 / .
 / It exists because four tests here USED to pass on this list's order alone.
-/ Each scanned live global state that other suites mutate - .qbw fixture
+/ Each scanned live global state that other suites mutate - .qetl.job.bounded fixture
 / workers reaching a documentation ratchet, a test-registered source reaching
-/ a namespace check, .qdag.jobs reaching a registry scan - and each was
+/ a namespace check, .qetl.dag.jobs reaching a registry scan - and each was
 / fixed to ask about the tree rather than about the process. This is what
 / keeps them fixed: `scripts/test.py q-order` runs the whole suite reversed,
 / and a test that quietly grows a dependency on running after some other

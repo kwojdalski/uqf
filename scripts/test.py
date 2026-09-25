@@ -172,7 +172,7 @@ def lane_q_scripts() -> None:
     Each runs in its own process: they load src/init.q, define top-level
     tables and insert into them, and a shared process would let one
     example's rows reach the next. A non-zero exit fails the lane, which is
-    the whole point - the scripts already narrate through .qlog, so the
+    the whole point - the scripts already narrate through .qetl.log, so the
     output is the report.
     """
     _banner("q-scripts: every worked example under scripts/examples/")
@@ -264,7 +264,7 @@ def lane_coverage() -> None:
 
     What made that possible was closing in-memory instrumentation's one real
     hole. A function whose VALUE was captured into a registry beforehand is
-    called through that copy and never counted - `.qio.memory` holds
+    called through that copy and never counted - `.qetl.io.memory` holds
     `write_memory`, so every bounded worker wrote through a captured copy
     and it reported as never called while being exercised on every window.
     `.cov.reseed` swaps those copies too.

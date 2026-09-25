@@ -1,4 +1,4 @@
-/ markout.q - the whole of the markout job (.qsub.markout).
+/ markout.q - the whole of the markout job (.qpipe.job.markout).
 / .
 / Subscribes to `trades` and `quote`, buffers both, and every second scores
 / the fills old enough to score against the mid at each horizon, publishing
@@ -11,7 +11,7 @@
 / subscription and timer in the old scripts/torq_markout_etl.q (deleted in
 / #204) - because the
 / computation had to be testable and the wiring had to connect. The publish
-/ seam (.qstream.wire) makes both true of one file.
+/ seam (.qetl.job.stream.wire) makes both true of one file.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / .
@@ -23,7 +23,7 @@
 / WITHOUT `time`, which .u.upd stamps on receipt (invariant 1).
 / tests/q/test_transform.q holds the two to each other.
 
-\d .qsub.markout
+\d .qpipe.job.markout
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -53,16 +53,16 @@ execution_quality:([] sym:`symbol$(); trade_time:`timestamp$(); horizon:`timespa
 / @param quotes quote ticks, as the batch handler mirrors them
 / @return one row per fill per horizon, in fill order then horizon order
 score_markouts:{[trades;quotes]
-    if[0=count trades; :.qsub.markout.execution_quality];
+    if[0=count trades; :.qpipe.job.markout.execution_quality];
     mids:select sym, time, mid:(bid+ask)%2 from quotes;
-    scored:.qexec.markout_at_horizons[trades;mids;.qsub.markout.horizons];
+    scored:.qexec.markout_at_horizons[trades;mids;.qpipe.job.markout.horizons];
     select sym, trade_time, horizon, trade_price, ref_price, markout_pips from scored}
 
 / --------------------------------------------------------------- THE JOB
 
-/ Where rows go. A stub until .qstream.wire points it at the tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `markout;
+publish:.qetl.job.stream.unwired `markout;
 
 / STATE, two blocks. pending is a queue: every trade not yet old enough to
 / score, drained by on_timer as it scores them. quote_hist is a mirror:
@@ -87,9 +87,9 @@ quote_hist:quotes;
 / @return nothing - this handler publishes nothing itself
 on_batch:{[t;x]
     $[t=`trades;
-        `.qsub.markout.pending insert select time, sym, side, trade_price, size, pip_factor from x where sym in .qsynth.pairs;
+        `.qpipe.job.markout.pending insert select time, sym, side, trade_price, size, pip_factor from x where sym in .qsynth.pairs;
       t=`quote;
-        `.qsub.markout.quote_hist insert select time, sym, bid, ask from x where sym in .qsynth.pairs;
+        `.qpipe.job.markout.quote_hist insert select time, sym, bid, ask from x where sym in .qsynth.pairs;
       ()];
     }
 
@@ -103,25 +103,25 @@ on_batch:{[t;x]
 / publish leaves the batch buffered for the next tick instead of losing it -
 / the runner's safe timer swallows the error, so a drain-first ordering
 / would lose the batch silently. That ordering is why this reads then
-/ evicts rather than calling .qstream.drain.
+/ evicts rather than calling .qetl.job.stream.drain.
 / .
 / `now` is an argument so the whole job can be driven in a test. The runner
 / passes the process clock.
 / @param now the instant to score as of
 / @return nothing
 score_ready:{[now]
-    if[0=count .qsub.markout.pending; :()];
-    mask:.qsub.markout.pending[`time]<=now-.qsub.markout.max_horizon;
-    ready:.qsub.markout.pending where mask;
+    if[0=count .qpipe.job.markout.pending; :()];
+    mask:.qpipe.job.markout.pending[`time]<=now-.qpipe.job.markout.max_horizon;
+    ready:.qpipe.job.markout.pending where mask;
     if[0=count ready; :()];
-    out:.qxf.apply[`execution_quality;`trades`quotes!(ready;.qsub.markout.quote_hist)];
-    .qsub.markout.publish[`execution_quality;out];
-    .qstream.evict[`.qsub.markout.pending;mask];
+    out:.qetl.transform.apply[`execution_quality;`trades`quotes!(ready;.qpipe.job.markout.quote_hist)];
+    .qpipe.job.markout.publish[`execution_quality;out];
+    .qetl.job.stream.evict[`.qpipe.job.markout.pending;mask];
     }
 
 / The timer body the runner installs. Reads the clock once and hands it to
 / score_ready, which is the testable half.
-on_timer:{[] .qsub.markout.score_ready .qsub.markout.now[]}
+on_timer:{[] .qpipe.job.markout.score_ready .qpipe.job.markout.now[]}
 
 / The clock, as a function so a test can replace it.
 / .
@@ -143,10 +143,10 @@ now:{[] .z.p}
 
 \d .
 
-.qxf.define[`execution_quality;`inputs`output`fn`examples!(
-    `trades`quotes!(.qsub.markout.trades;.qsub.markout.quotes);
-    .qsub.markout.execution_quality;
-    .qsub.markout.score_markouts;
+.qetl.transform.define[`execution_quality;`inputs`output`fn`examples!(
+    `trades`quotes!(.qpipe.job.markout.trades;.qpipe.job.markout.quotes);
+    .qpipe.job.markout.execution_quality;
+    .qpipe.job.markout.score_markouts;
     / A EURUSD buy that moves 5 then 10 pips in its favour; a USDJPY sell
     / whose single later quote serves both horizons; a GBPUSD buy with no
     / quote at all, which must come out null rather than go missing.
@@ -171,12 +171,12 @@ now:{[] .z.p}
 
 / Score every second - frequent enough that execution_quality stays close to
 / real-time in a demo, cheap enough not to matter at this data volume.
-.qstream.define[`markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
+.qetl.job.stream.define[`markout;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
     `markout1;
     `trades`quote;
     enlist `execution_quality;
-    .qsub.markout.on_batch;
+    .qpipe.job.markout.on_batch;
     0D00:00:01.000;
-    .qsub.markout.on_timer;
+    .qpipe.job.markout.on_timer;
     1b;
     "compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two")];

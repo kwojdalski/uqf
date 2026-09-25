@@ -1,4 +1,4 @@
-/ coercion.q - the shared text-to-type layer for external sources (.qcoer).
+/ coercion.q - the shared text-to-type layer for external sources (.qetl.coerce).
 / .
 / Implements the question bank (issue #73), answered there: sources return text
 / that q must coerce, and there IS one shared coercion layer rather than a
@@ -48,7 +48,7 @@
 /   folded by `$, so a lower-case source symbol misses every join and
 /   returns an empty table that reads as "no data for that pair".
 
-\d .qcoer
+\d .qetl.coerce
 
 / ------------------------------------------------------------------ FLOAT
 
@@ -71,9 +71,9 @@ numeric_chars:".-+eE0123456789"
 / build changing it would otherwise change this function's meaning silently.
 / @param str the text to coerce
 / @return the float, or 0n when the text is empty or not numeric
-/ @eg .qcoer.to_float["1.0842"]  ->  1.0842
-/ @eg .qcoer.to_float["1,0842"]  ->  1.0842
-/ @eg .qcoer.to_float[""]        ->  0n
+/ @eg .qetl.coerce.to_float["1.0842"]  ->  1.0842
+/ @eg .qetl.coerce.to_float["1,0842"]  ->  1.0842
+/ @eg .qetl.coerce.to_float[""]        ->  0n
 to_float:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0n];
@@ -111,8 +111,8 @@ to_long:{[str]
 / genuinely wants midnight can say so with `to_date_as_midnight`, which is
 / explicit and greppable.
 / @return the timestamp, or 0Np when empty, malformed, or date-only
-/ @eg .qcoer.to_timestamp["2026-09-15T09:30:00"]  ->  2026.09.15D09:30:00
-/ @eg .qcoer.to_timestamp["2026-09-15"]           ->  0Np
+/ @eg .qetl.coerce.to_timestamp["2026-09-15T09:30:00"]  ->  2026.09.15D09:30:00
+/ @eg .qetl.coerce.to_timestamp["2026-09-15"]           ->  0Np
 to_timestamp:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Np];
@@ -163,8 +163,8 @@ to_date_as_midnight:{[str]
 / trailing whitespace itself. The trim stays because it costs nothing and a
 / source may pad with characters `$ does not strip, but it is not fixing a
 / q behaviour and should not be cited as doing so.
-/ @eg .qcoer.to_symbol["EURUSD "]  ->  `EURUSD
-/ @eg .qcoer.to_symbol[" eurusd"]  ->  `EURUSD
+/ @eg .qetl.coerce.to_symbol["EURUSD "]  ->  `EURUSD
+/ @eg .qetl.coerce.to_symbol[" eurusd"]  ->  `EURUSD
 to_symbol:{[str]
     trimmed:trim str;
     if[0=count trimmed; :` ];

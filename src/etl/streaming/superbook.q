@@ -1,14 +1,14 @@
-/ superbook.q - latest direct liquidity across sources (.qsub.superbook).
+/ superbook.q - latest direct liquidity across sources (.qpipe.job.superbook).
 / .
 / Keeps one full snapshot per (sym, source), never a concatenated history.
 / Publishes one sorted ladder per pair with aligned source and time vectors.
 / Source timestamps are also watermarks: expiry does not erase them and let
 / a delayed older snapshot resurrect withdrawn liquidity.
 
-\d .qsub.superbook
+\d .qpipe.job.superbook
 
-publish:.qstream.unwired `superbook;
-books:`sym`source xkey .qsub.market_data.market_data
+publish:.qetl.job.stream.unwired `superbook;
+books:`sym`source xkey .qpipe.job.market_data.market_data
 superbook:([] sym:`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())
 / The demo feeds tick every 500ms. Override for the actual feed SLA.
 max_age:0D00:00:05
@@ -18,7 +18,7 @@ max_age:0D00:00:05
 / @param sizes the matching numeric vector in base currency
 / @return a table of positive finite price and size
 / @throws when vectors are malformed or their lengths differ
-/ @eg .qsub.superbook.levels[1.1 1.2;100 0f] -> ([] price:enlist 1.1; size:enlist 100f)
+/ @eg .qpipe.job.superbook.levels[1.1 1.2;100 0f] -> ([] price:enlist 1.1; size:enlist 100f)
 levels:{[prices;sizes]
     if[not all (type each (prices;sizes)) in 0 6 7 8 9h;
         '"superbook: prices and sizes must be numeric vectors"];
@@ -36,12 +36,12 @@ levels:{[prices;sizes]
 / @param as_of UTC processing timestamp
 / @return updated keyed snapshots, without mutating state
 / @throws when columns, identities, timestamps or level vectors are malformed
-/ @eg count .qsub.superbook.replace_books[.qsub.superbook.books;.qsub.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0
+/ @eg count .qpipe.job.superbook.replace_books[.qpipe.job.superbook.books;.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0
 replace_books:{[state;batch;as_of]
-    wanted:cols .qsub.market_data.market_data;
+    wanted:cols .qpipe.job.market_data.market_data;
     .qschema.require_cols[`superbook;`batch;batch;wanted];
     rows:wanted#batch;
-    problems:.qxf.problems[.qsub.market_data.market_data;rows;1b];
+    problems:.qetl.transform.problems[.qpipe.job.market_data.market_data;rows;1b];
     if[count problems; '"superbook: ","; " sv problems];
     if[any null rows`source_time; '"superbook: source_time must not be null"];
     if[(any null rows`source) or not all .qccy.is_ccy_pair each rows`sym;
@@ -69,7 +69,7 @@ replace_books:{[state;batch;as_of]
 / @param side `bid or `ask
 / @return price, size, source and source_time sorted best-first
 / @throws error if side isn't `bid or `ask
-/ @eg count .qsub.superbook.side_levels[.qsub.market_data.market_data;`bid] -> 0
+/ @eg count .qpipe.job.superbook.side_levels[.qpipe.job.market_data.market_data;`bid] -> 0
 side_levels:{[rows;side]
     if[not $[-11h=type side; side in `bid`ask; 0b];
         '"side_levels: side must be `bid or `ask, got ",.Q.s1 side];
@@ -87,12 +87,12 @@ side_levels:{[rows;side]
 / @param as_of UTC processing timestamp
 / @param age maximum quote age, inclusive at the boundary
 / @return unkeyed superbook snapshots, one row per known pair
-/ @eg count .qsub.superbook.snapshot[`sym`source xkey 0#.qsub.market_data.market_data;2026.09.19D10:00:00.000000000;0D00:00:05] -> 0
+/ @eg count .qpipe.job.superbook.snapshot[`sym`source xkey 0#.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000;0D00:00:05] -> 0
 snapshot:{[state;as_of;age]
     all_books:0!state;
     cutoff:as_of-age;
     fresh:select from all_books where source_time>=cutoff, source_time<=as_of;
-    result:0#.qsub.superbook.superbook;
+    result:0#.qpipe.job.superbook.superbook;
     pairs:distinct all_books`sym;
     i:0;
     while[i<count pairs;
@@ -114,18 +114,18 @@ snapshot:{[state;as_of;age]
 / none. tests/q/test_superbook.q drives it against a book it builds itself.
 refresh:{[as_of]
     rows:snapshot[books;as_of;max_age];
-    if[count rows; .qsub.superbook.publish[`superbook;rows]];
+    if[count rows; .qpipe.job.superbook.publish[`superbook;rows]];
     }
 
 / Consume a canonical market_data batch and publish the recomputed books.
 / @param t incoming table name
 / @param x full source snapshots
 / @return nothing
-/ @eg .qsub.superbook.on_batch[`unrelated;()]
+/ @eg .qpipe.job.superbook.on_batch[`unrelated;()]
 on_batch:{[t;x]
     if[not t=`market_data; :()];
     now:.z.p;
-    `.qsub.superbook.books set replace_books[books;x;now];
+    `.qpipe.job.superbook.books set replace_books[books;x;now];
     refresh now;
     }
 
@@ -139,13 +139,13 @@ on_timer:{[] refresh .z.p;}
 
 / The expiry window is what decides which liquidity counts as live, so a
 / change to it changes every snapshot downstream - worth recording (#295).
-.qaudit.watch[`superbook;enlist `.qsub.superbook.max_age];
+.qetl.cfg.audit.watch[`superbook;enlist `.qpipe.job.superbook.max_age];
 
-.qstream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note!(
+.qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note!(
     `superbook1;
     enlist `market_data;
     `superbook`config_change;
-    .qsub.superbook.on_batch;
+    .qpipe.job.superbook.on_batch;
     0D00:00:00.500;
-    .qsub.superbook.on_timer;
+    .qpipe.job.superbook.on_timer;
     "latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there")];

@@ -23,9 +23,10 @@ which is merely wasteful.
 Those two failures are not symmetrical, and almost every ordering decision in
 the framework falls out of preferring the second:
 
-- **Publish, then record coverage, then checkpoint.** `.qwrt.finish_window`
-  sequences all three, and the order is the requirement, not an implementation
-  detail. Interrupt it anywhere and the result is an under-claim.
+- **Publish, then record coverage, then checkpoint.**
+  `.qetl.job.bounded.runtime.finish_window` sequences all three, and the order
+  is the requirement, not an implementation detail. Interrupt it anywhere and
+  the result is an under-claim.
 - **A failed data-quality check takes the same path as a failed fetch.** The
   window is not published, no coverage is staged, the run continues, and the
   next run plans that window again because coverage never claimed it. That is
@@ -69,14 +70,14 @@ This tree has produced the failure repeatedly and the examples are kept rather
 than tidied away: `.qdqc` carried nine data-quality check functions that nothing
 called, which meant the coverage ledger could record a window as complete that
 had failed its own checks. `docs/man.q` was generated for months and never
-loaded by anything. `.qwcfg.set_layers` implemented three documented
+loaded by anything. `.qetl.cfg.set_layers` implemented three documented
 configuration layers with no production caller.
 
 So: **a check that is not on the publish path is decoration**, and a capability
 that works only under the test runner is not a capability. When something is
 added here, the question asked first is which live path reaches it.
 
-The corollary is restraint. `.qio` defines `write` and nothing else --- no
+The corollary is restraint. `.qetl.io` defines `write` and nothing else --- no
 `read`, no `exists` --- because nothing in this framework reads a target back
 through an abstraction. Those go in when something calls them.
 
@@ -105,9 +106,9 @@ every living document and confirms that each `.q*` function it names exists, and
 that any call it shows passes no more arguments than the function takes. The
 gate's first run found two references left behind by renames: a design note
 citing `.qmicro.require_sorted_tape` (the function is `require_tape`) and an
-agent citing `.qcoer.coerce` (it is `coerce_column`). Neither was caught by
-anything else, because a name that appears in no generated artifact has nothing
-to disagree with.
+agent citing `.qetl.coerce.coerce` (it is `coerce_column`). Neither was caught
+by anything else, because a name that appears in no generated artifact has
+nothing to disagree with.
 
 The same reflex applies to borrowed values. The orchestrator extends
 `monitor1`'s subscription list by *parsing the vendored list and appending to
@@ -118,21 +119,21 @@ it*, rather than pinning a copy made on the day it was written.
 A component handed something malformed should stop, naming what is wrong, before
 the first read that would depend on it:
 
-- `.qmatz.require_schema` refuses a ledger built to a different shape, because
-  every read here would otherwise aggregate across whatever the unexpected
-  column distinguishes, and a range covered for one value of it would report as
-  covered for all.
-- `.qbw.advanced_to` refuses a cursor that would stand still or move backwards,
-  because a run's progress cursor is what tells a stuck run from a finished one.
-  (It used to be `plan`'s lower bound as well, which made a restatement behind
-  the cursor unreachable; coverage decides what to plan now, and the cursor
-  tracks progress within a run.)
-- `.qbw.define` refuses two workers declaring the same dataset *and* partition,
-  because their coverage rows would then be indistinguishable, and refuses a
-  worker that supplies its own `ns`, because the namespace is derived from the
-  worker's name --- `.qwrk.<worker name>`.
-- `.qmatz.require_interval` refuses a zero-width or reversed window, because
-  recording one claims completeness for no data.
+- `.qetl.coverage.require_schema` refuses a ledger built to a different shape,
+  because every read here would otherwise aggregate across whatever the
+  unexpected column distinguishes, and a range covered for one value of it would
+  report as covered for all.
+- `.qetl.job.bounded.advanced_to` refuses a cursor that would stand still or
+  move backwards, because a run's progress cursor is what tells a stuck run from
+  a finished one. (It used to be `plan`'s lower bound as well, which made a
+  restatement behind the cursor unreachable; coverage decides what to plan now,
+  and the cursor tracks progress within a run.)
+- `.qetl.job.bounded.define` refuses two workers declaring the same dataset
+  *and* partition, because their coverage rows would then be indistinguishable,
+  and refuses a worker that supplies its own `ns`, because the namespace is
+  derived from the worker's name --- `.qpipe.job.<worker name>`.
+- `.qetl.coverage.require_interval` refuses a zero-width or reversed window,
+  because recording one claims completeness for no data.
 
 Each refusal names a specific failure it prevents. A guard whose comment cannot
 name one is usually guarding nothing.
@@ -145,9 +146,9 @@ directly.
 
 ## 6. Required for choices, ambient for facts
 
-`source_version` is a required parameter of `.qmatz.stage_completion`, not an
-optional filter, on the grounds that an optional filter is one a caller forgets ---
-and forgetting this one merges coverage across releases.
+`source_version` is a required parameter of `.qetl.coverage.stage_completion`,
+not an optional filter, on the grounds that an optional filter is one a caller
+forgets --- and forgetting this one merges coverage across releases.
 
 `run_id` looks like the same case and is not. `source_version` is a *choice* the
 caller makes, and the wrong choice is silent corruption. `run_id` is a *fact
@@ -163,16 +164,16 @@ it?"** If yes, demand it. If no, read it.
 
 The coverage ledger is append-only. A restatement does not edit the row it
 replaces --- it stamps `superseded_at`, and every read takes an as-of instant
-(see [`.qmatz.supersede`](../../src/etl/core/materialisation.q)). A claim is
-therefore *true until superseded* rather than *true or gone*, and "what did we
-believe on Tuesday" stays answerable.
+(see [`.qetl.coverage.supersede`](../../src/etl/core/materialisation.q)). A
+claim is therefore *true until superseded* rather than *true or gone*, and "what
+did we believe on Tuesday" stays answerable.
 
 Current rows carry a far-future sentinel (`0Wp`) rather than a null, so an as-of
-comparison needs no special case. `.qrun` uses the same device for a run that
-has not ended.
+comparison needs no special case. `.qetl.run` uses the same device for a run
+that has not ended.
 
-There is exactly one mutation in the ETL tree --- `.qrun.finish` updating the
-row `begin` wrote --- and it is argued for in place: a run's outcome is not
+There is exactly one mutation in the ETL tree --- `.qetl.run.finish` updating
+the row `begin` wrote --- and it is argued for in place: a run's outcome is not
 known when it starts, and appending a second row would make "how many runs were
 there" ambiguous.
 
@@ -211,45 +212,45 @@ there.
 There are two kinds of ETL process here, and they are deliberately *two*
 frameworks of the same shape rather than one framework with a flag:
 
-  |             | bounded (batch)                                              | streaming                                                                               |
-  | ---         | ---                                                          | ---                                                                                     |
-  | framework   | `.qbw` — `core/bounded_worker.q`                             | `.qstream` — `core/stream_job.q`                                                        |
-  | an instance | `.qwrk.<worker>`, `workers/`                                 | `.qsub.<job>`, `streaming/`                                                             |
-  | declaration | `.qbw.define[name; source dataset width transform …]`        | `.qstream.define[name; procname subscribe_to publishes on_batch on_timer …]`            |
-  | runner      | `scripts/processes/torq_backfill.q`                          | `scripts/processes/torq_stream.q`                                                       |
-  | lifecycle   | init → plan → fetch → transform → publish → cover → **done** | wire `publish` → subscribe → `on_batch` per tick, `on_timer` per period → **forever**   |
+  |             | bounded (batch)                                                           | streaming                                                                                       |
+  | ---         | ---                                                                       | ---                                                                                             |
+  | framework   | `.qetl.job.bounded` — `core/bounded_worker.q`                             | `.qetl.job.stream` — `core/stream_job.q`                                                        |
+  | an instance | `.qpipe.job.<worker>`, `workers/`                                         | `.qpipe.job.<job>`, `streaming/`                                                                |
+  | declaration | `.qetl.job.bounded.define[name; source dataset width transform …]`        | `.qetl.job.stream.define[name; procname subscribe_to publishes on_batch on_timer …]`            |
+  | runner      | `scripts/processes/torq_backfill.q`                                       | `scripts/processes/torq_stream.q`                                                               |
+  | lifecycle   | init → plan → fetch → transform → publish → cover → **done**              | wire `publish` → subscribe → `on_batch` per tick, `on_timer` per period → **forever**           |
 
 A bounded worker covers a stated range and finishes, so it can carry a contract
-(`.qbfstate.require_contract`) and a coverage claim. A streaming job never
-finishes, so it carries neither (§2: state the weakest guarantee that is true ---
-for a tailer that is freshness, not completion). Forcing the two under one
-abstraction would give every instance a lifecycle half of which is null. The
-instance namespace is derived from the name in both (`.qwrk.x`, `.qsub.x`), and
-an instance file is its own logic plus one declaration: on the bounded side
-`define` stamps the inherited lifecycle methods into the namespace (#227), on
-the streaming side the declaration carries the callbacks and the runner wires
-only `publish`.
+(`.qetl.job.bounded.state.require_contract`) and a coverage claim. A streaming
+job never finishes, so it carries neither (§2: state the weakest guarantee that
+is true --- for a tailer that is freshness, not completion). Forcing the two
+under one abstraction would give every instance a lifecycle half of which is
+null. The instance namespace is derived from the name in both (`.qpipe.job.x`,
+`.qpipe.job.x`), and an instance file is its own logic plus one declaration: on
+the bounded side `define` stamps the inherited lifecycle methods into the
+namespace (#227), on the streaming side the declaration carries the callbacks
+and the runner wires only `publish`.
 
 **Nothing under `src/etl/` knows TorQ exists**. That is what lets a worker or
 job load in a plain q process and be tested with a recorder in place of a
-tickerplant. The one namespace allowed to know TorQ is `.qpipe`
+tickerplant. The one namespace allowed to know TorQ is `.qtorq`
 (`scripts/processes/torq_pipeline.q`), the adapter: find the tickerplant, open
 the access-listed handle, reshape rows for `.u.upd`, trap a timer so it is not
 silently deactivated. It is called by the runners and by nothing in `src/`. The
 arrow points one way --- `src/` never reaches into `scripts/` --- and the day it
 pointed the other way the symptom was a try-with-fallback around
-`.qpipe.status_dir` in `backfill_state.q`, guarding against a namespace that
+`.qtorq.status_dir` in `backfill_state.q`, guarding against a namespace that
 might not be loaded (#229). A dependency you have to guard against being absent
 is a dependency pointing the wrong way.
 
 What both halves share and the outside world reads --- the status file the
-Airflow sensor and the frontend poll --- lives in `core/status.q` (`.qstatus`),
-not in the adapter, because it is not TorQ plumbing: it is a cross-repository
-contract, and its header names its readers.
+Airflow sensor and the frontend poll --- lives in `core/status.q`
+(`.qetl.status`), not in the adapter, because it is not TorQ plumbing: it is a
+cross-repository contract, and its header names its readers.
 
 *Enforced by* `scripts/gates/check_etl_layering.py`, twice: `core/` may not
 reference a declaring namespace (§9), and nothing under `src/etl/` may reference
-`.qpipe`.
+`.qtorq`.
 
 ## 11. Public repository, private sources
 

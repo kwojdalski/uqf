@@ -25,9 +25,9 @@ works). It refuses to start without one rather than failing on its first call.
 subscription and publishes raw MBP-10 onto `databento_mbp10` - forty per-level
 columns, exactly as Databento sends them. `databento1`, an ordinary streaming
 job, subscribes to that and republishes `databento_book`, folding the forty
-columns into four level-0-first vectors with **the same `.qxf` transform the
-backfill uses**. The fold exists once, in q, with its own worked examples; the
-Python side decides nothing about what a book is.
+columns into four level-0-first vectors with **the same `.qetl.transform`
+transform the backfill uses**. The fold exists once, in q, with its own worked
+examples; the Python side decides nothing about what a book is.
 
 The handler is not a process.csv row, for the same reason cryptorust is not: a q
 process cannot hold a Databento subscription, so it gets a pidfile and a

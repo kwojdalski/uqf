@@ -1,8 +1,8 @@
 / stream_job.q - the contract a continuous (streaming) job declares, and the
-/ seam its process runs it through (.qstream).
+/ seam its process runs it through (.qetl.job.stream).
 / .
 / The bounded half of this tree has had a shell since #124: a worker declares
-/ its source, dataset, width and transform, and .qbw runs it. The continuous
+/ its source, dataset, width and transform, and .qetl.job.bounded runs it. The continuous
 / half had nothing. Each of the four tickerplant subscriber jobs was TWO
 / files - its computation in src/etl/transforms/stream.q so it could be
 / tested, its subscription, buffers, timer and publish in its own
@@ -22,10 +22,10 @@
 / computations were moved out to src/ in the first place (nothing in
 / src/etl/ may depend on TorQ).
 
-\d .qstream
+\d .qetl.job.stream
 
 / job -> its declaration, ENLISTED. Keyed by the job's own name, which is
-/ also the segment of its namespace: `markout` is `.qsub.markout`.
+/ also the segment of its namespace: `markout` is `.qpipe.job.markout`.
 / .
 / The enlist is load-bearing, and the reason is a q trap worth knowing: a
 / dictionary whose values are dictionaries with the SAME keys is a table, and
@@ -60,24 +60,24 @@ required_declarations:`ns`procname`subscribe_to`publishes
 / Private: can this value be called?
 / .
 / Not `100h=type`, which is a LAMBDA only. The natural way to hand a job a
-/ publisher is to bind the handle into one - `.qpipe.publish[h;;]` - and
+/ publisher is to bind the handle into one - `.qtorq.publish[h;;]` - and
 / that is a projection (104h), as is a test's recorder bound to a job name.
 / Refusing those would mean the seam only accepted the one shape nobody
 / writes. 100-112h covers lambdas, operators, projections, compositions and
 / q's own iterators.
 is_callable:{[v] (type v) within 100 112h}
 
-/ The namespace every job instance lives under, as .qsub.<job>.
+/ The namespace every job instance lives under, as .qpipe.job.<job>.
 / .
-/ Separate from this framework's own `.qstream` for the reason `.qwrk` is
-/ separate from `.qbw`: a job called `jobs` or `define` nested inside the
+/ Separate from this framework's own `.qetl.job.stream` for the reason `.qpipe.job` is
+/ separate from `.qetl.job.bounded`: a job called `jobs` or `define` nested inside the
 / framework would overwrite it.
-job_root:`.qsub
+job_root:`.qpipe.job
 
 / The namespace a job's implementation lives in.
 / @param job the job's name
-/ @return the namespace symbol, e.g. `.qsub.markout
-/ @eg .qstream.namespace `markout  ->  `.qsub.markout
+/ @return the namespace symbol, e.g. `.qpipe.job.markout
+/ @eg .qetl.job.stream.namespace `markout  ->  `.qpipe.job.markout
 namespace:{[job] ` sv job_root,job}
 
 / Declare a streaming job. Called by the job's own file as it loads, so a
@@ -90,6 +90,9 @@ namespace:{[job] ` sv job_root,job}
 / @return the job name
 / @throws error naming every missing or malformed field at once
 define:{[job;decl]
+    / Both execution modes share .qpipe.job, so a name cannot belong to both.
+    if[job in key @[value;`.qetl.job.bounded.worker_cfg;{()}];
+        '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
     decl[`ns]:namespace job;
     missing:required_declarations where not required_declarations in key decl;
@@ -134,7 +137,7 @@ define:{[job;decl]
         '"define: ",string[job],"'s note must be a string"];
     jobs[job]:enlist decl;
     procnames[decl`procname]:job;
-    .[{.qlog.dbg[x;y;z]};(job;"streaming job registered";
+    .[{.qetl.log.dbg[x;y;z]};(job;"streaming job registered";
         `procname`subscribe_to`publishes`timer!(decl`procname;decl`subscribe_to;decl`publishes;
             $[has_period; decl`period; 0Nn]));::];
     job}
@@ -143,7 +146,7 @@ define:{[job;decl]
 / @param job the job's name
 / @return the declaration dict
 / @throws error naming the job when register was never called for it
-/ @eg .qstream.def[`markout]`subscribe_to  ->  `trades`quote
+/ @eg .qetl.job.stream.def[`markout]`subscribe_to  ->  `trades`quote
 def:{[job]
     if[not job in key jobs;
         '"def: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];
@@ -158,7 +161,7 @@ def:{[job]
 / @param procname the TorQ process name, e.g. `markout1
 / @return the job's name
 / @throws error when no registered job claims that process
-/ @eg .qstream.for_procname `markout1  ->  `markout
+/ @eg .qetl.job.stream.for_procname `markout1  ->  `markout
 for_procname:{[procname]
     if[not procname in key procnames;
         '"for_procname: no streaming job runs as ",string[procname]," - registered processes: ",", " sv string key procnames];
@@ -181,7 +184,7 @@ wire:{[job;publisher]
     if[not is_callable publisher;
         '"wire: ",string[job],"'s publisher must be callable as (table; rows) - a lambda or a projection over one"];
     (` sv (def[job]`ns),`publish) set publisher;
-    .[{.qlog.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist def[job]`publishes);::];
+    .[{.qetl.log.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist def[job]`publishes);::];
     job}
 
 / ------------------------------------------------------------ THE BUFFER
@@ -193,13 +196,13 @@ wire:{[job;publisher]
 / recomputes its cutoff in the delete clause has exactly that race.
 / .
 / Lived in scripts/processes/torq_pipeline.q until the jobs moved into src/, where
-/ nothing may call .qpipe. It belongs here anyway: buffering is the
+/ nothing may call .qtorq. It belongs here anyway: buffering is the
 / job's own business, not TorQ's.
-/ @param table_name the buffer table's fully-qualified name, e.g. `.qsub.markout.pending
+/ @param table_name the buffer table's fully-qualified name, e.g. `.qpipe.job.markout.pending
 / @param mask a boolean vector over that table, as long as it is
 / @return the drained rows, in their original order
-/ @eg `.qstream.eg_buffer set ([] a:1 2 3); .qstream.drain[`.qstream.eg_buffer;101b]  ->  ([] a:1 3)
-/ @see .qstream.evict - use that instead when a failed publish should retry
+/ @eg `.qetl.job.stream.eg_buffer set ([] a:1 2 3); .qetl.job.stream.drain[`.qetl.job.stream.eg_buffer;101b]  ->  ([] a:1 3)
+/ @see .qetl.job.stream.evict - use that instead when a failed publish should retry
 /   the batch rather than lose it (drain is at-most-once, evict at-least-once)
 drain:{[table_name;mask]
     buffer:get table_name;
@@ -220,7 +223,7 @@ drain:{[table_name;mask]
 / @param table_name the buffer table's fully-qualified name
 / @param mask the boolean vector already used to read the batch
 / @return the number of rows removed
-/ @eg `.qstream.eg_buffer set ([] a:1 2 3); .qstream.evict[`.qstream.eg_buffer;101b]  ->  2i
+/ @eg `.qetl.job.stream.eg_buffer set ([] a:1 2 3); .qetl.job.stream.evict[`.qetl.job.stream.eg_buffer;101b]  ->  2i
 evict:{[table_name;mask]
     buffer:get table_name;
     if[0=count buffer; :0];
@@ -235,6 +238,6 @@ evict:{[table_name;mask]
 / @param job the job's name, for the message
 / @return a function that throws when called
 unwired:{[job]
-    {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qstream.wire first"}[job]}
+    {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qetl.job.stream.wire first"}[job]}
 
 \d .

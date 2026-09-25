@@ -1,4 +1,4 @@
-/ run.q - run identity and materialisation metadata (.qrun).
+/ run.q - run identity and materialisation metadata (.qetl.run).
 / .
 / WHAT WAS MISSING, AND WHY IT MATTERED
 / .
@@ -35,7 +35,7 @@
 / give every caller the chance to pass the wrong one, which is a failure mode
 / that does not otherwise exist.
 / .
-/ So `current[]` is the single source, and .qmatz.stage_completion reads it.
+/ So `current[]` is the single source, and .qetl.coverage.stage_completion reads it.
 / Outside a run it returns the null guid, and that is recorded honestly: a
 / materialisation not attributable to any run is a real state (a direct call
 / from a test, or a repair by hand) and saying so is better than inventing an
@@ -48,13 +48,13 @@
 / make "how many runs were there" ambiguous. That is the only mutation here.
 / Nothing ever deletes.
 
-\d .qrun
+\d .qetl.run
 
 / ---------------------------------------------------------------- SCHEMA
 
 / The run ledger's columns, in order. One constant in one place: changing the
 / shape is an edit here plus the writer's column list plus require_run_schema,
-/ not a hunt through the file. Same discipline as .qmatz.schema.
+/ not a hunt through the file. Same discipline as .qetl.coverage.schema.
 run_schema:`run_id`worker`process`host`pid`started_at`ended_at`status
 
 / The metadata table's columns, in order.
@@ -76,7 +76,7 @@ run_schema:`run_id`worker`process`host`pid`started_at`ended_at`status
 / reader than everything being text.
 meta_schema:`run_id`dataset`range_from`range_to`label`text`recorded_at
 
-/ A run in flight has not ended. Same sentinel discipline as .qmatz's
+/ A run in flight has not ended. Same sentinel discipline as .qetl.coverage's
 / still_current: an ended_at far in the future satisfies every "ended before
 / x" comparison by arithmetic, so no read needs a null branch.
 not_ended:0Wp
@@ -94,7 +94,7 @@ in_flight:`running
 
 / Create the run ledger if absent.
 / @return the ledger table name
-/ @eg .qrun.init_runs[]
+/ @eg .qetl.run.init_runs[]
 init_runs:{[]
     if[not `etl_runs in tables `.;
         `etl_runs set ([] run_id:`guid$(); worker:`symbol$(); process:`symbol$();
@@ -104,7 +104,7 @@ init_runs:{[]
 
 / Create the materialisation metadata table if absent.
 / @return the metadata table name
-/ @eg .qrun.init_meta[]
+/ @eg .qetl.run.init_meta[]
 init_meta:{[]
     if[not `etl_run_meta in tables `.;
         `etl_run_meta set ([] run_id:`guid$(); dataset:`symbol$();
@@ -113,9 +113,9 @@ init_meta:{[]
     `etl_run_meta}
 
 / The root run table. Exists so no read below names `etl_runs` bare - inside
-/ \d .qrun a bare name resolves to .qrun.etl_runs, which does not exist, and
+/ \d .qetl.run a bare name resolves to .qetl.run.etl_runs, which does not exist, and
 / the read would fail at the point of use rather than here. Same reason
-/ .qmatz.ledger exists.
+/ .qetl.coverage.ledger exists.
 runs:{[] value `etl_runs}
 
 / The root metadata table, for the same reason.
@@ -128,13 +128,13 @@ meta_table:{[] value `etl_run_meta}
 
 / Check a run ledger this process did not create against the shape above.
 / .
-/ Same asymmetry .qmatz.attach draws: a table we just built matches by
+/ Same asymmetry .qetl.coverage.attach draws: a table we just built matches by
 / construction and checking it would only ever confirm itself; a table
 / someone else built is EVIDENCE, and must be validated before a read is
 / trusted.
 / @return 1b when the live shape matches
 / @throws error naming the difference
-/ @eg .qrun.require_run_schema[]
+/ @eg .qetl.run.require_run_schema[]
 require_run_schema:{[]
     live:exec c from 0!meta value `etl_runs;
     absent:run_schema where not run_schema in live;
@@ -148,7 +148,7 @@ require_run_schema:{[]
 
 / Attach to both tables, validating a shape this process did not create.
 / .
-/ The same create-if-absent-and-verify contract .qmatz.attach offers, and the
+/ The same create-if-absent-and-verify contract .qetl.coverage.attach offers, and the
 / function a worker's init should call. The asymmetry is the point: a table
 / we just built matches by construction, so checking it would only ever
 / confirm itself; a table another process built is evidence, and is validated
@@ -163,7 +163,7 @@ require_run_schema:{[]
 / describe every process that has written to this directory rather than only
 / the calling one.
 / @return the two table names
-/ @eg .qrun.attach[]
+/ @eg .qetl.run.attach[]
 attach:{[]
     existed:`etl_runs in tables `.;
     init_runs[];
@@ -184,12 +184,12 @@ attach:{[]
 / already have.
 / @param name `etl_runs or `etl_run_meta
 / @return that table's file path
-/ @eg .qrun.table_path `etl_runs
-table_path:{[name] (.qbfstate.lock_dir[]),"/",string name}
+/ @eg .qetl.run.table_path `etl_runs
+table_path:{[name] (.qetl.job.bounded.state.lock_dir[]),"/",string name}
 
 / Write both tables to disk. Call only under the lock.
 / .
-/ q binary via `set`, like .qmatz.persist: the run ledger carries a guid, an
+/ q binary via `set`, like .qetl.coverage.persist: the run ledger carries a guid, an
 / int pid and three timestamps including the 0Wp not_ended sentinel, and a
 / sentinel that came back as a null would make every unfinished[] read wrong.
 / @return the two paths written
@@ -204,7 +204,7 @@ persist:{[]
 / tree is refused by name rather than read and silently misinterpreted. No
 / file is not an error: a first run has nothing to reload.
 / @return the two table names
-/ @eg .qrun.reload[]
+/ @eg .qetl.run.reload[]
 reload:{[]
     pr:hsym `$table_path `etl_runs;
     if[not ()~key pr; `etl_runs set get pr; require_run_schema[]];
@@ -214,10 +214,10 @@ reload:{[]
 
 / Private: read-modify-write under the run ledger's own mutex.
 / .
-/ Its OWN mutex, not .qmatz's: these are different tables, and guarding one
+/ Its OWN mutex, not .qetl.coverage's: these are different tables, and guarding one
 / with another's lock would serialise writes that never contend while
 / leaving the pair that do unprotected the moment someone changed either.
-under_lock:{[f;args] .qbfstate.with_file_lock[`etl_runs;f;args]}
+under_lock:{[f;args] .qetl.job.bounded.state.with_file_lock[`etl_runs;f;args]}
 
 / ---------------------------------------------------------------- IDENTITY
 
@@ -234,12 +234,12 @@ current_run:0Ng
 / INCLUDING the null. See this file's header on why a null run_id is an
 / honest answer rather than a missing one.
 / @return the current run id, or 0Ng
-/ @eg .qrun.current[]
+/ @eg .qetl.run.current[]
 current:{[] current_run}
 
 / Is a run in flight?
 / @return 1b when current[] would return a real id
-/ @eg .qrun.is_running[]
+/ @eg .qetl.run.is_running[]
 is_running:{[] not null current_run}
 
 / The current run id, refusing to answer outside a run.
@@ -249,7 +249,7 @@ is_running:{[] not null current_run}
 / null because coverage genuinely can be staged outside a run.
 / @return the current run id
 / @throws error when no run is in flight
-/ @eg .qrun.begin[`demo_deals_backfill]; id:.qrun.require_current[]; .qrun.release[]; id
+/ @eg .qetl.run.begin[`demo_deals_backfill]; id:.qetl.run.require_current[]; .qetl.run.release[]; id
 require_current:{[]
     if[not is_running[];
         '"require_current: no run in flight - begin[] one before recording against it"];
@@ -277,7 +277,7 @@ require_current:{[]
 / uniqueness comes from things that actually differ between processes rather
 / than from a generator that does not.
 / @return a fresh run id
-/ @eg .qrun.mint[]
+/ @eg .qetl.run.mint[]
 mint:{[]
     hex:raze string md5 raze string (.z.h;.z.i;.z.p;.z.n);
     "G"$ "-" sv (0 8 12 16 20) _ hex}
@@ -287,7 +287,7 @@ mint:{[]
 / Read through a protected eval because .proc is TorQ's and this file is unit
 / tested outside a TorQ process, where .proc does not exist at all. An
 / unwrapped read would make every test here depend on a running stack - the
-/ same wrapping .qwrt does for .servers.SERVERS.
+/ same wrapping .qetl.job.bounded.runtime does for .servers.SERVERS.
 proc_name:{[] @[value;`.proc.procname;`]}
 
 / Begin a run, and make it current.
@@ -298,7 +298,7 @@ proc_name:{[] @[value;`.proc.procname;`]}
 / @param worker the worker this run executes, e.g. `demo_deals_backfill
 / @return the new run id
 / @throws error when a run is already in flight in this process
-/ @eg .qrun.begin[`demo_deals_backfill]
+/ @eg .qetl.run.begin[`demo_deals_backfill]
 begin:{[worker]
     if[is_running[];
         '"begin: a run is already in flight in this process - finish or release it first"];
@@ -322,7 +322,7 @@ begin:{[worker]
 / @param status the outcome, e.g. `completed or `failed
 / @return the run id that was closed
 / @throws error when no run is in flight
-/ @eg .qrun.finish[`completed]
+/ @eg .qetl.run.finish[`completed]
 finish:{[status]
     id:require_current[];
     init_runs[];
@@ -330,7 +330,7 @@ finish:{[status]
     / than `id` and `status`: a bare `id` in the where clause would resolve
     / to the run_id column and a bare `status` to the status column, each
     / comparing a column to itself and matching every row. Same trap
-    / .qmatz.valid_at documents.
+    / .qetl.coverage.valid_at documents.
     under_lock[{[target;outcome]
         reload[];
         `etl_runs set update ended_at:.z.p, status:outcome from runs[] where run_id=target;
@@ -345,7 +345,7 @@ finish:{[status]
 / without claiming the run ended. The row keeps `running`, which is the
 / truth: nothing observed it finish.
 / @return the run id that was released, or 0Ng when none was in flight
-/ @eg .qrun.release[]
+/ @eg .qetl.run.release[]
 release:{[]
     id:current_run;
     current_run::0Ng;
@@ -379,7 +379,7 @@ as_text:{[v] $[10h=type v; v; -11h=type v; string v; -3!v]}
 / @return the number of facts recorded
 / @throws error when no run is in flight, facts is not a symbol-keyed dict,
 /   or the interval is empty/reversed
-/ @eg .qrun.begin[`demo_deals_backfill]; .qrun.record[`demo_deals;2026.09.13D00:00;2026.09.14D00:00;(enlist `rows)!enlist 42]; .qrun.release[]
+/ @eg .qetl.run.begin[`demo_deals_backfill]; .qetl.run.record[`demo_deals;2026.09.13D00:00;2026.09.14D00:00;(enlist `rows)!enlist 42]; .qetl.run.release[]
 record:{[dataset;range_from;range_to;facts]
     id:require_current[];
     if[not 99h=type facts;
@@ -387,7 +387,7 @@ record:{[dataset;range_from;range_to;facts]
     ks:key facts;
     if[not 11h=abs type ks;
         '"record: facts labels must be symbols"];
-    .qmatz.require_interval[range_from;range_to];
+    .qetl.coverage.require_interval[range_from;range_to];
     init_meta[];
     n:count ks;
     under_lock[{[rows]
@@ -402,7 +402,7 @@ record:{[dataset;range_from;range_to;facts]
 
 / Every run recorded, newest first.
 / @return the run ledger, newest first
-/ @eg .qrun.history[]
+/ @eg .qetl.run.history[]
 history:{[]
     init_runs[];
     `started_at xdesc runs[]}
@@ -410,7 +410,7 @@ history:{[]
 / One run's row.
 / @param id the run id
 / @return that run's row, or an empty table when the id is unknown
-/ @eg .qrun.of_run[.qrun.current[]]
+/ @eg .qetl.run.of_run[.qetl.run.current[]]
 of_run:{[id]
     init_runs[];
     target:id;
@@ -422,7 +422,7 @@ of_run:{[id]
 / is the intended reading: an interrupted execution is one a reader needs to
 / find, and nothing else records it.
 / @return the unfinished runs
-/ @eg .qrun.unfinished[]
+/ @eg .qetl.run.unfinished[]
 unfinished:{[]
     init_runs[];
     running:in_flight;
@@ -431,7 +431,7 @@ unfinished:{[]
 / Every fact recorded against one run.
 / @param id the run id
 / @return the metadata rows for that run
-/ @eg .qrun.facts_of[.qrun.current[]]
+/ @eg .qetl.run.facts_of[.qetl.run.current[]]
 facts_of:{[id]
     init_meta[];
     target:id;
@@ -446,7 +446,7 @@ facts_of:{[id]
 / @param range_from window start
 / @param range_to window end, exclusive
 / @return the metadata rows for that window, from any run
-/ @eg .qrun.facts_about[`demo_deals;2026.09.13D00:00;2026.09.14D00:00]
+/ @eg .qetl.run.facts_about[`demo_deals;2026.09.13D00:00;2026.09.14D00:00]
 facts_about:{[dataset;range_from;range_to]
     init_meta[];
     ds:dataset; rf:range_from; rt:range_to;

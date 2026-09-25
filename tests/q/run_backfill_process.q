@@ -49,9 +49,9 @@ check:{[label;ok]
 / --- single instance, against a real second process ---------------------
 
 lockworker:`crossproc;
-.qbfstate.release_lock lockworker;
-held:.qbfstate.acquire_lock lockworker;
-check["this process holds the lock";.qbfstate.lock_held lockworker];
+.qetl.job.bounded.state.release_lock lockworker;
+held:.qetl.job.bounded.state.acquire_lock lockworker;
+check["this process holds the lock";.qetl.job.bounded.state.lock_held lockworker];
 
 / A genuinely separate q process, which is the only thing that tests mutual
 / exclusion rather than q's own bookkeeping. It must FAIL to acquire.
@@ -67,22 +67,22 @@ child:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
 out:@[{system x};child;{enlist "SPAWN-FAILED: ",x}];
 check["a second process is refused the lock";any out like\: "REFUSED*"];
 
-.qbfstate.release_lock lockworker;
-check["the lock is gone after release";not .qbfstate.lock_held lockworker];
+.qetl.job.bounded.state.release_lock lockworker;
+check["the lock is gone after release";not .qetl.job.bounded.state.lock_held lockworker];
 
 / ...and a second process CAN take it once released, which is what makes the
 / refusal above meaningful rather than a process that always fails.
 out2:@[{system x};child;{enlist "SPAWN-FAILED: ",x}];
 check["a second process acquires a released lock";any out2 like\: "ACQUIRED*"];
-.qbfstate.release_lock lockworker;
+.qetl.job.bounded.state.release_lock lockworker;
 
 / --- resumption across a restart ----------------------------------------
 
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D};
 spec:`source_version`range_from`range_to!(`v1;d 1;d 4);
 rworker:`restartproc;
-.qbfstate.clear_checkpoint rworker;
-.qbfstate.save_checkpoint[rworker;spec;d 2];
+.qetl.job.bounded.state.clear_checkpoint rworker;
+.qetl.job.bounded.state.save_checkpoint[rworker;spec;d 2];
 
 / Read the checkpoint from a FRESH process, which shares nothing with this
 / one but the directory. That is the actual requirement: the state on disk
@@ -92,7 +92,7 @@ rchild:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
 rout:@[{system x};rchild;{enlist "SPAWN-FAILED: ",x}];
 check["a fresh process resumes from the cursor on disk";any rout like\: "CURSOR:2026.09.12D00:00:00.000000000*"];
 
-.qbfstate.clear_checkpoint rworker;
+.qetl.job.bounded.state.clear_checkpoint rworker;
 cout:@[{system x};rchild;{enlist "SPAWN-FAILED: ",x}];
 check["a cleared checkpoint gives a fresh process nothing to resume from";any cout like\: "CURSOR:0Np*"];
 
@@ -108,8 +108,8 @@ check["a cleared checkpoint gives a fresh process nothing to resume from";any co
 / This is the check that would have. Stage here, read from a process that
 / shares nothing with this one but the directory.
 
-.qmatz.attach[];
-.qmatz.stage_completion[`durable_ds;`;`v1;d 1;d 2;7];
+.qetl.coverage.attach[];
+.qetl.coverage.stage_completion[`durable_ds;`;`v1;d 1;d 2;7];
 
 cchild:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
        " tests/q/read_coverage.q < /dev/null 2>/dev/null";
@@ -120,7 +120,7 @@ check["and can answer is_covered from it";any covout like\: "COVERED:yes*"];
 / A withdrawn claim must stay withdrawn across a restart - a supersession
 / that did not persist would let a claim come back from the dead, which is
 / the worst failure this ledger has.
-.qmatz.supersede[`durable_ds;`;`v1;d 1;d 2];
+.qetl.coverage.supersede[`durable_ds;`;`v1;d 1;d 2];
 supout:@[{system x};cchild;{enlist "SPAWN-FAILED: ",x}];
 check["a supersession survives the process too";any supout like\: "COVERED:no*"];
 
@@ -134,15 +134,15 @@ check["a supersession survives the process too";any supout like\: "COVERED:no*"]
 / takes its own rows with it. A backfill runs in its own process and exits,
 / so that was every backfill.
 
-.qrun.attach[];
-runid:.qrun.begin[`durable_worker];
+.qetl.run.attach[];
+runid:.qetl.run.begin[`durable_worker];
 / A DIFFERENT dataset from the coverage checks above, which staged
 / durable_ds before any run existed - so its row carries a null run_id,
 / and `first` over durable_ds would pick that one and resolve nothing.
-.qmatz.stage_completion[`run_ds;`;`v1;d 2;d 3;11];
-.qrun.record[`run_ds;d 2;d 3;(enlist `rows)!enlist 11];
+.qetl.coverage.stage_completion[`run_ds;`;`v1;d 2;d 3;11];
+.qetl.run.record[`run_ds;d 2;d 3;(enlist `rows)!enlist 11];
 / Released, not finished: this is what a process that died mid-run leaves.
-.qrun.release[];
+.qetl.run.release[];
 
 rchild2:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
         " tests/q/read_runs.q < /dev/null 2>/dev/null";

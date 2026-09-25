@@ -1,5 +1,5 @@
 / worker_runtime.q - retry classification, dry-run, and the authority split
-/ (.qwrt).
+/ (.qetl.job.bounded.runtime).
 / .
 / Implements the retry decisions recorded on issues #71/#72.
 / .
@@ -23,7 +23,7 @@
 /      only the row publication leaves coverage claiming the window is
 /      complete - the exact lie the ledger exists to prevent.
 
-\d .qwrt
+\d .qetl.job.bounded.runtime
 
 / ------------------------------------------------------------- AUTHORITY
 
@@ -49,7 +49,7 @@ retry_boundary:"in-attempt transport retry is q's; task-level retry is Airflow's
 
 / Which layer owns a concern, for a diagnostic that would otherwise guess.
 / @throws error if the concern belongs to neither layer
-/ @eg .qwrt.owner[`scheduling]  ->  `airflow
+/ @eg .qetl.job.bounded.runtime.owner[`scheduling]  ->  `airflow
 owner:{[concern]
     $[concern in q_owned; `q;
       concern in airflow_owned; `airflow;
@@ -78,7 +78,7 @@ data_patterns:("*schema*";"*type*";"*cast*";"*parse*";"*length*";
 / An unrecognised error is `data, i.e. terminal - see the header's point 2.
 / @param err the caught error string
 / @return `transport or `data
-/ @eg .qwrt.classify["connection refused"]  ->  `transport
+/ @eg .qetl.job.bounded.runtime.classify["connection refused"]  ->  `transport
 classify:{[err]
     e:lower err;
     $[any e like/: data_patterns;      `data;
@@ -98,11 +98,11 @@ default_policy:`max_attempts`base_delay_ms`max_delay_ms!(3j;250j;8000j)
 
 / Resolve the policy from configuration, falling back to the defaults.
 / .
-/ Read through .qwcfg so the precedence is the settled one, rather than a
+/ Read through .qetl.cfg so the precedence is the settled one, rather than a
 / second ad-hoc lookup order that drifts from it.
 policy:{[]
     read_one:{[k;fallback]
-        v:@[{.qwcfg.raw x};k;{""}];
+        v:@[{.qetl.cfg.raw x};k;{""}];
         $[0=count v; fallback; null j:"J"$v; fallback; j]};
     `max_attempts`base_delay_ms`max_delay_ms!(
         read_one[`retry_max_attempts;  default_policy`max_attempts];
@@ -110,7 +110,7 @@ policy:{[]
         read_one[`retry_max_delay_ms;  default_policy`max_delay_ms])}
 
 / Exponential backoff for attempt n (1-based), capped.
-/ @eg .qwrt.backoff_ms[.qwrt.default_policy;3]  ->  1000
+/ @eg .qetl.job.bounded.runtime.backoff_ms[.qetl.job.bounded.runtime.default_policy;3]  ->  1000
 backoff_ms:{[pol;attempt]
     raw:"j"$(pol`base_delay_ms)*2 xexp attempt-1;
     (pol`max_delay_ms) & raw}
@@ -130,7 +130,7 @@ sleep_ms:{[ms] if[ms>0; system"sleep ",string ms%1000]; ms}
 / @param f a niladic function performing the attempt
 / @return dict of state (`ok or `failed), kind (`none/`transport/`data),
 /   attempts, result (on success) and error (on failure)
-/ @eg .qwrt.with_retry[.qwrt.default_policy;{42}]`result  ->  42
+/ @eg .qetl.job.bounded.runtime.with_retry[.qetl.job.bounded.runtime.default_policy;{42}]`result  ->  42
 with_retry:{[pol;f]
     / `cap`, not `max` - max is a q builtin, and shadowing it inside the
     / lambda breaks the & fallback below in a way that reports as `nyi at
@@ -143,14 +143,14 @@ with_retry:{[pol;f]
         if[`ok~first outcome;
             :`state`kind`attempts`result`error!(`ok;`none;attempt;last outcome;"")];
         kind:classify last outcome;
-        .[{.qlog.dbg[x;y;z]};(`qwrt;"attempt failed";
+        .[{.qetl.log.dbg[x;y;z]};(`qetl.job.bounded.runtime;"attempt failed";
             `attempt`of`kind`error!(attempt;cap;kind;last outcome));::];
         if[kind=`data;
             :`state`kind`attempts`result`error!(`failed;`data;attempt;::;last outcome)];
         if[attempt=cap;
             :`state`kind`attempts`result`error!(`failed;`transport;attempt;::;last outcome)];
         wait:backoff_ms[pol;attempt];
-        .[{.qlog.warn[x;y;z]};(`qwrt;"retrying after a transport error";
+        .[{.qetl.log.warn[x;y;z]};(`qetl.job.bounded.runtime;"retrying after a transport error";
             `attempt`of`backoff_ms`error!(attempt;cap;wait;last outcome));::];
         sleep_ms wait;
         attempt+:1];
@@ -166,9 +166,9 @@ suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint
 
 / Is this run diagnostic-only?
 / .
-/ Opt-in via .qwcfg.get_flag, which defaults absent-to-false - so a
+/ Opt-in via .qetl.cfg.get_flag, which defaults absent-to-false - so a
 / misconfigured worker does real work rather than silently doing none.
-is_dry_run:{[] @[{.qwcfg.get_flag `dry_run};::;{0b}]}
+is_dry_run:{[] @[{.qetl.cfg.get_flag `dry_run};::;{0b}]}
 
 / Perform one named side effect, or record that dry-run withheld it.
 / .
@@ -196,7 +196,7 @@ commit:{[dry;effect;action;args]
     / `f . ()` is a TYPE error rather than a niladic call; the unary-null
     / argument list is what actually applies a niladic function.
     applied:$[0=count args; enlist(::); args];
-    if[dry; .[{.qlog.dbg[x;y;z]};(`qwrt;"dry run - skipped";enlist[`effect]!enlist effect);::]];
+    if[dry; .[{.qetl.log.dbg[x;y;z]};(`qetl.job.bounded.runtime;"dry run - skipped";enlist[`effect]!enlist effect);::]];
     $[dry; (`skipped;effect); (`done;effect;action . applied)]}
 
 / ----------------------------------------------------------- WINDOWS
@@ -228,7 +228,7 @@ commit:{[dry;effect;action;args]
 / out of a public repository. So the assumption is written down instead of
 / guessed at, and tests/q/test_time_zone.q pins it: whoever adds a venue
 / calendar has to change a failing test rather than a comment. Nothing else
-/ here has a business-date notion either - .qmatz composes half-open
+/ here has a business-date notion either - .qetl.coverage composes half-open
 / intervals and .qdcf counts actual calendar days - and the only day roll
 / this tree knows about is TorQ's EOD reload, which is an operational state
 / rather than a business date.
@@ -236,14 +236,14 @@ commit:{[dry;effect;action;args]
 / Cutting in UTC is also what makes DST harmless: a daily window is
 / exactly 24h across a transition, never the 23h or 25h a local calendar day
 / becomes, so coverage keeps tiling exactly. The variable local span is
-/ handled where it belongs, in .qsrc's per-source zone conversion.
+/ handled where it belongs, in .qetl.source's per-source zone conversion.
 / @param from_ts range start
 / @param to_ts range end, exclusive
 / @param width a timespan, e.g. 1D
 / @return a table of range_from/range_to
-/ @eg .qwrt.windows[2026.09.01D00:00;2026.09.04D00:00;1D]  -> 3 daily windows
+/ @eg .qetl.job.bounded.runtime.windows[2026.09.01D00:00;2026.09.04D00:00;1D]  -> 3 daily windows
 windows:{[from_ts;to_ts;width]
-    .qmatz.require_interval[from_ts;to_ts];
+    .qetl.coverage.require_interval[from_ts;to_ts];
     if[not width>0D00:00;
         '"windows: width must be positive, got ",string width];
     n:"j"$ceiling (to_ts-from_ts)%width;
@@ -267,7 +267,7 @@ windows:{[from_ts;to_ts;width]
 / @param part this worker's partition, or ` when its dataset has none
 / @return 1b when the window still needs fetching
 needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
-    not .qmatz.is_covered[ds;part;version;as_of;from_ts;to_ts]}
+    not .qetl.coverage.is_covered[ds;part;version;as_of;from_ts;to_ts]}
 
 / Narrow a requested range to the parts not yet published.
 / .
@@ -276,10 +276,10 @@ needs_fetch:{[ds;part;version;as_of;from_ts;to_ts]
 / means there is nothing to do - which is an `idle success, not a
 / failure.
 remaining:{[ds;part;version;as_of;from_ts;to_ts]
-    m:.qmatz.missing[ds;part;version;as_of;from_ts;to_ts];
+    m:.qetl.coverage.missing[ds;part;version;as_of;from_ts;to_ts];
     / The answer to "why did the run do nothing": every window already covered
     / at this version, so there is nothing left to fetch.
-    .[{.qlog.dbg[x;y;z]};(ds;"coverage gaps";
+    .[{.qetl.log.dbg[x;y;z]};(ds;"coverage gaps";
         `partition`source_version`range_from`range_to`gaps!(part;version;from_ts;to_ts;count m));::];
     m}
 
@@ -306,11 +306,11 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
     dry:is_dry_run[];
     published:commit[dry;`publish_rows;publish;()];
     rows:$[`done~first published; last published; 0];
-    covered:commit[dry;`publish_coverage;.qmatz.stage_completion;
+    covered:commit[dry;`publish_coverage;.qetl.coverage.stage_completion;
         (ds;part;spec`source_version;from_ts;to_ts;rows)];
-    checkpointed:commit[dry;`write_checkpoint;.qbfstate.save_checkpoint;
+    checkpointed:commit[dry;`write_checkpoint;.qetl.job.bounded.state.save_checkpoint;
         (worker;spec;to_ts)];
-    .[{.qlog.dbg[x;y;z]};(worker;"window finished";
+    .[{.qetl.log.dbg[x;y;z]};(worker;"window finished";
         `range_from`range_to`rows`dry_run!(from_ts;to_ts;rows;dry));::];
     `dry_run`rows_published`published`covered`checkpointed!
         (dry;rows;published;covered;checkpointed)}
@@ -321,7 +321,7 @@ finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
 declared_dependencies:(`symbol$())!();
 
 / Declare what a worker needs before it can run.
-/ @eg .qwrt.declare_dependencies[`markout_backfill;`tickerplant`hdb]
+/ @eg .qetl.job.bounded.runtime.declare_dependencies[`markout_backfill;`tickerplant`hdb]
 declare_dependencies:{[worker;procs]
     declared_dependencies[worker]:procs;
     procs}
@@ -344,7 +344,7 @@ connected_override:();
 / function has to pick, so that a broken probe stops a worker at init rather
 / than letting it run blind.
 / @return a symbol vector of proctypes, empty outside a TorQ process
-/ @eg .qwrt.connected[]
+/ @eg .qetl.job.bounded.runtime.connected[]
 connected:{[]
     if[count connected_override; :connected_override];
     @[{exec distinct proctype from .servers.SERVERS where not null w};::;{`symbol$()}]}
@@ -361,7 +361,7 @@ require_dependencies:{[worker]
     if[0=count needed; :worker];
     live:connected[];
     missing:needed where not needed in live;
-    .[{.qlog.dbg[x;y;z]};(worker;"dependencies";`needed`connected`missing!(needed;live;missing));::];
+    .[{.qetl.log.dbg[x;y;z]};(worker;"dependencies";`needed`connected`missing!(needed;live;missing));::];
     if[count missing;
         '"require_dependencies: ",string[worker]," cannot start - no connection to ",
          (", " sv string missing),
@@ -384,6 +384,6 @@ require_dependencies:{[worker]
 / @param upstream_part the upstream's partition, or ` when it has none
 / @throws error naming the missing upstream ranges
 require_upstream:{[upstream;upstream_part;version;as_of;from_ts;to_ts]
-    .qmatz.require_covered[upstream;upstream_part;version;as_of;from_ts;to_ts]}
+    .qetl.coverage.require_covered[upstream;upstream_part;version;as_of;from_ts;to_ts]}
 
 \d .

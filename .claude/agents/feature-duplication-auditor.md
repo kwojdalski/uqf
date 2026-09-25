@@ -159,7 +159,7 @@ reporting.
 **Report this one.** Interval algebra exists twice:
 
 ```
-  q       .qmatz.compose / .qmatz.gaps    src/etl/core/materialisation.q:243, :278
+  q       .qetl.coverage.compose / .qetl.coverage.gaps    src/etl/core/materialisation.q:243, :278
   python  Interval.touches / merge      python/uqf_frontend/src/uqf_frontend/coverage.py:39
 
   Shared behaviour: merging adjacent half-open [from,to) intervals, which

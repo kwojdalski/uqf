@@ -37,13 +37,13 @@ scripts/test.py all                 # every lane except coverage, smoke and stac
 They are separate because they prove different things, and five of them cannot
 prove what they claim if folded into `q-unit`:
 
-  | Lane                 | Proves what `q-unit` cannot                                                                                                                                                                                       |
-  | ---                  | ---                                                                                                                                                                                                               |
-  | `q-order`            | no test depends on running after another — [below](#order-independence)                                                                                                                                           |
-  | `q-backfill-process` | single-instance locking and resumption across a restart, which need a real filesystem and a genuinely separate process                                                                                            |
-  | `q-two-instances`    | the only lane where a source runs **live**: `.qbw.connect`, a source's `query` and `.qsrc.validate_live` execute nowhere else                                                                                     |
-  | `stack-smoke`        | the wiring — a declared table with no rows, or a process writing to its error log while we watch. [Below](#what-ci-cannot-check), with the three bugs that motivated it                                           |
-  | `smoke`              | A source contract's live half, against the **same declaration** the fixture is checked against. Excluded from `all`: a local run that depends on a remote host trains everyone to read red as "the network again" |
+  | Lane                 | Proves what `q-unit` cannot                                                                                                                                                                                                           |
+  | ---                  | ---                                                                                                                                                                                                                                   |
+  | `q-order`            | no test depends on running after another — [below](#order-independence)                                                                                                                                                               |
+  | `q-backfill-process` | single-instance locking and resumption across a restart, which need a real filesystem and a genuinely separate process                                                                                                                |
+  | `q-two-instances`    | the only lane where a source runs **live**: `.qetl.job.bounded.connect`, a source's `query` and `.qetl.source.validate_live` execute nowhere else                                                                                     |
+  | `stack-smoke`        | the wiring — a declared table with no rows, or a process writing to its error log while we watch. [Below](#what-ci-cannot-check), with the three bugs that motivated it                                                               |
+  | `smoke`              | A source contract's live half, against the **same declaration** the fixture is checked against. Excluded from `all`: a local run that depends on a remote host trains everyone to read red as "the network again"                     |
 
 ## What CI cannot check
 
@@ -89,9 +89,9 @@ Two things to know before reading a failure:
   underneath that one's processes and leave them orphaned - up, and subscribed
   to a tickerplant that no longer exists.
 
-`.qaudit` and the limit-breach table are exempt from check 1, with reasons, in
-`stack_smoke.MAY_BE_EMPTY` - a table that is empty because nothing happened
-carries no information. A test holds that list free of dead entries.
+`.qetl.cfg.audit` and the limit-breach table are exempt from check 1, with
+reasons, in `stack_smoke.MAY_BE_EMPTY` - a table that is empty because nothing
+happened carries no information. A test holds that list free of dead entries.
 
 ## Order independence
 
@@ -102,13 +102,13 @@ Both are the same 1459 tests; only the order differs.
 It exists because five tests once passed on `run_tests.q`'s hand-written
 namespace list alone. Each read live global state that other suites mutate:
 
-  | test                                             | what leaked in                                                                                |
-  | ---                                              | ---                                                                                           |
-  | the documentation ratchet                        | `.qcompletetest`, `.qmethodsonly` and `.qsub.nt_k` - whole namespaces built inside assertions |
-  | every registered source has a `.qfeed` namespace | sources registered by `etl_test_doubles.q`, which have no declaration file                    |
-  | every registered worker has a `.qwrk` namespace  | `.qbw` fixture workers named `reference`, `partial`, `fixture_*`                              |
-  | every dict-valued registry is covered            | `.qdag.jobs`, which has not collapsed into a table while it is empty                          |
-  | cross-arbitrage consumes a batch                 | `publish`, left wired by whichever suite ran first                                            |
+  | test                                                    | what leaked in                                                                                             |
+  | ---                                                     | ---                                                                                                        |
+  | the documentation ratchet                               | `.qcompletetest`, `.qmethodsonly` and `.qpipe.job.nt_k` - whole namespaces built inside assertions         |
+  | every registered source has a `.qpipe.source` namespace | sources registered by `etl_test_doubles.q`, which have no declaration file                                 |
+  | every registered worker has a `.qpipe.job` namespace    | `.qetl.job.bounded` fixture workers named `reference`, `partial`, `fixture_*`                              |
+  | every dict-valued registry is covered                   | `.qetl.dag.jobs`, which has not collapsed into a table while it is empty                                   |
+  | cross-arbitrage consumes a batch                        | `publish`, left wired by whichever suite ran first                                                         |
 
 None was a flaky test - each was deterministic, and each measured the process
 rather than the tree. The fix in every case was to ask the tree: a registry is

@@ -70,11 +70,11 @@ gate enforcing it, is a constraint that will be broken by whoever does not read
 it. Quote the paragraph; name the missing check.
 
 **2. Frameworks with two instances.** A shell parameterised over N
-implementations is justified by N. Count the instances. `.qbw`, `.qstream`,
-`.qnorm`, `.qio`, `.qsrc` --- for each, how many declarations exist, and would a
-plain function have done until the third? The tree argues that duplication
-across four workers justified a shell; check whether the shell is now bigger
-than the four files it replaced.
+implementations is justified by N. Count the instances. `.qetl.job.bounded`,
+`.qetl.job.stream`, `.qetl.job.stream.normalizer`, `.qetl.io`, `.qetl.source` ---
+for each, how many declarations exist, and would a plain function have done
+until the third? The tree argues that duplication across four workers justified
+a shell; check whether the shell is now bigger than the four files it replaced.
 
 **3. Abstractions with one caller.** Grep each exported function for call sites
 outside its own file and its own test. A function called only by its test is a
@@ -95,7 +95,7 @@ was needed.
 
 **6. Layer boundaries that only a grep enforces.** `src/` must not know TorQ,
 and a script checks the namespace. Ask what a file can assume *without* naming
-`.qpipe` --- a stamped column, an async publisher, a delivery order --- and
+`.qtorq` --- a stamped column, an async publisher, a delivery order --- and
 whether the boundary is real or merely lexical.
 
 **7. Test counts as a proxy for confidence.** Thousands of tests. Ask how many

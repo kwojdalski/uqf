@@ -31,8 +31,8 @@ an input whose shape is read from the plant schema.
 scaffold all_fills:
   create src/etl/streaming/all_fills.q (65 lines)
   ...
-  note: implement .qsub.all_fills.from_trades and its example
-  note: implement .qsub.all_fills.from_crypto_trades and its example
+  note: implement .qpipe.job.all_fills.from_trades and its example
+  note: implement .qpipe.job.all_fills.from_crypto_trades and its example
   note: start it with its producers: crypto_trades trades
 ```
 
@@ -59,10 +59,10 @@ from_trades:{[batch]
     '"all_fills.from_trades: not implemented";
     }
 
-.qxf.define[`all_fills_from_trades;`inputs`output`fn`examples!(
-    (enlist `trades)!enlist .qsub.all_fills.trades;
-    .qsub.all_fills.all_fills;
-    .qsub.all_fills.from_trades;
+.qetl.transform.define[`all_fills_from_trades;`inputs`output`fn`examples!(
+    (enlist `trades)!enlist .qpipe.job.all_fills.trades;
+    .qpipe.job.all_fills.all_fills;
+    .qpipe.job.all_fills.from_trades;
     enlist `inputs`expected!( ... ))];
 ```
 
@@ -72,7 +72,7 @@ leaving it whole means an upstream change to a column you never read breaks your
 job. Deleting the columns `from_trades` does not touch is part of implementing
 it, not tidying afterwards.
 
-## What `.qxf.define` adds
+## What `.qetl.transform.define` adds
 
 Each mapping is registered as a **transform with examples**, not just a
 function. `inputs` and `output` are the shapes it promises; `examples` are
@@ -81,8 +81,8 @@ producing the canonical shape fails at load, in the suite, rather than by
 publishing a wrong-shaped row the plant discards silently.
 
 That is why the note says "implement `from_trades` **and its example**". The
-example is not a test you may skip --- `.qxf.define` refuses a transform whose
-examples are all empty.
+example is not a test you may skip --- `.qetl.transform.define` refuses a
+transform whose examples are all empty.
 
 ## Then
 

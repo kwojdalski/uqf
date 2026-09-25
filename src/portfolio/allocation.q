@@ -20,7 +20,7 @@
 / THREE AXES OF FLEXIBILITY, all declared rather than hardcoded.
 / .
 / 1. METHOD. A registry of matching strategies in the dict-of-functions
-/    idiom .qsrc and .qio already use here. A method is two functions: how
+/    idiom .qetl.source and .qetl.io already use here. A method is two functions: how
 /    an opening trade joins the lot queue (`open`), and which lot the next
 /    close consumes (`pick`). That factoring is what makes fifo, lifo, hifo
 /    and weighted four lines each rather than four engines - and it is why
@@ -69,7 +69,7 @@
 / The keys a matching method must carry. `why is optional and defaults to
 / "", but every STORED method has all three: q collapses a dictionary whose
 / values are same-keyed dicts into a table, after which assigning a
-/ differently-keyed dict throws `type - the same trap .qsrc.define
+/ differently-keyed dict throws `type - the same trap .qetl.source.define
 / normalises row_key around. Fixing the shape at registration keeps every
 / method mutually assignable.
 required:`open`pick
@@ -216,7 +216,7 @@ default_opts:`method`by`universe`where`opening`asof!(`fifo; enlist `sym; all_row
 / A bare symbol is accepted in place of the whole dict, because
 / allocate[trades;`lifo] is what a caller reaches for first.
 / .
-/ `by is normalised to a vector for .qsrc.define's reason: storing one
+/ `by is normalised to a vector for .qetl.source.define's reason: storing one
 / shape means no consumer downstream has to decide whether a single-column
 / bucket needs enlisting.
 normalised_opts:{[opts]

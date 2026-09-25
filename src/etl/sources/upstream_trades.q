@@ -1,4 +1,4 @@
-/ upstream_trades.q - a trade table in ANOTHER kdb+ process (.qfeed.upstream_trades).
+/ upstream_trades.q - a trade table in ANOTHER kdb+ process (.qpipe.source.upstream_trades).
 / .
 / The other two sources in this directory are analogues of external
 / relational systems, and their live path has never run here because no such
@@ -6,8 +6,8 @@
 / is a plain q process loading the vendored starter pack's HDB - the smallest
 / kdb+ instance that can exist, with real data in it - and it is what
 / tests/q/run_two_instances.q stands up. So this is the source through which
-/ the framework's live-connection code (.qbw.connect, a source's `query`,
-/ .qsrc.validate_live) is actually exercised, rather than merely declared.
+/ the framework's live-connection code (.qetl.job.bounded.connect, a source's `query`,
+/ .qetl.source.validate_live) is actually exercised, rather than merely declared.
 / .
 / The shape is the starter pack's `trade`, which this tree did not design and
 / does not own: date-partitioned, sym `p#, an `int` size where every table of
@@ -15,7 +15,7 @@
 / declaration describes what the OTHER side has, and the transform is where
 / it becomes ours.
 
-\d .qfeed.upstream_trades
+\d .qpipe.source.upstream_trades
 
 source_name:`upstream_trades
 
@@ -56,8 +56,8 @@ tz:`UTC
 / partition on disk before the time filter saw a row.
 / .
 / `trade WITH A BACKTICK, never bare. A lambda carries its defining
-/ namespace across the wire, and this one is defined under \d .qfeed.upstream_trades - so on
-/ the remote, a bare `trade` resolves as `.qfeed.upstream_trades.trade`, which does not exist
+/ namespace across the wire, and this one is defined under \d .qpipe.source.upstream_trades - so on
+/ the remote, a bare `trade` resolves as `.qpipe.source.upstream_trades.trade`, which does not exist
 / there, and the query throws 'trade. The symbol form is resolved by the
 / remote's own select at ITS root, which is where the table is. Found the
 / first time any source in this tree ran live; both older sources have the
@@ -83,7 +83,7 @@ query:{[h;range_from;range_to]
 / second), and `ex` is a one-character exchange code. Sorted by time, as
 / the window logic requires.
 / @return ten real upstream rows, sorted by time
-/ @eg .qfeed.upstream_trades.fixture[]
+/ @eg .qpipe.source.upstream_trades.fixture[]
 fixture:{[]
     `time xasc ([]
         time:2015.01.07D00:00:02.038247000 2015.01.07D00:00:02.838234000 2015.01.07D00:00:01.638238000
@@ -96,7 +96,7 @@ fixture:{[]
         size:41 19 1 2 41 47 9 32 7 42i;
         side:`side`buy`side`side`buy`side`buy`buy`buy`buy)}
 
-.qsrc.define[source_name;
+.qetl.source.define[source_name;
     `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
     (source_name;`trade;target;time_column;row_key;columns;types;query;fixture;tz)];
 

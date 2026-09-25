@@ -1,5 +1,5 @@
 / fx_orders_feed.q - the whole of the synthetic order-flow feed
-/ (.qsub.fx_orders_feed).
+/ (.qpipe.job.fx_orders_feed).
 / .
 / Subscribes to nothing and publishes one `orders` row a second: a random
 / pair, book, product, side and size, at a price a few pips either side of
@@ -21,11 +21,11 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - the plant stamps its own (invariant 1).
 
-\d .qsub.fx_orders_feed
+\d .qpipe.job.fx_orders_feed
 
-/ Where rows go. A stub until .qstream.wire points it at a tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `fx_orders_feed;
+publish:.qetl.job.stream.unwired `fx_orders_feed;
 
 / The trading books this invented desk runs. Two, because one book makes
 / every per-book figure equal to the desk total and a bug that drops the
@@ -67,30 +67,30 @@ last_id:0
 / @param status one of statuses
 / @param slip_pips how far from the pair's level it printed, in pips
 / @return one order's rows: order_id, sym, book, product, side, size, price, order_status
-/ @eg count .qsub.fx_orders_feed.order_rows[1;0;`london;`spot;1;1e6;`filled;0] -> 8
+/ @eg count .qpipe.job.fx_orders_feed.order_rows[1;0;`london;`spot;1;1e6;`filled;0] -> 8
 order_rows:{[id;i;bk;pr;side;size;status;slip_pips]
-    price:.qsynth.spot[i]+slip_pips%.qsub.fx_orders_feed.pip_factor[i];
+    price:.qsynth.spot[i]+slip_pips%.qpipe.job.fx_orders_feed.pip_factor[i];
     (enlist id;enlist .qsynth.pairs i;enlist bk;enlist pr;enlist side;
         enlist size;enlist price;enlist status)}
 
 / Draw one order and publish it. The draws live here so that order_rows
 / stays deterministic and its shape can be asserted.
 on_timer:{[]
-    `.qsub.fx_orders_feed.last_id set .qsub.fx_orders_feed.last_id+1;
+    `.qpipe.job.fx_orders_feed.last_id set .qpipe.job.fx_orders_feed.last_id+1;
     i:rand count .qsynth.pairs;
     / 1 or -1, always an ATOM: indexing `1 -1` with a possibly-empty
     / vector is how a sibling feed once produced a list, and the plant
     / read it as two rows.
     side:1-2*rand 2;
-    .qsub.fx_orders_feed.publish[`orders;
-        .qsub.fx_orders_feed.order_rows[
-            .qsub.fx_orders_feed.last_id;
+    .qpipe.job.fx_orders_feed.publish[`orders;
+        .qpipe.job.fx_orders_feed.order_rows[
+            .qpipe.job.fx_orders_feed.last_id;
             i;
-            .qsub.fx_orders_feed.books rand count .qsub.fx_orders_feed.books;
-            .qsub.fx_orders_feed.products rand count .qsub.fx_orders_feed.products;
+            .qpipe.job.fx_orders_feed.books rand count .qpipe.job.fx_orders_feed.books;
+            .qpipe.job.fx_orders_feed.products rand count .qpipe.job.fx_orders_feed.products;
             side;
-            .qsub.fx_orders_feed.sizes rand count .qsub.fx_orders_feed.sizes;
-            .qsub.fx_orders_feed.statuses rand count .qsub.fx_orders_feed.statuses;
+            .qpipe.job.fx_orders_feed.sizes rand count .qpipe.job.fx_orders_feed.sizes;
+            .qpipe.job.fx_orders_feed.statuses rand count .qpipe.job.fx_orders_feed.statuses;
             -3+rand 7]];
     }
 
@@ -98,11 +98,11 @@ on_timer:{[]
 
 / Once a second, the same cadence as the fills feed: an order is a rarer
 / event than a quote, and the positions service snapshots every five.
-.qstream.define[`fx_orders_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all`note!(
+.qetl.job.stream.define[`fx_orders_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all`note!(
     `fxordersfeed1;
     `symbol$();
     enlist `orders;
     0D00:00:01.000;
-    .qsub.fx_orders_feed.on_timer;
+    .qpipe.job.fx_orders_feed.on_timer;
     1b;
     "synthetic order flow, most of which never becomes a fill - fxpositions1's input")];

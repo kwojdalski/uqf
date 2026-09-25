@@ -16,7 +16,7 @@ a process that is `up`, heartbeating, and publishing nothing.
 A PLAN, NOT A WRITE. Every entry point returns a `ScaffoldPlan` - a list of
 file actions - which the caller renders (`--dry-run`) or applies. That is
 what lets the templates be tested without a repository to write into, and
-`test_scaffold.py` holds the generated `.qstream.define` block against the
+`test_scaffold.py` holds the generated `.qetl.job.stream.define` block against the
 same regex `pipeline_edges` parses real jobs with, so a template that drifts
 out of what the tree can read fails the build rather than rotting quietly.
 """
@@ -209,18 +209,18 @@ def streaming_job(
     reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribe_to)
     writes = ", ".join(f"`{t}`" for t in pubs) if pubs else "nothing - it keeps its output local"
 
-    body = f"""/ {name}.q - <one line: what this job is for> (.qsub.{name}).
+    body = f"""/ {name}.q - <one line: what this job is for> (.qpipe.job.{name}).
 / .
 / Reads {reads}; publishes {writes}.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\\d .qsub.{name}
+\\d .qpipe.job.{name}
 
-/ Where rows go. A stub until .qstream.wire points it at the tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
-publish:.qstream.unwired `{name};
+publish:.qetl.job.stream.unwired `{name};
 
 / SCAFFOLDED. This throws until it is written - a job that silently did
 / nothing would report `up`, heartbeat, and publish no rows, which is the
@@ -235,11 +235,11 @@ publish:.qstream.unwired `{name};
 / process that runs it, and `start_with_all`, absent here, keeps it on demand -
 / add `start_with_all with 1b to start it with the stack, once the connection
 / budget has room.
-.qstream.define[`{name};`procname`subscribe_to`publishes{timer_key}`{handler}`note!(
+.qetl.job.stream.define[`{name};`procname`subscribe_to`publishes{timer_key}`{handler}`note!(
     `{proc};
     {sub_literal};
     {pub_literal};{timer}
-    .qsub.{name}.{handler};
+    .qpipe.job.{name}.{handler};
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
 """
     actions.append(FileAction(STREAM_DIR / f"{name}.q", body))
@@ -288,7 +288,7 @@ publish:.qstream.unwired `{name};
         )
     )
     actions.append(_nslist_action(ns))
-    notes.append(f"implement .qsub.{name}.{handler}, then replace the scaffolded test")
+    notes.append(f"implement .qpipe.job.{name}.{handler}, then replace the scaffolded test")
     notes.append(_STACK_PAGE_NOTE.format(proc=proc))
     notes.append(_PROFILE_NOTE.format(proc=proc))
     if not is_feed:
@@ -313,7 +313,7 @@ def bounded_worker(
     the rows are and how to window them, the worker says which source feeds
     which dataset how wide, and the transform sits between. They are
     scaffolded together because a worker whose source does not exist aborts
-    at load: `.qbw.define` resolves it at define time.
+    at load: `.qetl.job.bounded.define` resolves it at define time.
 
     `reuse_source` plans a worker on a source that already exists - a second
     window width or target over rows someone has already declared - so the
@@ -367,12 +367,12 @@ def bounded_worker(
         _nslist_action(test_namespace(name, bounded=True)),
     ]
     if reuse_source:
-        notes = [f"reuses .qfeed.{src}: its query and fixture are already written"]
+        notes = [f"reuses .qpipe.source.{src}: its query and fixture are already written"]
     else:
         notes = [
-            f"write .qfeed.{src}.query - parameterised, never concatenated"
+            f"write .qpipe.source.{src}.query - parameterised, never concatenated"
             " (see src/etl/core/source_contract.q)",
-            f"write .qfeed.{src}.fixture - deterministic, same contract as the live source",
+            f"write .qpipe.source.{src}.fixture - deterministic, same contract as the live source",
             f"declared columns: {', '.join(c for c, _ in cols)}",
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")

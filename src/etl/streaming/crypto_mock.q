@@ -1,5 +1,5 @@
 / crypto_mock.q - a stand-in for cryptorust, publishing what its two kdb
-/ recorders publish (.qsub.crypto_mock).
+/ recorders publish (.qpipe.job.crypto_mock).
 / .
 / WHY. The stack declares crypto_book and crypto_trades, and cryptorust's
 / kdb-market-data-recorder and kdb-fills-recorder fill them - but only when
@@ -33,11 +33,11 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qsub.crypto_mock
+\d .qpipe.job.crypto_mock
 
-/ Where rows go. A stub until .qstream.wire points it at a tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `crypto_mock;
+publish:.qetl.job.stream.unwired `crypto_mock;
 
 / --------------------------------------------------------------- MARKET
 
@@ -100,7 +100,7 @@ last_id:venues!(count venues)#0
 / @param a the first shape parameter, a positive integer
 / @param b the second, likewise
 / @return one draw in [0;1]
-/ @eg (.qsub.crypto_mock.beta_draw[2;2]) within 0 1f -> 1b
+/ @eg (.qpipe.job.crypto_mock.beta_draw[2;2]) within 0 1f -> 1b
 beta_draw:{[a;b] (asc (a+b-1)?1f) a-1}
 
 / A hazard rate over a horizon, as a probability: 1-exp(-hazard*horizon),
@@ -109,7 +109,7 @@ beta_draw:{[a;b] (asc (a+b-1)?1f) a-1}
 / @param hazard fills per second
 / @param horizon seconds
 / @return the probability of at least one fill
-/ @eg .qsub.crypto_mock.hazard_to_prob[0;1] -> 0f
+/ @eg .qpipe.job.crypto_mock.hazard_to_prob[0;1] -> 0f
 hazard_to_prob:{[hazard;horizon] 1-exp neg hazard*horizon}
 
 / The two sides' fill probabilities under a given toxicity - the exact
@@ -118,9 +118,9 @@ hazard_to_prob:{[hazard;horizon] 1-exp neg hazard*horizon}
 / @param p the unskewed probability
 / @param tox flow toxicity in [-1;1]
 / @return (bid probability; ask probability), each clipped to [0;1]
-/ @eg .qsub.crypto_mock.skewed[0.5;0f] -> 0.5 0.5
+/ @eg .qpipe.job.crypto_mock.skewed[0.5;0f] -> 0.5 0.5
 skewed:{[p;tox]
-    f:.qsub.crypto_mock.toxicity_factor;
+    f:.qpipe.job.crypto_mock.toxicity_factor;
     1&0|(p*1+f*0|neg tox; p*1+f*0|tox)}
 
 / Walk one mid: the same symmetric random walk .qsynth uses for FX, +/-5bp.
@@ -133,7 +133,7 @@ walk:{[m] .qsynth.drift_one m}
 / one side. A stand-in for the flow-derived figure cryptorust computes.
 / @param toxicity the current toxicity
 / @return the next, clipped to [-1;1]
-/ @eg (.qsub.crypto_mock.drift_toxicity 0f) within -1 1f -> 1b
+/ @eg (.qpipe.job.crypto_mock.drift_toxicity 0f) within -1 1f -> 1b
 drift_toxicity:{[toxicity] 1&-1|(0.9*toxicity)+0.1*-1+2*rand 1f}
 
 / ------------------------------------------------------------ THE BOOK
@@ -146,11 +146,11 @@ drift_toxicity:{[toxicity] 1&-1|(0.9*toxicity)+0.1*-1+2*rand 1f}
 / market has rows; the four ladder columns are lists of vectors.
 / @param mkt the market table
 / @return the rows: venue, sym, bid_prices, bid_sizes, ask_prices, ask_sizes
-/ @eg count first .qsub.crypto_mock.book_rows[.qsub.crypto_mock.market] 2 -> 3
+/ @eg count first .qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market] 2 -> 3
 book_rows:{[mkt]
-    n:.qsub.crypto_mock.n_levels;
-    unit:.qsub.crypto_mock.quote_size .qsub.crypto_mock.syms?mkt`sym;
-    step:.qsub.crypto_mock.level_step*mkt`mid;
+    n:.qpipe.job.crypto_mock.n_levels;
+    unit:.qpipe.job.crypto_mock.quote_size .qpipe.job.crypto_mock.syms?mkt`sym;
+    step:.qpipe.job.crypto_mock.level_step*mkt`mid;
     (mkt`venue; mkt`sym;
         .qsynth.levels_one[;;-1;n] .' flip (mkt`mid;step);
         {[u;n] u*1+til n}[;n] each unit;
@@ -162,13 +162,13 @@ book_rows:{[mkt]
 / The maker's quote for one market row, as (bid; ask) prices.
 / @param mid the mid
 / @return (bid; ask)
-/ @eg .qsub.crypto_mock.touch 10000f -> 9999 10001f
-touch:{[mid] mid*(1-.qsub.crypto_mock.half_spread;1+.qsub.crypto_mock.half_spread)}
+/ @eg .qpipe.job.crypto_mock.touch 10000f -> 9999 10001f
+touch:{[mid] mid*(1-.qpipe.job.crypto_mock.half_spread;1+.qpipe.job.crypto_mock.half_spread)}
 
 / The quote currency of a symbol: what comes after the hyphen.
 / @param s a symbol like `$"BTC-USDT"
 / @return `USDT
-/ @eg .qsub.crypto_mock.quote_ccy `$"BTC-USDT" -> `USDT
+/ @eg .qpipe.job.crypto_mock.quote_ccy `$"BTC-USDT" -> `USDT
 quote_ccy:{[s] `$last "-" vs string s}
 
 / One fill's rows, in the recorder's exact wire shape.
@@ -184,11 +184,11 @@ quote_ccy:{[s] `$last "-" vs string s}
 / @param size the filled size, base units
 / @param id the exchange fill id
 / @return the rows: sym, venue, side, trade_price, size, fee, fee_currency, exchange_fill_id
-/ @eg count .qsub.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`x] -> 8
+/ @eg count .qpipe.job.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`x] -> 8
 fill_rows:{[venue;s;side;price;size;id]
-    bps:.qsub.crypto_mock.maker_fee_bps .qsub.crypto_mock.venues?venue;
+    bps:.qpipe.job.crypto_mock.maker_fee_bps .qpipe.job.crypto_mock.venues?venue;
     (enlist s; enlist venue; enlist side; enlist price; enlist size;
-        enlist size*price*bps%10000; enlist .qsub.crypto_mock.quote_ccy s; enlist id)}
+        enlist size*price*bps%10000; enlist .qpipe.job.crypto_mock.quote_ccy s; enlist id)}
 
 / Decide the fills for one market row this tick, given the draws.
 / .
@@ -200,14 +200,14 @@ fill_rows:{[venue;s;side;price;size;id]
 / @param horizon the tick length in seconds
 / @param draws (at_touch; u_bid; u_ask; frac_bid; frac_ask)
 / @return zero, one or two (side; price; size) triples
-/ @eg count .qsub.crypto_mock.decide[first .qsub.crypto_mock.market;1;(1b;0f;0f;0.5;0.5)] -> 2
+/ @eg count .qpipe.job.crypto_mock.decide[first .qpipe.job.crypto_mock.market;1;(1b;0f;0f;0.5;0.5)] -> 2
 decide:{[row;horizon;draws]
     if[not draws 0; :()];
-    h:.qsub.crypto_mock.hazard_per_s .qsub.crypto_mock.venues?row`venue;
-    p:.qsub.crypto_mock.skewed[.qsub.crypto_mock.hazard_to_prob[h;horizon];row`toxicity];
-    q:.qsub.crypto_mock.quote_size .qsub.crypto_mock.syms?row`sym;
-    bidask:.qsub.crypto_mock.touch row`mid;
-    cap:.qsub.crypto_mock.max_fill_fraction;
+    h:.qpipe.job.crypto_mock.hazard_per_s .qpipe.job.crypto_mock.venues?row`venue;
+    p:.qpipe.job.crypto_mock.skewed[.qpipe.job.crypto_mock.hazard_to_prob[h;horizon];row`toxicity];
+    q:.qpipe.job.crypto_mock.quote_size .qpipe.job.crypto_mock.syms?row`sym;
+    bidask:.qpipe.job.crypto_mock.touch row`mid;
+    cap:.qpipe.job.crypto_mock.max_fill_fraction;
     out:();
     if[(draws 1)<p 0; out,:enlist (1;bidask 0;q*cap&draws 3)];
     if[(draws 2)<p 1; out,:enlist (-1;bidask 1;q*cap&draws 4)];
@@ -215,24 +215,24 @@ decide:{[row;horizon;draws]
 
 / Private: the draws for one market row.
 draws:{[]
-    (rand[1f]<.qsub.crypto_mock.quote_share; rand 1f; rand 1f;
-        .qsub.crypto_mock.beta_draw[.qsub.crypto_mock.fill_alpha;.qsub.crypto_mock.fill_beta];
-        .qsub.crypto_mock.beta_draw[.qsub.crypto_mock.fill_alpha;.qsub.crypto_mock.fill_beta])}
+    (rand[1f]<.qpipe.job.crypto_mock.quote_share; rand 1f; rand 1f;
+        .qpipe.job.crypto_mock.beta_draw[.qpipe.job.crypto_mock.fill_alpha;.qpipe.job.crypto_mock.fill_beta];
+        .qpipe.job.crypto_mock.beta_draw[.qpipe.job.crypto_mock.fill_alpha;.qpipe.job.crypto_mock.fill_beta])}
 
 / Private: issue the next fill id for a venue - `<venue>-<n>`, unique
 / within a run the way an exchange's are unique within a venue.
 next_id:{[venue]
-    n:1+.qsub.crypto_mock.last_id venue;
-    .qsub.crypto_mock.last_id[venue]:n;
+    n:1+.qpipe.job.crypto_mock.last_id venue;
+    .qpipe.job.crypto_mock.last_id[venue]:n;
     `$string[venue],"-",string n}
 
 / Private: publish every fill decided for one market row.
 publish_fills:{[horizon;row]
-    decided:.qsub.crypto_mock.decide[row;horizon;.qsub.crypto_mock.draws[]];
+    decided:.qpipe.job.crypto_mock.decide[row;horizon;.qpipe.job.crypto_mock.draws[]];
     {[row;f]
-        .qsub.crypto_mock.publish[`crypto_trades;
-            .qsub.crypto_mock.fill_rows[row`venue;row`sym;f 0;f 1;f 2;
-                .qsub.crypto_mock.next_id row`venue]]}[row] each decided;
+        .qpipe.job.crypto_mock.publish[`crypto_trades;
+            .qpipe.job.crypto_mock.fill_rows[row`venue;row`sym;f 0;f 1;f 2;
+                .qpipe.job.crypto_mock.next_id row`venue]]}[row] each decided;
     count decided}
 
 / The tick length, in seconds - the horizon the fill hazards are converted
@@ -244,18 +244,18 @@ tick_seconds:1f
 / The book goes out first: a fill at a price the book has not yet shown is
 / a fill nobody can explain from the tape.
 on_timer:{[]
-    `.qsub.crypto_mock.market set update mid:.qsub.crypto_mock.walk each mid,
-        toxicity:.qsub.crypto_mock.drift_toxicity each toxicity from .qsub.crypto_mock.market;
-    .qsub.crypto_mock.publish[`crypto_book;.qsub.crypto_mock.book_rows .qsub.crypto_mock.market];
-    .qsub.crypto_mock.publish_fills[.qsub.crypto_mock.tick_seconds] each .qsub.crypto_mock.market;
+    `.qpipe.job.crypto_mock.market set update mid:.qpipe.job.crypto_mock.walk each mid,
+        toxicity:.qpipe.job.crypto_mock.drift_toxicity each toxicity from .qpipe.job.crypto_mock.market;
+    .qpipe.job.crypto_mock.publish[`crypto_book;.qpipe.job.crypto_mock.book_rows .qpipe.job.crypto_mock.market];
+    .qpipe.job.crypto_mock.publish_fills[.qpipe.job.crypto_mock.tick_seconds] each .qpipe.job.crypto_mock.market;
     }
 
 \d .
 
-.qstream.define[`crypto_mock;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`crypto_mock;`procname`subscribe_to`publishes`period`on_timer`note!(
     `cryptomock1;
     `symbol$();
     `crypto_book`crypto_trades;
     0D00:00:01.000;
-    .qsub.crypto_mock.on_timer;
+    .qpipe.job.crypto_mock.on_timer;
     "stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one")];

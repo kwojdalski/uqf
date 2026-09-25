@@ -1,5 +1,5 @@
 / cross_arbitrage.q - synthetic-versus-direct cross-currency opportunities
-/ (.qsub.cross_arbitrage).
+/ (.qpipe.job.cross_arbitrage).
 / .
 / A DIFFERENT QUESTION FROM arbitrage.q, which is why it is a different job
 / and a different process. That one asks "are two sources crossed on the
@@ -28,9 +28,9 @@
 / inactive - present in the output, so it can be seen, rather than
 / silently dropped.
 
-\d .qsub.cross_arbitrage
+\d .qpipe.job.cross_arbitrage
 
-publish:.qstream.unwired `cross_arbitrage;
+publish:.qetl.job.stream.unwired `cross_arbitrage;
 
 / The notional every edge is quoted at, in the cross pair's BASE currency.
 / One size rather than a ladder: an edge is only meaningful at a size, and
@@ -44,7 +44,7 @@ max_skew:0D00:00:02
 
 / Latest superbook snapshot per pair. Keyed, so a new snapshot replaces
 / rather than accumulates - and never published directly (invariant 2).
-books:`sym xkey 0#.qsub.superbook.superbook
+books:`sym xkey 0#.qpipe.job.superbook.superbook
 
 cross_arbitrage:([] sym:`symbol$(); as_of:`timestamp$(); active:`boolean$();
     direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$();
@@ -54,7 +54,7 @@ cross_arbitrage:([] sym:`symbol$(); as_of:`timestamp$(); active:`boolean$();
 / The four vectors forwards.q's sweep functions want, out of a superbook row.
 / @param row one superbook snapshot
 / @return dict `bid_prices`bid_sizes`ask_prices`ask_sizes
-/ @eg .qsub.cross_arbitrage.leg_book[`bid_prices`bid_sizes`ask_prices`ask_sizes`sym!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6;`EURUSD)] -> `bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6)
+/ @eg .qpipe.job.cross_arbitrage.leg_book[`bid_prices`bid_sizes`ask_prices`ask_sizes`sym!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6;`EURUSD)] -> `bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6)
 leg_book:{[row]
     `bid_prices`bid_sizes`ask_prices`ask_sizes!
         (row`bid_prices;row`bid_sizes;row`ask_prices;row`ask_sizes)}
@@ -64,7 +64,7 @@ leg_book:{[row]
 / deep inside a sweep rather than being skipped here.
 / @param state the keyed book state
 / @return the quotable pair symbols
-/ @eg .qsub.cross_arbitrage.quotable[`sym xkey 0#.qsub.superbook.superbook] -> `symbol$()
+/ @eg .qpipe.job.cross_arbitrage.quotable[`sym xkey 0#.qpipe.job.superbook.superbook] -> `symbol$()
 quotable:{[state]
     rows:0!state;
     / The empty case needs its own arm. `bid_prices` is an untyped empty
@@ -83,7 +83,7 @@ quotable:{[state]
 / @param avail quotable pair symbols
 / @param sym the pair to find a synthetic route for
 / @return the route's legs in traversal order, empty when none exists
-/ @eg .qsub.cross_arbitrage.route_for[`EURUSD`USDJPY`EURJPY;`EURJPY] -> `EURUSD`USDJPY
+/ @eg .qpipe.job.cross_arbitrage.route_for[`EURUSD`USDJPY`EURJPY;`EURJPY] -> `EURUSD`USDJPY
 route_for:{[avail;sym]
     legs:.qccy.ccy_pair_legs sym;
     @[{.qfwd.ccy_shortest_path[x;y;z]}[avail except sym;legs`base];legs`quote;`symbol$()]}
@@ -94,7 +94,7 @@ route_for:{[avail;sym]
 / @param state the keyed book state
 / @param route the route's legs
 / @return dict `as_of`skew - the OLDEST leg time, and oldest-to-newest
-/ @eg .qsub.cross_arbitrage.leg_times[`sym xkey 0#.qsub.superbook.superbook;`symbol$()] -> `as_of`skew!(0Np;0Nn)
+/ @eg .qpipe.job.cross_arbitrage.leg_times[`sym xkey 0#.qpipe.job.superbook.superbook;`symbol$()] -> `as_of`skew!(0Np;0Nn)
 leg_times:{[state;route]
     if[0=count route; :`as_of`skew!(0Np;0Nn)];
     ts:{[state;leg] r:state leg; min (first r`bid_times;first r`ask_times)}[state] each route;
@@ -106,7 +106,7 @@ leg_times:{[state;route]
 / @param size the notional
 / @return dict `price`fully_filled
 / @throws error if side isn't `bid or `ask
-/ @eg (.qsub.cross_arbitrage.direct_side[`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6);`bid;1e6])`price -> 1.1
+/ @eg (.qpipe.job.cross_arbitrage.direct_side[`bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist 1.1;enlist 1e6;enlist 1.2;enlist 1e6);`bid;1e6])`price -> 1.1
 direct_side:{[row;side;size]
     if[not $[-11h=type side; side in `bid`ask; 0b];
         '"direct_side: side must be `bid or `ask, got ",.Q.s1 side];
@@ -166,7 +166,7 @@ opportunity:{[state;avail;sym;size;as_of]
 / @return the cross_arbitrage status table
 evaluate:{[state;size;as_of]
     avail:quotable state;
-    result:0#.qsub.cross_arbitrage.cross_arbitrage;
+    result:0#.qpipe.job.cross_arbitrage.cross_arbitrage;
     i:0;
     while[i<count avail;
         result:result upsert opportunity[state;avail;avail i;size;as_of];
@@ -180,7 +180,7 @@ evaluate:{[state;size;as_of]
 / @param t incoming table name
 / @param x superbook rows
 / @return nothing
-/ @eg .qsub.cross_arbitrage.on_batch[`unrelated;()]
+/ @eg .qpipe.job.cross_arbitrage.on_batch[`unrelated;()]
 on_batch:{[t;x]
     if[not t=`superbook; :()];
     if[0=count x; :()];
@@ -190,9 +190,9 @@ on_batch:{[t;x]
     / does nothing on every batch. Guarded on presence because the same job
     / runs under run_stream.q, where the plant has not stamped a `time`.
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
-    `.qsub.cross_arbitrage.books upsert `sym xkey rows;
+    `.qpipe.job.cross_arbitrage.books upsert `sym xkey rows;
     rows:evaluate[books;notional;.z.p];
-    if[count rows; .qsub.cross_arbitrage.publish[`cross_arbitrage;rows]];
+    if[count rows; .qpipe.job.cross_arbitrage.publish[`cross_arbitrage;rows]];
     }
 
 \d .
@@ -200,12 +200,12 @@ on_batch:{[t;x]
 / The two numbers that change what this job reports, declared so a change
 / to either is recorded rather than inferred later from a shift in the
 / output (#295). `books` is deliberately absent: it is state, and large.
-.qaudit.watch[`cross_arbitrage;
-    `.qsub.cross_arbitrage.notional`.qsub.cross_arbitrage.max_skew];
+.qetl.cfg.audit.watch[`cross_arbitrage;
+    `.qpipe.job.cross_arbitrage.notional`.qpipe.job.cross_arbitrage.max_skew];
 
-.qstream.define[`cross_arbitrage;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`cross_arbitrage;`procname`subscribe_to`publishes`on_batch`note!(
     `crossarb1;
     enlist `superbook;
     `cross_arbitrage`config_change;
-    .qsub.cross_arbitrage.on_batch;
+    .qpipe.job.cross_arbitrage.on_batch;
     "the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default")];

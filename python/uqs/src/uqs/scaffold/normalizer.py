@@ -1,12 +1,12 @@
 """Scaffolding a normalizer: many differently-shaped sources, one canonical table.
 
 Its own module rather than a branch of `jobs.py`: a normalizer is three
-declarations in one file - the canonical table, one `.qxf` transform per
-source, and the `.qnorm.define` that registers the job - and the transforms
+declarations in one file - the canonical table, one `.qetl.transform` transform per
+source, and the `.qetl.job.stream.normalize` that registers the job - and the transforms
 are what make it different. See src/etl/core/normalizer.q for why it is a
 kind at all, and src/etl/streaming/marks.q for a finished one.
 
-THE FILE MUST LOAD. `.qxf.define` checks a transform's examples when the
+THE FILE MUST LOAD. `.qetl.transform.define` checks a transform's examples when the
 file is loaded, and refuses one with no rows. So every mapping gets a typed
 example row - the same sample values a scaffolded source's fixture uses -
 and the MAPPING throws instead: the transform suite then fails on it, which
@@ -38,7 +38,7 @@ def definition_columns(definition: str) -> list[tuple[str, str]]:
 
     The grouped attribute is dropped: it is a property of the plant's copy,
     and a mapping's declared input carrying it would make every example the
-    scaffold writes - which has no attribute - fail `.qxf.define` at load.
+    scaffold writes - which has no attribute - fail `.qetl.transform.define` at load.
     """
     body = definition[definition.index("([]") + 3 : definition.rindex(")")]
     out = []
@@ -69,7 +69,7 @@ def normalizer(
 
     `columns` is the canonical table as `parse_columns` reads `--columns`,
     `time` included: the plant's copy keeps it, the normalizer's own output
-    drops it, since `.qnorm.define` refuses an output carrying `time`.
+    drops it, since `.qetl.job.stream.normalize` refuses an output carrying `time`.
     `source_columns` is each source's plant schema, the facts the caller reads
     from the tree - a mapping's input starts as its source's whole table.
     """
@@ -119,10 +119,10 @@ from_{src}:{{[batch]
         )
     defines = "\n".join(
         f"""/ SCAFFOLDED example: one {src} row, and the {name} row it should become.
-.qxf.define[`{xf};`inputs`output`fn`examples!(
-    (enlist `{src})!enlist .qsub.{name}.{src};
-    .qsub.{name}.{name};
-    .qsub.{name}.from_{src};
+.qetl.transform.define[`{xf};`inputs`output`fn`examples!(
+    (enlist `{src})!enlist .qpipe.job.{name}.{src};
+    .qpipe.job.{name}.{name};
+    .qpipe.job.{name}.from_{src};
     enlist `inputs`expected!(
         (enlist `{src})!enlist {_row(source_columns[src])};
         {_row(output)}))];
@@ -134,17 +134,17 @@ from_{src}:{{[batch]
     else:
         mapping = "`" + "`".join(sources) + "!`" + "`".join(transforms)
     body = f"""/ {name}.q - the `{name}` normalizer: <one line: the one fact, from every source>
-/ (.qsub.{name}).
+/ (.qpipe.job.{name}).
 / .
 / Reads {", ".join(f"`{s}`" for s in sources)}; publishes `{name}`.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\\d .qsub.{name}
+\\d .qpipe.job.{name}
 
-/ Where rows go. A stub until .qstream.wire points it at a tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `{name};
+publish:.qetl.job.stream.unwired `{name};
 
 / The canonical output. No `time`: the plant stamps it.
 {name}:{_empty(output)}
@@ -153,13 +153,13 @@ publish:.qstream.unwired `{name};
 \\d .
 
 {defines}
-.qnorm.define[`{name};`procname`output`input`note!(
+.qetl.job.stream.normalize[`{name};`procname`output`input`note!(
     `{proc};
-    .qsub.{name}.{name};
+    .qpipe.job.{name}.{name};
     {mapping};
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
 """
-    notes = [f"implement .qsub.{name}.from_{s} and its example" for s in sources]
+    notes = [f"implement .qpipe.job.{name}.from_{s} and its example" for s in sources]
     actions = [
         FileAction(STREAM_DIR / f"{name}.q", body),
         FileAction(

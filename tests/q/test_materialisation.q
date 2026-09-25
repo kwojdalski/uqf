@@ -30,10 +30,10 @@ setUp_fresh_ledger:{[] .testutil.reset_coverage_ledger[];}
 / --- interval validation ------------------------------------------
 
 test_an_empty_interval_is_rejected:{[t]
-    .qunit.assertError[{.qmatz.require_interval[x;x]};.coveragetest.d 1;"from=to covers nothing, so recording it would claim completeness for no data"]};
+    .qunit.assertError[{.qetl.coverage.require_interval[x;x]};.coveragetest.d 1;"from=to covers nothing, so recording it would claim completeness for no data"]};
 
 test_a_reversed_interval_is_rejected:{[t]
-    .qunit.assertError[{.qmatz.require_interval[x 0;x 1]};(.coveragetest.d 2;.coveragetest.d 1);"a reversed interval is rejected at construction"]};
+    .qunit.assertError[{.qetl.coverage.require_interval[x 0;x 1]};(.coveragetest.d 2;.coveragetest.d 1);"a reversed interval is rejected at construction"]};
 
 / --- composition: the boundary rule -------------------------------
 
@@ -41,125 +41,125 @@ test_a_reversed_interval_is_rejected:{[t]
 / compose. This is the case a naive implementation gets right by accident.
 test_boundary_adjacent_intervals_compose:{[t]
     ivs:([] range_from:(.coveragetest.d 1;.coveragetest.d 2); range_to:(.coveragetest.d 2;.coveragetest.d 3));
-    .qunit.assertEquals[count .qmatz.compose ivs;1;"[Mon,Tue) and [Tue,Wed) are contiguous and compose to one"]};
+    .qunit.assertEquals[count .qetl.coverage.compose ivs;1;"[Mon,Tue) and [Tue,Wed) are contiguous and compose to one"]};
 
 / ...and this is the case it gets WRONG: merging across a real gap silently
 / reports a missing day as covered.
 test_intervals_with_a_day_between_them_do_not_compose:{[t]
     ivs:([] range_from:(.coveragetest.d 1;.coveragetest.d 3); range_to:(.coveragetest.d 2;.coveragetest.d 4));
-    .qunit.assertEquals[count .qmatz.compose ivs;2;"a real gap must not be merged away"]};
+    .qunit.assertEquals[count .qetl.coverage.compose ivs;2;"a real gap must not be merged away"]};
 
 test_overlapping_intervals_compose_to_the_outer_bound:{[t]
     ivs:([] range_from:(.coveragetest.d 1;.coveragetest.d 2); range_to:(.coveragetest.d 3;.coveragetest.d 4));
-    got:.qmatz.compose ivs;
+    got:.qetl.coverage.compose ivs;
     .qunit.assertEquals[count got;1;"overlapping intervals compose"];
     .qunit.assertEquals[first got`range_to;.coveragetest.d 4;"to the outer bound"]};
 
 test_composition_is_order_independent:{[t]
     fwd:([] range_from:(.coveragetest.d 1;.coveragetest.d 2); range_to:(.coveragetest.d 2;.coveragetest.d 3));
     rev:([] range_from:(.coveragetest.d 2;.coveragetest.d 1); range_to:(.coveragetest.d 3;.coveragetest.d 2));
-    .qunit.assertEquals[count .qmatz.compose fwd;count .qmatz.compose rev;"composition does not depend on input order"]};
+    .qunit.assertEquals[count .qetl.coverage.compose fwd;count .qetl.coverage.compose rev;"composition does not depend on input order"]};
 
 / --- recording ----------------------------------------------------
 
 test_a_completed_window_is_recorded:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;1234];
-    .qunit.assertEquals[count .qmatz.intervals[`markouts;`;`v1;.z.p];1;"a staged window appears in the ledger"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;1234];
+    .qunit.assertEquals[count .qetl.coverage.intervals[`markouts;`;`v1;.z.p];1;"a staged window appears in the ledger"]};
 
 / The counter-intuitive requirement, and the one most likely to be
 / optimised away by someone who has not read this: an EMPTY window is still
 / recorded. It is positive evidence the range was examined and held nothing,
 / which is not the same as never having been attempted.
 test_an_empty_window_is_still_recorded:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;0];
-    .qunit.assertTrue[.qmatz.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];"a window that published nothing still counts as covered"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;0];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];"a window that published nothing still counts as covered"]};
 
 test_a_null_source_version_is_refused:{[t]
-    .qunit.assertError[{.qmatz.stage_completion[`markouts;`;`;x 0;x 1;5]};(.coveragetest.d 1;.coveragetest.d 2);"coverage under one source release says nothing about another"]};
+    .qunit.assertError[{.qetl.coverage.stage_completion[`markouts;`;`;x 0;x 1;5]};(.coveragetest.d 1;.coveragetest.d 2);"coverage under one source release says nothing about another"]};
 
 test_staging_rejects_an_empty_range:{[t]
-    .qunit.assertError[{.qmatz.stage_completion[`markouts;`;`v1;x;x;5]};.coveragetest.d 1;"a zero-width window cannot be recorded as coverage"]};
+    .qunit.assertError[{.qetl.coverage.stage_completion[`markouts;`;`v1;x;x;5]};.coveragetest.d 1;"a zero-width window cannot be recorded as coverage"]};
 
 / --- version isolation --------------------------------------
 
 / The rule: intervals from different versions are NEVER merged
 / to satisfy a dependency. A v1 window must not make a v2 range look covered.
 test_coverage_does_not_leak_across_source_versions:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 5;100];
-    .qunit.assertEquals[count .qmatz.intervals[`markouts;`;`v2;.z.p];0;"a v1 window is invisible to a v2 query"];
-    .qunit.assertTrue[not .qmatz.is_covered[`markouts;`;`v2;.z.p;.coveragetest.d 1;.coveragetest.d 5];"v1 coverage must not satisfy a v2 dependency"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 5;100];
+    .qunit.assertEquals[count .qetl.coverage.intervals[`markouts;`;`v2;.z.p];0;"a v1 window is invisible to a v2 query"];
+    .qunit.assertTrue[not .qetl.coverage.is_covered[`markouts;`;`v2;.z.p;.coveragetest.d 1;.coveragetest.d 5];"v1 coverage must not satisfy a v2 dependency"]};
 
 test_coverage_does_not_leak_across_datasets:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 5;100];
-    .qunit.assertEquals[count .qmatz.intervals[`deals;`;`v1;.z.p];0;"one dataset's coverage says nothing about another's"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 5;100];
+    .qunit.assertEquals[count .qetl.coverage.intervals[`deals;`;`v1;.z.p];0;"one dataset's coverage says nothing about another's"]};
 
 / --- gaps ----------------------------------------------------------------
 
 test_an_empty_ledger_reports_the_whole_range_missing:{[t]
-    got:.qmatz.missing[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];
+    got:.qetl.coverage.missing[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];
     .qunit.assertEquals[count got;1;"nothing covered means one gap"];
     .qunit.assertEquals[first got`range_from;.coveragetest.d 1;"the gap starts where the request did"]};
 
 test_a_middle_gap_is_found:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;5];
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 4;.coveragetest.d 5;5];
-    got:.qmatz.missing[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 5];
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;5];
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 4;.coveragetest.d 5;5];
+    got:.qetl.coverage.missing[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 5];
     .qunit.assertEquals[count got;1;"one gap between the two windows"];
     .qunit.assertEquals[first got`range_from;.coveragetest.d 2;"the gap starts where the first window ended"];
     .qunit.assertEquals[first got`range_to;.coveragetest.d 4;"and ends where the second began"]};
 
 test_coverage_wider_than_the_request_clips_to_it:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 10;5];
-    .qunit.assertTrue[.qmatz.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 3;.coveragetest.d 4];"a wide window covers a narrow request"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 10;5];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 3;.coveragetest.d 4];"a wide window covers a narrow request"]};
 
 test_coverage_outside_the_request_is_ignored:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 8;.coveragetest.d 9;5];
-    .qunit.assertTrue[not .qmatz.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];"an unrelated window does not cover the request"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 8;.coveragetest.d 9;5];
+    .qunit.assertTrue[not .qetl.coverage.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];"an unrelated window does not cover the request"]};
 
 test_require_covered_names_the_missing_ranges:{[t]
-    msg:@[{.qmatz.require_covered[`markouts;`;`v1;.z.p;x 0;x 1];""};(.coveragetest.d 1;.coveragetest.d 3);{x}];
+    msg:@[{.qetl.coverage.require_covered[`markouts;`;`v1;.z.p;x 0;x 1];""};(.coveragetest.d 1;.coveragetest.d 3);{x}];
     .qunit.assertTrue[msg like "*missing*";"a refusal names what is missing, so a caller can narrow its request"]};
 
 test_require_covered_passes_when_complete:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 3;5];
-    .qunit.assertTrue[.qmatz.require_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];"a fully covered range is admitted"]};
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 3;5];
+    .qunit.assertTrue[.qetl.coverage.require_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];"a fully covered range is admitted"]};
 
 / --- private checkpoints ------------------------------------------
 
 test_no_checkpoint_returns_null:{[t]
-    .qbfstate.clear_checkpoint[`cp_absent];
-    .qunit.assertTrue[null .qbfstate.load_checkpoint[`cp_absent;.coveragetest.spec[]];"no checkpoint means start from the beginning"]};
+    .qetl.job.bounded.state.clear_checkpoint[`cp_absent];
+    .qunit.assertTrue[null .qetl.job.bounded.state.load_checkpoint[`cp_absent;.coveragetest.spec[]];"no checkpoint means start from the beginning"]};
 
 spec:{[] `source_version`range_from`range_to!(`v1;.coveragetest.d 1;.coveragetest.d 2)}
 
 test_a_matching_specification_resumes:{[t]
-    .qbfstate.save_checkpoint[`cp_match;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
-    .qunit.assertEquals[.qbfstate.load_checkpoint[`cp_match;.coveragetest.spec[]];(.coveragetest.d 1)+0D12;"an identical run specification resumes from its cursor"]};
+    .qetl.job.bounded.state.save_checkpoint[`cp_match;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
+    .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`cp_match;.coveragetest.spec[]];(.coveragetest.d 1)+0D12;"an identical run specification resumes from its cursor"]};
 
 / "Discard saved state when the current specification differs". A
 / cursor is only meaningful relative to the run that produced it: resuming a
 / [Sep1,Sep5) cursor into a [Sep1,Sep30) run would skip most of the range
 / while reporting progress.
 test_a_widened_range_discards_the_checkpoint:{[t]
-    .qbfstate.save_checkpoint[`cp_wide;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
+    .qetl.job.bounded.state.save_checkpoint[`cp_wide;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
     wider:`source_version`range_from`range_to!(`v1;.coveragetest.d 1;.coveragetest.d 9);
-    .qunit.assertTrue[null .qbfstate.load_checkpoint[`cp_wide;wider];"a different range is a different run"]};
+    .qunit.assertTrue[null .qetl.job.bounded.state.load_checkpoint[`cp_wide;wider];"a different range is a different run"]};
 
 test_a_new_source_version_discards_the_checkpoint:{[t]
-    .qbfstate.save_checkpoint[`cp_ver;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
+    .qetl.job.bounded.state.save_checkpoint[`cp_ver;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
     newver:`source_version`range_from`range_to!(`v2;.coveragetest.d 1;.coveragetest.d 2);
-    .qunit.assertTrue[null .qbfstate.load_checkpoint[`cp_ver;newver];"a new source release is a different run"]};
+    .qunit.assertTrue[null .qetl.job.bounded.state.load_checkpoint[`cp_ver;newver];"a new source release is a different run"]};
 
 test_clearing_a_checkpoint_restarts_from_the_beginning:{[t]
-    .qbfstate.save_checkpoint[`cp_clear;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
-    .qbfstate.clear_checkpoint[`cp_clear];
-    .qunit.assertTrue[null .qbfstate.load_checkpoint[`cp_clear;.coveragetest.spec[]];"a cleared checkpoint means start over"]};
+    .qetl.job.bounded.state.save_checkpoint[`cp_clear;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
+    .qetl.job.bounded.state.clear_checkpoint[`cp_clear];
+    .qunit.assertTrue[null .qetl.job.bounded.state.load_checkpoint[`cp_clear;.coveragetest.spec[]];"a cleared checkpoint means start over"]};
 
 / A checkpoint is private: it is never evidence that a dataset is
 / complete. Completeness has exactly one channel, the etl_coverage ledger.
 test_a_checkpoint_is_not_coverage:{[t]
-    .qbfstate.save_checkpoint[`cp_private;.coveragetest.spec[];.coveragetest.d 2];
-    .qunit.assertTrue[not .qmatz.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];"a worker reaching the end of a range does not by itself make it covered"]};
+    .qetl.job.bounded.state.save_checkpoint[`cp_private;.coveragetest.spec[];.coveragetest.d 2];
+    .qunit.assertTrue[not .qetl.coverage.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];"a worker reaching the end of a range does not by itself make it covered"]};
 
 / --- the assumed schema, and refusing to trust a different one (#60) -----
 
@@ -170,7 +170,7 @@ test_a_checkpoint_is_not_coverage:{[t]
 
 test_the_assumed_schema_is_accepted:{[t]
     .testutil.reset_coverage_ledger[];
-    .qunit.assertEquals[.qmatz.require_schema[];1b;"the shape this file creates is the shape it assumes"]};
+    .qunit.assertEquals[.qetl.coverage.require_schema[];1b;"the shape this file creates is the shape it assumes"]};
 
 / The dangerous case #60 was filed for. A partition key means every read here
 / aggregates across partitions, so a range covered in one partition and empty
@@ -184,7 +184,7 @@ test_an_undeclared_column_is_refused_rather_than_ignored:{[t]
     / `date` assertion below would have gone on matching a refusal about a
     / different column entirely.
     `etl_coverage set update date:`date$() from .testutil.foreign_coverage_ledger[];
-    r:@[{.qmatz.require_schema[]; ""};::;{x}];
+    r:@[{.qetl.coverage.require_schema[]; ""};::;{x}];
     / restore via the helper, which DELETES first - calling init_ledger here
     / would leave the wrong-shaped table in place for every later suite.
     .testutil.reset_coverage_ledger[];
@@ -205,16 +205,16 @@ test_an_undeclared_column_is_refused_rather_than_ignored:{[t]
 / another. Without it, the first worker to finish a window would tell every
 / other partition its work was already done.
 test_coverage_of_one_partition_does_not_cover_another:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     .qunit.assertEquals[
-        .qmatz.is_covered[`markouts;`USDJPY;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
+        .qetl.coverage.is_covered[`markouts;`USDJPY;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
         0b;
         "a range covered for EURUSD says nothing whatever about USDJPY"]};
 
 test_a_partition_covers_its_own_range:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     .qunit.assertEquals[
-        .qmatz.is_covered[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
+        .qetl.coverage.is_covered[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
         1b;
         "the partition that was filled reads as covered"]};
 
@@ -223,17 +223,17 @@ test_a_partition_covers_its_own_range:{[t]
 / would merge perfectly if the partition were ignored, so an implementation
 / that dropped the filter would report both days complete for both symbols.
 test_two_partitions_do_not_compose_into_one_range:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 2;.coveragetest.d 3;10];
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 2;.coveragetest.d 3;10];
     .qunit.assertEquals[
-        .qmatz.is_covered[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];
+        .qetl.coverage.is_covered[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];
         0b;
         "EURUSD covers day one only - USDJPY's day two must not fill its gap"]};
 
 test_the_gap_a_partition_reports_is_its_own:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 2;.coveragetest.d 3;10];
-    m:.qmatz.missing[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 2;.coveragetest.d 3;10];
+    m:.qetl.coverage.missing[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];
     .qunit.assertEquals[count m;1;"one gap"];
     .qunit.assertEquals[(first m)`range_from;.coveragetest.d 2;"the gap starts where EURUSD's own coverage stopped"]};
 
@@ -243,23 +243,23 @@ test_the_gap_a_partition_reports_is_its_own:{[t]
 / other, so the isolation has to hold in BOTH directions - that is what makes
 / adding the column safe for every dataset that does not use it.
 test_an_unpartitioned_read_does_not_see_partitioned_rows:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     .qunit.assertEquals[
-        .qmatz.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
+        .qetl.coverage.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
         0b;
         "coverage recorded for a symbol does not make the dataset-wide claim true"]};
 
 test_a_partitioned_read_does_not_see_unpartitioned_rows:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     .qunit.assertEquals[
-        .qmatz.is_covered[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
+        .qetl.coverage.is_covered[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
         0b;
         "a dataset-wide claim does not answer for one symbol either"]};
 
 test_the_sentinel_is_a_partition_like_any_other:{[t]
-    .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     .qunit.assertEquals[
-        .qmatz.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
+        .qetl.coverage.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
         1b;
         "a dataset with no partition dimension behaves exactly as it did before the column existed"]};
 
@@ -269,7 +269,7 @@ test_the_sentinel_is_a_partition_like_any_other:{[t]
 / unpartitioned dataset in the tree.
 test_a_null_partition_is_the_sentinel_not_an_error:{[t]
     .qunit.assertEquals[
-        0<.qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+        0<.qetl.coverage.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
         1b;
         "` is a legitimate value meaning no partition dimension, not a caller who forgot"]};
 
@@ -279,48 +279,48 @@ test_a_null_partition_is_the_sentinel_not_an_error:{[t]
 / do exactly that, silently, leaving the other partitions reading as
 / uncovered until someone noticed and republished them.
 test_superseding_one_partition_leaves_another_standing:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    n:.qmatz.supersede[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    n:.qetl.coverage.supersede[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2];
     .qunit.assertEquals[n;1;"exactly one claim withdrawn, not both"];
     .qunit.assertEquals[
-        .qmatz.is_covered[`markouts;`USDJPY;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
+        .qetl.coverage.is_covered[`markouts;`USDJPY;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
         1b;
         "USDJPY's claim was never in question and still stands"]};
 
 test_superseding_one_partition_withdraws_that_partition:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.supersede[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.supersede[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2];
     .qunit.assertEquals[
-        .qmatz.is_covered[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
+        .qetl.coverage.is_covered[`markouts;`EURUSD;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];
         0b;
         "the restated partition is no longer covered"]};
 
 / --- the audit reads are scoped too ---------------------------------------
 
 test_history_is_one_partitions_claims:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qunit.assertEquals[count .qmatz.history[`markouts;`EURUSD;`v1];1;
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qunit.assertEquals[count .qetl.coverage.history[`markouts;`EURUSD;`v1];1;
         "history answers for the partition asked about, not the dataset"]};
 
 test_contributing_runs_is_one_partitions_runs:{[t]
-    .qmatz.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qunit.assertEquals[count .qmatz.contributing_runs[`markouts;`EURUSD;`v1];1;
+    .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`markouts;`USDJPY;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qunit.assertEquals[count .qetl.coverage.contributing_runs[`markouts;`EURUSD;`v1];1;
         "one partition, one contributing run - not the two that touched the dataset"]};
 
 / --- the schema itself ----------------------------------------------------
 
 test_partition_is_part_of_the_declared_schema:{[t]
-    .qunit.assertEquals[`partition in .qmatz.schema;1b;
+    .qunit.assertEquals[`partition in .qetl.coverage.schema;1b;
         "a column every read filters on must be declared, or require_schema would call a correct ledger foreign"]};
 
 test_partition_follows_dataset_in_the_schema:{[t]
     / Order is not cosmetic: the ledger is a published table, and a reader
     / scanning it should meet the four key columns together before the
     / measures. dataset then partition then source_version is that key.
-    .qunit.assertEquals[3#.qmatz.schema;`dataset`partition`source_version;
+    .qunit.assertEquals[3#.qetl.coverage.schema;`dataset`partition`source_version;
         "the key columns lead, in the order the signatures take them"]};
 
 / --- attach: the guard that actually fires (#60) ---------------------------
@@ -332,14 +332,14 @@ test_partition_follows_dataset_in_the_schema:{[t]
 
 test_attaching_to_an_absent_ledger_creates_it:{[t]
     ![`.;();0b;enlist `etl_coverage];
-    .qunit.assertEquals[.qmatz.attach[];`etl_coverage;"a first attach creates the ledger rather than refusing"]};
+    .qunit.assertEquals[.qetl.coverage.attach[];`etl_coverage;"a first attach creates the ledger rather than refusing"]};
 
 / Checking a table we just built would only ever confirm itself, so the
 / absent case deliberately does not validate.
 test_attaching_to_a_ledger_we_created_does_not_second_guess_it:{[t]
     ![`.;();0b;enlist `etl_coverage];
-    .qmatz.attach[];
-    .qunit.assertEquals[.qmatz.attach[];`etl_coverage;"a second attach to our own ledger is fine"]};
+    .qetl.coverage.attach[];
+    .qunit.assertEquals[.qetl.coverage.attach[];`etl_coverage;"a second attach to our own ledger is fine"]};
 
 / The case #60 is about: a ledger someone ELSE created, whose shape is
 / evidence rather than our assumption.
@@ -351,21 +351,21 @@ test_attaching_to_a_foreign_ledger_with_an_extra_column_is_refused:{[t]
     / `date` assertion below would have gone on matching a refusal about a
     / different column entirely.
     `etl_coverage set update date:`date$() from .testutil.foreign_coverage_ledger[];
-    r:@[{.qmatz.attach[]; ""};::;{x}];
+    r:@[{.qetl.coverage.attach[]; ""};::;{x}];
     .testutil.reset_coverage_ledger[];
     .qunit.assertEquals[r like "*date*";1b;"an existing ledger of the wrong shape is refused by column name before a single read is trusted"]};
 
 test_attaching_to_a_foreign_ledger_missing_a_column_is_refused:{[t]
     `etl_coverage set ([] dataset:`symbol$(); range_from:`timestamp$();
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$());
-    r:@[{.qmatz.attach[]; ""};::;{x}];
+    r:@[{.qetl.coverage.attach[]; ""};::;{x}];
     .testutil.reset_coverage_ledger[];
     .qunit.assertEquals[r like "*source_version*";1b;"a ledger without source_version is named, not read anyway"]};
 
 test_attaching_to_a_correctly_shaped_foreign_ledger_succeeds:{[t]
     / same columns, built independently of init_ledger
     `etl_coverage set .testutil.foreign_coverage_ledger[];
-    .qunit.assertEquals[.qmatz.attach[];`etl_coverage;"a foreign ledger of the right shape is accepted"]};
+    .qunit.assertEquals[.qetl.coverage.attach[];`etl_coverage;"a foreign ledger of the right shape is accepted"]};
 
 / --- persistence (durable, cross-process) ---------------------------------
 
@@ -374,53 +374,53 @@ test_a_staged_completion_reaches_disk:{[t]
     / with the worker, so a bounded worker - which runs a range and exits -
     / took its own coverage with it, and the ledger's "durable cross-process
     / completeness" was true of nothing.
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qunit.assertEquals[count key hsym `$.qmatz.ledger_path[];1;
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qunit.assertEquals[count key hsym `$.qetl.coverage.ledger_path[];1;
         "staging a completion writes the ledger to disk"]};
 
 test_reload_restores_what_another_process_would_have_written:{[t]
     / Stands in for a second process: stage, drop the in-memory table the way
     / a fresh interpreter would have none, reload, and the rows are back.
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     ![`.;();0b;enlist `etl_coverage];
-    .qmatz.reload[];
-    .qunit.assertEquals[count .qmatz.ledger[];1;
+    .qetl.coverage.reload[];
+    .qunit.assertEquals[count .qetl.coverage.ledger[];1;
         "a process that did not stage the row can still read it"]};
 
 test_attach_reloads_so_a_worker_sees_earlier_coverage:{[t]
-    / attach is the entry point .qbw.init calls, so this is the path a real
+    / attach is the entry point .qetl.job.bounded.init calls, so this is the path a real
     / worker takes. Without the reload here, coverage skipping can
     / never fire across runs.
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     ![`.;();0b;enlist `etl_coverage];
-    .qmatz.attach[];
-    .qunit.assertEquals[count .qmatz.ledger[];1;"attach picks up the persisted ledger"]};
+    .qetl.coverage.attach[];
+    .qunit.assertEquals[count .qetl.coverage.ledger[];1;"attach picks up the persisted ledger"]};
 
 test_a_supersession_is_persisted_too:{[t]
     / A withdrawn claim that came back after a restart would be the worst
     / failure this file has, so supersede persists on the same path.
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
     ![`.;();0b;enlist `etl_coverage];
-    .qmatz.reload[];
-    .qunit.assertEquals[count .qmatz.valid_at[`ds1;`;`v1;.z.p];0;
+    .qetl.coverage.reload[];
+    .qunit.assertEquals[count .qetl.coverage.valid_at[`ds1;`;`v1;.z.p];0;
         "the withdrawal survives the process, not just the claim"]};
 
 test_reload_with_no_file_is_not_an_error:{[t]
     / A first run has nothing to reload, which is ordinary rather than a
     / fault.
-    @[{system"rm -f ",x};.qmatz.ledger_path[];{[e] (::)}];
+    @[{system"rm -f ",x};.qetl.coverage.ledger_path[];{[e] (::)}];
     ![`.;();0b;enlist `etl_coverage];
-    .qmatz.reload[];
-    .qunit.assertEquals[count .qmatz.ledger[];0;"no file means an empty ledger, not a throw"]};
+    .qetl.coverage.reload[];
+    .qunit.assertEquals[count .qetl.coverage.ledger[];0;"no file means an empty ledger, not a throw"]};
 
 test_reload_refuses_a_file_of_the_wrong_shape:{[t]
     / A ledger written by an older version of this tree has an older shape.
     / require_schema is the guard, and reload runs it - so an old file is
     / refused by name rather than read and silently aggregated across a
     / column it does not have.
-    (hsym `$.qmatz.ledger_path[]) set ([] dataset:`symbol$(); range_from:`timestamp$());
-    r:@[{.qmatz.reload[]; ""};::;{x}];
+    (hsym `$.qetl.coverage.ledger_path[]) set ([] dataset:`symbol$(); range_from:`timestamp$());
+    r:@[{.qetl.coverage.reload[]; ""};::;{x}];
     .testutil.reset_coverage_ledger[];
     .qunit.assertEquals[r like "*source_version*";1b;
         "a stale ledger file is named and refused, not loaded"]};
@@ -441,12 +441,12 @@ test_reload_refuses_a_file_of_the_wrong_shape:{[t]
 / q's `system` throws 'os when the command exits non-zero, and its stdout was
 / not reliably captured back into q - so the probe both raised on the absent
 / case and misreported the present one.
-lock_exists:{[] 0<count @[{key hsym `$x};.qmatz.lock_path[];{[e] ()}]}
+lock_exists:{[] 0<count @[{key hsym `$x};.qetl.coverage.lock_path[];{[e] ()}]}
 
 test_with_lock_releases_even_when_the_body_throws:{[t]
     / An error path that skips the release wedges every later write on the
     / host, so the release has to survive a throw.
-    r:@[{.qmatz.with_lock[{[x] '"boom"};enlist 1]; ""};::;{x}];
+    r:@[{.qetl.coverage.with_lock[{[x] '"boom"};enlist 1]; ""};::;{x}];
     .qunit.assertEquals[(r like "*boom*";.coveragetest.lock_exists[]);(1b;0b);
         "the lock is released and the error re-thrown"]};
 
@@ -456,23 +456,23 @@ test_with_lock_actually_defers_the_body:{[t]
     / BEFORE with_lock is entered, and the lock protects nothing. Nothing
     / about the return value reveals that, which is why it shipped looking
     / correct - so this asserts the lock is HELD while the body runs.
-    held:.qmatz.with_lock[{[x] .coveragetest.lock_exists[]};enlist 1];
+    held:.qetl.coverage.with_lock[{[x] .coveragetest.lock_exists[]};enlist 1];
     .qunit.assertEquals[(held;.coveragetest.lock_exists[]);(1b;0b);
         "the body runs inside the critical section, and it is released after"]};
 
 test_the_foreign_fixture_tracks_the_declared_schema:{[t]
     / The canary for the three tests above. They need a ledger carrying every
     / declared column, so that a refusal exercises the EXTRA-column path
-    / rather than the missing-column one. When .qmatz.schema gains a column and
+    / rather than the missing-column one. When .qetl.coverage.schema gains a column and
     / the fixture does not, they all start passing for the wrong reason or
     / failing for a confusing one - so this fails first, and says what to fix.
-    .qunit.assertEquals[cols .testutil.foreign_coverage_ledger[];.qmatz.schema;
-        "the hand-built fixture must carry exactly .qmatz.schema's columns - update the fixture in testutil.q, not require_schema"]};
+    .qunit.assertEquals[cols .testutil.foreign_coverage_ledger[];.qetl.coverage.schema;
+        "the hand-built fixture must carry exactly .qetl.coverage.schema's columns - update the fixture in testutil.q, not require_schema"]};
 
 test_a_missing_column_is_refused:{[t]
     `etl_coverage set ([] dataset:`symbol$(); range_from:`timestamp$();
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$());
-    r:@[{.qmatz.require_schema[]; ""};::;{x}];
+    r:@[{.qetl.coverage.require_schema[]; ""};::;{x}];
     / restore via the helper, which DELETES first - calling init_ledger here
     / would leave the wrong-shaped table in place for every later suite.
     .testutil.reset_coverage_ledger[];
@@ -486,31 +486,31 @@ test_a_missing_column_is_refused:{[t]
 / per-source row key. The first two are what these tests exercise.
 
 test_a_claim_is_current_when_made:{[t]
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qunit.assertEquals[.qmatz.is_covered[`ds1;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];1b;
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`ds1;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];1b;
         "a freshly staged window is covered as of now"]};
 
 test_superseding_withdraws_the_claim_going_forward:{[t]
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
-    .qunit.assertEquals[.qmatz.is_covered[`ds1;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];0b;
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`ds1;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];0b;
         "a withdrawn claim no longer covers the range"]};
 
 test_the_earlier_answer_is_still_answerable:{[t]
     / The whole point of option A. Overwriting would have made this
     / unanswerable, which is exactly the audit question a restatement
     / provokes: what did we believe before the correction?
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     before:.z.p;
-    .qmatz.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
-    .qunit.assertEquals[.qmatz.is_covered[`ds1;`;`v1;before;.coveragetest.d 1;.coveragetest.d 2];1b;
+    .qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`ds1;`;`v1;before;.coveragetest.d 1;.coveragetest.d 2];1b;
         "as of before the restatement, the range was covered - and still reads that way"]};
 
 test_a_republished_window_is_covered_again:{[t]
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;12];
-    .qunit.assertEquals[.qmatz.is_covered[`ds1;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];1b;
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;12];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`ds1;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];1b;
         "withdraw then republish leaves the range covered by the new claim"]};
 
 test_supersede_withdraws_an_overlapping_claim_not_only_a_contained_one:{[t]
@@ -518,54 +518,54 @@ test_supersede_withdraws_an_overlapping_claim_not_only_a_contained_one:{[t]
     / claim: after the correction the wide claim is no longer wholly true,
     / and leaving it standing would report the restated day as still covered
     / by the superseded belief.
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 10;100];
-    n:.qmatz.supersede[`ds1;`;`v1;.coveragetest.d 5;.coveragetest.d 6];
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 10;100];
+    n:.qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 5;.coveragetest.d 6];
     .qunit.assertEquals[n;1;"the overlapping wide claim is withdrawn, not skipped"]};
 
 test_supersede_leaves_a_disjoint_claim_alone:{[t]
     / The boundary that is easy to get backwards. [1;2) and [2;3) share an
     / endpoint and do NOT overlap, because the ranges are half-open.
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    n:.qmatz.supersede[`ds1;`;`v1;.coveragetest.d 2;.coveragetest.d 3];
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    n:.qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 2;.coveragetest.d 3];
     .qunit.assertEquals[n;0;"a claim that merely abuts the restated range is untouched"]};
 
 test_supersede_does_not_cross_datasets:{[t]
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.stage_completion[`ds2;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
-    .qunit.assertEquals[.qmatz.is_covered[`ds2;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];1b;
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`ds2;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`ds2;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];1b;
         "withdrawing one dataset's claim leaves another's standing"]};
 
 test_supersede_does_not_cross_source_versions:{[t]
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.stage_completion[`ds1;`;`v2;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
-    .qunit.assertEquals[.qmatz.is_covered[`ds1;`;`v2;.z.p;.coveragetest.d 1;.coveragetest.d 2];1b;
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`ds1;`;`v2;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`ds1;`;`v2;.z.p;.coveragetest.d 1;.coveragetest.d 2];1b;
         "a restatement at one source_version says nothing about another"]};
 
 test_superseding_nothing_reports_zero:{[t]
-    .qunit.assertEquals[.qmatz.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];0;
+    .qunit.assertEquals[.qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];0;
         "withdrawing from an empty ledger is a no-op, not an error"]};
 
 test_supersede_refuses_an_improper_interval:{[t]
-    .qunit.assertError[{.qmatz.supersede[`ds1;`;`v1;x 0;x 1]};(.coveragetest.d 2;.coveragetest.d 1);
+    .qunit.assertError[{.qetl.coverage.supersede[`ds1;`;`v1;x 0;x 1]};(.coveragetest.d 2;.coveragetest.d 1);
         "a backwards range is refused before any row is touched"]};
 
 test_history_keeps_the_withdrawn_row:{[t]
     / Append-only in the sense that matters: nothing is deleted, so the
     / audit view still shows both beliefs.
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qmatz.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;12];
-    .qunit.assertEquals[count .qmatz.history[`ds1;`;`v1];2;
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.supersede[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2];
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;12];
+    .qunit.assertEquals[count .qetl.coverage.history[`ds1;`;`v1];2;
         "both the withdrawn claim and its replacement remain on record"]};
 
 test_current_rows_use_infinity_not_null:{[t]
     / 0Wp, not 0Np. A null would make `as_of<superseded_at` false for every
     / current row, so a fully published range would read as empty - a
     / plausible wrong answer rather than an error.
-    .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
-    .qunit.assertEquals[first exec superseded_at from .qmatz.history[`ds1;`;`v1];0Wp;
+    .qetl.coverage.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qunit.assertEquals[first exec superseded_at from .qetl.coverage.history[`ds1;`;`v1];0Wp;
         "an unsuperseded claim carries infinity, so the as-of test needs no null case"]};
 
 \d .

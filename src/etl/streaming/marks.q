@@ -1,5 +1,5 @@
 / marks.q - the `marks` normalizer: a mid per instrument from every book
-/ the stack carries, as one table (.qsub.marks).
+/ the stack carries, as one table (.qpipe.job.marks).
 / .
 / A position is marked to a mid, and the two markets spell a mid
 / differently. The vendored `quote` is one bid and one ask; `crypto_book`
@@ -18,11 +18,11 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qsub.marks
+\d .qpipe.job.marks
 
-/ Where rows go. A stub until .qstream.wire points it at a tickerplant
+/ Where rows go. A stub until .qetl.job.stream.wire points it at a tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qstream.unwired `marks;
+publish:.qetl.job.stream.unwired `marks;
 
 / The canonical output. No `time`: the plant stamps it.
 marks:([] source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); mid:`float$())
@@ -41,7 +41,7 @@ fx_venue:`fx
 / @param batch a quote batch
 / @return canonical marks
 from_quote:{[batch]
-    select source_time:time, sym, venue:.qsub.marks.fx_venue, mid:(bid+ask)%2 from batch}
+    select source_time:time, sym, venue:.qpipe.job.marks.fx_venue, mid:(bid+ask)%2 from batch}
 
 / A crypto book row as a mark: halfway between the best bid and the best
 / ask, which are level 0 of each ladder.
@@ -53,20 +53,20 @@ from_crypto_book:{[batch]
 
 \d .
 
-.qxf.define[`marks_from_quote;`inputs`output`fn`examples!(
-    (enlist `quote)!enlist .qsub.marks.quote;
-    .qsub.marks.marks;
-    .qsub.marks.from_quote;
+.qetl.transform.define[`marks_from_quote;`inputs`output`fn`examples!(
+    (enlist `quote)!enlist .qpipe.job.marks.quote;
+    .qpipe.job.marks.marks;
+    .qpipe.job.marks.from_quote;
     enlist `inputs`expected!(
         (enlist `quote)!enlist ([] time:2026.09.17D10:00:00 2026.09.17D10:00:00;
             sym:`EURUSD`AAPL; bid:1.0849 150; ask:1.0851 150.1);
         ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:00; sym:`EURUSD`AAPL;
             venue:`fx`fx; mid:1.085 150.05)))];
 
-.qxf.define[`marks_from_crypto_book;`inputs`output`fn`examples!(
-    (enlist `crypto_book)!enlist .qsub.marks.crypto_book;
-    .qsub.marks.marks;
-    .qsub.marks.from_crypto_book;
+.qetl.transform.define[`marks_from_crypto_book;`inputs`output`fn`examples!(
+    (enlist `crypto_book)!enlist .qpipe.job.marks.crypto_book;
+    .qpipe.job.marks.marks;
+    .qpipe.job.marks.from_crypto_book;
     enlist `inputs`expected!(
         (enlist `crypto_book)!enlist ([] time:enlist 2026.09.17D10:00:01;
             venue:enlist `binance_spot; sym:enlist `$"BTC-USDT";
@@ -75,9 +75,9 @@ from_crypto_book:{[batch]
         ([] source_time:enlist 2026.09.17D10:00:01; sym:enlist `$"BTC-USDT";
             venue:enlist `binance_spot; mid:enlist 62000f)))];
 
-.qnorm.define[`marks;`procname`output`input`start_with_all`note!(
+.qetl.job.stream.normalize[`marks;`procname`output`input`start_with_all`note!(
     `marks1;
-    .qsub.marks.marks;
+    .qpipe.job.marks.marks;
     `quote`crypto_book!`marks_from_quote`marks_from_crypto_book;
     1b;
     "a mid per instrument from every book: quote and crypto_book -> marks")];

@@ -3,7 +3,7 @@
 Split from scaffold/jobs.py, which crossed the 400-line threshold this package
 holds itself to. The seam is real rather than convenient: everything here
 PRODUCES TEXT and follows the shape of a real job - change it when
-`.qstream.define` grows a field, or when a source declaration gains one.
+`.qetl.job.stream.define` grows a field, or when a source declaration gains one.
 scaffold/jobs.py plans and writes, and changes when what a job NEEDS changes.
 
 Every template is deliberately unfinished in the same way: the handler
@@ -57,7 +57,7 @@ _TYPE_CHARS = {
 
 
 #: One value per column type, for the single row a scaffolded fixture carries.
-#: Not empty, because `.qxf.define` refuses a transform whose examples are all
+#: Not empty, because `.qetl.transform.define` refuses a transform whose examples are all
 #: empty - "at least one must carry rows" - and not random, because a fixture
 #: that changes between runs makes a failing assertion impossible to attribute.
 _SAMPLE_VALUES = {
@@ -92,7 +92,7 @@ def test_stub(name: str, namespace: str, what: str, *, driver: bool = False) -> 
         f"""
 / SCAFFOLDED. What test_job_output_contracts.q drives {name} with, so every
 / table it publishes is held to its plant table by name, order and type.
-/ Push one batch {name} acts on through .qsub.{name}.on_batch - built from
+/ Push one batch {name} acts on through .qpipe.job.{name}.on_batch - built from
 / the rows this file's own tests use - and call its timer if it publishes on one.
 contract_driver:{{[]
     '"{name}: write .{namespace}.contract_driver - see tests/q/test_job_output_contracts.q"}}
@@ -121,11 +121,11 @@ def source_body(src: str, dataset: str, cols: list[tuple[str, str]]) -> str:
     types = "".join(_TYPE_CHARS[literal] for _, literal in cols)
     # The fixture is a real empty table of the declared shape - see its comment.
     fixture_cols = "; ".join(f"{c}:enlist {_SAMPLE_VALUES[lit]}" for c, lit in cols)
-    return f"""/ {src}.q - <one line: what this source is> (.qfeed.{src}).
+    return f"""/ {src}.q - <one line: what this source is> (.qpipe.source.{src}).
 / .
 / SCAFFOLDED. `query` and `fixture` throw until they are written.
 
-\\d .qfeed.{src}
+\\d .qpipe.source.{src}
 
 source_name:`{src}
 
@@ -164,9 +164,9 @@ query:{{[h;range_from;range_to]
 / never a fallback for a failed connection.
 / .
 / SCAFFOLDED, and deliberately neither a throw nor empty. The worker's
-/ .qxf.passthrough call reads this AT LOAD TIME, so a fixture that threw
+/ .qetl.transform.passthrough call reads this AT LOAD TIME, so a fixture that threw
 / would stop the whole ETL tree from loading - you could not run the suite to
-/ see what was unfinished. Empty does not work either: .qxf.define refuses a
+/ see what was unfinished. Empty does not work either: .qetl.transform.define refuses a
 / transform whose examples are all empty. So: one deterministic row of the
 / declared shape, which loads and asserts nothing. Replace it with rows that
 / exercise what this source actually does before trusting a run.
@@ -174,7 +174,7 @@ fixture:{{[]
     ([] {fixture_cols})}}
 
 / Register on load, so the declaration and the implementation cannot drift.
-.qsrc.define[source_name;
+.qetl.source.define[source_name;
     `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
     (source_name;`{dataset};target;time_column;row_key;columns;types;query;fixture;tz)];
 
@@ -183,13 +183,13 @@ fixture:{{[]
 
 
 def worker_body(worker: str, src: str, dataset: str, width: str, proc: str) -> str:
-    return f"""/ {worker}.q - the {src} bounded worker (.qwrk.{worker}).
+    return f"""/ {worker}.q - the {src} bounded worker (.qpipe.job.{worker}).
 / .
 / SCAFFOLDED. Mostly a declaration: the lifecycle - windowing, retries,
-/ coverage, checkpoints, dry-run - is .qbw's, and none of it belongs here.
-/ If you find yourself writing a loop over days, you are rebuilding .qbw.
+/ coverage, checkpoints, dry-run - is .qetl.job.bounded's, and none of it belongs here.
+/ If you find yourself writing a loop over days, you are rebuilding .qetl.job.bounded.
 
-\\d .qwrk.{worker}
+\\d .qpipe.job.{worker}
 
 / What this run SAW, beyond its row count. A row count alone reads a partial
 / extract as success. Every aggregate must survive an empty batch - a
@@ -201,14 +201,14 @@ facts:{{[batch]
 \\d .
 
 / Pass-through until a real transform is needed: the batch is published as
-/ fetched. The example tables are what .qxf checks the shape against.
-.qxf.passthrough[`{src}_passthrough;`batch;0#.qfeed.{src}.fixture[];.qfeed.{src}.fixture[]];
+/ fetched. The example tables are what .qetl.transform checks the shape against.
+.qetl.transform.passthrough[`{src}_passthrough;`batch;0#.qpipe.source.{src}.fixture[];.qpipe.source.{src}.fixture[]];
 
 / `procname` is the process that runs this worker - the process registry is
 / read from this declaration, so there is no entry to add anywhere else.
-.qbw.define[`{worker};
+.qetl.job.bounded.define[`{worker};
     `source`dataset`width`transform`facts`procname`note!
-        (`{src};`{dataset};{width};`{src}_passthrough;.qwrk.{worker}.facts;
+        (`{src};`{dataset};{width};`{src}_passthrough;.qpipe.job.{worker}.facts;
          `{proc};
          "SCAFFOLDED: bounded - say what this backfill is for")];
 """

@@ -1,5 +1,5 @@
 / databento_mbp10.q - Databento MBP-10 order-book records over ODBC
-/ (.qfeed.databento_mbp10).
+/ (.qpipe.source.databento_mbp10).
 / .
 / The first source in this tree reached through ODBC and carrying real market
 / data: Databento's MBP-10 schema (market by price, ten levels) for US
@@ -30,7 +30,7 @@
 / applying epoch_ns() to the column: a function on the column stops DuckDB
 / skipping row groups by their min/max, so every window would scan every row.
 
-\d .qfeed.databento_mbp10
+\d .qpipe.source.databento_mbp10
 
 source_name:`databento_mbp10
 
@@ -66,11 +66,11 @@ select_list:{[]
         s:string f;
         $[f=`ts_event; "epoch_ns(ts_event) AS ts_event";
           (f in `size`sequence) or s like "*_sz_*"; "CAST(",s," AS BIGINT) AS ",s;
-          s]} each .qfeed.databento_mbp10.columns;
+          s]} each .qpipe.source.databento_mbp10.columns;
     ", " sv exprs}
 
-/ Private: a timestamp as DuckDB epoch nanoseconds, through .qodbc.literal.
-epoch_ns_literal:{[ts] "make_timestamp_ns(",.qodbc.literal["j"$ts-1970.01.01D00:00],")"}
+/ Private: a timestamp as DuckDB epoch nanoseconds, through .qetl.io.odbc.literal.
+epoch_ns_literal:{[ts] "make_timestamp_ns(",.qetl.io.odbc.literal["j"$ts-1970.01.01D00:00],")"}
 
 / Private: the driver's table in the declared types.
 adapt:{[raw]
@@ -79,9 +79,9 @@ adapt:{[raw]
     `ts_event`symbol`action`side`price`size`sequence xcols t}
 
 / One window of records, half-open [range_from;range_to) on ts_event,
-/ built through .qodbc's one escape function and returned in the
+/ built through .qetl.io.odbc's one escape function and returned in the
 / declared types. Ordered so a window is the same table on every fetch.
-/ @param h an ODBC handle from .qodbc.open
+/ @param h an ODBC handle from .qetl.io.odbc.open
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the records in the window, in the contract's shape
@@ -90,7 +90,7 @@ query:{[h;range_from;range_to]
         " WHERE ts_event >= ",epoch_ns_literal[range_from],
         " AND ts_event < ",epoch_ns_literal[range_to],
         " ORDER BY symbol, ts_event, sequence";
-    adapt .qodbc.run_sql[h;sql]}
+    adapt .qetl.io.odbc.run_sql[h;sql]}
 
 / Private: one fixture row's ten levels, flattened in level_fields order.
 / Prices step one cent away from the touch per level, sizes by 100.
@@ -109,7 +109,7 @@ fixture:{[]
     lv:flip level_fields!raze each flip (fixture_levels[271.45;271.66;500];fixture_levels[271.45;271.66;479];fixture_levels[642;643.;100];fixture_levels[642;643.01;100]);
     base,'lv}
 
-.qsrc.define[source_name;
+.qetl.source.define[source_name;
     `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
     (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport)];
 

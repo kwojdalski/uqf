@@ -1,4 +1,4 @@
-/ torq_pipeline.q - the shared .qpipe block library every scripts/torq_*.q
+/ torq_pipeline.q - the shared .qtorq block library every scripts/torq_*.q
 / feed and ETL process builds on. Created to close the gap those scripts'
 / own header comments kept documenting: "no shared-constant infra exists
 / across scripts/torq_*.q, each defines its own" (torq_markout_etl.q) - so
@@ -22,15 +22,15 @@
 /      lib/torq/code/processes/segmentedtickerplant.q's .stplg.updtab). A
 /      publisher that sends its own `time` makes every message one column
 /      too wide - a confirmed-live 'length error, not a silent mismatch.
-/      -> .qpipe.publish drops `time` if present.
+/      -> .qtorq.publish drops `time` if present.
 /   2. Keyed tables (type 99h) are rejected by the tickerplant's upd/.u.upd
-/      machinery (Rule S7) - which is why .qsub.posbook.book can never be
+/      machinery (Rule S7) - which is why .qpipe.job.posbook.book can never be
 /      published directly, only a flat snapshot of it.
-/      -> .qpipe.publish unkeys a keyed table rather than letting it through.
+/      -> .qtorq.publish unkeys a keyed table rather than letting it through.
 /   3. .u.upd derives its row count from column length, so every column must
 /      be a vector - never a bare atom, even for a single row (the vendored
 /      feed.q always builds n-length vectors, n>=1).
-/      -> .qpipe.publish accepts a dict of atoms and enlists it into a
+/      -> .qtorq.publish accepts a dict of atoms and enlists it into a
 /         1-row table.
 /   4. A timer function that throws gets silently deactivated (Rule T3), so
 /      every timer target must be trapped - but the textbook niladic trap
@@ -43,16 +43,16 @@
 /      So the `.` form would log a spurious error on every single tick.
 /      `@[f;::;errfn]` - @ with a generic-null placeholder arg - is the form
 /      that actually works, and it behaves identically on both interpreters.
-/      -> .qpipe.safe_timer wraps the function in the working idiom.
+/      -> .qtorq.safe_timer wraps the function in the working idiom.
 /   5. A function defined inside a non-root namespace does not reliably
 /      resolve a root global (like the publish handle `h`) by its bare name
 /      on this build. Every pipeline therefore defines `upd` and its compute
 /      function at ROOT and fully-qualifies its own .<name>.* state refs.
-/      -> .qpipe.publish takes the handle as an explicit argument instead of
+/      -> .qtorq.publish takes the handle as an explicit argument instead of
 /         reaching for a global, so it works from either context.
 /   6. src/init.q's own \l lines are repo-root-relative and torq.sh does not
 /      launch a process from the repo root.
-/      -> .qpipe.load_uqf does the cd-there-and-back, and restores the cwd
+/      -> .qtorq.load_uqf does the cd-there-and-back, and restores the cwd
 /         even when the load throws (the hand-rolled copies in
 /         torq_cross_etl.q/torq_vectorize_etl.q/torq_posbook_etl.q/
 /         torq_markout_etl.q leave the process in the wrong directory if
@@ -60,7 +60,7 @@
 /   7. A real .sub.subscribe subscriber needs .servers.startup[]'s
 /      access-listed handle to the tickerplant, which means borrowing an
 /      already-credentialed proctype ("metrics") in process.csv.
-/      -> .qpipe.subscribe_etl does the whole startup/depcycles/subscribe
+/      -> .qtorq.subscribe_etl does the whole startup/depcycles/subscribe
 /         dance and hands back the publish handle.
 /   8. .u.upd onto a table the tickerplant does NOT define discards the rows
 /      and reports nothing - no throw at the publisher, no line in the
@@ -70,7 +70,7 @@
 /      the generated database.q defined, for as long as it had been running
 /      (#287). Both were defined in uqs_tables.q the whole time; the
 /      registry simply never asked for them.
-/      -> .qpipe.assert_publishable refuses to start a process whose
+/      -> .qtorq.assert_publishable refuses to start a process whose
 /         declared publishes the plant has no table for, and
 /         plant_schema.undefined_published_tables holds the same rule over
 /         the registry so it fails at declaration rather than at runtime.
@@ -82,14 +82,14 @@
 /      defines neither throws once a period, and TorQ traps that into the
 /      process's own stderr log: four invisible error lines an hour in
 /      every uqf process, with nothing else different, until #298.
-/      -> .qpipe.install_period_handlers defines both.
+/      -> .qtorq.install_period_handlers defines both.
 / .
 / Loaded via each pipeline row's own `load` column in the process.csv
 / uqs.stack.runtime.bootstrap() generates - not by src/init.q, and not
 / part of the uqf library proper (this is TorQ plumbing, outside the eFX
 / pricing/risk/execution/microstructure scope src/*.q keeps to).
 
-\d .qpipe
+\d .qtorq
 
 / NOTE on parameter names: `desc` and `tables` are q builtins, and using
 / either as a lambda PARAMETER name throws a bare 'nyi when the function is
@@ -112,26 +112,26 @@ check_cycles:0W
 
 / Load uqf's own src/init.q (invariant 6), and the transform block with the
 / stream jobs' transforms (src/etl/core/transform.q, src/etl/transforms/
-/ stream.q) - every pipeline's computation is a declared .qxf transform, so a
+/ stream.q) - every pipeline's computation is a declared .qetl.transform transform, so a
 / pipeline process without them has nothing to call. Restores the cwd even
 / if the load throws, unlike the hand-rolled copies this replaces.
 / @throws error if UQFROOT is unset, or if any of the three files fails to load
 / .
-/ Says so on stdout before and after, with the time it took: .qlog is one of
+/ Says so on stdout before and after, with the time it took: .qetl.log is one of
 / the files being loaded, so it cannot report its own load, and a process
 / that dies here otherwise leaves a log with no line from uqf at all. Then
 / applies -verbose (see apply_verbose).
 load_uqf:{[]
     t0:.z.p;
     root:getenv`UQFROOT;
-    if[0=count root; '"qpipe.load_uqf: UQFROOT is not set"];
-    -1 string[.z.p]," | qpipe: loading uqf tree from ",root;
+    if[0=count root; '"qtorq.load_uqf: UQFROOT is not set"];
+    -1 string[.z.p]," | qtorq: loading uqf tree from ",root;
     cwd:first system"pwd";
     system"cd ",root;
     outcome:@[{system"l src/init.q"; system"l src/etl/init.q"; `ok};::;{x}];
     system"cd ",cwd;
-    if[not outcome~`ok; '"qpipe.load_uqf: could not load uqf and its ETL tree: ",outcome];
-    -1 string[.z.p]," | qpipe: uqf tree loaded in ",string[elapsed_ms t0],"ms";
+    if[not outcome~`ok; '"qtorq.load_uqf: could not load uqf and its ETL tree: ",outcome];
+    -1 string[.z.p]," | qtorq: uqf tree loaded in ",string[elapsed_ms t0],"ms";
     apply_verbose[];
     }
 
@@ -144,12 +144,12 @@ elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 / say who this process is. Every uqf process script takes the same flag, so
 / `-extras -verbose` on a start line, or `uqs backfill --debug`, is one
 / spelling for all of them. A process already running can be switched too,
-/ without a restart: `uqs query ".qlog.debug 1b" --port <port>`.
+/ without a restart: `uqs query ".qetl.log.debug 1b" --port <port>`.
 / @return 1b when debug logging is now on
 apply_verbose:{[]
     on:`verbose in key .Q.opt .z.x;
-    if[on; .qlog.debug 1b];
-    .qlog.dbg[`qpipe;"debug logging on";
+    if[on; .qetl.log.debug 1b];
+    .qetl.log.dbg[`qtorq;"debug logging on";
         `procname`pid`port`cwd!(@[get;`.proc.procname;`];.z.i;system"p";first system"pwd")];
     on}
 
@@ -161,11 +161,11 @@ apply_verbose:{[]
 / @return the milliseconds it waited
 wait_for_tickerplant:{[nm]
     t0:.z.p;
-    .qlog.info[nm;"waiting for the tickerplant - if this is the last line, it is not running";
+    .qetl.log.info[nm;"waiting for the tickerplant - if this is the last line, it is not running";
         `proctype`retry_s`cycles!(tp_type;con_sleep;check_cycles)];
     .servers.startupdepcycles[tp_type;con_sleep;check_cycles];
     ms:elapsed_ms t0;
-    .qlog.info[nm;"tickerplant is up";enlist[`waited_ms]!enlist ms];
+    .qetl.log.info[nm;"tickerplant is up";enlist[`waited_ms]!enlist ms];
     ms}
 
 / Rows published so far, per table, and batches received, per table - so
@@ -182,9 +182,9 @@ received:(`symbol$())!`long$()
 / @return n
 record_published:{[table_name;n]
     before:0^published table_name;
-    .qpipe.published[table_name]:before+n;
-    if[0=before; .qlog.info[`qpipe;"first rows published";`table`rows!(table_name;n)]];
-    .qlog.dbg[`qpipe;"published";`table`rows`total!(table_name;n;before+n)];
+    .qtorq.published[table_name]:before+n;
+    if[0=before; .qetl.log.info[`qtorq;"first rows published";`table`rows!(table_name;n)]];
+    .qetl.log.dbg[`qtorq;"published";`table`rows`total!(table_name;n;before+n)];
     n}
 
 / Record one batch arriving from the tickerplant, the same way.
@@ -194,9 +194,9 @@ record_published:{[table_name;n]
 record_received:{[t;x]
     n:$[98h=type x; count x; count first x];
     before:0^received t;
-    .qpipe.received[t]:before+n;
-    if[0=before; .qlog.info[`qpipe;"first batch received";`table`rows!(t;n)]];
-    .qlog.dbg[`qpipe;"batch received";`table`rows`total!(t;n;before+n)];
+    .qtorq.received[t]:before+n;
+    if[0=before; .qetl.log.info[`qtorq;"first batch received";`table`rows!(t;n)]];
+    .qetl.log.dbg[`qtorq;"batch received";`table`rows`total!(t;n;before+n)];
     n}
 
 / Bring this process up as a tickerplant subscriber and hand back a publish
@@ -209,16 +209,16 @@ record_received:{[t;x]
 / @throws error if no tickerplant can be found to subscribe to
 subscribe_etl:{[nm;sub_tables]
     .servers.CONNECTIONS:tp_type;
-    .qlog.dbg[nm;"registering with discovery";()!()];
+    .qetl.log.dbg[nm;"registering with discovery";()!()];
     .servers.startup[];
     wait_for_tickerplant nm;
     handles:.sub.getsubscriptionhandles[tp_type;();()!()];
-    .qlog.dbg[nm;"subscription handles";enlist[`count]!enlist count handles];
-    if[0=count handles; '"qpipe.subscribe_etl: no ",(string tp_type)," found to subscribe to"];
+    .qetl.log.dbg[nm;"subscription handles";enlist[`count]!enlist count handles];
+    if[0=count handles; '"qtorq.subscribe_etl: no ",(string tp_type)," found to subscribe to"];
     subproc:first handles;
-    .qlog.info[`qpipe;"subscribing";`job`tables`publisher!(nm;sub_tables;subproc`procname)];
+    .qetl.log.info[`qtorq;"subscribing";`job`tables`publisher!(nm;sub_tables;subproc`procname)];
     r:.sub.subscribe[sub_tables;`;0b;0b;subproc];
-    .qlog.dbg[nm;"subscribed";enlist[`result]!enlist r];
+    .qetl.log.dbg[nm;"subscribed";enlist[`result]!enlist r];
     / safe to acquire now - startupdepcycles above already blocked until the
     / tickerplant was confirmed up. Separate, unauthenticated handle from the
     / .servers.startup[] subscription handle, same as every ETL did by hand.
@@ -252,10 +252,10 @@ assert_publishable:{[h;pub_tables]
     tbls:(),pub_tables;
     if[0=count tbls; :pub_tables];
     defined:h"tables[]";
-    .qlog.dbg[`qpipe;"tickerplant tables";`declared`defined!(tbls;defined)];
+    .qetl.log.dbg[`qtorq;"tickerplant tables";`declared`defined!(tbls;defined)];
     missing:tbls except defined;
     if[count missing;
-        '"qpipe.assert_publishable: the tickerplant defines no table ",
+        '"qtorq.assert_publishable: the tickerplant defines no table ",
             (", " sv string missing),
             " - rows published onto it are discarded without an error. Add it to ",
             "scripts/processes/uqs_tables.q and restart the stack"];
@@ -266,15 +266,15 @@ assert_publishable:{[h;pub_tables]
 / torq_fx_trades_feed.q all open with exactly these two lines).
 / @return the publish handle to the tickerplant
 feed_handle:{[]
-    wait_for_tickerplant `qpipe;
+    wait_for_tickerplant `qtorq;
     .servers.gethandlebytype[tp_type;`any]}
 
 / ----------------------------------------------------------------- STATE
 
 / The buffer helpers that used to live here - drain and evict - are now
-/ .qstream.drain and .qstream.evict (src/etl/core/stream_job.q). They moved
+/ .qetl.job.stream.drain and .qetl.job.stream.evict (src/etl/core/stream_job.q). They moved
 / with the jobs that use them: a job is a src/ file now, and nothing in src/
-/ may call .qpipe.
+/ may call .qtorq.
 
 / ------------------------------------------------------------------ SINK
 
@@ -295,7 +295,7 @@ as_table:{[data]
             / table so every column is a 1-element vector.
             enlist data;
             flip data];
-        '"qpipe.publish: expected a table, keyed table or dict, got type ",string t]}
+        '"qtorq.publish: expected a table, keyed table or dict, got type ",string t]}
 
 / Private: is this the list-of-columns form - one vector per column, no
 / names - that .u.upd itself takes?
@@ -323,10 +323,10 @@ is_columns:{[data] (0h=type data) and (0<count data) and all 0<=type each data}
 / nothing to flush either. The rdb and wdb, which DO roll their tables,
 / have their own vendored handlers and never load this file.
 / @return the names defined
-/ @eg .qpipe.install_period_handlers[] -> `endofperiod`endofday
+/ @eg .qtorq.install_period_handlers[] -> `endofperiod`endofday
 install_period_handlers:{[]
     / `` `endofperiod ``, NOT `` `.endofperiod ``. A dotless symbol passed
-    / to `set` names the ROOT global even from inside `\d .qpipe`, which is
+    / to `set` names the ROOT global even from inside `\d .qtorq`, which is
     / what the plant calls. A LEADING DOT makes it a different name
     / entirely - `.endofperiod` - which is defined, resolvable, and never
     / called by anything. Measured, because both forms look equally
@@ -334,9 +334,9 @@ install_period_handlers:{[]
     /   \d .ns  /  f:{`endofperiod set {..}}  ->  root type 100
     /   \d .ns  /  f:{`.endofday set {..}}    ->  root MISSING, .endofday 100
     `endofperiod set {[current_period;next_period;data]
-        .qlog.info[`qpipe;"end of period";`from`to!(current_period;next_period)];
+        .qetl.log.info[`qtorq;"end of period";`from`to!(current_period;next_period)];
         };
-    `endofday set {[dt;data] .qlog.info[`qpipe;"end of day";enlist[`date]!enlist dt]; };
+    `endofday set {[dt;data] .qetl.log.info[`qtorq;"end of day";enlist[`date]!enlist dt]; };
     `endofperiod`endofday}
 
 / Publish rows onto the tickerplant (invariants 1, 2, 3 and 5). The one and
@@ -347,9 +347,9 @@ install_period_handlers:{[]
 / @param x a table, keyed table, a dict (of atoms for one row, or of
 /   vectors for many), or a list of column vectors in the table's own order
 / @return the number of rows published
-/ @eg .qpipe.publish[h;`execution_quality;out]
-/ @eg .qpipe.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]
-/ @eg .qpipe.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]
+/ @eg .qtorq.publish[h;`execution_quality;out]
+/ @eg .qtorq.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]
+/ @eg .qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]
 publish:{[h;t;x]
     if[is_columns x;
         / Straight through: this IS .u.upd's shape, and there are no names
@@ -370,7 +370,7 @@ publish:{[h;t;x]
 / --------------------------------------------------------------- TRIGGER
 
 / Register a repeating timer that runs fn and can never throw (invariant 4).
-/ Creates a niladic wrapper .qpipe.tick_<nm> around fn and registers THAT
+/ Creates a niladic wrapper .qtorq.tick_<nm> around fn and registers THAT
 / with .timer.repeat.
 / .
 / The wrapper is built by string-eval rather than as a projection because
@@ -378,24 +378,24 @@ publish:{[h;t;x]
 / function in this demo is a genuine niladic {[] ...} - a projection with
 / remaining parameters is not the same rank and does not stand in for one.
 / The generated wrapper is a real, inspectable function: call
-/ .qpipe.tick_markout[] by hand to test it.
+/ .qtorq.tick_markout[] by hand to test it.
 / @param name the pipeline's name - also names the wrapper and tags log lines
 / @param interval a timespan, e.g. 0D00:00:01.000
 / @param f the fully-qualified name of the niladic function to run
 / @param timer_desc the description .timer.repeat shows
 / @return the generated wrapper's name
-/ @eg .qpipe.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;"Run the markout streaming job"]
+/ @eg .qtorq.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;"Run the markout streaming job"]
 safe_timer:{[name;interval;f;timer_desc]
-    wrapper:`$".qpipe.tick_",string name;
+    wrapper:`$".qtorq.tick_",string name;
     / `value` the lambda EXPRESSION only, then `set` the name - not
     / `value "name:{...}"`. Evaluating an assignment statement through
     / `value` from inside a lambda throws 'nyi on this build (confirmed
     / live while writing this file); parsing a bare lambda and assigning it
     / with `set` is well-defined and does the same job.
-    body:"{[] @[get `",(string f),";::;{[e] .qlog.err[`",(string name),";\"timer function failed\";`fn`error!(`",(string f),";e)]}]}";
+    body:"{[] @[get `",(string f),";::;{[e] .qetl.log.err[`",(string name),";\"timer function failed\";`fn`error!(`",(string f),";e)]}]}";
     wrapper set value body;
     .timer.repeat[.proc.cp[];0Wp;interval;(wrapper;`);timer_desc];
-    .qlog.dbg[name;"timer installed";`fn`interval`wrapper!(f;interval;wrapper)];
+    .qetl.log.dbg[name;"timer installed";`fn`interval`wrapper!(f;interval;wrapper)];
     wrapper}
 
 / The HDB process type to tell when a backfill has written into its
@@ -404,7 +404,7 @@ safe_timer:{[name;interval;f;timer_desc]
 hdb_type:`hdb
 
 / Tell every running HDB to reload, so rows a backfill wrote straight into
-/ its partitions (.qio.hdb) become queryable.
+/ its partitions (.qetl.io.hdb) become queryable.
 / .
 / The same message the RDB sends at end-of-day - (`reload;date), which
 / TorQ's hdbstandard.q answers by re-mapping the database - found through
@@ -413,12 +413,12 @@ hdb_type:`hdb
 / that fails to reload is logged and does not fail the backfill, whose rows
 / are already on disk and its coverage recorded.
 / @return the number of HDBs asked to reload
-/ @eg .qpipe.reload_hdb[]
+/ @eg .qtorq.reload_hdb[]
 reload_hdb:{[]
     hs:exec w from .servers.getservers[`proctype;hdb_type;()!();1b;0b];
     hs:hs where not null hs;
-    {[h] @[h;(`reload;.z.d);{[e] .qlog.err[`qpipe;"hdb reload failed";enlist[`error]!enlist e]}]} each hs;
-    .qlog.info[`qpipe;"hdb reload requested";enlist[`hdbs]!enlist count hs];
+    {[h] @[h;(`reload;.z.d);{[e] .qetl.log.err[`qtorq;"hdb reload failed";enlist[`error]!enlist e]}]} each hs;
+    .qetl.log.info[`qtorq;"hdb reload requested";enlist[`hdbs]!enlist count hs];
     count hs}
 
 \d .

@@ -1,5 +1,5 @@
 / continuous_state.q - the continuous-worker poll-and-cursor pattern
-/ (.qcont).
+/ (.qetl.job.continuous).
 / .
 / The continuous-worker pattern: "implement continuous workers as long-running
 / poll loops: load a local cursor at startup, publish a transformed page,
@@ -9,7 +9,7 @@
 / THE ASYMMETRY WITH BOUNDED WORKERS IS DELIBERATE
 / .
 / There is no registry here and no enforced contract, unlike
-/ .qbfstate.bounded_workers. Bounded workers get both because the
+/ .qetl.job.bounded.state.bounded_workers. Bounded workers get both because the
 / thing being prevented is specific: "a bounded worker must not silently
 / become an unbounded tailer". A continuous worker is already unbounded, so
 / there is no such failure to prevent, and a registry with nothing to enforce
@@ -23,14 +23,14 @@
 / to here", NOT "everything up to here is published and complete". Those are
 / different claims, and conflating them is how a dataset gets declared
 / complete because a tailer happened to get far enough. So this file has NO
-/ path to .qmatz.stage_completion, and `advance` refuses a cursor that would
+/ path to .qetl.coverage.stage_completion, and `advance` refuses a cursor that would
 / go backwards - the one way a tailer can silently re-publish.
 / .
 / Freshness is reported instead, which is the honest statement a consumer of
 / continuous output can actually use. That it is not a cross-worker contract
 / is #62's open question, and `freshness` says so at the point of use.
 
-\d .qcont
+\d .qetl.job.continuous
 
 / ----------------------------------------------------------------- STATE
 
@@ -38,7 +38,7 @@
 / bounded workers' checkpoints, but the FILENAME differs (.cursor, not
 / .checkpoint) so the two can never be read for each other - a bounded
 / resume reading a tailer's cursor would skip history it never published.
-cursor_path:{[worker] (.qbfstate.lock_dir[]),"/",string[worker],".cursor"}
+cursor_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".cursor"}
 
 / Load the cursor at startup.
 / .
@@ -47,7 +47,7 @@ cursor_path:{[worker] (.qbfstate.lock_dir[]),"/",string[worker],".cursor"}
 / Deliberately NOT an error: a first run has no cursor, and treating that as
 / a failure would make every fresh deployment need manual seeding.
 / .
-/ Unlike .qbfstate.load_checkpoint this takes no run specification, because a
+/ Unlike .qetl.job.bounded.state.load_checkpoint this takes no run specification, because a
 / continuous worker has no bounded run to compare against. That is the whole
 / structural difference between the two kinds of state, and it is why they
 / are separate functions rather than one with a flag.
@@ -67,7 +67,7 @@ load_cursor:{[worker]
 / re-publishing the page on restart, which retry-safe publication tolerates.
 / Under-claim over over-claim, exactly as bounded coverage does it.
 save_cursor:{[worker;cursor]
-    dir:.qbfstate.lock_dir[];
+    dir:.qetl.job.bounded.state.lock_dir[];
     system"mkdir -p ",dir;
     path:cursor_path worker;
     (hsym `$path) 0: enlist .j.j `cursor`saved_at!(cursor;.z.p);
@@ -82,7 +82,7 @@ save_cursor:{[worker;cursor]
 / path's checkpoint is not.
 / @param worker the feeder's name, as a symbol
 / @return the worker's name
-/ @eg .qcont.clear_cursor `fx_feed_2
+/ @eg .qetl.job.continuous.clear_cursor `fx_feed_2
 clear_cursor:{[worker]
     system"rm -f ",cursor_path worker;
     cursor_path worker}
@@ -143,7 +143,7 @@ freshness:{[worker]
 feeds:(`symbol$())!`symbol$()
 
 / Declare which dataset a continuous worker feeds.
-/ @eg .qcont.register_feeder[`fx_feed_2;`quotes]
+/ @eg .qetl.job.continuous.register_feeder[`fx_feed_2;`quotes]
 register_feeder:{[worker;dataset]
     feeds[worker]:dataset;
     worker}

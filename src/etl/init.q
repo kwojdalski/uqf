@@ -3,7 +3,7 @@
 / .
 / Why this file exists: until it did, nothing loaded the ETL tree as a whole.
 / Each worker was loaded piecemeal and tests/run_tests.q held the only
-/ complete, correctly-ordered list anywhere in the repository. So .qdag's job
+/ complete, correctly-ordered list anywhere in the repository. So .qetl.dag's job
 / graph - the whole point of which is that a q PROCESS can order and draw its
 / own DAG - existed only inside the test suite. A capability that works only
 / under the test runner is not a capability.
@@ -15,26 +15,26 @@
 / .
 / THE ORDER IS LOAD-BEARING, and not obvious from the filenames:
 / .
-/   coercion    before  source_contract  - .qsrc's type table names
-/                                          .qcoer.to_timestamp/to_symbol AT
+/   coercion    before  source_contract  - .qetl.source's type table names
+/                                          .qetl.coerce.to_timestamp/to_symbol AT
 /                                          LOAD TIME, so a later coercion.q
 /                                          aborts source_contract.q with a
-/                                          bare `.qcoer.to_symbol
-/   materialisation before worker_runtime - .qwrt.remaining calls .qmatz
+/                                          bare `.qetl.coerce.to_symbol
+/   materialisation before worker_runtime - .qetl.job.bounded.runtime.remaining calls .qetl.coverage
 /   dag         before  pipeline_dag     - the generated bridge defines
-/                                          .qdag.register_pipelines, which
-/                                          calls .qdag.register
+/                                          .qetl.dag.register_pipelines, which
+/                                          calls .qetl.dag.register
 /   core        before  sources/workers  - a declaration registers itself on
 /                                          load, so the registry it registers
 /                                          into has to exist
 / .
 / run.q sits after materialisation.q by READABILITY, not by necessity:
-/ .qrun.record
-/ calls .qmatz.require_interval and .qmatz.stage_completion reads
-/ .qrun.current[], so the two reference each other and q's call-time binding
+/ .qetl.run.record
+/ calls .qetl.coverage.require_interval and .qetl.coverage.stage_completion reads
+/ .qetl.run.current[], so the two reference each other and q's call-time binding
 / resolves both whichever order they load in. Both calls are additionally
 / protected, because several minimal loaders pull in materialisation.q without the
-/ rest of the tree and a missing .qrun must degrade to an unattributed
+/ rest of the tree and a missing .qetl.run must degrade to an unattributed
 / materialisation rather than an error.
 / .
 / NOT every loader should use this file. tests/q/try_acquire.q,
@@ -43,7 +43,7 @@
 / processes to prove one thing (a lock is exclusive; a real source's metadata
 / matches its declaration), and pulling in the whole tree would be slower and,
 / for the smoke script, wrong: it runs outside a worker on purpose, which is
-/ why it reads getenv rather than .qwcfg. Those are minimal by intent, not
+/ why it reads getenv rather than .qetl.cfg. Those are minimal by intent, not
 / oversights to tidy into full loads.
 / .
 / Assumes src/init.q has already been loaded: the ETL tree uses the library's
@@ -80,22 +80,23 @@
 / its implementation cannot drift - there is no way to have one without the
 / other.
 / .
-/ GLOBBED, not listed. Every .q file in these three directories is loaded, so
+/ GLOBBED, not listed. Every .q file in these four directories is loaded, so
 / adding a source, a worker or a streaming job means adding the file and
 / nothing else. What this replaced was twenty-six \l lines - a hand-kept copy
 / of `ls`, which had to be edited in the right place and whose failure mode
 / was a file nobody loaded.
 / .
-/ The DIRECTORY order is load-bearing: .qbw.define looks its source up at
+/ Shared transforms load after sources and before either job family.
+/ The DIRECTORY order is load-bearing: .qetl.job.bounded.define looks its source up at
 / define time, so a worker whose source has not loaded aborts with a bare
-/ `.qfeed.<name> from inside a declaration that looks fine.
+/ `.qpipe.source.<name> from inside a declaration that looks fine.
 / .
 / Within a directory the order is alphabetical, except the names passed as
 / lead, which load first. Those are the files that read ANOTHER job's table
 / at load time, to build an empty keyed table from its schema:
 / .
-/   superbook.q:11        .qsub.market_data.market_data
-/   cross_arbitrage.q:47  .qsub.superbook.superbook
+/   superbook.q:11        .qpipe.job.market_data.market_data
+/   cross_arbitrage.q:47  .qpipe.job.superbook.superbook
 / .
 / Alphabetically superbook sorts AFTER cross_arbitrage, so a plain glob
 / aborts there. A name in lead with no matching file throws rather than being
@@ -115,6 +116,7 @@ etl_load_declarations:{[dir;lead]
     }
 
 etl_load_declarations["src/etl/sources";`symbol$()];
+etl_load_declarations["src/etl/transforms";`symbol$()];
 etl_load_declarations["src/etl/workers";`symbol$()];
 etl_load_declarations["src/etl/streaming";`market_data`superbook];
 
