@@ -10,7 +10,7 @@ plus uqf's own additions (`fxfeed1`, `quotesfeed1`, `widefeed1`, `cross1`,
 backfill processes (`deals_backfill1`, `events_backfill1`,
 `databento_backfill1`, `upstream_backfill1`). Declared is not the same as
 running here - see [what starts with the
-stack](#what-starts-with-the-stack-and-why-not-all-of-it).
+stack](#what-starts-and-why-not-all-of-it).
 
 Direct FX arbitrage flows through `marketdata1` (`quote` and `quotes` into
 `market_data`), `superbook1` (fresh source books merged into `superbook`), and
@@ -138,7 +138,7 @@ to be startable with it.
 (`scripts/processes/torq_tap.q`): it chooses its tables at runtime rather than
 declaring them, which is exactly what a `.qstream` declaration cannot express.
 
-### What starts with the stack, and why not all of it
+### What starts, and why not all of it
 
 `uqs start` does not start every process it knows about, and that is deliberate.
 A q process running on the community licence in `~/.kx/kc.lic` accepts
@@ -178,10 +178,10 @@ their schema row and their place in the DAG, and are one command away:
 
 To run them, start a profile - a named set that pulls in what it reads - rather
 than adding processes to the default start:
-[`guides/uqs.md`](../guides/uqs.md#profiles-a-named-start-set-that-fits) lists
-them, and refuses one the licence cannot hold. Each process above has its
-upstream producer either in the default set or shed alongside it, so starting
-one is enough - that property is held by a test, not by habit.
+[`guides/uqs.md`](../guides/uqs.md#profiles) lists them, and refuses one the
+licence cannot hold. Each process above has its upstream producer either in the
+default set or shed alongside it, so starting one is enough - that property is
+held by a test, not by habit.
 
 ## Data pipeline: table by table
 

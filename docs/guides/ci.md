@@ -39,13 +39,13 @@ prove what they claim if folded into `q-unit`:
 
   | Lane                 | Proves what `q-unit` cannot                                                                                                                                                                                       |
   | ---                  | ---                                                                                                                                                                                                               |
-  | `q-order`            | no test depends on running after another — [below](#the-suite-does-not-depend-on-its-own-order)                                                                                                                   |
+  | `q-order`            | no test depends on running after another — [below](#order-independence)                                                                                                                                           |
   | `q-backfill-process` | single-instance locking and resumption across a restart, which need a real filesystem and a genuinely separate process                                                                                            |
   | `q-two-instances`    | the only lane where a source runs **live**: `.qbw.connect`, a source's `query` and `.qsrc.validate_live` execute nowhere else                                                                                     |
-  | `stack-smoke`        | the wiring — a declared table with no rows, or a process writing to its error log while we watch. [Below](#what-ci-cannot-check-the-wiring), with the three bugs that motivated it                                |
+  | `stack-smoke`        | the wiring — a declared table with no rows, or a process writing to its error log while we watch. [Below](#what-ci-cannot-check), with the three bugs that motivated it                                           |
   | `smoke`              | A source contract's live half, against the **same declaration** the fixture is checked against. Excluded from `all`: a local run that depends on a remote host trains everyone to read red as "the network again" |
 
-## What CI cannot check: the wiring
+## What CI cannot check
 
 Every ETL bug this tree has had was in the seam between a job and the stack it
 runs in, and every one of them passed CI on the day it shipped:
@@ -93,7 +93,7 @@ Two things to know before reading a failure:
 in `stack_smoke.MAY_BE_EMPTY` - a table that is empty because nothing happened
 carries no information. A test holds that list free of dead entries.
 
-## The suite does not depend on its own order
+## Order independence
 
 `scripts/test.py q-order` runs the whole q suite again with the suites in the
 opposite order, and `UQF_TEST_ORDER=shuffle` runs them in a seeded random one.

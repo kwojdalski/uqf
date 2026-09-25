@@ -46,7 +46,7 @@ demo's own `feed:pass` credential (see `appconfig/passwords/ feed.txt`) to
 authenticate against `stp1`'s access-list, same as any other feed process here -
 no separate cryptorust-side credential to set up.
 
-## The fills recorder: simulated and real fills, two tables
+## The fills recorder
 
 `uqs crypto fills-start`/`fills-stop`/`fills-status` are a separate proof of
 concept, alongside the book recorder above: cryptorust's own

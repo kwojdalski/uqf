@@ -25,16 +25,15 @@ current process topology, table-level data pipeline, and config-generation flow.
 - [Commands](#commands)
 - [Listing things](#listing-things)
 - [What actually starts](#what-actually-starts) --- including
-  [profiles](#profiles-a-named-start-set-that-fits)
+  [profiles](#profiles)
 - [Changing a process's config](#changing-a-processs-config)
 - [Logs](#logs)
 - [Connecting](#connecting)
 - [Verifying it's alive](#verifying-its-alive)
-- [What lib/torq ships that uqf deliberately does not
-  use](#what-libtorq-ships-that-uqf-deliberately-does-not-use)
+- [What uqf leaves unused](#what-uqf-leaves-unused)
 - [Services](#services)
 - [Adding a process](#adding-a-process) --- including [installing jobs from
-  another folder](#installing-jobs-kept-in-another-folder)
+  elsewhere](#installing-jobs-from-elsewhere)
 - [MCP server](#mcp-server)
 - [Other commands](#other-commands)
 - [Known harmless warnings](#known-harmless-warnings)
@@ -213,7 +212,7 @@ uqs schema --proc hdb1      # the history instead of today
 uqs schema --port 6052      # a port directly, skipping --proc resolution
 ```
 
-### When the history will not answer at all
+### When history cannot answer
 
 ```
 $ uqs schema --proc hdb1
@@ -387,7 +386,7 @@ community edition's connection limits mean `reporter1`, `filealerter1`,
 kdb+/KDB-X. `killtick` and `tpreplay1` are on-demand utility processes, not part
 of the standing stack, so they also don't auto-start.
 
-### Profiles: a named start set that fits
+### Profiles
 
 `start all` is one answer to "what should be running", and on this licence it is
 nearly the only one you can afford. Fourteen tickerplant slots are available
@@ -531,7 +530,7 @@ by default anyway, because a column nobody knows about answers nothing: a reader
 on a narrow terminal can ask for fewer, while one who never learns the graph is
 there has no such move.
 
-### Responds: can each process answer within half a second
+### Responds: answering within half a second
 
 `Status` comes from a PID lookup, and a hung process still has a PID.
 `Heartbeat` notices only after a tolerance of missed beats. `Responds` asks
@@ -559,7 +558,7 @@ own timer, and it applies to every client, the gateway's long queries included.
 Each probe briefly holds one inbound connection, and TorQ logs it like any
 other. `--probe-timeout 0` skips it.
 
-### summary gives up after two minutes
+### summary's two-minute timeout
 
 `summary` is the command you run when something is already wrong, which makes it
 the worst thing in the CLI to hang - and each of its blocking steps could. the
@@ -601,10 +600,9 @@ uqs start marketdata1 superbook1 arbitrage1
 `crossarb1` is a second consumer of that chain, answering the other arbitrage
 question - the direct book against a synthetic route rather than two sources on
 one pair. The chain plus BOTH detectors is four plant connections on top of
-whatever is already running, which is what
-[`--profile arbitrage`](#profiles-a-named-start-set-that-fits) exists for: it
-starts that set and is checked against the budget first, where a positional
-start is only warned about. See [the cross-arbitrage
+whatever is already running, which is what [`--profile arbitrage`](#profiles)
+exists for: it starts that set and is checked against the budget first, where a
+positional start is only warned about. See [the cross-arbitrage
 service](../services/cross-arbitrage.md).
 
 The graph behind all of this is the `subscribe_to`/`publishes` pair on each
@@ -612,7 +610,7 @@ The graph behind all of this is the `subscribe_to`/`publishes` pair on each
 graph are built from - so what you are warned about and what is running cannot
 describe different systems.
 
-### monitor1 is the one vendored default this tree overrides
+### monitor1, the one overridden default
 
 Upstream ships `monitor1` with `startwithall=0`, for the licence reason above.
 That left the heartbeat unusable: every process *publishes* a heartbeat
@@ -767,7 +765,7 @@ Ctrl-C; if `summary` cannot say which those were, it stops everything it was
 asked to start. To start in the background and watch separately instead,
 `uqs start` and `uqs logs -f` are still there.
 
-### Why a process is not doing anything: read its own log
+### When a process sits idle: its own log
 
 Every uqf process script - `torq_stream.q` (every streaming job),
 `torq_backfill.q`, `torq_tap.q`, `run_stream.q` - logs the stages where it can
@@ -807,7 +805,7 @@ uqs query ".qlog.debug 1b" --port <port>              # a process already runnin
 `-verbose` is uqf's own flag, taken by every process script. It is not TorQ's
 `-debug`, which also stops the log going to its file.
 
-### The CLI's own logging, which is a different thing
+### The CLI's own logging
 
 `logs --level` filters what the *q processes* wrote. It says nothing about what
 `uqs` itself is doing, and the two are easy to confuse when a command reports
@@ -899,7 +897,7 @@ stack as a whole. `tap1`, the diagnostic subscriber that logs every batch, is
 There is one way: declare a job in q and let `uqs new-job` scaffold it. See
 [adding a pipeline](new-pipeline.md).
 
-### Installing jobs kept in another folder
+### Installing jobs from elsewhere
 
 Jobs written outside the tree - a `sidecars/` folder, another repository - are
 installed with:
@@ -1001,7 +999,7 @@ stdout/stderr logs land in `output/uqs/logs/` (`out_<procname>.log` /
 `err_<procname>.log`) - check these first if a process shows `down`
 unexpectedly.
 
-## What lib/torq ships that uqf deliberately does not use
+## What uqf leaves unused
 
 Three access layers are vendored in `lib/torq` and wired into nothing:
 

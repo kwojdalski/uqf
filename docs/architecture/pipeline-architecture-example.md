@@ -1,4 +1,4 @@
-# An example pipeline architecture, composed from what is here
+# A desk system, composed
 
 What a trading desk's system looks like when it is built out of the services
 this tree implements. Not the running demo --- [the stack page](stack.md) and

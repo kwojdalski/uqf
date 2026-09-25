@@ -57,7 +57,7 @@ on_timer:{[]
 must produce everything, so whatever it needs between ticks --- a price level, a
 sequence number, an RNG seed --- is state in its own namespace.
 
-## The three rules a feed breaks most often
+## The rules
 
 **Never publish `time`.** `.u.upd` stamps its own on receipt (invariant 1). A
 `time` column in your output is silently overwritten, so a row you stamped in

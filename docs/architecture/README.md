@@ -31,7 +31,7 @@ another is the easiest way to be misled by this directory.
   | [`cryptorust-discovery.md`](cryptorust-discovery.md)                   | why a non-listening process belongs in TorQ's client table and not its server one                                   |
   | [`stack.md`](stack.md)                                                 | the running stack: process topology, the connection budget, the data pipeline table by table, and config generation |
 
-## A page states its own status, and the two kinds that need one differ
+## Which pages state a status
 
 The design note and the closed assessment each open with where they stand,
 because a reader who takes a *design note* for a *description of the code* will

@@ -4,7 +4,7 @@ The two feeds that invent market data for the demo, and how to add another.
 Starting, stopping and inspecting the stack as a whole is in [running the uqf
 stack](../guides/uqs.md).
 
-## fxfeed1 - adding your own row-generating process
+## fxfeed1
 
 `src/etl/streaming/fx_feed.q` is a second, independent feed process publishing
 synthetic top-of-book quotes for `EURUSD`/`GBPUSD`/`USDJPY`/`AUDUSD` (a small
@@ -35,7 +35,7 @@ read from the declaration, and a new process is given the next free port in
 `scripts/processes/process_ports.csv`. `uqs new-job` scaffolds it; see [adding a
 pipeline](../guides/new-pipeline.md).
 
-## quotesfeed1 - a real database for one of uqf's own table shapes
+## quotesfeed1
 
 `src/etl/streaming/quotes_feed.q` is a proof of concept for getting an actual
 on-disk kdb+ database, built with the TorQ Finance Starter Pack's own

@@ -10,7 +10,7 @@ built on this repository's own machinery instead.
 
 ## Running it
 
-### On the stack, like any other process
+### On the stack
 
 This is an ordinary registered process, not a thing you run by hand. It declares
 `start_with_all`, so `uqs start` brings it and `fxordersfeed1` up with
@@ -79,7 +79,7 @@ reason not to be startable with it.
 
 ## The four decisions worth knowing
 
-### 1. This is a risk engine, not a P&L engine
+### 1. Risk, not P&L
 
 `.qpos` already tracks a book per sym at weighted-average cost, carrying
 realised P&L, and `.qsub.posbook` already publishes it. This service answers a
@@ -109,7 +109,7 @@ things, it is long GBP and roughly flat EUR, and only a per-currency netting
 and the difference between them is the trading result, which is what
 `break_even` reports.
 
-### 3. Limits are data, and there is no hierarchy
+### 3. Limits are flat data
 
 A limit is a row --- a scope, a metric and a cap --- not a registered function.
 Desks change them daily and they arrive from a risk system, so they have to be
@@ -121,7 +121,7 @@ on `book` polices the desk. The caller rolls its book up to the level its limits
 are written at --- that is a `.qdesk.rollup` call --- so one mechanism serves
 every level.
 
-### 4. A breach is a state, so alerting needs a throttle
+### 4. Breaches are states, so alerts throttle
 
 A position over its limit is over it on every tick until someone trades out of
 it. Without throttling the desk gets one alert per timer tick and stops reading

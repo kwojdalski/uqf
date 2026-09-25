@@ -59,7 +59,7 @@ query errors propagate rather than being recorded as zero. A map of named
 definitions can cover several tables or several breakdowns of one table; there
 is no mutable global registry or fixed list of eFX columns.
 
-## Broader profiling: counts, ranges, nulls and quality
+## Broader profiling
 
 `profile[time_cols;null_cols;rules]` builds an aggregate dictionary for the same
 standalone `definition`/`collect`/`refresh` API and the DQE adapter:

@@ -72,7 +72,7 @@ Per-run arguments are flags, not variables: a backfill's worker, version and
 range are `uqs backfill` options, and the live smoke check's sources are
 `scripts/test.py smoke --targets … --tables … --timeout-ms …`.
 
-## Produced by the orchestrator --- do not set these by hand
+## Produced by the orchestrator
 
 `uqs.stack.env.build_env` computes these from `UqsPaths` and hands them to
 `torq.sh`; `process.csv`'s `${VAR}` and `{VAR}+N` placeholders resolve against

@@ -7,7 +7,7 @@
 odd-lot ratios). FX has no round-lot convention, so the odd-lot size is an
 argument the caller passes rather than a declared venue constant (#360).
 
-## Why this document exists
+## Why this exists
 
 `quotes` in this library is periodic book **snapshots**. Seven candidate
 features were blocked on the absence of a per-event tape, and adding one was a
@@ -16,7 +16,7 @@ seven were unblocked by it; the seventh, `order_count_imbalance`, needs a
 snapshot-schema change instead and is still open --- see the `decision`-labelled
 issues.
 
-## Which tape this is --- and which it is not
+## Which tape this is
 
 There are two different things people call an event tape, and they unblock
 different features. This one is the **market microstructure tape**:
@@ -59,7 +59,7 @@ existing markout family keeps working on it. Two divergences, both deliberate:
   `scripts/gates/check_q_traps.py`). Symbols cost nothing, grep cleanly, and
   cannot silently fail to match.
 
-### Column meanings, and the two that are easy to get wrong
+### Columns, and two easy to mistake
 
   | column       | meaning                                                                                                                                                                                                                                                                                                                     |
   | ---          | ---                                                                                                                                                                                                                                                                                                                         |
@@ -88,7 +88,7 @@ tree:
 So: the ingesting worker publishes in event order, and a function given an
 unsorted tape **throws**. `.qmicro.require_tape` is that check.
 
-## What it unblocks --- six of the seven candidates
+## What it unblocks
 
   | feature                                              | status                                                                 |
   | ---                                                  | ---                                                                    |

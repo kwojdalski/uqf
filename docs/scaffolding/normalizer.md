@@ -39,7 +39,7 @@ scaffold all_fills:
 **One note per source.** That is the shape of the work: a normalizer is not one
 function, it is one function per input, each landing on the same output.
 
-## What you get --- 65 lines, not 32
+## What you get
 
 The extra bulk is the part you would otherwise write by hand. For each
 subscribed table, the scaffold copies **that table's real plant schema** into
@@ -72,7 +72,7 @@ leaving it whole means an upstream change to a column you never read breaks your
 job. Deleting the columns `from_trades` does not touch is part of implementing
 it, not tidying afterwards.
 
-## `.qxf.define` is what makes this different
+## What `.qxf.define` adds
 
 Each mapping is registered as a **transform with examples**, not just a
 function. `inputs` and `output` are the shapes it promises; `examples` are

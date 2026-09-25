@@ -17,7 +17,7 @@ The first row, with an empty `old`, is written the first time the process sees
 the variable --- so the log says what it **started** with. A log that only
 records later edits cannot tell you what they were edits from.
 
-## What it cannot do, and why the design follows from that
+## What it cannot do
 
 **q has no hook on global assignment.** There is no `.z` callback for `x:5`, and
 a view (`x::expr`) recomputes lazily when *read* rather than firing when its
@@ -77,13 +77,13 @@ A job that watches anything must also declare `config_change` among its
 `publishes`, because the audit publishes through the job's own seam. A test
 holds the two together.
 
-## Why it runs in every process rather than one
+## Why every process, not one
 
 Configuration lives in each process's own memory. A central poller would need a
 handle to every watched process --- and connections are the scarce resource
 here, sixteen per process on the community licence ([the
-budget](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it)) ---
-and it could only ever see what it thought to ask for.
+budget](../architecture/stack.md#what-starts-and-why-not-all-of-it)) --- and it
+could only ever see what it thought to ask for.
 
 In-process costs no new connection, sees a change whatever caused it, and needed
 no new plumbing: every streaming job already has a publish seam and the runner

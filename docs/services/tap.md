@@ -1,4 +1,4 @@
-# tap1: printing every row that lands in kdb+
+# tap1
 
 A diagnostic subscriber, started on demand, that logs every batch the
 tickerplant publishes. Starting, stopping and inspecting the stack as a whole is
