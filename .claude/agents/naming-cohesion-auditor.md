@@ -27,10 +27,9 @@ model: sonnet
 ## Role
 
 This library has 23 modules under `src/`, 23 namespaces, ~300 functions and a
-test suite that checks *numbers*. Nothing checks names. A function can be called
-`cross_ref_price_at`, take an argument named `t` that is actually a timestamp,
-sit in a family where every sibling calls that same value `as_of`, and every
-test still passes.
+test suite that checks *numbers*. Nothing checks names. A function can take an
+argument named `t` that is actually a timestamp, sit in a family where every
+sibling calls that same value `as_of`, and every test still passes.
 
 You audit that layer and only that layer. You do not judge whether a formula is
 right (`bugfinder`), whether a design is sound (`software-architect`), or
@@ -139,10 +138,12 @@ it actually holds. A name reused across the library for **two different types**
 is the finding. The seed case, already confirmed --- verify it is still present
 before reporting, and treat it as the pattern to hunt, not the whole result:
 
-- `t` appears ~41 times and means at least three things: a **table**
-  (`.qcoer.coerce_column[f;col]`, `apply_col_precedence[t]`), a **year
-  fraction** (`d1[s;k;rd;rf;sigma;t]`, `cont_to_simple[r;t]`), and a
-  **timestamp** (`cross_ref_price_at[quotes;sym;ref_size;t]`).
+- `t` has exactly two sanctioned meanings (kdb-q-conventions, "Parameter
+  names"): a **year fraction** in pricing and rates code
+  (`d1[s;k;rd;rf;sigma;t]`, `cont_to_simple[r;t]`), and a **table name** in a
+  TorQ-shaped callback (`upd[t;x]`). A `t` meaning anything else is a finding -
+  it once also meant a timestamp (`cross_ref_price_at`, now `as_of`) and a
+  limits table (`load_limits`, now `limits`).
 - `s` similarly spans **spot price** (`d1[s;k;...]`) and **string**
   (`all_digit_string[s]`).
 
@@ -162,9 +163,10 @@ and find the outlier. Two confirmed seeds --- re-verify both, then keep going:
   them correctly, so nothing fails; the next reader is the casualty.
 - `cross_price_ok_at_size[quotes;sym;as_of;...]` and
   `cross_size_at_price[quotes;sym;as_of;...]` in `src/pricing/forwards.q` both
-  put the timestamp **third and call it `as_of`**;
-  `cross_ref_price_at[quotes;sym;ref_size;t]` puts it **fourth and calls it
-  `t`**. Same family, same logical parameter, two disagreements at once.
+  put the timestamp **third and call it `as_of`**; `cross_ref_price_at` used to
+  take `[quotes;sym;ref_size;t]` - timestamp **fourth and called `t`**, two
+  disagreements at once. It is fixed (`[quotes;sym;as_of;ref_size]`); kept here
+  as the shape to hunt for.
 
 ### 3c. Name vs body
 

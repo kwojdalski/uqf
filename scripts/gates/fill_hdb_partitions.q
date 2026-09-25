@@ -126,14 +126,14 @@ partitions:parts hdb_root;
 written:0;
 patched:0;
 {[root;declared;part]
-    made:{[root;part;tbl] fill_one[root;part;tbl]}[root;part] each declared;
+    made:{[root;part;table_name] fill_one[root;part;table_name]}[root;part] each declared;
     n:sum made;
     if[n>0; -1 "  ",string[part],": wrote ",string[n]," missing table(s)"];
     `written set written+n;
     / Columns AFTER tables, and in the same pass over the partition: a table
     / this run just created is already complete, so fill_cols finds nothing
     / in it and the two steps do not fight.
-    grew:raze {[root;part;tbl] fill_cols[root;part;tbl]}[root;part] each declared;
+    grew:raze {[root;part;table_name] fill_cols[root;part;table_name]}[root;part] each declared;
     if[count grew;
         -1 "  ",string[part],": added ",string[count grew]," column(s) - ",
            ", " sv string grew];
