@@ -5,7 +5,7 @@
 / crypto_mock stands in for that recorder when cryptorust is not running. This
 / is the third way to the same data and the only one that is repeatable: the
 / capture cryptorust already wrote to disk, in
-/ cryptorust/data/market_data.duckdb, replayed a window at a time. A recorded
+/ cryptorust/data/live.duckdb, replayed a window at a time. A recorded
 / file can be backfilled, re-backfilled after a bug fix, and asserted against;
 / a live socket cannot.
 / .
@@ -23,9 +23,9 @@
 /                 the recorder writes it - one row carries both.
 / .
 / The credential, UQF_SOURCE_CRED_CRYPTO_MARKET_DATA, is an ODBC connection
-/ string: "DRIVER=DuckDB;Database=/path/market_data.duckdb;
-/ access_mode=READ_ONLY". scripts/dev/odbc_rosetta.sh sets the driver up on
-/ macOS. Without the credential the worker runs on `fixture`, the demo path.
+/ string: "DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY".
+/ scripts/dev/odbc_rosetta.sh sets the driver up on macOS. Without the
+/ credential the worker runs on `fixture`, the demo path.
 / .
 / WHAT THE DRIVER GETS WRONG, AND THE QUERY FIXES
 / .
@@ -70,13 +70,34 @@ types:"ppssb",(raze 5#enlist "ffff"),"ffjffs"
 
 / The table in the DuckDB file, and the table its rows land in here.
 / .
-/ cryptorust exposes the same 31 columns under two names, and which one a
-/ file has is the only thing that differs between them: `market_data` in the
-/ dumped data/market_data.duckdb, and `market_data_live`, a view over the
-/ rolling data/live_*.parquet shards, in data/live.duckdb while the recorder
-/ is running. sql_for reads THIS symbol rather than spelling the name again,
-/ so pointing the source at the live view is this one line and the credential.
-table_name:`market_data
+/ cryptorust exposes the same 31 columns under two names, and which one a file
+/ has is the only thing that differs: `market_data`, a real table in the dumped
+/ data/market_data.duckdb, and `market_data_live`, a VIEW in data/live.duckdb.
+/ sql_for reads THIS symbol rather than spelling the name again, so moving
+/ between them is one line.
+/ .
+/ THREE THINGS ABOUT THE VIEW, each of which stops a run that looks correct.
+/ None is this tree's to fix, and all three were measured on 2026.09.25:
+/ .
+/   the path is RELATIVE. The view is
+/   `read_parquet('data/live*.parquet', union_by_name=true)`, so it resolves
+/   only when the PROCESS's working directory is cryptorust's repository root.
+/   scripts/processes/torq_backfill.q cds to uqf's root before loading, so a
+/   fleet run cannot satisfy that and fails with DuckDB's "No files found that
+/   match the pattern". Defining the view with an absolute path, in cryptorust,
+/   is the fix; pointing this source at an absolute read_parquet glob and a
+/   :memory: database is the workaround.
+/ .
+/   the definition lives in the WAL until the writer checkpoints. Copy
+/   live.duckdb without live.duckdb.wal and the catalog is empty - not an
+/   error, just a database with no such view, which reads as a typo here.
+/ .
+/   the recorder's own lock excludes readers. While cryptorust is writing,
+/   opening the file returns "Conflicting lock is held", and access_mode=
+/   READ_ONLY does NOT get around it. A backfill over live data therefore
+/   wants the parquet shards, which are append-only and unlocked, rather than
+/   the database file that indexes them.
+table_name:`market_data_live
 target:`crypto_market_data
 
 time_column:`source_time

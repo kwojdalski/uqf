@@ -77,6 +77,15 @@ test_the_select_list_renames_what_duckdb_calls_it:{[t]
     .qunit.assertTrue[sql like "SELECT timestamp_ms AS source_time, local_timestamp_ms AS local_time, venue, symbol AS sym, CAST(is_snapshot AS INTEGER) AS is_snapshot,*";
         "the four columns DuckDB spells differently, and the boolean the driver's handling of is unmeasured"]};
 
+test_the_sql_selects_from_the_declared_table:{[t]
+    sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
+    .qunit.assertTrue[sql like "* FROM ",string[.qetl.source.def[`crypto_market_data]`table_name]," *";
+        "sql_for reads table_name rather than spelling it again - the dumped file calls it market_data and the live one market_data_live, and that is the only difference between them"]};
+
+test_the_source_points_at_the_live_view:{[t]
+    .qunit.assertEquals[.qetl.source.def[`crypto_market_data]`table_name;`market_data_live;
+        "data/live.duckdb's view over the rolling parquet shards, not the dumped market_data table"]};
+
 test_every_level_column_is_read:{[t]
     sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
     .qunit.assertEquals[count where {[s;f] s like "*",string[f],"*"}[sql] each .qpipe.source.crypto_market_data.level_fields;
