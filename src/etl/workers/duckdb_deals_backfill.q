@@ -40,7 +40,7 @@ quality_check:{[batch]
 / @eg .qwrk.duckdb_deals_backfill.facts[.qfeed.duckdb_deals.fixture[]]
 facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
-    `deals`pairs`first_deal`last_deal!(count batch;count distinct batch`sym;min batch`time;max batch`time)}
+    `deals`pairs`first_deal`last_deal!(count batch;count distinct batch`sym;min batch`deal_time;max batch`deal_time)}
 
 \d .
 

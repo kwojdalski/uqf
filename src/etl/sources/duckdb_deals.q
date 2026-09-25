@@ -28,15 +28,18 @@
 / spliced into SQL any other way - and a long, not a timestamp, because
 / .qodbc.literal's timestamp form drops the sub-second part.
 / .
-/ The deal's own time lands in `time`, the column every stack table leads
-/ with (scripts/processes/uqs_tables.q), so duckdb_deals has the plant's shape.
+/ The deal's own time stays `deal_time`, NOT `time`. `time` is the
+/ tickerplant's: .qpipe.publish drops any `time` a publisher sends and the
+/ plant stamps its receipt time, so a deal time carried in `time` would be
+/ overwritten the day these rows are published. uqs_tables.q defines the
+/ plant table as time plus deal_time, as databento_book keeps ts_event.
 
 \d .qfeed.duckdb_deals
 
 source_name:`duckdb_deals
 
 / The columns this adapter READS, in the order the target table holds them.
-columns:`time`deal_id`sym`side`notional`rate
+columns:`deal_time`deal_id`sym`side`notional`rate
 / p=timestamp, j=long, s=symbol, s=symbol, f=float, f=float
 types:"pjssff"
 
@@ -44,7 +47,7 @@ types:"pjssff"
 table_name:`deals
 target:`duckdb_deals
 
-time_column:`time
+time_column:`deal_time
 
 / deal_id is the DuckDB table's PRIMARY KEY, so here the source does
 / guarantee uniqueness - the thing a natural key needs and demo_deals can
@@ -67,7 +70,7 @@ epoch_ns_literal:{[ts] "make_timestamp_ns(",.qodbc.literal["j"$ts-1970.01.01D00:
 / @return the SELECT statement text
 / @eg .qfeed.duckdb_deals.sql_for[2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]
 sql_for:{[range_from;range_to]
-    "SELECT epoch_ns(deal_time) AS time, deal_id, sym, side, notional, rate",
+    "SELECT epoch_ns(deal_time) AS deal_time, deal_id, sym, side, notional, rate",
     " FROM deals",
     " WHERE deal_time >= ",epoch_ns_literal[range_from],
     " AND deal_time < ",epoch_ns_literal[range_to],
@@ -76,9 +79,9 @@ sql_for:{[range_from;range_to]
 / The driver's table in the declared types and column order.
 / @param raw the table .qodbc.run_sql returns for sql_for's statement
 / @return the same rows as the contract declares them
-/ @eg .qfeed.duckdb_deals.adapt[([] time:enlist 1789117200000000000; deal_id:enlist 1; sym:enlist "EURUSD"; side:enlist "buy"; notional:enlist 1e6; rate:enlist 1.0842)]
+/ @eg .qfeed.duckdb_deals.adapt[([] deal_time:enlist 1789117200000000000; deal_id:enlist 1; sym:enlist "EURUSD"; side:enlist "buy"; notional:enlist 1e6; rate:enlist 1.0842)]
 adapt:{[raw]
-    t:update time:1970.01.01D00:00+time from raw;
+    t:update deal_time:1970.01.01D00:00+deal_time from raw;
     t:@[t;`sym`side;{`$x}];
     columns xcols t}
 
@@ -92,7 +95,7 @@ query:{[h;range_from;range_to] adapt .qodbc.run_sql[h;sql_for[range_from;range_t
 / demo_deals' five deals, one a day from 2026.09.11 - the same rows that open
 / the DuckDB file - in this source's column names.
 fixture:{[]
-    ([] time:2026.09.11D09:00:00.000000000+1D*til 5;
+    ([] deal_time:2026.09.11D09:00:00.000000000+1D*til 5;
         deal_id:1 2 3 4 5j;
         sym:`EURUSD`GBPUSD`EURUSD`USDJPY`EURUSD;
         side:`buy`sell`buy`sell`buy;

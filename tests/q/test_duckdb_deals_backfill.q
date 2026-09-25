@@ -19,7 +19,7 @@ spec_for:{[version;from_n;to_n]
 / What KX's ODBC client returns for sql_for's statement: epoch_ns(deal_time)
 / as a long, the text columns as strings.
 driver_rows:{[]
-    ([] time:1789117200000000001 1789203600000000000;
+    ([] deal_time:1789117200000000001 1789203600000000000;
         deal_id:1 2;
         sym:("EURUSD";"GBPUSD");
         side:("buy";"sell");
@@ -63,7 +63,7 @@ test_a_window_is_ordered:{[t]
 
 test_the_select_list_is_the_contract_in_order:{[t]
     sql:.qfeed.duckdb_deals.sql_for[.duckdb_dealsbftest.d 1;.duckdb_dealsbftest.d 2];
-    .qunit.assertTrue[sql like "SELECT epoch_ns(deal_time) AS time, deal_id, sym, side, notional, rate FROM deals *";
+    .qunit.assertTrue[sql like "SELECT epoch_ns(deal_time) AS deal_time, deal_id, sym, side, notional, rate FROM deals *";
         "deal_time read as epoch nanoseconds - the driver would return a millisecond datetime"]};
 
 / --- what the driver hands back ----------------------------------------
@@ -74,7 +74,7 @@ test_driver_rows_become_the_contract:{[t]
 
 test_adapt_keeps_the_nanosecond:{[t]
     r:.qfeed.duckdb_deals.adapt driver_rows[];
-    .qunit.assertEquals[first r`time;2026.09.11D09:00:00.000000001;"not rounded to the millisecond"]};
+    .qunit.assertEquals[first r`deal_time;2026.09.11D09:00:00.000000001;"not rounded to the millisecond"]};
 
 test_adapt_puts_columns_in_contract_order:{[t]
     r:.qfeed.duckdb_deals.adapt `rate`sym xcols driver_rows[];

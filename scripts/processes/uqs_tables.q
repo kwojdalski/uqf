@@ -216,6 +216,6 @@ connections:([]time:`timestamp$(); venue:`g#`symbol$(); host:`symbol$(); port:`l
 / event fires, which is what distinguishes a forecast row from a fired one.
 economic_calendar:([]time:`timestamp$(); event_id:`long$(); ccy:`symbol$(); event_name:`symbol$(); importance:`symbol$(); forecast:`float$(); previous:`float$(); actual:`float$())
 
-/ duckdb_deals_backfill1's target: one mock FX deal read from DuckDB over ODBC, `time`
-/ being when it was dealt.
-duckdb_deals:([]time:`timestamp$(); deal_id:`long$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
+/ duckdb_deals_backfill1's target: one mock FX deal read from DuckDB over ODBC.
+/ deal_time is when it was dealt; time, as on every plant table, is the plant's.
+duckdb_deals:([]time:`timestamp$(); deal_time:`timestamp$(); deal_id:`long$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
