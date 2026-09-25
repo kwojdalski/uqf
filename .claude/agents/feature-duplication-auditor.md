@@ -163,8 +163,7 @@ reporting.
   python  Interval.touches / merge      python/uqf_frontend/src/uqf_frontend/coverage.py:39
 
   Shared behaviour: merging adjacent half-open [from,to) intervals, which
-    compose ONLY at a common boundary (ETL-08), never across versions
-    (ETL-09, ETL-10).
+    compose ONLY at a common boundary, never across source versions.
   Drift scenario: q treats [Mon,Tue) + [Tue,Wed) as covered; if Python's
     `touches` ever loosens to >= , the gateway reports a range covered that
     the ledger says has a gap, and a caller reads a bounded dataset that was

@@ -58,9 +58,7 @@ module is *for*.
 The data-engineering component is documented separately: see
 [pipeline-framework-gaps.md](../architecture/pipeline-framework-gaps.md) for how
 `src/etl/` maps onto a Dagster-shaped framework, what closed each gap it found,
-and what it deliberately does not have, and
-[etl-framework-requirements.md](etl-framework-requirements.md) for the contract
-CI holds it to.
+and what it deliberately does not have.
 
 ## Conventions
 

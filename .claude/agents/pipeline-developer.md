@@ -35,22 +35,22 @@ against.
 
 ## The namespaces, in `src/etl/init.q`'s load order
 
-  | File                       | Namespace   | Owns                                                 |
-  | ---                        | ---         | ---                                                  |
-  | `core/backfill_state.q`    | `.qbfstate` | the bounded-worker registry and checkpoints          |
-  | `core/log.q`               | `.qlog`     | structured log events — never log text (ETL-15)      |
-  | `core/coercion.q`          | `.qcoer`    | the shared type-coercion layer                       |
-  | `core/coverage.q`          | `.qmatz`    | the bitemporal coverage ledger (`etl_coverage`)      |
-  | `core/io_manager.q`        | `.qio`      | where a pipeline's output goes (`memory`, `discard`) |
-  | `core/singlestore_odbc.q`  | `.qodbc`    | the SingleStore ODBC adapter                         |
-  | `core/heartbeat.q`         | `.qhb`      | worker liveness                                      |
-  | `core/dag.q`               | `.qdag`     | the job graph, derived from declared inputs/outputs  |
-  | `generated/pipeline_dag.q` | —           | generated bridge; **never hand-edit**                |
-  | `core/worker_config.q`     | `.qwcfg`    | layered config with typed getters                    |
-  | `core/worker_runtime.q`    | `.qwrt`     | windowing, coverage skipping, `finish_window`        |
-  | `core/continuous_state.q`  | `.qcont`    | the continuous poll-and-cursor pattern               |
-  | `core/source_contract.q`   | `.qsrc`     | external source declarations (resources)             |
-  | `core/bounded_worker.q`    | `.qbw`      | the bounded-worker lifecycle and `run`               |
+  | File                       | Namespace   | Owns                                                  |
+  | ---                        | ---         | ---                                                   |
+  | `core/backfill_state.q`    | `.qbfstate` | the bounded-worker registry and checkpoints           |
+  | `core/log.q`               | `.qlog`     | structured log events — never log text                |
+  | `core/coercion.q`          | `.qcoer`    | the shared type-coercion layer                        |
+  | `core/coverage.q`          | `.qmatz`    | the bitemporal coverage ledger (`etl_coverage`)       |
+  | `core/io_manager.q`        | `.qio`      | where a pipeline's output goes (`memory`, `discard`)  |
+  | `core/singlestore_odbc.q`  | `.qodbc`    | the SingleStore ODBC adapter                          |
+  | `core/heartbeat.q`         | `.qhb`      | worker liveness                                       |
+  | `core/dag.q`               | `.qdag`     | the job graph, derived from declared inputs/outputs   |
+  | `generated/pipeline_dag.q` | —           | generated bridge; **never hand-edit**                 |
+  | `core/worker_config.q`     | `.qwcfg`    | layered config with typed getters                     |
+  | `core/worker_runtime.q`    | `.qwrt`     | windowing, coverage skipping, `finish_window`         |
+  | `core/continuous_state.q`  | `.qcont`    | the continuous poll-and-cursor pattern                |
+  | `core/source_contract.q`   | `.qsrc`     | external source declarations (resources)              |
+  | `core/bounded_worker.q`    | `.qbw`      | the bounded-worker lifecycle and `run`                |
 
 Sources (`sources/*.q`) and workers (`workers/*.q`) load **last**, because a
 declaration registers itself on load --- there is no way to have a declaration
@@ -98,9 +98,6 @@ Two registry facts that changed under you, and that a job no longer states:
 
 - **`.claude/skills/kdb-q-conventions/SKILL.md`** and its
   `q-language-reference.md` --- this repo's hard-won q gotchas.
-- **`docs/reference/etl-framework-requirements.md`** --- ETL-01..ETL-24. These
-  are not style preferences; several encode a specific failure this tree has
-  already had. The ones that bite most often are listed below.
 - **`docs/architecture/pipeline-framework-gaps.md`** --- the closed assessment
   against Dagster: what each piece replaced, and the four differences that are
   decisions rather than gaps.
@@ -117,24 +114,23 @@ Two registry facts that changed under you, and that a job no longer states:
 
 ## The requirements that bite
 
-- **ETL-05 / ETL-07 --- publish before you claim.** Coverage is staged only
-  after the publication it describes, and the checkpoint only after coverage.
-  `.qwrt.finish_window` sequences all three, and the order *is* the requirement.
-  Every interruption point must leave an under-claim, never an over-claim: a
-  re-run redoing work is tolerable, skipping work the ledger wrongly believes is
-  done is not.
-- **ETL-08 --- every interval is half-open**, `[from; to)`. A zero-width or
-  reversed window is an error, not an empty result.
-- **ETL-09 / ETL-10 --- `source_version` is a required parameter, never an
-  optional filter**, because an optional filter is one a caller forgets, and
-  forgetting this one merges coverage across releases.
-- **ETL-13 --- bounded retries are idempotent** through range-and-version
-  skipping. A window already covered at this version is not re-fetched; at a
-  *different* version it is.
-- **ETL-16 --- declared dependencies resolve through `.servers`, and missing
-  window parameters are refused together**, not one at a time.
-- **ETL-19 --- use `etl_test_doubles`** to replace fetch/publish/checkpoint.
-  Doubling the edges is not the same as testing the middle.
+- **Publish before you claim.** Coverage is staged only after the publication it
+  describes, and the checkpoint only after coverage. `.qwrt.finish_window`
+  sequences all three, and the order *is* the requirement. Every interruption
+  point must leave an under-claim, never an over-claim: a re-run redoing work is
+  tolerable, skipping work the ledger wrongly believes is done is not.
+- **Every interval is half-open**, `[from; to)`. A zero-width or reversed window
+  is an error, not an empty result.
+- **`source_version` is a required parameter, never an optional filter**,
+  because an optional filter is one a caller forgets, and forgetting this one
+  merges coverage across releases.
+- **Bounded retries are idempotent** through range-and-version skipping. A
+  window already covered at this version is not re-fetched; at a *different*
+  version it is.
+- **Declared dependencies resolve through `.servers`, and missing window
+  parameters are refused together**, not one at a time.
+- **Use `etl_test_doubles`** to replace fetch/publish/checkpoint. Doubling the
+  edges is not the same as testing the middle.
 - **Source credentials come from the environment only** (`UQF_SOURCE_CRED_*`).
   No file fallback, no vault. A file fallback is how a credential ends up
   committed.

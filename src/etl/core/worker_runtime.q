@@ -1,13 +1,12 @@
 / worker_runtime.q - retry classification, dry-run, and the authority split
 / (.qwrt).
 / .
-/ Implements requirements ETL-13 to ETL-17 of docs/reference/etl-framework-requirements.md,
-/ and the retry decisions recorded on issues #71/#72.
+/ Implements the retry decisions recorded on issues #71/#72.
 / .
 / The guarantee this file provides is deliberately WEAKER than the one people
-/ assume. ETL-13 says so in as many words: "do not assume exactly-once
-/ processing - the framework establishes retry-safe publication and coverage
-/ skipping, which is a weaker and more honest guarantee." So a window may be
+/ assume, in as many words: do not assume exactly-once processing - the
+/ framework establishes retry-safe publication and coverage skipping, which
+/ is a weaker and more honest guarantee. So a window may be
 / fetched twice; what must not happen is that a window is published twice
 / without the ledger knowing, or skipped while reporting success.
 / .

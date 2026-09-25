@@ -145,7 +145,7 @@ Write in this order, and run the suite between each:
   under `src/` may touch TorQ --- `scripts/gates/check_etl_layering.py` fails
   the build if it does.
 - **Never publish `time`.** `.u.upd` stamps its own (invariant 1).
-- **Parameterised queries, never concatenation** (ETL-08). The window bounds are
+- **Parameterised queries, never concatenation.** The window bounds are
   arguments to a functional select evaluated remotely. Where a driver cannot
   parameterise, there is exactly one escape function, `.qodbc.literal`.
 - **Half-open windows `[from;to)`** --- `>=` on the lower bound, `<` on the

@@ -16,7 +16,7 @@ is supplied to the decision check through `GH_TOKEN`.
 
 One per layer. `all` is every lane except `coverage` and the two that reach
 outside the process, so it is what a release runs and not what an edit runs -
-ETL-21 asks for the lane matching the layer you changed.
+run the lane matching the layer you changed.
 
 ```
 scripts/test.py q-unit              # deterministic qUnit suite
@@ -37,13 +37,13 @@ scripts/test.py all                 # every lane except coverage, smoke and stac
 They are separate because they prove different things, and five of them cannot
 prove what they claim if folded into `q-unit`:
 
-  | Lane                 | Proves what `q-unit` cannot                                                                                                                                                                            |
-  | ---                  | ---                                                                                                                                                                                                    |
-  | `q-order`            | no test depends on running after another — [below](#the-suite-does-not-depend-on-its-own-order)                                                                                                        |
-  | `q-backfill-process` | single-instance locking and resumption across a restart, which need a real filesystem and a genuinely separate process                                                                                 |
-  | `q-two-instances`    | the only lane where a source runs **live**: `.qbw.connect`, a source's `query` and `.qsrc.validate_live` execute nowhere else                                                                          |
-  | `stack-smoke`        | the wiring — a declared table with no rows, or a process writing to its error log while we watch. [Below](#what-ci-cannot-check-the-wiring), with the three bugs that motivated it                     |
-  | `smoke`              | ETL-12's live half, against the **same declaration** the fixture is checked against. Excluded from `all`: a local run that depends on a remote host trains everyone to read red as "the network again" |
+  | Lane                 | Proves what `q-unit` cannot                                                                                                                                                                                       |
+  | ---                  | ---                                                                                                                                                                                                               |
+  | `q-order`            | no test depends on running after another — [below](#the-suite-does-not-depend-on-its-own-order)                                                                                                                   |
+  | `q-backfill-process` | single-instance locking and resumption across a restart, which need a real filesystem and a genuinely separate process                                                                                            |
+  | `q-two-instances`    | the only lane where a source runs **live**: `.qbw.connect`, a source's `query` and `.qsrc.validate_live` execute nowhere else                                                                                     |
+  | `stack-smoke`        | the wiring — a declared table with no rows, or a process writing to its error log while we watch. [Below](#what-ci-cannot-check-the-wiring), with the three bugs that motivated it                                |
+  | `smoke`              | A source contract's live half, against the **same declaration** the fixture is checked against. Excluded from `all`: a local run that depends on a remote host trains everyone to read red as "the network again" |
 
 ## What CI cannot check: the wiring
 

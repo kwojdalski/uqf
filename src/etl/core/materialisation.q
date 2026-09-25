@@ -8,11 +8,10 @@
 / Dagster's word for "this asset was produced, for this partition, at this
 / time". That is what stage_completion writes and what the ledger holds.
 / .
-/ The TABLE stays `etl_coverage`, and the requirements stay ETL-07 to
-/ ETL-11 "coverage", because those name what callers ASK: "is this range
-/ covered?". Four things outside this file already agree on that word - the
-/ persisted table, the requirements document, the frontend's /coverage
-/ endpoint and its Coverage view - and renaming a persisted table to match
+/ The TABLE stays `etl_coverage`, because it names what callers ASK: "is
+/ this range covered?". Three things outside this file already agree on that
+/ word - the persisted table, the frontend's /coverage endpoint and its
+/ Coverage view - and renaming a persisted table to match
 / a namespace is the tail wagging the dog. A namespace and the table it
 / writes need not share a name; .qpos manages `position` and .qexec writes
 / `execution_quality` on the same principle.
@@ -24,13 +23,7 @@
 / file was renamed with the namespace so the collision is gone at both
 / ends.
 / .
-/ Implements requirements ETL-07 to ETL-11 of docs/reference/etl-framework-requirements.md.
-/ Those IDs are the REQUIREMENTS document's; the question bank uses an
-/ overlapping E-nn scheme for source-adapter questions, so question-bank
-/ answers are named as such below.
-/ .
-/ The two things most easily got wrong here, both counter-intuitive and both
-/ stated explicitly in the canonical document:
+/ The two things most easily got wrong here, both counter-intuitive:
 / .
 /   1. Coverage is RECORDED, not derived (ETL-07). It is not computed from the
 /      target data; a completion event is staged for every completed bounded

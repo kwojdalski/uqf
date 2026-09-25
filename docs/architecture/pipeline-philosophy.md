@@ -1,13 +1,11 @@
 # How the pipeline framework thinks
 
 `src/etl/` has a shape, and the shape came from a small number of positions held
-consistently. This page states them, because the requirements
-(`docs/reference/etl-framework-requirements.md`) say *what* the code must do and
-the framework assessment
+consistently. This page states them, because the framework assessment
 ([`pipeline-framework-gaps.md`](pipeline-framework-gaps.md)) says what each
-piece replaced, but neither says *why* the whole is arranged this way. Someone
-changing `src/etl/` needs the why, or the next change will be locally reasonable
-and globally wrong.
+piece replaced, but not *why* the whole is arranged this way. Someone changing
+`src/etl/` needs the why, or the next change will be locally reasonable and
+globally wrong.
 
 Where a principle is enforced, the enforcement is named. A principle nothing
 enforces is an intention, and this page tries not to contain any.
@@ -27,10 +25,9 @@ which is merely wasteful.
 Those two failures are not symmetrical, and almost every ordering decision in
 the framework falls out of preferring the second:
 
-- **Publish, then record coverage, then checkpoint** (ETL-05, ETL-07).
-  `.qwrt.finish_window` sequences all three, and the order is the requirement,
-  not an implementation detail. Interrupt it anywhere and the result is an
-  under-claim.
+- **Publish, then record coverage, then checkpoint.** `.qwrt.finish_window`
+  sequences all three, and the order is the requirement, not an implementation
+  detail. Interrupt it anywhere and the result is an under-claim.
 - **A failed data-quality check takes the same path as a failed fetch.** The
   window is not published, no coverage is staged, the run continues, and the
   next run plans that window again because coverage never claimed it. That is
@@ -51,10 +48,10 @@ all-clear.
 
 ## 2. State the weakest guarantee that is true.
 
-ETL-13 could have said "exactly-once processing". It says the opposite, in as
-many words: **do not assume exactly-once** --- the framework establishes
-retry-safe publication and coverage skipping, "which is a weaker and more honest
-guarantee."
+The framework could have promised "exactly-once processing". It promises the
+opposite, in as many words: **do not assume exactly-once** --- it establishes
+retry-safe publication and coverage skipping, which is a weaker and more honest
+guarantee.
 
 That sentence is doing real work. A caller who believes in exactly-once writes
 code with no defence against a duplicate. A caller told "retries are safe, and
@@ -150,9 +147,9 @@ directly.
 
 ## 6. Required where the value is a choice; ambient where it is a fact.
 
-ETL-09 makes `source_version` a required parameter of `.qmatz.stage_completion`,
-not an optional filter, on the grounds that an optional filter is one a caller
-forgets --- and forgetting this one merges coverage across releases.
+`source_version` is a required parameter of `.qmatz.stage_completion`, not an
+optional filter, on the grounds that an optional filter is one a caller forgets ---
+and forgetting this one merges coverage across releases.
 
 `run_id` looks like the same case and is not. `source_version` is a *choice* the
 caller makes, and the wrong choice is silent corruption. `run_id` is a *fact
@@ -183,7 +180,7 @@ there" ambiguous.
 
 ## 8. Authority is split, and the split is written down.
 
-ETL-15 is explicit about who owns what. q and TorQ own process startup, source
+The split of who owns what is explicit. q and TorQ own process startup, source
 reads, query failures, checkpoints, run and window counts, and coverage events.
 Airflow owns task ordering, scheduling, retries, timeouts, concurrency and alert
 routing. The two exchange **structured status** --- neither infers the other's
@@ -301,5 +298,3 @@ obvious way to mint a unique id returns the same value everywhere.
 - [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) --- the closed
   assessment against Dagster: what each piece replaced, and the four differences
   that are decisions.
-- [`../reference/etl-framework-requirements.md`](../reference/etl-framework-requirements.md) ---
-  ETL-01..ETL-24, the contract CI holds the code to.
