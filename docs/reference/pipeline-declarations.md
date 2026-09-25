@@ -20,7 +20,7 @@ rather than part-way through a run.
 `scripts/gates/check_declaration_reference.py` holds the key tables on this page
 to the key lists in the q source, in both directions.
 
-## Fixture, examples and the run spec are three different things
+## Fixture, examples and run spec
 
 They are easy to confuse because each is "some rows written by hand".
 
@@ -180,8 +180,8 @@ one path that notifies, and not on a dry run --- with that window's range.
 Prefer `on_worker` when the downstream work is itself a worker: its edge in the
 graph is read from the worker's declaration rather than asserted. [Recomputing a
 table when the one it reads is
-published](../guides/new-pipeline.md#recomputing-a-table-when-the-one-it-reads-is-published)
-covers when to use which.
+published](../guides/new-pipeline.md#recomputing-on-an-upstream-publish) covers
+when to use which.
 
 ## The job graph is derived, not declared
 

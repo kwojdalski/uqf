@@ -35,9 +35,9 @@ uqs start --profile arbitrage
 which is this chain plus `crossarb1`, started as a set. Every streaming job
 holds one connection to `stp1` and the plant is the scarce resource in this
 topology, so the profile is the form to reach for: it is checked against [the
-budget](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it)
-before anything starts, where naming the three processes positionally on top of
-a running default start is not. That budget page has the numbers, and is the one
+budget](../architecture/stack.md#what-starts-and-why-not-all-of-it) before
+anything starts, where naming the three processes positionally on top of a
+running default start is not. That budget page has the numbers, and is the one
 place that states them.
 
 Being a closed chain is what makes starting and stopping it as a set safe.

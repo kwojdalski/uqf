@@ -1,4 +1,4 @@
-# Cross-currency arbitrage: the direct book against a synthetic route
+# Cross-currency arbitrage
 
 `crossarb1` asks a different question from `arbitrage1`, which is why it is a
 different process.
@@ -55,7 +55,7 @@ A direct EURJPY ask of 164.90 is 0.10 cheap: buy 1mm EUR directly at 164.90,
 sell it through the route at 165.00, for 100,000 JPY of gross edge. That is the
 first test in `tests/q/test_cross_arbitrage.q`, and every expected number in
 that file is computed by hand on purpose --- see
-[why](#why-the-tests-use-hand-computed-numbers).
+[why](#why-hand-computed-test-numbers).
 
 ## The output
 
@@ -79,7 +79,7 @@ select from latest where active
   | `skew`                             | how far apart the legs of the route were quoted                                 |
   | `as_of`                            | the **oldest** leg's timestamp — a synthetic price is as old as its stalest leg |
 
-### Two columns worth reading before the profit
+### Two columns to read first
 
 **`fully_filled`.** A route is only as deep as its thinnest leg. If EURUSD can
 fill 1mm EUR but USDJPY can only absorb 100k of the ~1.1mm USD that produces,
@@ -116,12 +116,12 @@ uqs start --profile arbitrage
 which is `marketdata1`, `superbook1`, `arbitrage1` and this process. Naming
 those four positionally on a running default start instead is four plant
 connections more than it holds, and [the
-budget](../architecture/stack.md#what-starts-with-the-stack-and-why-not-all-of-it)
-has no room for them --- the profile is checked against it before anything
-starts. `crossarb1` also runs without `arbitrage1`: they answer different
-questions and neither depends on the other.
+budget](../architecture/stack.md#what-starts-and-why-not-all-of-it) has no room
+for them --- the profile is checked against it before anything starts.
+`crossarb1` also runs without `arbitrage1`: they answer different questions and
+neither depends on the other.
 
-## Why the triangle exists at all
+## Why the triangle exists
 
 The four original demo pairs are **all USD-legged**:
 
@@ -142,7 +142,7 @@ an artefact of three unrelated random walks, not a market. On real feeds the
 same code answers a real question; on this one it is a demonstration that the
 pipeline works.
 
-## Why the tests use hand-computed numbers
+## Why hand-computed test numbers
 
 A wrong inversion on one leg of a route does not throw. It produces a
 plausible-looking edge that is not there.

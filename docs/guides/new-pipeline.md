@@ -137,7 +137,7 @@ and `docs/man.q` - it regenerates before it returns.
 The rest of this guide is what to write into that skeleton, and why each part is
 shaped the way it is.
 
-## Before you start: is it bounded or continuous?
+## Bounded or continuous?
 
 Two different shells. Which one a job wants is
 [`scaffolding/`](../scaffolding/README.md)'s opening question, asked there over
@@ -558,7 +558,7 @@ lambda carries your `\d .qfeed.fx_rates` across the wire, so a bare name
 resolves in that namespace on the remote and throws; `test_source_contract.q`
 refuses it.
 
-## Recomputing a table when the one it reads is published
+## Recomputing on an upstream publish
 
 A published window announces itself. Register a reaction and it runs, with the
 range that was just published, as soon as the window is recorded:

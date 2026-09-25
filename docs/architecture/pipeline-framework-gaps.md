@@ -1,4 +1,4 @@
-# What a Dagster-shaped pipeline framework needs, and what `src/etl/` has
+# uqf against a Dagster-shaped framework
 
 **This assessment is closed.** It asked two questions --- what is missing
 relative to how a modern orchestration framework is structured, and is that
@@ -44,7 +44,7 @@ The worker contract, the coverage ledger and the derived DAG are the three
 things most homegrown pipelines never get, and they are the three this tree had
 from the start.
 
-## 2. The gaps it found, and what closed each
+## 2. The gaps, and what closed each
 
 Three real gaps and two smaller ones. The `§` numbers are cited from source
 headers, so they are stable: `io_manager.q:4` names §2.1 and `run.q:2` names
@@ -103,7 +103,7 @@ with what would change the decision.
   the same decisions, and the two would disagree. *This one does not reopen: it
   is the authority split, not a gap.*
 
-## 4. Why q suited this better than it looks
+## 4. Why q suited this
 
 Three properties made the work easier than it would have been elsewhere, and
 they are why the pieces above are small:

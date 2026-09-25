@@ -12,7 +12,7 @@ enforces is an intention, and this page tries not to contain any.
 
 --------------------------------------------------------------------------------
 
-## 1. A claim is true, or absent. It is never wrong.
+## 1. A claim is true, or absent
 
 This is the one every other position is downstream of.
 
@@ -46,7 +46,7 @@ has no row for this process), and `not collected` (nothing is collecting at all)
 because rendering the last two identically would turn a monitoring gap into an
 all-clear.
 
-## 2. State the weakest guarantee that is true.
+## 2. State the weakest true guarantee
 
 The framework could have promised "exactly-once processing". It promises the
 opposite, in as many words: **do not assume exactly-once** --- it establishes
@@ -115,7 +115,7 @@ The same reflex applies to borrowed values. The orchestrator extends
 `monitor1`'s subscription list by *parsing the vendored list and appending to
 it*, rather than pinning a copy made on the day it was written.
 
-## 5. Refuse at the boundary. Never heal silently.
+## 5. Refuse at the boundary
 
 A component handed something malformed should stop, naming what is wrong, before
 the first read that would depend on it:
@@ -145,7 +145,7 @@ returned an empty *symbol vector* instead of an empty table, which every suite
 then healed on first use, hiding the fault until something called `meta`
 directly.
 
-## 6. Required where the value is a choice; ambient where it is a fact.
+## 6. Required for choices, ambient for facts
 
 `source_version` is a required parameter of `.qmatz.stage_completion`, not an
 optional filter, on the grounds that an optional filter is one a caller forgets ---
@@ -161,7 +161,7 @@ exist.
 So the test is not "is this important" but **"can the caller be wrong about
 it?"** If yes, demand it. If no, read it.
 
-## 7. History accumulates; it is not overwritten.
+## 7. History accumulates
 
 The coverage ledger is append-only. A restatement does not edit the row it
 replaces --- it stamps `superseded_at`, and every read takes an as-of instant
@@ -178,7 +178,7 @@ row `begin` wrote --- and it is argued for in place: a run's outcome is not
 known when it starts, and appending a second row would make "how many runs were
 there" ambiguous.
 
-## 8. Authority is split, and the split is written down.
+## 8. Authority is split, and written down
 
 The split of who owns what is explicit. q and TorQ own process startup, source
 reads, query failures, checkpoints, run and window counts, and coverage events.
@@ -196,7 +196,7 @@ overlays, overrides, and command-line configuration that the framework applies
 *after* every vendored layer. An edit would work until the next upgrade and then
 be silently lost.
 
-## 9. The declaration and the thing declared live apart, but arrive together.
+## 9. Declarations live apart, arrive together
 
 `src/etl/core/` defines the contract. `sources/` and `workers/` declare against
 it. The core never depends on a declaration --- `check_etl_layering.py` enforces
@@ -208,7 +208,7 @@ loads declarations last. There is deliberately no way to have a declaration
 without its implementation, or a registry entry describing something that is not
 there.
 
-## 10. Two frameworks, one adapter, and the adapter is the only thing that knows TorQ.
+## 10. Two frameworks, one adapter
 
 There are two kinds of ETL process here, and they are deliberately *two*
 frameworks of the same shape rather than one framework with a flag:
@@ -253,7 +253,7 @@ contract, and its header names its readers.
 reference a declaring namespace (§9), and nothing under `src/etl/` may reference
 `.qpipe`.
 
-## 11. This repository is public, and the real sources are not.
+## 11. Public repository, private sources
 
 Every source, dataset and table here is a generic analogue --- `demo_deals`,
 `demo_events`, `event_tape`. No bank table name, hostname, schema shape or
