@@ -264,7 +264,7 @@ test_the_two_workers_have_separate_state:{[t]
 / window running past the requested range would record coverage for a range
 / nobody asked for.
 test_the_worker_uses_its_own_window_width:{[t]
-    .qunit.assertEquals[.qbw.declaration[`demo_events_backfill]`width;0D01:00:00;"an event tape is denser than a deal feed, so its windows are hourly, not daily"]};
+    .qunit.assertEquals[.qbw.def[`demo_events_backfill]`width;0D01:00:00;"an event tape is denser than a deal feed, so its windows are hourly, not daily"]};
 
 test_a_short_range_gives_one_clipped_window:{[t]
     .qwrk.demo_events_backfill.init .evttest.espec[0;10];

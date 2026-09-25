@@ -102,7 +102,7 @@ test_a_worker_is_not_handed_a_key_it_never_declared:{[t]
     / chose. Normalising at registration makes the shape intended, and this
     / pins the property that matters: an undeclared optional is (::), not
     / another worker's value.
-    d:.qbw.declaration `demo_events_backfill;
+    d:.qbw.def `demo_events_backfill;
     .qunit.assertEquals[d`check;(::);
         "a worker that declares no check has a null one, not a neighbour's"]};
 

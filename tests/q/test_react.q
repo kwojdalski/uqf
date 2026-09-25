@@ -177,7 +177,7 @@ test_a_plain_reaction_declares_no_output_and_is_a_terminal_node:{[t]
     .qdag.reset[];
     .qreact.on[`a;`glance;{[ds;f;t] 1}];
     .qdag.adopt_reactions[];
-    d:.qdag.declaration .qdag.reaction_job[`a;`glance];
+    d:.qdag.def .qdag.reaction_job[`a;`glance];
     .qunit.assertEquals[(d`kind;d`inputs;d`outputs);(`reaction;enlist `a;`$());
         "a plain reaction reads the dataset it watches and claims to write nothing"]};
 
@@ -219,7 +219,7 @@ test_a_worker_reaction_derives_its_output_rather_than_claiming_it:{[t]
     / disagree with what the worker does.
     .qreact.on_worker[`upstream;`demo_deals_backfill;{[f;tt] `source_version`range_from`range_to!(`v1;f;tt)}];
     r:first select outputs, derived from .qreact.for_dataset `upstream;
-    .qunit.assertEquals[(r`outputs;r`derived);(enlist (.qbw.declaration `demo_deals_backfill)`dataset;1b);
+    .qunit.assertEquals[(r`outputs;r`derived);(enlist (.qbw.def `demo_deals_backfill)`dataset;1b);
         "on_worker reads the target from .qbw rather than being told it"]};
 
 test_an_asserted_output_is_reported_as_such:{[t]

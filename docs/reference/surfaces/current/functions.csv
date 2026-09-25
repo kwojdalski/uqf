@@ -5,10 +5,12 @@ qalloc,append_lot,function,2,lots lot
 qalloc,bucket,function,5,m bys kv seed sub
 qalloc,by_cols,function,1,d
 qalloc,by_trade,function,1,matches
+qalloc,def,function,1,name
 qalloc,default_opts,dict,,
+qalloc,define,function,2,name decl
+qalloc,defined,function,1,
 qalloc,key_table,function,2,t bys
 qalloc,merge_lot,function,2,lots lot
-qalloc,method,function,1,name
 qalloc,methods,dict,,
 qalloc,new_lots,function,1,trades
 qalloc,new_matches,function,1,trades
@@ -21,8 +23,6 @@ qalloc,position,function,2,lots group_cols
 qalloc,position_at,function,3,trades opts ts
 qalloc,prepared,function,2,trades bys
 qalloc,prepared_opening,function,2,opening bys
-qalloc,register,function,2,name decl
-qalloc,registered,function,1,
 qalloc,require_method,function,1,decl
 qalloc,required,value,,
 qalloc,required_cols,value,,
@@ -69,7 +69,7 @@ qbw,begin_run,function,1,worker
 qbw,checkpoint,function,2,worker cursor
 qbw,cleanup,function,1,worker
 qbw,connect,function,1,worker
-qbw,declaration,function,1,worker
+qbw,def,function,1,worker
 qbw,define,function,2,worker decl
 qbw,delegate,function,2,worker nm
 qbw,do_window,function,2,worker w
@@ -149,7 +149,7 @@ qdag,adopt_reactions,function,1,
 qdag,adopt_workers,function,1,
 qdag,consumers,function,1,table_name
 qdag,d2,function,1,
-qdag,declaration,function,1,job
+qdag,def,function,1,job
 qdag,edges,function,1,
 qdag,external_inputs,function,1,
 qdag,external_ref,function,2,source table_name
@@ -414,7 +414,7 @@ qmicro,vpin,function,3,tape bucket_volume n_buckets
 qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
 qmicro,vwmp_skew_one,function,5,n_levels bid_prices bid_sizes ask_prices ask_sizes
 qnorm,check_source,function,4,who out src xf
-qnorm,declaration,function,1,name
+qnorm,def,function,1,name
 qnorm,define,function,2,name decl
 qnorm,defined,function,1,
 qnorm,dispatch,function,3,name t x
@@ -553,7 +553,7 @@ qsrc,coerce,function,2,source tbl
 qsrc,coercers,dict,,
 qsrc,column_names,function,1,tbl
 qsrc,credential_var,function,1,source
-qsrc,declaration,function,1,source
+qsrc,def,function,1,source
 qsrc,default_transport,value,,
 qsrc,define,function,2,source decl
 qsrc,defined,function,1,
@@ -592,7 +592,7 @@ qstatus,require_transition,function,2,from_state to
 qstatus,status_dir,function,1,
 qstatus,status_states,value,,
 qstatus,write_status,function,6,worker instance_id state spec progress err
-qstream,declaration,function,1,job
+qstream,def,function,1,job
 qstream,define,function,2,job decl
 qstream,defined,function,1,
 qstream,drain,function,2,table_name mask
@@ -924,7 +924,7 @@ qxf,apply_as_of,function,3,name given as_of
 qxf,check_example,function,5,name ins output clock ex
 qxf,col_equal,function,3,typ e a
 qxf,col_types,function,1,tbl
-qxf,declaration,function,1,name
+qxf,def,function,1,name
 qxf,define,function,2,name decl
 qxf,differences,function,2,expected actual
 qxf,float_tolerance,value,,

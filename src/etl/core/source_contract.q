@@ -256,7 +256,7 @@ defined:{[] key sources}
 / Stored normalised by `define`, so this is already a vector - the `(),`
 / is belt-and-braces for a declaration written directly into `sources` by a
 / test rather than through register.
-row_key:{[source] (),(declaration source)`row_key}
+row_key:{[source] (),(def source)`row_key}
 
 / One source's full declaration, or a refusal naming it.
 / .
@@ -268,10 +268,10 @@ row_key:{[source] (),(declaration source)`row_key}
 / @return the declaration dict (source, table, target, time_column, row_key,
 /   columns, types, query, fixture, tz)
 / @throws error naming the source when it was never registered
-/ @eg .qsrc.declaration `demo_deals
-declaration:{[source]
+/ @eg .qsrc.def `demo_deals
+def:{[source]
     if[not source in key sources;
-        '"declaration: ",string[source]," is not a registered source - sources register centrally, so an unregistered source is a wiring bug rather than a lookup miss"];
+        '"def: ",string[source]," is not a registered source - sources register centrally, so an unregistered source is a wiring bug rather than a lookup miss"];
     sources source}
 
 / ------------------------------------------------------------ VALIDATION
@@ -302,7 +302,7 @@ column_names:{[tbl] exec c from 0!meta tbl}
 / @return 1b when the table satisfies the declaration
 / @throws error naming every missing field and every type mismatch at once
 validate:{[source;tbl]
-    decl:declaration source;
+    decl:def source;
     present:column_names tbl;
     chars:type_chars tbl;
     missing:decl[`columns] where not decl[`columns] in present;
@@ -329,7 +329,7 @@ validate:{[source;tbl]
 / Runs in the deterministic suite, with no connection anywhere. A fixture
 / that does not satisfy the contract is a broken test double, and finding
 / that out from a failing worker test is a much longer path.
-validate_fixture:{[source] validate[source;(declaration[source]`fixture)[]]}
+validate_fixture:{[source] validate[source;(def[source]`fixture)[]]}
 
 / Validate LIVE external metadata against the same declaration.
 / .
@@ -342,7 +342,7 @@ validate_fixture:{[source] validate[source;(declaration[source]`fixture)[]]}
 / @param source a registered source name
 / @param h an open handle to the external source
 validate_live:{[source;h]
-    decl:declaration source;
+    decl:def source;
     m:@[{[handle;table_name] handle({0!meta x};table_name)}[h];decl`table_name;
         {[table_name;err] '"validate_live: cannot read metadata for ",string[table_name]," (",err,")"}[decl`table_name;]];
     present:exec c from m;
@@ -381,7 +381,7 @@ credential_var:{[source] "UQF_SOURCE_CRED_",upper string source}
 / Sixth reserved-name collision here, and the first as a local rather than a
 / parameter - check_q_traps.py now covers both.
 require_credentials:{[source]
-    declaration source;
+    def source;
     env_var:credential_var source;
     v:getenv `$env_var;
     / The variable's NAME only - never its value, which is a credential.
@@ -605,7 +605,7 @@ coercers:(!). flip (
 / @return dict of `table (coerced) and `failures (field -> count)
 / @throws error when a declared type has no coercer
 coerce:{[source;tbl]
-    decl:declaration source;
+    decl:def source;
     present:column_names tbl;
     columns:decl[`columns] where decl[`columns] in present;
     chars:(decl`types) (decl`columns)?columns;
@@ -654,7 +654,7 @@ coerce:{[source;tbl]
 / has to know about zones. See source_bounds and narrow_to_utc.
 fetch_window:{[source;h;range_from;range_to]
     t0:.z.p;
-    decl:declaration source;
+    decl:def source;
     bounds:source_bounds[decl;range_from;range_to];
     .[{.qlog.dbg[x;y;z]};(source;"fetching";
         `path`range_from`range_to`source_from`source_to`tz!

@@ -358,16 +358,16 @@ test_unrealised_marks_what_is_still_open:{[t]
 test_a_desk_can_register_its_own_method:{[t]
     / The point of the open/pick factoring: a new method is two existing
     / pieces and a name, with no change to the engine.
-    .qalloc.register[`alloctest_second; `open`pick`why!(.qalloc.append_lot; {[lots] 1}; "the second lot")];
+    .qalloc.define[`alloctest_second; `open`pick`why!(.qalloc.append_lot; {[lots] 1}; "the second lot")];
     trades:mk_two_lots[];
     .qunit.assertEquals[exec open_id from .qalloc.allocate[trades;`alloctest_second]; enlist 1;
         "the custom pick chose the lot it said it would"];
-    .qunit.assertTrue[`alloctest_second in .qalloc.registered[];
+    .qunit.assertTrue[`alloctest_second in .qalloc.defined[];
         "and the method shows up in the registry"]};
 
 test_why_is_optional_and_always_stored:{[t]
-    .qalloc.register[`alloctest_nowhy; `open`pick!(.qalloc.append_lot; .qalloc.pick_first)];
-    .qunit.assertEquals[.qalloc.method[`alloctest_nowhy]`why; "";
+    .qalloc.define[`alloctest_nowhy; `open`pick!(.qalloc.append_lot; .qalloc.pick_first)];
+    .qunit.assertEquals[.qalloc.def[`alloctest_nowhy]`why; "";
         "a method registered without a description still has the key, so every stored method is the same shape"]};
 
 test_a_malformed_method_is_refused_at_registration:{[t]
@@ -380,7 +380,7 @@ test_a_malformed_method_is_refused_at_registration:{[t]
     .qunit.assertThrows[.qalloc.require_method; 42; "*must be a dictionary*"; "and the method has to be a dict"]};
 
 test_an_unregistered_method_names_what_is_available:{[t]
-    .qunit.assertThrows[.qalloc.method; `nonesuch; "*not a registered matching method*";
+    .qunit.assertThrows[.qalloc.def; `nonesuch; "*not a registered matching method*";
         "looking up a method that does not exist says so"]};
 
 / ------------------------------------------------------------- REFUSALS

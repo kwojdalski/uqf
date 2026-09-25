@@ -77,9 +77,9 @@ register:{[job;decl]
 
 / A job's spec, or a refusal naming it.
 / @throws error when the job was never registered
-declaration:{[job]
+def:{[job]
     if[not job in key jobs;
-        '"declaration: ",string[job]," is not a registered job"];
+        '"def: ",string[job]," is not a registered job"];
     jobs job}
 
 / Forget every registration. For tests, and for rebuilding the graph after
@@ -90,18 +90,18 @@ reset:{[] jobs::(`symbol$())!(); ()}
 registry:{[]
     js:asc key jobs;
     ([] job:js;
-        kind:{(declaration x)`kind} each js;
-        inputs:{(declaration x)`inputs} each js;
-        outputs:{(declaration x)`outputs} each js)}
+        kind:{(def x)`kind} each js;
+        inputs:{(def x)`inputs} each js;
+        outputs:{(def x)`outputs} each js)}
 
 / ---------------------------------------------------------------- GRAPH
 
 / Which jobs write this table? Empty means nothing here produces it, which
 / makes it an external input rather than an error.
-producers:{[table_name] js:key jobs; js where {[t;j] t in (declaration j)`outputs}[table_name] each js}
+producers:{[table_name] js:key jobs; js where {[t;j] t in (def j)`outputs}[table_name] each js}
 
 / Which jobs read this table?
-consumers:{[table_name] js:key jobs; js where {[t;j] t in (declaration j)`inputs}[table_name] each js}
+consumers:{[table_name] js:key jobs; js where {[t;j] t in (def j)`inputs}[table_name] each js}
 
 / Private: the empty edge table, so every return path has one shape.
 no_edges:{[] ([] upstream:`symbol$(); tbl:`symbol$(); downstream:`symbol$())}
@@ -115,7 +115,7 @@ edges:{[]
     js:key jobs;
     if[0=count js; :no_edges[]];
     e:raze {[j]
-        ins:(declaration j)`inputs;
+        ins:(def j)`inputs;
         if[0=count ins; :no_edges[]];
         raze {[j;t]
             ps:producers t;
@@ -128,12 +128,12 @@ edges:{[]
 
 / Tables read by some job and written by none - where data enters.
 external_inputs:{[]
-    ins:distinct raze {(declaration x)`inputs} each key jobs;
+    ins:distinct raze {(def x)`inputs} each key jobs;
     ins where 0=count each producers each ins}
 
 / Tables written by some job and read by none - where data comes to rest.
 sinks:{[]
-    outs:distinct raze {(declaration x)`outputs} each key jobs;
+    outs:distinct raze {(def x)`outputs} each key jobs;
     outs where 0=count each consumers each outs}
 
 / Private: job-level dependency pairs, with external entry points dropped -
@@ -278,7 +278,7 @@ adopt_workers:{[]
     ws:key .qbw.worker_cfg;
     {[w]
         cfg:.qbw.worker_cfg w;
-        d:.qsrc.declaration cfg`source;
+        d:.qsrc.def cfg`source;
         register[w;`kind`inputs`outputs!
             (`bounded; external_ref[cfg`source;d`table_name]; d`target)]
       } each ws;

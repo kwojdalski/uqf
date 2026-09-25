@@ -201,7 +201,7 @@ define:{[worker;decl]
     / malformed manager should fail at declaration, not halfway through a
     / backfill having already fetched a window it is now unable to store.
     .qio.for_cfg decl;
-    .qsrc.declaration decl`source;
+    .qsrc.def decl`source;
     require_transform[worker;decl];
 
     / Refuse two workers filling one dataset AND PARTITION (#60, #185).
@@ -281,12 +281,12 @@ require_transform:{[worker;cfg]
     who:"define: ",string[worker];
     if[not -11h=type cfg`transform;
         'who,"'s transform must be the name of a .qxf transform"];
-    d:.qxf.declaration cfg`transform;
+    d:.qxf.def cfg`transform;
     if[not 1=count d`inputs;
         'who,"'s transform ",string[cfg`transform]," must read exactly one input, the fetched batch"];
     if[d`as_of;
         'who,"'s transform ",string[cfg`transform]," takes as_of, which a bounded window cannot supply"];
-    src:.qsrc.declaration cfg`source;
+    src:.qsrc.def cfg`source;
     contract:flip (src`columns)!{[c] $[c within "AZ"; (); c$()]} each src`types;
     p:.qxf.problems[contract;first value d`inputs;0b];
     if[count p;
@@ -301,16 +301,16 @@ normalised:{[cfg]
 
 / One worker's configuration, or a refusal naming it.
 / .
-/ Throws rather than returning a null for the same reason .qsrc.declaration
+/ Throws rather than returning a null for the same reason .qsrc.def
 / does: a caller handed an empty dict fails later and somewhere else.
 / @param worker the defined worker's name, as a symbol
 / @return the config dict (source, dataset, width, transform, partition,
 /   and the derived ns)
 / @throws error naming the worker when define was never called for it
-/ @eg .qbw.declaration `demo_deals_backfill
-declaration:{[worker]
+/ @eg .qbw.def `demo_deals_backfill
+def:{[worker]
     if[not worker in key worker_cfg;
-        '"declaration: ",string[worker]," has no configuration - call .qbw.define first"];
+        '"def: ",string[worker]," has no configuration - call .qbw.define first"];
     worker_cfg worker}
 
 / One worker's partition, resolved.
@@ -322,7 +322,7 @@ declaration:{[worker]
 / @param worker the defined worker's name
 / @return its partition symbol, ` when it declared none
 / @eg .qbw.partition_of `demo_deals_backfill
-partition_of:{[worker] (declaration worker)`partition}
+partition_of:{[worker] (def worker)`partition}
 
 / ------------------------------------------------------- WORKER STATE
 
@@ -334,8 +334,8 @@ partition_of:{[worker] (declaration worker)`partition}
 / load time and aborts the rest of the file - leaving .qbw half-populated
 / while the enclosing script carries on. Seventh reserved-name collision in
 / this repository, after desc, tables, sv, load, var and save.
-read_state:{[worker;nm] value ` sv ((declaration worker)`ns),nm}
-write_state:{[worker;nm;v] (` sv ((declaration worker)`ns),nm) set v}
+read_state:{[worker;nm] value ` sv ((def worker)`ns),nm}
+write_state:{[worker;nm;v] (` sv ((def worker)`ns),nm) set v}
 
 / Private: one of the worker's own methods - the inherited delegate, or the
 / worker's override. run and do_window go through here rather than calling
@@ -361,7 +361,7 @@ spec:{[worker] `source_version`range_from`range_to!read_state[worker] each `sour
 / @param run_spec dict of source_version, range_from, range_to
 / @return the run specification, as stored
 init:{[worker;run_spec]
-    cfg:declaration worker;
+    cfg:def worker;
     write_state[worker;`source_version;run_spec`source_version];
     write_state[worker;`range_from;run_spec`range_from];
     write_state[worker;`range_to;run_spec`range_to];
@@ -403,7 +403,7 @@ init:{[worker;run_spec]
     / `odbc`, not `var`: var is a q builtin (variance).
     live:.qsrc.has_credentials cfg`source;
     if[not live;
-        odbc:`odbc~(.qsrc.declaration cfg`source)`transport;
+        odbc:`odbc~(.qsrc.def cfg`source)`transport;
         .qlog.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so the secret stays off the command line";
             `variable`expects`example!(
                 .qsrc.credential_var cfg`source;
@@ -427,9 +427,9 @@ init:{[worker;run_spec]
 / The source's transport picks the opener: an ipc credential is host:port,
 / an odbc credential is a connection string.
 connect:{[worker]
-    source:(declaration worker)`source;
+    source:(def worker)`source;
     cred:.qsrc.require_credentials source;
-    transport:(.qsrc.declaration source)`transport;
+    transport:(.qsrc.def source)`transport;
     .qlog.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
     opener:$[`odbc~transport;
         {.qodbc.open x};
@@ -453,7 +453,7 @@ empty_windows:{[] ([] range_from:`timestamp$(); range_to:`timestamp$())}
 / coverage the cursor had already passed. The body changed and the header did
 / not, so the two disagreed about the thing the function is for.
 plan:{[worker;cursor]
-    cfg:declaration worker;
+    cfg:def worker;
     s:spec worker;
     / ONE as_of for the whole plan, captured here rather than read per call
     / Calling .z.p inside each coverage read would plan against a
@@ -504,7 +504,7 @@ plan:{[worker;cursor]
 / missing column reads as a NULL in most q code, so without this the worker
 / publishes nulls and records the window as covered.
 fetch:{[worker;from_ts;to_ts]
-    cfg:declaration worker;
+    cfg:def worker;
     h:read_state[worker;`handle];
     r:.qwrt.with_retry[.qwrt.policy[];
         {[source;h;from_ts;to_ts] last .qsrc.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts]];
@@ -521,8 +521,8 @@ fetch:{[worker;from_ts;to_ts]
 / is legal and meaningful: an empty window is positive evidence the
 / range was examined and held nothing.
 publish:{[worker;batch]
-    cfg:declaration worker;
-    t:.qsrc.declaration[cfg`source]`target;
+    cfg:def worker;
+    t:.qsrc.def[cfg`source]`target;
     .qio.write[.qio.for_cfg cfg;t;batch]}
 
 / Save the cursor. Present because the contract requires it; the
@@ -626,7 +626,7 @@ end_run:{[state] @[{.qrun.finish x};state;{[e] (::)}]}
 / @throws error when a declared check is not callable, or returns a
 /   non-table, naming the worker
 run_check:{[worker;batch]
-    cfg:declaration worker;
+    cfg:def worker;
     if[not `check in key cfg; :no_failures[]];
     c:cfg`check;
     if[(::)~c; :no_failures[]];
@@ -652,8 +652,8 @@ no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 / @return the transformed batch
 / @throws whatever the transform throws, or a schema refusal from .qxf
 transform_batch:{[worker;batch]
-    cfg:declaration worker;
-    columns:(.qsrc.declaration cfg`source)`columns;
+    cfg:def worker;
+    columns:(.qsrc.def cfg`source)`columns;
     nm:cfg`transform;
     .qxf.apply[nm;(.qxf.input_names nm)!enlist columns#batch]}
 
@@ -667,7 +667,7 @@ transform_batch:{[worker;batch]
 / @return 1b when the window completed, 0b when it failed and the run
 /   should continue with the next one
 do_window:{[worker;w]
-    cfg:declaration worker;
+    cfg:def worker;
     .qlog.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
     f:own[worker;`fetch][w`range_from;w`range_to];
     if[`failed~f`state;
@@ -829,7 +829,7 @@ publish_last_batch:{[worker;unused] own[worker;`publish] read_state[worker;`last
 / release_lock is a no-op when not held.
 cleanup:{[worker]
     h:read_state[worker;`handle];
-    closer:$[`odbc~(.qsrc.declaration (declaration worker)`source)`transport;
+    closer:$[`odbc~(.qsrc.def (def worker)`source)`transport;
         .qodbc.close;
         {[h] @[hclose;h;::]}];
     if[not null h; closer h; write_state[worker;`handle;0Ni]];

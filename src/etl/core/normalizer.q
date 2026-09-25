@@ -93,7 +93,7 @@ define:{[name;decl]
 check_source:{[who;out;src;xf]
     if[not xf in key .qxf.registry;
         'who,": source ",string[src]," maps through transform ",string[xf],", which is not registered - a mapping is a declared transform, so its examples are verified"];
-    d:.qxf.declaration xf;
+    d:.qxf.def xf;
     if[1<>count d`inputs;
         'who,": source ",string[src],"'s transform ",string[xf]," takes ",string[count d`inputs]," inputs - a mapping reads one source"];
     p:.qxf.problems[out;d`output;1b];
@@ -105,10 +105,10 @@ check_source:{[who;out;src;xf]
 / @param name the normalizer
 / @return the declaration dict
 / @throws error when nothing was defined under that name
-/ @eg .qnorm.declaration[`executions]`input
-declaration:{[name]
+/ @eg .qnorm.def[`executions]`input
+def:{[name]
     if[not name in key registry;
-        '"declaration: ",string[name]," is not a defined normalizer - defined: ",", " sv string key registry];
+        '"def: ",string[name]," is not a defined normalizer - defined: ",", " sv string key registry];
     first registry name}
 
 / Every defined normalizer.
@@ -130,12 +130,12 @@ defined:{[] key registry}
 / @throws error when src is not one of the normalizer's sources, or the batch lacks a declared column
 / @eg cols .qnorm.normalize[`executions;`trades;([] time:enlist 2026.09.17D10:00:00; sym:enlist `EURUSD; side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000)]
 normalize:{[name;src;batch]
-    d:declaration name;
+    d:def name;
     srcs:d`input;
     if[not src in key srcs;
         '"normalize: ",string[src]," is not a source of ",string[name]," - its sources are ",", " sv string key srcs];
     xf:srcs src;
-    ins:.qxf.declaration[xf]`inputs;
+    ins:.qxf.def[xf]`inputs;
     want:cols first value ins;
     .qschema.require_cols[`normalize;`$(string src)," batch for ",string name;batch;want];
     .qxf.apply[xf;(enlist first key ins)!enlist want#batch]}
@@ -147,7 +147,7 @@ normalize:{[name;src;batch]
 / the plant delivers only what was subscribed to, so this can only happen
 / from a test or a hand call, and neither should take the job down.
 dispatch:{[name;t;x]
-    if[not t in key declaration[name]`input; :()];
+    if[not t in key def[name]`input; :()];
     if[0=count x; :()];
     rows:normalize[name;t;x];
     if[0=count rows; :()];

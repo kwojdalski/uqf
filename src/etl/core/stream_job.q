@@ -143,10 +143,10 @@ define:{[job;decl]
 / @param job the job's name
 / @return the declaration dict
 / @throws error naming the job when register was never called for it
-/ @eg .qstream.declaration[`markout]`subscribe_to  ->  `trades`quote
-declaration:{[job]
+/ @eg .qstream.def[`markout]`subscribe_to  ->  `trades`quote
+def:{[job]
     if[not job in key jobs;
-        '"declaration: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];
+        '"def: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];
     first jobs job}
 
 / The job a TorQ process runs, by the name the process was started under.
@@ -180,8 +180,8 @@ defined:{[] key jobs}
 wire:{[job;publisher]
     if[not is_callable publisher;
         '"wire: ",string[job],"'s publisher must be callable as (table; rows) - a lambda or a projection over one"];
-    (` sv (declaration[job]`ns),`publish) set publisher;
-    .[{.qlog.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist declaration[job]`publishes);::];
+    (` sv (def[job]`ns),`publish) set publisher;
+    .[{.qlog.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist def[job]`publishes);::];
     job}
 
 / ------------------------------------------------------------ THE BUFFER

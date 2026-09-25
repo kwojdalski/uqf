@@ -192,7 +192,7 @@ test_tickerplant_routes_all_three_processes_using_the_real_schemas:{[t]
         output:get ` sv `.qsub,job,job;
         .qtick.schema[job;([] time:`timestamp$()),'output];
         .qstream.wire[job;.qtick.publish];
-        d:.qstream.declaration job;
+        d:.qstream.def job;
         .qtick.subscribe[d`subscribe_to;{[handler;msg] handler . 1_msg}[d`on_batch]];
         } each `market_data`superbook`arbitrage;
     .qtick.subscribe[enlist `arbitrage;{[msg] .sbtest.record[msg 1;msg 2]}];

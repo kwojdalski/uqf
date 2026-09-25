@@ -260,6 +260,13 @@ One word per concept, so a signature reads the same in every module:
   | a time window                                             | `range_from`, `range_to`  | `start_ts`, `end_ts` |
   | a function to run (under a lock, retry, timer)            | `f`                       | `fn`                 |
 
+A registry's three verbs are `define` (declare one), `defined[]` (list them) and
+`def[x]` (read one back) - `.qsrc`, `.qstream`, `.qbw`, `.qnorm`, `.qxf`,
+`.qdag` and `.qalloc` alike. The lookup is `def` and not `decl` on purpose:
+callers write `decl:def x`, and a function named `decl` would be shadowed by
+that local for the whole body - the right-hand side would read the unset local
+instead of calling the lookup (the `d1v` trap above).
+
 `spec` is kept for one thing only: a bounded run's spec (`spec_fn`). `cfg` names
 the stored worker registry (`worker_cfg`, `required_cfg`), not the argument
 `define` takes.

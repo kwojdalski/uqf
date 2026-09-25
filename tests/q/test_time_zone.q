@@ -204,7 +204,7 @@ test_the_over_fetch_does_not_publish_neighbouring_rows:{[t]
 
 / The zone is a per-source declaration, because only the source knows it.
 test_the_demo_source_declares_its_zone:{[t]
-    .qunit.assertEquals[(.qsrc.declaration `demo_deals)`tz;`UTC;"the zone is a claim the source makes, which validate_live can be run against"]};
+    .qunit.assertEquals[(.qsrc.def `demo_deals)`tz;`UTC;"the zone is a claim the source makes, which validate_live can be run against"]};
 
 / A UTC source takes the identity path: no table, no lookup, no conversion.
 / That matters because it is the path every source in this tree takes, so a

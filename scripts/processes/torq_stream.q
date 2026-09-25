@@ -73,7 +73,7 @@ upd:{[t;x]
 / @param job the job's name
 / @return the job name
 run:{[job]
-    decl:.qstream.declaration job;
+    decl:.qstream.def job;
     `.qproc.stream.job set job;
     / Before anything that can block, so a process stuck waiting for the
     / tickerplant has already said what it was about to do.
