@@ -24,6 +24,15 @@
 / .qetl.io.memory, and the rows are in a crypto_market_data table in that
 / process.
 / .
+/ A CAPTURE RECORDED TODAY CANNOT BE BACKFILLED TODAY, and that is the
+/ architecture rather than a limitation of this worker. .qetl.io.hdb refuses a
+/ batch dated today or later - "today and later belong to the tickerplant and
+/ end-of-day, not a backfill" - so pointing this at a cryptorust capture that
+/ is still being recorded and asking for today's range fails at the write,
+/ after the fetch and the quality gate have both passed. Backfill yesterday
+/ and earlier; today's rows reach the same stack through the live path, which
+/ is what crypto_book and crypto_mock are.
+/ .
 / RELATED, AND DELIBERATELY NOT THE SAME TABLE. crypto_book is the live path -
 / cryptorust's kdb-market-data-recorder publishes it, and crypto_mock stands
 / in when cryptorust is not running. This worker's target carries the venue

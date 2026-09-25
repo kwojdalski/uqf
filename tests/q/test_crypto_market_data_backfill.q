@@ -13,8 +13,10 @@
 
 \d .crypto_market_databftest
 
-/ Hour n of 2026.09.25, the day of the capture the fixture is drawn from.
-h:{[n] 2026.09.25D00:00:00.000000000+n*0D01}
+/ Hour n of 2026.09.11, the fixture's date. Earlier than the 2026.09.25
+/ capture it is drawn from, because .qetl.io.hdb refuses rows dated today or
+/ later - see the source's fixture.
+h:{[n] 2026.09.11D00:00:00.000000000+n*0D01}
 
 spec_for:{[version;from_n;to_n]
     `source_version`range_from`range_to!(version;.crypto_market_databftest.h from_n;.crypto_market_databftest.h to_n)}
@@ -51,15 +53,15 @@ tearDown_release:{[] .qpipe.job.crypto_market_data_backfill.cleanup[];}
 
 test_a_bound_rounds_up_to_the_millisecond:{[t]
     .qunit.assertEquals[.qpipe.source.crypto_market_data.epoch_ms_bound[.crypto_market_databftest.h 21];
-        "1790370000000";
+        "1789160400000";
         "a whole millisecond is itself"];
     .qunit.assertEquals[.qpipe.source.crypto_market_data.epoch_ms_bound[1+.crypto_market_databftest.h 21];
-        "1790370000001";
+        "1789160400001";
         "one nanosecond past it is the NEXT millisecond - flooring here would refetch the one before on every window"]};
 
 test_the_window_is_half_open:{[t]
     sql:.qpipe.source.crypto_market_data.sql_for[.crypto_market_databftest.h 21;.crypto_market_databftest.h 22];
-    .qunit.assertTrue[sql like "* WHERE timestamp_ms >= 1790370000000 AND timestamp_ms < 1790373600000 *";
+    .qunit.assertTrue[sql like "* WHERE timestamp_ms >= 1789160400000 AND timestamp_ms < 1789164000000 *";
         ">= the lower bound and < the upper, so a row on a boundary is fetched once"]};
 
 test_the_bound_is_not_a_function_of_the_column:{[t]
@@ -146,7 +148,7 @@ test_the_fixture_passes_the_quality_check:{[t]
     .qunit.assertEquals[count .qpipe.job.crypto_market_data_backfill.quality_check b;0;"six recorded rows, no failures"]};
 
 test_the_quality_check_names_a_crossed_book:{[t]
-    f:update bid_price_1:84000f from .qpipe.source.crypto_market_data.fixture[] where sym=`$"BTC-USD", source_time<2026.09.25D22:00;
+    f:update bid_price_1:84000f from .qpipe.source.crypto_market_data.fixture[] where sym=`$"BTC-USD", source_time<2026.09.11D22:00;
     r:.qpipe.job.crypto_market_data_backfill.quality_check .qpipe.transform.crypto_market_data.to_book f;
     .qunit.assertEquals[r`check;enlist `crossed_book;"a bid above the ask in a snapshot means the levels were paired wrong"]};
 
@@ -178,6 +180,12 @@ test_facts_report_the_wire_lag:{[t]
 test_facts_survive_an_empty_window:{[t]
     f:.qpipe.job.crypto_market_data_backfill.facts .qpipe.transform.crypto_market_data.book;
     .qunit.assertEquals[f`window;"empty window";"a zero-row window is legal and says so"]};
+
+/ --- the fixture is backfillable ---------------------------------------
+
+test_the_fixture_is_dated_before_today:{[t]
+    .qunit.assertTrue[all .z.d>`date$.qpipe.source.crypto_market_data.fixture[]`source_time;
+        ".qetl.io.hdb refuses a batch dated today or later, so a fixture carrying the capture's own date would make the HDB path undemonstrable on exactly the day it was written"]};
 
 / --- a full pass on the fixture ----------------------------------------
 
