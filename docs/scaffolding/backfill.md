@@ -69,14 +69,13 @@ security review exists to make.
 It is the frontend's guarantee that no caller input reaches query text, and
 [`source_contract.q`](../../src/etl/core/source_contract.q) applies it here on
 the grounds that *"a source adapter is the same problem with a less friendly
-input"*. The rule has no `ETL-nn` of its own --- the scaffold cited one for
-months, and it resolved to the interval rule below.
+input"*.
 
-**The window is half-open `[from;to)` (ETL-08)** --- `>=` on the lower bound,
-`<` on the upper. Include the start, exclude the end, reject empty and reversed
-intervals, compose adjacent windows only at their common boundary. One wrong
-operator double-publishes every boundary row, and the duplicate surfaces far
-from here, in a number that is quietly too big.
+**The window is half-open `[from;to)`** --- `>=` on the lower bound, `<` on the
+upper. Include the start, exclude the end, reject empty and reversed intervals,
+compose adjacent windows only at their common boundary. One wrong operator
+double-publishes every boundary row, and the duplicate surfaces far from here,
+in a number that is quietly too big.
 
 Two rules, two numbers, both on `query`. Keeping them apart is why the generated
 file states them in separate paragraphs.
@@ -124,8 +123,8 @@ facts:{[batch]
 
 `facts` is what the run saw beyond its row count --- a row count alone reads a
 partial extract as success. **Every aggregate must survive an empty batch**: a
-zero-row window is legal and is recorded deliberately (ETL-07), because "ran,
-found nothing" and "never ran" must not look the same in the coverage ledger.
+zero-row window is legal and is recorded deliberately, because "ran, found
+nothing" and "never ran" must not look the same in the coverage ledger.
 
 ## Running it
 

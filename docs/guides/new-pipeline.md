@@ -22,8 +22,7 @@ be a `\l` line per file --- twenty-six of them, a hand-kept copy of `ls` whose
 failure mode was a file nobody loaded.
 
 Everything else follows from those. Why it is shaped this way is [the pipeline
-philosophy](../architecture/pipeline-philosophy.md); what the framework
-guarantees is [ETL-nn](../reference/etl-framework-requirements.md).
+philosophy](../architecture/pipeline-philosophy.md).
 
 ## Scaffolding it
 
@@ -334,10 +333,10 @@ supplied `ns` key is refused. So
 `key `.qwrk` lists every loaded worker, and a worker has one name rather than a name and an abbreviation to keep in step. The library's own modules stay flat (`.qbw`, `.qmatz`, `.qsrc\`);
 the nesting marks the line between the framework and what runs on it.
 
-**The contract's names are stamped by `define`, not written by you.** ETL-01
-requires `source_version`, `range_from` and `range_to` to be names in *this*
-namespace, so that "is this worker complete" is a check rather than a
-code-review question --- and `.qbw.define` writes them there, along with
+**The contract's names are stamped by `define`, not written by you.** The
+lifecycle contract requires `source_version`, `range_from` and `range_to` to be
+names in *this* namespace, so that "is this worker complete" is a check rather
+than a code-review question --- and `.qbw.define` writes them there, along with
 `handle`, the run accumulators, and the eight methods (`init`, `plan`, `fetch`,
 `publish`, `checkpoint`, `spec`, `run`, `cleanup`), each a one-line delegate to
 the shell with the shell's own parameter names:
@@ -600,7 +599,7 @@ and therefore announces nothing.
 
 **Who should react is derivable; what they should do is not.** `.qdag` already
 knows which jobs read a dataset ---
-`.qreact.dag_consumers[`demo_deals\]` names them — but running a downstream worker needs a `source_version`, which is a decision about which release of the upstream data the run claims (ETL-09). No framework can invent one, so the graph tells you who to wire and the handler says what running means. `.qreact.audit\[\]\`
+`.qreact.dag_consumers[`demo_deals\]` names them — but running a downstream worker needs a `source_version`, which is a decision about which release of the upstream data the run claims. No framework can invent one, so the graph tells you who to wire and the handler says what running means. `.qreact.audit\[\]\`
 lists graph edges with no reaction behind them, and reactions on datasets the
 graph does not know.
 

@@ -169,7 +169,7 @@ pipeline](docs/guides/new-pipeline.md) walks one through end to end.
 
 `all` is every lane except `coverage` and the two that reach outside the
 process: `smoke`, which checks a live external source's metadata against its
-declared contract (ETL-20) and so needs credentials and a reachable source, and
+declared contract and so needs credentials and a reachable source, and
 `stack-smoke`, which restarts the fleet and watches it.
 
 ## Components
@@ -187,9 +187,7 @@ usually belongs to exactly one.
   | **Database metadata**       | [`src/metadata/`](src/metadata)                                                                                              | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable group-by breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md)                                                                                                                                                             |
 
 How `src/etl/` maps onto a Dagster-shaped framework is
-[pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md); the
-contract CI holds it to is
-[etl-framework-requirements.md](docs/reference/etl-framework-requirements.md).
+[pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md).
 
 Authority is split deliberately between them: q and TorQ own process startup,
 source reads and coverage; Airflow owns ordering, retries and alerting. Neither

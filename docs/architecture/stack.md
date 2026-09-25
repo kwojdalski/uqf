@@ -47,8 +47,8 @@ They are declared processes so that **starting one wires it to discovery**: TorQ
 registers a declared process at startup, so a running backfill is visible in
 `.servers.SERVERS` and can be found by proctype `backfill`. Before that they
 were spawned ad hoc and were invisible to the fleet. `startwithall=0` on both ---
-a backfill is a bounded job triggered with a window range (ETL-15 gives that
-trigger to Airflow), not part of the stack `uqs start` brings up.
+a backfill is a bounded job triggered with a window range (by Airflow, which
+owns scheduling), not part of the stack `uqs start` brings up.
 
 For the authoritative per-process table - ports, scripts, the table each owns,
 and its subscribe/publish edges - see [processes.md](../reference/processes.md),

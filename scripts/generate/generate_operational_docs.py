@@ -167,7 +167,7 @@ def render() -> str:
         "",
         "Unmodified TorQ Finance Starter Pack processes. uqf never edits the",
         "vendored `process.csv`; `bootstrap()` regenerates an overlay copy that",
-        "appends the rows above (ETL-17).",
+        "appends the rows above.",
         "",
         ", ".join(f"`{n}`" for n in vendored),
         "",

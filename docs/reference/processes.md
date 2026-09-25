@@ -92,6 +92,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 
 Unmodified TorQ Finance Starter Pack processes. uqf never edits the
 vendored `process.csv`; `bootstrap()` regenerates an overlay copy that
-appends the rows above (ETL-17).
+appends the rows above.
 
 `discovery1`, `stp1`, `rdb1`, `hdb1`, `hdb2`, `wdb1`, `sort1`, `gateway1`, `killtick`, `monitor1`, `tpreplay1`, `housekeeping1`, `reporter1`, `filealerter1`, `feed1`, `sctp1`, `sortworker1`, `sortworker2`, `metrics1`, `dqc1`, `dqcdb1`, `dqe1`, `dqedb1`

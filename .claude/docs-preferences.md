@@ -136,6 +136,13 @@ or to the code that enforces the rule.
 > Chosen over leaving them dangling: strip every `FE-nn` and `B0`..`B5` phase
 > label, keep the sentence's own rule, and where a note needs a pointer, point
 > at `src/etl/core/source_contract.q`, which enforces it.
+>
+> *2026-09-25.* Asked: "remove etl framework requirements doc ... and all
+> references ... at least not in docs".
+> `docs/reference/etl-framework-requirements.md` went the same way: every link
+> to it and every `ETL-nn` citation in `docs/`, the README and `.claude/`
+> removed, each sentence keeping its rule. The ~300 `ETL-nn` citations in code
+> comments and error messages were left, as asked.
 
 **No prescriptive meta-rules about the documentation process itself.** Describe
 what is, not how future documents must be filed.
