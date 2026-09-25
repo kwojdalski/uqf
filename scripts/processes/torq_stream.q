@@ -117,10 +117,10 @@ run:{[job]
     / It publishes through the job's OWN publish seam, so the table is
     / declared in the job's .qstream.define like any other output and
     / verify_pipeline_edges needs no exemption.
-    if[count .qcfgaudit.watching job;
-        `.qcfgaudit.owner_here set job;
-        .qpipe.safe_timer[`$(string job),"_config";.qcfgaudit.period;
-            `.qcfgaudit.poll_and_publish;
+    if[count .qaudit.watching job;
+        `.qaudit.owner_here set job;
+        .qpipe.safe_timer[`$(string job),"_config";.qaudit.period;
+            `.qaudit.poll_and_publish;
             "Audit ",(string job)," configuration changes"]];
     .qlog.info[`qproc;"streaming job wired - running";
         `job`subscribe_to`publishes!(job;decl`subscribe_to;decl`publishes)];

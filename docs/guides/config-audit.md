@@ -4,7 +4,7 @@ Someone sets `.qsub.cross_arbitrage.notional` to 5,000,000 over IPC at 14:32. An
 hour later the edges in `cross_arbitrage` look different. Nothing records the
 connection between those two facts.
 
-`.qcfgaudit` records the value side of it, into a `config_change` table.
+`.qaudit` records the value side of it, into a `config_change` table.
 
 ```q
 q) select from config_change where name like "*notional*"
@@ -32,7 +32,7 @@ need auditing.
 So the only approach that cannot be bypassed is to look periodically and
 compare. The cost is real and worth stating: **a change made and reverted inside
 one poll interval is never seen**, and a change's timestamp is when it was
-*noticed*, not when it happened. `.qcfgaudit.period` is 5 seconds.
+*noticed*, not when it happened. `.qaudit.period` is 5 seconds.
 
 ## Who changed it
 
@@ -57,7 +57,7 @@ expensive. So a job names its own tunables, in its own file, beside their
 definitions:
 
 ```q
-.qcfgaudit.watch[`cross_arbitrage;
+.qaudit.watch[`cross_arbitrage;
     `.qsub.cross_arbitrage.notional`.qsub.cross_arbitrage.max_skew];
 ```
 
@@ -95,7 +95,7 @@ that was there.
 Two lines, in the file that owns it:
 
 ```q
-.qcfgaudit.watch[`my_job;`.qsub.my_job.my_tunable];
+.qaudit.watch[`my_job;`.qsub.my_job.my_tunable];
 ```
 
 and `config_change` in that job's `.qstream.define` publishes. Nothing else ---

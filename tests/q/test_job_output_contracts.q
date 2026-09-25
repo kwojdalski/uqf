@@ -65,9 +65,9 @@ unowned:enlist[`quote]!enlist
 / need the enlist .tabletest.not_exchanged explains.
 not_built:(
     (`superbook;`config_change;
-        "published by .qcfgaudit through the job's own publish when its config changes, not by its handlers");
+        "published by .qaudit through the job's own publish when its config changes, not by its handlers");
     (`cross_arbitrage;`config_change;
-        "the same .qcfgaudit publication"))
+        "the same .qaudit publication"))
 
 / --- the comparison -------------------------------------------------------
 

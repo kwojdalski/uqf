@@ -58,7 +58,7 @@ arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:
 / BEFORE filtering on active.
 cross_arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$(); fully_filled:`boolean$(); skew:`timespan$())
 
-/ An audit trail of runtime configuration changes (.qcfgaudit). `old` is
+/ An audit trail of runtime configuration changes (.qaudit). `old` is
 / empty on a name's first observation, which is the row that says what the
 / process STARTED with. Values are -3! renderings, because one column has to
 / hold a timespan, a float and a symbol list. WHO made a change is not here:
