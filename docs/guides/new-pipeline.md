@@ -22,7 +22,9 @@ be a `\l` line per file --- twenty-six of them, a hand-kept copy of `ls` whose
 failure mode was a file nobody loaded.
 
 Everything else follows from those. Why it is shaped this way is [the pipeline
-philosophy](../architecture/pipeline-philosophy.md).
+philosophy](../architecture/pipeline-philosophy.md). Every key each declaration
+accepts, and what it refuses, is in [the declaration
+reference](../reference/pipeline-declarations.md).
 
 ## Scaffolding it
 

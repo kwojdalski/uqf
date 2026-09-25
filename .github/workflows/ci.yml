@@ -143,6 +143,13 @@ jobs:
         # substitute for this page.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_env_reference.py --check
+      - name: Check the pipeline declaration reference lists every key
+        # docs/reference/pipeline-declarations.md is hand-written, like the
+        # environment page, and for the same reason drifts the day a key is
+        # added or renamed. Checked in both directions against the key lists
+        # in the declaring q files.
+        if: ${{ !cancelled() }}
+        run: python3 scripts/gates/check_declaration_reference.py
 
   web:
     name: Browser application
