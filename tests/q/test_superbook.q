@@ -26,6 +26,16 @@ test_gross_opportunity_has_direction_quantity_and_quote_currency_profit:{[t]
     .testutil.assertApprox[r`gross_edge;0.001;1e-12;"bid minus ask"];
     .testutil.assertApprox[r`gross_profit;0.06;1e-12;"60 EUR times 0.001 USD per EUR"]};
 
+test_side_levels_takes_a_book_side:{[t]
+    / `bid/`ask, not 1/-1 (#415): 1 means a BUY elsewhere in the library, and
+    / a buy executes against the ask, so the integer read backwards.
+    rows:0!state[];
+    .qunit.assertEquals[(.qsub.superbook.side_levels[rows;`bid])`price;1.101 1.099 1.098 1.097;"`bid is the bids, best first"];
+    .qunit.assertEquals[(.qsub.superbook.side_levels[rows;`ask])`price;1.100 1.102 1.103 1.104;"`ask is the asks, best first"];
+    {[r;s] .qunit.assertThrows[.qsub.superbook.side_levels[r;];s;
+        "side_levels: side must be `bid or `ask, got *";
+        "the old integer encoding and a typo are refused, not read as asks"]}[rows] each (1;-1;`aks)};
+
 test_update_replaces_a_source_instead_of_accumulating_history:{[t]
     newer:update source_time:.sbtest.d 1, bid_prices:enlist enlist 1.095 from 1#fixtures[];
     newer:update bid_sizes:enlist enlist 20f from newer;
