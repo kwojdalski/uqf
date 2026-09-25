@@ -48,7 +48,7 @@ tz:`UTC
 
 / ------------------------------------------------------------- THE QUERY
 
-/ A parameterised functional select on the remote side (ETL-08), never a
+/ A parameterised functional select on the remote side, never a
 / string. The bounds are ARGUMENTS.
 / .
 / The upstream is date-partitioned, so the partition column is constrained

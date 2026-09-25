@@ -1,5 +1,5 @@
 // test_materialisation.q - tests for src/etl/core/materialisation.q (the append-only
-// completeness ledger) and the ETL-06 checkpoint functions in
+// completeness ledger) and the checkpoint functions in
 // src/etl/core/backfill_state.q. Load src/etl/core/status.q,
 // src/etl/core/backfill_state.q, src/etl/core/materialisation.q, tests/lib/qunit.q
 // and tests/lib/testutil.q before this file.
@@ -27,7 +27,7 @@ beforeNamespace_isolate:{[]
 // test's rows.
 setUp_fresh_ledger:{[] .testutil.reset_coverage_ledger[];}
 
-/ --- interval validation (ETL-08) ------------------------------------------
+/ --- interval validation ------------------------------------------
 
 test_an_empty_interval_is_rejected:{[t]
     .qunit.assertError[{.qmatz.require_interval[x;x]};.coveragetest.d 1;"from=to covers nothing, so recording it would claim completeness for no data"]};
@@ -35,7 +35,7 @@ test_an_empty_interval_is_rejected:{[t]
 test_a_reversed_interval_is_rejected:{[t]
     .qunit.assertError[{.qmatz.require_interval[x 0;x 1]};(.coveragetest.d 2;.coveragetest.d 1);"a reversed interval is rejected at construction"]};
 
-/ --- composition: the boundary rule (ETL-08) -------------------------------
+/ --- composition: the boundary rule -------------------------------
 
 / With half-open intervals [Mon;Tue) and [Tue;Wed) are contiguous, so they
 / compose. This is the case a naive implementation gets right by accident.
@@ -60,14 +60,14 @@ test_composition_is_order_independent:{[t]
     rev:([] range_from:(.coveragetest.d 2;.coveragetest.d 1); range_to:(.coveragetest.d 3;.coveragetest.d 2));
     .qunit.assertEquals[count .qmatz.compose fwd;count .qmatz.compose rev;"composition does not depend on input order"]};
 
-/ --- recording (ETL-07) ----------------------------------------------------
+/ --- recording ----------------------------------------------------
 
 test_a_completed_window_is_recorded:{[t]
     .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 2;1234];
     .qunit.assertEquals[count .qmatz.intervals[`markouts;`;`v1;.z.p];1;"a staged window appears in the ledger"]};
 
 / The counter-intuitive requirement, and the one most likely to be
-/ optimised away by someone who has not read ETL-07: an EMPTY window is still
+/ optimised away by someone who has not read this: an EMPTY window is still
 / recorded. It is positive evidence the range was examined and held nothing,
 / which is not the same as never having been attempted.
 test_an_empty_window_is_still_recorded:{[t]
@@ -75,14 +75,14 @@ test_an_empty_window_is_still_recorded:{[t]
     .qunit.assertTrue[.qmatz.is_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 2];"a window that published nothing still counts as covered"]};
 
 test_a_null_source_version_is_refused:{[t]
-    .qunit.assertError[{.qmatz.stage_completion[`markouts;`;`;x 0;x 1;5]};(.coveragetest.d 1;.coveragetest.d 2);"coverage under one source release says nothing about another (ETL-09)"]};
+    .qunit.assertError[{.qmatz.stage_completion[`markouts;`;`;x 0;x 1;5]};(.coveragetest.d 1;.coveragetest.d 2);"coverage under one source release says nothing about another"]};
 
 test_staging_rejects_an_empty_range:{[t]
     .qunit.assertError[{.qmatz.stage_completion[`markouts;`;`v1;x;x;5]};.coveragetest.d 1;"a zero-width window cannot be recorded as coverage"]};
 
-/ --- version isolation (ETL-09, ETL-10) --------------------------------------
+/ --- version isolation --------------------------------------
 
-/ The rule ETL-10 states: intervals from different versions are NEVER merged
+/ The rule: intervals from different versions are NEVER merged
 / to satisfy a dependency. A v1 window must not make a v2 range look covered.
 test_coverage_does_not_leak_across_source_versions:{[t]
     .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 5;100];
@@ -124,7 +124,7 @@ test_require_covered_passes_when_complete:{[t]
     .qmatz.stage_completion[`markouts;`;`v1;.coveragetest.d 1;.coveragetest.d 3;5];
     .qunit.assertTrue[.qmatz.require_covered[`markouts;`;`v1;.z.p;.coveragetest.d 1;.coveragetest.d 3];"a fully covered range is admitted"]};
 
-/ --- private checkpoints (ETL-06) ------------------------------------------
+/ --- private checkpoints ------------------------------------------
 
 test_no_checkpoint_returns_null:{[t]
     .qbfstate.clear_checkpoint[`cp_absent];
@@ -136,7 +136,7 @@ test_a_matching_specification_resumes:{[t]
     .qbfstate.save_checkpoint[`cp_match;.coveragetest.spec[];(.coveragetest.d 1)+0D12];
     .qunit.assertEquals[.qbfstate.load_checkpoint[`cp_match;.coveragetest.spec[]];(.coveragetest.d 1)+0D12;"an identical run specification resumes from its cursor"]};
 
-/ ETL-06's "discard saved state when the current specification differs". A
+/ "Discard saved state when the current specification differs". A
 / cursor is only meaningful relative to the run that produced it: resuming a
 / [Sep1,Sep5) cursor into a [Sep1,Sep30) run would skip most of the range
 / while reporting progress.
@@ -155,7 +155,7 @@ test_clearing_a_checkpoint_restarts_from_the_beginning:{[t]
     .qbfstate.clear_checkpoint[`cp_clear];
     .qunit.assertTrue[null .qbfstate.load_checkpoint[`cp_clear;.coveragetest.spec[]];"a cleared checkpoint means start over"]};
 
-/ A checkpoint is private (ETL-06): it is never evidence that a dataset is
+/ A checkpoint is private: it is never evidence that a dataset is
 / complete. Completeness has exactly one channel, the etl_coverage ledger.
 test_a_checkpoint_is_not_coverage:{[t]
     .qbfstate.save_checkpoint[`cp_private;.coveragetest.spec[];.coveragetest.d 2];
@@ -367,12 +367,12 @@ test_attaching_to_a_correctly_shaped_foreign_ledger_succeeds:{[t]
     `etl_coverage set .testutil.foreign_coverage_ledger[];
     .qunit.assertEquals[.qmatz.attach[];`etl_coverage;"a foreign ledger of the right shape is accepted"]};
 
-/ --- persistence (ETL-07: durable, cross-process) --------------------------
+/ --- persistence (durable, cross-process) ---------------------------------
 
 test_a_staged_completion_reaches_disk:{[t]
     / The bug this closes: the ledger used to be an in-memory table that died
     / with the worker, so a bounded worker - which runs a range and exits -
-    / took its own coverage with it, and ETL-07's "durable cross-process
+    / took its own coverage with it, and the ledger's "durable cross-process
     / completeness" was true of nothing.
     .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     .qunit.assertEquals[count key hsym `$.qmatz.ledger_path[];1;
@@ -389,7 +389,7 @@ test_reload_restores_what_another_process_would_have_written:{[t]
 
 test_attach_reloads_so_a_worker_sees_earlier_coverage:{[t]
     / attach is the entry point .qbw.init calls, so this is the path a real
-    / worker takes. Without the reload here, coverage skipping (ETL-13) can
+    / worker takes. Without the reload here, coverage skipping can
     / never fire across runs.
     .qmatz.stage_completion[`ds1;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
     ![`.;();0b;enlist `etl_coverage];

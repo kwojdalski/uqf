@@ -11,7 +11,7 @@ and `python/uqf_frontend/tests/test_status.py`, which both parse
 
 Only the fields a sensor actually needs are exposed here (state, error,
 worker, instance_id, updated_at) — this is a narrower reader than
-uqf_frontend's, on purpose: ETL-15 says q owns run/window counts and coverage
+uqf_frontend's, on purpose: the authority split says q owns run/window counts and coverage
 too, but Airflow's poke contract has no use for them, and exposing fields
 nothing here reads is scope this increment did not need.
 """
@@ -43,7 +43,7 @@ class MalformedStatusFile(ValueError):
 
     Raised rather than silently coerced, because a sensor that guesses at a
     malformed file risks reporting Airflow-owned success or failure on data
-    it could not actually parse — exactly the kind of invented fact ETL-15
+    it could not actually parse — exactly the kind of invented fact the authority split
     forbids.
     """
 

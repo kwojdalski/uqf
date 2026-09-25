@@ -21,7 +21,7 @@ class Filter(BaseModel):
 class CoverageRequirement(BaseModel):
     """An opt-in pre-check: refuse the query unless this range is published.
 
-    ``source_version`` is mandatory, not optional, because ETL-09 requires
+    ``source_version`` is mandatory, not optional, because the framework requires
     coverage consumers to filter on it - coverage under one source release
     says nothing about another.
 
@@ -204,10 +204,10 @@ class WorkerStatusOut(BaseModel):
 class BackfillStatusResponse(BaseModel):
     """What q reports about its own backfill runs.
 
-    Carries only facts q owns per ETL-15 - startup, source reads, failures,
+    Carries only facts q owns under the authority split - startup, source reads, failures,
     checkpoints, run and window counts. Airflow's facts (task ordering,
     retries, timeouts, concurrency) are deliberately absent: inferring them
-    from these files is the cross-layer inference ETL-15 forbids.
+    from these files is the cross-layer inference the authority split forbids.
     """
 
     summary: dict[str, int] = Field(
@@ -332,7 +332,7 @@ class WorkerConfigResponse(BaseModel):
 class BackfillRequest(BaseModel):
     """Run a bounded worker over a range.
 
-    Every field is required and none has a default. ETL-02 at the HTTP
+    Every field is required and none has a default. The explicit-range rule at the HTTP
     surface: a backfill that guessed a range would publish the wrong window
     and record it as covered.
     """

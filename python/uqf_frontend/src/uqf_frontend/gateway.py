@@ -4,7 +4,7 @@ Reuses the kola IPC pattern already proven in this repo by
 ``uqs.stack.runtime.query()`` rather than introducing a second mechanism.
 
 ``Gateway`` is a Protocol so that tests run with a fake and no q process.
-That is the same posture ETL-19 takes on the q side: double the adapters at
+That is the same posture the q-side test doubles take: double the adapters at
 the edges, test the logic in the middle directly.
 """
 

@@ -153,7 +153,7 @@ class Settings:
         """Build settings from UQF_FRONTEND_* environment variables.
 
         Fails loudly on a malformed numeric value rather than silently
-        falling back to a default, matching the config posture in ETL-14
+        falling back to a default, matching the q side's config posture
         (refuse to start rather than start misconfigured).
         """
         base_port = _int_env("UQF_FRONTEND_BASE_PORT", cls.base_port)

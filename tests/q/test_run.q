@@ -155,7 +155,7 @@ test_record_refuses_a_non_dictionary:{[t]
 
 test_record_refuses_an_empty_interval:{[t]
     / Metadata is keyed by the window, so a window that covers nothing is as
-    / meaningless here as it is in the coverage ledger (ETL-08).
+    / meaningless here as it is in the coverage ledger.
     .qrun.begin[`w1];
     .qunit.assertError[{[x] .qrun.record[`ds1;x;x;(enlist `a)!enlist 1]};
         .runtest.d 1;"a zero-width window"]};
@@ -241,7 +241,7 @@ test_contributing_runs_lists_every_execution_behind_a_dataset:{[t]
         "a backfill run in slices shows every run that contributed, in order"]};
 
 test_contributing_runs_is_version_specific:{[t]
-    / Same reasoning as ETL-10 everywhere else in the ledger: attribution
+    / Same reasoning as no-merging-across-versions everywhere else in the ledger: attribution
     / under one release says nothing about another.
     .qrun.begin[`w1];
     .qmatz.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];

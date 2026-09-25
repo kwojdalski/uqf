@@ -105,7 +105,7 @@ test_every_worker_reports_its_spec_after_init:{[t]
 
 test_a_second_run_is_idle_for_every_worker:{[t]
     / Coverage is recorded, so a repeat of the same range has nothing to do.
-    / This is ETL-13 stated once for every worker rather than per worker.
+    / This is retry-safety stated once for every worker rather than per worker.
     bad:{[w]
         spec:.wruntest.prepare w;
         .wruntest.call[w;`init][spec];
@@ -118,7 +118,7 @@ test_a_second_run_is_idle_for_every_worker:{[t]
         "a repeated range is fully covered, so the second run does no windows"]};
 
 test_a_dry_run_publishes_nothing_for_every_worker:{[t]
-    / ETL-17: fetch and transform happen, publication does not. Asserted for
+    / Dry run: fetch and transform happen, publication does not. Asserted for
     / every worker, because the flag is read by the shell and a worker that
     / overrode `publish` could ignore it.
     setenv[`UQF_DRY_RUN;"true"];

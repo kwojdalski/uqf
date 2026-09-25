@@ -103,7 +103,7 @@ if[count partition_like;
     -1 "            1. add the column to .qmatz.schema and init_ledger";
     -1 "            2. add it as a REQUIRED parameter to intervals/";
     -1 "               is_covered/missing/require_covered - required, not";
-    -1 "               optional, for the same reason source_version is (ETL-09)";
+    -1 "               optional, for the same reason source_version is";
     -1 "            3. add it to uqf_frontend/queries.py's COVERAGE program";
     -1 "            4. add a test that coverage under one value does not";
     -1 "               satisfy a query for another";

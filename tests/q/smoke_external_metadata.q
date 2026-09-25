@@ -1,6 +1,6 @@
-// smoke_external_metadata.q - the ETL-20 live external metadata check.
+// smoke_external_metadata.q - the live external metadata check.
 //
-// ETL-20: "Run the live external metadata smoke test separately, when an
+// The rule: "Run the live external metadata smoke test separately, when an
 // external schema or adapter changes."
 //
 //   > The deterministic suite proves local behaviour, NOT that a configured
@@ -57,7 +57,7 @@ if[(0=count targets) or 0=count table_specs;
     -1 "SKIP  nothing configured - pass -targets host:port ... and";
     -1 "      -tables table:col,col ... to run this check.";
     -1 "";
-    -1 "      ETL-20 keeps this lane separate precisely so an unconfigured";
+    -1 "      This lane is kept separate precisely so an unconfigured";
     -1 "      checkout is not reported as a failure.";
     exit 0];
 
@@ -130,7 +130,7 @@ check_table:{[expectation]
 
 check_table each expectations;
 
-/ --- ETL-12's live half: every registered source, against its own contract --
+/ --- the source contract's live half: every registered source, against its own contract --
 
 / The requirement is that live external metadata is validated against "that
 / SAME contract" the fixture is validated against. The fixture side runs in
@@ -140,7 +140,7 @@ check_table each expectations;
 / .
 / Each registered source is checked only when its credential names THIS
 / target, so a run pointed at one host does not report every source as
-/ broken. A source whose credential is unset is skipped, not failed: ETL-20's
+/ broken. A source whose credential is unset is skipped, not failed: this lane's
 / whole point is that an unconfigured checkout is not a failure.
 check_source:{[source]
     if[not .qsrc.has_credentials source;

@@ -29,7 +29,7 @@
 / It is NOT "the framework runs the downstream worker for you". .qdag knows
 / which jobs read a dataset, and that is a genuine dependency - but running a
 / bounded worker needs a source_version, which is a DECISION about which
-/ release of the upstream data this run claims (ETL-09), and no framework can
+/ release of the upstream data this run claims, and no framework can
 / invent one. So the graph says who is interested and the handler says what to
 / do, and the thing that cannot be derived is written down by the person who
 / knows it. `.qreact.dag_consumers` is here to make that wiring obvious.
@@ -142,7 +142,7 @@ on_writing:{[dataset;nm;outputs;handler]
 / .
 / `spec_fn` supplies the one thing that genuinely cannot be derived - the
 / run specification, whose `source_version` is a DECISION about which release
-/ of the upstream data this run claims (ETL-09). It is called with the
+/ of the upstream data this run claims. It is called with the
 / published range and must return the dict .qbw.init takes.
 / @param dataset the upstream dataset whose publication fires this
 / @param worker a worker registered with .qbw.define

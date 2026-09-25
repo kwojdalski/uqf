@@ -78,7 +78,7 @@ adapt:{[raw]
     t:@[t;`symbol`action`side;{`$x}];
     `ts_event`symbol`action`side`price`size`sequence xcols t}
 
-/ One window of records, half-open [range_from;range_to) on ts_event (ETL-08),
+/ One window of records, half-open [range_from;range_to) on ts_event,
 / built through .qodbc's one escape function and returned in the
 / declared types. Ordered so a window is the same table on every fetch.
 / @param h an ODBC handle from .qodbc.open

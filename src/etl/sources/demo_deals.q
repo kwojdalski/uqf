@@ -18,7 +18,7 @@
 / .
 / Two consequences worth stating plainly, rather than discovering later:
 / .
-/   1. This CANNOT validate the real source contract. ETL-12 asks that live
+/   1. This CANNOT validate the real source contract. The source contract asks that live
 /      external metadata be validated against the same declaration as the
 /      fixture, and the machinery for that is built - but the declaration
 /      itself is a guess at a shape nobody here can see. Running
@@ -34,7 +34,7 @@
 source_name:`demo_deals
 
 / The columns this adapter reads, and their q types. Deliberately a small
-/ subset of what such a table would have: ETL-12 asks for the required fields,
+/ subset of what such a table would have: the source contract asks for the required fields,
 / not every field, and declaring columns the worker does not read would make
 / an upstream change to an unused column break the run.
 fields:`deal_id`deal_time`sym`side`notional`rate
@@ -84,7 +84,7 @@ tz:`UTC
 / and it is also how a type coercion bug becomes a silent wrong answer
 / rather than an error.
 / .
-/ Half-open [range_from;range_to) throughout, per ETL-08: >= on the lower
+/ Half-open [range_from;range_to) throughout: >= on the lower
 / bound and < on the upper. Getting that wrong by one operator
 / double-publishes every boundary row, which then appears as a duplicate
 / nobody can explain.

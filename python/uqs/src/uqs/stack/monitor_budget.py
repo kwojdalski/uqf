@@ -33,7 +33,7 @@ log = get_logger(__name__)
 # were already covered, since `feed` is on the vendored list.
 #
 # `backfill` is deliberately NOT here. A backfill is a bounded job that
-# registers, runs a window and exits (ETL-16). Its `.hb.hb` row would
+# registers, runs a window and exits. Its `.hb.hb` row would
 # outlive it, and `checkheartbeat` would age that row into `warning` and
 # then `error` - reporting a job that SUCCEEDED as a fault, permanently.
 # Absence is the expected end state for a bounded worker, so the thing to

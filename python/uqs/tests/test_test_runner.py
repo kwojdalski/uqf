@@ -53,7 +53,7 @@ def test_the_smoke_options_reach_the_script_as_its_own_flags(ran):
 
 
 def test_smoke_with_no_options_passes_no_flags_so_the_script_can_skip(ran):
-    """An unconfigured checkout is SKIP, not a failure (ETL-20)."""
+    """An unconfigured checkout is SKIP, not a failure."""
     assert runner.main(["smoke"]) == 0
     assert ran == [("smoke", "tests/q/smoke_external_metadata.q", ())]
 

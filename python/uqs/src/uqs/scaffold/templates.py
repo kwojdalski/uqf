@@ -152,7 +152,7 @@ tz:`UTC
 / The bounds are arguments to a functional select evaluated on the remote
 / side, so no caller value is ever spliced into query text.
 / .
-/ Half-open [range_from;range_to) - ETL-08, a DIFFERENT rule: >= on the lower
+/ Half-open [range_from;range_to) - a DIFFERENT rule: >= on the lower
 / bound and < on the upper, so a boundary row is published exactly once.
 query:{{[h;range_from;range_to]
     '"{src}.query: not implemented";
@@ -193,7 +193,7 @@ def worker_body(worker: str, src: str, dataset: str, width: str, proc: str) -> s
 
 / What this run SAW, beyond its row count. A row count alone reads a partial
 / extract as success. Every aggregate must survive an empty batch - a
-/ zero-row window is legal and recorded deliberately (ETL-07).
+/ zero-row window is legal and recorded deliberately.
 facts:{{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     (enlist `rows)!enlist count batch}}

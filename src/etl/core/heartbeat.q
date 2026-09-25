@@ -22,7 +22,7 @@
 /   is the process alive?      the monitor's query either connects or does not
 /   is it making progress?     THIS table's last_seen
 /   what did the last run do?  the status file
-/   is the data complete?      the coverage ledger (ETL-07)
+/   is the data complete?      the coverage ledger
 / .
 / Four questions, four answers, no overlap. Trying to make any one of them
 / answer another is how a monitor ends up confidently wrong - and a
@@ -59,7 +59,7 @@ init_table:{[]
 / The root table. Exists so no read below names it bare.
 ledger:{[] value `worker_heartbeat}
 
-/ Refuse if the table is not the declared shape (ETL-16's posture).
+/ Refuse if the table is not the declared shape.
 / @throws error naming the missing or unexpected column(s)
 require_schema:{[]
     actual:cols ledger[];

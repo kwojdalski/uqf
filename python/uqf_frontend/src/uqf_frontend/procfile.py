@@ -6,7 +6,7 @@ otherwise the fleet view can only report on processes someone remembered to
 list twice.
 
 The file is *generated* by ``uqs.stack.runtime.bootstrap()`` from
-vendored inputs plus uqf's own additions (ETL-17), and its port column carries
+vendored inputs plus uqf's own additions, and its port column carries
 unresolved placeholders: ``{KDBBASEPORT}`` or ``{KDBBASEPORT}+N``. Resolving
 them here duplicates a few lines of the orchestrator rather than importing it,
 deliberately: the placeholder grammar is two forms wide, and this is the path

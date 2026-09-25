@@ -36,13 +36,13 @@ setUp_fresh:{[]
 
 tearDown_release:{[] .qwrk.demo_deals_backfill.cleanup[];}
 
-/ --- initialisation (ETL-01, ETL-16) ----------------------------------------
+/ --- initialisation ----------------------------------------
 
 test_init_satisfies_the_contract:{[t]
     .qunit.assertEquals[.qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];.ddbftest.spec_for[`v1;1;4];"the worker implements every contract method and global"]};
 
 test_a_null_source_version_is_refused_at_init:{[t]
-    .qunit.assertError[{.qwrk.demo_deals_backfill.init x};.ddbftest.spec_for[`;1;4];"a run that cannot name its release cannot record coverage (ETL-09)"]};
+    .qunit.assertError[{.qwrk.demo_deals_backfill.init x};.ddbftest.spec_for[`;1;4];"a run that cannot name its release cannot record coverage"]};
 
 test_a_reversed_range_is_refused_at_init:{[t]
     .qunit.assertError[{.qwrk.demo_deals_backfill.init x};.ddbftest.spec_for[`v1;4;1];"a bad bound fails before any work happens, not part-way through"]};
@@ -56,7 +56,7 @@ test_no_credential_means_the_fixture_path:{[t]
 
 test_init_takes_the_single_instance_lock:{[t]
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
-    .qunit.assertEquals[.qbfstate.lock_held `demo_deals_backfill;1b;"one instance per worker is what keeps the checkpoint private (ETL-06)"]};
+    .qunit.assertEquals[.qbfstate.lock_held `demo_deals_backfill;1b;"one instance per worker is what keeps the checkpoint private"]};
 
 / --- a full pass --------------------------------------------------------
 
@@ -80,7 +80,7 @@ test_the_cursor_lands_on_the_range_end:{[t]
     r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`cursor;.ddbftest.d 4;"a completed run's cursor is the range's exclusive end"]};
 
-/ --- coverage skipping (ETL-13) -------------------------------------------
+/ --- coverage skipping -------------------------------------------
 
 / "Ran, found no work" is a SUCCESS, not a failure. An orchestrator
 / that cannot tell them apart retries a successful no-op forever.
@@ -96,7 +96,7 @@ test_a_second_run_publishes_nothing_further:{[t]
     .qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[count value `demo_deals;3;"a retry does not duplicate published rows"]};
 
-/ ETL-10, in the direction that matters: a version bump exists to force
+/ No merging across versions, in the direction that matters: a version bump exists to force
 / re-extraction, so v1 coverage must not suppress a v2 run.
 test_a_version_bump_re_runs_the_whole_range:{[t]
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
@@ -106,7 +106,7 @@ test_a_version_bump_re_runs_the_whole_range:{[t]
     r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[(r`state;r`windows_completed);(`completed;3);"a new source release re-fetches everything"]};
 
-/ A retry after a partial run redoes only the gap. This is the case ETL-13
+/ A retry after a partial run redoes only the gap. This is the case retry-safety
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]
     .qmatz.stage_completion[`demo_deals;`;`v1;.ddbftest.d 1;.ddbftest.d 2;1];
@@ -123,7 +123,7 @@ test_a_middle_gap_does_not_bridge_covered_coverage:{[t]
     r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;2;"day 1 and day 3 are planned; day 2 is skipped, not spanned"]};
 
-/ --- resumption (ETL-06) --------------------------------------------------
+/ --- resumption --------------------------------------------------
 
 test_a_matching_checkpoint_resumes:{[t]
     / Days 1-2 were published by the run being resumed; its checkpoint is at
@@ -145,7 +145,7 @@ test_a_foreign_checkpoint_is_discarded:{[t]
     r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[r`windows_completed;3;"a cursor from a different run specification is dropped, and the range is done in full"]};
 
-/ --- dry run (ETL-14) ----------------------------------------------------
+/ --- dry run ----------------------------------------------------
 
 test_a_dry_run_publishes_no_coverage:{[t]
     setenv[`UQF_DRY_RUN;"true"];
@@ -178,7 +178,7 @@ test_a_real_run_after_a_dry_run_does_everything:{[t]
     r:.qwrk.demo_deals_backfill.run[];
     .qunit.assertEquals[(r`state;r`windows_completed);(`completed;3);"a dry run leaves nothing behind that suppresses the real one"]};
 
-/ --- contract validation on the fetched rows (ETL-12) ---------------------
+/ --- contract validation on the fetched rows ---------------------
 
 / Not belt-and-braces: a source that has dropped a column returns rows where
 / the missing column reads as a NULL in most q code, so without this the
@@ -192,7 +192,7 @@ test_a_contract_breaking_source_fails_the_window:{[t]
     .qsrc.sources[`demo_deals]:@[.qsrc.sources`demo_deals;`fixture;:;orig];
     .qunit.assertEquals[0=count value `etl_coverage;1b;"a source missing declared columns records no coverage, rather than publishing nulls as complete"]};
 
-/ ETL-07 records an empty window deliberately, so the quality gate receives
+/ Coverage records an empty window deliberately, so the quality gate receives
 / one. The guard exists because the three checks below it select from an
 / empty table and would report no failures anyway - but only by accident of
 / how `select` behaves, not by intent, and an accident is not a contract.
@@ -280,7 +280,7 @@ test_cleanup_delegates:{[t]
     .qunit.assertEquals[.qbfstate.lock_held `demo_deals_backfill;0b;
         "cleanup releases the single-instance lock"]};
 
-/ The five names ETL-01 requires, called through the worker's OWN namespace
+/ The five names the contract requires, called through the worker's OWN namespace
 / rather than the shell's - which is what an orchestrator does.
 test_every_contract_method_is_callable_not_merely_present:{[t]
     .qwrk.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];

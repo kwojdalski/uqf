@@ -96,7 +96,7 @@ SELECT = """{[t;fc;fo;fv;lim]
 #: Coverage intervals for one dataset at one source release, as understood at
 #: an instant.
 #:
-#: ETL-09 requires consumers to filter on ``source_version``; doing it inside
+#: Consumers must filter on ``source_version``; doing it inside
 #: the program rather than in Python means a caller cannot omit it. Restatement adds
 #: the same reasoning one dimension over: a coverage row is true *until
 #: superseded*, so a read without an as-of silently reports withdrawn claims
@@ -138,7 +138,7 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
 
     A naive datetime is rejected by kola itself with an unhelpful TypeError,
     so this function requires UTC explicitly. That is not a workaround - it
-    is ETL-08/R9.1 (everything is UTC internally) enforced at the boundary
+    is the everything-is-UTC-internally rule enforced at the boundary
     where a browser's local time would otherwise leak in.
     """
     if as_list:

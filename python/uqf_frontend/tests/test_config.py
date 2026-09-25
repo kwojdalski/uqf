@@ -49,7 +49,7 @@ def test_env_overrides_are_read(monkeypatch):
 
 
 def test_a_malformed_numeric_setting_fails_loudly(monkeypatch):
-    """Refuse to start rather than start misconfigured - the posture ETL-14
+    """Refuse to start rather than start misconfigured - the posture the q side
     takes on the q side.
     """
     monkeypatch.setenv("UQF_FRONTEND_GATEWAY_PORT", "not-a-port")

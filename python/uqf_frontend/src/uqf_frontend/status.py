@@ -3,17 +3,17 @@
 Backfill and Airflow task status is the one frontend requirement with no
 gateway path: q writes it to disk and the Airflow operators read it there.
 The chosen mechanism is to read those files directly rather than to call
-Airflow's REST API, which keeps q authoritative for the facts ETL-15 says it
+Airflow's REST API, which keeps q authoritative for the facts the authority split says it
 owns and adds no Airflow dependency to a frontend that should work without
 one.
 
-**The scope boundary this module refuses to cross.** ETL-15 splits authority:
+**The scope boundary this module refuses to cross.** Authority is split:
 q owns process startup, source reads, query failures, checkpoints, run and
 window counts, and coverage events; Airflow owns task ordering, scheduling,
 retries, timeouts, concurrency and alerting. These files carry only the
 first set, and this reader surfaces only what they carry. It never infers an
 Airflow fact — a retry count, a queue position — from them, because that is
-exactly the cross-layer inference ETL-15 forbids. A caller wanting those must
+exactly the cross-layer inference the split forbids. A caller wanting those must
 ask Airflow.
 
 The format is defined by ``.qstatus.write_status`` in

@@ -1,6 +1,6 @@
 // test_source_contract.q - tests for src/etl/core/source_contract.q (.qsrc)
 // and the demo source's own declaration. Implements the deterministic half
-// of ETL-12; the live half is in the `smoke` lane (ETL-20).
+// of the source contract; the live half is in the `smoke` lane.
 //
 // Load src/etl/core/status.q, src/etl/core/materialisation.q,
 // src/etl/core/source_contract.q, src/etl/sources/demo_deals.q,
@@ -33,7 +33,7 @@ setUp_clean:{[]
     setenv[`UQF_SOURCE_CRED_T;""];
     }
 
-/ --- registration validates immediately (ETL-12) ---------------------------
+/ --- registration validates immediately ---------------------------
 
 test_a_complete_declaration_registers:{[t]
     .qunit.assertEquals[.qsrc.register[`t;.srctest.decl[]];`t;"a valid declaration is accepted"]};
@@ -50,7 +50,7 @@ test_every_missing_field_is_named_at_once:{[t]
     err:@[{.qsrc.register[`t;x]; ""};partial;{x}];
     .qunit.assertEquals[all err like/: ("*fields*";"*types*";"*query*";"*fixture*");1b;"four omissions are reported together, not one per attempt"]};
 
-/ ETL-12 asks for a required TYPE per required field. A mismatched count means
+/ The source contract asks for a required TYPE per required field. A mismatched count means
 / some field has no declared type, and the validator would silently check
 / fewer columns than declared.
 test_a_type_per_field_is_required:{[t]
@@ -61,9 +61,9 @@ test_a_type_per_field_is_required:{[t]
 / concatenation - the injection path source_contract.q exists to refuse.
 test_a_string_query_is_refused:{[t]
     bad:@[.srctest.decl[];`query;:;"select from ext"];
-    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a string query implies concatenation, which ETL-08 forbids"]};
+    .qunit.assertError[{.qsrc.register[`t;x]};bad;"a string query implies concatenation, which is forbidden"]};
 
-/ ETL-04: every source must be exercisable with no driver at all.
+/ Every source must be exercisable with no driver at all.
 test_a_source_without_a_fixture_is_refused:{[t]
     bad:@[.srctest.decl[];`fixture;:;()];
     .qunit.assertError[{.qsrc.register[`t;x]};bad;"without a fixture the whole backfill path is undemonstrable"]};
@@ -99,7 +99,7 @@ test_the_time_field_type_error_names_the_trap:{[t]
     .qunit.assertEquals[err like "*not \"p\"*";1b;"the error says which type was expected, not merely that something is wrong"]};
 
 test_an_unregistered_source_is_an_error_not_a_miss:{[t]
-    .qunit.assertError[{.qsrc.declaration x};`nosuch;"ETL-12 requires central registration, so an unknown source is a wiring bug"]};
+    .qunit.assertError[{.qsrc.declaration x};`nosuch;"sources register centrally, so an unknown source is a wiring bug"]};
 
 / --- validation, the one path both fixture and live go through -----------
 
@@ -135,11 +135,11 @@ test_an_extra_column_is_allowed:{[t]
 
 test_an_empty_table_of_the_right_shape_validates:{[t]
     .qsrc.register[`t;.srctest.decl[]];
-    .qunit.assertEquals[.qsrc.validate[`t;0#([] ts:`timestamp$(); px:`float$())];1b;"an empty window is legal (ETL-07), so its shape must still validate"]};
+    .qunit.assertEquals[.qsrc.validate[`t;0#([] ts:`timestamp$(); px:`float$())];1b;"an empty window is legal, so its shape must still validate"]};
 
 / --- the demo source's own declaration ----------------------------------
 
-/ ETL-12's "validate generated fixtures against that same contract". A fixture
+/ "Validate generated fixtures against that same contract". A fixture
 / that does not satisfy its own declaration is a broken double, and finding
 / that out from a failing worker test is a much longer path.
 test_the_demo_fixture_satisfies_its_own_contract:{[t]
@@ -210,7 +210,7 @@ test_a_non_symbol_key_is_refused:{[t]
 test_the_demo_source_declares_its_key:{[t]
     .qunit.assertEquals[.qsrc.row_key `demo_deals;enlist `deal_id;"the natural key for a deal-shaped source"]};
 
-/ --- coercion through the contract (ETL-05) --------------------------------
+/ --- coercion through the contract --------------------------------
 
 / The three trap classes named on #73, all present in one table, coerced in
 / one call - which is what "one shared coercion layer" has to mean to be
@@ -262,7 +262,7 @@ test_an_uncoercible_declared_type_is_refused:{[t]
     txt:([] ts:enlist "2026-09-15T09:30:00"; blob:enlist "x");
     .qunit.assertError[{.qsrc.coerce[`weird;x]};txt;"a type with no coercer is named rather than passed through as text"]};
 
-/ --- credentials (ETL-07) --------------------------------------------------
+/ --- credentials --------------------------------------------------
 
 test_the_credential_variable_is_mechanical:{[t]
     .qunit.assertEquals[.qsrc.credential_var `demo_deals;"UQF_SOURCE_CRED_DEMO_DEALS";"an operator can guess the variable name"]};

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""test.py - the lane dispatcher ETL-21 names.
+"""test.py - the test lane dispatcher.
 
-ETL-21: "Use the suite that matches the changed layer: q-unit for q
+The rule: "Use the suite that matches the changed layer: q-unit for q
 behaviour, q-backfill-process for bounded process behaviour, and the
 focused Python suites for orchestration."
 
@@ -35,7 +35,7 @@ between them:
                        test enters is not in tests/q/coverage_baseline.txt,
                        or when a baseline entry is covered after all
   coverage             what the suites actually execute, q and Python both.
-  smoke                ETL-20's live external check. Explicitly NOT part of
+  smoke                the live external check. Explicitly NOT part of
                        any other lane: the deterministic suite proves local
                        behaviour, not that a configured external service is
                        reachable or compatible, and folding it in would make
@@ -197,8 +197,8 @@ def lane_python() -> None:
 def lane_smoke(flags: Sequence[str] = ()) -> None:
     """`flags` are the script's own: -targets, -tables, -timeout_ms. With
     none, it reports SKIP and exits 0 - an unconfigured checkout is not a
-    failure (ETL-20)."""
-    _banner("smoke: ETL-20 live external metadata check")
+    failure."""
+    _banner("smoke: live external metadata check")
     _q("smoke", "tests/q/smoke_external_metadata.q", *flags)
 
 
@@ -296,7 +296,7 @@ LANES: dict[str, Callable[[], None]] = {
     "stack-smoke": lane_stack_smoke,
 }
 
-#: `all` is every lane except smoke (ETL-20), stack-smoke and coverage.
+#: `all` is every lane except smoke, stack-smoke and coverage.
 #: coverage runs the q suite a second time under instrumentation;
 #: stack-smoke needs a licence, free ports and a couple of minutes because
 #: it starts the actual stack. Both are worth asking for and neither is
@@ -313,7 +313,7 @@ ALL = [
 ]
 
 EPILOG = """\
-ETL-21: run the lane matching the layer you changed. `all` is for a release,
+Run the lane matching the layer you changed. `all` is for a release,
 not for an edit.
 
 The interpreter comes from $Q (default ~/.kx/bin/q) and $QHOME (default

@@ -20,7 +20,7 @@
 / .
 /   startwithall=0   it must not start with the stack. `uqs start` is
 /                    for the streaming fleet; a backfill is a job an operator
-/                    or Airflow triggers with a range (ETL-15).
+/                    or Airflow triggers with a range.
 /   exit at the end  the process leaves discovery when it finishes, so the
 /                    fleet view shows running backfills and not a graveyard
 /                    of completed ones.
@@ -54,7 +54,7 @@
 \d .qproc.backfill
 
 / The flags this process reads. Listed so the refusal below can report every
-/ missing one at once rather than over four restarts (ETL-16).
+/ missing one at once rather than over four restarts.
 required_flags:`worker`version`from`to
 
 / Refuse unless every required flag has a value, naming all that do not.
@@ -110,7 +110,7 @@ window_count:{[spec;width]
 / .
 / Errors are caught and logged rather than thrown, so the process exits with
 / a status a caller can read instead of a q error trace. The exit CODE is
-/ what Airflow reads (ETL-15 gives it retries), so it must distinguish a
+/ what Airflow reads (Airflow owns retries), so it must distinguish a
 / failed run from a successful one.
 / @return the run's result dictionary
 run:{[]

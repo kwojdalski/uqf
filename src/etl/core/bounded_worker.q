@@ -13,7 +13,7 @@
 / .
 / WHY STATE STILL LIVES IN THE WORKER'S OWN NAMESPACE
 / .
-/ The obvious design is for this file to hold the state. It cannot: ETL-01's
+/ The obvious design is for this file to hold the state. It cannot: the contract's
 / contract, enforced by .qbfstate.require_contract, requires
 / source_version/range_from/range_to to be names in the WORKER's namespace,
 / so that "is this worker complete" stays a deterministic check rather than
@@ -94,7 +94,7 @@ namespace:{[worker] ` sv worker_root,worker}
 
 / ------------------------------------------------------- INHERITANCE
 
-/ The globals every worker starts with. The first three are ETL-01's
+/ The globals every worker starts with. The first three are the contract's
 / contract; `handle` is the live connection or 0Ni on the fixture; `progress`
 / and `last_batch` are the run accumulators, one set PER WORKER because a q
 / lambda does not close over an enclosing local, so `each` over windows needs
@@ -349,7 +349,7 @@ spec:{[worker] `source_version`range_from`range_to!read_state[worker] each `sour
 
 / ------------------------------------------------------------------ INIT
 
-/ Resolve everything that can fail BEFORE any work happens (ETL-16).
+/ Resolve everything that can fail BEFORE any work happens.
 / .
 / Order is deliberate, cheapest and most-likely-misconfigured first:
 / configuration, then the contract, then the source and its fixture, then
@@ -367,7 +367,7 @@ init:{[worker;run_spec]
     write_state[worker;`range_to;run_spec`range_to];
 
     if[null run_spec`source_version;
-        '"init: source_version must be set - coverage under one source release says nothing about another (ETL-09)"];
+        '"init: source_version must be set - coverage under one source release says nothing about another"];
     .qmatz.require_interval[run_spec`range_from;run_spec`range_to];
 
     .qbfstate.register[worker;cfg`ns];
@@ -441,7 +441,7 @@ connect:{[worker]
 
 empty_windows:{[] ([] range_from:`timestamp$(); range_to:`timestamp$())}
 
-/ The windows still to do (ETL-13, ETL-18).
+/ The windows still to do.
 / .
 / ONE narrowing: coverage. Every gap in the range is planned, at this
 / source_version, whatever the cursor says - the body below explains what
@@ -499,7 +499,7 @@ plan:{[worker;cursor]
 / rather than throwing, so the caller decides what a terminal failure means -
 / here, the window fails and the run moves on.
 / .
-/ Every fetched window is validated against the source contract (ETL-12).
+/ Every fetched window is validated against the source contract.
 / Not belt-and-braces: a source that dropped a column returns rows where the
 / missing column reads as a NULL in most q code, so without this the worker
 / publishes nulls and records the window as covered.
@@ -518,15 +518,15 @@ fetch:{[worker;from_ts;to_ts]
 / Publish a window's rows into the source's declared target.
 / .
 / Returns the row count, which finish_window records as rows_published. Zero
-/ is legal and meaningful (ETL-07): an empty window is positive evidence the
+/ is legal and meaningful: an empty window is positive evidence the
 / range was examined and held nothing.
 publish:{[worker;batch]
     cfg:declaration worker;
     t:.qsrc.declaration[cfg`source]`target;
     .qio.write[.qio.for_cfg cfg;t;batch]}
 
-/ Save the cursor. Present because the contract requires it (ETL-01); the
-/ write goes through .qbfstate so ETL-06's spec-binding is not
+/ Save the cursor. Present because the contract requires it; the
+/ write goes through .qbfstate so the checkpoint's spec-binding is not
 / re-implemented.
 checkpoint:{[worker;cursor] .qbfstate.save_checkpoint[worker;spec worker;cursor]}
 

@@ -142,11 +142,11 @@ status_dir:{[]
 / HERE rather than inferred, because this tree has no Airflow provider to be
 / compatible with - the pipeline layer is developed in this repository.
 / .
-/ What belongs in this file is exactly what ETL-15 says q owns: process
+/ What belongs in this file is exactly what the authority split says q owns: process
 / startup, source reads, query failures, checkpoints, run and window counts,
 / and coverage events. It deliberately carries NO retry count, task ordering,
 / timeout or concurrency state - those are Airflow's facts, and a reader that
-/ wants them must ask Airflow. Mixing the two is what ETL-15 forbids.
+/ wants them must ask Airflow. Mixing the two is what the split forbids.
 / .
 / Written atomically: serialise, write to a temp path, then rename over the
 / target. A reader polling the directory (the frontend polls) would
@@ -157,8 +157,8 @@ status_dir:{[]
 /   so two instances of one worker do not overwrite each other
 / @param state one of status_states
 / @param spec dict with `source_version`range_from`range_to - the run
-/   specification. range is half-open [range_from;range_to) per ETL-08, and
-/   source_version is mandatory per ETL-09 (coverage under one source release
+/   specification. range is half-open [range_from;range_to), and
+/   source_version is mandatory (coverage under one source release
 /   says nothing about another)
 / @param progress dict with `cursor`rows_published`windows_completed
 / @param err an error string, or "" when there is none
@@ -175,8 +175,8 @@ write_status:{[worker;instance_id;state;spec;progress;err]
     req:`source_version`range_from`range_to;
     missing:req where not req in key spec;
     if[count missing; '"write_status: spec is missing ",", " sv string missing];
-    if[null spec`source_version; '"write_status: source_version must be set (ETL-09)"];
-    / ETL-08: half-open and forward-going. Rejecting here means a bad range
+    if[null spec`source_version; '"write_status: source_version must be set"];
+    / Half-open and forward-going. Rejecting here means a bad range
     / can never reach the file, rather than being caught by the reader.
     if[not spec[`range_to]>spec`range_from;
         '"write_status: range must be non-empty and forward-going, got [",

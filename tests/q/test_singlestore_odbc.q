@@ -93,7 +93,7 @@ test_an_unknown_type_is_refused:{[t]
 / --- the windowed query --------------------------------------------------
 
 test_the_window_is_half_open:{[t]
-    / ETL-08: >= on the lower bound, < on the upper. One wrong operator
+    / Half-open: >= on the lower bound, < on the upper. One wrong operator
     / double-publishes every boundary row, which then appears as a duplicate
     / nobody can explain.
     sql:.odbctest.built_sql[];

@@ -76,7 +76,7 @@ LITERAL_READS = (
     # unread - which is how scripts/processes/torq_backfill.q's four variables were
     # reported as documented-but-dead on their first run. Declaring the set is
     # better practice than four scattered getenv calls (it lets the process
-    # refuse naming every missing one at once, per ETL-16), so the gate should
+    # refuse naming every missing one at once), so the gate should
     # understand the better idiom rather than push code toward the worse one.
     re.compile(r"required_env\s*:\s*((?:`[A-Z][A-Z0-9_]*)+)"),
     # TypeScript: process.env.NAME

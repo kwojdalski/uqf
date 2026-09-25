@@ -201,7 +201,7 @@ table_names:{[h] require_available[]; .odbc.tables h}
 / A windowed SELECT over one table, with the bounds escaped.
 / .
 / This is the shape a .qsrc source's `query` callback needs: half-open
-/ [range_from;range_to) per ETL-08, so >= on the lower bound and < on the
+/ [range_from;range_to), so >= on the lower bound and < on the
 / upper. Getting that one operator wrong double-publishes every boundary row,
 / which then appears as a duplicate nobody can explain.
 / .

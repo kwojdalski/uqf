@@ -1,5 +1,5 @@
 // test_continuous_state.q - tests for src/etl/core/continuous_state.q
-// (.qcont), the ETL-03 continuous-worker pattern.
+// (.qcont), the continuous-worker pattern.
 //
 // The sentence these tests exist to hold: "do not publish a
 // resume-completion claim merely because a continuous cursor advanced."
@@ -25,7 +25,7 @@ setUp_fresh:{[]
     .qcont.clear_cursor `tailer;
     }
 
-/ --- cursor state (ETL-03) -------------------------------------------------
+/ --- cursor state -------------------------------------------------
 
 / A first run has no cursor. Treating that as an error would make every
 / fresh deployment need manual seeding.
@@ -73,7 +73,7 @@ test_a_refused_advance_leaves_the_stored_cursor_alone:{[t]
     @[{.qcont.advance[`tailer;.conttest.d 3;x]};.conttest.d 1;{x}];
     .qunit.assertEquals[.qcont.load_cursor `tailer;.conttest.d 3;"a rejected advance does not corrupt the cursor it rejected"]};
 
-/ --- the claim this file must NOT make (ETL-03) ---------------------------
+/ --- the claim this file must NOT make ---------------------------
 
 / The requirement's own sentence, as an assertion. A tailer passing a
 / timestamp is not evidence that everything before it is published, and
@@ -92,7 +92,7 @@ test_freshness_states_that_it_is_not_completeness:{[t]
     .qcont.save_cursor[`tailer;.conttest.d 2];
     .qunit.assertEquals[.qcont.freshness[`tailer]`is_completeness_claim;0b;"the return value says outright that this is not a completeness claim"]};
 
-/ --- freshness (ETL-22's gap, reported rather than papered over) ----------
+/ --- freshness (#62's gap, reported rather than papered over) -------------
 
 test_freshness_reports_the_cursor_and_a_lag:{[t]
     .qcont.save_cursor[`tailer;.z.p-0D00:05];
@@ -162,7 +162,7 @@ test_other_datasets_feeders_are_not_counted:{[t]
 test_dataset_freshness_is_still_not_a_completeness_claim:{[t]
     .qcont.register_feeder[`f1;`quotes];
     .qcont.save_cursor[`f1;.conttest.d 5];
-    .qunit.assertEquals[.qcont.dataset_freshness[`quotes]`is_completeness_claim;0b;"the ETL-03 distinction survives aggregation"]};
+    .qunit.assertEquals[.qcont.dataset_freshness[`quotes]`is_completeness_claim;0b;"the continuous-worker distinction survives aggregation"]};
 
 test_dataset_is_fresh_within_tolerance:{[t]
     .qcont.register_feeder[`f1;`quotes]; .qcont.register_feeder[`f2;`quotes];
@@ -170,7 +170,7 @@ test_dataset_is_fresh_within_tolerance:{[t]
     .qcont.save_cursor[`f2;.z.p-0D00:03];
     .qunit.assertEquals[(.qcont.dataset_is_fresh[`quotes;0D00:05];.qcont.dataset_is_fresh[`quotes;0D00:02]);10b;"fresh is judged against the slowest feed's lag"]};
 
-/ --- polling (ETL-03, ETL-05) -----------------------------------------------
+/ --- polling -----------------------------------------------
 
 test_a_poll_publishes_a_page_and_advances:{[t]
     `.conttest.page set ([] ts:enlist .conttest.d 1; v:enlist 1.5);
