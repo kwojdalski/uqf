@@ -19,6 +19,7 @@ lazily-imported functions, and each test patches the one it exercises.
 from __future__ import annotations
 
 import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Any
 
@@ -273,8 +274,12 @@ def test_a_backfill_is_launched_detached_and_reports_where_to_watch(writeable, m
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
     _patch_bootstrap(monkeypatch)
-    body = writeable.post("/control/backfill", json=_backfill_body()).json()
+    r = writeable.post("/control/backfill", json=_backfill_body())
 
+    # Status first, body second: a refusal here used to read `KeyError: 'pid'`
+    # and say nothing about what was refused.
+    assert r.status_code == 200, r.text
+    body = r.json()
     assert body["pid"] == 4242
     assert body["status_path"] == "/ops/backfill"
     assert seen["new_session"] is True, "a restart of the API must not kill a running backfill"
@@ -296,7 +301,8 @@ def test_the_range_reaches_the_process_as_flags_with_q_timestamps(writeable, mon
         lambda cmd, **kw: (seen.update(cmd=cmd, env=kw["env"]), FakeProc())[1],
     )
     _patch_bootstrap(monkeypatch)
-    writeable.post("/control/backfill", json=_backfill_body())
+    r = writeable.post("/control/backfill", json=_backfill_body())
+    assert r.status_code == 200, r.text
 
     cmd = seen["cmd"]
     flags = dict(zip(cmd[2::2], cmd[3::2], strict=True))
@@ -355,12 +361,36 @@ def _patch_core(monkeypatch, **fns: Any) -> None:
     monkeypatch.setattr(stack_paths, "default_paths", lambda: "PATHS")
 
 
+#: An absolute path that really exists and really is executable, standing in
+#: for the q interpreter.
+#:
+#: `sys.executable`, not a hardcoded path. This was "/bin/true", which exists
+#: on Linux and does NOT on macOS - `true` lives in /usr/bin there, and this
+#: machine's /bin has no `true` at all. `q_interpreter` resolves QCMD through
+#: `shutil.which`, which answers None for a path that is not there, so the
+#: endpoint refused with "no q interpreter to run the backfill" and the two
+#: launch tests failed on every Mac while passing in CI (#461).
+#:
+#: The process is never run - `subprocess.Popen` is monkeypatched in each
+#: test - so the only thing that matters is that it resolves.
+_FAKE_QCMD = sys.executable
+
+
 def _patch_bootstrap(monkeypatch) -> None:
     from uqs import paths as stack_paths
+    from uqs.paths import q_interpreter
     from uqs.stack import runtime
 
+    # Assert the stand-in before handing it over. Without this the failure
+    # surfaces as `KeyError: 'pid'` on a body nobody printed, which is how
+    # #461 stayed open: the endpoint's actual complaint was in the response
+    # the test threw away.
+    assert q_interpreter({"QCMD": _FAKE_QCMD}) is not None, (
+        f"the stand-in q interpreter {_FAKE_QCMD} does not resolve, so the "
+        "endpoint will refuse before it reaches the mocked Popen"
+    )
     monkeypatch.setattr(stack_paths, "default_paths", lambda: _FakePaths())
-    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QCMD": "/bin/true"})
+    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QCMD": _FAKE_QCMD})
 
 
 @dataclass
