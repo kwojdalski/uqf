@@ -101,6 +101,7 @@ bind_fixtures:{[]
     / uses, or from the source's own declaration. None is invented here.
     `markout_trades set .executiontest.mk_markout_trades[];
     `mid_quotes set .executiontest.mk_mid_quotes[];
+    `fill_orders set .executiontest.mk_fill_orders[];
     `trades set .positionstest.mk_trades[];
     / `value `trades`, not `trades`: inside \d .egtest a bare name resolves
     / to .egtest.trades, which does not exist. Every read of a root binding

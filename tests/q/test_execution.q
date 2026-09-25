@@ -367,4 +367,178 @@ test_a_zero_numerator_over_a_real_denominator_is_still_zero:{[t]
     .testutil.assertApprox[.qexec.fill_ratio[0;100];0f;1e-12;
         "zero fills over real quotes is zero, not null"]};
 
+
+/ ---- fill_probability_by: empirical fill probability by horizon ----------
+
+/ Ten fully observed EURUSD orders a minute apart, for a one-minute horizon:
+/   0-3  filled completely 30s in                    any: fill     full: fill
+/   4    part-filled 20s in, never completed         any: fill     full: failure
+/   5    part-filled 20s in, completed at 90s        any: fill     full: failure (after the horizon)
+/   6-9  never touched                               any: failure  full: failure
+/ So full-fill probability is 4/10 and any-fill 6/10. Also bound as the
+/ `fill_orders` @eg fixture.
+mk_fill_orders:{[]
+    s:2026.01.01D10:00:00.000000000+0D00:01:00*til 10;
+    ([] sym:10#`EURUSD;
+        submit_time:s;
+        observed_until:10#0Np;
+        first_fill_time:s+0D00:00:01*30 30 30 30 20 20 0N 0N 0N 0N;
+        full_fill_time:s+0D00:00:01*30 30 30 30 0N 90 0N 0N 0N 0N;
+        cancel_time:10#0Np)}
+
+/ Every order resolved: the last horizon ends at 10:10.
+fill_as_of:2026.01.01D12:00:00.000000000
+
+/ Private: the one row for a target, from an unbucketed single-horizon run.
+fill_row:{[r;tgt] first select from r where target=tgt}
+
+test_fill_probability_full_fill_is_four_in_ten:{[t]
+    r:.qexec.fill_probability_by[mk_fill_orders[];0D00:01:00;`symbol$();fill_as_of;::];
+    full:fill_row[r;`full];
+    .qunit.assertEquals[full`observed_count;10;"ten fully observed orders"];
+    .qunit.assertEquals[full`fill_count;4;"four filled completely inside the horizon"];
+    .qunit.assertEquals[full`fill_probability;0.4;"exactly 0.4"];
+    .qunit.assertEquals[full`censored_count;0;"nothing censored when every horizon was observed"]};
+
+test_fill_probability_partial_fills_separate_any_from_full:{[t]
+    r:.qexec.fill_probability_by[mk_fill_orders[];0D00:01:00;`symbol$();fill_as_of;::];
+    .qunit.assertEquals[fill_row[r;`any]`fill_count;6;"the two part-filled orders count as any-fills"];
+    .qunit.assertEquals[fill_row[r;`any]`fill_probability;0.6;"6 of 10 filled at least in part"];
+    .qunit.assertEquals[fill_row[r;`full]`fill_probability;0.4;"but only 4 of 10 completely"]};
+
+test_fill_probability_half_observed_order_is_censored_not_failed:{[t]
+    / Order 6 (never filled) stops being observed 30s into its 60s horizon:
+    / it might still have filled, so it leaves the denominator.
+    o:update observed_until:submit_time+0D00:00:30 from mk_fill_orders[] where i=6;
+    full:fill_row[.qexec.fill_probability_by[o;0D00:01:00;`symbol$();fill_as_of;::];`full];
+    .qunit.assertEquals[full`censored_count;1;"the half-observed order is censored"];
+    .qunit.assertEquals[full`failure_count;5;"and is not among the failures"];
+    .qunit.assertEquals[full`observed_count;9;"so the denominator is nine, not ten"];
+    .qunit.assertEquals[full`fill_probability;4%9;"4 fills over 9 observed"]};
+
+test_fill_probability_ignores_everything_after_as_of:{[t]
+    / as_of 10:05:30: orders 0-4 are resolved, order 5's horizon (to 10:06)
+    / is still open, orders 6-9 do not exist yet.
+    as_of:2026.01.01D10:05:30.000000000;
+    base:mk_fill_orders[];
+    before:.qexec.fill_probability_by[base;0D00:01:00;`symbol$();as_of;::];
+    / Rewrite every outcome that lies after as_of: fill the untouched orders,
+    / move order 5's completion, cancel order 7.
+    later:update first_fill_time:submit_time+0D00:00:05, full_fill_time:submit_time+0D00:00:05 from base where i within 6 9;
+    later:update full_fill_time:submit_time+0D00:00:40 from later where i=5;
+    later:update cancel_time:submit_time+0D00:00:01, first_fill_time:0Np, full_fill_time:0Np from later where i=7;
+    after:.qexec.fill_probability_by[later;0D00:01:00;`symbol$();as_of;::];
+    .qunit.assertEquals[after;before;"outcomes after as_of cannot move an estimate made at as_of"]};
+
+test_fill_probability_open_horizon_at_as_of_is_censored:{[t]
+    / Order 5 was submitted at 10:05; at 10:05:30 its horizon is half over
+    / and it is part-filled (20s in) but not complete.
+    r:.qexec.fill_probability_by[mk_fill_orders[];0D00:01:00;`symbol$();2026.01.01D10:05:30.000000000;::];
+    .qunit.assertEquals[fill_row[r;`any]`order_count;6;"orders submitted after as_of are not counted at all"];
+    .qunit.assertEquals[fill_row[r;`any]`censored_count;0;"order 5's first fill at 10:05:20 was already seen"];
+    .qunit.assertEquals[fill_row[r;`full]`censored_count;1;"its full fill had not happened yet, and might"]};
+
+test_fill_probability_fill_on_the_horizon_counts:{[t]
+    o:([] submit_time:enlist 2026.01.01D10:00:00.000000000; observed_until:enlist 0Np;
+        first_fill_time:enlist 2026.01.01D10:01:00.000000000;
+        full_fill_time:enlist 2026.01.01D10:01:00.000000000; cancel_time:enlist 0Np);
+    r:.qexec.fill_probability_by[o;0D00:01:00;`symbol$();fill_as_of;::];
+    .qunit.assertEquals[fill_row[r;`full]`fill_count;1;"a fill exactly at submit_time+horizon is inside the horizon"]};
+
+/ Order 6 is cancelled 10s in, before any fill; order 4 (part-filled at 20s)
+/ is cancelled 40s in, before completing.
+mk_cancelled_orders:{[]
+    o:update cancel_time:submit_time+0D00:00:40 from mk_fill_orders[] where i=4;
+    update cancel_time:submit_time+0D00:00:10 from o where i=6}
+
+test_fill_probability_cancel_excluded_by_default:{[t]
+    r:.qexec.fill_probability_by[mk_cancelled_orders[];0D00:01:00;`symbol$();fill_as_of;::];
+    full:fill_row[r;`full];
+    .qunit.assertEquals[full`cancelled_count;2;"both cancels are counted as cancels"];
+    .qunit.assertEquals[full`observed_count;8;"and set aside, not scored as misses"];
+    .qunit.assertEquals[full`fill_probability;0.5;"4 fills over 8"];
+    any_row:fill_row[r;`any];
+    .qunit.assertEquals[any_row`fill_count;6;"order 4 part-filled before its cancel, so it is still an any-fill"];
+    .qunit.assertEquals[any_row`cancelled_count;1;"only order 6 was cancelled with nothing filled"]};
+
+test_fill_probability_cancel_as_failure_policy:{[t]
+    r:.qexec.fill_probability_by[mk_cancelled_orders[];0D00:01:00;`symbol$();fill_as_of;
+        (enlist `cancel_policy)!enlist `failure];
+    full:fill_row[r;`full];
+    .qunit.assertEquals[full`observed_count;10;"cancels are in the denominator"];
+    .qunit.assertEquals[full`fill_probability;0.4;"4 fills over 10"]};
+
+test_fill_probability_cancel_on_the_horizon_is_a_failure:{[t]
+    / Exposed for the whole horizon, then pulled: that is a miss, not a cancel.
+    o:update cancel_time:submit_time+0D00:01:00 from mk_fill_orders[] where i=9;
+    full:fill_row[.qexec.fill_probability_by[o;0D00:01:00;`symbol$();fill_as_of;::];`full];
+    .qunit.assertEquals[full`cancelled_count;0;"no cancel before the horizon ended"];
+    .qunit.assertEquals[full`failure_count;6;"order 9 is still a failure"]};
+
+test_fill_probability_buckets_are_counted_separately:{[t]
+    o:update sym:`GBPUSD from mk_fill_orders[] where i in 0 6 7;
+    r:.qexec.fill_probability_by[o;0D00:01:00;enlist `sym;fill_as_of;::];
+    gbp:first select from r where sym=`GBPUSD, target=`full;
+    eur:first select from r where sym=`EURUSD, target=`full;
+    .qunit.assertEquals[(gbp`fill_count;gbp`observed_count);1 3;"GBPUSD: order 0 filled, 6 and 7 did not"];
+    .qunit.assertEquals[(eur`fill_count;eur`observed_count);3 7;"EURUSD: the other seven"]};
+
+test_fill_probability_one_row_per_horizon:{[t]
+    r:.qexec.fill_probability_by[mk_fill_orders[];0D00:01:00 0D00:02:00;`symbol$();fill_as_of;::];
+    .qunit.assertEquals[count r;4;"two horizons by two targets"];
+    long_full:first select from r where horizon=0D00:02:00, target=`full;
+    .qunit.assertEquals[long_full`fill_count;5;"order 5 completes at 90s, inside two minutes"]};
+
+test_fill_probability_status_marks_sparse_and_empty:{[t]
+    r:.qexec.fill_probability_by[mk_fill_orders[];0D00:01:00;`symbol$();fill_as_of;::];
+    .qunit.assertEquals[distinct r`status;enlist `sparse;"ten observations is under the default floor of 30"];
+    r:.qexec.fill_probability_by[mk_fill_orders[];0D00:01:00;`symbol$();fill_as_of;(enlist `min_count)!enlist 10];
+    .qunit.assertEquals[distinct r`status;enlist `ok;"and meets a floor of ten"];
+    / At 10:00:10 the one existing order's horizon is open and nothing has happened.
+    r:.qexec.fill_probability_by[mk_fill_orders[];0D00:01:00;`symbol$();2026.01.01D10:00:10.000000000;::];
+    .qunit.assertEquals[distinct r`status;enlist `empty;"only censored orders: nothing observed"];
+    .qunit.assertTrue[all null r`fill_probability;"and no probability, rather than a zero"]};
+
+test_fill_probability_no_orders_gives_no_rows:{[t]
+    r:.qexec.fill_probability_by[0#mk_fill_orders[];0D00:01:00;enlist `sym;fill_as_of;::];
+    .qunit.assertEquals[count r;0;"nothing to count"];
+    .qunit.assertEquals[cols r;`sym`horizon`target`order_count`fill_count`failure_count`cancelled_count`censored_count`observed_count`fill_probability`status;
+        "but the columns are still there"]};
+
+/ Private: call with one argument changed, for the refusal tests.
+fill_call:{[args] .qexec.fill_probability_by . args}
+fill_args:{[] (mk_fill_orders[];0D00:01:00;`symbol$();fill_as_of;::)}
+
+test_fill_probability_refuses_a_missing_column:{[t]
+    .qunit.assertThrows[fill_call;@[fill_args[];0;{delete cancel_time from x}];
+        "fill_probability_by: orders is missing required column(s) cancel_time";"names the missing column"]};
+
+test_fill_probability_refuses_a_datetime_column:{[t]
+    .qunit.assertThrows[fill_call;@[fill_args[];0;{update submit_time:`datetime$submit_time from x}];
+        "fill_probability_by: submit_time must be timestamp column(s)*";"a datetime is refused, not rounded"]};
+
+test_fill_probability_refuses_a_fill_before_its_order:{[t]
+    .qunit.assertThrows[fill_call;@[fill_args[];0;{update first_fill_time:submit_time-0D00:00:01 from x where i=0}];
+        "fill_probability_by: first_fill_time before submit_time*";"an event cannot precede its order"]};
+
+test_fill_probability_refuses_a_full_fill_without_a_first_fill:{[t]
+    .qunit.assertThrows[fill_call;@[fill_args[];0;{update first_fill_time:0Np from x where i=0}];
+        "fill_probability_by: an order has a full_fill_time with no first_fill_time*";"a full fill is a fill"]};
+
+test_fill_probability_refuses_a_non_positive_horizon:{[t]
+    .qunit.assertThrows[fill_call;@[fill_args[];1;:;0D00:00:00];
+        "fill_probability_by: every horizon must be positive";"a zero horizon measures nothing"]};
+
+test_fill_probability_refuses_an_unknown_cancel_policy:{[t]
+    .qunit.assertThrows[fill_call;@[fill_args[];4;:;(enlist `cancel_policy)!enlist `ignore];
+        "fill_probability_by: cancel_policy must be `exclude or `failure*";"the policy is named, not guessed"]};
+
+test_fill_probability_refuses_an_unknown_option:{[t]
+    .qunit.assertThrows[fill_call;@[fill_args[];4;:;(enlist `min_obs)!enlist 5];
+        "fill_probability_by: unknown option(s) min_obs*";"a misspelt option is not silently ignored"]};
+
+test_fill_probability_refuses_a_bucket_named_like_an_output:{[t]
+    .qunit.assertThrows[fill_call;@[fill_args[];(0;2);:;(update target:`x from mk_fill_orders[];enlist `target)];
+        "fill_probability_by: bucket column(s) target would collide*";"an output column cannot also be a bucket"]};
+
 \d .
