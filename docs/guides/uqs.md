@@ -23,6 +23,7 @@ current process topology, table-level data pipeline, and config-generation flow.
 - [Quick start](#quick-start)
 - [Reading the database's shape](#reading-the-databases-shape)
 - [Commands](#commands)
+- [Replaying a tickerplant log](#replaying-a-tickerplant-log)
 - [Listing things](#listing-things)
 - [What actually starts](#what-actually-starts) --- including
   [profiles](#profiles)
@@ -290,6 +291,12 @@ backfill WORKER --version V --from T --to T [--port N] [--debug]
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables. --debug
                                       starts it with -verbose: DBG lines in its log
+replay tplog [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
+             [--table T]... [--port N] [--dry-run]
+                                      replay a tickerplant log into the HDB. With
+                                      nothing passed, every one of those comes off
+                                      the running plant and hdb process - including
+                                      the base port (see below)
 clean [--match REGEX] [--dry-run]     wipe output/uqs/, or part of it
 install-jobs DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs
@@ -325,6 +332,48 @@ quoted `"posbook1 markout1"` still works. `--port` sets `KDBBASEPORT` (default
 `FILE` as CSV or Parquet, format inferred from the extension - see
 `python/uqs/README.md`'s "Exporting output" section. Full `--help` is available
 on the command itself and on every subcommand.
+
+## Replaying a tickerplant log
+
+`replay tplog` is TorQ's own `tickerlogreplay` - the `tpreplay1` process - with
+the aiming done for you:
+
+```
+uqs replay tplog --dry-run
+uqs replay tplog --date 2026-09-22 --table quote --table trade
+```
+
+What it replays, and into what, is read off the processes that are **running**,
+not off the configuration that describes them:
+
+  | what              | where it comes from                                            |
+  | ---               | ---                                                            |
+  | the log directory | the running plant's own `-tplogdir`, newest day for that plant |
+  | the schema        | that plant's `-schemafile`                                     |
+  | the database      | the `-load` of the hdb process on the same stack               |
+  | the base port     | the plant's `-stackid`                                         |
+
+The two can disagree, and silently. This tree's data directory moved from
+`scripts/output/uqf-stack` to `output/uqs`, so a plant started before the move
+still writes its log under the old path while every config-derived answer names
+the new one; a replay aimed at the configured path would have found *a* log,
+replayed it without complaint, and written down a day nobody asked for. A
+process's start line cannot drift from the process.
+
+That is also why `--port` is not needed here: the plant is running under a
+`-stackid`, and that is the stack. Pass one only to override it.
+
+Every row in that table is an option (`--dir`, `--schema`, `--hdb`, `--port`),
+and an option that is given wins - supply all four and nothing is asked of the
+machine at all, which is how to replay a log after the stack it came from has
+been stopped. `--proc` picks between plants when more than one is up with a log
+of its own; with exactly one, it is not needed, and with several the command
+refuses rather than ranking them.
+
+**It empties what it writes.** TorQ's replay defaults are kept whole, so the
+tables being replayed are cleared in the partitions the replay touches before it
+writes them. `--dry-run` prints the resolved plan and the start line and runs
+nothing.
 
 ## Listing things
 
@@ -384,7 +433,9 @@ file itself). The vendored README explains why the rest stay off: the KDB-X
 community edition's connection limits mean `reporter1`, `filealerter1`,
 `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off unless you have a fully-licensed
 kdb+/KDB-X. `killtick` and `tpreplay1` are on-demand utility processes, not part
-of the standing stack, so they also don't auto-start.
+of the standing stack, so they also don't auto-start - `tpreplay1` is what
+[`replay tplog`](#replaying-a-tickerplant-log) starts, for one replay, and it
+exits when the replay is done.
 
 ### Profiles
 
