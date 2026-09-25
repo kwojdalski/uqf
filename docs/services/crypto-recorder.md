@@ -1,4 +1,4 @@
-# Cryptorust recorders
+# Cryptorust
 
 cryptorust's kdb recorders publish real venue books and fills onto this stack's
 tickerplant; `cryptomock1` stands in for them. Starting, stopping and inspecting

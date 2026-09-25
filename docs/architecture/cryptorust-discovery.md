@@ -1,4 +1,4 @@
-# Can cryptorust be discovered by TorQ?
+# Cryptorust
 
 **Yes, but not as a discovery member --- and the distinction is the whole
 answer.** TorQ already tracks it, in the right place, and nothing surfaces that.
