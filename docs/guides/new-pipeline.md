@@ -36,7 +36,7 @@ There is no registry entry - the process is read from the job's own declaration.
 
 ![What uqs new-job writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
-Read it left to right. The **appends** are the whole reason the middle band
+Read it top to bottom. The **appends** are the whole reason the middle band
 exists: everything else is picked up by a glob, and those files hold the facts
 the tree cannot derive from itself --- the table definition, `nsList`, the one
 hand-kept list of test namespaces, and `expected` in

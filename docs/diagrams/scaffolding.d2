@@ -21,9 +21,16 @@
 # behind would make "generated" and "implemented" look the same from outside.
 # That is the state stack_smoke.py exists to catch - a process that is `up`,
 # heartbeating, and publishing nothing.
+#
+# ON DIRECTION. Down, not right, for the reason
+# pipeline-architecture-example.d2's own header gives: right rendered this
+# 2489x1370, and a page that shows a wide strip at its column width shrinks
+# every label past reading. Down is taller than wide, and a reader scrolls.
+# The bands still read in order - plan, created, appended, picked up, yours -
+# it is the axis that changed, so new-pipeline.md says "top to bottom".
 
 
-direction: right
+direction: down
 
 vars: {
   d2-config: {
