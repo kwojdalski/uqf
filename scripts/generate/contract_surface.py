@@ -159,6 +159,11 @@ def export_env_surface() -> dict[str, Any]:
         return {"variables": []}
     names = []
     for line in doc.read_text(encoding="utf-8").splitlines():
+        # `lstrip` because the markdown formatter indents tables by two
+        # spaces. Without it this loop matches nothing and the export is
+        # silently EMPTY - no error, no warning, just a contract surface
+        # that has stopped mentioning environment variables.
+        line = line.lstrip()
         if not line.startswith("|"):
             continue
         cell = line.split("|")[1].strip()

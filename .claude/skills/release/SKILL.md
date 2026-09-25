@@ -1,11 +1,13 @@
 ---
 name: release
-description: Release a previously claimed GitHub issue (remove in-progress status). Use when done working on an issue, or when abandoning work.
+description: Release a previously claimed GitHub issue (remove in-progress
+  status). Use when done working on an issue, or when abandoning work.
 ---
 
 # Issue Release
 
-Release a GitHub issue that was previously claimed, removing the `in-progress` status.
+Release a GitHub issue that was previously claimed, removing the `in-progress`
+status.
 
 ## Usage
 
@@ -15,11 +17,11 @@ Release a GitHub issue that was previously claimed, removing the `in-progress` s
 
 ## Options
 
-- `--status <status>` — Optional final status to report:
-  - `resolved` — Issue was fixed (default)
-  - `blocked` — Issue is blocked by something else
-  - `invalid` — Issue turned out to be invalid
-  - `needs-info` — Waiting for more information
+- `--status <status>` --- Optional final status to report:
+  - `resolved` --- Issue was fixed (default)
+  - `blocked` --- Issue is blocked by something else
+  - `invalid` --- Issue turned out to be invalid
+  - `needs-info` --- Waiting for more information
 
 ## What It Does
 
@@ -41,7 +43,8 @@ Release a GitHub issue that was previously claimed, removing the `in-progress` s
    ```bash
    gh issue close <number> --comment "Resolved by session..."
    ```
-   This step is **mandatory** for `resolved` and `invalid` — do not skip it. For `blocked` or `needs-info`, leave the issue open.
+   This step is **mandatory** for `resolved` and `invalid` --- do not skip it.
+   For `blocked` or `needs-info`, leave the issue open.
 
 ## Example
 
@@ -57,7 +60,8 @@ Issue #87 is now closed.
 
 ## Session Matching
 
-The release comment includes the same session ID as the original claim comment. This creates a traceable audit trail:
+The release comment includes the same session ID as the original claim comment.
+This creates a traceable audit trail:
 
 ```
 # Claim comment
@@ -87,7 +91,9 @@ Other skills should call this when done:
 ## Important
 
 - Always include the same session ID as the claim for traceability
-- If you can't find the original claim comment, generate a new session ID and note "session ID unknown"
+- If you can't find the original claim comment, generate a new session ID and
+  note "session ID unknown"
 - Do not release an issue without removing the `in-progress` label
-- Only close issues that are actually resolved or invalid; use `blocked` or `needs-info` for others
+- Only close issues that are actually resolved or invalid; use `blocked` or
+  `needs-info` for others
 - Do not use emojis

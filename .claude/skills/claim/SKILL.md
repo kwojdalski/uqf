@@ -1,11 +1,14 @@
 ---
 name: claim
-description: Claim a GitHub issue as in-progress to coordinate work across multiple Claude Code sessions. Other skills should call this before starting work on an issue.
+description: Claim a GitHub issue as in-progress to coordinate work across
+  multiple Claude Code sessions. Other skills should call this before starting
+  work on an issue.
 ---
 
 # Issue Claim
 
-Claim a GitHub issue as in-progress. This prevents multiple Claude Code sessions from working on the same issue simultaneously.
+Claim a GitHub issue as in-progress. This prevents multiple Claude Code sessions
+from working on the same issue simultaneously.
 
 ## Usage
 
@@ -55,11 +58,12 @@ Issue #87 is now claimed by this session.
 
 ## Stale Claims
 
-If an issue has `in-progress` label but the claim is older than 4 hours, treat it as stale and allow re-claiming without confirmation.
+If an issue has `in-progress` label but the claim is older than 4 hours, treat
+it as stale and allow re-claiming without confirmation.
 
 ## Labels Used
 
-- `in-progress` — Indicates someone is actively working on this issue
+- `in-progress` --- Indicates someone is actively working on this issue
 
 ## Integration
 

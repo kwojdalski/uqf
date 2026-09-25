@@ -268,6 +268,11 @@ def documented() -> tuple[set[str], set[str]]:
     exact: set[str] = set()
     prefixes: set[str] = set()
     for line in DOC.read_text(encoding="utf-8").splitlines():
+        # `lstrip` because the formatter indents tables by two spaces, which
+        # is still a table to any markdown renderer (a block may be indented
+        # up to three) but was not to this parser: the whole page read as
+        # zero documented variables and every read variable as undocumented.
+        line = line.lstrip()
         if not line.startswith("|"):
             continue
         cell = line.split("|")[1].strip()
