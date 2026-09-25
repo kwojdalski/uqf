@@ -240,7 +240,7 @@ def test_endpoint_reports_unconfigured_as_422(tmp_path):
 
 
 def test_endpoint_carries_no_airflow_owned_fields(tmp_path):
-    """ETL-15: these files carry q's facts only. Retry counts, task ordering,
+    """These files carry q's facts only. Retry counts, task ordering,
     timeouts and concurrency are Airflow's, and inferring them here is the
     cross-layer inference the framework forbids.
     """

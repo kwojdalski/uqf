@@ -1,4 +1,4 @@
-// run_backfill_process.q - the q-backfill-process lane (ETL-21).
+// run_backfill_process.q - the q-backfill-process lane.
 //
 // What separates this lane from q-unit is not the assertions but the
 // ENVIRONMENT. These checks are meaningless in-process:
@@ -96,12 +96,12 @@ check["a fresh process resumes from the cursor on disk";any rout like\: "CURSOR:
 cout:@[{system x};rchild;{enlist "SPAWN-FAILED: ",x}];
 check["a cleared checkpoint gives a fresh process nothing to resume from";any cout like\: "CURSOR:0Np*"];
 
-/ --- the coverage ledger survives the process (ETL-07) -------------------
+/ --- the coverage ledger survives the process -------------------
 
 / The requirement calls etl_coverage the channel for "durable cross-process
 / completeness". It was neither: an in-memory table created by attach, never
 / written anywhere, so a bounded worker - which runs a range and exits - took
-/ its coverage with it and ETL-13's skip-what-is-covered could not fire
+/ its coverage with it and skip-what-is-covered could not fire
 / across runs. Nothing caught that, because a single long-lived process
 / behaves correctly.
 / .

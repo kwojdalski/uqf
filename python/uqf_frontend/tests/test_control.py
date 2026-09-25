@@ -317,7 +317,7 @@ def test_a_backfill_value_a_shell_would_interpret_is_refused(writeable, monkeypa
 
 @pytest.mark.parametrize("field", ["worker", "source_version", "range_from", "range_to"])
 def test_every_backfill_field_is_required(writeable, field):
-    """ETL-02 at the HTTP surface: a backfill that guessed a range would
+    """The explicit-range rule at the HTTP surface: a backfill that guessed a range would
     publish the wrong window and record it as covered."""
     resp = writeable.post("/control/backfill", json=_backfill_body(**{field: ""}))
     assert resp.status_code == 422

@@ -142,7 +142,9 @@ or to the code that enforces the rule.
 > `docs/reference/etl-framework-requirements.md` went the same way: every link
 > to it and every `ETL-nn` citation in `docs/`, the README and `.claude/`
 > removed, each sentence keeping its rule. The ~300 `ETL-nn` citations in code
-> comments and error messages were left, as asked.
+> comments and error messages were left, as asked - then removed the same day on
+> a follow-up ("strip ETL-nn from code too"), with `renumber_requirement_ids.py`
+> and its CI step, which existed only to keep that spelling.
 
 **No prescriptive meta-rules about the documentation process itself.** Describe
 what is, not how future documents must be filed.

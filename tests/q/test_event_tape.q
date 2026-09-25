@@ -22,7 +22,7 @@ tape:{[actions;sides;sizes]
         order_id:"j"$til count actions;
         pip_factor:(count actions)#10000j)}
 
-/ --- the shape is a registered source under the ETL-12 contract ------------
+/ --- the shape is a registered source under the source contract -----------
 
 test_the_event_source_is_registered_on_load:{[t]
     .qunit.assertEquals[`demo_events in .qsrc.registered[];1b;"loading the source file registers it, so declaration and implementation cannot drift"]};
@@ -225,7 +225,7 @@ tearDown_worker:{[] .qwrk.demo_events_backfill.cleanup[];}
 espec:{[from_n;to_n] `source_version`range_from`range_to!(`v1;.evttest.d from_n;.evttest.d to_n)}
 
 test_the_worker_satisfies_the_bounded_contract:{[t]
-    .qunit.assertEquals[.qwrk.demo_events_backfill.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies ETL-01 in full"]};
+    .qunit.assertEquals[.qwrk.demo_events_backfill.init .evttest.espec[0;10];.evttest.espec[0;10];"a 47-line declaration still satisfies the contract in full"]};
 
 test_the_worker_publishes_the_windowed_events:{[t]
     .qwrk.demo_events_backfill.init .evttest.espec[0;10];
@@ -244,7 +244,7 @@ test_the_worker_honours_dry_run:{[t]
     .qwrk.demo_events_backfill.init .evttest.espec[0;10];
     .qwrk.demo_events_backfill.run[];
     setenv[`UQF_DRY_RUN;""];
-    .qunit.assertEquals[(count value `event_tape;count value `etl_coverage);(0;0);"ETL-14 comes free too - nothing published, no coverage staged"]};
+    .qunit.assertEquals[(count value `event_tape;count value `etl_coverage);(0;0);"dry run comes free too - nothing published, no coverage staged"]};
 
 / The two workers must not share state. They have separate namespaces and
 / separate `progress` globals for exactly this reason - stamped one set per
@@ -259,7 +259,7 @@ test_the_two_workers_have_separate_state:{[t]
 
 / The declared width is hourly, but the fixture's range is ten SECONDS, so
 / the single window is clipped to the range - the final window is never
-/ extended past to_ts (ETL-18). The first draft of this test asserted the
+/ extended past to_ts. The first draft of this test asserted the
 / window was an hour wide and failed, which is the clipping working: a
 / window running past the requested range would record coverage for a range
 / nobody asked for.
@@ -429,7 +429,7 @@ test_the_events_worker_checkpoint_delegates:{[t]
         "the cursor written through the delegator is the one the shell stores"]};
 
 test_facts_on_an_empty_window_says_so_rather_than_computing_infinities:{[t]
-    / ETL-07 records a zero-row window deliberately, so `facts` receives one.
+    / Coverage records a zero-row window deliberately, so `facts` receives one.
     / min/max over an empty column yields infinities, which would be recorded
     / as though they were observations of the data.
     r:.qwrk.demo_events_backfill.facts[0#.qfeed.demo_events.fixture[]];

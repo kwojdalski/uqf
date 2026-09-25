@@ -242,7 +242,7 @@ def start_backfill(
     the honest answer to "did it work" is that endpoint, not this one's
     response body.
 
-    The range is REQUIRED and has no default, which is ETL-02 reaching the
+    The range is REQUIRED and has no default, which is the explicit-range rule reaching the
     HTTP surface: a backfill that guessed a range would publish the wrong
     window and record it as covered. The four values reach the process as the
     command-line flags `scripts/processes/torq_backfill.q` reads, built by the
@@ -255,7 +255,7 @@ def start_backfill(
     if not source_version:
         raise ValidationFailed(
             "source_version is required - coverage recorded under one source release "
-            "says nothing about another (ETL-09)"
+            "says nothing about another"
         )
     for name, raw in (("range_from", range_from), ("range_to", range_to)):
         if not raw:

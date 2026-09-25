@@ -13,7 +13,7 @@
 //     silently wrong while every count still matched.
 //
 // Not a qUnit suite and not in the default lane, for smoke_external_metadata.q's
-// reasons (ETL-20): it needs a driver, a database file and minutes of fetching.
+// reasons: it needs a driver, a database file and minutes of fetching.
 // It SKIPs, exit 0, when either is missing.
 //
 // Run, on macOS:

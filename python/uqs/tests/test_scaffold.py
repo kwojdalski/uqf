@@ -540,20 +540,17 @@ def test_no_driver_where_the_contract_test_needs_none(subscribes, publishes, col
 
 
 def test_the_query_note_cites_the_rule_that_actually_says_it():
-    """`parameterised, never concatenated` is not ETL-08.
-
-    It cited ETL-08 for months, and that number resolves - to the wrong rule.
-    ETL-08 is half-open intervals; the parameterised-query rule has no ETL-nn
-    of its own, so the note points at `src/etl/core/source_contract.q`, which
-    refuses a string query. A reader who
-    followed the number landed on interval arithmetic while reading about
-    query construction.
+    """`parameterised, never concatenated` is enforced by
+    `src/etl/core/source_contract.q`, which refuses a string query - so that is
+    what the note points at. It once cited the half-open interval rule instead,
+    and a reader who followed it landed on interval arithmetic while reading
+    about query construction.
     """
     plan = jobs.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
     query_notes = [note for note in plan.notes if ".query" in note]
     assert query_notes, "the scaffold no longer tells you to write query"
     assert "source_contract.q" in query_notes[0]
-    assert "ETL-08" not in query_notes[0], "ETL-08 is the interval rule, not this one"
+    assert "Half-open" not in query_notes[0], "the interval rule is not this one"
 
 
 def test_the_source_template_keeps_the_two_rules_apart():
@@ -562,5 +559,5 @@ def test_the_source_template_keeps_the_two_rules_apart():
     plan = jobs.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
     source = _body(plan, "citeprobe.q")
     assert "source_contract.q" in source, "the parameterised-query rule"
-    assert "ETL-08" in source, "the half-open interval rule"
+    assert "Half-open [range_from;range_to)" in source, "the half-open interval rule"
     assert "DIFFERENT rule" in source, "and the template says they are not the same one"

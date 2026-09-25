@@ -43,7 +43,7 @@ beforeNamespace_register_fixtures:{[]
     .qbfstate.register[`fixture_no_methods;`.qglobalsonly];
     }
 
-/ --- the contract (requirement ETL-01, the question bank) ------------------
+/ --- the contract (the question bank) ------------------------------------
 
 test_a_complete_worker_satisfies_the_contract:{[t]
     .qunit.assertEquals[.qbfstate.require_contract[`fixture_complete];`fixture_complete;"a complete worker passes and returns its own name, so it can sit inline in an init chain"]};
@@ -72,13 +72,13 @@ test_the_contract_lists_are_not_empty:{[t]
     .qunit.assertTrue[0<count .qbfstate.bounded_worker_globals;"there are contract globals to check"]};
 
 / source_version is mandatory because coverage recorded under one source
-/ release says nothing about another (requirement ETL-09). A worker that cannot
+/ release says nothing about another. A worker that cannot
 / name its release must not be able to record coverage.
 test_source_version_is_part_of_the_contract:{[t]
-    .qunit.assertTrue[`source_version in .qbfstate.bounded_worker_globals;"source_version is contractually required (ETL-09)"]};
+    .qunit.assertTrue[`source_version in .qbfstate.bounded_worker_globals;"source_version is contractually required"]};
 
 test_the_range_bounds_are_part_of_the_contract:{[t]
-    .qunit.assertTrue[all `range_from`range_to in .qbfstate.bounded_worker_globals;"a bounded worker must make its bound explicit (ETL-02)"]};
+    .qunit.assertTrue[all `range_from`range_to in .qbfstate.bounded_worker_globals;"a bounded worker must make its bound explicit"]};
 
 / --- the single-instance lock ------------------------
 
@@ -116,7 +116,7 @@ test_the_lock_records_its_owner:{[t]
     .qunit.assertTrue[`pid in key owner;"the lock records the holding pid, so a stale lock can be diagnosed rather than deleted blindly"];
     .qbfstate.release_lock[`lock_owner]};
 
-/ --- the shell (the question bank, requirement ETL-04) --------------------
+/ --- the shell (the question bank) ----------------------------------------
 
 test_run_pass_returns_progress_on_success:{[t]
     spec:`source_version`range_from`range_to!(`v1;2026.09.13D00:00:00.000000000;2026.09.14D00:00:00.000000000);

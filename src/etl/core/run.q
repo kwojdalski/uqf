@@ -27,7 +27,7 @@
 / .
 / WHY run_id IS AMBIENT AND NOT A PARAMETER
 / .
-/ ETL-09 argues that source_version must be a required parameter, because an
+/ source_version is a required parameter, because an
 / optional filter is one a caller forgets. run_id looks similar and is not.
 / source_version is a CHOICE the caller makes - which release am I recording
 / against - and a wrong choice is silent corruption. run_id is a FACT about

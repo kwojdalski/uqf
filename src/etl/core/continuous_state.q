@@ -1,7 +1,7 @@
 / continuous_state.q - the continuous-worker poll-and-cursor pattern
 / (.qcont).
 / .
-/ Implements requirement ETL-03: "implement continuous workers as long-running
+/ The continuous-worker pattern: "implement continuous workers as long-running
 / poll loops: load a local cursor at startup, publish a transformed page,
 / then advance and persist the cursor. Do not publish a resume-completion
 / claim merely because a continuous cursor advanced."
@@ -9,11 +9,11 @@
 / THE ASYMMETRY WITH BOUNDED WORKERS IS DELIBERATE
 / .
 / There is no registry here and no enforced contract, unlike
-/ .qbfstate.bounded_workers. ETL-01/ETL-02 give bounded workers both because the
+/ .qbfstate.bounded_workers. Bounded workers get both because the
 / thing being prevented is specific: "a bounded worker must not silently
 / become an unbounded tailer". A continuous worker is already unbounded, so
 / there is no such failure to prevent, and a registry with nothing to enforce
-/ is ceremony. ETL-22/ETL-24 (issue #62) ask whether that should change; this
+/ is ceremony. Issue #62 asks whether that should change; this
 / file deliberately does not pre-empt that answer by inventing a contract.
 / .
 / THE SENTENCE THIS FILE EXISTS TO ENFORCE
@@ -28,7 +28,7 @@
 / .
 / Freshness is reported instead, which is the honest statement a consumer of
 / continuous output can actually use. That it is not a cross-worker contract
-/ is ETL-22's open question, and `freshness` says so at the point of use.
+/ is #62's open question, and `freshness` says so at the point of use.
 
 \d .qcont
 
@@ -40,7 +40,7 @@
 / resume reading a tailer's cursor would skip history it never published.
 cursor_path:{[worker] (.qbfstate.lock_dir[]),"/",string[worker],".cursor"}
 
-/ Load the cursor at startup (ETL-03).
+/ Load the cursor at startup.
 / .
 / Returns 0Np when there is none, which a worker reads as "start from
 / whatever its own policy says" - typically now, or a configured lookback.
@@ -59,7 +59,7 @@ load_cursor:{[worker]
     @[{"P"$x};saved`cursor;{0Np}]}
 
 / Persist the cursor AFTER the page it acknowledges has been published
-/ (ETL-03, ETL-05).
+/.
 / .
 / The ordering is the requirement. Persisting first and publishing second
 / means a crash between them loses the page for good: the cursor says it was
@@ -94,7 +94,7 @@ clear_cursor:{[worker]
 / A cursor going backwards is the one way a tailer silently re-publishes: it
 / re-reads a page it has already handled, and because continuous output has
 / no coverage ledger, nothing anywhere records that it happened twice. A
-/ bounded worker is protected from the same mistake by ETL-13's coverage
+/ bounded worker is protected from the same mistake by its coverage
 / precheck; a continuous worker has only this.
 / .
 / Equal is also refused. A page that does not move the cursor means the poll
@@ -117,11 +117,11 @@ advance:{[worker;current;next_cursor]
 / How current is this worker's output?
 / .
 / This is the honest statement a consumer of continuous output can make, and
-/ it is deliberately NOT a completeness claim (ETL-03). "I have seen up to
+/ it is deliberately NOT a completeness claim. "I have seen up to
 / 09:41" says nothing about whether everything before 09:41 is published -
 / only that the tailer has passed it.
 / .
-/ ETL-22 asks whether continuous workers need a framework-level public
+/ Issue #62 asks whether continuous workers need a framework-level public
 / freshness contract. They do not have one: this is per-worker, there is no
 / cross-worker aggregate, and nothing consuming continuous output has a
 / sanctioned way to ask "is this fresh enough". Reporting the gap in the
@@ -134,11 +134,11 @@ freshness:{[worker]
 
 / ----------------------------------------------------- DATASET FRESHNESS
 
-/ worker -> the dataset it feeds (ETL-22, decided on #62).
+/ worker -> the dataset it feeds (decided on #62).
 / .
-/ The one dict ETL-22 needed. It is the only registry continuous workers
+/ The one dict #62 needed. It is the only registry continuous workers
 / have, and it is deliberately NOT a contract: registering says which
-/ dataset a tailer feeds, nothing about how it must behave. ETL-24's
+/ dataset a tailer feeds, nothing about how it must behave. #62's
 / "no enforced lifecycle for continuous workers" stands.
 feeds:(`symbol$())!`symbol$()
 
@@ -150,7 +150,7 @@ register_feeder:{[worker;dataset]
 
 feeders_of:{[dataset] key[feeds] where value[feeds]=dataset}
 
-/ How current is a DATASET, across every worker that feeds it (ETL-22)?
+/ How current is a DATASET, across every worker that feeds it?
 / .
 / A dataset is only as fresh as its SLOWEST feeder. Three tailers with
 / cursors at 09:41, 09:41 and 09:12 mean the dataset is current to 09:12,
@@ -166,7 +166,7 @@ feeders_of:{[dataset] key[feeds] where value[feeds]=dataset}
 / .
 / Still not a completeness claim, and the payload says so. This aggregates
 / "seen up to here" across feeders; it does not say everything before that
-/ point is published. That distinction is ETL-03's, and it survives
+/ point is published. That distinction is the continuous-worker pattern's, and it survives
 / aggregation unchanged.
 / @return dict of dataset, cursor (min), lag (max), laggard, feeders, and
 /   is_completeness_claim (always 0b)
@@ -203,11 +203,11 @@ is_fresh:{[worker;tolerance]
 
 / ------------------------------------------------------------------ POLL
 
-/ One poll iteration: fetch a page, publish it, advance (ETL-03).
+/ One poll iteration: fetch a page, publish it, advance.
 / .
 / Returns a dict rather than looping, so the LOOP belongs to the worker's own
-/ timer and this function stays testable without one. That follows ETL-04's
-/ split: the page's transformation and the cursor arithmetic are
+/ timer and this function stays testable without one. That follows the
+/ pure/impure split: the page's transformation and the cursor arithmetic are
 / deterministic and unit-testable, while the timer that calls this lives in
 / the shell.
 / .

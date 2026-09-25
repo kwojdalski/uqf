@@ -1,11 +1,11 @@
-// test_etl_lifecycle.q - the ETL-18 lifecycle coverage and the ETL-19 doubles
+// test_etl_lifecycle.q - the lifecycle coverage and the doubles
 // discipline. Load src/etl/core/status.q, src/etl/core/backfill_state.q,
 // src/etl/core/materialisation.q, src/etl/core/worker_config.q,
 // src/etl/core/worker_runtime.q, tests/lib/etl_test_doubles.q,
 // tests/q/reference_worker.q, tests/lib/qunit.q and tests/lib/testutil.q
 // before this file.
 //
-// ETL-18 names SIX bounded-lifecycle decision points, each "a place where a
+// There are SIX bounded-lifecycle decision points, each "a place where a
 // wrong answer is silent":
 //
 //   1. contract completeness       5. coverage staging
@@ -71,7 +71,7 @@ test_a_worker_missing_one_method_is_rejected:{[t]
 
 test_init_records_the_run_specification:{[t]
     got:.qrefw.init .lifecycletest.spec_for[`v1;1;4];
-    .qunit.assertEquals[got;.lifecycletest.spec_for[`v1;1;4];"the bound is explicit and inspectable after init (ETL-02)"]};
+    .qunit.assertEquals[got;.lifecycletest.spec_for[`v1;1;4];"the bound is explicit and inspectable after init"]};
 
 / --- 2. cursor advancement ----------------------------------------------
 
@@ -174,13 +174,13 @@ test_publication_precedes_coverage_which_precedes_the_checkpoint:{[t]
         {.qrefw.publish ([] px:enlist 1.5)}];
     / coverage and the checkpoint are observable as state; publish is
     / observable only through the double's call log, which is exactly why
-    / ETL-19 permits doubling it.
+    / The doubles rule permits doubling it.
     .qunit.assertEquals[
         (.qetldbl.call_order[];count value `etl_coverage;not null .qbfstate.load_checkpoint[`reference;spec]);
         (enlist `publish;1;1b);
         "publish ran, then coverage was staged, then the cursor was saved"]};
 
-/ A whole run, window by window, with every adapter doubled: the ETL-19 case.
+/ A whole run, window by window, with every adapter doubled: the doubles case.
 / NOTE on the shape of every run loop below. finish_window takes a NILADIC
 / publish function, and `{[w] ...}[w]` is not one: a fully-applied projection
 / in q is a CALL, so it runs immediately and hands finish_window a number,
@@ -235,21 +235,21 @@ test_full_upstream_coverage_admits_the_run:{[t]
     .qmatz.stage_completion[`upstream;`;`v1;.lifecycletest.d 1;.lifecycletest.d 4;30];
     .qunit.assertEquals[.qwrt.require_upstream[`upstream;`;`v1;.z.p;.lifecycletest.d 1;.lifecycletest.d 4];1b;"a fully published upstream admits the run"]};
 
-/ --- ETL-19: the doubles discipline ---------------------------------------
+/ --- the doubles discipline -----------------------------------------------
 
 test_the_four_permitted_adapters_can_be_doubled:{[t]
     .qetldbl.reset[];
-    .qunit.assertEquals[.qetldbl.install[;{1}] each `fetch`publish`checkpoint`log;`fetch`publish`checkpoint`log;"ETL-19 permits exactly these four"]};
+    .qunit.assertEquals[.qetldbl.install[;{1}] each `fetch`publish`checkpoint`log;`fetch`publish`checkpoint`log;"the doubles rule permits exactly these four"]};
 
-/ The rule ETL-19 states twice, enforced rather than repeated. A suite where
+/ The rule the doubles discipline states twice, enforced rather than repeated. A suite where
 / stage_completion is a double passes whatever the real ledger does - so the
 / interval arithmetic deciding whether a range is complete goes untested
 / while every test name still says "coverage".
 test_the_coverage_ledger_must_not_be_doubled:{[t]
-    .qunit.assertError[{.qetldbl.install[x;{1}]};`stage_completion;"doubling the edges is not the same as testing the middle (ETL-19)"]};
+    .qunit.assertError[{.qetldbl.install[x;{1}]};`stage_completion;"doubling the edges is not the same as testing the middle"]};
 
 test_a_transform_must_not_be_doubled:{[t]
-    .qunit.assertError[{.qetldbl.install[x;{1}]};`transform;"deterministic business logic is tested directly, not through a double (ETL-19)"]};
+    .qunit.assertError[{.qetldbl.install[x;{1}]};`transform;"deterministic business logic is tested directly, not through a double"]};
 
 test_the_interval_arithmetic_must_not_be_doubled:{[t]
     .qunit.assertEquals[all {[a] not 0b~@[{.qetldbl.install[x;{1}]; 0b};a;{1b}]} each `compose`gaps`is_covered;1b;"compose, gaps and is_covered are the middle, and stay real"]};

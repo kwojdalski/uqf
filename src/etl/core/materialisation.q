@@ -25,13 +25,13 @@
 / .
 / The two things most easily got wrong here, both counter-intuitive:
 / .
-/   1. Coverage is RECORDED, not derived (ETL-07). It is not computed from the
+/   1. Coverage is RECORDED, not derived. It is not computed from the
 /      target data; a completion event is staged for every completed bounded
 /      window, INCLUDING AN EMPTY ONE. The empty-window rule is what makes
 /      "we ran and there was nothing" distinguishable from "we never ran" -
 /      and a derived ledger cannot express that difference at all.
 / .
-/   2. source_version is not optional and not advisory (ETL-09, ETL-10).
+/   2. source_version is not optional and not advisory.
 /      Coverage recorded under one source release says nothing about
 /      another, so every read filters on it and intervals from different
 /      versions are NEVER merged to satisfy a dependency.
@@ -63,7 +63,7 @@
 / .
 / So `partition` is now the fourth dimension of the coverage key, and it is a
 / REQUIRED parameter on write AND on read, for the reason source_version is
-/ (ETL-09): an optional filter is one a caller forgets, and forgetting THIS
+/: an optional filter is one a caller forgets, and forgetting THIS
 / one reports a gap-ridden range as complete. It is required by ARITY - every
 / signature below takes it positionally - so omitting it is an arity error at
 / the call site, never a silent default.
@@ -97,7 +97,7 @@
 / add attribution that was absent.
 / .
 / It is written from .qrun.current[] rather than passed in - see that file's
-/ header for why an ambient fact is not the same as ETL-09's required choice.
+/ header for why an ambient fact is not the same as source_version's required choice.
 / .
 / A LEDGER WRITTEN BEFORE THIS COLUMN EXISTED will now fail require_schema
 / with "missing run_id". That is deliberate and is the whole point of the
@@ -110,7 +110,7 @@ schema:`dataset`partition`source_version`range_from`range_to`rows_published`reco
 
 / Create the ledger if absent.
 / .
-/ Append-only in the sense ETL-07 means: no row is ever deleted, and no fact
+/ Append-only in the strict sense: no row is ever deleted, and no fact
 / about a window is edited once written. `supersede` is the one writer that
 / updates, and it only ever stamps `superseded_at` on a row whose claim has
 / been withdrawn - the claim itself stays readable at any earlier as-of
@@ -192,11 +192,11 @@ attach:{[]
     existed:`etl_coverage in tables `.;
     init_ledger[];
     if[existed; require_schema[]];
-    / Pick up what earlier processes recorded. THIS is what makes ETL-07's
+    / Pick up what earlier processes recorded. THIS is what makes the ledger's
     / "durable cross-process completeness" true rather than aspirational: the
     / ledger used to be an in-memory table that died with the worker, so a
     / bounded worker - which runs a range and exits - took its own coverage
-    / with it and ETL-13's skip-what-is-covered could never fire across runs.
+    / with it and skip-what-is-covered could never fire across runs.
     / reload validates the shape it finds, so an older file is refused by
     / name rather than read.
     reload[];
@@ -244,7 +244,7 @@ require_schema:{[]
 
 / -------------------------------------------------------------- INTERVALS
 
-/ Validate a half-open [from;to) interval (ETL-08).
+/ Validate a half-open [from;to) interval.
 / .
 / Rejecting empty and reversed intervals at construction is what stops a
 / zero-width backfill reporting success: a window where from=to covers
@@ -257,7 +257,7 @@ require_interval:{[range_from;range_to]
     (range_from;range_to)}
 
 / Merge overlapping and boundary-adjacent intervals, leaving real gaps
-/ (ETL-08).
+/.
 / .
 / "Only at their common boundary" is the load-bearing phrase. With half-open
 / intervals [Mon;Tue) and [Tue;Wed) are contiguous with nothing between
@@ -398,7 +398,7 @@ reload:{[]
 / resulting rank error instead of the failure it was written for.
 current_run:{[] @[{.qrun.current[]};::;0Ng]}
 
-/ Stage a completion event for one completed bounded window (ETL-07).
+/ Stage a completion event for one completed bounded window.
 / .
 / Called for EVERY completed window, including one that published no rows.
 / That is not an oversight to optimise away: an empty window is positive
@@ -406,14 +406,14 @@ current_run:{[] @[{.qrun.current[]};::;0Ng]}
 / reader cannot distinguish that from a range never attempted. Recording
 / rows_published=0 is the whole point.
 / .
-/ Only ever called AFTER the underlying work is complete (ETL-07), which is
-/ the same publish-before-acknowledge ordering ETL-05 requires of cursors.
+/ Only ever called AFTER the underlying work is complete, which is
+/ the same publish-before-acknowledge ordering cursors follow.
 / @param dataset the dataset completed, e.g. `markouts
 / @param partition the slice of that dataset this window covers - `EURUSD, a
 /   venue, a region - or ` when the dataset has no partition dimension.
 /   Required, and required positionally: see the header on why arity rather
 /   than a null check is what stops a caller forgetting it
-/ @param source_version the immutable source-release label (ETL-09)
+/ @param source_version the immutable source-release label
 / @param range_from window start
 / @param range_to window end, exclusive
 / @param rows_published how many rows the window published; 0 is legal and
@@ -423,7 +423,7 @@ current_run:{[] @[{.qrun.current[]};::;0Ng]}
 / @eg .qmatz.stage_completion[`markouts;`EURUSD;`v1;2026.09.13D00:00;2026.09.14D00:00;1234]
 stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_published]
     if[null source_version;
-        '"stage_completion: source_version must be set - coverage under one source release says nothing about another (ETL-09)"];
+        '"stage_completion: source_version must be set - coverage under one source release says nothing about another"];
     require_interval[range_from;range_to];
     init_ledger[];
     / Reload, insert, persist - all three under the lock, so a second process
@@ -445,9 +445,9 @@ stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_pub
 / Every coverage interval for one dataset at one source release.
 / .
 / source_version is a required parameter rather than an optional filter,
-/ because ETL-09 requires consumers to filter on it and an optional filter is
+/ because consumers must filter on it and an optional filter is
 / one a caller forgets. Intervals from other versions are not returned, so
-/ they cannot be merged into this answer (ETL-10).
+/ they cannot be merged into this answer.
 / @param dataset the dataset to report on
 / @param source_version the release to report for
 / @return a table of composed intervals
@@ -504,7 +504,7 @@ missing:{[ds;part;version;as_of;from_ts;to_ts]
 
 / Admission check: refuse the caller unless the range is fully covered.
 / .
-/ ETL-11 requires that local historical reads, INCLUDING this check, go
+/ Local historical reads, INCLUDING this check, must go
 / through a gateway addressing both `rdb and `hdb. That matters because
 / completion data moves after EOD: a check bound to an rdb-only handle
 / starts returning false gaps the morning after, for data that is present

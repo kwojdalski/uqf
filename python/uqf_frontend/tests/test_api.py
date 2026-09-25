@@ -218,7 +218,7 @@ def test_coverage_reports_gaps_for_a_requested_range(client_for):
 
 
 def test_coverage_filters_on_source_version(client_for):
-    """ETL-09: the version is passed to q, not applied afterwards in Python."""
+    """The version is passed to q, not applied afterwards in Python."""
     gw = _cov([])
     client_for(gw).get(
         "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v7"}

@@ -62,12 +62,12 @@ if[not ready; [stop_upstream pid; -1 "upstream never came up; log:"; -1 each rea
 / --- point the worker at it through the framework's own credential --------
 
 / The credential is the address, and it is set HERE, in the environment,
-/ because that is the only place the framework reads it from (ETL-07).
+/ because that is the only place the framework reads it from.
 / With it set, .qbw.init opens a live handle instead of using the fixture.
 setenv[`UQF_SOURCE_CRED_UPSTREAM_TRADES;"localhost:",string port];
 check["the framework sees a credential for the source";.qsrc.has_credentials `upstream_trades];
 
-/ --- the live schema check (ETL-12), against the real meta ----------------
+/ --- the live schema check, against the real meta ----------------
 
 h:hopen `$":localhost:",string port;
 check["validate_live accepts the declaration against the upstream's real meta";

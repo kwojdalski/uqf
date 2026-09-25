@@ -1,7 +1,7 @@
 """Bootstrapping, the env bridge, and driving lib/torq/torq.sh.
 
 bootstrap() is idempotent and regenerates the overlay config on every call
-from the vendored inputs plus uqf's own additions (ETL-17: never hand-edit
+from the vendored inputs plus uqf's own additions (never hand-edit
 vendored configuration, and never depend on a previously generated file
 still being correct)."""
 

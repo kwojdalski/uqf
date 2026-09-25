@@ -287,7 +287,7 @@ adopt_workers:{[]
 / Register every continuous feeder from .qcont.feeds.
 / .
 / A feeder's input is external by definition - it tails a live feed, which
-/ is why there is no coverage ledger on that path (ETL-22) - so it declares
+/ is why there is no coverage ledger on that path - so it declares
 / no inputs and appears as a root.
 adopt_feeders:{[]
     if[not `qcont in key `; :`$()];

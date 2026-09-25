@@ -155,7 +155,7 @@ def test_a_worker_config_key_is_required():
 
 @pytest.mark.parametrize(
     ("field", "message"),
-    [("worker", "worker name is required"), ("source_version", "ETL-09")],
+    [("worker", "worker name is required"), ("source_version", "says nothing about another")],
 )
 def test_a_backfill_needs_a_worker_and_a_version(field, message):
     args = {

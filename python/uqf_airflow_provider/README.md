@@ -8,7 +8,7 @@ This answers issue #55: Airflow/backfill task status reaches the frontend (and,
 here, Airflow itself) by reading the files q writes, not by a database table or
 a q-side call into Airflow's API.
 
-## What this package refuses to do (ETL-15)
+## What this package refuses to do
 
 q owns process startup, source reads, query failures, checkpoints, run and
 window counts, and coverage events. Airflow owns task ordering, scheduling,

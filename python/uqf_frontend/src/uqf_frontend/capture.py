@@ -23,7 +23,7 @@ The design is deliberately dull: a watermark of the newest row captured, a
 fetch of everything strictly newer, an append to a sink, then the watermark
 advances - and only after the append succeeds, so a failed write is retried
 rather than skipped. That ordering is the same publish-before-checkpoint rule
-the ETL framework states in ETL-05.
+the ETL framework follows for cursors.
 """
 
 from __future__ import annotations
@@ -144,7 +144,7 @@ class UsageCapture:
             except Exception as exc:
                 result.failed[proc_result.process] = f"sink write failed: {exc}"
                 continue
-            # Advance only after a successful write (ETL-05's ordering).
+            # Advance only after a successful write (publish, then acknowledge).
             newest = max(_aware(r["time"]) for r in rows if r.get("time") is not None)
             self._watermarks[proc_result.process] = newest
             result.captured[proc_result.process] = len(rows)
@@ -154,7 +154,7 @@ class UsageCapture:
 
 def _aware(value: Any) -> dt.datetime:
     """q stores UTC and kola returns naive datetimes, so label rather than
-    convert (ETL-08/R9.1).
+    convert.
     """
     if isinstance(value, dt.datetime):
         return value if value.tzinfo else value.replace(tzinfo=dt.UTC)

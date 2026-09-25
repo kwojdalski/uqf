@@ -20,7 +20,7 @@
 
 # --- Needs a live external system --------------------------------------
 # These reach a real database, a real ODBC driver or a real qls server. The
-# deterministic suite has no such thing by design (ETL-20), and the smoke
+# deterministic suite has no such thing by design, and the smoke
 # lanes that do exercise them are not part of this run.
 .qbw.connect
 .qodbc.close

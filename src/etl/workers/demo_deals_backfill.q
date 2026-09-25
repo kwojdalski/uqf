@@ -14,7 +14,7 @@
 / WHERE THE CONTRACT'S NAMES ARE
 / .
 / In this namespace, stamped by the define call at the bottom (#227):
-/ ETL-01's globals and the delegating methods are written here by .qbw
+/ The contract's globals and the delegating methods are written here by .qbw
 / because require_contract looks for them HERE, and a worker that wanted a
 / different fetch or publish would define its own above that call. This
 / file declares only what is this worker's: its check and its transform.

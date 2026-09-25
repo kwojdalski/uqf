@@ -74,8 +74,7 @@ append a rule you inferred; only ones the maintainer actually stated.
   change that is wrong, not the position.
 - **The gates that touch docs**, so you know what will fail:
   `check_doc_references.py`, `generate_man_registry.py --check`,
-  `generate_operational_docs.py --check`, `check_env_reference.py`,
-  `renumber_requirement_ids.py --check`.
+  `generate_operational_docs.py --check`, `check_env_reference.py`.
 
 ## Rules
 
@@ -90,9 +89,7 @@ append a rule you inferred; only ones the maintainer actually stated.
   oddly, say so in your report and let the maintainer decide --- do not quietly
   correct them.
 - **This repository is public.** No bank table names, hostnames, schema shapes
-  or business logic, in prose or examples. Generic analogues only. A requirement
-  citation is `bank E-nn`, lowercase prefix --- a bare `E-nn` fails
-  `renumber_requirement_ids.py --check`.
+  or business logic, in prose or examples. Generic analogues only.
 - **Do not add prescriptive meta-rules about documenting.** Describe what is. A
   section telling future writers how to file their documents was removed from
   `docs/README.md` on request.

@@ -30,7 +30,7 @@
 /                   cancels and trades, so rows alone say nothing about how
 /                   much of the window is actual execution.
 / .
-/ An empty batch is legal (ETL-07 records a zero-row window deliberately), so
+/ An empty batch is legal (coverage records a zero-row window deliberately), so
 / every aggregate here must survive it - hence the count guard rather than
 / min/max over an empty column, which would yield infinities and record them
 / as though they were observations.

@@ -1,5 +1,5 @@
 // reference_worker.q - a minimal bounded worker (.qrefw) that satisfies the
-// .qbfstate contract, for driving the ETL-18 lifecycle tests.
+// .qbfstate contract, for driving the lifecycle tests.
 //
 // This is TEST INFRASTRUCTURE, not a production worker. It deliberately does
 // not live in src/etl/workers/: what a real worker looks like is a design
@@ -9,11 +9,11 @@
 // Its source is synthetic and in-memory, so every lifecycle assertion is
 // deterministic. The adapters it calls go through .qetldbl, so a test can
 // make fetch fail on the third window, or count how many times publish ran,
-// without a live connection anywhere (ETL-19).
+// without a live connection anywhere.
 
 \d .qrefw
 
-/ --- the contract's required globals (ETL-02) ------------------------------
+/ --- the contract's required globals ------------------------------
 
 source_version:`;
 range_from:0Np;

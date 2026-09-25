@@ -72,7 +72,7 @@ def test_the_variable_that_is_read_from_dotenv_is_accepted(monkeypatch, tmp_path
 
 
 def test_a_secret_in_the_example_is_refused_naming_its_real_reader(monkeypatch, tmp_path):
-    """ETL-07: environment only, no file fallback, because a file fallback is
+    """Environment only, no file fallback, because a file fallback is
     how a credential ends up committed. The message says WHERE it is really
     read, so the fix is obvious."""
     rc, err = _run_with_example(

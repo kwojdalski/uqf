@@ -320,7 +320,7 @@ def create_app(
 
         Read from disk rather than from the gateway because q writes these
         and nothing publishes them over IPC. Carries only q's own facts -
-        see status.py on the ETL-15 boundary this deliberately does not cross.
+        see status.py on the authority boundary this deliberately does not cross.
         """
         authorise(request)
         statuses, unreadable = status.read_dir(settings.status_dir)

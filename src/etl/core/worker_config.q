@@ -1,7 +1,7 @@
 / worker_config.q - typed, validated worker configuration with a stated
 / precedence (.qwcfg).
 / .
-/ Implements the configuration half of requirement ETL-16, and the precedence
+/ Implements the configuration checks, and the precedence
 / decision recorded on issue #71:
 / .
 /   env  >  process_overrides.csv  >  config/backfill.yaml  >  code default
@@ -33,7 +33,7 @@
 / tree's three
 / process-definition files.
 / .
-/ Errors accumulate rather than failing on the first problem (ETL-16, and the
+/ Errors accumulate rather than failing on the first problem (the
 / shape canonical's own worker_config.q uses): a worker started with three
 / bad settings should be told about three, not discover them over three
 / restarts.
@@ -172,7 +172,7 @@ get_flag:{[k]
 / Reset the accumulated errors, before a fresh resolution.
 reset:{[] errors::(); ()}
 
-/ Throw if anything went wrong, naming every problem at once (ETL-16).
+/ Throw if anything went wrong, naming every problem at once.
 / .
 / Refusing to start beats starting with defaults silently substituted: a
 / worker that begins with a wrong window backfills the wrong data and

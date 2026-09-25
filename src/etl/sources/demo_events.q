@@ -2,7 +2,7 @@
 / (.qfeed.demo_events).
 / .
 / The ingestion half of issue #46. Shape and rationale in docs/architecture/event-tape.md;
-/ this file is the ETL-12 source declaration for it.
+/ this file is the source declaration for it.
 / .
 / SYNTHETIC BY DESIGN
 / .
@@ -50,7 +50,7 @@ tz:`UTC
 / ------------------------------------------------------------- THE QUERY
 
 / Parameterised, never concatenated. Half-open
-/ [range_from;range_to) per ETL-08 - >= on the lower bound and < on the
+/ [range_from;range_to) - >= on the lower bound and < on the
 / upper, so a boundary event is published exactly once.
 query:{[h;range_from;range_to]
     h({[from_ts;to_ts]

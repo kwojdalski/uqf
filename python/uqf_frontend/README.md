@@ -110,9 +110,8 @@ curl -s localhost:8000/query -H 'content-type: application/json' -d '{
 ```
 
 A timestamp **must** carry an explicit timezone offset. Everything is stored UTC
-(**ETL-08**, **R9.1**), and kola rejects a naive datetime anyway --- so a
-browser's local time is refused at the boundary with a reason rather than being
-silently wrong.
+and kola rejects a naive datetime anyway --- so a browser's local time is
+refused at the boundary with a reason rather than being silently wrong.
 
 ## Running
 
@@ -148,7 +147,7 @@ Configuration is environment-only, so credentials stay server-side:
   | `UQF_FRONTEND_STATUS_DIR`               | unset — where q writes status files (pairs with `UQFSTATUSDIR`)                                                        |
 
 A malformed numeric value fails at startup rather than falling back to a default ---
-the same posture **ETL-14** takes on the q side.
+the same posture the q side takes.
 
 ## Tests
 
@@ -185,15 +184,15 @@ and *names the missing ranges* when the requested window is not fully published:
                       "range_to":   "2026-09-16T00:00:00Z"}}
 ```
 
-`source_version` is **mandatory**, not optional, because **ETL-09** requires
-coverage consumers to filter on it --- coverage under one source release says
-nothing about another. The filter is applied inside the q program rather than
-afterwards in Python, so a caller cannot omit it.
+`source_version` is **mandatory**, not optional, because coverage consumers must
+filter on it --- coverage under one source release says nothing about another.
+The filter is applied inside the q program rather than afterwards in Python, so
+a caller cannot omit it.
 
-Interval composition follows **ETL-08**: `[range_from, range_to)` is half-open
-and adjacent intervals compose **only at their common boundary**, so `[Mon,Tue)`
-and `[Tue,Wed)` merge while `[Mon,Tue)` and `[Wed,Thu)` leave Tuesday as a
-reported gap. That arithmetic is pure and unit-tested without a gateway.
+Interval composition: `[range_from, range_to)` is half-open and adjacent
+intervals compose **only at their common boundary**, so `[Mon,Tue)` and
+`[Tue,Wed)` merge while `[Mon,Tue)` and `[Wed,Thu)` leave Tuesday as a reported
+gap. That arithmetic is pure and unit-tested without a gateway.
 
 ### The schema it reads
 
@@ -309,20 +308,19 @@ capture = UsageCapture(KolaFleet(settings), JsonlSink(Path("captured")))
 capture.capture_once()  # safe to call repeatedly, on any scheduler
 ```
 
-The ordering is deliberately dull and matches **ETL-05**'s
-publish-before-checkpoint rule: fetch everything strictly newer than the
-watermark, append to the sink, and advance the watermark **only after the append
-succeeds**. A failed write keeps the old watermark so the next pass retries the
-same rows rather than losing them, and because the fetch filters strictly
-greater, a successful pass captures each row exactly once.
+The ordering is deliberately dull and follows the publish-before-checkpoint
+rule: fetch everything strictly newer than the watermark, append to the sink,
+and advance the watermark **only after the append succeeds**. A failed write
+keeps the old watermark so the next pass retries the same rows rather than
+losing them, and because the fetch filters strictly greater, a successful pass
+captures each row exactly once.
 
 ## Backfill status
 
 `GET /ops/backfill` reads the status files q writes, rather than calling
-Airflow's REST API. That keeps q authoritative for the facts **ETL-15** says it
-owns and adds no Airflow dependency to a frontend that should work without one.
-Set `UQF_FRONTEND_STATUS_DIR` to the directory `.qstatus.status_dir` writes
-into.
+Airflow's REST API. That keeps q authoritative for the facts it owns and adds no
+Airflow dependency to a frontend that should work without one. Set
+`UQF_FRONTEND_STATUS_DIR` to the directory `.qstatus.status_dir` writes into.
 
 **The format is defined here, not inherited.** This tree has no Airflow provider
 to be compatible with, so `.qstatus.write_status` in `src/etl/core/status.q`
@@ -332,13 +330,13 @@ on one side would silently drop data on the other.
 
 ### The boundary this deliberately does not cross
 
-**ETL-15** splits authority: q owns process startup, source reads, query
-failures, checkpoints, run and window counts, and coverage events; Airflow owns
-task ordering, scheduling, retries, timeouts, concurrency and alerting. These
-files carry only the first set, and a test asserts no Airflow-owned field
-(`retries`, `try_number`, `timeout`, `concurrency`, `queue`) appears in the
-response. Inferring one layer's facts from the other's output is exactly what
-ETL-15 forbids.
+Authority is split: q owns process startup, source reads, query failures,
+checkpoints, run and window counts, and coverage events; Airflow owns task
+ordering, scheduling, retries, timeouts, concurrency and alerting. These files
+carry only the first set, and a test asserts no Airflow-owned field (`retries`,
+`try_number`, `timeout`, `concurrency`, `queue`) appears in the response.
+Inferring one layer's facts from the other's output is exactly what the split
+forbids.
 
 ### Three outcomes, not two
 
