@@ -12,7 +12,7 @@
 
 \d .qwrk.demo_events_backfill
 
-/ Materialisation metadata for one window (gap 2.3).
+/ Materialisation metadata for one window.
 / .
 / The framework already records rows, source_version and dry_run, because it
 / can know those without reading a column. Everything here needs to know what

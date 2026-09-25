@@ -1,11 +1,9 @@
 # How the pipeline framework thinks
 
 `src/etl/` has a shape, and the shape came from a small number of positions held
-consistently. This page states them, because the framework assessment
-([`pipeline-framework-gaps.md`](pipeline-framework-gaps.md)) says what each
-piece replaced, but not *why* the whole is arranged this way. Someone changing
-`src/etl/` needs the why, or the next change will be locally reasonable and
-globally wrong.
+consistently. This page states them, because the code says what each piece does,
+but not *why* the whole is arranged this way. Someone changing `src/etl/` needs
+the why, or the next change will be locally reasonable and globally wrong.
 
 Where a principle is enforced, the enforcement is named. A principle nothing
 enforces is an intention, and this page tries not to contain any.
@@ -271,9 +269,7 @@ escape function and everything routes through it.
 
 The concepts are lifted from asset-oriented orchestrators --- Dagster most
 directly. Asset, op, resource, IO manager, partition, asset check, run identity,
-config schema: the words mean here roughly what they mean there, and
-`pipeline-framework-gaps.md` is an explicit audit of this tree against that
-model.
+config schema: the words mean here roughly what they mean there.
 
 What was taken is the **asset-oriented framing**: the unit of work is *a dataset
 being made correct for a window*, not *a script that runs*. That is why the
@@ -292,9 +288,3 @@ of it harder, which the code records where it bit: reserved builtins that shadow
 at load time, an empty-vector-versus-empty-table distinction that heals itself,
 and a random number generator seeded identically in every process, so the
 obvious way to mint a unique id returns the same value everywhere.
-
-## See also
-
-- [`pipeline-framework-gaps.md`](pipeline-framework-gaps.md) --- the closed
-  assessment against Dagster: what each piece replaced, and the four differences
-  that are decisions.

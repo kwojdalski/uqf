@@ -124,7 +124,7 @@ check["and can answer is_covered from it";any covout like\: "COVERED:yes*"];
 supout:@[{system x};cchild;{enlist "SPAWN-FAILED: ",x}];
 check["a supersession survives the process too";any supout like\: "COVERED:no*"];
 
-/ --- the run ledger survives the process too (gap 2.3) -------------------
+/ --- the run ledger survives the process too ------------------------------
 
 / etl_coverage carries a run_id. Until the run ledger persisted as well,
 / that was a key into a table that died with the process that wrote it: a

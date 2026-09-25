@@ -105,7 +105,6 @@ website:
           - architecture/pipeline-philosophy.md
           - architecture/stack.md
           - architecture/pipeline-architecture-example.md
-          - architecture/pipeline-framework-gaps.md
           - architecture/event-tape.md
           - architecture/cryptorust-discovery.md
       - section: "Reference"

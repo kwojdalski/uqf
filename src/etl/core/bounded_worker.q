@@ -161,7 +161,7 @@ unpartitioned:`
 / INTENDED rather than emergent: registration order stops mattering, a new
 / optional key is one entry here, and no worker is handed a key it did not
 / ask for with a value it did not choose.
-/ `facts` is the worker's hook into materialisation metadata (gap 2.3): a
+/ `facts` is the worker's hook into materialisation metadata: a
 / monadic function from the fetched batch to a dict of symbol labels, whose
 / result is attached to the window's materialisation. The framework records
 / what it can know without a schema - rows, source_version, dry_run - and
@@ -539,7 +539,7 @@ checkpoint:{[worker;cursor] .qbfstate.save_checkpoint[worker;spec worker;cursor]
 / did succeed, and their coverage is what makes the retry cheap. Failed
 / windows stay uncovered, so the next run plans them again.
 run:{[worker]
-    / One run identity for the whole execution (gap 2.3), so every window
+    / One run identity for the whole execution, so every window
     / this run materialises is attributable to it and to each other. Begun
     / before the first window and closed with the run's own outcome, so an
     / execution that dies mid-flight leaves a row reading `running` rather
@@ -721,7 +721,7 @@ do_window:{[worker;w]
         w`range_from;w`range_to;publish_pending[worker]];
     .qlog.dbg[worker;"window published";
         `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
-    / Materialisation metadata (gap 2.3), recorded HERE rather than in
+    / Materialisation metadata, recorded HERE rather than in
     / finish_window because this is the only place the batch itself is in
     / hand - finish_window receives a niladic publisher, not rows.
     record_facts[worker;cfg;w;out;r];

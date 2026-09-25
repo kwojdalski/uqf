@@ -1,6 +1,6 @@
 / test_io_manager.q - where a worker's output goes (.iotest).
 / .
-/ Gap 2.1 of the framework assessment. The seam replaces four hardcoded lines
+/ The seam replaces four hardcoded lines
 / in .qbw.publish, so the first thing these prove is that the DEFAULT
 / behaviour is unchanged - a seam that quietly altered where every existing
 / worker writes would be a worse problem than the one it solves.

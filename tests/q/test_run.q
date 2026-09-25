@@ -1,5 +1,5 @@
 // test_run.q - tests for src/etl/core/run.q (run identity and
-// materialisation metadata, gap 2.3). Load src/etl/core/materialisation.q and
+// materialisation metadata). Load src/etl/core/materialisation.q and
 // src/etl/core/run.q before this file - .qrun.record calls
 // .qmatz.require_interval, and the attribution tests read the coverage ledger.
 

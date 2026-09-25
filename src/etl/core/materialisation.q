@@ -87,7 +87,7 @@
 / .
 / ON run_id, WHICH IS THE COLUMN THAT DID GET ADDED
 / .
-/ Gap 2.3 of the pipeline-framework assessment: every column above describes
+/ Every column above describes
 / the WINDOW, and none described the EXECUTION, so "which materialisations
 / came from one run" and "were these two datasets built together" had no
 / answer. run_id is that column. It differs from `partition` above in exactly
@@ -525,7 +525,7 @@ require_covered:{[ds;part;version;as_of;from_ts;to_ts]
 
 / ------------------------------------------------------- SUPERSESSION
 
-/ Every materialisation one execution produced (gap 2.3).
+/ Every materialisation one execution produced.
 / .
 / The question run_id was added to answer. A run that published three
 / datasets has three rows here, and a reader comparing two datasets can tell
