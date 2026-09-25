@@ -1,4 +1,4 @@
-# Scaffolding a normalizer
+# Normalizer
 
 A normalizer answers one question from several tables that each answer it
 differently. `executions1` turns FX `trades` and crypto `crypto_trades` into one
@@ -8,7 +8,7 @@ instrument. Downstream reads one shape and never learns there were two.
 It is an [etl](etl.md) with a specific job, and the scaffold knows enough about
 that job to write considerably more of it.
 
-## The command
+## Command
 
 ```bash
 uqs new-job all_fills --kind normalizer \

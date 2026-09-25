@@ -1,10 +1,10 @@
-# Scaffolding a feed
+# Feed
 
 A feed invents its own rows on a timer. Nothing upstream of it exists in the
 stack: the synthetic FX quotes, the order flow, the mock crypto recorder are all
 feeds. If your rows come from a plant table, you want [etl.md](etl.md) instead.
 
-## The command
+## Command
 
 ```bash
 uqs new-job pulsefeed --publishes pulse --columns "sym:symbol, px:float"
@@ -57,7 +57,7 @@ on_timer:{[]
 must produce everything, so whatever it needs between ticks --- a price level, a
 sequence number, an RNG seed --- is state in its own namespace.
 
-## The rules
+## Rules
 
 **Never publish `time`.** `.u.upd` stamps its own on receipt (invariant 1). A
 `time` column in your output is silently overwritten, so a row you stamped in
@@ -85,7 +85,7 @@ The payoff is the test. A feed whose logic is a pure function of its draws can
 be asserted exactly; one that calls `rand` inside its row builder can only be
 checked for shape.
 
-## The timer
+## Timer
 
 `period` is `0D00:00:01` by default --- one second. It is a field in the
 declaration, so changing it is a one-line edit, and a feed that should tick

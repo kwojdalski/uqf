@@ -88,7 +88,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `trades` | `uqs_tables.q` | `fxtradesfeed1` |
 | `wide_book` | `uqs_tables.q` | `widefeed1` |
 
-## The vendored stack
+## Vendored stack
 
 Unmodified TorQ Finance Starter Pack processes. uqf never edits the
 vendored `process.csv`; `bootstrap()` regenerates an overlay copy that

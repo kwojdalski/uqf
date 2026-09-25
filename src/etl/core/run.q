@@ -1,5 +1,4 @@
-/ run.q - run identity and materialisation metadata (.qrun). Closes gap 2.3
-/ of docs/architecture/pipeline-framework-gaps.md.
+/ run.q - run identity and materialisation metadata (.qrun).
 / .
 / WHAT WAS MISSING, AND WHY IT MATTERED
 / .
@@ -61,7 +60,7 @@ run_schema:`run_id`worker`process`host`pid`started_at`ended_at`status
 / The metadata table's columns, in order.
 / .
 / Long form - one row per fact - rather than one column per kind of fact. The
-/ whole point of gap 2.3's second half is that the metadata a pipeline wants
+/ whole point of materialisation metadata is that the metadata a pipeline wants
 / to attach is NOT known in advance: a row count, a min/max, a null fraction,
 / a checksum, the query text. A wide table would need a schema migration per
 / new kind of fact, which is precisely what stops anyone recording one.

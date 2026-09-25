@@ -1,10 +1,10 @@
-# The cryptorust recorders
+# Cryptorust
 
 cryptorust's kdb recorders publish real venue books and fills onto this stack's
 tickerplant; `cryptomock1` stands in for them. Starting, stopping and inspecting
 the stack as a whole is in [running the uqf stack](../guides/uqs.md).
 
-## The market-data recorder
+## Market-data recorder
 
 `uqs crypto start`/`stop`/`status` (a nested command group, not flat `crypto-*`
 commands - these don't drive `torq.sh`/`process.csv` at all, a distinct enough
@@ -46,7 +46,7 @@ demo's own `feed:pass` credential (see `appconfig/passwords/ feed.txt`) to
 authenticate against `stp1`'s access-list, same as any other feed process here -
 no separate cryptorust-side credential to set up.
 
-## The fills recorder
+## Fills recorder
 
 `uqs crypto fills-start`/`fills-stop`/`fills-status` are a separate proof of
 concept, alongside the book recorder above: cryptorust's own

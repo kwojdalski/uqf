@@ -1,8 +1,7 @@
 / io_manager.q - where a worker's output goes, as a declaration rather than a
 / hardcoded table insert (.qio).
 / .
-/ Gap 2.1 of docs/architecture/pipeline-framework-gaps.md. Before this,
-/ .qbw.publish was four lines and they decided everything:
+/ Before this, .qbw.publish was four lines and they decided everything:
 / .
 /     t:.qsrc.def[(.qbw.def worker)`source]`target;
 /     if[not t in tables `.; t set 0#batch];

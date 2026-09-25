@@ -186,9 +186,6 @@ usually belongs to exactly one.
   | **Scheduling and access**   | [`python/uqf_airflow_provider/`](python/uqf_airflow_provider), [`python/uqf_frontend/`](python/uqf_frontend), [`web/`](web)  | An Airflow sensor reading q-side status, an HTTP gateway over the fleet, and the React desk and operations app                                                                                                                                                                                                                                                                                            |
   | **Database metadata**       | [`src/metadata/`](src/metadata)                                                                                              | Partition-level profiling of an HDB: row counts, temporal span, null density and configurable group-by breakdowns, refreshed under an explicit bound and exposed to TorQ's DQE through a thin adapter. [The guide](docs/guides/metatables.md)                                                                                                                                                             |
 
-How `src/etl/` maps onto a Dagster-shaped framework is
-[pipeline-framework-gaps.md](docs/architecture/pipeline-framework-gaps.md).
-
 Authority is split deliberately between them: q and TorQ own process startup,
 source reads and coverage; Airflow owns ordering, retries and alerting. Neither
 infers the other's facts from log text. That rule, and the others the tree is
@@ -231,8 +228,8 @@ scripts/test.py all       # every lane except coverage, smoke and stack-smoke
 ```
 
 Thirteen lanes in all, one per layer. The full list, and what each proves that
-`q-unit` cannot, is [the CI guide](docs/guides/ci.md#the-lanes) --- it is the
-page that also says what the gates check and what CI cannot.
+`q-unit` cannot, is [the CI guide](docs/guides/ci.md#lanes) --- it is the page
+that also says what the gates check and what CI cannot.
 
 ### Coverage
 

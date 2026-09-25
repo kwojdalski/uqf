@@ -57,9 +57,8 @@ module is *for*.
   | [`examples/example_defaults.q`](../../src/examples/example_defaults.q)   | `.qexdef`  | shared example inputs used by docstrings and demos                                                                                 | —                                            |
 
 The data-engineering component is documented separately: see
-[pipeline-framework-gaps.md](../architecture/pipeline-framework-gaps.md) for how
-`src/etl/` maps onto a Dagster-shaped framework, what closed each gap it found,
-and what it deliberately does not have.
+[pipeline-philosophy.md](../architecture/pipeline-philosophy.md) for the
+positions `src/etl/` is built on.
 
 ## Conventions
 

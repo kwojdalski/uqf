@@ -1,4 +1,4 @@
-# Can cryptorust be discovered by TorQ?
+# Cryptorust discovery
 
 **Yes, but not as a discovery member --- and the distinction is the whole
 answer.** TorQ already tracks it, in the right place, and nothing surfaces that.
@@ -51,7 +51,7 @@ This is not a workaround. A client belongs in the client table; a service
 belongs in the server table. Discovery answers "what can I connect to", and
 nothing should ever connect to cryptorust.
 
-## The gap, and what closes it
+## What is missing, and what closes it
 
 Nothing in this tree reads `.clients.clients`. The frontend's `/ops/connections`
 uses `.gw.clients` --- the **gateway's** clients --- and cryptorust connects to

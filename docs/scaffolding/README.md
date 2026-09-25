@@ -1,4 +1,4 @@
-# Scaffolding a worker
+# Scaffolding
 
 `uqs new-job` writes the skeleton of a process: its q files, its table, its
 registry entry and a failing test. Four shapes, one page each. Every command

@@ -805,7 +805,7 @@ uqs query ".qlog.debug 1b" --port <port>              # a process already runnin
 `-verbose` is uqf's own flag, taken by every process script. It is not TorQ's
 `-debug`, which also stops the log going to its file.
 
-### The CLI's own logging
+### CLI's own logging
 
 `logs --level` filters what the *q processes* wrote. It says nothing about what
 `uqs` itself is doing, and the two are easy to confuse when a command reports

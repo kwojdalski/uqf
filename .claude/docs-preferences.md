@@ -75,9 +75,6 @@ contents, where it is read most and checked least.
 > *2026-09-22.* `docs/ROADMAP.md` said `Status: implemented` at line 8 and had a
 > "Still to do" section whose first item was headed `— DONE.`; 136 of its 146
 > lines were built candidates. Cut to the three items actually open.
-> `pipeline-framework-gaps.md` §2 narrated five closed gaps whose reasoning
-> already sat, at greater length, in the header of the module that closed each ---
-> replaced with a table naming that module per row.
 
 **Reasoning belongs in one place, next to the code it explains.** A design
 argument repeated in a document and in a module header will be updated in one of

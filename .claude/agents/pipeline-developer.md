@@ -26,12 +26,10 @@ shape of Dagster's concepts --- assets, ops, resources, IO managers, partitions,
 asset checks, run identity, config schemas --- implemented in q against TorQ,
 for a public repository that must never carry bank-internal detail.
 
-The framework's honest self-assessment lives in
-`docs/architecture/pipeline-framework-gaps.md`: what maps onto Dagster today,
-which gaps are closed, which are open, and which were deliberately ranked lower.
-**Read it before proposing any structural change** --- it already argues the
-shape of most work you will be asked to do, and it records what was decided
-against.
+The positions the framework is built on are in
+`docs/architecture/pipeline-philosophy.md`. **Read it before proposing any
+structural change** --- it already argues the shape of most work you will be
+asked to do, and it records what was decided against.
 
 ## The namespaces, in `src/etl/init.q`'s load order
 
@@ -98,9 +96,6 @@ Two registry facts that changed under you, and that a job no longer states:
 
 - **`.claude/skills/kdb-q-conventions/SKILL.md`** and its
   `q-language-reference.md` --- this repo's hard-won q gotchas.
-- **`docs/architecture/pipeline-framework-gaps.md`** --- the closed assessment
-  against Dagster: what each piece replaced, and the four differences that are
-  decisions rather than gaps.
 - **`src/etl/core/materialisation.q`'s `still_current`, `valid_at` and
   `supersede` comments** --- bitemporal coverage: what `superseded_at` means and
   why `is_covered` demands an as-of.

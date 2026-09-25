@@ -163,7 +163,7 @@ def render() -> str:
 
     lines += [
         "",
-        "## The vendored stack",
+        "## Vendored stack",
         "",
         "Unmodified TorQ Finance Starter Pack processes. uqf never edits the",
         "vendored `process.csv`; `bootstrap()` regenerates an overlay copy that",

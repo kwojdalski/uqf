@@ -12,7 +12,7 @@ dependencies come from `uv.lock`; `UV_LOCKED=true` also keeps the hooks' own
 revisions are pinned. The job token has only content and issue read access, and
 is supplied to the decision check through `GH_TOKEN`.
 
-## The lanes
+## Lanes
 
 One per layer. `all` is every lane except `coverage` and the two that reach
 outside the process, so it is what a release runs and not what an edit runs -
