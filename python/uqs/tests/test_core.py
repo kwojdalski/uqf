@@ -1356,10 +1356,12 @@ def test_every_on_demand_plant_client_still_has_a_producer_to_start_with():
         if pipeline.startwithall == "1" or pipeline.subscribes_dynamic:
             continue
         for table in pipeline.subscribed_tables:
-            # databento_mbp10 comes from an external Python feed handler and
-            # from the backfill; no pipeline publishes it, which its own
-            # note says.
-            if table == "databento_mbp10":
+            # A table fed from outside the stack has no in-stack producer by
+            # definition. Read from dependencies.EXTERNAL_PRODUCERS rather
+            # than named here: this was a hardcoded `databento_mbp10` until a
+            # second external feed arrived, and a list that has to be
+            # remembered in two places is one that will be updated in one.
+            if table in dependencies.EXTERNAL_PRODUCERS:
                 continue
             assert producers.get(table, set()) & declared, (
                 f"{pipeline.procname} is on-demand and subscribes to {table!r}, "

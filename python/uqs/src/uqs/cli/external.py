@@ -1,8 +1,8 @@
-"""The two external recorders: Databento, and cryptorust.
+"""The external publishers: Databento, Kafka, and cryptorust.
 
-Both are sub-apps (`uqs databento ...`, `uqs crypto ...`) driving
-a process this repository does not own. See cli/lifecycle.py for why the
-split is shaped this way.
+Each is a sub-app (`uqs databento ...`, `uqs kafka ...`, `uqs crypto ...`)
+driving a process this repository does not own. See cli/lifecycle.py for why
+the split is shaped this way.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from uqs.cli.shared import (
     app,
     console,
 )
-from uqs.external import crypto, databento_feed
+from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
     CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
@@ -93,6 +93,61 @@ def databento_status() -> None:
     """Whether the handler is running, its pid, and where its log lives."""
     status = databento_feed.databento_feed_status(_paths())
     table = Table(title="databento feed status")
+    table.add_column("field")
+    table.add_column("value")
+    for k, v in status.items():
+        table.add_row(k, v)
+    console.print(table)
+
+
+# Live Kafka. Its own group for the reason databento has one: it does not
+# drive torq.sh or process.csv either - the consumer is an external
+# publisher, and the q half of it (kafka_flow1) is an ordinary pipeline row.
+kafka_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="A Kafka topic into the tickerplant, deduplicated by kafka_flow1.",
+)
+app.add_typer(kafka_app, name="kafka")
+
+
+@kafka_app.command("start")
+def kafka_start(
+    brokers: Annotated[
+        str, typer.Option(help="bootstrap.servers for the Kafka cluster")
+    ] = kafka_feed.DEFAULT_BROKERS,
+    topic: Annotated[str, typer.Option(help="Topic to consume")] = kafka_feed.DEFAULT_TOPIC,
+    group: Annotated[
+        str, typer.Option(help="Consumer group id - the committed offsets belong to it")
+    ] = kafka_feed.DEFAULT_GROUP,
+) -> None:
+    """Start the Kafka consumer against the running stack's tickerplant.
+
+    Rows land on `kafka_client_flow` raw; `kafka_flow1` drops any the broker
+    has already delivered and republishes the rest onto `client_flow`.
+
+    Needs a reachable broker and `confluent-kafka` installed - neither ships
+    with this repository, and nothing in the default test lane needs either.
+    """
+    try:
+        pid = kafka_feed.start_kafka_feed(_paths(), brokers=brokers, topic=topic, group=group)
+    except UqsError as exc:
+        _die(exc)
+    console.print(f"kafka feed started (pid {pid})")
+
+
+@kafka_app.command("stop")
+def kafka_stop() -> None:
+    """Stop the Kafka consumer started by `kafka start`."""
+    kafka_feed.stop_kafka_feed(_paths())
+    console.print("kafka feed stopped")
+
+
+@kafka_app.command("status")
+def kafka_status() -> None:
+    """Whether the consumer is running, its pid, and where its log lives."""
+    status = kafka_feed.kafka_feed_status(_paths())
+    table = Table(title="kafka feed status")
     table.add_column("field")
     table.add_column("value")
     for k, v in status.items():

@@ -101,6 +101,23 @@ databento_mbp10:([]time:`timestamp$(); ts_event:`timestamp$(); sym:`g#`symbol$()
 / ARRIVED could not tell a stale feed from a fast one.
 databento_book:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
+/ Client FX flow as the external Kafka consumer publishes it - one row per
+/ consumed record, in the source contract's own field order. Written by
+/ python/uqs/src/uqs/external/kafka_feed.py rather than by any q process,
+/ the same way databento_mbp10 above and crypto_book below are.
+/ .
+/ `partition` and `offset` are the Kafka coordinates of the record, and they
+/ are columns rather than consumer-side bookkeeping BECAUSE the plant is the
+/ thing that has to survive a redelivery. At-least-once delivery means a
+/ rebalance or a restart can replay a record this table has already seen;
+/ kafka1 drops those by comparing against a per-partition high-water mark,
+/ which it can only do if the coordinates travel with the row.
+/ .
+/ `broker_time` is the broker's own timestamp, kept for the reason
+/ databento_mbp10 keeps ts_event: `time` says when we heard about the
+/ record, not when it happened, and their difference is the lag.
+kafka_client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); partition:`long$(); offset:`long$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$())
+
 / Written by the external cryptorust recorder rather than by any
 / scripts/torq_*.q process - see start_crypto_recorder. Carries `venue`
 / because a crypto book is venue-specific in a way an FX book here is not.
@@ -219,3 +236,6 @@ economic_calendar:([]time:`timestamp$(); event_id:`long$(); ccy:`symbol$(); even
 / duckdb_deals_backfill1's target: one mock FX deal read from DuckDB over ODBC.
 / deal_time is when it was dealt; time, as on every plant table, is the plant's.
 duckdb_deals:([]time:`timestamp$(); deal_time:`timestamp$(); deal_id:`long$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
+
+/ kafka_flow1's output. <one line: what a row means>
+client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$(); partition:`long$(); offset:`long$())

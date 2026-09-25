@@ -12,6 +12,7 @@ adding a new service is [adding a pipeline](../guides/new-pipeline.md).
   | [`cross-arbitrage.md`](cross-arbitrage.md) | `crossarb1`                               | the direct book against a synthetic route through other pairs                |
   | [`fx-positions.md`](fx-positions.md)       | `fxordersfeed1`, `fxpositions1`           | a running book with limits and breach alerts                                 |
   | [`databento.md`](databento.md)             | `databento1`                              | live Databento MBP-10 folded into the book shape                             |
+  | [`kafka.md`](kafka.md)                     | `kafka_flow1`                             | a Kafka topic deduplicated on (partition;offset) into client flow            |
   | [`crypto-recorder.md`](crypto-recorder.md) | `cryptomock1`, cryptorust's recorders     | venue books and fills from cryptorust, or a mock of them                     |
   | [`tap.md`](tap.md)                         | `tap1`                                    | a diagnostic subscriber that logs every batch                                |
 

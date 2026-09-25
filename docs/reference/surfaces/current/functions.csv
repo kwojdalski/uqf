@@ -248,6 +248,20 @@ qfeed.demo_events,target,value,,
 qfeed.demo_events,time_column,value,,
 qfeed.demo_events,types,value,,
 qfeed.demo_events,tz,value,,
+qfeed.duckdb_deals,adapt,function,1,raw
+qfeed.duckdb_deals,columns,value,,
+qfeed.duckdb_deals,epoch_ns_literal,function,1,ts
+qfeed.duckdb_deals,fixture,function,1,
+qfeed.duckdb_deals,query,function,3,h range_from range_to
+qfeed.duckdb_deals,row_key,value,,
+qfeed.duckdb_deals,source_name,value,,
+qfeed.duckdb_deals,sql_for,function,2,range_from range_to
+qfeed.duckdb_deals,table_name,value,,
+qfeed.duckdb_deals,target,value,,
+qfeed.duckdb_deals,time_column,value,,
+qfeed.duckdb_deals,transport,value,,
+qfeed.duckdb_deals,types,value,,
+qfeed.duckdb_deals,tz,value,,
 qfeed.upstream_trades,columns,value,,
 qfeed.upstream_trades,fixture,function,1,
 qfeed.upstream_trades,query,function,3,h range_from range_to
@@ -735,6 +749,12 @@ qsub.fx_trades_feed,pip_factor,value,,
 qsub.fx_trades_feed,publish,value,,
 qsub.fx_trades_feed,sizes,value,,
 qsub.fx_trades_feed,spot,value,,
+qsub.kafka_flow,above_high_water,function,1,rows
+qsub.kafka_flow,advance,function,1,rows
+qsub.kafka_flow,first_per_coordinate,function,1,rows
+qsub.kafka_flow,high_water,dict,,
+qsub.kafka_flow,on_batch,function,2,t x
+qsub.kafka_flow,publish,value,,
 qsub.market_data,from_quote,function,1,batch
 qsub.market_data,from_quotes,function,1,batch
 qsub.market_data,market_data,table,,
@@ -897,6 +917,22 @@ qwrk.demo_events_backfill,range_to,value,,
 qwrk.demo_events_backfill,run,function,1,
 qwrk.demo_events_backfill,source_version,value,,
 qwrk.demo_events_backfill,spec,function,1,
+qwrk.duckdb_deals_backfill,checkpoint,function,1,cursor
+qwrk.duckdb_deals_backfill,cleanup,function,1,
+qwrk.duckdb_deals_backfill,facts,function,1,batch
+qwrk.duckdb_deals_backfill,fetch,function,2,from_ts to_ts
+qwrk.duckdb_deals_backfill,handle,value,,
+qwrk.duckdb_deals_backfill,init,function,1,run_spec
+qwrk.duckdb_deals_backfill,last_batch,value,,
+qwrk.duckdb_deals_backfill,plan,function,1,cursor
+qwrk.duckdb_deals_backfill,progress,dict,,
+qwrk.duckdb_deals_backfill,publish,function,1,batch
+qwrk.duckdb_deals_backfill,quality_check,function,1,batch
+qwrk.duckdb_deals_backfill,range_from,value,,
+qwrk.duckdb_deals_backfill,range_to,value,,
+qwrk.duckdb_deals_backfill,run,function,1,
+qwrk.duckdb_deals_backfill,source_version,value,,
+qwrk.duckdb_deals_backfill,spec,function,1,
 qwrk.upstream_trades_backfill,checkpoint,function,1,cursor
 qwrk.upstream_trades_backfill,cleanup,function,1,
 qwrk.upstream_trades_backfill,facts,function,1,batch

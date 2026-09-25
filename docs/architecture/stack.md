@@ -5,6 +5,7 @@ Diagrams for the running state of the uqf stack (see
 Reflects what `uqs list processes` shows today: the vendored 23-process stack
 plus uqf's own additions (`fxfeed1`, `quotesfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `markout1`, `databento1`,
+`kafka_flow1`,
 `cryptomock1`, `executions1`, `marks1`, `fxordersfeed1`, `fxpositions1`,
 `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`), and five bounded
 backfill processes (`deals_backfill1`, `events_backfill1`,
@@ -100,6 +101,20 @@ holds a live Databento subscription and publishes raw MBP-10 onto
 for the reason cryptorust is not: a q process cannot hold that subscription, so
 it is started by `uqs databento start` rather than by `torq.sh`.
 
+`kafka_flow1` is the second subscriber fed from outside q, and it exists to
+answer a question `databento1` never has to. Its input comes from an external
+Python consumer (`external/kafka_streamer.py`) holding a Kafka subscription,
+and a Kafka topic is the same kind of object as the tickerplant log it feeds:
+an ordered, replayable record of what happened. Joining the two means choosing
+where the offset commit sits relative to `.u.upd`. Committing first loses a
+record undetectably if the consumer dies in the gap; committing after replays
+it. The consumer commits after, so every failure is a duplicate rather than a
+hole, and `kafka_flow1` removes the duplicates by comparing each record's
+`(partition;offset)` against a per-partition high-water mark. That is why those
+two coordinates are columns on `kafka_client_flow` and survive onto
+`client_flow`: the plant is what has to outlive a redelivery. Neither half is
+correct alone.
+
 The crypto half of the stack has the same shape, with one difference in who
 publishes the raw rows. `crypto_book` and `crypto_trades` are declared for
 cryptorust's two kdb recorders, which are Rust binaries connected to live
@@ -171,6 +186,7 @@ their schema row and their place in the DAG, and are one command away:
   | `cross1`                                  | a leaf: it subscribes to `quotes` and publishes no table, so nothing stalls while it is stopped                                                                                     |
   | `widefeed1`, `vectorize1`                 | a closed pair - the only producer of `wide_book` and its only consumer - so they start and stop together                                                                            |
   | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                  |
+  | `kafka_flow1`                             | subscribes to `kafka_client_flow`, which only the external Kafka consumer publishes, so on a default start it consumes nothing                                                       |
   | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                               |
   | `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together |
   | `crossarb1`                               | the synthetic-versus-direct detector, a second consumer of that chain, so it runs with it                                                                                           |

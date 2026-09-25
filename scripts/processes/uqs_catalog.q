@@ -104,6 +104,8 @@ describe[`economic_calendar]:
 hidden:(`symbol$())!();
 hidden[`databento_mbp10]:
     "the RAW Databento feed, published by an external Python handler and consumed only by databento1, which folds it into databento_book. A desk browsing a book wants the folded one; this is the input to that fold";
+hidden[`kafka_client_flow]:
+    "the RAW Kafka consumer output, published by an external Python consumer and read only by kafka_flow1, which deduplicates it into client_flow. It holds every redelivery the broker sent, so a desk reading it would see replayed trades twice - client_flow is the one to browse";
 
 / The browsable surface: every described table that is not hidden.
 / .
@@ -131,3 +133,5 @@ surface:{[]
 / into the block above is a tidy-up, never a fix.
 .qcat.describe[`duckdb_deals]:
     "one mock FX deal - pair, side, notional and rate - backfilled from a DuckDB file over ODBC";
+.qcat.describe[`client_flow]:
+    "One client FX trade consumed off a Kafka topic, deduplicated by kafka_flow1 on the (partition;offset) the record carries - so a broker redelivery does not show the desk the same trade twice. Carries those coordinates, so any row can be traced back to the exact Kafka record";
