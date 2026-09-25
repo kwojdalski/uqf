@@ -312,13 +312,21 @@ qhb,never_started,function,1,
 qhb,report,function,1,
 qhb,require_schema,function,1,
 qhb,stale,function,1,max_age
+qio,callable,function,1,v
+qio,default,dict,,
 qio,discard,dict,,
+qio,finish,function,1,mgr
+qio,finish_hdb,function,2,root ignored
 qio,for_cfg,function,1,cfg
+qio,hdb,function,2,root partition_col
 qio,memory,dict,,
+qio,optional,value,,
 qio,require_manager,function,1,mgr
 qio,required,value,,
+qio,touched,table,,
 qio,write,function,3,mgr target batch
 qio,write_discard,function,2,target batch
+qio,write_hdb,function,4,root partition_col target batch
 qio,write_memory,function,2,target batch
 qlimit,evaluate,function,2,measured limits
 qlimit,identity,function,1,scopes

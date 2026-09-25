@@ -5,13 +5,12 @@
 / day at a time. A declaration over .qbw like every worker: windowing,
 / retries, coverage, checkpoints and dry-run are the shell's.
 / .
-/ WHERE THE ROWS GO. No `io` is declared, so .qio.memory writes them to a
-/ duckdb_deals table in THIS process - which is where a test or an operator
-/ at the q prompt reads them. Run as the duckdb_deals_backfill1 process, the
-/ process exits when the range is done and the rows go with it, while the
-/ coverage ledger on disk records the range as covered. Landing them in the
-/ stack's RDB/HDB needs an io manager that publishes or writes down, which
-/ this tree does not have yet; databento_book_backfill has the same gap.
+/ WHERE THE ROWS GO. No `io` is declared, so the process decides. Run as
+/ duckdb_deals_backfill1, scripts/processes/torq_backfill.q makes it the
+/ HDB writer (.qio.hdb): each deal lands in the partition of its own
+/ deal_time's date, with `time` set from deal_time, and the HDB is told to
+/ reload. Loaded in plain q - a test, or an operator at the prompt - it is
+/ .qio.memory, and the rows are in a duckdb_deals table in that process.
 
 \d .qwrk.duckdb_deals_backfill
 

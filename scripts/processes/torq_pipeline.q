@@ -398,4 +398,27 @@ safe_timer:{[name;interval;f;timer_desc]
     .qlog.dbg[name;"timer installed";`fn`interval`wrapper!(f;interval;wrapper)];
     wrapper}
 
+/ The HDB process type to tell when a backfill has written into its
+/ partitions - the same default the RDB's own end-of-day uses (rdb.q's
+/ hdbtypes).
+hdb_type:`hdb
+
+/ Tell every running HDB to reload, so rows a backfill wrote straight into
+/ its partitions (.qio.hdb) become queryable.
+/ .
+/ The same message the RDB sends at end-of-day - (`reload;date), which
+/ TorQ's hdbstandard.q answers by re-mapping the database - found through
+/ discovery the same way subscribe_etl finds the tickerplant. An HDB that
+/ is not running is not an error: it maps the partitions when it starts. One
+/ that fails to reload is logged and does not fail the backfill, whose rows
+/ are already on disk and its coverage recorded.
+/ @return the number of HDBs asked to reload
+/ @eg .qpipe.reload_hdb[]
+reload_hdb:{[]
+    hs:exec w from .servers.getservers[`proctype;hdb_type;()!();1b;0b];
+    hs:hs where not null hs;
+    {[h] @[h;(`reload;.z.d);{[e] .qlog.err[`qpipe;"hdb reload failed";enlist[`error]!enlist e]}]} each hs;
+    .qlog.info[`qpipe;"hdb reload requested";enlist[`hdbs]!enlist count hs];
+    count hs}
+
 \d .
