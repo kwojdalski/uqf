@@ -166,7 +166,7 @@ def test_the_export_is_deterministic() -> None:
     the exporter records no timestamp: a timestamp makes every export differ
     from every other and destroys the diff the file exists to enable.
     """
-    if not q_interpreter().is_file():
+    if q_interpreter() is None:
         pytest.skip("no KDB-X interpreter")
     runs = []
     for _ in range(2):
@@ -193,7 +193,7 @@ def test_the_committed_baseline_matches_this_tree() -> None:
     Here rather than only in CI because the q suite and the Python suite run
     on a developer's machine, where the staleness is introduced.
     """
-    if not q_interpreter().is_file():
+    if q_interpreter() is None:
         pytest.skip("no KDB-X interpreter")
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "check"],

@@ -18,25 +18,36 @@ from uqs.logger import get_logger
 log = get_logger(__name__)
 
 
-#: The variable that chooses the q interpreter, everywhere (#414). It is the
-#: name `torq.sh` already starts every stack process with, so one setting now
-#: reaches the stack, its HDB filler, the backfill launcher and every test
-#: lane. There were four rules before - `Q`, `QBIN`, `UQFQ` and a bare `q` on
-#: PATH - and the stack and its HDB could run different binaries.
+#: The variable that chooses the q interpreter, everywhere (#414). It is
+#: TorQ's own: `torq.sh` starts every stack process with `$QCMD`, defaulting
+#: to `q`, so one setting now reaches the stack, its HDB filler, the backfill
+#: launcher and every test lane. There were four rules before - `Q`, `QBIN`,
+#: `UQFQ` and a bare `q` - and the stack and its HDB could run different
+#: binaries.
 Q_INTERPRETER_ENV = "QCMD"
 
+#: TorQ's default when QCMD is unset (lib/torq/torq.sh, lib/torq/setenv.sh).
+#: Deliberately no ~/.kx/bin/q fallback on top: TorQ has none, and a second
+#: default here would be a second rule.
+Q_DEFAULT_COMMAND = "q"
 
-def q_interpreter(env: Mapping[str, str] | None = None) -> Path:
-    """The q interpreter: ``$QCMD`` if set, otherwise ``~/.kx/bin/q``.
 
-    Nothing else - no PATH lookup, because whatever ``q`` is first on PATH
-    would be chosen for you, and the README says choosing an interpreter the
-    tree is not verified on is explicit. Whether it exists is the caller's
-    question: a test skips, a script refuses, the stack reports.
+def q_command(env: Mapping[str, str] | None = None) -> str:
+    """The q command as TorQ spells it: ``$QCMD`` if set, otherwise ``q``."""
+    source = os.environ if env is None else env
+    return source.get(Q_INTERPRETER_ENV) or Q_DEFAULT_COMMAND
+
+
+def q_interpreter(env: Mapping[str, str] | None = None) -> Path | None:
+    """The q interpreter ``q_command`` names, resolved - or None.
+
+    A bare name resolves on the PATH of ``env`` (the process's own when env
+    is None); a path must be an executable file. None is the caller's to
+    handle: a test skips, a script refuses, the stack reports.
     """
     source = os.environ if env is None else env
-    chosen = source.get(Q_INTERPRETER_ENV)
-    return Path(chosen) if chosen else Path.home() / ".kx" / "bin" / "q"
+    found = shutil.which(q_command(source), path=source.get("PATH"))
+    return Path(found) if found else None
 
 
 #: ---------------------------------------------------------------------------

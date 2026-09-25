@@ -90,11 +90,11 @@ def _kdbx() -> tuple[str, dict[str, str]]:
 
     env = os.environ.copy()
     q = q_interpreter(env)
-    if q.is_file():
+    if q is not None:
         env.setdefault("QHOME", str(Path.home() / ".kx"))
         return str(q), env
     raise SystemExit(
-        f"no KDB-X interpreter at {q} (set $QCMD to choose one). There is deliberately no "
+        "no q interpreter - set $QCMD, or put q on PATH. There is deliberately no "
         "fallback: another interpreter would export a partial surface rather "
         "than fail, which is the one outcome this must not produce."
     )

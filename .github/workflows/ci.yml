@@ -54,8 +54,8 @@ jobs:
         shell: bash
         run: |
           # The same rule scripts/test.py applies, so CI skips exactly when
-          # the hook would have nothing to run: $QCMD, else ~/.kx/bin/q.
-          if [ -x "${QCMD:-$HOME/.kx/bin/q}" ]; then
+          # the hook would have nothing to run: $QCMD, else q on PATH.
+          if command -v "${QCMD:-q}" >/dev/null; then
             echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "SKIP=$SKIP,q-tests,q-coverage,contract-surface" >> "$GITHUB_ENV"
@@ -92,12 +92,11 @@ jobs:
         # only thing verifying the surface.
         #
         # The same interpreter rule as contract_surface.py itself ($QCMD,
-        # else ~/.kx/bin/q). A bare `q` on PATH used to count here too, and
-        # the script would then have refused it anyway.
+        # else q on PATH - TorQ's rule).
         if: ${{ !cancelled() }}
         shell: bash
         run: |
-          if [ -x "${QCMD:-$HOME/.kx/bin/q}" ]; then
+          if command -v "${QCMD:-q}" >/dev/null; then
             uv run python scripts/generate/contract_surface.py check
           else
             echo "::warning::No KDB-X on this runner; the contract surface in docs/reference/surfaces/current/ was NOT checked. Run 'uv run python scripts/generate/contract_surface.py check' locally before merging."

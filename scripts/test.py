@@ -70,9 +70,9 @@ REPO = Path(__file__).resolve().parent.parent
 #: interpreter - a suite that passed on something the code is not verified
 #: against is worse than one that does not run. `QCMD` and `QHOME` let an
 #: operator point it elsewhere DELIBERATELY; see README.md#requirements.
-#: The rule is uqs.paths.q_interpreter's, restated because this file runs
-#: under a bare python3 that cannot import uqs.
-Q = Path(os.environ.get("QCMD") or Path.home() / ".kx" / "bin" / "q")
+#: $QCMD, else `q` on PATH - TorQ's rule, and uqs.paths.q_command's,
+#: restated because this file runs under a bare python3 that cannot import uqs.
+Q_CMD = os.environ.get("QCMD") or "q"
 QHOME = os.environ.get("QHOME", str(Path.home() / ".kx"))
 
 
@@ -90,16 +90,17 @@ def _run(lane: str, argv: list[str], *, env: dict[str, str] | None = None) -> No
     """Run a command, inheriting stdio so test output streams as it happens."""
     # QCMD passed on, so a lane that starts its own q processes
     # (q-backfill-process, q-two-instances) starts the same interpreter.
-    merged = {**os.environ, "QHOME": QHOME, "QCMD": str(Q), **(env or {})}
+    merged = {**os.environ, "QHOME": QHOME, "QCMD": Q_CMD, **(env or {})}
     result = subprocess.run(argv, cwd=REPO, env=merged, check=False)
     if result.returncode != 0:
         raise LaneFailed(lane, result.returncode)
 
 
 def _q(lane: str, script: str, *args: str, env: dict[str, str] | None = None) -> None:
-    if not Q.exists():
+    q = shutil.which(Q_CMD)
+    if q is None:
         raise LaneFailed(lane, 127)
-    _run(lane, [str(Q), script, *args], env=env)
+    _run(lane, [q, script, *args], env=env)
 
 
 def _banner(text: str) -> None:
@@ -320,7 +321,7 @@ EPILOG = """\
 Run the lane matching the layer you changed. `all` is for a release,
 not for an edit.
 
-The interpreter comes from $QCMD (default ~/.kx/bin/q) and $QHOME (default
+The interpreter comes from $QCMD (default `q` on PATH) and $QHOME (default
 ~/.kx). There is no fallback: see README.md#requirements.
 """
 
@@ -366,8 +367,8 @@ def main(argv: list[str] | None = None) -> int:
     except LaneFailed as failure:
         if failure.code == 127:
             print(
-                f"\nno q interpreter at {Q}. Set $QCMD to point at one, or see\n"
-                "README.md#requirements.",
+                f"\nno q interpreter: {Q_CMD!r} is not runnable. Set $QCMD to point\n"
+                "at one, put q on PATH, or see README.md#requirements.",
                 file=sys.stderr,
             )
         else:

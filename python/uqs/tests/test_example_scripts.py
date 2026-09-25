@@ -54,10 +54,10 @@ def _kdbx() -> tuple[str, dict[str, str]]:
     """
     env = os.environ.copy()
     q = q_interpreter(env)
-    if q.is_file():
+    if q is not None:
         env.setdefault("QHOME", str(Path.home() / ".kx"))
         return str(q), env
-    pytest.skip(f"no KDB-X interpreter at {q} - set $QCMD to choose one")
+    pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
 
 
 def test_examples_are_discovered() -> None:
