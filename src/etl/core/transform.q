@@ -179,9 +179,9 @@ check_example:{[name;ins;output;clock;ex]
     given:ex`inputs;
     if[not (99h=type given) and (asc key given)~asc key ins;
         'who," has an example whose inputs are not exactly ",", " sv string key ins];
-    {[who;schema;nm;tbl]
+    {[who;schema;input_name;tbl]
         p:problems[schema;tbl;0b];
-        if[count p; 'who,"'s example input ",string[nm],": ","; " sv p]
+        if[count p; 'who,"'s example input ",string[input_name],": ","; " sv p]
       }[who]'[ins key given;key given;value given];
     p:problems[output;ex`expected;1b];
     if[count p; 'who,"'s example expected output: ","; " sv p];
@@ -256,9 +256,9 @@ run:{[name;d;given;extra]
     if[not (99h=type given) and (asc key given)~asc key ins;
         '"transform ",string[name]," takes inputs ",(", " sv string key ins),
          " - got ",$[99h=type given; ", " sv string key given; "a non-dictionary"]];
-    {[name;schema;nm;tbl]
+    {[name;schema;input_name;tbl]
         p:problems[schema;tbl;0b];
-        if[count p; '"transform ",string[name]," input ",string[nm],": ","; " sv p]
+        if[count p; '"transform ",string[name]," input ",string[input_name],": ","; " sv p]
       }[name]'[ins key ins;key ins;given key ins];
     args:(given key ins),extra;
     out:(d`fn) . args;

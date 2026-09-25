@@ -183,7 +183,7 @@ connect:{[job;tp]
     / had it passed, `(neg h)[tbl;rows]` sends a two-element message, which
     / the remote evaluates as `tbl[rows]` - indexing a table NAME by the
     / rows. The wrapper names the function to call over there.
-    {[send;tbl;rows] send(`.qtick.publish;tbl;rows)}[neg h]}
+    {[send;t;x] send(`.qtick.publish;t;x)}[neg h]}
 
 / Start everything this process was asked to run.
 / @return the jobs started

@@ -59,7 +59,7 @@ check_market_data_quality:{[quotes;max_spread_bps]
     result:update status:`crossed`ok`wide idx from result;
     `status xasc result};
 
-/ Per-sym staleness: how long ago was the last quote at or before at_time,
+/ Per-sym staleness: how long ago was the last quote at or before as_of,
 / for every sym currently present in quotes? Scoped to syms quotes
 / actually has at least one row for - detecting a sym that should be
 / quoting but never ticks at all needs live process/feed monitoring (see
@@ -68,19 +68,24 @@ check_market_data_quality:{[quotes;max_spread_bps]
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
 /   sorted `sym`time xasc (same as every other as-of lookup in this library
 /   - see forwards.q's cross_book_at)
-/ @param at_time only consider quotes at or before this time
+/ @param as_of only consider quotes at or before this time
 / @param max_age a gap at or below this is `ok; above it is `stale
 / @return a table sym/last_ts/age/status (`ok` or `stale`), sorted
 /   status-ascending (`stale` sorts before `ok`)
 / @throws error if quotes is missing a required column
 / @eg .qdqc.check_stale_quotes[quotes;.z.p;0D00:00:05]
-check_stale_quotes:{[quotes;at_time;max_age]
+check_stale_quotes:{[quotes;as_of;max_age]
     .qfwd.require_quotes_cols[`check_stale_quotes;quotes];
     / by before from, where after from - the canonical qSQL clause order,
     / kept because a reordered clause reads as a typo to anyone scanning it.
-    latest:select last_ts:last time by sym from quotes where time<=at_time;
+    / Compared through a local, never `where time<=as_of`: this tree's
+    / derived tables (superbook, arbitrage) carry an `as_of` column, and
+    / inside a where clause the column shadows the parameter - every row
+    / would be compared with its own as_of instead of the cutoff.
+    cutoff:as_of;
+    latest:select last_ts:last time by sym from quotes where time<=cutoff;
     result:([] sym:exec sym from latest; last_ts:exec last_ts from latest);
-    result:update age:at_time-last_ts from result;
+    result:update age:cutoff-last_ts from result;
     result:update status:`ok`stale (age>max_age) from result;
     `status xasc result};
 

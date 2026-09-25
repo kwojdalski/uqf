@@ -178,11 +178,11 @@ optional_cfg:`check`io`facts`partition
 / and the opposite of .qbfstate.register, whose methods appear as a file
 / loads.
 / @param worker the worker's name
-/ @param cfg dict of source, dataset, width, transform, and optionally
+/ @param decl dict of source, dataset, width, transform, and optionally
 /   check, facts, partition, io, procname (default `<worker>1) and note
 / @throws error naming every missing or malformed field at once
-define:{[worker;cfg]
-    missing:required_cfg where not required_cfg in key cfg;
+define:{[worker;decl]
+    missing:required_cfg where not required_cfg in key decl;
     if[count missing;
         '"define: ",string[worker]," is missing ",", " sv string missing];
     / The namespace is not configurable, and a supplied one is refused rather
@@ -190,19 +190,19 @@ define:{[worker;cfg]
     / for under .qwrk.demo_deals_backfill regardless, and the author would
     / learn that from a contract failure at init naming twelve missing
     / methods rather than from define naming the key.
-    if[`ns in key cfg;
+    if[`ns in key decl;
         '"define: ",string[worker],"'s namespace is derived - .qwrk.",string[worker]," - not configured; drop the ns key"];
-    cfg[`ns]:namespace worker;
-    if[not 16h=abs type cfg`width;
+    decl[`ns]:namespace worker;
+    if[not 16h=abs type decl`width;
         '"define: ",string[worker],"'s width must be a timespan, e.g. 1D"];
-    if[not (cfg`width)>0D00:00;
+    if[not (decl`width)>0D00:00;
         '"define: ",string[worker],"'s width must be positive - a zero width plans infinitely many empty windows"];
     / Validate the io manager HERE, not at first write. A worker with a
     / malformed manager should fail at declaration, not halfway through a
     / backfill having already fetched a window it is now unable to store.
-    .qio.for_cfg cfg;
-    .qsrc.declaration cfg`source;
-    require_transform[worker;cfg];
+    .qio.for_cfg decl;
+    .qsrc.declaration decl`source;
+    require_transform[worker;decl];
 
     / Refuse two workers filling one dataset AND PARTITION (#60, #185).
     / .
@@ -223,36 +223,36 @@ define:{[worker;cfg]
     / The unpartitioned sentinel is a partition like any other here, so two
     / workers that both decline to declare one still clash - which keeps every
     / existing worker's guarantee exactly as it was.
-    part:$[`partition in key cfg; cfg`partition; unpartitioned];
+    part:$[`partition in key decl; decl`partition; unpartitioned];
     if[not -11h=type part;
         '"define: ",string[worker],"'s partition must be a symbol, or ` for a dataset with no partition dimension"];
     / Resolved before storage, so `worker_cfg` never holds (::) here and the clash
     / comparison below is symbol against symbol. Every other optional key can
     / be absent because nothing compares them; this one is compared.
-    cfg[`partition]:part;
+    decl[`partition]:part;
     / The process that runs this worker, and a line on why it is deployed the
     / way it is. Both feed the uqs process registry, which is DERIVED
     / from these declarations rather than kept as a second list. Resolved
     / before storage for the reason partition is: worker_cfg's rows share one
     / shape, and a column that is a symbol on one row and (::) on the next
     / stops the next assignment fitting.
-    proc:$[`procname in key cfg; cfg`procname; `$string[worker],"1"];
+    proc:$[`procname in key decl; decl`procname; `$string[worker],"1"];
     if[not -11h=type proc;
         '"define: ",string[worker],"'s procname must be a symbol naming the process that runs it, e.g. `",string[worker],"1"];
-    cfg[`procname]:proc;
-    note:$[`note in key cfg; cfg`note; ""];
+    decl[`procname]:proc;
+    note:$[`note in key decl; decl`note; ""];
     if[not 10h=type note;
         '"define: ",string[worker],"'s note must be a string"];
-    cfg[`note]:note;
+    decl[`note]:note;
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
     / worker as the claimant.
-    clash:(key worker_cfg) where ((value worker_cfg)[;`dataset]=cfg`dataset)
+    clash:(key worker_cfg) where ((value worker_cfg)[;`dataset]=decl`dataset)
                            and (value worker_cfg)[;`partition]=part;
     clash:clash except worker;
     if[count clash;
-        '"define: ",string[worker]," declares dataset ",string[cfg`dataset],
+        '"define: ",string[worker]," declares dataset ",string[decl`dataset],
          / PARENTHESISED. q evaluates right to left, so
          / `", " sv string clash, " - two workers..."` makes `sv` join the
          / EXPLANATION character by character - the message came out as
@@ -263,9 +263,9 @@ define:{[worker;cfg]
          " - two workers on one dataset and partition produce coverage rows nothing can tell apart"];
 
     / Normalise to the full key set before storing - see optional_cfg.
-    worker_cfg[worker]:normalised cfg;
+    worker_cfg[worker]:normalised decl;
     / Last, so a refused declaration leaves no half-stamped namespace behind.
-    inherit[worker;cfg`ns];
+    inherit[worker;decl`ns];
     worker}
 
 / Private: the declared transform exists and reads exactly this worker's

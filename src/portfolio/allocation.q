@@ -78,22 +78,22 @@ required:`open`pick
 / .
 / Checked at REGISTRATION rather than at first use, so a malformed method
 / fails on the line that declares it rather than halfway through a ledger.
-/ @param m the candidate method
+/ @param decl the candidate method
 / @return 1b when acceptable
 / @throws error naming the missing key, the unknown key, or the key whose value is not a function
 / @eg .qalloc.require_method[`open`pick!(.qalloc.append_lot;.qalloc.pick_first)] -> 1b
-require_method:{[m]
-    if[not 99h=type m;
+require_method:{[decl]
+    if[not 99h=type decl;
         '"require_method: a matching method must be a dictionary carrying ",
          ", " sv string required];
-    missing:required where not required in key m;
+    missing:required where not required in key decl;
     if[count missing;
         '"require_method: matching method is missing ",", " sv string missing];
-    supplied:key m;
+    supplied:key decl;
     unknown:supplied where not supplied in required,`why;
     if[count unknown;
         '"require_method: unknown matching method key ",", " sv string unknown];
-    if[not all (type each m required) within 100 104h;
+    if[not all (type each decl required) within 100 104h;
         '"require_method: a matching method's open and pick must both be functions"];
     1b}
 
@@ -104,26 +104,26 @@ methods:(`symbol$())!()
 / .
 / The registry IS the list of methods - there is no second enumeration of
 / which ones exist, so adding one is a registration and nothing else.
-/ @param nm the name callers will pass as the `method option
-/ @param m a dict with `open (lots;lot -> lots) and `pick (lots -> index), optionally `why
+/ @param name the name callers will pass as the `method option
+/ @param decl a dict with `open (lots;lot -> lots) and `pick (lots -> index), optionally `why
 / @return the name registered
 / @throws error when the method is malformed - see require_method
 / @eg .qalloc.register[`fifo_again;`open`pick!(.qalloc.append_lot;.qalloc.pick_first)] -> `fifo_again
-register:{[nm;m]
-    require_method m;
-    methods[nm]:`open`pick`why!(m`open; m`pick; $[`why in key m; m`why; ""]);
-    nm}
+register:{[name;decl]
+    require_method decl;
+    methods[name]:`open`pick`why!(decl`open; decl`pick; $[`why in key decl; decl`why; ""]);
+    name}
 
 / Look a method up by name.
-/ @param nm a registered method name
+/ @param name a registered method name
 / @return its declaration dict
 / @throws error when nothing is registered under that name, listing what is
 / @eg .qalloc.method[`fifo]`why -> "oldest open lot first"
-method:{[nm]
-    if[not nm in key methods;
-        '"method: ",string[nm]," is not a registered matching method - have ",
+method:{[name]
+    if[not name in key methods;
+        '"method: ",string[name]," is not a registered matching method - have ",
          ", " sv string key methods];
-    methods nm}
+    methods name}
 
 / Every registered method name, in registration order.
 / @return a symbol vector - the five built in here, plus anything a desk has registered since

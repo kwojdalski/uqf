@@ -343,8 +343,8 @@ validate_fixture:{[source] validate[source;(declaration[source]`fixture)[]]}
 / @param h an open handle to the external source
 validate_live:{[source;h]
     decl:declaration source;
-    m:@[{[handle;tbl] handle({0!meta x};tbl)}[h];decl`table_name;
-        {[tbl;err] '"validate_live: cannot read metadata for ",string[tbl]," (",err,")"}[decl`table_name;]];
+    m:@[{[handle;table_name] handle({0!meta x};table_name)}[h];decl`table_name;
+        {[table_name;err] '"validate_live: cannot read metadata for ",string[table_name]," (",err,")"}[decl`table_name;]];
     present:exec c from m;
     chars:exec t from m;
     missing:decl[`columns] where not decl[`columns] in present;

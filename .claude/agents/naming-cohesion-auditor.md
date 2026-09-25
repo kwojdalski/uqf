@@ -29,7 +29,7 @@ model: sonnet
 This library has 23 modules under `src/`, 23 namespaces, ~300 functions and a
 test suite that checks *numbers*. Nothing checks names. A function can be called
 `cross_ref_price_at`, take an argument named `t` that is actually a timestamp,
-sit in a family where every sibling calls that same value `at_time`, and every
+sit in a family where every sibling calls that same value `as_of`, and every
 test still passes.
 
 You audit that layer and only that layer. You do not judge whether a formula is
@@ -160,9 +160,9 @@ and find the outlier. Two confirmed seeds --- re-verify both, then keep going:
   `book_convexity_one[side;prices]` in `src/market_data/microstructure.q`,
   defined ~17 lines apart with the arguments **flipped**. The call site passes
   them correctly, so nothing fails; the next reader is the casualty.
-- `cross_price_ok_at_size[quotes;sym;at_time;...]` and
-  `cross_size_at_price[quotes;sym;at_time;...]` in `src/pricing/forwards.q` both
-  put the timestamp **third and call it `at_time`**;
+- `cross_price_ok_at_size[quotes;sym;as_of;...]` and
+  `cross_size_at_price[quotes;sym;as_of;...]` in `src/pricing/forwards.q` both
+  put the timestamp **third and call it `as_of`**;
   `cross_ref_price_at[quotes;sym;ref_size;t]` puts it **fourth and calls it
   `t`**. Same family, same logical parameter, two disagreements at once.
 

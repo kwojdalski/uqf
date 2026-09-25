@@ -60,19 +60,19 @@ kinds:`bounded`continuous`stream`reaction`normalizer
 / reloading a file during development is not a failure - the same posture
 / .qbw.define takes for redeclaring a worker.
 / @param job symbol naming the job, e.g. `posbook1 or `demo_deals_backfill
-/ @param spec dict of kind, inputs, outputs
+/ @param decl dict of kind, inputs, outputs
 / @throws error when a required key is missing, or the kind is not known
 / @eg .qdag.register[`cross1;`kind`inputs`outputs!(`stream;`quotes;`symbol$())]
-register:{[job;spec]
-    missing:required_spec where not required_spec in key spec;
+register:{[job;decl]
+    missing:required_spec where not required_spec in key decl;
     if[count missing;
         '"register: ",string[job]," is missing ",", " sv string missing];
-    if[not (spec`kind) in kinds;
-        '"register: ",string[job],"'s kind ",string[spec`kind]," is not one of ",
+    if[not (decl`kind) in kinds;
+        '"register: ",string[job],"'s kind ",string[decl`kind]," is not one of ",
          ", " sv string kinds];
-    jobs[job]:`kind`inputs`outputs!(spec`kind; `$(); `$());
-    jobs[job;`inputs]:(),spec`inputs;
-    jobs[job;`outputs]:(),spec`outputs;
+    jobs[job]:`kind`inputs`outputs!(decl`kind; `$(); `$());
+    jobs[job;`inputs]:(),decl`inputs;
+    jobs[job;`outputs]:(),decl`outputs;
     job}
 
 / A job's spec, or a refusal naming it.
@@ -98,10 +98,10 @@ registry:{[]
 
 / Which jobs write this table? Empty means nothing here produces it, which
 / makes it an external input rather than an error.
-producers:{[tbl] js:key jobs; js where {[t;j] t in (declaration j)`outputs}[tbl] each js}
+producers:{[table_name] js:key jobs; js where {[t;j] t in (declaration j)`outputs}[table_name] each js}
 
 / Which jobs read this table?
-consumers:{[tbl] js:key jobs; js where {[t;j] t in (declaration j)`inputs}[tbl] each js}
+consumers:{[table_name] js:key jobs; js where {[t;j] t in (declaration j)`inputs}[table_name] each js}
 
 / Private: the empty edge table, so every return path has one shape.
 no_edges:{[] ([] upstream:`symbol$(); tbl:`symbol$(); downstream:`symbol$())}
@@ -268,7 +268,7 @@ to_json:{[]
 / Parseable on purpose, so a viz tool can split it back into source and table
 / rather than having to treat the node as opaque.
 / @eg .qdag.external_ref[`demo_deals;`demo_deals]  ->  `demo_deals@demo_deals
-external_ref:{[source;tbl] `$(string tbl),"@",string source}
+external_ref:{[source;table_name] `$(string table_name),"@",string source}
 
 / Register every bounded worker into the job graph, from .qbw's own registry.
 / @return the worker names registered, empty when .qbw is not loaded
@@ -331,8 +331,8 @@ adopt_reactions:{[]
     if[not `qreact in key `; :`$()];
     raze {[ds]
         rs:.qreact.for_dataset ds;
-        {[ds;nm;outs]
-            job:reaction_job[ds;nm];
+        {[ds;name;outs]
+            job:reaction_job[ds;name];
             register[job;`kind`inputs`outputs!(`reaction;ds;outs)];
             job}[ds] .' flip (rs`name;rs`outputs)
       } each key .qreact.reactions}
@@ -351,10 +351,10 @@ adopt_reactions:{[]
 / halves. The cost is that it must be constructed rather than typed, which
 / is what this function is for.
 / @param dataset the dataset the reaction watches
-/ @param nm the reaction's name, unique within that dataset
+/ @param name the reaction's name, unique within that dataset
 / @return the job name, as a symbol
 / @eg .qdag.reaction_job[`demo_deals;`rebuild_positions]
-reaction_job:{[dataset;nm] `$(string dataset),"~",string nm}
+reaction_job:{[dataset;name] `$(string dataset),"~",string name}
 
 / Every reaction edge, and whether its output was derived or asserted.
 / .

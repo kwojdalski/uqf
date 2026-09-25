@@ -40,9 +40,9 @@ Commands: ok — fix it | s/skip — skip | done — stop
 
 ### 2. Function Signatures and Parameter Ordering
 
-- Same logical parameter (`quotes`, `sym`, `at_time`, `pip_factor`, `side`)
+- Same logical parameter (`quotes`, `sym`, `as_of`, `pip_factor`, `side`)
   appearing in a different position across similar functions that are often
-  called together (e.g. `cross_book_at[quotes;sym;at_time;sizes;sides]` vs a
+  called together (e.g. `cross_book_at[quotes;sym;as_of;sizes;sides]` vs a
   sibling function that orders these differently with no reason)
 - Some functions take `pip_factor` as an explicit argument (the library-wide
   convention --- never hardcoded), others hardcode `10000`/`100` inline

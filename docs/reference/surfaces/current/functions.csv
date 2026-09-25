@@ -8,7 +8,7 @@ qalloc,by_trade,function,1,matches
 qalloc,default_opts,dict,,
 qalloc,key_table,function,2,t bys
 qalloc,merge_lot,function,2,lots lot
-qalloc,method,function,1,nm
+qalloc,method,function,1,name
 qalloc,methods,dict,,
 qalloc,new_lots,function,1,trades
 qalloc,new_matches,function,1,trades
@@ -21,9 +21,9 @@ qalloc,position,function,2,lots group_cols
 qalloc,position_at,function,3,trades opts ts
 qalloc,prepared,function,2,trades bys
 qalloc,prepared_opening,function,2,opening bys
-qalloc,register,function,2,nm m
+qalloc,register,function,2,name decl
 qalloc,registered,function,1,
-qalloc,require_method,function,1,m
+qalloc,require_method,function,1,decl
 qalloc,required,value,,
 qalloc,required_cols,value,,
 qalloc,required_lot_cols,value,,
@@ -70,7 +70,7 @@ qbw,checkpoint,function,2,worker cursor
 qbw,cleanup,function,1,worker
 qbw,connect,function,1,worker
 qbw,declaration,function,1,worker
-qbw,define,function,2,worker cfg
+qbw,define,function,2,worker decl
 qbw,delegate,function,2,worker nm
 qbw,do_window,function,2,worker w
 qbw,empty_windows,function,1,
@@ -147,22 +147,22 @@ qdag,adopt_feeders,function,1,
 qdag,adopt_pipelines,function,1,
 qdag,adopt_reactions,function,1,
 qdag,adopt_workers,function,1,
-qdag,consumers,function,1,tbl
+qdag,consumers,function,1,table_name
 qdag,d2,function,1,
 qdag,declaration,function,1,job
 qdag,edges,function,1,
 qdag,external_inputs,function,1,
-qdag,external_ref,function,2,source tbl
+qdag,external_ref,function,2,source table_name
 qdag,id_chars,value,,
 qdag,job_edges,function,1,
 qdag,jobs,dict,,
 qdag,kinds,value,,
 qdag,layers,function,1,
 qdag,no_edges,function,1,
-qdag,producers,function,1,tbl
+qdag,producers,function,1,table_name
 qdag,reaction_edges,function,1,
-qdag,reaction_job,function,2,dataset nm
-qdag,register,function,2,job spec
+qdag,reaction_job,function,2,dataset name
+qdag,register,function,2,job decl
 qdag,register_pipelines,function,1,
 qdag,registry,function,1,
 qdag,required_spec,value,,
@@ -191,15 +191,15 @@ qdesk,empty_book,function,1,dims
 qdesk,required_cols,value,,
 qdesk,rollup,function,2,book group_cols
 qdqc,check_market_data_quality,function,2,quotes max_spread_bps
-qdqc,check_stale_quotes,function,3,quotes at_time max_age
+qdqc,check_stale_quotes,function,3,quotes as_of max_age
 qdqc,summarize_checks,function,1,named_checks
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_ratio,function,2,num_fills num_quotes
-qexec,hit_ratio_by,function,6,requests start_ts end_ts bucket_size group_cols mode
+qexec,hit_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,markout,function,4,side trade_price ref_price pip_factor
 qexec,markout_at_horizons,function,3,trades quotes horizons
 qexec,reject_ratio,function,2,num_rejects num_requests
-qexec,reject_ratio_by,function,6,requests start_ts end_ts bucket_size group_cols mode
+qexec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,slippage,function,4,side arrival_price exec_price pip_factor
 qexec,sweep_price,function,3,prices sizes target_size
 qexec,vwap,function,2,prices sizes
@@ -260,7 +260,7 @@ qfwd,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
 qfwd,col_precedence,value,,
 qfwd,combine_oriented_books,function,2,book_ab book_bc
 qfwd,cross_book,function,4,sym1 book1 sym2 book2
-qfwd,cross_book_at,function,5,quotes sym at_time sizes sides
+qfwd,cross_book_at,function,5,quotes sym as_of sizes sides
 qfwd,cross_book_at_one_size,function,5,sym1 book1 sym2 book2 size
 qfwd,cross_book_at_sizes,function,6,sym1 book1 sym2 book2 sizes sides
 qfwd,cross_book_chain_at_one_size,function,3,syms books size
@@ -269,11 +269,11 @@ qfwd,cross_decomp,function,2,avail_syms sym
 qfwd,cross_impact_at_horizons,function,8,quotes traded_sym impact_sym trade_time side pip_factor horizons_ms ref_size
 qfwd,cross_markout_at_horizons,function,8,quotes sym trade_time side trade_price pip_factor horizons_ms ref_size
 qfwd,cross_markout_decomp,function,6,quotes sym t0 t1 pip_factor ref_size
-qfwd,cross_price_ok_at_size,function,6,quotes sym at_time side price_limit size
+qfwd,cross_price_ok_at_size,function,6,quotes sym as_of side price_limit size
 qfwd,cross_rate,function,2,ab_rate bc_rate
 qfwd,cross_rate_shared_base,function,2,rate_ax rate_ay
-qfwd,cross_ref_price_at,function,4,quotes sym at_time ref_size
-qfwd,cross_size_at_price,function,5,quotes sym at_time side price_limit
+qfwd,cross_ref_price_at,function,4,quotes sym as_of ref_size
+qfwd,cross_size_at_price,function,5,quotes sym as_of side price_limit
 qfwd,cross_sweep_chain,function,4,books side size inverts
 qfwd,cross_sweep_side,function,6,book1 book2 side size invert1 invert2
 qfwd,fwd_cont,function,4,spot rd rf t
@@ -284,7 +284,7 @@ qfwd,implied_foreign_rate,function,4,spot fwd rd t
 qfwd,invert_book,function,1,book
 qfwd,invert_book_depth,function,2,prices sizes
 qfwd,invert_rate,function,1,rate
-qfwd,leg_book_as_of,function,3,quotes at_time target_sym
+qfwd,leg_book_as_of,function,3,quotes as_of target_sym
 qfwd,oriented_levels,function,3,side book invert
 qfwd,points_to_outright,function,3,spot points pip_factor
 qfwd,require_quotes_cols,function,2,fn_name quotes
@@ -470,7 +470,7 @@ qopt,implied_vol,function,7,price s k rd rf t is_call
 qpos,apply_fill,function,5,pos sym qty price side
 qpos,apply_fills,function,2,pos trades
 qpos,ccy_exposure,function,1,pos
-qpos,ccy_exposure_in,function,4,pos quotes reporting_ccy at_time
+qpos,ccy_exposure_in,function,4,pos quotes reporting_ccy as_of
 qpos,ccy_legs,function,3,sym qty avg_price
 qpos,empty_book,function,1,
 qpos,reconcile_trades,function,4,reference_book trades qty_tol price_tol
@@ -595,8 +595,8 @@ qstatus,write_status,function,6,worker instance_id state spec progress err
 qstream,declaration,function,1,job
 qstream,define,function,2,job decl
 qstream,defined,function,1,
-qstream,drain,function,2,tblname mask
-qstream,evict,function,2,tblname mask
+qstream,drain,function,2,table_name mask
+qstream,evict,function,2,table_name mask
 qstream,for_procname,function,1,procname
 qstream,is_callable,function,1,v
 qstream,job_root,value,,
@@ -638,7 +638,7 @@ qsub.crypto_mock,beta_draw,function,2,a b
 qsub.crypto_mock,book_rows,function,1,mkt
 qsub.crypto_mock,decide,function,3,row horizon draws
 qsub.crypto_mock,draws,function,1,
-qsub.crypto_mock,drift_toxicity,function,1,t
+qsub.crypto_mock,drift_toxicity,function,1,toxicity
 qsub.crypto_mock,fill_alpha,value,,
 qsub.crypto_mock,fill_beta,value,,
 qsub.crypto_mock,fill_rows,function,6,venue s side price size id
@@ -702,7 +702,7 @@ qsub.fx_positions,fresh_breaches,function,1,now
 qsub.fx_positions,fx_limit_breach,table,,
 qsub.fx_positions,fx_position,table,,
 qsub.fx_positions,limits,table,,
-qsub.fx_positions,load_limits,function,1,t
+qsub.fx_positions,load_limits,function,1,limits
 qsub.fx_positions,net_orders,function,2,book batch
 qsub.fx_positions,on_batch,function,2,t x
 qsub.fx_positions,on_timer,function,1,
@@ -792,7 +792,7 @@ qsynth,size_unit,value,,
 qsynth,spot,value,,
 qtick,can_send,function,1,sink
 qtick,fan_out,function,2,name batch
-qtick,learn,function,2,tbl stamped
+qtick,learn,function,2,table_name stamped
 qtick,log_handle,value,,
 qtick,log_path,value,,
 qtick,msg_count,value,,
@@ -802,7 +802,7 @@ qtick,record,function,1,msg
 qtick,replay,function,2,path handler
 qtick,require_batch,function,2,t x
 qtick,reset,function,1,
-qtick,schema,function,2,tbl empty
+qtick,schema,function,2,table_name empty
 qtick,schemas,dict,,
 qtick,subscribe,function,2,want sink
 qtick,subscribers,table,,

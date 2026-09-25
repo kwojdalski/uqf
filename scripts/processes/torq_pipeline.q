@@ -177,14 +177,14 @@ published:(`symbol$())!`long$()
 received:(`symbol$())!`long$()
 
 / Record one publish, logging the first per table at INF and every one at DBG.
-/ @param tbl the table published onto
+/ @param table_name the table published onto
 / @param n rows published
 / @return n
-record_published:{[tbl;n]
-    before:0^published tbl;
-    .qpipe.published[tbl]:before+n;
-    if[0=before; .qlog.info[`qpipe;"first rows published";`table`rows!(tbl;n)]];
-    .qlog.dbg[`qpipe;"published";`table`rows`total!(tbl;n;before+n)];
+record_published:{[table_name;n]
+    before:0^published table_name;
+    .qpipe.published[table_name]:before+n;
+    if[0=before; .qlog.info[`qpipe;"first rows published";`table`rows!(table_name;n)]];
+    .qlog.dbg[`qpipe;"published";`table`rows`total!(table_name;n;before+n)];
     n}
 
 / Record one batch arriving from the tickerplant, the same way.
@@ -379,23 +379,23 @@ publish:{[h;t;x]
 / remaining parameters is not the same rank and does not stand in for one.
 / The generated wrapper is a real, inspectable function: call
 / .qpipe.tick_markout[] by hand to test it.
-/ @param nm the pipeline's name - also names the wrapper and tags log lines
+/ @param name the pipeline's name - also names the wrapper and tags log lines
 / @param interval a timespan, e.g. 0D00:00:01.000
-/ @param fn the fully-qualified name of the niladic function to run
+/ @param f the fully-qualified name of the niladic function to run
 / @param timer_desc the description .timer.repeat shows
 / @return the generated wrapper's name
 / @eg .qpipe.safe_timer[`markout;0D00:00:01.000;`.qproc.stream.tick;"Run the markout streaming job"]
-safe_timer:{[nm;interval;fn;timer_desc]
-    wrapper:`$".qpipe.tick_",string nm;
+safe_timer:{[name;interval;f;timer_desc]
+    wrapper:`$".qpipe.tick_",string name;
     / `value` the lambda EXPRESSION only, then `set` the name - not
     / `value "name:{...}"`. Evaluating an assignment statement through
     / `value` from inside a lambda throws 'nyi on this build (confirmed
     / live while writing this file); parsing a bare lambda and assigning it
     / with `set` is well-defined and does the same job.
-    body:"{[] @[get `",(string fn),";::;{[e] .qlog.err[`",(string nm),";\"timer function failed\";`fn`error!(`",(string fn),";e)]}]}";
+    body:"{[] @[get `",(string f),";::;{[e] .qlog.err[`",(string name),";\"timer function failed\";`fn`error!(`",(string f),";e)]}]}";
     wrapper set value body;
     .timer.repeat[.proc.cp[];0Wp;interval;(wrapper;`);timer_desc];
-    .qlog.dbg[nm;"timer installed";`fn`interval`wrapper!(fn;interval;wrapper)];
+    .qlog.dbg[name;"timer installed";`fn`interval`wrapper!(f;interval;wrapper)];
     wrapper}
 
 \d .

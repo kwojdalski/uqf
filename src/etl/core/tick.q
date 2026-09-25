@@ -75,20 +75,20 @@ msg_count:0
 / is told up front can refuse the first bad batch as well as the second,
 / and a subscriber that connects before any data flows gets the schema it
 / needs to build its own empty table.
-/ @param tbl the table name
+/ @param table_name the table name
 / @param empty an empty table of the right shape, `time` first
 / @return the table name
 / @throws error when empty is not a table, or is keyed
 / @eg .qtick.schema[`eg_quote;([] time:`timestamp$(); sym:`symbol$(); bid:`float$())] -> `eg_quote
-schema:{[tbl;empty]
+schema:{[table_name;empty]
     if[not 98h=type empty;
-        '"schema: ",string[tbl],"'s schema must be an unkeyed table"];
+        '"schema: ",string[table_name],"'s schema must be an unkeyed table"];
     if[count empty;
-        '"schema: ",string[tbl],"'s schema must be EMPTY - it declares a shape, not data"];
+        '"schema: ",string[table_name],"'s schema must be EMPTY - it declares a shape, not data"];
     if[not `time=first cols empty;
-        '"schema: ",string[tbl],"'s first column must be `time` - the plant stamps it there, and a schema that omits it describes rows nobody will ever receive"];
-    schemas[tbl]:empty;
-    tbl}
+        '"schema: ",string[table_name],"'s first column must be `time` - the plant stamps it there, and a schema that omits it describes rows nobody will ever receive"];
+    schemas[table_name]:empty;
+    table_name}
 
 / Subscribe a sink to one or more tables.
 / .
@@ -198,10 +198,10 @@ publish:{[t;x]
 / Private: build a table from a declared schema's column names and a list
 / of column vectors, so a plant that was told its schema can hand
 / subscribers a table rather than a bare list.
-learn:{[tbl;stamped]
-    if[not tbl in key schemas;
-        '"publish: ",string[tbl]," was published as a list of columns and has no declared schema, so the plant cannot name them - call .qtick.schema first"];
-    flip (cols schemas tbl)!stamped}
+learn:{[table_name;stamped]
+    if[not table_name in key schemas;
+        '"publish: ",string[table_name]," was published as a list of columns and has no declared schema, so the plant cannot name them - call .qtick.schema first"];
+    flip (cols schemas table_name)!stamped}
 
 / Private: send one batch to every sink subscribed to that table.
 fan_out:{[name;batch]

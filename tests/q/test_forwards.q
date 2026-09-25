@@ -426,7 +426,7 @@ test_cross_book_at_rejects_unreachable_pair:{[t]
     wrapper:{[q] .qfwd.cross_book_at[q;`AUDJPY;2026.01.02D00:00:00.000000000;enlist 500000;`mid]};
     .qunit.assertError[wrapper;quotes;"no chain of available pairs connects AUD and JPY"]};
 
-test_cross_book_at_rejects_quote_after_at_time:{[t]
+test_cross_book_at_rejects_quote_after_as_of:{[t]
     quotes:mk_quotes_table[::];
     wrapper:{[q] .qfwd.cross_book_at[q;`AUDUSD;2025.12.31D00:00:00.000000000;enlist 500000;`mid]};
     .qunit.assertError[wrapper;quotes;"no quote exists yet at or before the requested time"]};
@@ -461,10 +461,10 @@ mk_deep_quotes_table:{[dummy]
 
 test_cross_size_at_price_finds_boundary_size:{[t]
     quotes:mk_deep_quotes_table[::];
-    at_time:2026.01.01D00:00:00.000000000+0D00:00:01;
-    max_sz:.qfwd.cross_size_at_price[quotes;`AUDPLN;at_time;`bid;2.5650];
-    r_at_max:.qfwd.cross_book_at[quotes;`AUDPLN;at_time;enlist max_sz;enlist `bid];
-    r_above:.qfwd.cross_book_at[quotes;`AUDPLN;at_time;enlist (max_sz*1.01);enlist `bid];
+    as_of:2026.01.01D00:00:00.000000000+0D00:00:01;
+    max_sz:.qfwd.cross_size_at_price[quotes;`AUDPLN;as_of;`bid;2.5650];
+    r_at_max:.qfwd.cross_book_at[quotes;`AUDPLN;as_of;enlist max_sz;enlist `bid];
+    r_above:.qfwd.cross_book_at[quotes;`AUDPLN;as_of;enlist (max_sz*1.01);enlist `bid];
     .qunit.assertTrue[(first r_at_max`bid)>=2.5650;"price at the found max size still meets the limit"];
     .qunit.assertTrue[(first r_above`bid)<2.5650;"a slightly larger size breaches the limit"]};
 
@@ -477,8 +477,8 @@ test_cross_size_at_price_near_zero_when_even_negligible_size_breaches:{[t]
     / top-of-book bid is ~2.5654 - a limit of 10 can never be met, even
     / at a negligible size, so the search should converge to ~0.
     quotes:mk_quotes_table[::];
-    at_time:2026.01.02D00:00:00.000000000;
-    max_sz:.qfwd.cross_size_at_price[quotes;`AUDPLN;at_time;`bid;10f];
+    as_of:2026.01.02D00:00:00.000000000;
+    max_sz:.qfwd.cross_size_at_price[quotes;`AUDPLN;as_of;`bid;10f];
     .testutil.assertApprox[max_sz;0f;1e-6;"an unreachable price limit returns ~zero tradeable size"]};
 
 / Shared 3-pair, 2-timestamp (1s apart) quotes table for the markout

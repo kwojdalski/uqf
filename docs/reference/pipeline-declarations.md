@@ -83,7 +83,7 @@ A job that copies rows unchanged still declares its transform, with
 
 ## Bounded worker --- `.qbw.define`
 
-`.qbw.define[worker;cfg]`, at the bottom of the worker file.
+`.qbw.define[worker;decl]`, at the bottom of the worker file.
 
   | key         | required | type                              | meaning                                                                                                                                                                                                                                                               | refused when                                                                                                                        |
   | ---         | ---      | ---                               | ---                                                                                                                                                                                                                                                                   | ---                                                                                                                                 |
@@ -185,7 +185,7 @@ covers when to use which.
 
 ## The job graph is derived, not declared
 
-`.qdag.register[job;spec]` exists, but no job file calls it. The graph is
+`.qdag.register[job;decl]` exists, but no job file calls it. The graph is
 assembled from the declarations above, so a job's edges cannot disagree with
 what it does:
 

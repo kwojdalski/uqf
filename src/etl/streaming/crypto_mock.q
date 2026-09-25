@@ -131,10 +131,10 @@ walk:{[m] .qsynth.drift_one m}
 / Drift one toxicity reading: pulled back toward zero and nudged, so it
 / wanders in [-1;1] and changes sign every so often rather than sitting on
 / one side. A stand-in for the flow-derived figure cryptorust computes.
-/ @param t the current toxicity
+/ @param toxicity the current toxicity
 / @return the next, clipped to [-1;1]
 / @eg (.qsub.crypto_mock.drift_toxicity 0f) within -1 1f -> 1b
-drift_toxicity:{[t] 1&-1|(0.9*t)+0.1*-1+2*rand 1f}
+drift_toxicity:{[toxicity] 1&-1|(0.9*toxicity)+0.1*-1+2*rand 1f}
 
 / ------------------------------------------------------------ THE BOOK
 
