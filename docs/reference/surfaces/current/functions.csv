@@ -408,6 +408,7 @@ qetl.source,bound_padding,value,,
 qetl.source,coerce,function,2,source tbl
 qetl.source,coercers,dict,,
 qetl.source,column_names,function,1,tbl
+qetl.source,credential_example,function,1,source
 qetl.source,credential_var,function,1,source
 qetl.source,def,function,1,source
 qetl.source,default_transport,value,,
@@ -923,6 +924,7 @@ qpipe.job.wide_book_feed,spot,value,,
 qpipe.job.wide_book_feed,tick_rows,function,1,mids
 qpipe.source.crypto_market_data,adapt,function,1,raw
 qpipe.source.crypto_market_data,columns,value,,
+qpipe.source.crypto_market_data,credential_example,value,,
 qpipe.source.crypto_market_data,epoch_ms_bound,function,1,ts
 qpipe.source.crypto_market_data,fixture,function,1,
 qpipe.source.crypto_market_data,fixture_levels,function,4,bid ask tick sz
@@ -941,6 +943,7 @@ qpipe.source.crypto_market_data,types,value,,
 qpipe.source.crypto_market_data,tz,value,,
 qpipe.source.databento_mbp10,adapt,function,1,raw
 qpipe.source.databento_mbp10,columns,value,,
+qpipe.source.databento_mbp10,credential_example,value,,
 qpipe.source.databento_mbp10,epoch_ns_literal,function,1,ts
 qpipe.source.databento_mbp10,fixture,function,1,
 qpipe.source.databento_mbp10,fixture_levels,function,3,bid ask sz
@@ -976,6 +979,7 @@ qpipe.source.demo_events,types,value,,
 qpipe.source.demo_events,tz,value,,
 qpipe.source.duckdb_deals,adapt,function,1,raw
 qpipe.source.duckdb_deals,columns,value,,
+qpipe.source.duckdb_deals,credential_example,value,,
 qpipe.source.duckdb_deals,epoch_ns_literal,function,1,ts
 qpipe.source.duckdb_deals,fixture,function,1,
 qpipe.source.duckdb_deals,query,function,3,h range_from range_to

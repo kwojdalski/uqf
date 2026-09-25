@@ -144,6 +144,17 @@ test_hdb_refuses_today:{[t]
         "hdb: iodeals has rows dated *";
         "today's partition belongs to the tickerplant and end-of-day"]};
 
+test_the_refusal_of_today_says_what_to_do_instead:{[t]
+    / The boundary is right - today is the plant's, earlier is the
+    / backfill's, end-of-day is the handover - but it is met after the fetch
+    / and the quality gate have both passed, which is a confusing place to
+    / learn a policy from a message that only says no.
+    root:hdb_dir[];
+    b:([] deal_time:enlist .z.p; sym:enlist `EURUSD; notional:enlist 1e6);
+    .qunit.assertThrows[{.qetl.io.write[.qetl.io.hdb[x;`deal_time];`iodeals;y]}[root];b;
+        "*Backfill a range ending on or before ",string[.z.d-1],", or let today's rows arrive through the live path";
+        "names the remedy and the latest date that would work, not only the refusal"]};
+
 test_hdb_refuses_a_batch_with_nothing_to_partition_by:{[t]
     root:hdb_dir[];
     / Two named parameters, so {...}[root] is a projection: a lambda reading

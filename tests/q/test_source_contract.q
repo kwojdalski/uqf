@@ -423,4 +423,26 @@ test_a_from_inside_a_comment_is_not_read:{[t]
     .qunit.assertEquals[bare_from_in ok_source,enlist "  / copied from trade upstream";();
         "prose after a comment marker is not code"]};
 
+test_a_source_can_declare_what_its_credential_looks_like:{[t]
+    .qunit.assertEquals[.qetl.source.credential_example `crypto_market_data;
+        "DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY";
+        "DuckDB is embedded: a path and a mode, with no host, user or password"]};
+
+test_a_source_that_declares_none_falls_back_to_its_transport:{[t]
+    .qunit.assertEquals[.qetl.source.credential_example `demo_deals;"localhost:5010";
+        "an ipc source's credential is host:port"]};
+
+test_an_undeclared_example_is_not_an_empty_string:{[t]
+    / The declarations share one stored value list, so the moment one source
+    / declares a twelfth key q pads every other declaration with a null of
+    / the matching type. `credential_example in key d` is therefore 1b even
+    / for a source that never declared one, and reading it without checking
+    / the VALUE hands the operator an empty example.
+    .qunit.assertTrue[`credential_example in key .qetl.source.def `demo_deals;
+        "the key is present on every declaration once any source declares it"];
+    .qunit.assertEquals[(.qetl.source.def `demo_deals)`credential_example;"";
+        "padded with an empty string - which is what 'did not declare' looks like"];
+    .qunit.assertTrue[0<count .qetl.source.credential_example `demo_deals;
+        "so the accessor must test the value, not the key"]};
+
 \d .

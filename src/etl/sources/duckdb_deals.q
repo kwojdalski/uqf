@@ -57,6 +57,12 @@ row_key:`deal_id
 tz:`UTC
 transport:`odbc
 
+/ What UQF_SOURCE_CRED_DUCKDB_DEALS looks like. Declared rather than
+/ left to the per-transport default, which is a networked-database string:
+/ DuckDB is embedded, so this is a file path and a mode, with no host, user
+/ or password to supply.
+credential_example:"DRIVER=DuckDB;Database=/path/fx_deals.duckdb;access_mode=READ_ONLY"
+
 / A timestamp as DuckDB epoch nanoseconds, through .qetl.io.odbc.literal.
 / @param ts a timestamp
 / @return SQL text for the same instant, to the nanosecond
@@ -103,7 +109,7 @@ fixture:{[]
         rate:1.0842 1.2631 1.0847 149.82 1.0851)}
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
+    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
 
 \d .

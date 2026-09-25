@@ -60,6 +60,12 @@ row_key:`symbol`ts_event`sequence`action`side`price`size
 tz:`UTC
 transport:`odbc
 
+/ What UQF_SOURCE_CRED_DATABENTO_MBP10 looks like. Declared rather than
+/ left to the per-transport default, which is a networked-database string:
+/ DuckDB is embedded, so this is a file path and a mode, with no host, user
+/ or password to supply.
+credential_example:"DRIVER=DuckDB;Database=/path/databento.duckdb;access_mode=READ_ONLY"
+
 / Private: the SQL expression selecting each field, in `columns` order.
 select_list:{[]
     exprs:{[f]
@@ -110,7 +116,7 @@ fixture:{[]
     base,'lv}
 
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport!
-    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
+    (source_name;table_name;target;time_column;row_key;columns;types;query;fixture;tz;transport;credential_example)];
 
 \d .

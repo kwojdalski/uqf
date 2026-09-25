@@ -168,9 +168,16 @@ write_hdb:{[root;partition_col;target;batch]
     days:`date$data`time;
     if[any null days;
         '"hdb: ",string[target]," has rows with a null time - no partition to put them in"];
+    / Names the REMEDY, not only the refusal. The rule is a boundary - today
+    / is the plant's, yesterday and earlier are the backfill's, and
+    / end-of-day is the handover - but an operator meeting it for the first
+    / time meets it as a wall, after the fetch and the quality gate have both
+    / passed, which is a confusing place to learn a policy.
     if[any days>=.z.d;
         '"hdb: ",string[target]," has rows dated ",string[max days],
-         " - today and later belong to the tickerplant and end-of-day, not a backfill"];
+         " - today and later belong to the tickerplant and end-of-day, not a backfill.",
+         " Backfill a range ending on or before ",string[.z.d-1],
+         ", or let today's rows arrive through the live path"];
     data:.Q.en[root;data];
     {[root;target;data;days;d]
         part:hsym `$(string .Q.par[root;d;target]),"/";
