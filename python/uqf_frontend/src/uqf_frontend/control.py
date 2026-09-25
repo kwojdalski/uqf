@@ -284,12 +284,12 @@ def start_backfill(
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
     env = {**os.environ, **overrides}
-    q = q_interpreter(env)
-    if q is None:
-        raise ValidationFailed("no q interpreter to run the backfill - set $QCMD, or put q on PATH")
     script = paths.scripts_dir.parent / "scripts" / "processes" / "torq_backfill.q"
     if not script.is_file():
         raise ValidationFailed(f"{script} not found - is this the repository root?")
+    q = q_interpreter(env)
+    if q is None:
+        raise ValidationFailed("no q interpreter to run the backfill - set $QCMD, or put q on PATH")
 
     # start_new_session detaches it from this server's process group, so a
     # restart of the API does not take a running backfill down with it.
