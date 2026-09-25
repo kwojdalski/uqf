@@ -59,8 +59,11 @@ test_no_undeclared_table_appears:{[t]
     / The other direction. A table added to the q file that nothing here
     / knows about is either a new capability nobody wired up, or a stray
     / definition - both worth one line of thought before it ships.
+    / The failure is the prompt (#352), so it says what to do: `uqs new-job`
+    / adds its table to `expected` itself, and a table added by hand needs
+    / the same one line once someone has decided it should ship.
     .qunit.assertEquals[.tabletest.declared[] except expected;`symbol$();
-        "the q file declares exactly the tables this test knows about"]};
+        "a table in scripts/processes/uqs_tables.q that this test does not know - if it is meant to ship, add it to `expected` in tests/q/test_stack_tables.q; if not, remove it"]};
 
 / --- shapes their consumers depend on ------------------------------------
 
