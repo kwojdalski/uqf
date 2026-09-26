@@ -299,6 +299,32 @@ test_a_run_that_throws_still_releases_the_lock:{[t]
     .qunit.assertEquals[.qetl.job.bounded.state.lock_held `demo_deals_backfill;0b;
         "a run that threw released its lock, so the next run of this worker can start"]};
 
+/ init takes the lock and then keeps going - credential lookup, connect, the
+/ contract - so a throw after that line used to leave the lock behind (#492).
+/ #490's guard sits on `run`, which a failed init never reaches, so an
+/ unreachable source leaked one on every attempt.
+test_an_init_that_throws_releases_the_lock:{[t]
+    / A credential makes this worker `live`, so init tries to connect; the
+    / stubbed connect then throws exactly where a real unreachable source
+    / does. Both are undone in the same test, whatever the assertion does.
+    setenv[`$.qetl.source.credential_var[`demo_deals];"stub-credential"];
+    saved:.qetl.job.bounded.connect;
+    .qetl.job.bounded.connect:{[worker] '"connect: demo_deals unreachable - deliberate"};
+    err:@[{.qpipe.job.demo_deals_backfill.init[x]; ""};.ddbftest.spec_for[`v1;1;4];{x}];
+    .qetl.job.bounded.connect:saved;
+    setenv[`$.qetl.source.credential_var[`demo_deals];""];
+    .qunit.assertTrue[err like "*deliberate*";
+        "the connect error still reaches the caller - releasing must not swallow it"];
+    .qunit.assertEquals[.qetl.job.bounded.state.lock_held `demo_deals_backfill;0b;
+        "an init that threw released its lock, so the next attempt need not break a stale one"]};
+
+/ The other half of the same rule: a SUCCESSFUL init must KEEP the lock.
+/ Releasing on both branches would defeat the point of taking it.
+test_an_init_that_succeeds_keeps_the_lock:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertEquals[.qetl.job.bounded.state.lock_held `demo_deals_backfill;1b;
+        "a successful init holds the lock for the run that follows"]};
+
 test_a_run_that_succeeds_releases_the_lock:{[t]
     .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
     .qpipe.job.demo_deals_backfill.run[];

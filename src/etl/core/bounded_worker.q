@@ -363,7 +363,31 @@ spec:{[worker] `source_version`range_from`range_to!read_state[worker] each `sour
 / @param worker the worker's name
 / @param run_spec dict of source_version, range_from, range_to
 / @return the run specification, as stored
+/ A GUARD, with the work in init_body below (#492).
+/ .
+/ init TAKES the instance lock and then keeps going - credential lookup,
+/ connect, the source contract - so anything that throws after that line
+/ leaves the lock behind. #490 put this same guard on `run` and missed this
+/ path entirely, because a failed init means `run` is never called: an
+/ unreachable source leaked a lock on every attempt.
+/ .
+/ RELEASES ON THE FAILURE BRANCH ONLY, which is where this differs from
+/ `run`. A successful init must KEEP the lock - holding it across the run is
+/ the whole reason it was taken - so only the throw path cleans up.
+/ @param worker the worker's name
+/ @param run_spec the run specification - source_version, range_from, range_to
+/ @return whatever init_body returns
 init:{[worker;run_spec]
+    r:.[{[w;s] (1b; init_body[w;s])};(worker;run_spec);{[e] (0b;e)}];
+    if[not first r; cleanup worker; 'last r];
+    last r}
+
+/ The initialisation itself. Never call this directly - `init` is what
+/ releases the lock when this throws.
+/ @param worker the worker's name
+/ @param run_spec the run specification - source_version, range_from, range_to
+/ @return the worker's name
+init_body:{[worker;run_spec]
     cfg:def worker;
     write_state[worker;`source_version;run_spec`source_version];
     write_state[worker;`range_from;run_spec`range_from];

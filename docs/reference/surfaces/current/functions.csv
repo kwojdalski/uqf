@@ -225,6 +225,7 @@ qetl.job.bounded,fetch,function,3,worker from_ts to_ts
 qetl.job.bounded,inherit,function,2,worker ns
 qetl.job.bounded,inherited_methods,value,,
 qetl.job.bounded,init,function,2,worker run_spec
+qetl.job.bounded,init_body,function,2,worker run_spec
 qetl.job.bounded,initial_state,dict,,
 qetl.job.bounded,namespace,function,1,worker
 qetl.job.bounded,no_failures,function,1,
