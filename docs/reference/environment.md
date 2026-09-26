@@ -104,6 +104,37 @@ about where data lives, which is a confusing way to spend an afternoon.
   | `QCON`          | `qcon`                                         |
   | `QCMD`          | `$QCMD`, else `q` --- see above                |
 
+## Where to put them
+
+There is no file fallback for a credential, deliberately (see the
+`UQF_SOURCE_CRED_<SOURCE>` row above), so anything secret or machine-specific
+has to be exported by the shell that starts the process. A gitignored `.envrc`
+is the tidiest way to do that, and it keeps the rule intact --- nothing in this
+tree reads `.envrc`, so the value still arrives through the environment.
+
+Two reasons to prefer it over typing the `export`:
+
+- It **unloads when you leave the directory**. A stale credential cannot outlive
+  the shell that set it. Re-running an older `export` line and having it
+  silently win, while the corrected value sits unused in a file, is a real way
+  to lose an afternoon to a failure that looks like a bug in the source.
+
+- `.envrc` is **executed**, so a path can be derived rather than pinned.
+  `CRYPTORUST_ROOT` is enough to build the whole `crypto_market_data`
+  credential, including the `file_search_path=` that `data/live.duckdb`'s
+  relative `read_parquet` view needs to resolve from this repository's working
+  directory:
+
+  ```bash
+  export CRYPTORUST_ROOT="${CRYPTORUST_ROOT:-$(cd "$PWD/../cryptorust" && pwd)}"
+  export UQF_SOURCE_CRED_CRYPTO_MARKET_DATA="DRIVER=DuckDB;Database=$CRYPTORUST_ROOT/data/live.duckdb;access_mode=READ_ONLY;file_search_path=$CRYPTORUST_ROOT"
+  ```
+
+`.env` is a different thing and is not an alternative here: exactly one file
+reads it (`src/integrations/data.q`, for `DATABENTO_DATA_DIR`), it is inert data
+rather than shell, and a key put there that nothing reads is ignored rather than
+set. See [`.env.example`](../../.env.example).
+
 ## Prerequisites, not configuration
 
 `QHOME` must point at a real q installation (`~/.kx` for KDB-X, the preferred

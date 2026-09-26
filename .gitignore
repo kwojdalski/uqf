@@ -10,6 +10,13 @@ actual/
 # local machine config (data paths etc.) - see .env for the expected keys
 .env
 
+# direnv's per-directory environment, loaded on cd into the tree and unloaded
+# on the way out. Ignored on its own line because the `.env` pattern above does
+# NOT match `.envrc` - and an .envrc is where a source credential gets
+# exported, so an unignored one is exactly the accident .env.example warns
+# about. See its Secrets note.
+.envrc
+
 # local Claude Code session permissions, not project config
 .claude/settings.local.json
 
