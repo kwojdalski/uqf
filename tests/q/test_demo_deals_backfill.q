@@ -280,6 +280,31 @@ test_cleanup_delegates:{[t]
     .qunit.assertEquals[.qetl.job.bounded.state.lock_held `demo_deals_backfill;0b;
         "cleanup releases the single-instance lock"]};
 
+/ A run that THROWS must still release (#490). init takes the lock and only
+/ cleanup releases it, so while the release sat on run's last line every
+/ error path walked past it: the run logged `failed`, the lock outlived the
+/ process, and the next run refused against a pid that had already exited.
+/ Nothing releases on process exit either - this tree has no .z.exit - so the
+/ throw path is the one the framework itself can be held to.
+test_a_run_that_throws_still_releases_the_lock:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    / Break the plan, which run calls before it can reach any per-window
+    / error handling, so the throw leaves run_body by the shortest path.
+    saved:.qpipe.job.demo_deals_backfill.plan;
+    .qpipe.job.demo_deals_backfill.plan:{[cursor] '"deliberate plan failure"};
+    err:@[{.qpipe.job.demo_deals_backfill.run[]; ""};::;{x}];
+    .qpipe.job.demo_deals_backfill.plan:saved;
+    .qunit.assertTrue[err like "*deliberate plan failure*";
+        "the error still reaches the caller - releasing the lock must not swallow it"];
+    .qunit.assertEquals[.qetl.job.bounded.state.lock_held `demo_deals_backfill;0b;
+        "a run that threw released its lock, so the next run of this worker can start"]};
+
+test_a_run_that_succeeds_releases_the_lock:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qpipe.job.demo_deals_backfill.run[];
+    .qunit.assertEquals[.qetl.job.bounded.state.lock_held `demo_deals_backfill;0b;
+        "and so did a run that finished - both exits go through the one release"]};
+
 / The five names the contract requires, called through the worker's OWN namespace
 / rather than the shell's - which is what an orchestrator does.
 test_every_contract_method_is_callable_not_merely_present:{[t]

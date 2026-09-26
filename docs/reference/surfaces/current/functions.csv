@@ -241,6 +241,7 @@ qetl.job.bounded,record_facts,function,5,worker cfg w batch r
 qetl.job.bounded,require_transform,function,2,worker cfg
 qetl.job.bounded,required_cfg,value,,
 qetl.job.bounded,run,function,1,worker
+qetl.job.bounded,run_body,function,1,worker
 qetl.job.bounded,run_check,function,2,worker batch
 qetl.job.bounded,runtime,dict,,
 qetl.job.bounded,spec,function,1,worker
@@ -288,8 +289,13 @@ qetl.job.bounded.state,file_lock_wait,value,,
 qetl.job.bounded.state,load_checkpoint,function,2,worker spec
 qetl.job.bounded.state,lock_dir,function,1,
 qetl.job.bounded.state,lock_held,function,1,worker
+qetl.job.bounded.state,lock_is_stale,function,1,path
 qetl.job.bounded.state,lock_path,function,1,worker
 qetl.job.bounded.state,ns_names,function,1,ns
+qetl.job.bounded.state,owner_desc,function,1,path
+qetl.job.bounded.state,owner_file,function,1,path
+qetl.job.bounded.state,pid_alive,function,1,pid
+qetl.job.bounded.state,read_owner,function,1,path
 qetl.job.bounded.state,register,function,2,worker ns
 qetl.job.bounded.state,registered,function,1,
 qetl.job.bounded.state,release_lock,function,1,worker
@@ -297,6 +303,7 @@ qetl.job.bounded.state,require_contract,function,1,worker
 qetl.job.bounded.state,run_pass,function,3,worker spec pass
 qetl.job.bounded.state,save_checkpoint,function,3,worker spec cursor
 qetl.job.bounded.state,with_file_lock,function,3,name f args
+qetl.job.bounded.state,write_owner,function,1,path
 qetl.job.continuous,advance,function,3,worker current next_cursor
 qetl.job.continuous,clear_cursor,function,1,worker
 qetl.job.continuous,cursor_path,function,1,worker

@@ -575,7 +575,28 @@ checkpoint:{[worker;cursor] .qetl.job.bounded.state.save_checkpoint[worker;spec 
 / the run continues: failing the whole pass would throw away the windows that
 / did succeed, and their coverage is what makes the retry cheap. Failed
 / windows stay uncovered, so the next run plans them again.
+/ .
+/ A GUARD, with the work in run_body below. init takes the instance lock and
+/ only cleanup releases it, so until #490 every way out of run_body that was
+/ not `return` leaked it: a window that threw past the retry policy, a
+/ contract error, an operator's ctrl-c. The run then logged `failed` and the
+/ next one refused to start, naming a pid that had already exited.
+/ .
+/ The idiom is with_file_lock's, one file over in backfill_state.q: capture
+/ (ok; value), release, then re-raise what was caught. An error path that
+/ skips the release is how one failed run wedges every later one.
+/ @param worker the worker's name
+/ @return the run's result dictionary
 run:{[worker]
+    r:@[{[w] (1b; run_body w)};worker;{[e] (0b;e)}];
+    cleanup worker;
+    if[not first r; 'last r];
+    last r}
+
+/ The run itself. Never call this directly - `run` is what releases the lock.
+/ @param worker the worker's name
+/ @return the run's result dictionary
+run_body:{[worker]
     / One run identity for the whole execution, so every window
     / this run materialises is attributable to it and to each other. Begun
     / before the first window and closed with the run's own outcome, so an
@@ -594,7 +615,6 @@ run:{[worker]
             `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
         .qetl.hb.beat[worker;`idle];
         end_run[`idle];
-        cleanup worker;
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
     / The run's OWN cursor starts null, not at the loaded checkpoint. The
@@ -629,25 +649,22 @@ run:{[worker]
     / says `running` and keeps saying it.
     .qetl.hb.beat[worker;result`state];
     end_run[result`state];
-    / Release what init took, on the way out of a TERMINAL run.
+    / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
-    / Until this line, release_lock was reached on exactly one path - the
-    / failure branch of .qetl.job.bounded.state.run_pass - and `cleanup` had no
-    / caller in src/ or scripts/ at all, only test teardowns. So a run that
-    / FAILED unlocked and a run that SUCCEEDED did not: the lock directory
-    / outlived the process, and every later run of that worker refused to
-    / start with "is already running" against a process that had exited
-    / cleanly hours earlier. The operator's fix, `rm <worker>.lock`, then
-    / failed too - acquire_lock uses mkdir for atomicity, so the lock is a
+    / The release used to live on this line, which made it the happy path's
+    / privilege - a run that threw never reached it. Before that it was on
+    / the failure branch only, so a run that FAILED unlocked and a run that
+    / SUCCEEDED did not. Moving it into the guard is what finally covers
+    / both, and the operator's instinctive fix - `rm <worker>.lock` - never
+    / worked anyway, because acquire_lock uses mkdir and the lock is a
     / directory.
     / .
-    / Here rather than in the process script, because torq_backfill.q is not
-    / the only caller: a test, or an operator at a q prompt, runs init and
-    / run directly and leaked one just as readily. A bounded run has no
+    / In `run` rather than in the process script, because torq_backfill.q is
+    / not the only caller: a test, or an operator at a q prompt, runs init
+    / and run directly and leaked one just as readily. A bounded run has no
     / state to carry past its terminal state, so the run ending IS the
     / session ending. cleanup is idempotent, so a caller that also cleans up
     / (every test teardown does) is unaffected.
-    cleanup worker;
     result}
 
 / The exit code an orchestrator should see for a terminal run state.

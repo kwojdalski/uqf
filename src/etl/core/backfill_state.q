@@ -97,6 +97,102 @@ lock_dir:{[] .qetl.status.status_dir[]}
 
 lock_path:{[worker] (lock_dir[]),"/",string[worker],".lock"}
 
+/ ------------------------------------------------- LOCK OWNERSHIP
+/ .
+/ A lock records WHO holds it, and these are the functions that read that
+/ back. Until #490 the record was written and never read by anything but a
+/ test: there is no .z.exit handler anywhere in this tree, so nothing
+/ released a lock when a process ended, and a worker that finished cleanly -
+/ or was killed, or threw - blocked every later run of itself until an
+/ operator found the directory and removed it by hand. The refusal they got
+/ meanwhile said the worker "is already running", which the code had never
+/ checked.
+
+/ The file inside a lock directory that names its holder.
+/ @param path the lock directory
+/ @return the path of the owner file inside it
+/ @eg .qetl.job.bounded.state.owner_file["/tmp/x.lock"]  ->  "/tmp/x.lock/owner"
+owner_file:{[path] path,"/owner"}
+
+/ Record who holds a lock.
+/ .
+/ HOST as well as pid, because a pid means nothing off the machine that
+/ issued it. Without the host a lock left on a shared status directory by
+/ another box could be broken here on the strength of a number that happens
+/ to match some unrelated local process.
+/ @param path the lock directory
+/ @return the owner file's path
+/ @eg .qetl.job.bounded.state.write_owner["/tmp/x.lock"]
+write_owner:{[path]
+    (hsym `$owner_file path) 0: enlist .j.j `pid`started`host!(.z.i;.z.p;string .z.h);
+    owner_file path}
+
+/ The holder recorded inside a lock, or () when there is none to read.
+/ .
+/ AN UNREADABLE OWNER IS NOT AN ABSENT ONE. acquire_lock creates the
+/ directory and writes the owner as two steps, so a competitor looking in
+/ between sees a lock with no owner file - and that lock is live, not stale.
+/ Every caller here treats () as "assume held".
+/ @param path the lock directory
+/ @return the parsed owner dictionary, or ()
+/ @eg .qetl.job.bounded.state.read_owner["/tmp/nonexistent.lock"]  ->  ()
+read_owner:{[path] @[{.j.k first read0 hsym `$x};owner_file path;{[e] ()}]}
+
+/ Is a process with this id running on this host?
+/ .
+/ `ps -p` rather than `kill -0`: kill reports EPERM for a live process owned
+/ by another user, which arrives here looking exactly like "no such process"
+/ and would break a lock held by a running worker under a different account.
+/ .
+/ ANYTHING UNREADABLE COUNTS AS ALIVE. The two errors are not symmetric -
+/ failing to break a stale lock costs one `rm -rf` by hand, while breaking a
+/ live one costs two instances advancing the same private checkpoint, which
+/ is the exact outcome the lock exists to prevent.
+/ @param pid the process id
+/ @return 1b when a process with that id exists here
+/ @eg .qetl.job.bounded.state.pid_alive .z.i  ->  1b
+pid_alive:{[pid]
+    out:@[system;"ps -p ",string["j"$pid]," > /dev/null 2>&1; echo $?";{[e] ""}];
+    $[0=count out; 1b; "0"=first first out]}
+
+/ Is this lock left behind by a process that is gone?
+/ .
+/ Four ways to answer no, and every one of them is the safe direction:
+/ .
+/   no owner file       the holder is mid-acquire - mkdir and the owner write
+/                       are two steps - so the lock is live
+/   no pid or host      written by a version that recorded neither; not ours
+/                       to judge
+/   another host        a pid is meaningless off the machine that issued it
+/   the pid is running  it holds the lock, or a reused number does, and
+/                       neither is ours to break
+/ @param path the lock directory
+/ @return 1b when the recorded holder is gone from this host
+/ @eg .qetl.job.bounded.state.lock_is_stale["/tmp/nonexistent.lock"]  ->  0b
+lock_is_stale:{[path]
+    o:read_owner path;
+    $[()~o;                          0b;
+      not all `pid`host in key o;    0b;
+      not o[`host]~string .z.h;      0b;
+      not pid_alive o`pid]}
+
+/ How a refusal or a timeout describes the holder it found.
+/ .
+/ PARENTHESISE THE CALL at every use site - `" by ",(owner_desc path),"..."`.
+/ q evaluates right to left, so the obvious spelling without them reads as
+/ owner_desc[path,"..."], which looks up the owner of a path with the rest of
+/ the error message glued onto it, reports "an unrecorded holder", and eats
+/ the remainder of the message. It throws nothing and fails no parse.
+/ @param path the lock directory
+/ @return a phrase naming the holder, for an error message
+/ @eg .qetl.job.bounded.state.owner_desc["/tmp/nonexistent.lock"]  ->  "an unrecorded holder (no owner file - it is mid-acquire)"
+owner_desc:{[path]
+    o:read_owner path;
+    if[()~o; :"an unrecorded holder (no owner file - it is mid-acquire)"];
+    "pid ",string["j"$o`pid],
+        $[`host in key o; " on ",o`host; ""],
+        $[`started in key o; ", started ",o`started; ""]}
+
 / Take an exclusive single-instance lock, or refuse to start
 / .
 / .
@@ -120,13 +216,30 @@ acquire_lock:{[worker]
     path:lock_path worker;
     / mkdir on an existing directory returns non-zero: that IS the test.
     rc:@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
+    / A lock whose recorded holder is gone from this host is BROKEN AND
+    / RETAKEN rather than reported (#490). Nothing releases a lock when a
+    / process ends - this tree has no .z.exit handler - so without this a
+    / clean exit, a kill and a throw each left one behind, and the next run
+    / of that worker refused against a pid that had not existed for hours.
+    if[rc<>0;
+        if[lock_is_stale path;
+            .[{.qetl.log.info[x;y;z]};
+                (worker;"breaking a stale lock - its holder is gone";
+                 `path`holder!(path;owner_desc path));::];
+            system"rm -rf ",path;
+            / Retake it through the same atomic mkdir. Losing THIS race means
+            / another process got in first, and the refusal below - now
+            / describing that live holder - is the right answer.
+            rc:@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}]]];
     if[rc<>0;
         '"acquire_lock: ",string[worker]," is already running (lock held at ",path,
+         " by ",(owner_desc path),
          ") - refusing to start a second instance, because two instances would ",
          "both advance the same private checkpoint"];
-    / record who holds it, so a stale lock can be diagnosed rather than just
-    / deleted blindly.
-    (hsym `$path,"/owner") 0: enlist .j.j `pid`started!(.z.i;.z.p);
+    / Record who holds it, so the next process can tell a live lock from one
+    / this process left behind. READ BACK by lock_is_stale above; it was
+    / write-only until #490.
+    write_owner path;
     .[{.qetl.log.dbg[x;y;z]};(worker;"lock acquired";enlist[`path]!enlist path);::];
     path}
 
@@ -192,13 +305,22 @@ with_file_lock:{[name;f;args]
     path:file_lock_path name;
     deadline:.z.p+file_lock_wait;
     while[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};path;{[e] 1}];
-        if[.z.p>deadline;
-            '"with_file_lock: could not take ",string[name]," at ",path," within ",
-             string[file_lock_wait]," - another process may have died mid-write"];
-        system"sleep 0.01"];
-    / Record the holder, so a lock left by a dead process can be diagnosed
-    / rather than deleted blindly. Same courtesy acquire_lock extends.
-    (hsym `$path,"/owner") 0: enlist .j.j `pid`started!(.z.i;.z.p);
+        / Same staleness rule acquire_lock uses, and it matters MORE here.
+        / This mutex is SHARED, so one process dying mid-write used to wedge
+        / the ledger for every worker on the host - five seconds at a time,
+        / forever - with an error that named the case it could not handle.
+        / Breaking it here turns that into a pause and a log line.
+        stale:lock_is_stale path;
+        if[stale; system"rm -rf ",path];
+        if[not stale;
+            if[.z.p>deadline;
+                '"with_file_lock: could not take ",string[name]," at ",path," within ",
+                 string[file_lock_wait]," - held by ",(owner_desc path),
+                 ", which is still running"];
+            system"sleep 0.01"]];
+    / Record the holder, so a lock left by a dead process can be broken by
+    / the next process to want it rather than waited on.
+    write_owner path;
     r:@[{[fa] (1b; (fa 0) . fa 1)};(f;args);{[e] (0b;e)}];
     system"rm -rf ",path;
     if[not first r; 'last r];
