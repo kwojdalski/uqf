@@ -510,6 +510,10 @@ qexec,reject_ratio,function,2,num_rejects num_requests
 qexec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qexec,slippage,function,4,side arrival_price exec_price pip_factor
 qexec,sweep_price,function,3,prices sizes target_size
+qexec,venue_quality,function,5,quotes requests trades window config
+qexec,venue_quality_config,function,1,config
+qexec,venue_quality_defaults,dict,,
+qexec,venue_quality_require_args,function,4,quotes requests trades window
 qexec,vwap,function,2,prices sizes
 qexec,vwap_expanding,function,2,prices sizes
 qfwd,CROSS_SIZE_MAX_DOUBLINGS,value,,

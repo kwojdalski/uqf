@@ -410,6 +410,125 @@ fill_probability_require_consistent:{[orders]
         '"fill_probability_by: an order has a full_fill_time with no first_fill_time at or before it - a full fill is a fill"];
     };
 
+/ ---- venue_quality: a per-venue execution-quality scorecard (#338) -------
+/ .
+/ ABSTRACT FOR NOW. The signature, inputs, config and output below are the
+/ contract; the computation is not written yet. venue_quality validates
+/ everything it is given - that part is real and tested - and then throws
+/ "not implemented". Implementing #338 means replacing its last line, not
+/ changing what it takes or returns.
+/ .
+/ WHAT IT IS FOR. Comparing liquidity providers on what can be observed of
+/ them: how fresh and tight their quotes are, how often a request to them
+/ fills or is rejected, and where the market went after they filled. Each
+/ component is reported raw, with the sample count behind it, so a ranking
+/ can always be taken apart into what drove it.
+/ .
+/ A MISSING MEASURE IS NEVER ZERO. A venue with no fills has no markout, not
+/ a markout of 0 - which would read as "no adverse selection", the best
+/ possible result. Such a row is `incomplete and names the component in
+/ `missing`, and a composite score over it is null.
+
+/ What venue_quality uses when config does not say.
+/ .
+/ stale_after: a quote older than this at the end of its bucket counts as
+/ stale - 5s by default, a convention rather than a derived number.
+/ min_count: the sample count below which a component is `sparse - 30, as
+/ fill_probability_by uses. weights: (::) for no composite score, or a dict
+/ of component -> weight. normalise: how components are put on one scale
+/ before weighting - required with weights, because a composite over raw
+/ bps, rates and pips compares nothing.
+venue_quality_defaults:`stale_after`min_count`weights`normalise!(0D00:00:05;30;::;`)
+
+/ Venue-quality scorecard: per time bucket, venue and pair, the observable
+/ execution-quality components a desk compares liquidity providers on, each
+/ with its sample count. See the section header above.
+/ .
+/ ABSTRACT: validates its arguments, then throws "not implemented" until
+/ #338 is built. The contract below does not change when it is.
+/ .
+/ OUTPUT - one row per (time; venue; sym), sorted by those three, so the
+/ result does not depend on input row order:
+/ .
+/   time venue sym     bucket start (window xbar time), venue, pair
+/   n_quotes           quotes in the bucket
+/   stale_share        fraction of the venue's pairs whose latest quote is
+/                      older than stale_after at the bucket end
+/   spread_bps         mean quoted spread, in basis points of mid (spread_bps)
+/   depth              mean top-of-book size, (bsize+asize)%2
+/   n_requests         requests sent in the bucket
+/   fill_rate          fills % requests; fill_rate_size weights by size
+/   reject_rate        rejects % requests; reject_rate_size weights by size
+/   n_fills            fills in the bucket
+/   markout_pips       mean post-fill markout per horizon, a float vector
+/                      aligned with config`horizons - positive when the market
+/                      moved in the fill's favour, as markout
+/   status             `complete, `sparse (a component under min_count) or
+/                      `incomplete (a component with no observations)
+/   missing            the components with no observations
+/   score              the weighted composite, null without config`weights
+/                      and null for an `incomplete row
+/ .
+/ Nothing after config`as_of is used, from any input.
+/ @param quotes table, one row per quote update: `time`sym`venue`bid`ask`bsize`asize
+/ @param requests table, one row per request: `time`sym`venue`size`hit`reject
+/   - hit and reject are booleans, as hit_ratio_by and reject_ratio_by take
+/ @param trades table, one row per fill: `time`sym`venue`side`trade_price`pip_factor
+/   - the shape markout_at_horizons takes, plus venue
+/ @param window a positive timespan to bucket time by, e.g. 0D01:00:00
+/ @param config a dict: as_of (timestamp, required), horizons (timespan or
+/   timespans for the post-fill markouts, required), and optionally
+/   stale_after, min_count, weights and normalise - see venue_quality_defaults
+/ @return the scorecard table described above
+/ @throws error naming what is wrong with an argument; otherwise
+/   "not implemented" until #338 is built
+venue_quality:{[quotes;requests;trades;window;config]
+    venue_quality_require_args[quotes;requests;trades;window];
+    venue_quality_config config;
+    '"venue_quality: not implemented yet (#338) - the contract is fixed, the computation is not"};
+
+/ Private: refuse venue_quality's tables and window, naming what is wrong.
+venue_quality_require_args:{[quotes;requests;trades;window]
+    if[not .Q.qt quotes; '"venue_quality: quotes must be a table"];
+    if[not .Q.qt requests; '"venue_quality: requests must be a table"];
+    if[not .Q.qt trades; '"venue_quality: trades must be a table"];
+    .qschema.require_cols[`venue_quality;`quotes;0!quotes;`time`sym`venue`bid`ask`bsize`asize];
+    .qschema.require_cols[`venue_quality;`requests;0!requests;`time`sym`venue`size`hit`reject];
+    .qschema.require_cols[`venue_quality;`trades;0!trades;`time`sym`venue`side`trade_price`pip_factor];
+    if[not -16h=type window; '"venue_quality: window must be a timespan, e.g. 0D01:00:00"];
+    if[not window>0D00:00:00; '"venue_quality: window must be positive"];
+    };
+
+/ Private: venue_quality's config, checked and resolved against the defaults.
+/ @throws error naming a missing or unknown key, or a value of the wrong kind
+venue_quality_config:{[config]
+    if[not 99h=type config;
+        '"venue_quality: config must be a dictionary with at least as_of and horizons"];
+    missing:`as_of`horizons except key config;
+    if[count missing; '"venue_quality: config is missing ",", " sv string missing];
+    unknown:(key config) except `as_of`horizons,key venue_quality_defaults;
+    if[count unknown;
+        '"venue_quality: unknown config key(s) ",(", " sv string unknown),
+         " - known: as_of, horizons, ",", " sv string key venue_quality_defaults];
+    c:venue_quality_defaults,config;
+    if[not -12h=type c`as_of;
+        '"venue_quality: as_of must be a timestamp - nothing after it is used"];
+    if[null c`as_of; '"venue_quality: as_of is null"];
+    hs:(),c`horizons;
+    if[not 16h=type hs;
+        '"venue_quality: horizons must be a timespan or timespan vector, e.g. 0D00:00:01 0D00:01:00"];
+    if[0=count hs; '"venue_quality: horizons is empty"];
+    if[not all hs>0D00:00:00; '"venue_quality: every horizon must be positive"];
+    if[not -16h=type c`stale_after; '"venue_quality: stale_after must be a timespan"];
+    if[not (type c`min_count) in -5 -6 -7h; '"venue_quality: min_count must be an integer"];
+    if[0>c`min_count; '"venue_quality: min_count must not be negative"];
+    if[not (::)~c`weights;
+        if[not 99h=type c`weights;
+            '"venue_quality: weights must be (::) or a dictionary of component -> weight"];
+        if[null c`normalise;
+            '"venue_quality: weights need a normalise method - a composite over raw bps, rates and pips compares nothing"]];
+    c};
+
 / Size-weighted average execution price across a set of fills.
 / @param prices list of fill prices
 / @param sizes list of fill sizes, same length as prices
