@@ -3,7 +3,7 @@ docs/guides/uqs.md). Bridges lib/torq + lib/torq-finance-starter-pack
 without editing either vendored tree.
 
 All the actual bootstrapping/config logic lives in the model/, stack/ and
-external/ modules, which uqs_mcp.py's FastMCP server calls too, so the
+external/ modules, which uqs.mcp's FastMCP server calls too, so the
 two front ends can't drift apart.
 
 Reached through the `uqs` script entry point (pyproject.toml

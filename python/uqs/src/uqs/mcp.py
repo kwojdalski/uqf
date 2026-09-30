@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""uqs_mcp.py - FastMCP server exposing the TorQ Finance Starter Pack
+"""uqs.mcp - FastMCP server exposing the TorQ Finance Starter Pack
 demo (see docs/guides/uqs.md) as MCP tools, so an MCP client (e.g. Claude)
 can start/stop/query/configure it without shelling out.
 
@@ -10,7 +10,7 @@ external/ modules, so they can't drift apart.
 Run (stdio transport, the default - point an MCP client's server command
 at this):
 
-    uv run --project python/uqs python/uqs/uqs_mcp.py
+    uv run uqs-mcp
 """
 
 from __future__ import annotations
@@ -291,5 +291,10 @@ def uqs_crypto_fills_status() -> dict[str, str]:
     return crypto.crypto_fills_recorder_status(stack_paths.default_paths())
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Entry point for the `uqs-mcp` console script."""
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

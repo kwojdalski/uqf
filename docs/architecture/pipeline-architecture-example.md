@@ -140,8 +140,8 @@ these can be asked *as of* a past instant and get the answer that was true then.
 - [`uqf_airflow_provider`](../../python/uqf_airflow_provider) --- an operator
   that starts a backfill and a sensor that reads the status files
   [`.qetl.status`](../../src/etl/core/status.q) writes.
-- The [`uqs` MCP server](../../python/uqs/uqs_mcp.py) --- the stack as tools an
-  agent can call.
+- The [`uqs` MCP server](../../python/uqs/src/uqs/mcp.py) --- the stack as tools
+  an agent can call.
 
 ## What a day looks like through it
 
