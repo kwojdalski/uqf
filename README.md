@@ -137,20 +137,20 @@ is UTC: a backfill that silently defaulted its range would publish the wrong
 window and record coverage for it. `uqs` finds the process that runs the worker
 and passes all four to it as flags on its start line.
 
-**Add a pipeline.** `uqs new-job` scaffolds one of three shapes, and `--dry-run`
+**Add a pipeline.** `uqs job new` scaffolds one of three shapes, and `--dry-run`
 lists every file it would create or append to without writing any of them:
 
 ```
 # a streaming job: reads quote, publishes a table of its own
-uv run uqs new-job spread_stats --subscribe-to quote \
+uv run uqs job new spread_stats --subscribe-to quote \
     --publishes spread_stats --columns "sym:symbol, spread_pips:float" --dry-run
 
 # a feed: subscribes to nothing, publishes on a timer
-uv run uqs new-job rates_feed --publishes rates \
+uv run uqs job new rates_feed --publishes rates \
     --columns "sym:symbol, mid:float" --dry-run
 
 # a bounded worker, with its source and transform, one day per window
-uv run uqs new-job eod_rates --kind backfill --dataset eod_rates \
+uv run uqs job new eod_rates --kind backfill --dataset eod_rates \
     --columns "sym:symbol, mid:float" --width 1D --dry-run
 ```
 
@@ -199,7 +199,7 @@ directories, one question each:
   | Directory                                         | Answers                                                                                                   |
   | ---                                               | ---                                                                                                       |
   | [`docs/guides/`](docs/guides/)                    | *How do I do this?* — running the stack, adding a pipeline, the CI gates                                  |
-  | [`docs/scaffolding/`](docs/scaffolding/README.md) | *How do I create one of these?* — one page per shape `uqs new-job` writes                                 |
+  | [`docs/scaffolding/`](docs/scaffolding/README.md) | *How do I create one of these?* — one page per shape `uqs job new` writes                                 |
   | [`docs/services/`](docs/services/README.md)       | *What does this running service do, and how do I run it?* — one page per service                          |
   | [`docs/architecture/`](docs/architecture/)        | *Why is it shaped this way?* — including the running stack                                                |
   | [`docs/reference/`](docs/reference/)              | *What is the contract?* — the quant modules, environment variables, requirement ids and the process table |

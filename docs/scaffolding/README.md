@@ -1,6 +1,6 @@
 # Scaffolding
 
-`uqs new-job` writes the skeleton of a process: its q files, its table, its
+`uqs job new` writes the skeleton of a process: its q files, its table, its
 registry entry and a failing test. Four shapes, one page each. Every command
 below was run against this tree, and the output shown is what it printed.
 
@@ -70,11 +70,11 @@ in `UNPROFILED` with a reason. Backfills are exempt --- see
 that way first, and it costs nothing to do the same:
 
 ```bash
-uqs new-job <name> ... --dry-run
+uqs job new <name> ... --dry-run
 ```
 
 To take a scaffold back out - a typo in the name, a wrong shape - run
-`uqs remove-job <name>`. It works out every file and line the scaffold wrote
+`uqs job remove <name>`. It works out every file and line the scaffold wrote
 from the tree, keeps any table or source another job still uses, and refuses a
 job that has been written (its SCAFFOLDED markers are gone) unless `--force`.
 

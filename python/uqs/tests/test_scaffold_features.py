@@ -1,4 +1,4 @@
-"""`uqs new-job`'s timer, partition, quality check and profile options.
+"""`uqs job new`'s timer, partition, quality check and profile options.
 
 As in test_scaffold_options.py, each option is read back the way the tree
 reads it where there is a reader, and the profiles.py edits are applied to
@@ -242,6 +242,6 @@ def test_an_option_for_another_kind_is_refused_by_name(argv, option, monkeypatch
         raise SystemExit(1)
 
     monkeypatch.setattr(create, "_die", record)
-    result = runner.invoke(cli.app, ["new-job", *argv, "--dry-run"])
+    result = runner.invoke(cli.app, ["job", "new", *argv, "--dry-run"])
     assert result.exit_code == 1
     assert refused and refused[0].startswith(f"{option} does not apply to --kind")

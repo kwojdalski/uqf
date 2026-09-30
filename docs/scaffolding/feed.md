@@ -7,7 +7,7 @@ feeds. If your rows come from a plant table, you want [etl.md](etl.md) instead.
 ## Command
 
 ```bash
-uqs new-job pulsefeed --publishes pulse --columns "sym:symbol, px:float"
+uqs job new pulsefeed --publishes pulse --columns "sym:symbol, px:float"
 ```
 
 **There is no `--kind feed`.** A streaming job that subscribes to nothing is a

@@ -1,4 +1,4 @@
-"""`uqs remove-job`: undoing a scaffold, worked out from the tree.
+"""`uqs job remove`: undoing a scaffold, worked out from the tree.
 
 The property that matters is the round trip: scaffold into a copy of the real
 tree, remove, and every file is BYTE-identical to before. A removal that left

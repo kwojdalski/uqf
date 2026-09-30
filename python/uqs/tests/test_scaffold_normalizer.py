@@ -1,4 +1,4 @@
-"""`uqs new-job --kind normalizer`: many sources, one canonical table.
+"""`uqs job new --kind normalizer`: many sources, one canonical table.
 
 The generated declaration is read back through the same reader the process
 registry is built from, as test_scaffold.py does for streaming jobs - a

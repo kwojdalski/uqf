@@ -122,7 +122,7 @@ surface:{[]
 
 / --- scaffolded entries --------------------------------------------------
 / .
-/ `uqs new-job` appends here, below the `\d .` above rather than inside the
+/ `uqs job new` appends here, below the `\d .` above rather than inside the
 / namespace block, because APPEND is the only write mode the scaffold has and
 / it writes at the end of the file.
 / .

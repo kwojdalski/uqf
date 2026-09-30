@@ -1,4 +1,4 @@
-"""Tests for `uqs new-job` (scaffold/jobs.py, worker.py, templates.py).
+"""Tests for `uqs job new` (scaffold/jobs.py, worker.py, templates.py).
 
 WHAT IS WORTH TESTING HERE. Not that the templates produce a particular
 string - that would pin the prose and break on every wording change. What
@@ -377,7 +377,7 @@ def test_a_job_publishing_a_new_table_is_told_about_the_desk_catalog():
     only warning of either.
 
     The catalog note was missing, so publishing a new table left TWO pytest
-    failures while `new-job` named one of them - and the guide described one
+    failures while `uqs job new` named one of them - and the guide described one
     too. An unannounced failure in a tree with 1030 passing tests reads as
     "the scaffold is broken", not "your turn".
     """
@@ -407,7 +407,7 @@ def test_a_bounded_worker_is_told_about_its_dataset():
 
 # ------------------------------------------- publishes, subscribe_to, the plant
 
-#: What `new-job` passes as the plant's tables: vendored `quote` and this
+#: What `uqs job new` passes as the plant's tables: vendored `quote` and this
 #: tree's `trades` and `orders`.
 _PLANT = {"quote", "trades", "orders"}
 

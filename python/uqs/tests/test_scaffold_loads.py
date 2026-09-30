@@ -1,4 +1,4 @@
-"""What `uqs new-job` writes must LOAD in q, and register what it declares.
+"""What `uqs job new` writes must LOAD in q, and register what it declares.
 
 test_scaffold.py and test_scaffold_options.py read the generated text back
 through the registry's own reader, which proves the tree can PARSE it. Neither

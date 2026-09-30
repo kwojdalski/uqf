@@ -12,7 +12,7 @@ process that stays up.
 ## Command
 
 ```bash
-uqs new-job fxprobe --kind backfill --dataset fx_probe \
+uqs job new fxprobe --kind backfill --dataset fx_probe \
     --columns "sym:symbol, mid:float" --width 1D
 ```
 

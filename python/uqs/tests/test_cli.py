@@ -1296,7 +1296,7 @@ def test_a_skipped_dependency_warning_keeps_its_reason(monkeypatch):
     assert not any("%s" in m for m in captured.messages)
 
 
-# ------------------------------------------- new-job: a dataset already filled
+# ------------------------------------------- uqs job new: a dataset already filled
 
 
 def _worker_tree(tmp_path, body: str):
@@ -1308,7 +1308,7 @@ def _worker_tree(tmp_path, body: str):
 
 def test_a_dataset_an_unpartitioned_worker_fills_is_found(tmp_path):
     """.qetl.job.bounded.define refuses two workers on one dataset and partition, and a
-    scaffolded worker declares no partition - so new-job must refuse first,
+    scaffolded worker declares no partition - so uqs job new must refuse first,
     rather than write a tree that no longer loads."""
     root = _worker_tree(
         tmp_path,

@@ -127,9 +127,9 @@ replaced or queried on its own.
 
 ![](../diagrams/scaffolding.svg){.r-stretch}
 
-`uqs new-job <name> [--kind streaming|normalizer|backfill]` writes the job, its
+`uqs job new <name> [--kind streaming|normalizer|backfill]` writes the job, its
 table and a test that fails until you fill it in. A streaming job that
-subscribes to nothing is a feed. `uqs install-jobs` brings in jobs kept outside
+subscribes to nothing is a feed. `uqs job install` brings in jobs kept outside
 the tree. The next `uqs` command picks up either.
 
 ## Operating it: `uqs` in place of `torq.sh` {.smaller}

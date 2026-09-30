@@ -15,7 +15,7 @@ sits *around* those processes:
   | Who knows TorQ exists  | every process - code is written against `.servers`, `.u.upd`, `.lg`           | only `.qtorq`, in `scripts/`; a gate fails the build if anything under `src/` reaches for it                                                                            |
   | History and backfills  | replay a tickerplant log, or write your own loader                            | bounded workers (`.qetl.job.bounded`): a window range, written through `.qetl.io`, recorded in a coverage ledger (`.qetl.coverage`) so a re-run redoes only gaps        |
   | A table on the plant   | define it in `database.q`; `.u.upd` onto an undefined one drops rows silently | defined from what jobs declare they publish; a job refuses to start when a table it publishes is missing                                                                |
-  | Adding one             | write the script, add the row, pick a free port                               | `uqs new-job` scaffolds it; no registration step - the port, the process row and the job graph are derived                                                              |
+  | Adding one             | write the script, add the row, pick a free port                               | `uqs job new` scaffolds it; no registration step - the port, the process row and the job graph are derived                                                              |
   | Operating it           | `torq.sh start`, `stop`, `summary`, per process                               | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `conn`, `summary`; `.qetl.log` adds DBG and key=value fields to `.lg`                      |
 
 The slide version is [the deck](presentation/uqf.qmd); why the framework is
@@ -49,7 +49,7 @@ etl scaffolding page](scaffolding/etl.md#rules).
 
 ## How do I add a job?
 
-`uqs new-job`, then implement what it leaves failing. There is no list to add it
+`uqs job new`, then implement what it leaves failing. There is no list to add it
 to: `src/etl/init.q` loads every declaration file it finds, the process registry
 is read from the declarations, and the port is appended to
 `scripts/processes/process_ports.csv`. [Scaffolding](scaffolding/README.md) has

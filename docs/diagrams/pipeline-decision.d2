@@ -87,11 +87,11 @@ feed: "a FEED\ndeclares period + on_timer,\nbuilds its own rows" { class: shell 
 etl: "an ETL\ndeclares subscribe_to + on_batch" { class: shell }
 q2b: "Several sources, in different\nshapes, into ONE canonical table?" { class: question }
 normalizer: "a NORMALIZER (.qetl.job.stream.normalizer)\none mapping per source" { class: shell }
-cmd_n: "uqs new-job NAME --kind normalizer\n  --subscribe-to A,B --publishes T --columns \"...\"" { class: command }
+cmd_n: "uqs job new NAME --kind normalizer\n  --subscribe-to A,B --publishes T --columns \"...\"" { class: command }
 
-cmd_b: "uqs new-job NAME --kind backfill\n  --dataset T --columns \"...\" --width 1D" { class: command }
-cmd_f: "uqs new-job NAME\n  --publishes T --columns \"...\"" { class: command }
-cmd_e: "uqs new-job NAME --subscribe-to A,B\n  --publishes T --columns \"...\"" { class: command }
+cmd_b: "uqs job new NAME --kind backfill\n  --dataset T --columns \"...\" --width 1D" { class: command }
+cmd_f: "uqs job new NAME\n  --publishes T --columns \"...\"" { class: command }
+cmd_e: "uqs job new NAME --subscribe-to A,B\n  --publishes T --columns \"...\"" { class: command }
 
 q3: "Does it publish a\nNEW table?" { class: question }
 newtable: "--publishes / --dataset with --columns\nThe scaffold defines it on the plant.\n\nWithout that .u.upd DISCARDS the rows\nin silence - healthy process, empty table" { class: warn }

@@ -2,7 +2,7 @@
 
 Split from scaffold/jobs.py when adding the source transport took it past the
 400-line limit this package holds its modules to. The seam is the one
-`uqs new-job --kind` already draws: jobs.py plans a streaming job, this plans
+`uqs job new --kind` already draws: jobs.py plans a streaming job, this plans
 a backfill, and both share jobs.py's naming and registration helpers.
 """
 

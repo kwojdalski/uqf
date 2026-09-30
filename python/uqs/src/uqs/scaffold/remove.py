@@ -1,4 +1,4 @@
-"""Undoing a scaffold: `uqs remove-job NAME`.
+"""Undoing a scaffold: `uqs job remove NAME`.
 
 A scaffold is seven or eight edits across the tree - the job file, its test,
 a table, three lists and a catalog entry - and a typo in the job name used to
@@ -78,7 +78,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     text = (repo_root / job_file).read_text()
     if MARKER not in text and not force:
         raise UqsError(
-            f"{job_file} has no {MARKER} marker left - it has been written, and remove-job "
+            f"{job_file} has no {MARKER} marker left - it has been written, and uqs job remove "
             "only undoes a scaffold. Pass --force to remove it anyway"
         )
     fn, job, fields = _declaration(job_file, text)

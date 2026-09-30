@@ -1,4 +1,4 @@
-"""The command that WRITES code: `new-job`, which scaffolds an ETL job into
+"""The command that WRITES code: `uqs job new`, which scaffolds an ETL job into
 the tree. Its own module because it creates files rather than acting on a
 running fleet. See cli/lifecycle.py for why the split is shaped this way.
 
@@ -23,6 +23,7 @@ from uqs.cli.shared import (
     _paths,
     app,
     console,
+    job_app,
 )
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.schemas import _DEFINITION
@@ -133,7 +134,10 @@ def _plant_tables(paths: UqsPaths) -> set[str]:
     return _defined_tables(paths.repo_root) | theirs
 
 
-@app.command("new-job")
+app.add_typer(job_app, name="job")
+
+
+@job_app.command("new")
 def new_job(
     name: Annotated[str, typer.Argument(help="Job name: a q namespace and a filename")],
     kind: Annotated[
@@ -231,12 +235,12 @@ def new_job(
 
     Streaming, reading two tables and writing one:
 
-        uqs new-job markout2 --subscribe-to trades,quote \\
+        uqs job new markout2 --subscribe-to trades,quote \\
             --publishes my_metric --columns "sym:symbol, value:float"
 
     Bounded worker, with its source and transform:
 
-        uqs new-job fx_rates --kind backfill --dataset fx_rates \\
+        uqs job new fx_rates --kind backfill --dataset fx_rates \\
             --columns "sym:symbol, mid:float" --width 1D
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]

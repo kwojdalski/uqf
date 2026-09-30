@@ -1,9 +1,9 @@
-"""`remove-job`: undoing what `new-job` wrote.
+"""`uqs job remove`: undoing what `uqs job new` wrote.
 
 Its own module because create.py is at its size limit, and because removing is
-not a variation of creating: new-job works from the command's arguments, this
+not a variation of creating: uqs job new works from the command's arguments, this
 from the tree. The planning is scaffold/remove.py's; this confirms, applies,
-and regenerates what the removal made stale - the same derived files new-job
+and regenerates what the removal made stale - the same derived files uqs job new
 regenerates, since the job graph and the man registry named the job.
 """
 
@@ -14,14 +14,14 @@ from typing import Annotated
 import typer
 
 from uqs.cli.create import _DERIVED, _export_contract_surface, _regenerate_derived
-from uqs.cli.shared import _die, _paths, app, console
+from uqs.cli.shared import _die, _paths, console, job_app
 from uqs.paths import CONTRACT_SURFACE_SCRIPT, UqsError
 from uqs.scaffold.remove import plan_removal
 
 
-@app.command("remove-job")
+@job_app.command("remove")
 def remove_job(
-    name: Annotated[str, typer.Argument(help="The job, as new-job named it")],
+    name: Annotated[str, typer.Argument(help="The job, as uqs job new named it")],
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print what would be removed, remove nothing")
     ] = False,
@@ -33,14 +33,14 @@ def remove_job(
     ] = False,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask before removing")] = False,
 ) -> None:
-    """Undo a scaffold: the job's files, its table, and every line new-job added.
+    """Undo a scaffold: the job's files, its table, and every line uqs job new added.
 
     A table the job published is kept when anything else in the tree uses it,
     and a backfill's source is kept when another worker reads it. A job whose
     SCAFFOLDED markers are gone has been written, and is refused without
     --force.
 
-        uqs remove-job fx_rates --dry-run
+        uqs job remove fx_rates --dry-run
     """
     repo_root = _paths().repo_root
     try:
