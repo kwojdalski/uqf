@@ -13,7 +13,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli.create import _DERIVED, _export_contract_surface, _regenerate_derived
+from uqs.cli.regenerate import _DERIVED, _export_contract_surface, _regenerate_derived
 from uqs.cli.shared import _die, _paths, console, job_app
 from uqs.paths import CONTRACT_SURFACE_SCRIPT, UqsError
 from uqs.scaffold.remove import plan_removal

@@ -1,7 +1,7 @@
 # Scaffolding
 
 `uqs job new` writes the skeleton of a process: its q files, its table, its
-registry entry and a failing test. Four shapes, one page each. Every command
+registry entry and a failing test. Five shapes, one page each. Every command
 below was run against this tree, and the output shown is what it printed.
 
 ## Which shape
@@ -15,6 +15,7 @@ them:
   | one or more plant tables                | a subscription      | **etl**        | [etl.md](etl.md)               |
   | several tables that mean the same thing | a subscription each | **normalizer** | [normalizer.md](normalizer.md) |
   | outside the stack, for a past window    | a query you write   | **backfill**   | [backfill.md](backfill.md)     |
+  | a window a backfill just published      | its publication     | **reaction**   | [reaction.md](reaction.md)     |
 
 The first three are **streaming**: long-running processes that subscribe,
 compute and republish forever. The fourth is **bounded**: it takes a window from
@@ -26,12 +27,15 @@ have chosen.
 
 `--kind` names three of them --- `streaming` (the default), `normalizer`,
 `backfill`. There is no `--kind feed`: a streaming job that subscribes to
-nothing *is* a feed, and the scaffold derives that rather than asking twice.
+nothing *is* a feed, and the scaffold derives that rather than asking twice. A
+reaction is `--triggered-by DATASET`, and is the one shape with no process of
+its own: it runs inside the process that publishes `DATASET`.
 
 ## What every shape has in common
 
-All four write the same six changes, and the reason each exists is the same
-across shapes:
+The four with a process write the same six changes, and the reason each exists
+is the same across shapes. A reaction writes only the first and the last two: it
+has no table.
 
 ```
 create src/etl/<streaming|sources+workers>/<name>.q   the job itself

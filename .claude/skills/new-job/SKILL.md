@@ -4,13 +4,15 @@ description: >-
   Add a new ETL job to this tree end to end - scaffold it with `uqs job new`,
   implement the handler, write the test that replaces the failing stub, and
   verify it against a real q. Covers every shape `uqs job new` scaffolds: a
-  streaming job (a feed, an etl, or a normalizer under `src/etl/streaming/`) and
-  a bounded worker (a source + worker + transform under `src/etl/sources/` and
-  `src/etl/workers/`). Use when the user asks to add a job, a feed, a backfill,
-  a worker, a source, or a pipeline stage, or says "scaffold", "new-job" or "uqs
-  job new". Distinct from the `pipeline-developer` agent, which changes the
-  FRAMEWORK those jobs run on - the lifecycle, the coverage ledger, the job
-  graph. This is for adding one job to a framework that already works.
+  streaming job (a feed, an etl, or a normalizer under `src/etl/streaming/`), a
+  bounded worker (a source + worker + transform under `src/etl/sources/` and
+  `src/etl/workers/`) and a reaction to a worker's published window (under
+  `src/etl/reactions/`). Use when the user asks to add a job, a feed, a
+  backfill, a worker, a source, a reaction, or a pipeline stage, or says
+  "scaffold", "new-job" or "uqs job new". Distinct from the `pipeline-developer`
+  agent, which changes the FRAMEWORK those jobs run on - the lifecycle, the
+  coverage ledger, the job graph. This is for adding one job to a framework that
+  already works.
 ---
 
 # Adding an ETL job
@@ -59,7 +61,15 @@ uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
 # NAME is that table, and each source gets a .qetl.transform mapping and an example
 uqs job new ticks --kind normalizer --subscribe-to quote,trades \
     --columns "source_time:timestamp, sym:symbol, px:float" --dry-run
+
+# reaction: recompute each time a bounded worker publishes a window of a dataset.
+# No process of its own - it runs in the worker's. --writes puts it in the job graph
+uqs job new rebuild_positions --triggered-by demo_deals --writes positions --dry-run
 ```
+
+A reaction's DATASET must be one a bounded worker fills: only a worker's window
+fires reactions, so one on a streaming-only table would never run, and the
+scaffold refuses it. See `docs/scaffolding/reaction.md`.
 
 A normalizer's mappings start from each source's whole plant schema and a typed
 example row, so the file loads; each mapping throws until written. Narrow each

@@ -214,6 +214,42 @@ def declaration_calls(source: str) -> list[tuple[str, str, dict[str, str]]]:
     return found
 
 
+#: A reaction's registration. Positional rather than a dictionary - dataset
+#: first, then the reaction's name - which is why it is not a `_CALL_RE` shape.
+_REACTION_RE = re.compile(r"\.qetl\.reaction\.(on|on_writing)\[")
+
+
+@dataclass(frozen=True)
+class Reaction:
+    """One `.qetl.reaction.on`/`on_writing` registration, as its q file makes it.
+
+    NOT a Declaration: a reaction has no process of its own - it runs inside
+    whichever process publishes `dataset` - so it must never reach the process
+    registry. It is read for `uqs list jobs` and `uqs job remove` alone.
+    """
+
+    name: str
+    dataset: str
+    #: What `on_writing` claims the handler writes; empty for `on`.
+    writes: tuple[str, ...]
+
+
+def reaction_calls(source: str) -> list[Reaction]:
+    """Every reaction q `source` registers, in order."""
+    source = strip_q_comments(source)
+    found = []
+    for match in _REACTION_RE.finditer(source):
+        parts = split_top_level(_call_body(source, match.end() - 1))
+        if len(parts) < 3:
+            continue
+        dataset, name = symbols(parts[0]), symbols(parts[1])
+        if len(dataset) != 1 or len(name) != 1:
+            continue
+        writes = symbols(parts[2]) if match.group(1) == "on_writing" else ()
+        found.append(Reaction(name[0], dataset[0], writes))
+    return found
+
+
 def read_file_text(source: str, path: Path) -> list[Declaration]:
     """Every declaration q `source` makes, as if read from `path`."""
     return [_declaration(fn, name, fields, path) for fn, name, fields in declaration_calls(source)]
