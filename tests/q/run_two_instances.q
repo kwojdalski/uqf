@@ -132,8 +132,8 @@ stop_upstream pid;
 system"sleep 0.3";
 setenv[`UQF_SOURCE_CRED_UPSTREAM_TRADES;"localhost:",string port];
 err:@[{[a;b] .qpipe.job.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;a;b)]; ""}[from_ts];to_ts;{x}];
-check["with the upstream gone, init refuses rather than using the fixture";err like "*cannot reach*"];
-check["the refusal says what it is refusing to do";err like "*refusing to start*"];
+check["with the upstream gone, init refuses rather than using the fixture";err like "*unreachable*"];
+check["the refusal says what it is refusing to do";err like "*Not falling back to the fixture*"];
 / init acquired the single-instance lock before it tried to connect, so it
 / is still held; release it the way a crashed process's successor would.
 .qetl.job.bounded.state.release_lock `upstream_trades_backfill;
