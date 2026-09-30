@@ -27,6 +27,7 @@ from uqs.cli.shared import (
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import (
+    CONTRACT_SURFACE_SCRIPT,
     MAN_REGISTRY_SCRIPT,
     OPERATIONAL_DOCS_SCRIPT,
     SOURCE_DIR,
@@ -34,8 +35,9 @@ from uqs.paths import (
     WORKER_DIR,
     UqsError,
     UqsPaths,
+    q_interpreter,
 )
-from uqs.scaffold import jobs, normalizer, write
+from uqs.scaffold import jobs, normalizer, worker, write
 
 #: What a scaffold makes stale, each checked in CI with --check: the registry's
 #: derived files (processes.md, src/etl/generated/pipeline_dag.q), and
@@ -61,6 +63,25 @@ def _regenerate_derived(repo_root: Path) -> list[subprocess.CompletedProcess[str
         )
         for script in _DERIVED
     ]
+
+
+def _export_contract_surface(repo_root: Path) -> subprocess.CompletedProcess[str] | None:
+    """Re-export the contract surface, or None when no q is installed.
+
+    Separate from `_regenerate_derived` because it needs q: it loads the tree
+    to read what is defined. Every scaffold adds `.qpipe.job.<name>` names, so
+    without this the contract-surface hook fails on the next commit, for a
+    change nobody made by hand.
+    """
+    if q_interpreter() is None:
+        return None
+    return subprocess.run(
+        [sys.executable, str(repo_root / CONTRACT_SURFACE_SCRIPT), "export"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def _unpartitioned_workers_filling(repo_root: Path, dataset: str) -> list[str]:
@@ -149,11 +170,32 @@ def new_job(
     width: Annotated[
         str, typer.Option("--width", help="Backfill window width, as a q timespan")
     ] = "1D",
+    procname: Annotated[
+        str | None,
+        typer.Option(
+            "--procname", help="The process that runs it (default: NAME1, or NAME_backfill1)"
+        ),
+    ] = None,
+    start_with_all: Annotated[
+        bool,
+        typer.Option(
+            "--start-with-all",
+            help="Start it with `uqs start all` (streaming, normalizer; default: on demand)",
+        ),
+    ] = False,
+    transport: Annotated[
+        str,
+        typer.Option(
+            "--transport",
+            help="How a new backfill source is reached: 'ipc' (a q process) or 'odbc'",
+            autocompletion=completion.choices("ipc", "odbc"),
+        ),
+    ] = "ipc",
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print what would be written, write nothing")
     ] = False,
 ) -> None:
-    """Scaffold a new ETL job: its q files, its table, and its registry entry.
+    """Scaffold a new ETL job: its q files, its table, and the lists that register them.
 
     Writes the SHAPE, never the logic. The generated handler throws and the
     generated test fails, on purpose - a scaffold that left something green
@@ -173,12 +215,27 @@ def new_job(
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root
+    if transport != "ipc" and kind != "backfill":
+        # A streaming job reads the plant; only a backfill's source has a transport.
+        _die(UqsError("--transport is for a backfill's source - drop it for --kind " + kind))
+        return
     try:
         if kind == "streaming":
             plan = jobs.streaming_job(
-                name, subs, publishes, columns, known_tables=_plant_tables(_paths())
+                name,
+                subs,
+                publishes,
+                columns,
+                procname,
+                known_tables=_plant_tables(_paths()),
+                start_with_all=start_with_all,
             )
         elif kind == "backfill":
+            if start_with_all:
+                # A backfill runs a window and exits; `uqs start all` starts
+                # standing processes, and .qetl.job.bounded.define has no such key.
+                _die(UqsError("--start-with-all is for standing jobs, not a backfill - drop it"))
+                return
             if not dataset:
                 _die(UqsError("--kind backfill needs --dataset: the table it fills"))
                 return
@@ -196,12 +253,14 @@ def new_job(
             # An existing source is reused, not rewritten, and an existing
             # table is not defined twice: a second worker over rows someone
             # already declared is the common case after the first.
-            plan = jobs.bounded_worker(
+            plan = worker.bounded_worker(
                 name,
                 dataset,
                 columns,
                 width=width,
                 source=source,
+                procname=procname,
+                transport=transport,
                 reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
                 define_table=dataset not in _defined_tables(repo_root),
             )
@@ -223,6 +282,8 @@ def new_job(
                     if s in definitions
                 },
                 known_tables=_plant_tables(_paths()),
+                procname=procname,
+                start_with_all=start_with_all,
             )
         else:
             _die(UqsError(f"--kind must be 'streaming', 'backfill' or 'normalizer', not {kind!r}"))
@@ -232,7 +293,9 @@ def new_job(
         return
 
     console.print(plan.render())
-    console.print(f"  then regenerate: {', '.join(str(p) for p in _DERIVED)}")
+    console.print(
+        f"  then regenerate: {', '.join(str(p) for p in (*_DERIVED, CONTRACT_SURFACE_SCRIPT))}"
+    )
     if dry_run:
         console.print("[dim]--dry-run: nothing written[/]")
         return
@@ -253,5 +316,18 @@ def new_job(
                 f"[red]could not regenerate[/] - run `python3 {script}` "
                 f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
             )
+    surface = _export_contract_surface(repo_root)
+    if surface is None:
+        console.print(
+            f"[yellow]no q on PATH[/] - run `uv run python {CONTRACT_SURFACE_SCRIPT} export` where "
+            "q is installed, or the contract-surface hook fails on the next commit"
+        )
+    elif surface.returncode == 0:
+        console.print(f"[green]regenerated[/] via {CONTRACT_SURFACE_SCRIPT}")
+    else:
+        console.print(
+            f"[red]could not export the contract surface[/] - the new files may not load in q:\n"
+            f"{surface.stdout}{surface.stderr}"
+        )
     for note in plan.notes:
         console.print(f"  [yellow]next[/] {note}")

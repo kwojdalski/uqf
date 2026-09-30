@@ -1,4 +1,4 @@
-"""Tests for `uqs new-job` (scaffold/jobs.py, scaffold/templates.py).
+"""Tests for `uqs new-job` (scaffold/jobs.py, worker.py, templates.py).
 
 WHAT IS WORTH TESTING HERE. Not that the templates produce a particular
 string - that would pin the prose and break on every wording change. What
@@ -29,6 +29,7 @@ from uqs.model.pipeline import PipelineKind
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import UqsError
 from uqs.scaffold import jobs, write
+from uqs.scaffold import worker as backfill
 from uqs.scaffold.plan import WriteMode
 
 
@@ -72,7 +73,7 @@ def test_a_scaffolded_feed_declares_no_subscription():
 def test_a_scaffolded_worker_declares_its_process():
     """A worker's process is read from its own `.qetl.job.bounded.define`, so the
     scaffolded one must name the process the plan says it runs."""
-    plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
+    plan = backfill.bounded_worker("fx_rates", "fx_rates", "mid:float")
     (d,) = _declared(plan, "fx_rates_backfill.q")
     assert (d.procname, d.worker, d.kind) == (
         "fx_rates_backfill1",
@@ -129,7 +130,7 @@ def test_columns_without_publishing_is_refused():
 
 
 def test_a_scaffolded_worker_declares_its_source_and_dataset():
-    plan = jobs.bounded_worker("fx_rates", "fx_rates", "sym:symbol, mid:float")
+    plan = backfill.bounded_worker("fx_rates", "fx_rates", "sym:symbol, mid:float")
     worker = _body(plan, "fx_rates_backfill.q")
     assert ".qetl.job.bounded.define[`fx_rates_backfill;" in worker
     assert "`fx_rates;`fx_rates;1D;" in worker
@@ -140,7 +141,7 @@ def test_a_scaffolded_fixture_carries_a_row():
     throwing fixture stops src/etl/init.q loading, because the worker's
     .qetl.transform.passthrough reads it AT LOAD TIME - and an empty one is refused by
     .qetl.transform.define, which requires at least one example with rows."""
-    plan = jobs.bounded_worker("fx_rates", "fx_rates", "mid:float")
+    plan = backfill.bounded_worker("fx_rates", "fx_rates", "mid:float")
     source = _body(plan, "sources/fx_rates.q")
     assert "enlist" in source.split("fixture:")[1], "the fixture must carry a row"
     assert "not implemented" not in source.split("fixture:")[1].split(".qetl.source.define")[0]
@@ -195,7 +196,7 @@ def test_the_registered_namespace_is_the_one_the_test_file_declares():
     different hat."""
     for plan in (
         jobs.streaming_job("markout2", ["trades"], None, None),
-        jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"),
+        backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"),
     ):
         entry = _body(plan, "run_tests.q").strip()
         # The TEST file, not the job file - both end in .q, and the job file
@@ -259,7 +260,7 @@ def test_a_job_that_owns_a_table_adds_it_to_the_q_table_list():
     through. Before the scaffold appended to it, every job that owned a table
     left a red suite that was not about the job."""
     for plan, table in (
-        (jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates"),
+        (backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates"),
         (jobs.streaming_job("markout2", ["trades"], "my_metric", "value:float"), "my_metric"),
     ):
         assert _body(plan, "test_stack_tables.q") == f"`{table}"
@@ -302,32 +303,32 @@ def test_a_worker_on_an_existing_source_does_not_rewrite_it():
     """The second worker over a source someone already wrote - another width,
     another target - used to be refused: the plan always CREATED the source
     file, and apply_plan refuses a file that exists."""
-    plan = jobs.bounded_worker(
+    plan = backfill.bounded_worker(
         "fx_rates_1h", "fx_rates", None, source="fx_rates", reuse_source=True, define_table=False
     )
     paths = [str(a.path) for a in plan.actions]
-    assert not any(p.startswith(str(jobs.SOURCE_DIR)) for p in paths)
-    assert str(jobs.WORKER_DIR / "fx_rates_1h_backfill.q") in paths
+    assert not any(p.startswith(str(backfill.SOURCE_DIR)) for p in paths)
+    assert str(backfill.WORKER_DIR / "fx_rates_1h_backfill.q") in paths
 
 
 def test_an_existing_table_is_not_defined_twice():
-    plan = jobs.bounded_worker("fx_rates_1h", "fx_rates", "mid:float", define_table=False)
+    plan = backfill.bounded_worker("fx_rates_1h", "fx_rates", "mid:float", define_table=False)
     paths = [a.path for a in plan.actions]
     assert jobs.TABLES_FILE not in paths
     assert jobs.STACK_TABLES_TEST not in paths
-    assert jobs.SOURCE_DIR / "fx_rates_1h.q" in paths, "a new source still needs its file"
+    assert backfill.SOURCE_DIR / "fx_rates_1h.q" in paths, "a new source still needs its file"
 
 
 def test_columns_are_required_when_something_new_is_written():
     with pytest.raises(UqsError, match="needs --columns"):
-        jobs.bounded_worker("fx_rates", "fx_rates", None)
+        backfill.bounded_worker("fx_rates", "fx_rates", None)
     with pytest.raises(UqsError, match="needs --columns"):
-        jobs.bounded_worker("fx_rates", "fx_rates", None, reuse_source=True)
+        backfill.bounded_worker("fx_rates", "fx_rates", None, reuse_source=True)
 
 
 def test_columns_with_nothing_to_shape_are_refused_not_ignored():
     with pytest.raises(UqsError, match="nothing to shape"):
-        jobs.bounded_worker(
+        backfill.bounded_worker(
             "fx_rates", "fx_rates", "mid:float", reuse_source=True, define_table=False
         )
 
@@ -337,7 +338,7 @@ def test_every_plan_names_the_stack_page_line_it_cannot_write():
     it names the process - so the plan says so, rather than leaving that red to
     be discovered."""
     for plan, proc in (
-        (jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates_backfill1"),
+        (backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"), "fx_rates_backfill1"),
         (jobs.streaming_job("markout2", ["trades"], None, None), "markout21"),
     ):
         assert any(proc in n and "stack.md" in n for n in plan.notes), plan.notes
@@ -353,7 +354,7 @@ def test_every_action_declares_a_known_write_mode():
     `read_text()` on a file that might not be there."""
     for plan in (
         jobs.streaming_job("markout2", ["trades"], "my_metric", "value:float"),
-        jobs.bounded_worker("fx_rates", "fx_rates", "mid:float"),
+        backfill.bounded_worker("fx_rates", "fx_rates", "mid:float"),
     ):
         assert all(a.mode in tuple(WriteMode) for a in plan.actions)
 
@@ -399,7 +400,7 @@ def test_a_bounded_worker_is_told_about_its_dataset():
     """A backfill's new table is its `dataset`, not a `publishes`, so it needs
     the note by a different name - and the first version of this only wired it
     into the streaming path."""
-    plan = jobs.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
+    plan = backfill.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
     notes = " ".join(plan.notes)
     assert "uqs_catalog.q" in notes and "fx_probe" in notes
 
@@ -494,9 +495,9 @@ def test_the_catalog_entry_is_qualified_so_it_lands_in_the_namespace():
 
 
 def test_a_worker_dataset_gets_a_catalog_entry_only_when_it_is_new():
-    new = jobs.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
+    new = backfill.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
     assert _body(new, "uqs_catalog.q").startswith(".qcat.describe[`fx_probe]:")
-    old = jobs.bounded_worker("fxprobe", "fx_probe", "mid:float", define_table=False)
+    old = backfill.bounded_worker("fxprobe", "fx_probe", "mid:float", define_table=False)
     assert not any(str(a.path).endswith("uqs_catalog.q") for a in old.actions)
 
 
@@ -546,7 +547,7 @@ def test_the_query_note_cites_the_rule_that_actually_says_it():
     and a reader who followed it landed on interval arithmetic while reading
     about query construction.
     """
-    plan = jobs.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
+    plan = backfill.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
     query_notes = [note for note in plan.notes if ".query" in note]
     assert query_notes, "the scaffold no longer tells you to write query"
     assert "source_contract.q" in query_notes[0]
@@ -556,7 +557,7 @@ def test_the_query_note_cites_the_rule_that_actually_says_it():
 def test_the_source_template_keeps_the_two_rules_apart():
     """Both apply to `query`, and they are different rules. One sentence
     carrying both invites exactly the confusion the note above had."""
-    plan = jobs.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
+    plan = backfill.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
     source = _body(plan, "citeprobe.q")
     assert "source_contract.q" in source, "the parameterised-query rule"
     assert "Half-open [range_from;range_to)" in source, "the half-open interval rule"

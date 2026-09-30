@@ -39,6 +39,27 @@ Q_TYPES = {
     "list": "()",
 }
 
+#: How a source is reached, as `.qetl.source.transports` lists them. Held to
+#: src/etl/core/source_contract.q by test_scaffold.py.
+TRANSPORTS = ("ipc", "odbc")
+
+#: What a credential looks like per transport, for the scaffold's own note.
+#: A source that knows better declares its own `credential_example`.
+CREDENTIAL_SHAPES = {
+    "ipc": "host:port of the q process to read from",
+    "odbc": "an ODBC connection string",
+}
+
+
+def credential_var(source: str) -> str:
+    """The environment variable a live run reads the source's credential from.
+
+    `.qetl.source.credential_var` computes it in q; test_scaffold.py holds
+    the two to the same spelling.
+    """
+    return f"UQF_SOURCE_CRED_{source.upper()}"
+
+
 _TYPE_CHARS = {
     "`timestamp$()": "p",
     "`symbol$()": "s",
@@ -116,8 +137,41 @@ test_{name}_is_implemented:{{[t]
 """
 
 
-def source_body(src: str, dataset: str, cols: list[tuple[str, str]]) -> str:
+#: The query comment and extra declarations that differ by transport. IPC
+#: reads a q process with a functional select; ODBC builds SQL whose bounds go
+#: through .qetl.io.odbc.literal, as src/etl/sources/duckdb_deals.q does.
+_QUERY_NOTES = {
+    "ipc": """/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).
+/ The bounds are arguments to a functional select evaluated on the remote
+/ side, so no caller value is ever spliced into query text.""",
+    "odbc": """/ `h` is an ODBC handle from .qetl.io.odbc.open. Build the SELECT with every
+/ bound through .qetl.io.odbc.literal - never string concatenation of a raw
+/ value - run it with .qetl.io.odbc.run_sql, and return the declared columns
+/ and types (src/etl/sources/duckdb_deals.q's sql_for and adapt).""",
+}
+
+
+def _transport_block(src: str, transport: str) -> tuple[str, str, str]:
+    """(declarations, extra define keys, extra define values) for a transport.
+
+    IPC is the default `.qetl.source.define` assumes, so it adds nothing.
+    """
+    if transport == "ipc":
+        return "", "", ""
+    decls = f"""
+transport:`{transport}
+
+/ SCAFFOLDED. What {credential_var(src)} looks like, for the warning a worker
+/ logs when none is set - a DuckDB file is a path and a mode, a server needs
+/ its host, user and password.
+credential_example:"SCAFFOLDED: e.g. DRIVER=...;Database=..."
+"""
+    return decls, "`transport`credential_example", ";transport;credential_example"
+
+
+def source_body(src: str, dataset: str, cols: list[tuple[str, str]], transport: str = "ipc") -> str:
     names = [c for c, _ in cols]
+    extra_decls, extra_keys, extra_values = _transport_block(src, transport)
     types = "".join(_TYPE_CHARS[literal] for _, literal in cols)
     # The fixture is a real empty table of the declared shape - see its comment.
     fixture_cols = "; ".join(f"{c}:enlist {_SAMPLE_VALUES[lit]}" for c, lit in cols)
@@ -147,10 +201,8 @@ row_key:`{TIME_COLUMN}
 / A claim, not a default. An unstated zone is the shape of the bug - every
 / later reader assumes UTC while the source hands over local wall-clock time.
 tz:`UTC
-
-/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).
-/ The bounds are arguments to a functional select evaluated on the remote
-/ side, so no caller value is ever spliced into query text.
+{extra_decls}
+{_QUERY_NOTES[transport]}
 / .
 / Half-open [range_from;range_to) - a DIFFERENT rule: >= on the lower
 / bound and < on the upper, so a boundary row is published exactly once.
@@ -175,8 +227,8 @@ fixture:{{[]
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qetl.source.define[source_name;
-    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz!
-    (source_name;`{dataset};target;time_column;row_key;columns;types;query;fixture;tz)];
+    `source`table_name`target`time_column`row_key`columns`types`query`fixture`tz{extra_keys}!
+    (source_name;`{dataset};target;time_column;row_key;columns;types;query;fixture;tz{extra_values})];
 
 \\d .
 """
