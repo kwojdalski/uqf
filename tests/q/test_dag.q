@@ -178,6 +178,49 @@ test_d2_declares_every_external_node_before_using_it:{[t]
     .qunit.assertEquals[count used except declared;0;
         "every ext_ node an edge points from has its own declaration line"]};
 
+/ #532: a reaction's `on_writing` outputs are a claim nothing checks, and the
+/ drawing is what people read - so the drawing says so. `asserted_graph`
+/ wires one asserted reaction (demo_deals is filled by a real worker, which
+/ .qetl.reaction.register requires) with a reader of what it writes, so an
+/ asserted EDGE exists to draw as well as the node.
+asserted_graph:{[]
+    .qetl.reaction.on_writing[`demo_deals;`dagtest_rx;`dagtest_out;{[ds;f;tt] ds}];
+    .qetl.dag.register[`dagtest_reader;`kind`inputs`outputs!(`bounded;`dagtest_out;`dagtest_sum)];
+    .qetl.dag.adopt_reactions[];
+    .qetl.dag.reaction_job[`demo_deals;`dagtest_rx]}
+tearDown_asserted:{[] .qetl.reaction.off[`demo_deals;`dagtest_rx]; .qetl.reaction.off[`imported_trades;`demo_deals_backfill];}
+
+test_d2_draws_an_asserted_reaction_dashed:{[t]
+    job:.dagtest.asserted_graph[];
+    lines:"\n" vs .qetl.dag.d2[];
+    node:.qetl.dag.safe_id job;
+    edge:lines where (lines like node,"*") and 0<count each lines ss\: "(asserted) {style.stroke-dash: 3}";
+    .qunit.assertEquals[((node,".style.stroke-dash: 3") in lines;count edge);(1b;1);
+        "the asserted reaction's node is dashed, and so is its edge to what reads its output"]};
+
+test_a_derived_reaction_is_not_drawn_asserted:{[t]
+    / on_worker reads its outputs from the worker's declaration: checked, not claimed.
+    .qetl.reaction.on_worker[`imported_trades;`demo_deals_backfill;{[f;tt] `source_version`range_from`range_to!(`v1;f;tt)}];
+    .qetl.dag.adopt_reactions[];
+    job:.qetl.dag.reaction_job[`imported_trades;`demo_deals_backfill];
+    / Its OWN lines only: the tree's real asserted reaction (rebuild_positions)
+    / is registered too, and is rightly drawn dashed.
+    lines:"\n" vs .qetl.dag.d2[];
+    mine:lines where 0<count each lines ss\: .qetl.dag.safe_id job;
+    .qunit.assertEquals[(job in .qetl.dag.asserted_jobs[];0<count mine;any 0<count each mine ss\: "stroke-dash");
+        (0b;1b;0b);
+        "a derived reaction is drawn, and drawn like any other job"]};
+
+test_json_marks_each_edge_asserted:{[t]
+    job:.dagtest.asserted_graph[];
+    j:.j.k .qetl.dag.to_json[];
+    e:j`edges;
+    mine:e where (`$e[;`upstream])=job;
+    rest:e where not (`$e[;`upstream])=job;
+    .qunit.assertEquals[(all mine[;`asserted];any rest[;`asserted];0<count mine;job in `$j`asserted_jobs);
+        (1b;0b;1b;1b);
+        "an edge from the asserted reaction says so, and no other edge does"]};
+
 test_json_carries_the_order_and_the_edges:{[t]
     chain[];
     j:.qetl.dag.to_json[];
