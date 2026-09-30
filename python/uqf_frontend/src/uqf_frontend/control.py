@@ -182,14 +182,12 @@ def process_choices(settings: Settings) -> list[dict[str, Any]]:
 
 #: Set one `.qetl.cfg` override in a live process.
 #:
-#: `.qetl.cfg.set_layers[overrides;yaml;defaults]` replaces all three layers, so
-#: setting one key means reading the current override layer and putting the
-#: key into it - done in q, in one expression, so two concurrent callers
-#: cannot interleave a read and a write and lose one of them.
-SET_WORKER_CONFIG = """{[k;v]
-  cur:$[99h=type .qetl.cfg.overrides; .qetl.cfg.overrides; ()!()];
-  .qetl.cfg.set_layers[cur,(enlist k)!enlist v; .qetl.cfg.yaml; .qetl.cfg.defaults];
-  .qetl.cfg.explain k}"""
+#: One call to the q function that owns the layers, rather than a program that
+#: reaches into them. The version before this read three layers under names
+#: `.qetl.cfg` does not define, and no test could see it because the gateway is
+#: mocked. python/uqs/tests/test_q_names.py now checks every q name the Python
+#: code mentions against the names the q source defines.
+SET_WORKER_CONFIG = """{[k;v] .qetl.cfg.set_override[k;v]}"""
 
 
 def set_worker_config(gateway: Any, settings: Settings, key: str, value: str) -> dict[str, Any]:

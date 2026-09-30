@@ -109,6 +109,38 @@ explain:{[k]
     hits:sources where 0<count each raw_from[;k] each sources;
     $[0=count hits; (`none;""); (first hits; raw_from[first hits;k])]}
 
+/ Set one override in a running process, and say which layer now answers.
+/ .
+/ For a caller outside this namespace - the frontend's PUT
+/ /control/worker-config sends it over IPC - so the layer variables stay
+/ private. That caller used to build the call to set_layers itself and read
+/ the layers by names that do not exist (.qetl.cfg.overrides, .yaml,
+/ .defaults), because nothing checked a q program held in a Python string.
+/ .
+/ The other overrides and the yaml and default layers are left as they are.
+/ The value is stored as a string, like every layer: kola sends a Python str
+/ as a symbol, and a symbol in a layer would make raw hand back a symbol
+/ list that get_flag compares against strings and never matches.
+/ .
+/ The change lives in memory only: a restart reloads the layers from their
+/ files.
+/ @param k (symbol|string) the key, e.g. `dry_run
+/ @param v (string|symbol|char) the value
+/ @return (list) explain k: the source that now answers, and its raw value.
+/ An environment variable still outranks the override, and this says so.
+/ @throws qetl.cfg.set_override a key that is not a symbol or string, or a
+/ value that is not a string, symbol or char
+/ @eg .qetl.cfg.set_override[`example_only;"x"]
+set_override:{[k;v]
+    if[10h=type k; k:`$k];
+    if[not -11h=type k; '"qetl.cfg.set_override: the key must be a symbol, e.g. `dry_run"];
+    v:$[-11h=type v; string v;
+        10h=type v; v;
+        -10h=type v; enlist v;
+        '"qetl.cfg.set_override: the value must be a string or symbol"];
+    override_values::override_values,(enlist k)!enlist v;
+    explain k}
+
 / Raw string value for a key, honouring the precedence order.
 / .
 / `(),` is load-bearing, not decoration. A single character is an ATOM in q,

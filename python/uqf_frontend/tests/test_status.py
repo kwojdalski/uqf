@@ -72,6 +72,18 @@ def test_reader_states_match_the_q_writer():
     assert set(re.findall(r"`(\w+)", line)) == set(status.STATES)
 
 
+def test_status_file_name_matches_the_q_writer():
+    """The file name is how a reader finds a status file at all. `status.q`
+    builds it in place (`"/airflow_status_",string[instance_id],".txt"`), so a
+    change there leaves every reader looking for files that are never
+    written, reporting "no status yet" for a worker that is running.
+    """
+    src = STATUS_Q.read_text()
+    built = re.findall(r'"/(\w+)",string\[instance_id\],"([.\w]+)"', src)
+    assert built, "status.q no longer builds the path the way this test reads it"
+    assert set(built) == {(status.FILENAME_PREFIX, status.FILENAME_SUFFIX)}
+
+
 # --- reading ---------------------------------------------------------------
 
 
