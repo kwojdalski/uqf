@@ -26,6 +26,31 @@ test_check_market_data_quality_normal_spread_is_ok:{[t]
     r:.qdqc.check_market_data_quality[quotes;5];
     .qunit.assertEquals[first r`status;`ok;"a normal 2-pip-ish spread is within a 5bp threshold -> ok"]};
 
+/ #546: a side nobody quoted gives a null spread, and q orders a null below
+/ every number - so `spreads<0` called a one-sided quote crossed.
+test_check_market_data_quality_a_one_sided_quote_is_not_crossed:{[t]
+    quotes:([] time:enlist 2026.01.01D00:00:00.000000000; sym:enlist `EURUSD;
+        bid_prices:enlist enlist 0n; bid_sizes:enlist enlist 0;
+        ask_prices:enlist enlist 1.1010; ask_sizes:enlist enlist 1000000);
+    r:.qdqc.check_market_data_quality[quotes;5];
+    .qunit.assertEquals[first r`status;`one_sided;"an ask with no bid is one-sided, not a crossed book"]};
+
+test_check_market_data_quality_a_quote_with_no_sides_is_one_sided:{[t]
+    quotes:([] time:enlist 2026.01.01D00:00:00.000000000; sym:enlist `EURUSD;
+        bid_prices:enlist enlist 0n; bid_sizes:enlist enlist 0;
+        ask_prices:enlist enlist 0n; ask_sizes:enlist enlist 0);
+    r:.qdqc.check_market_data_quality[quotes;5];
+    .qunit.assertEquals[first r`status;`one_sided;"a pair quoted on neither side is absent, not crossed or wide"]};
+
+test_check_market_data_quality_one_sided_rows_do_not_hide_a_real_crossing:{[t]
+    / The guard is per row: a crossed row beside a one-sided one is still crossed.
+    quotes:([] time:2#2026.01.01D00:00:00.000000000; sym:`EURUSD`GBPUSD;
+        bid_prices:(enlist 1.1012;enlist 0n); bid_sizes:(enlist 1000000;enlist 0);
+        ask_prices:(enlist 1.1010;enlist 1.2510); ask_sizes:(enlist 1000000;enlist 1000000));
+    r:.qdqc.check_market_data_quality[quotes;5];
+    .qunit.assertEquals[exec sym!status from r;`EURUSD`GBPUSD!`crossed`one_sided;
+        "EURUSD's bid through its ask is crossed; GBPUSD's missing bid is only one-sided"]};
+
 test_check_market_data_quality_rejects_missing_columns:{[t]
     wrapper:{[q] .qdqc.check_market_data_quality[q;5]};
     .qunit.assertError[wrapper;([] time:enlist 2026.01.01D00:00:00.000000000; sym:enlist `EURUSD);"missing bid_prices/ask_prices etc -> rejected, not silently misread"]};

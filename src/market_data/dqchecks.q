@@ -33,14 +33,22 @@
 / separately (thin/stale liquidity or a bad print, not necessarily wrong,
 / but worth a human's attention) so the two very different severities
 / don't collapse into one generic "bad" bucket.
+/ .
+/ A side nobody quoted is ABSENT, not wrong: its spread is null, and a null
+/ is neither crossed nor wide - it is `one_sided. Written the obvious way,
+/ `spreads<0` called it crossed, because q orders a null below every number,
+/ so a quote with an ask and no bid read as a data error (#546). The same
+/ guard crypto_market_data_backfill.q's quality_check applies to its own
+/ crossed test.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 /   (see forwards.q's require_quotes_cols) - any row order, needn't be sorted
 / @param max_spread_bps a spread at or below this many bps is `ok; above
 /   it (and non-negative) is `wide
-/ @return a table time/sym/spread_bps/status (`ok`, `crossed`, or `wide`),
-/   sorted status-ascending (`crossed` sorts first, then `ok`, then `wide`
-/   - alphabetical, not a severity ranking; `crossed` rows are the most
-/   urgent, so they land first, which is what matters)
+/ @return a table time/sym/spread_bps/status (`ok`, `crossed`, `wide`, or
+/   `one_sided` when a side is unquoted and the spread is null), sorted
+/   status-ascending (`crossed`, `ok`, `one_sided`, `wide` - alphabetical,
+/   not a severity ranking; `crossed` rows are the most urgent, so they land
+/   first, which is what matters)
 / @throws error if quotes is missing a required column
 / @eg .qdqc.check_market_data_quality[quotes;5]
 check_market_data_quality:{[quotes;max_spread_bps]
@@ -52,11 +60,14 @@ check_market_data_quality:{[quotes;max_spread_bps]
     / index-a-status-vector idiom check_stale_quotes/reconcile_trades
     / already use for the 2-way case, generalized to 3 statuses via a
     / 0/1/2 index built from ordinary boolean arithmetic instead of $.
-    is_crossed:spreads<0;
+    one_sided:null spreads;
+    is_crossed:(not one_sided) & spreads<0;
     is_wide:spreads>max_spread_bps;
-    idx:(1-is_crossed)*(1+is_wide);
+    / 0 crossed, 1 ok, 2 wide - and 3 one_sided, which overrides: a null
+    / spread is never crossed (guarded above) or wide (null>x is false).
+    idx:((1-is_crossed)*(1+is_wide)*not one_sided)+3*one_sided;
     result:([] time:quotes`time; sym:quotes`sym; spread_bps:spreads);
-    result:update status:`crossed`ok`wide idx from result;
+    result:update status:`crossed`ok`wide`one_sided idx from result;
     `status xasc result};
 
 / Per-sym staleness: how long ago was the last quote at or before as_of,
