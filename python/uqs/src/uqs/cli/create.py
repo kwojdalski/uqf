@@ -175,8 +175,9 @@ def new_job(
         str | None, typer.Option("--source", help="Source name (backfill; defaults to NAME)")
     ] = None,
     width: Annotated[
-        str, typer.Option("--width", help="Backfill window width, as a q timespan")
-    ] = "1D",
+        str | None,
+        typer.Option("--width", help="Backfill window width, as a q timespan (default 1D)"),
+    ] = None,
     procname: Annotated[
         str | None,
         typer.Option(
@@ -251,6 +252,9 @@ def new_job(
             "--transport": transport != "ipc",
             "--partition": partition is not None,
             "--check": check,
+            "--dataset": dataset is not None,
+            "--source": source is not None,
+            "--width": width is not None,
         },
         "streaming": {"--period": period is not None},
         "standing": {"--profile": profile is not None, "--unprofiled": unprofiled is not None},
@@ -302,7 +306,7 @@ def new_job(
                 name,
                 dataset,
                 columns,
-                width=width,
+                width="1D" if width is None else width,
                 source=source,
                 procname=procname,
                 transport=transport,

@@ -111,6 +111,10 @@ def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
         _die(UqsError(f"could not start {argv[0]}: {exc}"))
 
 
+#: The hosts `--proc` can resolve against: this machine's.
+_LOCAL_HOSTS = ("localhost", "127.0.0.1")
+
+
 def _proc_port(procname: str, base_port: int) -> int:
     """The port `procname` listens on in the stack at `base_port`, refusing a
     process that is not declared or not running.
@@ -177,6 +181,15 @@ def query(
     """
     if (proc is None) == (port is None):
         _die(UqsError("name the process to query: --proc NAME or --port N, not both"))
+        return
+    if proc is not None and host not in _LOCAL_HOSTS:
+        # --proc reads this machine's registry and process list, so on another
+        # host both the port and the up/down check would describe the wrong one.
+        _die(
+            UqsError(
+                "--proc looks the port up in this machine's stack - give --port for another host"
+            )
+        )
         return
     if port is None:
         try:

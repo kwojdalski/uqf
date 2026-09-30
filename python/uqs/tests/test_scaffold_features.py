@@ -218,6 +218,10 @@ def test_a_normalizer_takes_a_profile_too():
         ),
         (["x", "--publishes", "x", "--columns", "a:float", "--partition", "EURUSD"], "--partition"),
         (["x", "--publishes", "x", "--columns", "a:float", "--check"], "--check"),
+        (["x", "--publishes", "x", "--columns", "a:float", "--width", "2D"], "--width"),
+        (["x", "--publishes", "x", "--columns", "a:float", "--source", "s"], "--source"),
+        (["x", "--publishes", "x", "--columns", "a:float", "--dataset", "d"], "--dataset"),
+        (["x", "--kind", "normalizer", "--columns", "a:float", "--width", "2D"], "--width"),
         (
             [
                 "x",

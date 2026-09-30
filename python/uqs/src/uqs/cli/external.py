@@ -48,11 +48,24 @@ def _split(text: str) -> tuple[str, ...]:
     return tuple(s.strip() for s in text.split(",") if s.strip())
 
 
+def _or(value: Any, default: Any) -> Any:
+    """`value` when the option was given, else `default`.
+
+    `is None`, not truthiness: `--interval-ms 0` or `--symbols ""` was typed,
+    and reaches the feed as typed rather than as the default.
+    """
+    return default if value is None else value
+
+
+def _list_or(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
+    return default if value is None else _split(value)
+
+
 def _start_databento(o: dict[str, Any]) -> str:
     pid = databento_feed.start_databento_feed(
         _paths(),
-        dataset=o["dataset"] or databento_feed.DEFAULT_DATASET,
-        symbols=_split(o["symbols"]) if o["symbols"] else tuple(databento_feed.DEFAULT_SYMBOLS),
+        dataset=_or(o["dataset"], databento_feed.DEFAULT_DATASET),
+        symbols=_list_or(o["symbols"], tuple(databento_feed.DEFAULT_SYMBOLS)),
         api_key=o["api_key"],
     )
     return f"databento feed started (pid {pid})"
@@ -61,9 +74,9 @@ def _start_databento(o: dict[str, Any]) -> str:
 def _start_kafka(o: dict[str, Any]) -> str:
     pid = kafka_feed.start_kafka_feed(
         _paths(),
-        brokers=o["brokers"] or kafka_feed.DEFAULT_BROKERS,
-        topic=o["topic"] or kafka_feed.DEFAULT_TOPIC,
-        group=o["group"] or kafka_feed.DEFAULT_GROUP,
+        brokers=_or(o["brokers"], kafka_feed.DEFAULT_BROKERS),
+        topic=_or(o["topic"], kafka_feed.DEFAULT_TOPIC),
+        group=_or(o["group"], kafka_feed.DEFAULT_GROUP),
     )
     return f"kafka feed started (pid {pid})"
 
@@ -71,11 +84,11 @@ def _start_kafka(o: dict[str, Any]) -> str:
 def _start_crypto(o: dict[str, Any]) -> str:
     pid = crypto.start_crypto_recorder(
         _paths(),
-        base_port=o["port"] or DEFAULT_BASE_PORT,
-        venues=_split(o["venues"]) if o["venues"] else CRYPTO_RECORDER_DEFAULT_VENUES,
-        symbols=_split(o["symbols"]) if o["symbols"] else CRYPTO_RECORDER_DEFAULT_SYMBOLS,
-        top_n_levels=o["top_n_levels"] or 5,
-        interval_ms=o["interval_ms"] or 1000,
+        base_port=_or(o["port"], DEFAULT_BASE_PORT),
+        venues=_list_or(o["venues"], CRYPTO_RECORDER_DEFAULT_VENUES),
+        symbols=_list_or(o["symbols"], CRYPTO_RECORDER_DEFAULT_SYMBOLS),
+        top_n_levels=_or(o["top_n_levels"], 5),
+        interval_ms=_or(o["interval_ms"], 1000),
     )
     return f"crypto recorder started (pid {pid})"
 
@@ -83,10 +96,10 @@ def _start_crypto(o: dict[str, Any]) -> str:
 def _start_crypto_fills(o: dict[str, Any]) -> str:
     pid = crypto.start_crypto_fills_recorder(
         _paths(),
-        base_port=o["port"] or DEFAULT_BASE_PORT,
-        oms_socket_path=o["oms_socket_path"] or DEFAULT_OMS_SOCKET_PATH,
-        symbol=o["symbol"] or CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
-        poll_interval_ms=o["poll_interval_ms"] or CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
+        base_port=_or(o["port"], DEFAULT_BASE_PORT),
+        oms_socket_path=_or(o["oms_socket_path"], DEFAULT_OMS_SOCKET_PATH),
+        symbol=_or(o["symbol"], CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL),
+        poll_interval_ms=_or(o["poll_interval_ms"], CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS),
     )
     return (
         f"crypto fills recorder started (pid {pid}) - "
