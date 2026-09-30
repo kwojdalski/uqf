@@ -62,7 +62,7 @@ test_set_override_keeps_every_other_layer:{[t]
     .qetl.cfg.set_override[`added;"x"];
     .qunit.assertEquals[
         (.qetl.cfg.raw `only_override;.qetl.cfg.raw `only_yaml;.qetl.cfg.raw `only_default;.qetl.cfg.raw `added);
-        ("ov";"ya";"de";"x");
+        ("ov";"ya";"de";enlist "x");
         "one write adds one key and leaves the rest of every layer alone"]};
 
 / kola sends a Python str as a symbol. Stored as a symbol, get_flag would
@@ -74,7 +74,7 @@ test_set_override_stores_a_symbol_value_as_a_string:{[t]
 
 test_set_override_accepts_a_string_key:{[t]
     setUp_layers[];
-    .qunit.assertEquals[last .qetl.cfg.set_override["string_key";"v"];"v";"a key sent as a char vector is cast to a symbol"]};
+    .qunit.assertEquals[last .qetl.cfg.set_override["string_key";"v"];enlist "v";"a key sent as a char vector is cast to a symbol"]};
 
 test_set_override_refuses_a_key_that_is_not_a_name:{[t]
     .qunit.assertThrows[.qetl.cfg.set_override[;"v"];42;"qetl.cfg.set_override: the key must be*";"a numeric key is refused by name, not stored"]};
