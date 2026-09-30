@@ -27,12 +27,10 @@ import re
 
 from uqs.paths import (
     RUN_TESTS_FILE,
-    SOURCE_DIR,
     STACK_TABLES_TEST,
     STREAM_DIR,
     TABLES_FILE,
     TEST_DIR,
-    WORKER_DIR,
     UqsError,
 )
 from uqs.scaffold.catalog import catalog_actions
@@ -41,10 +39,8 @@ from uqs.scaffold.templates import (
     GROUPED,
     Q_TYPES,
     TIME_COLUMN,
-    source_body,
     table_definition,
     test_stub,
-    worker_body,
 )
 
 #: The layout comes from `paths`, which is the one place that knows it - see
@@ -155,6 +151,15 @@ def _symbol_list(names: list[str]) -> str:
     return f"enlist `{names[0]}" if len(names) == 1 else "`" + "`".join(names)
 
 
+def start_with_all_field(start_with_all: bool) -> tuple[str, str]:
+    """The declaration key and value line for `start_with_all`, or nothing.
+
+    Written only when it is on: absent means on demand, and a scaffold that
+    wrote `0b` would be a line saying what the default already says.
+    """
+    return ("`start_with_all", "\n    1b;") if start_with_all else ("", "")
+
+
 def streaming_job(
     name: str,
     subscribe_to: list[str],
@@ -163,6 +168,7 @@ def streaming_job(
     procname: str | None = None,
     *,
     known_tables: set[str] | None = None,
+    start_with_all: bool = False,
 ) -> ScaffoldPlan:
     """Plan a new streaming job: the q file, its table and its test.
 
@@ -177,6 +183,10 @@ def streaming_job(
     refused here rather than found idle after `uqs start`, and a published
     table that already exists is published onto rather than defined twice.
     Without it every published table is new.
+
+    `start_with_all` declares the job part of `uqs start all`. Off by default,
+    as in `.qetl.job.stream.define`: a new process joins the default start
+    only once someone has decided the connection budget has room for it.
     """
     _check_name(name, "job name")
     proc = procname or f"{name}1"
@@ -199,12 +209,16 @@ def streaming_job(
     actions: list[FileAction] = []
     notes: list[str] = []
 
-    sub_literal = "`symbol$()" if is_feed else "`" + "`".join(subscribe_to)
+    # `enlist` for one table, as for `publishes` below and as the tree's own
+    # jobs write it: a bare `trades is an atom, which define accepts but which
+    # reads as a different shape from every other declaration.
+    sub_literal = "`symbol$()" if is_feed else _symbol_list(subscribe_to)
     pub_literal = _symbol_list(pubs) if pubs else "`symbol$()"
     handler = "on_timer" if is_feed else "on_batch"
     handler_args = "[]" if is_feed else "[t;x]"
     timer = "\n    0D00:00:01;" if is_feed else ""
     timer_key = "`period" if is_feed else ""
+    swa_key, swa_value = start_with_all_field(start_with_all)
 
     reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribe_to)
     writes = ", ".join(f"`{t}`" for t in pubs) if pubs else "nothing - it keeps its output local"
@@ -232,14 +246,13 @@ publish:.qetl.job.stream.unwired `{name};
 \\d .
 
 / The process registry is read from this declaration: `procname` is the
-/ process that runs it, and `start_with_all`, absent here, keeps it on demand -
-/ add `start_with_all with 1b to start it with the stack, once the connection
-/ budget has room.
-.qetl.job.stream.define[`{name};`procname`subscribe_to`publishes{timer_key}`{handler}`note!(
+/ process that runs it, and `start_with_all` whether `uqs start all` starts it
+/ (absent: on demand, until the connection budget has room).
+.qetl.job.stream.define[`{name};`procname`subscribe_to`publishes{timer_key}`{handler}{swa_key}`note!(
     `{proc};
     {sub_literal};
     {pub_literal};{timer}
-    .qpipe.job.{name}.{handler};
+    .qpipe.job.{name}.{handler};{swa_value}
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
 """
     actions.append(FileAction(STREAM_DIR / f"{name}.q", body))
@@ -294,89 +307,3 @@ publish:.qetl.job.stream.unwired `{name};
     if not is_feed:
         notes.append("start it with its producers: " + " ".join(sorted(set(subscribe_to))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)
-
-
-def bounded_worker(
-    name: str,
-    dataset: str,
-    columns: str | None,
-    width: str = "1D",
-    source: str | None = None,
-    procname: str | None = None,
-    *,
-    reuse_source: bool = False,
-    define_table: bool = True,
-) -> ScaffoldPlan:
-    """Plan a new bounded worker: its source, its worker and its test.
-
-    A backfill is three declarations rather than one - the source says what
-    the rows are and how to window them, the worker says which source feeds
-    which dataset how wide, and the transform sits between. They are
-    scaffolded together because a worker whose source does not exist aborts
-    at load: `.qetl.job.bounded.define` resolves it at define time.
-
-    `reuse_source` plans a worker on a source that already exists - a second
-    window width or target over rows someone has already declared - so the
-    source file is not written. `define_table` is False when the dataset is
-    already a plant table, which then must not be defined a second time.
-    Both are facts about the tree, so the caller, which has one, decides.
-    """
-    _check_name(name, "worker name")
-    src = source or name
-    _check_name(src, "source name")
-    _check_name(dataset, "dataset")
-    worker = f"{name}_backfill"
-    proc = procname or f"{name}_backfill1"
-    # Columns shape what is WRITTEN - a new source's fields, a new table - so
-    # they are required when either is, and refused when neither is, rather
-    # than silently ignored.
-    needs_columns = define_table or not reuse_source
-    if needs_columns and not columns:
-        raise UqsError(
-            f"--kind backfill needs --columns: they declare the new source {src!r}'s fields "
-            f"and, if {dataset!r} is not yet a plant table, its definition"
-        )
-    if columns and not needs_columns:
-        raise UqsError(
-            f"--columns has nothing to shape: source {src!r} and table {dataset!r} both "
-            "exist already - drop --columns"
-        )
-    cols = parse_columns(columns) if columns else []
-
-    actions: list[FileAction] = []
-    if not reuse_source:
-        actions.append(FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols)))
-    actions.append(
-        FileAction(WORKER_DIR / f"{worker}.q", worker_body(worker, src, dataset, width, proc))
-    )
-    if define_table:
-        actions += [
-            FileAction(
-                TABLES_FILE,
-                f"\n/ {proc}'s target. <one line: what a row means>\n"
-                f"{table_definition(dataset, cols)}\n",
-                mode=WriteMode.APPEND,
-            ),
-            _expected_table_action(dataset),
-        ]
-    actions += [
-        FileAction(
-            TEST_DIR / f"test_{worker}.q",
-            test_stub(worker, test_namespace(name, bounded=True), f"the {worker} bounded worker"),
-        ),
-        _nslist_action(test_namespace(name, bounded=True)),
-    ]
-    if reuse_source:
-        notes = [f"reuses .qpipe.source.{src}: its query and fixture are already written"]
-    else:
-        notes = [
-            f"write .qpipe.source.{src}.query - parameterised, never concatenated"
-            " (see src/etl/core/source_contract.q)",
-            f"write .qpipe.source.{src}.fixture - deterministic, same contract as the live source",
-            f"declared columns: {', '.join(c for c, _ in cols)}",
-        ]
-    notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
-    notes.append(_STACK_PAGE_NOTE.format(proc=proc))
-    if define_table:
-        actions += catalog_actions(dataset, cols, notes)
-    return ScaffoldPlan(name=worker, actions=actions, notes=notes)

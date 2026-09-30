@@ -18,7 +18,10 @@ uqs new-job fxprobe --kind backfill --dataset fx_probe \
 
 `--dataset` is the table it fills, and it is **required** --- a backfill with no
 dataset has nothing to record coverage against. `--width` is the window size as
-a q timespan.
+a q timespan. `--transport odbc` scaffolds a source read from a database rather
+than a q process: it declares `transport` and a `credential_example`, and its
+query comment points at `.qetl.io.odbc` and `src/etl/sources/duckdb_deals.q`.
+`--procname` names the process (default `NAME_backfill1`).
 
 ```
 scaffold fxprobe_backfill:
@@ -32,7 +35,9 @@ scaffold fxprobe_backfill:
   note: write .qpipe.source.fxprobe.query - parameterised, never concatenated (see src/etl/core/source_contract.q)
   note: write .qpipe.source.fxprobe.fixture - deterministic, same contract as the live source
   note: declared columns: time, sym, mid
+  note: a live run reads UQF_SOURCE_CRED_FXPROBE (host:port of the q process to read from); without it the worker runs on the fixture, and warns that it is
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
+  note: optional: a quality check that fails a window on bad rows (`check`) - see quality_check in src/etl/workers/demo_deals_backfill.q
 ```
 
 **Two q files, not one**, and the process is named for the worker

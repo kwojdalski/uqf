@@ -47,6 +47,10 @@ uqs new-job tickfeed --publishes ticks --columns "sym:symbol, px:float"
 uqs new-job fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
 
+# the same, reading a database over ODBC rather than a q process
+uqs new-job ledger --kind backfill --dataset ledger \
+    --columns "sym:symbol, amt:float" --transport odbc
+
 # a second worker over that source, into its own dataset: the source is reused
 uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
     --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
@@ -61,6 +65,15 @@ A normalizer's mappings start from each source's whole plant schema and a typed
 example row, so the file loads; each mapping throws until written. Narrow each
 input to the columns its mapping reads, and replace each example with a real row
 and the canonical row it becomes.
+
+`--procname` names the process (default `NAME1`, or `NAME_backfill1`), and
+`--start-with-all` puts a streaming job or normalizer in `uqs start all`. Leave
+that off unless the user asks: a new process in the default start counts against
+the licence's connection budget, and the profile tests pin the default set.
+
+After writing, `new-job` regenerates the derived files and, where q is
+installed, re-exports the contract surface. Without q it says so, and the
+`contract-surface` hook fails until `contract_surface.py export` is run.
 
 **Always `--dry-run` first** and show the user what it would write. It appends
 to `uqs_tables.q` and two test lists, which are files they may have opinions

@@ -24,6 +24,7 @@ from uqs.scaffold.jobs import (
     _check_name,
     _expected_table_action,
     _nslist_action,
+    start_with_all_field,
     test_namespace,
 )
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -64,6 +65,7 @@ def normalizer(
     *,
     known_tables: set[str],
     procname: str | None = None,
+    start_with_all: bool = False,
 ) -> ScaffoldPlan:
     """Plan a normalizer publishing `name` from `sources`.
 
@@ -133,6 +135,7 @@ from_{src}:{{[batch]
         mapping = f"(enlist `{sources[0]})!enlist `{transforms[0]}"
     else:
         mapping = "`" + "`".join(sources) + "!`" + "`".join(transforms)
+    swa_key, swa_value = start_with_all_field(start_with_all)
     body = f"""/ {name}.q - the `{name}` normalizer: <one line: the one fact, from every source>
 / (.qpipe.job.{name}).
 / .
@@ -153,10 +156,10 @@ publish:.qetl.job.stream.unwired `{name};
 \\d .
 
 {defines}
-.qetl.job.stream.normalize[`{name};`procname`output`input`note!(
+.qetl.job.stream.normalize[`{name};`procname`output`input{swa_key}`note!(
     `{proc};
     .qpipe.job.{name}.{name};
-    {mapping};
+    {mapping};{swa_value}
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
 """
     notes = [f"implement .qpipe.job.{name}.from_{s} and its example" for s in sources]
