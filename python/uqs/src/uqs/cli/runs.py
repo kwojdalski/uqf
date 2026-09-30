@@ -1,0 +1,109 @@
+"""`uqs run ...`: reading the run ledger - which execution produced what.
+
+A group, as `job` and `data` are. Read-only: every command here asks the ledger
+in the status directory a question and prints the answer; see stack/runs.py
+for why that means a short-lived q and not a running process.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+import typer
+from rich.table import Table
+
+from uqs.cli.shared import _die, _paths, app, console
+from uqs.paths import UqsError
+from uqs.stack import backfill as stack_backfill
+from uqs.stack import runs as stack_runs
+
+run_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Read the run ledger: unfinished runs, one run's facts, one window across runs.",
+)
+app.add_typer(run_app, name="run")
+
+_RUN_COLUMNS = ("run_id", "worker", "process", "host", "status", "started_at", "ended_at")
+_FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
+
+
+def _print(title: str, rows: list[dict], columns: tuple[str, ...], empty: str) -> None:
+    if not rows:
+        console.print(f"[dim]{empty}[/]")
+        return
+    table = Table(title=title)
+    for col in columns:
+        # A run id is what `uqs run show` takes, so it is never cut short.
+        if col == "run_id":
+            table.add_column(col, min_width=36, no_wrap=True)
+        else:
+            table.add_column(col)
+    for row in rows:
+        table.add_row(*(str(row.get(col, "")) for col in columns))
+    console.print(table)
+
+
+@run_app.command("status")
+def status() -> None:
+    """Runs that began and never finished.
+
+    Includes runs whose process has died: `running` on a run whose process is
+    gone means that execution was interrupted, which is what this is for.
+    """
+    try:
+        rows = stack_runs.unfinished(_paths())
+    except UqsError as exc:
+        _die(exc)
+        return
+    _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs")
+
+
+@run_app.command("list")
+def list_runs() -> None:
+    """Every run in the ledger, newest first."""
+    try:
+        rows = stack_runs.history(_paths())
+    except UqsError as exc:
+        _die(exc)
+        return
+    _print("runs", rows, _RUN_COLUMNS, "no runs recorded")
+
+
+@run_app.command("show")
+def show(run_id: Annotated[str, typer.Argument(help="A run id, from `uqs run list`")]) -> None:
+    """One run, and every fact it recorded about what it published."""
+    try:
+        run, facts = stack_runs.show(_paths(), run_id)
+    except UqsError as exc:
+        _die(exc)
+        return
+    if not run:
+        _die(UqsError(f"no run {run_id} in the ledger"))
+        return
+    _print("run", run, _RUN_COLUMNS, "")
+    _print("facts", facts, _FACT_COLUMNS, "this run recorded no facts")
+
+
+@run_app.command("audit")
+def audit(
+    dataset: Annotated[str, typer.Argument(help="The dataset, e.g. demo_deals")],
+    range_from: Annotated[str, typer.Option("--from", help="The window's start")],
+    range_to: Annotated[str, typer.Option("--to", help="The window's end, exclusive")],
+) -> None:
+    """Every fact recorded about one window, from every run that published it.
+
+    Two runs' facts side by side: whether two materialisations of the same
+    window agree, which is the question run identity exists to answer.
+    """
+    try:
+        rows = stack_runs.audit(
+            _paths(),
+            dataset,
+            stack_backfill.parse_bound("--from", range_from),
+            stack_backfill.parse_bound("--to", range_to),
+        )
+    except UqsError as exc:
+        _die(exc)
+        return
+    _print(f"{dataset} [{range_from}, {range_to})", rows, _FACT_COLUMNS, "no facts for that window")

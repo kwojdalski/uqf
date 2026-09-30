@@ -516,6 +516,22 @@ range would publish the wrong window and record it as covered:
 uqs backfill fx_rates_backfill --version v1 --from 2026-09-11 --to 2026-09-16
 ```
 
+Every run it makes is recorded in the run ledger, beside the coverage ledger in
+the status directory, with the facts each window reported. `uqs run` reads it
+back. No stack needs to be up, because the worker has exited by then:
+
+```bash
+uqs run status                     # runs that began and never finished - interrupted ones
+uqs run list                       # every run, newest first, with the run ids
+uqs run show RUN_ID                # one run, and what it recorded about each window
+uqs run audit fx_rates --from 2026-09-11 --to 2026-09-12
+                                   # one window's facts from every run that published it
+```
+
+`audit` is the question run identity exists to answer: whether two
+materialisations of the same window agree. It reads `$UQF_STATUS_DIR`, or
+`$TORQDATA/status` when that is unset, the directory the workers write.
+
 ## 5. Check what it claims
 
 Coverage is **recorded, not derived** --- a completion event is staged for every
