@@ -97,8 +97,16 @@ require_method:{[decl]
         '"require_method: a matching method's open and pick must both be functions"];
     1b}
 
-/ method name -> its declaration.
-methods:(`symbol$())!()
+/ method name -> its declaration, as a table keyed on `name`.
+/ .
+/ A keyed table, not a symbol-keyed dict of dicts. q silently collapses such a
+/ dict into a table on its first entry, and KDB-X then accepts further rows by
+/ key - but PeachQ does not: its second `methods[name]:decl` throws 'type, so
+/ src/init.q stopped loading on PeachQ right here, at `lifo`. Declaring the
+/ table says outright what the dict only became by accident, and `upsert`
+/ adds or replaces a row by key on both interpreters. The columns are the
+/ fixed key set require_method enforces.
+methods:([name:`symbol$()] open:(); pick:(); why:())
 
 / Register a matching method under a name.
 / .
@@ -111,7 +119,7 @@ methods:(`symbol$())!()
 / @eg .qalloc.define[`fifo_again;`open`pick!(.qalloc.append_lot;.qalloc.pick_first)] -> `fifo_again
 define:{[name;decl]
     require_method decl;
-    methods[name]:`open`pick`why!(decl`open; decl`pick; $[`why in key decl; decl`why; ""]);
+    `.qalloc.methods upsert (name; decl`open; decl`pick; $[`why in key decl; decl`why; ""]);
     name}
 
 / Look a method up by name.
@@ -120,15 +128,15 @@ define:{[name;decl]
 / @throws error when nothing is registered under that name, listing what is
 / @eg .qalloc.def[`fifo]`why -> "oldest open lot first"
 def:{[name]
-    if[not name in key methods;
+    if[not name in defined[];
         '"def: ",string[name]," is not a registered matching method - have ",
-         ", " sv string key methods];
+         ", " sv string defined[]];
     methods name}
 
 / Every registered method name, in registration order.
 / @return a symbol vector - the five built in here, plus anything a desk has registered since
 / @eg `fifo in .qalloc.defined[] -> 1b
-defined:{[] key methods}
+defined:{[] exec name from key methods}
 
 / ------------------------------------------------------- METHOD PIECES
 
@@ -306,7 +314,9 @@ step:{[m;state;row]
             (lot`trade_id; lot`time; lot`side; row`trade_id; row`time; take;
              lot`price; "f"$row`trade_price);
         qty-:take;
-        lots:$[take=lot`qty; lots _ ix; @[lots;`qty;@[;ix;-;take]]];
+        / Indexed, not `lots _ ix`: dropping a row from a table by position
+        / throws 'type on PeachQ, and the two agree on KDB-X.
+        lots:$[take=lot`qty; lots (til count lots) except ix; @[lots;`qty;@[;ix;-;take]]];
         ];
     if[0<qty;
         lots:(m`open)[lots;
@@ -320,7 +330,11 @@ step:{[m;state;row]
 / carried in and not touched today still has to appear in the residual.
 with_by:{[out;kv;bys]
     n:count out;
-    bys xcols out ,' flip bys!n#/:kv bys}
+    / Joined as column dictionaries, not `out ,' flip bys!...`: for an EMPTY
+    / `out` PeachQ answers `,'` with () where KDB-X keeps the table, and the
+    / two spellings agree on KDB-X - `,` on dicts lets the right side win a
+    / shared column exactly as `,'` does.
+    bys xcols flip (flip out),bys!n#/:kv bys}
 
 / Private: just the bucket columns of a table, in `by order.
 / .

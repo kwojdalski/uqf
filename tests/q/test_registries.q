@@ -20,8 +20,11 @@
 / .
 / Five registries in this tree store dictionaries, and each defends
 / differently: .qetl.job.stream and .qetl.job.stream.normalizer ENLIST every declaration, which is
-/ shape-independent; .qetl.source, .qetl.transform, .qalloc and .qetl.job.bounded NORMALISE to a fixed key
-/ set, which works only while that set stays closed. Both are correct. A
+/ shape-independent; .qetl.source, .qetl.transform and .qetl.job.bounded NORMALISE to a fixed key
+/ set, which works only while that set stays closed. Both are correct.
+/ .qalloc goes one further and DECLARES the table: .qalloc.methods is a keyed
+/ table from the start, so there is no collapse to depend on - which is also
+/ what lets it load on PeachQ, where adding a row to a collapsed dict throws. A
 / sixth registry copying the second kind and then accepting an optional key
 / would reintroduce the bug, so this file checks the defences rather than
 / trusting that the next author reads one of the four headers explaining
@@ -34,7 +37,11 @@
 / .sjtest's "every job is registered" both fail if it runs first.
 forget:{[reg;names]
     r:get reg;
-    reg set (names inter key r) _ r;
+    / A registry is a dict, or a keyed table (.qalloc.methods), whose `key`
+    / is a table - `names inter` it would match nothing and forget nothing.
+    reg set $[98h=type key r;
+        ![r;enlist (in;first cols key r;enlist names);0b;`symbol$()];
+        (names inter key r) _ r];
     }
 
 forget_job:{[job]
