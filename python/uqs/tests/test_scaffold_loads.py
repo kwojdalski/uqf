@@ -27,7 +27,8 @@ from pathlib import Path
 
 import pytest
 
-from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, q_interpreter
+from uqs.interpreter import q_interpreter
+from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
 from uqs.scaffold.normalizer import definition_columns, normalizer

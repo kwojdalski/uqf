@@ -14,11 +14,12 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from uqs.interpreter import q_command, q_interpreter
 from uqs.logger import get_logger
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.plant_schema import _generated_schema_content
 from uqs.model.registry import DEFAULT_BASE_PORT
-from uqs.paths import UqsError, UqsPaths, check_prerequisites, q_command, q_interpreter
+from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive
 from uqs.stack.env import build_env
 from uqs.stack.procs import _base_process_rows, _read_overrides

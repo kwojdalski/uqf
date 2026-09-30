@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.paths import q_interpreter
+from uqs.interpreter import q_interpreter
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = UQF_ROOT / "scripts" / "generate" / "contract_surface.py"

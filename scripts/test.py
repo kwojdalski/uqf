@@ -70,10 +70,63 @@ REPO = Path(__file__).resolve().parent.parent
 #: interpreter - a suite that passed on something the code is not verified
 #: against is worse than one that does not run. `QCMD` and `QHOME` let an
 #: operator point it elsewhere DELIBERATELY; see README.md#requirements.
-#: $QCMD, else `q` on PATH - TorQ's rule, and uqs.paths.q_command's,
+#: $QCMD, else `q` on PATH - TorQ's rule, and uqs.interpreter.q_command's,
 #: restated because this file runs under a bare python3 that cannot import uqs.
 Q_CMD = os.environ.get("QCMD") or "q"
 QHOME = os.environ.get("QHOME", str(Path.home() / ".kx"))
+
+#: Which implementation $QCMD is declared to be - `kdbx` unless UQF_Q_IMPL
+#: says `peachq` - and the script that asks the binary itself. Restated from
+#: uqs.interpreter for the reason Q_CMD is; test_interpreter.py holds the two
+#: equal. PeachQ runs only when chosen out loud: `peachq` needs QCMD, and a
+#: binary that is not what was declared is refused before any lane runs, so a
+#: green suite always says which interpreter made it green.
+Q_IMPL_ENV = "UQF_Q_IMPL"
+Q_IMPLS = ("kdbx", "peachq")
+IDENTIFY_SCRIPT = '-1 $[-7h=type @[value;`.pq.load_natives;{0N}];"kdbx";"peachq"];\nexit 0\n'
+
+
+def check_interpreter(env: dict[str, str] | None = None) -> str | None:
+    """The declared implementation, once the binary has confirmed it; None
+    when there is no runnable q (the lanes report that themselves). Raises
+    SystemExit naming the mismatch otherwise."""
+    source = os.environ if env is None else env
+    declared = (source.get(Q_IMPL_ENV) or "kdbx").strip().lower()
+    if declared not in Q_IMPLS:
+        raise SystemExit(f"{Q_IMPL_ENV}={declared!r} - it is one of {', '.join(Q_IMPLS)}")
+    if declared == "peachq" and not source.get("QCMD"):
+        raise SystemExit(
+            f"{Q_IMPL_ENV}=peachq needs QCMD set to the PeachQ binary - "
+            "a bare `q` on PATH is never taken to be PeachQ"
+        )
+    q = shutil.which(source.get("QCMD") or "q", path=source.get("PATH"))
+    if q is None:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        script = Path(tmp) / "identify.q"
+        script.write_text(IDENTIFY_SCRIPT)
+        result = subprocess.run(
+            [q, str(script), "-q"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**source, "QHOME": source.get("QHOME", QHOME)},
+            check=False,
+        )
+    actual = (result.stdout.strip().splitlines()[-1:] or [""])[0]
+    if actual not in Q_IMPLS:
+        raise SystemExit(
+            f"could not tell which q {q} is (exit {result.returncode}): "
+            f"{(result.stdout + result.stderr).strip()[:200]!r}"
+        )
+    if actual != declared:
+        hint = (
+            f"set {Q_IMPL_ENV}=peachq to run it knowingly"
+            if actual == "peachq"
+            else "point QCMD at the PeachQ binary"
+        )
+        raise SystemExit(f"{q} is {actual}, but {Q_IMPL_ENV} declares {declared} - {hint}")
+    return actual
 
 
 class LaneFailed(Exception):
@@ -322,7 +375,9 @@ Run the lane matching the layer you changed. `all` is for a release,
 not for an edit.
 
 The interpreter comes from $QCMD (default `q` on PATH) and $QHOME (default
-~/.kx). There is no fallback: see README.md#requirements.
+~/.kx). There is no fallback: see README.md#requirements. PeachQ runs only
+when chosen: UQF_Q_IMPL=peachq with QCMD naming its binary, and the binary is
+checked against that choice before any lane starts.
 """
 
 
@@ -358,6 +413,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--targets, --tables and --timeout-ms apply to the smoke lane only")
 
     lanes = ALL if args.lane == "all" else [args.lane]
+    impl = check_interpreter()
+    if impl is not None:
+        _banner(f"interpreter: {impl} ({Q_CMD})")
     try:
         for name in lanes:
             if name == "smoke":

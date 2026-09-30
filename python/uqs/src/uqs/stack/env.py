@@ -13,9 +13,10 @@ else calls it and only reads.
 
 from __future__ import annotations
 
+from uqs.interpreter import q_command
 from uqs.logger import get_logger
 from uqs.model.registry import DEFAULT_BASE_PORT
-from uqs.paths import UqsPaths, q_command
+from uqs.paths import UqsPaths
 
 log = get_logger(__name__)
 

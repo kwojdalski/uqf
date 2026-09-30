@@ -262,7 +262,8 @@ def start_backfill(
     import os
     import subprocess
 
-    from uqs.paths import UqsError, q_interpreter
+    from uqs.interpreter import q_interpreter
+    from uqs.paths import UqsError
     from uqs.stack.backfill import backfill_flags
     from uqs.stack.runtime import bootstrap
 
