@@ -149,6 +149,7 @@
 "databento_mbp10","bid_sz_09","j"
 "databento_mbp10","ask_px_09","f"
 "databento_mbp10","ask_sz_09","j"
+"deal_positions","time","p"
 "deal_positions","sym","s"
 "deal_positions","window","p"
 "deal_positions","net_notional","f"

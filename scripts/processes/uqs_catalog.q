@@ -133,6 +133,8 @@ surface:{[]
 / into the block above is a tidy-up, never a fix.
 .qcat.describe[`duckdb_deals]:
     "one mock FX deal - pair, side, notional and rate - backfilled from a DuckDB file over ODBC";
+.qcat.describe[`deal_positions]:
+    "Net FX notional per pair for one published window of demo_deals - buys add, sells take away - built by the rebuild_positions reaction as each window is backfilled, and written where the deals were. Appended per release: a re-published window adds its rows again, so read the latest";
 .qcat.describe[`client_flow]:
     "One client FX trade consumed off a Kafka topic, deduplicated by kafka_flow1 on the (partition;offset) the record carries - so a broker redelivery does not show the desk the same trade twice. Carries those coordinates, so any row can be traced back to the exact Kafka record";
 .qcat.describe[`crypto_market_data]:

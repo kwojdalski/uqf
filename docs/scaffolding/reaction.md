@@ -32,6 +32,14 @@ The same rule holds beneath the scaffold: `.qetl.reaction.on`, `on_writing` and
 does not list, so a reaction written or edited by hand cannot slip past it
 either.
 
+A handler reads what was published with `.qetl.reaction.published[]` and writes
+its output with `.qetl.reaction.write[table;rows]`, which goes through the
+publishing worker's own IO manager - into the HDB under `uqs backfill`, as the
+worker's rows did. Never read the dataset by name, and never keep output in a
+table of its own: a reaction runs inside the backfill process, which exits when
+its range is done (#541). Writes append, as the worker's own do, and the rows
+need a `time` column for the HDB writer to partition by.
+
 `--writes` is optional: the tables the handler writes. With it, the reaction
 registers through `on_writing` and becomes a node in the job graph, where a
 cycle is refused when the file loads. Writing the dataset it watches is refused

@@ -365,16 +365,18 @@ qetl.reaction,drain,function,1,
 qetl.reaction,draining,value,,
 qetl.reaction,empty_history,function,1,
 qetl.reaction,empty_queue,function,1,
-qetl.reaction,enqueue,function,5,dataset range_from range_to depth rows
+qetl.reaction,enqueue,function,6,dataset range_from range_to depth rows io
 qetl.reaction,fillable,function,1,
 qetl.reaction,for_dataset,function,1,dataset
 qetl.reaction,history,table,,
 qetl.reaction,history_limit,value,,
+qetl.reaction,io_now,value,,
 qetl.reaction,log_failure,function,3,item nm e
 qetl.reaction,max_depth,value,,
 qetl.reaction,no_reactions,function,1,
 qetl.reaction,notify,function,3,dataset range_from range_to
 qetl.reaction,notify_from_here,function,3,dataset range_from range_to
+qetl.reaction,notify_published,function,5,dataset range_from range_to rows io
 qetl.reaction,notify_rows,function,4,dataset range_from range_to rows
 qetl.reaction,off,function,2,dataset nm
 qetl.reaction,on,function,3,dataset nm handler
@@ -390,6 +392,7 @@ qetl.reaction,require_handler,function,3,dataset nm handler
 qetl.reaction,reset,function,1,
 qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
+qetl.reaction,write,function,2,target rows
 qetl.run,as_text,function,1,v
 qetl.run,attach,function,1,
 qetl.run,begin,function,1,worker
