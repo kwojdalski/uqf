@@ -22,17 +22,18 @@
 / replaces its own rows instead of adding to them - its old rows are dropped
 / first, which also takes out a pair the restatement no longer carries.
 / .
-/ `` `. `demo_deals ``, not `demo_deals`: the worker publishes into the root
-/ namespace, and a bare name in a function defined under this `\d` resolves
-/ HERE, throwing 'demo_deals. The unqualified `deal_positions symbol, by
-/ contrast, is resolved when the call runs, which is in the root.
+/ The deals are READ AS PUBLISHED, through .qetl.reaction.published, and not
+/ by naming the dataset: under `uqs backfill` the worker writes HDB
+/ partitions, and a handler that read `. `demo_deals found no table and
+/ failed on every window, silently (#541). The published rows are the
+/ window's rows whatever the IO manager was.
 / @param dataset the dataset just published, `demo_deals
 / @param range_from inclusive lower bound of the published window
 / @param range_to exclusive upper bound
 / @return the number of pairs written for this window
-/ @eg .qpipe.job.rebuild_positions.handler[`demo_deals;2026.09.11D00:00;2026.09.12D00:00]
+/ @eg .qetl.reaction.notify_rows[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[]]
 handler:{[dataset;range_from;range_to]
-    deals:select from (`. `demo_deals) where deal_time within (range_from;range_to-1);
+    deals:.qetl.reaction.published[];
     net:select net_notional:sum notional*?[side=`buy;1f;-1f], deals:count i
         by sym, window:range_from from deals;
     delete from `deal_positions where window=range_from;

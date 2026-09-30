@@ -270,9 +270,9 @@ def reaction_body(name: str, dataset: str, writes: list[str], producers: list[st
 / Called with the dataset and the half-open range [range_from;range_to) just
 / published. Recompute exactly what that range changed, keyed by the window,
 / so a re-published window replaces its own rows instead of adding to them.
-/ Read {dataset} as `. `{dataset}, not bare: the worker publishes into the
-/ root, and a bare name under this \\d resolves HERE and throws. See
-/ src/etl/reactions/rebuild_positions.q for a written one.
+/ Read the rows with .qetl.reaction.published[], never {dataset} by name:
+/ under `uqs backfill` the worker writes HDB partitions and there is no table
+/ to name. See src/etl/reactions/rebuild_positions.q for a written one.
 handler:{{[dataset;range_from;range_to]
     '"{name}: not implemented";
     }}
