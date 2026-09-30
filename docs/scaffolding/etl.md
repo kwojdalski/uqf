@@ -12,7 +12,7 @@ If your rows come from a timer rather than a subscription you want
 ## Command
 
 ```bash
-uqs new-job spreadmon --subscribe-to quotes \
+uqs job new spreadmon --subscribe-to quotes \
     --publishes spread_bps --columns "sym:symbol, spread:float"
 ```
 

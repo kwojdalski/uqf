@@ -1,4 +1,4 @@
-"""`uqs new-job`'s process options, source transport and q-held spellings.
+"""`uqs job new`'s process options, source transport and q-held spellings.
 
 Each option is read back the way the tree reads it - through the reader the
 process registry is built from - rather than by searching the generated text,
@@ -176,7 +176,7 @@ def test_the_credential_variable_is_spelled_as_q_spells_it():
         ),
         (
             ["x", "--publishes", "x", "--columns", "a:float", "--transport", "odbc"],
-            "is for a backfill",
+            "--transport does not apply to --kind streaming",
         ),
     ],
 )
@@ -192,7 +192,7 @@ def test_an_option_that_does_not_apply_to_the_kind_is_refused(argv, message, mon
         raise SystemExit(1)
 
     monkeypatch.setattr(create, "_die", record)
-    result = runner.invoke(cli.app, ["new-job", *argv, "--dry-run"])
+    result = runner.invoke(cli.app, ["job", "new", *argv, "--dry-run"])
     assert result.exit_code == 1
     assert refused and message in refused[0]
 

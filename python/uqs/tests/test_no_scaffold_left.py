@@ -1,4 +1,4 @@
-"""Nothing `uqs new-job` wrote as a placeholder is left in the tree.
+"""Nothing `uqs job new` wrote as a placeholder is left in the tree.
 
 The scaffold marks every placeholder it writes with SCAFFOLDED: the handler
 that throws, the note that says "say why this exists", the catalog row that

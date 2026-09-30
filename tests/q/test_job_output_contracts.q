@@ -19,7 +19,7 @@
 / minus `time` (which the plant stamps). Feeds drive themselves on their own
 / timer. A job that subscribes needs a driver: a few lines pushing a batch it
 / actually acts on, declared as .<job>test.contract_driver in its own test
-/ file (where `uqs new-job` scaffolds one) or in the dictionary below. A new
+/ file (where `uqs job new` scaffolds one) or in the dictionary below. A new
 / job with no driver fails
 / test_every_publishing_job_can_be_driven by name - that is the point, since
 / a job this suite cannot drive is a job whose output nothing checks.
@@ -148,7 +148,7 @@ publishing:{[] j where {[j] 0<count (),.qetl.job.stream.def[j]`publishes} each j
 is_feed:{[j] 0=count (),.qetl.job.stream.def[j]`subscribe_to}
 
 / The driver `j`'s own test file declares, as .<job>test.contract_driver -
-/ where `uqs new-job` scaffolds one - or :: when it declares none.
+/ where `uqs job new` scaffolds one - or :: when it declares none.
 / .
 / A second home because the dictionary above cannot take a new job's entry:
 / it is one literal in this file, and a test file loaded before this one that
@@ -163,7 +163,7 @@ can_drive:{[j] (j in key .jobouttest.drivers) or (100h=type .jobouttest.own_driv
 / Everything `j` published when driven, as a (tbl; rows) table. Each rows
 / cell holds its batch ENLISTED, as .sjtest.recorder stores it - so a
 / reader takes `first each` before looking at a batch, as .sjtest does.
-/ Jobs whose own driver THREW, as (job; error) pairs. `uqs new-job` scaffolds
+/ Jobs whose own driver THREW, as (job; error) pairs. `uqs job new` scaffolds
 / a contract_driver that throws until someone writes it, which is the right
 / signal and was reaching the reader in the worst possible way: can_drive sees
 / a lambda and says yes, so the throw escaped `runs` and turned the two
@@ -207,7 +207,7 @@ test_every_publishing_job_can_be_driven:{[t]
         "every job that subscribes and publishes has a driver - .<job>test.contract_driver in its own test file, or an entry in .jobouttest.drivers - without one, nothing checks what it sends the plant"]};
 
 test_no_contract_driver_is_left_scaffolded:{[t]
-    / The scaffolded driver throws, so this is the test a fresh `uqs new-job`
+    / The scaffolded driver throws, so this is the test a fresh `uqs job new`
     / is meant to leave red. It replaces two errors that said `.
     runs[];
     / The job AND its error IN THE MESSAGE. assertEquals reports only its msg,

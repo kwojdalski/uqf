@@ -7,7 +7,7 @@ feeds. If your rows come from a plant table, you want [etl.md](etl.md) instead.
 ## Command
 
 ```bash
-uqs new-job pulsefeed --publishes pulse --columns "sym:symbol, px:float"
+uqs job new pulsefeed --publishes pulse --columns "sym:symbol, px:float"
 ```
 
 **There is no `--kind feed`.** A streaming job that subscribes to nothing is a
@@ -87,15 +87,16 @@ checked for shape.
 
 ## Timer
 
-`period` is `0D00:00:01` by default --- one second. It is a field in the
-declaration, so changing it is a one-line edit, and a feed that should tick
-faster than the plant can absorb is a decision to make deliberately rather than
-discover.
+`period` is `0D00:00:01` by default --- one second --- and `--period` sets it:
+`--period 0D00:00:00.500` for twice a second. It is a field in the declaration,
+so changing it later is a one-line edit, and a feed that should tick faster than
+the plant can absorb is a decision to make deliberately rather than discover.
 
 ## Then
 
 Implement `on_timer`, replace `tests/q/test_pulsefeed.q` entirely, and add
 `pulsefeed1` to a profile in
-[`profiles.py`](../../python/uqs/src/uqs/model/profiles.py) --- a feed is
-usually a *dependency* of something rather than a leaf, so it most often arrives
-in a profile by being what a leaf reads, not by being named.
+[`profiles.py`](../../python/uqs/src/uqs/model/profiles.py) (or scaffold with
+`--profile NAME`) --- a feed is usually a *dependency* of something rather than
+a leaf, so it most often arrives in a profile by being what a leaf reads, not by
+being named.

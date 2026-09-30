@@ -1,16 +1,16 @@
 ---
 name: new-job
 description: >-
-  Add a new ETL job to this tree end to end - scaffold it with `uqs new-job`,
+  Add a new ETL job to this tree end to end - scaffold it with `uqs job new`,
   implement the handler, write the test that replaces the failing stub, and
-  verify it against a real q. Covers every shape `uqs new-job` scaffolds: a
+  verify it against a real q. Covers every shape `uqs job new` scaffolds: a
   streaming job (a feed, an etl, or a normalizer under `src/etl/streaming/`) and
   a bounded worker (a source + worker + transform under `src/etl/sources/` and
   `src/etl/workers/`). Use when the user asks to add a job, a feed, a backfill,
-  a worker, a source, or a pipeline stage, or says "scaffold" or "new-job".
-  Distinct from the `pipeline-developer` agent, which changes the FRAMEWORK
-  those jobs run on - the lifecycle, the coverage ledger, the job graph. This is
-  for adding one job to a framework that already works.
+  a worker, a source, or a pipeline stage, or says "scaffold", "new-job" or "uqs
+  job new". Distinct from the `pipeline-developer` agent, which changes the
+  FRAMEWORK those jobs run on - the lifecycle, the coverage ledger, the job
+  graph. This is for adding one job to a framework that already works.
 ---
 
 # Adding an ETL job
@@ -37,27 +37,27 @@ expensive to undo.
 
 ```bash
 # continuous: subscribes to two tables, publishes one
-uqs new-job markout2 --subscribe-to trades,quote \
+uqs job new markout2 --subscribe-to trades,quote \
     --publishes my_metric --columns "sym:symbol, value:float" --dry-run
 
 # continuous FEED: subscribes to nothing, publishes on a timer
-uqs new-job tickfeed --publishes ticks --columns "sym:symbol, px:float"
+uqs job new tickfeed --publishes ticks --columns "sym:symbol, px:float"
 
 # bounded worker: source + worker + transform together
-uqs new-job fx_rates --kind backfill --dataset fx_rates \
+uqs job new fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
 
 # the same, reading a database over ODBC rather than a q process
-uqs new-job ledger --kind backfill --dataset ledger \
+uqs job new ledger --kind backfill --dataset ledger \
     --columns "sym:symbol, amt:float" --transport odbc
 
 # a second worker over that source, into its own dataset: the source is reused
-uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
+uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
     --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
 
 # normalizer: several tables carrying one fact, one canonical table out -
 # NAME is that table, and each source gets a .qetl.transform mapping and an example
-uqs new-job ticks --kind normalizer --subscribe-to quote,trades \
+uqs job new ticks --kind normalizer --subscribe-to quote,trades \
     --columns "source_time:timestamp, sym:symbol, px:float" --dry-run
 ```
 
@@ -66,12 +66,22 @@ example row, so the file loads; each mapping throws until written. Narrow each
 input to the columns its mapping reads, and replace each example with a real row
 and the canonical row it becomes.
 
+`--period` sets a feed's tick (default one second), or adds an `on_timer` to an
+etl, as markout and fx_positions have. For a backfill, `--partition SYM` scopes
+the worker to one slice of its dataset - the only way two workers can fill one
+dataset - and `--check` scaffolds a quality check that throws until written.
+
+To undo a scaffold, `uqs job remove NAME --dry-run` shows everything it would
+take back out, then run it without `--dry-run`. It refuses a job whose
+SCAFFOLDED markers are gone, and keeps any table or source something else still
+uses.
+
 `--procname` names the process (default `NAME1`, or `NAME_backfill1`), and
 `--start-with-all` puts a streaming job or normalizer in `uqs start all`. Leave
 that off unless the user asks: a new process in the default start counts against
 the licence's connection budget, and the profile tests pin the default set.
 
-After writing, `new-job` regenerates the derived files and, where q is
+After writing, `uqs job new` regenerates the derived files and, where q is
 installed, re-exports the contract surface. Without q it says so, and the
 `contract-surface` hook fails until `contract_surface.py export` is run.
 
@@ -107,12 +117,12 @@ So after scaffolding, the tree is in a known state:
 - `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
   every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is
   the to-do list: the handler, the test, the job's `note`, and the two below.
-- A new streaming job is in **no profile**, so `uqs start --profile` cannot
-  reach it and only `uqs start <name>` will. The scaffold says so; add it to one
-  in `python/uqs/src/uqs/model/profiles.py`, or to `UNPROFILED` with the reason
-  it belongs to no standing start set. `test_profiles.py` fails until one of the
-  two is true. Bounded workers are exempt - a backfill is triggered, not started
-  with the stack.
+- A new streaming job or normalizer is in **no profile** unless you said which:
+  `--profile NAME` adds it to one in `python/uqs/src/uqs/model/profiles.py`, and
+  `--unprofiled "REASON"` exempts it in `UNPROFILED`. Ask the user which - it is
+  a judgement about what runs together. Without either, `test_profiles.py` fails
+  until one is written. Bounded workers are exempt - a backfill is triggered,
+  not started with the stack.
 - For a job that defines a NEW table, the scaffold appends a SCAFFOLDED
   `.qcat.describe` line to `scripts/processes/uqs_catalog.q`. The description is
   for someone choosing a table, so it is yours to write. If the desk should not
@@ -209,7 +219,7 @@ Say this back to the user, because it is the part that surprises people:
   still a deliberate gate, and the scaffold appends the new table to it. The
   Python tests that used to pin every process and table (`test_core.py`,
   `test_schemas.py`) derive them from the registry and from that q list.
-- **No regeneration step.** `new-job` reruns
+- **No regeneration step.** `uqs job new` reruns
   `scripts/generate/generate_operational_docs.py` and
   `scripts/generate/generate_man_registry.py` itself.
 - **No hand-copied source for a second worker.** An existing source is reused

@@ -2,11 +2,13 @@
 
 Split from scaffold/jobs.py when adding the source transport took it past the
 400-line limit this package holds its modules to. The seam is the one
-`uqs new-job --kind` already draws: jobs.py plans a streaming job, this plans
+`uqs job new --kind` already draws: jobs.py plans a streaming job, this plans
 a backfill, and both share jobs.py's naming and registration helpers.
 """
 
 from __future__ import annotations
+
+import re
 
 from uqs.paths import SOURCE_DIR, TABLES_FILE, TEST_DIR, WORKER_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
@@ -29,6 +31,9 @@ from uqs.scaffold.templates import (
     worker_body,
 )
 
+#: A partition is a q symbol: `EURUSD, `binance_spot.
+_PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
+
 
 def bounded_worker(
     name: str,
@@ -41,6 +46,8 @@ def bounded_worker(
     reuse_source: bool = False,
     define_table: bool = True,
     transport: str = "ipc",
+    partition: str | None = None,
+    check: bool = False,
 ) -> ScaffoldPlan:
     """Plan a new bounded worker: its source, its worker and its test.
 
@@ -59,11 +66,21 @@ def bounded_worker(
     `transport` is how a new source is reached: `ipc` (a q process, the
     default) or `odbc` (a database, through `.qetl.io.odbc`). It shapes the
     source file, so it is refused for a source that is reused.
+
+    `partition` scopes the worker to one slice of its dataset: coverage is
+    kept per (dataset, partition), so it is the only way two workers can fill
+    one dataset. `check` scaffolds a quality check that fails a window on bad
+    rows - most of the tree's workers declare one.
     """
     _check_name(name, "worker name")
     src = source or name
     _check_name(src, "source name")
     _check_name(dataset, "dataset")
+    if partition is not None and not _PARTITION.match(partition):
+        raise UqsError(
+            f"--partition {partition!r} must be a q symbol - letters, digits and underscores, "
+            "e.g. EURUSD"
+        )
     worker = f"{name}_backfill"
     proc = procname or f"{name}_backfill1"
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
@@ -94,7 +111,10 @@ def bounded_worker(
             FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols, transport))
         )
     actions.append(
-        FileAction(WORKER_DIR / f"{worker}.q", worker_body(worker, src, dataset, width, proc))
+        FileAction(
+            WORKER_DIR / f"{worker}.q",
+            worker_body(worker, src, dataset, width, proc, partition=partition, check=check),
+        )
     )
     if define_table:
         actions += [
@@ -125,10 +145,13 @@ def bounded_worker(
             "without it the worker runs on the fixture, and warns that it is",
         ]
     notes.append("the window is half-open [from;to): >= on the lower bound, < on the upper")
-    notes.append(
-        "optional: a quality check that fails a window on bad rows (`check`) - see "
-        "quality_check in src/etl/workers/demo_deals_backfill.q"
-    )
+    if check:
+        notes.append(f"write .qpipe.job.{worker}.quality_check - every window fails until you do")
+    else:
+        notes.append(
+            "optional: a quality check that fails a window on bad rows - rerun with --check, "
+            "or see quality_check in src/etl/workers/demo_deals_backfill.q"
+        )
     notes.append(_STACK_PAGE_NOTE.format(proc=proc))
     if define_table:
         actions += catalog_actions(dataset, cols, notes)

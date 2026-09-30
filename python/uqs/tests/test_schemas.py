@@ -22,7 +22,7 @@ import pytest
 from uqs.model import schemas
 
 #: The q suite's own list of tickerplant tables - the one hand-kept list,
-#: which `uqs new-job` appends to. Read rather than copied: a second copy
+#: which `uqs job new` appends to. Read rather than copied: a second copy
 #: here meant every new table was two edits, and the two could disagree.
 #: Parsed by splitting the `expected:` symbol list, deliberately NOT with the
 #: `schemas` regex under test, so this remains an independent check of it.

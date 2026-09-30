@@ -42,6 +42,7 @@ from uqs.cli import summary  # noqa: F401
 from uqs.cli import inspect  # noqa: F401
 from uqs.cli import config  # noqa: F401
 from uqs.cli import create  # noqa: F401
+from uqs.cli import remove  # noqa: F401
 from uqs.cli import install  # noqa: F401
 from uqs.cli import external  # noqa: F401
 

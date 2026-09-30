@@ -1,4 +1,4 @@
-"""Tests for `uqs install-jobs` (stack/install.py, cli/install.py).
+"""Tests for `uqs job install` (stack/install.py, cli/install.py).
 
 Every test builds a fake repository root and a sidecar under tmp_path, so
 nothing here writes into this tree; the CLI tests patch `_paths` to point at
@@ -144,7 +144,7 @@ def cli_repo(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _run(*args: str, stdin: str = "") -> tuple[int, str]:
-    result = CliRunner().invoke(cli.app, ["install-jobs", *args], input=stdin)
+    result = CliRunner().invoke(cli.app, ["job", "install", *args], input=stdin)
     return result.exit_code, result.output
 
 
