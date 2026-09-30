@@ -18,12 +18,13 @@ One per layer. `all` is every lane except `coverage` and the two that reach
 outside the process, so it is what a release runs and not what an edit runs -
 run the lane matching the layer you changed.
 
-```
+````
 scripts/test.py q-unit              # deterministic qUnit suite
 scripts/test.py q-order             # the same suite, reversed and shuffled
 scripts/test.py q-metatables-hdb    # metatable queries against a temporary HDB
 scripts/test.py q-examples          # every documented @eg runs, in its own process
 scripts/test.py q-scripts           # every worked example under scripts/examples/
+scripts/test.py q-docs              # the ```q blocks in docs/ marked to run
 scripts/test.py q-backfill-process  # bounded lifecycle, real filesystem, child processes
 scripts/test.py q-two-instances     # a second kdb+ process, data moved across the wire
 scripts/test.py python              # orchestrator and frontend
@@ -32,7 +33,7 @@ scripts/test.py coverage            # the same, q and Python together
 scripts/test.py smoke --targets HOST:PORT --tables TABLE:COL,COL   # live external metadata check
 scripts/test.py stack-smoke         # restart the fleet, watch what it publishes
 scripts/test.py all                 # every lane except coverage, smoke and stack-smoke
-```
+````
 
 They are separate because they prove different things, and five of them cannot
 prove what they claim if folded into `q-unit`:
@@ -132,9 +133,49 @@ not mean the q runtime tests passed.
 Run `scripts/test.py q-unit` and `scripts/test.py q-examples` locally before
 merging q changes. The hook, CI and the Python IPC fixtures all find q by the
 same rule `scripts/test.py` applies, which is TorQ's: `$QCMD` if set, otherwise
-`q` on `PATH`, and nothing else - no `~/.kx/bin/q` and no PeachQ fallback. If
-the runner later supplies one, CI runs the hook automatically; a failing
-interpreter or test is a failure, not a reason to skip it.
+`q` on `PATH`, and nothing else - no `~/.kx/bin/q` and no PeachQ fallback
+(PeachQ runs only where it is named, below). If the runner later supplies one,
+CI runs the hook automatically; a failing interpreter or test is a failure, not
+a reason to skip it.
+
+### What CI does run on q: PeachQ
+
+The one exception is PeachQ, an MIT-licensed q that a hosted runner can download
+where it cannot license KDB-X. CI installs a pinned release, checked against its
+published sha256, beside the tree and **not** on `PATH`. So every step above
+still finds no q, and nothing it does can pass for a KDB-X run. Two steps then
+name it explicitly, with `UQF_Q_IMPL=peachq` and `QCMD`:
+
+- **`q-docs` on PeachQ, blocking.** This runs every ```` ```q ```` block in the
+  docs that is marked to run (see below).
+- **`q-unit` on PeachQ, informational.** It never fails the build. The job
+  summary says how far PeachQ and the suite agree, which is not a verdict on the
+  tree.
+
+## Doc examples
+
+A ```` ```q ```` block in the docs is a claim that it runs. Most cannot run on
+their own: they need a stack, an HDB or ODBC, or they are fragments of a larger
+file. So a block opts in with one HTML comment directly above its fence, which
+renders as nothing:
+
+```
+<!-- q-example: run -->          run the block; any error fails
+<!-- q-example: transcript -->   run each `q)` line; one output line after it
+                                 is a q literal the result must match
+<!-- q-example: run kdbx-only: REASON -->   KDB-X only, with why not PeachQ
+```
+
+A document's marked blocks run in **one** q process, in order, the way a reader
+types them. A later block may therefore use what an earlier one defined. Each
+session loads `src/init.q` first, plus the ETL stack when a block names `.qetl`
+or `.qpipe`. `python3 scripts/dev/doc_examples.py` lists what is marked. The
+Python lane checks every marker without q, so a typo'd mode or a marker adrift
+from its fence fails there.
+
+A block that runs on KDB-X but not on PeachQ is marked `kdbx-only` with the
+reason. It is never left unmarked to make CI green: an unmarked block is one
+nobody claims runs.
 
 The local branch-name and protected-branch hooks are excluded in CI because PR
 checkout can be detached and pushes to `master` are expected. Every other hook

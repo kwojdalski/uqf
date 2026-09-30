@@ -31,6 +31,7 @@ one idea:
 
 > the shortest path **excluding the direct leg** is the synthetic route
 
+<!-- q-example: transcript -->
 ```q
 q) .qfwd.ccy_shortest_path[`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY except `EURJPY;`EUR;`JPY]
 `EURUSD`USDJPY
