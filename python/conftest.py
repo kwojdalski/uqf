@@ -26,10 +26,10 @@ def find_q_binary() -> tuple[str, dict[str, str]]:
     """The q interpreter, by the rule scripts/test.py applies.
 
     $QCMD if set, otherwise `q` on PATH - TorQ's rule, through
-    uqs.paths.q_interpreter. Skips the calling test when there is none,
+    uqs.interpreter.q_interpreter. Skips the calling test when there is none,
     saying how to choose one.
     """
-    from uqs.paths import q_interpreter
+    from uqs.interpreter import q_interpreter
 
     env = os.environ.copy()
     q = q_interpreter(env)

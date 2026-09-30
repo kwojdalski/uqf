@@ -16,6 +16,7 @@ that nothing can read, because it has no slot left to ACCEPT the query.
 from __future__ import annotations
 
 from uqs.logger import get_logger
+from uqs.model import profiles
 from uqs.model.pipeline_edges import INBOUND_RESERVE, LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsPaths
 
@@ -88,7 +89,7 @@ def _vendored_monitor_connections(paths: UqsPaths) -> list[str]:
 
 
 def monitor_connection_plan(
-    connections: list[str], rows: list[dict[str, str]]
+    connections: list[str], rows: list[dict[str, str]], limit: int | None = LICENCE_CONNECTION_LIMIT
 ) -> tuple[list[str], list[str]]:
     """Trim monitor1's subscriptions to fit its connection budget.
 
@@ -106,13 +107,18 @@ def monitor_connection_plan(
     proctypes in MONITOR_CONNECTION_SACRIFICE_ORDER until the rest fit. Only
     processes that actually start are counted, for the same reason the plant
     budget counts them: a declared-but-stopped process holds no handle.
+
+    `limit` is the licence's cap, profiles.licence_limit() at the call site;
+    None - PeachQ, which has no cap - keeps every subscription.
     """
+    if limit is None:
+        return list(connections), []
     startable = [r for r in rows if r.get("startwithall") == "1"]
     per_type: dict[str, int] = {}
     for row in startable:
         per_type[row.get("proctype", "")] = per_type.get(row.get("proctype", ""), 0) + 1
 
-    allowance = LICENCE_CONNECTION_LIMIT - INBOUND_RESERVE
+    allowance = limit - INBOUND_RESERVE
     kept = list(connections)
     dropped: list[str] = []
 
@@ -136,7 +142,7 @@ def monitor_connection_plan(
             "Heartbeat coverage will be partial and monitor1 may be unqueryable.",
             projected(),
             allowance,
-            LICENCE_CONNECTION_LIMIT,
+            limit,
             INBOUND_RESERVE,
         )
     return kept, dropped
@@ -156,7 +162,7 @@ def monitor_connection_extras(paths: UqsPaths, rows: list[dict[str, str]]) -> st
     for proctype in MONITOR_EXTRA_CONNECTIONS:
         if proctype not in connections:
             connections.append(proctype)
-    kept, dropped = monitor_connection_plan(connections, rows)
+    kept, dropped = monitor_connection_plan(connections, rows, profiles.licence_limit())
     if dropped:
         # DEBUG, not INFO: process.csv is composed several times per command,
         # so at INFO this printed three times above every `summary` table. It

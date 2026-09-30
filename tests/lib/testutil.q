@@ -128,7 +128,7 @@ etl_declaration_names:{[dir]
 
 // The q command a runner starts its child processes with: $QCMD if set,
 // otherwise `q`, resolved by the shell on PATH. TorQ's rule (torq.sh), and
-// uqs.paths.q_command's (#414); scripts/test.py passes QCMD on to every lane
+// uqs.interpreter.q_command's (#414); scripts/test.py passes QCMD on to every lane
 // it runs, so the children run the binary the runner itself was started with.
 q_interpreter:{[] $[""~getenv `QCMD; "q"; getenv `QCMD]}
 

@@ -63,13 +63,35 @@ vendored TorQ, which has its own compatibility surface.
 
 Every entry point, the running stack included, finds q by TorQ's own rule:
 `$QCMD` if set, otherwise `q` on `PATH` --- the default `torq.sh` itself
-applies. There is no second fallback on top of it (no `~/.kx/bin/q`, no PeachQ):
-one rule, so the stack, its HDB and the test lanes cannot run different
-binaries. To choose an interpreter, set `$QCMD` and `$QHOME`:
+applies. There is no second fallback on top of it (no `~/.kx/bin/q`, and no
+PeachQ unless chosen - see below): one rule, so the stack, its HDB and the test
+lanes cannot run different binaries. To choose an interpreter, set `$QCMD` and
+`$QHOME`:
 
 ```
 QCMD=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
 ```
+
+**PeachQ is opt-in.** [PeachQ](https://peachq.org) is an MIT-licensed q
+interpreter this tree once ran on. It is supported again only as a choice made
+out loud: set `UQF_Q_IMPL=peachq` and point `QCMD` at its binary.
+
+```
+UQF_Q_IMPL=peachq QCMD=/path/to/peachq/q scripts/test.py q-unit
+```
+
+`peachq` without `QCMD` is refused, since a bare `q` on `PATH` is never taken to
+be PeachQ. `scripts/test.py` also asks the binary which implementation it is
+before any lane runs, and refuses a mismatch either way: a PeachQ binary without
+the opt-in, or a KDB-X one declared as PeachQ. A green run therefore always says
+which interpreter made it green. What passes on PeachQ is not verified here;
+KDB-X stays the reference.
+
+What PeachQ buys is scale: it has no connection licence, so the community
+edition's 16-connection cap does not apply. On `UQF_Q_IMPL=peachq` a start is
+held to no connection budget - `uqs start --profile all` starts,
+`uqs list profiles` shows `no cap`, and monitor1 watches every process instead
+of giving some up. `UQS_LICENCE_CONNECTIONS`, if set, still wins.
 
 Run everything from the repository root - the load scripts use paths relative to
 it (e.g. `src/foundation/stats.q`).

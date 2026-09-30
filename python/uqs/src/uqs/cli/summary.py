@@ -31,8 +31,7 @@ from uqs.cli.shared import (
 )
 from uqs.cli.summary_graph import attach_graph_columns
 from uqs.logger import configure_logging
-from uqs.model import dependencies
-from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
+from uqs.model import dependencies, profiles
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing, probe, runtime, startup
@@ -331,17 +330,22 @@ def summary(
         # and not the common one. Saturation looks identical from here and is
         # what actually happens on a full stack: monitor1 opens a handle to
         # every process it monitors, the licence caps a q process at
-        # LICENCE_CONNECTION_LIMIT concurrent connections, and once it is at
+        # profiles.licence_limit() concurrent connections, and once it is at
         # the cap it cannot accept the inbound handle this query needs - so a
         # monitor that is running perfectly, and collecting heartbeats
         # correctly, is unreachable. Telling the reader to restart it then
         # sends them to fix a process that has nothing wrong with it.
         monitor_up = any(r["Process"] == MONITOR_PROCNAME and r["Status"] == "up" for r in rows)
+        limit = profiles.licence_limit()
         cause = (
-            "It is up, so it is most likely at its connection cap "
-            f"({LICENCE_CONNECTION_LIMIT} on this licence) and cannot accept "
-            "another handle - check `err_monitor1.log`, which will still be "
-            "recording the heartbeats it collected"
+            (
+                "It is up, so it is most likely at its connection cap "
+                f"({limit} on this licence) and cannot accept another handle"
+                if limit is not None
+                else "It is up but did not answer, and PeachQ has no connection cap"
+            )
+            + " - check `err_monitor1.log`, which will still be recording the "
+            "heartbeats it collected"
             if monitor_up
             else "It is not running - it starts with the stack, so it died or was "
             "stopped. Run `uqs start monitor1`"

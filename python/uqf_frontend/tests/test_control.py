@@ -378,7 +378,7 @@ _FAKE_QCMD = sys.executable
 
 def _patch_bootstrap(monkeypatch) -> None:
     from uqs import paths as stack_paths
-    from uqs.paths import q_interpreter
+    from uqs.interpreter import q_interpreter
     from uqs.stack import runtime
 
     # Assert the stand-in before handing it over. Without this the failure

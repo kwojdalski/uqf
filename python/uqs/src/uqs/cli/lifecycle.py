@@ -84,8 +84,8 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     lets one process hold handles for.
 
     The licence caps a q process at `profiles.licence_limit()` concurrent
-    connections - the community licence's 16 unless UQS_LICENCE_CONNECTIONS
-    says otherwise. Every streaming job opens a handle to stp1 and monitor1
+    connections - 16 on the community licence, none on PeachQ, unless
+    UQS_LICENCE_CONNECTIONS says. Every streaming job opens a handle to stp1 and monitor1
     opens one per process it watches, so past that count the cap - not the
     configuration - decides what works. The plant does not complain: it
     resets the extra connection, the process wedges in its retry loop, and
@@ -110,7 +110,7 @@ def _warn_about_connection_cap(procs: str, port: int) -> None:
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
         log.debug("connection-cap warning skipped: {}", exc)
         return
-    if total <= limit:
+    if limit is None or total <= limit:
         return
     console.print(
         f"[yellow]warning[/] this start leaves {total} processes running, past the "
@@ -160,7 +160,7 @@ def _resolve_profiles(names: str) -> str:
         _die(UqsError(problem))
     console.print(
         f"[dim]profile {', '.join(wanted)}: {len(resolved)} process(es), "
-        f"{profiles.plant_slots(resolved)}/{profiles.allowance()} plant slots[/]"
+        f"{profiles.plant_slots(resolved)}/{profiles.allowance() or 'no cap'} plant slots[/]"
     )
     return " ".join(resolved)
 

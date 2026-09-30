@@ -25,6 +25,8 @@ _spec.loader.exec_module(runner)
 @pytest.fixture
 def ran(monkeypatch) -> list[tuple[str, str, tuple[str, ...]]]:
     calls: list[tuple[str, str, tuple[str, ...]]] = []
+    # The interpreter check starts q; these tests are about the lanes' flags.
+    monkeypatch.setattr(runner, "check_interpreter", lambda env=None: None)
     monkeypatch.setattr(
         runner, "_q", lambda lane, script, *args, **_kw: calls.append((lane, script, args))
     )

@@ -61,6 +61,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterable
 
+from uqs.interpreter import PEACHQ, q_impl
 from uqs.model.dependencies import (
     EXTERNAL_PRODUCERS,
     inputs_by_process,
@@ -214,8 +215,13 @@ UNPROFILED: dict[str, str] = {
 LICENCE_CONNECTIONS_ENV = "UQS_LICENCE_CONNECTIONS"
 
 
-def licence_limit() -> int:
-    """Concurrent connections a q process may hold on this machine's licence.
+def licence_limit() -> int | None:
+    """Concurrent connections a q process may hold on this machine's licence,
+    or None for no cap.
+
+    None when the interpreter is PeachQ (`UQF_Q_IMPL=peachq`), which has no
+    connection licence - the reason to run it for a fleet past sixteen. An
+    explicit UQS_LICENCE_CONNECTIONS still wins, as a budget chosen on purpose.
 
     Read on every call. A value that is not a whole number, or that leaves no
     slot once INBOUND_RESERVE is held back, is refused rather than ignored: a
@@ -223,7 +229,7 @@ def licence_limit() -> int:
     """
     raw = os.environ.get(LICENCE_CONNECTIONS_ENV, "").strip()
     if not raw:
-        return LICENCE_CONNECTION_LIMIT
+        return None if q_impl() == PEACHQ else LICENCE_CONNECTION_LIMIT
     try:
         limit = int(raw)
     except ValueError:
@@ -238,9 +244,10 @@ def licence_limit() -> int:
     return limit
 
 
-def allowance() -> int:
-    """Plant slots a profile may hold on this machine's licence."""
-    return licence_limit() - INBOUND_RESERVE
+def allowance() -> int | None:
+    """Plant slots a profile may hold on this machine's licence; None for no cap."""
+    limit = licence_limit()
+    return None if limit is None else limit - INBOUND_RESERVE
 
 
 def _procnames() -> set[str]:
@@ -342,7 +349,7 @@ def over_budget(names: Iterable[str]) -> str | None:
     wanted = sorted(names)
     held = plant_slots(resolve(wanted))
     slots = allowance()
-    if held <= slots:
+    if slots is None or held <= slots:
         return None
     return (
         f"profile(s) {', '.join(wanted)} need {held} tickerplant connections, "

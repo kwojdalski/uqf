@@ -86,7 +86,7 @@ def _kdbx() -> tuple[str, dict[str, str]]:
     exported from anything else would be a quietly incomplete contract - the
     worst kind for this purpose.
     """
-    from uqs.paths import q_interpreter
+    from uqs.interpreter import q_interpreter
 
     env = os.environ.copy()
     q = q_interpreter(env)

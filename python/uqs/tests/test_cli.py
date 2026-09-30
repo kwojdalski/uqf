@@ -601,6 +601,7 @@ def test_a_start_past_the_licence_cap_warns(monkeypatch):
     and it does so silently: the extra handle is reset, the process wedges in
     its retry loop, and `summary` still reports it `up` because that is a PID
     check."""
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     over = {f"p{i}" for i in range(LICENCE_CONNECTION_LIMIT + 1)}
     _patch(monkeypatch, alive, "running", result=over)
     _patch(monkeypatch, runtime, "start", result=Completed())
@@ -1660,6 +1661,7 @@ def test_a_profile_over_the_cap_is_refused_rather_than_warned(monkeypatch):
     """The asymmetry with a positional start: a profile is a set this tree
     named, so one that cannot run is reported here rather than discovered when
     the plant resets a handle and the process wedges while reporting `up`."""
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     rec = _patch(monkeypatch, runtime, "start", result=Completed())
     result = runner.invoke(cli.app, ["start", "--profile", "fx,arbitrage"])
     assert result.exit_code != 0
@@ -1693,7 +1695,21 @@ def test_a_positional_start_over_the_cap_still_only_warns(monkeypatch):
     assert rec.calls, "it was started"
 
 
+def test_on_peachq_a_big_start_does_not_warn_and_profiles_have_no_cap(monkeypatch):
+    """PeachQ has no connection licence: past sixteen is what it is for."""
+    monkeypatch.setenv("UQF_Q_IMPL", "peachq")
+    monkeypatch.setenv("QCMD", "/opt/peachq/q")
+    over = {f"p{i}" for i in range(LICENCE_CONNECTION_LIMIT + 5)}
+    _patch(monkeypatch, alive, "running", result=over)
+    _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "rdb1"])
+    assert result.exit_code == 0
+    assert "past the" not in result.stdout
+    assert "no cap" in runner.invoke(cli.app, ["list", "profiles"]).output
+
+
 def test_list_profiles_shows_the_slot_count(monkeypatch):
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     result = runner.invoke(cli.app, ["list", "profiles"])
     assert result.exit_code == 0
     assert "arbitrage" in result.output

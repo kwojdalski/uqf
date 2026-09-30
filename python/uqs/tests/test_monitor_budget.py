@@ -97,3 +97,9 @@ def test_an_empty_connection_list_stays_empty():
     settings file, and that must remain a no-op rather than becoming a
     truncation."""
     assert monitor_connection_plan([], _rows(rdb=40)) == ([], [])
+
+
+def test_no_cap_keeps_every_subscription():
+    """On PeachQ (licence_limit() None) monitor1 watches the whole fleet."""
+    connections = ["rdb", "metrics", "sortworker", "reporter"]
+    assert monitor_connection_plan(connections, _rows(rdb=40), None) == (connections, [])

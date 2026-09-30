@@ -25,6 +25,7 @@ from uqs.cli.shared import (
     console,
     job_app,
 )
+from uqs.interpreter import q_interpreter
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import (
@@ -36,7 +37,6 @@ from uqs.paths import (
     WORKER_DIR,
     UqsError,
     UqsPaths,
-    q_interpreter,
 )
 from uqs.scaffold import jobs, normalizer, worker, write
 
