@@ -43,13 +43,13 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     is never touched, and a table or column a partition holds that
     database.q no longer declares is left alone - that is history, and
     deleting history is not this function's business. A column whose
-    declared TYPE changed is reported by `uqs hdb-check`, not
+    declared TYPE changed is reported by `uqs data hdb-check`, not
     repaired here.
 
     NEVER FAILS A BOOTSTRAP. Every `uqs` command bootstraps, so a
     problem here - no q on the path, an HDB mid-write, a permissions
     fault - must not stop an operator stopping the stack or reading a log.
-    It is reported and stepped over; `uqs hdb-check` says the same
+    It is reported and stepped over; `uqs data hdb-check` says the same
     thing on demand, and the smoke lane says it about a running stack.
     """
     hdb_root = paths.torqdata / "hdb"
@@ -80,7 +80,7 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     if result.returncode != 0:
         log.warning(
             "could not fill HDB partitions ({}) - a query spanning every table "
-            "may fail until `uqs hdb-check` is run: {}",
+            "may fail until `uqs data hdb-check` is run: {}",
             result.returncode,
             (result.stderr or result.stdout).strip()[:300],
         )
@@ -110,7 +110,7 @@ def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
 
     # Extend (never edit in place) the vendored process.csv with uqf's own
     # extra processes (fxfeed1) and any process_overrides.csv fields set via
-    # set_process_config()/`config-set`/uqs_set_config.
+    # set_process_config()/`config set`/uqs_set_config.
     overrides = _read_overrides(paths)
     rows = _base_process_rows(paths)
     for row in rows:
@@ -301,7 +301,7 @@ def query(
 
 def export_table(rows: Any, path: Path) -> None:
     """Write *rows* to *path* as CSV or Parquet, format inferred from the
-    file extension. *rows* is either a list[dict] (list_items/config-get's
+    file extension. *rows* is either a list[dict] (list_items/config get's
     own shape) or a polars.DataFrame (what kola's query() returns for a
     table-shaped q result - kola is a Polars interface to q, so this is
     already the native return type for `select ... from t`, no conversion

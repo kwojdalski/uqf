@@ -49,7 +49,7 @@ def test_process_names_come_from_the_registry_not_a_list_of_their_own():
     assert complete("uqs start ") == ["all", *registry_procnames()]
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "print", "logs", "multitail"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "logs"])
 def test_every_command_taking_processes_completes_them(command):
     assert "posbook1" in complete(f"uqs {command} pos")
 
@@ -96,18 +96,20 @@ def test_sort_offers_the_columns_of_the_kind_already_typed():
 
 
 def test_config_fields_complete_after_the_process():
-    assert complete("uqs config-get rdb1 ") == list(PROCESS_CSV_FIELDS)
-    assert complete("uqs config-set rdb1 ") == list(PROCESS_CSV_FIELDS)
+    assert complete("uqs config get rdb1 ") == list(PROCESS_CSV_FIELDS)
+    assert complete("uqs config set rdb1 ") == list(PROCESS_CSV_FIELDS)
 
 
 def test_a_port_is_offered_with_the_process_it_belongs_to():
     ports = listing.configured_ports(stack_paths.default_paths())
     assert ports["fxpositions1"] in complete("uqs query --port ")
+    assert "fxpositions1" in complete("uqs query --proc ")
 
 
 def test_fixed_choices_complete():
     assert complete("uqs logs --level W") == ["WARNING"]
-    assert complete("uqs multitail --stream ") == ["out", "err", "both"]
+    assert complete("uqs logs --multitail --stream ") == ["out", "err", "both"]
+    assert complete("uqs feed start ") == ["databento", "kafka", "crypto", "crypto-fills"]
     assert complete("uqs job new x --kind ") == ["streaming", "backfill", "normalizer"]
 
 

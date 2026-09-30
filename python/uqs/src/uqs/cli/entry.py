@@ -32,7 +32,8 @@ from __future__ import annotations
 # off for it: the fleet first, the bounded jobs that run over data it has
 # already written, then the summary of it, then what reads it, then what writes
 # code, then the external recorders. Alphabetical would open the help with
-# `config-get`.
+# `backfill`. The groups (`data`, `config`, `job`, `feed`) list after every flat
+# command, in the order their modules register them.
 #
 # isort: off
 from uqs.cli import lifecycle  # noqa: F401

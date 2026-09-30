@@ -52,11 +52,11 @@ log = get_logger(__name__)
 #: tree are.
 EXTERNAL_PRODUCERS: dict[str, str] = {
     "databento_mbp10": (
-        "the external Databento feed handler (`uqs databento-feed start`) "
+        "the external Databento feed handler (`uqs feed start databento`) "
         "or a `databento_backfill1` run"
     ),
     "kafka_client_flow": (
-        "the external Kafka consumer (`uqs kafka start`). There is no backfill "
+        "the external Kafka consumer (`uqs feed start kafka`). There is no backfill "
         "alternative: replaying a topic from offset 0 is Kafka's own answer to "
         "that, and it needs the same broker"
     ),

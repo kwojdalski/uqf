@@ -8,15 +8,15 @@ TorQ is not replaced. The tickerplant, the RDB/WDB/HDB, discovery and the
 gateway are TorQ's, vendored under `lib/torq` and never edited. uqf changes what
 sits *around* those processes:
 
-  | Question               | Plain TorQ                                                                    | uqf on TorQ                                                                                                                                                             |
-  | ---                    | ---                                                                           | ---                                                                                                                                                                     |
-  | A unit of work         | a process: a `process.csv` row naming its own q script                        | a job: a declaration in `src/etl/` (`.qetl.job.stream.define`, `.qetl.job.bounded.define`), run by one generic runner script picked by process name                     |
-  | Configuration          | edit `process.csv` and the config directories                                 | `lib/torq` is never edited; `process.csv` and `database.q` are regenerated on every `uqs` command from the declarations and `uqs_tables.q`                              |
-  | Who knows TorQ exists  | every process - code is written against `.servers`, `.u.upd`, `.lg`           | only `.qtorq`, in `scripts/`; a gate fails the build if anything under `src/` reaches for it                                                                            |
-  | History and backfills  | replay a tickerplant log, or write your own loader                            | bounded workers (`.qetl.job.bounded`): a window range, written through `.qetl.io`, recorded in a coverage ledger (`.qetl.coverage`) so a re-run redoes only gaps        |
-  | A table on the plant   | define it in `database.q`; `.u.upd` onto an undefined one drops rows silently | defined from what jobs declare they publish; a job refuses to start when a table it publishes is missing                                                                |
-  | Adding one             | write the script, add the row, pick a free port                               | `uqs job new` scaffolds it; no registration step - the port, the process row and the job graph are derived                                                              |
-  | Operating it           | `torq.sh start`, `stop`, `summary`, per process                               | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `conn`, `summary`; `.qetl.log` adds DBG and key=value fields to `.lg`                      |
+  | Question               | Plain TorQ                                                                    | uqf on TorQ                                                                                                                                                                     |
+  | ---                    | ---                                                                           | ---                                                                                                                                                                             |
+  | A unit of work         | a process: a `process.csv` row naming its own q script                        | a job: a declaration in `src/etl/` (`.qetl.job.stream.define`, `.qetl.job.bounded.define`), run by one generic runner script picked by process name                             |
+  | Configuration          | edit `process.csv` and the config directories                                 | `lib/torq` is never edited; `process.csv` and `database.q` are regenerated on every `uqs` command from the declarations and `uqs_tables.q`                                      |
+  | Who knows TorQ exists  | every process - code is written against `.servers`, `.u.upd`, `.lg`           | only `.qtorq`, in `scripts/`; a gate fails the build if anything under `src/` reaches for it                                                                                    |
+  | History and backfills  | replay a tickerplant log, or write your own loader                            | bounded workers (`.qetl.job.bounded`): a window range, written through `.qetl.io`, recorded in a coverage ledger (`.qetl.coverage`) so a re-run redoes only gaps                |
+  | A table on the plant   | define it in `database.q`; `.u.upd` onto an undefined one drops rows silently | defined from what jobs declare they publish; a job refuses to start when a table it publishes is missing                                                                        |
+  | Adding one             | write the script, add the row, pick a free port                               | `uqs job new` scaffolds it; no registration step - the port, the process row and the job graph are derived                                                                      |
+  | Operating it           | `torq.sh start`, `stop`, `summary`, per process                               | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `query --proc`, `summary`; `.qetl.log` adds DBG and key=value fields to `.lg`                      |
 
 The slide version is [the deck](presentation/uqf.qmd); why the framework is
 shaped this way is [the pipeline
@@ -76,9 +76,9 @@ processes it therefore needs running. A job that is `up` but idle is usually a
 job whose inputs nobody is producing, and this column says so.
 
 **2. What does its log say?** `uqs logs <process> -f` follows it
-(`uqs multitail <process>` gives one pane per log file, and `uqs up <process>`
-starts it and streams its log in the foreground). Three lines tell you where
-rows stop:
+(`uqs logs --multitail <process>` gives one pane per log file, and
+`uqs up <process>` starts it and streams its log in the foreground). Three lines
+tell you where rows stop:
 
   | Last line you see             | Means                                                            |
   | ---                           | ---                                                              |
@@ -92,8 +92,8 @@ rows stop:
 per process on purpose: switched on fleet-wide, it buries the one worker you are
 looking at.
 
-**4. Look inside the running process.** `uqs conn <process>` opens a qcon
-session on it by name. From there,
+**4. Look inside the running process.** `uqs query --proc <process>` opens a
+qcon session on it by name. From there,
 `.qetl.job.stream.def `<job>` is its declaration, `.qpipe.job.<job>` holds its state, and `.qtorq.received` / `.qtorq.published\`
 count the rows in and out per table.
 
@@ -112,7 +112,7 @@ heartbeats. All three live in the status directory, `$UQFSTATUSDIR`.
 
 **Query errors from the HDB** such as
 `./2026.01.07/arbitrage. OS reports: No such file or directory` mean a partition
-is missing a table or column: `uqs hdb-check` names which.
+is missing a table or column: `uqs data hdb-check` names which.
 
 **Before tracing q by hand**, run
 [`qlinter`](https://github.com/kwojdalski/q-lint) on the file. Several of this

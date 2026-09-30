@@ -6,10 +6,10 @@ delivered. Starting, stopping and inspecting the stack as a whole is in [running
 the uqf stack](../guides/uqs.md).
 
 ```
-uqs kafka start                                      # localhost:9092, uqf.client.flow
-uqs kafka start --brokers broker:9092 --topic fx.deals --group uqf-kafka-flow
-uqs kafka status
-uqs kafka stop
+uqs feed start kafka                                      # localhost:9092, uqf.client.flow
+uqs feed start kafka --brokers broker:9092 --topic fx.deals --group uqf-kafka-flow
+uqs feed status kafka
+uqs feed stop kafka
 ```
 
 Needs a reachable broker and `confluent-kafka`, and **neither ships with this

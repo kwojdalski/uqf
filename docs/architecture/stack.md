@@ -98,7 +98,7 @@ holds a live Databento subscription and publishes raw MBP-10 onto
 `databento_mbp10`, and `databento1` folds it into `databento_book` with the same
 `.qetl.transform` transform the ODBC backfill applies. The handler is not a
 process here, for the reason cryptorust is not: a q process cannot hold that
-subscription, so it is started by `uqs databento start` rather than by
+subscription, so it is started by `uqs feed start databento` rather than by
 `torq.sh`.
 
 `kafka_flow1` is the second subscriber fed from outside q, and it exists to

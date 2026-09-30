@@ -39,7 +39,7 @@ describe[`config_change]:
 describe[`cross_arbitrage]:
     "Synthetic-versus-direct cross-currency opportunities: one pair priced against a route through others (EURJPY against EURUSD x USDJPY). route carries the legs, skew how far apart they were quoted, fully_filled whether the notional can be worked through every leg. Like arbitrage, select the latest row per pair before filtering active";
 describe[`crypto_book]:
-    "Live venue order books published by cryptorust's kdb-market-data-recorder (uqs crypto start): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. Two clocks: source_time is the venue's own stamp and time is the tickerplant's, stamped on receipt. Read source_time for when the market was in this state, and their difference for how long it took to get here";
+    "Live venue order books published by cryptorust's kdb-market-data-recorder (uqs feed start crypto): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. Two clocks: source_time is the venue's own stamp and time is the tickerplant's, stamped on receipt. Read source_time for when the market was in this state, and their difference for how long it took to get here";
 describe[`crypto_sim_fills]:
     "Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from";
 describe[`crypto_trades]:

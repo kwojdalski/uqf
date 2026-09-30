@@ -25,8 +25,8 @@ started with another; here the running plant's `-stackid` IS the answer, so
 WHAT IS DELIBERATELY NOT DECIDED HERE. `emptytables`, `clean`, `sortafterreplay`
 and the rest keep TorQ's defaults, which means the replay EMPTIES the tables it
 is about to write in the partitions it touches. That is what a tickerplant
-replay is, and changing it under a friendlier default would make `uqs replay
-tplog` something other than the thing it wraps - so the flags are passed
+replay is, and changing it under a friendlier default would make `uqs data
+replay` something other than the thing it wraps - so the flags are passed
 through instead, and `--dry-run` exists to show what a run would do first.
 """
 
@@ -148,7 +148,7 @@ def resolve_plant(procname: str | None = None, timeout: float | None = None) -> 
         raise UqsError(
             "no tickerplant is running, so there is nothing to take a log directory "
             "from - start one with `uqs start stp1`, or name the log yourself with "
-            "`uqs replay tplog --dir <path>`"
+            "`uqs data replay --dir <path>`"
         )
     if len(plants) > 1:
         names = ", ".join(p.procname for p in plants)

@@ -4,7 +4,7 @@ A live market-data feed: an external Python handler publishes raw MBP-10 rows,
 and `databento1` folds them into the book shape. Starting, stopping and
 inspecting the stack as a whole is in [running the uqf stack](../guides/uqs.md).
 
-`uqs databento start`/`stop`/`status` subscribe to
+`uqs feed start databento`/`stop`/`status` subscribe to
 [Databento](https://databento.com) and stream MBP-10 into this stack. It is the
 live counterpart to the ODBC backfill in
 [`new-pipeline.md`](../guides/new-pipeline.md): same vendor, same schema, same
@@ -12,10 +12,10 @@ fold - the difference is only whether the rows arrive from a historical query or
 a subscription.
 
 ```
-uqs databento start                                  # XNAS.ITCH, AAPL/MSFT
-uqs databento start --dataset XNAS.ITCH --symbols AAPL,TSLA
-uqs databento status
-uqs databento stop
+uqs feed start databento                                  # XNAS.ITCH, AAPL/MSFT
+uqs feed start databento --dataset XNAS.ITCH --symbols AAPL,TSLA
+uqs feed status databento
+uqs feed stop databento
 ```
 
 Needs `$DATABENTO_API_KEY` (Databento's own variable, so an existing export

@@ -5,7 +5,7 @@ THE CONSTRAINT THIS EXISTS FOR. The licence caps a q process at
 held back for ad-hoc handles, leaving fourteen tickerplant slots. The default
 start holds thirteen. So the arbitrage chain - four processes - cannot run
 without first stopping something, and the only dial was
-`uqs config-set <proc> startwithall 0/1`: one process at a time, persisted to
+`uqs config set <proc> startwithall 0/1`: one process at a time, persisted to
 disk, easy to forget you changed.
 
 Past the cap nothing complains. The plant RESETS the extra connection, the
@@ -191,11 +191,11 @@ NEEDS_LARGER_LICENCE: dict[str, str] = {
 UNPROFILED: dict[str, str] = {
     "databento1": (
         "a live external feed - its rows come from the Databento handler "
-        "(`uqs databento-feed start`), so it is started with that or not at all"
+        "(`uqs feed start databento`), so it is started with that or not at all"
     ),
     "kafka_flow1": (
         "a live external feed - its rows come from the Kafka consumer "
-        "(`uqs kafka start`), so it is started with that or not at all"
+        "(`uqs feed start kafka`), so it is started with that or not at all"
     ),
     "tap1": (
         "a diagnostic subscriber chosen at runtime: which table it taps is an "

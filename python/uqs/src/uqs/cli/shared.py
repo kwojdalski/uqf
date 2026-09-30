@@ -42,6 +42,17 @@ job_app = typer.Typer(
     help="Write ETL jobs into the tree: scaffold one, remove a scaffold, install finished ones.",
 )
 
+#: `uqs data ...`: moving data the stack has already written into where it
+#: belongs, and checking the result - replaying a tickerplant log into the HDB
+#: and checking the HDB's shape. Here rather than in either module because
+#: both register on it: replay.py and inspect.py. `backfill` stays top level,
+#: being the one of these people reach for most.
+data_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Move written data into the HDB and check its shape: replay, hdb-check.",
+)
+
 DEFAULT_LOG_LEVEL = "INFO"
 
 

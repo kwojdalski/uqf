@@ -146,7 +146,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
         steps.add_row(f"{len(steps.rows) + 1}.", what, command)
 
     step("The registry sees them", "uqs list processes")
-    step("The exact start line", f"uqs print {procs}")
+    step("The exact start line", f"uqs start --print {procs}")
     if streaming or not workers:
         step("Start them", f"uqs start {procs}")
     for worker in workers:

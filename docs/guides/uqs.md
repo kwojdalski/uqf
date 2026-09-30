@@ -89,8 +89,8 @@ so the error names whichever table sorts first rather than the partition that is
 actually short.
 
 ```
-uqs hdb-check         # which partitions are missing what
-uqs hdb-check --fix   # write an empty copy of each into them
+uqs data hdb-check         # which partitions are missing what
+uqs data hdb-check --fix   # write an empty copy of each into them
 ```
 
 `--fix` is additive and idempotent: a table directory that exists is never
@@ -136,7 +136,8 @@ the pattern, or the shell will try to expand it against your filenames first.
 ## Commands
 
 ```
-start [PROCS] [--port N]              start (default: all startwithall=1 processes)
+start [PROCS] [--port N] [--print]    start (default: all startwithall=1 processes);
+                                      --print shows the startup command line(s) instead
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
 up [PROCS] [--profile P] [--level L]  start, then stream every started process's log to
@@ -147,18 +148,18 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       Responds; --timeout defaults to 120s,
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
-print [PROCS] [--port N]              show exact startup command line(s), no-op otherwise
 backfill WORKER --version V --from T --to T [--port N] [--debug]
                                       run a bounded worker over [--from, --to); dates
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables. --debug
                                       starts it with -verbose: DBG lines in its log
-replay tplog [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
-             [--table T]... [--port N] [--dry-run]
+data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
+            [--table T]... [--port N] [--dry-run]
                                       replay a tickerplant log into the HDB. With
                                       nothing passed, every one of those comes off
                                       the running plant and hdb process - including
                                       the base port (see below)
+data hdb-check [--fix]                HDB partitions missing a declared table or column
 clean [--match REGEX] [--dry-run]     wipe output/uqs/, or part of it
 job new NAME [--kind K] [--dry-run] ...
                                       scaffold an ETL job: its q files, table and
@@ -168,26 +169,26 @@ job remove NAME [--dry-run] [--force] [-y]
 job install DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs
                                       in DIR into src/etl/ (see "Adding a process")
-conn PROCNAME [--port N]              interactive qcon session on a process, by name: its
-                                      port is looked up, and a stopped one is refused
-query [EXPR] --port N [--export FILE] run a q expression against a process; with no
-                                      EXPR, an interactive qcon session on it
+query [EXPR] --proc P|--port N [--export FILE]
+                                      run a q expression against a process; with no
+                                      EXPR, an interactive qcon session on it. --proc
+                                      looks the port up, and refuses a stopped process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern
 list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse]  list every item of KIND
                                        ('processes', 'profiles', 'fields', 'overrides',
                                        'env', 'dependencies', 'jobs') - no argument shows
                                        the kinds
-config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective
+config get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective
                                                  process.csv row (or one field), with
                                                  placeholders resolved unless --raw
-config-set PROCNAME FIELD VALUE       persist a process.csv field override for a process
-logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own colorized
+config set PROCNAME FIELD VALUE       persist a process.csv field override for a process
+logs [PROCS] [-f] [-n N] [--level L] [--multitail]
+                                       tail out_/err_*.log through the CLI's own colorized
                                        logger instead of raw files (see "Logs" below)
-crypto start/stop/status              proof of concept: cryptorust (Rust) publishing over
-                                       kdb+ IPC (see "crypto recorder" below)
-crypto fills-start/fills-stop/        proof of concept: cryptorust's simulated + real fills
-  fills-status                        over kdb+ IPC (see "crypto fills recorder" below)
+feed start|stop|status NAME           an external publisher into the tickerplant: databento,
+                                       kafka, crypto or crypto-fills (see docs/services/);
+                                       `feed status` alone shows every feed
 raw -- ARGS...                        pass any other torq.sh verb straight through
                                        (e.g. `raw -- debug rdb1`, `raw -- top feed1`)
 ```
@@ -196,7 +197,7 @@ raw -- ARGS...                        pass any other torq.sh verb straight throu
 `uqs start posbook1 markout1` - which is what lets TAB complete them. A single
 quoted `"posbook1 markout1"` still works. `--port` sets `KDBBASEPORT` (default
 `6050`, see the port table below). `--export FILE` (on
-`summary`/`query`/`list`/`config-get`) additionally writes the same rows to
+`summary`/`query`/`list`/`config get`) additionally writes the same rows to
 `FILE` as CSV or Parquet, format inferred from the extension - see
 `python/uqs/README.md`'s "Exporting output" section. Full `--help` is available
 on the command itself and on every subcommand.
@@ -220,12 +221,12 @@ sizes - worth running first, since none of this is reversible.
 
 ## Replaying a tickerplant log
 
-`replay tplog` is TorQ's own `tickerlogreplay` - the `tpreplay1` process - with
+`data replay` is TorQ's own `tickerlogreplay` - the `tpreplay1` process - with
 the aiming done for you:
 
 ```
-uqs replay tplog --dry-run
-uqs replay tplog --date 2026-09-22 --table quote --table trade
+uqs data replay --dry-run
+uqs data replay --date 2026-09-22 --table quote --table trade
 ```
 
 What it replays, and into what, is read off the processes that are **running**,
@@ -271,17 +272,17 @@ uqs list processes
 ```
 
 - `processes` - every process's `procname`/`proctype`/`port`/`startwithall`,
-  resolved and with any `config-set` overrides applied - the full set
-  `config-get`/`config-set`/`start <procname>` accept, without already needing
+  resolved and with any `config set` overrides applied - the full set
+  `config get`/`config set`/`start <procname>` accept, without already needing
   to know a name ahead of time - plus the `inputs` and `outputs` its job
   declares: the tables it subscribes to and publishes, or for a backfill worker
   the dataset it fills. The same declarations `summary`'s graph columns come
   from, but readable without a running stack
-- `fields` - `process.csv`'s valid columns (what `config-set`'s `FIELD` argument
+- `fields` - `process.csv`'s valid columns (what `config set`'s `FIELD` argument
   accepts)
-- `overrides` - every `config-set` override currently in effect
+- `overrides` - every `config set` override currently in effect
 - `env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values (the same
-  env `config-get`'s placeholder resolution and `torq.sh` itself use)
+  env `config get`'s placeholder resolution and `torq.sh` itself use)
 - `dependencies` - each process's input tables and who publishes them, so you
   can see what a process needs before starting it on its own
 - `jobs` - every streaming job, normalizer and bounded worker, read from its own
@@ -324,7 +325,7 @@ community edition's connection limits mean `reporter1`, `filealerter1`,
 `dqc1`/`dqcdb1`, `dqe1`/`dqedb1` stay off unless you have a fully-licensed
 kdb+/KDB-X. `killtick` and `tpreplay1` are on-demand utility processes, not part
 of the standing stack, so they also don't auto-start - `tpreplay1` is what
-[`replay tplog`](#replaying-a-tickerplant-log) starts, for one replay, and it
+[`data replay`](#replaying-a-tickerplant-log) starts, for one replay, and it
 exits when the replay is done.
 
 ### Profiles
@@ -561,7 +562,7 @@ collected" on a healthy stack.
 To get the upstream behaviour back:
 
 ```bash
-uqs config-set monitor1 startwithall 0
+uqs config set monitor1 startwithall 0
 ```
 
 ### Default ports
@@ -587,30 +588,30 @@ Base `6050`, override with `--port <n>`:
 
 ## Changing a process's config
 
-`config-get`/`config-set` read and write a *process.csv field override* - not
+`config get`/`config set` read and write a *process.csv field override* - not
 the vendored `process.csv` (never edited) and not the *generated* one in
 `output/uqs/` either (regenerated from scratch on every `bootstrap()` call, i.e.
 every `start`/`stop`/`summary`/... - anything written directly there would just
 be clobbered on the next command). Overrides persist instead in
 `python/uqs/process_overrides.csv` (a small `procname,field,value` csv, created
-on first `config-set` - tracked in git like any other config, not gitignored),
+on first `config set` - tracked in git like any other config, not gitignored),
 and `bootstrap()` applies them on top of the vendored+fxfeed1 rows every time it
 (re)generates `process.csv`.
 
 ```
-uqs config-get fxfeed1
-uqs config-get fxfeed1 startwithall
-uqs config-set fxfeed1 startwithall 0
+uqs config get fxfeed1
+uqs config get fxfeed1 startwithall
+uqs config set fxfeed1 startwithall 0
 ```
 
-`config-get` resolves `process.csv`'s two placeholder styles by default -
+`config get` resolves `process.csv`'s two placeholder styles by default -
 `${VAR}`/`$VAR` (e.g. `load=${KDBHDB}` -> the real path,
 `U=${TORQAPPHOME}/appconfig/passwords/accesslist.txt` -> the real path) and the
 port column's own `{VAR}`/`{VAR}+N`/`{VAR}-N` arithmetic shorthand (e.g.
 `port={KDBBASEPORT}+3` -> `6053`) - the same values `torq.sh` itself substitutes
 at process-start time, evaluated against `build_env(paths, --port)`. Pass
 `--raw` to see the literal, unresolved value instead (e.g. to copy it into a
-`config-set` call).
+`config set` call).
 
 Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`, `extras`,
@@ -641,16 +642,16 @@ rolling/restart-aliasing correctly) and merges them through a queue; without
 sorted by the log's own timestamp - not wall-clock arrival order. `--level`
 filters to that level and above (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
 
-`uqs multitail` follows the same files in
+`uqs logs --multitail` follows the same files in
 [multitail](https://www.vanheusden.com/multitail/), one pane per file, titled
 with its file name, instead of merging them - so two busy processes stay side by
 side rather than interleaved. It takes the same process names and needs the
 `multitail` binary (`brew install multitail`, `apt install multitail`):
 
 ```
-uqs multitail rdb1 fxpositions1          # a pane for each out_/err_ log, stacked
-uqs multitail all --stream err -c 2      # every process's err_ log, in two columns
-uqs multitail stp1 -n 100 --print        # show the multitail command, run nothing
+uqs logs --multitail rdb1 fxpositions1          # a pane for each out_/err_ log, stacked
+uqs logs --multitail all --stream err -c 2      # every process's err_ log, in two columns
+uqs logs --multitail stp1 -n 100 --print        # show the multitail command, run nothing
 ```
 
 A process that has never started has no log and gets no pane; a name that is not
@@ -817,7 +818,7 @@ Then check it is running:
 
 ```
 uqs list processes                      # the registry sees the new processes
-uqs print <procname>                    # the exact start line
+uqs start --print <procname>                    # the exact start line
 uqs start <procname>                    # streaming jobs
 uqs backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02
 uqs summary --columns status            # up, and Responds: yes
@@ -847,8 +848,8 @@ uqs query \
 For an interactive session, name the process and let `uqs` find its port:
 
 ```
-uqs conn rdb1              # qcon localhost:6052:admin:admin, under rlwrap if installed
-uqs conn gateway1 --port 7000   # a stack started with --port 7000
+uqs query --proc rdb1              # qcon localhost:6052:admin:admin, under rlwrap if installed
+uqs query --proc gateway1 --port 7000   # a stack started with --port 7000
 ```
 
 It refuses a process that is not running - with the `uqs start` to fix it -
@@ -910,7 +911,7 @@ is #54's, not this one.
 ## MCP server
 
 `python/uqs/src/uqs/mcp.py` (the `uqs-mcp` command) exposes the same
-start/stop/restart/summary/print/clean/query/config-get/config-set/list/
+start/stop/restart/summary/print/clean/query/config get/config set/list/
 logs/crypto-lifecycle operations as MCP tools (`uqs_start`, `uqs_stop`,
 `uqs_get_config`, `uqs_set_config`, `uqs_logs`,
 `uqs_crypto_start`/`_stop`/`_status`,
@@ -966,7 +967,7 @@ uqs --install-completion      # bash, zsh, fish or PowerShell - detected
 ```
 
 TAB then completes process names, `--profile` names, `list` kinds and `--sort`
-columns, `config-get`/`config-set` fields and the plant's tables, all read from
+columns, `config get`/`config set` fields and the plant's tables, all read from
 the same registry the commands resolve against. `uqs --show-completion` prints
 the script instead. From a script or CI there is no tty to detect the shell
 from, and the install fails with `Shell None is not supported.`

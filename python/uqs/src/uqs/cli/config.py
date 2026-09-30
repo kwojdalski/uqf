@@ -38,8 +38,19 @@ from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
 from uqs.stack.listing import LISTABLE_KINDS
 
+#: `uqs config get/set`: one process's process.csv row, read resolved or
+#: changed through process_overrides.csv. `uqs list overrides` and
+#: `uqs list fields` stay kinds of `list`, where they share its --sort,
+#: --export and completion with every other kind.
+config_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Read or set a process's process.csv fields (persisted to process_overrides.csv).",
+)
+app.add_typer(config_app, name="config")
 
-@app.command("config-get")
+
+@config_app.command("get")
 def config_get(
     procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
     field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
@@ -135,7 +146,7 @@ def list_items(
     ] = False,
 ) -> None:
     """List every item of KIND - run with no argument to see the available
-    kinds. Not just processes: 'fields' lists process.csv's valid config-set
+    kinds. Not just processes: 'fields' lists process.csv's valid config set
     columns, 'overrides' lists every process_overrides.csv entry currently
     set, 'env' lists build_env()'s resolved KDBBASEPORT/KDBHDB/... values.
 
@@ -162,7 +173,7 @@ def list_items(
     _export(items, export)
 
 
-@app.command("config-set")
+@config_app.command("set")
 def config_set(
     procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
     field: Annotated[str, typer.Argument(autocompletion=completion.csv_fields)],
@@ -180,48 +191,13 @@ def config_set(
 
 
 @app.command()
-def multitail(
-    procs: ProcsArg = None,
-    stream: Annotated[
-        str,
-        typer.Option(
-            "--stream",
-            help="Which log files get a pane: out, err or both",
-            autocompletion=completion.choices("out", "err", "both"),
-        ),
-    ] = "both",
-    columns: Annotated[
-        int, typer.Option("--columns", "-c", help="Split the panes into this many columns")
-    ] = 1,
-    lines: Annotated[int, typer.Option("--lines", "-n", help="History each pane opens with")] = 20,
-    print_only: Annotated[
-        bool, typer.Option("--print", help="Show the multitail command without running it")
-    ] = False,
-) -> None:
-    """Follow process logs in multitail, one pane per out_/err_*.log file -
-    e.g. `multitail rdb1 fxpositions1`, `multitail all --stream err -c 2`.
-    Needs the `multitail` binary; `logs -f` merges the same files without it.
-    """
-    try:
-        argv = stack_logs.multitail_command(
-            _paths(), _procs(procs), stream=stream, columns=columns, lines=lines
-        )
-        if print_only:
-            console.print(shlex.join(argv), markup=False, highlight=False, soft_wrap=True)
-            return
-        stack_logs.run_multitail(argv)
-    except UqsError as exc:
-        _die(exc)
-
-
-@app.command()
 def logs(
     procs: ProcsArg = None,
     follow: Annotated[
         bool, typer.Option("--follow", "-f", help="Keep streaming new lines (Ctrl-C to stop)")
     ] = False,
     lines: Annotated[
-        int, typer.Option("--lines", "-n", help="Lines per process log to show (non-follow only)")
+        int, typer.Option("--lines", "-n", help="Lines per process log to show (history)")
     ] = 20,
     level: Annotated[
         str | None,
@@ -230,13 +206,58 @@ def logs(
             autocompletion=completion.choices("DEBUG", "INFO", "WARNING", "ERROR"),
         ),
     ] = None,
+    multitail: Annotated[
+        bool,
+        typer.Option(
+            "--multitail", help="Follow in multitail instead, one pane per out_/err_*.log file"
+        ),
+    ] = False,
+    stream: Annotated[
+        str | None,
+        typer.Option(
+            "--stream",
+            help="With --multitail: which log files get a pane, out, err or both (default)",
+            autocompletion=completion.choices("out", "err", "both"),
+        ),
+    ] = None,
+    columns: Annotated[
+        int | None,
+        typer.Option("--columns", "-c", help="With --multitail: split the panes into N columns"),
+    ] = None,
+    print_only: Annotated[
+        bool,
+        typer.Option("--print", help="With --multitail: show its command without running it"),
+    ] = False,
 ) -> None:
     """Tail out_/err_*.log for one or more processes through the same
     colorized logger the CLI itself uses, instead of raw per-process files -
     e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
+
+    `--multitail` follows the same files in the `multitail` binary, one pane
+    each: `logs all --multitail --stream err -c 2`.
     """
+    given = {
+        "--stream": stream is not None,
+        "--columns": columns is not None,
+        "--print": print_only,
+    }
+    if multitail:
+        given = {"--follow": follow, "--level": level is not None}
+    for option, used in given.items():
+        if used:
+            relation = "does not apply with" if multitail else "needs"
+            _die(UqsError(f"{option} {relation} --multitail"))
+            return
     try:
-        if follow:
+        if multitail:
+            argv = stack_logs.multitail_command(
+                _paths(), _procs(procs), stream=stream or "both", columns=columns or 1, lines=lines
+            )
+            if print_only:
+                console.print(shlex.join(argv), markup=False, highlight=False, soft_wrap=True)
+                return
+            stack_logs.run_multitail(argv)
+        elif follow:
             stack_logs.follow_logs(_paths(), _procs(procs), min_level=level)
         else:
             stack_logs.print_recent_logs(_paths(), _procs(procs), lines=lines, min_level=level)

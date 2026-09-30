@@ -19,12 +19,12 @@ from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
-    PortOpt,
     _die,
     _export,
     _paths,
     app,
     console,
+    data_app,
     log,
 )
 from uqs.model.registry import DEFAULT_BASE_PORT
@@ -32,7 +32,7 @@ from uqs.paths import UqsError
 from uqs.stack import alive, listing, runtime
 
 
-@app.command("hdb-check")
+@data_app.command("hdb-check")
 def hdb_check(
     fix: Annotated[
         bool,
@@ -74,7 +74,7 @@ def hdb_check(
     if thin:
         console.print(f"[yellow]{hdb_shape.describe_columns(thin)}[/]")
     console.print(
-        "\n[dim]`uqs hdb-check --fix` writes an empty copy of each missing "
+        "\n[dim]`uqs data hdb-check --fix` writes an empty copy of each missing "
         "table, and each missing column as its declared type's null. Additive: an "
         "existing table directory or column file is never touched, and a column "
         "whose declared TYPE changed is not repaired here.[/]"
@@ -94,7 +94,7 @@ def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
             UqsError(
                 "qcon is not on PATH. It ships with kdb+ rather than with this "
                 "repository (macOS: it is beside q in your KDB-X install). "
-                'Without it, `uqs query --port <p> "<expr>"` still works over IPC.'
+                'Without it, `uqs query --proc <name> "<expr>"` still works over IPC.'
             )
         )
         return
@@ -111,67 +111,34 @@ def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
         _die(UqsError(f"could not start {argv[0]}: {exc}"))
 
 
-@app.command()
-def conn(
-    procname: Annotated[
-        str,
-        typer.Argument(
-            help="the process to open a qcon session on, e.g. rdb1",
-            autocompletion=completion.procname,
-        ),
-    ],
-    port: PortOpt = DEFAULT_BASE_PORT,
-    user: str = "admin",
-    passwd: str = "admin",
-) -> None:
-    """Open an interactive qcon session on a process, named rather than numbered.
+def _proc_port(procname: str, base_port: int) -> int:
+    """The port `procname` listens on in the stack at `base_port`, refusing a
+    process that is not declared or not running.
 
-    `uqs conn rdb1` is `uqs query --port <rdb1's port>` without
-    having to know the port: it comes from the registry at the stack's base
-    port (`--port`, as for `start`). A process that is not running is refused
-    with how to start it, rather than left to qcon's bare connection refusal,
-    which reads the same as a wrong port.
+    A process that is down is refused with how to start it, rather than left
+    to qcon's or kola's bare connection refusal, which reads the same as a
+    wrong port.
     """
     paths = _paths()
-    try:
-        ports = listing.configured_ports(paths, base_port=port)
-    except UqsError as exc:
-        _die(exc)
-        return
+    ports = listing.configured_ports(paths, base_port=base_port)
     if procname not in ports:
-        _die(
-            UqsError(f"{procname} is not a declared process - `uqs list processes` shows them all")
+        raise UqsError(
+            f"{procname} is not a declared process - `uqs list processes` shows them all"
         )
-        return
-    # Advisory: a check that cannot answer does not stop the session, since
-    # qcon will say for itself whether anything is listening.
+    # Advisory: a check that cannot answer does not stop the call, since the
+    # connection will say for itself whether anything is listening.
     try:
-        up = procname in alive.running(paths, base_port=port)
+        up = procname in alive.running(paths, base_port=base_port)
     except Exception as exc:  # noqa: BLE001 - see comment above
         log.debug("could not tell whether {} is running: {}", procname, exc)
         up = True
     if not up:
-        _die(UqsError(f"{procname} is not running - start it with `uqs start {procname}`"))
-        return
-    target = int(ports[procname])
-    log.debug("conn {} -> localhost:{}", procname, target)
-    _exec_qcon("localhost", target, user, passwd)
+        raise UqsError(f"{procname} is not running - start it with `uqs start {procname}`")
+    return int(ports[procname])
 
 
 @app.command()
 def query(
-    # `port` is declared FIRST only because Python forbids a parameter without
-    # a default after one with a default, and `expr` is optional. Keeping
-    # --port required matters: defaulting it would turn "you forgot to say
-    # which process" into "silently queried the tickerplant". Option order
-    # does not affect the command line.
-    port: Annotated[
-        int,
-        typer.Option(
-            help="port of the process to query, e.g. base_port+2 for rdb1",
-            autocompletion=completion.process_ports,
-        ),
-    ],
     expr: Annotated[
         str | None,
         typer.Argument(
@@ -179,6 +146,23 @@ def query(
             "interactive qcon session on the process"
         ),
     ] = None,
+    proc: Annotated[
+        str | None,
+        typer.Option(
+            help="process to query, by name, e.g. rdb1",
+            autocompletion=completion.procname,
+        ),
+    ] = None,
+    port: Annotated[
+        int | None,
+        typer.Option(
+            help="port to query directly, instead of naming --proc",
+            autocompletion=completion.process_ports,
+        ),
+    ] = None,
+    base_port: Annotated[
+        int, typer.Option(help="stack base port --proc is resolved against")
+    ] = DEFAULT_BASE_PORT,
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",
@@ -187,9 +171,20 @@ def query(
     """Run a q expression against a running process - or, with no expression,
     open an interactive qcon session on it (under rlwrap when installed).
 
-    The four connection options mean the same in both modes. `uqs conn
-    PROCNAME` is the same session with the port looked up by name.
+    Name the process with `--proc rdb1`, or give its `--port`. One of the two
+    is required: defaulting would turn "you forgot to say which process" into
+    "silently queried the tickerplant".
     """
+    if (proc is None) == (port is None):
+        _die(UqsError("name the process to query: --proc NAME or --port N, not both"))
+        return
+    if port is None:
+        try:
+            port = _proc_port(str(proc), base_port)
+        except UqsError as exc:
+            _die(exc)
+            return
+        log.debug("query {} -> {}:{}", proc, host, port)
     if expr is None:
         if export is not None:
             _die(UqsError("--export needs an expression whose result it can write"))

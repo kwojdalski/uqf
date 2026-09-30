@@ -165,7 +165,7 @@ def list_items(
 ) -> list[dict[str, str]]:
     """List every item of *kind* - 'processes' (procname/proctype/port/
     startwithall, resolved+overridden), 'fields' (process.csv's valid
-    column names, for config-set), 'overrides' (every process_overrides.csv
+    column names, for config set), 'overrides' (every process_overrides.csv
     entry currently set), 'env' (build_env()'s resolved KDBBASEPORT/
     KDBHDB/... values), 'dependencies' (each process's input tables and
     who publishes them), or 'jobs' (every declared ETL job, and whether it is

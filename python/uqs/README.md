@@ -39,7 +39,7 @@ src/uqs/
                      used for the CLI/MCP server's own status/error output
   mcp.py            the `uqs-mcp` FastMCP server, exposing the same
                      operations as MCP tools
-process_overrides.csv   created on first `config-set` - per-process
+process_overrides.csv   created on first `config set` - per-process
                          process.csv field overrides (see "Config setters"
                          below); tracked in git like any other config
 tests/                  flat, one test module per source module, because
@@ -109,7 +109,8 @@ macOS: `brew install gettext rlwrap`).
 ## Commands
 
 ```
-start [PROCS] [--port N]              start (default: all startwithall=1 processes)
+start [PROCS] [--port N] [--print]    start (default: all startwithall=1 processes);
+                                      --print shows the startup command line(s) instead
 stop [PROCS] [--port N]               stop
 restart [PROCS] [--port N]            restart
 summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
@@ -117,18 +118,22 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       whether each process answers within 0.5s
                                       (Responds), and its declared graph; --debug
                                       adds each process's load time
-print [PROCS] [--port N]              show exact startup command line(s)
 backfill WORKER --version V --from T --to T [--port N]
                                       run a bounded worker over [--from, --to);
                                       2026-09-13, 2026-09-13T06:00 or 2026.09.13D06:00,
                                       no offset means UTC
 clean [--match REGEX] [--dry-run]     wipe ../../output/uqs/, or part of it
-query EXPR --port N [--export FILE]   run a synchronous q expression
+query [EXPR] --proc P|--port N [--export FILE]
+                                      run a q expression; no EXPR opens a qcon session
 list [KIND] [--export FILE]           list every item of KIND - no argument shows the kinds
-config-get PROCNAME [FIELD] [--raw] [--export FILE]   show a process's effective process.csv row, resolved
-config-set PROCNAME FIELD VALUE       persist a process.csv field override
-logs [PROCS] [-f] [-n N] [--level L]  tail out_/err_*.log through the CLI's own logger
-crypto start/stop/status              proof of concept: cryptorust (Rust) publishing over kdb+ IPC
+config get PROCNAME [FIELD] [--raw] [--export FILE]   show a process's effective process.csv row, resolved
+config set PROCNAME FIELD VALUE       persist a process.csv field override
+logs [PROCS] [-f] [-n N] [--level L] [--multitail]
+                                      tail out_/err_*.log through the CLI's own logger
+data replay|hdb-check                 replay a tickerplant log into the HDB; check its shape
+feed start|stop|status NAME           an external publisher: databento, kafka, crypto,
+                                      crypto-fills
+job new|remove|install                write ETL jobs into the tree
 raw -- ARGS...                        anything else torq.sh supports
 ```
 
@@ -138,7 +143,7 @@ profiles and option values.
 
 ## Exporting output
 
-`summary`/`query`/`config-get`/`list` all take `--export FILE`, writing the same
+`summary`/`query`/`config get`/`list` all take `--export FILE`, writing the same
 rows shown on screen to `FILE` as CSV or Parquet (format inferred from the
 extension) via [polars](https://pola.rs/) - `query`'s table results are already
 a `polars.DataFrame` (that's what [kola](https://pypi.org/project/kola/) returns
@@ -149,7 +154,7 @@ one-cell table.
 
 ```
 uqs list processes --export processes.csv
-uqs query "select from quotes" --port 6050 --export quotes.parquet
+uqs query "select from quotes" --proc rdb1 --export quotes.parquet
 ```
 
 ## Listing things
@@ -157,14 +162,14 @@ uqs query "select from quotes" --port 6050 --export quotes.parquet
 `list` isn't limited to processes - it dispatches on a small registry
 (`stack.listing.LISTABLE_KINDS`), currently `processes` (procname/proctype/port/
 startwithall, resolved and with overrides applied - the default), `fields`
-(`process.csv`'s valid `config-set` columns), `overrides` (every `config-set`
+(`process.csv`'s valid `config set` columns), `overrides` (every `config set`
 override in effect), and `env` (`build_env()`'s resolved
 `KDBBASEPORT`/`KDBHDB`/... values). Adding a new kind is one function plus one
 registry entry - see `stack/listing.py`'s `_list_*` functions.
 
 ## Config setters
 
-`config-get`/`config-set` read and write **`process_overrides.csv`** - not the
+`config get`/`config set` read and write **`process_overrides.csv`** - not the
 vendored `process.csv` (never edited) and not the *generated* one under
 `output/uqs/` either, which `bootstrap()` rebuilds from scratch on every single
 command, so anything written there directly would just be overwritten by the
@@ -173,10 +178,10 @@ instead: a small `procname,field,value` file, applied on top of the vendored +
 `fxfeed1` rows every time `bootstrap()` (re)generates `process.csv`.
 
 ```
-uqs config-set fxfeed1 startwithall 0
+uqs config set fxfeed1 startwithall 0
 ```
 
-`config-get` resolves both of `process.csv`'s placeholder styles by default -
+`config get` resolves both of `process.csv`'s placeholder styles by default -
 `${VAR}`/`$VAR` (`load=${KDBHDB}` -> the real path) and the port column's
 `{VAR}`/`{VAR}+N` arithmetic shorthand (`port={KDBBASEPORT}+3` -> `6053`),
 evaluated the same way `torq.sh` itself does at process-start time. Pass `--raw`
@@ -203,19 +208,19 @@ uqs logs stp1 rdb1 -n 50
 uqs logs -f --level WARNING
 ```
 
-`multitail` follows the same files in multitail instead, one pane per file
+`--multitail` follows the same files in multitail instead, one pane per file
 (`--stream out|err|both`, `-c N` columns, `--print` to show the command); it
 needs the `multitail` binary.
 
 ```
-uqs multitail rdb1 fxpositions1 -c 2
+uqs logs --multitail rdb1 fxpositions1 -c 2
 ```
 
 ## crypto recorder (cryptorust) - a proof of concept
 
-`crypto start`/`stop`/`status` (a nested command group) build and launch a
-sibling `~/github_projects/cryptorust` checkout's own `kdb-market-data-recorder`
-Rust binary, pointed at this demo's `stp1` - proving the kdb+ infra here isn't
+`uqs feed start|stop|status crypto` build and launch a sibling
+`~/github_projects/cryptorust` checkout's own `kdb-market-data-recorder` Rust
+binary, pointed at this demo's `stp1` - proving the kdb+ infra here isn't
 TorQ/q-specific, any process that speaks kdb+ IPC can publish onto it. See
 `docs/guides/uqs.md`'s own section for the full picture (schema, credentials,
 `$CRYPTORUST_ROOT`).
