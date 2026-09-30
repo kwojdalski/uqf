@@ -176,7 +176,8 @@ schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, 
                                       columns of every table matching a pattern
 list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse]  list every item of KIND
                                        ('processes', 'profiles', 'fields', 'overrides',
-                                       'env', 'dependencies') - no argument shows the kinds
+                                       'env', 'dependencies', 'jobs') - no argument shows
+                                       the kinds
 config-get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective
                                                  process.csv row (or one field), with
                                                  placeholders resolved unless --raw
@@ -283,6 +284,11 @@ uqs list processes
   env `config-get`'s placeholder resolution and `torq.sh` itself use)
 - `dependencies` - each process's input tables and who publishes them, so you
   can see what a process needs before starting it on its own
+- `jobs` - every streaming job, normalizer and bounded worker, read from its own
+  q declaration: its kind, process, what it reads and writes (a backfill's
+  source, and its dataset and partition), whether it starts with the stack, and
+  whether it is still a `scaffolded` job `uqs job new` wrote or `written` work.
+  `uqs list jobs --sort state` puts the unfinished scaffolds together
 
 New kinds are one function + one `LISTABLE_KINDS` entry, not a new CLI command
 each time - see `stack/listing.py`'s `_list_*` functions.
