@@ -179,6 +179,13 @@ A block that runs on KDB-X but not on PeachQ is marked `kdbx-only` with the
 reason. It is never left unmarked to make CI green: an unmarked block is one
 nobody claims runs.
 
+Locally the blocks run on both interpreters, and both are required. `q-tests`
+runs them on KDB-X. `q-docs-peachq` runs them again on PeachQ, from
+`$UQF_PEACHQ`, and fails without it rather than skipping. PeachQ is paired with
+KDB-X here, not substituted for it, until the two are compatible enough for one
+to stand for both. When a PeachQ release fixes what a `kdbx-only` reason names,
+remove the marker: the PeachQ run then holds the block too.
+
 The local branch-name and protected-branch hooks are excluded in CI because PR
 checkout can be detached and pushes to `master` are expected. Every other hook
 retains its existing configuration.
