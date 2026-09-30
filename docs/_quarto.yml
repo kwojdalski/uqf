@@ -93,6 +93,7 @@ website:
           - scaffolding/etl.md
           - scaffolding/normalizer.md
           - scaffolding/backfill.md
+          - scaffolding/reaction.md
       - section: "Services"
         contents:
           - services/synthetic-feeds.md

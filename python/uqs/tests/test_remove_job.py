@@ -20,6 +20,7 @@ from uqs.paths import CATALOG_FILE, RUN_TESTS_FILE, STACK_TABLES_TEST, TABLES_FI
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
 from uqs.scaffold.profile import PROFILES_FILE
+from uqs.scaffold.reaction import reaction
 from uqs.scaffold.remove import plan_removal
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
@@ -41,7 +42,13 @@ def tree(tmp_path: Path) -> Path:
 
 def _snapshot(root: Path) -> dict[Path, str]:
     files = {rel: (root / rel).read_text() for rel in _TRACKED}
-    for d in ("src/etl/streaming", "src/etl/workers", "src/etl/sources", "tests/q"):
+    for d in (
+        "src/etl/streaming",
+        "src/etl/workers",
+        "src/etl/sources",
+        "src/etl/reactions",
+        "tests/q",
+    ):
         files.update({p.relative_to(root): p.read_text() for p in (root / d).glob("*.q")})
     return files
 
@@ -93,6 +100,25 @@ def test_a_backfill_round_trips_with_its_source(tree):
         tree,
     )
     _remove(tree, "ledger")
+    assert _snapshot(tree) == before
+
+
+def test_a_reaction_round_trips_exactly(tree):
+    """Its file, its test and the nsList entry - and nothing else is touched,
+    since a reaction has no table, profile or port."""
+    before = _snapshot(tree)
+    plan = reaction(
+        "rebuild_positions",
+        "demo_deals",
+        ["positions"],
+        producers={"demo_deals": ["deals_backfill1"]},
+        taken=set(),
+    )
+    write.apply_plan(plan, tree)
+    assert _snapshot(tree) != before
+    removal = plan_removal(tree, "rebuild_positions")
+    assert set(removal.rewrites) == {RUN_TESTS_FILE}
+    removal.apply(tree)
     assert _snapshot(tree) == before
 
 

@@ -10,6 +10,8 @@ the profile lines naming its process. For a backfill, its source too, when no
 other worker reads it. A table the job publishes (or fills) goes with its
 definition, its `expected` entry and its catalog line - but only when nothing
 else in the tree mentions it, so a table another job reads is never taken.
+A reaction is only its file, its test and the test's nsList entry: it has no
+process, so no table, profile or port.
 
 WHAT IT REFUSES. A job whose file carries no SCAFFOLDED marker any more: it
 has been written, and deleting written work is not undoing a scaffold.
@@ -25,6 +27,7 @@ from pathlib import Path
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.paths import (
     CATALOG_FILE,
+    REACTION_DIR,
     RUN_TESTS_FILE,
     SOURCE_DIR,
     STACK_TABLES_TEST,
@@ -81,6 +84,8 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             f"{job_file} has no {MARKER} marker left - it has been written, and uqs job remove "
             "only undoes a scaffold. Pass --force to remove it anyway"
         )
+    if job_file.parent == REACTION_DIR:
+        return _reaction_removal(repo_root, name, job_file)
     fn, job, fields = _declaration(job_file, text)
     proc = (symbols(fields.get("procname", "")) or (f"{job}1",))[0]
     removal = Removal(job)
@@ -100,18 +105,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     else:
         tables = list(symbols(fields.get("publishes", "")))
 
-    test_file = TEST_DIR / f"test_{job}.q"
-    if (repo_root / test_file).is_file():
-        ns = _NAMESPACE.search((repo_root / test_file).read_text())
-        removal.deletes.append(test_file)
-        gone.add(test_file)
-        if ns:
-            _edit(
-                removal,
-                repo_root,
-                RUN_TESTS_FILE,
-                lambda t: _drop_token(t, "nsList:", f"`.{ns.group(1)}"),
-            )
+    gone |= _remove_test(removal, repo_root, job)
 
     for table in tables:
         if _mentioned_elsewhere(repo_root, table, gone):
@@ -138,11 +132,38 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     return removal
 
 
+def _reaction_removal(repo_root: Path, name: str, job_file: Path) -> Removal:
+    """A reaction is its file and its test: no table, profile or port, since
+    it has no process of its own."""
+    removal = Removal(name)
+    removal.deletes.append(job_file)
+    _remove_test(removal, repo_root, name)
+    return removal
+
+
+def _remove_test(removal: Removal, repo_root: Path, job: str) -> set[Path]:
+    """Queue `job`'s test file and its nsList entry; return what goes."""
+    test_file = TEST_DIR / f"test_{job}.q"
+    if not (repo_root / test_file).is_file():
+        return set()
+    ns = _NAMESPACE.search((repo_root / test_file).read_text())
+    removal.deletes.append(test_file)
+    if ns:
+        _edit(
+            removal,
+            repo_root,
+            RUN_TESTS_FILE,
+            lambda t: _drop_token(t, "nsList:", f"`.{ns.group(1)}"),
+        )
+    return {test_file}
+
+
 def _job_file(repo_root: Path, name: str) -> Path:
     candidates = [
         STREAM_DIR / f"{name}.q",
         WORKER_DIR / f"{name}.q",
         WORKER_DIR / f"{name}_backfill.q",
+        REACTION_DIR / f"{name}.q",
     ]
     found = [c for c in candidates if (repo_root / c).is_file()]
     if len(found) != 1:

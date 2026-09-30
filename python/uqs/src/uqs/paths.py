@@ -32,6 +32,9 @@ ETL_DIR = Path("src/etl")
 STREAM_DIR = ETL_DIR / "streaming"
 SOURCE_DIR = ETL_DIR / "sources"
 WORKER_DIR = ETL_DIR / "workers"
+#: Reactions: handlers a bounded worker's published window fires. Not jobs
+#: with a process of their own - they run inside whichever process publishes.
+REACTION_DIR = ETL_DIR / "reactions"
 
 TEST_DIR = Path("tests/q")
 RUN_TESTS_FILE = Path("tests/run_tests.q")

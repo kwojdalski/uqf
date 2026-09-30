@@ -32,6 +32,7 @@ from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
 from uqs.scaffold.normalizer import definition_columns, normalizer
+from uqs.scaffold.reaction import reaction
 from uqs.scaffold.templates import table_definition
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
@@ -59,6 +60,13 @@ check["ipc worker registered"; registered[.qetl.job.bounded.def;`smokebf_backfil
 check["odbc worker registered"; registered[.qetl.job.bounded.def;`smokedb_backfill]]
 check["feed on_timer throws not implemented"; unwritten {.qpipe.job.smokefeed.on_timer[]}]
 check["etl on_batch throws not implemented"; unwritten {.qpipe.job.smokeetl.on_batch[`t;()]}]
+check["reaction registered on its dataset";
+    `smokerx in exec name from .qetl.reaction.for_dataset `smoke_hist]
+check["reaction handler throws not implemented";
+    unwritten {.qpipe.job.smokerx.handler[`smoke_hist;0Wp;0Wp]}]
+.qetl.dag.adopt_reactions[];
+check["reaction is the job-graph producer of what it writes";
+    .qetl.dag.reaction_job[`smoke_hist;`smokerx] in .qetl.dag.producers `smoke_rx_out]
 exit 0
 """
 
@@ -104,6 +112,14 @@ def _scaffold_every_kind(root: Path) -> None:
         ),
         backfill.bounded_worker("smokebf", "smoke_hist", "sym:symbol, px:float"),
         backfill.bounded_worker("smokedb", "smoke_db", "sym:symbol, amt:float", transport="odbc"),
+        # On a dataset the worker above fills, and writing, so the graph path runs.
+        reaction(
+            "smokerx",
+            "smoke_hist",
+            ["smoke_rx_out"],
+            producers={"smoke_hist": ["smokebf_backfill1"]},
+            taken=set(),
+        ),
     ]
     for plan in plans:
         write.apply_plan(plan, root)

@@ -200,7 +200,7 @@ def test_an_option_that_does_not_apply_to_the_kind_is_refused(argv, message, mon
 def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
     """No q, no export: the command says what to run instead of leaving the
     contract-surface hook to fail on the next commit unexplained."""
-    from uqs.cli import create
+    from uqs.cli import regenerate
 
-    monkeypatch.setattr(create, "q_interpreter", lambda: None)
-    assert create._export_contract_surface(tmp_path) is None
+    monkeypatch.setattr(regenerate, "q_interpreter", lambda: None)
+    assert regenerate._export_contract_surface(tmp_path) is None
