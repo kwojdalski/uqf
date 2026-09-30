@@ -49,6 +49,39 @@ test_each_layer_is_reachable_on_its_own:{[t]
         ("ov";"ya";"de");
         "a key present in exactly one layer resolves from that layer"]};
 
+/ --- setting one override in a running process ---------------------------
+
+test_set_override_takes_effect_and_says_where_from:{[t]
+    setUp_layers[];
+    .qunit.assertEquals[.qetl.cfg.set_override[`only_yaml;"now-set"];(`overrides;"now-set");"the override outranks yaml, and the answer names the layer"]};
+
+/ The frontend's old program rebuilt the layers from names that do not exist.
+/ The other overrides and the lower layers must survive a single write.
+test_set_override_keeps_every_other_layer:{[t]
+    setUp_layers[];
+    .qetl.cfg.set_override[`added;"x"];
+    .qunit.assertEquals[
+        (.qetl.cfg.raw `only_override;.qetl.cfg.raw `only_yaml;.qetl.cfg.raw `only_default;.qetl.cfg.raw `added);
+        ("ov";"ya";"de";"x");
+        "one write adds one key and leaves the rest of every layer alone"]};
+
+/ kola sends a Python str as a symbol. Stored as a symbol, get_flag would
+/ compare a symbol list against strings and read "true" as off.
+test_set_override_stores_a_symbol_value_as_a_string:{[t]
+    setUp_layers[];
+    .qetl.cfg.set_override[`flag_from_ipc;`true];
+    .qunit.assertEquals[.qetl.cfg.get_flag `flag_from_ipc;1b;"a symbol value is stored as the string every layer holds"]};
+
+test_set_override_accepts_a_string_key:{[t]
+    setUp_layers[];
+    .qunit.assertEquals[last .qetl.cfg.set_override["string_key";"v"];"v";"a key sent as a char vector is cast to a symbol"]};
+
+test_set_override_refuses_a_key_that_is_not_a_name:{[t]
+    .qunit.assertThrows[.qetl.cfg.set_override[;"v"];42;"qetl.cfg.set_override: the key must be*";"a numeric key is refused by name, not stored"]};
+
+test_set_override_refuses_a_value_that_is_not_text:{[t]
+    .qunit.assertThrows[.qetl.cfg.set_override[`k;];42;"qetl.cfg.set_override: the value must be*";"a numeric value is refused rather than stored in a string layer"]};
+
 / --- the environment variable mapping ------------------------------------
 
 test_the_env_name_is_mechanical:{[t]

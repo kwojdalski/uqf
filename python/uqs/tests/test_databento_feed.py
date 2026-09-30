@@ -19,6 +19,7 @@ around a third-party client.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,6 +92,25 @@ def test_the_field_order_comes_from_the_q_declaration():
     assert len(fields) == 7 + 40, "seven scalars plus ten levels of four"
     assert fields[7:11] == ["bid_px_00", "bid_sz_00", "ask_px_00", "ask_sz_00"]
     assert fields[-1] == "ask_sz_09"
+
+
+def test_the_fields_line_up_with_the_plant_table_column_for_column():
+    """The test above checks the fields against numbers written in Python.
+    This one checks them against what `.u.upd` writes into: the
+    `databento_mbp10` table in uqs_tables.q. The streamer derives its level
+    columns rather than reading them (LEVELS and the four prefixes), so a q
+    change to the level count or a level column would otherwise misalign
+    every row after it with nothing raising.
+
+    The plant stamps `time`, and the table calls the venue's symbol `sym`
+    where the source contract says `symbol`; the rest is position for
+    position.
+    """
+    from uqs.model.schemas import definition
+
+    table = re.findall(r"(\w+):", definition("databento_mbp10").split(":", 1)[1])
+    expected = ["symbol" if c == "sym" else c for c in table if c != "time"]
+    assert contract_fields(str(REPO)) == expected
 
 
 def test_no_time_column_is_produced():
