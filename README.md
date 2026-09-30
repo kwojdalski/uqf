@@ -87,6 +87,19 @@ the opt-in, or a KDB-X one declared as PeachQ. A green run therefore always says
 which interpreter made it green. What passes on PeachQ is not verified here;
 KDB-X stays the reference.
 
+**For now, committing needs both.** PeachQ already runs part of this tree: the q
+code blocks in `docs/`, in the commit hook and in CI, where KDB-X cannot be
+licensed. So the `q-docs-peachq` hook runs those blocks a second time on PeachQ,
+from the binary `UQF_PEACHQ` names, and fails when it is unset. This does not
+replace the KDB-X run. It is there as well, until the two interpreters are
+compatible enough for one to stand for both. A block that cannot run on PeachQ
+yet is marked `kdbx-only` with the reason (see
+[CI](docs/guides/ci.md#doc-examples)).
+
+```
+export UQF_PEACHQ=/path/to/peachq/q    # e.g. in your shell profile
+```
+
 What PeachQ buys is scale: it has no connection licence, so the community
 edition's 16-connection cap does not apply. On `UQF_Q_IMPL=peachq` a start is
 held to no connection budget - `uqs start --profile all` starts,

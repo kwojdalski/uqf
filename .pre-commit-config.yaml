@@ -214,6 +214,18 @@ repos:
         files: '\.(q|md)$'
         pass_filenames: false
 
+      # The same doc blocks again, on PeachQ. Both interpreters are REQUIRED
+      # for now: PeachQ runs part of this tree (these blocks here, and CI,
+      # which cannot license KDB-X), and until the two are compatible enough
+      # for one to stand for both, neither run vouches for the other. So this
+      # fails, rather than skipping, when $UQF_PEACHQ does not name a binary.
+      - id: q-docs-peachq
+        name: Run the q blocks in docs/ on PeachQ too
+        entry: python3 scripts/test.py q-docs-peachq
+        language: system
+        files: '\.(q|md)$'
+        pass_filenames: false
+
       - id: doc-links
         name: Check every link and anchor in docs/ resolves
         # Asks Quarto to resolve each link the way a reader's browser will,

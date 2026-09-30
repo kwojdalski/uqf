@@ -1,4 +1,4 @@
-"""Tests for scripts/test.py's smoke lane options.
+"""Tests for scripts/test.py's smoke lane options, and the q-docs-peachq lane.
 
 The lane runs tests/q/smoke_external_metadata.q, which reads its sources off
 its own command line. These check that --targets, --tables and --timeout-ms
@@ -65,3 +65,23 @@ def test_the_smoke_options_are_refused_for_another_lane(ran):
         runner.main(["python", "--targets", "h1:5010"])
     assert exc.value.code == 2
     assert ran == []
+
+
+def test_q_docs_peachq_refuses_without_the_binary_rather_than_skipping(ran, monkeypatch):
+    """PeachQ is required beside KDB-X, so an unset UQF_PEACHQ fails the lane."""
+    monkeypatch.delenv(runner.PEACHQ_ENV, raising=False)
+    with pytest.raises(SystemExit, match=runner.PEACHQ_ENV):
+        runner.main(["q-docs-peachq"])
+
+
+def test_q_docs_peachq_reruns_q_docs_declared_as_peachq(monkeypatch):
+    """The child is told it is PeachQ, so the interpreter check refuses a
+    UQF_PEACHQ that names a KDB-X binary."""
+    calls = []
+    monkeypatch.setattr(runner, "check_interpreter", lambda env=None: None)
+    monkeypatch.setattr(runner, "_run", lambda lane, argv, *, env=None: calls.append((argv, env)))
+    monkeypatch.setenv(runner.PEACHQ_ENV, "/opt/peachq/q")
+    assert runner.main(["q-docs-peachq"]) == 0
+    [(argv, env)] = calls
+    assert argv[1:] == [str(SCRIPT), "q-docs"]
+    assert env == {runner.Q_IMPL_ENV: "peachq", "QCMD": "/opt/peachq/q"}
