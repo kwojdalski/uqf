@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pytest
 
+from uqs.interpreter import Q_IMPL_ENV
 from uqs.model import dependencies, profiles
 from uqs.model.pipeline import PipelineKind
 from uqs.model.registry import PIPELINES
@@ -31,8 +32,10 @@ FITTING = sorted(set(NAMES) - set(profiles.NEEDS_LARGER_LICENCE))
 @pytest.fixture(autouse=True)
 def _community_licence(monkeypatch):
     """Every test here reads the budget of the licence anyone can get, not of
-    whatever licence the machine running them happens to declare."""
+    whatever licence the machine running them happens to declare - or
+    whichever interpreter it runs."""
     monkeypatch.delenv(profiles.LICENCE_CONNECTIONS_ENV, raising=False)
+    monkeypatch.delenv(Q_IMPL_ENV, raising=False)
 
 
 @pytest.mark.parametrize("name", FITTING)
@@ -223,6 +226,22 @@ def test_declaring_a_larger_licence_lets_it_start(monkeypatch):
     monkeypatch.setenv(profiles.LICENCE_CONNECTIONS_ENV, "24")
     assert profiles.allowance() == 22
     assert profiles.over_budget(["all"]) is None
+
+
+def test_peachq_has_no_connection_cap(monkeypatch):
+    """PeachQ carries no connection licence, so nothing is held to sixteen."""
+    monkeypatch.setenv(Q_IMPL_ENV, "peachq")
+    monkeypatch.setenv("QCMD", "/opt/peachq/q")
+    assert profiles.licence_limit() is None
+    assert profiles.allowance() is None
+    assert profiles.over_budget(["all"]) is None, "the profile KDB-X community refuses"
+
+
+def test_a_declared_licence_still_wins_on_peachq(monkeypatch):
+    monkeypatch.setenv(Q_IMPL_ENV, "peachq")
+    monkeypatch.setenv("QCMD", "/opt/peachq/q")
+    monkeypatch.setenv(profiles.LICENCE_CONNECTIONS_ENV, "18")
+    assert profiles.allowance() == 16
 
 
 @pytest.mark.parametrize("value", ["lots", "2", "-1"])

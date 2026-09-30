@@ -377,9 +377,10 @@ licence has. On that licence it is refused like any profile over the cap. On a q
 licence that allows more concurrent connections, say how many with
 `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every start
 is held to - `--profile`, `uqs list profiles`' `fits` column and the
-positional-start warning. `all` leaves out `crypto`, because the mock replaces
-cryptorust's recorders rather than joining them; ask for it with
-`--profile all,crypto`.
+positional-start warning. On PeachQ (`UQF_Q_IMPL=peachq`, see the README's
+Requirements) there is no cap at all, so `all` starts as it is. `all` leaves out
+`crypto`, because the mock replaces cryptorust's recorders rather than joining
+them; ask for it with `--profile all,crypto`.
 
 Two things profiles deliberately do **not** do. They do not change
 `startwithall`, so `start all` is untouched - `default` describes that set so

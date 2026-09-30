@@ -87,6 +87,12 @@ the opt-in, or a KDB-X one declared as PeachQ. A green run therefore always says
 which interpreter made it green. What passes on PeachQ is not verified here;
 KDB-X stays the reference.
 
+What PeachQ buys is scale: it has no connection licence, so the community
+edition's 16-connection cap does not apply. On `UQF_Q_IMPL=peachq` a start is
+held to no connection budget - `uqs start --profile all` starts,
+`uqs list profiles` shows `no cap`, and monitor1 watches every process instead
+of giving some up. `UQS_LICENCE_CONNECTIONS`, if set, still wins.
+
 Run everything from the repository root - the load scripts use paths relative to
 it (e.g. `src/foundation/stats.q`).
 

@@ -137,8 +137,8 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
                 "profile": name,
                 "leaves": ", ".join(profiles.PROFILES[name]),
                 "processes": str(len(resolved)),
-                "slots": f"{held}/{slots}",
-                "fits": "yes" if held <= slots else "NO",
+                "slots": f"{held}/{'no cap' if slots is None else slots}",
+                "fits": "yes" if slots is None or held <= slots else "NO",
             }
         )
     return rows
