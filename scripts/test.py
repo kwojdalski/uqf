@@ -24,6 +24,9 @@ between them:
                        run as a script in its own process. Nothing ran these
                        before; the first commit to add one found a false
                        claim in uqs_tables.q that had stood untested.
+  q-docs               the ```q blocks in docs/ marked `<!-- q-example: ... -->`,
+                       one q process per document. The q lane CI runs on
+                       PeachQ, which needs no licence.
   q-two-instances      a second kdb+ process is started on the starter
                        pack's HDB and a bounded worker moves trades out of
                        it - the only lane in which a worker's LIVE path runs.
@@ -56,6 +59,7 @@ shell quoting nobody should have to review.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -239,6 +243,36 @@ def lane_q_scripts() -> None:
             _q(f"q-scripts:{script.stem}", str(script), env={"UQFSTATUSDIR": statusdir})
 
 
+def lane_q_docs() -> None:
+    """The ```q blocks in docs/ that are marked to run, one q process per
+    document - see scripts/dev/doc_examples.py for the markers.
+
+    On PeachQ this is the one q lane a hosted CI runner can have: KDB-X needs
+    a licence, PeachQ does not. A block correct on KDB-X that PeachQ cannot
+    run is marked `kdbx-only` with the reason, and named here as skipped.
+    """
+    _banner("q-docs: the q blocks in docs/ that are marked to run")
+    spec = importlib.util.spec_from_file_location(
+        "doc_examples", REPO / "scripts" / "dev" / "doc_examples.py"
+    )
+    assert spec and spec.loader
+    docex = importlib.util.module_from_spec(spec)
+    # Registered before running it: its dataclass resolves annotations
+    # through sys.modules, and an unregistered module is not there.
+    sys.modules[spec.name] = docex
+    spec.loader.exec_module(docex)
+    impl = (os.environ.get(Q_IMPL_ENV) or "kdbx").strip().lower()
+    with tempfile.TemporaryDirectory() as tmp:
+        sessions, skipped = docex.write_sessions(REPO, Path(tmp), impl)
+        for block in skipped:
+            print(f"skipped on {impl}: {block.where} (kdbx-only: {block.kdbx_only})")
+        if not sessions:
+            raise SystemExit("q-docs: no q blocks in docs/ are marked to run")
+        for session in sessions:
+            with tempfile.TemporaryDirectory() as statusdir:
+                _q(f"q-docs:{session.stem}", str(session), env={"UQFSTATUSDIR": statusdir})
+
+
 def lane_q_two_instances() -> None:
     _banner("q-two-instances: data moved between two kdb+ processes")
     # The upstream is a second q process on a port; its own status directory
@@ -346,6 +380,7 @@ LANES: dict[str, Callable[[], None]] = {
     "q-backfill-process": lane_q_backfill_process,
     "q-examples": lane_q_examples,
     "q-scripts": lane_q_scripts,
+    "q-docs": lane_q_docs,
     "q-two-instances": lane_q_two_instances,
     "python": lane_python,
     "q-coverage": lane_q_coverage,
@@ -364,6 +399,7 @@ ALL = [
     "q-order",
     "q-examples",
     "q-scripts",
+    "q-docs",
     "q-backfill-process",
     "q-two-instances",
     "q-metatables-hdb",

@@ -38,6 +38,7 @@ work off a `requests` table, and `markout_at_horizons` off `trades`.
 
 ## Shape
 
+<!-- q-example: run -->
 ```q
 event_tape:([] time:`timestamp$();  sym:`symbol$();   action:`symbol$();
                side:`long$();       size:`float$();   price:`float$();

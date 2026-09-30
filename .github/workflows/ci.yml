@@ -172,6 +172,49 @@ jobs:
         # in the declaring q files.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_declaration_reference.py
+      - name: Install PeachQ (pinned)
+        # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can
+        # have one - which makes it the only interpreter CI can run q with.
+        # Pinned by version AND by the sha256 the release publishes, and put
+        # beside the tree, NOT on PATH: every other step still finds no q, so
+        # nothing here can be mistaken for a KDB-X run. It is reached only by
+        # the steps below, which name it through QCMD with UQF_Q_IMPL=peachq,
+        # and scripts/test.py asks the binary which q it is before any lane.
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          PEACHQ_VERSION: v0.88
+          PEACHQ_SHA256: b95d61c7c73c9ab5a0de12bab3705d96f0db551cb20db376afbc9f7bcdfc1d57
+        run: |
+          set -euo pipefail
+          url="https://github.com/peachq-org/peachq/releases/download/${PEACHQ_VERSION}/peachq-linux-x86_64.tar.gz"
+          curl -sSfL "$url" -o "$RUNNER_TEMP/peachq.tar.gz"
+          echo "${PEACHQ_SHA256}  $RUNNER_TEMP/peachq.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/peachq"
+          tar -xzf "$RUNNER_TEMP/peachq.tar.gz" -C "$RUNNER_TEMP/peachq"
+          echo "PEACHQ_BIN=$RUNNER_TEMP/peachq/q" >> "$GITHUB_ENV"
+      - name: Run the marked q blocks in docs/ on PeachQ
+        # A block marked `<!-- q-example: ... -->` is a claim that it runs;
+        # this holds every one to it. Blocking: a marked block that fails
+        # here is either wrong, or correct on KDB-X only - and then it says
+        # so with `kdbx-only: REASON` rather than being unmarked.
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
+        run: UQF_Q_IMPL=peachq QCMD="$PEACHQ_BIN" python3 scripts/test.py q-docs
+      - name: Run the qUnit suite on PeachQ (informational)
+        # Not a verdict on the tree - KDB-X is the verified interpreter - but
+        # the one measure CI can take of how far PeachQ and the suite agree.
+        # Never fails the build; the step summary says how it went.
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
+        continue-on-error: true
+        timeout-minutes: 8
+        shell: bash
+        run: |
+          if UQF_Q_IMPL=peachq QCMD="$PEACHQ_BIN" python3 scripts/test.py q-unit; then
+            echo "qUnit on PeachQ: passed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "qUnit on PeachQ: failed (informational - KDB-X is the verified interpreter)." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
   web:
     name: Browser application

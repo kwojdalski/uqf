@@ -208,7 +208,10 @@ repos:
             # scenario added there found a false claim in uqs_tables.q about
             # `quotes` being usable by cross_book_at unreshaped.
             python3 scripts/test.py q-scripts
-        files: '\.q$'
+            # The ```q blocks in docs/ marked `<!-- q-example: ... -->`; CI
+            # runs the same lane on PeachQ, so here is where KDB-X checks them.
+            python3 scripts/test.py q-docs
+        files: '\.(q|md)$'
         pass_filenames: false
 
       - id: doc-links
