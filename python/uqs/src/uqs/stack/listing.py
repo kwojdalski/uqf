@@ -11,6 +11,7 @@ from uqs.logger import get_logger
 from uqs.model import profiles
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_by_process
+from uqs.model.jobs import job_rows
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
 from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
@@ -143,7 +144,13 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     return rows
 
 
+def _list_jobs(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
+    """Every streaming job, normalizer and bounded worker, from its declaration."""
+    return job_rows(paths.repo_root)
+
+
 LISTABLE_KINDS: dict[str, Any] = {
+    "jobs": _list_jobs,
     "processes": _list_processes,
     "profiles": _list_profiles,
     "fields": _list_fields,
@@ -160,8 +167,9 @@ def list_items(
     startwithall, resolved+overridden), 'fields' (process.csv's valid
     column names, for config-set), 'overrides' (every process_overrides.csv
     entry currently set), 'env' (build_env()'s resolved KDBBASEPORT/
-    KDBHDB/... values), or 'dependencies' (each process's input tables and
-    who publishes them). See LISTABLE_KINDS for the full, extensible set.
+    KDBHDB/... values), 'dependencies' (each process's input tables and
+    who publishes them), or 'jobs' (every declared ETL job, and whether it is
+    still a scaffold). See LISTABLE_KINDS for the full, extensible set.
     """
     if kind not in LISTABLE_KINDS:
         raise UqsError(f"unknown list kind {kind!r} - {sorted(LISTABLE_KINDS)}")
