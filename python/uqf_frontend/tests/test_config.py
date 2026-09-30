@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import csv
+from pathlib import Path
+
 import pytest
 
-from uqf_frontend.config import GATEWAY_PORT_OFFSET, Settings
+from uqf_frontend.config import DEFAULT_BASE_PORT, GATEWAY_PORT_OFFSET, Settings
+
+UQF_ROOT = Path(__file__).resolve().parents[3]
+
+#: The vendored process table the stack's gateway1 row comes from. uqs copies
+#: it into the data directory and overlays it, but never moves gateway1.
+VENDORED_PROCESS_CSV = UQF_ROOT / "lib" / "torq-finance-starter-pack" / "appconfig" / "process.csv"
 
 
 def test_defaults_point_at_the_local_gateway():
@@ -21,6 +30,26 @@ def test_the_default_port_is_the_gateways_not_another_processes():
     s = Settings()
     assert s.port == s.base_port + GATEWAY_PORT_OFFSET
     assert s.port == 6057
+
+
+def test_the_gateway_offset_is_the_one_process_csv_declares():
+    """GATEWAY_PORT_OFFSET restates `{KDBBASEPORT}+7` from the vendored
+    process.csv. The test above checks the arithmetic against itself; this one
+    checks the 7 against the row, so a vendor upgrade that moved gateway1 fails
+    here instead of sending every routed query to whatever took port 6057.
+    """
+    with VENDORED_PROCESS_CSV.open(newline="") as f:
+        rows = {r["procname"]: r for r in csv.DictReader(f)}
+    assert rows["gateway1"]["port"] == f"{{KDBBASEPORT}}+{GATEWAY_PORT_OFFSET}"
+
+
+def test_the_default_base_port_is_the_one_uqs_starts_the_stack_on():
+    """Two packages, one base port. The frontend does not import uqs at
+    module level, so the number is written in both; this is what keeps them
+    the same."""
+    from uqs.model.registry import DEFAULT_BASE_PORT as UQS_BASE_PORT
+
+    assert DEFAULT_BASE_PORT == UQS_BASE_PORT
 
 
 def test_a_non_default_base_port_moves_the_gateway_with_it(monkeypatch):

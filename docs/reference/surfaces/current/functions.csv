@@ -88,6 +88,7 @@ qetl.cfg,raw_from,function,2,source k
 qetl.cfg,require_valid,function,1,
 qetl.cfg,reset,function,1,
 qetl.cfg,set_layers,function,3,overrides yaml defaults
+qetl.cfg,set_override,function,2,k v
 qetl.cfg,sources,value,,
 qetl.cfg,truthy,value,,
 qetl.cfg,yaml_values,dict,,

@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 from uqf_airflow_provider.status_reader import (
+    FILENAME_PREFIX,
+    FILENAME_SUFFIX,
     STATES,
     MalformedStatusFile,
     read_status_file,
@@ -50,6 +52,18 @@ def test_states_match_the_q_writer():
     src = STATUS_Q.read_text()
     line = next(ln for ln in src.splitlines() if ln.startswith("status_states:"))
     assert set(re.findall(r"`(\w+)", line)) == set(STATES)
+
+
+def test_status_file_name_matches_the_q_writer():
+    """The file name is how a reader finds a status file at all. `status.q`
+    builds it in place (`"/airflow_status_",string[instance_id],".txt"`), so a
+    change there leaves every reader looking for files that are never
+    written, reporting "no status yet" for a worker that is running.
+    """
+    src = STATUS_Q.read_text()
+    built = re.findall(r'"/(\w+)",string\[instance_id\],"([.\w]+)"', src)
+    assert built, "status.q no longer builds the path the way this test reads it"
+    assert set(built) == {(FILENAME_PREFIX, FILENAME_SUFFIX)}
 
 
 def test_reads_a_completed_run(tmp_path):
