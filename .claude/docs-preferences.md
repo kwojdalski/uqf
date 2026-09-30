@@ -143,6 +143,24 @@ or to the code that enforces the rule.
 > a follow-up ("strip ETL-nn from code too"), with a one-off renumbering script
 > (since deleted) and its CI step, which existed only to keep that spelling.
 
+**A quick start is what a first run needs, and nothing else.** Migration notes
+for old installs, install internals and the reasoning behind a behaviour go
+elsewhere: the migration notes nowhere (the code refuses and prints the fix),
+the internals to an Installing section, and the reasoning to the module that
+implements it, which in this tree already holds it.
+
+> *2026-09-30.* Asked for advice on shortening sections, then for the proposals.
+> `guides/uqs.md`'s Quick start was 161 lines: two package renames, the data
+> directory's two moves, `.pth` and console-script internals, zsh completion's
+> first-TAB fix and `clean --match`. Now 20 lines, with an Installing section
+> and `### Cleaning up` under Commands. `### monitor1` and
+> `### CLI's own logging` were cut to what the user sees; their arguments were
+> already in `stack/monitor_budget.py`, `logger/floats.py` and
+> `stack/startup.py`. Start-order paragraphs that had drifted into the timeout
+> section went back to the section they describe, the port table got its own
+> heading, and six claim-style headings became names
+> (`### Started is not the same as fed` -> `### Idle subscribers`).
+
 **No prescriptive meta-rules about the documentation process itself.** Describe
 what is, not how future documents must be filed.
 

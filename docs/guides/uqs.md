@@ -37,168 +37,30 @@ current process topology, table-level data pipeline, and config-generation flow.
   elsewhere](#installing-jobs-from-elsewhere)
 - [MCP server](#mcp-server)
 - [Other commands](#other-commands)
+- [Installing](#installing)
 - [Known harmless warnings](#known-harmless-warnings)
 
 ## Quick start
 
-The CLI is also a `uqs` script entry point (`pyproject.toml`'s
-`[project.scripts]`), so every command below is
-`uv run --project python/uqs uqs ...`. Shorter still, one-time setup:
-
 ```
-scripts/dev/install.sh
-```
-
-installs `uqs` onto your `PATH` as an editable link back to this repo's source,
-so from then on, from anywhere:
-
-```
-uqs start all      # start every startwithall=1 process
-uqs summary        # status table
-uqs stop all       # stop everything
+scripts/dev/install.sh     # once: puts `uqs` on your PATH, editable
+uqs start all              # every startwithall=1 process
+uqs summary                # status table
+uqs stop all               # stop everything
 ```
 
-The script is `uv tool install --force --editable python/uqs` plus the two steps
-a one-liner skips: removing any install registered under a former distribution
-name, and then checking the command actually runs. Both matter for the reason
-the next paragraph gives. It is idempotent - re-run it after pulling, or any
-time `uqs` behaves like an older copy of itself.
+Without the install - in CI or a fresh checkout - prefix each command with
+`uv run --project python/uqs`, which resolves the package's dependencies on
+demand. Either form runs from any directory.
 
-**Tab completion**, once per shell, after the install above:
+The first `start` creates the data directory `output/uqs/` (gitignored) and
+copies the app's sample `hdb/`/`dqe/` data into it. Logs, tickerplant logs, the
+write-down database and every process's reads and writes stay inside it, never
+inside `lib/`. `uqs clean` wipes it (see [Cleaning up](#cleaning-up)).
 
-```
-uqs --install-completion      # bash, zsh, fish or PowerShell - detected
-```
-
-Open a new shell and TAB completes process names (`uqs start pos<TAB>`,
-`uqs logs rdb1 st<TAB>`), `--profile` names, the kinds `list` takes and the
-columns `--sort` takes for that kind, `config-get`/`config-set` fields, `--port`
-on `query`/`schema` (zsh and fish show which process each port belongs to),
-`--level`, `--stream`, `new-job --kind`, and the plant's tables for
-`--subscribe-to`/`--publishes`. Every value is read from the same registry the
-command resolves against, so a new pipeline completes as soon as it is declared.
-`uqs --show-completion` prints the script instead of installing it. It needs
-`uqs` on your `PATH`: the `uv run --project python/uqs uqs` form has nothing for
-the shell to call.
-
-TAB completes on the **first** press. Typer's own zsh script does not: it
-generates a `#compdef` file whose body defines a helper and registers it, so the
-first TAB in each new shell rebinds `uqs` and offers nothing, and only the
-second completes. `uqs` replaces that script with one whose body runs the
-completion directly (`cli/zsh_completion.py`), so `--install-completion` writes
-the fixed version.
-
-Run it **from an interactive terminal**. The shell is detected by walking the
-process tree with `ps`, which lists only tty-attached processes - so from a
-script, a CI step or an agent's non-interactive shell there is nothing to find,
-and the install fails with `Shell None is not supported.` That message names the
-detection failure, not a missing feature: the same command in a real terminal
-installs normally.
-
-**Editable updates the code, not the script names, and not the path.** A `.pth`
-file points the install at `python/uqs/src`, so every source edit is live the
-moment it is saved - no reinstall for a new command, option or fix. Two things
-are NOT live, and both bite after a rename:
-
-- **The console scripts** in `[project.scripts]` are generated once, at install
-  time, and the generated script names its import directly. An install predating
-  a rename keeps working, keeps picking up new code, and still calls itself by
-  the old name - which looks like the rename never happened.
-- **The path in the `.pth` file** is written once too, so an install made before
-  the package DIRECTORY moved points at somewhere that no longer exists. That
-  one does not degrade gracefully: the command fails to import rather than
-  running old code, which is the better of the two failures but needs the same
-  fix.
-
-This package has been renamed twice, so there are two old names in circulation.
-`uv tool list` shows which you have:
-
-  | if `uv tool list` shows | it is from | the script imports |
-  | --- | --- | --- |
-  | `uqs` | now | `uqs.cli` |
-  | `uqf-stack` | the rename before this one | `uqf_stack.cli` - gone |
-  | `torq-orchestrator` | before that | `torq_orchestrator.cli` - gone |
-
-A distribution rename means `uv tool install` will NOT replace the old entry: it
-installs a second tool, and the old one goes on owning a broken command on your
-`PATH`. Uninstall by the old name first, whichever you have:
-
-```
-uv tool uninstall uqf-stack              # or torq-orchestrator, if older
-uv tool install --force --editable python/uqs
-```
-
-**The data directory has moved twice.** It was `scripts/output/uqf-stack/`,
-became `scripts/output/uqs/` with the package rename, and is now `output/uqs/`,
-beside everything else the repository generates at runtime. It holds the HDB,
-the tickerplant logs and the write-down database, and nothing reads the old
-paths any more - `uqs` refuses to run while an old one exists and the new one
-does not, and prints the command. No downtime needed: every path is inside the
-one checkout, so this is a rename on one filesystem and every running process
-keeps the files it already has open:
-
-```
-mkdir -p output && mv scripts/output/uqs output/uqs          # or scripts/output/uqf-stack
-```
-
-Restart the stack afterwards when convenient, so each process reopens at the new
-path rather than through the handle it already holds.
-
-Forgetting the move does not error - `bootstrap()` regenerates `process.csv` and
-`database.q` on every command, so the stack would start cleanly against an EMPTY
-HDB and every historical query would return no rows. That is why
-`check_data_dir_was_migrated` refuses to run when the old directory is present
-and the new one is not, and prints the `mv` above.
-
-It refuses `stop` as well, which looks unhelpful and is not: `process.csv` lives
-inside the data directory, so a `stop` allowed through would bootstrap the NEW
-directory into existence, leave both present, silence the check for good and
-orphan the old HDB. The block stays; the message is what had to give, and it no
-longer tells you to stop first.
-
-`--force` is what re-generates the scripts. The same applies to any entry point
-added or renamed later.
-
-Without that one-time step, or in CI/a fresh checkout, fall back to `uv run`:
-
-```
-uv run --project python/uqs uqs start all
-uv run --project python/uqs uqs summary
-uv run --project python/uqs uqs stop all
-```
-
-Run from anywhere - the command resolves its own location and works out
-`lib/torq`/`lib/torq-finance-starter-pack`'s absolute paths itself;
-`uv run --project python/uqs` (or the installed `uqs`) resolves that package's
-dependencies (typer, loguru, rich, kola, fastmcp) on demand, no separate
-`uv sync` step needed. First `start` bootstraps a data directory at
-`output/uqs/` (gitignored with the rest of `output/`, which also holds
-`timer_replay_example.q`'s run artifacts and the dev tools' databases) by
-copying the app's sample `hdb/`/`dqe/` data there - `logs/`, `tplogs/`,
-`wdbhdb/`, and every process's actual read/write activity all happen inside that
-directory, never inside `lib/`. Run `uqs clean` to wipe it and start fresh next
-time.
-
-`clean` also takes part of it. `--match REGEX` keeps only the entries whose path
-*under* `output/uqs/` the regex finds - so the pattern reads the way the tree
-does, not as an absolute path:
-
-```
-uqs clean --dry-run                       # what a full wipe would remove
-uqs clean --match '^logs$' --dry-run      # the logs alone, still removing nothing
-uqs clean --match '^(logs|tplogs)$'       # and now actually remove them
-uqs clean --match 'out_rdb1'              # one process's files, wherever they sit
-```
-
-A directory the pattern matches goes whole; one it does not is descended into,
-which is what lets `out_rdb1` be found without naming `logs`. The match is a
-search, not a full match, so anchor with `^`/`$` to be exact. `--dry-run` (`-n`)
-lists what would go, with sizes, and removes nothing - worth doing first for
-anything but a full wipe, because none of this is reversible.
-
-Requires KDB-X (`q` on `PATH`) elsewhere in this repo for `src/`/`tests/` - plus
-`envsubst` and `rlwrap` (TorQ's own `torq.sh`, which this still drives under the
-hood, needs both; on macOS: `brew install gettext rlwrap`).
+Requires KDB-X (`q` on `PATH`), plus `envsubst` and `rlwrap`, which TorQ's
+`torq.sh` needs (on macOS: `brew install gettext rlwrap`). See
+[Installing](#installing) for tab completion and reinstalling after a rename.
 
 ## Reading the database's shape
 
@@ -213,7 +75,7 @@ uqs schema --proc hdb1      # the history instead of today
 uqs schema --port 6052      # a port directly, skipping --proc resolution
 ```
 
-### When history cannot answer
+### Missing partitions
 
 ```
 $ uqs schema --proc hdb1
@@ -332,6 +194,23 @@ quoted `"posbook1 markout1"` still works. `--port` sets `KDBBASEPORT` (default
 `FILE` as CSV or Parquet, format inferred from the extension - see
 `python/uqs/README.md`'s "Exporting output" section. Full `--help` is available
 on the command itself and on every subcommand.
+
+### Cleaning up
+
+`uqs clean` wipes `output/uqs/`. `--match REGEX` keeps only the entries whose
+path *under* `output/uqs/` the regex finds:
+
+```
+uqs clean --dry-run                       # what a full wipe would remove
+uqs clean --match '^logs$' --dry-run      # the logs alone, still removing nothing
+uqs clean --match '^(logs|tplogs)$'       # and now actually remove them
+uqs clean --match 'out_rdb1'              # one process's files, wherever they sit
+```
+
+A directory the pattern matches goes whole; one it does not is descended into,
+which is how `out_rdb1` is found without naming `logs`. The match is a search,
+so anchor with `^`/`$` to be exact. `--dry-run` (`-n`) lists what would go, with
+sizes - worth running first, since none of this is reversible.
 
 ## Replaying a tickerplant log
 
@@ -522,7 +401,7 @@ name --- plus `stp1` itself as the listener and one external process
 budget is blind to anything outside the registry that opens a handle, which is
 part of what the two reserved slots absorb.
 
-### Started is not the same as fed
+### Idle subscribers
 
 A subscriber started without its producer subscribes **successfully**. The table
 is defined on the tickerplant whether or not anybody publishes to it, so the
@@ -548,6 +427,30 @@ and `summary` says the same about processes that are already up:
     publishes - start `uqs start cryptomock1`, unless it is coming
     from cryptorust's kdb recorder, which cryptomock1 stands in for.
 ```
+
+Both warnings are **advisory and never block a start**. Bringing a subscriber up
+before its feed is how you avoid missing the first batch, and some tables come
+from outside the process list entirely - the Databento feed handler,
+cryptorust's recorders, a backfill run - which is why those are named as context
+rather than reported as faults. Processes you name in the same command count as
+present, so the recommended form for a chain is silent:
+
+```bash
+uqs start marketdata1 superbook1 arbitrage1
+```
+
+`crossarb1` is a second consumer of that chain, answering the other arbitrage
+question - the direct book against a synthetic route rather than two sources on
+one pair. The chain plus BOTH detectors is four plant connections on top of
+whatever is already running, which is what [`--profile arbitrage`](#profiles)
+exists for: it starts that set and is checked against the budget first, where a
+positional start is only warned about. See [the cross-arbitrage
+service](../services/cross-arbitrage.md).
+
+The graph behind all of this is the `subscribe_to`/`publishes` pair on each
+`Pipeline`, the same declaration the generated `database.q` and the `.qetl.dag`
+job graph are built from - so what you are warned about and what is running
+cannot describe different systems.
 
 `summary` shows the whole graph, not just the unsatisfied part of it, in three
 columns derived from the same declarations:
@@ -581,7 +484,7 @@ by default anyway, because a column nobody knows about answers nothing: a reader
 on a narrow terminal can ask for fewer, while one who never learns the graph is
 there has no such move.
 
-### Responds: answering within half a second
+### Responds column
 
 `Status` comes from a PID lookup, and a hung process still has a PID.
 `Heartbeat` notices only after a tolerance of missed beats. `Responds` asks
@@ -602,104 +505,47 @@ table.
 
 The probe is the handshake, not a query, so no q code runs on the process; q
 answers the handshake from its main loop, which is exactly what is busy when a
-process is unresponsive. It is done from `uqs` with a plain socket, because
-kola's timeout is whole seconds. It is not q's `-T`, which limits how long one
-client query may run on a process - it says nothing about a process stuck in its
-own timer, and it applies to every client, the gateway's long queries included.
-Each probe briefly holds one inbound connection, and TorQ logs it like any
-other. `--probe-timeout 0` skips it.
+process is unresponsive. Each probe briefly holds one inbound connection, and
+TorQ logs it like any other. `--probe-timeout 0` skips it.
 
-### summary's two-minute timeout
+### summary --timeout
 
-`summary` is the command you run when something is already wrong, which makes it
-the worst thing in the CLI to hang - and each of its blocking steps could. the
-process listing (`ps`, then `lsof`) is a subprocess, the heartbeat lookup talks
-to `monitor1`, which at its connection cap accepts the TCP connection and then
-never answers, and the `Responds` probe connects to every process that is up.
+`summary` gets **one budget for the whole command** (120s by default): listing
+the processes, asking `monitor1` for heartbeats, and probing each process. Any
+of them could otherwise hang - `monitor1` at its connection cap accepts a
+connection and never answers.
 
 ```
 uqs summary --timeout 10   # fail fast
 uqs summary --timeout 0    # wait forever
 ```
 
-It is one **budget for the whole command**, not a limit per call - two steps
-given ten seconds each is a twenty-second hang, which is not what anyone means
-by a ten-second timeout. The process listing is asked first and the heartbeat
-query gets whatever is left, with a floor of one second so the last step fails
-on its own terms rather than on an expired clock. The probe runs last and takes
-the smaller of `--probe-timeout` and what remains; with nothing left it is
-skipped and the column shows `-`. Running out is a refusal, not a traceback:
+The listing goes first and the heartbeat lookup gets what is left (at least one
+second); the probe takes the smaller of `--probe-timeout` and the remainder, or
+is skipped, showing `-`. A listing that runs out is a refusal, not a traceback:
 
 ```
 listing processes did not finish within 120s
 ```
 
-A heartbeat lookup that runs out is not fatal: it degrades to the same "monitor1
-could not be reached" the column already knows how to say.
+A heartbeat lookup that runs out degrades to the column's usual "monitor1 could
+not be reached".
 
-Both warnings are **advisory and never block a start**. Bringing a subscriber up
-before its feed is how you avoid missing the first batch, and some tables come
-from outside the process list entirely - the Databento feed handler,
-cryptorust's recorders, a backfill run - which is why those are named as context
-rather than reported as faults. Processes you name in the same command count as
-present, so the recommended form for a chain is silent:
+### monitor1
 
-```bash
-uqs start marketdata1 superbook1 arbitrage1
-```
+Upstream ships `monitor1` with `startwithall=0`; uqs turns it on
+(`VENDORED_STARTWITHALL_OVERLAY` in `stack/procs.py`). It is the only process
+that collects heartbeats, so without it `summary`'s Heartbeat column reads "not
+collected" on a healthy stack.
 
-`crossarb1` is a second consumer of that chain, answering the other arbitrage
-question - the direct book against a synthetic route rather than two sources on
-one pair. The chain plus BOTH detectors is four plant connections on top of
-whatever is already running, which is what [`--profile arbitrage`](#profiles)
-exists for: it starts that set and is checked against the budget first, where a
-positional start is only warned about. See [the cross-arbitrage
-service](../services/cross-arbitrage.md).
-
-The graph behind all of this is the `subscribe_to`/`publishes` pair on each
-`Pipeline`, the same declaration the generated `database.q` and the `.qetl.dag`
-job graph are built from - so what you are warned about and what is running
-cannot describe different systems.
-
-### monitor1, the one overridden default
-
-Upstream ships `monitor1` with `startwithall=0`, for the licence reason above.
-That left the heartbeat unusable: every process *publishes* a heartbeat
-regardless, but `monitor1` is the only thing that *collects* them, so `.hb.hb`
-was empty and `uqs summary`'s Heartbeat column read "not collected" on a
-perfectly healthy stack. A health signal that only ever appears if an operator
-knows to start one more process by hand is not a health signal, so
-`procs.VENDORED_STARTWITHALL_OVERLAY` turns it on.
-
-Two consequences worth knowing:
-
-- **Under the community licence the coverage is partial, and deliberately so.**
-  `monitor1` opens one handle per process it monitors, and the licence caps a q
-  process at 16 concurrent connections. Untrimmed on this tree it wants 32 - so
-  it saturated, and a saturated monitor cannot *accept* the handle `uqs summary`
-  needs to read `.hb.hb`. Heartbeats were collected correctly and nothing could
-  read them, which is the worst shape of monitoring failure available: an empty
-  Heartbeat column on a fleet that was being monitored perfectly well.
-
-  `stack/monitor_budget.py` therefore trims `.servers.CONNECTIONS` to fit
-  `LICENCE_CONNECTION_LIMIT` minus `INBOUND_RESERVE`, giving up proctypes in
-  `MONITOR_CONNECTION_SACRIFICE_ORDER` - `sortworker`, `reporter`,
-  `housekeeping`, `feed`, then `metrics` - until the rest fit. Core
-  infrastructure is never given up: a stack whose `rdb` or plant is unheard is
-  not monitored in any useful sense. Processes of a dropped proctype show `-` in
-  the Heartbeat column, and `summary` names them rather than leaving the dash to
-  be guessed at. On a fully-licensed kdb+/KDB-X nothing is trimmed and it
-  reaches the whole fleet.
-
-  Partial coverage that can be queried beats full coverage that cannot.
-
-- **`monitor1` subscribes to the proctypes in `.servers.CONNECTIONS`**, and the
-  vendored settings file lists TorQ's own types only. The orchestrator reads
-  that list back out and appends `metrics` (via a `-.servers.CONNECTIONS`
-  command-line override, since `.proc.override[]` runs after every config layer)
-  so uqf's standing ETLs are covered too. `backfill` is deliberately left off: a
-  bounded worker's heartbeat row would outlive the job and age into a permanent
-  false `error`.
+- **Under the community licence, coverage is partial.** A q process may hold 16
+  connections, and a monitor with none left cannot accept the query `summary`
+  reads heartbeats with. So `stack/monitor_budget.py` stops monitoring
+  `sortworker`, `reporter`, `housekeeping`, `feed`, then `metrics` processes
+  until the rest fit. Those show `-` in the Heartbeat column, and `summary`
+  names them. On a fully licensed kdb+/KDB-X nothing is dropped.
+- **uqf's standing ETLs (`metrics`) are monitored too**; `backfill` workers are
+  not, because a finished job's heartbeat would age into a false `error`.
 
 To get the upstream behaviour back:
 
@@ -707,7 +553,9 @@ To get the upstream behaviour back:
 uqs config-set monitor1 startwithall 0
 ```
 
-Default ports (base `6050`, override with `--port <n>`):
+### Default ports
+
+Base `6050`, override with `--port <n>`:
 
   | Port        | Process       | Role                                                                       |
   | ---         | ---           | ---                                                                        |
@@ -816,7 +664,7 @@ Ctrl-C; if `summary` cannot say which those were, it stops everything it was
 asked to start. To start in the background and watch separately instead,
 `uqs start` and `uqs logs -f` are still there.
 
-### When a process sits idle: its own log
+### Where a process stopped
 
 Every uqf process script - `torq_stream.q` (every streaming job),
 `torq_backfill.q`, `torq_tap.q`, `run_stream.q` - logs the stages where it can
@@ -858,9 +706,8 @@ uqs query ".qetl.log.debug 1b" --port <port>              # a process already ru
 
 ### CLI's own logging
 
-`logs --level` filters what the *q processes* wrote. It says nothing about what
-`uqs` itself is doing, and the two are easy to confuse when a command reports
-something surprising about a fleet whose own logs look fine.
+`logs --level` filters what the *q processes* wrote. `--debug` shows what `uqs`
+itself is doing:
 
 ```
 uqs --debug summary        # this invocation only
@@ -868,28 +715,13 @@ uqs summary --debug        # the same, spelled on the command
 LOG_LEVEL=DEBUG uqs summary   # same, for a shell session
 ```
 
-`--debug` wins over `LOG_LEVEL`; an unrecognised `LOG_LEVEL` falls back to
-`INFO` rather than refusing to run.
+`--debug` wins over `LOG_LEVEL`. `NO_COLOR=1` turns colour off and
+`FORCE_COLOR=1` keeps it through a pipe (e.g. `less -R`). Floats in these lines
+are cut to six decimal places (`LOG_FLOAT_DECIMALS` in `logger/floats.py`).
 
-Each line is the level, then the message - `ERROR    | unknown process(es) ...` -
-with the level and message coloured on a terminal and plain in a pipe or a file.
-At `DEBUG` the line also names where it came from (`uqs.cli.shared:_die:132`).
-`NO_COLOR=1` turns colour off and `FORCE_COLOR=1` keeps it through a pipe, e.g.
-for `less -R`; `NO_COLOR` wins if both are set.
-
-A float in these lines is written with **at most six decimal places**, trailing
-zeros dropped - `1.0850000000000002` prints as `1.085`, `2.5` as `2.5`. One
-global setting, `LOG_FLOAT_DECIMALS` in `python/uqs/src/uqs/logger/floats.py`,
-applies to every `uqs` module's log calls. It rounds only float *arguments*: a
-message that asks for its own format (`{:.3f}`) keeps it, and text is never
-rewritten, so a q timestamp in a line from `uqs logs` keeps all nine digits.
-
-This matters most on `summary`, because two of its three lookups degrade instead
-of failing. A port map that cannot be built leaves every `down` row with a blank
-port, and an unreachable `monitor1` leaves the whole Heartbeat column blank - at
-the default level both look the same as a stack with nothing to report.
-`--debug` prints the reason, and separates `monitor1` not being a declared
-process from `monitor1` being declared but not answering:
+It matters most on `summary`, where a port map that cannot be built or an
+unreachable `monitor1` leaves a column blank rather than failing. `--debug`
+prints why:
 
 ```
 summary base_port=6050 torqdata=.../output/uqs
@@ -900,19 +732,12 @@ parsed 46 row(s): 23 up, 23 down
 starved process(es): executions1, marks1
 ```
 
-`parsed N row(s)` against the process listing's line count is the one to read
-when the table looks short: it is the only place the rows the listing emitted
-and the rows the parser kept are both visible.
+If the table looks short, compare `parsed N row(s)` with the listing's line
+count. `uqs raw -- summary` still runs torq.sh's own, slower check.
 
-The listing asks the operating system once - one `ps` for every command line,
-one `lsof` for the ports of the ones that matched - rather than running
-`torq.sh summary`, which checked the processes one at a time with some twenty
-forks each and bootstrapped (starting q to fill the HDB) on every call. It
-matches exactly what torq.sh's `findproc` matches, so the two agree on what is
-up; `uqs raw -- summary` still runs torq.sh's own.
-
-In debug, `summary` also prints how long each process took to load on its latest
-start, slowest first:
+With `--debug`, `summary` also prints each process's load time on its latest
+start, read from its own `out_` log rather than over IPC (see
+`stack/startup.py`):
 
 ```
      Load time on each process's latest start, from its own log
@@ -926,15 +751,6 @@ start, slowest first:
 │              │                     │           │ stopped while loading       │
 └──────────────┴─────────────────────┴───────────┴─────────────────────────────┘
 ```
-
-It is read from each process's `out_` log, not asked over IPC, so a process at
-its connection cap cannot make it hang. TorQ prints its banner twice on a start:
-when the log file is created, and again at the very end of torq.q, once every
-code directory, the `-load` file and `.servers.startup[]` have run. The load
-time is the first timestamped line to the last one before that second banner,
-both on the process's own clock. `Started` is on that clock too - GMT unless the
-process runs with `-localtime`. After a daily log roll the start is found in the
-older file that holds it; `python/uqs/src/uqs/stack/startup.py` has the details.
 
 ## Services
 
@@ -1121,6 +937,28 @@ It requires `qcon` on `PATH`, which ships with kdb+ rather than with this
 repository; without it the command says so and points back at giving an
 expression, which works over IPC and needs nothing installed. `rlwrap` is used
 for line editing when present and skipped when not.
+
+## Installing
+
+`scripts/dev/install.sh` runs `uv tool install --force --editable python/uqs`,
+first removing any install registered under a former package name, then checks
+that `uqs` runs. It is idempotent.
+
+Editable means every source edit is live at once. The console script and the
+package path are written at install time, though, so after a package rename or
+move `uqs` keeps its old name, or fails to import: re-run the script.
+
+**Tab completion**, once per shell, from an interactive terminal:
+
+```
+uqs --install-completion      # bash, zsh, fish or PowerShell - detected
+```
+
+TAB then completes process names, `--profile` names, `list` kinds and `--sort`
+columns, `config-get`/`config-set` fields and the plant's tables, all read from
+the same registry the commands resolve against. `uqs --show-completion` prints
+the script instead. From a script or CI there is no tty to detect the shell
+from, and the install fails with `Shell None is not supported.`
 
 ## Known harmless warnings
 
