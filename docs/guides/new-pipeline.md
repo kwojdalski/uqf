@@ -234,7 +234,7 @@ The rest of this guide is the bounded case.
 A source declares its **shape**, not its plumbing. Create
 `src/etl/sources/fx_rates.q`:
 
-<!-- q-example: run -->
+<!-- q-example: run kdbx-only: src/init.q does not load on PeachQ v0.88 - registering a second .qalloc method throws 'type (allocation.q:114) -->
 ```q
 / fx_rates.q - an external reference-rate source (.qpipe.source.fx_rates).
 
@@ -310,7 +310,7 @@ covered.
 
 Mostly a declaration. Create `src/etl/workers/fx_rates_backfill.q`:
 
-<!-- q-example: run -->
+<!-- q-example: run kdbx-only: src/init.q does not load on PeachQ v0.88 - registering a second .qalloc method throws 'type (allocation.q:114) -->
 ```q
 / fx_rates_backfill.q - the fx_rates bounded worker (.qpipe.job.fx_rates_backfill).
 
@@ -586,7 +586,7 @@ refuses it.
 A published window announces itself. Register a reaction and it runs, with the
 range that was just published, as soon as the window is recorded:
 
-<!-- q-example: run -->
+<!-- q-example: run kdbx-only: src/init.q does not load on PeachQ v0.88 - registering a second .qalloc method throws 'type (allocation.q:114) -->
 ```q
 `positions set ([sym:`symbol$(); window:`timestamp$()] notional:`float$());
 

@@ -56,7 +56,7 @@ snapshotting a whole namespace every five seconds would be both wrong and
 expensive. So a job names its own tunables, in its own file, beside their
 definitions:
 
-<!-- q-example: run -->
+<!-- q-example: run kdbx-only: src/init.q does not load on PeachQ v0.88 - registering a second .qalloc method throws 'type (allocation.q:114) -->
 ```q
 .qetl.cfg.audit.watch[`cross_arbitrage;
     `.qpipe.job.cross_arbitrage.notional`.qpipe.job.cross_arbitrage.max_skew];
@@ -95,7 +95,7 @@ that was there.
 
 Two lines, in the file that owns it:
 
-<!-- q-example: run -->
+<!-- q-example: run kdbx-only: src/init.q does not load on PeachQ v0.88 - registering a second .qalloc method throws 'type (allocation.q:114) -->
 ```q
 .qetl.cfg.audit.watch[`my_job;`.qpipe.job.my_job.my_tunable];
 ```

@@ -167,11 +167,13 @@ renders as nothing:
 ```
 
 A document's marked blocks run in **one** q process, in order, the way a reader
-types them. A later block may therefore use what an earlier one defined. Each
-session loads `src/init.q` first, plus the ETL stack when a block names `.qetl`
-or `.qpipe`. `python3 scripts/dev/doc_examples.py` lists what is marked. The
-Python lane checks every marker without q, so a typo'd mode or a marker adrift
-from its fence fails there.
+types them. A later block may therefore use what an earlier one defined. A
+session loads only what its blocks use: `src/init.q` when one names a library
+namespace (`.qfwd.`, `.qalloc.`, ...), plus the ETL stack when one names `.qetl`
+or `.qpipe`. A block that uses neither runs on a bare q.
+`python3 scripts/dev/doc_examples.py` lists what is marked. The Python lane
+checks every marker without q, so a typo'd mode or a marker adrift from its
+fence fails there.
 
 A block that runs on KDB-X but not on PeachQ is marked `kdbx-only` with the
 reason. It is never left unmarked to make CI green: an unmarked block is one

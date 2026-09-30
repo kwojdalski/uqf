@@ -94,3 +94,20 @@ def test_a_document_is_one_session_in_order_with_the_etl_stack_when_named(tmp_pa
     assert text.rstrip().endswith("exit 0")
     kdbx, _ = docex.write_sessions(tmp_path, tmp_path / "out", "kdbx")
     assert "docs/g.md:11" in kdbx[0].read_text(), "KDB-X runs the kdbx-only block"
+
+
+@pytest.mark.parametrize(
+    ("body", "loads"),
+    [
+        ("t:([] a:`long$())", []),
+        (".qfwd.cross[1;2]", ["src/init.q"]),
+        (".qetl.cfg.audit.watch[`o;`.a.b]", ["src/init.q", "src/etl/init.q"]),
+    ],
+)
+def test_a_session_loads_only_what_its_blocks_use(tmp_path, body, loads):
+    """A bare block runs on a bare q - the only way it can run on an
+    interpreter the library does not load on."""
+    block = docex.Block(DOC, 2, "run", "", body)
+    text = docex.session_q([block], [tmp_path / "b.q"])
+    loaded = [line.removeprefix("\\l ") for line in text.splitlines() if line.startswith("\\l ")]
+    assert [p for p in loaded if p in ("src/init.q", "src/etl/init.q")] == loads

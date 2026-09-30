@@ -31,7 +31,7 @@ one idea:
 
 > the shortest path **excluding the direct leg** is the synthetic route
 
-<!-- q-example: transcript -->
+<!-- q-example: transcript kdbx-only: src/init.q does not load on PeachQ v0.88 - registering a second .qalloc method throws 'type (allocation.q:114) -->
 ```q
 q) .qfwd.ccy_shortest_path[`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY except `EURJPY;`EUR;`JPY]
 `EURUSD`USDJPY
