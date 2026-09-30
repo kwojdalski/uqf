@@ -93,7 +93,8 @@ max_depth:8
 / @param name a name for this reaction, unique per dataset
 / @param handler a function taking (dataset; range_from; range_to)
 / @return the reaction's name
-/ @throws error when the handler is not a 3-argument function
+/ @throws error when the handler is not a 3-argument function, or when no
+/   bounded worker fills `dataset` (see `fillable`)
 / @eg .qetl.reaction.on[`demo_deals;`rebuild_positions;{[ds;f;t] .qpos.rebuild[f;t]}]
 / `nm`, not `name`: inside the where-clause below BOTH sides of a comparison
 / written `name~/:name` resolve to the COLUMN, so the filter matched nothing
@@ -125,7 +126,8 @@ require_handler:{[dataset;nm;handler]
 / node in the job graph rather than a terminal one. Asserted rather than
 / derived - see `on`.
 / @param outputs the dataset(s) this handler writes, as a symbol or vector
-/ @throws error when outputs is not a symbol or symbol vector
+/ @throws error when outputs is not a symbol or symbol vector, or when no
+/   bounded worker fills `dataset`
 / @eg .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time within (f;t-1)}]
 on_writing:{[dataset;nm;outputs;handler]
     require_handler[dataset;nm;handler];
@@ -148,8 +150,9 @@ on_writing:{[dataset;nm;outputs;handler]
 / @param worker a worker registered with .qetl.job.bounded.define
 / @param spec_fn a function (range_from;range_to) -> the run specification
 / @return the reaction's name, which is the worker's name
-/ @throws error when the worker is not registered, or spec_fn is not binary
-/ @eg .qetl.reaction.on_worker[`upstream_feed;`demo_deals_backfill;{[f;t] `source_version`range_from`range_to!(`v1;f;t)}]
+/ @throws error when the worker is not registered, spec_fn is not binary, or
+/   no bounded worker fills `dataset`
+/ @eg .qetl.reaction.on_worker[`imported_trades;`demo_deals_backfill;{[f;t] `source_version`range_from`range_to!(`v1;f;t)}]
 on_worker:{[dataset;worker;spec_fn]
     cfg:.qetl.job.bounded.def worker;
     if[not (type spec_fn) within 100 112h;
@@ -164,8 +167,33 @@ on_worker:{[dataset;worker;spec_fn]
       }[worker;ns;spec_fn];
     register[dataset;worker;h;(),cfg`dataset;1b]}
 
+/ The datasets a reaction may watch: those a registered bounded worker fills.
+/ .
+/ Only .qetl.job.bounded.do_window announces a publication, so a reaction on
+/ anything else - a table only streaming jobs write, or a typo - would load,
+/ register, and never run: the silent failure this tree exists to prevent.
+/ Read from the worker registry when asked rather than stored, because
+/ src/etl/init.q loads every worker before any reaction, so the registry is
+/ complete by the time the first reaction registers.
+/ @return the datasets, empty when .qetl.job.bounded is not loaded
+/ @eg `demo_deals in .qetl.reaction.fillable[]  ->  1b
+fillable:{[]
+    if[not `worker_cfg in key `.qetl.job.bounded; :`$()];
+    (),distinct {x`dataset} each value .qetl.job.bounded.worker_cfg}
+
+/ Private: refuse a dataset no bounded worker fills. Here, beneath all three
+/ ways to register, and not only in `uqs job new --triggered-by`: a reaction
+/ written or edited by hand must be refused just the same (#531).
+require_fillable:{[dataset;nm]
+    if[not dataset in fillable[];
+        '"on: ",string[nm]," watches ",string[dataset],
+            ", which no bounded worker fills - only a bounded worker's published window",
+            " (.qetl.job.bounded.do_window) fires a reaction, so it would never run"];
+    }
+
 / Private: store one reaction, replacing any of the same name.
 register:{[dataset;nm;handler;outputs;derived]
+    require_fillable[dataset;nm];
     existing:$[dataset in key reactions; reactions dataset; no_reactions[]];
     existing:select from existing where not name=nm;
     reactions[dataset]:existing upsert

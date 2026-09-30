@@ -27,6 +27,11 @@ window fires a reaction (.qetl.job.bounded.do_window) - a reaction on it would
 load and never run
 ```
 
+The same rule holds beneath the scaffold: `.qetl.reaction.on`, `on_writing` and
+`on_worker` refuse, at registration, a dataset that `.qetl.reaction.fillable[]`
+does not list, so a reaction written or edited by hand cannot slip past it
+either.
+
 `--writes` is optional: the tables the handler writes. With it, the reaction
 registers through `on_writing` and becomes a node in the job graph, where a
 cycle is refused when the file loads. Writing the dataset it watches is refused

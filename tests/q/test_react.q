@@ -23,6 +23,16 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 / so the record has to be a global somewhere.
 fired:()
 
+/ The datasets these tests react to (`a, `b, `upstream, ...) are invented,
+/ and .qetl.reaction.register refuses one no bounded worker fills (#531). So
+/ `fillable` is stubbed per test to add them to the real list, and restored
+/ after - a stub here rather than a test-mode switch in react.q, which would
+/ be a way to turn the refusal off in production.
+real_fillable:.qetl.reaction.fillable
+invented:`a`b`c`upstream`invented_dataset
+setUp_fillable:{[] .qetl.reaction.fillable:{[] .rxtest.real_fillable[],.rxtest.invented};}
+tearDown_fillable:{[] .qetl.reaction.fillable:.rxtest.real_fillable;}
+
 setUp_fresh:{[]
     .qetl.reaction.reset[];
     `.rxtest.fired set ();
@@ -57,6 +67,32 @@ test_a_handler_of_the_wrong_arity_is_refused_at_registration:{[t]
     / attributed to the upstream job rather than to this wiring.
     .qunit.assertError[{.qetl.reaction.on[`a;`bad;x]};{[ds;f] ds};
         "a handler must take (dataset;range_from;range_to)"]};
+
+/ #531: a dataset no bounded worker fills would register and never fire -
+/ refused at registration, by every way to register, not only by the scaffold.
+test_a_dataset_no_bounded_worker_fills_is_refused_by_on:{[t]
+    .qunit.assertThrows[{.qetl.reaction.on[`quote;`r1;x]};.rxtest.recorder`r1;
+        "on: r1 watches quote, which no bounded worker fills*";
+        "quote is published by streaming jobs only, so a reaction on it would never run"]};
+
+test_a_dataset_no_bounded_worker_fills_is_refused_by_on_writing:{[t]
+    .qunit.assertThrows[{.qetl.reaction.on_writing[`nosuchdataset;`r1;`out;x]};.rxtest.recorder`r1;
+        "*no bounded worker fills*";"on_writing is held to the same rule as on"]};
+
+test_a_dataset_no_bounded_worker_fills_is_refused_by_on_worker:{[t]
+    .qunit.assertThrows[
+        {.qetl.reaction.on_worker[`quote;`demo_deals_backfill;x]};
+        {[f;tt] `source_version`range_from`range_to!(`v1;f;tt)};
+        "*no bounded worker fills*";"on_worker is held to the same rule as on"]};
+
+test_a_refused_reaction_is_not_registered:{[t]
+    @[{.qetl.reaction.on[`quote;`r1;x]};.rxtest.recorder`r1;{[e] ::}];
+    .qunit.assertEquals[count .qetl.reaction.for_dataset `quote;0;"the refusal stores nothing"]};
+
+test_fillable_is_what_the_bounded_workers_fill:{[t]
+    real:.rxtest.real_fillable[];
+    .qunit.assertEquals[(`demo_deals in real;`quote in real);(1b;0b);
+        "demo_deals_backfill fills demo_deals; no worker fills quote"]};
 
 test_off_stops_one_reaction_and_leaves_the_others:{[t]
     .qetl.reaction.on[`a;`keep;.rxtest.recorder`keep];
