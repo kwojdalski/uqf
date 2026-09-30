@@ -2316,7 +2316,7 @@
 .man.registerArg (".qalloc.require_method";"return";"";"1b when acceptable");
 .man.registerArg (".qalloc.require_method";"throws";"";"error naming the missing key, the unknown key, or the key whose value is not a function");
 .man.registerArg (".qalloc.require_method";"eg";"";".qalloc.require_method[`open`pick!(.qalloc.append_lot;.qalloc.pick_first)] -> 1b");
-.man.registerFunc (".qalloc.methods";".qalloc";"method name -> its declaration.";".qalloc.methods";"");
+.man.registerFunc (".qalloc.methods";".qalloc";"method name -> its declaration, as a table keyed on `name`. A keyed table, not a symbol-keyed dict of dicts. q silently collapses such a dict into a table on its first entry, and KDB-X then accepts further rows by key - but PeachQ does not: its second `methods[name]:decl` throws 'type, so src/init.q stopped loading on PeachQ right here, at `lifo`. Declaring the table says outright what the dict only became by accident, and `upsert` adds or replaces a row by key on both interpreters. The columns are the fixed key set require_method enforces.";".qalloc.methods";"");
 .man.registerFunc (".qalloc.define";".qalloc";"Register a matching method under a name. The registry IS the list of methods - there is no second enumeration of which ones exist, so adding one is a registration and nothing else.";".qalloc.define";".qalloc.define[`fifo_again;`open`pick!(.qalloc.append_lot;.qalloc.pick_first)] -> `fifo_again");
 .man.registerArg (".qalloc.define";"param";"name";"the name callers will pass as the `method option");
 .man.registerArg (".qalloc.define";"param";"decl";"a dict with `open (lots;lot -> lots) and `pick (lots -> index), optionally `why");
