@@ -77,6 +77,11 @@ graph edge is a promise (`derived` is `0b`, see `.qetl.reaction.on`). Where the
 downstream work is a registered bounded worker, `.qetl.reaction.on_worker`
 derives the edge instead; write that by hand in place of the scaffolded call.
 
+A written one to copy from:
+[`src/etl/reactions/rebuild_positions.q`](../../src/etl/reactions/rebuild_positions.q),
+which keeps a net position per pair and window as `demo_deals` is published, and
+its test drives it through the real worker.
+
 [new-pipeline.md](../guides/new-pipeline.md#recomputing-on-an-upstream-publish)
 has a worked handler and the dispatcher's guarantees.
 

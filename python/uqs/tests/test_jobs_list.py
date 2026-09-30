@@ -26,13 +26,24 @@ def _tree(root: Path, files: dict[str, str]) -> Path:
 
 
 def test_every_job_the_registry_reads_is_listed_once():
-    listed = [row["job"] for row in job_rows(UQF_ROOT)]
+    """Reactions are listed too, but have no process, so the registry - which
+    is a list of processes - never reads them: they are held to it apart."""
+    rows = job_rows(UQF_ROOT)
+    listed = [row["job"] for row in rows if row["kind"] != "reaction"]
     assert sorted(listed) == sorted(d.name for d in read_declarations(UQF_ROOT))
-    assert len(listed) == len(set(listed))
+    assert len(rows) == len({row["job"] for row in rows})
 
 
 def test_every_kind_is_represented_in_the_real_tree():
-    assert {row["kind"] for row in job_rows(UQF_ROOT)} == {"feed", "etl", "normalizer", "backfill"}
+    """`reaction` since #529, when rebuild_positions became the first one the
+    tree runs rather than only tests."""
+    assert {row["kind"] for row in job_rows(UQF_ROOT)} == {
+        "feed",
+        "etl",
+        "normalizer",
+        "backfill",
+        "reaction",
+    }
 
 
 def test_it_is_a_list_kind():
