@@ -266,7 +266,10 @@ audit:{[]
 
 / ---------------------------------------------------------- THE QUEUE
 
-empty_queue:{[] ([] dataset:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); depth:`long$())}
+/ `rows` is what was published, when the notifier had it in hand - see
+/ `published`. A general column: each item's rows are a whole table, or ()
+/ when a notification carried none.
+empty_queue:{[] ([] dataset:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); depth:`long$(); rows:())}
 
 queue:empty_queue[]
 
@@ -311,13 +314,13 @@ record:{[dataset;name;depth;range_from;range_to;outcome;detail]
 / @param range_to exclusive upper bound
 / @return the number of reactions run by this call
 / @eg .qetl.reaction.notify[`demo_deals;2026.09.11D00:00;2026.09.12D00:00]
-notify:{[dataset;range_from;range_to] enqueue[dataset;range_from;range_to;0]}
+notify:{[dataset;range_from;range_to] enqueue[dataset;range_from;range_to;0;()]}
 
 / Private: queue one notification and, unless a drain is already running,
 / drain the queue.
-enqueue:{[dataset;range_from;range_to;depth]
+enqueue:{[dataset;range_from;range_to;depth;rows]
     queue,:([] dataset:enlist dataset; range_from:enlist range_from;
-              range_to:enlist range_to; depth:enlist depth);
+              range_to:enlist range_to; depth:enlist depth; rows:enlist rows);
     $[draining; 0; drain[]]}
 
 / Private: run queued notifications until none are left.
@@ -371,10 +374,17 @@ dispatch:{[item]
 / through the ordinary path and cannot be asked to thread a depth through.
 depth_now:0
 
+/ What the publication being reacted to published, while its reactions run.
+/ A global for the reason depth_now is: a handler's signature stays
+/ (dataset;range_from;range_to), and this is how it reaches the rows.
+rows_now:()
+
 run_one:{[item;nm;h]
     `.qetl.reaction.depth_now set item`depth;
+    `.qetl.reaction.rows_now set item`rows;
     r:@[{[h;item] h[item`dataset;item`range_from;item`range_to]; `ok}[h];item;{[e] (`failed;e)}];
     `.qetl.reaction.depth_now set 0;
+    `.qetl.reaction.rows_now set ();
     $[`ok~r;
         record[item`dataset;nm;item`depth;item`range_from;item`range_to;`ok;""];
         [record[item`dataset;nm;item`depth;item`range_from;item`range_to;`failed;last r];
@@ -398,7 +408,38 @@ log_failure:{[item;nm;e]
 / .qetl.job.bounded.do_window calls this rather than `notify` directly, so a chain
 / triggered by a reaction is counted: at depth 0 the two are identical, and
 / inside a handler this is what makes max_depth bite.
-notify_from_here:{[dataset;range_from;range_to]
-    enqueue[dataset;range_from;range_to;$[draining; depth_now+1; 0]]}
+notify_from_here:{[dataset;range_from;range_to] notify_rows[dataset;range_from;range_to;()]}
+
+/ Announce a publication together with the rows it published.
+/ .
+/ .qetl.job.bounded.do_window calls this with the batch it has just written,
+/ so a reaction reads WHAT WAS PUBLISHED through `published` rather than
+/ through wherever it was written. That is the point (#541): under
+/ `uqs backfill` a worker writes HDB partitions (.qetl.io.hdb), not the root
+/ table the in-memory manager makes, so a handler that read the dataset back
+/ by name found nothing and failed on every window - silently, since a
+/ reaction never fails the publication. The rows are in hand here whatever
+/ the IO manager is, and a reaction only ever runs in the publishing process.
+/ @param rows the published rows, as a table
+/ @eg .qetl.reaction.notify_rows[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;.qpipe.source.demo_deals.fixture[]]
+notify_rows:{[dataset;range_from;range_to;rows]
+    enqueue[dataset;range_from;range_to;$[draining; depth_now+1; 0];rows]}
+
+/ The rows the publication being reacted to published - call it from a
+/ handler.
+/ .
+/ The way to read a publication that does not depend on where it was
+/ written: memory, the HDB, or a manager not yet written. Refuses, naming
+/ why, outside a reaction, and for a notification that carried no rows (a
+/ bare `notify`, made by hand) - never an empty table that would read as
+/ "nothing was published".
+/ @return the published rows, as a table
+/ @throws error outside a reaction, or when the notification carried no rows
+/ @eg .qetl.reaction.on[`demo_deals;`count_deals;{[ds;f;t] count .qetl.reaction.published[]}]
+published:{[]
+    if[not draining; '"published: only a reaction's handler can ask what was published"];
+    if[not 98h=type rows_now;
+        '"published: this notification carried no rows - it was made with notify, not notify_rows"];
+    rows_now}
 
 \d .

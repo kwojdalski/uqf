@@ -17,6 +17,8 @@ d:{[n] 2026.09.11D00:00:00.000000000+n*1D}
 setUp_reaction:{[]
     system "l src/etl/reactions/rebuild_positions.q";
     delete from `deal_positions;
+    / Each test reads the history of ITS run: nothing else clears it.
+    `.qetl.reaction.history set .qetl.reaction.empty_history[];
     .testutil.reset_coverage_ledger[];
     .qetl.job.bounded.state.release_lock `demo_deals_backfill;
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
@@ -57,15 +59,35 @@ test_republishing_a_window_replaces_its_rows:{[t]
         "a restated window replaces its own rows rather than adding a second set"]};
 
 test_a_pair_a_restatement_drops_is_removed:{[t]
-    `demo_deals set .qpipe.source.demo_deals.fixture[];
-    before:.qpipe.job.rebuild_positions.handler[`demo_deals;d 0;d 1];
-    `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
-    .qpipe.job.rebuild_positions.handler[`demo_deals;d 0;d 1];
+    / Through notify_rows, which is how do_window hands a reaction its rows:
+    / the window first published with its EURUSD deal, then re-published empty.
+    rows:.qpipe.source.demo_deals.fixture[];
+    .qetl.reaction.notify_rows[`demo_deals;d 0;d 1;1#rows];
     / `.rebuild_positionsrxtest.d`, not `d`, inside the where-clause: q-sql
     / resolves a bare name there in the root, not in this namespace.
+    before:count select from `deal_positions where window=.rebuild_positionsrxtest.d 0;
+    .qetl.reaction.notify_rows[`demo_deals;d 0;d 1;0#rows];
     after:count select from `deal_positions where window=.rebuild_positionsrxtest.d 0;
     .qunit.assertEquals[(before;after);(1;0);
         "the window's EURUSD row existed, and re-publishing it with no deals removed it"]};
+
+/ #541. What `uqs backfill` actually does: torq_backfill.q points the worker at
+/ .qetl.io.hdb, which writes partitions on disk and makes no root table - so
+/ the reaction must read what was PUBLISHED, not the dataset by name. Before
+/ the fix every window's reaction failed here, and the backfill still
+/ reported success.
+test_it_builds_positions_under_the_hdb_io_manager:{[t]
+    system "rm -rf build/test_hdb_rebuild_positions";
+    saved:.qetl.io.default;
+    .qetl.io.default:.qetl.io.hdb[`:build/test_hdb_rebuild_positions;`deal_time];
+    r:@[.rebuild_positionsrxtest.run_worker;`rp6;{x}];
+    .qetl.io.default:saved;
+    h:select from .qetl.reaction.history where name=`rebuild_positions;
+    .qunit.assertEquals[
+        (r`windows_completed;count value `demo_deals;exec distinct outcome from h;
+         `sym`window xasc 0!value `deal_positions);
+        (5;0;enlist `ok;`sym`window xasc 0!expected);
+        "rows went to the HDB, not a root table, and every reaction still built its positions"]};
 
 test_a_dry_run_builds_nothing:{[t]
     setenv[`UQF_DRY_RUN;"true"];

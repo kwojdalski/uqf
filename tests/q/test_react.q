@@ -94,6 +94,33 @@ test_fillable_is_what_the_bounded_workers_fill:{[t]
     .qunit.assertEquals[(`demo_deals in real;`quote in real);(1b;0b);
         "demo_deals_backfill fills demo_deals; no worker fills quote"]};
 
+/ #541: a reaction reads what was published through `published`, not the
+/ dataset by name, because under .qetl.io.hdb there is no table to name.
+test_published_hands_a_handler_the_rows_of_its_notification:{[t]
+    `.rxtest.seen set ();
+    .qetl.reaction.on[`a;`reader;{[ds;f;tt] `.rxtest.seen set .qetl.reaction.published[]}];
+    rows:([] x:1 2 3);
+    .qetl.reaction.notify_rows[`a;.rxtest.d 1;.rxtest.d 2;rows];
+    .qunit.assertEquals[.rxtest.seen;rows;"the handler read exactly the rows the notification carried"]};
+
+test_published_refuses_outside_a_reaction:{[t]
+    .qunit.assertThrows[{.qetl.reaction.published[]};::;
+        "published: only a reaction's handler*";"there is no publication to read outside a dispatch"]};
+
+test_published_refuses_a_notification_that_carried_no_rows:{[t]
+    / A bare notify has no rows; the handler's refusal is recorded, not an empty table.
+    .qetl.reaction.on[`a;`reader;{[ds;f;tt] .qetl.reaction.published[]}];
+    .qetl.reaction.notify[`a;.rxtest.d 1;.rxtest.d 2];
+    .qunit.assertTrue[(exec last detail from .qetl.reaction.history) like "published: this notification carried no rows*";
+        "a handler asking for rows a bare notify never sent is refused, naming why"]};
+
+test_each_cascaded_notification_keeps_its_own_rows:{[t]
+    `.rxtest.seen set ();
+    .qetl.reaction.on[`a;`to_b;{[ds;f;tt] .qetl.reaction.notify_rows[`b;f;tt;([] y:10 20)]}];
+    .qetl.reaction.on[`b;`reader;{[ds;f;tt] `.rxtest.seen set .qetl.reaction.published[]}];
+    .qetl.reaction.notify_rows[`a;.rxtest.d 1;.rxtest.d 2;([] x:1 2 3)];
+    .qunit.assertEquals[.rxtest.seen;([] y:10 20);"a downstream reaction reads its own publication, not the upstream one"]};
+
 test_off_stops_one_reaction_and_leaves_the_others:{[t]
     .qetl.reaction.on[`a;`keep;.rxtest.recorder`keep];
     .qetl.reaction.on[`a;`drop;.rxtest.recorder`drop];

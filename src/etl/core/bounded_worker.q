@@ -863,8 +863,11 @@ do_window:{[worker;w]
     / Protected like begin_run for the same reason - react.q is not a load
     / time dependency and a minimal loader must still run a worker.
     if[not r`dry_run;
-        @[{[a] .qetl.reaction.notify_from_here . a};
-          (cfg`dataset;w`range_from;w`range_to);
+        / The batch goes with it, so a reaction reads what was published
+        / rather than wherever it was written - under .qetl.io.hdb there is
+        / no root table to read back (#541).
+        @[{[a] .qetl.reaction.notify_rows . a};
+          (cfg`dataset;w`range_from;w`range_to;out);
           {[e] (::)}]];
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];
