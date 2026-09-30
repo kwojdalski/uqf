@@ -6,13 +6,18 @@
 / .
 /   env  >  process_overrides.csv  >  config/backfill.yaml  >  code default
 / .
-/ ONLY THE FIRST LAYER IS WIRED TODAY, and saying so here matters more than
-/ the order does. `set_layers` below is what populates the lower three, and
-/ its only callers are tests - no production path calls it, so in a running
-/ worker override_values, yaml_values and default_values stay empty and `env`
-/ supplies everything. `config/` does not exist in this tree at all.
+/ TWO LAYERS ARE WIRED TODAY, and saying which matters more than the order
+/ does. `env` supplies almost everything. The overrides layer has one live
+/ writer, `set_override` below, which the frontend reaches at runtime through
+/ `PUT /control/worker-config` (python/uqf_frontend control.py), so a running
+/ worker's override_values CAN hold keys an operator set from the UI - held
+/ in memory only, and still outranked by `env`. The two file-backed layers
+/ are not wired: `set_layers`, the only thing that populates yaml_values and
+/ default_values, is called by tests alone, and `config/` does not exist in
+/ this tree at all. So when a value is unexpected, `explain` says which
+/ source answered - and "overrides" is a real answer (#548).
 / .
-/ The precedence is therefore a decided contract with one supplier, not a
+/ The precedence is therefore a decided contract with two suppliers, not a
 / description of four live layers. It is left standing rather than deleted
 / because the ORDER is settled and that answer does not expire - but a
 / reader who concluded they could drop a key into a YAML file and have a
