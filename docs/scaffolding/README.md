@@ -122,3 +122,15 @@ skill](../../.claude/skills/new-job/SKILL.md):
 
 Then `scripts/test.py q-unit`, and `scripts/test.py stack-smoke` against a real
 stack, which is the only thing that proves the wiring.
+
+## Adding a shape
+
+A new shape is added only once the newest one has a real caller in `src/etl/`,
+not just tests. A scaffolder pays for itself on its Nth use, and every shape
+added before the last one is used makes a larger bet on growth the tree has not
+needed yet (#534). Most of the jobs here were written by hand before
+`uqs job new` existed.
+
+The newest shape is the reaction. Its first real caller is
+[`src/etl/reactions/rebuild_positions.q`](../../src/etl/reactions/rebuild_positions.q)
+(#529), so the next shape may come once there is a job that needs it.
