@@ -365,6 +365,7 @@ qetl.reaction,draining,value,,
 qetl.reaction,empty_history,function,1,
 qetl.reaction,empty_queue,function,1,
 qetl.reaction,enqueue,function,4,dataset range_from range_to depth
+qetl.reaction,fillable,function,1,
 qetl.reaction,for_dataset,function,1,dataset
 qetl.reaction,history,table,,
 qetl.reaction,history_limit,value,,
@@ -381,6 +382,7 @@ qetl.reaction,queue,table,,
 qetl.reaction,reactions,dict,,
 qetl.reaction,record,function,7,dataset name depth range_from range_to outcome detail
 qetl.reaction,register,function,5,dataset nm handler outputs derived
+qetl.reaction,require_fillable,function,2,dataset nm
 qetl.reaction,require_handler,function,3,dataset nm handler
 qetl.reaction,reset,function,1,
 qetl.reaction,run_one,function,3,item nm h
