@@ -20,7 +20,8 @@ from rich.table import Table
 from rich.text import Text
 
 from uqs.cli import completion
-from uqs.cli.create import _DERIVED, _plant_tables, _regenerate_derived
+from uqs.cli.create import _plant_tables
+from uqs.cli.regenerate import _DERIVED, _regenerate_derived
 from uqs.cli.shared import _die, _paths, console, job_app
 from uqs.model.declarations import Declaration, declaration_calls, read_file, symbols
 from uqs.model.pipeline import PipelineKind

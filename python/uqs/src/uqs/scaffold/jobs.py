@@ -46,7 +46,7 @@ from uqs.scaffold.templates import test_stub
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-def test_namespace(base: str, *, bounded: bool = False) -> str:
+def test_namespace(base: str, *, bounded: bool = False, reaction: bool = False) -> str:
     """The q namespace the generated test file declares, without its leading dot.
 
     Computed here and nowhere else, because it is needed TWICE - by the test
@@ -55,9 +55,11 @@ def test_namespace(base: str, *, bounded: bool = False) -> str:
     registration exists to prevent: a namespace the runner does not know about
     means the file loads, its tests never run, and the suite stays green.
 
-    A bounded worker gets `bf` so that a backfill and a streaming job of the
-    same base name do not claim one namespace.
+    A bounded worker gets `bf` and a reaction `rx`, so that jobs of different
+    kinds with the same base name do not claim one namespace.
     """
+    if reaction:
+        return f"{base}rxtest"
     return f"{base}bftest" if bounded else f"{base}test"
 
 

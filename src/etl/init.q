@@ -80,8 +80,8 @@
 / its implementation cannot drift - there is no way to have one without the
 / other.
 / .
-/ GLOBBED, not listed. Every .q file in these four directories is loaded, so
-/ adding a source, a worker or a streaming job means adding the file and
+/ GLOBBED, not listed. Every .q file in these directories is loaded, so
+/ adding a source, a worker, a streaming job or a reaction means adding the file and
 / nothing else. What this replaced was twenty-six \l lines - a hand-kept copy
 / of `ls`, which had to be edited in the right place and whose failure mode
 / was a file nobody loaded.
@@ -119,6 +119,13 @@ etl_load_declarations["src/etl/sources";`symbol$()];
 etl_load_declarations["src/etl/transforms";`symbol$()];
 etl_load_declarations["src/etl/workers";`symbol$()];
 etl_load_declarations["src/etl/streaming";`market_data`superbook];
+
+/ Reactions last: a reaction names the dataset it watches, which a worker above
+/ fills. Unlike the four directories above, this one may be absent or hold no q
+/ at all - a tree need have no reactions, and `uqs job remove` of the last one
+/ leaves the directory empty - so it is loaded only when there is something to
+/ load, rather than throwing the way an empty sources/ rightly does.
+if[any (key `:src/etl/reactions) like "*.q"; etl_load_declarations["src/etl/reactions";`symbol$()]];
 
 / Local to this file rather than tree API: the load order is init.q's own
 / business, and a helper left in the root namespace is one the enumeration

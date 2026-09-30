@@ -233,3 +233,48 @@ facts:{{[batch]
          `{proc};
          "SCAFFOLDED: bounded - say what this backfill is for")];
 """
+
+
+def reaction_body(name: str, dataset: str, writes: list[str], producers: list[str]) -> str:
+    """A reaction file: a handler that throws, registered on `dataset`.
+
+    `writes` switches `on` for `on_writing`, which puts the reaction in the job
+    graph as a node that writes those tables - a CLAIM, since a handler can
+    write anywhere (`derived` is 0b; see .qetl.reaction.on).
+    """
+    runs_in = ", ".join(producers)
+    if writes:
+        outputs = f"enlist `{writes[0]}" if len(writes) == 1 else "`" + "`".join(writes)
+        register = (
+            f".qetl.reaction.on_writing[`{dataset};`{name};{outputs};.qpipe.job.{name}.handler];"
+        )
+        claim = (
+            f"/ on_writing, because this handler writes {', '.join(writes)}: that puts it in\n"
+            "/ the job graph, where a cycle is refused at load. It is a CLAIM nothing\n"
+            "/ checks - keep it true when you write the handler.\n"
+        )
+    else:
+        register = f".qetl.reaction.on[`{dataset};`{name};.qpipe.job.{name}.handler];"
+        claim = ""
+    return f"""/ {name}.q - recompute when {dataset} is published (.qpipe.job.{name}).
+/ .
+/ SCAFFOLDED. The handler throws until it is written.
+/ .
+/ Runs inside whichever process publishes {dataset} - today {runs_in} - once
+/ per published window, after the window's coverage is recorded. It has no
+/ process of its own. A failure is recorded in .qetl.reaction.history and
+/ never fails the publication; see src/etl/core/react.q.
+
+\\d .qpipe.job.{name}
+
+/ Called with the dataset and the half-open range [range_from;range_to) just
+/ published. Recompute exactly what that range changed, keyed by the window,
+/ so a re-published window replaces its own rows instead of adding to them.
+handler:{{[dataset;range_from;range_to]
+    '"{name}: not implemented";
+    }}
+
+\\d .
+
+{claim}{register}
+"""
