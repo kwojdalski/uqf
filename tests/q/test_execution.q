@@ -541,4 +541,70 @@ test_fill_probability_refuses_a_bucket_named_like_an_output:{[t]
     .qunit.assertThrows[fill_call;@[fill_args[];(0;2);:;(update target:`x from mk_fill_orders[];enlist `target)];
         "fill_probability_by: bucket column(s) target would collide*";"an output column cannot also be a bucket"]};
 
+/ ---- venue_quality: the abstract scorecard (#338) ---------------------------
+/ .
+/ The computation is not written yet, so these pin the CONTRACT: every
+/ argument is refused by name when it is wrong, and a valid call reaches the
+/ "not implemented" throw rather than failing somewhere on the way. Each
+/ asserts its message - assertError would pass on a typo here too.
+
+mk_vq_quotes:{[]
+    ([] time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); bid:`float$(); ask:`float$();
+        bsize:`long$(); asize:`long$())}
+mk_vq_requests:{[]
+    ([] time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); size:`float$(); hit:`boolean$();
+        reject:`boolean$())}
+mk_vq_trades:{[]
+    ([] time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$();
+        pip_factor:`long$())}
+vq_config:{[] `as_of`horizons!(2026.09.15D12:00:00.000000000;0D00:00:01 0D00:01:00)}
+vq_call:{[args] .qexec.venue_quality . args}
+vq_args:{[] (mk_vq_quotes[];mk_vq_requests[];mk_vq_trades[];0D01:00:00;vq_config[])}
+
+test_venue_quality_is_abstract_for_now:{[t]
+    .qunit.assertThrows[vq_call;vq_args[];
+        "venue_quality: not implemented yet (#338)*";"valid arguments reach the not-implemented throw"]};
+
+test_venue_quality_refuses_a_missing_column:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];1;{delete reject from x}];
+        "venue_quality: requests is missing required column(s) reject";"requests need hit AND reject"];
+    .qunit.assertThrows[vq_call;@[vq_args[];0;{delete bsize from x}];
+        "venue_quality: quotes is missing required column(s) bsize";"depth needs both sizes"];
+    .qunit.assertThrows[vq_call;@[vq_args[];2;{delete venue from x}];
+        "venue_quality: trades is missing required column(s) venue";"a fill has to say where"]};
+
+test_venue_quality_refuses_a_non_table:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];0;:;`notatable];
+        "venue_quality: quotes must be a table";"quotes are a table"]};
+
+test_venue_quality_refuses_a_bad_window:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];3;:;0D00:00:00];
+        "venue_quality: window must be positive";"a zero-width bucket buckets nothing"];
+    .qunit.assertThrows[vq_call;@[vq_args[];3;:;`hourly];
+        "venue_quality: window must be a timespan*";"a window is a timespan"]};
+
+test_venue_quality_refuses_a_config_missing_as_of:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];4;{`as_of _ x}];
+        "venue_quality: config is missing as_of";"no cutoff means hindsight can leak in"]};
+
+test_venue_quality_refuses_an_unknown_config_key:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];4;{x,(enlist `foo)!enlist 1}];
+        "venue_quality: unknown config key(s) foo*";"a typo in a key is not silently ignored"]};
+
+test_venue_quality_refuses_a_non_timestamp_as_of:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];4;{x,(enlist `as_of)!enlist 2026.09.15}];
+        "venue_quality: as_of must be a timestamp*";"a date is not an instant"]};
+
+test_venue_quality_refuses_a_non_positive_horizon:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];4;{x,(enlist `horizons)!enlist -0D00:00:01}];
+        "venue_quality: every horizon must be positive";"a markout looks forward"]};
+
+test_venue_quality_refuses_weights_without_normalise:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];4;{x,(enlist `weights)!enlist `spread_bps`fill_rate!0.5 0.5}];
+        "venue_quality: weights need a normalise method*";"raw bps, rates and pips are not one scale"]};
+
+test_venue_quality_accepts_weights_with_normalise:{[t]
+    .qunit.assertThrows[vq_call;@[vq_args[];4;{x,`weights`normalise!(`spread_bps`fill_rate!0.5 0.5;`zscore)}];
+        "venue_quality: not implemented yet (#338)*";"a complete config gets as far as the computation"]};
+
 \d .
