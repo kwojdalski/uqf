@@ -66,6 +66,16 @@ example row, so the file loads; each mapping throws until written. Narrow each
 input to the columns its mapping reads, and replace each example with a real row
 and the canonical row it becomes.
 
+`--period` sets a feed's tick (default one second), or adds an `on_timer` to an
+etl, as markout and fx_positions have. For a backfill, `--partition SYM` scopes
+the worker to one slice of its dataset - the only way two workers can fill one
+dataset - and `--check` scaffolds a quality check that throws until written.
+
+To undo a scaffold, `uqs remove-job NAME --dry-run` shows everything it would
+take back out, then run it without `--dry-run`. It refuses a job whose
+SCAFFOLDED markers are gone, and keeps any table or source something else still
+uses.
+
 `--procname` names the process (default `NAME1`, or `NAME_backfill1`), and
 `--start-with-all` puts a streaming job or normalizer in `uqs start all`. Leave
 that off unless the user asks: a new process in the default start counts against
@@ -107,12 +117,12 @@ So after scaffolding, the tree is in a known state:
 - `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
   every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is
   the to-do list: the handler, the test, the job's `note`, and the two below.
-- A new streaming job is in **no profile**, so `uqs start --profile` cannot
-  reach it and only `uqs start <name>` will. The scaffold says so; add it to one
-  in `python/uqs/src/uqs/model/profiles.py`, or to `UNPROFILED` with the reason
-  it belongs to no standing start set. `test_profiles.py` fails until one of the
-  two is true. Bounded workers are exempt - a backfill is triggered, not started
-  with the stack.
+- A new streaming job or normalizer is in **no profile** unless you said which:
+  `--profile NAME` adds it to one in `python/uqs/src/uqs/model/profiles.py`, and
+  `--unprofiled "REASON"` exempts it in `UNPROFILED`. Ask the user which - it is
+  a judgement about what runs together. Without either, `test_profiles.py` fails
+  until one is written. Bounded workers are exempt - a backfill is triggered,
+  not started with the stack.
 - For a job that defines a NEW table, the scaffold appends a SCAFFOLDED
   `.qcat.describe` line to `scripts/processes/uqs_catalog.q`. The description is
   for someone choosing a table, so it is yours to write. If the desk should not

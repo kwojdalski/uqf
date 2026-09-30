@@ -84,20 +84,23 @@ def _export_contract_surface(repo_root: Path) -> subprocess.CompletedProcess[str
     )
 
 
-def _unpartitioned_workers_filling(repo_root: Path, dataset: str) -> list[str]:
-    """Workers that already fill `dataset` without declaring a partition.
+def _workers_filling(repo_root: Path, dataset: str, partition: str | None = None) -> list[str]:
+    """Workers that already fill `dataset` in `partition` (None: no partition).
 
     `.qetl.job.bounded.define` refuses two workers on one dataset AND partition (#60,
-    #185), and a scaffolded worker declares none - so a second one on such a
-    dataset is a tree that no longer LOADS. Caught here, before anything is
-    written, rather than as a bare error from inside a declaration.
+    #185), so a second one on a claimed pair is a tree that no longer LOADS.
+    Caught here, before anything is written, rather than as a bare error from
+    inside a declaration.
     """
     found = []
     for path in sorted((repo_root / WORKER_DIR).glob("*.q")):
         for fn, name, fields in declaration_calls(path.read_text()):
             if fn != "qetl.job.bounded.define":
                 continue
-            if symbols(fields.get("dataset", "")) == (dataset,) and "partition" not in fields:
+            claimed = symbols(fields["partition"])[:1] if "partition" in fields else ()
+            if symbols(fields.get("dataset", "")) == (dataset,) and claimed == (
+                (partition,) if partition else ()
+            ):
                 found.append(name)
     return found
 
@@ -191,6 +194,29 @@ def new_job(
             autocompletion=completion.choices("ipc", "odbc"),
         ),
     ] = "ipc",
+    period: Annotated[
+        str | None,
+        typer.Option("--period", help="Timer period: a feed's tick, or an etl's added on_timer"),
+    ] = None,
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            help="Start profile it joins (streaming, normalizer)",
+            autocompletion=completion.profiles,
+        ),
+    ] = None,
+    unprofiled: Annotated[
+        str | None,
+        typer.Option("--unprofiled", help="Or the reason it belongs to no profile"),
+    ] = None,
+    partition: Annotated[
+        str | None,
+        typer.Option("--partition", help="The slice of --dataset it fills (backfill)"),
+    ] = None,
+    check: Annotated[
+        bool, typer.Option("--check", help="Scaffold a quality check (backfill)")
+    ] = False,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print what would be written, write nothing")
     ] = False,
@@ -215,10 +241,21 @@ def new_job(
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root
-    if transport != "ipc" and kind != "backfill":
-        # A streaming job reads the plant; only a backfill's source has a transport.
-        _die(UqsError("--transport is for a backfill's source - drop it for --kind " + kind))
-        return
+    # Options that shape one kind only are refused on the others, not ignored.
+    only = {
+        "backfill": {
+            "--transport": transport != "ipc",
+            "--partition": partition is not None,
+            "--check": check,
+        },
+        "streaming": {"--period": period is not None},
+        "standing": {"--profile": profile is not None, "--unprofiled": unprofiled is not None},
+    }
+    for owner, given in only.items():
+        fits = kind in (("streaming", "normalizer") if owner == "standing" else (owner,))
+        for option in (o for o, used in given.items() if used and not fits):
+            _die(UqsError(f"{option} does not apply to --kind {kind}"))
+            return
     try:
         if kind == "streaming":
             plan = jobs.streaming_job(
@@ -229,6 +266,9 @@ def new_job(
                 procname,
                 known_tables=_plant_tables(_paths()),
                 start_with_all=start_with_all,
+                period=period,
+                profile=profile,
+                unprofiled=unprofiled,
             )
         elif kind == "backfill":
             if start_with_all:
@@ -239,14 +279,15 @@ def new_job(
             if not dataset:
                 _die(UqsError("--kind backfill needs --dataset: the table it fills"))
                 return
-            claimed = _unpartitioned_workers_filling(repo_root, dataset)
+            claimed = _workers_filling(repo_root, dataset, partition)
             if claimed:
+                where = f"partition {partition!r}" if partition else "no partition"
                 _die(
                     UqsError(
-                        f"dataset {dataset!r} is already filled by {', '.join(claimed)} with no "
-                        "partition, and .qetl.job.bounded.define refuses two workers "
-                        "on one dataset and "
-                        "partition - pick another --dataset, or give both workers a partition"
+                        f"dataset {dataset!r} is already filled by {', '.join(claimed)} "
+                        f"in {where}, "
+                        "and .qetl.job.bounded.define refuses two workers on one dataset and "
+                        "partition - pick another --dataset, or another --partition"
                     )
                 )
                 return
@@ -261,6 +302,8 @@ def new_job(
                 source=source,
                 procname=procname,
                 transport=transport,
+                partition=partition,
+                check=check,
                 reuse_source=(repo_root / SOURCE_DIR / f"{source or name}.q").is_file(),
                 define_table=dataset not in _defined_tables(repo_root),
             )
@@ -284,6 +327,8 @@ def new_job(
                 known_tables=_plant_tables(_paths()),
                 procname=procname,
                 start_with_all=start_with_all,
+                profile=profile,
+                unprofiled=unprofiled,
             )
         else:
             _die(UqsError(f"--kind must be 'streaming', 'backfill' or 'normalizer', not {kind!r}"))

@@ -24,6 +24,7 @@ out of what the tree can read fails the build rather than rotting quietly.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 
 from uqs.paths import (
     RUN_TESTS_FILE,
@@ -35,6 +36,7 @@ from uqs.paths import (
 )
 from uqs.scaffold.catalog import catalog_actions
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
+from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import (
     GROUPED,
     Q_TYPES,
@@ -77,25 +79,6 @@ def _nslist_action(namespace: str) -> FileAction:
 #: prose for a person to read. Each has a test that fails until it is written,
 #: and a note here is what stops that failure being a surprise.
 _STACK_PAGE_NOTE = "name {proc} in docs/architecture/stack.md - authored prose, checked by pytest"
-
-#: A new process is reachable by name from the day it is scaffolded, and by
-#: `--profile` never, until someone says which profile it belongs to.
-#:
-#: Always said for a streaming job, because it is always true: a process this
-#: command is about to create is in no profile by construction, and there is
-#: nothing to check. A note rather than a prompt because which named start
-#: set a job belongs to is a judgement about what you would want running
-#: together, and the tool cannot guess it.
-#:
-#: Not said for a bounded worker. A profile is a standing start set and a
-#: backfill is triggered, runs its window and exits - it holds no plant
-#: connection and belongs to no profile, which is the same distinction
-#: `profiles.plant_slots` draws.
-_PROFILE_NOTE = (
-    "add {proc} to a profile in python/uqs/src/uqs/model/profiles.py, or it is "
-    "startable only by name - `uqs list profiles` shows the sets and their "
-    "connection budget"
-)
 
 
 def _expected_table_action(table: str) -> FileAction:
@@ -151,6 +134,26 @@ def _symbol_list(names: list[str]) -> str:
     return f"enlist `{names[0]}" if len(names) == 1 else "`" + "`".join(names)
 
 
+#: A q timespan as a declaration writes it: `0D00:00:05`, `0D00:00:00.500`.
+_PERIOD = re.compile(r"^\d+D\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?$")
+
+
+def check_period(period: str) -> str:
+    """Refuse a period `.qetl.job.stream.define` would refuse at load.
+
+    define wants a positive timespan; a malformed one is a q parse error in
+    the generated file, and a zero one a refusal - both found only when the
+    tree next loads, far from the typo.
+    """
+    if not _PERIOD.match(period):
+        raise UqsError(
+            f"--period {period!r} must be a q timespan, e.g. 0D00:00:05 or 0D00:00:00.500"
+        )
+    if not any(c in "123456789" for c in period):
+        raise UqsError(f"--period {period!r} must be positive - a timer that never waits spins")
+    return period
+
+
 def start_with_all_field(start_with_all: bool) -> tuple[str, str]:
     """The declaration key and value line for `start_with_all`, or nothing.
 
@@ -169,6 +172,10 @@ def streaming_job(
     *,
     known_tables: set[str] | None = None,
     start_with_all: bool = False,
+    period: str | None = None,
+    profile: str | None = None,
+    unprofiled: str | None = None,
+    known_profiles: Iterable[str] | None = None,
 ) -> ScaffoldPlan:
     """Plan a new streaming job: the q file, its table and its test.
 
@@ -187,8 +194,19 @@ def streaming_job(
     `start_with_all` declares the job part of `uqs start all`. Off by default,
     as in `.qetl.job.stream.define`: a new process joins the default start
     only once someone has decided the connection budget has room for it.
+
+    `period` is how often the job's timer fires. A feed always has one - it
+    is what makes the feed publish - and ticks every second unless told
+    otherwise. An etl has one only when asked, as markout and fx_positions
+    do: an `on_timer` beside its `on_batch`, for work due on the clock rather
+    than on a batch.
+
+    `profile`, `unprofiled` and `known_profiles` place the process in a start
+    profile or exempt it - see scaffold/profile.py.
     """
     _check_name(name, "job name")
+    if period is not None:
+        check_period(period)
     proc = procname or f"{name}1"
     _check_name(proc, "procname")
     for table in subscribe_to:
@@ -214,10 +232,25 @@ def streaming_job(
     # reads as a different shape from every other declaration.
     sub_literal = "`symbol$()" if is_feed else _symbol_list(subscribe_to)
     pub_literal = _symbol_list(pubs) if pubs else "`symbol$()"
-    handler = "on_timer" if is_feed else "on_batch"
-    handler_args = "[]" if is_feed else "[t;x]"
-    timer = "\n    0D00:00:01;" if is_feed else ""
-    timer_key = "`period" if is_feed else ""
+    # (handler, its arguments) in declaration order: a batch handler when the
+    # job subscribes, then a timer when it is a feed or was given a period.
+    handlers = [] if is_feed else [("on_batch", "[t;x]")]
+    tick = period or ("0D00:00:01" if is_feed else None)
+    if tick:
+        handlers.append(("on_timer", "[]"))
+    keys = "".join(f"`{h}" if h != "on_timer" else "`period`on_timer" for h, _ in handlers)
+    values = "".join(
+        f"\n    .qpipe.job.{name}.{h};"
+        if h != "on_timer"
+        else f"\n    {tick};\n    .qpipe.job.{name}.{h};"
+        for h, _ in handlers
+    )
+    stubs = "\n\n".join(
+        f"""{h}:{{{args}
+    '"{name}.{h}: not implemented";
+    }}"""
+        for h, args in handlers
+    )
     swa_key, swa_value = start_with_all_field(start_with_all)
 
     reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribe_to)
@@ -239,20 +272,17 @@ publish:.qetl.job.stream.unwired `{name};
 / SCAFFOLDED. This throws until it is written - a job that silently did
 / nothing would report `up`, heartbeat, and publish no rows, which is the
 / one failure the stack smoke check exists to find.
-{handler}:{{{handler_args}
-    '"{name}.{handler}: not implemented";
-    }}
+{stubs}
 
 \\d .
 
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`{name};`procname`subscribe_to`publishes{timer_key}`{handler}{swa_key}`note!(
+.qetl.job.stream.define[`{name};`procname`subscribe_to`publishes{keys}{swa_key}`note!(
     `{proc};
     {sub_literal};
-    {pub_literal};{timer}
-    .qpipe.job.{name}.{handler};{swa_value}
+    {pub_literal};{values}{swa_value}
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack")];
 """
     actions.append(FileAction(STREAM_DIR / f"{name}.q", body))
@@ -301,9 +331,20 @@ publish:.qetl.job.stream.unwired `{name};
         )
     )
     actions.append(_nslist_action(ns))
-    notes.append(f"implement .qpipe.job.{name}.{handler}, then replace the scaffolded test")
+    notes.append(
+        f"implement {', '.join(f'.qpipe.job.{name}.{h}' for h, _ in handlers)}, "
+        "then replace the scaffolded test"
+    )
     notes.append(_STACK_PAGE_NOTE.format(proc=proc))
-    notes.append(_PROFILE_NOTE.format(proc=proc))
+    member_actions, member_notes = membership(
+        proc,
+        profile=profile,
+        unprofiled=unprofiled,
+        start_with_all=start_with_all,
+        known_profiles=profile_names(known_profiles),
+    )
+    actions += member_actions
+    notes += member_notes
     if not is_feed:
         notes.append("start it with its producers: " + " ".join(sorted(set(subscribe_to))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)

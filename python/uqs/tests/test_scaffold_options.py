@@ -176,7 +176,7 @@ def test_the_credential_variable_is_spelled_as_q_spells_it():
         ),
         (
             ["x", "--publishes", "x", "--columns", "a:float", "--transport", "odbc"],
-            "is for a backfill",
+            "--transport does not apply to --kind streaming",
         ),
     ],
 )

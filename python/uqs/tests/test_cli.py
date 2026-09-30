@@ -1316,8 +1316,8 @@ def test_a_dataset_an_unpartitioned_worker_fills_is_found(tmp_path):
         ".qetl.job.bounded.define[`w;\n    `source`dataset`width`transform!\n"
         "    (`s;`fx;1D;`s_passthrough)];\n",
     )
-    assert create._unpartitioned_workers_filling(root, "fx") == ["w"]
-    assert create._unpartitioned_workers_filling(root, "other") == []
+    assert create._workers_filling(root, "fx") == ["w"]
+    assert create._workers_filling(root, "other") == []
 
 
 def test_a_partitioned_worker_leaves_room_for_another(tmp_path):
@@ -1326,7 +1326,7 @@ def test_a_partitioned_worker_leaves_room_for_another(tmp_path):
         ".qetl.job.bounded.define[`w;`source`dataset`width`transform`partition!"
         "(`s;`fx;1D;`s_passthrough;`EURUSD)];\n",
     )
-    assert create._unpartitioned_workers_filling(root, "fx") == []
+    assert create._workers_filling(root, "fx") == []
 
 
 def test_every_real_worker_is_read():
@@ -1339,7 +1339,7 @@ def test_every_real_worker_is_read():
         "imported_trades": "upstream_trades_backfill",
         "databento_book": "databento_book_backfill",
     }.items():
-        assert create._unpartitioned_workers_filling(root, dataset) == [worker]
+        assert create._workers_filling(root, dataset) == [worker]
 
 
 # ------------------------------------------- query with no expression (qcon)

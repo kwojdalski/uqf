@@ -73,6 +73,11 @@ that way first, and it costs nothing to do the same:
 uqs new-job <name> ... --dry-run
 ```
 
+To take a scaffold back out - a typo in the name, a wrong shape - run
+`uqs remove-job <name>`. It works out every file and line the scaffold wrote
+from the tree, keeps any table or source another job still uses, and refuses a
+job that has been written (its SCAFFOLDED markers are gone) unless `--force`.
+
 ## After you run it
 
 The order that gives the shortest feedback loop, from [the new-job

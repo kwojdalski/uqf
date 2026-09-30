@@ -59,8 +59,11 @@ uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
 
 `--transport odbc` scaffolds a backfill source read from a database instead of a
 q process, `--procname` names the process, and `--start-with-all` puts a
-streaming job in `uqs start all`. Where q is installed, `new-job` also
-re-exports the contract surface; without it, it prints the command to run.
+streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
+a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
+`--partition`/`--check` shape a backfill. `uqs remove-job NAME` undoes a
+scaffold. Where q is installed, `new-job` also re-exports the contract surface;
+without it, it prints the command to run.
 
 The third is a second worker over the second's source: a source that already
 exists is reused rather than rewritten, and a table that already exists is not

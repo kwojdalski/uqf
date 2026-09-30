@@ -42,6 +42,9 @@ class FileAction:
     path: Path
     body: str
     mode: WriteMode = WriteMode.CREATE
+    #: Where in `path` an APPEND goes, for a file with more than one place:
+    #: profiles.py takes a process into a named profile or into UNPROFILED.
+    anchor: str = ""
 
     def describe(self) -> str:
         verb = "create" if self.mode is WriteMode.CREATE else "append to"

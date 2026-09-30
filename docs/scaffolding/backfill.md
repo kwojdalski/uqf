@@ -21,7 +21,10 @@ dataset has nothing to record coverage against. `--width` is the window size as
 a q timespan. `--transport odbc` scaffolds a source read from a database rather
 than a q process: it declares `transport` and a `credential_example`, and its
 query comment points at `.qetl.io.odbc` and `src/etl/sources/duckdb_deals.q`.
-`--procname` names the process (default `NAME_backfill1`).
+`--procname` names the process (default `NAME_backfill1`). `--partition SYM`
+scopes the worker to one slice of its dataset, which is what lets a second
+worker fill the same one, and `--check` adds a quality check that fails a window
+on bad rows --- it throws until written.
 
 ```
 scaffold fxprobe_backfill:
