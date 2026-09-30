@@ -28,39 +28,42 @@ reference](../reference/pipeline-declarations.md).
 
 ## Scaffolding it
 
-`uqs new-job` writes the skeleton: the q files, the table definition and a test.
+`uqs job new` writes the skeleton: the q files, the table definition and a test.
 There is no registry entry - the process is read from the job's own declaration.
 
 <!-- Source: docs/diagrams/scaffolding.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
 
-![What uqs new-job writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
+![What uqs job new writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
 Read it top to bottom. The **appends** are the whole reason the middle band
 exists: everything else is picked up by a glob, and those files hold the facts
 the tree cannot derive from itself --- the table definition, `nsList`, the one
 hand-kept list of test namespaces, and `expected` in
 [`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q), the gate
-every new table passes through. After writing them, `new-job` reruns
+every new table passes through. After writing them, `uqs job new` reruns
 `scripts/generate/generate_operational_docs.py`, so `processes.md`,
 `src/etl/generated/pipeline_dag.q` and the port lock never lag the job it just
 declared.
 
 ```
-uqs new-job markout2 --subscribe-to trades,quote \
+uqs job new markout2 --subscribe-to trades,quote \
     --publishes my_metric --columns "sym:symbol, value:float"
 
-uqs new-job fx_rates --kind backfill --dataset fx_rates \
+uqs job new fx_rates --kind backfill --dataset fx_rates \
     --columns "sym:symbol, mid:float" --width 1D
 
-uqs new-job fx_rates_1h --kind backfill --dataset fx_rates_1h \
+uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
     --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
 ```
 
 `--transport odbc` scaffolds a backfill source read from a database instead of a
 q process, `--procname` names the process, and `--start-with-all` puts a
-streaming job in `uqs start all`. Where q is installed, `new-job` also
-re-exports the contract surface; without it, it prints the command to run.
+streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
+a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
+`--partition`/`--check` shape a backfill. `uqs job remove NAME` undoes a
+scaffold. Where q is installed, `uqs job new` also re-exports the contract
+surface; without it, it prints the command to run.
 
 The third is a second worker over the second's source: a source that already
 exists is reused rather than rewritten, and a table that already exists is not
@@ -68,7 +71,8 @@ defined again. `--columns` is required whenever a new source or a new table is
 written, and refused when neither is. Its dataset is its own because
 `.qetl.job.bounded.define` refuses two workers on one dataset and partition -
 their coverage would compose, and a range full of gaps would read as complete -
-so `new-job` refuses a dataset another worker already fills without a partition.
+so `uqs job new` refuses a dataset another worker already fills without a
+partition.
 
 A streaming job follows the same rule for what it publishes: `--publishes` takes
 a comma list, a table the plant already defines is published onto without
@@ -94,7 +98,7 @@ until written - the batch
 drives the job with to hold every table it publishes to its plant table:
 
 ```
-uqs new-job dxprobe --subscribe-to trades --publishes dx_t --columns "sym:symbol, v:float"
+uqs job new dxprobe --subscribe-to trades --publishes dx_t --columns "sym:symbol, v:float"
 q tests/run_tests.q
 ```
 
@@ -152,7 +156,7 @@ what you need before writing into either.
 <!-- Source: docs/diagrams/pipeline-decision.d2. Rendered by
      scripts/generate/render_diagrams.py, which CI runs with --check. -->
 
-![A decision tree: known range or not chooses the bounded worker or the streaming shell; whether it reads another table chooses a feed or an etl; whether it publishes a new table decides if columns must be declared; every path ends at the same new-job command and the same three remaining steps](../diagrams/pipeline-decision.svg)
+![A decision tree: known range or not chooses the bounded worker or the streaming shell; whether it reads another table chooses a feed or an etl; whether it publishes a new table decides if columns must be declared; every path ends at the same uqs job new command and the same three remaining steps](../diagrams/pipeline-decision.svg)
 
 Three questions, and only the first is hard to change afterwards --- the other
 two are flags on one command, and the kinds below them are derived from the
@@ -212,7 +216,7 @@ Two ship: `executions` (`trades` + `crypto_trades`) and `marks` (`quote` +
 `crypto_book`), which is how `posbook1` holds FX and crypto positions in one
 book without knowing either market's tape format. A third market is a mapping in
 a normalizer, not a branch in a consumer.
-`uqs new-job NAME --kind normalizer --subscribe-to a,b --columns ...` scaffolds
+`uqs job new NAME --kind normalizer --subscribe-to a,b --columns ...` scaffolds
 one: the canonical table NAME, and per source its schema, a throwing mapping and
 a typed example row, so the file loads while each mapping stays red.
 
@@ -468,7 +472,7 @@ sixteen licensed connections (#285) - a decision to make on purpose.
 survive other processes being added around it. Each process's offset lives in
 [`scripts/processes/process_ports.csv`](../../scripts/processes/process_ports.csv),
 a generated, append-only lock: a process not yet in it gets the next free
-offset, and `generate_operational_docs.py` (which `new-job` runs) writes it
+offset, and `generate_operational_docs.py` (which `uqs job new` runs) writes it
 down. A retired process keeps its row, so its offset is never reused, and
 `--check` fails in CI on a process the lock lacks.
 

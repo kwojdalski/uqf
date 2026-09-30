@@ -108,11 +108,11 @@ def test_a_port_is_offered_with_the_process_it_belongs_to():
 def test_fixed_choices_complete():
     assert complete("uqs logs --level W") == ["WARNING"]
     assert complete("uqs multitail --stream ") == ["out", "err", "both"]
-    assert complete("uqs new-job x --kind ") == ["streaming", "backfill", "normalizer"]
+    assert complete("uqs job new x --kind ") == ["streaming", "backfill", "normalizer"]
 
 
 def test_plant_tables_complete_for_a_job_s_inputs():
-    offered = complete("uqs new-job x --subscribe-to quote,")
+    offered = complete("uqs job new x --subscribe-to quote,")
     assert "quote,executions" in offered
     assert "quote,quote" not in offered
 

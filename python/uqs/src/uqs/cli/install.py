@@ -1,7 +1,7 @@
-"""`uqs install-jobs`: bring jobs kept outside the tree - a "sidecar" folder
+"""`uqs job install`: bring jobs kept outside the tree - a "sidecar" folder
 of sources, workers and streaming jobs - into it, as copies or symlinks.
 
-Its own module because, like `new-job`, it writes into the tree rather than
+Its own module because, like `uqs job new`, it writes into the tree rather than
 acting on a running fleet; the logic that decides what goes where is in
 stack/install.py, so this is only the wizard around it: show the plan, ask
 how, ask before replacing anything, then say how to check it worked.
@@ -21,7 +21,7 @@ from rich.text import Text
 
 from uqs.cli import completion
 from uqs.cli.create import _DERIVED, _plant_tables, _regenerate_derived
-from uqs.cli.shared import _die, _paths, app, console
+from uqs.cli.shared import _die, _paths, console, job_app
 from uqs.model.declarations import Declaration, declaration_calls, read_file, symbols
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import UqsError
@@ -179,7 +179,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
     )
 
 
-@app.command("install-jobs")
+@job_app.command("install")
 def install_jobs(
     sidecar: Annotated[
         Path,
@@ -222,9 +222,9 @@ def install_jobs(
     the sidecar can be laid out any way. Then the derived files are
     regenerated, and the next steps say how to check the jobs are running.
 
-        uqs install-jobs ../sidecars
+        uqs job install ../sidecars
 
-        uqs install-jobs ../sidecars --mode symlink --yes
+        uqs job install ../sidecars --mode symlink --yes
     """
     repo_root = _paths().repo_root
     sidecar = sidecar.resolve()
@@ -237,7 +237,7 @@ def install_jobs(
     console.print(
         Panel(
             f"from [cyan]{sidecar}[/]\ninto [cyan]{repo_root}[/]",
-            title="uqs install-jobs",
+            title="uqs job install",
             border_style="cyan",
             expand=False,
         )

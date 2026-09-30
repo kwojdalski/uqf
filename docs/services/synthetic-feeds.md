@@ -32,7 +32,7 @@ any more. The three things the job itself still owns:
 To add your own: write a job file under `src/etl/streaming/` and register it
 with `.qetl.job.stream.define`. That is the whole registration - the process
 registry is read from the declaration, and a new process is given the next free
-port in `scripts/processes/process_ports.csv`. `uqs new-job` scaffolds it; see
+port in `scripts/processes/process_ports.csv`. `uqs job new` scaffolds it; see
 [adding a pipeline](../guides/new-pipeline.md).
 
 ## quotesfeed1

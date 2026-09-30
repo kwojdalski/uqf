@@ -16,6 +16,7 @@ is the red this scaffold is meant to leave, without the tree failing to load.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 
 from uqs.paths import STREAM_DIR, TABLES_FILE, TEST_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
@@ -28,6 +29,7 @@ from uqs.scaffold.jobs import (
     test_namespace,
 )
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
+from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import _SAMPLE_VALUES, TIME_COLUMN, table_definition, test_stub
 
 #: One `name:literal` column inside a `([]...)` definition.
@@ -66,6 +68,9 @@ def normalizer(
     known_tables: set[str],
     procname: str | None = None,
     start_with_all: bool = False,
+    profile: str | None = None,
+    unprofiled: str | None = None,
+    known_profiles: Iterable[str] | None = None,
 ) -> ScaffoldPlan:
     """Plan a normalizer publishing `name` from `sources`.
 
@@ -183,5 +188,14 @@ publish:.qetl.job.stream.unwired `{name};
         _nslist_action(ns),
     ]
     notes.append(_STACK_PAGE_NOTE.format(proc=proc))
+    member_actions, member_notes = membership(
+        proc,
+        profile=profile,
+        unprofiled=unprofiled,
+        start_with_all=start_with_all,
+        known_profiles=profile_names(known_profiles),
+    )
+    actions += member_actions
+    notes += member_notes
     notes.append("start it with its producers: " + " ".join(sorted(set(sources))))
     return ScaffoldPlan(name=name, actions=actions, notes=notes)

@@ -234,7 +234,37 @@ fixture:{{[]
 """
 
 
-def worker_body(worker: str, src: str, dataset: str, width: str, proc: str) -> str:
+_CHECK_STUB = """
+/ SCAFFOLDED. The rows of a batch that must not be published, as a table
+/ check/status/detail with one row per offence - empty means it passes
+/ (.qetl.job.bounded.no_failures[]). A failing window publishes nothing and
+/ records no coverage, so the next run tries it again. Throws until written,
+/ so every window fails until it is: see quality_check in
+/ src/etl/workers/demo_deals_backfill.q.
+quality_check:{{[batch]
+    '"{worker}.quality_check: not implemented";
+    }}
+"""
+
+
+def worker_body(
+    worker: str,
+    src: str,
+    dataset: str,
+    width: str,
+    proc: str,
+    *,
+    partition: str | None = None,
+    check: bool = False,
+) -> str:
+    """The worker file. `partition` scopes it to one slice of its dataset,
+    which is what lets a second worker fill the same dataset; `check` adds a
+    quality check stub."""
+    check_stub = _CHECK_STUB.format(worker=worker) if check else ""
+    extra_keys = ("`check" if check else "") + ("`partition" if partition else "")
+    extra_values = (f";.qpipe.job.{worker}.quality_check" if check else "") + (
+        f";`{partition}" if partition else ""
+    )
     return f"""/ {worker}.q - the {src} bounded worker (.qpipe.job.{worker}).
 / .
 / SCAFFOLDED. Mostly a declaration: the lifecycle - windowing, retries,
@@ -249,7 +279,7 @@ def worker_body(worker: str, src: str, dataset: str, width: str, proc: str) -> s
 facts:{{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     (enlist `rows)!enlist count batch}}
-
+{check_stub}
 \\d .
 
 / Pass-through until a real transform is needed: the batch is published as
@@ -259,8 +289,8 @@ facts:{{[batch]
 / `procname` is the process that runs this worker - the process registry is
 / read from this declaration, so there is no entry to add anywhere else.
 .qetl.job.bounded.define[`{worker};
-    `source`dataset`width`transform`facts`procname`note!
-        (`{src};`{dataset};{width};`{src}_passthrough;.qpipe.job.{worker}.facts;
+    `source`dataset`width`transform`facts{extra_keys}`procname`note!
+        (`{src};`{dataset};{width};`{src}_passthrough;.qpipe.job.{worker}.facts{extra_values};
          `{proc};
          "SCAFFOLDED: bounded - say what this backfill is for")];
 """

@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST, UqsError
+from uqs.scaffold import profile
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
 
@@ -63,6 +64,8 @@ def _appended(existing: str, action: FileAction) -> str:
         return _with_nslist_entry(existing, action.body)
     if action.path == STACK_TABLES_TEST:
         return _with_expected_table(existing, action.body)
+    if action.path == profile.PROFILES_FILE:
+        return profile.apply(existing, action)
     return existing.rstrip("\n") + "\n" + action.body
 
 

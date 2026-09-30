@@ -27,7 +27,7 @@ src/uqs/
                      family, all registering onto one shared Typer `app` so
                      `uqs start` stays spelled that way. `entry.py` is
                      the `[project.scripts]` entry point
-  scaffold/         `uqs new-job`: the plan, the file templates, and
+  scaffold/         `uqs job new`: the plan, the file templates, and
                      applying one to the tree
   external/         processes this tree starts but does not own - the crypto
                      recorder, the Databento feed and its streamer

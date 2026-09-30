@@ -30,6 +30,18 @@ app = typer.Typer(
 console = Console()
 log = get_logger(__name__)
 
+#: `uqs job ...`: the commands that WRITE jobs into the tree - new, remove,
+#: install - rather than act on a running fleet. A group, as `crypto` and
+#: `replay` are, because the flat app exists to keep `uqs start` spelled that
+#: way, and none of these is a lifecycle command. Registered on `app` in
+#: create.py, the first of the three modules entry.py imports, so it lists
+#: where they did.
+job_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Write ETL jobs into the tree: scaffold one, remove a scaffold, install finished ones.",
+)
+
 DEFAULT_LOG_LEVEL = "INFO"
 
 

@@ -1,4 +1,4 @@
-# scaffolding.d2 - what `uqs new-job` writes, and what picks each file
+# scaffolding.d2 - what `uqs job new` writes, and what picks each file
 # up afterwards.
 #
 # Rendered by scripts/generate/render_diagrams.py, which CI runs with
@@ -12,7 +12,7 @@
 # tree - the table definition, nsList, the one hand-kept list of test
 # namespaces, and the q suite's list of tables, a deliberate gate - which is
 # why they are the only places the scaffold has to edit rather than create.
-# Everything derived, new-job regenerates itself before it returns, the port
+# Everything derived, uqs job new regenerates itself before it returns, the port
 # lock included.
 #
 # The other thing worth seeing is the red column. The scaffold writes the
@@ -90,7 +90,7 @@ classes: {
   }
 }
 
-cmd: "uqs new-job" {
+cmd: "uqs job new" {
   class: band
 
   plan: "a ScaffoldPlan\nrendered first,\nwritten second\n\n--dry-run stops here" { class: command }
@@ -118,7 +118,7 @@ picked_up: "Picked up: no registration step" {
 
   init: "src/etl/init.q\nglobs the three\ndeclaration directories" { class: derived }
   suites: ".testutil.load_suites[]\nglobs tests/q/test_*.q" { class: derived }
-  consumers: "the process registry,\nread from the declarations;\nprocess.csv, processes.md,\npipeline_dag.q, the port lock -\nre-derived by new-job itself" { class: derived }
+  consumers: "the process registry,\nread from the declarations;\nprocess.csv, processes.md,\npipeline_dag.q, the port lock -\nre-derived by uqs job new itself" { class: derived }
 }
 
 todo: "Yours" {

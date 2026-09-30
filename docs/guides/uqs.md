@@ -160,7 +160,12 @@ replay tplog [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
                                       the running plant and hdb process - including
                                       the base port (see below)
 clean [--match REGEX] [--dry-run]     wipe output/uqs/, or part of it
-install-jobs DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
+job new NAME [--kind K] [--dry-run] ...
+                                      scaffold an ETL job: its q files, table and
+                                      test (see docs/scaffolding/)
+job remove NAME [--dry-run] [--force] [-y]
+                                      undo a scaffold, keeping anything still in use
+job install DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs
                                       in DIR into src/etl/ (see "Adding a process")
 conn PROCNAME [--port N]              interactive qcon session on a process, by name: its
@@ -767,7 +772,7 @@ stack as a whole. `tap1`, the diagnostic subscriber that logs every batch, is
 
 ## Adding a process
 
-There is one way: declare a job in q and let `uqs new-job` scaffold it. See
+There is one way: declare a job in q and let `uqs job new` scaffold it. See
 [adding a pipeline](new-pipeline.md).
 
 ### Installing jobs from elsewhere
@@ -776,9 +781,9 @@ Jobs written outside the tree - a `sidecars/` folder, another repository - are
 installed with:
 
 ```
-uqs install-jobs ../sidecars                        # the wizard
-uqs install-jobs ../sidecars --dry-run              # just the plan
-uqs install-jobs ../sidecars --mode symlink --yes   # no questions, for scripts
+uqs job install ../sidecars                        # the wizard
+uqs job install ../sidecars --dry-run              # just the plan
+uqs job install ../sidecars --mode symlink --yes   # no questions, for scripts
 ```
 
 A file in `src/etl/sources`, `src/etl/workers` or `src/etl/streaming` is already
