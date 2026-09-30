@@ -6,11 +6,11 @@ the stack as a whole is in [running the uqf stack](../guides/uqs.md).
 
 ## Market-data recorder
 
-`uqs crypto start`/`stop`/`status` (a nested command group, not flat `crypto-*`
-commands - these don't drive `torq.sh`/`process.csv` at all, a distinct enough
-concern to read as its own namespace) are a proof of concept that this demo's
-kdb+ infra isn't TorQ/q-specific: anything that can speak kdb+ IPC can publish
-onto the same tickerplant alongside the q feeds ([synthetic
+`uqs feed start crypto`/`stop`/`status` (a nested command group, not flat
+`crypto-*` commands - these don't drive `torq.sh`/`process.csv` at all, a
+distinct enough concern to read as its own namespace) are a proof of concept
+that this demo's kdb+ infra isn't TorQ/q-specific: anything that can speak kdb+
+IPC can publish onto the same tickerplant alongside the q feeds ([synthetic
 feeds](synthetic-feeds.md)), including a process written in an entirely
 different language, in a completely separate project. Specifically, they build
 and launch a sibling checkout of
@@ -24,10 +24,10 @@ use, just from Rust instead of q - with its own reconnect-on-drop loop, so a
 `stp1` restart doesn't take it down permanently.
 
 ```
-uqs crypto start                    # binance_spot, BTC-USDT/ETH-USDT by default
-uqs crypto start --venues binance_spot,bybit_spot --symbols BTC-USDT
-uqs crypto status
-uqs crypto stop
+uqs feed start crypto                    # binance_spot, BTC-USDT/ETH-USDT by default
+uqs feed start crypto --venues binance_spot,bybit_spot --symbols BTC-USDT
+uqs feed status crypto
+uqs feed stop crypto
 ```
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
@@ -40,7 +40,7 @@ uqs query "select from crypto_book" --port <rdb1's port>
 ```
 
 Requires a `~/github_projects/cryptorust` checkout (override the path via
-`$CRYPTORUST_ROOT`) with a Rust toolchain on `PATH` - `crypto start` runs
+`$CRYPTORUST_ROOT`) with a Rust toolchain on `PATH` - `feed start crypto` runs
 `cargo build` itself the first time, which can take a while. It also reuses this
 demo's own `feed:pass` credential (see `appconfig/passwords/ feed.txt`) to
 authenticate against `stp1`'s access-list, same as any other feed process here -
@@ -48,15 +48,15 @@ no separate cryptorust-side credential to set up.
 
 ## Fills recorder
 
-`uqs crypto fills-start`/`fills-stop`/`fills-status` are a separate proof of
-concept, alongside the book recorder above: cryptorust's own
-`kdb-fills-recorder` binary (`src/bin/kdb_fills_recorder.rs`) polls an
-*already-running* cryptorust service's OMS over its own IPC unix socket (default
-`/tmp/beacon.sock`) and republishes new fills onto this demo's `stp1`, the
-bridge role the `posbook` and `markout` streaming jobs play inside this repo's
-own uqf stack - except this one bridges two entirely different IPC protocols
-(cryptorust's JSON-RPC and kdb+'s wire protocol) rather than two kdb+ processes.
-It polls two independent methods each tick, into two separate tables:
+`uqs feed start|stop|status crypto-fills` is a separate proof of concept,
+alongside the book recorder above: cryptorust's own `kdb-fills-recorder` binary
+(`src/bin/kdb_fills_recorder.rs`) polls an *already-running* cryptorust
+service's OMS over its own IPC unix socket (default `/tmp/beacon.sock`) and
+republishes new fills onto this demo's `stp1`, the bridge role the `posbook` and
+`markout` streaming jobs play inside this repo's own uqf stack - except this one
+bridges two entirely different IPC protocols (cryptorust's JSON-RPC and kdb+'s
+wire protocol) rather than two kdb+ processes. It polls two independent methods
+each tick, into two separate tables:
 
 - **`get_recent_fills` -> `crypto_sim_fills`** - the market-making bot's
   *simulated* (paper) fill model: a probabilistic fill simulation run against
@@ -72,16 +72,16 @@ It polls two independent methods each tick, into two separate tables:
 Both are empty/unavailable whenever the polled service has no OMS attached or no
 fills have happened yet - not an error, just nothing to publish that tick.
 
-Unlike `crypto start`, this doesn't launch its own exchange connectors - it
+Unlike `feed start crypto`, this doesn't launch its own exchange connectors - it
 needs a cryptorust service already running (e.g. `helm start beacon` inside the
 cryptorust checkout), with its OMS/trading cycle active before either method
 returns anything.
 
 ```
-uqs crypto fills-start                       # polls /tmp/beacon.sock, tags sim rows BTC-USDT
-uqs crypto fills-start --oms-socket-path /tmp/beacon.sock --symbol ETH-USDT
-uqs crypto fills-status
-uqs crypto fills-stop
+uqs feed start crypto-fills                       # polls /tmp/beacon.sock, tags sim rows BTC-USDT
+uqs feed start crypto-fills --oms-socket-path /tmp/beacon.sock --symbol ETH-USDT
+uqs feed status crypto-fills
+uqs feed stop crypto-fills
 ```
 
 Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/

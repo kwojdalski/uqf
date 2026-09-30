@@ -53,7 +53,7 @@ log = get_logger(__name__)
 # This is an overlay, not an edit: the vendored file is never touched,
 # and because process_overrides.csv is still applied afterwards, an operator
 # who does want the upstream behaviour can put it back with
-# `uqs config-set monitor1 startwithall 0`.
+# `uqs config set monitor1 startwithall 0`.
 VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 
 #: Extra q the gateway loads, appended to its vendored `load` column.
@@ -145,7 +145,7 @@ def list_process_names(paths: UqsPaths) -> list[str]:
 def assert_known_procnames(paths: UqsPaths, procs: str) -> None:
     """Refuse a lifecycle selector naming a process that does not exist.
 
-    `start`/`stop`/`restart`/`print` used to hand `procs` straight to the
+    `start`/`stop`/`restart`/`start --print` used to hand `procs` straight to the
     vendored torq.sh on the grounds that it owns its own handling of an
     unknown name. It does, but badly, and the cost is paid before you see it:
     `uqs start xyz` first printed a licence-cap warning whose arithmetic
@@ -180,7 +180,7 @@ def list_process_choices(paths: UqsPaths) -> list[dict[str, str]]:
     procname, proctype and startwithall, from the same effective rows torq.sh
     starts from - vendored process.csv and the pipelines -
     with process_overrides.csv applied, so a startwithall a user set through
-    config-set is the one reported. Nothing is resolved beyond that: a picker
+    config set is the one reported. Nothing is resolved beyond that: a picker
     needs to know what CAN be started and which are started by "all", not
     what port each would take.
     """

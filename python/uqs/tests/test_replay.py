@@ -1,4 +1,4 @@
-"""Tests for `uqs replay tplog` and how it aims TorQ's tickerlogreplay.
+"""Tests for `uqs data replay` and how it aims TorQ's tickerlogreplay.
 
 The point of the command is that it reads the RUNNING processes rather than
 the configuration that describes them, so most of what is asserted here is
@@ -296,7 +296,7 @@ def test_dry_run_prints_the_plan_and_starts_nothing(monkeypatch):
         raise AssertionError("--dry-run started the replay")
 
     monkeypatch.setattr(replay, "start", explode)
-    argv = ["replay", "tplog", "--dry-run", "--port", "6050"]
+    argv = ["data", "replay", "--dry-run", "--port", "6050"]
     argv += ["--dir", TPLOGS, "--hdb", HDB, "--schema", SCHEMA]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -305,12 +305,12 @@ def test_dry_run_prints_the_plan_and_starts_nothing(monkeypatch):
 
 def test_the_command_exits_with_what_the_replay_exited_with(monkeypatch):
     monkeypatch.setattr(replay, "start", lambda *a, **k: type("Completed", (), {"returncode": 3})())
-    argv = ["replay", "tplog", "--port", "6050"]
+    argv = ["data", "replay", "--port", "6050"]
     argv += ["--dir", TPLOGS, "--hdb", HDB, "--schema", SCHEMA]
     assert runner.invoke(cli.app, argv).exit_code == 3
 
 
 def test_a_refusal_exits_one_rather_than_raising(monkeypatch):
     monkeypatch.setattr(replay, "_command_lines", lambda timeout=None: [])
-    result = runner.invoke(cli.app, ["replay", "tplog"])
+    result = runner.invoke(cli.app, ["data", "replay"])
     assert result.exit_code == 1

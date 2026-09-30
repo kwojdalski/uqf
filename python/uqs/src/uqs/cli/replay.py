@@ -1,10 +1,7 @@
-"""`uqs replay tplog`: replay a tickerplant log into the HDB.
+"""`uqs data replay`: replay a tickerplant log into the HDB.
 
-A sub-app rather than a flat `replay-tplog`, for the reason cli/external.py
-gives for its own: `tplog` is one of several things a stack can be asked to
-replay, and the ones that follow (a wdb's unsaved partition, a recorder's
-capture file) are different enough commands that they should not be spelled as
-options on this one.
+Registers the `data` group on the app (see cli/shared.py), which
+cli/inspect.py's `hdb-check` joins.
 
 What it wraps is TorQ's tickerlogreplay, unchanged. What it adds is aim: which
 log, which database, which schema and which stack, all read from the processes
@@ -21,20 +18,15 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
-from uqs.cli.shared import _die, _paths, app, console
+from uqs.cli.shared import _die, _paths, app, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import replay as stack_replay
 
-replay_app = typer.Typer(
-    no_args_is_help=True,
-    add_completion=False,
-    help="Replay what a running process has written, into where it belongs.",
-)
-app.add_typer(replay_app, name="replay")
+app.add_typer(data_app, name="data")
 
 
-@replay_app.command("tplog")
-def tplog(
+@data_app.command("replay")
+def replay(
     proc: Annotated[
         str | None,
         typer.Option(
@@ -96,7 +88,7 @@ def tplog(
     before it writes them. Run `--dry-run` first on anything you have not run
     before.
 
-    e.g. `uqs replay tplog --date 2026-09-22 --table quote --table trade`
+    e.g. `uqs data replay --date 2026-09-22 --table quote --table trade`
     """
     try:
         plan = stack_replay.plan(

@@ -209,14 +209,24 @@ def _start_in_foreground(names: str, port: int) -> None:
 
 @app.command()
 def start(
-    procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT, profile: ProfileOpt = None
+    procs: ProcsArg = None,
+    port: PortOpt = DEFAULT_BASE_PORT,
+    profile: ProfileOpt = None,
+    print_only: Annotated[
+        bool,
+        typer.Option("--print", help="Show the exact startup command line(s); start nothing"),
+    ] = False,
 ) -> None:
     """Start every startwithall=1 process (or specific process name(s)).
 
     `--profile fx` starts a named set instead: its leaves and everything they
     read, resolved from the dependency graph rather than listed by hand.
     """
-    _start(_names_to_start(procs, profile), port)
+    names = _names_to_start(procs, profile)
+    if print_only:
+        _print_startlines(names, port)
+        return
+    _start(names, port)
 
 
 LevelOpt = Annotated[
@@ -312,10 +322,8 @@ def restart(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     _run_streaming(runtime.restart, names, base_port=port)
 
 
-@app.command("print")
-def print_startlines(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
-    """Show the exact startup command line(s) without starting anything."""
-    names = _procs(procs)
+def _print_startlines(names: str, port: int) -> None:
+    """Print the startup command line(s) for `names`, then exit - `start --print`."""
     _reject_unknown(names)
     try:
         result = runtime.print_procs(_paths(), names, base_port=port)

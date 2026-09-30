@@ -571,7 +571,7 @@ def test_every_process_has_a_configured_port(fake_paths: UqsPaths):
 
 def test_process_choices_cover_every_process_and_apply_overrides(fake_paths: UqsPaths):
     """The list a picker offers is the list `start all` acts on, overrides
-    included: a startwithall set through config-set must be the value
+    included: a startwithall set through config set must be the value
     reported, or the picker's "started by all" hint lies about exactly the
     processes someone deliberately changed."""
     stack_procs.set_process_config(fake_paths, "discovery1", "startwithall", "0")
