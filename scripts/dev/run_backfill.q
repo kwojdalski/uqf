@@ -84,10 +84,10 @@ use_io:{[opts;worker]
 / here rather than refused, because TORQDATA is unset outside a TorQ process
 / and the bare fallback is "/status", which is not writable and fails with a
 / bare 'os halfway through init.
-if[""~getenv `UQFSTATUSDIR;
-    setenv[`UQFSTATUSDIR;"output/uqs/status"];
-    -1 "run_backfill: UQFSTATUSDIR was unset, using output/uqs/status"];
-system "mkdir -p ",getenv `UQFSTATUSDIR;
+if[""~getenv `UQF_STATUS_DIR;
+    setenv[`UQF_STATUS_DIR;"output/uqs/status"];
+    -1 "run_backfill: UQF_STATUS_DIR was unset, using output/uqs/status"];
+system "mkdir -p ",getenv `UQF_STATUS_DIR;
 
 / Caught rather than thrown: a bad flag reaching q's own handler prints a
 / trace and exits 0, which is the worst of both - it looks like a clean run

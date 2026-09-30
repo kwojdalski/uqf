@@ -18,7 +18,7 @@
 / is its own lane.
 / .
 / Run from the repository root:
-/   UQFSTATUSDIR=$(mktemp -d) q tests/q/run_examples.q
+/   UQF_STATUS_DIR=$(mktemp -d) q tests/q/run_examples.q
 / or through `scripts/test.py q-examples`.
 
 \l tests/lib/qunit.q
@@ -42,7 +42,7 @@
 / A status directory of our own. Examples take locks and write status
 / files, and a directory another run left behind would make a lock example
 / fail for a reason that has nothing to do with the docs.
-if[0=count getenv `UQFSTATUSDIR; setenv[`UQFSTATUSDIR;first system"mktemp -d"]];
+if[0=count getenv `UQF_STATUS_DIR; setenv[`UQF_STATUS_DIR;first system"mktemp -d"]];
 
 / The Databento directory, pinned to an EMPTY one, always - not only when
 / unset. Found the first time this ran in a fresh worktree: four data.q

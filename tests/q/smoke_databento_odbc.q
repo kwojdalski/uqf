@@ -40,7 +40,7 @@ if[not .qetl.io.odbc.available[];
 / A status directory of its own, emptied first: the coverage ledger persists
 / there, and a previous run of this script would otherwise make this one
 / correctly idle - and fail every count below.
-setenv[`UQFSTATUSDIR;"build/smoke-status"];
+setenv[`UQF_STATUS_DIR;"build/smoke-status"];
 system"rm -rf build/smoke-status";
 system"mkdir -p build/smoke-status";
 

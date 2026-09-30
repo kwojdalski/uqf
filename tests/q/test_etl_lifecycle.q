@@ -25,7 +25,7 @@ spec_for:{[version;from_n;to_n]
     `source_version`range_from`range_to!(version;.lifecycletest.d from_n;.lifecycletest.d to_n)}
 
 beforeNamespace_isolate:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     .testutil.reset_coverage_ledger[];
     }

@@ -134,17 +134,17 @@ only needs `UQF_FRONTEND_BASE_PORT`.
 
 Configuration is environment-only, so credentials stay server-side:
 
-  | Variable                                | Default                                                                                                                |
-  | ---                                     | ---                                                                                                                    |
-  | `UQF_FRONTEND_GATEWAY_HOST`             | `localhost`                                                                                                            |
-  | `UQF_FRONTEND_GATEWAY_PORT`             | `6057` — the base port +7, where `process.csv` puts `gateway1`; derived from `UQF_FRONTEND_BASE_PORT` when that is set |
-  | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty — set both; `admin`/`admin` for the demo stack                                                                   |
-  | `UQF_FRONTEND_TIMEOUT`                  | `30`                                                                                                                   |
-  | `UQF_FRONTEND_MAX_ROWS`                 | `10000`                                                                                                                |
-  | `UQF_FRONTEND_PROCESSES`                | empty — `rdb1:6052,hdb1:6053` or `name:host:port`                                                                      |
-  | `UQF_FRONTEND_PROCESS_CSV`              | unset — TorQ's generated `process.csv`                                                                                 |
-  | `UQF_FRONTEND_BASE_PORT`                | `6050` — what `{KDBBASEPORT}` resolves to, and what the gateway port is derived from                                   |
-  | `UQF_FRONTEND_STATUS_DIR`               | unset — where q writes status files (pairs with `UQFSTATUSDIR`)                                                        |
+  | Variable                                | Default                                                                                                                  |
+  | ---                                     | ---                                                                                                                      |
+  | `UQF_FRONTEND_GATEWAY_HOST`             | `localhost`                                                                                                              |
+  | `UQF_FRONTEND_GATEWAY_PORT`             | `6057` — the base port +7, where `process.csv` puts `gateway1`; derived from `UQF_FRONTEND_BASE_PORT` when that is set   |
+  | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty — set both; `admin`/`admin` for the demo stack                                                                     |
+  | `UQF_FRONTEND_TIMEOUT`                  | `30`                                                                                                                     |
+  | `UQF_FRONTEND_MAX_ROWS`                 | `10000`                                                                                                                  |
+  | `UQF_FRONTEND_PROCESSES`                | empty — `rdb1:6052,hdb1:6053` or `name:host:port`                                                                        |
+  | `UQF_FRONTEND_PROCESS_CSV`              | unset — TorQ's generated `process.csv`                                                                                   |
+  | `UQF_FRONTEND_BASE_PORT`                | `6050` — what `{KDBBASEPORT}` resolves to, and what the gateway port is derived from                                     |
+  | `UQF_FRONTEND_STATUS_DIR`               | unset — where q writes status files (pairs with `UQF_STATUS_DIR`)                                                        |
 
 A malformed numeric value fails at startup rather than falling back to a default ---
 the same posture the q side takes.

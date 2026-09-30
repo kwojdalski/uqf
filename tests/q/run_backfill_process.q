@@ -12,7 +12,7 @@
 //     cannot show that the state on disk was sufficient.
 //
 // Run via `scripts/test.py q-backfill-process`, which gives each run a fresh
-// UQFSTATUSDIR - a stale directory would make a leftover lock look like a
+// UQF_STATUS_DIR - a stale directory would make a leftover lock look like a
 // passing exclusion test.
 
 \c 400 1000
@@ -27,11 +27,11 @@
 \l src/etl/core/worker_config.q
 \l src/etl/core/worker_runtime.q
 
-if[""~getenv `UQFSTATUSDIR;
-    -1 "run_backfill_process: UQFSTATUSDIR is unset - refusing to run against a shared default, since a stale lock there would make this lane pass spuriously";
+if[""~getenv `UQF_STATUS_DIR;
+    -1 "run_backfill_process: UQF_STATUS_DIR is unset - refusing to run against a shared default, since a stale lock there would make this lane pass spuriously";
     exit 2];
 
-statusdir:getenv `UQFSTATUSDIR;
+statusdir:getenv `UQF_STATUS_DIR;
 system"mkdir -p ",statusdir;
 .testutil.reset_coverage_ledger[];
 
@@ -62,7 +62,7 @@ check["this process holds the lock";.qetl.job.bounded.state.lock_held lockworker
 / entirely, so every check below would have failed for want of a line to
 / match rather than for want of the behaviour. The banner it re-enables is
 / harmless, since the checks match a line rather than the whole output.
-child:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
+child:"QHOME=",getenv[`QHOME]," UQF_STATUS_DIR=",statusdir," ",Q,
       " tests/q/try_acquire.q < /dev/null 2>/dev/null";
 out:@[{system x};child;{enlist "SPAWN-FAILED: ",x}];
 check["a second process is refused the lock";any out like\: "REFUSED*"];
@@ -87,7 +87,7 @@ rworker:`restartproc;
 / Read the checkpoint from a FRESH process, which shares nothing with this
 / one but the directory. That is the actual requirement: the state on disk
 / must be sufficient to resume.
-rchild:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
+rchild:"QHOME=",getenv[`QHOME]," UQF_STATUS_DIR=",statusdir," ",Q,
        " tests/q/read_checkpoint.q < /dev/null 2>/dev/null";
 rout:@[{system x};rchild;{enlist "SPAWN-FAILED: ",x}];
 check["a fresh process resumes from the cursor on disk";any rout like\: "CURSOR:2026.09.12D00:00:00.000000000*"];
@@ -111,7 +111,7 @@ check["a cleared checkpoint gives a fresh process nothing to resume from";any co
 .qetl.coverage.attach[];
 .qetl.coverage.stage_completion[`durable_ds;`;`v1;d 1;d 2;7];
 
-cchild:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
+cchild:"QHOME=",getenv[`QHOME]," UQF_STATUS_DIR=",statusdir," ",Q,
        " tests/q/read_coverage.q < /dev/null 2>/dev/null";
 covout:@[{system x};cchild;{enlist "SPAWN-FAILED: ",x}];
 check["a fresh process sees coverage this one staged";any covout like\: "ROWS:1*"];
@@ -144,7 +144,7 @@ runid:.qetl.run.begin[`durable_worker];
 / Released, not finished: this is what a process that died mid-run leaves.
 .qetl.run.release[];
 
-rchild2:"QHOME=",getenv[`QHOME]," UQFSTATUSDIR=",statusdir," ",Q,
+rchild2:"QHOME=",getenv[`QHOME]," UQF_STATUS_DIR=",statusdir," ",Q,
         " tests/q/read_runs.q < /dev/null 2>/dev/null";
 runout:@[{system x};rchild2;{enlist "SPAWN-FAILED: ",x}];
 check["a fresh process sees the run ledger";any runout like\: "RUNS:1*"];

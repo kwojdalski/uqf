@@ -133,7 +133,7 @@ test_never_started_comes_from_the_worker_registry:{[t]
 / .
 / The tests that prove beat[] is actually CALLED live in
 / test_demo_deals_backfill.q, not here. They need a running worker, which
-/ needs UQFSTATUSDIR pointed at a writable directory - .ddbftest's
+/ needs UQF_STATUS_DIR pointed at a writable directory - .ddbftest's
 / beforeNamespace hook already does that, and duplicating its isolation here
 / is how test_source_contract's setUp once wiped the source registry and
 / broke 21 tests in other files.

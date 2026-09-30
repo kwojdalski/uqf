@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-#: Paths under $UQFSCRIPTS, which is scripts/. The subdirectory is part of
+#: Paths under $UQF_SCRIPTS, which is scripts/. The subdirectory is part of
 #: the name because that is what lands in process.csv's load column - see
 #: load_expression below. scripts/ was foldered by role in #241.
 PIPELINE_LIB_SCRIPT = "processes/torq_pipeline.q"
@@ -225,4 +225,4 @@ class Pipeline:
         scripts = [self.script]
         if self.loads_qtorq:
             scripts.insert(0, PIPELINE_LIB_SCRIPT)
-        return " ".join(f"${{UQFSCRIPTS}}/{s}" for s in scripts)
+        return " ".join(f"${{UQF_SCRIPTS}}/{s}" for s in scripts)

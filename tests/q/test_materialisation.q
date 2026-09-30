@@ -9,7 +9,7 @@
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
 beforeNamespace_isolate:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     / a fresh ledger per run, so these tests never depend on each other's rows.
     / `value` is load-bearing: init_ledger returns the SYMBOL `etl_coverage,

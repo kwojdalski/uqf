@@ -14,7 +14,7 @@ d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 fast:{[attempts] `max_attempts`base_delay_ms`max_delay_ms!(attempts;0j;0j)}
 
 beforeNamespace_isolate:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     .testutil.reset_coverage_ledger[];
     }

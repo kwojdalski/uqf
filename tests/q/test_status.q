@@ -17,7 +17,7 @@ spec:{[] `source_version`range_from`range_to!(`v1;.statustest.d 1;.statustest.d 
 progress:{[] `cursor`rows_published`windows_completed!(.statustest.d 2;10;1)}
 
 beforeNamespace_isolate:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 

@@ -98,7 +98,7 @@ def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
             row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
         if row["procname"] in VENDORED_LOAD_OVERLAY:
             extra = VENDORED_LOAD_OVERLAY[row["procname"]]
-            row["load"] = f"{row['load']} ${{UQFSCRIPTS}}/{extra}".strip()
+            row["load"] = f"{row['load']} ${{UQF_SCRIPTS}}/{extra}".strip()
     for row in rows:
         # stp1 loads its schema via -schemafile in `extras`; point it at the
         # generated copy (vendored database.q + uqf's own `quotes` table -
@@ -230,7 +230,7 @@ def get_process_config(
     """The effective process.csv row for *procname* - vendored/fxfeed1 values
     with any set_process_config() overrides applied on top. With
     resolve=True (the default), also evaluates ${VAR}-style and
-    {VAR}(+N)-style placeholders (KDBBASEPORT, KDBHDB, UQFSCRIPTS, ...)
+    {VAR}(+N)-style placeholders (KDBBASEPORT, KDBHDB, UQF_SCRIPTS, ...)
     against build_env(paths, base_port) - the same values torq.sh itself
     would substitute at process-start time.
     """

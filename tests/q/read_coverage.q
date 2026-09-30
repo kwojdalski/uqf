@@ -5,7 +5,7 @@
 / ledger on disk is sufficient, so pulling in the whole tree - and anything
 / that might stage a row of its own - would weaken what the check establishes.
 / .
-/ Run from the repository root, with UQFSTATUSDIR pointing at the directory
+/ Run from the repository root, with UQF_STATUS_DIR pointing at the directory
 / the parent used.
 
 system"l src/init.q";

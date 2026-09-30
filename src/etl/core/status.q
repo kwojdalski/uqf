@@ -129,11 +129,11 @@ previous_state:{[instance_id]
     saved:@[{.j.k x};raw;{()!()}];
     $[`state in key saved; `$saved`state; `]}
 
-/ Where status files go. Overridden by UQFSTATUSDIR so the demo and a real
+/ Where status files go. Overridden by UQF_STATUS_DIR so the demo and a real
 / deployment can differ without a code change; defaults under TORQDATA
 / alongside the other generated state.
 status_dir:{[]
-    d:getenv`UQFSTATUSDIR;
+    d:getenv`UQF_STATUS_DIR;
     $[0<count d; d; (getenv[`TORQDATA]),"/status"]}
 
 / Publish one worker's status as a JSON object, for a reader outside q.

@@ -27,8 +27,8 @@
 \l scripts/processes/torq_pipeline.q
 \l src/etl/init.q
 
-statusdir:getenv `UQFSTATUSDIR;
-if[0=count statusdir; '"run_two_instances: set UQFSTATUSDIR to a fresh directory"];
+statusdir:getenv `UQF_STATUS_DIR;
+if[0=count statusdir; '"run_two_instances: set UQF_STATUS_DIR to a fresh directory"];
 system"mkdir -p ",statusdir;
 Q:.testutil.q_interpreter[];
 

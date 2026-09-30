@@ -26,7 +26,7 @@ fired:()
 setUp_fresh:{[]
     .qetl.reaction.reset[];
     `.rxtest.fired set ();
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 
@@ -245,7 +245,7 @@ test_on_writing_refuses_a_non_symbol_output:{[t]
 / A reaction registered through on_worker actually RUNS the worker - the
 / wiring is not merely a graph entry.
 test_a_worker_reaction_runs_that_worker:{[t]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     .testutil.reset_coverage_ledger[];
     .qetl.job.bounded.state.release_lock `demo_deals_backfill;
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;

@@ -108,7 +108,7 @@ process on stock kdb+, use `scripts/processes/run_stream.q`.
 q, after loading the tree: `.qetl.coverage.attach[]` then
 `.qetl.coverage.ledger[]` for what was covered, `.qetl.run.attach[]` then
 `.qetl.run.history[]` for each run and its outcome, and `.qetl.hb.report[]` for
-heartbeats. All three live in the status directory, `$UQFSTATUSDIR`.
+heartbeats. All three live in the status directory, `$UQF_STATUS_DIR`.
 
 **Query errors from the HDB** such as
 `./2026.01.07/arbitrage. OS reports: No such file or directory` mean a partition

@@ -205,7 +205,7 @@ test_the_grouped_form_also_validates_its_tape:{[t]
 / resumption and logging without restating any of it.
 
 beforeNamespace_worker:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 
