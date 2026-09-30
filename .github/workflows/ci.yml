@@ -22,7 +22,9 @@ jobs:
       # uv run inside the hooks must use the committed resolution.
       UV_LOCKED: "true"
       # These govern local commits/branch names, not a detached PR merge ref.
-      SKIP: no-commit-to-branch,branch-naming-with-git-username
+      # q-docs-peachq needs UQF_PEACHQ, and PeachQ is installed only after the
+      # hooks run; "Run the marked q blocks in docs/ on PeachQ" below covers it.
+      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

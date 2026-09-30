@@ -27,6 +27,9 @@ between them:
   q-docs               the ```q blocks in docs/ marked `<!-- q-example: ... -->`,
                        one q process per document. The q lane CI runs on
                        PeachQ, which needs no licence.
+  q-docs-peachq        q-docs again on PeachQ, the binary $UQF_PEACHQ names.
+                       Required beside KDB-X, not instead of it, until the
+                       two are compatible enough for one to stand for both.
   q-two-instances      a second kdb+ process is started on the starter
                        pack's HDB and a bounded worker moves trades out of
                        it - the only lane in which a worker's LIVE path runs.
@@ -88,6 +91,13 @@ QHOME = os.environ.get("QHOME", str(Path.home() / ".kx"))
 Q_IMPL_ENV = "UQF_Q_IMPL"
 Q_IMPLS = ("kdbx", "peachq")
 IDENTIFY_SCRIPT = '-1 $[-7h=type @[value;`.pq.load_natives;{0N}];"kdbx";"peachq"];\nexit 0\n'
+
+#: The PeachQ binary for the lanes that run on BOTH interpreters. A second
+#: variable rather than a second meaning of QCMD: QCMD stays the one q every
+#: other lane uses, and this names PeachQ out loud, which is the only way the
+#: tree takes it. There is no default - not ./q either - for the reason QCMD
+#: has none.
+PEACHQ_ENV = "UQF_PEACHQ"
 
 
 def check_interpreter(env: dict[str, str] | None = None) -> str | None:
@@ -273,6 +283,29 @@ def lane_q_docs() -> None:
                 _q(f"q-docs:{session.stem}", str(session), env={"UQF_STATUS_DIR": statusdir})
 
 
+def lane_q_docs_peachq() -> None:
+    """q-docs a second time, on PeachQ.
+
+    Both interpreters are required for now, and neither result stands in for
+    the other. KDB-X is the reference; PeachQ is used for part of the tree -
+    the doc blocks, and CI, where KDB-X cannot run - and is held to it until
+    the two are compatible enough for one to vouch for both. A child process,
+    not a call, because Q_CMD and the interpreter check are fixed at import.
+    """
+    binary = os.environ.get(PEACHQ_ENV)
+    if not binary:
+        raise SystemExit(
+            f"q-docs-peachq: set {PEACHQ_ENV} to the PeachQ binary. The doc "
+            "blocks run on PeachQ AND KDB-X until the two are compatible "
+            "enough for one to stand for both - see README.md#requirements"
+        )
+    _run(
+        "q-docs-peachq",
+        [sys.executable, str(Path(__file__).resolve()), "q-docs"],
+        env={Q_IMPL_ENV: "peachq", "QCMD": binary},
+    )
+
+
 def lane_q_two_instances() -> None:
     _banner("q-two-instances: data moved between two kdb+ processes")
     # The upstream is a second q process on a port; its own status directory
@@ -381,6 +414,7 @@ LANES: dict[str, Callable[[], None]] = {
     "q-examples": lane_q_examples,
     "q-scripts": lane_q_scripts,
     "q-docs": lane_q_docs,
+    "q-docs-peachq": lane_q_docs_peachq,
     "q-two-instances": lane_q_two_instances,
     "python": lane_python,
     "q-coverage": lane_q_coverage,
@@ -400,6 +434,7 @@ ALL = [
     "q-examples",
     "q-scripts",
     "q-docs",
+    "q-docs-peachq",
     "q-backfill-process",
     "q-two-instances",
     "q-metatables-hdb",
@@ -413,7 +448,9 @@ not for an edit.
 The interpreter comes from $QCMD (default `q` on PATH) and $QHOME (default
 ~/.kx). There is no fallback: see README.md#requirements. PeachQ runs only
 when chosen: UQF_Q_IMPL=peachq with QCMD naming its binary, and the binary is
-checked against that choice before any lane starts.
+checked against that choice before any lane starts. q-docs-peachq is the
+exception that runs on BOTH: KDB-X for the lanes, PeachQ from $UQF_PEACHQ for
+a second run of the doc blocks.
 """
 
 
