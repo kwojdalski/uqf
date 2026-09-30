@@ -20,8 +20,8 @@
 / Logging goes through .qetl.log like every other process's. tap1 runs no job,
 / so it does not load uqf's tree - only log.q, which has no load-time
 / dependencies (TorQ's .lg is looked up per call).
-if[0=count getenv`UQFROOT; '"torq_tap: UQFROOT is not set"];
-system"l ",getenv[`UQFROOT],"/src/etl/core/log.q";
+if[0=count getenv`UQF_ROOT; '"torq_tap: UQF_ROOT is not set"];
+system"l ",getenv[`UQF_ROOT],"/src/etl/core/log.q";
 
 / -verbose switches DBG on, the same flag every uqf process script takes.
 if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];

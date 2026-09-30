@@ -894,7 +894,7 @@ def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
 def test_pipelines_not_loading_qpipe_load_only_their_own_script():
     for pipeline in PIPELINES:
         if not pipeline.loads_qtorq:
-            assert pipeline.load_column() == f"${{UQFSCRIPTS}}/{pipeline.script}"
+            assert pipeline.load_column() == f"${{UQF_SCRIPTS}}/{pipeline.script}"
             assert PIPELINE_LIB_SCRIPT not in pipeline.load_column()
 
 
@@ -1541,7 +1541,7 @@ def test_gateway1_loads_the_desk_catalog_after_its_own_script():
         "the vendored gateway script must still load first - this overlay appends"
     )
     assert loaded[-1].endswith("processes/uqs_catalog.q")
-    assert "${UQFSCRIPTS}" in loaded[-1], (
+    assert "${UQF_SCRIPTS}" in loaded[-1], (
         "pathed through the env var the pipeline rows use, not a literal path"
     )
 

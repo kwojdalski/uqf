@@ -16,7 +16,7 @@
 d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
 
 beforeNamespace_isolate:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 

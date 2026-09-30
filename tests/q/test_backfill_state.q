@@ -9,14 +9,14 @@
 / ones. Built as real namespaces rather than mocked, because require_contract
 / inspects namespaces and a mock would test the mock.
 / .
-/ Also points UQFSTATUSDIR at a scratch directory, because the lock and
+/ Also points UQF_STATUS_DIR at a scratch directory, because the lock and
 / status tests write files. Without this the suite inherits whatever the
 / environment happens to hold - and under the pre-commit hook that is
 / nothing, so lock_dir falls back to "/status", which is not writable and
 / errored 8 tests. A suite that only passes when a variable happens to be
 / set is not deterministic, which this suite requires.
 beforeNamespace_register_fixtures:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"rm -rf build/test-status";
     system"mkdir -p build/test-status";
 

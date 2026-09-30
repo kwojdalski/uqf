@@ -12,7 +12,7 @@ beforeNamespace_isolate:{[]
     // The ledger is persisted now, so where it persists TO is this suite's
     // business, and depending on another file's setenv is exactly the kind
     // of ordering coupling that makes a suite pass alone and fail in a run.
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     .testutil.reset_coverage_ledger[];
     }

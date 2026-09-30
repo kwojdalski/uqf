@@ -32,7 +32,7 @@ driver_rows:{[]
     @[t;`is_snapshot;{"i"$x}]}
 
 beforeNamespace_isolate:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 

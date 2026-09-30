@@ -192,7 +192,7 @@ def lane_q_backfill_process() -> None:
         _q(
             "q-backfill-process",
             "tests/q/run_backfill_process.q",
-            env={"UQFSTATUSDIR": statusdir},
+            env={"UQF_STATUS_DIR": statusdir},
         )
 
 
@@ -207,7 +207,7 @@ def lane_q_examples() -> None:
     # Its own process and its own status directory: examples stage coverage,
     # take locks and open runs, and none of that may leak into another lane.
     with tempfile.TemporaryDirectory() as statusdir:
-        _q("q-examples", "tests/q/run_examples.q", env={"UQFSTATUSDIR": statusdir})
+        _q("q-examples", "tests/q/run_examples.q", env={"UQF_STATUS_DIR": statusdir})
 
 
 def lane_q_scripts() -> None:
@@ -240,7 +240,7 @@ def lane_q_scripts() -> None:
         raise SystemExit("q-scripts: no examples found under scripts/examples/")
     for script in scripts:
         with tempfile.TemporaryDirectory() as statusdir:
-            _q(f"q-scripts:{script.stem}", str(script), env={"UQFSTATUSDIR": statusdir})
+            _q(f"q-scripts:{script.stem}", str(script), env={"UQF_STATUS_DIR": statusdir})
 
 
 def lane_q_docs() -> None:
@@ -270,7 +270,7 @@ def lane_q_docs() -> None:
             raise SystemExit("q-docs: no q blocks in docs/ are marked to run")
         for session in sessions:
             with tempfile.TemporaryDirectory() as statusdir:
-                _q(f"q-docs:{session.stem}", str(session), env={"UQFSTATUSDIR": statusdir})
+                _q(f"q-docs:{session.stem}", str(session), env={"UQF_STATUS_DIR": statusdir})
 
 
 def lane_q_two_instances() -> None:
@@ -278,7 +278,7 @@ def lane_q_two_instances() -> None:
     # The upstream is a second q process on a port; its own status directory
     # keeps this run's locks and checkpoints away from every other lane's.
     with tempfile.TemporaryDirectory() as statusdir:
-        _q("q-two-instances", "tests/q/run_two_instances.q", env={"UQFSTATUSDIR": statusdir})
+        _q("q-two-instances", "tests/q/run_two_instances.q", env={"UQF_STATUS_DIR": statusdir})
 
 
 def lane_python() -> None:

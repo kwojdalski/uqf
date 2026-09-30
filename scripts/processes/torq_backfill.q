@@ -176,14 +176,14 @@ run:{[]
 {[uqfroot]
   t0:.z.p;
   cwd:first system"pwd";
-  if[0=count uqfroot; '"torq_backfill: UQFROOT is unset - cannot find the uqf tree to load"];
+  if[0=count uqfroot; '"torq_backfill: UQF_ROOT is unset - cannot find the uqf tree to load"];
   -1 string[.z.p]," | torq_backfill: loading uqf tree from ",uqfroot;
   system"cd ",uqfroot;
   system"l src/init.q";
   system"l src/etl/init.q";
   system"cd ",cwd;
   -1 string[.z.p]," | torq_backfill: uqf tree loaded in ",string[`long$(.z.p-t0)%1000000],"ms";
- }[getenv[`UQFROOT]];
+ }[getenv[`UQF_ROOT]];
 
 / DBG before anything else logs, so -verbose covers discovery too. .qetl.log is
 / only defined once the tree above has loaded.

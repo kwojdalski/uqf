@@ -115,7 +115,7 @@ check_cycles:0W
 / stream.q) - every pipeline's computation is a declared .qetl.transform transform, so a
 / pipeline process without them has nothing to call. Restores the cwd even
 / if the load throws, unlike the hand-rolled copies this replaces.
-/ @throws error if UQFROOT is unset, or if any of the three files fails to load
+/ @throws error if UQF_ROOT is unset, or if any of the three files fails to load
 / .
 / Says so on stdout before and after, with the time it took: .qetl.log is one of
 / the files being loaded, so it cannot report its own load, and a process
@@ -123,8 +123,8 @@ check_cycles:0W
 / applies -verbose (see apply_verbose).
 load_uqf:{[]
     t0:.z.p;
-    root:getenv`UQFROOT;
-    if[0=count root; '"qtorq.load_uqf: UQFROOT is not set"];
+    root:getenv`UQF_ROOT;
+    if[0=count root; '"qtorq.load_uqf: UQF_ROOT is not set"];
     -1 string[.z.p]," | qtorq: loading uqf tree from ",root;
     cwd:first system"pwd";
     system"cd ",root;

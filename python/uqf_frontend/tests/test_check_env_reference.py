@@ -31,7 +31,7 @@ def test_only_the_dotenv_reader_s_variables_count_as_read_from_dotenv():
     names = cer.dotenv_read_names()
     assert "DATABENTO_DATA_DIR" in names
     assert "UQF_FRONTEND_GATEWAY_PASSWD" not in names, "read by Settings.from_env, not from .env"
-    assert "UQFSTATUSDIR" not in names, "read by getenv in status.q"
+    assert "UQF_STATUS_DIR" not in names, "read by getenv in status.q"
 
 
 def test_the_example_file_parses_keys_and_ignores_comments(monkeypatch, tmp_path):
@@ -88,10 +88,10 @@ def test_an_environment_only_variable_in_the_example_is_refused(monkeypatch, tmp
     the refusal names the file that really reads it - here status.q, for
     wiring build_env sets on every TorQ process."""
     rc, err = _run_with_example(
-        monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nUQFSTATUSDIR=/tmp/status\n"
+        monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nUQF_STATUS_DIR=/tmp/status\n"
     )
     assert rc == 1
-    assert "UQFSTATUSDIR" in err and "status.q" in err
+    assert "UQF_STATUS_DIR" in err and "status.q" in err
 
 
 def test_a_key_nothing_reads_is_refused_and_says_so(monkeypatch, tmp_path):

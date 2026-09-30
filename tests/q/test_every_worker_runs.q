@@ -31,7 +31,7 @@
 \d .wruntest
 
 beforeNamespace_isolate:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 

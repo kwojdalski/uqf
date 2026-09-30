@@ -114,7 +114,7 @@ def read_dir(directory: Path | None) -> tuple[list[WorkerStatus], list[dict[str,
         raise ValidationFailed(
             "backfill status needs UQF_FRONTEND_STATUS_DIR set to the directory "
             "q writes status files into (see .qetl.status.status_dir in "
-            "src/etl/core/status.q, which honours UQFSTATUSDIR)"
+            "src/etl/core/status.q, which honours UQF_STATUS_DIR)"
         )
     if not directory.is_dir():
         raise ValidationFailed(f"status directory does not exist: {directory}")

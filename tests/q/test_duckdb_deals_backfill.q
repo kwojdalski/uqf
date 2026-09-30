@@ -27,7 +27,7 @@ driver_rows:{[]
         rate:1.0842 1.2631)}
 
 beforeNamespace_isolate:{[]
-    setenv[`UQFSTATUSDIR;"build/test-status"];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
     }
 
