@@ -3,8 +3,9 @@
 / .
 / The first reaction the tree runs rather than only tests (#529): each time
 / demo_deals_backfill publishes a window, the rows of THAT window are summed
-/ into `deal_positions`, keyed by (sym; window). Nothing polls, and nothing
-/ recomputes a window that did not change.
+/ into `deal_positions`, one row per (sym; window), written where the deals
+/ were - the HDB under `uqs backfill`. Nothing polls, and nothing recomputes
+/ a window that did not change.
 / .
 / Runs inside whichever process publishes demo_deals - today deals_backfill1 -
 / once per published window, after the window's coverage is recorded. It has
@@ -18,34 +19,32 @@
 \d .qpipe.job.rebuild_positions
 
 / Net notional by pair for [range_from;range_to): a buy adds, a sell takes
-/ away. Keyed by the WINDOW as well as the pair, so a re-published window
-/ replaces its own rows instead of adding to them - its old rows are dropped
-/ first, which also takes out a pair the restatement no longer carries.
+/ away. One row per (sym; window), with `time` the window's start - the
+/ column the HDB writer partitions by.
 / .
-/ The deals are READ AS PUBLISHED, through .qetl.reaction.published, and not
-/ by naming the dataset: under `uqs backfill` the worker writes HDB
-/ partitions, and a handler that read `. `demo_deals found no table and
-/ failed on every window, silently (#541). The published rows are the
-/ window's rows whatever the IO manager was.
+/ READ AS PUBLISHED and WRITTEN WHERE THE WORKER WROTE (#541). The deals come
+/ from .qetl.reaction.published, not the dataset by name, because under
+/ `uqs backfill` the worker writes HDB partitions and there is no table to
+/ name. The positions go out through .qetl.reaction.write - the worker's
+/ own IO manager - because this runs inside the backfill process, which
+/ exits when its range is done: a table kept here would go with it.
+/ .
+/ APPEND, like the dataset it is computed from: re-publishing a window adds
+/ that release's positions again rather than replacing the first. That is
+/ how every write through an IO manager behaves in this tree; a reader that
+/ wants one answer per window takes the latest.
 / @param dataset the dataset just published, `demo_deals
 / @param range_from inclusive lower bound of the published window
 / @param range_to exclusive upper bound
-/ @return the number of pairs written for this window
-/ @eg .qetl.reaction.notify_rows[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[]]
+/ @return the number of rows written for this window
+/ @eg .qetl.reaction.notify_published[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
 handler:{[dataset;range_from;range_to]
     deals:.qetl.reaction.published[];
-    net:select net_notional:sum notional*?[side=`buy;1f;-1f], deals:count i
+    net:0!select net_notional:sum notional*?[side=`buy;1f;-1f], deals:count i
         by sym, window:range_from from deals;
-    delete from `deal_positions where window=range_from;
-    `deal_positions upsert net;
-    count net}
+    .qetl.reaction.write[`deal_positions;`time`sym`window`net_notional`deals#update time:window from net]}
 
 \d .
-
-/ What `handler` writes, keyed by (sym; window). Defined at load, and only when
-/ absent, so reloading this file does not wipe positions already built.
-if[not `deal_positions in key `.;
-    `deal_positions set ([sym:`symbol$(); window:`timestamp$()] net_notional:`float$(); deals:`long$())];
 
 / on_writing, because this handler writes deal_positions: that puts it in the
 / job graph, where a cycle is refused at load. It is a CLAIM nothing checks -

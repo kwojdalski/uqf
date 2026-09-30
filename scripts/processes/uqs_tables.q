@@ -253,3 +253,9 @@ client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$();
 / `time` is the plant's - because the lag between them is what a recorded
 / capture exists to measure, and crypto_book above has room for none of it.
 crypto_market_data:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); is_snapshot:`boolean$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); latency_ms:`float$(); latency_min_ms:`float$(); latency_count:`long$(); trade_price:`float$(); trade_size:`float$(); trade_side:`symbol$())
+
+/ rebuild_positions' output (a reaction on demo_deals): the net notional per
+/ pair for each published window, written through demo_deals_backfill's own
+/ IO manager - so into the HDB under `uqs backfill`. `time` is the window's
+/ start, which is what the HDB writer partitions by.
+deal_positions:([]time:`timestamp$(); sym:`g#`symbol$(); window:`timestamp$(); net_notional:`float$(); deals:`long$())

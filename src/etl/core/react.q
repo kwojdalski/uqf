@@ -268,8 +268,10 @@ audit:{[]
 
 / `rows` is what was published, when the notifier had it in hand - see
 / `published`. A general column: each item's rows are a whole table, or ()
-/ when a notification carried none.
-empty_queue:{[] ([] dataset:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); depth:`long$(); rows:())}
+/ when a notification carried none. `io` is the IO manager the publisher
+/ wrote through, which `write` writes a reaction's output through too, or
+/ (::) when the notifier named none.
+empty_queue:{[] ([] dataset:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$(); depth:`long$(); rows:(); io:())}
 
 queue:empty_queue[]
 
@@ -314,13 +316,13 @@ record:{[dataset;name;depth;range_from;range_to;outcome;detail]
 / @param range_to exclusive upper bound
 / @return the number of reactions run by this call
 / @eg .qetl.reaction.notify[`demo_deals;2026.09.11D00:00;2026.09.12D00:00]
-notify:{[dataset;range_from;range_to] enqueue[dataset;range_from;range_to;0;()]}
+notify:{[dataset;range_from;range_to] enqueue[dataset;range_from;range_to;0;();(::)]}
 
 / Private: queue one notification and, unless a drain is already running,
 / drain the queue.
-enqueue:{[dataset;range_from;range_to;depth;rows]
+enqueue:{[dataset;range_from;range_to;depth;rows;io]
     queue,:([] dataset:enlist dataset; range_from:enlist range_from;
-              range_to:enlist range_to; depth:enlist depth; rows:enlist rows);
+              range_to:enlist range_to; depth:enlist depth; rows:enlist rows; io:enlist io);
     $[draining; 0; drain[]]}
 
 / Private: run queued notifications until none are left.
@@ -379,12 +381,18 @@ depth_now:0
 / (dataset;range_from;range_to), and this is how it reaches the rows.
 rows_now:()
 
+/ The IO manager the publication being reacted to was written through, for
+/ `write`. (::) when the notifier named none.
+io_now:(::)
+
 run_one:{[item;nm;h]
     `.qetl.reaction.depth_now set item`depth;
     `.qetl.reaction.rows_now set item`rows;
+    `.qetl.reaction.io_now set item`io;
     r:@[{[h;item] h[item`dataset;item`range_from;item`range_to]; `ok}[h];item;{[e] (`failed;e)}];
     `.qetl.reaction.depth_now set 0;
     `.qetl.reaction.rows_now set ();
+    `.qetl.reaction.io_now set (::);
     $[`ok~r;
         record[item`dataset;nm;item`depth;item`range_from;item`range_to;`ok;""];
         [record[item`dataset;nm;item`depth;item`range_from;item`range_to;`failed;last r];
@@ -422,8 +430,16 @@ notify_from_here:{[dataset;range_from;range_to] notify_rows[dataset;range_from;r
 / the IO manager is, and a reaction only ever runs in the publishing process.
 / @param rows the published rows, as a table
 / @eg .qetl.reaction.notify_rows[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;.qpipe.source.demo_deals.fixture[]]
-notify_rows:{[dataset;range_from;range_to;rows]
-    enqueue[dataset;range_from;range_to;$[draining; depth_now+1; 0];rows]}
+notify_rows:{[dataset;range_from;range_to;rows] notify_published[dataset;range_from;range_to;rows;::]}
+
+/ Announce a publication with its rows AND the IO manager it was written
+/ through - what .qetl.job.bounded.do_window calls. The manager is what
+/ `write` sends a reaction's output through, so a reaction under
+/ `uqs backfill` writes the HDB exactly as its worker did (#541).
+/ @param io the IO manager the rows were written with, or (::)
+/ @eg .qetl.reaction.notify_published[`demo_deals;2026.09.11D00:00;2026.09.12D00:00;1#.qpipe.source.demo_deals.fixture[];.qetl.io.memory]
+notify_published:{[dataset;range_from;range_to;rows;io]
+    enqueue[dataset;range_from;range_to;$[draining; depth_now+1; 0];rows;io]}
 
 / The rows the publication being reacted to published - call it from a
 / handler.
@@ -441,5 +457,31 @@ published:{[]
     if[not 98h=type rows_now;
         '"published: this notification carried no rows - it was made with notify, not notify_rows"];
     rows_now}
+
+/ Write a reaction's output through the IO manager its publication was
+/ written with - call it from a handler.
+/ .
+/ The output half of #541. A reaction runs inside the publishing process,
+/ and under `uqs backfill` that is a process that exits when its range is
+/ done: output kept in a table there is gone with it. Written through the
+/ worker's own manager, it lands where the worker's rows did - HDB
+/ partitions under `uqs backfill`, a root table under .qetl.io.memory - and
+/ the worker's end-of-run `finish` sorts and attributes those partitions
+/ with its own. When the notification named no manager (a bare notify),
+/ .qetl.io.default is used: where this process writes.
+/ .
+/ APPEND, as every write through an IO manager is: re-publishing a window
+/ adds its rows again rather than replacing them, exactly as the worker's
+/ own dataset does. The rows need a `time` column (or the manager's
+/ partition column) - the HDB writer partitions by it.
+/ @param target the table to write, as a symbol
+/ @param rows the rows, as a table
+/ @return the number of rows written
+/ @throws error outside a reaction
+/ @eg .qetl.reaction.on[`demo_deals;`copy_out;{[ds;f;t] .qetl.reaction.write[`demo_copy;.qetl.reaction.published[]]}]
+write:{[target;rows]
+    if[not draining; '"write: only a reaction's handler writes a reaction's output"];
+    mgr:$[99h=type io_now; io_now; .qetl.io.default];
+    .qetl.io.write[mgr;target;rows]}
 
 \d .
