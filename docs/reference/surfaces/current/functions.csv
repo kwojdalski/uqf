@@ -900,6 +900,7 @@ qpipe.job.quotes_feed,on_timer,function,1,
 qpipe.job.quotes_feed,publish,value,,
 qpipe.job.quotes_feed,spot,value,,
 qpipe.job.quotes_feed,tick_rows,function,1,mids
+qpipe.job.rebuild_positions,handler,function,3,dataset range_from range_to
 qpipe.job.superbook,books,dict,,
 qpipe.job.superbook,levels,function,2,prices sizes
 qpipe.job.superbook,max_age,value,,

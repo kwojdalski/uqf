@@ -108,7 +108,7 @@ def test_a_reaction_round_trips_exactly(tree):
     since a reaction has no table, profile or port."""
     before = _snapshot(tree)
     plan = reaction(
-        "rebuild_positions",
+        "rebuild_exposure",
         "demo_deals",
         ["positions"],
         producers={"demo_deals": ["deals_backfill1"]},
@@ -116,7 +116,7 @@ def test_a_reaction_round_trips_exactly(tree):
     )
     write.apply_plan(plan, tree)
     assert _snapshot(tree) != before
-    removal = plan_removal(tree, "rebuild_positions")
+    removal = plan_removal(tree, "rebuild_exposure")
     assert set(removal.rewrites) == {RUN_TESTS_FILE}
     removal.apply(tree)
     assert _snapshot(tree) == before
