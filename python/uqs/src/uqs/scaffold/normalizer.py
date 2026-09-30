@@ -15,11 +15,11 @@ is the red this scaffold is meant to leave, without the tree failing to load.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 
 from uqs.paths import STREAM_DIR, TABLES_FILE, TEST_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
+from uqs.scaffold.columns import TIME_COLUMN, is_known, sample_value, table_definition
 from uqs.scaffold.jobs import (
     _STACK_PAGE_NOTE,
     _check_name,
@@ -30,25 +30,7 @@ from uqs.scaffold.jobs import (
 )
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
-from uqs.scaffold.templates import _SAMPLE_VALUES, TIME_COLUMN, table_definition, test_stub
-
-#: One `name:literal` column inside a `([]...)` definition.
-_COLUMN = re.compile(r"^\s*([a-z_][a-z0-9_]*)\s*:\s*(.+?)\s*$", re.IGNORECASE)
-
-
-def definition_columns(definition: str) -> list[tuple[str, str]]:
-    """`t:([]a:`float$(); b:())` as [("a", "`float$()"), ("b", "()")].
-
-    The grouped attribute is dropped: it is a property of the plant's copy,
-    and a mapping's declared input carrying it would make every example the
-    scaffold writes - which has no attribute - fail `.qetl.transform.define` at load.
-    """
-    body = definition[definition.index("([]") + 3 : definition.rindex(")")]
-    out = []
-    for part in body.split(";"):
-        if m := _COLUMN.match(part):
-            out.append((m.group(1), m.group(2).replace("`g#", "")))
-    return out
+from uqs.scaffold.templates import test_stub
 
 
 def _empty(cols: list[tuple[str, str]]) -> str:
@@ -56,7 +38,7 @@ def _empty(cols: list[tuple[str, str]]) -> str:
 
 
 def _row(cols: list[tuple[str, str]]) -> str:
-    return "([] " + "; ".join(f"{c}:enlist {_SAMPLE_VALUES[lit]}" for c, lit in cols) + ")"
+    return "([] " + "; ".join(f"{c}:enlist {sample_value(lit)}" for c, lit in cols) + ")"
 
 
 def normalizer(
@@ -93,7 +75,7 @@ def normalizer(
     missing = [s for s in sources if s not in source_columns]
     if missing:
         raise UqsError(f"no plant definition to read for source(s) {', '.join(missing)}")
-    unsampled = sorted({lit for s in sources for _, lit in source_columns[s]} - set(_SAMPLE_VALUES))
+    unsampled = sorted({lit for s in sources for _, lit in source_columns[s] if not is_known(lit)})
     if unsampled:
         raise UqsError(
             f"a source column type has no sample value to scaffold an example with: "

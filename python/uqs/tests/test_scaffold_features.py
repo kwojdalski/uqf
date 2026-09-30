@@ -19,7 +19,8 @@ from uqs.model.declarations import declaration_calls, symbols
 from uqs.paths import UqsError
 from uqs.scaffold import jobs, profile
 from uqs.scaffold import worker as backfill
-from uqs.scaffold.normalizer import definition_columns, normalizer
+from uqs.scaffold.columns import definition_columns, parse_columns
+from uqs.scaffold.normalizer import normalizer
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 PROFILES_TEXT = (UQF_ROOT / profile.PROFILES_FILE).read_text()
@@ -187,7 +188,7 @@ def test_a_normalizer_takes_a_profile_too():
     plan = normalizer(
         "ticks",
         ["quote"],
-        jobs.parse_columns("sym:symbol"),
+        parse_columns("sym:symbol"),
         {"quote": definition_columns(quote)},
         known_tables={"quote"},
         profile="fx",

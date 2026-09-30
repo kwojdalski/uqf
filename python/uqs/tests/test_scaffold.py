@@ -30,6 +30,7 @@ from uqs.model.schemas import _DEFINITION
 from uqs.paths import UqsError
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
+from uqs.scaffold.columns import parse_columns
 from uqs.scaffold.plan import WriteMode
 
 
@@ -98,20 +99,20 @@ def test_a_scaffolded_table_parses_as_a_definition():
 def test_time_is_added_when_the_caller_forgets_it():
     """Every plant table has one, `.u.upd` stamps it, and a table without it
     is refused later by a publish path that assumes it."""
-    assert jobs.parse_columns("value:float")[0][0] == "time"
+    assert parse_columns("value:float")[0][0] == "time"
 
 
 def test_sym_keeps_its_grouped_attribute():
     """Every table in uqs_tables.q groups sym. A missing `g#` is a
     performance cliff with no error attached."""
-    cols = dict(jobs.parse_columns("sym:symbol"))
+    cols = dict(parse_columns("sym:symbol"))
     assert cols["sym"] == "`g#`symbol$()"
 
 
 @pytest.mark.parametrize("spec", ["value", "value:nosuchtype", ""])
 def test_a_malformed_column_spec_is_refused(spec):
     with pytest.raises(UqsError):
-        jobs.parse_columns(spec)
+        parse_columns(spec)
 
 
 def test_publishing_without_columns_is_refused():

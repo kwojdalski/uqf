@@ -14,8 +14,8 @@ import pytest
 from uqs.model.declarations import read_file_text
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import UqsError
-from uqs.scaffold import jobs
-from uqs.scaffold.normalizer import definition_columns, normalizer
+from uqs.scaffold.columns import definition_columns, parse_columns
+from uqs.scaffold.normalizer import normalizer
 
 _QUOTE = "quote:([]time:`timestamp$(); sym:`g#`symbol$(); bid:`float$(); ask:`float$())"
 _TRADES = "trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); size:`float$())"
@@ -24,7 +24,7 @@ _PLANT = {"quote", "trades", "orders"}
 
 
 def _plan(sources=("quote", "trades"), name="ticks", cols="source_time:timestamp, sym:symbol"):
-    return normalizer(name, list(sources), jobs.parse_columns(cols), _SOURCES, known_tables=_PLANT)
+    return normalizer(name, list(sources), parse_columns(cols), _SOURCES, known_tables=_PLANT)
 
 
 def _file(plan, suffix):
@@ -90,4 +90,4 @@ def test_a_normalizer_that_cannot_be_scaffolded_is_refused(kwargs, message):
 def test_a_source_column_with_no_sample_value_is_refused():
     odd = {"odd": [("time", "`timestamp$()"), ("g", "`guid$()")]}
     with pytest.raises(UqsError, match="no sample value"):
-        normalizer("n", ["odd"], jobs.parse_columns("v:float"), odd, known_tables={"odd"})
+        normalizer("n", ["odd"], parse_columns("v:float"), odd, known_tables={"odd"})

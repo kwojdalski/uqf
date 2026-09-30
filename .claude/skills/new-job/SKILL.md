@@ -92,7 +92,9 @@ about.
 `kind` is derived for a streaming job --- no `--subscribe-to` means a feed ---
 so do not ask for it. `--publishes` takes a comma list. A table the plant
 already defines is published onto as it is - no `--columns`, and none is
-accepted - so `--columns` shapes the one NEW table, and two new tables in one
+accepted - so `--columns` (or `--columns-from TABLE`, which copies an existing
+plant table's shape exactly; `venue:g#symbol` groups a column other than `sym`,
+`x:list` is a vector column) shapes the one NEW table, and two new tables in one
 scaffold are refused. `--subscribe-to` must name tables the plant defines
 (`uqs_tables.q` or the vendored `quote`/`trade`): a typo is refused rather than
 scaffolded into a job that never receives a row, so scaffold a producer before

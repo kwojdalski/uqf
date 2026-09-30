@@ -38,6 +38,7 @@ from uqs.paths import (
     UqsError,
     UqsPaths,
 )
+from uqs.scaffold import columns as columns_mod
 from uqs.scaffold import jobs, normalizer, worker, write
 
 #: What a scaffold makes stale, each checked in CI with --check: the registry's
@@ -169,7 +170,15 @@ def new_job(
     ] = None,
     columns: Annotated[
         str | None,
-        typer.Option("--columns", help="Its table's columns: 'sym:symbol, value:float'"),
+        typer.Option("--columns", help="Its table's columns: 'sym:symbol, venue:g#symbol'"),
+    ] = None,
+    columns_from: Annotated[
+        str | None,
+        typer.Option(
+            "--columns-from",
+            help="Copy an existing plant table's columns instead of --columns",
+            autocompletion=completion.plant_tables,
+        ),
     ] = None,
     source: Annotated[
         str | None, typer.Option("--source", help="Source name (backfill; defaults to NAME)")
@@ -265,12 +274,13 @@ def new_job(
             _die(UqsError(f"{option} does not apply to --kind {kind}"))
             return
     try:
+        shape = columns_mod.resolve_shape(columns, columns_from, _plant_definitions(_paths()))
         if kind == "streaming":
             plan = jobs.streaming_job(
                 name,
                 subs,
                 publishes,
-                columns,
+                shape,
                 procname,
                 known_tables=_plant_tables(_paths()),
                 start_with_all=start_with_all,
@@ -305,7 +315,7 @@ def new_job(
             plan = worker.bounded_worker(
                 name,
                 dataset,
-                columns,
+                shape,
                 width="1D" if width is None else width,
                 source=source,
                 procname=procname,
@@ -319,16 +329,16 @@ def new_job(
             if publishes:
                 _die(UqsError("a normalizer publishes its own NAME - drop --publishes"))
                 return
-            if not columns:
+            if not shape:
                 _die(UqsError("--kind normalizer needs --columns: its canonical table"))
                 return
             definitions = _plant_definitions(_paths())
             plan = normalizer.normalizer(
                 name,
                 subs,
-                jobs.parse_columns(columns),
+                columns_mod.as_columns(shape),
                 {
-                    s: normalizer.definition_columns(definitions[s])
+                    s: columns_mod.definition_columns(definitions[s])
                     for s in subs
                     if s in definitions
                 },
