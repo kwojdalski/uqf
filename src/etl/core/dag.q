@@ -217,8 +217,15 @@ safe_id:{[s] c:string s; @[c;where not c in id_chars;:;"_"]}
 / .
 / Text either way: a plain clone reads it, and a diagram change is a readable
 / diff. That part was true and still is.
+/ .
+/ An ASSERTED job - a reaction registered through `on_writing`, whose outputs
+/ are a claim nothing checks - is drawn dashed: its node, and every edge it
+/ is the upstream of, labelled "(asserted)". Its node is marked as well as
+/ its edges because a reaction whose output nothing reads has no outgoing
+/ edge to mark, and would otherwise look exactly as checked as a worker (#532).
 d2:{[]
     e:edges[];
+    asserted:asserted_jobs[];
     lines:enlist "direction: right";
     / An external input is a table nobody in the graph writes, so it is drawn
     / as a cylinder like the tables in the committed diagrams - and it needs
@@ -227,20 +234,38 @@ d2:{[]
     ext:distinct exec tbl from e where null upstream;
     lines,:{"ext_",safe_id[x],": \"",string[x],"\" { shape: cylinder }"} each ext;
     lines,:distinct
-        {[r] $[null r`upstream;
+        {[asserted;r] $[null r`upstream;
                 "ext_",safe_id[r`tbl]," -> ",safe_id r`downstream;
+              r[`upstream] in asserted;
+                safe_id[r`upstream]," -> ",safe_id[r`downstream],": ",string[r`tbl],
+                    " (asserted) {style.stroke-dash: 3}";
                 safe_id[r`upstream]," -> ",safe_id[r`downstream],": ",string r`tbl]
-          } each e;
+          }[asserted] each e;
     / A job with no edges at all would otherwise not appear.
     lonely:key[jobs] where {[j] 0=count ?[edges[];enlist (or;(=;`upstream;enlist j);
                                                             (=;`downstream;enlist j));0b;()]} each key jobs;
     lines,:{safe_id[x],": \"",string[x],"\""} each lonely;
+    lines,:{safe_id[x],".style.stroke-dash: 3"} each asserted inter key jobs;
     "\n" sv lines}
 
-/ The graph as JSON, for a viz tool that would rather not parse d2.
+/ The jobs in the graph whose outputs were ASSERTED rather than derived: the
+/ reactions registered through `on_writing`, whose `derived` is 0b. A
+/ reaction through `on_worker` reads its outputs from the worker's own
+/ declaration, and one through plain `on` claims none, so neither is here.
+/ @return the job names, as .qetl.dag.reaction_job builds them
+/ @eg .qetl.dag.asserted_jobs[]
+asserted_jobs:{[]
+    r:select from reaction_edges[] where not derived, 0<count each outputs;
+    `symbol$reaction_job'[r`dataset;r`reaction]}
+
+/ The graph as JSON, for a viz tool that would rather not parse d2. Each edge
+/ carries `asserted`, so a tool can draw a claimed edge differently from a
+/ checked one without re-deriving which is which.
 to_json:{[]
-    .j.j `jobs`edges`external_inputs`sinks`order!
-        (registry[]; edges[]; external_inputs[]; sinks[]; topological[])}
+    asserted:asserted_jobs[];
+    .j.j `jobs`edges`asserted_jobs`external_inputs`sinks`order!
+        (registry[]; update asserted:upstream in asserted from edges[]; asserted;
+         external_inputs[]; sinks[]; topological[])}
 
 / ----------------------------------------------------- ADOPTION (derive)
 

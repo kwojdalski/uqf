@@ -145,6 +145,7 @@ qetl.dag,adopt_feeders,function,1,
 qetl.dag,adopt_pipelines,function,1,
 qetl.dag,adopt_reactions,function,1,
 qetl.dag,adopt_workers,function,1,
+qetl.dag,asserted_jobs,function,1,
 qetl.dag,consumers,function,1,table_name
 qetl.dag,d2,function,1,
 qetl.dag,def,function,1,job
