@@ -14,30 +14,7 @@ where being unfinished would break the tree rather than the build - see
 
 from __future__ import annotations
 
-#: Columns every plant table carries, and how. `time` first because `.u.upd`
-#: stamps it (invariant 1) and every consumer reads it positionally; `sym`
-#: grouped because every table in uqs_tables.q groups it and a missing
-#: `g#` is a silent performance cliff rather than an error.
-TIME_COLUMN = "time"
-GROUPED = {"sym"}
-
-#: q type names accepted in a --columns spec, mapped to the empty-column
-#: literal that `uqs_tables.q` spells them with. `list` is the general
-#: column a vector-valued table uses (see wide_book's bid_prices).
-Q_TYPES = {
-    "timestamp": "`timestamp$()",
-    "symbol": "`symbol$()",
-    "float": "`float$()",
-    "long": "`long$()",
-    "int": "`int$()",
-    "short": "`short$()",
-    "boolean": "`boolean$()",
-    "char": "`char$()",
-    "date": "`date$()",
-    "time": "`time$()",
-    "timespan": "`timespan$()",
-    "list": "()",
-}
+from uqs.scaffold.columns import TIME_COLUMN, sample_value, type_char
 
 #: How a source is reached, as `.qetl.source.transports` lists them. Held to
 #: src/etl/core/source_contract.q by test_scaffold.py.
@@ -58,44 +35,6 @@ def credential_var(source: str) -> str:
     the two to the same spelling.
     """
     return f"UQF_SOURCE_CRED_{source.upper()}"
-
-
-_TYPE_CHARS = {
-    "`timestamp$()": "p",
-    "`symbol$()": "s",
-    "`g#`symbol$()": "s",
-    "`float$()": "f",
-    "`long$()": "j",
-    "`int$()": "i",
-    "`short$()": "h",
-    "`boolean$()": "b",
-    "`char$()": "c",
-    "`date$()": "d",
-    "`time$()": "t",
-    "`timespan$()": "n",
-    "()": " ",
-}
-
-
-#: One value per column type, for the single row a scaffolded fixture carries.
-#: Not empty, because `.qetl.transform.define` refuses a transform whose examples are all
-#: empty - "at least one must carry rows" - and not random, because a fixture
-#: that changes between runs makes a failing assertion impossible to attribute.
-_SAMPLE_VALUES = {
-    "`timestamp$()": "2026.01.01D00:00:00.000000000",
-    "`symbol$()": "`SCAFFOLD",
-    "`g#`symbol$()": "`SCAFFOLD",
-    "`float$()": "1.0",
-    "`long$()": "1j",
-    "`int$()": "1i",
-    "`short$()": "1h",
-    "`boolean$()": "0b",
-    "`char$()": '" "',
-    "`date$()": "2026.01.01",
-    "`time$()": "00:00:00.000",
-    "`timespan$()": "0D00:00:01",
-    "()": "1 2 3f",
-}
 
 
 def test_stub(name: str, namespace: str, what: str, *, driver: bool = False) -> str:
@@ -172,9 +111,9 @@ credential_example:"SCAFFOLDED: e.g. DRIVER=...;Database=..."
 def source_body(src: str, dataset: str, cols: list[tuple[str, str]], transport: str = "ipc") -> str:
     names = [c for c, _ in cols]
     extra_decls, extra_keys, extra_values = _transport_block(src, transport)
-    types = "".join(_TYPE_CHARS[literal] for _, literal in cols)
+    types = "".join(type_char(literal) for _, literal in cols)
     # The fixture is a real empty table of the declared shape - see its comment.
-    fixture_cols = "; ".join(f"{c}:enlist {_SAMPLE_VALUES[lit]}" for c, lit in cols)
+    fixture_cols = "; ".join(f"{c}:enlist {sample_value(lit)}" for c, lit in cols)
     return f"""/ {src}.q - <one line: what this source is> (.qpipe.source.{src}).
 / .
 / SCAFFOLDED. `query` and `fixture` throw until they are written.
@@ -339,9 +278,3 @@ handler:{{[dataset;range_from;range_to]
 
 {claim}{register}
 """
-
-
-def table_definition(table: str, columns: list[tuple[str, str]]) -> str:
-    """One `name:([]...)` line, in uqs_tables.q's own shape."""
-    body = "; ".join(f"{col}:{literal}" for col, literal in columns)
-    return f"{table}:([]{body})"

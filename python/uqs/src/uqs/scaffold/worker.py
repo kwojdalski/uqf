@@ -12,12 +12,12 @@ import re
 
 from uqs.paths import SOURCE_DIR, TABLES_FILE, TEST_DIR, WORKER_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
+from uqs.scaffold.columns import Columns, as_columns, table_definition
 from uqs.scaffold.jobs import (
     _STACK_PAGE_NOTE,
     _check_name,
     _expected_table_action,
     _nslist_action,
-    parse_columns,
     test_namespace,
 )
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -26,7 +26,6 @@ from uqs.scaffold.templates import (
     TRANSPORTS,
     credential_var,
     source_body,
-    table_definition,
     test_stub,
     worker_body,
 )
@@ -38,7 +37,7 @@ _PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
 def bounded_worker(
     name: str,
     dataset: str,
-    columns: str | None,
+    columns: Columns | None,
     width: str = "1D",
     source: str | None = None,
     procname: str | None = None,
@@ -103,7 +102,7 @@ def bounded_worker(
         raise UqsError(
             f"--transport shapes a new source, and {src!r} exists already - drop --transport"
         )
-    cols = parse_columns(columns) if columns else []
+    cols = as_columns(columns) if columns else []
 
     actions: list[FileAction] = []
     if not reuse_source:

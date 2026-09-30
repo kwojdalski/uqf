@@ -31,9 +31,9 @@ from uqs.interpreter import q_interpreter
 from uqs.paths import RUN_TESTS_FILE, STACK_TABLES_TEST
 from uqs.scaffold import jobs, write
 from uqs.scaffold import worker as backfill
-from uqs.scaffold.normalizer import definition_columns, normalizer
+from uqs.scaffold.columns import definition_columns, parse_columns, table_definition
+from uqs.scaffold.normalizer import normalizer
 from uqs.scaffold.reaction import reaction
-from uqs.scaffold.templates import table_definition
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 TIMEOUT_SECONDS = 120
@@ -93,7 +93,7 @@ def _copy_of_the_tree(root: Path) -> None:
 
 
 def _scaffold_every_kind(root: Path) -> None:
-    feed_table = table_definition("smoke_ticks", jobs.parse_columns(_FEED_COLUMNS))
+    feed_table = table_definition("smoke_ticks", parse_columns(_FEED_COLUMNS))
     plans = [
         jobs.streaming_job("smokefeed", [], "smoke_ticks", _FEED_COLUMNS),
         jobs.streaming_job(
@@ -106,7 +106,7 @@ def _scaffold_every_kind(root: Path) -> None:
         normalizer(
             "smokenorm",
             ["smoke_ticks"],
-            jobs.parse_columns("sym:symbol, mid:float"),
+            parse_columns("sym:symbol, mid:float"),
             {"smoke_ticks": definition_columns(feed_table)},
             known_tables={"smoke_ticks"},
         ),

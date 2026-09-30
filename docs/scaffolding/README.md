@@ -68,6 +68,34 @@ reach it. The scaffold says so; `test_profiles.py` fails until it is in one or
 in `UNPROFILED` with a reason. Backfills are exempt --- see
 [backfill.md](backfill.md).
 
+## Table columns
+
+`--columns` spells a new table as `name:type` pairs, and each is written into
+`uqs_tables.q` as the q column it stands for:
+
+```
+--columns "sym:symbol, venue:g#symbol, px:float, bid_prices:list"
+```
+
+`sym` is grouped (`` `g#`symbol$() ``) without asking. Any other column is
+grouped with `g#` before its type, and `list` is a general column, the
+vector-valued kind `quotes` uses. The types are `timestamp`, `symbol`, `float`,
+`long`, `int`, `short`, `boolean`, `char`, `date`, `time`, `timespan` and
+`list`, and `time` is added first when you leave it out. What each one means,
+its `meta` character and the sample value a fixture gets, is decided in one
+place, `python/uqs/src/uqs/scaffold/columns.py`. A test holds it to the `meta` q
+itself reports.
+
+When the new table is shaped like one the plant already has, copy it instead:
+
+```bash
+uqs job new spread2 --subscribe-to quote --publishes spread2 --columns-from quotes
+```
+
+`--columns-from TABLE` takes that table's columns exactly, attributes included,
+from `uqs_tables.q` or the vendored `database.q`, and is refused alongside
+`--columns`.
+
 ## Before you run it
 
 `--dry-run` prints the plan and writes nothing. Every example here was checked

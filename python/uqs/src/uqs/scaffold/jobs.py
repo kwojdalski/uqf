@@ -35,15 +35,10 @@ from uqs.paths import (
     UqsError,
 )
 from uqs.scaffold.catalog import catalog_actions
+from uqs.scaffold.columns import Columns, as_columns, table_definition
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
-from uqs.scaffold.templates import (
-    GROUPED,
-    Q_TYPES,
-    TIME_COLUMN,
-    table_definition,
-    test_stub,
-)
+from uqs.scaffold.templates import test_stub
 
 #: The layout comes from `paths`, which is the one place that knows it - see
 #: its own docstring. `scaffold` previously spelled all seven here, including
@@ -100,37 +95,6 @@ def _check_name(name: str, what: str) -> str:
     return name
 
 
-def parse_columns(spec: str) -> list[tuple[str, str]]:
-    """A `--columns` string as [(name, q empty-column literal)].
-
-    `time` is prepended when absent rather than rejected: every plant table
-    has one, `.u.upd` stamps it, and a table scaffolded without it would be
-    refused later by a publish path that assumes it.
-    """
-    out: list[tuple[str, str]] = []
-    for part in (p.strip() for p in spec.split(",") if p.strip()):
-        if ":" not in part:
-            raise UqsError(
-                f"column {part!r} must be name:type, e.g. 'value:float'. "
-                f"Types: {', '.join(sorted(Q_TYPES))}"
-            )
-        col, _, qtype = (s.strip() for s in part.partition(":"))
-        _check_name(col, "column")
-        if qtype not in Q_TYPES:
-            raise UqsError(
-                f"column {col!r} has unknown type {qtype!r}. Types: {', '.join(sorted(Q_TYPES))}"
-            )
-        literal = Q_TYPES[qtype]
-        if col in GROUPED and qtype == "symbol":
-            literal = "`g#`symbol$()"
-        out.append((col, literal))
-    if not out:
-        raise UqsError("--columns is empty: a published table needs at least one column")
-    if not any(c == TIME_COLUMN for c, _ in out):
-        out.insert(0, (TIME_COLUMN, Q_TYPES["timestamp"]))
-    return out
-
-
 def _symbol_list(names: list[str]) -> str:
     """A q symbol-list literal: `enlist` for one, since a bare `` `a `` is an atom."""
     return f"enlist `{names[0]}" if len(names) == 1 else "`" + "`".join(names)
@@ -169,7 +133,7 @@ def streaming_job(
     name: str,
     subscribe_to: list[str],
     publishes: str | None,
-    columns: str | None,
+    columns: Columns | None,
     procname: str | None = None,
     *,
     known_tables: set[str] | None = None,
@@ -304,7 +268,7 @@ publish:.qetl.job.stream.unwired `{name};
                 f"--publishes {new_tables[0]} needs --columns: the plant must define a table "
                 "before anything writes to it, or .u.upd discards the rows in silence"
             )
-        cols = parse_columns(columns)
+        cols = as_columns(columns)
         definition = table_definition(new_tables[0], cols)
         actions.append(
             FileAction(

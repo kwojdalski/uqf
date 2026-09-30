@@ -22,7 +22,8 @@ from uqs.model.declarations import read_file_text
 from uqs.paths import UqsError
 from uqs.scaffold import jobs
 from uqs.scaffold import worker as backfill
-from uqs.scaffold.normalizer import definition_columns, normalizer
+from uqs.scaffold.columns import definition_columns, parse_columns
+from uqs.scaffold.normalizer import normalizer
 from uqs.scaffold.templates import TRANSPORTS, credential_var
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
@@ -64,7 +65,7 @@ def test_a_normalizer_can_start_with_the_stack_too():
     plan = normalizer(
         "ticks",
         ["quote"],
-        jobs.parse_columns("sym:symbol"),
+        parse_columns("sym:symbol"),
         {"quote": definition_columns(quote)},
         known_tables={"quote"},
         procname="tick1",
