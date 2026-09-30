@@ -11,9 +11,9 @@ manage.
 The `uqs` CLI (`python/uqs/`) bridges the two vendored trees so you can actually
 start the demo up and poke at it, without editing or writing into either `lib/`
 directory. The actual bootstrapping/config logic lives in
-`python/uqs/src/uqs/`'s `model/` and `stack/` modules, shared with
-`uqs_mcp.py`'s FastMCP server (see "MCP server" below) so the CLI and the MCP
-tools can't drift apart. It's a standalone package (`python/uqs/`).
+`python/uqs/src/uqs/`'s `model/` and `stack/` modules, shared with `uqs.mcp`'s
+FastMCP server (see "MCP server" below) so the CLI and the MCP tools can't drift
+apart. It's a standalone package (`python/uqs/`).
 
 See [docs/architecture/stack.md](../architecture/stack.md) for diagrams of the
 current process topology, table-level data pipeline, and config-generation flow.
@@ -1082,7 +1082,7 @@ is #54's, not this one.
 
 ## MCP server
 
-`python/uqs/uqs_mcp.py` exposes the same
+`python/uqs/src/uqs/mcp.py` (the `uqs-mcp` command) exposes the same
 start/stop/restart/summary/print/clean/query/config-get/config-set/list/
 logs/crypto-lifecycle operations as MCP tools (`uqs_start`, `uqs_stop`,
 `uqs_get_config`, `uqs_set_config`, `uqs_logs`,
@@ -1094,7 +1094,7 @@ CLI. Not exposed: `raw` (an arbitrary passthrough to `torq.sh`, deliberately
 left off as a scope boundary). Point an MCP client's server command at:
 
 ```
-uv run --project python/uqs python/uqs/uqs_mcp.py
+uv run uqs-mcp
 ```
 
 (stdio transport, the default). `uqs_query` returns a list of row dicts for

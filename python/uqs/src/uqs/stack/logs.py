@@ -183,7 +183,7 @@ def get_recent_logs(
     """The last *lines* lines of each matching process's out_/err_ log,
     merged, sorted by timestamp, and filtered to min_level - the data
     print_recent_logs formats and prints through the shared loguru
-    logger, and uqs_mcp.py's uqs_logs tool returns as-is for
+    logger, and uqs.mcp's uqs_logs tool returns as-is for
     an MCP client to read directly.
     """
     procnames = resolve_procnames(paths, procs)

@@ -696,7 +696,7 @@ def test_print_recent_logs_filters_by_min_level(fake_paths: UqsPaths, capsys):
 
 
 def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: UqsPaths):
-    # the data source uqs_mcp.py's uqs_logs tool returns
+    # the data source uqs.mcp's uqs_logs tool returns
     # directly - print_recent_logs just formats/prints this same data.
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)

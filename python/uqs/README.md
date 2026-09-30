@@ -12,7 +12,6 @@ it carries its own dependencies (`typer`, `rich`, `loguru`, `fastmcp`, `kola`).
 ## Layout
 
 ```
-uqs_mcp.py    FastMCP server exposing the same operations as MCP tools
 src/uqs/
   paths.py          where every file in the tree lives, and `repo_root()`,
                      which searches upward for a marker rather than counting
@@ -38,6 +37,8 @@ src/uqs/
   logger/           small loguru-based logging package (ported from a
                      sibling project's generic logger, see git history) -
                      used for the CLI/MCP server's own status/error output
+  mcp.py            the `uqs-mcp` FastMCP server, exposing the same
+                     operations as MCP tools
 process_overrides.csv   created on first `config-set` - per-process
                          process.csv field overrides (see "Config setters"
                          below); tracked in git like any other config
@@ -222,14 +223,14 @@ TorQ/q-specific, any process that speaks kdb+ IPC can publish onto it. See
 ## MCP server
 
 ```
-uv run --project python/uqs python/uqs/uqs_mcp.py
+uv run uqs-mcp
 ```
 
 Exposes `uqs_start`/`stop`/`restart`/`summary`/`print`/`clean`/`query`/
 `get_config`/`set_config`/`list`/`logs`, plus the crypto recorder lifecycle
 (`crypto_start`/`stop`/`status`, `crypto_fills_start`/`stop`/`status`), as MCP
 tools (stdio transport) for an MCP client to drive the demo directly. `raw` (an
-arbitrary passthrough to `torq.sh`) isn't exposed - see `uqs_mcp.py` for the
+arbitrary passthrough to `torq.sh`) isn't exposed - see `src/uqs/mcp.py` for the
 exact, current tool list.
 
 ## Testing
