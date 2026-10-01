@@ -1003,12 +1003,12 @@ def test_raw_propagates_the_exit_code(monkeypatch):
     assert runner.invoke(cli.app, ["raw", "--", "debug", "rdb1"]).exit_code == 7
 
 
-# ------------------------------------------------------------------ clean
+# ---------------------------------------------------------- remove output
 
 
-def test_clean_delegates(monkeypatch):
+def test_remove_output_delegates(monkeypatch):
     rec = _patch(monkeypatch, stack_paths, "clean", result=[])
-    assert runner.invoke(cli.app, ["clean"]).exit_code == 0
+    assert runner.invoke(cli.app, ["remove", "output"]).exit_code == 0
     assert len(rec.calls) == 1
 
 
@@ -1022,17 +1022,17 @@ def test_clean_delegates(monkeypatch):
         (["--match", "^logs$", "-n"], {"match": "^logs$", "dry_run": True}),
     ],
 )
-def test_clean_passes_its_flags_through(monkeypatch, argv, expected):
+def test_remove_output_passes_its_flags_through(monkeypatch, argv, expected):
     """The flags have to arrive as given - a dropped --dry-run deletes."""
     rec = _patch(monkeypatch, stack_paths, "clean", result=[])
-    assert runner.invoke(cli.app, ["clean", *argv]).exit_code == 0
+    assert runner.invoke(cli.app, ["remove", "output", *argv]).exit_code == 0
     assert rec.calls[-1][1] == expected
 
 
-def test_clean_reports_what_it_removed(monkeypatch):
+def test_remove_output_reports_what_it_removed(monkeypatch):
     rec_result = [(Path("/data/logs"), 800), (Path("/data/tplogs"), 200)]
     _patch(monkeypatch, stack_paths, "clean", result=rec_result)
-    result = runner.invoke(cli.app, ["clean", "--dry-run"])
+    result = runner.invoke(cli.app, ["remove", "output", "--dry-run"])
     assert result.exit_code == 0
     assert "would remove 2 entries" in result.output
     assert "logs" in result.output
@@ -1610,14 +1610,28 @@ def test_query_proc_without_qcon_installed_says_what_still_works(monkeypatch):
     assert any("not on PATH" in m for m in errors.messages), errors.messages
 
 
-@pytest.mark.parametrize("argv", [["select 1"], ["select 1", "--proc", "rdb1", "--port", "6052"]])
-def test_query_needs_exactly_one_of_proc_and_port(monkeypatch, argv):
-    """A default here would turn "you forgot to say which process" into
-    "silently queried the tickerplant"; both at once is ambiguous."""
+def test_query_refuses_both_proc_and_port(monkeypatch):
+    """Both at once is ambiguous: which one did they mean?"""
     errors = _error_log(monkeypatch)
     monkeypatch.setattr(runtime, "query", lambda *a, **k: pytest.fail("should not query"))
-    assert runner.invoke(cli.app, ["query", *argv]).exit_code == 1
+    argv = ["query", "select 1", "--proc", "rdb1", "--port", "6052"]
+    assert runner.invoke(cli.app, argv).exit_code == 1
     assert any("--proc NAME or --port N" in m for m in errors.messages), errors.messages
+
+
+def test_query_with_neither_asks_the_gateway(monkeypatch):
+    seen = _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    rec = _patch(monkeypatch, runtime, "query", result="42")
+    result = runner.invoke(cli.app, ["query", "1+1"])
+    assert result.exit_code == 0, result.output
+    assert rec.args[:2] == ("1+1", 6057)
+    assert "base" in seen, "the port came from the stack's own map"
+
+
+def test_query_with_nothing_at_all_opens_qcon_on_the_gateway(monkeypatch):
+    seen = _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    assert runner.invoke(cli.app, ["query"]).exit_code == 0
+    assert any("6057" in part for part in seen["argv"])
 
 
 @pytest.mark.parametrize("expr", [[], ["count trade"]])
@@ -1723,3 +1737,15 @@ def test_list_profiles_shows_the_slot_count(monkeypatch):
     assert result.exit_code == 0
     assert "arbitrage" in result.output
     assert "/14" in result.output, "the budget is the column that matters"
+
+
+@pytest.mark.parametrize("gone", ["clean", "clear-checkpoint"])
+def test_the_old_removal_commands_are_gone(gone):
+    """One group, `uqs remove`, rather than an alias left behind for each."""
+    assert runner.invoke(cli.app, [gone]).exit_code != 0
+
+
+def test_remove_lists_what_it_can_remove():
+    result = runner.invoke(cli.app, ["remove", "--help"])
+    assert result.exit_code == 0
+    assert "output" in result.output and "checkpoint" in result.output

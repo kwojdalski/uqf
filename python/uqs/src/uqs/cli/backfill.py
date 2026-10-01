@@ -13,7 +13,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
-from uqs.cli.shared import PortOpt, _debug_requested, _die, _paths, app, console
+from uqs.cli.shared import PortOpt, _debug_requested, _die, _paths, app
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
@@ -79,32 +79,3 @@ def backfill(
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
-
-
-@app.command("clear-checkpoint")
-def clear_checkpoint(
-    worker: Annotated[
-        str,
-        typer.Argument(
-            help="The bounded worker whose checkpoint to delete, e.g. demo_deals_backfill",
-            autocompletion=completion.backfill_workers,
-        ),
-    ],
-) -> None:
-    """Delete a bounded worker's checkpoint, so its next run starts at --from.
-
-    Refused while a run of the worker may still be live. The checkpoint is
-    only where a run resumes: windows already in the coverage ledger are
-    still skipped. To fetch those again, run under a new --version.
-
-    e.g. `uqs clear-checkpoint demo_deals_backfill`
-    """
-    try:
-        path = stack_backfill.clear_checkpoint(_paths(), worker)
-    except UqsError as exc:
-        _die(exc)
-        return
-    if path is None:
-        console.print(f"{worker} has no checkpoint - nothing to clear", markup=False)
-    else:
-        console.print(f"cleared {worker}'s checkpoint ({path})", markup=False)

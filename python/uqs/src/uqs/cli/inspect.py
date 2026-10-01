@@ -141,6 +141,11 @@ def _proc_port(procname: str, base_port: int) -> int:
     return int(ports[procname])
 
 
+#: What `uqs query` asks when told neither --proc nor --port: the gateway, the
+#: fleet's front door, rather than whichever process a guess would land on.
+DEFAULT_QUERY_PROC = "gateway1"
+
+
 @app.command()
 def query(
     expr: Annotated[
@@ -153,7 +158,7 @@ def query(
     proc: Annotated[
         str | None,
         typer.Option(
-            help="process to query, by name, e.g. rdb1",
+            help=f"process to query, by name, e.g. rdb1 (default: {DEFAULT_QUERY_PROC})",
             autocompletion=completion.procname,
         ),
     ] = None,
@@ -175,13 +180,17 @@ def query(
     """Run a q expression against a running process - or, with no expression,
     open an interactive qcon session on it (under rlwrap when installed).
 
-    Name the process with `--proc rdb1`, or give its `--port`. One of the two
-    is required: defaulting would turn "you forgot to say which process" into
-    "silently queried the tickerplant".
+    Name the process with `--proc rdb1`, or give its `--port`. With neither it
+    asks the gateway, gateway1 - the fleet's front door, and the one process
+    whose answer does not depend on which part of the day the data is in. A
+    table query through it goes by its API, e.g.
+    `uqs query '.gw.syncexec["select count i by sym from trade";`rdb`hdb]'`.
     """
-    if (proc is None) == (port is None):
-        _die(UqsError("name the process to query: --proc NAME or --port N, not both"))
+    if proc is not None and port is not None:
+        _die(UqsError("name the process to query once: --proc NAME or --port N, not both"))
         return
+    if proc is None and port is None:
+        proc = DEFAULT_QUERY_PROC
     if proc is not None and host not in _LOCAL_HOSTS:
         # --proc reads this machine's registry and process list, so on another
         # host both the port and the up/down check would describe the wrong one.

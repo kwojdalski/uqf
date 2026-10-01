@@ -56,7 +56,7 @@ demand. Either form runs from any directory.
 The first `start` creates the data directory `output/uqs/` (gitignored) and
 copies the app's sample `hdb/`/`dqe/` data into it. Logs, tickerplant logs, the
 write-down database and every process's reads and writes stay inside it, never
-inside `lib/`. `uqs clean` wipes it (see [Cleaning up](#cleaning-up)).
+inside `lib/`. `uqs remove output` wipes it (see [Cleaning up](#cleaning-up)).
 
 Requires KDB-X (`q` on `PATH`), plus `envsubst` and `rlwrap`, which TorQ's
 `torq.sh` needs (on macOS: `brew install gettext rlwrap`). See
@@ -153,10 +153,6 @@ backfill WORKER --version V --from T --to T [--port N] [--debug]
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables. --debug
                                       starts it with -verbose: DBG lines in its log
-clear-checkpoint WORKER               delete a worker's checkpoint, so its next run
-                                      starts at --from. Refused while a run of it may
-                                      be live. Covered windows are still skipped:
-                                      re-fetch those under a new --version
 data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
             [--table T]... [--port N] [--dry-run]
                                       replay a tickerplant log into the HDB. With
@@ -164,7 +160,12 @@ data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
                                       the running plant and hdb process - including
                                       the base port (see below)
 data hdb-check [--fix]                HDB partitions missing a declared table or column
-clean [--match REGEX] [--dry-run]     wipe output/uqs/, or part of it
+remove output [--match REGEX] [--dry-run]
+                                      wipe output/uqs/, or part of it
+remove checkpoint WORKER              delete a worker's checkpoint, so its next run
+                                      starts at --from. Refused while a run of it may
+                                      be live. Covered windows are still skipped:
+                                      re-fetch those under a new --version
 job new NAME [--kind K] [--dry-run] ...
                                       scaffold an ETL job: its q files, table and
                                       test (see docs/scaffolding/)
@@ -173,8 +174,9 @@ job remove NAME [--dry-run] [--force] [-y]
 job install DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs
                                       in DIR into src/etl/ (see "Adding a process")
-query [EXPR] --proc P|--port N [--export FILE]
-                                      run a q expression against a process; with no
+query [EXPR] [--proc P|--port N] [--export FILE]
+                                      run a q expression against a process - gateway1
+                                      unless --proc or --port says otherwise; with no
                                       EXPR, an interactive qcon session on it. --proc
                                       looks the port up, and refuses a stopped process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
@@ -208,14 +210,15 @@ on the command itself and on every subcommand.
 
 ### Cleaning up
 
-`uqs clean` wipes `output/uqs/`. `--match REGEX` keeps only the entries whose
-path *under* `output/uqs/` the regex finds:
+`uqs remove output` wipes `output/uqs/`. `--match REGEX` keeps only the entries
+whose path *under* `output/uqs/` the regex finds:
 
 ```
-uqs clean --dry-run                       # what a full wipe would remove
-uqs clean --match '^logs$' --dry-run      # the logs alone, still removing nothing
-uqs clean --match '^(logs|tplogs)$'       # and now actually remove them
-uqs clean --match 'out_rdb1'              # one process's files, wherever they sit
+uqs remove output --dry-run                   # what a full wipe would remove
+uqs remove output --match '^logs$' --dry-run  # the logs alone, still removing nothing
+uqs remove output --match '^(logs|tplogs)$'   # and now actually remove them
+uqs remove output --match 'out_rdb1'          # one process's files, wherever they sit
+uqs remove checkpoint demo_deals_backfill     # one backfill worker's resume point
 ```
 
 A directory the pattern matches goes whole; one it does not is descended into,
@@ -682,9 +685,9 @@ uqs up --profile fx --level WARNING
 
 It follows the log files from *before* the start runs, so what a process prints
 while it loads is shown - `fxpositions1` spends forty seconds there - and a log
-the start creates, on a first run or after `uqs clean`, is read from its first
-line. Processes that were already running when it began are left running at
-Ctrl-C; if `summary` cannot say which those were, it stops everything it was
+the start creates, on a first run or after `uqs remove output`, is read from its
+first line. Processes that were already running when it began are left running
+at Ctrl-C; if `summary` cannot say which those were, it stops everything it was
 asked to start. To start in the background and watch separately instead,
 `uqs start` and `uqs logs -f` are still there.
 
@@ -857,12 +860,20 @@ uqs query \
     "select from quote where sym in \`EURUSD\`GBPUSD\`USDJPY\`AUDUSD" --port 6052
 ```
 
-For an interactive session, name the process and let `uqs` find its port:
+For an interactive session, name the process and let `uqs` find its port, or
+name none and get the gateway:
 
 ```
-uqs query --proc rdb1              # qcon localhost:6052:admin:admin, under rlwrap if installed
-uqs query --proc gateway1 --port 7000   # a stack started with --port 7000
+uqs query                          # qcon on gateway1, under rlwrap if installed
+uqs query --proc rdb1              # qcon localhost:6052:admin:admin
+uqs query --base-port 7000         # gateway1 in a stack started with --port 7000
+uqs query '.gw.syncexec["select count i by sym from trade";`rdb`hdb]'
+                                   # a table query, through the gateway's API
 ```
+
+The gateway holds no tables of its own: a plain `select from trade` sent to it
+fails, and goes through `.gw.syncexec` instead, which routes it to the RDB and
+HDB and joins what they return.
 
 It refuses a process that is not running - with the `uqs start` to fix it -
 rather than leaving qcon to report a refused connection, which reads the same as

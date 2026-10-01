@@ -188,7 +188,7 @@ def test_a_refusal_exits_one_rather_than_raising():
     assert not isinstance(result.exception, UqsError)
 
 
-# --- clear-checkpoint --------------------------------------------------------
+# --- remove checkpoint ------------------------------------------------------
 
 WORKER = "demo_deals_backfill"
 
@@ -254,17 +254,17 @@ def test_a_lock_left_by_an_exited_run_does_not_block_clearing(status):
     assert backfill.clear_checkpoint(stack_paths.default_paths(), WORKER) is not None
 
 
-def test_clear_checkpoint_command_reports_what_it_did(status):
+def test_remove_checkpoint_reports_what_it_did(status):
     (status / f"{WORKER}.checkpoint").write_text("{}")
-    result = runner.invoke(cli.app, ["clear-checkpoint", WORKER])
+    result = runner.invoke(cli.app, ["remove", "checkpoint", WORKER])
     assert result.exit_code == 0, result.output
     assert "cleared demo_deals_backfill's checkpoint" in result.output
-    again = runner.invoke(cli.app, ["clear-checkpoint", WORKER])
+    again = runner.invoke(cli.app, ["remove", "checkpoint", WORKER])
     assert "has no checkpoint" in again.output
 
 
-def test_clear_checkpoint_refusal_exits_one(status):
+def test_remove_checkpoint_refusal_exits_one(status):
     _lock(status, {"pid": os.getpid(), "host": socket.gethostname()})
-    result = runner.invoke(cli.app, ["clear-checkpoint", WORKER])
+    result = runner.invoke(cli.app, ["remove", "checkpoint", WORKER])
     assert result.exit_code == 1
     assert not isinstance(result.exception, UqsError)

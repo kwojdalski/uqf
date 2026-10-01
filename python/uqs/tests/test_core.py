@@ -183,7 +183,7 @@ def test_an_invalid_regex_is_refused_before_anything_is_removed(fake_paths: UqsP
 
 
 def test_no_match_still_removes_the_whole_directory(fake_paths: UqsPaths):
-    """Unchanged behaviour: `uqs clean` with no flags is the old wipe."""
+    """Unchanged behaviour: `uqs remove output` with no flags is the old wipe."""
     _tree(fake_paths.torqdata)
     stack_paths.clean(fake_paths)
     assert not fake_paths.torqdata.exists()
