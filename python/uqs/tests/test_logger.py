@@ -354,18 +354,20 @@ def test_print_recent_logs_emits_through_the_kdb_format(tmp_path, monkeypatch, c
     assert "644413000" not in out
 
 
-def test_follow_logs_streams_a_line_appended_after_it_starts(tmp_path, monkeypatch):
-    """The live tail behind `uqs logs -f`: one `tail -F` per file,
-    fanned into a queue by a thread each. None of it had ever run."""
+def test_follow_logs_shows_the_recent_lines_then_what_is_appended(tmp_path, monkeypatch):
+    """The live tail behind `uqs logs -f`: the last lines first, as `uqs logs`
+    shows them, then every line appended. It used to start at the end of
+    every file, so on a quiet process it showed nothing at all."""
     paths = _paths_with_logs(tmp_path, monkeypatch, {"out_rdb1.log": [LINE_INF]})
     target = tmp_path / "logs" / "out_rdb1.log"
     seen: list[dict[str, str]] = []
 
-    def stop_after_first(log, rec, min_level):
+    def stop_after_two(log, rec, min_level):
         seen.append(rec)
-        raise KeyboardInterrupt  # how a user stops it; must end cleanly
+        if len(seen) == 2:
+            raise KeyboardInterrupt  # how a user stops it; must end cleanly
 
-    monkeypatch.setattr(logs, "_emit", stop_after_first)
+    monkeypatch.setattr(logs, "_emit", stop_after_two)
 
     def append_later():
         time.sleep(0.5)
@@ -375,10 +377,46 @@ def test_follow_logs_streams_a_line_appended_after_it_starts(tmp_path, monkeypat
     threading.Thread(target=append_later, daemon=True).start()
     logs.follow_logs(paths, "rdb1")
 
-    assert len(seen) == 1
-    assert seen[0]["message"] == "lost the tickerplant", (
-        "tail -n 0 starts at the end: the line already in the file is not replayed"
-    )
+    assert [rec["message"] for rec in seen] == ["started", "lost the tickerplant"]
+
+
+def test_follow_logs_with_no_history_starts_at_the_end(tmp_path, monkeypatch):
+    paths = _paths_with_logs(tmp_path, monkeypatch, {"out_rdb1.log": [LINE_INF]})
+    target = tmp_path / "logs" / "out_rdb1.log"
+    seen: list[dict[str, str]] = []
+    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+
+    def append_later():
+        time.sleep(0.5)
+        with target.open("a") as f:
+            f.write(LINE_ERR + "\n")
+
+    threading.Thread(target=append_later, daemon=True).start()
+    logs.follow_logs(paths, "rdb1", lines=0)
+
+    assert [rec["message"] for rec in seen] == ["lost the tickerplant"]
+
+
+def test_follow_logs_follows_the_alias_to_a_restarted_processs_new_file(tmp_path, monkeypatch):
+    """TorQ re-points out_<proc>.log at a new file on every start. A follower
+    that stayed on the old file went quiet after the first restart."""
+    paths = _paths_with_logs(tmp_path, monkeypatch, {"out_rdb1_1.log": [LINE_INF]})
+    log_dir = tmp_path / "logs"
+    (log_dir / "out_rdb1.log").symlink_to("out_rdb1_1.log")
+    seen: list[dict[str, str]] = []
+    monkeypatch.setattr(logs, "_emit", _stop_after_first(seen))
+
+    def restart_later():
+        time.sleep(0.5)
+        (log_dir / "out_rdb1_2.log").write_text(LINE_ERR + "\n")
+        tmp = log_dir / "out_rdb1.tmp"
+        tmp.symlink_to("out_rdb1_2.log")
+        tmp.replace(log_dir / "out_rdb1.log")  # what `ln -sf` does
+
+    threading.Thread(target=restart_later, daemon=True).start()
+    logs.follow_logs(paths, "rdb1", lines=0)
+
+    assert [rec["message"] for rec in seen] == ["lost the tickerplant"]
 
 
 def _stop_after_first(seen: list[dict[str, str]]):

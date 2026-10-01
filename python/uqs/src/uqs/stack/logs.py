@@ -7,6 +7,7 @@ consistent levels and formatting."""
 from __future__ import annotations
 
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -191,9 +192,14 @@ def get_recent_logs(
             "- has the demo been started at least once?"
         )
 
+    return _recent_records(files, lines, min_level)
+
+
+def _recent_records(files: list[Path], lines: int, min_level: str | None) -> list[dict[str, str]]:
+    """The last *lines* parsed lines of each file, merged by timestamp."""
     records = []
     for f in files:
-        tail = f.read_text(errors="replace").splitlines()[-lines:]
+        tail = f.read_text(errors="replace").splitlines()[-lines:] if lines else []
         records.extend(rec for line in tail if (rec := parse_log_line(line)) is not None)
     records.sort(key=lambda r: r["time"])
 
@@ -221,12 +227,18 @@ def _pump(stream: Any, out_queue: Any) -> None:
         out_queue.put(line)
 
 
-def follow_logs(paths: UqsPaths, procs: str = "all", min_level: str | None = None) -> None:
-    """Stream new lines appended to each matching process's out_/err_ log,
-    live, through the shared loguru logger - Ctrl-C to stop. One `tail -F`
-    subprocess per file (follows the stable alias across TorQ's own log
-    rolling, no polling/inotify dependency of our own) fanned into a single
-    queue by a reader thread each.
+def follow_logs(
+    paths: UqsPaths, procs: str = "all", min_level: str | None = None, lines: int = 20
+) -> None:
+    """The last *lines* lines of each matching process's out_/err_ log, merged
+    and sorted by time as `uqs logs` prints them, then every line appended,
+    live, through the shared loguru logger - Ctrl-C to stop.
+
+    The history is the point of opening it: it used to start at the end of
+    every file (`tail -n 0`), so `uqs logs -f` on a quiet process showed
+    nothing at all where `uqs logs` showed its last lines, and read as broken.
+    The followers start before the history is read, so a line written while
+    it is printed is shown - at worst twice, never not at all.
     """
     procnames = resolve_procnames(paths, procs)
     files = _log_files(paths, procnames)
@@ -235,7 +247,7 @@ def follow_logs(paths: UqsPaths, procs: str = "all", min_level: str | None = Non
             f"no log files found for {procnames} under {paths.torqdata / 'logs'} "
             "- has the demo been started at least once?"
         )
-    _follow(files, min_level)
+    _follow(files, min_level, history=lambda: _recent_records(files, lines, min_level))
 
 
 #: How long `follow_during` waits for a log file the start has not created
@@ -256,17 +268,29 @@ def follow_during(
     a process prints while it loads, which for fxpositions1 is forty seconds.
 
     A log that already exists is the previous run's, followed from its end;
-    when the process starts, TorQ points the alias at this run's file and
-    `tail -F` follows it there from its first line. A log that does not exist
-    yet - a first run, or after `uqs remove output` - is waited for and read from
-    its first line once it appears, rather than handed to `tail -F` to
-    retry: whether tail waits for a missing file differs between GNU and BSD
-    tail, and this has to work on both.
+    when the process starts, TorQ points the alias at this run's file and the
+    follower (stack/follow.py) moves there and reads it from its first line. A
+    log that does not exist yet - a first run, or after `uqs remove output` -
+    is waited for here and read from its first line once it appears.
     """
     expected = _expected_log_files(paths, procnames)
     present = [f for f in expected if f.is_file()]
     awaited = [f for f in expected if not f.is_file()]
     _follow(present, min_level, awaited=awaited, before=start)
+
+
+#: What "from its first line" asks the follower for: every line it holds.
+_ALL_LINES = 10**9
+
+
+def _follower(path: Path, from_start: bool) -> list[str]:
+    """One file's follower: stack/follow.py, which re-checks what the
+    out_/err_<procname>.log alias points at. Not the system `tail -F`: TorQ
+    re-points the alias on every start and at the daily roll, and whether a
+    `tail` follows it there depends on which `tail` it is - BSD's can stay on
+    the file the alias used to name, and the stream goes quiet."""
+    lines = _ALL_LINES if from_start else 0
+    return [sys.executable, "-m", "uqs.stack.follow", str(lines), str(path)]
 
 
 def _follow(
@@ -275,6 +299,7 @@ def _follow(
     *,
     awaited: list[Path] | None = None,
     before: Callable[[], None] | None = None,
+    history: Callable[[], list[dict[str, str]]] | None = None,
 ) -> None:
     import queue
 
@@ -291,7 +316,7 @@ def _follow(
             if done.is_set():
                 return
             tail = subprocess.Popen(
-                ["tail", "-n", "+1" if from_start else "0", "-F", str(path)],
+                _follower(path, from_start),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 text=True,
@@ -311,6 +336,8 @@ def _follow(
         attach(path, from_start=False)
 
     try:
+        for rec in history() if history is not None else []:
+            _emit(log, rec, None)
         if before is not None:
             before()
         if awaited:

@@ -950,6 +950,13 @@ def test_follow_selects_the_streaming_path(monkeypatch):
     assert len(follow.calls) == 1
 
 
+def test_follow_opens_on_the_same_history_logs_shows(monkeypatch):
+    """`logs -f` used to open empty, starting at the end of every file."""
+    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    runner.invoke(cli.app, ["logs", "-f", "--lines", "7"])
+    assert follow.kwargs["lines"] == 7
+
+
 def test_the_level_filter_reaches_core(monkeypatch):
     rec = _patch(monkeypatch, stack_logs, "print_recent_logs")
     runner.invoke(cli.app, ["logs", "--level", "WARNING", "--lines", "5"])
