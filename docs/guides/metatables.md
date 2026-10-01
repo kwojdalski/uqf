@@ -21,7 +21,9 @@ slices. It installs no process, scheduler, connections, handlers, persistence
 engine or quality checker. `scripts/processes/torq_metatables.q` adapts the same
 queries to DQE's existing result protocol. ETL run records and publication
 coverage remain separate: observed row counts cannot establish successful
-ingestion, expected completeness, or absence of duplicates.
+ingestion, expected completeness, or absence of duplicates. They can contradict
+the coverage ledger, though, and `reconcile` reports where they do (see
+[Reconcile with ETL coverage](#reconcile-with-etl-coverage)).
 
 ## Define and collect
 
@@ -45,12 +47,13 @@ Adapt `trade`, `sym`, `venue`, `size` and `time` to your schema. Summing `size`
 is meaningful only when its unit and currency are uniform within each group; no
 currency conversion or cross-pair total is implied.
 
-Output columns are the partition column, grouping columns, named measurements
-and `meta_observed_at` (UTC timestamp captured at the start of collection).
-Grouping and measurement types are preserved. The partition column need not be
-named `date`: integer, long, month, date and symbol slices are supported. Symbol
-slices can be logical partitions in an in-memory table; this does not imply that
-kdb+ supports physical symbol-partitioned HDBs.
+Output columns are the partition column, grouping columns, named measurements,
+`meta_observed_at` (UTC timestamp captured at the start of collection) and
+`meta_definition` (the definition's fingerprint, see below). Grouping and
+measurement types are preserved. The partition column need not be named `date`:
+integer, long, month, date and symbol slices are supported. Symbol slices can be
+logical partitions in an in-memory table; this does not imply that kdb+ supports
+physical symbol-partitioned HDBs.
 
 `aggregates` accepts trusted functional qSQL expressions, including custom
 aggregate functions. Each must return a scalar per group. Definitions are
@@ -132,9 +135,17 @@ trade_markets:.qmeta.refresh[trade_markets;by_market;enlist 2026.09.01];
 Refresh returns a replacement value only after all requested queries succeed. It
 preserves other partitions and their observation timestamps. An empty recomputed
 grouped slice removes its old groups. Repeating a refresh does not accumulate
-counts. Keep one unchanged definition per metatable; schema changes require
-rebuilding it, and semantic changes with the same column names also require a
-rebuild. The caller owns assignment and storage.
+counts. The caller owns assignment and storage.
+
+Keep one unchanged definition per metatable. `refresh` enforces this two ways:
+the stored schema must match, and every stored row's `meta_definition` must
+equal `.qmeta.fingerprint` of the definition passed in. The second check catches
+what the first cannot: changing `notional` from `(sum;`size)` to `(max;`size)`
+keeps the column names and types, but would otherwise mix two meanings in one
+table. The fingerprint is an MD5 of the serialized definition, so it also
+changes when a lambda the definition embeds is redefined (as `.qmeta.time_bound`
+in `profile`). A table collected before this column existed has no fingerprints
+and must be rebuilt with `collect`.
 
 For a partitioned HDB, use its loaded partition column and values (normally
 `.Q.pf` and a selected subset of `.Q.PV`). Read on an HDB after its reload has
@@ -142,6 +153,46 @@ completed. This component does not replace TorQ's EOD/reload coordination. Kdb+
 can initialize its partition-count cache on first use; see the [KX partition
 guidance](https://code.kx.com/q/kb/partition/) before dispatching count queries
 on secondary threads or read-only evaluation contexts.
+
+## Reconcile with ETL coverage
+
+Bounded workers record, for every window they complete, how many rows they
+published (`rows_published` in the `etl_coverage` ledger). `reconcile` compares
+those claims with what a metatable observed:
+
+```q
+/ Restrict the metatable to the slice that the coverage partition describes.
+eurusd:select from trade_markets where sym=`EURUSD;
+.qmeta.reconcile[eurusd;2026.09.01 2026.09.02;`trades;`EURUSD;`v1]
+```
+
+It returns one row per requested date: `observed` (rows summed over the
+metatable's groups), `published` (rows summed over that day's current windows),
+`windows`, `fully_covered` (whether the claims cover the whole day) and
+`status`:
+
+  | Status       | Meaning                                                                                                  |
+  | ---          | ---                                                                                                      |
+  | `match`      | observed equals published                                                                                |
+  | `mismatch`   | they differ: rows lost, duplicated, or written outside the ledger                                        |
+  | `unrecorded` | no window claims this date, so there is nothing to compare                                               |
+  | `ambiguous`  | a window crosses midnight, or two current windows overlap, so the day's published total cannot be stated |
+
+Only current claims count; superseded ones are ignored. Dates are explicit, as
+with `collect`. A requested date with no rows in the metatable counts as zero
+observed rows, because a grouped empty slice has no rows to show. Reading the
+result:
+
+- A `match` is consistent, not proof: the right number of wrong rows also
+  matches.
+- The comparison only means something when bounded workers are the dataset's
+  only writer. Rows from a live feed or a manual load appear as a `mismatch`,
+  and on a day that is not `fully_covered` that may be all a mismatch means.
+- The metatable must have a `rows` count, which is the default aggregate and the
+  first one `profile` produces. Partitions other than `date` are not supported.
+
+`reconcile` changes neither the metatable nor the ledger, and needs
+`src/etl/core/materialisation.q` loaded.
 
 ## TorQ DQE integration
 
@@ -186,5 +237,6 @@ The second command creates and cleans up a disposable two-date, enumerated HDB
 in a fresh KDB-X process. Tests cover exact totals, eFX grouping, custom
 aggregates, empty slices, repeat refresh and the adapter result shape. Unit
 tests additionally cover disappearing groups, failed refreshes, schema changes,
-invalid inputs and logical symbol partitions. The full live DQE transport and
-DQEDB lifecycle are not exercised by these tests.
+redefined aggregates, invalid inputs, logical symbol partitions, and every
+`reconcile` status against an in-memory coverage ledger. The full live DQE
+transport and DQEDB lifecycle are not exercised by these tests.

@@ -29,8 +29,8 @@ definition:{[tab;partition_col;group_cols;aggregates]
         '"metatables: aggregate names must be named and unique"];
     if[any names in partition_col,group_cols;
         '"metatables: aggregate names collide with grouping columns"];
-    if[`meta_observed_at in partition_col,group_cols,names;
-        '"metatables: meta_observed_at is reserved"];
+    if[any `meta_observed_at`meta_definition in partition_col,group_cols,names;
+        '"metatables: meta_observed_at and meta_definition are reserved"];
     `table`partition_col`group_cols`aggregates!(tab;partition_col;group_cols;aggregates)};
 
 / Private: validate a definition against current source metadata and normalize partitions.
@@ -52,8 +52,19 @@ require_request:{[spec;partitions]
         '"metatables: partition type does not match source"];
     distinct partitions};
 
+/ Identify a definition, so stored rows can prove which definition produced them.
+/ The schema check in refresh cannot catch a changed aggregate that keeps its
+/ name (sum size -> sum size*px); this can. It hashes the whole definition,
+/ including any lambda it embeds, so redefining such a lambda also counts as a
+/ new definition.
+/ @param spec definition returned by definition
+/ @return guid, equal for equal definitions
+/ @eg .qmeta.fingerprint[.qmeta.definition[`trade;`date;`sym`venue;()!()]]
+fingerprint:{[spec]
+    "G"$"-" sv 0 8 12 16 20 cut raze string md5 "c"$-8!spec};
+
 / Private: query a single partition; preserve typed empty grouped results.
-collect_partition:{[spec;part;observed_at]
+collect_partition:{[spec;part;observed_at;definition_id]
     grouping:spec`group_cols;
     by_expr:$[count grouping;grouping!grouping;0b];
     predicate:enlist(=;spec`partition_col;$[-11h=type part;enlist part;part]);
@@ -64,7 +75,7 @@ collect_partition:{[spec;part;observed_at]
     if[any 0h=type each flip result;
         '"metatables: aggregates must produce scalar columns"];
     result:flip ((enlist spec`partition_col)!enlist(count result)#part),flip result;
-    result:flip (flip result),(enlist`meta_observed_at)!enlist(count result)#observed_at;
+    result:flip (flip result),`meta_observed_at`meta_definition!(count result)#/:(observed_at;definition_id);
     result};
 
 / Collect exact measurements for explicit partitions, without changing source or stored metadata.
@@ -72,12 +83,13 @@ collect_partition:{[spec;part;observed_at]
 / A zero count is not proof that a physical partition exists or is complete.
 / @param spec definition returned by definition
 / @param partitions nonempty typed vector; duplicate partitions are measured once
-/ @return unkeyed table: partition, grouping columns, aggregates, UTC meta_observed_at
+/ @return unkeyed table: partition, grouping columns, aggregates, UTC
+/   meta_observed_at, and meta_definition (the definition's fingerprint)
 / @throws malformed request, missing source columns, query or aggregate errors
 / @eg .qmeta.collect[.qmeta.definition[`trade;`date;`symbol$();()!()];enlist 2026.09.01]
 collect:{[spec;partitions]
     partitions:require_request[spec;partitions];
-    raze collect_partition[spec;;.z.p]each partitions};
+    raze collect_partition[spec;;.z.p;fingerprint spec]each partitions};
 
 / Replace complete requested slices of a metatable, including groups which disappeared.
 / Returns a new table only after every query succeeds. Assign or persist it at the caller.
@@ -85,15 +97,79 @@ collect:{[spec;partitions]
 / @param spec unchanged definition (use a new metatable when changing definitions)
 / @param partitions explicit slices to recompute
 / @return replacement metatable; other partitions retain their original observations
-/ @throws source/query failure or incompatible stored schema, leaving current untouched
+/ @throws source/query failure, incompatible stored schema, or stored rows
+/   collected under a different definition, leaving current untouched
 / @eg .qmeta.refresh[stored;spec;enlist 2026.09.01]
 refresh:{[current;spec;partitions]
     if[not 98h=type current;'"metatables: current must be an unkeyed table"];
+    if[not `meta_definition in cols current;
+        '"metatables: stored table has no meta_definition; rebuild it with collect"];
+    if[not all (fingerprint spec)=current`meta_definition;
+        '"metatables: stored rows were collected under a different definition; rebuild"];
     replacement:collect[spec;partitions];
     if[not (0#current)~0#replacement;
         '"metatables: stored schema differs; rebuild after definition changes"];
     retained:?[current;enlist(not;(in;spec`partition_col;enlist partitions));0b;()];
     retained,replacement};
+
+/ Private: reconcile one date against the current coverage claims.
+/ A window counts towards a date only when it lies wholly inside that day; one
+/ that crosses midnight cannot be split, so its rows cannot be attributed.
+reconcile_date:{[claims;observed;day]
+    start:`timestamp$day;
+    end:`timestamp$day+1;
+    inside:`range_from xasc select from claims where range_from>=start, range_to<=end;
+    crossing:select from claims where range_from<end, range_to>start,
+        not (range_from>=start) and range_to<=end;
+    overlapping:any (1_inside`range_from)<-1_maxs inside`range_to;
+    published:`long$sum inside`rows_published;
+    seen:0^observed day;
+    status:$[(count crossing) or overlapping;`ambiguous;
+        0=count inside;`unrecorded;
+        seen=published;`match;
+        `mismatch];
+    `date`observed`published`windows`fully_covered`status!
+        (day;seen;published;count inside;
+         0=count .qetl.coverage.gaps[start;end;select range_from,range_to from claims];
+         status)};
+
+/ Compare observed row counts with the rows the ETL coverage ledger says it published.
+/ Read-only: neither the metatable nor the ledger is changed. Only current
+/ claims count; superseded ones are ignored. Meaningful only when bounded
+/ workers are the dataset's sole writer: rows that arrive another way (a live
+/ feed, a manual load) show up as a mismatch, which is the point.
+/ Status per date:
+/   match       observed rows equal the rows the date's windows published
+/   mismatch    they differ - rows lost, duplicated, or written outside the ledger
+/   unrecorded  no window claims this date; there is nothing to compare against
+/   ambiguous   a window crosses midnight, or two current windows overlap, so the
+/               published total for the date cannot be stated
+/ fully_covered says whether the claims cover the whole day; a mismatch on a
+/ partly covered day may only mean the rest of the day came from elsewhere.
+/ @param metatable unkeyed collect result with date and rows columns, already
+/   restricted to the slice that the coverage partition describes
+/ @param dates explicit nonempty date vector; a date with no rows in the
+/   metatable counts as zero observed rows, as a grouped empty slice does
+/ @param ds coverage dataset name
+/ @param part coverage partition, or ` for an unpartitioned dataset
+/ @param version source release the claims were recorded under
+/ @return table of date, observed, published, windows, fully_covered, status
+/ @throws malformed metatable or dates, or the coverage ledger is not loaded
+/ @eg .qmeta.reconcile[stored;2026.09.01 2026.09.02;`trade;`;`v1]
+reconcile:{[metatable;dates;ds;part;version]
+    if[not 98h=type metatable;'"metatables: metatable must be an unkeyed table"];
+    if[not all `date`rows in cols metatable;
+        '"metatables: reconcile needs a date-partitioned metatable with a rows count"];
+    if[not 7h=type metatable`rows;'"metatables: rows must be a long count"];
+    if[not 14h=type dates;'"metatables: reconcile dates must be a date vector"];
+    if[0=count dates;'"metatables: explicit nonempty dates required"];
+    if[any null dates;'"metatables: null dates are not allowed"];
+    if[not `history in key `.qetl.coverage;
+        '"metatables: reconcile needs src/etl/core/materialisation.q loaded"];
+    claims:select range_from,range_to,rows_published from .qetl.coverage.history[ds;part;version]
+        where superseded_at=.qetl.coverage.still_current;
+    observed:exec sum rows by date from metatable;
+    reconcile_date[claims;observed;]each distinct dates};
 
 / Private: temporal bounds preserve typed nulls for empty/all-null slices.
 time_bound:{[direction;values]
