@@ -43,6 +43,16 @@ def backfill(
     range_to: Annotated[
         str, typer.Option("--to", help=f"Exclusive end of the range. {_BOUND_HELP}")
     ],
+    on_conflict: Annotated[
+        str | None,
+        typer.Option(
+            "--on-conflict",
+            help="For this run: what a write does with a row whose row_key is already "
+            "there - upsert, replace, ignore, append or fail. Default: the worker's own "
+            "(upsert unless it declares otherwise)",
+            autocompletion=completion.choices(*stack_backfill.ON_CONFLICT),
+        ),
+    ] = None,
     port: PortOpt = DEFAULT_BASE_PORT,
     debug: Annotated[
         bool,
@@ -74,6 +84,7 @@ def backfill(
             stack_backfill.parse_bound("--to", range_to),
             base_port=port,
             verbose=_debug_requested(ctx, debug),
+            on_conflict=on_conflict,
         )
     except UqsError as exc:
         _die(exc)
