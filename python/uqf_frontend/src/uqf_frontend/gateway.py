@@ -10,6 +10,7 @@ the edges, test the logic in the middle directly.
 
 from __future__ import annotations
 
+import socket
 from typing import Any, Protocol, runtime_checkable
 
 from uqf_frontend.config import Settings
@@ -34,6 +35,26 @@ TIERS: dict[str, list[str]] = {
     "hdb": ["hdb"],
     "both": ["rdb", "hdb"],
 }
+
+
+def kola_host(host: str, timeout: int) -> str:
+    """The address to hand kola for `host`: its IPv4 address when a timeout is set.
+
+    kola 2.5 connects to only the FIRST address a name resolves to when given
+    a timeout, and on this Mac `localhost` resolves to `::1` first while q
+    listens on IPv4 alone - so every connection with a timeout was refused
+    ("Connection refused (os error 61)") against a process that was plainly
+    up. Without a timeout kola tries every address and works. A name with no
+    IPv4 address is returned unchanged. uqs.stack.runtime has the same
+    helper; this package keeps uqs off its query path.
+    """
+    if not timeout:
+        return host
+    try:
+        found = socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
+    except OSError:
+        return host
+    return str(found[0][4][0]) if found else host
 
 
 @runtime_checkable
@@ -82,7 +103,13 @@ class KolaGateway:
 
         s = self._settings
         try:
-            q = kola.Q(s.host, s.port, user=s.user, passwd=s.passwd, timeout=s.timeout)
+            q = kola.Q(
+                kola_host(s.host, s.timeout),
+                s.port,
+                user=s.user,
+                passwd=s.passwd,
+                timeout=s.timeout,
+            )
         except Exception as exc:  # pragma: no cover - construction rarely fails
             raise GatewayUnavailable(f"could not construct a gateway client: {exc}") from exc
 
