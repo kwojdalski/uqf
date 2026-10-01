@@ -15,13 +15,17 @@ reused the last range - the default torq_backfill.q exists to refuse.
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import socket
 import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 
 from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import runtime
+from uqs.stack import runs, runtime
 
 #: What a flag value may contain. torq.sh builds the start line into a string
 #: and `eval`s it, so anything a shell would interpret - a space, a `;`, a
@@ -174,3 +178,66 @@ def start(
     procname = procname_for(worker)
     flags = backfill_flags(worker, source_version, range_from, range_to, verbose=verbose)
     return runtime.run_torq_sh(paths, ["start", procname, "-extras", *flags], base_port=base_port)
+
+
+def checkpoint_path(paths: UqsPaths, worker: str) -> Path:
+    """`worker`'s private checkpoint, where `.qetl.job.bounded.state.checkpoint_path`
+    writes it: `<worker>.checkpoint` in the status directory."""
+    return runs.status_dir(paths) / f"{worker}.checkpoint"
+
+
+def _pid_alive(pid: int) -> bool:
+    """Is `pid` running on this machine? A process owned by another user
+    raises PermissionError, and that one IS running - the reason
+    `.qetl.job.bounded.state.pid_alive` uses `ps -p` rather than `kill -0`."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _live_holder(lock: Path) -> str | None:
+    """Who holds `lock`, or None when nobody does or its holder is gone.
+
+    The same rule as `.qetl.job.bounded.state.lock_is_stale`, and in the same
+    direction: anything it cannot prove dead - no owner file yet, an owner
+    with no pid or host, another host's pid - counts as live.
+    """
+    if not lock.is_dir():
+        return None
+    try:
+        owner = json.loads((lock / "owner").read_text())
+    except OSError, ValueError:
+        return "an unrecorded holder (no readable owner file)"
+    pid, host = owner.get("pid"), owner.get("host")
+    if pid is None or host is None:
+        return "a holder that recorded no pid or host"
+    if host != socket.gethostname():
+        return f"pid {pid} on {host}"
+    return f"pid {pid}" if _pid_alive(int(pid)) else None
+
+
+def clear_checkpoint(paths: UqsPaths, worker: str) -> Path | None:
+    """Delete `worker`'s checkpoint, returning its path, or None if it had none.
+
+    Refused while a run of `worker` may still be live: that run would go on
+    writing the cursor it holds in memory, and the delete would not have
+    happened. A lock left by a run that has exited does not count - the next
+    run breaks it itself.
+    """
+    procname_for(worker)
+    lock = runs.status_dir(paths) / f"{worker}.lock"
+    holder = _live_holder(lock)
+    if holder is not None:
+        raise UqsError(
+            f"{worker} may still be running - its lock {lock} is held by {holder}. "
+            "Let the run finish, or stop it, then clear the checkpoint."
+        )
+    path = checkpoint_path(paths, worker)
+    if not path.is_file():
+        return None
+    path.unlink()
+    return path
