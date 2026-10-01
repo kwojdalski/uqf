@@ -174,9 +174,10 @@ job remove NAME [--dry-run] [--force] [-y]
 job install DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs
                                       in DIR into src/etl/ (see "Adding a process")
-query [EXPR] [--proc P|--port N] [--export FILE]
-                                      run a q expression against a process - gateway1
-                                      unless --proc or --port says otherwise; with no
+query [EXPR] [--proc P|--port N] [--servers T] [--export FILE]
+                                      run a q expression against a process - gateway1,
+                                      which routes a select to the RDB and HDB, unless
+                                      --proc or --port says otherwise; with no
                                       EXPR, an interactive qcon session on it. --proc
                                       looks the port up, and refuses a stopped process
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
@@ -867,13 +868,19 @@ name none and get the gateway:
 uqs query                          # qcon on gateway1, under rlwrap if installed
 uqs query --proc rdb1              # qcon localhost:6052:admin:admin
 uqs query --base-port 7000         # gateway1 in a stack started with --port 7000
-uqs query '.gw.syncexec["select count i by sym from trade";`rdb`hdb]'
-                                   # a table query, through the gateway's API
 ```
 
-The gateway holds no tables of its own: a plain `select from trade` sent to it
-fails, and goes through `.gw.syncexec` instead, which routes it to the RDB and
-HDB and joins what they return.
+The gateway holds no tables of its own, so a `select` or `exec` sent to it is
+routed: `uqs` wraps it in TorQ's `.gw.syncexec`, which runs it on the RDB and
+HDB and joins what they return. `--servers` names other process types. Anything
+else - an `update` or `delete`, which routed would change live data, a `.gw.*`
+call of your own, a system command - is sent to the gateway as typed:
+
+```
+uqs query "select count i by sym from trade"   # .gw.syncexec[...;`rdb`hdb]
+uqs query "select from trade" --servers hdb    # history only
+uqs query "select from trade" --proc rdb1      # rdb1 directly, as typed
+```
 
 It refuses a process that is not running - with the `uqs start` to fix it -
 rather than leaving qcon to report a refused connection, which reads the same as

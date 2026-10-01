@@ -1628,6 +1628,56 @@ def test_query_with_neither_asks_the_gateway(monkeypatch):
     assert "base" in seen, "the port came from the stack's own map"
 
 
+def test_a_select_on_the_gateway_is_routed_to_rdb_and_hdb(monkeypatch):
+    _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    rec = _patch(monkeypatch, runtime, "query", result="42")
+    result = runner.invoke(cli.app, ["query", "select count i by sym from trade"])
+    assert result.exit_code == 0, result.output
+    assert rec.args[0] == '.gw.syncexec["select count i by sym from trade";`rdb`hdb]'
+
+
+def test_servers_names_where_the_gateway_routes(monkeypatch):
+    _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    rec = _patch(monkeypatch, runtime, "query", result="42")
+    argv = ["query", "exec max px from quote", "--servers", "hdb"]
+    assert runner.invoke(cli.app, argv).exit_code == 0
+    assert rec.args[0] == '.gw.syncexec["exec max px from quote";`hdb]'
+
+
+def test_a_select_on_another_process_is_sent_as_typed(monkeypatch):
+    _conn(monkeypatch)
+    rec = _patch(monkeypatch, runtime, "query", result="42")
+    assert runner.invoke(cli.app, ["query", "select from trade", "--proc", "rdb1"]).exit_code == 0
+    assert rec.args[0] == "select from trade"
+
+
+def test_bad_servers_are_refused_before_anything_is_sent(monkeypatch):
+    _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    monkeypatch.setattr(runtime, "query", lambda *a, **k: pytest.fail("should not query"))
+    argv = ["query", "select from trade", "--servers", "rdb;exit 0"]
+    assert runner.invoke(cli.app, argv).exit_code == 1
+
+
+@pytest.mark.parametrize(
+    ("expr", "sent"),
+    [
+        (
+            'select from t where s like "EUR*"',
+            '.gw.syncexec["select from t where s like \\"EUR*\\"";`rdb]',
+        ),
+        ('.gw.syncexec["select from t";`hdb]', '.gw.syncexec["select from t";`hdb]'),
+        ("delete from `trade", "delete from `trade"),
+        ("update px:0 from `trade", "update px:0 from `trade"),
+        ("selected", "selected"),
+        ("\\t 1", "\\t 1"),
+    ],
+)
+def test_only_a_read_is_routed_and_quotes_survive(expr, sent):
+    """update and delete stay on the gateway as typed: routed, `delete from
+    `trade` would change the RDB's live data."""
+    assert inspect.gateway_expression(expr, "rdb") == sent
+
+
 def test_query_with_nothing_at_all_opens_qcon_on_the_gateway(monkeypatch):
     seen = _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     assert runner.invoke(cli.app, ["query"]).exit_code == 0
