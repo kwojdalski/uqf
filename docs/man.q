@@ -201,6 +201,8 @@
 .man.registerFunc (".qetl.job.bounded.run";".qetl.job.bounded";"Run one bounded pass to completion. a window that exhausts its retries is TERMINAL for that window and the run continues: failing the whole pass would throw away the windows that did succeed, and their coverage is what makes the retry cheap. Failed windows stay uncovered, so the next run plans them again. A GUARD, with the work in run_body below. init takes the instance lock and only cleanup releases it, so until #490 every way out of run_body that was not `return` leaked it: a window that threw past the retry policy, a contract error, an operator's ctrl-c. The run then logged `failed` and the next one refused to start, naming a pid that had already exited. The idiom is with_file_lock's, one file over in backfill_state.q: capture (ok; value), release, then re-raise what was caught. An error path that skips the release is how one failed run wedges every later one.";".qetl.job.bounded.run";"");
 .man.registerArg (".qetl.job.bounded.run";"param";"worker";"the worker's name");
 .man.registerArg (".qetl.job.bounded.run";"return";"";"the run's result dictionary");
+.man.registerFunc (".qetl.job.bounded.recover_unfinished";".qetl.job.bounded";"Private: queue what an earlier, interrupted run of this worker wrote and never finished, over this run's range. A run killed after recording a window's coverage and before finishing its HDB partition leaves that partition unsorted, without p#sym - correct rows that as-of joins read wrongly. Coverage now calls the window done, so a re-run plans nothing for it and finishes nothing, forever. Read off the files, because the to-do list the killed run held died with it. Not on a dry run, which changes nothing on disk.";".qetl.job.bounded.recover_unfinished";"");
+.man.registerArg (".qetl.job.bounded.recover_unfinished";"return";"";"how many partitions were queued");
 .man.registerFunc (".qetl.job.bounded.run_body";".qetl.job.bounded";"The run itself. Never call this directly - `run` is what releases the lock.";".qetl.job.bounded.run_body";"");
 .man.registerArg (".qetl.job.bounded.run_body";"param";"worker";"the worker's name");
 .man.registerArg (".qetl.job.bounded.run_body";"return";"";"the run's result dictionary");
@@ -441,6 +443,8 @@
 .man.registerArg (".qetl.io.finish_parts";"param";"root";"the HDB directory");
 .man.registerArg (".qetl.io.finish_parts";"param";"todo";"a table of dt and tbl");
 .man.registerArg (".qetl.io.finish_parts";"return";"";"how many partitions were finished");
+.man.registerFunc (".qetl.io.is_finished";".qetl.io";"Private: is this partition finished, as finish_parts leaves it? Read off the file, because `touched` lives in the process that wrote it and dies with it. finish_parts puts p# on sym, and xasc leaves s# on time for a table without sym; write_hdb takes p# OFF when it appends. So a partition with neither was written and never finished. One with neither column has nothing to judge by and reads as finished, as does one that does not exist.";".qetl.io.is_finished";"");
+.man.registerFunc (".qetl.io.recover_hdb";".qetl.io";"Private: queue the partitions of `target` in [range_from;range_to) that were written and never finished, for the next finish.";".qetl.io.recover_hdb";"");
 .man.registerFunc (".qetl.io.finish_hdb";".qetl.io";"Private: every partition this root was written to.";".qetl.io.finish_hdb";"");
 .man.registerFunc (".qetl.io.flush_hdb";".qetl.io";"Private: the partitions of this root dated wholly before `upto`, and how many of its partitions are still open after them.";".qetl.io.flush_hdb";"");
 .man.registerFunc (".qetl.io.default";".qetl.io";"The manager used when a worker's declaration names none. `memory` unless something that knows the deployment says otherwise: scripts/processes/torq_backfill.q sets it to an HDB writer, because where a backfill's rows belong is a fact about the stack it runs in, not about the worker - the same split as a streaming job's publish, which the runner wires. Tests, and anything that loads the tree in plain q, keep memory.";".qetl.io.default";"");
@@ -462,6 +466,13 @@
 .man.registerArg (".qetl.io.write_keyed";"param";"opts";"on_conflict and row_key, and for `replace time_column, range_from");
 .man.registerArg (".qetl.io.write_keyed";"return";"";"the rows written");
 .man.registerArg (".qetl.io.write_keyed";"eg";"";".qetl.io.write_keyed[.qetl.io.discard;`t;([] id:1 2);`on_conflict`row_key!(`upsert;`id)]  ->  2");
+.man.registerFunc (".qetl.io.recover";".qetl.io";"Queue what an earlier, interrupted run left unfinished, when the manager can.";".qetl.io.recover";".qetl.io.recover[.qetl.io.memory;`t;2026.01.01D00:00;2026.01.03D00:00]  ->  0");
+.man.registerArg (".qetl.io.recover";"param";"mgr";"the manager");
+.man.registerArg (".qetl.io.recover";"param";"target";"the table, as a symbol");
+.man.registerArg (".qetl.io.recover";"param";"range_from";"inclusive lower bound to look in");
+.man.registerArg (".qetl.io.recover";"param";"range_to";"exclusive upper bound");
+.man.registerArg (".qetl.io.recover";"return";"";"how many parts were queued for the next finish; 0 for a manager");
+.man.registerArg (".qetl.io.recover";"eg";"";".qetl.io.recover[.qetl.io.memory;`t;2026.01.01D00:00;2026.01.03D00:00]  ->  0");
 .man.registerFunc (".qetl.io.finish";".qetl.io";"Run a manager's end-of-run step, when it has one.";".qetl.io.finish";".qetl.io.finish .qetl.io.memory");
 .man.registerArg (".qetl.io.finish";"param";"mgr";"the manager");
 .man.registerArg (".qetl.io.finish";"return";"";"the manager's finish result, or (::) when it has none");

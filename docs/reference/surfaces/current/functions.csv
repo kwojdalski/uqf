@@ -196,12 +196,15 @@ qetl.io,flush_hdb,function,2,root upto
 qetl.io,for_cfg,function,1,cfg
 qetl.io,hdb,function,2,root partition_col
 qetl.io,hdb_rows,function,3,partition_col target batch
+qetl.io,is_finished,function,3,root d t
 qetl.io,last_seen,function,1,k
 qetl.io,memory,dict,,
 qetl.io,odbc,dict,,
 qetl.io,optional,value,,
 qetl.io,plain,function,1,t
 qetl.io,ready,function,2,mgr status
+qetl.io,recover,function,4,mgr target range_from range_to
+qetl.io,recover_hdb,function,4,root target from_ts to_ts
 qetl.io,require_manager,function,1,mgr
 qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
@@ -259,6 +262,7 @@ qetl.job.bounded,publish_last_batch,function,2,worker unused
 qetl.job.bounded,publish_pending,function,1,worker
 qetl.job.bounded,read_state,function,2,worker nm
 qetl.job.bounded,record_facts,function,5,worker cfg w batch r
+qetl.job.bounded,recover_unfinished,function,1,worker
 qetl.job.bounded,require_target_key,function,2,worker decl
 qetl.job.bounded,require_transform,function,2,worker cfg
 qetl.job.bounded,required_cfg,value,,

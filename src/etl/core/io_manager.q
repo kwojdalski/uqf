@@ -39,7 +39,7 @@ required:enlist `write
 / appended windows are not finished data until something runs over all of
 / them - the HDB writer below sorts and applies attributes there. A manager
 / without one needs nothing at the end, which is every in-memory one.
-optional:`write_keyed`finish`flush`on_ready
+optional:`write_keyed`finish`flush`recover`on_ready
 
 / `write_keyed` takes (target;batch;opts) and honours opts`on_conflict - what to
 / do when an incoming row's row_key is already in the target. See CONFLICTS.
@@ -48,6 +48,13 @@ optional:`write_keyed`finish`flush`on_ready
 / shell calls it after every window with the window's end, so a store can
 / make finished parts of a run usable before the run ends. It returns
 / `finished`pending: how many parts it finished, and how many are still open.
+/ .
+/ `recover` takes (target;range_from;range_to) and queues for the next
+/ finish whatever of `target` in that range a previous run wrote and never
+/ finished - a run killed between recording a window's coverage and
+/ finishing its partition. It returns how many parts it queued. The shell
+/ calls it at the start of every run, because coverage already calls those
+/ windows done, so no later run writes them again and nothing else would.
 / .
 / `on_ready` is the deployment's hook, not the store's: called after every
 / flush and finish with `finished`pending`final, it decides what to do now
@@ -81,6 +88,8 @@ require_manager:{[mgr]
         '"require_manager: an io manager's write_keyed must be a function taking (target;batch;opts)"];
     if[(`flush in key mgr) and not callable mgr`flush;
         '"require_manager: an io manager's flush must be a function taking a timestamp"];
+    if[(`recover in key mgr) and not callable mgr`recover;
+        '"require_manager: an io manager's recover must be a function taking (target;range_from;range_to)"];
     if[(`on_ready in key mgr) and not callable mgr`on_ready;
         '"require_manager: an io manager's on_ready must be a function taking a dictionary"];
     1b}
@@ -280,8 +289,8 @@ hdb:{[root;partition_col]
         '"hdb: partition_col must be a symbol naming a timestamp column"];
     / finish_hdb takes a second, ignored argument so that finish_hdb[root;] is a
     / PROJECTION: on a one-argument function, finish_hdb[root] would be a call.
-    `write`write_keyed`flush`finish!(write_hdb[root;partition_col;;];write_hdb_keyed[root;partition_col;;;];
-        flush_hdb[root;];finish_hdb[root;])}
+    `write`write_keyed`flush`finish`recover!(write_hdb[root;partition_col;;];write_hdb_keyed[root;partition_col;;;];
+        flush_hdb[root;];finish_hdb[root;];recover_hdb[root;;;])}
 
 / Private: append one window into its date partitions.
 write_hdb:{[root;partition_col;target;batch]
@@ -379,6 +388,30 @@ finish_parts:{[root;todo]
     `.qetl.io.touched set touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
 
+/ Private: is this partition finished, as finish_parts leaves it?
+/ .
+/ Read off the file, because `touched` lives in the process that wrote it and
+/ dies with it. finish_parts puts p# on sym, and xasc leaves s# on time for a
+/ table without sym; write_hdb takes p# OFF when it appends. So a partition
+/ with neither was written and never finished. One with neither column has
+/ nothing to judge by and reads as finished, as does one that does not exist.
+is_finished:{[root;d;t]
+    base:string .Q.par[root;d;t];
+    if[()~key hsym `$base,"/.d"; :1b];
+    c:get hsym `$base,"/.d";
+    $[`sym in c; `p=attr get hsym `$base,"/sym";
+      `time in c; `s=attr get hsym `$base,"/time";
+      1b]}
+
+/ Private: queue the partitions of `target` in [range_from;range_to) that
+/ were written and never finished, for the next finish.
+recover_hdb:{[root;target;from_ts;to_ts]
+    if[not from_ts<to_ts; :0];
+    span:{[f;t] f+til 1+t-f}[`date$from_ts;`date$to_ts-1];
+    ds:span where not is_finished[root;;target] each span;
+    `.qetl.io.touched upsert ([] hdb_root:count[ds]#root; dt:ds; tbl:count[ds]#target);
+    count ds}
+
 / Private: every partition this root was written to.
 finish_hdb:{[root;ignored]
     finish_parts[root;distinct select dt, tbl from touched where hdb_root=root]}
@@ -441,6 +474,18 @@ write_keyed:{[mgr;target;batch;opts]
     $[`write_keyed in key mgr; (mgr`write_keyed)[target;batch;opts];
       `append=strategy; (mgr`write)[target;batch];
       '"write_keyed: this io manager can only append - declare on_conflict `append, or give it a write_keyed"]}
+
+/ Queue what an earlier, interrupted run left unfinished, when the manager can.
+/ @param mgr the manager
+/ @param target the table, as a symbol
+/ @param range_from inclusive lower bound to look in
+/ @param range_to exclusive upper bound
+/ @return how many parts were queued for the next finish; 0 for a manager
+/   without recover
+/ @eg .qetl.io.recover[.qetl.io.memory;`t;2026.01.01D00:00;2026.01.03D00:00]  ->  0
+recover:{[mgr;target;range_from;range_to]
+    if[not `recover in key mgr; :0];
+    (mgr`recover)[target;range_from;range_to]}
 
 / Run a manager's end-of-run step, when it has one.
 / @param mgr the manager

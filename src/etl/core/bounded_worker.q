@@ -675,6 +675,26 @@ run:{[worker]
     if[not first r; 'last r];
     last r}
 
+/ Private: queue what an earlier, interrupted run of this worker wrote and
+/ never finished, over this run's range.
+/ .
+/ A run killed after recording a window's coverage and before finishing its
+/ HDB partition leaves that partition unsorted, without p#sym - correct rows
+/ that as-of joins read wrongly. Coverage now calls the window done, so a
+/ re-run plans nothing for it and finishes nothing, forever. Read off the
+/ files, because the to-do list the killed run held died with it. Not on a
+/ dry run, which changes nothing on disk.
+/ @return how many partitions were queued
+recover_unfinished:{[worker]
+    if[.qetl.job.bounded.runtime.is_dry_run[]; :0];
+    s:spec worker;
+    n:.qetl.io.recover[.qetl.io.for_cfg def worker;(.qetl.source.def (def worker)`source)`target;
+        s`range_from;s`range_to];
+    if[n>0;
+        .qetl.log.warn[worker;"found partitions an earlier run wrote and never finished - finishing them with this run";
+            enlist[`partitions]!enlist n]];
+    n}
+
 / The run itself. Never call this directly - `run` is what releases the lock.
 / @param worker the worker's name
 / @return the run's result dictionary
@@ -685,6 +705,7 @@ run_body:{[worker]
     / execution that dies mid-flight leaves a row reading `running` rather
     / than leaving no trace - see .qetl.run's header.
     begin_run[worker];
+    recovered:recover_unfinished worker;
     cursor:.qetl.job.bounded.state.load_checkpoint[worker;spec worker];
     windows:own[worker;`plan][cursor];
     if[0=count windows;
@@ -696,6 +717,10 @@ run_body:{[worker]
         .qetl.log.info[worker;"idle - every window in the range is already covered at this source_version";
             `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
         .qetl.hb.beat[worker;`idle];
+        / Finish what recover_unfinished found, which is the only thing an
+        / idle run has to do - and only then, so an idle run with nothing to
+        / repair does not ask the HDB to reload for nothing.
+        if[recovered>0; .qetl.io.finish .qetl.io.for_cfg def worker];
         end_run[`idle;run_counts[0;0;0;0]];
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
