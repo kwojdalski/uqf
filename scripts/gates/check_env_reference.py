@@ -87,10 +87,12 @@ LITERAL_READS = (
     re.compile(r"(?:\.qdata\.)?cfg\s*\[\s*`([A-Z][A-Z0-9_]*)"),
 )
 
-#: The ONE read that consults a .env file. `.qdata.cfg` is the only reader in
-#: this repository with a file fallback; everything else reads the OS
-#: environment directly. So this pattern, alone, decides what may appear in
-#: .env.example: a key read any other way is ignored there, not set.
+#: The ONE read in the code that consults a .env file. `.qdata.cfg` is the only
+#: reader with a file fallback; everything else reads the OS environment. uqs
+#: also loads .env into the processes IT starts (uqs.stack.envfiles), but a
+#: process started any other way never sees it, so this pattern, alone, decides
+#: what may appear in .env.example: a key read any other way works under uqs
+#: and is silently ignored everywhere else.
 DOTENV_READ = LITERAL_READS[-1]
 
 ENV_EXAMPLE = REPO / ".env.example"
@@ -399,8 +401,8 @@ def main() -> int:
             how = ", ".join(sorted(set(reads.get(name, [])))[:3]) or "nothing reads it at all"
             print(f"  {name}  (read from the OS environment only, by: {how})", file=sys.stderr)
         print(
-            "\nOnly .qdata.cfg reads .env. Set these in the shell instead - see the header of "
-            ".env.example for which theme each belongs to.",
+            "\nOutside uqs, only .qdata.cfg reads .env. Set these in the shell or .envrc "
+            "instead - see the header of .env.example for which theme each belongs to.",
             file=sys.stderr,
         )
 
