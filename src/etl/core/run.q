@@ -214,8 +214,8 @@ table_path:{[name] (.qetl.job.bounded.state.lock_dir[]),"/",string name}
 / sentinel that came back as a null would make every unfinished[] read wrong.
 / @return the two paths written
 persist:{[]
-    (hsym `$table_path `etl_runs) set runs[];
-    (hsym `$table_path `etl_run_meta) set meta_table[];
+    .qetl.job.bounded.state.durable_set[table_path `etl_runs;runs[]];
+    .qetl.job.bounded.state.durable_set[table_path `etl_run_meta;meta_table[]];
     (table_path `etl_runs; table_path `etl_run_meta)}
 
 / Replace both in-memory tables with what is on disk, if anything is.
@@ -227,9 +227,9 @@ persist:{[]
 / @eg .qetl.run.reload[]
 reload:{[]
     pr:hsym `$table_path `etl_runs;
-    if[not ()~key pr; `etl_runs set get pr; require_run_schema[]];
+    if[not ()~key pr; `etl_runs set .qetl.job.bounded.state.durable_get table_path `etl_runs; require_run_schema[]];
     pm:hsym `$table_path `etl_run_meta;
-    if[not ()~key pm; `etl_run_meta set get pm];
+    if[not ()~key pm; `etl_run_meta set .qetl.job.bounded.state.durable_get table_path `etl_run_meta];
     `etl_runs`etl_run_meta}
 
 / Private: read-modify-write under the run ledger's own mutex.

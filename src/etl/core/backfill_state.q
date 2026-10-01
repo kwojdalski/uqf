@@ -176,6 +176,32 @@ lock_is_stale:{[path]
       not o[`host]~string .z.h;      0b;
       not pid_alive o`pid]}
 
+/ Break a stale lock, if it is still stale - without ever removing a live one.
+/ .
+/ THE RACE THIS CLOSES. Two waiters read the same dead owner and both decide
+/ to break. The first removes it and takes the lock afresh; the second, acting
+/ on what it read before, then removed the FIRST one's live lock - two holders.
+/ Breaking is therefore serialised behind its own mutex, `<lock>.break`, and
+/ staleness is re-read while holding it. That re-read cannot go stale before
+/ the removal: a lock directory with a dead owner cannot be taken by anyone
+/ (mkdir fails while it exists), and no one else can be breaking it.
+/ .
+/ A breaker that dies while holding `.break` leaves it behind; it records an
+/ owner like any lock, so the next breaker clears it when that owner is gone.
+/ @param path the lock directory
+/ @return 1b when this call removed the lock
+/ @eg .qetl.job.bounded.state.break_stale "/tmp/nonexistent.lock"  ->  0b
+break_stale:{[path]
+    b:path,".break";
+    if[0<>@[{system"mkdir ",x," 2>/dev/null"; 0};b;{[e] 1}];
+        if[lock_is_stale b; system"rm -rf ",b];
+        :0b];
+    write_owner b;
+    broke:lock_is_stale path;
+    if[broke; system"rm -rf ",path];
+    system"rm -rf ",b;
+    broke}
+
 / How a refusal or a timeout describes the holder it found.
 / .
 / PARENTHESISE THE CALL at every use site - `" by ",(owner_desc path),"..."`.
@@ -226,7 +252,7 @@ acquire_lock:{[worker]
             .[{.qetl.log.info[x;y;z]};
                 (worker;"breaking a stale lock - its holder is gone";
                  `path`holder!(path;owner_desc path));::];
-            system"rm -rf ",path;
+            break_stale path;
             / Retake it through the same atomic mkdir. Losing THIS race means
             / another process got in first, and the refusal below - now
             / describing that live holder - is the right answer.
@@ -311,7 +337,7 @@ with_file_lock:{[name;f;args]
         / forever - with an error that named the case it could not handle.
         / Breaking it here turns that into a pause and a log line.
         stale:lock_is_stale path;
-        if[stale; system"rm -rf ",path];
+        if[stale; break_stale path];
         if[not stale;
             if[.z.p>deadline;
                 '"with_file_lock: could not take ",string[name]," at ",path," within ",
@@ -325,6 +351,52 @@ with_file_lock:{[name;f;args]
     system"rm -rf ",path;
     if[not first r; 'last r];
     last r}
+
+/ ------------------------------------------------- DURABLE LEDGER FILES
+
+/ Write `v` to `path` so that a crash at any moment leaves a readable file.
+/ .
+/ `set` straight onto the ledger truncated it first, so a process killed
+/ mid-write left a file that `get` refuses with 'parse - and every worker then
+/ failed at init until someone repaired it by hand. Here the new value is
+/ written beside it, the current file is kept as `<path>.bak` (a hard link:
+/ the previous generation, at no copying cost), and a rename puts the new one
+/ in place. A rename replaces atomically, so `path` is always the old file or
+/ the new one, never half of either.
+/ .
+/ Call under the ledger's lock, as the writers already do.
+/ @param path the file, as a string
+/ @param v the value to write
+/ @return path
+/ @eg .qetl.job.bounded.state.durable_set["/tmp/durable_eg";([] a:1 2)]
+durable_set:{[path;v]
+    tmp:path,".tmp";
+    (hsym `$tmp) set v;
+    if[not ()~key hsym `$path; system"ln -f ",path," ",path,".bak"];
+    system"mv -f ",tmp," ",path;
+    path}
+
+/ Read a file durable_set wrote, falling back to the previous generation.
+/ .
+/ A file that will not parse - a crash on a filesystem that did not honour
+/ the rename, a disk that filled, a hand edit - is replaced by `<path>.bak`,
+/ with a warning, rather than stopping every reader. The fallback loses at most
+/ the last write, and for a ledger of claims that is an under-claim: the window
+/ is simply done again. Neither readable is refused, naming both.
+/ @param path the file, as a string
+/ @return the value
+/ @throws error when neither the file nor its .bak can be read
+/ @eg .qetl.job.bounded.state.durable_get "/tmp/durable_eg"
+durable_get:{[path]
+    r:@[{(1b;get hsym `$x)};path;{(0b;x)}];
+    if[first r; :last r];
+    bak:path,".bak";
+    b:@[{(1b;get hsym `$x)};bak;{(0b;x)}];
+    if[not first b;
+        '"durable_get: ",path," is unreadable (",(last r),") and so is its .bak (",(last b),")"];
+    .[{.qetl.log.warn[x;y;z]};(`qetl.state;"ledger file unreadable - using the previous generation";
+        `path`error!(path;last r));::];
+    last b}
 
 / -------------------------------------------------------- CHECKPOINT
 

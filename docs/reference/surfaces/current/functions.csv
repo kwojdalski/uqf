@@ -308,8 +308,11 @@ qetl.job.bounded.state,acquire_lock,function,1,worker
 qetl.job.bounded.state,bounded_worker_globals,value,,
 qetl.job.bounded.state,bounded_worker_methods,value,,
 qetl.job.bounded.state,bounded_workers,dict,,
+qetl.job.bounded.state,break_stale,function,1,path
 qetl.job.bounded.state,checkpoint_path,function,1,worker
 qetl.job.bounded.state,clear_checkpoint,function,1,worker
+qetl.job.bounded.state,durable_get,function,1,path
+qetl.job.bounded.state,durable_set,function,2,path v
 qetl.job.bounded.state,fail,function,4,worker spec progress err
 qetl.job.bounded.state,file_lock_path,function,1,name
 qetl.job.bounded.state,file_lock_wait,value,,
