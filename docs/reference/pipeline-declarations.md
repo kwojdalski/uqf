@@ -246,8 +246,9 @@ what it does:
   | call                          | registers                                                                                                                                                                                        |
   | ---                           | ---                                                                                                                                                                                              |
   | `.qetl.dag.adopt_workers[]`   | every bounded worker, reading `<source>@<table>` and writing the source's `target`                                                                                                               |
-  | `.qetl.dag.adopt_pipelines[]` | every streaming job and normalizer, from `src/etl/generated/pipeline_dag.q` --- generated from the `uqs` process registry, which is itself read from their `subscribe_to` and `publishes`        |
+  | `.qetl.dag.adopt_streams[]`   | every streaming job and normalizer, by job name, read from `.qetl.job.stream`: inputs are `subscribe_to`, outputs `publishes`                                                                    |
+  | `.qetl.dag.adopt_pipelines[]` | processes that run no declared job (`tap1`), from `src/etl/generated/pipeline_dag.q`, generated from `NON_JOB_PIPELINES`                                                                         |
   | `.qetl.dag.adopt_feeders[]`   | every continuous feeder                                                                                                                                                                          |
   | `.qetl.dag.adopt_reactions[]` | every `.qetl.reaction` reaction, with the edges its call declares                                                                                                                                |
 
-`.qetl.dag.adopt_all[]` runs all four, reactions last.
+`.qetl.dag.adopt_all[]` runs all five, reactions last.

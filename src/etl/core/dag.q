@@ -9,7 +9,7 @@
 / vendored-tree rule as its standing
 / lesson about process facts living in more than one file.
 / .
-/ DERIVE, NEVER RE-DECLARE. Three registries already know their own inputs
+/ DERIVE, NEVER RE-DECLARE. The registries already know their own inputs
 / and outputs, so none of them is asked to restate anything:
 / .
 /   .qetl.job.bounded.worker_cfg     bounded workers. Input is the source's remote `table_name`,
@@ -17,11 +17,20 @@
 /                   declaration, reachable from the worker's `source`.
 /   .qetl.job.continuous.feeds    continuous feeders. Output is the dataset they feed;
 /                   their input is external by definition (a live feed).
-/   PIPELINES       the nine TorQ streaming processes. It was already decided
-/                   the Python Pipeline registry is the source of truth, so
-/                   this side is GENERATED into q rather than re-declared -
-/                   the same shape as generate_operational_docs.py, and for
-/                   the same reason.
+/   .qetl.job.stream.jobs   streaming jobs, normalizers among them. Input is
+/                   `subscribe_to`, output is `publishes`; a job that is
+/                   also in .qetl.job.stream.normalizer.registry is drawn as
+/                   a `normalizer`.
+/   .qetl.reaction  reactions, input the dataset each watches.
+/ .
+/ One process q cannot describe, because it runs no declared job (tap1, a
+/ diagnostic subscriber), comes from src/etl/generated/pipeline_dag.q,
+/ GENERATED from Python's NON_JOB_PIPELINES. That bridge used to carry every
+/ streaming process, on the ground that Python's registry was the source of
+/ truth. It no longer is - Python now derives its registry from these same q
+/ declarations - so carrying streams through it was a round trip back to q,
+/ and it registered every backfill a second time, as an edgeless `stream`
+/ node named by process.
 / .
 / The point of having it in q: `topological[]` gives a runnable order and
 / `d2[]`/`to_json[]` give a drawing, with no Python in the path. A q
@@ -320,16 +329,37 @@ adopt_feeders:{[]
     {[f] register[f;`kind`inputs`outputs!(`continuous; `$(); .qetl.job.continuous.feeds f)]} each fs;
     fs}
 
-/ Register the nine TorQ streaming processes, if the generated bridge has
-/ been loaded.
+/ Register every streaming job, from .qetl.job.stream's own registry.
 / .
-/ src/etl/generated/pipeline_dag.q defines register_pipelines; it is
-/ GENERATED from the Python Pipeline registry, because that registry is the
-/ source of truth and a hand-written q copy would be a second place for the
-/ same edges to be wrong. Absent - a bare ETL process that never loads it -
-/ this returns empty rather than throwing, so the graph is simply smaller.
-/ @return the process names registered, empty when the generated bridge is
-/   not loaded
+/ Named by JOB, as a bounded worker is, not by the process that runs it: one
+/ identity for every node, and the one reactions and coverage already use.
+/ A job that is also a normalizer is registered as one, so a drawing shows
+/ where shapes converge.
+/ .
+/ `first` because each declaration is stored ENLISTED - see .qetl.job.stream.jobs
+/ on the same-keyed-dicts trap.
+/ @return the job names registered, empty when .qetl.job.stream is not loaded
+/ @eg .qetl.dag.adopt_streams[]
+adopt_streams:{[]
+    if[not `jobs in key @[value;`.qetl.job.stream;{()}]; :`$()];
+    js:key .qetl.job.stream.jobs;
+    norms:@[{key .qetl.job.stream.normalizer.registry};::;{`$()}];
+    {[norms;j]
+        d:first .qetl.job.stream.jobs j;
+        register[j;`kind`inputs`outputs!
+            ($[j in norms;`normalizer;`stream]; d`subscribe_to; d`publishes)]
+      }[norms] each js;
+    js}
+
+/ Register the processes that run no declared job, if the generated bridge
+/ has been loaded.
+/ .
+/ src/etl/generated/pipeline_dag.q defines register_pipelines, GENERATED
+/ from Python's NON_JOB_PIPELINES: a process like tap1 has no q declaration
+/ to read, so this is the one place it can come from. Streaming jobs are not
+/ in it - adopt_streams reads them from q. Absent (a bare ETL process that
+/ never loads the bridge), this returns empty rather than throwing.
+/ @return the process names registered, empty when the bridge is not loaded
 / @eg .qetl.dag.adopt_pipelines[]
 adopt_pipelines:{[]
     $[`register_pipelines in key `.qetl.dag; register_pipelines[]; `$()]}
@@ -408,7 +438,7 @@ reaction_edges:{[]
 / the graph's own layering readable.
 adopt_all:{[]
     reset[];
-    `workers`feeders`pipelines`reactions!
-        (adopt_workers[]; adopt_feeders[]; adopt_pipelines[]; adopt_reactions[])}
+    `workers`feeders`streams`pipelines`reactions!
+        (adopt_workers[]; adopt_feeders[]; adopt_streams[]; adopt_pipelines[]; adopt_reactions[])}
 
 \d .
