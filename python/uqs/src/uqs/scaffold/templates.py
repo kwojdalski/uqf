@@ -272,9 +272,11 @@ def reaction_body(name: str, dataset: str, writes: list[str], producers: list[st
 / so a re-published window replaces its own rows instead of adding to them.
 / Read the rows with .qetl.reaction.published[], never {dataset} by name:
 / under `uqs backfill` the worker writes HDB partitions and there is no table
-/ to name. Write output with .qetl.reaction.write[table;rows] (rows need a
-/ `time` column), which goes where the worker wrote - not a table here, in a
-/ process that exits. See src/etl/reactions/rebuild_positions.q.
+/ to name. Write output with .qetl.reaction.write[table;row_key;rows], which
+/ goes where the worker wrote - not a table here, in a process that exits -
+/ and replaces this window's output, so a re-published window leaves one
+/ answer. Rows need a `time` column inside the window. See
+/ src/etl/reactions/rebuild_positions.q.
 handler:{{[dataset;range_from;range_to]
     '"{name}: not implemented";
     }}

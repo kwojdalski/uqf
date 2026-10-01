@@ -57,15 +57,42 @@ test_it_ran_as_a_reaction_and_succeeded:{[t]
     .qunit.assertEquals[(count h;exec distinct outcome from h);(5;enlist `ok);
         "fired once per published window, and never failed"]};
 
-test_republishing_a_window_appends_that_release:{[t]
-    / APPEND, as every write through an IO manager is - the worker's own
-    / demo_deals included. A reader wanting one answer per window takes the latest.
+/ The bug this replaced: the worker upserts demo_deals, so a second release of
+/ the same range leaves one copy of each deal, while the reaction appended
+/ and left two of every position - a sum over a day saw double.
+test_republishing_a_window_replaces_its_positions:{[t]
     run_worker `rp3;
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
     run_worker `rp4;
-    p:positions[];
-    .qunit.assertEquals[(count p;distinct `time`sym`window`net_notional`deals#p);(10;expected);
-        "two releases of the same range: ten rows, the same five positions twice"]};
+    .qunit.assertEquals[positions[];expected;
+        "two releases of the same range: one row per pair and window, not two"]};
+
+/ What replace does that upsert would not: a pair the corrected window no
+/ longer trades is removed, rather than keeping its old position.
+test_a_pair_gone_from_a_republished_window_loses_its_row:{[t]
+    deals:.qpipe.source.demo_deals.fixture[];
+    .qetl.reaction.notify_published[`demo_deals;d 0;d 1;1#deals;.qetl.io.memory];
+    .qetl.reaction.notify_published[`demo_deals;d 0;d 1;update sym:`AUDUSD from 1#deals;.qetl.io.memory];
+    .qunit.assertEquals[exec sym from positions[];enlist `AUDUSD;
+        "the window now holds the corrected pair only"]};
+
+test_republishing_one_window_leaves_the_others_alone:{[t]
+    run_worker `rp7;
+    deals:.qpipe.source.demo_deals.fixture[];
+    .qetl.reaction.notify_published[`demo_deals;d 0;d 1;1#deals;.qetl.io.memory];
+    .qunit.assertEquals[positions[];expected;"replacing day one does not touch days two to five"]};
+
+/ The window is what gets cleared, so output timed outside it is refused
+/ rather than written beside rows this call never cleared.
+test_a_row_outside_the_window_is_refused:{[t]
+    .qetl.reaction.on[`demo_deals;`stray_writer;{[ds;f;t]
+        .qetl.reaction.write[`stray_out;`sym;([] time:enlist t; sym:enlist `EURUSD)]}];
+    .qetl.reaction.notify_published[`demo_deals;d 0;d 1;0#.qpipe.source.demo_deals.fixture[];.qetl.io.memory];
+    h:select from .qetl.reaction.history where name=`stray_writer;
+    .qetl.reaction.off[`demo_deals;`stray_writer];
+    .qunit.assertEquals[exec outcome from h;enlist `failed;"the reaction failed, without failing the publication"];
+    .qunit.assertTrue[(first exec detail from h) like "*outside the window*";"and says why"];
+    .qunit.assertTrue[not `stray_out in tables `.;"nothing was written"]};
 
 test_an_empty_window_writes_nothing:{[t]
     .qetl.reaction.notify_published[`demo_deals;d 0;d 1;0#.qpipe.source.demo_deals.fixture[];.qetl.io.memory];
@@ -92,6 +119,23 @@ test_under_the_hdb_io_manager_positions_land_in_the_hdb:{[t]
          col`net_notional;col`deals);
         (5;enlist `ok;0b;1000000 -2500000 750000 -3000000 1250000f;5#1j);
         "every reaction succeeded, and deal_positions is in the HDB partitions, not in memory"]};
+
+/ The same fix where it matters: `uqs backfill` writes the HDB, and a second
+/ release of the range must leave one row per day there too.
+test_under_the_hdb_io_manager_a_second_release_replaces:{[t]
+    system "rm -rf build/test_hdb_rebuild_positions_twice";
+    saved:.qetl.io.default;
+    .qetl.io.default:.qetl.io.hdb[`:build/test_hdb_rebuild_positions_twice;`deal_time];
+    r1:@[.rebuild_positionsrxtest.run_worker;`rp8;{x}];
+    .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
+    r2:@[.rebuild_positionsrxtest.run_worker;`rp9;{x}];
+    .qetl.io.default:saved;
+    col:{[c] raze {[c;dt] get hsym `$"build/test_hdb_rebuild_positions_twice/",string[dt],"/deal_positions/",string c}[c]
+        each 2026.09.11+til 5};
+    .qunit.assertEquals[(r1`windows_completed;r2`windows_completed);5 5;"both releases ran every window"];
+    .qunit.assertEquals[(col`net_notional;col`deals);
+        (1000000 -2500000 750000 -3000000 1250000f;5#1j);
+        "one row per day in the partitions after two releases, not two"]};
 
 test_a_dry_run_builds_nothing:{[t]
     setenv[`UQF_DRY_RUN;"true"];
