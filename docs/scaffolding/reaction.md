@@ -33,12 +33,15 @@ does not list, so a reaction written or edited by hand cannot slip past it
 either.
 
 A handler reads what was published with `.qetl.reaction.published[]` and writes
-its output with `.qetl.reaction.write[table;rows]`, which goes through the
-publishing worker's own IO manager - into the HDB under `uqs backfill`, as the
-worker's rows did. Never read the dataset by name, and never keep output in a
-table of its own: a reaction runs inside the backfill process, which exits when
-its range is done (#541). Writes append, as the worker's own do, and the rows
-need a `time` column for the HDB writer to partition by.
+its output with `.qetl.reaction.write[table;row_key;rows]`, which goes through
+the publishing worker's own IO manager - into the HDB under `uqs backfill`, as
+the worker's rows did. Never read the dataset by name, and never keep output in
+a table of its own: a reaction runs inside the backfill process, which exits
+when its range is done (#541). A write replaces what the table held for the
+window being reacted to, matched by `row_key`, so re-publishing a window leaves
+one answer per window rather than a second copy. The rows need a `time` column
+inside that window, which is how the HDB writer partitions them and how the
+window is cleared.
 
 `--writes` is optional: the tables the handler writes. With it, the reaction
 registers through `on_writing` and becomes a node in the job graph, where a

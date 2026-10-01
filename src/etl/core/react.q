@@ -385,14 +385,20 @@ rows_now:()
 / `write`. (::) when the notifier named none.
 io_now:(::)
 
+/ The window being reacted to, as range_from range_to, for `write`: what it
+/ replaces is this window's output and nothing else.
+window_now:0#0Np
+
 run_one:{[item;nm;h]
     `.qetl.reaction.depth_now set item`depth;
     `.qetl.reaction.rows_now set item`rows;
     `.qetl.reaction.io_now set item`io;
+    `.qetl.reaction.window_now set (item`range_from;item`range_to);
     r:@[{[h;item] h[item`dataset;item`range_from;item`range_to]; `ok}[h];item;{[e] (`failed;e)}];
     `.qetl.reaction.depth_now set 0;
     `.qetl.reaction.rows_now set ();
     `.qetl.reaction.io_now set (::);
+    `.qetl.reaction.window_now set 0#0Np;
     $[`ok~r;
         record[item`dataset;nm;item`depth;item`range_from;item`range_to;`ok;""];
         [record[item`dataset;nm;item`depth;item`range_from;item`range_to;`failed;last r];
@@ -470,18 +476,35 @@ published:{[]
 / with its own. When the notification named no manager (a bare notify),
 / .qetl.io.default is used: where this process writes.
 / .
-/ APPEND, as every write through an IO manager is: re-publishing a window
-/ adds its rows again rather than replacing them, exactly as the worker's
-/ own dataset does. The rows need a `time` column (or the manager's
-/ partition column) - the HDB writer partitions by it.
+/ REPLACES this window's output, under on_conflict `replace keyed by
+/ `row_key`: what the target held for [range_from;range_to) goes, and `rows`
+/ take its place. So re-publishing a window - a restatement at a new
+/ source_version, or a re-run - leaves one answer per window rather than
+/ stacking a second, as the worker's own upsert does for its dataset. A key
+/ the corrected window no longer has is removed too, which an upsert would
+/ leave behind.
+/ .
+/ The rows need a `time` column (the HDB writer partitions by it), and every
+/ one must lie inside the window being reacted to: the window is what gets
+/ cleared, so a row timed outside it would be written beside output this
+/ call never cleared. That is refused rather than written.
 / @param target the table to write, as a symbol
+/ @param row_key the column(s) identifying one output row, e.g. `sym`window
 / @param rows the rows, as a table
 / @return the number of rows written
-/ @throws error outside a reaction
-/ @eg .qetl.reaction.on[`demo_deals;`copy_out;{[ds;f;t] .qetl.reaction.write[`demo_copy;.qetl.reaction.published[]]}]
-write:{[target;rows]
+/ @throws error outside a reaction, without a `time` column, or with a row
+/   outside the window
+/ @eg .qetl.reaction.on[`demo_deals;`copy_out;{[ds;f;t] .qetl.reaction.write[`demo_copy;`deal_id;.qetl.reaction.published[]]}]
+write:{[target;row_key;rows]
     if[not draining; '"write: only a reaction's handler writes a reaction's output"];
+    if[not `time in cols rows;
+        '"write: ",string[target],"'s rows need a time column - the window is cleared by it"];
+    w:window_now;
+    if[count outside:select from rows where not time within (w 0;w[1]-1);
+        '"write: ",string[count outside]," row(s) of ",string[target],
+         " lie outside the window being reacted to, ",string[w 0]," to ",string w 1];
     mgr:$[99h=type io_now; io_now; .qetl.io.default];
-    .qetl.io.write[mgr;target;rows]}
+    .qetl.io.write_keyed[mgr;target;rows;
+        `on_conflict`row_key`time_column`range_from`range_to!(`replace;row_key;`time;w 0;w 1)]}
 
 \d .

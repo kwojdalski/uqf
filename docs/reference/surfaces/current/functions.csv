@@ -412,7 +412,8 @@ qetl.reaction,require_handler,function,3,dataset nm handler
 qetl.reaction,reset,function,1,
 qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
-qetl.reaction,write,function,2,target rows
+qetl.reaction,window_now,value,,
+qetl.reaction,write,function,3,target row_key rows
 qetl.run,as_text,function,1,v
 qetl.run,attach,function,1,
 qetl.run,begin,function,2,worker spec

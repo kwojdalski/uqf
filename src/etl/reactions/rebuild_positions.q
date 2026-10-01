@@ -29,10 +29,10 @@
 / own IO manager - because this runs inside the backfill process, which
 / exits when its range is done: a table kept here would go with it.
 / .
-/ APPEND, like the dataset it is computed from: re-publishing a window adds
-/ that release's positions again rather than replacing the first. That is
-/ how every write through an IO manager behaves in this tree; a reader that
-/ wants one answer per window takes the latest.
+/ REPLACED per window, keyed by (sym; window): re-publishing a window - a
+/ restatement or a re-run - leaves that window's positions as the latest
+/ release computed them, one row per pair, as the worker's own upsert does
+/ for demo_deals. A pair with no deals in the corrected window loses its row.
 / @param dataset the dataset just published, `demo_deals
 / @param range_from inclusive lower bound of the published window
 / @param range_to exclusive upper bound
@@ -42,7 +42,7 @@ handler:{[dataset;range_from;range_to]
     deals:.qetl.reaction.published[];
     net:0!select net_notional:sum notional*?[side=`buy;1f;-1f], deals:count i
         by sym, window:range_from from deals;
-    .qetl.reaction.write[`deal_positions;`time`sym`window`net_notional`deals#update time:window from net]}
+    .qetl.reaction.write[`deal_positions;`sym`window;`time`sym`window`net_notional`deals#update time:window from net]}
 
 \d .
 
