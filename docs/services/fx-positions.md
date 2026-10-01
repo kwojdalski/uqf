@@ -136,9 +136,12 @@ into the identity. There is a test named after it.
 
 ## Recovery
 
-The plant logs every message it carries. A job started against an existing log
-replays it **before subscribing**, so a restart mid-session rebuilds the book it
-had rather than starting flat:
+The plant logs every message it carries. `fx_positions` declares `replay 1b`, so
+when it starts against an existing log it replays it **before subscribing**, and
+a restart mid-session rebuilds the book it had rather than starting flat - under
+TorQ as well as here (`.qetl.job.stream.start` runs the same sequence for both).
+Publish is muted during the replay, so the snapshots already sent are not sent
+again:
 
 ```
 run_stream: recovered 19 message(s) from :tplog/uqflocal20260918

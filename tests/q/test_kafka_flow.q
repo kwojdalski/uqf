@@ -201,4 +201,53 @@ contract_driver:{[]
     .qpipe.job.kafka_flow.on_batch[`kafka_client_flow;.kafka_flowtest.batch[0 0j;0 1j]];
     }
 
+/ --- restarts: restoring the marks and catching up -------------------------
+
+/ What the plant's log holds after kafka_flow1 published offsets 0 and 1,
+/ went down, and the consumer published 2 and 3 meanwhile: each raw row,
+/ and the client_flow row it produced, interleaved as they were logged.
+restart_log:{[]
+    raw:.kafka_flowtest.batch[0 0 0 0j;0 1 2 3j];
+    flow:{[r] select time, broker_time, sym, side, qty, price, client, trade_id, partition, offset from r};
+    ((`kafka_client_flow;1#raw);(`client_flow;flow 1#raw);
+     (`kafka_client_flow;1_2#raw);(`client_flow;flow 1_2#raw);
+     (`kafka_client_flow;2_raw))}
+
+replay_transport:{[replayed]
+    `connect`publisher`subscribe`timer!(
+        {[] };
+        {[] .kafka_flowtest.recorder};
+        {[replayed;tbls;h;replay] if[replay; {[h;m] h . m}[h] each replayed];}[replayed];
+        {[n;p;f] })}
+
+/ The bug: rows published while the job was down reached the plant's log and
+/ nothing else, because the job subscribed without replay and the consumer
+/ had already committed their offsets.
+test_a_restart_publishes_exactly_the_rows_that_arrived_while_it_was_down:{[t]
+    drive_ready[];
+    `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held;
+    .qetl.job.stream.start[`kafka_flow;replay_transport restart_log[]];
+    .qunit.assertEquals[exec offset from all_rows[];2 3j;"offsets 2 and 3, and not 0 and 1 a second time"];
+    .qunit.assertEquals[(.qpipe.job.kafka_flow.high_water 0j;count .qpipe.job.kafka_flow.held);(3j;0);
+        "the mark is restored and moved on, and nothing is left held"]};
+
+test_during_a_replay_raw_rows_are_held_not_published:{[t]
+    drive_ready[];
+    `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held;
+    `.qetl.job.stream.replaying set 1b;
+    r:@[push[0j;];enlist 5j;{x}];
+    `.qetl.job.stream.replaying set 0b;
+    .qunit.assertEquals[(calls[];count .qpipe.job.kafka_flow.held);(0;1);
+        "a raw row is judged only once the whole log has restored the marks"];
+    `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held};
+
+/ Raising the mark before publishing left it raised over rows that never
+/ went out, so a redelivery of them was dropped as already seen.
+test_a_publish_that_throws_does_not_move_the_mark:{[t]
+    drive_ready[];
+    .qetl.job.stream.wire[`kafka_flow;{[t;x] '"plant down"}];
+    r:@[push[0j;];enlist 0j;{x}];
+    .qunit.assertEquals[(r;.qpipe.job.kafka_flow.high_water 0j);("plant down";0Nj);
+        "the publish failed and the mark did not move"]};
+
 \d .

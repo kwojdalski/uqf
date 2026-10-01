@@ -91,40 +91,6 @@ start_plant:{[port]
     `.z.pc set {[h] .qetl.tick.unsubscribe neg h;};
     existing}
 
-/ Rebuild a job's state from the plant's log before it sees live traffic.
-/ .
-/ WHY BEFORE SUBSCRIBING, and not after. A job that subscribes first would
-/ take live batches while replaying historical ones, and apply them out of
-/ order - so its book would be right only if nothing traded during
-/ recovery. Subscribing afterwards means the plant's log and the live
-/ stream meet exactly once, at the message replay stopped on.
-/ @param job the job's name
-/ @return the number of messages replayed
-recover:{[job]
-    decl:.qetl.job.stream.def job;
-    if[0=count decl`subscribe_to; :0];
-    if[not `on_batch in key decl; :0];
-    wanted:decl`subscribe_to;
-    / Replay only the tables this job subscribes to. The log carries every
-    / table the plant ever saw, and handing a job a batch it never asked
-    / for is a bug the live path cannot produce.
-    handler:{[wanted;h;t;r] if[t in wanted; h[t;r]];}[wanted;decl`on_batch];
-    .qetl.tick.replay[.qetl.tick.log_path;handler]}
-
-/ Wire a job's publish seam and start its timer.
-/ @param job the job's name
-/ @param sink where its output goes - the local plant, or a handle to a remote one
-/ @return the job name
-start_job:{[job;sink]
-    decl:.qetl.job.stream.def job;
-    .qetl.log.info[job;"starting streaming job";
-        `subscribe_to`publishes`timer!(decl`subscribe_to;decl`publishes;
-            $[`period in key decl; decl`period; 0Nn])];
-    if[count decl`publishes; .qetl.job.stream.wire[job;sink]];
-    if[`period in key decl;
-        `.qproc.standalone.timers set .qproc.standalone.timers,enlist (job;decl`on_timer;decl`period;0Np)];
-    job}
-
 / The timers this process runs: (job; body; period; last fired).
 / .
 / ONE q timer driving many jobs, rather than one timer each - q has a
@@ -149,41 +115,61 @@ tick:{[]
     fire each til count timers;
     }
 
-/ Subscribe a job to a plant and hand back the sink it should publish to.
-/ @param job the job's name
-/ @param tp the plant's port, or 0N for the plant in this process
-/ @return the sink
-connect:{[job;tp]
-    decl:.qetl.job.stream.def job;
-    if[null tp;
-        / `1_m`, dropping the `upd` the message leads with - NOT `1 2#m`,
-        / which is a RESHAPE: it yields a one-element list, so `.` applies
-        / on_batch to a single argument, which makes a projection rather
-        / than an error. The job then receives nothing and reports healthy.
-        if[count decl`subscribe_to;
-            .qetl.tick.subscribe[decl`subscribe_to;
-                {[handler;m] handler . 1_m}[decl`on_batch]]];
-        :{[t;r] .qetl.tick.publish[t;r]}];
-    .qetl.log.info[job;"connecting to the plant";enlist[`port]!enlist tp];
-    h:@[hopen;tp;{[tp;e]
-        '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];
-    if[count decl`subscribe_to;
-        / The plant has to call US back, so it needs a sink addressed at
-        / this process - which only the REMOTE can build, out of its own
-        / .z.w. Send it a lambda to apply: a local function would arrive
-        / as a value the plant cannot route anywhere.
-        h({[want] .qetl.tick.subscribe[want;neg .z.w]};decl`subscribe_to);
-        / What comes back is (`upd;table;rows), which q evaluates here as
-        / upd[table;rows] - so the job's handler has to BE root upd.
-        `upd set decl`on_batch];
-    / NOT a bare `neg h`. Two reasons, and the first is why the three-process
-    / mode never ran: a handle is an integer, and .qetl.job.stream.wire rejects it
-    / (.qetl.job.stream.is_callable is 100-112h, functions only - unlike
-    / .qetl.tick.can_send, which does accept a handle). The second is that even
-    / had it passed, `(neg h)[tbl;rows]` sends a two-element message, which
-    / the remote evaluates as `tbl[rows]` - indexing a table NAME by the
-    / rows. The wrapper names the function to call over there.
-    {[send;t;x] send(`.qetl.tick.publish;t;x)}[neg h]}
+/ Private: the timer half both transports share.
+add_timer:{[name;period;f] `.qproc.standalone.timers set .qproc.standalone.timers,enlist (name;f;period;0Np);}
+
+/ The transport for a plant IN this process: .qetl.tick directly.
+/ .
+/ A replay reads the plant's own log - only the tables asked for, since the
+/ log carries every table the plant saw - BEFORE subscribing, so the log and
+/ the live stream meet exactly once, at the message replay stopped on. A
+/ job subscribing first would apply live batches among historical ones.
+/ .
+/ `1_m` in the subscription sink drops the `upd` each message leads with -
+/ NOT `1 2#m`, which is a RESHAPE: a one-element list, so `.` would apply
+/ the handler to one argument and make a projection rather than an error.
+/ @return the transport dictionary
+local_transport:{[]
+    `connect`publisher`subscribe`timer!(
+        {[] };
+        {[] {[t;r] .qetl.tick.publish[t;r]}};
+        {[tbls;handler;replay]
+            if[replay;
+                n:.qetl.tick.replay[.qetl.tick.log_path;{[tbls;h;t;r] if[t in tbls; h[t;r]];}[tbls;handler]];
+                if[0<n; -1 "run_stream: recovered ",string[n]," message(s) from ",string .qetl.tick.log_path]];
+            .qetl.tick.subscribe[tbls;{[h;m] h . 1_m}[handler]];};
+        add_timer)}
+
+/ The transport for a plant in ANOTHER process, on port `tp`.
+/ .
+/ The plant has to call this process back, so it needs a sink addressed at
+/ it - which only the REMOTE can build, out of its own .z.w: send it a
+/ lambda to apply. What comes back is (`upd;table;rows), evaluated here as
+/ upd[table;rows], so the handler has to BE root upd.
+/ .
+/ Publishing is NOT a bare `neg h`. A handle is an integer, which
+/ .qetl.job.stream.wire rejects (functions only), and `(neg h)[tbl;rows]`
+/ would send a two-element message the remote evaluates as `tbl[rows]`. The
+/ wrapper names the function to call over there.
+/ .
+/ No replay here: the log belongs to the other process. A job asking for one
+/ is told so rather than silently started without it.
+/ @param tp the plant's port
+/ @return the transport dictionary
+remote_transport:{[tp]
+    `connect`publisher`subscribe`timer!(
+        {[tp]
+            .qetl.log.info[`run_stream;"connecting to the plant";enlist[`port]!enlist tp];
+            `.qproc.standalone.h set @[hopen;tp;{[tp;e]
+                '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];}[tp];
+        {[] {[send;t;x] send(`.qetl.tick.publish;t;x)}[neg .qproc.standalone.h]};
+        {[tbls;handler;replay]
+            if[replay;
+                .qetl.log.warn[`run_stream;"replay asked for, but the plant's log is in another process - starting without it";
+                    enlist[`tables]!enlist tbls]];
+            `upd set handler;
+            .qproc.standalone.h({[want] .qetl.tick.subscribe[want;neg .z.w]};tbls);};
+        add_timer)}
 
 / Start everything this process was asked to run.
 / @return the jobs started
@@ -201,12 +187,9 @@ start:{[]
     if[local; start_plant plant_port];
     if[not null listen; system "p ",string listen];
     started:();
-    if[not null job;
-        replayed:$[local; recover job; 0];
-        if[0<replayed;
-            -1 "run_stream: recovered ",string[replayed]," message(s) from ",string .qetl.tick.log_path];
-        started,:start_job[job;connect[job;tp]]];
-    if[not null feed; started,:start_job[feed;connect[feed;tp]]];
+    tr:$[local; local_transport[]; remote_transport tp];
+    if[not null job; started,:.qetl.job.stream.start[job;tr]];
+    if[not null feed; started,:.qetl.job.stream.start[feed;tr]];
     if[count timers;
         `.z.ts set {[] .qproc.standalone.tick[]};
         / A fixed 250ms wakeup that each job's own period is checked
@@ -221,7 +204,7 @@ start:{[]
 \d .
 
 / Start only when the command line actually asked for something. Loading
-/ this file with no arguments - which is what tests/q/test_fx_positions.q
-/ does - defines every function above and starts nothing, so the runner's
-/ own logic is testable without a port, a log or a timer.
+/ this file with no arguments defines every function above and starts
+/ nothing, so the runner's own logic is testable without a port, a log or
+/ a timer.
 if[count `job`plant inter key .qproc.standalone.opts; .qproc.standalone.start[]];

@@ -228,12 +228,15 @@ on_timer:{[]
             base_qty:250000 600000f; quote_qty:-37387500 -89660000f; fill_count:1 2))
     ))];
 
-.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`note!(
+/ replay 1b: on a restart the book is rebuilt from the day's orders, not
+/ started flat - under TorQ as well as run_stream.q, which always did.
+.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`start_with_all`replay`note!(
     `fxpositions1;
     enlist `orders;
     `fx_position`fx_limit_breach;
     .qpipe.job.fx_positions.on_batch;
     0D00:00:05.000;
     .qpipe.job.fx_positions.on_timer;
+    1b;
     1b;
     "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it")];

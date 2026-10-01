@@ -34,12 +34,21 @@
 / row. They stay on the output too, so a desk querying client_flow can point
 / at any row and name the exact Kafka record it came from.
 / .
-/ WHAT THIS DOES NOT SURVIVE, stated plainly: the high-water marks below are
-/ this PROCESS's state. Restart kafka_flow1 and they are empty, so a replay
-/ that straddles the restart is not caught. Seeding them from the plant on
-/ startup is the obvious fix and is deliberately not done here - it needs a
-/ query against rdb1 at wire time, which no other .qetl.job.stream job does, and
-/ inventing that seam for an example would be the tail wagging the dog.
+/ RESTARTS. The high-water marks below are this process's state, and the
+/ consumer commits offsets once the plant has the row - so rows published
+/ while kafka_flow1 was down reach the plant's log and nowhere else. The job
+/ therefore declares replay 1b and restores from its own `client_flow`:
+/ .
+/   during the replay  client_flow rows raise the marks to what was
+/                      published before the restart; kafka_client_flow
+/                      rows are HELD, because the log puts each raw row
+/                      before the client_flow row it produced, so a raw
+/                      row cannot be judged until the whole log is read.
+/   on_replayed        publishes the held rows above the restored marks -
+/                      exactly those that arrived while the job was down.
+/ .
+/ Live, a client_flow batch is this job's own output coming back; raising
+/ the marks from it again changes nothing.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
@@ -58,6 +67,11 @@ publish:.qetl.job.stream.unwired `kafka_flow;
 / fixed partition count, so this dict is as big as the topic is wide and
 / never bigger. There is nothing to evict.
 high_water:(`long$())!`long$();
+
+/ Raw rows held during a replay, judged by on_replayed once the marks are
+/ complete.
+held:([] broker_time:`timestamp$(); sym:`symbol$(); side:`symbol$(); qty:`float$(); price:`float$();
+    client:`symbol$(); trade_id:`long$(); partition:`long$(); offset:`long$())
 
 / ------------------------------------------------------------- THE DEDUPE
 
@@ -118,21 +132,48 @@ advance:{[rows]
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
-    if[not t=`kafka_client_flow; :()];
     if[0=count x; :()];
+    if[t=`client_flow; :.qpipe.job.kafka_flow.advance x];
+    if[not t=`kafka_client_flow; :()];
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
+    if[.qetl.job.stream.replaying;
+        `.qpipe.job.kafka_flow.held upsert cols[.qpipe.job.kafka_flow.held]#rows;
+        :()];
+    .qpipe.job.kafka_flow.publish_fresh rows;
+    }
+
+/ Private: publish the rows above the marks, then raise the marks.
+/ .
+/ PUBLISH FIRST. Raising the marks before publishing meant a publish that
+/ threw left them raised over rows that never went out, so a redelivery
+/ was dropped as already seen.
+publish_fresh:{[rows]
     fresh:.qpipe.job.kafka_flow.first_per_coordinate .qpipe.job.kafka_flow.above_high_water rows;
-    if[0=count fresh; :()];
-    .qpipe.job.kafka_flow.advance fresh;
+    if[0=count fresh; :0];
     out:select broker_time, sym, side, qty, price, client, trade_id, partition, offset from fresh;
     .qpipe.job.kafka_flow.publish[`client_flow;out];
-    }
+    .qpipe.job.kafka_flow.advance fresh;
+    count out}
+
+/ After the replay: publish what arrived while the job was down.
+/ .
+/ The marks now hold everything published before the restart, so the held
+/ rows above them are exactly the missed ones.
+/ @return the number of rows published
+on_replayed:{[]
+    n:.qpipe.job.kafka_flow.publish_fresh .qpipe.job.kafka_flow.held;
+    `.qpipe.job.kafka_flow.held set 0#.qpipe.job.kafka_flow.held;
+    if[n>0; .[{.qetl.log.info[x;y;z]};(`kafka_flow;"published rows that arrived while this job was down";enlist[`rows]!enlist n);::]];
+    n}
 
 \d .
 
-.qetl.job.stream.define[`kafka_flow;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`kafka_flow;`procname`subscribe_to`publishes`on_batch`replay`restore_from`on_replayed`note!(
     `kafka_flow1;
     `kafka_client_flow;
     enlist `client_flow;
     .qpipe.job.kafka_flow.on_batch;
+    1b;
+    enlist `client_flow;
+    .qpipe.job.kafka_flow.on_replayed;
     "deduplicates client FX flow consumed off a Kafka topic, on the (partition;offset) the record carries. The raw rows are published by an EXTERNAL Python consumer (external/kafka_feed.py) - a q process cannot hold a Kafka subscription - so kafka_client_flow has a schema row but no producer in this list. That is why it does not start with the stack: on a default start nothing publishes the table it subscribes to, and it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer")];

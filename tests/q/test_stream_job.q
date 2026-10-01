@@ -970,4 +970,73 @@ test_fresh_breaches_is_decidable_without_a_timer:{[t]
     .qunit.assertEquals[count .qpipe.job.fx_positions.fresh_breaches d 600;1;
         "and once the throttle period has passed it does again"]};
 
+/ --- starting a job: .qetl.job.stream.start ------------------------------
+
+/ A transport that delivers `replayed` - a list of (table; rows) - as the
+/ day's log when asked to replay, and records what it was asked. The live
+/ handler it was given is kept, so a test can send a batch after start.
+started:()!()
+fake_transport:{[job;replayed]
+    `connect`publisher`subscribe`timer!(
+        {[] };
+        / A projection still owed its one argument: start calls publisher[].
+        {[job;unused] .sjtest.recorder job}[job];
+        {[replayed;tbls;h;replay]
+            `.sjtest.started set `tbls`replay`seen_replaying!(tbls;replay;());
+            if[replay;
+                {[h;m] .sjtest.started[`seen_replaying],:.qetl.job.stream.replaying; h . m}[h] each replayed];
+            `.sjtest.live set h;}[replayed];
+        {[n;p;f] })}
+
+/ The bug this fixes: a restarted posbook1 started its book flat, so the next
+/ fill published a position as if it were the first of the day.
+test_a_replaying_job_rebuilds_its_state_without_publishing_it_again:{[t]
+    reset[];
+    replayed:((`marks;a_mark[`EURUSD;1.104]);
+         (`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]);
+         (`executions;an_execution[d 1;`EURUSD;1;1.11;1e6]));
+    .qetl.job.stream.start[`posbook;fake_transport[`posbook;replayed]];
+    .qunit.assertEquals[count .sjtest.published;0;"what the replay recomputed was published before the restart"];
+    .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 2e6;"the book is back"];
+    .qunit.assertEquals[(.sjtest.started`replay;all .sjtest.started`seen_replaying;.qetl.job.stream.replaying);(1b;1b;0b);
+        "replay was asked for, `replaying` was set throughout it, and cleared after"];
+    .sjtest.live[`executions;an_execution[d 2;`EURUSD;-1;1.12;5e5]];
+    .qunit.assertEquals[exec qty from last_rows[];enlist 1.5e6;
+        "the first live fill builds on the rebuilt book - not -500k from flat"]};
+
+test_a_job_that_does_not_replay_is_not_asked_to:{[t]
+    reset[];
+    .qetl.job.stream.start[`markout;fake_transport[`markout;()]];
+    .qunit.assertEquals[.sjtest.started`replay;0b;"replay is opt-in"]};
+
+/ Publish has to be wired before subscribing: a replay delivers batches
+/ during the subscribe call, and a job that publishes from one must not hit
+/ the unwired stub (run_stream.q's recovery used to, for exactly that reason).
+test_publish_is_wired_before_the_subscription_delivers:{[t]
+    reset[];
+    .qpipe.job.posbook.publish:.qetl.job.stream.unwired `posbook;
+    .qetl.job.stream.start[`posbook;fake_transport[`posbook;()]];
+    .sjtest.live[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]];
+    .qunit.assertEquals[count .sjtest.published;1;"the live batch published through the transport"]};
+
+test_a_transport_missing_a_step_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.start[`posbook;];`connect`publisher!({[] };{[] });
+        "start: the transport is missing subscribe, timer";"named, before anything connects"]};
+
+test_restore_tables_are_subscribed_but_are_not_inputs:{[t]
+    .qunit.assertEquals[.qetl.job.stream.subscriptions `kafka_flow;`kafka_client_flow`client_flow;
+        "kafka_flow reads its own output back, to restore its marks"];
+    .qetl.dag.adopt_all[];
+    .qunit.assertEquals[(.qetl.dag.def `kafka_flow)`inputs;enlist `kafka_client_flow;
+        "but the graph sees only its input, so it draws no cycle"]};
+
+test_restore_declarations_are_refused_without_a_replay:{[t]
+    base:`procname`subscribe_to`publishes`on_batch!(`sjrestoreprobe1;enlist `quote;`symbol$();{[t;x]});
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_restore_probe;];base,enlist[`restore_from]!enlist enlist `quote;
+        "*restore_from without replay 1b*";"restore tables are read only by a replay"];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_restore_probe;];base,enlist[`on_replayed]!enlist {[] };
+        "*on_replayed without replay 1b*";"so is on_replayed called only after one"];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_restore_probe;];base,enlist[`replay]!enlist 1;
+        "*replay must be a boolean*";"and replay is 1b or 0b"]};
+
 \d .

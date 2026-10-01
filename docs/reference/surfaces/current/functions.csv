@@ -353,6 +353,7 @@ qetl.job.stream,defined,function,1,
 qetl.job.stream,drain,function,2,table_name mask
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
+qetl.job.stream,guarded,function,4,job f t x
 qetl.job.stream,is_callable,function,1,v
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
@@ -360,7 +361,11 @@ qetl.job.stream,namespace,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
 qetl.job.stream,procnames,dict,,
+qetl.job.stream,replaying,value,,
 qetl.job.stream,required_declarations,value,,
+qetl.job.stream,start,function,2,job tr
+qetl.job.stream,subscriptions,function,1,job
+qetl.job.stream,transport_keys,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,wire,function,2,job publisher
 qetl.job.stream.normalizer,check_source,function,4,who out src xf
@@ -900,9 +905,12 @@ qpipe.job.fx_trades_feed,spot,value,,
 qpipe.job.kafka_flow,above_high_water,function,1,rows
 qpipe.job.kafka_flow,advance,function,1,rows
 qpipe.job.kafka_flow,first_per_coordinate,function,1,rows
+qpipe.job.kafka_flow,held,table,,
 qpipe.job.kafka_flow,high_water,dict,,
 qpipe.job.kafka_flow,on_batch,function,2,t x
+qpipe.job.kafka_flow,on_replayed,function,1,
 qpipe.job.kafka_flow,publish,value,,
+qpipe.job.kafka_flow,publish_fresh,function,1,rows
 qpipe.job.market_data,from_quote,function,1,batch
 qpipe.job.market_data,from_quotes,function,1,batch
 qpipe.job.market_data,market_data,table,,
