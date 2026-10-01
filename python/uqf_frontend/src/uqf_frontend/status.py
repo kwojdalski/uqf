@@ -151,7 +151,9 @@ def _parse(text: str) -> WorkerStatus:
         # Not fatal: an unrecognised state still tells a reader the worker is
         # alive and reporting. Flag it rather than discarding the row, since
         # the likeliest cause is a writer newer than this reader.
-        warnings.append(f"unrecognised state {state!r}; known states are {', '.join(STATES)}")
+        warnings.append(
+            f"unrecognised state {state!r}; known states are {', '.join(sorted(STATES))}"
+        )
 
     if state == "failed" and not str(raw.get("error") or "").strip():
         warnings.append("state is 'failed' but no error was recorded")

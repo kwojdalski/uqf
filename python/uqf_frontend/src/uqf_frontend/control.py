@@ -110,7 +110,9 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
     """
     require_writes(settings)
     if action not in LIFECYCLE_ACTIONS:
-        raise ValidationFailed(f"unknown action {action!r} - expected one of {LIFECYCLE_ACTIONS}")
+        raise ValidationFailed(
+            f"unknown action {action!r} - expected one of {sorted(LIFECYCLE_ACTIONS)}"
+        )
     from uqs.paths import UqsError
     from uqs.stack import runtime
 

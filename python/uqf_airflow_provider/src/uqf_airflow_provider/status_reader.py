@@ -82,7 +82,7 @@ def read_status_file(path: Path) -> WorkerStatus:
     state = str(raw["state"])
     if state not in STATES:
         raise MalformedStatusFile(
-            f"{path}: unrecognised state {state!r}; known states are {', '.join(STATES)}"
+            f"{path}: unrecognised state {state!r}; known states are {', '.join(sorted(STATES))}"
         )
 
     # `str(None)` is the four-character string "None", so a JSON null here

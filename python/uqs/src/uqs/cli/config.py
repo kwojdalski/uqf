@@ -117,7 +117,11 @@ def _sorted_items(
     known = {column.casefold(): column for column in items[0]}
     column = known.get(sort.strip().casefold())
     if column is None:
-        _die(UqsError(f"cannot sort by {sort!r}: no such column. Available: {', '.join(items[0])}"))
+        _die(
+            UqsError(
+                f"cannot sort by {sort!r}: no such column. Available: {', '.join(sorted(items[0]))}"
+            )
+        )
         return items
     return sorted(items, key=lambda item: _sort_key(item.get(column, "")), reverse=reverse)
 

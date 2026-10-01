@@ -169,7 +169,7 @@ def assert_known_procnames(paths: UqsPaths, procs: str) -> None:
     unknown = [name for name in procs.split() if name not in known]
     if unknown:
         raise UqsError(
-            f"unknown process(es) {unknown} - known processes are {known}. "
+            f"unknown process(es) {unknown} - known processes are {sorted(known)}. "
             "Nothing was started or stopped."
         )
 
@@ -251,9 +251,9 @@ def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -
     only file this touches; the vendored process.csv is never edited.
     """
     if field not in PROCESS_CSV_FIELDS:
-        raise UqsError(f"unknown process.csv field {field!r} - {PROCESS_CSV_FIELDS}")
+        raise UqsError(f"unknown process.csv field {field!r} - {sorted(PROCESS_CSV_FIELDS)}")
     if procname not in list_process_names(paths):
-        raise UqsError(f"unknown process {procname!r} - {list_process_names(paths)}")
+        raise UqsError(f"unknown process {procname!r} - {sorted(list_process_names(paths))}")
 
     overrides = _read_overrides(paths)
     overrides.setdefault(procname, {})[field] = value

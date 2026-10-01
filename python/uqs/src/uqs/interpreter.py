@@ -55,7 +55,7 @@ def q_impl(env: Mapping[str, str] | None = None) -> str:
     source = os.environ if env is None else env
     impl = (source.get(Q_IMPL_ENV) or KDBX).strip().lower()
     if impl not in Q_IMPLS:
-        raise UqsError(f"{Q_IMPL_ENV}={impl!r} - it is one of {', '.join(Q_IMPLS)}")
+        raise UqsError(f"{Q_IMPL_ENV}={impl!r} - it is one of {', '.join(sorted(Q_IMPLS))}")
     if impl == PEACHQ and not source.get(Q_INTERPRETER_ENV):
         raise UqsError(
             f"{Q_IMPL_ENV}=peachq needs {Q_INTERPRETER_ENV} set to the PeachQ binary - "

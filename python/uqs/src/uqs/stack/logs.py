@@ -135,7 +135,7 @@ def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:
     unknown = [name for name in requested if name not in known]
     if unknown:
         raise UqsError(
-            f"unknown process(es) {unknown} - known processes are {known}. "
+            f"unknown process(es) {unknown} - known processes are {sorted(known)}. "
             "A process that exists but has never started has no log file yet; "
             "that case is skipped silently rather than reported here."
         )
@@ -358,7 +358,7 @@ def multitail_command(
     and a name absent from process.csv is refused - resolve_procnames' rule.
     """
     if stream not in MULTITAIL_STREAMS:
-        raise UqsError(f"--stream must be one of {', '.join(MULTITAIL_STREAMS)}, not {stream!r}")
+        raise UqsError(f"--stream {stream!r} is not one of {', '.join(sorted(MULTITAIL_STREAMS))}")
     if columns < 1:
         raise UqsError(f"--columns must be at least 1, not {columns}")
     if lines < 0:
