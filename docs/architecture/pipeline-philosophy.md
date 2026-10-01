@@ -88,7 +88,7 @@ silent. So the second copy is generated, or checked, or both:
 
   | Derived thing                      | From                              | Held by                                |
   | ---                                | ---                               | ---                                    |
-  | `src/etl/generated/pipeline_dag.q` | the pipeline registry             | `generate_operational_docs.py --check` |
+  | `src/etl/generated/pipeline_dag.q` | `NON_JOB_PIPELINES`               | `generate_operational_docs.py --check` |
   | `docs/man.q`                       | the qDoc blocks in `src/`         | `generate_man_registry.py --check`     |
   | `docs/reference/processes.md`      | the pipeline registry             | `generate_operational_docs.py --check` |
   | `docs/reference/environment.md`    | the code that reads each variable | `check_env_reference.py`               |

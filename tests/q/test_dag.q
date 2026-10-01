@@ -286,8 +286,62 @@ test_the_real_graph_is_acyclic:{[t]
 
 test_the_real_graph_has_every_declaring_registry_in_it:{[t]
     r:.qetl.dag.adopt_all[];
-    .qunit.assertTrue[(0<count r`workers) and 0<count r`pipelines;
-        "bounded workers and the generated streaming processes both land in one graph"]};
+    .qunit.assertTrue[(0<count r`workers) and 0<count r`streams;
+        "bounded workers and the streaming jobs both land in one graph"]};
+
+/ --- streaming jobs, read from q ---------------------------------------
+
+/ Each streaming job is a node under its JOB name, with exactly the edges it
+/ declares. They used to arrive through the generated bridge, named by
+/ process, which Python built by parsing these same declarations.
+test_every_streaming_job_is_a_node_with_its_declared_edges:{[t]
+    .qetl.dag.adopt_all[];
+    js:.qetl.job.stream.defined[];
+    .qunit.assertTrue[0<count js;"there are streaming jobs to check"];
+    bad:js where not {[j]
+        d:.qetl.job.stream.def j; g:.qetl.dag.def j;
+        (((),d`subscribe_to)~g`inputs) and ((),d`publishes)~g`outputs
+      } each js;
+    .qunit.assertEquals[bad;`symbol$();"every streaming job's node carries its declared inputs and outputs"]};
+
+test_a_normalizer_is_its_own_kind:{[t]
+    .qetl.dag.adopt_all[];
+    ns:key .qetl.job.stream.normalizer.registry;
+    .qunit.assertTrue[0<count ns;"there are normalizers to check"];
+    .qunit.assertEquals[distinct {(.qetl.dag.def x)`kind} each ns;enlist `normalizer;
+        "a normalizer is drawn as one, so a graph shows where shapes converge"]};
+
+/ The bug this replaced: every backfill process came back through the bridge
+/ as an edgeless `stream` node beside the real `bounded` one.
+test_no_backfill_appears_a_second_time_under_its_process_name:{[t]
+    .qetl.dag.adopt_all[];
+    procs:{(.qetl.job.bounded.def x)`procname} each key .qetl.job.bounded.worker_cfg;
+    .qunit.assertEquals[procs inter key .qetl.dag.jobs;`symbol$();
+        "a bounded worker is one node, named by worker, never also by its process"]};
+
+test_no_streaming_job_appears_under_its_process_name:{[t]
+    .qetl.dag.adopt_all[];
+    procs:{(.qetl.job.stream.def x)`procname} each .qetl.job.stream.defined[];
+    .qunit.assertEquals[procs inter key .qetl.dag.jobs;`symbol$();
+        "a streaming job is named by job, the identity every other node uses"]};
+
+/ What adopting from q buys: a job q has declared is in the graph with no
+/ generator run. Declared by inserting into the registry and restored after,
+/ because a real define would also count as a shipped job to the suites that
+/ check src/etl/streaming against the registry.
+test_a_job_q_knows_about_is_in_the_graph_without_regenerating:{[t]
+    saved:.qetl.job.stream.jobs;
+    decl:`ns`procname`subscribe_to`publishes!(`.dagtest.probe;`dagprobe1;enlist`quote;enlist`dag_probe_out);
+    .qetl.job.stream.jobs[`dag_probe]:enlist decl;
+    r:@[{.qetl.dag.adopt_all[]; .qetl.dag.def `dag_probe};::;{x}];
+    .qetl.job.stream.jobs:saved;
+    .qetl.dag.adopt_all[];
+    .qunit.assertEquals[r`outputs;enlist `dag_probe_out;"the probe's output reached the graph"];
+    .qunit.assertEquals[r`inputs;enlist `quote;"and its input"]};
+
+test_the_generated_bridge_carries_only_processes_with_no_job:{[t]
+    .qunit.assertEquals[(),.qetl.dag.register_pipelines[];enlist `tap1;
+        "streaming jobs come from q; the bridge is for what q cannot declare"]};
 
 test_a_workers_remote_table_is_a_different_node_from_its_target:{[t]
     / The fix, asserted directly rather than only via the acyclic test - so
