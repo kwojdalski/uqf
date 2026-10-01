@@ -664,10 +664,10 @@ a process is refused. Press `q` to leave multitail.
 
 Each pane runs uqs's own follower (`python -m uqs.stack.follow`) rather than
 multitail's `-f`. TorQ re-points `out_<procname>.log` at a new file on every
-start and at the daily roll, and multitail's `-f` hands following to the
-system `tail`, which can stay on the file the name used to point at - a pane
-that went quiet after the first restart. The follower checks what the name
-points at whenever it runs out of lines and moves to the new run's file.
+start and at the daily roll, and multitail's `-f` hands following to the system
+`tail`, which can stay on the file the name used to point at - a pane that went
+quiet after the first restart. The follower checks what the name points at
+whenever it runs out of lines and moves to the new run's file.
 
 **`uqs up` is the foreground form of all this**: it starts what `start` would -
 the same names, `all`, or `--profile` - then streams those processes' logs to

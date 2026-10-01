@@ -656,7 +656,9 @@ def test_run_multitail_execs_the_binary_with_the_argv(monkeypatch):
     """exec, not a child: multitail needs the terminal to itself."""
     seen = []
     monkeypatch.setattr(stack_multitail.shutil, "which", lambda _: "/usr/bin/multitail")
-    monkeypatch.setattr(stack_multitail.os, "execv", lambda binary, argv: seen.append((binary, argv)))
+    monkeypatch.setattr(
+        stack_multitail.os, "execv", lambda binary, argv: seen.append((binary, argv))
+    )
     stack_multitail.run_multitail(["multitail", "-f", "x.log"])
     assert seen == [("/usr/bin/multitail", ["multitail", "-f", "x.log"])]
 
