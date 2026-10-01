@@ -365,7 +365,7 @@ with_lock:{[f;args] .qetl.job.bounded.state.with_file_lock[`etl_coverage;f;args]
 / .
 / Call only under with_lock.
 / @return the path written
-persist:{[] (hsym `$ledger_path[]) set ledger[]; ledger_path[]}
+persist:{[] .qetl.job.bounded.state.durable_set[ledger_path[];ledger[]]}
 
 / Replace the in-memory ledger with the one on disk, if there is one.
 / .
@@ -380,7 +380,7 @@ persist:{[] (hsym `$ledger_path[]) set ledger[]; ledger_path[]}
 reload:{[]
     p:hsym `$ledger_path[];
     if[()~key p; :init_ledger[]];
-    `etl_coverage set get p;
+    `etl_coverage set .qetl.job.bounded.state.durable_get ledger_path[];
     require_schema[];
     `etl_coverage}
 

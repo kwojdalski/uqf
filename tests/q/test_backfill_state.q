@@ -165,6 +165,81 @@ test_a_lock_from_another_host_is_never_broken:{[t]
         "a lock from another host is refused however dead its pid looks here"];
     .qetl.job.bounded.state.release_lock[`lock_otherhost]};
 
+/ --- break_stale: one breaker, re-checked, never a live lock ---------------
+
+/ The race: two waiters judged the same dead owner stale; the first broke the
+/ lock and took it afresh, the second then removed that LIVE lock. Standing
+/ in for the second waiter: a lock that is live by the time it acts.
+test_break_stale_never_removes_a_lock_that_is_live_when_it_acts:{[t]
+    path:plant_lock[`brk_live;.z.i;string .z.h];
+    .qunit.assertEquals[.qetl.job.bounded.state.break_stale path;0b;"re-checked under the break mutex: live, so left alone"];
+    .qunit.assertTrue[not ()~key hsym `$path;"the live lock is still there"];
+    .qetl.job.bounded.state.release_lock[`brk_live]};
+
+test_break_stale_removes_a_dead_holders_lock:{[t]
+    path:plant_lock[`brk_dead;dead_pid;string .z.h];
+    .qunit.assertEquals[.qetl.job.bounded.state.break_stale path;1b;"stale when re-checked, so removed"];
+    .qunit.assertTrue[()~key hsym `$path;"and gone"];
+    .qunit.assertTrue[()~key hsym `$path,".break";"the break mutex is released"]};
+
+test_a_breaker_that_finds_another_at_work_stands_down:{[t]
+    path:plant_lock[`brk_busy;dead_pid;string .z.h];
+    system"mkdir -p ",path,".break";
+    (hsym `$path,".break/owner") 0: enlist .j.j `pid`started`host!(.z.i;.z.p;string .z.h);
+    .qunit.assertEquals[.qetl.job.bounded.state.break_stale path;0b;"someone live is breaking it"];
+    .qunit.assertTrue[not ()~key hsym `$path;"so this call removed nothing"];
+    system"rm -rf ",path,".break";
+    .qetl.job.bounded.state.release_lock[`brk_busy]};
+
+test_a_break_mutex_left_by_a_dead_breaker_is_cleared:{[t]
+    path:plant_lock[`brk_orphan;dead_pid;string .z.h];
+    system"mkdir -p ",path,".break";
+    (hsym `$path,".break/owner") 0: enlist .j.j `pid`started`host!(dead_pid;.z.p;string .z.h);
+    first_try:.qetl.job.bounded.state.break_stale path;
+    second_try:.qetl.job.bounded.state.break_stale path;
+    .qunit.assertEquals[(first_try;second_try);01b;"the dead breaker's marker is cleared, then the lock is broken"]};
+
+test_with_file_lock_still_takes_a_mutex_a_dead_process_left:{[t]
+    path:.qetl.job.bounded.state.file_lock_path `brk_ledger;
+    system"rm -rf ",path;
+    system"mkdir -p ",path;
+    (hsym `$path,"/owner") 0: enlist .j.j `pid`started`host!(dead_pid;.z.p;string .z.h);
+    .qunit.assertEquals[.qetl.job.bounded.state.with_file_lock[`brk_ledger;{x+1};enlist 41];42;
+        "the stale mutex is broken through break_stale and the section runs"]};
+
+/ --- durable ledger files ------------------------------------------------
+
+durable_path:{[nm] "build/test-status/",nm}
+
+test_durable_set_round_trips_exact_types:{[t]
+    p:durable_path "dur_roundtrip";
+    v:([] a:1 2j; ts:(.z.p;0Wp); g:2?0Ng);
+    .qetl.job.bounded.state.durable_set[p;v];
+    .qunit.assertEquals[.qetl.job.bounded.state.durable_get p;v;"types, the 0Wp sentinel and guids survive"];
+    .qunit.assertTrue[()~key hsym `$p,".tmp";"no temporary file is left behind"]};
+
+test_durable_set_keeps_the_previous_generation:{[t]
+    p:durable_path "dur_generations";
+    system"rm -f ",p," ",p,".bak";
+    .qetl.job.bounded.state.durable_set[p;([] a:enlist 1)];
+    .qetl.job.bounded.state.durable_set[p;([] a:1 2)];
+    .qunit.assertEquals[get hsym `$p,".bak";([] a:enlist 1);".bak is the file as it was before the last write"]};
+
+/ What `set` straight onto the ledger used to leave after a crash mid-write.
+test_a_truncated_file_falls_back_to_its_previous_generation:{[t]
+    p:durable_path "dur_truncated";
+    .qetl.job.bounded.state.durable_set[p;([] a:enlist 1)];
+    .qetl.job.bounded.state.durable_set[p;([] a:1 2 3)];
+    system"printf 'garbage' > ",p;
+    .qunit.assertEquals[.qetl.job.bounded.state.durable_get p;([] a:enlist 1);
+        "an unreadable file is replaced by the last good generation, not an error for every reader"]};
+
+test_neither_readable_is_refused_naming_both:{[t]
+    p:durable_path "dur_both_bad";
+    system"printf 'garbage' > ",p,"; printf 'garbage' > ",p,".bak";
+    e:.qunit.assertThrows[.qetl.job.bounded.state.durable_get;p;"durable_get: *";"no silent empty ledger"];
+    .qunit.assertTrue[e like "*and so is its .bak*";"and it says the fallback failed too"]};
+
 test_a_lock_still_being_acquired_is_never_broken:{[t]
     / mkdir and the owner write are two steps. A competitor looking in
     / between sees no owner file, and that lock is live, not stale.

@@ -568,4 +568,16 @@ test_current_rows_use_infinity_not_null:{[t]
     .qunit.assertEquals[first exec superseded_at from .qetl.coverage.history[`ds1;`;`v1];0Wp;
         "an unsuperseded claim carries infinity, so the as-of test needs no null case"]};
 
+/ A crash mid-write used to leave an etl_coverage file `get` refuses with
+/ 'parse, and every worker then failed at init until someone repaired it.
+/ Written durably, the ledger falls back to its previous generation: the
+/ last claim is lost, which is an under-claim - that window is done again.
+test_a_corrupted_ledger_file_reloads_its_previous_generation:{[t]
+    .qetl.coverage.stage_completion[`ds_crash;`;`v1;.coveragetest.d 1;.coveragetest.d 2;10];
+    .qetl.coverage.stage_completion[`ds_crash;`;`v1;.coveragetest.d 2;.coveragetest.d 3;20];
+    system"printf 'garbage' > ",.qetl.coverage.ledger_path[];
+    .qetl.coverage.reload[];
+    .qunit.assertEquals[exec rows_published from .qetl.coverage.history[`ds_crash;`;`v1];enlist 10j;
+        "the ledger as it stood before the last write, not an error"]};
+
 \d .
