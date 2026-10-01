@@ -43,7 +43,8 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
-from uqs.cli import config, create, inspect, lifecycle, shared, summary, summary_graph
+from uqs.cli import config, create, lifecycle, shared, summary, summary_graph
+from uqs.cli import query as query_cli
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_TABLE,
@@ -56,6 +57,7 @@ from uqs.stack import alive, listing, probe, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
+from uqs.stack import render as stack_render
 from uqs.stack.listing import LISTABLE_KINDS, SUMMARY_COLUMNS, SUMMARY_GRAPH_COLUMNS
 
 runner = CliRunner()
@@ -1494,7 +1496,7 @@ class _ErrorLog:
 
 def _error_log(monkeypatch) -> _ErrorLog:
     """`_die` lives in `shared`, so that is whose `log` has to be replaced -
-    patching inspect's would leave the message going to the real sink."""
+    patching query_cli's would leave the message going to the real sink."""
     captured = _ErrorLog()
     monkeypatch.setattr(shared, "log", captured)
     return captured
@@ -1504,8 +1506,8 @@ def test_query_with_no_expression_execs_qcon_on_the_same_connection(monkeypatch)
     """No expression means a session: the same four options pointed at a
     different transport, so it must land on the process a query would hit."""
     seen: dict[str, Any] = {}
-    monkeypatch.setattr(inspect.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(inspect.os, "execvp", lambda f, a: seen.update(file=f, argv=a))
+    monkeypatch.setattr(query_cli.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: seen.update(file=f, argv=a))
     result = runner.invoke(
         cli.app,
         ["query", "--port", "6099", "--host", "h2", "--user", "u", "--passwd", "p"],
@@ -1519,7 +1521,7 @@ def test_a_session_without_qcon_installed_says_what_still_works(monkeypatch):
     ordinary state rather than a broken install - and the message has to leave
     the reader with a way to run their query."""
     errors = _error_log(monkeypatch)
-    monkeypatch.setattr(inspect.shutil, "which", lambda name: None)
+    monkeypatch.setattr(query_cli.shutil, "which", lambda name: None)
     assert runner.invoke(cli.app, ["query", "--port", "6099"]).exit_code == 1
     assert any("not on PATH" in m and "still works over IPC" in m for m in errors.messages), (
         errors.messages
@@ -1528,7 +1530,7 @@ def test_a_session_without_qcon_installed_says_what_still_works(monkeypatch):
 
 def test_an_expression_runs_it_and_never_opens_a_session(monkeypatch):
     rec = _patch(monkeypatch, runtime, "query", result="RESULT")
-    monkeypatch.setattr(inspect.os, "execvp", lambda f, a: pytest.fail("should not exec"))
+    monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: pytest.fail("should not exec"))
     assert runner.invoke(cli.app, ["query", "--port", "6099", "select 1"]).exit_code == 0
     assert rec.args[0] == "select 1"
 
@@ -1537,7 +1539,7 @@ def test_export_without_an_expression_is_refused(monkeypatch):
     """A session has no single result to write, so --export would be silently
     ignored - refused instead, before qcon takes the terminal."""
     errors = _error_log(monkeypatch)
-    monkeypatch.setattr(inspect.os, "execvp", lambda f, a: pytest.fail("should not exec"))
+    monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: pytest.fail("should not exec"))
     result = runner.invoke(cli.app, ["query", "--port", "6099", "--export", "out.csv"])
     assert result.exit_code == 1
     assert any("--export needs an expression" in m for m in errors.messages), errors.messages
@@ -1552,7 +1554,7 @@ def _conn(monkeypatch, *, running=("rdb1",), ports=None):
     seen: dict[str, Any] = {}
     ports = ports if ports is not None else {"rdb1": "6052", "hdb1": "6053"}
     monkeypatch.setattr(
-        inspect.listing,
+        query_cli.listing,
         "configured_ports",
         lambda paths, base_port: seen.update(base=base_port) or ports,
     )
@@ -1561,11 +1563,11 @@ def _conn(monkeypatch, *, running=("rdb1",), ports=None):
         def refuse(paths, base_port):
             raise running
 
-        monkeypatch.setattr(inspect.alive, "running", refuse)
+        monkeypatch.setattr(query_cli.alive, "running", refuse)
     else:
-        monkeypatch.setattr(inspect.alive, "running", lambda paths, base_port: set(running))
-    monkeypatch.setattr(inspect.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(inspect.os, "execvp", lambda f, a: seen.update(argv=a))
+        monkeypatch.setattr(query_cli.alive, "running", lambda paths, base_port: set(running))
+    monkeypatch.setattr(query_cli.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: seen.update(argv=a))
     return seen
 
 
@@ -1612,7 +1614,7 @@ def test_query_proc_still_connects_when_it_cannot_tell_what_is_running(monkeypat
 def test_query_proc_without_qcon_installed_says_what_still_works(monkeypatch):
     errors = _error_log(monkeypatch)
     _conn(monkeypatch)
-    monkeypatch.setattr(inspect.shutil, "which", lambda name: None)
+    monkeypatch.setattr(query_cli.shutil, "which", lambda name: None)
     assert runner.invoke(cli.app, ["query", "--proc", "rdb1"]).exit_code == 1
     assert any("not on PATH" in m for m in errors.messages), errors.messages
 
@@ -1678,19 +1680,65 @@ def test_query_with_nothing_at_all_opens_the_routing_session_on_the_gateway(monk
     _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     seen = {}
 
-    def session(host, port, user, passwd, *, show, fail, servers):
+    def session(host, port, user, passwd, *, show, fail, servers, render):
         seen.update(port=port, servers=servers)
         return 0
 
-    monkeypatch.setattr(inspect.stack_gateway, "query_session", session)
+    monkeypatch.setattr(query_cli.stack_gateway, "query_session", session)
     assert runner.invoke(cli.app, ["query"]).exit_code == 0
     assert seen == {"port": 6057, "servers": "rdb hdb"}
+
+
+# ------------------------------------------------ query --render (q or kola)
+
+
+def test_by_default_q_prints_the_result_and_it_is_shown_verbatim(monkeypatch):
+    monkeypatch.delenv(stack_render.RENDER_ENV, raising=False)
+    monkeypatch.setattr(stack_render, "console_size", lambda: (40, 120))
+    rec = _patch(monkeypatch, runtime, "query", result="sym  | x\n-----| -\n[EUR]| 1\n")
+    result = runner.invoke(cli.app, ["query", "select from t", "--port", "6052"])
+    assert result.exit_code == 0, result.output
+    assert rec.kwargs["render"] == (40, 120)
+    assert result.output == "sym  | x\n-----| -\n[EUR]| 1\n", "no markup, no extra line"
+
+
+@pytest.mark.parametrize(
+    ("argv", "env"),
+    [(["--render", "kola"], {}), ([], {"UQS_QUERY_RENDER": "kola"}), (["--export", "x.csv"], {})],
+)
+def test_kola_or_an_export_gets_the_python_objects(monkeypatch, argv, env):
+    """--export needs the data itself, whichever renderer was chosen."""
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(query_cli, "_export", lambda result, path: None)
+    rec = _patch(monkeypatch, runtime, "query", result=42)
+    result = runner.invoke(cli.app, ["query", "1+1", "--port", "6052", *argv])
+    assert result.exit_code == 0, result.output
+    assert rec.kwargs["render"] is None
+
+
+def test_an_unknown_renderer_is_refused_before_anything_connects(monkeypatch):
+    monkeypatch.setattr(runtime, "query", lambda *a, **k: pytest.fail("should not query"))
+    argv = ["query", "1+1", "--port", "6052", "--render", "python"]
+    assert runner.invoke(cli.app, argv).exit_code == 1
+
+
+@pytest.mark.parametrize(("argv", "rendered"), [([], True), (["--render", "kola"], False)])
+def test_the_gateway_session_renders_as_chosen(monkeypatch, argv, rendered):
+    monkeypatch.delenv(stack_render.RENDER_ENV, raising=False)
+    _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    seen = {}
+    monkeypatch.setattr(
+        query_cli.stack_gateway, "query_session", lambda *a, **k: seen.update(k) or 0
+    )
+    assert runner.invoke(cli.app, ["query", *argv]).exit_code == 0
+    assert (seen["render"] is stack_render.console_size) is rendered
 
 
 def test_raw_with_nothing_opens_plain_qcon_on_the_gateway(monkeypatch):
     seen = _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     monkeypatch.setattr(
-        inspect.stack_gateway, "query_session", lambda *a, **k: pytest.fail("not the session")
+        query_cli.stack_gateway, "query_session", lambda *a, **k: pytest.fail("not the session")
     )
     assert runner.invoke(cli.app, ["query", "--raw"]).exit_code == 0
     assert any("6057" in part for part in seen["argv"])

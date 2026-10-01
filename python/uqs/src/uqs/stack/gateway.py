@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from uqs.paths import UqsError
+from uqs.stack import render as stack_render
 
 #: The process `uqs query` asks when told neither --proc nor --port.
 DEFAULT_PROC = "gateway1"
@@ -53,8 +54,7 @@ def expression(expr: str, servers: str = DEFAULT_SERVERS) -> str:
     bad = [t for t in types if not _PROCTYPE.match(t)]
     if not types or bad:
         raise UqsError(f"--servers takes process types, e.g. 'rdb hdb' - not {servers!r}")
-    quoted = expr.replace("\\", "\\\\").replace('"', '\\"')
-    return f'.gw.syncexec["{quoted}";{"".join("`" + t for t in types)}]'
+    return f'.gw.syncexec["{stack_render.quoted(expr)}";{"".join("`" + t for t in types)}]'
 
 
 #: What ends the session. `\\` is q's own; the words are for everyone else.
@@ -109,10 +109,15 @@ def query_session(
     show: Callable[[Any], None],
     fail: Callable[[str], None],
     servers: str = DEFAULT_SERVERS,
+    render: Callable[[], tuple[int, int]] | None = None,
 ) -> int:
     """The session over one held kola connection, with line editing and
     history from readline where Python has it. `show` and `fail` are the
-    CLI's: this module does not print."""
+    CLI's: this module does not print.
+
+    With `render`, which gives the console size, each answer comes back as
+    the text q prints (stack/render.py). It is asked again on every line, so
+    a terminal resized mid-session is fitted from the next answer on."""
     import kola
 
     try:
@@ -122,6 +127,12 @@ def query_session(
     conn = kola.Q(host, port, user=user, passwd=passwd, timeout=0)
     conn.connect()
     try:
-        return session(conn.sync, input, show, fail, servers)
+
+        def send(expr: str) -> Any:
+            if render is None:
+                return conn.sync(expr)
+            return stack_render.text(conn.sync(stack_render.wrap(expr, render())))
+
+        return session(send, input, show, fail, servers)
     finally:
         conn.disconnect()
