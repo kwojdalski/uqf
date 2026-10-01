@@ -906,8 +906,19 @@ It refuses a process that is not running - with the `uqs start` to fix it -
 rather than leaving qcon to report a refused connection, which reads the same as
 a wrong port. `qcon` ships with kdb+, not with this repository.
 
-`query` returns a Polars DataFrame (via `kola`, the same IPC library the
-frontend gateway uses) for table results. From a plain q session instead:
+Results print as q's own console prints them: the process formats its answer
+with `.Q.s`, laid out to this terminal's size (or in full when the output is
+piped), and puts its own `\c` back afterwards. To see what `kola` - the IPC
+library `uqs` connects with - makes of a result instead, a Polars DataFrame for
+a table, Python objects for the rest, choose the `kola` renderer:
+
+```
+uqs query "select from trade" --render kola   # this call
+export UQS_QUERY_RENDER=kola                  # every call, and the gateway session
+```
+
+`--render` wins over `UQS_QUERY_RENDER`; the default is `q`. `--export` always
+writes the data itself, whichever is chosen. From a plain q session instead:
 `q)h:hopen \`:localhost:6052:admin:admin`, then `h "..."`, then `hclose h\`.
 
 The gateway (6057) is the intended single entry point for querying across the

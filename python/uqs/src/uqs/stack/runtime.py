@@ -21,6 +21,7 @@ from uqs.model.plant_schema import _generated_schema_content
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive
+from uqs.stack import render as stack_render
 from uqs.stack.env import build_env
 from uqs.stack.procs import _base_process_rows, _read_overrides
 
@@ -277,9 +278,14 @@ def query(
     user: str = "admin",
     passwd: str = "admin",
     timeout: int = 0,
+    render: tuple[int, int] | None = None,
 ) -> Any:
     """Run a synchronous q expression against a running demo process (e.g.
     rdb1 on base_port+2) over kdb+ IPC via kola.
+
+    With `render` - a (rows, columns) console size - the process formats the
+    result itself and this returns the text q's console would print; without
+    it, kola's Python objects. See stack/render.py.
 
     `timeout` is whole SECONDS, kola's own unit, and 0 means wait forever -
     kola's default, kept as this function's default so an interactive query
@@ -295,7 +301,9 @@ def query(
     q = kola.Q(host, port, user=user, passwd=passwd, timeout=timeout)
     q.connect()
     try:
-        return q.sync(expr)
+        if render is None:
+            return q.sync(expr)
+        return stack_render.text(q.sync(stack_render.wrap(expr, render)))
     finally:
         q.disconnect()
 

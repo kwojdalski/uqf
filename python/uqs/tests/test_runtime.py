@@ -126,6 +126,41 @@ def test_query_disconnects_even_when_the_expression_fails(q_port):
     assert runtime.query("1", q_port, user="", passwd="") == 1
 
 
+# ------------------------------------------------------- query, rendered by q
+
+
+def test_render_returns_what_the_q_console_prints(q_port):
+    out = runtime.query("select from trades", q_port, user="", passwd="", render=(40, 120))
+    assert isinstance(out, str)
+    lines = out.splitlines()
+    assert lines[0].split() == ["time", "sym", "px"]
+    assert set(lines[1]) == {"-"}
+    assert "2026.09.17D09:00:00.000000000 EURUSD 1.1" in out
+
+
+def test_render_shows_an_atom_and_a_string_as_q_does(q_port):
+    assert runtime.query("1+1", q_port, user="", passwd="", render=(40, 120)) == "2\n"
+    assert runtime.query('"abc"', q_port, user="", passwd="", render=(40, 120)) == '"abc"\n'
+
+
+def test_render_runs_an_expression_with_its_own_semicolons_and_quotes(q_port):
+    out = runtime.query('a:"x;y"; count a', q_port, user="", passwd="", render=(40, 120))
+    assert out == "3\n"
+
+
+def test_render_fits_the_given_width_and_puts_the_servers_back(q_port):
+    """`\\c` is the SERVER's, so a wrapper that left it changed would change
+    every later caller's output - including after an expression that threw."""
+    before = runtime.query('system"c"', q_port, user="", passwd="")
+    wide = "til 200"
+    narrow = runtime.query(wide, q_port, user="", passwd="", render=(20, 40))
+    assert max(len(line) for line in narrow.splitlines()) <= 40
+    with pytest.raises(Exception, match="nope"):
+        runtime.query("'nope", q_port, user="", passwd="", render=(20, 40))
+    after = runtime.query('system"c"', q_port, user="", passwd="")
+    assert list(after) == list(before)
+
+
 # -------------------------------------------------------------- export_table
 
 
