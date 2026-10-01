@@ -208,21 +208,46 @@ record_received:{[t;x]
 / @return the publish handle to the tickerplant (assign it to root-level `h`)
 / @throws error if no tickerplant can be found to subscribe to
 subscribe_etl:{[nm;sub_tables]
+    h:connect_etl nm;
+    subscribe_tables[nm;sub_tables;0b];
+    h}
+
+/ The first half of subscribe_etl: register with discovery, wait for the
+/ tickerplant, and hand back the publish handle - without subscribing.
+/ .
+/ Split out so a streaming job's publish can be wired BEFORE it subscribes
+/ (.qetl.job.stream.start): a subscription that replays the log delivers
+/ batches during the subscribe call itself, and a job publishing from them
+/ needs its publish in place by then.
+/ @param nm the pipeline's name, for log lines
+/ @return the publish handle to the tickerplant
+connect_etl:{[nm]
     .servers.CONNECTIONS:tp_type;
     .qetl.log.dbg[nm;"registering with discovery";()!()];
     .servers.startup[];
     wait_for_tickerplant nm;
-    handles:.sub.getsubscriptionhandles[tp_type;();()!()];
-    .qetl.log.dbg[nm;"subscription handles";enlist[`count]!enlist count handles];
-    if[0=count handles; '"qtorq.subscribe_etl: no ",(string tp_type)," found to subscribe to"];
-    subproc:first handles;
-    .qetl.log.info[`qtorq;"subscribing";`job`tables`publisher!(nm;sub_tables;subproc`procname)];
-    r:.sub.subscribe[sub_tables;`;0b;0b;subproc];
-    .qetl.log.dbg[nm;"subscribed";enlist[`result]!enlist r];
-    / safe to acquire now - startupdepcycles above already blocked until the
+    / safe to acquire now - wait_for_tickerplant above blocked until the
     / tickerplant was confirmed up. Separate, unauthenticated handle from the
     / .servers.startup[] subscription handle, same as every ETL did by hand.
     .servers.gethandlebytype[tp_type;`any]}
+
+/ The second half: subscribe to tables, replaying the day's log first when
+/ asked. The root `upd` must already be the handler - TorQ's replay calls
+/ whatever `upd` is installed when this runs.
+/ @param nm the pipeline's name, for log lines
+/ @param sub_tables the table(s) to subscribe to
+/ @param replay 1b to replay the tickerplant's log before live batches
+/ @return the subscription result
+/ @throws error if no tickerplant can be found to subscribe to
+subscribe_tables:{[nm;sub_tables;replay]
+    handles:.sub.getsubscriptionhandles[tp_type;();()!()];
+    .qetl.log.dbg[nm;"subscription handles";enlist[`count]!enlist count handles];
+    if[0=count handles; '"qtorq.subscribe_tables: no ",(string tp_type)," found to subscribe to"];
+    subproc:first handles;
+    .qetl.log.info[`qtorq;"subscribing";`job`tables`publisher`replay!(nm;sub_tables;subproc`procname;replay)];
+    r:.sub.subscribe[sub_tables;`;0b;replay;subproc];
+    .qetl.log.dbg[nm;"subscribed";enlist[`result]!enlist r];
+    r}
 
 / Refuse to start when the plant has no table for something this process
 / says it publishes.

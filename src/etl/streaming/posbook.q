@@ -166,10 +166,15 @@ on_batch:{[t;x]
         ([] sym:enlist `USDJPY; qty:enlist 0f; avg_price:enlist 0f; realized_pnl:enlist 1e6; mark_price:enlist 148.5; unrealized_pnl:enlist 0f; total_pnl:enlist 1e6))
     ))];
 
-.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`note!(
+/ replay 1b: the book is this process's memory, so a restart used to start it
+/ flat and publish every later position from zero. Replaying the day's
+/ executions and marks rebuilds it; publish is muted while it does, so the
+/ positions already published are not published twice.
+.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`note!(
     `posbook1;
     `executions`marks;
     enlist `position;
     .qpipe.job.posbook.on_batch;
+    1b;
     1b;
     "reads the two normalizers' outputs, not trades and quote, so one book carries FX and crypto and a new market is a mapping, not a job")];

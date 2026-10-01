@@ -135,6 +135,24 @@ define:{[job;decl]
         '"define: ",string[job],"'s start_with_all must be a boolean, 1b to start with the stack"];
     if[(`note in key decl) and not 10h=type decl`note;
         '"define: ",string[job],"'s note must be a string"];
+    / Restoring state at start - see `start` below.
+    if[(`replay in key decl) and not -1h=type decl`replay;
+        '"define: ",string[job],"'s replay must be a boolean, 1b to rebuild state from the day's log at start"];
+    replays:$[`replay in key decl; decl`replay; 0b];
+    if[`restore_from in key decl;
+        if[not 11h=abs type decl`restore_from;
+            '"define: ",string[job],"'s restore_from must be a symbol list of table names"];
+        if[not replays;
+            '"define: ",string[job]," declares restore_from without replay 1b - those tables are read only by a replay"];
+        if[not `on_batch in key decl;
+            '"define: ",string[job]," declares restore_from but no on_batch to read it with"]];
+    if[`on_replayed in key decl;
+        if[not is_callable decl`on_replayed;
+            '"define: ",string[job],"'s on_replayed must be a niladic function"];
+        if[not replays;
+            '"define: ",string[job]," declares on_replayed without replay 1b - it would never be called"]];
+    if[replays and not `on_batch in key decl;
+        '"define: ",string[job]," declares replay 1b but no on_batch - a replay delivers batches"];
     jobs[job]:enlist decl;
     procnames[decl`procname]:job;
     .[{.qetl.log.dbg[x;y;z]};(job;"streaming job registered";
@@ -237,6 +255,94 @@ evict:{[table_name;mask]
 / failure this tree keeps finding.
 / @param job the job's name, for the message
 / @return a function that throws when called
+/ ------------------------------------------------------------- STARTING
+
+/ 1b while a job is being replayed its day's log at start, 0b otherwise.
+/ .
+/ A job's on_batch reads it to tell a replayed batch from a live one, when
+/ the difference matters to it - kafka_flow holds replayed rows until the
+/ replay has shown it everything it already published. Most jobs need not
+/ look: during a replay their publish is muted anyway.
+replaying:0b
+
+/ What a runner must hand `start`: the transport, as functions.
+/ .
+/   connect             niladic; reach the plant.
+/   publisher           niladic, called after connect; the function a job
+/                       publishes through, (table; rows).
+/   subscribe           [tables; handler; replay]: deliver batches of `tables`
+/                       to handler[table; rows]. With replay 1b, deliver the
+/                       day's log first, synchronously, before it returns.
+/   timer               [name; period; f]: call niladic f every period.
+/   check_publishable   optional, [tables]: refuse a table the plant lacks.
+transport_keys:`connect`publisher`subscribe`timer
+
+/ Every table a job subscribes to: its inputs, and those it reads only to
+/ restore state. The second are not inputs - .qetl.dag reads subscribe_to
+/ alone, so a job restoring from its own output does not draw a cycle.
+/ @param job the job's name
+/ @return the tables, as a symbol list
+subscriptions:{[job]
+    d:def job;
+    distinct (),(d`subscribe_to),$[`restore_from in key d; d`restore_from; `symbol$()]}
+
+/ Private: the job's on_batch, logging a failure with its table before
+/ re-raising it, so the error still reaches the caller and is also in this
+/ process's own log, where someone asking "why is my output empty" looks.
+guarded:{[job;f;t;x]
+    .[f;(t;x);{[job;t;e] .[{.qetl.log.err[x;y;z]};(job;"on_batch failed";`table`error!(t;e));::]; 'e}[job;t]]}
+
+/ Start a job on a transport: the one sequence every runner uses.
+/ .
+/ IN THIS ORDER, and the order is the point.
+/   1. connect.
+/   2. Wire publish - BEFORE subscribing, so a replay can reach it.
+/   3. Subscribe, which installs the handler first. With `replay` 1b the
+/      day's log is delivered before any live batch, with publish MUTED and
+/      `replaying` set: a replay rebuilds state; it must not publish again
+/      what was published before the restart.
+/   4. on_replayed, with publish live again, for what the replay left owed.
+/   5. Timers: the job's, and the configuration audit's.
+/ .
+/ Both runners used to do this themselves, differently (#data-platform
+/ review): torq_stream.q subscribed with replay off and installed the job's
+/ handler after subscribing, so turning replay on would have replayed into
+/ TorQ's default upd; run_stream.q replayed every job before wiring
+/ publish, so a job publishing per batch threw on recovery.
+/ @param job the job's name
+/ @param tr the transport, a dictionary of transport_keys
+/ @return the job name
+/ @throws error when the transport lacks a key, or any step fails
+start:{[job;tr]
+    missing:transport_keys where not transport_keys in key tr;
+    if[count missing; '"start: the transport is missing ",", " sv string missing];
+    d:def job;
+    replay:$[`replay in key d; d`replay; 0b];
+    tbls:subscriptions job;
+    .[{.qetl.log.info[x;y;z]};(job;"starting streaming job";
+        `subscribe_to`publishes`replay`timer!(tbls;d`publishes;replay;
+            $[`period in key d; d`period; 0Nn]));::];
+    tr[`connect][];
+    if[count d`publishes;
+        if[`check_publishable in key tr; tr[`check_publishable] d`publishes];
+        wire[job;tr[`publisher][]]];
+    if[count tbls;
+        live:get pub:` sv (d`ns),`publish;
+        if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b];
+        r:@[{[tr;tbls;h;replay] tr[`subscribe][tbls;h;replay]; (1b;::)}[tr;tbls;guarded[job;d`on_batch]];
+            replay;{[e] (0b;e)}];
+        pub set live;
+        `.qetl.job.stream.replaying set 0b;
+        if[not first r; 'last r];
+        if[`on_replayed in key d; (d`on_replayed)[]]];
+    if[`period in key d; tr[`timer][job;d`period;d`on_timer]];
+    if[count .qetl.cfg.audit.watching job;
+        `.qetl.cfg.audit.owner_here set job;
+        tr[`timer][`$(string job),"_config";.qetl.cfg.audit.period;.qetl.cfg.audit.poll_and_publish]];
+    .[{.qetl.log.info[x;y;z]};(job;"streaming job wired - running";
+        `subscribe_to`publishes!(tbls;d`publishes));::];
+    job}
+
 unwired:{[job]
     {[job;t;x] '"publish: ",string[job]," is not wired - the runner (or a test) must call .qetl.job.stream.wire first"}[job]}
 

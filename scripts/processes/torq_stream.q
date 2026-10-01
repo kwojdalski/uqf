@@ -49,86 +49,49 @@ which_job:{[]
     .qetl.log.info[`qproc;"job chosen by procname";`procname`job!(.proc.procname;job)];
     job}
 
-/ The root `upd` the tickerplant calls, around the job's own on_batch.
+/ The TorQ transport for .qetl.job.stream.start: the tickerplant through
+/ .qtorq, TorQ's own timers, and the plant's table check.
 / .
-/ Counts what arrives (.qtorq.record_received: the first batch per table at
-/ INF, every one at DBG) and logs an on_batch error with its table before
-/ re-raising it, so the error still reaches the caller exactly as before -
-/ and is now also in this process's own log, which is where someone asking
-/ "why is my output empty" looks.
-/ @param t the table the batch is for
-/ @param x the batch
-upd:{[t;x]
-    .qtorq.record_received[t;x];
-    .[.qproc.stream.on_batch;(t;x);{[t;e]
-        .qetl.log.err[.qproc.stream.job;"on_batch failed";`table`error!(t;e)];
-        'e}[t]]}
-
-/ Subscribe, wire the job's publish seam to the tickerplant, install the
-/ root `upd` the tickerplant calls, and start the job's timer if it has one.
-/ .
-/ `upd` and the publish handle are at ROOT by necessity - the tickerplant
-/ calls `upd` by name there (scripts/processes/torq_pipeline.q, invariant 5) - and
-/ everything else stays inside the job's own namespace.
+/ A job that subscribes to nothing (a feed) takes a publish handle and
+/ nothing else: asking connect_etl for a subscriber's setup would register
+/ it for a subscription it never wanted.
 / @param job the job's name
-/ @return the job name
-run:{[job]
-    decl:.qetl.job.stream.def job;
-    `.qproc.stream.job set job;
-    / Before anything that can block, so a process stuck waiting for the
-    / tickerplant has already said what it was about to do.
-    .qetl.log.info[job;"starting streaming job";
-        `subscribe_to`publishes`timer`on_batch!(decl`subscribe_to;decl`publishes;
-            $[`period in key decl; decl`period; 0Nn];`on_batch in key decl)];
-    / A feed subscribes to nothing: it takes a publish handle and nothing
-    / else. Asking subscribe_etl for one would make it wait for a
-    / subscription it never wanted, and then subscribe to an empty list.
-    h:$[count decl`subscribe_to; .qtorq.subscribe_etl[job;decl`subscribe_to]; .qtorq.feed_handle[]];
-    / A job that publishes nothing keeps its unwired stub, so a later edit
-    / that starts publishing without declaring it fails loudly instead of
-    / sending rows nowhere.
-    / .
-    / The declared tables are checked against the plant BEFORE the seam is
-    / wired: a table the tickerplant does not define swallows every row
-    / without an error anywhere, which is how the whole FX positions
-    / service published into nothing (#287). Refusing here costs one round
-    / trip per process start and turns that into a startup failure naming
-    / the table.
-    if[count decl`publishes;
-        .qtorq.assert_publishable[h;decl`publishes];
-        .qetl.job.stream.wire[job;.qtorq.publish[h;;]]];
-    if[`on_batch in key decl;
-        `.qproc.stream.on_batch set decl`on_batch;
-        `upd set .qproc.stream.upd];
-    if[`period in key decl;
-        `.qproc.stream.tick set decl`on_timer;
-        .qtorq.safe_timer[job;decl`period;`.qproc.stream.tick;
-            "Run the ",(string job)," streaming job"]];
-    / A SECOND timer, when the job declares configuration worth auditing.
-    / .
-    / q has no hook on assignment, so the only way to notice that someone
-    / set .qpipe.job.x.notional over IPC is to look and compare (#295). It runs
-    / here rather than in a central process because config lives in each
-    / process's own memory: a poller elsewhere would need a handle per
-    / process - and connections are the scarce resource (#285) - and could
-    / only see what it thought to ask for. In-process costs nothing and
-    / catches a change whatever caused it.
-    / .
-    / It publishes through the job's OWN publish seam, so the table is
-    / declared in the job's .qetl.job.stream.define like any other output and
-    / verify_pipeline_edges needs no exemption.
-    if[count .qetl.cfg.audit.watching job;
-        `.qetl.cfg.audit.owner_here set job;
-        .qtorq.safe_timer[`$(string job),"_config";.qetl.cfg.audit.period;
-            `.qetl.cfg.audit.poll_and_publish;
-            "Audit ",(string job)," configuration changes"]];
-    .qetl.log.info[`qproc;"streaming job wired - running";
-        `job`subscribe_to`publishes!(job;decl`subscribe_to;decl`publishes)];
-    job}
+/ @return the transport dictionary
+transport:{[job]
+    feed:0=count .qetl.job.stream.subscriptions job;
+    `connect`publisher`check_publishable`subscribe`timer!(
+        {[job;feed] `.qproc.stream.h set $[feed; .qtorq.feed_handle[]; .qtorq.connect_etl job];}[job;feed];
+        {[] .qtorq.publish[.qproc.stream.h;;]};
+        {[tbls] .qtorq.assert_publishable[.qproc.stream.h;tbls];};
+        {[job;tbls;handler;replay]
+            / The root `upd` the tickerplant calls, counting what arrives
+            / (.qtorq.record_received) before the job's guarded handler.
+            / Installed BEFORE subscribing: TorQ's replay calls whatever
+            / `upd` is in place when the subscription is made.
+            / .
+            / A REPLAYED batch is not shaped like a live one. Live, the plant
+            / sends a table; its log holds what .u.upd received - a list of
+            / columns, `time` first - and that is what a replay delivers
+            / (measured on stp1's own log). A job written against tables then
+            / threw 'type on the first replayed batch, and TorQ abandoned the
+            / rest of the file. The plant's column names, asked once here,
+            / turn a list of columns back into the table the job expects.
+            names:tbls!{[h;t] h({cols x};t)}[.qproc.stream.h] each tbls;
+            `upd set {[names;h;t;x]
+                x:$[0h=type x; flip (names t)!x; x];
+                .qtorq.record_received[t;x];
+                h[t;x]}[names;handler];
+            .qtorq.subscribe_tables[job;tbls;replay];}[job];
+        {[name;period;f]
+            / .qtorq.safe_timer schedules a function by NAME, so each one
+            / gets a global of its own under .qproc.stream.timers.
+            fn:` sv `.qproc.stream.timers,name;
+            fn set f;
+            .qtorq.safe_timer[name;period;fn;"Run ",(string name)," for its streaming job"];})}
 
 \d .
 
 / Every plant subscriber needs these at ROOT - see .qtorq's own header.
 .qtorq.install_period_handlers[];
 
-.qproc.stream.run .qproc.stream.which_job[];
+{[job] .qetl.job.stream.start[job;.qproc.stream.transport job]} .qproc.stream.which_job[];
