@@ -2347,6 +2347,13 @@
 .man.registerArg (".qmicro.odd_lot_imbalance";"eg";"";".qmicro.odd_lot_imbalance[tape;1e6]");
 
 .man.registerFile ("metatables.q";"";".qmeta";"Declarative metatables for partitioned eFX data. Pure bounded queries and partition replacement; TorQ DQE owns scheduling, transport and persistence. Definitions are trusted q code, not a query language for untrusted clients.");
+.man.registerFunc (".qmeta.prefix";".qmeta";"What every metatable's name starts with, so it reads as derived bookkeeping beside the market data it measures - as etl_ marks the pipeline's own tables (etl_runs, etl_coverage). Fixed, not configurable: every reader would have to resolve it, and changing it would strand the tables already stored.";".qmeta.prefix";"");
+.man.registerFunc (".qmeta.require_name";".qmeta";"Check a metatable's name: a symbol atom of .qmeta.prefix followed by more. Refused rather than prefixed for the caller, so a name is never changed underneath whoever chose it.";".qmeta.require_name";".qmeta.require_name `meta_trade_counts -> `meta_trade_counts");
+.man.registerArg (".qmeta.require_name";"param";"name";"the metatable's name");
+.man.registerArg (".qmeta.require_name";"return";"";"name, unchanged");
+.man.registerArg (".qmeta.require_name";"throws";"";"a name that is not a symbol atom, or does not start with the prefix");
+.man.registerArg (".qmeta.require_name";"eg";"";".qmeta.require_name `meta_trade_counts -> `meta_trade_counts");
+.man.registerArg (".qmeta.require_name";"eg";"";".qmeta.require_name `trade_counts -> throws");
 .man.registerFunc (".qmeta.definition";".qmeta";"Construct a metatable definition; an empty aggregate dictionary means row counts.";".qmeta.definition";".qmeta.definition[`trade;`date;`sym`venue;()!()]");
 .man.registerArg (".qmeta.definition";"param";"tab";"source table name");
 .man.registerArg (".qmeta.definition";"param";"partition_col";"physical or logical partition column");
