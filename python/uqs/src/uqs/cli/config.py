@@ -263,7 +263,7 @@ def logs(
                 return
             stack_multitail.run_multitail(argv)
         elif follow:
-            stack_logs.follow_logs(_paths(), _procs(procs), min_level=level)
+            stack_logs.follow_logs(_paths(), _procs(procs), min_level=level, lines=lines)
         else:
             stack_logs.print_recent_logs(_paths(), _procs(procs), lines=lines, min_level=level)
     except UqsError as exc:

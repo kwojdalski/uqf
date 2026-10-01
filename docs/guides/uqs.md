@@ -641,14 +641,17 @@ to `extras`):
 ```
 uqs logs                          # last 20 lines per process, all processes
 uqs logs stp1 rdb1 -n 50          # last 50 lines each, merged and time-sorted
-uqs logs -f                       # live tail, every process, Ctrl-C to stop
+uqs logs -f                       # the last 20 lines, then live, Ctrl-C to stop
 uqs logs quotesfeed1 -f --level WARNING   # live tail, warnings/errors only
 ```
 
-`-f`/`--follow` spawns one `tail -F` per file (so it follows TorQ's own log
-rolling/restart-aliasing correctly) and merges them through a queue; without
-`-f`, the last `-n`/`--lines` lines of each file are read, parsed, and printed
-sorted by the log's own timestamp - not wall-clock arrival order. `--level`
+Either way the last `-n`/`--lines` lines of each file are read, parsed, and
+printed sorted by the log's own timestamp - not wall-clock arrival order. `-f`/
+`--follow` then keeps going: one follower per file (`uqs.stack.follow`, the one
+`--multitail` panes use), merged through a queue. It follows the
+`out_<procname>.log` alias by name, so when TorQ points it at a new file - every
+restart, and the daily roll - the stream moves with it; the system `tail -F`,
+which this used before, could stay on the old file and go quiet. `--level`
 filters to that level and above (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
 
 `uqs logs --multitail` follows the same files in
