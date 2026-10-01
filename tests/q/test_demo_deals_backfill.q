@@ -36,6 +36,51 @@ setUp_fresh:{[]
 
 tearDown_release:{[] .qpipe.job.demo_deals_backfill.cleanup[];}
 
+/ --- an interrupted run's unfinished HDB partitions -------------
+
+/ A run killed before any finishing, simulated without a kill: the real HDB
+/ writer with its flush and finish removed writes partitions, records
+/ coverage, and finishes nothing - and `touched`, the in-memory list a real
+/ kill would lose, is emptied after it.
+killed_run:{[root]
+    .qetl.io.default:`write`write_keyed`recover#.qetl.io.hdb[root;`deal_time];
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r:.qpipe.job.demo_deals_backfill.run[];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    `.qetl.io.touched set 0#.qetl.io.touched;
+    r}
+
+finished:{[root] .qetl.io.is_finished[root;;`demo_deals] each 2026.09.11 2026.09.12 2026.09.13}
+
+/ The bug: coverage calls the windows done, so the re-run is idle, and an
+/ idle run used to return before finishing anything - leaving the days
+/ unsorted and without p#sym for good.
+test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished:{[t]
+    root:`$":",first system"mktemp -d";
+    saved:.qetl.io.default;
+    r1:killed_run root;
+    before:finished root;
+    .qetl.io.default:.qetl.io.hdb[root;`deal_time];
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    r2:@[.qpipe.job.demo_deals_backfill.run;::;{x}];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    .qetl.io.default:saved;
+    .qunit.assertEquals[(r1`windows_completed;before);(3;000b);"the killed run published three days and finished none"];
+    .qunit.assertEquals[(r2`state;finished root);(`idle;111b);"the re-run had no windows to do, and finished all three"]};
+
+test_a_dry_rerun_repairs_nothing:{[t]
+    root:`$":",first system"mktemp -d";
+    saved:.qetl.io.default;
+    killed_run root;
+    .qetl.io.default:.qetl.io.hdb[root;`deal_time];
+    setenv[`UQF_DRY_RUN;"true"];
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    @[.qpipe.job.demo_deals_backfill.run;::;{x}];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    setenv[`UQF_DRY_RUN;""];
+    .qetl.io.default:saved;
+    .qunit.assertEquals[finished root;000b;"a rehearsal changes nothing on disk, repairs included"]};
+
 / --- initialisation ----------------------------------------
 
 test_init_satisfies_the_contract:{[t]

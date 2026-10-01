@@ -172,6 +172,61 @@ test_hdb_finish_sorts_and_attributes:{[t]
     .qunit.assertEquals[(value p`sym;p`notional;attr p`sym);(`EURUSD`GBPUSD;2e6 1e6;`p);
         "sorted by sym then time, with p#sym, as an HDB partition is expected to be"]};
 
+/ --- recovering what an interrupted run left unfinished ----------------
+
+/ What a killed process leaves: partitions written, and the in-memory list of
+/ what to finish gone with it. Emptying `touched` is that, without the kill.
+forget:{[] `.qetl.io.touched set 0#.qetl.io.touched}
+
+test_a_written_partition_is_unfinished_and_a_finished_one_is_not:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qunit.assertTrue[.qetl.io.is_finished[root;2026.01.02;`iodeals];"no partition at all has nothing to finish"];
+    .qetl.io.write[m;`iodeals;deals[]];
+    .qunit.assertTrue[not .qetl.io.is_finished[root;2026.01.02;`iodeals];"written and not finished"];
+    .qetl.io.finish m;
+    .qunit.assertTrue[.qetl.io.is_finished[root;2026.01.02;`iodeals];"finished: p#sym"]};
+
+test_a_table_without_sym_is_judged_by_its_sorted_time:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iobare;delete sym from deals[]];
+    .qunit.assertTrue[not .qetl.io.is_finished[root;2026.01.02;`iobare];"written, unsorted"];
+    .qetl.io.finish m;
+    .qunit.assertTrue[.qetl.io.is_finished[root;2026.01.02;`iobare];"xasc left s# on time"]};
+
+test_recover_finds_what_a_lost_process_wrote_and_finish_repairs_it:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;deals[]];
+    forget[];
+    .qunit.assertEquals[.qetl.io.finish m;0;"with the list gone, finish alone has nothing to do - the bug"];
+    n:.qetl.io.recover[m;`iodeals;2026.01.01D00:00:00.000000000;2026.01.05D00:00:00.000000000];
+    .qunit.assertEquals[n;2;"both written days are found from the files"];
+    .qetl.io.finish m;
+    p:part[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[(value p`sym;attr p`sym);(`EURUSD`GBPUSD;`p);"sorted and p#sym again"]};
+
+test_recover_looks_only_inside_the_range:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;deals[]];
+    forget[];
+    .qunit.assertEquals[.qetl.io.recover[m;`iodeals;2026.01.03D00:00:00.000000000;2026.01.04D00:00:00.000000000];1;
+        "only the day inside [from;to), and the end is exclusive"]};
+
+test_recover_leaves_finished_partitions_alone:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;deals[]];
+    .qetl.io.finish m;
+    .qunit.assertEquals[.qetl.io.recover[m;`iodeals;2026.01.01D00:00:00.000000000;2026.01.05D00:00:00.000000000];0;
+        "nothing to repair, so nothing is re-sorted"]};
+
+test_a_manager_without_recover_recovers_nothing:{[t]
+    .qunit.assertEquals[.qetl.io.recover[.qetl.io.memory;`iotgt;2026.01.01D00:00:00.000000000;2026.01.05D00:00:00.000000000];0;
+        "memory has nothing that can be left unfinished"]};
+
 test_hdb_finish_fills_a_partition_missing_a_table:{[t]
     / The most recent partition holds both tables, so .Q.chk has a template.
     root:hdb_dir[];
