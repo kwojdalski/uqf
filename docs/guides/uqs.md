@@ -153,6 +153,10 @@ backfill WORKER --version V --from T --to T [--port N] [--debug]
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables. --debug
                                       starts it with -verbose: DBG lines in its log
+clear-checkpoint WORKER               delete a worker's checkpoint, so its next run
+                                      starts at --from. Refused while a run of it may
+                                      be live. Covered windows are still skipped:
+                                      re-fetch those under a new --version
 data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
             [--table T]... [--port N] [--dry-run]
                                       replay a tickerplant log into the HDB. With

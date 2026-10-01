@@ -6,6 +6,10 @@ what is refused here is as much the point as what is built.
 
 from __future__ import annotations
 
+import json
+import os
+import socket
+import subprocess
 from datetime import UTC, datetime
 
 import pytest
@@ -180,5 +184,86 @@ def test_a_refusal_exits_one_rather_than_raising():
         cli.app,
         ["backfill", "nope", "--version", "v1", "--from", "2026-09-13", "--to", "2026-09-15"],
     )
+    assert result.exit_code == 1
+    assert not isinstance(result.exception, UqsError)
+
+
+# --- clear-checkpoint --------------------------------------------------------
+
+WORKER = "demo_deals_backfill"
+
+
+@pytest.fixture
+def status(tmp_path, monkeypatch):
+    """A status directory of this test's own, through the variable q reads."""
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    return tmp_path
+
+
+def _lock(status, owner: dict | None):
+    lock = status / f"{WORKER}.lock"
+    lock.mkdir()
+    if owner is not None:
+        (lock / "owner").write_text(json.dumps(owner))
+
+
+def _dead_pid() -> int:
+    proc = subprocess.Popen(["true"])
+    proc.wait()
+    return proc.pid
+
+
+def test_clearing_deletes_the_checkpoint_and_names_it(status):
+    (status / f"{WORKER}.checkpoint").write_text("{}")
+    path = backfill.clear_checkpoint(stack_paths.default_paths(), WORKER)
+    assert path == status / f"{WORKER}.checkpoint"
+    assert not path.exists()
+
+
+def test_clearing_a_worker_with_no_checkpoint_is_not_an_error(status):
+    assert backfill.clear_checkpoint(stack_paths.default_paths(), WORKER) is None
+
+
+def test_clearing_an_unknown_worker_is_refused(status):
+    with pytest.raises(UqsError, match="known workers"):
+        backfill.clear_checkpoint(stack_paths.default_paths(), "nope")
+
+
+@pytest.mark.parametrize(
+    "owner",
+    [
+        pytest.param({"pid": os.getpid(), "host": socket.gethostname()}, id="running-here"),
+        pytest.param({"pid": 1, "host": "some-other-box"}, id="another-host"),
+        pytest.param({"started": "2026.10.01D00:00"}, id="no-pid-or-host"),
+        pytest.param(None, id="mid-acquire-no-owner-file"),
+    ],
+)
+def test_a_lock_that_may_be_live_keeps_the_checkpoint(status, owner):
+    """The same rule as lock_is_stale: whatever cannot be proved dead is live."""
+    (status / f"{WORKER}.checkpoint").write_text("{}")
+    _lock(status, owner)
+    with pytest.raises(UqsError, match="may still be running"):
+        backfill.clear_checkpoint(stack_paths.default_paths(), WORKER)
+    assert (status / f"{WORKER}.checkpoint").exists()
+
+
+def test_a_lock_left_by_an_exited_run_does_not_block_clearing(status):
+    (status / f"{WORKER}.checkpoint").write_text("{}")
+    _lock(status, {"pid": _dead_pid(), "host": socket.gethostname()})
+    assert backfill.clear_checkpoint(stack_paths.default_paths(), WORKER) is not None
+
+
+def test_clear_checkpoint_command_reports_what_it_did(status):
+    (status / f"{WORKER}.checkpoint").write_text("{}")
+    result = runner.invoke(cli.app, ["clear-checkpoint", WORKER])
+    assert result.exit_code == 0, result.output
+    assert "cleared demo_deals_backfill's checkpoint" in result.output
+    again = runner.invoke(cli.app, ["clear-checkpoint", WORKER])
+    assert "has no checkpoint" in again.output
+
+
+def test_clear_checkpoint_refusal_exits_one(status):
+    _lock(status, {"pid": os.getpid(), "host": socket.gethostname()})
+    result = runner.invoke(cli.app, ["clear-checkpoint", WORKER])
     assert result.exit_code == 1
     assert not isinstance(result.exception, UqsError)
