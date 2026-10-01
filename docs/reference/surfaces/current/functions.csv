@@ -604,10 +604,13 @@ qlimit,scope_cols,function,1,limits
 qlimit,throttle,function,4,state breaches now period
 qlimit,unmatched_limits,function,2,measured limits
 qmeta,collect,function,2,spec partitions
-qmeta,collect_partition,function,3,spec part observed_at
+qmeta,collect_partition,function,4,spec part observed_at definition_id
 qmeta,count_bad,function,2,violations row_count
 qmeta,definition,function,4,tab partition_col group_cols aggregates
+qmeta,fingerprint,function,1,spec
 qmeta,profile,function,3,time_cols null_cols rules
+qmeta,reconcile,function,5,metatable dates ds part version
+qmeta,reconcile_date,function,3,claims observed day
 qmeta,refresh,function,3,current spec partitions
 qmeta,require_request,function,2,spec partitions
 qmeta,time_bound,function,2,direction values
