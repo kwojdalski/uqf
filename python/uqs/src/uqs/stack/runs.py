@@ -11,7 +11,8 @@ checkpoints, because bounded workers exit when their range is done. So this
 does not ask a running process: it starts a short-lived q that loads the few
 files the ledger needs - the same subset `tests/q/read_runs.q` proves is
 sufficient - attaches to the directory, asks one question and prints JSON.
-Nothing here writes to the ledger.
+Nothing here writes to the ledger except `migrate`, the one-off that upgrades
+a ledger written before etl_runs gained each run's range and counts.
 """
 
 from __future__ import annotations
@@ -40,6 +41,12 @@ _LOADS = (
 _GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
+#: Printed for the reader instead of the table itself: every integer column as
+#: a float. A run that never finished has null counts, and a float null is
+#: what `.j.j` writes as JSON null. `tbl`, not `t`: `meta`'s own type column
+#: is `t`, and a parameter of that name would shadow it inside the where.
+_FOR_JSON = '{[tbl] ints:exec c from meta tbl where t in "hij"; @[tbl;ints;"f"$]}'
+
 
 def status_dir(paths: UqsPaths, env: dict[str, str] | None = None) -> Path:
     """Where the fleet's processes keep the ledger: `$UQF_STATUS_DIR`, else
@@ -54,7 +61,9 @@ def _q_timestamp(moment: datetime) -> str:
     return moment.strftime("%Y.%m.%dD%H:%M:%S.%f")
 
 
-def query(paths: UqsPaths, expr: str, *, directory: Path | None = None) -> list[dict]:
+def query(
+    paths: UqsPaths, expr: str, *, directory: Path | None = None, attach: bool = True
+) -> list[dict]:
     """The rows q expression `expr` returns, evaluated against the ledger.
 
     `expr` is built by this module's own functions from validated parts,
@@ -68,8 +77,16 @@ def query(paths: UqsPaths, expr: str, *, directory: Path | None = None) -> list[
     where = directory or status_dir(paths)
     if not where.is_dir():
         raise UqsError(f"no status directory at {where} - no bounded worker has run here yet")
+    # `attach` validates the ledger's shape, which is exactly what `migrate`
+    # must not do first - it exists to fix a shape attach refuses.
     script = "\n".join(
-        [*(f"\\l {f}" for f in _LOADS), ".qetl.run.attach[];", f"-1 .j.j 0!{expr};", "exit 0", ""]
+        [
+            *(f"\\l {f}" for f in _LOADS),
+            *([".qetl.run.attach[];"] if attach else []),
+            f"-1 .j.j {_FOR_JSON} 0!{expr};",
+            "exit 0",
+            "",
+        ]
     )
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "runs.q"
@@ -90,6 +107,13 @@ def query(paths: UqsPaths, expr: str, *, directory: Path | None = None) -> list[
             f"reading the run ledger failed:\n{(result.stdout + result.stderr).strip()[-1500:]}"
         )
     return json.loads(lines[-1])
+
+
+def migrate(paths: UqsPaths, **kw) -> int:
+    """Upgrade a ledger written before etl_runs recorded each run's range and
+    counts, returning how many rows were upgraded - 0 when it was current."""
+    rows = query(paths, "([] upgraded:enlist .qetl.run.migrate[])", attach=False, **kw)
+    return int(rows[0]["upgraded"])
 
 
 def unfinished(paths: UqsPaths, **kw) -> list[dict]:

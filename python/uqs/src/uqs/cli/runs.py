@@ -24,8 +24,32 @@ run_app = typer.Typer(
 )
 app.add_typer(run_app, name="run")
 
-_RUN_COLUMNS = ("run_id", "worker", "process", "host", "status", "started_at", "ended_at")
+_RUN_COLUMNS = (
+    "run_id",
+    "worker",
+    "dataset",
+    "status",
+    "range_from",
+    "range_to",
+    "width",
+    "windows_planned",
+    "windows_completed",
+    "windows_failed",
+    "rows_published",
+    "started_at",
+    "ended_at",
+)
 _FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
+
+
+def _cell(value: object) -> str:
+    """A ledger value for display: counts arrive as floats (see stack/runs.py),
+    and a null - a run that never finished has no counts - as blank."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
 
 
 def _print(title: str, rows: list[dict], columns: tuple[str, ...], empty: str) -> None:
@@ -40,7 +64,7 @@ def _print(title: str, rows: list[dict], columns: tuple[str, ...], empty: str) -
         else:
             table.add_column(col)
     for row in rows:
-        table.add_row(*(str(row.get(col, "")) for col in columns))
+        table.add_row(*(_cell(row.get(col)) for col in columns))
     console.print(table)
 
 
@@ -68,6 +92,25 @@ def list_runs() -> None:
         _die(exc)
         return
     _print("runs", rows, _RUN_COLUMNS, "no runs recorded")
+
+
+@run_app.command("migrate")
+def migrate() -> None:
+    """Upgrade a run ledger written before it recorded each run's range and counts.
+
+    Run once, when a backfill refuses to start with "etl_runs predates the
+    run's range and counts". Earlier runs keep blanks in the new columns: what
+    they were asked to do was never recorded.
+    """
+    try:
+        upgraded = stack_runs.migrate(_paths())
+    except UqsError as exc:
+        _die(exc)
+        return
+    if upgraded:
+        console.print(f"upgraded {upgraded} run(s) - the ledger is current", markup=False)
+    else:
+        console.print("the run ledger is already current - nothing to do", markup=False)
 
 
 @run_app.command("show")

@@ -41,12 +41,12 @@
 / from a test, or a repair by hand) and saying so is better than inventing an
 / identity for it.
 / .
-/ THE TABLES ARE APPEND-ONLY, EXCEPT ONE FIELD
+/ THE TABLES ARE APPEND-ONLY, EXCEPT ONE ROW'S OUTCOME
 / .
-/ `finish` updates the row `begin` wrote - ended_at and status - because a
-/ run's outcome is not known when it starts, and appending a second row would
-/ make "how many runs were there" ambiguous. That is the only mutation here.
-/ Nothing ever deletes.
+/ `finish` updates the row `begin` wrote - ended_at, status and the run's
+/ counts - because a run's outcome is not known when it starts, and appending
+/ a second row would make "how many runs were there" ambiguous. That, and the
+/ one-off `migrate`, are the only mutations here. Nothing ever deletes.
 
 \d .qetl.run
 
@@ -55,7 +55,22 @@
 / The run ledger's columns, in order. One constant in one place: changing the
 / shape is an edit here plus the writer's column list plus require_run_schema,
 / not a hunt through the file. Same discipline as .qetl.coverage.schema.
-run_schema:`run_id`worker`process`host`pid`started_at`ended_at`status
+run_schema:`run_id`worker`process`host`pid`started_at`ended_at`status,
+    `dataset`source_version`range_from`range_to`width,
+    `windows_planned`windows_completed`windows_failed`rows_published
+
+/ WHAT A RUN WAS ASKED TO DO, AND WHAT IT DID. The second and third lines
+/ above, the same for every bounded worker so one table answers "every
+/ backfill, its range, its window width, how it went" without reading each
+/ worker's own log. The request - dataset, source_version, the range and the
+/ window width - is written by `begin`, so an interrupted run still says what
+/ it was doing. The counts are written by `finish`: windows planned,
+/ completed and failed, and rows published. A run that never finished keeps
+/ nulls there, next to `running`.
+
+/ The shape before those columns. Kept only so require_run_schema can tell an
+/ old ledger from a foreign one and name the command that upgrades it.
+previous_schema:`run_id`worker`process`host`pid`started_at`ended_at`status
 
 / The metadata table's columns, in order.
 / .
@@ -99,7 +114,10 @@ init_runs:{[]
     if[not `etl_runs in tables `.;
         `etl_runs set ([] run_id:`guid$(); worker:`symbol$(); process:`symbol$();
             host:`symbol$(); pid:`int$(); started_at:`timestamp$();
-            ended_at:`timestamp$(); status:`symbol$())];
+            ended_at:`timestamp$(); status:`symbol$();
+            dataset:`symbol$(); source_version:`symbol$(); range_from:`timestamp$();
+            range_to:`timestamp$(); width:`timespan$(); windows_planned:`long$();
+            windows_completed:`long$(); windows_failed:`long$(); rows_published:`long$())];
     `etl_runs}
 
 / Create the materialisation metadata table if absent.
@@ -139,6 +157,8 @@ require_run_schema:{[]
     live:exec c from 0!meta value `etl_runs;
     absent:run_schema where not run_schema in live;
     extra:live where not live in run_schema;
+    if[(asc live)~asc previous_schema;
+        '"require_run_schema: etl_runs predates the run's range and counts - run `uqs run migrate` once"];
     if[count absent;
         '"require_run_schema: etl_runs is missing ",(", " sv string absent),
          " - built to a different shape, and reads here would return nulls"];
@@ -290,16 +310,48 @@ mint:{[]
 / same wrapping .qetl.job.bounded.runtime does for .servers.SERVERS.
 proc_name:{[] @[value;`.proc.procname;`]}
 
+/ Private: d's value at k, or `fallback` when d has no k. Presence by `in key`
+/ rather than by indexing, because what a dictionary returns for an absent key
+/ depends on its value list's prototype.
+given:{[d;k;fallback] $[k in key d; d k; fallback]}
+
+/ Upgrade a run ledger written before the range and counts columns.
+/ .
+/ The one-off a refusing require_run_schema names, as `uqs run migrate`. Old
+/ rows get nulls in the new columns - what they were asked to do was never
+/ recorded, and inventing it would be worse than saying so. Run once: a
+/ ledger already at the current shape is left alone.
+/ @return how many rows were upgraded, 0 when there was nothing to do
+/ @throws error when the ledger is neither the old shape nor the current one
+/ @eg .qetl.run.migrate[]
+migrate:{[]
+    path:hsym `$table_path `etl_runs;
+    if[()~key path; :0];
+    under_lock[{[path]
+        t:get path;
+        c:cols t;
+        if[(asc c)~asc run_schema; :0];
+        if[not (asc c)~asc previous_schema;
+            '"migrate: etl_runs is neither the old shape nor the current one - not ours to rewrite"];
+        t:update dataset:`, source_version:`, range_from:0Np, range_to:0Np, width:0Nn,
+            windows_planned:0N, windows_completed:0N, windows_failed:0N, rows_published:0N from t;
+        path set run_schema xcols t;
+        count t};
+        enlist path]}
+
 / Begin a run, and make it current.
 / .
 / The row is written at once rather than at `finish`, so a run that dies
 / mid-flight still leaves one. A ledger that recorded only runs that finished
 / would be blind to exactly the executions a reader most wants to find.
 / @param worker the worker this run executes, e.g. `demo_deals_backfill
+/ @param spec what it was asked to do: any of dataset, source_version,
+/   range_from, range_to and width. Absent keys are recorded as nulls, so a
+/   run that is not a windowed backfill still gets a row.
 / @return the new run id
 / @throws error when a run is already in flight in this process
-/ @eg .qetl.run.begin[`demo_deals_backfill]
-begin:{[worker]
+/ @eg .qetl.run.begin[`demo_deals_backfill;`dataset`range_from`range_to`width!(`demo_deals;2026.09.13D00:00;2026.09.15D00:00;1D)]
+begin:{[worker;spec]
     if[is_running[];
         '"begin: a run is already in flight in this process - finish or release it first"];
     init_runs[];
@@ -311,7 +363,10 @@ begin:{[worker]
         reload[];
         `etl_runs insert row;
         persist[]};
-        enlist (id;worker;proc_name[];.z.h;.z.i;.z.p;not_ended;in_flight)];
+        enlist (id;worker;proc_name[];.z.h;.z.i;.z.p;not_ended;in_flight;
+            `symbol$given[spec;`dataset;`];`symbol$given[spec;`source_version;`];
+            `timestamp$given[spec;`range_from;0Np];`timestamp$given[spec;`range_to;0Np];
+            `timespan$given[spec;`width;0Nn];0N;0N;0N;0N)];
     current_run::id;
     id}
 
@@ -320,10 +375,12 @@ begin:{[worker]
 / Updates the row `begin` wrote rather than appending a second one, so "how
 / many runs were there" has one answer. This is the only mutation in the file.
 / @param status the outcome, e.g. `completed or `failed
+/ @param counts what it did: any of windows_planned, windows_completed,
+/   windows_failed and rows_published. Absent keys are recorded as nulls.
 / @return the run id that was closed
 / @throws error when no run is in flight
-/ @eg .qetl.run.finish[`completed]
-finish:{[status]
+/ @eg .qetl.run.finish[`completed;`windows_planned`windows_completed`windows_failed`rows_published!3 3 0 42]
+finish:{[status;counts]
     id:require_current[];
     init_runs[];
     / The inner lambda's parameters are named `target` and `outcome` rather
@@ -331,11 +388,14 @@ finish:{[status]
     / to the run_id column and a bare `status` to the status column, each
     / comparing a column to itself and matching every row. Same trap
     / .qetl.coverage.valid_at documents.
-    under_lock[{[target;outcome]
+    n:{[counts;k] "j"$given[counts;k;0N]}[counts] each `windows_planned`windows_completed`windows_failed`rows_published;
+    under_lock[{[target;outcome;n]
         reload[];
-        `etl_runs set update ended_at:.z.p, status:outcome from runs[] where run_id=target;
+        `etl_runs set update ended_at:.z.p, status:outcome, windows_planned:n 0,
+            windows_completed:n 1, windows_failed:n 2, rows_published:n 3
+            from runs[] where run_id=target;
         persist[]};
-        (id;status)];
+        (id;status;n)];
     current_run::0Ng;
     id}
 

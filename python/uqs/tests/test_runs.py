@@ -30,13 +30,15 @@ _WRITE = """
 \\l src/etl/core/status.q
 .qetl.run.attach[];
 w:(2026.09.13D00:00;2026.09.14D00:00);
-.qetl.run.begin[`deals_a];
+s:`dataset`source_version`range_from`range_to`width!(`demo_deals;`v1;w 0;w 1;1D);
+.qetl.run.begin[`deals_a;s];
 .qetl.run.record[`demo_deals;w 0;w 1;`rows`source_version!(5;`v1)];
-.qetl.run.finish[`completed];
-.qetl.run.begin[`deals_b];
+n:`windows_planned`windows_completed`windows_failed`rows_published!1 1 0 5;
+.qetl.run.finish[`completed;n];
+.qetl.run.begin[`deals_b;()!()];
 .qetl.run.record[`demo_deals;w 0;w 1;`rows`source_version!(4;`v2)];
-.qetl.run.finish[`completed];
-.qetl.run.begin[`interrupted_worker];
+.qetl.run.finish[`completed;()!()];
+.qetl.run.begin[`interrupted_worker;()!()];
 exit 0
 """
 
@@ -112,6 +114,58 @@ def test_audit_of_a_window_nothing_published_is_empty(ledger, paths):
         directory=ledger,
     )
     assert rows == []
+
+
+def test_a_run_records_what_it_was_asked_and_what_it_did(ledger, paths):
+    row = next(r for r in runs.history(paths, directory=ledger) if r["worker"] == "deals_a")
+    assert (row["dataset"], row["source_version"]) == ("demo_deals", "v1")
+    assert row["range_from"].startswith("2026-09-13") and row["range_to"].startswith("2026-09-14")
+    counts = [row[c] for c in ("windows_planned", "windows_completed", "windows_failed")]
+    assert counts == [1, 1, 0]
+    assert row["rows_published"] == 5
+
+
+def test_a_run_that_never_finished_has_no_counts(ledger, paths):
+    (row,) = runs.unfinished(paths, directory=ledger)
+    assert row["windows_completed"] is None and row["rows_published"] is None
+
+
+_OLD_LEDGER = """
+\\l src/init.q
+\\l src/etl/core/backfill_state.q
+\\l src/etl/core/materialisation.q
+\\l src/etl/core/run.q
+\\l src/etl/core/status.q
+(hsym `$.qetl.run.table_path `etl_runs) set ([] run_id:enlist 0Ng; worker:enlist `old_worker;
+    process:enlist `p; host:enlist `h; pid:enlist 1i; started_at:enlist .z.p;
+    ended_at:enlist .z.p; status:enlist `completed);
+exit 0
+"""
+
+
+def test_migrate_upgrades_a_ledger_from_before_the_range_and_counts(tmp_path, paths):
+    q = q_interpreter(os.environ)
+    if q is None:
+        pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
+    script = tmp_path / "old.q"
+    script.write_text(_OLD_LEDGER)
+    result = subprocess.run(
+        [str(q), str(script), "-q"],
+        cwd=UQF_ROOT,
+        env={**os.environ, "UQF_STATUS_DIR": str(tmp_path)},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    with pytest.raises(UqsError, match="uqs run migrate"):
+        runs.history(paths, directory=tmp_path)
+    assert runs.migrate(paths, directory=tmp_path) == 1
+    (row,) = runs.history(paths, directory=tmp_path)
+    assert (row["worker"], row["dataset"], row["windows_completed"]) == ("old_worker", "", None)
+    assert runs.migrate(paths, directory=tmp_path) == 0, "a second migrate has nothing to do"
 
 
 @pytest.mark.parametrize(

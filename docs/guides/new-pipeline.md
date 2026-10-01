@@ -523,11 +523,20 @@ back. No stack needs to be up, because the worker has exited by then:
 
 ```bash
 uqs run status                     # runs that began and never finished - interrupted ones
-uqs run list                       # every run, newest first, with the run ids
+uqs run list                       # every run, newest first: its range, window width and counts
 uqs run show RUN_ID                # one run, and what it recorded about each window
 uqs run audit fx_rates --from 2026-09-11 --to 2026-09-12
                                    # one window's facts from every run that published it
 ```
+
+Every run's row in `etl_runs` has the same columns whichever worker ran it. What
+it was asked to do is written when it starts: `dataset`, `source_version`,
+`range_from`, `range_to` and the window `width`. What it did is written when it
+ends: `windows_planned`, `windows_completed`, `windows_failed` and
+`rows_published`. A run that never finished keeps `running` and blank counts. A
+ledger written before these columns existed stops the next backfill with
+`etl_runs predates the run's range and counts`; run `uqs run migrate` once, and
+earlier runs keep blanks where nothing was recorded.
 
 `audit` is the question run identity exists to answer: whether two
 materialisations of the same window agree. It reads `$UQF_STATUS_DIR`, or

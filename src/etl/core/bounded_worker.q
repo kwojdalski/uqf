@@ -643,7 +643,7 @@ run_body:{[worker]
         .qetl.log.info[worker;"idle - every window in the range is already covered at this source_version";
             `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
         .qetl.hb.beat[worker;`idle];
-        end_run[`idle];
+        end_run[`idle;run_counts[0;0;0;0]];
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
     / The run's OWN cursor starts null, not at the loaded checkpoint. The
@@ -677,7 +677,7 @@ run_body:{[worker]
     / stuck mid-window, which is the case a status file cannot show - it
     / says `running` and keeps saying it.
     .qetl.hb.beat[worker;result`state];
-    end_run[result`state];
+    end_run[result`state;run_counts[count windows;p`windows_completed;p`windows_failed;p`rows_published]];
     / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
     / The release used to live on this line, which made it the happy path's
@@ -724,14 +724,29 @@ exit_code:{[state] $[state in `completed`idle; 0i; 1i]}
 / dependency of this file, and a worker loaded by one of the minimal test
 / loaders should still run. Attribution is an addition to what a run records,
 / never a precondition for running one.
-begin_run:{[worker] @[{.qetl.run.begin x};worker;{[e] (::)}]}
+/ .
+/ It records what the run was asked to do - dataset, source_version, range
+/ and window width - the same columns for every worker, so etl_runs reads as
+/ one table of every backfill.
+begin_run:{[worker]
+    @[{[w] cfg:def w; s:spec w;
+        .qetl.run.begin[w;`dataset`source_version`range_from`range_to`width!
+            (cfg`dataset;s`source_version;s`range_from;s`range_to;cfg`width)]};
+      worker;{[e] (::)}]}
 
 / Private: close this execution's run with its outcome.
 / .
 / The run's state is the worker's own result state - `completed, `partial or
 / `idle - rather than a separate vocabulary, so a reader of etl_runs and a
 / reader of the worker's log see the same word for the same outcome.
-end_run:{[state] @[{.qetl.run.finish x};state;{[e] (::)}]}
+/ .
+/ With the run's counts: windows planned, completed and failed, and rows
+/ published.
+end_run:{[state;counts] .[{.qetl.run.finish[x;y]};(state;counts);{[e] (::)}]}
+
+/ Private: a run's counts, as end_run records them.
+run_counts:{[planned;completed;failed;rows]
+    `windows_planned`windows_completed`windows_failed`rows_published!(planned;completed;failed;rows)}
 
 / Private: one window, end to end. Accumulates into the worker's own
 / `progress` rather than returning, because a q lambda does not close over an

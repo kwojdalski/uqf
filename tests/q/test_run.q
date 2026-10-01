@@ -76,15 +76,15 @@ test_require_current_refuses_outside_a_run:{[t]
     .qunit.assertError[{[x] .qetl.run.require_current[]};::;"no run in flight"]};
 
 test_begin_makes_a_run_current:{[t]
-    id:.qetl.run.begin[`w1];
+    id:.qetl.run.begin[`w1;()!()];
     .qunit.assertEquals[.qetl.run.current[];id;"begin returns the id it made current"]};
 
 test_a_second_begin_is_refused:{[t]
-    .qetl.run.begin[`w1];
-    .qunit.assertError[{[x] .qetl.run.begin[`w2]};::;"already in flight"]};
+    .qetl.run.begin[`w1;()!()];
+    .qunit.assertError[{[x] .qetl.run.begin[`w2;()!()]};::;"already in flight"]};
 
 test_release_clears_without_recording_an_outcome:{[t]
-    id:.qetl.run.begin[`w1];
+    id:.qetl.run.begin[`w1;()!()];
     .qetl.run.release[];
     .qunit.assertEquals[(.qetl.run.is_running[];first exec status from .qetl.run.of_run[id]);
         (0b;`running);"release clears process state but leaves the run reading running"]};
@@ -92,47 +92,47 @@ test_release_clears_without_recording_an_outcome:{[t]
 / --- lifecycle --------------------------------------------------------------
 
 test_a_begun_run_is_recorded_immediately:{[t]
-    id:.qetl.run.begin[`w1];
+    id:.qetl.run.begin[`w1;()!()];
     / Recorded at begin, not at finish: a ledger holding only runs that
     / finished would be blind to the executions a reader most wants to find.
     .qunit.assertEquals[count .qetl.run.of_run[id];1;"the row exists before the run ends"]};
 
 test_a_begun_run_is_unfinished:{[t]
-    .qetl.run.begin[`w1];
+    .qetl.run.begin[`w1;()!()];
     .qunit.assertEquals[count .qetl.run.unfinished[];1;"a run in flight reports as unfinished"]};
 
 test_finish_records_the_outcome_and_closes_the_run:{[t]
-    id:.qetl.run.begin[`w1];
-    .qetl.run.finish[`completed];
+    id:.qetl.run.begin[`w1;()!()];
+    .qetl.run.finish[`completed;()!()];
     r:first .qetl.run.of_run[id];
     .qunit.assertEquals[(r`status;r[`ended_at]<0Wp;.qetl.run.is_running[]);
         (`completed;1b;0b);"finish sets status and ended_at, and clears the current run"]};
 
 test_finish_updates_rather_than_appends:{[t]
-    id:.qetl.run.begin[`w1];
-    .qetl.run.finish[`completed];
+    id:.qetl.run.begin[`w1;()!()];
+    .qetl.run.finish[`completed;()!()];
     / One execution is one row. A second row would make "how many runs were
     / there" ambiguous, and every count over this ledger wrong by the number
     / of runs that finished.
     .qunit.assertEquals[count .qetl.run.of_run[id];1;"finishing a run does not append a second row"]};
 
 test_finish_only_touches_its_own_run:{[t]
-    a:.qetl.run.begin[`w1];
-    .qetl.run.finish[`completed];
-    b:.qetl.run.begin[`w2];
-    .qetl.run.finish[`failed];
+    a:.qetl.run.begin[`w1;()!()];
+    .qetl.run.finish[`completed;()!()];
+    b:.qetl.run.begin[`w2;()!()];
+    .qetl.run.finish[`failed;()!()];
     .qunit.assertEquals[(first exec status from .qetl.run.of_run[a];
                          first exec status from .qetl.run.of_run[b]);
         (`completed;`failed);"each run keeps its own outcome"]};
 
 test_finish_refuses_outside_a_run:{[t]
-    .qunit.assertError[{[x] .qetl.run.finish[`completed]};::;"no run in flight"]};
+    .qunit.assertError[{[x] .qetl.run.finish[`completed;()!()]};::;"no run in flight"]};
 
 test_an_interrupted_run_stays_running:{[t]
     / The state a crashed process leaves behind, and the one a reader needs
     / to be able to find. Nothing here can detect a crash, so `running` on a
     / run whose process is gone IS the signal.
-    id:.qetl.run.begin[`w1];
+    id:.qetl.run.begin[`w1;()!()];
     .qetl.run.release[];
     .qunit.assertEquals[(first exec status from .qetl.run.of_run[id];count .qetl.run.unfinished[]);
         (`running;1);"an abandoned run remains visible as unfinished"]};
@@ -140,7 +140,7 @@ test_an_interrupted_run_stays_running:{[t]
 / --- metadata ---------------------------------------------------------------
 
 test_record_stores_one_row_per_fact:{[t]
-    .qetl.run.begin[`w1];
+    .qetl.run.begin[`w1;()!()];
     n:.qetl.run.record[`ds1;.runtest.d 1;.runtest.d 2;`rows`note!(5;"ok")];
     .qunit.assertEquals[(n;count .qetl.run.facts_of[.qetl.run.current[]]);(2;2);"two facts become two rows"]};
 
@@ -149,19 +149,19 @@ test_record_refuses_outside_a_run:{[t]
         ::;"no run in flight"]};
 
 test_record_refuses_a_non_dictionary:{[t]
-    .qetl.run.begin[`w1];
+    .qetl.run.begin[`w1;()!()];
     .qunit.assertError[{[x] .qetl.run.record[`ds1;.runtest.d 1;.runtest.d 2;x]};
         ([] a:1 2);"facts must be a dictionary"]};
 
 test_record_refuses_an_empty_interval:{[t]
     / Metadata is keyed by the window, so a window that covers nothing is as
     / meaningless here as it is in the coverage ledger.
-    .qetl.run.begin[`w1];
+    .qetl.run.begin[`w1;()!()];
     .qunit.assertError[{[x] .qetl.run.record[`ds1;x;x;(enlist `a)!enlist 1]};
         .runtest.d 1;"a zero-width window"]};
 
 test_values_of_every_type_round_trip_as_text:{[t]
-    .qetl.run.begin[`w1];
+    .qetl.run.begin[`w1;()!()];
     .qetl.run.record[`ds1;.runtest.d 1;.runtest.d 2;
         `s`str`n`b!(`v1;"hello";42;0b)];
     got:exec label!text from .qetl.run.facts_of[.qetl.run.current[]];
@@ -171,12 +171,12 @@ test_values_of_every_type_round_trip_as_text:{[t]
 test_facts_about_spans_runs:{[t]
     / The cross-run comparison run identity was added to make askable: one
     / window materialised twice, both sets of facts side by side.
-    .qetl.run.begin[`w1];
+    .qetl.run.begin[`w1;()!()];
     .qetl.run.record[`ds1;.runtest.d 1;.runtest.d 2;(enlist `rows)!enlist 5];
-    .qetl.run.finish[`completed];
-    .qetl.run.begin[`w1];
+    .qetl.run.finish[`completed;()!()];
+    .qetl.run.begin[`w1;()!()];
     .qetl.run.record[`ds1;.runtest.d 1;.runtest.d 2;(enlist `rows)!enlist 9];
-    .qetl.run.finish[`completed];
+    .qetl.run.finish[`completed;()!()];
     / `enlist each "59"`, not `(,"5";,"9")`: a `,` opening a parenthesised
     / list item does not parse in q - it reads as a join with nothing on its
     / left. Each value here is a ONE-CHARACTER STRING, and ("5";"9") would be
@@ -185,10 +185,10 @@ test_facts_about_spans_runs:{[t]
         enlist each "59";"both runs' facts about one window are visible together"]};
 
 test_facts_of_isolates_one_run:{[t]
-    a:.qetl.run.begin[`w1];
+    a:.qetl.run.begin[`w1;()!()];
     .qetl.run.record[`ds1;.runtest.d 1;.runtest.d 2;(enlist `rows)!enlist 5];
-    .qetl.run.finish[`completed];
-    .qetl.run.begin[`w1];
+    .qetl.run.finish[`completed;()!()];
+    .qetl.run.begin[`w1;()!()];
     .qetl.run.record[`ds1;.runtest.d 1;.runtest.d 2;(enlist `rows)!enlist 9];
     .qunit.assertEquals[exec text from .qetl.run.facts_of[a];enlist enlist "5";
         "one run's facts exclude another's"]};
@@ -196,7 +196,7 @@ test_facts_of_isolates_one_run:{[t]
 / --- attribution on the coverage ledger -------------------------------------
 
 test_coverage_carries_the_current_run:{[t]
-    id:.qetl.run.begin[`w1];
+    id:.qetl.run.begin[`w1;()!()];
     .qetl.coverage.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
     .qunit.assertEquals[first exec run_id from .qetl.coverage.ledger[];id;
         "a materialisation is stamped with the run that produced it"]};
@@ -210,11 +210,11 @@ test_coverage_outside_a_run_records_a_null_run:{[t]
         "coverage staged outside a run is recorded as unattributed"]};
 
 test_materialisations_of_groups_one_execution:{[t]
-    id:.qetl.run.begin[`w1];
+    id:.qetl.run.begin[`w1;()!()];
     .qetl.coverage.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
     .qetl.coverage.stage_completion[`ds2;`;`v1;.runtest.d 1;.runtest.d 2;20];
-    .qetl.run.finish[`completed];
-    .qetl.run.begin[`w2];
+    .qetl.run.finish[`completed;()!()];
+    .qetl.run.begin[`w2;()!()];
     .qetl.coverage.stage_completion[`ds3;`;`v1;.runtest.d 1;.runtest.d 2;30];
     .qunit.assertEquals[asc exec dataset from .qetl.coverage.materialisations_of[id];
         `s#`ds1`ds2;"one run's materialisations exclude a later run's"]};
@@ -223,30 +223,30 @@ test_materialisations_of_includes_superseded_rows:{[t]
     / What a run produced does not change when a later run restates it.
     / Hiding withdrawn rows would make a fully-restated run look like a run
     / that did nothing.
-    id:.qetl.run.begin[`w1];
+    id:.qetl.run.begin[`w1;()!()];
     .qetl.coverage.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
-    .qetl.run.finish[`completed];
+    .qetl.run.finish[`completed;()!()];
     .qetl.coverage.supersede[`ds1;`;`v1;.runtest.d 1;.runtest.d 2];
     .qunit.assertEquals[count .qetl.coverage.materialisations_of[id];1;
         "a superseded materialisation is still something that run produced"]};
 
 test_contributing_runs_lists_every_execution_behind_a_dataset:{[t]
-    a:.qetl.run.begin[`w1];
+    a:.qetl.run.begin[`w1;()!()];
     .qetl.coverage.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
-    .qetl.run.finish[`completed];
-    b:.qetl.run.begin[`w1];
+    .qetl.run.finish[`completed;()!()];
+    b:.qetl.run.begin[`w1;()!()];
     .qetl.coverage.stage_completion[`ds1;`;`v1;.runtest.d 2;.runtest.d 3;10];
-    .qetl.run.finish[`completed];
+    .qetl.run.finish[`completed;()!()];
     .qunit.assertEquals[.qetl.coverage.contributing_runs[`ds1;`;`v1];(a;b);
         "a backfill run in slices shows every run that contributed, in order"]};
 
 test_contributing_runs_is_version_specific:{[t]
     / Same reasoning as no-merging-across-versions everywhere else in the ledger: attribution
     / under one release says nothing about another.
-    .qetl.run.begin[`w1];
+    .qetl.run.begin[`w1;()!()];
     .qetl.coverage.stage_completion[`ds1;`;`v1;.runtest.d 1;.runtest.d 2;10];
-    .qetl.run.finish[`completed];
-    b:.qetl.run.begin[`w1];
+    .qetl.run.finish[`completed;()!()];
+    b:.qetl.run.begin[`w1;()!()];
     .qetl.coverage.stage_completion[`ds1;`;`v2;.runtest.d 1;.runtest.d 2;10];
     .qunit.assertEquals[.qetl.coverage.contributing_runs[`ds1;`;`v2];enlist b;
         "runs under v1 do not appear in v2's attribution"]};
@@ -266,5 +266,60 @@ test_require_run_schema_rejects_a_foreign_table:{[t]
     / different shape, whose reads here would silently return nulls.
     `etl_runs set ([] run_id:`guid$(); worker:`symbol$());
     .qunit.assertError[{[x] .qetl.run.require_run_schema[]};::;"is missing"]};
+
+/ --- what a run was asked to do, and what it did ----------------------------
+
+spec:{[] `dataset`source_version`range_from`range_to`width!(`demo_deals;`v1;.runtest.d 1;.runtest.d 3;1D)}
+
+test_begin_records_what_the_run_was_asked_to_do:{[t]
+    id:.qetl.run.begin[`w1;.runtest.spec[]];
+    r:first .qetl.run.of_run id;
+    .qunit.assertEquals[r`dataset`source_version`range_from`range_to`width;
+        (`demo_deals;`v1;.runtest.d 1;.runtest.d 3;1D);
+        "the same request columns for every worker, written when the run starts"]};
+
+test_a_run_with_no_spec_still_gets_a_row:{[t]
+    / A run that is not a windowed backfill is still a run.
+    id:.qetl.run.begin[`w1;()!()];
+    r:first .qetl.run.of_run id;
+    .qunit.assertEquals[(r`dataset;null r`range_from;null r`width);(`;1b;1b);"absent keys are nulls"]};
+
+test_finish_records_the_counts:{[t]
+    id:.qetl.run.begin[`w1;.runtest.spec[]];
+    .qetl.run.finish[`partial;`windows_planned`windows_completed`windows_failed`rows_published!2 1 1 7];
+    r:first .qetl.run.of_run id;
+    .qunit.assertEquals[r`status`windows_planned`windows_completed`windows_failed`rows_published;
+        (`partial;2;1;1;7);"planned, completed, failed, rows - beside the outcome"]};
+
+test_an_unfinished_run_has_null_counts:{[t]
+    id:.qetl.run.begin[`w1;.runtest.spec[]];
+    r:first .qetl.run.of_run id;
+    .qunit.assertEquals[null r`windows_completed`rows_published;11b;"nothing recorded is not zero"]};
+
+/ A ledger from before the range and counts columns: the eight it had.
+old_ledger:{[] ([] run_id:enlist 0Ng; worker:enlist `old_worker; process:enlist `p; host:enlist `h;
+    pid:enlist 1i; started_at:enlist .z.p; ended_at:enlist .z.p; status:enlist `completed)}
+
+test_an_old_ledger_is_refused_naming_the_migration:{[t]
+    `etl_runs set .runtest.old_ledger[];
+    .qunit.assertThrows[{[x] .qetl.run.require_run_schema[]};::;"*uqs run migrate*";
+        "an old ledger is not a foreign one - say how to upgrade it"]};
+
+test_migrate_upgrades_an_old_ledger_on_disk:{[t]
+    (hsym `$.qetl.run.table_path `etl_runs) set .runtest.old_ledger[];
+    .qunit.assertEquals[.qetl.run.migrate[];1;"one row upgraded"];
+    .qetl.run.reload[];
+    r:first value `etl_runs;
+    .qunit.assertEquals[(r`worker;r`dataset;null r`windows_completed);(`old_worker;`;1b);
+        "old rows keep what they had, and nulls where nothing was recorded"]};
+
+test_migrate_leaves_a_current_ledger_alone:{[t]
+    .qetl.run.begin[`w1;.runtest.spec[]];
+    .qunit.assertEquals[.qetl.run.migrate[];0;"nothing to do"]};
+
+test_migrate_refuses_a_foreign_ledger:{[t]
+    (hsym `$.qetl.run.table_path `etl_runs) set ([] run_id:enlist 0Ng; worker:enlist `w);
+    .qunit.assertThrows[{[x] .qetl.run.migrate[]};::;"migrate: etl_runs is neither*";
+        "a shape it does not know is not its to rewrite"]};
 
 \d .
