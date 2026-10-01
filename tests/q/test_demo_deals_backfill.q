@@ -106,6 +106,34 @@ test_a_version_bump_re_runs_the_whole_range:{[t]
     r:.qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[(r`state;r`windows_completed);(`completed;3);"a new source release re-fetches everything"]};
 
+/ The bug on_conflict exists for. A restatement under a new version fetches
+/ every window again, and appending then doubled every row.
+test_a_version_bump_restates_rather_than_duplicates:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qpipe.job.demo_deals_backfill.run[];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v2;1;4]];
+    .qpipe.job.demo_deals_backfill.run[];
+    .qunit.assertEquals[count value `demo_deals;3;"three deals, upserted by deal_id - not six"]};
+
+test_the_default_strategy_is_upsert:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.on_conflict `demo_deals_backfill;`upsert;"declared nothing, so upsert"]};
+
+test_an_on_conflict_override_fails_clashing_windows_not_the_run:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qpipe.job.demo_deals_backfill.run[];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    .qetl.cfg.set_override[`on_conflict;"fail"];
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v2;1;4]];
+    r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`error!(`threw;x)}];
+    .qunit.assertEquals[(r`state;r`windows_failed;count value `demo_deals);(`partial;3;3);
+        "every window clashes and fails on its own; the run reports partial, and nothing doubled"]};
+
+test_define_refuses_an_unknown_on_conflict:{[t]
+    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`on_conflict;:;(`ddbftest_oc;`merge)];
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_oc_worker;x]};(`ns`procname`note) _ d;
+        "on_conflict must be one of *";"a typo fails the declaration, not the first window"]};
+
 / A retry after a partial run redoes only the gap. This is the case retry-safety
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]

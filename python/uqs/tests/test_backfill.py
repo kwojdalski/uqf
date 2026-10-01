@@ -123,7 +123,7 @@ def test_start_passes_the_flags_through_torq_sh_extras(monkeypatch):
 def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose):
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict):
         seen.update(worker=worker, version=version, range=(range_from, range_to), port=base_port)
         seen["verbose"] = verbose
         return type("Completed", (), {"returncode": 0})()
@@ -147,7 +147,7 @@ def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
     """Both spellings: the command's own --debug, and the global one."""
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose):
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict):
         seen["verbose"] = verbose
         return type("Completed", (), {"returncode": 0})()
 
@@ -161,6 +161,35 @@ def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
     result = runner.invoke(cli.app, [*prefix, *argv])
     assert result.exit_code == 0, result.output
     assert seen["verbose"] is True
+
+
+def test_on_conflict_reaches_the_process_as_a_flag():
+    flags = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, on_conflict="replace")
+    assert flags[-2:] == ["-on_conflict", "replace"]
+
+
+def test_no_on_conflict_leaves_the_worker_its_own():
+    assert "-on_conflict" not in backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO)
+
+
+def test_an_unknown_on_conflict_is_refused_naming_the_strategies():
+    with pytest.raises(UqsError, match="append, fail, ignore, replace, upsert"):
+        backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, on_conflict="merge")
+
+
+def test_the_cli_passes_on_conflict_through(monkeypatch):
+    seen = {}
+
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict):
+        seen["on_conflict"] = on_conflict
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr(backfill, "start", fake)
+    argv = ["backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv += ["--to", "2026-09-15", "--on-conflict", "replace"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert seen == {"on_conflict": "replace"}
 
 
 def test_verbose_adds_the_flag_torq_backfill_reads():

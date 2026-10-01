@@ -39,6 +39,10 @@
 /             window as it starts and publishes, and each stage's timing.
 /             `uqs backfill --debug` passes it. Not TorQ's own -debug, which
 /             also stops the log going to its file.
+/   -on_conflict  optional: upsert, replace, ignore, append or fail - what a
+/             write does with a row whose row_key is already there, for this
+/             run only, over the worker's declared strategy.
+/             `uqs backfill --on-conflict` passes it.
 / .
 / The first four are required and refused when absent. A backfill that defaulted a
 / range would publish the wrong window and record it as covered, which is the
@@ -94,6 +98,19 @@ elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -verbose was given
 verbose:{[opts] `verbose in key opts}
+
+/ Apply -on_conflict, when given, as this run's strategy - set as the
+/ on_conflict config override, which .qetl.job.bounded.on_conflict reads
+/ ahead of the worker's declaration. Checked here, so a typo fails before
+/ the first fetch rather than at the first write.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return the strategy, or ` when none was given
+use_on_conflict:{[opts]
+    if[not `on_conflict in key opts; :`];
+    v:first opts`on_conflict;
+    .qetl.io.require_strategy `$v;
+    .qetl.cfg.set_override[`on_conflict;v];
+    `$v}
 
 / How many windows [range_from;range_to) cuts into at the worker's width, for
 / the log only - so a reader can see progress against a total. Null when the
@@ -187,6 +204,8 @@ run:{[]
             (spec`range_from;spec`range_to;spec[`range_to]-spec`range_from;
              decl`width;window_count[spec;decl`width])];
     use_hdb decl;
+    oc:use_on_conflict .Q.opt .z.x;
+    if[not null oc; .qetl.log.info[worker;"on_conflict for this run";enlist[`on_conflict]!enlist oc]];
     / The run ledger, attached HERE and unprotected: the worker's own
     / begin_run tolerates any failure, so a ledger it cannot write - one from
     / before etl_runs gained its range and counts columns - would leave this

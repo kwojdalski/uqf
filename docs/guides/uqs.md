@@ -148,11 +148,13 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       Responds; --timeout defaults to 120s,
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
-backfill WORKER --version V --from T --to T [--port N] [--debug]
+backfill WORKER --version V --from T --to T [--on-conflict S] [--port N] [--debug]
                                       run a bounded worker over [--from, --to); dates
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables. --debug
-                                      starts it with -verbose: DBG lines in its log
+                                      starts it with -verbose: DBG lines in its log.
+                                      --on-conflict (upsert, replace, ignore, append,
+                                      fail) overrides the worker's own for this run
 data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
             [--table T]... [--port N] [--dry-run]
                                       replay a tickerplant log into the HDB. With

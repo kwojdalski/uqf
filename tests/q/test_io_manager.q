@@ -288,6 +288,124 @@ test_hdb_refuses_a_root_that_is_not_a_file_symbol:{[t]
     .qunit.assertThrows[{.qetl.io.hdb[x;`deal_time]};`plain;
         "hdb: root must be a file symbol*";"a bare symbol is not a directory"]};
 
+/ --- on_conflict: what a write does with a row already there -------------
+
+/ Two rows held, two arriving; id 2 is in both.
+held:{[] ([] id:1 2; v:10 20; time:2026.01.02D01:00:00.000000000 2026.01.02D02:00:00.000000000)}
+incoming:{[] ([] id:2 3; v:21 30; time:2026.01.02D02:30:00.000000000 2026.01.02D03:00:00.000000000)}
+opts:{[] `row_key`target`time_column`range_from`range_to!(`id;`t;`time;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000)}
+
+test_upsert_replaces_a_key_already_there_and_adds_the_rest:{[t]
+    r:.qetl.io.resolve[`upsert;.iotest.held[];.iotest.incoming[];.iotest.opts[]];
+    .qunit.assertEquals[(r`id;r`v);(1 2 3;10 21 30);"id 2 takes the incoming value, once"]};
+
+test_ignore_keeps_the_row_already_there:{[t]
+    r:.qetl.io.resolve[`ignore;.iotest.held[];.iotest.incoming[];.iotest.opts[]];
+    .qunit.assertEquals[(r`id;r`v);(1 2 3;10 20 30);"id 2 keeps 20; only id 3 is new"]};
+
+test_append_keeps_both:{[t]
+    r:.qetl.io.resolve[`append;.iotest.held[];.iotest.incoming[];.iotest.opts[]];
+    .qunit.assertEquals[r`id;1 2 2 3;"no check - the behaviour before on_conflict existed"]};
+
+test_fail_refuses_naming_the_clash:{[t]
+    .qunit.assertThrows[{[x] .qetl.io.resolve[`fail;.iotest.held[];.iotest.incoming[];.iotest.opts[]]};::;
+        "on_conflict fail: 1 row(s) of t already there by id";"one clash, named, nothing resolved"]};
+
+test_fail_writes_when_nothing_clashes:{[t]
+    r:.qetl.io.resolve[`fail;.iotest.held[];1#.iotest.incoming[] where 3=.iotest.incoming[]`id;.iotest.opts[]];
+    .qunit.assertEquals[r`id;1 2 3;"fail only refuses a clash"]};
+
+test_replace_drops_what_the_window_held_and_the_batch_left_out:{[t]
+    / The window is the whole of the 2nd: id 1 is inside it and not in the
+    / batch, so the source has withdrawn it.
+    r:.qetl.io.resolve[`replace;.iotest.held[];.iotest.incoming[];.iotest.opts[]];
+    .qunit.assertEquals[(r`id;r`v);(2 3;21 30);"only what the source now says"]};
+
+test_replace_keeps_what_lies_outside_the_window:{[t]
+    o:@[.iotest.opts[];`range_from;:;2026.01.02D02:00:00.000000000];
+    r:.qetl.io.resolve[`replace;.iotest.held[];.iotest.incoming[];o];
+    .qunit.assertEquals[r`id;1 2 3;"id 1 at 01:00 is before the window, so it stays"]};
+
+test_a_batch_that_repeats_a_key_writes_it_once:{[t]
+    b:([] id:3 3; v:30 31; time:2#2026.01.02D03:00:00.000000000);
+    .qunit.assertEquals[exec v from .qetl.io.resolve[`upsert;.iotest.held[];b;.iotest.opts[]] where id=3;enlist 31;
+        "upsert: the last of the batch wins"];
+    .qunit.assertEquals[exec v from .qetl.io.resolve[`ignore;.iotest.held[];b;.iotest.opts[]] where id=3;enlist 30;
+        "ignore: the first does"]};
+
+test_a_batch_with_other_columns_is_refused:{[t]
+    .qunit.assertThrows[{[x] .qetl.io.resolve[`upsert;.iotest.held[];([] id:enlist 9);.iotest.opts[]]};::;
+        "on_conflict: t holds *";"columns that differ are named, not joined"]};
+
+test_an_unknown_strategy_is_refused_naming_the_ones_there_are:{[t]
+    .qunit.assertThrows[{.qetl.io.require_strategy x};`merge;
+        "on_conflict must be one of append, fail, ignore, replace, upsert - not merge";"a typo names the alternatives"]};
+
+test_memory_upserts_rather_than_duplicating:{[t]
+    o:`on_conflict`row_key!(`upsert;`a);
+    .qetl.io.write_keyed[.qetl.io.memory;`iotgt;batch[];o];
+    .qetl.io.write_keyed[.qetl.io.memory;`iotgt;batch[];o];
+    .qunit.assertEquals[count value `iotgt;3;"the same three rows twice is still three rows"]};
+
+test_a_manager_that_can_only_append_refuses_any_other_strategy:{[t]
+    / Rather than append quietly - the duplication this exists to stop.
+    mgr:(enlist `write)!enlist {[target;b] count b};
+    .qunit.assertThrows[{[m] .qetl.io.write_keyed[m;`iotgt;batch[];`on_conflict`row_key!(`upsert;`a)]};mgr;
+        "write_keyed: this io manager can only append*";"refused, not appended"];
+    .qunit.assertEquals[.qetl.io.write_keyed[mgr;`iotgt;batch[];`on_conflict`row_key!(`append;`a)];3;
+        "append is what it can do"]};
+
+/ The HDB writer, keyed: deals[] on the 2nd and 3rd, then written again.
+hdb_opts:{[s] `on_conflict`row_key`time_column`range_from`range_to!(s;`sym`deal_time;`deal_time;2026.01.02D00:00:00.000000000;2026.01.04D00:00:00.000000000)}
+
+test_hdb_upsert_writes_a_window_twice_without_duplicating:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    .qetl.io.write_keyed[m;`iodeals;update notional:9e6 from deals[];hdb_opts`upsert];
+    p:part[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[(count p;asc p`notional);(2;9e6 9e6);"two deals on the 2nd, each restated, none doubled"]};
+
+test_hdb_append_still_duplicates:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`append];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`append];
+    .qunit.assertEquals[count part[root;2026.01.02;`iodeals];4;"append is the old path, unchanged"]};
+
+test_hdb_ignore_keeps_the_first_write:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`ignore];
+    .qetl.io.write_keyed[m;`iodeals;update notional:9e6 from deals[];hdb_opts`ignore];
+    .qunit.assertEquals[asc part[root;2026.01.02;`iodeals]`notional;1e6 2e6;"the rows already there stay"]};
+
+test_hdb_replace_clears_a_day_the_source_has_emptied:{[t]
+    / The second write returns only the 3rd's deal: the 2nd, inside the
+    / window and now empty upstream, must lose what it held.
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    .qetl.io.write_keyed[m;`iodeals;select from deals[] where deal_time>2026.01.03D00:00:00.000000000;hdb_opts`replace];
+    .qunit.assertEquals[(count part[root;2026.01.02;`iodeals];count part[root;2026.01.03;`iodeals]);0 1;
+        "the emptied day is empty, the other day keeps its deal"]};
+
+test_hdb_fail_writes_nothing_when_a_key_clashes:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    .qunit.assertThrows[{[r;ignored] .qetl.io.write_keyed[.qetl.io.hdb[r;`deal_time];`iodeals;deals[];.iotest.hdb_opts`fail]}[root];::;
+        "on_conflict fail: *";"the clash is refused"];
+    .qunit.assertEquals[count part[root;2026.01.02;`iodeals];2;"and nothing was written - the 2nd still holds two"]};
+
+test_hdb_keyed_writes_are_finished_like_any_other:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    .qetl.io.finish m;
+    p:part[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[(value p`sym;attr p`sym);(`EURUSD`GBPUSD;`p);"sorted and p#sym, as an appended partition is"]};
+
 / --- the wiring ----------------------------------------------------------
 
 test_define_refuses_a_malformed_manager:{[t]

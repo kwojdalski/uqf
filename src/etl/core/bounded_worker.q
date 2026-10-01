@@ -100,8 +100,9 @@ namespace:{[worker] ` sv worker_root,worker}
 / lambda does not close over an enclosing local, so `each` over windows needs
 / a named place for the running totals - and two workers in one process must
 / not share it.
-initial_state:`source_version`range_from`range_to`handle`progress`last_batch!
-    (`;0Np;0Np;0Ni;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);())
+initial_state:`source_version`range_from`range_to`handle`progress`last_batch`last_window!
+    (`;0Np;0Np;0Ni;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);();
+     `range_from`range_to!0N 0Np)
 
 / The methods every worker gets: the contract's five, taken from the
 / contract itself so the two cannot drift, plus the three the launcher and
@@ -179,7 +180,8 @@ optional_cfg:`check`io`facts`partition
 / loads.
 / @param worker the worker's name
 / @param decl dict of source, dataset, width, transform, and optionally
-/   check, facts, partition, io, procname (default `<worker>1) and note
+/   check, facts, partition, io, procname (default `<worker>1), note and
+/   on_conflict (default `upsert - see .qetl.io's CONFLICTS)
 / @throws error naming every missing or malformed field at once
 define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -247,6 +249,13 @@ define:{[worker;decl]
     if[not 10h=type note;
         '"define: ",string[worker],"'s note must be a string"];
     decl[`note]:note;
+    / What a write does with a row whose row_key is already there. Resolved
+    / before storage for the reason partition is, and checked here so a typo
+    / fails the declaration rather than the first window.
+    oc:$[`on_conflict in key decl; decl`on_conflict; .qetl.io.default_strategy];
+    if[not -11h=type oc;
+        '"define: ",string[worker],"'s on_conflict must be a symbol, e.g. `upsert"];
+    decl[`on_conflict]:.qetl.io.require_strategy oc;
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
@@ -588,8 +597,25 @@ fetch:{[worker;from_ts;to_ts]
 / range was examined and held nothing.
 publish:{[worker;batch]
     cfg:def worker;
-    t:.qetl.source.def[cfg`source]`target;
-    .qetl.io.write[.qetl.io.for_cfg cfg;t;batch]}
+    src:.qetl.source.def cfg`source;
+    w:read_state[worker;`last_window];
+    opts:`on_conflict`row_key`time_column`range_from`range_to!
+        (on_conflict worker;.qetl.source.row_key cfg`source;src`time_column;w`range_from;w`range_to);
+    .qetl.io.write_keyed[.qetl.io.for_cfg cfg;src`target;batch;opts]}
+
+/ The conflict strategy this run writes under: the operator's override when
+/ one is set - on_conflict in config, UQF_ON_CONFLICT, or `uqs backfill
+/ --on-conflict` - else what the worker declared.
+/ .
+/ An override exists for the one-off: a worker that upserts by default, run
+/ once with `replace to clear rows its source has since withdrawn.
+/ @param worker the worker's name
+/ @return the strategy, a symbol
+on_conflict:{[worker]
+    v:.qetl.cfg.raw `on_conflict;
+    cfg:def worker;
+    .qetl.io.require_strategy $[count v; `$v;
+        `on_conflict in key cfg; cfg`on_conflict; .qetl.io.default_strategy]}
 
 / Save the cursor. Present because the contract requires it; the
 / write goes through .qetl.job.bounded.state so the checkpoint's spec-binding is not
@@ -864,8 +890,23 @@ do_window:{[worker;w]
     / so the batch goes through the worker's own `last_batch` global and the
     / niladic reads it. Building the argument any other way would publish
     / before the dry-run gate could suppress it.
-    r:.qetl.job.bounded.runtime.finish_window[worker;cfg`dataset;cfg`partition;spec worker;
-        w`range_from;w`range_to;publish_pending[worker]];
+    / The window publish writes into, for a strategy that acts on a range
+    / (`replace clears what the target held inside it).
+    write_state[worker;`last_window;`range_from`range_to!(w`range_from;w`range_to)];
+    / A publish that throws - an on_conflict `fail, a row the store refuses -
+    / fails THIS window, the same terminal path as a failed fetch or check:
+    / nothing covered, planned again next run, and the run goes on. It used to
+    / end the run. A write that got partway is safe to repeat under the
+    / default `upsert, which is what makes failing just the window sound.
+    r:@[{[a] (1b;.qetl.job.bounded.runtime.finish_window . a)};
+        (worker;cfg`dataset;cfg`partition;spec worker;w`range_from;w`range_to;publish_pending[worker]);
+        {[e] (0b;e)}];
+    if[not first r;
+        .qetl.log.err[worker;"window failed to publish";
+            `range_from`range_to`error!(w`range_from;w`range_to;last r)];
+        write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
+        :0b];
+    r:last r;
     .qetl.log.dbg[worker;"window published";
         `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
     / Materialisation metadata, recorded HERE rather than in

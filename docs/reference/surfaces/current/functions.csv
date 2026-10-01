@@ -183,26 +183,37 @@ qetl.hb,require_schema,function,1,
 qetl.hb,stale,function,1,max_age
 qetl.io,callable,function,1,v
 qetl.io,default,dict,,
+qetl.io,default_strategy,value,,
 qetl.io,discard,dict,,
 qetl.io,due,function,4,state status now interval
 qetl.io,finish,function,1,mgr
 qetl.io,finish_hdb,function,2,root ignored
 qetl.io,finish_parts,function,2,root todo
+qetl.io,first_seen,function,1,k
 qetl.io,flush,function,2,mgr upto
 qetl.io,flush_hdb,function,2,root upto
 qetl.io,for_cfg,function,1,cfg
 qetl.io,hdb,function,2,root partition_col
+qetl.io,hdb_rows,function,3,partition_col target batch
+qetl.io,last_seen,function,1,k
 qetl.io,memory,dict,,
 qetl.io,odbc,dict,,
 qetl.io,optional,value,,
+qetl.io,plain,function,1,t
 qetl.io,ready,function,2,mgr status
 qetl.io,require_manager,function,1,mgr
+qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
+qetl.io,resolve,function,4,strategy existing batch opts
+qetl.io,strategies,value,,
 qetl.io,touched,table,,
 qetl.io,write,function,3,mgr target batch
 qetl.io,write_discard,function,2,target batch
 qetl.io,write_hdb,function,4,root partition_col target batch
+qetl.io,write_hdb_keyed,function,5,root partition_col target batch opts
+qetl.io,write_keyed,function,4,mgr target batch opts
 qetl.io,write_memory,function,2,target batch
+qetl.io,write_memory_keyed,function,3,target batch opts
 qetl.io.odbc,available,function,1,
 qetl.io.odbc,build_connection_string,function,5,host port database user password
 qetl.io.odbc,close,function,1,h
@@ -237,6 +248,7 @@ qetl.job.bounded,initial_state,dict,,
 qetl.job.bounded,namespace,function,1,worker
 qetl.job.bounded,no_failures,function,1,
 qetl.job.bounded,normalised,function,1,cfg
+qetl.job.bounded,on_conflict,function,1,worker
 qetl.job.bounded,optional_cfg,value,,
 qetl.job.bounded,own,function,2,worker nm
 qetl.job.bounded,partition_of,function,1,worker
