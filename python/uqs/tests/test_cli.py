@@ -190,6 +190,14 @@ def test_the_refusal_names_the_typo_and_the_alternatives(_known_procs):
     assert "Nothing was started or stopped" in message
 
 
+def test_the_refusal_lists_the_known_names_alphabetically(monkeypatch, _known_procs):
+    """process.csv order is load order, not something a reader can scan."""
+    monkeypatch.setattr(stack_procs, "list_process_names", lambda _paths: ["stp1", "hdb1", "rdb1"])
+    with pytest.raises(UqsError) as excinfo:
+        stack_procs.assert_known_procnames(cast("UqsPaths", _Paths()), "xyz")
+    assert "['hdb1', 'rdb1', 'stp1']" in str(excinfo.value)
+
+
 @pytest.mark.parametrize("selector", ["all", " all ", "rdb1", "rdb1 stp1"])
 def test_valid_selectors_raise_nothing(_known_procs, selector):
     """`all` is torq.sh's own word for the startwithall rows, not a process,

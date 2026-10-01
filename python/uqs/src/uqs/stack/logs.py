@@ -135,7 +135,7 @@ def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:
     unknown = [name for name in requested if name not in known]
     if unknown:
         raise UqsError(
-            f"unknown process(es) {unknown} - known processes are {known}. "
+            f"unknown process(es) {unknown} - known processes are {sorted(known)}. "
             "A process that exists but has never started has no log file yet; "
             "that case is skipped silently rather than reported here."
         )
