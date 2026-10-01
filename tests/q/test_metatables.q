@@ -72,9 +72,19 @@ test_symbol_partitions_are_literal_values:{[t]
     .qunit.assertEquals[strip result;([]venue:`EBS`REUTERS;rows:3 1j);"logical partition keys are not evaluated as variables"]};
 
 test_dqe_adapter_preserves_requested_partition_in_payload:{[t]
-    result:.dqe.uqf_metatable[`fx_counts;`.metatest.source;`date;enlist 2026.09.01;`sym`venue;()!()];
-    .qunit.assertEquals[key result;enlist`fx_counts;"DQE resultkeys identifier"];
-    .qunit.assertEquals[(result`fx_counts)`date;2#2026.09.01;"source date independent of DQE observation partition"]};
+    result:.dqe.uqf_metatable[`meta_fx_counts;`.metatest.source;`date;enlist 2026.09.01;`sym`venue;()!()];
+    .qunit.assertEquals[key result;enlist`meta_fx_counts;"DQE resultkeys identifier"];
+    .qunit.assertEquals[(result`meta_fx_counts)`date;2#2026.09.01;"source date independent of DQE observation partition"]};
+
+test_a_metatable_name_must_carry_the_prefix:{[t]
+    .qunit.assertEquals[.qmeta.require_name`meta_fx_counts;`meta_fx_counts;"a prefixed name passes unchanged"];
+    .qunit.assertThrows[.qmeta.require_name;`fx_counts;"*must start with meta_*e.g. `meta_fx_counts";"unprefixed name refused, with the name it should be"];
+    .qunit.assertThrows[.qmeta.require_name;`meta_;"*must start with meta_ and name something*";"the prefix alone names nothing"];
+    .qunit.assertThrows[.qmeta.require_name;`;"*must start with meta_*";"empty name refused"];
+    .qunit.assertThrows[.qmeta.require_name;"meta_x";"*must be a symbol atom*";"a string is not a name"]};
+
+test_dqe_adapter_refuses_an_unprefixed_name_before_querying:{[t]
+    .qunit.assertThrows[.dqe.uqf_metatable[;`.metatest.source;`date;enlist 2026.09.01;`sym`venue;()!()];`fx_counts;"*must start with meta_*";"adapter holds DQE results to the convention"]};
 
 test_profile_counts_ranges_nulls_and_violations:{[t]
     source[`size]:10 0n -5 40f;

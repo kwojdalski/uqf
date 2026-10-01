@@ -23,6 +23,20 @@ queries to DQE's existing result protocol. ETL run records and publication
 coverage remain separate: observed row counts cannot establish successful
 ingestion, expected completeness, or absence of duplicates.
 
+## Names
+
+A metatable's name starts with `meta_` (`.qmeta.prefix`), the way the pipeline's
+own bookkeeping starts with `etl_` (`etl_runs`, `etl_coverage`). In `tables[]`,
+an HDB directory or `uqs data schema`, either prefix marks a table as derived
+from the data beside it rather than being market data, and a tool can find them
+by pattern instead of by a list.
+
+`.qmeta.require_name` checks a name and the DQE adapter applies it: a name
+without the prefix is refused, with the prefixed name it should have been, never
+renamed for you. The prefix is fixed rather than configurable - every reader
+would have to resolve it, and changing it would strand the tables already
+stored.
+
 ## Define and collect
 
 Run from the repository root in a process with `trade` loaded:
@@ -32,13 +46,13 @@ Run from the repository root in a process with `trade` loaded:
 
 / Total rows per requested date, with no secondary grouping.
 totals:.qmeta.definition[`trade;`date;`symbol$();()!()];
-trade_counts:.qmeta.collect[totals;2026.09.01 2026.09.02];
+meta_trade_counts:.qmeta.collect[totals;2026.09.01 2026.09.02];
 
 / Counts and traded base quantity per pair and venue.
 metrics:`rows`base_quantity`first_time`last_time!
     ((count;`i);(sum;`size);(min;`time);(max;`time));
 by_market:.qmeta.definition[`trade;`date;`sym`venue;metrics];
-trade_markets:.qmeta.collect[by_market;2026.09.01 2026.09.02];
+meta_trade_markets:.qmeta.collect[by_market;2026.09.01 2026.09.02];
 ```
 
 Adapt `trade`, `sym`, `venue`, `size` and `time` to your schema. Summing `size`
@@ -126,7 +140,7 @@ measurements. This keeps profiling separate from quality enforcement.
 
 ```q
 / Recompute a corrected date, removing groups that disappeared.
-trade_markets:.qmeta.refresh[trade_markets;by_market;enlist 2026.09.01];
+meta_trade_markets:.qmeta.refresh[meta_trade_markets;by_market;enlist 2026.09.01];
 ```
 
 Refresh returns a replacement value only after all requested queries succeed. It
@@ -156,7 +170,7 @@ The adapter returns a dictionary of metatable name to result table. It can be
 called directly on the HDB:
 
 ```q
-.dqe.uqf_metatable[`trade_by_market;`trade;`date;
+.dqe.uqf_metatable[`meta_trade_by_market;`trade;`date;
     2026.09.01 2026.09.02;`sym`venue;()!()]
 ```
 
@@ -164,7 +178,7 @@ Or submitted through existing DQE transport from a configured DQE process:
 
 ```q
 .dqe.runquery[`.dqe.uqf_metatable;
-    (`trade_by_market;`trade;`date;2026.09.01 2026.09.02;`sym`venue;()!());
+    (`meta_trade_by_market;`trade;`date;2026.09.01 2026.09.02;`sym`venue;()!());
     `table;enlist`hdb1]
 ```
 

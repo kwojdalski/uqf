@@ -4,6 +4,28 @@
 / .
 \d .qmeta
 
+/ What every metatable's name starts with, so it reads as derived bookkeeping
+/ beside the market data it measures - as etl_ marks the pipeline's own tables
+/ (etl_runs, etl_coverage). Fixed, not configurable: every reader would have
+/ to resolve it, and changing it would strand the tables already stored.
+prefix:"meta_";
+
+/ Check a metatable's name: a symbol atom of .qmeta.prefix followed by more.
+/ Refused rather than prefixed for the caller, so a name is never changed
+/ underneath whoever chose it.
+/ @param name the metatable's name
+/ @return name, unchanged
+/ @throws a name that is not a symbol atom, or does not start with the prefix
+/ @eg .qmeta.require_name `meta_trade_counts -> `meta_trade_counts
+/ @eg .qmeta.require_name `trade_counts -> throws
+require_name:{[name]
+    if[not -11h=type name;'"metatables: result name must be a symbol atom"];
+    text:string name;
+    prefixed:.qmeta.prefix~count[.qmeta.prefix]#text;
+    if[prefixed and count[.qmeta.prefix]<count text;:name];
+    example:.qmeta.prefix,$[prefixed or 0=count text;"trade_counts";text];
+    '"metatables: result name must start with ",.qmeta.prefix," and name something, e.g. `",example};
+
 / Construct a metatable definition; an empty aggregate dictionary means row counts.
 / @param tab source table name
 / @param partition_col physical or logical partition column

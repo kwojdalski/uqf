@@ -606,8 +606,10 @@ qmeta,collect,function,2,spec partitions
 qmeta,collect_partition,function,3,spec part observed_at
 qmeta,count_bad,function,2,violations row_count
 qmeta,definition,function,4,tab partition_col group_cols aggregates
+qmeta,prefix,value,,
 qmeta,profile,function,3,time_cols null_cols rules
 qmeta,refresh,function,3,current spec partitions
+qmeta,require_name,function,1,name
 qmeta,require_request,function,2,spec partitions
 qmeta,time_bound,function,2,direction values
 qmicro,book_convexity,function,2,prices side
