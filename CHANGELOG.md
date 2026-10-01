@@ -2,6 +2,60 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-10-01
+
+This snapshot covers 67 commits in 56 merged PRs (#485--#567) since
+`stable/2026-09-25`. Most of the work went into the ETL framework, which gained
+conflict handling, a run ledger and reactions, and into `uqs`, whose commands
+were regrouped and gained a gateway-routed `query`. Master's q-unit and
+q-examples lanes are green again.
+
+### ETL framework (`src/etl/`)
+
+- **`on_conflict`** sets what a backfill does with a row that is already there:
+  `upsert` (the default), `replace`, `ignore`, `append` or `fail`, checked per
+  HDB date partition. Workers whose transforms rename key columns declare a
+  `target_key`.
+- **`etl_runs`** records every run's range, window width and counts.
+  `uqs run status|list|show|audit` reads it back.
+- **Reactions** are the first triggered jobs: `rebuild_positions` runs on
+  `demo_deals`, and `uqs job new --triggered-by` scaffolds new ones.
+- **Backfills** reload the HDB as each day finishes, retry the source query,
+  release their locks on every exit, and treat an idle run as a success.
+- **New workers:** a bounded DuckDB worker for cryptorust's recorded crypto
+  capture, and a headless backfill runner that makes ODBC reachable on macOS.
+
+### Quant and metadata (`src/`)
+
+- **`.qmeta`:** collected rows carry a definition fingerprint that `refresh`
+  enforces. `.qmeta.reconcile` compares observed row counts with the coverage
+  ledger's `rows_published`.
+- **`.qdqc`** reports a one-sided quote as `one_sided`, not as a crossed book.
+- **`execution`** gains `venue_quality` as an abstract method.
+
+### `uqs` (`python/uqs/`)
+
+- **Commands regrouped** under `job`, `feed`, `data`, `config` and `run`. The
+  MCP server now ships as `uqs-mcp`.
+- **`uqs query`** defaults to the gateway, routes expressions through
+  `.gw.syncexec`, and prints results as q's console does, including answers from
+  the gateway.
+- **Environment:** `uqs` loads `.env` and `.envrc` into every process it starts.
+  `.envrc` goes through direnv, so it must be approved with `direnv allow`.
+- **Logs:** `uqs logs -f` follows a process across restarts.
+
+### Interpreters, tests and docs
+
+- **PeachQ** is supported opt-in (`UQF_Q_IMPL=peachq`), and CI runs the `docs/`
+  q blocks on it.
+- **Fixed on master:** HDB keyed writes on KDB-X (`-9!-8!` does not copy a
+  splayed table), empty windows refused by the type check, and stale `@eg`
+  examples.
+- **Environment variables** now follow one convention: `UQF_ROOT`,
+  `UQF_SCRIPTS`, `UQF_STATUS_DIR`.
+
+226 files changed, 12,326 insertions(+), 2,285 deletions(-).
+
 ## stable/2026-09-25
 
 This snapshot covers 133 commits in 49 merged PRs (#431--#484) since
