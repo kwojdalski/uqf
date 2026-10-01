@@ -84,3 +84,33 @@ def test_a_refused_line_is_reported_not_sent():
 def test_ctrl_c_abandons_the_line_not_the_session():
     n, shown, _ = _run([KeyboardInterrupt(), "count trade"])
     assert n == 1 and shown
+
+
+def test_with_a_console_size_the_gateway_lays_out_the_joined_result():
+    """The layout goes in .gw.syncexecj's join, which the gateway applies
+    before its deferred reply - the only place a -30! reply still sees it."""
+    q = gateway.expression("tables[]", "rdb hdb", (40, 120))
+    assert q.startswith('.gw.syncexecj["tables[]";`rdb`hdb;{')
+    assert ".Q.s raze x" in q and 'system"c 40 120"' in q
+
+
+def test_an_as_typed_call_with_a_console_size_is_wrapped():
+    q = gateway.expression("\\t 1", "rdb", (40, 120))
+    assert ".Q.s value x" in q
+
+
+def test_the_session_routes_each_line_with_the_current_size():
+    sizes = iter([(40, 120), (30, 90)])
+    shown: list = []
+    lines = iter(["count trade", "count quote"])
+
+    def read(prompt):
+        try:
+            return next(lines)
+        except StopIteration:
+            raise EOFError from None
+
+    gateway.session(
+        lambda e: e, read, shown.append, list().append, "rdb", render=lambda: next(sizes)
+    )
+    assert 'system"c 40 120"' in shown[0] and 'system"c 30 90"' in shown[1]

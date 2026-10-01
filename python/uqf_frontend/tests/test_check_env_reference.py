@@ -102,7 +102,7 @@ def test_a_key_nothing_reads_is_refused_and_says_so(monkeypatch, tmp_path):
 
 def test_the_refusal_points_at_the_header_that_explains_the_themes(monkeypatch, tmp_path):
     _, err = _run_with_example(monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nLOG_LEVEL=DEBUG\n")
-    assert "Only .qdata.cfg reads .env" in err
+    assert "Outside uqs, only .qdata.cfg reads .env" in err
     assert "header of .env.example" in err
 
 

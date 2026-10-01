@@ -151,8 +151,10 @@ resolve:{[strategy;existing;batch;opts]
          " but the batch has ",(" " sv string cols batch)];
     batch:(cols existing)#batch;
     / Same names, same types: joined, two types would make a mixed column,
-    / and that is what would be written to disk.
-    if[count existing;
+    / and that is what would be written to disk. An empty batch adds no
+    / values to mix, and its nested columns are untyped `()` (meta says " "),
+    / so comparing it would refuse an empty window for nothing.
+    if[(count existing) and count batch;
         if[not (exec t from meta existing)~exec t from meta batch;
             '"on_conflict: ",string[opts`target],"'s batch types differ from what it holds"]];
     if[`append=strategy; :existing,batch];
@@ -349,7 +351,11 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
         / A COPY, not the mapped table: the partition is about to be
         / rewritten from the result, and a result that still pointed into
         / the files being overwritten would read them mid-write.
-        existing:$[()~key part; 0#rows; -9!-8!get part];
+        / Copied by indexing every column, not by -9!-8!: on KDB-X that
+        / round trip returns a mapped splayed table still (so `in` throws
+        / 'splay), and turns an enumerated sym into plain symbols (so the
+        / splayed `set` below throws 'type). Indexing keeps the enumeration.
+        existing:$[()~key part; 0#rows; flip {x til count x} each flip select from get part];
         (part;d;plain resolve[strategy;existing;rows;o])
         }[root;target;data;days;strategy;o] each dates;
     {[root;target;step] (step 0) set step 2; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;

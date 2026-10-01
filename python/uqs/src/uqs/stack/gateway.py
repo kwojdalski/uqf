@@ -36,15 +36,27 @@ _AS_TYPED = re.compile(r"^\s*(\.gw\.|\\)")
 _IN_PLACE = re.compile(r"^\s*(update|delete)\b.*\bfrom\s+`", re.DOTALL)
 
 
-def expression(expr: str, servers: str = DEFAULT_SERVERS) -> str:
+def expression(
+    expr: str, servers: str = DEFAULT_SERVERS, render: tuple[int, int] | None = None
+) -> str:
     """`expr` as the gateway should run it.
 
     Wrapped in `.gw.syncexec`, unless it is already a `.gw.*` call or a
     system command, which the gateway runs as typed. An in-place update or
     delete is refused: to change a table, name its process with --proc.
+
+    With `render`, a (rows, columns) console size, what comes back is the
+    text q's console would print rather than the data. Not by wrapping the
+    call in `.Q.s`: on kdb+ 3.6 and later TorQ's `.gw.syncexec` defers its
+    reply with `-30!`, which sends the joined result straight to the client
+    and discards whatever encloses the call - so a wrapped call still came
+    back as the raw data, and kola's Python objects. The formatting goes in
+    the JOIN function instead, through `.gw.syncexecj`: the gateway applies
+    it to the servers' results before replying, so the deferred reply is the
+    text. A call sent as typed is not deferred and is wrapped as usual.
     """
     if _AS_TYPED.match(expr):
-        return expr
+        return expr if render is None else stack_render.wrap(expr, render)
     if _IN_PLACE.match(expr):
         raise UqsError(
             "an update or delete `from `table` changes that table in place - routed through "
@@ -54,7 +66,12 @@ def expression(expr: str, servers: str = DEFAULT_SERVERS) -> str:
     bad = [t for t in types if not _PROCTYPE.match(t)]
     if not types or bad:
         raise UqsError(f"--servers takes process types, e.g. 'rdb hdb' - not {servers!r}")
-    return f'.gw.syncexec["{stack_render.quoted(expr)}";{"".join("`" + t for t in types)}]'
+    query = f'"{stack_render.quoted(expr)}"'
+    targets = "".join("`" + t for t in types)
+    if render is None:
+        return f".gw.syncexec[{query};{targets}]"
+    # raze is .gw.syncexec's own join, so the data is what it would have been.
+    return f".gw.syncexecj[{query};{targets};{stack_render.printer('raze x', render)}]"
 
 
 #: What ends the session. `\\` is q's own; the words are for everyone else.
@@ -68,6 +85,7 @@ def session(
     fail: Callable[[str], None],
     servers: str = DEFAULT_SERVERS,
     prompt: str = "gateway1) ",
+    render: Callable[[], tuple[int, int]] | None = None,
 ) -> int:
     """An interactive session on the gateway: read a line, wrap it, send it,
     show the answer - until `\\\\`, `exit`, `quit` or end of input.
@@ -77,7 +95,9 @@ def session(
     not the session.
 
     Every effect is a parameter, so this is tested without a terminal or a
-    gateway; query_session below wires the real ones.
+    gateway; query_session below wires the real ones. `render` gives the
+    console size for an answer printed as q prints it; it is asked again on
+    every line, so a resized terminal is fitted from the next answer on.
     @return how many lines were sent
     """
     sent = 0
@@ -94,7 +114,7 @@ def session(
         if text in _QUIT:
             return sent
         try:
-            show(send(expression(text, servers)))
+            show(send(expression(text, servers, render() if render else None)))
             sent += 1
         except Exception as exc:  # kola's own exception types, and UqsError
             fail(str(exc))
@@ -129,10 +149,9 @@ def query_session(
     try:
 
         def send(expr: str) -> Any:
-            if render is None:
-                return conn.sync(expr)
-            return stack_render.text(conn.sync(stack_render.wrap(expr, render())))
+            answer = conn.sync(expr)
+            return answer if render is None else stack_render.text(answer)
 
-        return session(send, input, show, fail, servers)
+        return session(send, input, show, fail, servers, render=render)
     finally:
         conn.disconnect()

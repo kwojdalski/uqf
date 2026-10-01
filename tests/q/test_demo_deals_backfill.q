@@ -134,6 +134,26 @@ test_define_refuses_an_unknown_on_conflict:{[t]
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_oc_worker;x]};(`ns`procname`note) _ d;
         "on_conflict must be one of *";"a typo fails the declaration, not the first window"]};
 
+test_the_target_key_defaults_to_the_source_row_key:{[t]
+    .qunit.assertEquals[(.qetl.job.bounded.def `demo_deals_backfill)`target_key;enlist `deal_id;
+        "a passthrough transform keeps the source's names, so the source key is the target key"]};
+
+/ The bug target_key exists for: upstream_trades' transform renames ex to
+/ venue, so the source row_key names a column the published batch lacks.
+test_define_refuses_a_source_row_key_the_transform_renames:{[t]
+    d:@[.qetl.job.bounded.def `upstream_trades_backfill;`dataset;:;`ddbftest_tk];
+    / Two patterns, not "*...*...*": KDB-X's like throws 'nyi past two wildcards.
+    e:.qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_tk_worker;x]};`ns`procname`note`target_key _ d;
+        "*source row_key names ex which transform upstream_trades_to_local does not output*";
+        "a key the transform drops fails the declaration, not every window"];
+    .qunit.assertTrue[e like "*declare target_key*";"and the refusal says what to do"]};
+
+test_define_refuses_a_target_key_outside_the_output:{[t]
+    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`target_key;:;(`ddbftest_tk;`deal_ref)];
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_tk_worker;x]};`ns`procname`note _ d;
+        "*target_key names deal_ref which transform demo_deals_passthrough does not output*";
+        "a declared key is held to the output too"]};
+
 / A retry after a partial run redoes only the gap. This is the case retry-safety
 / exists for, and the one a cursor alone cannot get right.
 test_a_partial_range_is_narrowed_to_the_gap:{[t]

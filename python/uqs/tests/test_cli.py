@@ -1252,12 +1252,18 @@ def test_every_command_is_reachable_and_documented():
 
 def test_main_configures_logging_before_running(monkeypatch):
     """Ordering, not decoration: a command that logged before logging was
-    configured would write through a default handler nobody sees."""
+    configured would write through a default handler nobody sees.
+
+    The env files load between two configurations: after the first, so a
+    warning about them has somewhere to go, and before the second, because
+    they may set LOG_LEVEL. And before the app, so every process a command
+    starts inherits them."""
     order: list[str] = []
     monkeypatch.setattr(cli.entry, "configure_logging", lambda **kw: order.append("configure"))
+    monkeypatch.setattr(cli.entry, "load_repo_env_files", lambda: order.append("env files"))
     monkeypatch.setattr(cli.entry, "app", lambda: order.append("app"))
     cli.main()
-    assert order == ["configure", "app"]
+    assert order == ["configure", "env files", "configure", "app"]
 
 
 # ------------------------------------------------------------ debug mode
@@ -1631,7 +1637,7 @@ def test_query_refuses_both_proc_and_port(monkeypatch):
 def test_query_with_neither_asks_the_gateway_through_syncexec(monkeypatch):
     seen = _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     rec = _patch(monkeypatch, runtime, "query", result="42")
-    result = runner.invoke(cli.app, ["query", "1+1"])
+    result = runner.invoke(cli.app, ["query", "1+1", "--render", "kola"])
     assert result.exit_code == 0, result.output
     assert rec.args[:2] == ('.gw.syncexec["1+1";`rdb`hdb]', 6057)
     assert "base" in seen, "the port came from the stack's own map"
@@ -1642,7 +1648,7 @@ def test_a_select_on_the_gateway_is_routed_to_rdb_and_hdb(monkeypatch):
     rec = _patch(monkeypatch, runtime, "query", result="42")
     result = runner.invoke(cli.app, ["query", "select count i by sym from trade"])
     assert result.exit_code == 0, result.output
-    assert rec.args[0] == '.gw.syncexec["select count i by sym from trade";`rdb`hdb]'
+    assert rec.args[0].startswith('.gw.syncexecj["select count i by sym from trade";`rdb`hdb;')
 
 
 def test_servers_names_where_the_gateway_routes(monkeypatch):
@@ -1650,7 +1656,22 @@ def test_servers_names_where_the_gateway_routes(monkeypatch):
     rec = _patch(monkeypatch, runtime, "query", result="42")
     argv = ["query", "exec max px from quote", "--servers", "hdb"]
     assert runner.invoke(cli.app, argv).exit_code == 0
-    assert rec.args[0] == '.gw.syncexec["exec max px from quote";`hdb]'
+    assert rec.args[0].startswith('.gw.syncexecj["exec max px from quote";`hdb;')
+
+
+def test_a_routed_query_is_laid_out_by_the_gateway_not_wrapped_again(monkeypatch):
+    """`.gw.syncexec` replies with -30!, which skips anything wrapped around
+    the call - so wrapping it in .Q.s printed kola's Python objects. The
+    layout rides in the join function, and runtime.query must not wrap too."""
+    monkeypatch.delenv(stack_render.RENDER_ENV, raising=False)
+    monkeypatch.setattr(stack_render, "console_size", lambda: (40, 120))
+    _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    rec = _patch(monkeypatch, runtime, "query", result=b"`s#`quote`trade\n")
+    result = runner.invoke(cli.app, ["query", "tables[]"])
+    assert result.exit_code == 0, result.output
+    assert rec.kwargs["render"] is None
+    assert 'system"c 40 120"' in rec.args[0] and ".Q.s raze x" in rec.args[0]
+    assert result.output == "`s#`quote`trade\n"
 
 
 def test_raw_sends_to_the_gateway_as_typed(monkeypatch):

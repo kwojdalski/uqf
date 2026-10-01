@@ -8,7 +8,7 @@ setUp:{[t]
         size:10 20 30 40f)};
 
 spec:{[groups;metrics] .qmeta.definition[`.metatest.source;`date;groups;metrics]};
-strip:{[result] delete meta_observed_at from result};
+strip:{[result] delete meta_observed_at, meta_definition from result};
 
 test_totals_include_empty_slices_and_deduplicate_requests:{[t]
     result:.qmeta.collect[spec[`symbol$();()!()];2026.09.01 2026.09.03 2026.09.01];
@@ -49,7 +49,87 @@ test_invalid_definitions_fail:{[t]
     .qunit.assertError[spec[;()!()];enlist`date;"partition cannot also be a group"];
     .qunit.assertError[spec[;()!()];`sym`sym;"duplicate grouping"];
     .qunit.assertError[spec[`symbol$();];enlist[`date]!enlist(count;`i);"aggregate cannot overwrite partition"];
-    .qunit.assertError[spec[`symbol$();];enlist[`meta_observed_at]!enlist(count;`i);"reserved provenance"]};
+    .qunit.assertError[spec[`symbol$();];enlist[`meta_observed_at]!enlist(count;`i);"reserved provenance"];
+    .qunit.assertThrows[spec[`symbol$();];enlist[`meta_definition]!enlist(count;`i);"*meta_definition are reserved";"reserved fingerprint"]};
+
+/ --- definition fingerprint ---------------------------------------
+
+test_collected_rows_carry_the_definition_fingerprint:{[t]
+    definition:spec[enlist`sym;()!()];
+    result:.qmeta.collect[definition;2026.09.01 2026.09.02];
+    .qunit.assertEquals[distinct result`meta_definition;enlist .qmeta.fingerprint definition;"every row names its definition"];
+    .qunit.assertEquals[.qmeta.fingerprint definition;.qmeta.fingerprint spec[enlist`sym;()!()];"equal definitions, equal fingerprint"];
+    .qunit.assertTrue[(.qmeta.fingerprint definition)<>.qmeta.fingerprint spec[`sym`venue;()!()];"different grouping, different fingerprint"]};
+
+/ The case the schema check cannot see: same column names and types, different meaning.
+test_refresh_refuses_a_redefined_aggregate_with_the_same_name:{[t]
+    stored:.qmeta.collect[spec[`symbol$();enlist[`notional]!enlist(sum;`size)];enlist 2026.09.01];
+    redefined:spec[`symbol$();enlist[`notional]!enlist(max;`size)];
+    .qunit.assertEquals[0#strip stored;0#strip .qmeta.collect[redefined;enlist 2026.09.01];"schemas really are identical"];
+    .qunit.assertThrows[.qmeta.refresh[stored;redefined;];enlist 2026.09.01;"*different definition*";"semantic change needs a rebuild"]};
+
+test_refresh_refuses_a_table_without_fingerprints:{[t]
+    definition:spec[`symbol$();()!()];
+    legacy:delete meta_definition from .qmeta.collect[definition;enlist 2026.09.01];
+    .qunit.assertThrows[.qmeta.refresh[legacy;definition;];enlist 2026.09.01;"*no meta_definition*";"pre-fingerprint table must be rebuilt"]};
+
+/ --- reconciliation with the coverage ledger ----------------------
+
+/ An in-memory ledger: these tests read claims, they never persist one.
+ledger:{[rows]
+    ![`.;();0b;enlist`etl_coverage];
+    .qetl.coverage.init_ledger[];
+    if[count rows;`etl_coverage insert flip .qetl.coverage.schema!flip rows];};
+
+claim:{[from_ts;to_ts;published;superseded]
+    (`trade;`;`v1;from_ts;to_ts;published;2026.09.03D00:00:00.000000000;superseded;0Ng)};
+
+tearDown:{[t] ![`.;();0b;enlist`etl_coverage]};
+
+reconciled:{[dates]
+    observed:.qmeta.collect[spec[enlist`sym;()!()];dates];
+    `date xkey .qmeta.reconcile[observed;dates;`trade;`;`v1]};
+
+test_reconcile_matches_mismatches_and_unrecorded_dates:{[t]
+    current:.qetl.coverage.still_current;
+    ledger (claim[2026.09.01D00:00:00.000000000;2026.09.01D12:00:00.000000000;2;current];
+        claim[2026.09.01D12:00:00.000000000;2026.09.02D00:00:00.000000000;1;current];
+        claim[2026.09.02D00:00:00.000000000;2026.09.03D00:00:00.000000000;5;current];
+        claim[2026.09.03D00:00:00.000000000;2026.09.04D00:00:00.000000000;0;current]);
+    result:reconciled 2026.09.01 2026.09.02 2026.09.03 2026.09.04;
+    .qunit.assertEquals[exec status from result;`match`mismatch`match`unrecorded;"status per date"];
+    .qunit.assertEquals[exec observed from result;3 1 0 0j;"observed rows summed over groups"];
+    .qunit.assertEquals[exec published from result;3 5 0 0j;"published rows summed over the day's windows"];
+    .qunit.assertEquals[exec windows from result;2 1 1 0j;"windows inside each day"];
+    .qunit.assertEquals[exec fully_covered from result;1110b;"coverage of the whole day"]};
+
+test_reconcile_ignores_superseded_claims:{[t]
+    current:.qetl.coverage.still_current;
+    ledger (claim[2026.09.01D00:00:00.000000000;2026.09.02D00:00:00.000000000;9;2026.09.03D01:00:00.000000000];
+        claim[2026.09.01D00:00:00.000000000;2026.09.02D00:00:00.000000000;3;current]);
+    .qunit.assertEquals[(reconciled enlist 2026.09.01)[2026.09.01;`status];`match;"only the current claim counts"]};
+
+test_reconcile_flags_lost_rows_on_a_date_with_no_observations:{[t]
+    ledger enlist claim[2026.09.05D00:00:00.000000000;2026.09.06D00:00:00.000000000;7;.qetl.coverage.still_current];
+    row:(reconciled enlist 2026.09.05)2026.09.05;
+    .qunit.assertEquals[row`observed`published;0 7j;"published rows that are gone"];
+    .qunit.assertEquals[row`status;`mismatch;"absent date is not skipped"]};
+
+test_reconcile_refuses_to_attribute_crossing_or_overlapping_windows:{[t]
+    current:.qetl.coverage.still_current;
+    ledger (claim[2026.09.01D18:00:00.000000000;2026.09.02D06:00:00.000000000;4;current];
+        claim[2026.09.03D00:00:00.000000000;2026.09.03D12:00:00.000000000;2;current];
+        claim[2026.09.03D06:00:00.000000000;2026.09.04D00:00:00.000000000;2;current]);
+    result:reconciled 2026.09.01 2026.09.02 2026.09.03;
+    .qunit.assertEquals[exec status from result;3#`ambiguous;"midnight crossing and overlap cannot be split"]};
+
+test_reconcile_rejects_malformed_requests:{[t]
+    ledger ();
+    observed:.qmeta.collect[spec[`symbol$();()!()];enlist 2026.09.01];
+    .qunit.assertThrows[.qmeta.reconcile[observed;;`trade;`;`v1];`date$();"*nonempty dates*";"no implicit dates"];
+    .qunit.assertThrows[.qmeta.reconcile[observed;;`trade;`;`v1];enlist 0Nd;"*null dates*";"null date"];
+    .qunit.assertThrows[.qmeta.reconcile[observed;;`trade;`;`v1];enlist 1j;"*date vector*";"wrong type"];
+    .qunit.assertThrows[.qmeta.reconcile[;enlist 2026.09.01;`trade;`;`v1];delete rows from observed;"*rows count*";"rows column required"]};
 
 test_failed_refresh_leaves_prior_table_unchanged:{[t]
     definition:spec[`symbol$();()!()];
@@ -78,7 +158,9 @@ test_dqe_adapter_preserves_requested_partition_in_payload:{[t]
 
 test_a_metatable_name_must_carry_the_prefix:{[t]
     .qunit.assertEquals[.qmeta.require_name`meta_fx_counts;`meta_fx_counts;"a prefixed name passes unchanged"];
-    .qunit.assertThrows[.qmeta.require_name;`fx_counts;"*must start with meta_*e.g. `meta_fx_counts";"unprefixed name refused, with the name it should be"];
+    / Two patterns, not "*...*...": KDB-X's like throws 'nyi past two wildcards.
+    e:.qunit.assertThrows[.qmeta.require_name;`fx_counts;"*must start with meta_*";"unprefixed name refused"];
+    .qunit.assertTrue[e like "*e.g. `meta_fx_counts";"with the name it should be"];
     .qunit.assertThrows[.qmeta.require_name;`meta_;"*must start with meta_ and name something*";"the prefix alone names nothing"];
     .qunit.assertThrows[.qmeta.require_name;`;"*must start with meta_*";"empty name refused"];
     .qunit.assertThrows[.qmeta.require_name;"meta_x";"*must be a symbol atom*";"a string is not a name"]};
