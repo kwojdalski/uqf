@@ -43,9 +43,9 @@ lives.
 ## Requirements
 
 **KDB-X is preferred** --- KX's own interpreter, and the one everything here is
-verified against. The personal edition is free for non-commercial use; it
-requires registering for a license at
-[kx.com](https://kx.com/kdb-personal-edition-download/).
+verified against. Its Community Edition is free for personal and commercial use;
+it requires registering for a license, and the [install
+guide](https://code.kx.com/get-started/install.html) walks through it.
 
 ```
 q tests/run_tests.q
@@ -271,10 +271,10 @@ that also says what the gates check and what CI cannot.
 line coverage for Python, and **statement and branch coverage for q** through
 the [`.cov` library](scripts/dev/coverage.q), which exists because q has no
 coverage tool and follows [KX's own coverage
-API](https://code.kx.com/developer/libraries/code-coverage/). It counts
-characters in tracked ranges, so a long untaken branch weighs more than a terse
-one, and it instruments statement positions only --- a `$` arm is *wrapped*
-rather than probed, so laziness survives.
+API](https://code.kx.com/analyst/libraries/code-coverage). It counts characters
+in tracked ranges, so a long untaken branch weighs more than a terse one, and it
+instruments statement positions only --- a `$` arm is *wrapped* rather than
+probed, so laziness survives.
 
 `q-coverage` is the gate: it fails when the set of functions nothing enters
 differs from `tests/q/coverage_baseline.txt` **in either direction**, so a
