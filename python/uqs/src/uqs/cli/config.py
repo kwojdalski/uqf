@@ -35,6 +35,7 @@ from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing
 from uqs.stack import logs as stack_logs
+from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 from uqs.stack.listing import LISTABLE_KINDS
 
@@ -254,13 +255,13 @@ def logs(
             return
     try:
         if multitail:
-            argv = stack_logs.multitail_command(
+            argv = stack_multitail.multitail_command(
                 _paths(), _procs(procs), stream=stream or "both", columns=columns or 1, lines=lines
             )
             if print_only:
                 console.print(shlex.join(argv), markup=False, highlight=False, soft_wrap=True)
                 return
-            stack_logs.run_multitail(argv)
+            stack_multitail.run_multitail(argv)
         elif follow:
             stack_logs.follow_logs(_paths(), _procs(procs), min_level=level)
         else:
