@@ -91,7 +91,7 @@ def _resolve_columns(requested: str | None) -> list[str]:
         _die(
             UqsError(
                 f"unknown summary column(s): {', '.join(unknown)}. "
-                f"Available: {', '.join(SUMMARY_ALL_COLUMNS)}, "
+                f"Available: {', '.join(sorted(SUMMARY_ALL_COLUMNS))}, "
                 "or `all` / `status`"
             )
         )

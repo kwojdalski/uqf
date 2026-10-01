@@ -97,7 +97,9 @@ def bounded_worker(
             "exist already - drop --columns"
         )
     if transport not in TRANSPORTS:
-        raise UqsError(f"--transport must be one of {', '.join(TRANSPORTS)}, not {transport!r}")
+        raise UqsError(
+            f"--transport must be one of {', '.join(sorted(TRANSPORTS))}, not {transport!r}"
+        )
     if reuse_source and transport != "ipc":
         raise UqsError(
             f"--transport shapes a new source, and {src!r} exists already - drop --transport"

@@ -358,7 +358,7 @@ def multitail_command(
     and a name absent from process.csv is refused - resolve_procnames' rule.
     """
     if stream not in MULTITAIL_STREAMS:
-        raise UqsError(f"--stream must be one of {', '.join(MULTITAIL_STREAMS)}, not {stream!r}")
+        raise UqsError(f"--stream {stream!r} is not one of {', '.join(sorted(MULTITAIL_STREAMS))}")
     if columns < 1:
         raise UqsError(f"--columns must be at least 1, not {columns}")
     if lines < 0:

@@ -342,7 +342,7 @@ def new_job(
                 unprofiled=unprofiled,
             )
         else:
-            _die(UqsError(f"--kind must be 'streaming', 'backfill' or 'normalizer', not {kind!r}"))
+            _die(UqsError(f"--kind must be 'backfill', 'normalizer' or 'streaming', not {kind!r}"))
             return
     except UqsError as exc:
         _die(exc)

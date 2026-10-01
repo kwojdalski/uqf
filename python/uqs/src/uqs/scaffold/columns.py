@@ -110,7 +110,7 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
     assumes it.
     """
     out: list[tuple[str, str]] = []
-    names = ", ".join(t.name for t in TYPES)
+    names = ", ".join(sorted(t.name for t in TYPES))
     for part in (p.strip() for p in spec.split(",") if p.strip()):
         if ":" not in part:
             raise UqsError(f"column {part!r} must be name:type, e.g. 'value:float'. Types: {names}")

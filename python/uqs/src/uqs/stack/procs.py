@@ -251,7 +251,7 @@ def set_process_config(paths: UqsPaths, procname: str, field: str, value: str) -
     only file this touches; the vendored process.csv is never edited.
     """
     if field not in PROCESS_CSV_FIELDS:
-        raise UqsError(f"unknown process.csv field {field!r} - {PROCESS_CSV_FIELDS}")
+        raise UqsError(f"unknown process.csv field {field!r} - {sorted(PROCESS_CSV_FIELDS)}")
     if procname not in list_process_names(paths):
         raise UqsError(f"unknown process {procname!r} - {sorted(list_process_names(paths))}")
 
