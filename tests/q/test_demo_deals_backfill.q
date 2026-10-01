@@ -192,6 +192,44 @@ test_a_contract_breaking_source_fails_the_window:{[t]
     .qetl.source.sources[`demo_deals]:@[.qetl.source.sources`demo_deals;`fixture;:;orig];
     .qunit.assertEquals[0=count value `etl_coverage;1b;"a source missing declared columns records no coverage, rather than publishing nulls as complete"]};
 
+/ --- the source query runs under the retry policy -----------------------
+
+/ Private: swap the source's fixture for f, returning the original. The
+/ fixture is called inside .qetl.source.fetch_window, exactly where a live
+/ source's query is, so a throwing fixture is a throwing query.
+swap_fixture:{[f]
+    orig:.qetl.source.sources[`demo_deals]`fixture;
+    .qetl.source.sources[`demo_deals]:@[.qetl.source.sources`demo_deals;`fixture;:;f];
+    orig}
+
+/ The query used to run BEFORE with_retry was entered: fetch applied its
+/ attempt lambda to all four arguments instead of projecting it, so a
+/ transport blip was never retried and threw straight out of the run.
+test_a_transport_error_in_the_query_is_retried:{[t]
+    .qetl.cfg.set_override[`retry_base_delay_ms;"0"];
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .ddbftest.calls:0;
+    orig:.ddbftest.swap_fixture {[]
+        .ddbftest.calls+:1;
+        if[1=.ddbftest.calls; '"connection refused"];
+        .qpipe.source.demo_deals.fixture[]};
+    r:@[{.qpipe.job.demo_deals_backfill.fetch[.ddbftest.d 1;.ddbftest.d 2]};::;{`state`error!(`threw;x)}];
+    .ddbftest.swap_fixture orig;
+    .qunit.assertEquals[r`state;`ok;"the second attempt succeeds, so the window is fetched"];
+    .qunit.assertEquals[(r`attempts;.ddbftest.calls);2 2;
+        "one failed attempt and one retry - the query ran inside with_retry, twice"]};
+
+/ A query that fails for good is a failed WINDOW, recorded and counted, and
+/ the run carries on - not an exception thrown out of run past cleanup.
+test_a_failing_query_fails_its_window_not_the_run:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    orig:.ddbftest.swap_fixture {[] '"type error on column px"};
+    r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`error!(`threw;x)}];
+    .ddbftest.swap_fixture orig;
+    .qunit.assertEquals[r`state;`partial;"the run returns its result rather than throwing"];
+    .qunit.assertEquals[(r`windows_completed;r`windows_failed);0 3;
+        "every window was attempted and each failure was counted"]};
+
 / Coverage records an empty window deliberately, so the quality gate receives
 / one. The guard exists because the three checks below it select from an
 / empty table and would report no failures anyway - but only by accident of

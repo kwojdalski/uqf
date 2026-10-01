@@ -567,8 +567,13 @@ plan:{[worker;cursor]
 fetch:{[worker;from_ts;to_ts]
     cfg:def worker;
     h:read_state[worker;`handle];
+    / The fifth, unused parameter is what makes this a projection. With four
+    / it was a full application: the query ran HERE, before with_retry, so a
+    / failing query skipped the retries and the failed-window path and threw
+    / out of the run, and a working one handed with_retry a table that `t[]`
+    / happened to return unchanged.
     r:.qetl.job.bounded.runtime.with_retry[.qetl.job.bounded.runtime.policy[];
-        {[source;h;from_ts;to_ts] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts]];
+        {[source;h;from_ts;to_ts;unused] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts]];
     .qetl.log.dbg[worker;"fetch attempted";
         `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
             $[`ok~r`state; count r`result; 0N])];
