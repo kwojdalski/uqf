@@ -400,12 +400,13 @@ labels recorded as materialisation metadata.
 **Where a backfill's rows land when it runs in the stack.** Leave `io` out and
 the process decides. `uqs backfill` runs the worker in a backfill process, which
 writes through `.qetl.io.hdb`: each row goes straight into the HDB partition of
-its own date, taken from `time` or from the source's time column. Each partition
-is sorted with `p#sym` at the end of the run, and the HDB is told to reload. It
-does not go through the tickerplant, which would stamp the rows with today's
-time and write them into today's partition. It refuses rows dated today or
-later, which belong to the tickerplant and end-of-day. In plain q, in a test or
-at a prompt, the same worker writes to an in-memory table.
+its own date, taken from `time` or from the source's time column. Each day is
+sorted with `p#sym` as the run moves past it, and the HDB is told to reload, so
+a long backfill shows up day by day rather than at its end. It does not go
+through the tickerplant, which would stamp the rows with today's time and write
+them into today's partition. It refuses rows dated today or later, which belong
+to the tickerplant and end-of-day. In plain q, in a test or at a prompt, the
+same worker writes to an in-memory table.
 
 ## 3. Register it
 

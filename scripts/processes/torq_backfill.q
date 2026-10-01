@@ -118,6 +118,38 @@ hdb_root:{[]
     if[0=count d; '"torq_backfill: KDBHDB is unset - a backfill writes into the HDB, and cannot tell where it is"];
     hsym `$d}
 
+/ ------------------------------------------------------------ HDB RELOAD
+/ .
+/ WHEN THE HDB IS TOLD TO RELOAD. It used to be once, after the run: a
+/ thirty-day backfill showed nothing in the HDB until its last day was
+/ written. Now the HDB writer finishes each day as the run moves past it
+/ (.qetl.io.flush), and on_hdb_ready asks .qetl.io.due whether to reload now:
+/ not while a partition is still being appended to, and mid-run not within
+/ hdb_reload_seconds of the last reload. The run's final call always reloads
+/ if anything finished since.
+
+/ Seconds between mid-run reloads: hdb_reload_seconds (UQF_HDB_RELOAD_SECONDS),
+/ else 30. 0 reloads at every day the run finishes. Unreadable is the
+/ default, not an error - a typo here should not fail a backfill that has
+/ rows to write.
+/ @return the interval, as a timespan
+reload_interval:{[]
+    v:.qetl.cfg.raw `hdb_reload_seconds;
+    n:$[0=count v; 30; null j:"J"$v; 30; j<0; 30; j];
+    n*0D00:00:01}
+
+/ What has been finished and not yet reloaded, and when the last reload was.
+reload_state:`dirty`last!(0b;0Np)
+
+/ The HDB manager's on_ready: reload when .qetl.io.due says so.
+/ @param status `finished`pending`final from .qetl.io.flush or .qetl.io.finish
+/ @return 1b when it asked the HDB to reload
+on_hdb_ready:{[status]
+    d:.qetl.io.due[.qproc.backfill.reload_state;status;.z.p;reload_interval[]];
+    `.qproc.backfill.reload_state set d`state;
+    if[d`act; .qtorq.reload_hdb[]];
+    d`act}
+
 / Point every worker that declares no io of its own at the HDB, partitioned
 / by its source's time column. Here rather than in the worker, because where
 / rows belong is a fact about the stack, not about the worker - the same
@@ -127,7 +159,7 @@ hdb_root:{[]
 use_hdb:{[decl]
     root:hdb_root[];
     col:(.qetl.source.def decl`source)`time_column;
-    .qetl.io.default:.qetl.io.hdb[root;col];
+    .qetl.io.default:.qetl.io.hdb[root;col],enlist[`on_ready]!enlist on_hdb_ready;
     .qetl.log.info[`backfill;"writing into the HDB";`root`partition_col!(root;col)];
     .qetl.io.default}
 
@@ -162,9 +194,8 @@ run:{[]
     r:(` sv ns,`run)[];
     .qetl.log.info[worker;"backfill process finished";
         r,`run_ms`total_ms!(elapsed_ms t2;elapsed_ms t0)];
-    / The partitions are sorted and filled by the run's own finish step; a
-    / running HDB still maps the old set until it is told to reload.
-    if[0<r`rows_published; .qtorq.reload_hdb[]];
+    / No reload here: the run's finish step called on_hdb_ready with final
+    / set, which reloads if anything finished since the last one.
     r}
 
 \d .

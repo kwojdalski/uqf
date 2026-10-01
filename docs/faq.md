@@ -125,11 +125,13 @@ In the HDB, in the partition of each row's own date - not through the
 tickerplant. A backfill started by `uqs backfill` writes through `.qetl.io.hdb`:
 it refuses rows dated today or later (the tickerplant's and end-of-day's), gives
 each row a `time` from its own time column, and appends it to
-`<hdb>/<date>/<table>/`. At the end of the run each partition it touched is
-sorted with `p#sym`, and the running HDB is asked to reload. The tickerplant
-would stamp old rows with today's time, file them under today's date, and hand
-them to every subscriber as if they had just happened. In plain q - a test, or a
-prompt - the same worker writes to an in-memory table instead. See
+`<hdb>/<date>/<table>/`. As the run moves past each day, that day's partitions
+are sorted with `p#sym` and the running HDB is asked to reload - at most every
+`UQF_HDB_RELOAD_SECONDS` (default 30), never while a partition is still being
+appended to, and always once more at the end. The tickerplant would stamp old
+rows with today's time, file them under today's date, and hand them to every
+subscriber as if they had just happened. In plain q - a test, or a prompt - the
+same worker writes to an in-memory table instead. See
 [`io_manager.q`](../src/etl/core/io_manager.q).
 
 ## How is a backfill job different from TorQ's dataloader?
