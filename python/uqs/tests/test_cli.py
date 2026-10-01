@@ -1252,12 +1252,18 @@ def test_every_command_is_reachable_and_documented():
 
 def test_main_configures_logging_before_running(monkeypatch):
     """Ordering, not decoration: a command that logged before logging was
-    configured would write through a default handler nobody sees."""
+    configured would write through a default handler nobody sees.
+
+    The env files load between two configurations: after the first, so a
+    warning about them has somewhere to go, and before the second, because
+    they may set LOG_LEVEL. And before the app, so every process a command
+    starts inherits them."""
     order: list[str] = []
     monkeypatch.setattr(cli.entry, "configure_logging", lambda **kw: order.append("configure"))
+    monkeypatch.setattr(cli.entry, "load_repo_env_files", lambda: order.append("env files"))
     monkeypatch.setattr(cli.entry, "app", lambda: order.append("app"))
     cli.main()
-    assert order == ["configure", "app"]
+    assert order == ["configure", "env files", "configure", "app"]
 
 
 # ------------------------------------------------------------ debug mode

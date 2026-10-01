@@ -34,6 +34,7 @@ from uqs.paths import UqsError
 from uqs.stack import listing, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
+from uqs.stack.envfiles import load_repo_env_files
 from uqs.stack.listing import LISTABLE_KINDS
 
 configure_logging(component="uqs_mcp")
@@ -293,6 +294,8 @@ def uqs_crypto_fills_status() -> dict[str, str]:
 
 def main() -> None:
     """Entry point for the `uqs-mcp` console script."""
+    # As the CLI does: the tools start processes, and those inherit this env.
+    load_repo_env_files()
     mcp.run()
 
 

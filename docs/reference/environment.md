@@ -23,14 +23,22 @@ without it:
   accept underscores, so a `${UQF_SCRIPTS}` in `process.csv` resolves like any
   other.
 
-- **Almost none of this is read from `.env`.** Exactly one reader consults that
-  file: `.qdata.cfg` in `src/integrations/data.q`, for `DATABENTO_DATA_DIR`.
-  Every Python package, every TorQ script and the browser app read the OS
-  environment only, so a variable placed in `.env` for any of them is not set,
-  it is ignored --- and the code reports it missing while the file plainly
-  contains it. `.env.example` lists what belongs there and sorts the rest by
-  theme (secrets, per-run arguments, deployment wiring, developer knobs);
-  `check_env_reference.py` refuses a key in it that nothing reads from `.env`.
+- **`uqs` loads `.env` and `.envrc` into every process it starts.** Before any
+  command runs, `uqs` and `uqs-mcp` put both files from the repository root into
+  their own environment, which every process they start inherits
+  (`uqs.stack.envfiles`). The environment `uqs` was started with wins, then
+  `.envrc`, then `.env`. `.envrc` is evaluated by `direnv export json`, never
+  sourced, so it loads only once approved with `direnv allow`; without direnv,
+  or while the file is blocked, it is skipped with a warning. Only variable
+  names are logged, at DEBUG.
+
+- **Outside `uqs`, almost none of this is read from `.env`.** One reader
+  consults the file itself: `.qdata.cfg` in `src/integrations/data.q`, for
+  `DATABENTO_DATA_DIR`. A process started some other way (q run directly,
+  `scripts/test.py`, the browser app) reads the OS environment only.
+  `.env.example` therefore lists only what `.qdata.cfg` reads, and sorts the
+  rest by theme (secrets, per-run arguments, deployment wiring, developer
+  knobs); `check_env_reference.py` refuses any other key in it.
 
 ## Read by this repository
 
@@ -115,9 +123,10 @@ about where data lives, which is a confusing way to spend an afternoon.
 
 There is no file fallback for a credential, deliberately (see the
 `UQF_SOURCE_CRED_<SOURCE>` row above), so anything secret or machine-specific
-has to be exported by the shell that starts the process. A gitignored `.envrc`
-is the tidiest way to do that, and it keeps the rule intact --- nothing in this
-tree reads `.envrc`, so the value still arrives through the environment.
+has to reach the process through its environment. A gitignored `.envrc` is the
+tidiest way to do that: direnv exports it in your shell, and `uqs` exports it
+into every process it starts even from a shell without direnv --- through direnv
+in both cases, so only after `direnv allow`.
 
 Two reasons to prefer it over typing the `export`:
 
@@ -137,10 +146,9 @@ Two reasons to prefer it over typing the `export`:
   export UQF_SOURCE_CRED_CRYPTO_MARKET_DATA="DRIVER=DuckDB;Database=$CRYPTORUST_ROOT/data/live.duckdb;access_mode=READ_ONLY;file_search_path=$CRYPTORUST_ROOT"
   ```
 
-`.env` is a different thing and is not an alternative here: exactly one file
-reads it (`src/integrations/data.q`, for `DATABENTO_DATA_DIR`), it is inert data
-rather than shell, and a key put there that nothing reads is ignored rather than
-set. See [`.env.example`](../../.env.example).
+`.env` also reaches every process `uqs` starts, but it is inert data rather than
+shell, so nothing in it can be derived, and outside `uqs` only `.qdata.cfg`
+reads it (for `DATABENTO_DATA_DIR`). See [`.env.example`](../../.env.example).
 
 ## Prerequisites, not configuration
 
