@@ -180,8 +180,9 @@ optional_cfg:`check`io`facts`partition
 / loads.
 / @param worker the worker's name
 / @param decl dict of source, dataset, width, transform, and optionally
-/   check, facts, partition, io, procname (default `<worker>1), note and
-/   on_conflict (default `upsert - see .qetl.io's CONFLICTS)
+/   check, facts, partition, io, procname (default `<worker>1), note,
+/   on_conflict (default `upsert - see .qetl.io's CONFLICTS) and target_key
+/   (default the source's row_key - see require_target_key)
 / @throws error naming every missing or malformed field at once
 define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -256,6 +257,7 @@ define:{[worker;decl]
     if[not -11h=type oc;
         '"define: ",string[worker],"'s on_conflict must be a symbol, e.g. `upsert"];
     decl[`on_conflict]:.qetl.io.require_strategy oc;
+    decl[`target_key]:require_target_key[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
@@ -304,6 +306,31 @@ require_transform:{[worker;cfg]
     if[count p;
         'who,"'s transform ",string[cfg`transform]," does not read source ",string[cfg`source],"'s contract: ","; " sv p];
     }
+
+/ Private: the columns on_conflict matches rows by, in the TARGET's names.
+/ .
+/ The source's row_key names source columns - the contract requires it - but
+/ publish matches the transformed batch, and a transform may rename the very
+/ columns the key is made of (databento's symbol/ts_event become sym/time,
+/ upstream_trades' ex becomes venue). So the key the writer uses is the
+/ worker's to declare, defaulting to the source row_key for a transform that
+/ keeps its names. Either way it must be among the transform's declared
+/ output columns: checked here, so a key the transform drops fails the
+/ declaration rather than every window with an error that only names a column.
+/ @return the target key as a symbol vector
+require_target_key:{[worker;decl]
+    k:$[`target_key in key decl; decl`target_key; .qetl.source.row_key decl`source];
+    if[not 11h=abs type k;
+        '"define: ",string[worker],"'s target_key must be a symbol or symbol vector naming output columns"];
+    k:(),k;
+    out:cols (.qetl.transform.def decl`transform)`output;
+    absent:k where not k in out;
+    if[count absent;
+        '"define: ",string[worker],"'s ",$[`target_key in key decl;"target_key";"source row_key"],
+         " names ",(", " sv string absent)," which transform ",string[decl`transform],
+         " does not output (",(", " sv string out),")",
+         $[`target_key in key decl;"";" - declare target_key in the output's column names"]];
+    k}
 
 / Private: a config carrying every optional key, absent ones as (::).
 normalised:{[cfg]
@@ -600,7 +627,7 @@ publish:{[worker;batch]
     src:.qetl.source.def cfg`source;
     w:read_state[worker;`last_window];
     opts:`on_conflict`row_key`time_column`range_from`range_to!
-        (on_conflict worker;.qetl.source.row_key cfg`source;src`time_column;w`range_from;w`range_to);
+        (on_conflict worker;cfg`target_key;src`time_column;w`range_from;w`range_to);
     .qetl.io.write_keyed[.qetl.io.for_cfg cfg;src`target;batch;opts]}
 
 / The conflict strategy this run writes under: the operator's override when
