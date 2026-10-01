@@ -8,7 +8,7 @@ licence, free ports and a couple of minutes. That is not a reason to skip
 it - the bugs it catches are precisely the ones CI cannot see, because
 every one of them passed CI on the day it shipped (#298).
 
-WHAT IT DOES NOT DO: it never calls `uqs clean`. A developer's tplogs
+WHAT IT DOES NOT DO: it never calls `uqs remove output`. A developer's tplogs
 and sample data are not this gate's to delete.
 """
 

@@ -258,7 +258,7 @@ def follow_during(
     A log that already exists is the previous run's, followed from its end;
     when the process starts, TorQ points the alias at this run's file and
     `tail -F` follows it there from its first line. A log that does not exist
-    yet - a first run, or after `uqs clean` - is waited for and read from
+    yet - a first run, or after `uqs remove output` - is waited for and read from
     its first line once it appears, rather than handed to `tail -F` to
     retry: whether tail waits for a missing file differs between GNU and BSD
     tail, and this has to work on both.

@@ -85,10 +85,10 @@ shared credential, and the caller's identity is *claimed* through a header
 anyone can set. That is defensible while every route is a read. Once a route can
 stop the fleet, "anyone who can reach the port" is the whole access control.
 
-`clean` is deliberately **not** exposed. It deletes logs, tplogs, wdb and the
-copied sample data --- the one orchestrator verb whose blast radius is data
-rather than process state. `uqs clean` remains, where the person running it is
-at a terminal on the host.
+Removing output is deliberately **not** exposed. It deletes logs, tplogs, wdb
+and the copied sample data --- the one orchestrator verb whose blast radius is
+data rather than process state. `uqs remove output` remains, where the person
+running it is at a terminal on the host.
 
 A backfill is launched detached rather than awaited: it runs for as long as its
 range takes, and a request that blocked on one would time out mid-run and tell

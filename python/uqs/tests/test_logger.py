@@ -390,7 +390,7 @@ def _stop_after_first(seen: list[dict[str, str]]):
 
 
 def test_follow_during_reads_a_log_the_start_creates_from_its_first_line(tmp_path, monkeypatch):
-    """A first run, or one after `uqs clean`: no log exists until the process
+    """A first run, or one after `uqs remove output`: no log exists until the process
     starts, and what it prints while it loads is the part worth seeing."""
     paths = _paths_with_logs(tmp_path, monkeypatch, {})
     target = tmp_path / "logs" / "out_rdb1.log"

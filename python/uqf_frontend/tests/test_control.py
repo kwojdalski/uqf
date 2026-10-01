@@ -181,7 +181,7 @@ def test_clean_is_not_reachable(writeable):
     """Deliberately absent. `clean` deletes logs, tplogs, wdb and the copied
     sample data - the one orchestrator verb whose blast radius is DATA, and
     not something to offer to anyone who can reach the port on a deployment
-    with a claimed identity. `uqs clean` remains, at a terminal."""
+    with a claimed identity. `uqs remove output` remains, at a terminal."""
     assert writeable.post("/control/process/clean", json={"procs": "all"}).status_code == 422
     assert "clean" not in control.LIFECYCLE_ACTIONS
 

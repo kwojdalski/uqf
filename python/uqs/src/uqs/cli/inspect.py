@@ -7,6 +7,7 @@ cli/lifecycle.py for why the split is shaped this way.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from typing import Annotated
 
@@ -141,6 +142,40 @@ def _proc_port(procname: str, base_port: int) -> int:
     return int(ports[procname])
 
 
+#: What `uqs query` asks when told neither --proc nor --port: the gateway, the
+#: fleet's front door, rather than whichever process a guess would land on.
+DEFAULT_QUERY_PROC = "gateway1"
+
+#: Where the gateway sends a select by default: today's rows and history.
+DEFAULT_GATEWAY_SERVERS = "rdb hdb"
+
+#: The qSQL forms the gateway routes: the two that only read. update and
+#: delete are left out on purpose - `delete from `trade` routed to the RDB
+#: would change live data, which a default must never do. Anything else - a
+#: `.gw.*` call of the caller's own, a system command - is sent as typed.
+_QSQL = re.compile(r"^\s*(select|exec)\b")
+_PROCTYPE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def gateway_expression(expr: str, servers: str) -> str:
+    """`expr` as the gateway runs it: a qSQL query wrapped in TorQ's
+    `.gw.syncexec[query;servertypes]`, which sends it to every server of those
+    types and joins what they return; anything else unchanged.
+
+    The gateway holds no tables of its own, so `select from trade` sent to it
+    as typed fails - which made defaulting `uqs query` to it useless for the
+    one thing a query is most often for.
+    """
+    if not _QSQL.match(expr):
+        return expr
+    types = servers.split()
+    bad = [t for t in types if not _PROCTYPE.match(t)]
+    if not types or bad:
+        raise UqsError(f"--servers takes process types, e.g. 'rdb hdb' - not {servers!r}")
+    quoted = expr.replace("\\", "\\\\").replace('"', '\\"')
+    return f'.gw.syncexec["{quoted}";{"".join("`" + t for t in types)}]'
+
+
 @app.command()
 def query(
     expr: Annotated[
@@ -153,7 +188,7 @@ def query(
     proc: Annotated[
         str | None,
         typer.Option(
-            help="process to query, by name, e.g. rdb1",
+            help=f"process to query, by name, e.g. rdb1 (default: {DEFAULT_QUERY_PROC})",
             autocompletion=completion.procname,
         ),
     ] = None,
@@ -170,18 +205,30 @@ def query(
     host: str = "localhost",
     user: str = "admin",
     passwd: str = "admin",
+    servers: Annotated[
+        str,
+        typer.Option(
+            help="with the gateway: the process types a select is routed to",
+        ),
+    ] = DEFAULT_GATEWAY_SERVERS,
     export: ExportOpt = None,
 ) -> None:
     """Run a q expression against a running process - or, with no expression,
     open an interactive qcon session on it (under rlwrap when installed).
 
-    Name the process with `--proc rdb1`, or give its `--port`. One of the two
-    is required: defaulting would turn "you forgot to say which process" into
-    "silently queried the tickerplant".
+    Name the process with `--proc rdb1`, or give its `--port`. With neither it
+    asks the gateway, gateway1 - the fleet's front door, and the one process
+    whose answer does not depend on which part of the day the data is in.
+
+    On the gateway a select or exec is routed for you: it
+    runs as `.gw.syncexec[query;`rdb`hdb]`, across today's rows and history,
+    and `--servers` names other process types. Anything else is sent as typed.
     """
-    if (proc is None) == (port is None):
-        _die(UqsError("name the process to query: --proc NAME or --port N, not both"))
+    if proc is not None and port is not None:
+        _die(UqsError("name the process to query once: --proc NAME or --port N, not both"))
         return
+    if proc is None and port is None:
+        proc = DEFAULT_QUERY_PROC
     if proc is not None and host not in _LOCAL_HOSTS:
         # --proc reads this machine's registry and process list, so on another
         # host both the port and the up/down check would describe the wrong one.
@@ -204,6 +251,13 @@ def query(
             return
         _exec_qcon(host, port, user, passwd)
         return
+    if proc == DEFAULT_QUERY_PROC:
+        try:
+            expr = gateway_expression(expr, servers)
+        except UqsError as exc:
+            _die(exc)
+            return
+        log.debug("routed through the gateway: {}", expr)
     try:
         result = runtime.query(expr, port, host=host, user=user, passwd=passwd)
     except Exception as exc:  # kola raises its own exception types on connect/query failure
