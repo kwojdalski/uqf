@@ -1,0 +1,32 @@
+# Suites that pass on PeachQ as well as KDB-X - the ones CI holds blocking.
+#
+# A hosted runner has no KDB-X licence, so the full suite cannot block a merge
+# there (see .github/workflows/ci.yml). PeachQ can run, but cannot yet load
+# the ETL tree (#511). These suites need only src/init.q - the quant library -
+# and pass on both, so tests/run_tests_portable.q runs them on PeachQ in CI
+# and a regression in any of them fails the build.
+#
+# One file per line, relative to tests/q/. Measured by loading each file alone
+# on PeachQ v0.88 beside src/init.q (2026-10-01): these passed every test.
+# Near misses, left out because the gate takes a file or nothing:
+#   test_limits.q   28 of 29 - one test differs on PeachQ
+#   test_seed.q     PeachQ's generator draws different numbers, by design
+# A suite that starts passing on PeachQ belongs here; one that stops is a
+# regression on PeachQ to fix or, if it is PeachQ's, to take out with a reason.
+test_allocation.q
+test_book.q
+test_catalog.q
+test_ccy.q
+test_daycount.q
+test_desk_positions.q
+test_dqchecks.q
+test_execution.q
+test_execution_scale.q
+test_forwards.q
+test_microstructure.q
+test_options.q
+test_positions.q
+test_rates.q
+test_risk.q
+test_schema.q
+test_stats.q

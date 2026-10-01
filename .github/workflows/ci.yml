@@ -75,7 +75,7 @@ jobs:
             echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "SKIP=$SKIP,q-tests,q-coverage,contract-surface" >> "$GITHUB_ENV"
-            echo "::warning::No q interpreter on this runner. qUnit, the coverage gate and q-dependent Python IPC tests are not exercised; static q checks still run."
+            echo "::warning::No q interpreter on this runner. The full qUnit suite, the coverage gate and q-dependent Python IPC tests are not exercised here; static q checks still run, and the portable qUnit suites run on PeachQ further down."
             echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
             echo "No q interpreter is installed on this hosted runner. The qUnit, coverage and contract-surface hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q and scripts/test.py q-coverage locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -202,10 +202,20 @@ jobs:
         # so with `kdbx-only: REASON` rather than being unmarked.
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
         run: UQF_Q_IMPL=peachq QCMD="$PEACHQ_BIN" python3 scripts/test.py q-docs
+      - name: Run the portable qUnit suites on PeachQ (blocking)
+        # The q tests CI can hold a merge to. This runner has no KDB-X, so the
+        # full suite cannot block here, and PeachQ cannot load the ETL tree
+        # yet (#511). tests/q/portable_suites.txt lists the suites that need
+        # only the quant library and pass on PeachQ as well as KDB-X; a
+        # regression in any of them fails the build.
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
+        timeout-minutes: 8
+        run: UQF_Q_IMPL=peachq QCMD="$PEACHQ_BIN" python3 scripts/test.py q-unit-portable
       - name: Run the qUnit suite on PeachQ (informational)
         # Not a verdict on the tree - KDB-X is the verified interpreter - but
         # the one measure CI can take of how far PeachQ and the suite agree.
-        # Never fails the build; the step summary says how it went.
+        # Never fails the build; the step summary says how it went. The part
+        # of it that does block is the portable step above.
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
         continue-on-error: true
         timeout-minutes: 8

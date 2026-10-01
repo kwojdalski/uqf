@@ -143,14 +143,24 @@ a reason to skip it.
 The one exception is PeachQ, an MIT-licensed q that a hosted runner can download
 where it cannot license KDB-X. CI installs a pinned release, checked against its
 published sha256, beside the tree and **not** on `PATH`. So every step above
-still finds no q, and nothing it does can pass for a KDB-X run. Two steps then
+still finds no q, and nothing it does can pass for a KDB-X run. Three steps then
 name it explicitly, with `UQF_Q_IMPL=peachq` and `QCMD`:
 
 - **`q-docs` on PeachQ, blocking.** This runs every ```` ```q ```` block in the
   docs that is marked to run (see below).
+- **`q-unit-portable` on PeachQ, blocking.** The suites listed in
+  `tests/q/portable_suites.txt`, run by `tests/run_tests_portable.q` with only
+  `src/init.q` loaded. These are the quant library's suites, which pass on
+  PeachQ as well as KDB-X. A regression in any of them fails the build. The ETL
+  tree is not covered, because PeachQ cannot load it yet (#511). The full suite
+  still runs only on KDB-X, locally and in the commit hook.
 - **`q-unit` on PeachQ, informational.** It never fails the build. The job
-  summary says how far PeachQ and the suite agree, which is not a verdict on the
-  tree.
+  summary says how far PeachQ and the whole suite agree, which is not a verdict
+  on the tree.
+
+A suite that starts passing on PeachQ belongs in `portable_suites.txt`, so CI
+holds it from then on. One that stops passing there is a regression to fix, or,
+if the difference is PeachQ's, a line to remove with the reason recorded.
 
 ## Doc examples
 

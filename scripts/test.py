@@ -15,6 +15,10 @@ between them:
   q-unit               deterministic q behaviour, in one process, no I/O
                        beyond a temp status directory. Fast, hermetic, and
                        the only lane the commit hook runs.
+  q-unit-portable      the suites in tests/q/portable_suites.txt - the quant
+                       library's, which pass on PeachQ as well as KDB-X - with
+                       only src/init.q loaded. The q-unit lane CI BLOCKS on,
+                       on PeachQ, where KDB-X cannot run.
   q-metatables-hdb     metatable queries against a temporary partitioned HDB.
   q-order              the q suite again, suites in the opposite order, so a
                        test that depends on running after another one fails
@@ -180,6 +184,14 @@ def _banner(text: str) -> None:
 def lane_q_unit() -> None:
     _banner("q-unit: deterministic qUnit suite")
     _q("q-unit", "tests/run_tests.q")
+
+
+def lane_q_unit_portable() -> None:
+    _banner("q-unit-portable: the suites that pass on PeachQ as well as KDB-X")
+    # What CI can block on: a hosted runner has PeachQ, not KDB-X, and PeachQ
+    # cannot load the ETL tree yet (#511). tests/q/portable_suites.txt lists
+    # the suites that need only the quant library and pass on both.
+    _q("q-unit-portable", "tests/run_tests_portable.q")
 
 
 def lane_q_order() -> None:
@@ -408,6 +420,7 @@ def lane_coverage() -> None:
 
 LANES: dict[str, Callable[[], None]] = {
     "q-unit": lane_q_unit,
+    "q-unit-portable": lane_q_unit_portable,
     "q-order": lane_q_order,
     "q-metatables-hdb": lane_q_metatables_hdb,
     "q-backfill-process": lane_q_backfill_process,
@@ -430,6 +443,7 @@ LANES: dict[str, Callable[[], None]] = {
 #: worth paying for on every release run.
 ALL = [
     "q-unit",
+    "q-unit-portable",
     "q-order",
     "q-examples",
     "q-scripts",
