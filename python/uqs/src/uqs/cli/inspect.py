@@ -7,7 +7,6 @@ cli/lifecycle.py for why the split is shaped this way.
 from __future__ import annotations
 
 import os
-import re
 import shutil
 from typing import Annotated
 
@@ -31,6 +30,7 @@ from uqs.cli.shared import (
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import alive, listing, runtime
+from uqs.stack import gateway as stack_gateway
 
 
 @data_app.command("hdb-check")
@@ -142,38 +142,27 @@ def _proc_port(procname: str, base_port: int) -> int:
     return int(ports[procname])
 
 
-#: What `uqs query` asks when told neither --proc nor --port: the gateway, the
-#: fleet's front door, rather than whichever process a guess would land on.
-DEFAULT_QUERY_PROC = "gateway1"
-
-#: Where the gateway sends a select by default: today's rows and history.
-DEFAULT_GATEWAY_SERVERS = "rdb hdb"
-
-#: The qSQL forms the gateway routes: the two that only read. update and
-#: delete are left out on purpose - `delete from `trade` routed to the RDB
-#: would change live data, which a default must never do. Anything else - a
-#: `.gw.*` call of the caller's own, a system command - is sent as typed.
-_QSQL = re.compile(r"^\s*(select|exec)\b")
-_PROCTYPE = re.compile(r"^[a-z][a-z0-9_]*$")
-
-
-def gateway_expression(expr: str, servers: str) -> str:
-    """`expr` as the gateway runs it: a qSQL query wrapped in TorQ's
-    `.gw.syncexec[query;servertypes]`, which sends it to every server of those
-    types and joins what they return; anything else unchanged.
-
-    The gateway holds no tables of its own, so `select from trade` sent to it
-    as typed fails - which made defaulting `uqs query` to it useless for the
-    one thing a query is most often for.
-    """
-    if not _QSQL.match(expr):
-        return expr
-    types = servers.split()
-    bad = [t for t in types if not _PROCTYPE.match(t)]
-    if not types or bad:
-        raise UqsError(f"--servers takes process types, e.g. 'rdb hdb' - not {servers!r}")
-    quoted = expr.replace("\\", "\\\\").replace('"', '\\"')
-    return f'.gw.syncexec["{quoted}";{"".join("`" + t for t in types)}]'
+def _gateway_session(host: str, port: int, user: str, passwd: str, servers: str) -> None:
+    """The gateway's interactive session: every line through .gw.syncexec."""
+    types = "".join("`" + t for t in servers.split())
+    console.print(
+        f"gateway1 at {host}:{port} - each line runs as .gw.syncexec[...;{types}]. "
+        "\\\\ or Ctrl-D to leave; uqs query --raw for plain qcon.",
+        markup=False,
+        style="dim",
+    )
+    try:
+        stack_gateway.query_session(
+            host,
+            port,
+            user,
+            passwd,
+            show=console.print,
+            fail=lambda msg: console.print(msg, markup=False, style="red"),
+            servers=servers,
+        )
+    except Exception as exc:  # kola's own exception types on connect
+        _die(UqsError(f"could not open a session on gateway1 at {host}:{port}: {exc}"))
 
 
 @app.command()
@@ -182,13 +171,13 @@ def query(
         str | None,
         typer.Argument(
             help='q expression, e.g. "select count i by sym from quote"; omit it for an '
-            "interactive qcon session on the process"
+            "interactive session on the process"
         ),
     ] = None,
     proc: Annotated[
         str | None,
         typer.Option(
-            help=f"process to query, by name, e.g. rdb1 (default: {DEFAULT_QUERY_PROC})",
+            help=f"process to query, by name, e.g. rdb1 (default: {stack_gateway.DEFAULT_PROC})",
             autocompletion=completion.procname,
         ),
     ] = None,
@@ -207,28 +196,38 @@ def query(
     passwd: str = "admin",
     servers: Annotated[
         str,
+        typer.Option(help="with the gateway: the process types an expression is routed to"),
+    ] = stack_gateway.DEFAULT_SERVERS,
+    raw: Annotated[
+        bool,
         typer.Option(
-            help="with the gateway: the process types a select is routed to",
+            "--raw",
+            help="with the gateway: send as typed, not through .gw.syncexec "
+            "(and, with no expression, open plain qcon)",
         ),
-    ] = DEFAULT_GATEWAY_SERVERS,
+    ] = False,
     export: ExportOpt = None,
 ) -> None:
     """Run a q expression against a running process - or, with no expression,
-    open an interactive qcon session on it (under rlwrap when installed).
+    open an interactive session on it.
 
     Name the process with `--proc rdb1`, or give its `--port`. With neither it
     asks the gateway, gateway1 - the fleet's front door, and the one process
     whose answer does not depend on which part of the day the data is in.
 
-    On the gateway a select or exec is routed for you: it
-    runs as `.gw.syncexec[query;`rdb`hdb]`, across today's rows and history,
-    and `--servers` names other process types. Anything else is sent as typed.
+    On the gateway every expression is routed for you - it runs as
+    `.gw.syncexec[expr;`rdb`hdb]`, across today's rows and history, and
+    `--servers` names other process types - and so is every line of its
+    interactive session. A `.gw.*` call or a `\\` command is sent as typed; an
+    in-place `update`/`delete ... from `t` is refused (it would change live
+    data); `--raw` sends anything as typed. Any other process gets qcon.
     """
     if proc is not None and port is not None:
         _die(UqsError("name the process to query once: --proc NAME or --port N, not both"))
         return
     if proc is None and port is None:
-        proc = DEFAULT_QUERY_PROC
+        proc = stack_gateway.DEFAULT_PROC
+    routed = proc == stack_gateway.DEFAULT_PROC and not raw
     if proc is not None and host not in _LOCAL_HOSTS:
         # --proc reads this machine's registry and process list, so on another
         # host both the port and the up/down check would describe the wrong one.
@@ -249,11 +248,14 @@ def query(
         if export is not None:
             _die(UqsError("--export needs an expression whose result it can write"))
             return
+        if routed:
+            _gateway_session(host, port, user, passwd, servers)
+            return
         _exec_qcon(host, port, user, passwd)
         return
-    if proc == DEFAULT_QUERY_PROC:
+    if routed:
         try:
-            expr = gateway_expression(expr, servers)
+            expr = stack_gateway.expression(expr, servers)
         except UqsError as exc:
             _die(exc)
             return

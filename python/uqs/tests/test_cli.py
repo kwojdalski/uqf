@@ -1626,12 +1626,12 @@ def test_query_refuses_both_proc_and_port(monkeypatch):
     assert any("--proc NAME or --port N" in m for m in errors.messages), errors.messages
 
 
-def test_query_with_neither_asks_the_gateway(monkeypatch):
+def test_query_with_neither_asks_the_gateway_through_syncexec(monkeypatch):
     seen = _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     rec = _patch(monkeypatch, runtime, "query", result="42")
     result = runner.invoke(cli.app, ["query", "1+1"])
     assert result.exit_code == 0, result.output
-    assert rec.args[:2] == ("1+1", 6057)
+    assert rec.args[:2] == ('.gw.syncexec["1+1";`rdb`hdb]', 6057)
     assert "base" in seen, "the port came from the stack's own map"
 
 
@@ -1651,6 +1651,13 @@ def test_servers_names_where_the_gateway_routes(monkeypatch):
     assert rec.args[0] == '.gw.syncexec["exec max px from quote";`hdb]'
 
 
+def test_raw_sends_to_the_gateway_as_typed(monkeypatch):
+    _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    rec = _patch(monkeypatch, runtime, "query", result="42")
+    assert runner.invoke(cli.app, ["query", "tables[]", "--raw"]).exit_code == 0
+    assert rec.args[0] == "tables[]"
+
+
 def test_a_select_on_another_process_is_sent_as_typed(monkeypatch):
     _conn(monkeypatch)
     rec = _patch(monkeypatch, runtime, "query", result="42")
@@ -1658,36 +1665,34 @@ def test_a_select_on_another_process_is_sent_as_typed(monkeypatch):
     assert rec.args[0] == "select from trade"
 
 
-def test_bad_servers_are_refused_before_anything_is_sent(monkeypatch):
+@pytest.mark.parametrize("argv", [["--servers", "rdb;exit 0"], []])
+def test_a_refused_expression_never_reaches_the_gateway(monkeypatch, argv):
+    """Bad --servers, or an in-place delete that would change live data."""
     _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     monkeypatch.setattr(runtime, "query", lambda *a, **k: pytest.fail("should not query"))
-    argv = ["query", "select from trade", "--servers", "rdb;exit 0"]
-    assert runner.invoke(cli.app, argv).exit_code == 1
+    expr = "select from trade" if argv else "delete from `trade"
+    assert runner.invoke(cli.app, ["query", expr, *argv]).exit_code == 1
 
 
-@pytest.mark.parametrize(
-    ("expr", "sent"),
-    [
-        (
-            'select from t where s like "EUR*"',
-            '.gw.syncexec["select from t where s like \\"EUR*\\"";`rdb]',
-        ),
-        ('.gw.syncexec["select from t";`hdb]', '.gw.syncexec["select from t";`hdb]'),
-        ("delete from `trade", "delete from `trade"),
-        ("update px:0 from `trade", "update px:0 from `trade"),
-        ("selected", "selected"),
-        ("\\t 1", "\\t 1"),
-    ],
-)
-def test_only_a_read_is_routed_and_quotes_survive(expr, sent):
-    """update and delete stay on the gateway as typed: routed, `delete from
-    `trade` would change the RDB's live data."""
-    assert inspect.gateway_expression(expr, "rdb") == sent
+def test_query_with_nothing_at_all_opens_the_routing_session_on_the_gateway(monkeypatch):
+    _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    seen = {}
 
+    def session(host, port, user, passwd, *, show, fail, servers):
+        seen.update(port=port, servers=servers)
+        return 0
 
-def test_query_with_nothing_at_all_opens_qcon_on_the_gateway(monkeypatch):
-    seen = _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    monkeypatch.setattr(inspect.stack_gateway, "query_session", session)
     assert runner.invoke(cli.app, ["query"]).exit_code == 0
+    assert seen == {"port": 6057, "servers": "rdb hdb"}
+
+
+def test_raw_with_nothing_opens_plain_qcon_on_the_gateway(monkeypatch):
+    seen = _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
+    monkeypatch.setattr(
+        inspect.stack_gateway, "query_session", lambda *a, **k: pytest.fail("not the session")
+    )
+    assert runner.invoke(cli.app, ["query", "--raw"]).exit_code == 0
     assert any("6057" in part for part in seen["argv"])
 
 
