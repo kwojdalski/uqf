@@ -135,7 +135,7 @@ check["a supersession survives the process too";any supout like\: "COVERED:no*"]
 / so that was every backfill.
 
 .qetl.run.attach[];
-runid:.qetl.run.begin[`durable_worker];
+runid:.qetl.run.begin[`durable_worker;()!()];
 / A DIFFERENT dataset from the coverage checks above, which staged
 / durable_ds before any run existed - so its row carries a null run_id,
 / and `first` over durable_ds would pick that one and resolve nothing.

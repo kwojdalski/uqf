@@ -187,6 +187,12 @@ run:{[]
             (spec`range_from;spec`range_to;spec[`range_to]-spec`range_from;
              decl`width;window_count[spec;decl`width])];
     use_hdb decl;
+    / The run ledger, attached HERE and unprotected: the worker's own
+    / begin_run tolerates any failure, so a ledger it cannot write - one from
+    / before etl_runs gained its range and counts columns - would leave this
+    / run untracked without a word. Failing the backfill names the fix
+    / (`uqs run migrate`) instead.
+    .qetl.run.attach[];
     t1:.z.p;
     (` sv ns,`init)[spec];
     .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist elapsed_ms t1];
