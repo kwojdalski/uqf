@@ -63,24 +63,35 @@ def quoted(expr: str) -> str:
     return expr.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def printer(body: str, size: tuple[int, int]) -> str:
+    """A q lambda of one argument `x` that returns `.Q.s` of `body` - an
+    expression over `x` - laid out to `size` (rows, columns), with the
+    process's own `\\c` put back afterwards whether `body` worked or threw.
+    A failure is caught only to restore `\\c`, then signalled again with its
+    own message."""
+    rows, cols = size
+    return (
+        '{o:system"c";'
+        f'system"c {rows} {cols}";'
+        f"r:@[{{(1b;.Q.s {body})}};x;{{(0b;x)}}];"
+        'system"c "," "sv string o;'
+        "$[r 0;r 1;'r 1]}"
+    )
+
+
 def wrap(expr: str, size: tuple[int, int]) -> str:
     """A q expression that evaluates `expr` and returns it as q's console
     would print it, laid out to `size` (rows, columns).
 
     `value` on the string, rather than splicing `expr` into the lambda, so an
     expression with its own `;` or a `\\` system command means what it would
-    typed at a q prompt. A failure is caught only to restore `\\c`, then
-    signalled again with its own message.
+    typed at a q prompt.
+
+    Not for a `.gw.syncexec` call: the gateway answers that with a deferred
+    reply (`-30!`) that bypasses whatever encloses the call, so the wrapper's
+    text never reaches the client - see uqs.stack.gateway.expression.
     """
-    rows, cols = size
-    return (
-        '{o:system"c";'
-        f'system"c {rows} {cols}";'
-        "r:@[{(1b;.Q.s value x)};x;{(0b;x)}];"
-        'system"c "," "sv string o;'
-        "$[r 0;r 1;'r 1]}"
-        f'"{quoted(expr)}"'
-    )
+    return printer("value x", size) + f'"{quoted(expr)}"'
 
 
 def text(result: object) -> str:
