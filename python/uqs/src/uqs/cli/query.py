@@ -223,22 +223,27 @@ def query(
             return
         _exec_qcon(host, port, user, passwd)
         return
+    # --export needs the data, not its picture, so it always takes kola's.
+    size = stack_render.console_size() if render == stack_render.Q and export is None else None
+    # Who lays the answer out: runtime.query wraps it for a process asked
+    # directly, while a routed expression carries its own layout - the
+    # gateway's deferred reply skips any wrapper (stack/gateway.expression).
+    wrap_size = size
     if routed:
         try:
-            expr = stack_gateway.expression(expr, servers)
+            expr = stack_gateway.expression(expr, servers, size)
         except UqsError as exc:
             _die(exc)
             return
+        wrap_size = None
         log.debug("routed through the gateway: {}", expr)
-    # --export needs the data, not its picture, so it always takes kola's.
-    size = stack_render.console_size() if render == stack_render.Q and export is None else None
     try:
-        result = runtime.query(expr, port, host=host, user=user, passwd=passwd, render=size)
+        result = runtime.query(expr, port, host=host, user=user, passwd=passwd, render=wrap_size)
     except Exception as exc:  # kola raises its own exception types on connect/query failure
         log.error("query failed: {}", exc)
         raise typer.Exit(code=1) from exc
     if size is not None:
-        _show_q(result)
+        _show_q(stack_render.text(result))
         return
     console.print(result)
     _export(result, export)
