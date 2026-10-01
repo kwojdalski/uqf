@@ -879,6 +879,14 @@ do_window:{[worker;w]
     write_state[worker;`progress;
         @[@[@[read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];
           `cursor;advanced_to[worker];w`range_to]];
+    / FINISH WHAT IS BEHIND THIS WINDOW. Windows run in order, so a store can
+    / finish whatever lies wholly before this one's end now rather than at
+    / the run's end - the HDB writer sorts those partitions, and its on_ready
+    / lets the deployment make them queryable while the run goes on. After
+    / the cursor and coverage, so nothing is shown that the run has not
+    / recorded. A no-op for a manager without flush, and on a dry run, which
+    / wrote nothing.
+    .qetl.io.flush[.qetl.io.for_cfg cfg;w`range_to];
     .qetl.hb.beat_window[worker];
     1b}
 

@@ -39,7 +39,17 @@ required:enlist `write
 / appended windows are not finished data until something runs over all of
 / them - the HDB writer below sorts and applies attributes there. A manager
 / without one needs nothing at the end, which is every in-memory one.
-optional:enlist `finish
+optional:`finish`flush`on_ready
+
+/ `flush` takes a timestamp and finishes only what lies wholly before it - the
+/ shell calls it after every window with the window's end, so a store can
+/ make finished parts of a run usable before the run ends. It returns
+/ `finished`pending: how many parts it finished, and how many are still open.
+/ .
+/ `on_ready` is the deployment's hook, not the store's: called after every
+/ flush and finish with `finished`pending`final, it decides what to do now
+/ that more is finished - a TorQ runner asks the HDB to reload. Kept off the
+/ store so the store stays TorQ-free (scripts/gates/check_etl_layering.py).
 
 / Private: can this value be called? A lambda, or a projection over one -
 / the HDB writer's functions are projections over its root and column.
@@ -64,6 +74,10 @@ require_manager:{[mgr]
         '"require_manager: an io manager's write must be a function taking (target;batch)"];
     if[(`finish in key mgr) and not callable mgr`finish;
         '"require_manager: an io manager's finish must be a niladic function"];
+    if[(`flush in key mgr) and not callable mgr`flush;
+        '"require_manager: an io manager's flush must be a function taking a timestamp"];
+    if[(`on_ready in key mgr) and not callable mgr`on_ready;
+        '"require_manager: an io manager's on_ready must be a function taking a dictionary"];
     1b}
 
 / ------------------------------------------------------------- MANAGERS
@@ -134,9 +148,17 @@ discard:(enlist `write)!enlist write_discard
 / in it. .Q.chk takes its table list from the most recent partition, which
 / in a running stack is end-of-day's and holds every table; the full,
 / schema-driven repair (scripts/gates/fill_hdb_partitions.q) runs on every
-/ uqs command's bootstrap. finish does NOT tell a running HDB to reload:
-/ that needs the stack, so scripts/processes/torq_backfill.q does it through
-/ .qtorq.
+/ uqs command's bootstrap.
+/ .
+/ WHAT flush DOES, after every window. The same work as finish, for only the
+/ partitions dated wholly before the window's end: windows run in order, so
+/ nothing later in the run writes to them again, and finishing them now
+/ rather than at the end is what lets a running HDB show a backfill day by
+/ day. It reports how many partitions are still open, because a reload while
+/ one is mid-append would map a half-written, unsorted partition.
+/ .
+/ Neither tells a running HDB to reload: that needs the stack, so the
+/ manager's on_ready does it, set by scripts/processes/torq_backfill.q.
 / .
 / Not safe to run beside end-of-day: both append to the HDB's sym file.
 
@@ -157,7 +179,7 @@ hdb:{[root;partition_col]
         '"hdb: partition_col must be a symbol naming a timestamp column"];
     / finish_hdb takes a second, ignored argument so that finish_hdb[root;] is a
     / PROJECTION: on a one-argument function, finish_hdb[root] would be a call.
-    `write`finish!(write_hdb[root;partition_col;;];finish_hdb[root;])}
+    `write`flush`finish!(write_hdb[root;partition_col;;];flush_hdb[root;];finish_hdb[root;])}
 
 / Private: append one window into its date partitions.
 write_hdb:{[root;partition_col;target;batch]
@@ -192,10 +214,12 @@ write_hdb:{[root;partition_col;target;batch]
         }[root;target;data;days] each distinct days;
     count batch}
 
-/ Private: sort and attribute every partition this root was written to,
-/ fill every partition with every table, and forget them.
-finish_hdb:{[root;ignored]
-    todo:distinct select dt, tbl from touched where hdb_root=root;
+/ Private: sort and attribute these partitions of `root`, fill every
+/ partition with every table, and forget them.
+/ @param root the HDB directory
+/ @param todo a table of dt and tbl
+/ @return how many partitions were finished
+finish_parts:{[root;todo]
     {[root;d;t]
         base:string .Q.par[root;d;t];
         part:hsym `$base,"/";
@@ -205,8 +229,18 @@ finish_hdb:{[root;ignored]
         if[`sym in c; @[part;`sym;`p#]];
         }[root]'[todo`dt;todo`tbl];
     if[count todo; .Q.chk root];
-    `.qetl.io.touched set select from touched where not hdb_root=root;
+    `.qetl.io.touched set touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
+
+/ Private: every partition this root was written to.
+finish_hdb:{[root;ignored]
+    finish_parts[root;distinct select dt, tbl from touched where hdb_root=root]}
+
+/ Private: the partitions of this root dated wholly before `upto`, and how
+/ many of its partitions are still open after them.
+flush_hdb:{[root;upto]
+    n:finish_parts[root;distinct select dt, tbl from touched where hdb_root=root, dt<`date$upto];
+    `finished`pending!(n;count distinct select dt, tbl from touched where hdb_root=root)}
 
 / ---------------------------------------------------------------- USE
 
@@ -247,6 +281,51 @@ write:{[mgr;target;batch] (mgr`write)[target;batch]}
 / @param mgr the manager
 / @return the manager's finish result, or (::) when it has none
 / @eg .qetl.io.finish .qetl.io.memory
-finish:{[mgr] $[`finish in key mgr; (mgr`finish)[]; (::)]}
+finish:{[mgr]
+    if[not `finish in key mgr; :(::)];
+    n:(mgr`finish)[];
+    ready[mgr;`finished`pending`final!(n;0;1b)];
+    n}
+
+/ Finish what lies wholly before `upto`, for a manager that can.
+/ .
+/ A manager without flush finishes nothing early and reports nothing open.
+/ @param mgr the manager
+/ @param upto a timestamp - the end of the window just written
+/ @return `finished`pending
+/ @eg .qetl.io.flush[.qetl.io.memory;2026.01.03D00:00]  ->  `finished`pending!0 0
+flush:{[mgr;upto]
+    r:$[`flush in key mgr; (mgr`flush)[upto]; `finished`pending!0 0];
+    ready[mgr;r,enlist[`final]!enlist 0b];
+    r}
+
+/ Should a deployment that exposes finished work - a TorQ HDB reload - do
+/ it now? The decision an on_ready makes, kept here, pure and TorQ-free, so
+/ it is tested without a stack; the deployment holds the state and acts.
+/ .
+/ Three rules, in order. Nothing finished since the last time: no. A part
+/ still open: no - for the HDB writer that is a partition being appended to,
+/ unsorted, which a reload would map half-written. Mid-run within `interval`
+/ of the last time: no - an HDB reload re-maps the whole database, and a fast
+/ run over many small days would otherwise ask once per day. The run's final
+/ call ignores the interval, so nothing finished is left unshown.
+/ @param state `dirty`last - finished-but-not-shown, and the last time it acted
+/ @param status `finished`pending`final, as on_ready receives it
+/ @param now the current time
+/ @param interval the least time between two mid-run actions, a timespan
+/ @return `act`state - whether to act, and the state to keep
+/ @eg .qetl.io.due[`dirty`last!(0b;0Np);`finished`pending`final!(1;0;0b);2026.01.02D00:00;0D00:00:30]`act  ->  1b
+due:{[state;status;now;interval]
+    dirty:state[`dirty] or 0<status`finished;
+    soon:(not status`final) and (not null state`last) and now<state[`last]+interval;
+    act:dirty and (0=status`pending) and not soon;
+    `act`state!(act;$[act; `dirty`last!(0b;now); `dirty`last!(dirty;state`last)])}
+
+/ Private: tell the deployment what is finished. Its failure is logged and
+/ swallowed: the rows are already written, and a reload that failed is no
+/ reason to fail the run that wrote them.
+ready:{[mgr;status]
+    if[not `on_ready in key mgr; :(::)];
+    @[mgr`on_ready;status;{[e] .[{.qetl.log.err[x;y;z]};(`qetl.io;"on_ready failed";enlist[`error]!enlist e);::]}]}
 
 \d .

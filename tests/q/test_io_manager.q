@@ -203,6 +203,87 @@ test_hdb_finish_forgets_what_it_finished:{[t]
     .qetl.io.finish m;
     .qunit.assertEquals[.qetl.io.finish m;0;"a second finish has nothing left to do"]};
 
+/ --- flush: finishing a run's days as it moves past them -----------------
+
+test_flush_finishes_only_the_days_wholly_behind_it:{[t]
+    / deals[] spans the 2nd and the 3rd. A window ending at midnight on the
+    / 3rd puts the 2nd behind the run - nothing later writes to it - and the
+    / 3rd still open.
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;deals[]];
+    r:.qetl.io.flush[m;2026.01.03D00:00:00.000000000];
+    .qunit.assertEquals[r;`finished`pending!1 1;"the 2nd is finished, the 3rd still open"];
+    .qunit.assertEquals[(attr part[root;2026.01.02;`iodeals]`sym;attr part[root;2026.01.03;`iodeals]`sym);(`p;`);
+        "only the finished day is sorted and given p#sym"]};
+
+test_finish_after_flush_does_only_what_flush_left:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;deals[]];
+    .qetl.io.flush[m;2026.01.03D00:00:00.000000000];
+    .qunit.assertEquals[.qetl.io.finish m;1;"the 2nd was finished already; only the 3rd is left"];
+    .qunit.assertEquals[attr part[root;2026.01.03;`iodeals]`sym;`p;"and the 3rd is finished now"]};
+
+test_on_ready_hears_every_flush_and_the_finish:{[t]
+    root:hdb_dir[];
+    `.iotest.heard set ();
+    m:.qetl.io.hdb[root;`deal_time],enlist[`on_ready]!enlist {[s] `.iotest.heard set .iotest.heard,enlist s};
+    .qetl.io.write[m;`iodeals;deals[]];
+    .qetl.io.flush[m;2026.01.03D00:00:00.000000000];
+    .qetl.io.finish m;
+    .qunit.assertEquals[.iotest.heard;
+        (`finished`pending`final!(1;1;0b);`finished`pending`final!(1;0;1b));
+        "what finished, what is still open, and whether the run is over"]};
+
+test_a_failing_on_ready_does_not_fail_the_flush:{[t]
+    / The rows are on disk either way; a reload that failed is no reason to
+    / fail the run that wrote them.
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time],enlist[`on_ready]!enlist {[s] '"reload refused"};
+    .qetl.io.write[m;`iodeals;deals[]];
+    .qunit.assertEquals[.qetl.io.flush[m;2026.01.03D00:00:00.000000000];`finished`pending!1 1;
+        "flush still reports what it finished"]};
+
+test_flush_is_a_no_op_for_a_manager_without_one:{[t]
+    .qunit.assertEquals[.qetl.io.flush[.qetl.io.memory;2026.01.03D00:00:00.000000000];`finished`pending!0 0;
+        "memory finishes nothing early and has nothing open"]};
+
+test_a_flush_that_is_not_a_function_is_refused:{[t]
+    .qunit.assertThrows[{.qetl.io.require_manager x};`write`flush!({[t;b] count b};42);
+        "require_manager: an io manager's flush must be*";"flush must be callable"]};
+
+/ --- due: whether a deployment should expose finished work now -----------
+
+dueat:{[dirty;last_at;finished;pending;final]
+    .qetl.io.due[`dirty`last!(dirty;last_at);`finished`pending`final!(finished;pending;final);
+        2026.01.02D12:00:00.000000000;0D00:00:30]}
+
+test_due_acts_when_something_finished_and_nothing_is_open:{[t]
+    d:.iotest.dueat[0b;0Np;1;0;0b];
+    .qunit.assertEquals[(d`act;d`state);(1b;`dirty`last!(0b;2026.01.02D12:00:00.000000000));
+        "act, and remember when"]};
+
+test_due_waits_while_a_part_is_open:{[t]
+    / The HDB would map a partition still being appended to, unsorted.
+    d:.iotest.dueat[0b;0Np;1;1;0b];
+    .qunit.assertEquals[(d`act;d[`state]`dirty);(0b;1b);"no - but what finished is still owed"]};
+
+test_due_does_nothing_when_nothing_is_new:{[t]
+    .qunit.assertEquals[.iotest.dueat[0b;0Np;0;0;1b]`act;0b;"even at the end, nothing new is nothing to do"]};
+
+test_due_holds_back_within_the_interval_mid_run:{[t]
+    d:.iotest.dueat[0b;2026.01.02D11:59:50.000000000;1;0;0b];
+    .qunit.assertEquals[(d`act;d[`state]`dirty);(0b;1b);"ten seconds after the last one: not yet, still owed"]};
+
+test_due_acts_after_the_interval:{[t]
+    .qunit.assertEquals[.iotest.dueat[1b;2026.01.02D11:59:00.000000000;0;0;0b]`act;1b;
+        "a minute later, what was owed is shown"]};
+
+test_the_final_call_ignores_the_interval:{[t]
+    .qunit.assertEquals[.iotest.dueat[1b;2026.01.02D11:59:59.000000000;0;0;1b]`act;1b;
+        "the run's end never leaves finished work unshown"]};
+
 test_hdb_refuses_a_root_that_is_not_a_file_symbol:{[t]
     .qunit.assertThrows[{.qetl.io.hdb[x;`deal_time]};`plain;
         "hdb: root must be a file symbol*";"a bare symbol is not a directory"]};

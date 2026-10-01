@@ -184,13 +184,18 @@ qetl.hb,stale,function,1,max_age
 qetl.io,callable,function,1,v
 qetl.io,default,dict,,
 qetl.io,discard,dict,,
+qetl.io,due,function,4,state status now interval
 qetl.io,finish,function,1,mgr
 qetl.io,finish_hdb,function,2,root ignored
+qetl.io,finish_parts,function,2,root todo
+qetl.io,flush,function,2,mgr upto
+qetl.io,flush_hdb,function,2,root upto
 qetl.io,for_cfg,function,1,cfg
 qetl.io,hdb,function,2,root partition_col
 qetl.io,memory,dict,,
 qetl.io,odbc,dict,,
 qetl.io,optional,value,,
+qetl.io,ready,function,2,mgr status
 qetl.io,require_manager,function,1,mgr
 qetl.io,required,value,,
 qetl.io,touched,table,,
