@@ -216,6 +216,7 @@ def _dead_pid() -> int:
 def test_clearing_deletes_the_checkpoint_and_names_it(status):
     (status / f"{WORKER}.checkpoint").write_text("{}")
     path = backfill.clear_checkpoint(stack_paths.default_paths(), WORKER)
+    assert path is not None
     assert path == status / f"{WORKER}.checkpoint"
     assert not path.exists()
 
