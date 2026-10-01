@@ -186,7 +186,7 @@ jobs:
         shell: bash
         env:
           PEACHQ_VERSION: v0.88
-          PEACHQ_SHA256: b95d61c7c73c9ab5a0de12bab3705d96f0db551cb20db376afbc9f7bcdfc1d57
+          PEACHQ_SHA256: 7d37e5bfd3a7db7eeeac0f43286ccdbafa27e37ebdab15c4088a0d23c4be2ec7
         run: |
           set -euo pipefail
           url="https://github.com/peachq-org/peachq/releases/download/${PEACHQ_VERSION}/peachq-linux-x86_64.tar.gz"
