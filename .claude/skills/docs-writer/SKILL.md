@@ -328,7 +328,7 @@ Explanation of what happens and what to expect.
 
 ## See Also
 
-- [kdb-q-conventions skill](../.claude/skills/kdb-q-conventions/SKILL.md)
+- [kdb-q-conventions skill](../../.claude/skills/kdb-q-conventions/SKILL.md)
 - [Related guide](./<slug>.md) \`\`\`
 
 ## Formatting Rules
