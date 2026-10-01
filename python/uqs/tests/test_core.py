@@ -1,7 +1,9 @@
 import csv
 import io
 import os
+import shlex
 import shutil
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -22,6 +24,7 @@ from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths, check_data_dir_was_migrated
 from uqs.stack import listing, runtime
 from uqs.stack import logs as stack_logs
+from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 from uqs.stack.procs import VENDORED_STARTWITHALL_OVERLAY
 
@@ -595,18 +598,19 @@ def _touch_logs(paths: UqsPaths, *names: str) -> Path:
 
 def test_multitail_opens_one_titled_following_pane_per_log_file(fake_paths: UqsPaths):
     log_dir = _touch_logs(fake_paths, "out_stp1.log", "err_stp1.log")
-    argv = stack_logs.multitail_command(fake_paths, "stp1", lines=5)
+    argv = stack_multitail.multitail_command(fake_paths, "stp1", lines=5)
     assert argv[0] == "multitail"
     assert "-s" not in argv, "multitail refuses -s 1; stacked panes are its default"
+    follower = [sys.executable, "-m", "uqs.stack.follow", "5"]
     assert argv[1:] == [
-        "-n", "5", "-f", "-t", "out_stp1.log", str(log_dir / "out_stp1.log"),
-        "-n", "5", "-f", "-t", "err_stp1.log", str(log_dir / "err_stp1.log"),
+        "-t", "out_stp1.log", "-l", shlex.join([*follower, str(log_dir / "out_stp1.log")]),
+        "-t", "err_stp1.log", "-l", shlex.join([*follower, str(log_dir / "err_stp1.log")]),
     ]  # fmt: skip
 
 
 def test_multitail_stream_and_columns_shape_the_panes(fake_paths: UqsPaths):
     _touch_logs(fake_paths, "out_stp1.log", "err_stp1.log", "err_discovery1.log")
-    argv = stack_logs.multitail_command(fake_paths, "stp1 discovery1", stream="err", columns=2)
+    argv = stack_multitail.multitail_command(fake_paths, "stp1 discovery1", stream="err", columns=2)
     assert argv[1:3] == ["-s", "2"]
     titles = [argv[i + 1] for i, a in enumerate(argv) if a == "-t"]
     assert titles == ["err_stp1.log", "err_discovery1.log"], "only err files, in the order asked"
@@ -615,19 +619,19 @@ def test_multitail_stream_and_columns_shape_the_panes(fake_paths: UqsPaths):
 def test_multitail_skips_a_process_with_no_log_yet(fake_paths: UqsPaths):
     """resolve_procnames' rule: never started is not a typo."""
     _touch_logs(fake_paths, "out_stp1.log")
-    argv = stack_logs.multitail_command(fake_paths, "stp1 discovery1", stream="out")
+    argv = stack_multitail.multitail_command(fake_paths, "stp1 discovery1", stream="out")
     assert [argv[i + 1] for i, a in enumerate(argv) if a == "-t"] == ["out_stp1.log"]
 
 
 def test_multitail_refuses_an_unknown_process(fake_paths: UqsPaths):
     _touch_logs(fake_paths, "out_stp1.log")
     with pytest.raises(UqsError, match="typo1"):
-        stack_logs.multitail_command(fake_paths, "stp1 typo1")
+        stack_multitail.multitail_command(fake_paths, "stp1 typo1")
 
 
 def test_multitail_refuses_when_there_is_nothing_to_show(fake_paths: UqsPaths):
     with pytest.raises(UqsError, match="no both log files found"):
-        stack_logs.multitail_command(fake_paths, "stp1")
+        stack_multitail.multitail_command(fake_paths, "stp1")
 
 
 @pytest.mark.parametrize(
@@ -637,13 +641,13 @@ def test_multitail_refuses_when_there_is_nothing_to_show(fake_paths: UqsPaths):
 def test_multitail_refuses_bad_options(fake_paths: UqsPaths, kwargs, message):
     _touch_logs(fake_paths, "out_stp1.log")
     with pytest.raises(UqsError, match=message):
-        stack_logs.multitail_command(fake_paths, "stp1", **kwargs)
+        stack_multitail.multitail_command(fake_paths, "stp1", **kwargs)
 
 
 def test_run_multitail_without_the_binary_names_the_install_and_the_fallback(monkeypatch):
-    monkeypatch.setattr(stack_logs.shutil, "which", lambda _: None)
+    monkeypatch.setattr(stack_multitail.shutil, "which", lambda _: None)
     with pytest.raises(UqsError) as excinfo:
-        stack_logs.run_multitail(["multitail", "-f", "x.log"])
+        stack_multitail.run_multitail(["multitail", "-f", "x.log"])
     assert "brew install multitail" in str(excinfo.value)
     assert "uqs logs -f" in str(excinfo.value)
 
@@ -651,9 +655,11 @@ def test_run_multitail_without_the_binary_names_the_install_and_the_fallback(mon
 def test_run_multitail_execs_the_binary_with_the_argv(monkeypatch):
     """exec, not a child: multitail needs the terminal to itself."""
     seen = []
-    monkeypatch.setattr(stack_logs.shutil, "which", lambda _: "/usr/bin/multitail")
-    monkeypatch.setattr(stack_logs.os, "execv", lambda binary, argv: seen.append((binary, argv)))
-    stack_logs.run_multitail(["multitail", "-f", "x.log"])
+    monkeypatch.setattr(stack_multitail.shutil, "which", lambda _: "/usr/bin/multitail")
+    monkeypatch.setattr(
+        stack_multitail.os, "execv", lambda binary, argv: seen.append((binary, argv))
+    )
+    stack_multitail.run_multitail(["multitail", "-f", "x.log"])
     assert seen == [("/usr/bin/multitail", ["multitail", "-f", "x.log"])]
 
 

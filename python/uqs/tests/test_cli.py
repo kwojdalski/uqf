@@ -54,6 +54,7 @@ from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import alive, listing, probe, runtime
 from uqs.stack import logs as stack_logs
+from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 from uqs.stack.listing import LISTABLE_KINDS, SUMMARY_COLUMNS, SUMMARY_GRAPH_COLUMNS
 
@@ -960,8 +961,8 @@ def test_the_level_filter_reaches_core(monkeypatch):
 
 
 def test_multitail_passes_its_options_to_core_and_execs(monkeypatch):
-    build = _patch(monkeypatch, stack_logs, "multitail_command", result=["multitail", "x"])
-    run = _patch(monkeypatch, stack_logs, "run_multitail")
+    build = _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "x"])
+    run = _patch(monkeypatch, stack_multitail, "run_multitail")
     result = runner.invoke(
         cli.app, ["logs", "rdb1 stp1", "--multitail", "--stream", "err", "-c", "2", "-n", "7"]
     )
@@ -972,8 +973,8 @@ def test_multitail_passes_its_options_to_core_and_execs(monkeypatch):
 
 
 def test_multitail_print_shows_the_command_and_runs_nothing(monkeypatch):
-    _patch(monkeypatch, stack_logs, "multitail_command", result=["multitail", "-t", "a b"])
-    run = _patch(monkeypatch, stack_logs, "run_multitail")
+    _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "-t", "a b"])
+    run = _patch(monkeypatch, stack_multitail, "run_multitail")
     result = runner.invoke(cli.app, ["logs", "--multitail", "--print"])
     assert result.exit_code == 0
     assert "multitail -t 'a b'" in result.stdout
@@ -981,7 +982,7 @@ def test_multitail_print_shows_the_command_and_runs_nothing(monkeypatch):
 
 
 def test_a_multitail_refusal_exits_one(monkeypatch):
-    _patch(monkeypatch, stack_logs, "multitail_command", raises=UqsError("no such process"))
+    _patch(monkeypatch, stack_multitail, "multitail_command", raises=UqsError("no such process"))
     assert runner.invoke(cli.app, ["logs", "nope", "--multitail"]).exit_code == 1
 
 
@@ -1198,7 +1199,7 @@ def test_feed_status_with_no_name_shows_every_feed(monkeypatch):
 )
 def test_logs_refuses_options_for_the_other_viewer(monkeypatch, argv, message):
     errors = _error_log(monkeypatch)
-    _patch(monkeypatch, stack_logs, "run_multitail")
+    _patch(monkeypatch, stack_multitail, "run_multitail")
     _patch(monkeypatch, stack_logs, "print_recent_logs")
     assert runner.invoke(cli.app, ["logs", *argv]).exit_code == 1
     assert any(message in m for m in errors.messages), errors.messages
