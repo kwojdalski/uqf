@@ -35,6 +35,7 @@ from types import ModuleType
 from typing import Any, cast
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 # The CLI is a package of command families now (see cli/entry.py): the `cli`
@@ -43,7 +44,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
-from uqs.cli import config, create, lifecycle, shared, summary, summary_graph
+from uqs.cli import create, lifecycle, shared, summary, summary_columns, summary_graph
 from uqs.cli import query as query_cli
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
@@ -465,8 +466,8 @@ def test_columns_status_gives_back_the_narrow_table(monkeypatch):
     """The escape hatch for an 80-column terminal, and the reason showing the
     graph by default is safe."""
     narrow = [*SUMMARY_COLUMNS, "Responds"]
-    assert summary._resolve_columns("status") == narrow
-    assert summary._resolve_columns("STATUS") == narrow
+    assert summary_columns.resolve_columns("status") == narrow
+    assert summary_columns.resolve_columns("STATUS") == narrow
 
 
 def test_columns_all_adds_the_graph(monkeypatch):
@@ -484,12 +485,12 @@ def test_columns_all_adds_the_graph(monkeypatch):
 def test_columns_are_matched_case_insensitively_and_kept_in_order(monkeypatch):
     """The names have a space and a capital in them ("Depends on"), so an
     exact-match-only option would be unusable from a shell."""
-    assert summary._resolve_columns("outputs,process") == ["Outputs", "Process"]
-    assert summary._resolve_columns("PROCESS") == ["Process"]
+    assert summary_columns.resolve_columns("outputs,process") == ["Outputs", "Process"]
+    assert summary_columns.resolve_columns("PROCESS") == ["Process"]
 
 
 def test_a_repeated_column_is_not_rendered_twice(monkeypatch):
-    assert summary._resolve_columns("Process,process,Process") == ["Process"]
+    assert summary_columns.resolve_columns("Process,process,Process") == ["Process"]
 
 
 def test_an_unknown_column_is_refused_with_the_available_ones(monkeypatch):
@@ -879,43 +880,43 @@ def test_a_numeric_column_sorts_numerically_not_lexicographically():
     """`port` is a string like "6051". Sorted as text, "6100" comes before
     "659" - which looks like the sort silently did nothing on the one column
     most worth sorting."""
-    order = [i["port"] for i in config._sorted_items(_procs(), "port", reverse=False)]
+    order = [i["port"] for i in shared._sorted_items(_procs(), "port", reverse=False)]
     assert order == ["659", "6067", "6100"]
 
 
 def test_a_text_column_sorts_case_insensitively():
     """ "Arbitrage1" must not sort before every lowercase name just for its
     capital - the reader is looking up a name, not an ordinal."""
-    order = [i["procname"] for i in config._sorted_items(_procs(), "procname", reverse=False)]
+    order = [i["procname"] for i in shared._sorted_items(_procs(), "procname", reverse=False)]
     assert order == ["Arbitrage1", "sortworker2", "stp1"]
 
 
 def test_reverse_flips_the_order():
-    order = [i["port"] for i in config._sorted_items(_procs(), "port", reverse=True)]
+    order = [i["port"] for i in shared._sorted_items(_procs(), "port", reverse=True)]
     assert order == ["6100", "6067", "659"]
 
 
 def test_the_column_name_is_matched_case_insensitively():
-    assert config._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
+    assert shared._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
 
 
 def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
     """A process with no override set is not "before aaa", it is absent -
     and a blank interleaved among real values reads as data."""
     items = [{"v": "b"}, {"v": ""}, {"v": "a"}]
-    assert [i["v"] for i in config._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
+    assert [i["v"] for i in shared._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
 
 
 def test_sorting_is_a_no_op_without_the_option():
     items = _procs()
-    assert config._sorted_items(items, None, reverse=False) == items
+    assert shared._sorted_items(items, None, reverse=False) == items
 
 
 def test_sorting_an_empty_listing_does_not_look_up_columns():
     """There is no first row to read column names from, and a kind with no
     items is a legitimate result - `overrides` is empty until something is
     set."""
-    assert config._sorted_items([], "anything", reverse=False) == []
+    assert shared._sorted_items([], "anything", reverse=False) == []
 
 
 def test_an_unsortable_column_names_the_real_ones(monkeypatch):
@@ -1965,3 +1966,73 @@ def test_list_env_says_not_runnable_without_a_q(monkeypatch, tmp_path):
         for r in listing._list_env(stack_paths.paths_for_root(stack_paths.repo_root()), 6050)
     }
     assert rows["q_impl (binary)"] == "not runnable"
+
+
+# ------------------------------------------------------------ summary --sort
+
+
+def _order(output: str, names: list[str]) -> list[str]:
+    """`names` in the order they appear in `output`."""
+    return sorted(names, key=output.index)
+
+
+_SORTABLE = [
+    _row(Process="tap1", Port="6100", Status="down"),
+    _row(Process="rdb1", Port="659", Status="up"),
+    _row(Process="hdb1", Port="6052", Status="up"),
+]
+
+
+def test_summary_sorts_a_numeric_column_numerically(monkeypatch):
+    # As text "6100" < "659"; numerically 659 < 6052 < 6100.
+    _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
+    result = runner.invoke(cli.app, ["summary", "--columns", "Process,Port", "--sort", "port"])
+    assert result.exit_code == 0, result.output
+    assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["rdb1", "hdb1", "tap1"]
+
+
+def test_summary_reverse_sorts_descending(monkeypatch):
+    _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
+    argv = ["summary", "--columns", "Process,Port", "--sort", "Port", "--reverse"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["tap1", "hdb1", "rdb1"]
+
+
+def test_summary_without_sort_keeps_the_listing_order(monkeypatch):
+    _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
+    result = runner.invoke(cli.app, ["summary", "--columns", "Process,Port"])
+    assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["tap1", "rdb1", "hdb1"]
+
+
+def test_summary_sorts_by_a_column_it_does_not_show(monkeypatch):
+    """`--sort Inputs` with Inputs left out of --columns: the graph is still
+    gathered, or every row would sort on a missing cell."""
+    _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
+    inputs = {"tap1": "trades", "rdb1": "quotes", "hdb1": "fills"}
+
+    def attach(rows):
+        for row in rows:
+            row["Inputs"] = inputs[row["Process"]]
+
+    monkeypatch.setattr(summary, "attach_graph_columns", attach)
+    result = runner.invoke(cli.app, ["summary", "--columns", "Process,Port", "--sort", "inputs"])
+    assert result.exit_code == 0, result.output
+    assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["hdb1", "rdb1", "tap1"]
+    assert "Inputs" not in result.output, "sorted on, not displayed"
+
+
+def test_summary_refuses_an_unknown_sort_column_before_doing_any_work(monkeypatch):
+    _patch(monkeypatch, runtime, "summary", raises=AssertionError("must not run"))
+    said = []
+
+    def die(exc):
+        # _die logs through loguru, not to the runner's output - record it.
+        said.append(str(exc))
+        raise typer.Exit(code=1)
+
+    monkeypatch.setattr(summary_columns, "_die", die)
+    result = runner.invoke(cli.app, ["summary", "--sort", "nope"])
+    assert result.exit_code == 1
+    assert len(said) == 1 and said[0].startswith("cannot sort by 'nope'")
+    assert "Process" in said[0], "the error names the columns that exist"

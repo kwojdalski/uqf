@@ -25,10 +25,12 @@ from uqs.cli.shared import (
     _export,
     _lines,
     _paths,
+    _sorted_items,
     app,
     console,
     log,
 )
+from uqs.cli.summary_columns import resolve_columns, resolve_sort_column
 from uqs.cli.summary_graph import attach_graph_columns
 from uqs.interpreter import interpreter_status
 from uqs.logger import configure_logging
@@ -38,10 +40,7 @@ from uqs.paths import UqsError
 from uqs.stack import listing, probe, runtime, startup
 from uqs.stack.listing import (
     MONITOR_PROCNAME,
-    SUMMARY_ALL_COLUMNS,
-    SUMMARY_COLUMNS,
     SUMMARY_GRAPH_COLUMNS,
-    SUMMARY_PROBE_COLUMNS,
 )
 
 _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
@@ -60,43 +59,6 @@ _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 #: calls each given ten seconds is a twenty-second hang, which is not what
 #: anyone means by a ten-second timeout.
 SUMMARY_TIMEOUT_SECONDS = 120.0
-
-
-def _resolve_columns(requested: str | None) -> list[str]:
-    """The columns to render, from a comma-separated `--columns` value.
-
-    The graph columns are ON by default. They were opt-in first, on the
-    grounds that nine columns do not fit an eighty-column terminal - which is
-    true, and was still the wrong trade: a column nobody knows about answers
-    nothing, and "what feeds this" is the question that follows "is it
-    running" almost every time. A reader on a narrow terminal can say
-    `--columns status`; a reader who never learns the columns exist has no
-    such move.
-    """
-    if not requested:
-        return list(SUMMARY_ALL_COLUMNS)
-    if requested.strip().lower() == "all":
-        return list(SUMMARY_ALL_COLUMNS)
-    if requested.strip().lower() == "status":
-        return list(SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS)
-    wanted = [c.strip() for c in requested.split(",") if c.strip()]
-    known = {c.lower(): c for c in SUMMARY_ALL_COLUMNS}
-    resolved, unknown = [], []
-    for column in wanted:
-        match = known.get(column.lower())
-        if match is None:
-            unknown.append(column)
-        elif match not in resolved:
-            resolved.append(match)
-    if unknown:
-        _die(
-            UqsError(
-                f"unknown summary column(s): {', '.join(unknown)}. "
-                f"Available: {', '.join(sorted(SUMMARY_ALL_COLUMNS))}, "
-                "or `all` / `status`"
-            )
-        )
-    return resolved
 
 
 def _print_startups(log_dir: Path, procnames: list[str]) -> None:
@@ -165,6 +127,20 @@ def summary(
             ),
         ),
     ] = False,
+    sort: Annotated[
+        str | None,
+        typer.Option(
+            "--sort",
+            help=(
+                "Sort by this column (case-insensitive, numeric-aware), shown or not: "
+                "`--sort Port`, `--sort Status`, `--sort Inputs`."
+            ),
+            autocompletion=completion.summary_sort_column,
+        ),
+    ] = None,
+    reverse: Annotated[
+        bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
+    ] = False,
 ) -> None:
     """Status table for every process in process.csv, with its declared graph.
 
@@ -176,6 +152,10 @@ def summary(
     Ten columns need a wide terminal. `--columns status` gives the seven
     status columns, and any subset can be named explicitly.
 
+    `--sort` orders the rows by any column, including one `--columns` leaves
+    out, numerically where the column is numeric (`Port`, `PID`) and with
+    empty cells last. The order reaches `--export` too.
+
     Run with `--debug` (or LOG_LEVEL=DEBUG) to see where each column came
     from: the two lookups below degrade rather than fail, so on the default
     level a missing port map and an unreachable monitor1 look the same as a
@@ -184,7 +164,11 @@ def summary(
     """
     if debug:
         configure_logging(component="uqs", level="DEBUG")
-    chosen = _resolve_columns(columns)
+    chosen = resolve_columns(columns)
+    sort_column = resolve_sort_column(sort)
+    # The columns whose data has to be gathered: those shown, and the one
+    # sorted on - which may be a graph or probe column left out of the table.
+    needed = [*chosen, *([sort_column] if sort_column else [])]
     # One budget shared across both blocking steps, spent in order. `remaining`
     # is what is left when each is reached; 0 means no limit, as it does on
     # the option itself.
@@ -257,11 +241,12 @@ def summary(
         sum(1 for r in rows if r["Status"] == "down"),
     )
 
-    if any(col in SUMMARY_GRAPH_COLUMNS for col in chosen):
+    if any(col in SUMMARY_GRAPH_COLUMNS for col in needed):
         attach_graph_columns(rows)
     silent = (
-        probe.attach_probe_column(rows, probe_timeout, deadline) if "Responds" in chosen else []
+        probe.attach_probe_column(rows, probe_timeout, deadline) if "Responds" in needed else []
     )
+    rows = _sorted_items(rows, sort_column, reverse)
 
     # Which q runs the fleet and the connection budget that follows (#518):
     # a 20-process fleet is fine on PeachQ and wedged past the cap on KDB-X.
