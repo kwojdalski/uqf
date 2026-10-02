@@ -769,6 +769,22 @@ uqs query ".qetl.log.debug 1b" --port <port>              # a process already ru
 `-verbose` is uqf's own flag, taken by every process script. It is not TorQ's
 `-debug`, which also stops the log going to its file.
 
+One level below that, `uqs backfill <worker> ... --trace` logs every query the
+source is sent (the SQL statement, or the q lambda and its bounds) and includes
+everything `--debug` shows. The log record stays one line, so `-f` and `grep`
+keep working, with the query as a full-length q string. `uqs logs` prints it as
+a header and an indented block:
+
+```
+query sent range_from=2026.09.10D00:00:00.000000000 range_to=2026.09.11D00:00:00.000000000
+    {[from_ts;to_ts]
+            select deal_id from `demo_deals
+                where deal_time>=from_ts, deal_time<to_ts
+          }
+```
+
+`uqs logs --level DEBUG` hides these lines again.
+
 ### CLI's own logging
 
 `logs --level` filters what the *q processes* wrote. `--debug` shows what `uqs`

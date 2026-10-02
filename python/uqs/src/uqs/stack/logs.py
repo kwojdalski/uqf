@@ -17,6 +17,7 @@ from typing import Any
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.procs import list_process_names
+from uqs.stack.trace_render import render_query_trace
 
 log = get_logger(__name__)
 
@@ -182,9 +183,11 @@ def _emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
     level = _LOGURU_LEVEL.get(rec["loglevel"], "INFO")
     if not _passes_level(level, min_level):
         return
+    # A query trace's code is shown as a block; every other message as it is.
+    # Here, the one path both the recent and the follow modes print through.
     log.bind(
         kdb_time=_format_kdb_time(rec["time"]), procname=rec["procname"], proctype=rec["proctype"]
-    ).log(level, rec["message"])
+    ).log(level, render_query_trace(rec["message"]))
 
 
 def get_recent_logs(

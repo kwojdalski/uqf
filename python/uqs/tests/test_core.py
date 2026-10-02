@@ -776,6 +776,24 @@ def test_the_level_filter_ranks_trace_below_debug(fake_paths: UqsPaths, min_leve
     assert [r["message"].split(" statement")[0] for r in records] == kept
 
 
+def test_uqs_logs_shows_the_block_with_its_trace_label(fake_paths: UqsPaths, capsys):
+    """Through the real reader: the raw record is ONE line, pipes in the code
+    included, and is shown as a block under TRACE."""
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    msg = 'query sent call="{[a;b] select from t where s like \\"x|y\\"}" range_from=1 range_to=2'
+    (log_dir / "out_discovery1.log").write_text(
+        f"2026.08.22D14:21:10.000000000|h|discovery|discovery1|TRC|ipc|{msg}\n"
+    )
+
+    stack_logs.print_recent_logs(fake_paths, "discovery1")
+
+    out = capsys.readouterr().out
+    header = next(line for line in out.splitlines() if "query sent" in line)
+    assert "| TRACE " in header and header.endswith("query sent range_from=1 range_to=2")
+    assert '    {[a;b] select from t where s like "x|y"}' in out.splitlines()
+
+
 def test_get_recent_logs_raises_when_no_log_files(fake_paths: UqsPaths):
     with pytest.raises(UqsError):
         stack_logs.get_recent_logs(fake_paths, "discovery1")

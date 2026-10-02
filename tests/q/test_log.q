@@ -141,6 +141,32 @@ test_enabled_reports_the_trace_gate:{[t]
     .qetl.log.trace[1b];
     .qunit.assertEquals[(off;.qetl.log.enabled `TRC);01b;"enabled follows the trace switch"]};
 
+/ --- values render IN FULL ---------------------------------------------
+/ .
+/ .Q.s1 stops at the console width on KDB-X - 79 characters and "..". A
+/ traced query is exactly the long field that was meant to be read whole.
+
+test_a_long_string_field_is_not_cut_at_the_console_width:{[t]
+    s:500#"select x from t where s=1 ";
+    r:.qetl.log.render enlist[`statement]!enlist s;
+    .qunit.assertEquals[(count r;r like "*..");(count["statement="]+502;0b);
+        "all 500 characters, quoted, and no trailing .."]};
+
+test_a_string_is_quoted_exactly_as_q_writes_it:{[t]
+    / every byte, short enough that -3! is not cut either
+    strs:{"a",x,"b"} each `char$til 256;
+    .qunit.assertEquals[.qetl.log.quoted each strs;-3!'strs;
+        "quotes, backslashes, newlines and every control or high byte escaped as -3! does"]};
+
+test_a_long_list_field_gets_the_widest_console:{[t]
+    / not unlimited - q's widest console is 2000 - but far past 80
+    .qunit.assertTrue[1000<count .qetl.log.value1 til 1000;"a 3,889-character list is not cut at 80"]};
+
+test_rendering_puts_the_console_width_back:{[t]
+    c:system"c";
+    .qetl.log.render `a`b!(til 1000;"x");
+    .qunit.assertEquals[system"c";c;"the widened console is restored after rendering"]};
+
 / --- lazy rendering -----------------------------------------
 
 / The suppression check must precede rendering, because DBG is off by
