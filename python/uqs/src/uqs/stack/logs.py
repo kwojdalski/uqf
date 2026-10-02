@@ -36,10 +36,19 @@ log = get_logger(__name__)
 # contain "|", so split with maxsplit rather than a plain split.
 _LOG_FIELDS = ("time", "host", "proctype", "procname", "loglevel", "id", "message")
 
-# .lg.outmap's own level vocabulary (torq.q's ERROR/ERR/INF/WARN) mapped
-# onto loguru's level names.
-_LOGURU_LEVEL = {"ERROR": "ERROR", "ERR": "ERROR", "WARN": "WARNING", "INF": "INFO"}
-_LEVEL_ORDER = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
+# .lg.outmap's own level vocabulary (torq.q's ERROR/ERR/INF/WARN) plus the two
+# .qetl.log adds below it (DBG, TRC - src/etl/core/log.q), mapped onto
+# loguru's level names. DBG and TRC were missing, so every debug and trace
+# line fell through to INFO: labelled INFO, and kept by `--level INFO`.
+_LOGURU_LEVEL = {
+    "ERROR": "ERROR",
+    "ERR": "ERROR",
+    "WARN": "WARNING",
+    "INF": "INFO",
+    "DBG": "DEBUG",
+    "TRC": "TRACE",
+}
+_LEVEL_ORDER = {"TRACE": 5, "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
 
 # Dedicated format for `logs` output - the record's own {time}/{function}/
 # {line} are Python's (always logger/core.py's _emit, useless here); the kdb
@@ -101,7 +110,10 @@ def _configure_kdb_log_sink() -> Any:
     """
     from uqs.logger.core import setup_logging
 
-    return setup_logging(level="DEBUG", format_string=_kdb_or_uqs_format)
+    # TRACE, not DEBUG: a TRC line from a `--trace` backfill is a loguru TRACE
+    # record, and a DEBUG sink drops it. uqs logs nothing at TRACE itself, so
+    # this lets through the processes' trace lines and nothing else.
+    return setup_logging(level="TRACE", format_string=_kdb_or_uqs_format)
 
 
 def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:

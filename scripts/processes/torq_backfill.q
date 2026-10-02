@@ -42,8 +42,9 @@
 /             also stops the log going to its file.
 /   -trace    optional: switch the TRC level on - every query the source is
 /             sent, the SQL statement or the q lambda and its bounds, before
-/             it goes and again with the rows and milliseconds it took.
-/             Independent of -verbose. `uqs backfill --trace` passes it.
+/             it goes and again with the rows and milliseconds it took - and
+/             DBG with it, as -verbose does: a query is read beside the window
+/             it was sent for. `uqs backfill --trace` passes it.
 /   -on_conflict  optional: upsert, replace, ignore, append or fail - what a
 /             write does with a row whose row_key is already there, for this
 /             run only, over the worker's declared strategy.
@@ -304,7 +305,10 @@ run:{[]
 / DBG before anything else logs, so -verbose covers discovery too. .qetl.log is
 / only defined once the tree above has loaded.
 if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
-if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.trace 1b];
+/ -trace is the most detail there is, so it includes DBG: a traced query is
+/ read beside the window it was sent for, which only DBG logs. The two stay
+/ separate switches in .qetl.log - only this flag ties them.
+if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
 .qetl.log.dbg[`backfill;"debug logging on";
     `procname`pid`port`cwd!(.proc.procname;.z.i;system"p";first system"pwd")];
 
