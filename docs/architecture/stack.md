@@ -228,6 +228,18 @@ horizon's quote should already exist. Unlike `cross_quotes`, both `position` and
 `rdb1`/`wdb1`/`hdb`, same as `mkt_orderbook`), since this history is worth
 keeping.
 
+`markout1`'s buffers live in its process, so a fill it never saw goes unscored:
+it was down, restarting, or the fill came before it. A bounded backfill covers
+those. `hdb_markouts_backfill1` (`uqs backfill hdb_markouts_backfill ...`) reads
+a window of fills from the HDB's `trades`, and their quotes from `quote` up to
+the window's end plus the longest horizon. It scores them with the same function
+and horizons as `markout1` (`.qpipe.source.hdb_markouts`) and writes the rows
+into the same `execution_quality` table. Rows are keyed on
+`sym, trade_time, horizon`, so a fill both jobs scored is replaced, not counted
+twice. Point it at the HDB with
+`UQF_SOURCE_CRED_HDB_MARKOUTS=localhost:<hdb1's port>`; without that, it runs on
+its fixture.
+
 `cross_quotes` is drawn dashed because it never becomes a real database table -
 it's `.qpipe.job.cross.crosses`, a plain in-memory table inside `cross1`'s own
 process, queryable only by connecting to `cross1` directly
