@@ -83,7 +83,7 @@ def backfill(
             "--trace",
             help="Log at TRACE inside the backfill process: every query the source is "
             "sent - the SQL, or the q lambda and its bounds - and the rows and time it "
-            "took. Independent of --debug",
+            "took. Includes everything --debug shows",
         ),
     ] = False,
 ) -> None:
@@ -104,7 +104,9 @@ def backfill(
 
     `--debug` (or `uqs --debug backfill ...`) starts the process with
     `-verbose`, so its log - `uqs logs <process>` - carries DBG lines.
-    `--trace` starts it with `-trace`: every query sent to the source, at TRC.
+    `--trace` starts it with `-trace`: every query sent to the source, at TRC,
+    and the DBG lines `--debug` would show, so each query sits beside its
+    window.
     """
     try:
         result = stack_backfill.start(

@@ -231,8 +231,8 @@ def start(
 LevelOpt = Annotated[
     str | None,
     typer.Option(
-        help="Only show this level and above: DEBUG/INFO/WARNING/ERROR",
-        autocompletion=completion.choices("DEBUG", "INFO", "WARNING", "ERROR"),
+        help="Only show this level and above: TRACE/DEBUG/INFO/WARNING/ERROR",
+        autocompletion=completion.choices("TRACE", "DEBUG", "INFO", "WARNING", "ERROR"),
     ),
 ]
 

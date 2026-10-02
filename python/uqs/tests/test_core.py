@@ -729,6 +729,52 @@ def test_get_recent_logs_filters_by_min_level(fake_paths: UqsPaths):
     assert [r["message"] for r in records] == ["loud error"]
 
 
+_ALL_LEVELS = (
+    '2026.08.22D14:21:10.000000000|h|discovery|discovery1|TRC|odbc|sql sent statement="SELECT 1"\n'
+    "2026.08.22D14:21:11.000000000|h|discovery|discovery1|DBG|bf|window start\n"
+    "2026.08.22D14:21:12.000000000|h|discovery|discovery1|INF|bf|run finished\n"
+)
+
+
+def test_debug_and_trace_lines_are_labelled_as_what_they_are(fake_paths: UqsPaths, capsys):
+    """DBG and TRC are .qetl.log's levels below TorQ's own. They were missing
+    from the mapping, so both printed as INFO."""
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(_ALL_LEVELS)
+
+    stack_logs.print_recent_logs(fake_paths, "discovery1")
+
+    lines = capsys.readouterr().out.splitlines()
+    label = {
+        m: next(line for line in lines if m in line)
+        for m in ("sql sent", "window start", "run finished")
+    }
+    assert "| TRACE " in label["sql sent"]
+    assert "| DEBUG " in label["window start"]
+    assert "| INFO " in label["run finished"]
+
+
+@pytest.mark.parametrize(
+    ("min_level", "kept"),
+    [
+        (None, ["sql sent", "window start", "run finished"]),
+        ("TRACE", ["sql sent", "window start", "run finished"]),
+        ("DEBUG", ["window start", "run finished"]),
+        ("INFO", ["run finished"]),
+    ],
+)
+def test_the_level_filter_ranks_trace_below_debug(fake_paths: UqsPaths, min_level, kept):
+    """`--level INFO` used to keep DBG and TRC lines, since both read as INFO."""
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(_ALL_LEVELS)
+
+    records = stack_logs.get_recent_logs(fake_paths, "discovery1", min_level=min_level)
+
+    assert [r["message"].split(" statement")[0] for r in records] == kept
+
+
 def test_get_recent_logs_raises_when_no_log_files(fake_paths: UqsPaths):
     with pytest.raises(UqsError):
         stack_logs.get_recent_logs(fake_paths, "discovery1")
