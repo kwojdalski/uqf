@@ -58,7 +58,6 @@
 .qtorq.connect_etl
 .qtorq.feed_handle
 .qtorq.load_uqf
-.qtorq.reload_hdb
 .qtorq.safe_timer
 .qtorq.subscribe_etl
 .qtorq.subscribe_tables

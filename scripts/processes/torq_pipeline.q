@@ -444,7 +444,10 @@ reload_hdb:{[]
     / this process vanishes from its answer - which is how a refused reload
     / used to log as `hdbs=0`, word for word what "no HDB running" logs.
     / What discovery has registered is counted separately, so the two differ.
-    registered:exec count i from .servers.SERVERS where proctype=hdb_type;
+    / .qtorq.hdb_type in full: a bare `hdb_type` inside an exec is not looked
+    / up in this function's namespace, and threw 'hdb_type after every
+    / backfill's rows were written.
+    registered:exec count i from .servers.SERVERS where proctype=.qtorq.hdb_type;
     hs:exec w from .servers.getservers[`proctype;hdb_type;()!();1b;0b];
     reload_handles[registered;hs]}
 
