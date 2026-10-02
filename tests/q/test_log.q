@@ -141,6 +141,34 @@ test_enabled_reports_the_trace_gate:{[t]
     .qetl.log.trace[1b];
     .qunit.assertEquals[(off;.qetl.log.enabled `TRC);01b;"enabled follows the trace switch"]};
 
+/ --- scoped context ----------------------------------------------------
+/ .
+/ What a line is about (run, worker, source, window, attempt), added to every
+/ line inside the scope, and gone when the scope ends - however it ends.
+
+test_a_line_inside_a_context_carries_it:{[t]
+    .qetl.log.with_context[`worker`source!(`w;`s);{.qetl.log.info[`x;"fetched";enlist[`rows]!enlist 3]};enlist(::)];
+    .qunit.assertEquals[last_msg[];"fetched rows=3 worker=`w source=`s";"own fields first, then the context"]};
+
+test_a_lines_own_field_wins_over_the_context:{[t]
+    .qetl.log.with_context[enlist[`range_from]!enlist 1;{.qetl.log.info[`x;"m";enlist[`range_from]!enlist 2]};enlist(::)];
+    .qunit.assertEquals[last_msg[];"m range_from=2";"a line's own value, not the context's"]};
+
+test_contexts_nest_and_unwind:{[t]
+    .qetl.log.with_context[enlist[`worker]!enlist `w;
+        {.qetl.log.with_context[enlist[`attempt]!enlist 2;{.qetl.log.info[`x;"in";()!()]};enlist(::)];
+         .qetl.log.info[`x;"out";()!()]};enlist(::)];
+    .qunit.assertEquals[.logtest.captured[;2];("in worker=`w attempt=2";"out worker=`w");
+        "the inner scope adds its field, and leaving it takes only that field away"]};
+
+test_the_context_is_restored_when_the_work_throws:{[t]
+    r:@[.qetl.log.with_context[enlist[`worker]!enlist `w;;enlist(::)];{'"boom"};{x}];
+    .qunit.assertEquals[(r;.qetl.log.context);("boom";()!());
+        "the error reaches the caller, and the context cannot leak into the next worker"]};
+
+test_with_context_returns_what_the_work_returns:{[t]
+    .qunit.assertEquals[.qetl.log.with_context[enlist[`worker]!enlist `w;{x+1};enlist 1];2;"a pass-through"]};
+
 / --- values render IN FULL ---------------------------------------------
 / .
 / .Q.s1 stops at the console width on KDB-X - 79 characters and "..". A

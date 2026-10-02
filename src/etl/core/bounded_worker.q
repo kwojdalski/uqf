@@ -727,8 +727,11 @@ fetch:{[worker;from_ts;to_ts]
     / failing query skipped the retries and the failed-window path and threw
     / out of the run, and a working one handed with_retry a table that `t[]`
     / happened to return unchanged.
-    r:.qetl.job.bounded.runtime.with_retry[.qetl.job.bounded.runtime.policy[];
-        {[source;h;from_ts;to_ts;unused] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts]];
+    / The source joins the window's log context for the fetch and its retries.
+    r:.qetl.log.with_context[enlist[`source]!enlist cfg`source;
+        .qetl.job.bounded.runtime.with_retry;
+        (.qetl.job.bounded.runtime.policy[];
+         {[source;h;from_ts;to_ts;unused] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts])];
     .qetl.log.dbg[worker;"fetch attempted";
         `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
             $[`ok~r`state; count r`result; 0N])];
@@ -1088,6 +1091,20 @@ transform_batch:{[worker;batch]
 / @return 1b when the window completed, 0b when it failed and the run
 /   should continue with the next one
 do_window:{[worker;w]
+    / Everything logged while this window runs - the fetch, its requests,
+    / the transform, a sidecar's own stages, the write - carries the run,
+    / worker and window, and the scope ends with the window, thrown or not.
+    run:.qetl.run.current[];
+    ctx:(`worker`range_from`range_to!(worker;w`range_from;w`range_to)),
+        $[null run; ()!(); enlist[`run]!enlist run];
+    .qetl.log.with_context[ctx;window_body;(worker;w)]}
+
+/ Private: one window, fetch to publish - do_window's body, inside its log
+/ context.
+/ @param worker the worker's name
+/ @param w the window, a dict of range_from and range_to
+/ @return 1b when the window was published, 0b when it failed
+window_body:{[worker;w]
     cfg:def worker;
     .qetl.log.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
     f:own[worker;`fetch][w`range_from;w`range_to];

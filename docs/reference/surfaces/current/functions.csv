@@ -293,6 +293,7 @@ qetl.job.bounded,state,dict,,
 qetl.job.bounded,transform_batch,function,2,worker batch
 qetl.job.bounded,unpartitioned,value,,
 qetl.job.bounded,validate,function,2,worker run_spec
+qetl.job.bounded,window_body,function,2,worker w
 qetl.job.bounded,worker_cfg,dict,,
 qetl.job.bounded,worker_root,value,,
 qetl.job.bounded,write_state,function,3,worker nm v
@@ -397,6 +398,7 @@ qetl.job.stream.normalizer,dispatch,function,3,name t x
 qetl.job.stream.normalizer,normalize,function,3,name src batch
 qetl.job.stream.normalizer,registry,dict,,
 qetl.job.stream.normalizer,required_keys,value,,
+qetl.log,context,dict,,
 qetl.log,dbg,function,3,id text fields
 qetl.log,debug,function,1,on
 qetl.log,debug_enabled,value,,
@@ -406,10 +408,12 @@ qetl.log,err,function,3,id text fields
 qetl.log,info,function,3,id text fields
 qetl.log,levels,value,,
 qetl.log,line,function,4,level id text fields
+qetl.log,next_request,function,1,
 qetl.log,quiet,value,,
 qetl.log,quoted,function,1,s
 qetl.log,register,function,1,
 qetl.log,render,function,1,fields
+qetl.log,request_seq,value,,
 qetl.log,switched,function,1,level
 qetl.log,torq_loaded,function,1,
 qetl.log,trace,function,1,on
@@ -417,6 +421,8 @@ qetl.log,trace_enabled,value,,
 qetl.log,trc,function,3,id text fields
 qetl.log,value1,function,1,v
 qetl.log,warn,function,3,id text fields
+qetl.log,with_context,function,3,ctx f args
+qetl.log,with_scope,function,1,fields
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
 qetl.plant,ccy_exposure,table,,

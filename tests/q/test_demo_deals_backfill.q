@@ -900,4 +900,26 @@ test_a_zero_width_is_refused:{[t]
         `source`dataset`width`transform!(`demo_deals;`something_else;0D00:00;`demo_deals_passthrough);
         "a zero width plans infinitely many empty windows"]};
 
+
+/ --- a window's log lines carry what they belong to ----------------------
+
+/ Every line `f` logs, as (level;id;text;fields) with its context merged -
+/ a recorder in place of .qetl.log.line, put back after.
+logged:{[f]
+    keep:.qetl.log.line; `.ddbftest.lines set ();
+    .qetl.log.line:{[level;id;text;fields] .ddbftest.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
+    @[f;::;::]; .qetl.log.line:keep;
+    .ddbftest.lines}
+
+test_a_windows_lines_carry_the_run_worker_and_window:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;3]];
+    lines:.ddbftest.logged {.qpipe.job.demo_deals_backfill.run[]};
+    starts:lines[;3] where lines[;2]~\:"window start";
+    .qunit.assertEquals[count starts;2;"two windows"];
+    .qunit.assertEquals[distinct starts[;`worker];enlist `demo_deals_backfill;"every line names the worker"];
+    .qunit.assertTrue[(1=count distinct starts[;`run]) and not null first starts[;`run];
+        "and the one run both windows belong to"];
+    .qunit.assertEquals[count distinct starts[;`range_from];2;"and its own window"];
+    .qunit.assertEquals[.qetl.log.context;()!();"nothing is left behind for the next worker"]};
+
 \d .
