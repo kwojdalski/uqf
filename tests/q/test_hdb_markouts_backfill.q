@@ -117,6 +117,32 @@ test_the_live_path_scores_exactly_as_the_fixture_does:{[t]
     r:.mbftest.with_hdb {.qpipe.source.hdb_markouts.query[.mbftest.hdb;.mbftest.day[]0;.mbftest.day[]1]};
     .qunit.assertEquals[`trade_time xasc r;.qpipe.source.hdb_markouts.fixture[];"live and fixture agree"]};
 
+test_a_fill_early_in_a_window_is_priced_by_the_quote_before_it:{[t]
+    / The quote live at 10:00:03 was set at 09:59:50 - before the window.
+    / Reading quotes only from the window's start priced this fill null, and
+    / the target key then replaced the live job's correct row with that null.
+    `.mbftest.early set {
+        `trades set ([] date:enlist 2026.09.17; time:enlist 2026.09.17D10:00:03; sym:enlist `EURUSD;
+            side:enlist 1; trade_price:enlist 1.1; pip_factor:enlist 10000);
+        `quote set ([] date:2026.09.17 2026.09.17; time:2026.09.17D09:59:50 2026.09.17D11:30:00;
+            sym:`EURUSD`EURUSD; bid:1.1 1.2; ask:1.1002 1.2002);
+        .qpipe.source.hdb_markouts.query[.mbftest.hdb;2026.09.17D10:00;2026.09.17D11:00]};
+    r:.mbftest.with_hdb {.mbftest.early[]};
+    .qunit.assertEquals[exec markout_pips from r;1 1f;
+        "both horizons priced against the 09:59:50 mid (1.1001), not null"]};
+
+test_the_quote_before_a_window_is_bounded_by_the_lookback:{[t]
+    / A pair quoted only long before the window stays unpriced, as the live
+    / job would leave it after a restart - the lookback is a bound, not all history.
+    `.mbftest.stale set {
+        `trades set ([] date:enlist 2026.09.17; time:enlist 2026.09.17D10:00:03; sym:enlist `EURUSD;
+            side:enlist 1; trade_price:enlist 1.1; pip_factor:enlist 10000);
+        `quote set ([] date:enlist 2026.09.01; time:enlist 2026.09.01D10:00; sym:enlist `EURUSD;
+            bid:enlist 1.1; ask:enlist 1.1002);
+        .qpipe.source.hdb_markouts.query[.mbftest.hdb;2026.09.17D10:00;2026.09.17D11:00]};
+    r:.mbftest.with_hdb {.mbftest.stale[]};
+    .qunit.assertTrue[all null exec markout_pips from r;"sixteen days back is past the 7-day lookback"]};
+
 test_a_window_without_fills_does_not_read_quotes:{[t]
     r:.mbftest.with_hdb {.qpipe.source.hdb_markouts.query[.mbftest.hdb;2026.09.17D12:00:00;2026.09.17D13:00:00]};
     .qunit.assertEquals[(count .mbftest.sent;count r;cols r);(1;0;cols .qpipe.source.hdb_markouts.fixture[]);

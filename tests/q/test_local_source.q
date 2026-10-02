@@ -86,6 +86,48 @@ test_a_table_no_partition_holds_is_refused_by_name:{[t]
         (2026.09.17D00:00;2026.09.18D00:00);"local: no partition of nope under *";
         "named, not an empty result that hides a typo"]};
 
+test_a_column_enumerated_against_another_domain_uses_that_domain:{[t]
+    / `venue, not `sym: decoding by sym's positions returned `b`a`b for `Y`X`Y.
+    d:"build/test-local-venue"; system"rm -rf ",d; system"mkdir -p ",d;
+    (hsym `$d,"/sym") set `a`b;
+    (hsym `$d,"/venue") set `X`Y;
+    `venue set `X`Y;
+    (hsym `$d,"/2026.09.17/t/") set ([] time:2026.09.17D10:00 2026.09.17D10:01 2026.09.17D10:02; v:`venue$`Y`X`Y);
+    delete venue from `.;
+    r:.qetl.source.local_read[hsym `$d;`t;2026.09.17D00:00;2026.09.18D00:00];
+    .qunit.assertEquals[exec v from r;`Y`X`Y;"each column against its own domain's file"]};
+
+test_a_missing_domain_file_is_refused_not_decoded_to_blanks:{[t]
+    d:"build/test-local-nosym"; system"rm -rf ",d; system"mkdir -p ",d;
+    / Enumerated against a `sym set only for this write; the process's own
+    / `sym - which the HDB writers in other suites rely on - is put back.
+    keep:@[get;`sym;{[e] `symbol$()}];
+    `sym set `a`b;
+    (hsym `$d,"/2026.09.17/t/") set ([] time:2026.09.17D10:00 2026.09.17D10:01; s:`sym$`a`b);
+    `sym set keep;
+    .qunit.assertThrows[{.qetl.source.local_read[hsym `$x;`t;2026.09.17D00:00;2026.09.18D00:00]};d;
+        "local: column s is enumerated against `sym, but * does not exist";
+        "no sym file, no blank symbols"]};
+
+test_a_domain_file_too_short_for_the_column_is_refused:{[t]
+    d:"build/test-local-short"; system"rm -rf ",d; system"mkdir -p ",d;
+    keep:@[get;`sym;{[e] `symbol$()}];
+    `sym set `a`b`c;
+    (hsym `$d,"/2026.09.17/t/") set ([] time:2026.09.17D10:00 2026.09.17D10:01; s:`sym$`a`c);
+    `sym set keep;
+    (hsym `$d,"/sym") set enlist `a;
+    .qunit.assertThrows[{.qetl.source.local_read[hsym `$x;`t;2026.09.17D00:00;2026.09.18D00:00]};d;
+        "local: column s needs 3 entries of `sym*";"positions past the file's end are refused"]};
+
+test_partitions_with_different_columns_are_refused_by_date:{[t]
+    d:"build/test-local-drift"; system"rm -rf ",d; system"mkdir -p ",d;
+    (hsym `$d,"/sym") set `a;
+    (hsym `$d,"/2026.09.17/t/") set ([] time:enlist 2026.09.17D10:00; px:enlist 1f);
+    (hsym `$d,"/2026.09.18/t/") set ([] time:enlist 2026.09.18D10:00; px:enlist 1f; qty:enlist 2);
+    .qunit.assertThrows[{.qetl.source.local_read[hsym `$x;`t;2026.09.17D00:00;2026.09.19D00:00]};d;
+        "local: t's columns differ between partitions 2026.09.18*";
+        "named, not a list of dicts that fails in the query"]};
+
 / --- the credential is a path, checked when the worker connects -------------
 
 test_a_path_that_does_not_exist_is_refused:{[t]
@@ -146,6 +188,18 @@ test_a_local_query_is_traced_like_a_remote_one:{[t]
     .qunit.assertEquals[lines[;1 2];((`local;"query sent");(`local;"query returned"));"sent, then returned"];
     .qunit.assertEquals[(lines[0;3]`transport;(lines[0;3]`request)~lines[1;3]`request;lines[1;3]`rows);(`local;1b;2);
         "transport local, one request number, the rows read"]};
+
+test_a_traced_query_carries_its_whole_lambda_at_any_console_width:{[t]
+    / -3! cut the call at the console width before log.q's full-width
+    / rendering saw it - 79 characters at the default 80 columns.
+    c:system"c"; system"c 25 80";
+    f:{[read;from_ts;to_ts] select time, sym, px from read[`trades;from_ts;to_ts] where time>=from_ts, time<to_ts};
+    / Through a global: `logged {..}[f]` would run the query before logged
+    / installs its recorder.
+    `.loctest.f set f;
+    lines:.loctest.logged {.qetl.source.local[.loctest.root;.loctest.f;2026.09.17D00:00;2026.09.18D00:00]};
+    system"c ",(" " sv string c);
+    .qunit.assertEquals[lines[0;3]`call;string f;"the lambda's full text, not 79 characters and .."]};
 
 test_a_failing_local_query_is_traced_and_rethrown:{[t]
     lines:.loctest.logged {@[.qetl.source.local[.loctest.root;{[read;a;b] '"bad query"};2026.09.17D00:00];

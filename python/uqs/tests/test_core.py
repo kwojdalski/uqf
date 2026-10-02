@@ -794,6 +794,42 @@ def test_uqs_logs_shows_the_block_with_its_trace_label(fake_paths: UqsPaths, cap
     assert '    {[a;b] select from t where s like "x|y"}' in out.splitlines()
 
 
+@pytest.mark.parametrize(
+    ("given", "means"),
+    [
+        ("WARN", "WARNING"),
+        ("err", "ERROR"),
+        ("INF", "INFO"),
+        ("DBG", "DEBUG"),
+        ("trc", "TRACE"),
+        ("warning", "WARNING"),
+        (None, None),
+    ],
+)
+def test_level_accepts_the_names_the_log_lines_print(given, means):
+    """`--level WARN` is what a reader copies from the log; it used to rank as
+    0 and pass every line."""
+    assert stack_logs.min_level_name(given) == means
+
+
+def test_an_unknown_level_is_refused_rather_than_showing_everything(fake_paths: UqsPaths):
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(_ALL_LEVELS)
+    with pytest.raises(UqsError, match="--level 'NOPE' is not a level"):
+        stack_logs.get_recent_logs(fake_paths, "discovery1", min_level="NOPE")
+
+
+def test_warn_filters_out_info(fake_paths: UqsPaths):
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(
+        _ALL_LEVELS + "2026.08.22D14:21:13.000000000|h|discovery|discovery1|WARN|bf|slow\n"
+    )
+    records = stack_logs.get_recent_logs(fake_paths, "discovery1", min_level="WARN")
+    assert [r["message"] for r in records] == ["slow"]
+
+
 def test_get_recent_logs_raises_when_no_log_files(fake_paths: UqsPaths):
     with pytest.raises(UqsError):
         stack_logs.get_recent_logs(fake_paths, "discovery1")

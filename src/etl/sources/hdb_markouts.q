@@ -9,7 +9,10 @@
 /   `trades  the fills the executions job published and end of day saved,
 /            already in markout's shape (signed side, trade_price, pip_factor)
 /   `quote   top of book, from the window's start to its end plus the
-/            longest horizon, so the last fill's horizons have their quotes
+/            longest horizon, so the last fill's horizons have their quotes,
+/            AND each traded pair's last quote before the window starts -
+/            the one an early fill is priced against when the market was
+/            quiet across the window's start (looked back up to `lookback`)
 / .
 / - scored by the SAME function at the SAME horizons as the live job
 / (.qexec.markout_at_horizons, .qpipe.job.markout.horizons), so a fill
@@ -60,6 +63,13 @@ score:{[deals;quotes]
 none:([] time:`timestamp$(); sym:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$();
     trade_price:`float$(); ref_price:`float$(); markout_pips:`float$())
 
+/ How far back the last quote before a window is looked for. Without it, a
+/ fill early in a window whose latest quote predates the window has nothing
+/ to be priced against and scores null - and the target key replaces the
+/ live job's correct row with that null. A pair unquoted for longer than this
+/ scores null, as the live job would after a restart.
+lookback:7D
+
 / The window's fills, and the quotes they are marked against, both from the
 / HDB; scored here. Both tables are date-partitioned, so the partition is
 / constrained first, and each is named as a symbol so it resolves at the
@@ -77,10 +87,16 @@ query:{[h;range_from;range_to]
     / No fills, no quote query - and no score: markout_at_horizons throws
     / 'type on zero trades, which would fail every quiet window.
     if[0=count deals; :none];
-    quotes:.qetl.source.ipc[h;{[from_ts;to_ts]
-        `time xasc select time, sym, bid, ask from `quote
-            where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts
-      };range_from;range_to+max .qpipe.job.markout.horizons];
+    / One request: the window's quotes, plus each traded pair's last quote
+    / before it. The pairs and the lookback travel in the projection.
+    quotes:.qetl.source.ipc[h;{[syms;lb;from_ts;to_ts]
+        before:select time, sym, bid, ask from
+            0!select last time, last bid, last ask by sym from `quote
+                where date within `date$(from_ts-lb;from_ts), time<from_ts, sym in syms;
+        inwin:select time, sym, bid, ask from `quote
+            where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts, sym in syms;
+        `time xasc before,inwin
+      }[distinct deals`sym;lookback];range_from;range_to+max .qpipe.job.markout.horizons];
     score[deals;quotes]}
 
 / Four fills on 2026.09.17: EURUSD both ways, a USDJPY buy, and a GBPUSD

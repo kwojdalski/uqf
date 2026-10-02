@@ -686,7 +686,7 @@ ipc:{[h;f;range_from;range_to]
     t0:.z.p;
     req:`transport`request!(`ipc;.qetl.log.next_request[]);
     .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";
-        (enlist[`call]!enlist -3!f),req,`range_from`range_to!(range_from;range_to));::];
+        (enlist[`call]!enlist call_text f),req,`range_from`range_to!(range_from;range_to));::];
     r:@[h;(f;range_from;range_to);{[req;t0;e]
         .[{.qetl.log.trc[x;y;z]};(`ipc;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
@@ -694,6 +694,16 @@ ipc:{[h;f;range_from;range_to]
     .[{.qetl.log.trc[x;y;z]};(`ipc;"query returned";
         req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
     r}
+
+/ Private: a query lambda's text for a trace - IN FULL. `string` for a
+/ lambda: -3! stops at the console width (79 characters by default), and cut
+/ the traced query before log.q's full-width rendering ever saw it. A
+/ projection has no source text of its own, so it is rendered at the widest
+/ console .qetl.log.value1 allows.
+/ @param f the function sent
+/ @return its text
+/ @eg count .qetl.source.call_text {[a;b] a+b} -> 11
+call_text:{[f] $[100h=type f; string f; .qetl.log.value1 f]}
 
 / ---------------------------------------------------------------- LOCAL
 / .
@@ -707,11 +717,14 @@ ipc:{[h;f;range_from;range_to]
 / its own HDB cannot afford either. Tables are read one date partition at a
 / time, column by column.
 / .
-/ THE SYM FILE IS THE HDB'S OWN. A plain `get` of an enumerated column
-/ resolves it against whatever `sym` THIS process has loaded - the one
-/ .qetl.io.hdb keeps for the HDB it writes - so reading another HDB that way
-/ silently returns the wrong symbols. Each enumerated column is decoded by
-/ its positions against the directory's own `sym` file instead.
+/ EACH ENUMERATION IS DECODED AGAINST THE HDB'S OWN DOMAIN FILE. A plain
+/ `get` of an enumerated column resolves it against whatever domain of that
+/ name THIS process has loaded - for `sym`, the one .qetl.io.hdb keeps for
+/ the HDB it writes - so reading another HDB that way silently returns the
+/ wrong symbols. Each enumerated column is decoded by its positions against
+/ the file named after ITS domain (`key` of the column: usually `sym`, but
+/ a column can be enumerated against any domain), and a missing or too-short
+/ domain file is refused rather than decoded to blanks.
 
 / The directory a `local credential names, validated: a directory, holding a
 / sym file or at least one date partition. Called by .qetl.job.bounded.connect,
@@ -740,16 +753,33 @@ local_dates:{[root;d0;d1]
     ds:"D"$string key root;
     asc ds where (not null ds) and ds within (d0;d1)}
 
+/ Private: an enumerated column, decoded against its own domain's file under
+/ `root`. Refuses a domain file that is missing, or too short for the
+/ positions the column holds - either would decode to blank symbols.
+/ @param root the HDB directory, as a file symbol
+/ @param c the column's name, for the error
+/ @param v the column as read: an enumeration
+/ @return the column as plain symbols
+local_decode:{[root;c;v]
+    dom:key v;
+    f:` sv root,dom;
+    if[()~key f; '"local: column ",string[c]," is enumerated against `",string[dom],", but ",(1_string f)," does not exist"];
+    vals:get f;
+    ix:"j"$v;
+    if[(count ix) and (max ix)>=count vals;
+        '"local: column ",string[c]," needs ",string[1+max ix]," entries of `",string[dom],", and ",(1_string f)," holds ",string count vals];
+    vals ix}
+
 / Private: one partition of one table, as a plain in-memory table with the
 / partition's `date` first (as a select from a mapped HDB has it), every
-/ enumerated column decoded against the HDB's own sym file. Empty list when
+/ enumerated column decoded against its own domain's file. Empty list when
 / that date has no such table.
-local_partition:{[root;syms;table;d]
+local_partition:{[root;table;d]
     base:string .Q.par[root;d;table];
     if[()~key hsym `$base,"/.d"; :()];
     cs:get hsym `$base,"/.d";
-    vals:{[base;syms;c] v:get hsym `$base,"/",string c;
-        $[(type v) within 20 76h; syms "j"$v; v]}[base;syms] each cs;
+    vals:{[root;base;c] v:get hsym `$base,"/",string c;
+        $[(type v) within 20 76h; local_decode[root;c;v]; v]}[root;base] each cs;
     `date xcols update date:d from flip cs!vals}
 
 / The rows of `table` from every date partition that [from_ts;to_ts) touches
@@ -763,12 +793,20 @@ local_partition:{[root;syms;table;d]
 /   range holds it
 / @throws error when no partition anywhere in the HDB holds the table
 local_read:{[root;table;from_ts;to_ts]
-    syms:$[()~key ` sv root,`sym; `symbol$(); get ` sv root,`sym];
     / to_ts is EXCLUSIVE: a window ending at midnight touches no part of the
     / next day, so its partition is not read.
-    parts:local_partition[root;syms;table] each local_dates[root;`date$from_ts;`date$to_ts-1];
-    parts:parts where 0<count each parts;
-    $[count parts; raze parts; 0#local_latest[root;table]]}
+    ds:local_dates[root;`date$from_ts;`date$to_ts-1];
+    parts:local_partition[root;table] each ds;
+    keep:where 0<count each parts;
+    if[0=count keep; :0#local_latest[root;table]];
+    / Partitions with different columns cannot be one table - a mapped HDB
+    / refuses them too - and razing them would hand the query a list of
+    / dicts that fails somewhere far from here.
+    shapes:cols each parts keep;
+    if[1<count distinct shapes;
+        '"local: ",string[table],"'s columns differ between partitions ",
+         (", " sv string ds keep where not shapes~\:first shapes)," and ",string first ds keep];
+    raze parts keep}
 
 / The most recent partition of `table`, read as local_read reads one. What
 / validate_live checks a local source's declaration against, and the shape
@@ -778,11 +816,10 @@ local_read:{[root;table;from_ts;to_ts]
 / @return that partition's rows
 / @throws error when no partition holds the table
 local_latest:{[root;table]
-    syms:$[()~key ` sv root,`sym; `symbol$(); get ` sv root,`sym];
     ds:reverse local_dates[root;-0Wd;0Wd];
     hit:ds where {[root;table;d] not ()~key hsym `$(string .Q.par[root;d;table]),"/.d"}[root;table] each ds;
     if[0=count hit; '"local: no partition of ",string[table]," under ",1_string root];
-    local_partition[root;syms;table;first hit]}
+    local_partition[root;table;first hit]}
 
 / Run a local source's query: call `f` with a table reader over the HDB and
 / the window's bounds, traced as .qetl.source.ipc traces an IPC query - the
@@ -806,7 +843,7 @@ local:{[root;f;range_from;range_to]
     t0:.z.p;
     req:`transport`request!(`local;.qetl.log.next_request[]);
     .[{.qetl.log.trc[x;y;z]};(`local;"query sent";
-        (enlist[`call]!enlist -3!f),req,`range_from`range_to!(range_from;range_to));::];
+        (enlist[`call]!enlist call_text f),req,`range_from`range_to!(range_from;range_to));::];
     r:.[f;(read;range_from;range_to);{[req;t0;e]
         .[{.qetl.log.trc[x;y;z]};(`local;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];

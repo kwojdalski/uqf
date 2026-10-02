@@ -38,27 +38,31 @@ def decode_q_string(text: str, start: int) -> tuple[str, int] | None:
 
     Decodes exactly what q writes (-3!, and .qetl.log's own quoting): `\\n`,
     `\\r`, `\\t`, `\\\\`, `\\"` and a three-digit octal escape.
+
+    Collected as BYTES and decoded as UTF-8 at the end: q escapes each byte
+    above 126 on its own, so an accented character arrives as two octal
+    escapes, and decoding each to a character gave mojibake (café -> cafÃ©).
     """
     if start >= len(text) or text[start] != '"':
         return None
-    out: list[str] = []
+    out = bytearray()
     i = start + 1
     while i < len(text):
         ch = text[i]
         if ch == '"':
-            return "".join(out), i + 1
+            return out.decode("utf-8", "replace"), i + 1
         if ch != "\\":
-            out.append(ch)
+            out += ch.encode("utf-8")
             i += 1
             continue
         nxt = text[i + 1 : i + 2]
         if nxt in _SIMPLE_ESCAPES:
-            out.append(_SIMPLE_ESCAPES[nxt])
+            out += _SIMPLE_ESCAPES[nxt].encode("utf-8")
             i += 2
             continue
         octal = text[i + 1 : i + 4]
         if len(octal) == 3 and all(c in "01234567" for c in octal):
-            out.append(chr(int(octal, 8)))
+            out.append(int(octal, 8))
             i += 4
             continue
         return None

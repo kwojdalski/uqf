@@ -70,9 +70,13 @@ For each window `[from, to)`, one hour wide by default, the source
 `.qpipe.source.hdb_markouts` (`src/etl/sources/hdb_markouts.q`):
 
 1. reads the fills with `trade_time` in `[from, to)` from the HDB's `trades`;
-2. reads quotes in `[from, to + 10s)` from `quote`, so the last fill's 10s
-   horizon has its quote (a window with no fills skips this query and returns an
-   empty table);
+2. reads, for the traded pairs, the quotes in `[from, to + 10s)` from `quote`,
+   so the last fill's 10s horizon has its quote, **and each pair's last quote
+   before `from`**, looking back up to 7 days (`lookback`). Without that, a fill
+   early in a window whose latest quote predates the window had nothing to be
+   priced against. It scored null, and the target key then replaced the live
+   job's correct row with that null. A window with no fills skips this query and
+   returns an empty table;
 3. scores them with the shared function.
 
 The worker (`src/etl/workers/hdb_markouts_backfill.q`) then does what every

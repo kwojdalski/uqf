@@ -166,6 +166,11 @@ test_the_context_is_restored_when_the_work_throws:{[t]
     .qunit.assertEquals[(r;.qetl.log.context);("boom";()!());
         "the error reaches the caller, and the context cannot leak into the next worker"]};
 
+test_a_unary_primitive_argument_is_passed_not_mistaken_for_no_arguments:{[t]
+    / neg is 101h, like ::; only :: itself means "call f with no arguments".
+    .qunit.assertEquals[.qetl.log.with_context[enlist[`worker]!enlist `w;{x 5};enlist neg];-5;
+        "f is applied to neg"]};
+
 test_with_context_returns_what_the_work_returns:{[t]
     .qunit.assertEquals[.qetl.log.with_context[enlist[`worker]!enlist `w;{x+1};enlist 1];2;"a pass-through"]};
 
