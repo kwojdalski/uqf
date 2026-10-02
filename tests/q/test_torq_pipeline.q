@@ -162,3 +162,62 @@ test_apply_verbose_reports_the_flag_this_process_was_started_with:{[t]
     .qunit.assertEquals[on;`verbose in key .Q.opt .z.x;
         "it reports whether -verbose was on this process's own start line"];
     .qunit.assertEquals[.qetl.log.debug_enabled;saved;"and this test left the setting as it found it"]};
+
+/ --- reload reporting and the outbound credential (backfill -> HDB) ----
+
+/ A stand-in HDB handle: records each message it is sent.
+reload_seen:();
+hdb_ok:{[msg] .pipetest.reload_seen,:enlist msg; ::};
+hdb_broken:{[msg] '"reload exploded"};
+
+/ The case that logged `hdbs=0` before: two HDBs registered, neither handle
+/ opened (refused with `access`). Nothing reloads, and it is now an ERR, not
+/ an INFO indistinguishable from "no HDB running".
+test_registered_hdbs_that_refused_reload_nothing_and_say_so:{[t]
+    saved:.qetl.log.err;
+    .qetl.log.err:{[c;m;d] .pipetest.errs_seen,:enlist m};
+    .pipetest.errs_seen:();
+    n:.qtorq.reload_handles[2;()];
+    .qetl.log.err:saved;
+    .qunit.assertEquals[n;0;"nothing reloaded"];
+    .qunit.assertTrue[any .pipetest.errs_seen like "hdb reload: could not open a handle to every registered hdb*";
+        "the refusal is an error naming its likely cause"]};
+
+test_no_hdb_running_is_not_an_error:{[t]
+    saved:.qetl.log.err;
+    .qetl.log.err:{[c;m;d] .pipetest.errs_seen,:enlist m};
+    .pipetest.errs_seen:();
+    n:.qtorq.reload_handles[0;()];
+    .qetl.log.err:saved;
+    .qunit.assertEquals[(n;count .pipetest.errs_seen);(0;0);"none registered: nothing to do, nothing wrong"]};
+
+test_every_opened_hdb_is_asked_to_reload_today:{[t]
+    .pipetest.reload_seen:();
+    n:.qtorq.reload_handles[2;(.pipetest.hdb_ok;.pipetest.hdb_ok)];
+    .qunit.assertEquals[(n;.pipetest.reload_seen);(2;2#enlist (`reload;.z.d));"both reloaded, with today's date"]};
+
+test_a_reload_that_throws_counts_as_not_reloaded:{[t]
+    saved:.qetl.log.err;
+    .qetl.log.err:{[c;m;d] .pipetest.errs_seen,:enlist m};
+    .pipetest.errs_seen:();
+    n:.qtorq.reload_handles[2;(.pipetest.hdb_ok;.pipetest.hdb_broken)];
+    .qetl.log.err:saved;
+    .qunit.assertEquals[(n;.pipetest.errs_seen);(1;enlist "hdb reload failed");"one reloaded, one logged as failed"]};
+
+/ Temp password files for the credential tests.
+pwfile:{[name;line] f:hsym `$(first system"mktemp -d"),"/",name; f 0: enlist line; f}
+
+test_a_process_with_no_password_file_of_its_own_adopts_the_fallback:{[t]
+    fb:pwfile["metrics.txt";"metrics:pass"];
+    c:.qtorq.credential_from[`:/no/such/backfill.txt`:/no/such/backfilldeals1.txt;fb];
+    .qunit.assertEquals[c;`source`userpass!(`adopted;`$"metrics:pass");"the ETL identity the access list accepts"]};
+
+test_a_password_file_of_its_own_stands:{[t]
+    own:pwfile["backfill.txt";"backfill:secret"];
+    fb:pwfile["metrics.txt";"metrics:pass"];
+    c:.qtorq.credential_from[(own;`:/no/such/backfilldeals1.txt);fb];
+    .qunit.assertEquals[c;`source`userpass!(`own;`);"a deployment's own file is not overridden"]};
+
+test_no_fallback_to_adopt_is_reported_not_guessed:{[t]
+    .qunit.assertEquals[.qtorq.credential_from[();`:/no/such/metrics.txt];`source`userpass!(`missing;`);
+        "missing, so the caller warns rather than connecting as torquser"]};

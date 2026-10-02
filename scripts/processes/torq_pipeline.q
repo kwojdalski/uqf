@@ -440,10 +440,56 @@ hdb_type:`hdb
 / @return the number of HDBs asked to reload
 / @eg .qtorq.reload_hdb[]
 reload_hdb:{[]
+    / getservers returns only the handles that OPENED, so an HDB that refused
+    / this process vanishes from its answer - which is how a refused reload
+    / used to log as `hdbs=0`, word for word what "no HDB running" logs.
+    / What discovery has registered is counted separately, so the two differ.
+    registered:exec count i from .servers.SERVERS where proctype=hdb_type;
     hs:exec w from .servers.getservers[`proctype;hdb_type;()!();1b;0b];
+    reload_handles[registered;hs]}
+
+/ Ask each handle to reload, and report how many were registered, opened
+/ and reloaded - so "none running", "running but refused us" and "reloaded"
+/ read differently. A shortfall is an ERR naming the likely cause: TorQ
+/ logs the refusal itself as `connection to ... failed: access`, and the
+/ cause is nearly always this process's outbound credential. Never fails
+/ the caller: the rows are on disk and the coverage recorded whatever the
+/ HDB does.
+/ @param registered how many HDBs discovery has registered
+/ @param hs the handles that opened, each a handle or anything callable
+/   with (`reload;date)
+/ @return how many HDBs reloaded
+/ @eg .qtorq.reload_handles[0;()]  ->  0
+reload_handles:{[registered;hs]
     hs:hs where not null hs;
-    {[h] @[h;(`reload;.z.d);{[e] .qetl.log.err[`qtorq;"hdb reload failed";enlist[`error]!enlist e]}]} each hs;
-    .qetl.log.info[`qtorq;"hdb reload requested";enlist[`hdbs]!enlist count hs];
-    count hs}
+    if[registered>count hs;
+        .qetl.log.err[`qtorq;"hdb reload: could not open a handle to every registered hdb - refused (this process's outbound credential, TorQ's passwords/<proctype>.txt, is not on the hdb's access list) or unreachable; the rows are on disk, the hdb has not reloaded them";
+            `registered`opened!(registered;count hs)]];
+    ok:{[h] @[{[h] h(`reload;.z.d); 1b};h;{[e] .qetl.log.err[`qtorq;"hdb reload failed";enlist[`error]!enlist e]; 0b}]} each hs;
+    n:sum ok;
+    .qetl.log.info[`qtorq;"hdb reload requested";`registered`opened`reloaded!(registered;count hs;n)];
+    n}
+
+/ The outbound identity a process should connect to the fleet with, when
+/ TorQ's own lookup found nothing specific to it.
+/ .
+/ TorQ picks its user:password from passwords/default.txt, then
+/ <parent proctype>.txt, <proctype>.txt and <procname>.txt, the last found
+/ winning. A process type the starter pack never had - `backfill` - finds
+/ only default.txt, whose torquser is on no access list, so every connection
+/ it opens is refused with `access`. This adopts another type's file - the
+/ one an ETL process uses - unless the deployment has given the process a
+/ file of its own, which then stands.
+/ .
+/ Returns the user:password for the caller to set as .servers.USERPASS, and
+/ never logs it.
+/ @param specific the proctype and procname password files TorQ looked for
+/ @param fallback the file to adopt when none of them exists
+/ @return dict: source (`own, `adopted or `missing) and userpass (` unless adopted)
+/ @eg .qtorq.credential_from[();`:/no/such/file]  ->  `source`userpass!(`missing;`)
+credential_from:{[specific;fallback]
+    if[any {not ()~key x} each specific,(); :`source`userpass!(`own;`)];
+    if[()~key fallback; :`source`userpass!(`missing;`)];
+    `source`userpass!(`adopted;first `$read0 fallback)}
 
 \d .
