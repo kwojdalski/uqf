@@ -43,6 +43,10 @@
 /             write does with a row whose row_key is already there, for this
 /             run only, over the worker's declared strategy.
 /             `uqs backfill --on-conflict` passes it.
+/   -mode     optional: validate, plan, dry_run or run (the default) - see
+/             .qetl.job.bounded.runtime.modes. validate and plan stop before
+/             any source is opened or anything written; dry_run fetches and
+/             writes nothing. `uqs backfill --mode` passes it.
 / .
 / The first four are required and refused when absent. A backfill that defaulted a
 / range would publish the wrong window and record it as covered, which is the
@@ -111,6 +115,29 @@ use_on_conflict:{[opts]
     .qetl.io.require_strategy `$v;
     .qetl.cfg.set_override[`on_conflict;v];
     `$v}
+
+/ Apply -mode, when given, as this run's mode - set as the mode config
+/ override, which .qetl.job.bounded.runtime.mode reads. Resolved here, so a
+/ typo or a contradiction with dry_run fails before anything is opened.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return the mode this run is in
+use_mode:{[opts]
+    if[`mode in key opts; .qetl.cfg.set_override[`mode;first opts`mode]];
+    .qetl.job.bounded.runtime.mode[]}
+
+/ Log a validate or plan report: one summary line, then the planned windows,
+/ capped so a year of hourly windows does not bury the summary.
+/ @param worker the worker's name
+/ @param r what .qetl.job.bounded.validate or plan_only returned
+/ @return the report
+report:{[worker;r]
+    .qetl.log.info[worker;string[r`state]," - nothing opened, nothing written";`plan _ r];
+    if[not `plan in key r; :r];
+    ws:r`plan;
+    shown:50&count ws;
+    {[worker;w] .qetl.log.info[worker;"would fetch";w]}[worker] each shown#ws;
+    if[shown<count ws; .qetl.log.info[worker;"and more windows";enlist[`count]!enlist count[ws]-shown]];
+    r}
 
 / How many windows [range_from;range_to) cuts into at the worker's width, for
 / the log only - so a reader can see progress against a total. Null when the
@@ -203,15 +230,21 @@ run:{[]
         `range_from`range_to`span`width`windows!
             (spec`range_from;spec`range_to;spec[`range_to]-spec`range_from;
              decl`width;window_count[spec;decl`width])];
-    use_hdb decl;
     oc:use_on_conflict .Q.opt .z.x;
     if[not null oc; .qetl.log.info[worker;"on_conflict for this run";enlist[`on_conflict]!enlist oc]];
+    md:use_mode .Q.opt .z.x;
+    .qetl.log.info[worker;"mode";enlist[`mode]!enlist md];
+    / validate and plan stop here: no HDB, no ledger, no lock, no source.
+    if[md~`validate; :report[worker;.qetl.job.bounded.validate[worker;spec]]];
+    if[md~`plan; :report[worker;.qetl.job.bounded.plan_only[worker;spec]]];
+    use_hdb decl;
     / The run ledger, attached HERE and unprotected: the worker's own
     / begin_run tolerates any failure, so a ledger it cannot write - one from
     / before etl_runs gained its range and counts columns - would leave this
     / run untracked without a word. Failing the backfill names the fix
     / (`uqs run migrate`) instead.
-    .qetl.run.attach[];
+    / Not on a dry run, which records no run - attaching can create the ledger.
+    if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
     t1:.z.p;
     (` sv ns,`init)[spec];
     .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist elapsed_ms t1];

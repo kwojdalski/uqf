@@ -123,7 +123,7 @@ def test_start_passes_the_flags_through_torq_sh_extras(monkeypatch):
 def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict):
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
         seen.update(worker=worker, version=version, range=(range_from, range_to), port=base_port)
         seen["verbose"] = verbose
         return type("Completed", (), {"returncode": 0})()
@@ -147,7 +147,7 @@ def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
     """Both spellings: the command's own --debug, and the global one."""
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict):
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
         seen["verbose"] = verbose
         return type("Completed", (), {"returncode": 0})()
 
@@ -180,7 +180,7 @@ def test_an_unknown_on_conflict_is_refused_naming_the_strategies():
 def test_the_cli_passes_on_conflict_through(monkeypatch):
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict):
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
         seen["on_conflict"] = on_conflict
         return type("Completed", (), {"returncode": 0})()
 
@@ -297,3 +297,37 @@ def test_remove_checkpoint_refusal_exits_one(status):
     result = runner.invoke(cli.app, ["remove", "checkpoint", WORKER])
     assert result.exit_code == 1
     assert not isinstance(result.exception, UqsError)
+
+
+@pytest.mark.parametrize(
+    ("mode", "sent"),
+    [("validate", "validate"), ("plan", "plan"), ("dry-run", "dry_run"), ("run", "run")],
+)
+def test_a_mode_reaches_the_process_spelled_as_q_spells_it(mode, sent):
+    flags = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, mode=mode)
+    assert flags[-2:] == ["-mode", sent]
+
+
+def test_no_mode_runs_for_real():
+    """Left out, the process decides - which is `run` unless UQF_DRY_RUN says otherwise."""
+    assert "-mode" not in backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO)
+
+
+def test_an_unknown_mode_is_refused_naming_the_four():
+    with pytest.raises(UqsError, match="validate, plan, dry-run, run"):
+        backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, mode="rehearse")
+
+
+def test_the_cli_passes_the_mode_through(monkeypatch):
+    seen = {}
+
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
+        seen["mode"] = mode
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr(backfill, "start", fake)
+    argv = ["backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv += ["--to", "2026-09-15", "--mode", "plan"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert seen == {"mode": "plan"}

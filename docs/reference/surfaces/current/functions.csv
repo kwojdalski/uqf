@@ -232,6 +232,7 @@ qetl.io.odbc,window_query,function,6,h table_name time_column columns range_from
 qetl.io.odbc,with_connection,function,2,conn f
 qetl.job.bounded,advanced_to,function,3,worker current next_cursor
 qetl.job.bounded,begin_run,function,1,worker
+qetl.job.bounded,check_static,function,2,worker run_spec
 qetl.job.bounded,checkpoint,function,2,worker cursor
 qetl.job.bounded,cleanup,function,1,worker
 qetl.job.bounded,connect,function,1,worker
@@ -244,6 +245,7 @@ qetl.job.bounded,empty_windows,function,1,
 qetl.job.bounded,end_run,function,2,state counts
 qetl.job.bounded,exit_code,function,1,state
 qetl.job.bounded,fetch,function,3,worker from_ts to_ts
+qetl.job.bounded,finish_store,function,1,worker
 qetl.job.bounded,inherit,function,2,worker ns
 qetl.job.bounded,inherited_methods,value,,
 qetl.job.bounded,init,function,2,worker run_spec
@@ -257,6 +259,7 @@ qetl.job.bounded,optional_cfg,value,,
 qetl.job.bounded,own,function,2,worker nm
 qetl.job.bounded,partition_of,function,1,worker
 qetl.job.bounded,plan,function,2,worker cursor
+qetl.job.bounded,plan_only,function,2,worker run_spec
 qetl.job.bounded,publish,function,2,worker batch
 qetl.job.bounded,publish_last_batch,function,2,worker unused
 qetl.job.bounded,publish_pending,function,1,worker
@@ -275,10 +278,12 @@ qetl.job.bounded,spec,function,1,worker
 qetl.job.bounded,state,dict,,
 qetl.job.bounded,transform_batch,function,2,worker batch
 qetl.job.bounded,unpartitioned,value,,
+qetl.job.bounded,validate,function,2,worker run_spec
 qetl.job.bounded,worker_cfg,dict,,
 qetl.job.bounded,worker_root,value,,
 qetl.job.bounded,write_state,function,3,worker nm v
 qetl.job.bounded.runtime,airflow_owned,value,,
+qetl.job.bounded.runtime,allows,function,1,effect
 qetl.job.bounded.runtime,backoff_ms,function,2,pol attempt
 qetl.job.bounded.runtime,classify,function,1,err
 qetl.job.bounded.runtime,commit,function,4,dry effect action args
@@ -290,6 +295,8 @@ qetl.job.bounded.runtime,declared_dependencies,dict,,
 qetl.job.bounded.runtime,default_policy,dict,,
 qetl.job.bounded.runtime,finish_window,function,7,worker ds part spec from_ts to_ts publish
 qetl.job.bounded.runtime,is_dry_run,function,1,
+qetl.job.bounded.runtime,mode,function,1,
+qetl.job.bounded.runtime,modes,value,,
 qetl.job.bounded.runtime,needs_fetch,function,6,ds part version as_of from_ts to_ts
 qetl.job.bounded.runtime,owner,function,1,concern
 qetl.job.bounded.runtime,policy,function,1,

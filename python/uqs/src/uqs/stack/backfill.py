@@ -42,6 +42,12 @@ _TORQ_SH_WORDS = ("csv", "extras")
 #: it says otherwise); `--on-conflict` overrides it for one run.
 ON_CONFLICT = ("upsert", "replace", "ignore", "append", "fail")
 
+#: What a run may do - .qetl.job.bounded.runtime.modes, spelled as the CLI
+#: takes them. Each opens and writes strictly more than the one before:
+#: validate reads only configuration and code, plan adds the local ledgers
+#: read-only, dry-run adds the source, run adds every write.
+MODES = ("validate", "plan", "dry-run", "run")
+
 
 def backfill_workers() -> dict[str, str]:
     """worker name -> the procname that runs it, from the registry."""
@@ -136,13 +142,17 @@ def backfill_flags(
     *,
     verbose: bool = False,
     on_conflict: str | None = None,
+    mode: str | None = None,
 ) -> list[str]:
     """The flags torq_backfill.q reads, validated so torq.sh passes them intact.
 
     `verbose` adds `-verbose`, which switches the process's DBG log level on.
     `on_conflict` adds `-on_conflict`, this run's strategy for a row already
-    there, over the worker's own.
+    there, over the worker's own. `mode` adds `-mode`, spelled as q spells it
+    (dry-run becomes dry_run); left out, the process runs for real.
     """
+    if mode is not None and mode not in MODES:
+        raise UqsError(f"--mode {mode!r} is not one of {', '.join(MODES)}")
     if on_conflict is not None and on_conflict not in ON_CONFLICT:
         raise UqsError(
             f"--on-conflict {on_conflict!r} is not one of {', '.join(sorted(ON_CONFLICT))}"
@@ -175,6 +185,8 @@ def backfill_flags(
             )
     if on_conflict is not None:
         flags += ["-on_conflict", on_conflict]
+    if mode is not None:
+        flags += ["-mode", mode.replace("-", "_")]
     return [*flags, "-verbose"] if verbose else flags
 
 
@@ -188,11 +200,18 @@ def start(
     *,
     verbose: bool = False,
     on_conflict: str | None = None,
+    mode: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Start the process that runs `worker`, over [range_from, range_to)."""
     procname = procname_for(worker)
     flags = backfill_flags(
-        worker, source_version, range_from, range_to, verbose=verbose, on_conflict=on_conflict
+        worker,
+        source_version,
+        range_from,
+        range_to,
+        verbose=verbose,
+        on_conflict=on_conflict,
+        mode=mode,
     )
     return runtime.run_torq_sh(paths, ["start", procname, "-extras", *flags], base_port=base_port)
 
