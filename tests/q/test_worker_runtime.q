@@ -146,6 +146,10 @@ test_an_unknown_effect_is_rejected:{[t]
 / four that used to leak past it: the run ledger, the facts, the store's
 / finish (which reloads the HDB) and the reactions. Suppressing only some is
 / the dangerous partial: a dry run that still wrote etl_runs read as a run.
+/ .
+/ This only pins the list, so it fails when the list is edited and not when
+/ a new effect skips it. What catches that is
+/ test_every_worker_runs.q's test_a_dry_run_leaves_everything_durable_as_it_was.
 test_dry_run_suppresses_every_durable_effect:{[t]
     .qunit.assertEquals[asc .qetl.job.bounded.runtime.suppressed_in_dry_run;
         asc `publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions;

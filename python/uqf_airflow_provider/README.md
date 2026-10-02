@@ -4,6 +4,13 @@ Reads the status files `.qetl.status.write_status` (`src/etl/core/status.q`)
 writes, and translates them into Airflow's sensor vocabulary --- a poke that is
 pending, succeeded, or failed.
 
+Every bounded run writes one, under its instance id - the process's TorQ
+`procname` (e.g. `deals_backfill1`), or the worker's name in plain q: `starting`
+at init, `running` when its windows begin, then `idle`, `completed` or `failed`.
+A run that finishes with failed windows reports `failed`, as its exit code does.
+A dry run writes it too: it reports how the process ended, and records no data.
+`validate` and `plan` write none.
+
 This answers issue #55: Airflow/backfill task status reaches the frontend (and,
 here, Airflow itself) by reading the files q writes, not by a database table or
 a q-side call into Airflow's API.
