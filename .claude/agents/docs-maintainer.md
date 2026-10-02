@@ -73,8 +73,9 @@ append a rule you inferred; only ones the maintainer actually stated.
   built on. A documentation change that contradicts one of them is usually the
   change that is wrong, not the position.
 - **The gates that touch docs**, so you know what will fail:
-  `check_doc_references.py`, `generate_man_registry.py --check`,
-  `generate_operational_docs.py --check`, `check_env_reference.py`.
+  `check_doc_references.py`, `generate_operational_docs.py --check`,
+  `check_env_reference.py`. `docs/man.q` needs none: it reads the qDoc comments
+  in `src/` when it loads.
 
 ## Rules
 

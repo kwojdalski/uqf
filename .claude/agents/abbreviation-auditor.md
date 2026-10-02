@@ -150,7 +150,6 @@ three generated artefacts and two gates notice:
 
 ```bash
 scripts/test.py q-unit
-uv run python scripts/generate/generate_man_registry.py     # man.q records every name
 uv run python scripts/generate/contract_surface.py export
 ```
 

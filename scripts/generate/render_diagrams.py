@@ -5,8 +5,8 @@ An `.svg` committed beside its `.d2` is a derived artefact, and this tree
 already knows what happens to those without a gate: `docs/man.q` called
 itself generated for months while covering 78 of 348 functions, because
 nothing re-ran the generator. So this is the same shape as
-`generate_man_registry.py --check` and `contract_surface.py check` - edit the
-source, forget the render, and the build says so.
+`contract_surface.py check` - edit the source, forget the render, and the
+build says so.
 
 WHY A BYTE COMPARISON IS SAFE HERE. d2 is deterministic for a given version:
 rendering the same `.d2` twice produces identical bytes (verified before this

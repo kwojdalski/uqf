@@ -15,17 +15,17 @@ from uqs.cli.shared import _die, console
 from uqs.interpreter import q_interpreter
 from uqs.paths import (
     CONTRACT_SURFACE_SCRIPT,
-    MAN_REGISTRY_SCRIPT,
     OPERATIONAL_DOCS_SCRIPT,
     UqsError,
 )
 from uqs.scaffold import write
 from uqs.scaffold.plan import ScaffoldPlan
 
-#: What a scaffold makes stale, each checked in CI with --check: the registry's
-#: derived files (processes.md, src/etl/generated/pipeline_dag.q), and
-#: docs/man.q, generated from the qDoc blocks of the q files just written.
-_DERIVED = (OPERATIONAL_DOCS_SCRIPT, MAN_REGISTRY_SCRIPT)
+#: What a scaffold makes stale, checked in CI with --check: the registry's
+#: derived files (processes.md, src/etl/generated/pipeline_dag.q). docs/man.q
+#: is not here: it reads the qDoc blocks when it loads, so a scaffold's new
+#: comments are in it with nothing to regenerate.
+_DERIVED = (OPERATIONAL_DOCS_SCRIPT,)
 
 
 def _regenerate_derived(repo_root: Path) -> list[subprocess.CompletedProcess[str]]:

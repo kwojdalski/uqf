@@ -169,10 +169,8 @@ Write in this order, and run the suite between each:
    `test_<name>_is_implemented` --- leaving it beside a real test means a red
    suite forever.
 3. **The docstrings.** Every function gets a qDoc block with `@param`,
-   `@return`, `@throws` if it can throw, and `@eg`. `docs/man.q` is generated
-   from these, and the `man-registry` pre-commit hook regenerates it when any
-   `src/**/*.q` changes - it rewrites the file and fails the commit, so
-   `git add` and commit again. You no longer have to remember.
+   `@return`, `@throws` if it can throw, and `@eg`. `docs/man.q` reads these
+   when it loads, so they are in the registry with nothing to regenerate.
 
 ### The rules that are not optional
 
@@ -232,8 +230,8 @@ Say this back to the user, because it is the part that surprises people:
   Python tests that used to pin every process and table (`test_core.py`,
   `test_schemas.py`) derive them from the registry and from that q list.
 - **No regeneration step.** `uqs job new` reruns
-  `scripts/generate/generate_operational_docs.py` and
-  `scripts/generate/generate_man_registry.py` itself.
+  `scripts/generate/generate_operational_docs.py` itself, and `docs/man.q` reads
+  the new qDoc blocks when it loads.
 - **No hand-copied source for a second worker.** An existing source is reused
   rather than rewritten, and an existing table is not defined again. A dataset
   another worker already fills with no partition is refused:

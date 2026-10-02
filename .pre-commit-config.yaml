@@ -165,13 +165,6 @@ repos:
       # reason its own header gives: d2 lays out differently between
       # releases, so regenerating would start a churn war between two
       # developers on different versions. These two have no such skew.
-      - id: man-registry
-        name: Regenerate docs/man.q from the qDoc comments
-        entry: python3 scripts/generate/generate_man_registry.py
-        language: system
-        pass_filenames: false
-        files: ^src/.*\.q$
-
       - id: operational-docs
         name: Regenerate the process table and pipeline DAG from the registry
         entry: uv run python scripts/generate/generate_operational_docs.py
