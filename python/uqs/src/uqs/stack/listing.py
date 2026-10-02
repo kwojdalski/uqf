@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from uqs.interpreter import InterpreterStatus, interpreter_status
 from uqs.logger import get_logger
 from uqs.model import profiles
 from uqs.model.declarations import declaration_calls, symbols
@@ -107,7 +108,43 @@ def _list_overrides(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
 
 def _list_env(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     env = build_env(paths, base_port=base_port)
-    return [{"name": name, "value": value} for name, value in env.items()]
+    rows = [{"name": name, "value": value} for name, value in env.items()]
+    # Which q that QCMD is, beside it (#518): the declaration, and what the
+    # binary says when asked. A mismatch is reported, never refused - this
+    # command only reads.
+    status = interpreter_status()
+    rows.append({"name": "UQF_Q_IMPL", "value": status.declared})
+    rows.append({"name": "q_impl (binary)", "value": _binary_impl(status)})
+    if status.problem:
+        log.warning("interpreter: {}", status.problem)
+    return rows
+
+
+def _binary_impl(status: InterpreterStatus) -> str:
+    """What the binary is, or why that cannot be said."""
+    if status.binary is None:
+        return "not runnable"
+    return status.actual or "unknown"
+
+
+def interpreter_line(status: InterpreterStatus | None = None) -> str:
+    """One line for the top of `uqs summary`: which q runs the fleet, and the
+    connection budget that follows from it.
+
+    The budget is what decides whether a 20-process fleet is fine (PeachQ, no
+    cap) or wedged past the licence (KDB-X), which nothing else on the screen
+    says (#518).
+    """
+    status = status or interpreter_status()
+    if status.binary is None:
+        return f"interpreter: {status.declared} declared - not runnable (no q found)"
+    impl = status.actual or status.declared
+    try:
+        limit = profiles.licence_limit()
+        budget = "no connection cap" if limit is None else f"{limit} connections"
+    except UqsError as exc:
+        budget = f"connection budget unreadable: {exc}"
+    return f"interpreter: {impl} ({status.binary}) - {budget}"
 
 
 def _list_dependencies(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
