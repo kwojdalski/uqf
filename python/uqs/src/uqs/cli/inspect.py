@@ -111,7 +111,7 @@ def schema(
     """Show the tables in a running process, or one table's columns and types.
 
     Reads the LIVE database over IPC, not the declarations in
-    scripts/processes/uqs_tables.q - a table can be declared and still absent
+    src/etl/plant_tables.q - a table can be declared and still absent
     from a process that failed to load its schema file, and that is exactly
     when someone runs this.
     """

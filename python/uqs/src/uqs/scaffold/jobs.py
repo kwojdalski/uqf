@@ -260,7 +260,7 @@ publish:.qetl.job.stream.unwired `{name};
         raise UqsError(
             f"--publishes names {len(new_tables)} tables the plant does not define yet "
             f"({', '.join(new_tables)}), and --columns can shape only one - scaffold with one "
-            "new table and add the others to scripts/processes/uqs_tables.q by hand"
+            "new table and add the others to src/etl/plant_tables.q by hand"
         )
     if new_tables:
         if not columns:

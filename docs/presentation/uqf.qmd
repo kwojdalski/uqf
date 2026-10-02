@@ -85,7 +85,7 @@ So the business logic can be tested without starting a stack.
 
 **Plain TorQ:** edit process.csv and database.q, and pick free ports. **uqf:**
 both files are regenerated on every `uqs` command from the job declarations,
-`uqs_tables.q` and `uqs config set` overrides. There is no registration step:
+`plant_tables.q` and `uqs config set` overrides. There is no registration step:
 ports, rows and the job DAG are all derived.
 
 ## Streaming or bounded: two kinds of job {.smaller}

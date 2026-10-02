@@ -243,10 +243,10 @@ nothing - no throw at the publisher, no line in the plant's log, no row
 downstream. It is the quietest failure in the stack, and it is not theoretical:
 `fxpositions1` published a correct sixteen-row book every five seconds onto
 `fx_position` and `fx_limit_breach` for as long as it had been running, and
-neither table existed (#287). Both had been defined in
-`scripts/processes/uqs_tables.q` the whole time - the registry simply never
-asked for them, because `database.q` was generated from each pipeline's `schema`
-field and `fxpositions1` publishes two tables and owns neither.
+neither table existed (#287). Both had been defined in `src/etl/plant_tables.q`
+the whole time - the registry simply never asked for them, because `database.q`
+was generated from each pipeline's `schema` field and `fxpositions1` publishes
+two tables and owns neither.
 
 The rule now holds from both ends:
 
@@ -259,8 +259,8 @@ The rule now holds from both ends:
   before wiring a job's publish seam, and refuses to start when a declared table
   is absent - naming every missing one, so a single restart fixes them all.
 
-Adding a table is therefore two edits and no third: define it in `uqs_tables.q`,
-and name it in the publishing pipeline's `publishes`.
+Adding a table is therefore two edits and no third: define it in
+`plant_tables.q`, and name it in the publishing pipeline's `publishes`.
 
 ## Config generation
 

@@ -117,7 +117,7 @@ def start_crypto_recorder(
 ) -> int:
     """Build (if needed) and launch cryptorust's kdb-market-data-recorder,
     pointed at this demo's own stp1, publishing into `crypto_book` (defined
-    in scripts/processes/uqs_tables.q). Returns the spawned PID.
+    in src/etl/plant_tables.q). Returns the spawned PID.
     """
     root = cryptorust_root(paths)
     if not (root / "Cargo.toml").is_file():
@@ -268,7 +268,7 @@ def start_crypto_fills_recorder(
     """Build (if needed) and launch cryptorust's kdb-fills-recorder,
     pointed at this demo's own stp1 - publishes SIMULATED (paper) fills
     into `crypto_sim_fills` and real confirmed executions into
-    `crypto_trades` (both defined in scripts/processes/uqs_tables.q)
+    `crypto_trades` (both defined in src/etl/plant_tables.q)
     - see that binary's own doc header for the full trace of how each
     source differs. `oms_socket_path` must point at an already-running
     cryptorust service's IPC socket (its own `ipc.socket_path` config,

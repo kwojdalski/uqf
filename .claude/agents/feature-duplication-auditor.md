@@ -75,9 +75,9 @@ status, run identity, schema shapes.
 
 **3. Own code beside a vendored tree that already does it.** `lib/torq` (process
 management, EOD), `lib/torq-finance-starter-pack` (feed handlers, tickerplant,
-sample HDB). The standing example is `scripts/processes/uqs_tables.q`'s
-quote/trade shapes against the starter pack's own. Report the overlap; see the
-refusals before proposing anything about it.
+sample HDB). The standing example is `src/etl/plant_tables.q`'s quote/trade
+shapes against the starter pack's own. Report the overlap; see the refusals
+before proposing anything about it.
 
 Note that one such overlap has already been resolved by DELETION rather than
 unification: `env/` carried eleven reference table schemas under `.envschema`

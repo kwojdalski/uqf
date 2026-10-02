@@ -33,7 +33,7 @@
 
 / --- the plant's tables ----------------------------------------------------
 
-/ table name -> the plant's empty table, from scripts/processes/uqs_tables.q.
+/ table name -> the plant's empty table, from src/etl/plant_tables.q.
 / .
 / Each definition's right-hand side is evaluated rather than the file
 / loaded, so this suite defines no root tables - the reason .tabletest
@@ -41,7 +41,7 @@
 / .tabletest.declared's, and like it contains no brackets: `like` reads
 / "[...]" as a character class.
 plant:{[]
-    ls:read0 `$":scripts/processes/uqs_tables.q";
+    ls:read0 `$":src/etl/plant_tables.q";
     ls:ls where (not ls like "/*") and ls like "*:(*";
     (`$ {x til x?":"} each ls)!{value (1+x?":") _ x} each ls}
 
@@ -246,7 +246,7 @@ test_every_publication_has_the_plant_shape:{[t]
     {[r;j]
         {[j;tbl;cell]
             msg:$[tbl in key .jobouttest.unowned; "";
-                  not tbl in key .jobouttest.shapes; "has no table in scripts/processes/uqs_tables.q";
+                  not tbl in key .jobouttest.shapes; "has no table in src/etl/plant_tables.q";
                   .jobouttest.problem[tbl;cell]];
             if[count msg; `.jobouttest.bad set .jobouttest.bad,enlist string[j],"/",string[tbl],": ",msg]
           }[j]'[exec tbl from r j;first each exec rows from r j]
@@ -292,6 +292,6 @@ test_the_excuses_still_describe_something_real:{[t]
     .qunit.assertEquals[(key unowned) except owners;`symbol$();
         "every unowned table is still published by some job"];
     .qunit.assertEquals[(key unowned) inter key shapes;`symbol$();
-        "and none has since gained a table in uqs_tables.q, which would make the excuse wrong"]};
+        "and none has since gained a table in plant_tables.q, which would make the excuse wrong"]};
 
 \d .

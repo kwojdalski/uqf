@@ -23,7 +23,7 @@ comma-separated list --- subscribing to two tables is legal and common
 ```
 scaffold spreadmon:
   create src/etl/streaming/spreadmon.q (32 lines)
-  append to scripts/processes/uqs_tables.q (3 lines)
+  append to src/etl/plant_tables.q (3 lines)
   append to tests/q/test_stack_tables.q (1 line)
   append to scripts/processes/uqs_catalog.q (2 lines)
   create tests/q/test_spreadmon.q (20 lines)

@@ -244,7 +244,7 @@ discard:`write`write_keyed!(write_discard;{[target;batch;opts] count batch})
 / WHAT write DOES, per window. Refuses rows dated today or later: that
 / partition belongs to the tickerplant and end-of-day, and two writers there
 / collide. Partitions by `time` when the batch has one - every stack table
-/ leads with it (scripts/processes/uqs_tables.q), and databento_book's
+/ leads with it (src/etl/plant_tables.q), and databento_book's
 / transform already fills it with the event time - and otherwise adds `time`
 / as a copy of `partition_col` (demo_deals and duckdb_deals carry deal_time),
 / so the partition gets the plant's shape and a query on time finds the row

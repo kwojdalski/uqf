@@ -163,7 +163,7 @@ require_batch:{[t;x]
 publish:{[t;x]
     require_batch[t;x];
     / `time` FIRST, matching every declared schema in
-    / scripts/processes/uqs_tables.q and .u.upd's own convention. A
+    / src/etl/plant_tables.q and .u.upd's own convention. A
     / plant that appended it instead would build tables whose columns are
     / one position out from everything else in this repository.
     now:.z.p;

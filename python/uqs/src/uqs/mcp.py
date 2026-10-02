@@ -205,7 +205,7 @@ def uqs_crypto_start(
 ) -> str:
     """Build and launch a sibling cryptorust checkout's own
     kdb-market-data-recorder, publishing live venue order books into
-    `crypto_book` (defined in scripts/processes/uqs_tables.q) on this demo's
+    `crypto_book` (defined in src/etl/plant_tables.q) on this demo's
     own stp1. venues/symbols are comma-separated (cryptorust's own
     venue-agnostic symbol format). Requires a cryptorust checkout - see
     $CRYPTORUST_ROOT in crypto.cryptorust_root's docstring.

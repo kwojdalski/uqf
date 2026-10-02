@@ -39,7 +39,7 @@ has no table.
 
 ```
 create src/etl/<streaming|sources+workers>/<name>.q   the job itself
-append to scripts/processes/uqs_tables.q              its table
+append to src/etl/plant_tables.q              its table
 append to tests/q/test_stack_tables.q                 that table's name
 append to scripts/processes/uqs_catalog.q             a SCAFFOLDED description
 create tests/q/test_<name>.q                          a test that FAILS
@@ -71,7 +71,7 @@ in `UNPROFILED` with a reason. Backfills are exempt --- see
 ## Table columns
 
 `--columns` spells a new table as `name:type` pairs, and each is written into
-`uqs_tables.q` as the q column it stands for:
+`plant_tables.q` as the q column it stands for:
 
 ```
 --columns "sym:symbol, venue:g#symbol, px:float, bid_prices:list"
@@ -93,7 +93,7 @@ uqs job new spread2 --subscribe-to quote --publishes spread2 --columns-from quot
 ```
 
 `--columns-from TABLE` takes that table's columns exactly, attributes included,
-from `uqs_tables.q` or the vendored `database.q`, and is refused alongside
+from `plant_tables.q` or the vendored `database.q`, and is refused alongside
 `--columns`.
 
 ## Before you run it

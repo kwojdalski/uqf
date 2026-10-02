@@ -17,7 +17,7 @@ signal.
 ```
 scaffold pulsefeed:
   create src/etl/streaming/pulsefeed.q (33 lines)
-  append to scripts/processes/uqs_tables.q (3 lines)
+  append to src/etl/plant_tables.q (3 lines)
   append to tests/q/test_stack_tables.q (1 line)
   append to scripts/processes/uqs_catalog.q (2 lines)
   create tests/q/test_pulsefeed.q (13 lines)

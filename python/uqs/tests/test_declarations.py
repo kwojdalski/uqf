@@ -130,8 +130,9 @@ def test_every_declaration_in_the_tree_is_a_process():
 def _tree(tmp_path: Path) -> Path:
     (tmp_path / STREAM_DIR).mkdir(parents=True)
     (tmp_path / WORKER_DIR).mkdir(parents=True)
-    (tmp_path / TABLES_FILE).parent.mkdir(parents=True)
+    (tmp_path / TABLES_FILE).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / TABLES_FILE).write_text("ticks:([]time:`timestamp$(); px:`float$())\n")
+    (tmp_path / PROCESS_PORTS_FILE).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / PROCESS_PORTS_FILE).write_text("procname,offset\ntap1,28\n")
     return tmp_path
 

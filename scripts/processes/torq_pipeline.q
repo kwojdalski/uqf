@@ -68,7 +68,7 @@
 /      file: fxpositions1 published a correct sixteen-row book every five
 /      seconds onto `fx_position` and `fx_limit_breach`, neither of which
 /      the generated database.q defined, for as long as it had been running
-/      (#287). Both were defined in uqs_tables.q the whole time; the
+/      (#287). Both were defined in plant_tables.q the whole time; the
 /      registry simply never asked for them.
 /      -> .qtorq.assert_publishable refuses to start a process whose
 /         declared publishes the plant has no table for, and
@@ -283,7 +283,7 @@ assert_publishable:{[h;pub_tables]
         '"qtorq.assert_publishable: the tickerplant defines no table ",
             (", " sv string missing),
             " - rows published onto it are discarded without an error. Add it to ",
-            "scripts/processes/uqs_tables.q and restart the stack"];
+            "src/etl/plant_tables.q and restart the stack"];
     pub_tables}
 
 / Publish handle only, for a feed process that produces rows but subscribes

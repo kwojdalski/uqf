@@ -16,14 +16,14 @@
 \d .cattest
 
 / Both files, loaded here rather than in run_tests.q's list: nothing else
-/ needs .qcat in scope, and uqs_tables.q defines twenty-odd top-level tables
+/ needs .qcat in scope, and plant_tables.q defines twenty-odd top-level tables
 / that no other suite wants in the root namespace. Same reasoning as
 / test_stack_tables.q, which loads the same table file for the same reason.
 beforeNamespace_load:{[]
     system"l scripts/processes/uqs_catalog.q";
     }
 
-/ The tables uqs_tables.q declares, read back out of the file as text.
+/ The tables plant_tables.q declares, read back out of the file as text.
 / .
 / Lifted from test_stack_tables.q's `declared`, including the reason its
 / pattern looks the way it does: q's `like` treats "[...]" as a CHARACTER
@@ -34,7 +34,7 @@ beforeNamespace_load:{[]
 / themselves, only their names, and loading them would put every one in the
 / root namespace for every suite that runs after this.
 published:{[]
-    ls:read0 `$":scripts/processes/uqs_tables.q";
+    ls:read0 `$":src/etl/plant_tables.q";
     ls:ls where (not ls like "/*") and ls like "*:(*";
     asc `$ {x til x?":"} each ls}
 
@@ -45,7 +45,7 @@ test_every_published_table_is_described_or_hidden:{[t]
     .qunit.assertEquals[
         .cattest.published[] except (key .qcat.describe),key .qcat.hidden;
         `symbol$();
-        "every table in uqs_tables.q is either described or explicitly hidden"]};
+        "every table in plant_tables.q is either described or explicitly hidden"]};
 
 test_no_table_is_both_described_and_hidden:{[t]
     / Both lists would be a contradiction the surface resolves silently in
@@ -55,10 +55,10 @@ test_no_table_is_both_described_and_hidden:{[t]
         "a table is described or hidden, never both"]};
 
 / Described tables whose declaration lives somewhere other than
-/ uqs_tables.q, and the file that owns each.
+/ plant_tables.q, and the file that owns each.
 / .
 / Carried over from the drift test's _Q_OWNED, because the fact survived the
-/ test that recorded it: uqs_tables.q holds what the tickerplant is
+/ test that recorded it: plant_tables.q holds what the tickerplant is
 / configured to carry, and these three are declared by the ETL tree instead -
 / the coverage ledger by the framework, the other two by their source
 / contracts. A desk browses all three, so they belong in the catalog; they

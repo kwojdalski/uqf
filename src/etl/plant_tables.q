@@ -1,4 +1,5 @@
-/ uqs_tables.q - the tickerplant tables the uqf stack publishes into.
+/ plant_tables.q - the tickerplant tables the uqf stack publishes into
+/ (.qetl.plant), and the one place each table's schema is written.
 / .
 / THESE ARE q TABLES, AND THIS IS WHERE THEY LIVE. They used to be Python
 / string literals in uqs/model/schemas.py, which meant q source that
@@ -21,11 +22,86 @@
 / So the definitions are checked by a q parser on every commit, which is the
 / property that was missing.
 / .
-/ TOP-LEVEL, NOT NAMESPACED, deliberately. These become tables on the
-/ tickerplant and in the RDB/HDB, where a name is a bare table name - the
-/ same form the vendored database.q uses.
+/ THE SCHEMA OF A PLANT TABLE IS WRITTEN HERE AND NOWHERE ELSE. A table is
+/ written by one job and read by others (executions: the normalizer writes it,
+/ posbook reads it), so no job owns its shape. Jobs take it from here with
+/ .qetl.plant.schema rather than declaring their own copy - a copy is a second
+/ place for the shape to be wrong, and kafka_flow's hand-written buffer once
+/ typed trade_id as a symbol the plant carries as a long.
+/ .
+/ NAMESPACED in q, BARE on the plant. Loaded as q - src/etl/init.q loads it -
+/ every definition lands in .qetl.plant, so a process that loads src/ gets no
+/ root tables of these names to shadow, or be mistaken for, live data. Read as
+/ text, uqs copies each `name:([]...)` line into stp1's schema file, where it
+/ is a bare table name, the form the vendored database.q uses.
+/ .
+/ The lookups come FIRST and the tables last, with no closing `\d .`: `uqs job
+/ new` appends a new table's line to the end of this file, and \l restores the
+/ caller's namespace itself, so an appended table still lands in .qetl.plant.
 / .
 / Definition order is immaterial to q - these are independent declarations.
+
+\d .qetl.plant
+
+/ Every plant table's name, in definition order.
+/ @return the table names, as a symbol list
+/ @eg 0<count .qetl.plant.names[]  ->  1b
+names:{[] (key `.qetl.plant) where 98h=type each get each ` sv' `.qetl.plant,'key `.qetl.plant}
+
+/ A plant table's schema: its empty table, `time` first.
+/ @param t the table's name, as a symbol
+/ @return the empty table
+/ @throws error naming the table when the plant does not carry it
+/ @eg cols .qetl.plant.schema `quote
+schema:{[t]
+    if[not t in names[];
+        '"plant: no table ",string[t]," - define it in src/etl/plant_tables.q, where every plant table's schema is written"];
+    0#get ` sv `.qetl.plant,t}
+
+/ A plant table's schema without `time`: the shape a job publishes, since the
+/ tickerplant stamps `time` itself (.u.upd, and .qetl.tick the same).
+/ @param t the table's name, as a symbol
+/ @return the empty table, without its time column
+/ @eg `time in cols .qetl.plant.published `quote  ->  0b
+published:{[t] (cols[s] except `time)#s:schema t}
+
+/ The vendored starter pack's own plant tables - quote, trade, packets - read
+/ from its database.q rather than copied here. uqs builds stp1's schema file
+/ from that file plus this one, so both are the plant; a copy of the vendored
+/ definitions would be a second place for them to drift, and that file is
+/ never edited. Each `name:([]...)` line is split at its first colon and set
+/ by name: `value` on a whole assignment statement throws 'nyi from inside a
+/ lambda on this build (see .qtorq.safe_timer).
+/ @param path the vendored database.q, relative to the repository root
+/ @return the table names registered
+adopt_vendored:{[path]
+    / A tree loaded without the vendored pack - a minimal copy, as the scaffold
+    / tests make - has no vendored tables to register, which is not an error.
+    if[()~key hsym `$path; :`symbol$()];
+    lines:read0 hsym `$path;
+    / A plain prefix test, not a `like` pattern: KDB-X's like throws 'nyi on a
+    / bracketed `[` class and past two wildcards.
+    defs:lines where {[l] (0<count l) and (first[l] within "az") and "([]"~3#(1+l?":")_l} each lines;
+    {[d] i:d?":"; (` sv `.qetl.plant,`$i#d) set value (i+1)_d; `$i#d} each defs}
+
+/ The vendored tables' names, so a caller can tell them from this tree's own.
+vendored:adopt_vendored "lib/torq-finance-starter-pack/database.q";
+
+/ This tree's own plant tables: every one except the vendored three.
+/ @return the table names
+/ @eg `quote in .qetl.plant.own[]  ->  0b
+own:{[] names[] except vendored}
+
+/ Define root tables of these names, empty, from their schemas.
+/ .
+/ For a standalone process that HOLDS these tables - an example script, the
+/ contract-surface exporter, a test of the tables themselves. Never for a job:
+/ a process that loads src/ must not get root tables shadowing live ones,
+/ which is why loading this file defines none.
+/ @param ts the table names
+/ @return ts
+/ @eg .qetl.plant.materialise enlist `orders
+materialise:{[ts] {[t] t set schema t} each ts; ts}
 
 / The order book shape every pricing and execution function in src/ expects:
 / vector-valued price and size columns, one row per (time, sym). Matches

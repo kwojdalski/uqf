@@ -31,9 +31,9 @@ uqs feed stop crypto
 ```
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
-`ask_prices`/`ask_sizes` - see its definition in
-`scripts/processes/uqs_tables.q`), flowing through `rdb1`/`wdb1`/`hdb` exactly
-like `quote`/`trade`/`quotes`/ `wide_book`:
+`ask_prices`/`ask_sizes` - see its definition in `src/etl/plant_tables.q`),
+flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`quotes`/
+`wide_book`:
 
 ```
 uqs query "select from crypto_book" --port <rdb1's port>
@@ -85,10 +85,9 @@ uqs feed stop crypto-fills
 ```
 
 Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/
-`realized_delta_pnl` - see its definition in `scripts/processes/uqs_tables.q`)
-and `crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
-`fee`/`fee_currency`/`exchange_fill_id` - defined in
-`scripts/processes/uqs_tables.q`):
+`realized_delta_pnl` - see its definition in `src/etl/plant_tables.q`) and
+`crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
+`fee`/`fee_currency`/`exchange_fill_id` - defined in `src/etl/plant_tables.q`):
 
 ```
 uqs query "select from crypto_sim_fills" --port <rdb1's port>

@@ -105,12 +105,12 @@ ship holding `quote` and `trade` alone. TorQ fills only the partition the wdb is
 currently writing (`lib/torq/code/processes/wdb.q`'s `filldb`), so nothing ever
 goes back (#348).
 
-**It reads the live process, not the declarations.**
-`scripts/processes/uqs_tables.q` says what the tickerplant is *configured* to
-carry; that is not evidence a table exists in the process you are about to
-query. A tickerplant that failed to load its schema file, or an RDB that has not
-replayed, looks identical in every other view - so reporting the declarations
-here would be confidently wrong exactly when it mattered.
+**It reads the live process, not the declarations.** `src/etl/plant_tables.q`
+says what the tickerplant is *configured* to carry; that is not evidence a table
+exists in the process you are about to query. A tickerplant that failed to load
+its schema file, or an RDB that has not replayed, looks identical in every other
+view - so reporting the declarations here would be confidently wrong exactly
+when it mattered.
 
 Two things the output says that `meta` alone does not:
 
@@ -836,8 +836,8 @@ keeps it).
 After installing it regenerates the derived files (`process_ports.csv`,
 `pipeline_dag.q`, `processes.md`, `docs/man.q`) - a declaration the generators
 refuse is reported here, with what they said - and warns about any table a job
-reads, publishes or fills that `scripts/processes/uqs_tables.q` does not define.
-Then check it is running:
+reads, publishes or fills that `src/etl/plant_tables.q` does not define. Then
+check it is running:
 
 ```
 uqs list processes                      # the registry sees the new processes

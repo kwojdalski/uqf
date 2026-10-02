@@ -10,7 +10,7 @@
 / .
 / Until this existed, both halves lived in python/uqf_frontend/catalog/ as two
 / CSVs - including a 203-row copy of every column and type, which needed a
-/ drift test to keep it honest against scripts/processes/uqs_tables.q. That
+/ drift test to keep it honest against src/etl/plant_tables.q. That
 / copy is gone; `meta` answers it.
 / .
 / WHO LOADS THIS. gateway1, via VENDORED_LOAD_OVERLAY in uqs/stack/procs.py.
@@ -79,7 +79,7 @@ describe[`trades]:
 describe[`wide_book]:
     "The unfolded book widefeed1 publishes: one column per level per side, bids0..bids10 and asks0..asks10. vectorize1 folds it into mkt_orderbook; a reader wanting a book usually wants that one instead";
 
-/ The six declared-but-not-yet-produced tables (see uqs_tables.q's block on
+/ The six declared-but-not-yet-produced tables (see plant_tables.q's block on
 / them). Described rather than hidden: a desk SHOULD be able to see that the
 / shape exists and what it is meant to hold - the description is the only
 / place that says so, since the table itself is empty and will stay empty

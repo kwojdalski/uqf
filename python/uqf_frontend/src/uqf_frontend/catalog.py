@@ -23,7 +23,7 @@ The intersection fails closed in both directions.
 
 WHY IT MOVED. Both halves used to be CSVs here - `tables.csv` for the prose
 and `columns.csv` for 203 rows of table, column and type. The second was a
-COPY of scripts/processes/uqs_tables.q, and `test_catalog_drift.py` existed
+COPY of src/etl/plant_tables.q, and `test_catalog_drift.py` existed
 solely to keep the copy honest. Asking `meta` deletes the copy instead of
 moving it, which is the same argument uqs's own `schema` command already
 makes: a catalogue of DECLARATIONS is confidently wrong exactly when it

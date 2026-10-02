@@ -17,7 +17,7 @@
 // tickerplant requires `time`, `status` where `orders` says `order_status` -
 // so the scenario taught the wrong column names for the tables this stack
 // actually publishes. env/ was deleted; this is the half worth keeping,
-// rewritten against scripts/processes/uqs_tables.q and run by
+// rewritten against src/etl/plant_tables.q and run by
 // `scripts/test.py q-scripts` on every commit, which env/seed.q never was.
 //
 // The ccy_exposure step is the one worth watching: PLN has no direct USD
@@ -33,7 +33,9 @@
 \c 400 1000
 \l src/init.q
 \l src/etl/core/log.q
-\l scripts/processes/uqs_tables.q
+\l src/etl/plant_tables.q
+/ This script holds the tables itself, so it wants them at the root.
+.qetl.plant.materialise .qetl.plant.own[];
 
 / .qetl.log suppresses DBG lines by default; this scenario's narration uses them.
 .qetl.log.debug 1b;

@@ -64,10 +64,10 @@ Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
   is. Same rationale as `lib/torq`: this library has no long-running processes
   for any of that machinery to manage, so nothing in `src/*.q` calls into it -
   vendored for reference only, at the repo owner's explicit choice.
-  `scripts/processes/uqs_tables.q` declares this tree's own tickerplant tables,
-  covering some of the same shapes (quotes/trades) without the
-  process/feed-handler layer this pulls in. It can still be started up and
-  queried, though - the `uqs` CLI (a Typer CLI) and `uqs-mcp` (a FastMCP server
-  exposing the same controls as MCP tools) bridge it with `lib/torq` (see
+  `src/etl/plant_tables.q` declares this tree's own tickerplant tables, covering
+  some of the same shapes (quotes/trades) without the process/feed-handler layer
+  this pulls in. It can still be started up and queried, though - the `uqs` CLI
+  (a Typer CLI) and `uqs-mcp` (a FastMCP server exposing the same controls as
+  MCP tools) bridge it with `lib/torq` (see
   [docs/guides/uqs.md](docs/guides/uqs.md)) so the two vendored trees can run as
   one demo without either being modified.

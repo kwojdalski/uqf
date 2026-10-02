@@ -32,7 +32,7 @@ def _catalog(described: list[dict], schema: list[dict]) -> Catalog:
 
 
 def test_a_table_the_database_has_but_nobody_describes_is_not_browsable():
-    """The direction that matters most. A table added to uqs_tables.q is
+    """The direction that matters most. A table added to plant_tables.q is
     invisible until somebody says what it is for - so a new table cannot
     become browsable by accident, only by decision."""
     cat = _catalog(
