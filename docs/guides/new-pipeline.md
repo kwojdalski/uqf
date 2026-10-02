@@ -58,7 +58,9 @@ uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
 ```
 
 `--transport odbc` scaffolds a backfill source read from a database instead of a
-q process, `--procname` names the process, and `--start-with-all` puts a
+q process, and `--transport local` one read from an HDB directory's files on
+this machine, with no process serving it (see "A source read from local HDB
+files" below), `--procname` names the process, and `--start-with-all` puts a
 streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
 a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
 `--partition`/`--check` shape a backfill. `uqs job remove NAME` undoes a
@@ -308,6 +310,42 @@ impossible to attribute. It is what the worker uses when no credential is
 configured, which is a stated demo path rather than a fallback for a failed
 connection --- an outage must never quietly become synthetic data recorded as
 covered.
+
+### A source read from local HDB files
+
+Not every kdb+ database has a process serving it. A source with
+`transport:`local\` reads an HDB directory on this machine directly, with no
+IPC:
+
+```q
+transport:`local
+
+query:{[h;range_from;range_to]
+    .qetl.source.local[h;{[read;from_ts;to_ts]
+        select time, sym, px from read[`trades;from_ts;to_ts]
+            where time>=from_ts, time<to_ts
+      };range_from;range_to]}
+```
+
+- **The credential is the directory.** Set `UQF_SOURCE_CRED_<SOURCE>` to the
+  HDB's path. `.qetl.source.local_root` checks it when the worker connects: it
+  must be a directory holding a `sym` file or a date partition. A wrong path
+  **fails the run**; it never falls back to the fixture. As with every
+  transport, only an *unset* variable selects the fixture.
+- **`read[table;from_ts;to_ts]`** returns the whole date partitions the window
+  touches, with `date` as the first column, as a select from a mapped HDB has
+  it. The window's end is exclusive, so a window ending at midnight doesn't read
+  the next day. The query filters the rows itself.
+- **Symbols are decoded against that HDB's own `sym` file.** A plain `get` would
+  decode them against whatever `sym` the backfill process has loaded, which is
+  the HDB it *writes*, and silently return the wrong symbols.
+- **Nothing is loaded globally.** `\l` would map the whole database at the root
+  and change the working directory. Tables are read one partition at a time,
+  column by column.
+- **Tracing and failures** work as for IPC: `--trace` logs each query with its
+  lambda and bounds, a `request` number and `transport=local`, and a query that
+  throws is traced as `failed` and rethrown.
+- **The handle is the directory itself**, so cleanup has nothing to close.
 
 ## 2. Write the worker
 

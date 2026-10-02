@@ -787,12 +787,12 @@ query sent range_from=2026.09.10D00:00:00.000000000 range_to=2026.09.11D00:00:00
 
 Every line logged while a window runs carries what it belongs to: `worker`,
 `run`, the window's `range_from`/`range_to`, and, around the fetch, `source` and
-`attempt`. Request traces add `transport` (`ipc` or `odbc`) and a `request`
-number shared by that request's `sent`, `returned` and `failed` lines. So two
-queries one window sends, such as a source that merges two tables, have the same
-worker, run and window but different request numbers, and the fetch, transform
-and write lines around them sort into the same window. A sidecar's own lines get
-these fields too, without logging them itself. The context is set by
+`attempt`. Request traces add `transport` (`ipc`, `odbc` or `local`) and a
+`request` number shared by that request's `sent`, `returned` and `failed` lines.
+So two queries one window sends, such as a source that merges two tables, have
+the same worker, run and window but different request numbers, and the fetch,
+transform and write lines around them sort into the same window. A sidecar's own
+lines get these fields too, without logging them itself. The context is set by
 `.qetl.log.with_context` and removed when the window ends, whether it succeeded
 or failed. With trace off, no request is numbered or formatted.
 
