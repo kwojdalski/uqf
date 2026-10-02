@@ -668,6 +668,16 @@ quietly rather than loudly:
   the coverage staged before any handler runs, so a downstream bug cannot turn a
   successful materialisation into a failed one. Failures land in
   `.qetl.reaction.history` and the log.
+- **A reaction that never succeeded is fired again.** Every outcome is also
+  written to `etl_reactions` beside the coverage ledger. A window covered with
+  no successful reaction since --- the reaction threw, or the process died
+  between recording coverage and reacting --- is owed
+  (`.qetl.reaction.pending`), and the next real run of the worker over that
+  range fetches it again and re-announces it before its own windows, even when
+  it otherwise finds nothing to do. Every reaction for the dataset runs again,
+  which is safe because `.qetl.reaction.write` replaces its window. A reaction
+  added after its dataset was published is filled the same way, over whatever
+  range the next run covers.
 - **A cascade terminates.** The same `(dataset, range)` is dispatched at most
   once per drain, so `a -> b -> a` settles; `.qetl.reaction.max_depth` bounds a
   chain that keeps inventing new ranges.
