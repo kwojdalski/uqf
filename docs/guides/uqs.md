@@ -500,7 +500,14 @@ columns derived from the same declarations:
 uqs summary                     # all ten columns
 uqs summary --columns status    # the seven status ones, for a narrow terminal
 uqs summary --columns "Process,Depends on,Inputs,Outputs"
+uqs summary --sort Port         # by any column, numeric-aware; --reverse for descending
+uqs summary --sort Status --columns status
 ```
+
+`--sort` takes any column, shown or not, case-insensitively. It sorts `Port` and
+`PID` as numbers, so 659 comes before 6052, and puts empty cells last, as
+`uqs list --sort` does; the two share one implementation. The order reaches
+`--export` too.
 
 ```
 ┃ Process      ┃ Depends on                  ┃ Inputs                ┃ Outputs        ┃

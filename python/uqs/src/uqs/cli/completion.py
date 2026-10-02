@@ -139,6 +139,11 @@ def csv_fields() -> list[str]:
 
 
 @_never_raises
+def summary_sort_column() -> list[str]:
+    return list(listing.SUMMARY_ALL_COLUMNS)
+
+
+@_never_raises
 def summary_columns(incomplete: str) -> list[str]:
     if "," not in incomplete:
         return ["all", "status", *listing.SUMMARY_ALL_COLUMNS]
