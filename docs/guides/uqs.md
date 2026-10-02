@@ -477,6 +477,22 @@ The graph behind all of this is the `subscribe_to`/`publishes` pair on each
 job graph are built from - so what you are warned about and what is running
 cannot describe different systems.
 
+`summary` opens with one line saying which q runs the fleet, and the connection
+budget that follows from it:
+
+```
+interpreter: kdbx (/Users/me/.kx/bin/q) - 16 connections
+interpreter: peachq (/opt/peachq/q) - no connection cap
+```
+
+That is what decides whether a fleet past sixteen processes is fine (PeachQ) or
+wedged past the licence (KDB-X). The implementation is asked of the binary
+itself. When it disagrees with `UQF_Q_IMPL`, a warning follows, in the same
+words `scripts/test.py` refuses with. `summary` only reads, so it reports the
+mismatch rather than refusing. `uqs list env` carries the same two facts as
+rows: `UQF_Q_IMPL` (the declaration) and `q_impl (binary)` (what the binary
+says, or `not runnable`).
+
 `summary` shows the whole graph, not just the unsatisfied part of it, in three
 columns derived from the same declarations:
 

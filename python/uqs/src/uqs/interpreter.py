@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import tempfile
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.paths import UqsError
@@ -108,15 +109,61 @@ def identify(q: Path, env: Mapping[str, str] | None = None, timeout: float = 30.
     return answer[0]
 
 
+def mismatch_message(q: Path, actual: str, declared: str) -> str:
+    """What `check_identity` refuses with when the binary is not what was declared."""
+    hint = (
+        f"set {Q_IMPL_ENV}=peachq to run it knowingly"
+        if actual == PEACHQ
+        else f"point {Q_INTERPRETER_ENV} at the PeachQ binary"
+    )
+    return f"{q} is {actual}, but {Q_IMPL_ENV} declares {declared} - {hint}"
+
+
 def check_identity(q: Path, env: Mapping[str, str] | None = None) -> str:
     """`identify`, refusing a binary that is not the declared implementation."""
     declared = q_impl(env)
     actual = identify(q, env)
     if actual != declared:
-        hint = (
-            f"set {Q_IMPL_ENV}=peachq to run it knowingly"
-            if actual == PEACHQ
-            else f"point {Q_INTERPRETER_ENV} at the PeachQ binary"
-        )
-        raise UqsError(f"{q} is {actual}, but {Q_IMPL_ENV} declares {declared} - {hint}")
+        raise UqsError(mismatch_message(q, actual, declared))
     return actual
+
+
+@dataclass(frozen=True)
+class InterpreterStatus:
+    """Which q the stack would run, for commands that report rather than run.
+
+    `declared` is what $UQF_Q_IMPL says (or the refusal, when it says
+    something invalid); `binary` the resolved $QCMD or None; `actual` what the
+    binary answers when asked, None when there is no binary or no answer;
+    `problem` what is wrong, in check_identity's words when the two disagree.
+    """
+
+    declared: str
+    binary: Path | None
+    actual: str | None
+    problem: str | None
+
+
+def interpreter_status(
+    env: Mapping[str, str] | None = None, timeout: float = 10.0
+) -> InterpreterStatus:
+    """The interpreter, described - never refused.
+
+    For `uqs list env` and `uqs summary`, which only read: an operator looking
+    at a fleet needs to see which q runs it, and a reporting command that died
+    on a mismatch would hide exactly the thing worth reporting.
+    """
+    source = os.environ if env is None else env
+    try:
+        declared = q_impl(source)
+    except UqsError as exc:
+        return InterpreterStatus(f"invalid ({exc})", None, None, str(exc))
+    binary = q_interpreter(source)
+    if binary is None:
+        return InterpreterStatus(declared, None, None, None)
+    try:
+        actual = identify(binary, source, timeout=timeout)
+    except (UqsError, OSError, subprocess.TimeoutExpired) as exc:
+        return InterpreterStatus(declared, binary, None, f"could not ask {binary}: {exc}")
+    problem = None if actual == declared else mismatch_message(binary, actual, declared)
+    return InterpreterStatus(declared, binary, actual, problem)

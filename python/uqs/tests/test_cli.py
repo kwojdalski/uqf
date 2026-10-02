@@ -1880,3 +1880,79 @@ def test_remove_lists_what_it_can_remove():
     result = runner.invoke(cli.app, ["remove", "--help"])
     assert result.exit_code == 0
     assert "output" in result.output and "checkpoint" in result.output
+
+
+# ---------------------------------------------- which q the fleet runs (#518)
+
+
+def _stand_in_q(tmp_path, answer: str):
+    """An executable answering the identity probe as `answer`, as in
+    test_interpreter.py."""
+    q = tmp_path / f"q_{answer}"
+    q.write_text(f"#!/bin/sh\necho '{answer}'\n")
+    q.chmod(0o755)
+    return q
+
+
+@pytest.mark.parametrize(
+    ("answer", "declared", "budget"),
+    [("kdbx", None, "16 connections"), ("peachq", "peachq", "no connection cap")],
+)
+def test_summary_says_which_q_runs_the_fleet(monkeypatch, tmp_path, answer, declared, budget):
+    _summary_ok(monkeypatch)
+    q = _stand_in_q(tmp_path, answer)
+    monkeypatch.setenv("QCMD", str(q))
+    monkeypatch.delenv("UQS_LICENCE_CONNECTIONS", raising=False)
+    if declared:
+        monkeypatch.setenv("UQF_Q_IMPL", declared)
+    else:
+        monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    result = runner.invoke(cli.app, ["summary"])
+    assert result.exit_code == 0, result.output
+    # Rich wraps the long temporary path mid-word, so compare with every
+    # whitespace character removed.
+    flat = "".join(result.output.split())
+    assert "".join(f"interpreter: {answer} ({q}) - {budget}".split()) in flat
+    assert "warning:" not in result.output
+
+
+def test_summary_warns_on_a_mismatch_and_still_prints(monkeypatch, tmp_path):
+    _summary_ok(monkeypatch)
+    q = _stand_in_q(tmp_path, "peachq")
+    monkeypatch.setenv("QCMD", str(q))
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    result = runner.invoke(cli.app, ["summary"])
+    assert result.exit_code == 0, "a reading command reports a mismatch, it does not refuse"
+    flat = "".join(result.output.split())
+    hint = "but UQF_Q_IMPL declares kdbx - set UQF_Q_IMPL=peachq to run it knowingly"
+    assert "".join(hint.split()) in flat
+
+
+def test_summary_with_no_q_reports_not_runnable(monkeypatch, tmp_path):
+    _summary_ok(monkeypatch)
+    monkeypatch.setenv("QCMD", str(tmp_path / "no-such-q"))
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    result = runner.invoke(cli.app, ["summary"])
+    assert result.exit_code == 0, result.output
+    assert "not runnable" in result.output
+
+
+def test_list_env_shows_the_declared_and_the_actual_implementation(monkeypatch, tmp_path):
+    q = _stand_in_q(tmp_path, "peachq")
+    monkeypatch.setenv("QCMD", str(q))
+    monkeypatch.setenv("UQF_Q_IMPL", "peachq")
+    rows = {
+        r["name"]: r["value"]
+        for r in listing._list_env(stack_paths.paths_for_root(stack_paths.repo_root()), 6050)
+    }
+    assert (rows["UQF_Q_IMPL"], rows["q_impl (binary)"]) == ("peachq", "peachq")
+
+
+def test_list_env_says_not_runnable_without_a_q(monkeypatch, tmp_path):
+    monkeypatch.setenv("QCMD", str(tmp_path / "no-such-q"))
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    rows = {
+        r["name"]: r["value"]
+        for r in listing._list_env(stack_paths.paths_for_root(stack_paths.repo_root()), 6050)
+    }
+    assert rows["q_impl (binary)"] == "not runnable"

@@ -20,8 +20,9 @@ from pathlib import Path
 import pytest
 
 from uqs import interpreter
-from uqs.interpreter import check_identity, identify, q_command, q_impl
+from uqs.interpreter import check_identity, identify, interpreter_status, q_command, q_impl
 from uqs.paths import UqsError
+from uqs.stack import listing
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "test.py"
 _spec = importlib.util.spec_from_file_location("uqf_test_runner_interp", SCRIPT)
@@ -125,3 +126,50 @@ def test_the_runner_accepts_what_was_declared(tmp_path, answer):
 
 def test_the_runner_leaves_a_missing_q_to_the_lanes(tmp_path):
     assert runner.check_interpreter(_env(QCMD=str(tmp_path / "nothing"))) is None
+
+
+# ------------------------------------------- reporting it: uqs list env / summary
+
+
+def test_status_reports_a_binary_that_is_what_was_declared(tmp_path):
+    q = _fake_q(tmp_path, "kdbx")
+    status = interpreter_status(_env(QCMD=str(q)))
+    assert (status.declared, status.binary, status.actual, status.problem) == (
+        "kdbx",
+        q,
+        "kdbx",
+        None,
+    )
+
+
+def test_status_reports_a_mismatch_in_check_identitys_words_and_does_not_refuse(tmp_path):
+    q = _fake_q(tmp_path, "peachq")
+    status = interpreter_status(_env(QCMD=str(q)))
+    assert status.actual == "peachq"
+    hint = "set UQF_Q_IMPL=peachq to run it knowingly"
+    assert status.problem == f"{q} is peachq, but UQF_Q_IMPL declares kdbx - {hint}"
+
+
+def test_status_with_no_q_is_not_runnable_rather_than_an_error(tmp_path):
+    status = interpreter_status({"PATH": str(tmp_path), "QCMD": "no-such-q"})
+    assert (status.binary, status.actual) == (None, None)
+    assert (
+        listing.interpreter_line(status) == "interpreter: kdbx declared - not runnable (no q found)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("answer", "declared", "budget"),
+    [("kdbx", None, "16 connections"), ("peachq", "peachq", "no connection cap")],
+)
+def test_the_summary_line_names_the_interpreter_and_its_budget(
+    tmp_path, monkeypatch, answer, declared, budget
+):
+    q = _fake_q(tmp_path, answer)
+    monkeypatch.setenv("QCMD", str(q))
+    monkeypatch.delenv("UQS_LICENCE_CONNECTIONS", raising=False)
+    if declared:
+        monkeypatch.setenv("UQF_Q_IMPL", declared)
+    else:
+        monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    assert listing.interpreter_line() == f"interpreter: {answer} ({q}) - {budget}"

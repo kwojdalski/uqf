@@ -30,6 +30,7 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.cli.summary_graph import attach_graph_columns
+from uqs.interpreter import interpreter_status
 from uqs.logger import configure_logging
 from uqs.model import dependencies, profiles
 from uqs.model.registry import DEFAULT_BASE_PORT
@@ -262,6 +263,12 @@ def summary(
         probe.attach_probe_column(rows, probe_timeout, deadline) if "Responds" in chosen else []
     )
 
+    # Which q runs the fleet and the connection budget that follows (#518):
+    # a 20-process fleet is fine on PeachQ and wedged past the cap on KDB-X.
+    status = interpreter_status()
+    console.print(listing.interpreter_line(status), style="dim", markup=False)
+    if status.problem:
+        console.print(f"warning: {status.problem}", style="yellow", markup=False)
     table = Table(title=f"uqs summary (base port {port})")
     for col in chosen:
         # The graph cells are pre-wrapped at their commas by graph_cell, so
