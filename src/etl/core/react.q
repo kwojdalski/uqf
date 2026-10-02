@@ -215,6 +215,11 @@ for_dataset:{[dataset] $[dataset in key reactions; reactions dataset; no_reactio
 / rebuilding the wiring after the registries change.
 reset:{[] reactions::(`symbol$())!(); `.qetl.reaction.queue set empty_queue[]; `.qetl.reaction.history set empty_history[]; ()}
 
+/ Forget every durable outcome - for tests, which must not inherit another
+/ test's ledger.
+/ @eg .qetl.reaction.reset_outcomes[]
+reset_outcomes:{[] @[{system"rm -f ",x,"*"};outcomes_path[];{[e] (::)}]; ()}
+
 / ------------------------------------------------------- THE DAG WIRING
 
 / Which jobs does .qetl.dag say read this dataset?
@@ -290,13 +295,81 @@ history:empty_history[]
 / otherwise grow it without limit, and the recent end is the useful one.
 history_limit:1000
 
-/ Private: record one reaction's outcome.
+/ Private: record one reaction's outcome - in `history`, and durably.
 record:{[dataset;name;depth;range_from;range_to;outcome;detail]
     `.qetl.reaction.history set history_limit sublist history,
         ([] at:enlist .z.p; dataset:enlist dataset; name:enlist name; depth:enlist depth;
             range_from:enlist range_from; range_to:enlist range_to;
             outcome:enlist outcome; detail:enlist detail);
+    / Never fails the reaction it records: a ledger that cannot be written is
+    / logged, and the next run's `pending` simply sees the window as not done.
+    @[persist_outcome;(dataset;name;range_from;range_to;outcome;.z.p);
+      {[e] @[{.qetl.log.err[`qetl.reaction;"could not record a reaction outcome";enlist[`error]!enlist x]};e;{[e2] (::)}]}];
     }
+
+/ ------------------------------------------------------ DURABLE OUTCOMES
+/ .
+/ `history` dies with the process, and a reaction runs AFTER its window's
+/ coverage is recorded. So a process killed between the two, or a reaction
+/ that throws, left a window the ledger calls covered and a derived table
+/ nobody rebuilt - and a re-run, finding the window covered, reported idle.
+/ Nothing anywhere said so.
+/ .
+/ Every outcome is therefore also written to `etl_reactions` beside the
+/ coverage ledger, and `pending` answers "which covered windows have a
+/ reaction that has not succeeded since the window was last covered". A
+/ bounded run asks it over its own range and fires those again
+/ (.qetl.job.bounded.replay_reactions) - the reconciler, as a backstop to
+/ the notification, not a replacement for it.
+
+/ The ledger's shape.
+empty_outcomes:{[] ([] dataset:`symbol$(); name:`symbol$(); range_from:`timestamp$();
+    range_to:`timestamp$(); outcome:`symbol$(); at:`timestamp$())}
+
+/ Where it lives: the status dir, beside etl_coverage and etl_runs.
+/ @return the file path
+outcomes_path:{[] (.qetl.job.bounded.state.lock_dir[]),"/etl_reactions"}
+
+/ Every outcome recorded so far, by any process.
+/ @return the ledger, or an empty one when none has been written
+/ @eg .qetl.reaction.outcomes[]
+outcomes:{[]
+    p:outcomes_path[];
+    $[()~key hsym `$p; empty_outcomes[]; .qetl.job.bounded.state.durable_get p]}
+
+/ Private: append one outcome, read-modify-write under its own mutex - the
+/ same pattern as the coverage and run ledgers.
+persist_outcome:{[row]
+    .qetl.job.bounded.state.with_file_lock[`etl_reactions;
+        {[row] .qetl.job.bounded.state.durable_set[outcomes_path[];outcomes[],enlist cols[empty_outcomes[]]!row]};
+        enlist row]}
+
+/ The (reaction; window) pairs still owed: covered windows of `ds` in
+/ [from_ts;to_ts) with a reaction that has no `ok outcome recorded at or
+/ after the window was covered. A window re-covered by a restatement is owed
+/ again, because its derived output describes the old release.
+/ @param ds the dataset
+/ @param part its partition, or ` when it has none
+/ @param version the source_version whose coverage counts
+/ @param from_ts inclusive lower bound
+/ @param to_ts exclusive upper bound
+/ @return a table of name, range_from, range_to
+/ @eg .qetl.reaction.pending[`demo_deals;`;`v1;2026.09.11D00:00;2026.09.13D00:00]
+pending:{[ds;part;version;from_ts;to_ts]
+    none:([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$());
+    rs:for_dataset ds;
+    if[0=count rs; :none];
+    .qetl.coverage.init_ledger[];
+    now:.z.p;
+    covered:select range_from, range_to, recorded_at from .qetl.coverage.ledger[]
+        where dataset=ds, partition=part, source_version=version,
+              recorded_at<=now, now<superseded_at, range_from<to_ts, range_to>from_ts;
+    if[0=count covered; :none];
+    done:select name, range_from, range_to, at from outcomes[] where dataset=ds, outcome=`ok;
+    pairs:raze {[covered;nm] update name:nm from covered}[covered] each rs`name;
+    ok:{[done;p] any (done[`name]=p`name) and (done[`range_from]=p`range_from) and
+        (done[`range_to]=p`range_to) and done[`at]>=p`recorded_at}[done] each pairs;
+    `name`range_from`range_to#pairs where not ok}
 
 / ------------------------------------------------------------- NOTIFY
 
