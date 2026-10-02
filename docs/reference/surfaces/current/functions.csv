@@ -988,6 +988,23 @@ qpipe.job.fx_trades_feed,pip_factor,value,,
 qpipe.job.fx_trades_feed,publish,value,,
 qpipe.job.fx_trades_feed,sizes,value,,
 qpipe.job.fx_trades_feed,spot,value,,
+qpipe.job.hdb_markouts_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_markouts_backfill,cleanup,function,1,
+qpipe.job.hdb_markouts_backfill,facts,function,1,batch
+qpipe.job.hdb_markouts_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_markouts_backfill,handle,value,,
+qpipe.job.hdb_markouts_backfill,init,function,1,run_spec
+qpipe.job.hdb_markouts_backfill,last_batch,value,,
+qpipe.job.hdb_markouts_backfill,last_window,dict,,
+qpipe.job.hdb_markouts_backfill,plan,function,1,cursor
+qpipe.job.hdb_markouts_backfill,progress,dict,,
+qpipe.job.hdb_markouts_backfill,publish,function,1,batch
+qpipe.job.hdb_markouts_backfill,quality_check,function,1,batch
+qpipe.job.hdb_markouts_backfill,range_from,value,,
+qpipe.job.hdb_markouts_backfill,range_to,value,,
+qpipe.job.hdb_markouts_backfill,run,function,1,
+qpipe.job.hdb_markouts_backfill,source_version,value,,
+qpipe.job.hdb_markouts_backfill,spec,function,1,
 qpipe.job.kafka_flow,above_high_water,function,1,rows
 qpipe.job.kafka_flow,advance,function,1,rows
 qpipe.job.kafka_flow,first_per_coordinate,function,1,rows
@@ -1153,6 +1170,19 @@ qpipe.source.duckdb_deals,time_column,value,,
 qpipe.source.duckdb_deals,transport,value,,
 qpipe.source.duckdb_deals,types,value,,
 qpipe.source.duckdb_deals,tz,value,,
+qpipe.source.hdb_markouts,columns,value,,
+qpipe.source.hdb_markouts,fixture,function,1,
+qpipe.source.hdb_markouts,none,table,,
+qpipe.source.hdb_markouts,query,function,3,h range_from range_to
+qpipe.source.hdb_markouts,raw_fills,function,1,
+qpipe.source.hdb_markouts,raw_quotes,function,1,
+qpipe.source.hdb_markouts,row_key,value,,
+qpipe.source.hdb_markouts,score,function,2,deals quotes
+qpipe.source.hdb_markouts,source_name,value,,
+qpipe.source.hdb_markouts,target,value,,
+qpipe.source.hdb_markouts,time_column,value,,
+qpipe.source.hdb_markouts,types,value,,
+qpipe.source.hdb_markouts,tz,value,,
 qpipe.source.upstream_trades,columns,value,,
 qpipe.source.upstream_trades,fixture,function,1,
 qpipe.source.upstream_trades,query,function,3,h range_from range_to
