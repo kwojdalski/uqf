@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import re
 import shlex
 import shutil
 import sys
@@ -1614,3 +1615,42 @@ def test_the_load_overlay_touches_no_other_process():
         if procname == "gateway1":
             continue
         assert composed[procname]["load"] == original, f"{procname}'s load column was altered"
+
+
+# ------------------------------------- monitor1's per-retry log lines, off
+
+
+def test_monitor1_starts_without_tracing_every_retry():
+    """monitor1 retries each stopped optional process every five minutes, and
+    with TorQ's default `.servers.DEBUG:1b` logs two INF lines per attempt.
+    The override turns those lines off and leaves the retries alone. Read
+    against the real vendored csv, as the overlay tests above are."""
+    rows = {r["procname"]: r for r in stack_procs._base_process_rows(stack_paths.default_paths())}
+    extras = rows["monitor1"]["extras"].split()
+    assert "-.servers.DEBUG" in extras
+    assert extras[extras.index("-.servers.DEBUG") + 1] == "0"
+    assert "-.servers.CONNECTIONS" in extras, "the connection budget is still passed beside it"
+    others = [
+        name
+        for name, row in rows.items()
+        if name != "monitor1" and "-.servers.DEBUG" in row["extras"]
+    ]
+    assert others == [], "only monitor1 retries the whole fleet; nothing else is quietened"
+
+
+def test_servers_debug_is_still_what_gates_the_retry_lines():
+    """The override works only while TorQ gates both lines on `.servers.DEBUG`
+    and defines it in its settings - which `.proc.override` requires, since it
+    only overrides a variable that already exists. If an upgrade moves either,
+    the override silently does nothing; fail here instead."""
+    torq = stack_paths.default_paths().torqhome
+    track = (torq / "code" / "handlers" / "trackservers.q").read_text()
+    assert 'if[DEBUG;.lg.o[`conn;"attempting to open handle to "' in track
+    assert 'if[DEBUG;.lg.o[`conn;"connection to "' in track
+    assert "procupdate:{[procs] addprocs[procs;exec distinct proctype from procs;0b];}" in track, (
+        "a process started by hand is no longer added unconnected - re-check whether "
+        "monitor1 still needs its retries, which is why only the lines were turned off"
+    )
+    settings = (torq / "config" / "settings" / "default.q").read_text()
+    servers = settings.split("\\d .servers", 1)[1].split("\n\\d ", 1)[0]
+    assert re.search(r"(?m)^DEBUG:1b", servers), ".servers.DEBUG is no longer set in the settings"

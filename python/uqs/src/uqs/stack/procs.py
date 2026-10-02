@@ -25,6 +25,7 @@ from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
+    MONITOR_QUIET_EXTRAS,
     monitor_connection_extras,
 )
 
@@ -110,8 +111,7 @@ def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
             )
         if row["procname"] == "monitor1":
             extras = monitor_connection_extras(paths, rows + appended)
-            if extras:
-                row["extras"] = " ".join(x for x in (row["extras"], extras) if x)
+            row["extras"] = " ".join(x for x in (row["extras"], extras, MONITOR_QUIET_EXTRAS) if x)
     rows.extend(appended)
     return rows
 
