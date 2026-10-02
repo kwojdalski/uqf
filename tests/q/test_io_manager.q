@@ -461,6 +461,69 @@ test_hdb_keyed_writes_are_finished_like_any_other:{[t]
     p:part[root;2026.01.02;`iodeals];
     .qunit.assertEquals[(value p`sym;attr p`sym);(`EURUSD`GBPUSD;`p);"sorted and p#sym, as an appended partition is"]};
 
+/ --- staged keyed writes and their recovery ------------------------------
+
+test_a_keyed_write_leaves_nothing_in_staging:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    s:.qetl.io.staging root;
+    left:{[s;kind] $[()~key hsym `$s,"/",kind; 0; sum {[s;kind;d] count key hsym `$s,"/",kind,"/",string d}[s;kind] each key hsym `$s,"/",kind]}[s] each ("new";"old");
+    .qunit.assertEquals[(left;count part[root;2026.01.02;`iodeals]);(0 0;2);
+        "the partition is written and the staging area is empty again"]};
+
+/ A kill between the two renames: the live table moved to `old`, its
+/ replacement never moved in. recover puts the old one back.
+test_recover_restores_a_table_swapped_out_and_never_replaced:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    .qetl.io.finish m;
+    before:part[root;2026.01.02;`iodeals];
+    old:.qetl.io.staged[root;`old;2026.01.02;`iodeals];
+    system"mkdir -p ",(.qetl.io.staging root),"/old/2026.01.02";
+    system"mv ",.qetl.io.part_path[root;2026.01.02;`iodeals]," ",old;
+    .qetl.io.recover[m;`iodeals;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000];
+    .qunit.assertEquals[(part[root;2026.01.02;`iodeals];()~key hsym `$old);(before;1b);
+        "the partition reads as it did before the write, and old is gone"]};
+
+/ A kill after staging and before any swap: the staged copy is a write that
+/ never happened, and the live partition was never touched.
+test_recover_discards_a_staged_table_that_never_reached_its_swap:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    before:part[root;2026.01.02;`iodeals];
+    .qetl.io.stage[root;2026.01.02;`iodeals;0#before];
+    .qetl.io.recover[m;`iodeals;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000];
+    .qunit.assertEquals[(count part[root;2026.01.02;`iodeals];()~key hsym `$.qetl.io.staged[root;`new;2026.01.02;`iodeals]);(2;1b);
+        "the live partition keeps its rows and the staged copy is removed"]};
+
+/ Another table's staging is another process's write in flight.
+test_recover_leaves_another_tables_staging_alone:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write_keyed[m;`iodeals;deals[];hdb_opts`upsert];
+    .qetl.io.stage[root;2026.01.02;`other;0#part[root;2026.01.02;`iodeals]];
+    .qetl.io.recover[m;`iodeals;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000];
+    .qunit.assertTrue[not ()~key hsym `$.qetl.io.staged[root;`new;2026.01.02;`other];"untouched"]};
+
+/ A kill part way through an APPEND, which writes column by column: one
+/ column one row longer than the rest. recover trims it back and queues the
+/ partition for finishing.
+test_recover_trims_a_torn_append:{[t]
+    root:hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;deals[]];
+    .qetl.io.finish m;
+    f:hsym `$.qetl.io.part_path[root;2026.01.02;`iodeals],"/notional";
+    f set (get f),9e9;
+    n:.qetl.io.recover[m;`iodeals;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000];
+    .qetl.io.finish m;
+    p:part[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[(n;count p;asc p`notional;attr p`sym);(1;2;1e6 2e6;`p);
+        "every column ends at the same row again, and the partition is finished"]};
+
 / --- the wiring ----------------------------------------------------------
 
 test_define_refuses_a_malformed_manager:{[t]
