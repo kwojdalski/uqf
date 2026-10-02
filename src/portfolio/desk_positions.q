@@ -154,7 +154,10 @@ ccy_exposure:{[book;group_cols]
     / Empty, but the SAME shape as a non-empty result: keyed on the group
     / columns (typed as the book has them) plus ccy, with amount - it used to
     / come back unkeyed, without the group columns at all.
-    if[0=count rows; :(g,`ccy) xkey ?[rows;();0b;g!g] ,' ([] ccy:`symbol$(); amount:`float$())];
+    / Built from the book's own (empty, typed) columns rather than with ,'
+    / over two empty tables, which PeachQ returns as () - this suite is in the
+    / PeachQ-portable set.
+    if[0=count rows; :(g,`ccy) xkey flip (g,`ccy`amount)!(rows g),(`symbol$();`float$())];
     legs:.qccy.ccy_pair_legs each rows`sym;
     / Two rows out of every one in - the base leg and the quote leg - so
     / the group columns are taken twice, in the same order the amounts are.
