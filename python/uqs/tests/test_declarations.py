@@ -187,3 +187,10 @@ def test_a_single_source_normalizer_reads_its_one_source():
         Path("n.q"),
     )
     assert d.subscribe_to == ("quote",)
+
+
+def test_a_worker_may_declare_a_default_source_version():
+    d = _one(
+        ".qetl.job.bounded.define[`w;`source`dataset`width`transform`source_version!(`s;`d;1D;`x;`v1)];"
+    )
+    assert d.source_version == "v1"

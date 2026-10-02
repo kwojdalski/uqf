@@ -245,6 +245,7 @@ qetl.job.bounded,cleanup,function,1,worker
 qetl.job.bounded,connect,function,1,worker
 qetl.job.bounded,connect_error,function,2,source e
 qetl.job.bounded,def,function,1,worker
+qetl.job.bounded,default_version,function,1,worker
 qetl.job.bounded,define,function,2,worker decl
 qetl.job.bounded,delegate,function,2,worker nm
 qetl.job.bounded,do_window,function,2,worker w

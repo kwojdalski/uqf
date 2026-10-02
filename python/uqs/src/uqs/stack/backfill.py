@@ -54,6 +54,25 @@ def backfill_workers() -> dict[str, str]:
     return {p.worker: p.procname for p in PIPELINES if p.worker}
 
 
+def resolve_version(worker: str, version: str | None) -> str:
+    """The source_version a run records coverage under: `version` when given,
+    else the worker's declared default, else a refusal.
+
+    Refused rather than defaulted because a worker that declares no default is
+    one whose source can be restated - guessing the release there files a
+    restatement under the old one, and every window then reads as covered.
+    """
+    if version:
+        return version
+    declared = {p.worker: p.default_version for p in PIPELINES if p.worker}
+    if declared.get(worker):
+        return str(declared[worker])
+    raise UqsError(
+        f"{worker} declares no default source_version - pass --version to say which "
+        "release of the source this run records coverage under"
+    )
+
+
 def procname_for(worker: str) -> str:
     """The process that runs `worker`, or a refusal naming the ones that exist."""
     workers = backfill_workers()

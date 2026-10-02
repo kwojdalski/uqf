@@ -12,7 +12,7 @@ This loads the ETL tree in q, the way a process does, and diffs q's own
 registries against the parser, field by field, for every job:
 
     streaming job, normalizer   procname, subscribe_to, publishes
-    bounded worker              procname, dataset
+    bounded worker              procname, dataset, source_version
 
 Not `start_with_all` or `note`: those are deployment facts only the registry
 reads, and q's declaration functions validate and then drop them, so there is
@@ -46,7 +46,8 @@ _DUMP = """
 s:{[j] d:.qetl.job.stream.def j;
     `procname`subscribe_to`publishes!(d`procname;(),d`subscribe_to;(),d`publishes)
   } each key .qetl.job.stream.jobs;
-b:{[w] c:.qetl.job.bounded.worker_cfg w; `procname`dataset!(c`procname;c`dataset)
+b:{[w] c:.qetl.job.bounded.worker_cfg w;
+    `procname`dataset`source_version!(c`procname;c`dataset;c`source_version)
   } each key .qetl.job.bounded.worker_cfg;
 -1 .j.j `stream`bounded!((key .qetl.job.stream.jobs)!s;(key .qetl.job.bounded.worker_cfg)!b);
 exit 0
@@ -59,7 +60,7 @@ def _parser_view(root: Path) -> dict[str, dict[str, dict]]:
     bounded: dict[str, dict] = {}
     for d in read_declarations(root):
         if d.kind is PipelineKind.BACKFILL:
-            bounded[d.name] = {"procname": d.procname}
+            bounded[d.name] = {"procname": d.procname, "source_version": d.source_version}
         else:
             stream[d.name] = {
                 "procname": d.procname,

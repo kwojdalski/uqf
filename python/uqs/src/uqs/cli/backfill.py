@@ -34,15 +34,20 @@ def backfill(
             autocompletion=completion.backfill_workers,
         ),
     ],
-    version: Annotated[
-        str, typer.Option("--version", help="The source_version to record coverage under")
-    ],
     range_from: Annotated[
         str, typer.Option("--from", help=f"Inclusive start of the range. {_BOUND_HELP}")
     ],
     range_to: Annotated[
         str, typer.Option("--to", help=f"Exclusive end of the range. {_BOUND_HELP}")
     ],
+    version: Annotated[
+        str | None,
+        typer.Option(
+            "--version",
+            help="The source_version to record coverage under. Optional when the worker "
+            "declares a default; a new value re-fetches windows already covered (a restatement)",
+        ),
+    ] = None,
     on_conflict: Annotated[
         str | None,
         typer.Option(
@@ -75,8 +80,10 @@ def backfill(
 ) -> None:
     """Run a bounded worker over [--from, --to), recording coverage under --version.
 
-    All three are required: a backfill that guessed a range would publish the
-    wrong window and record it as covered. The process registers with
+    The range is required: a backfill that guessed one would publish the wrong
+    window and record it as covered. --version is required too unless the
+    worker declares a default source_version - one whose source is never
+    restated. Pass a new --version to re-fetch windows already covered. The process registers with
     discovery, so the fleet has to be up, and it exits when the range is
     done - follow it with `uqs logs <process> -f`.
 
@@ -93,7 +100,7 @@ def backfill(
         result = stack_backfill.start(
             _paths(),
             worker,
-            version,
+            stack_backfill.resolve_version(worker, version),
             stack_backfill.parse_bound("--from", range_from),
             stack_backfill.parse_bound("--to", range_to),
             base_port=port,
