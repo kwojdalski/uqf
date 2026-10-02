@@ -415,8 +415,62 @@ spec:{[worker] `source_version`range_from`range_to!read_state[worker] each `sour
 / @return whatever init_body returns
 init:{[worker;run_spec]
     r:.[{[w;s] (1b; init_body[w;s])};(worker;run_spec);{[e] (0b;e)}];
-    if[not first r; cleanup worker; 'last r];
+    if[not first r; report_failure[worker;last r]; cleanup worker; 'last r];
     last r}
+
+/ ---------------------------------------------------------------- STATUS
+/ .
+/ What an orchestrator reads: .qetl.status's file for this process -
+/ starting, running, then idle, completed or failed. Airflow's sensor
+/ (python/uqf_airflow_provider) polls it and nothing else, so a run that
+/ never writes it leaves the sensor waiting until its timeout. Until this
+/ section the only writer was .qetl.job.bounded.state.fail, which nothing on
+/ the live path called.
+/ .
+/ Written in every mode that runs windows, dry_run included: the file says
+/ how the PROCESS ended, which an orchestrator running a rehearsal needs as
+/ much as a real run. It records no data.
+
+/ Private: the instance this run reports as - TorQ's procname under a stack,
+/ the worker's own name in plain q.
+/ @param worker the worker's name
+/ @return the instance id naming the status file
+instance:{[worker] p:@[value;`.proc.procname;`]; $[null p; worker; p]}
+
+/ Private: the progress fields the status file carries, zero before the run
+/ has made any.
+/ @param worker the worker's name
+/ @return dict of cursor, rows_published and windows_completed
+progress_now:{[worker]
+    d:`cursor`rows_published`windows_completed!(0Np;0;0);
+    p:@[read_state[worker;];`progress;{[e] ()!()}];
+    $[99h=type p; d,(key[d] inter key p)#p; d]}
+
+/ Private: write this run's status.
+/ .
+/ A new run's `starting` after one that never reached an outcome - killed,
+/ or crashed past every handler - records that run as failed first. The file
+/ still reads `starting or `running for it, and .qetl.status refuses either
+/ going straight to `starting, rightly: a run that died must not quietly read
+/ as one that is beginning. So the death is written down, and then the start.
+/ @param worker the worker's name
+/ @param state one of .qetl.status.status_states
+/ @param err the error, "" unless state is `failed
+report:{[worker;state;err]
+    id:instance worker;
+    if[(state~`starting) and (.qetl.status.previous_state id) in `starting`running;
+        .qetl.status.write_status[worker;id;`failed;spec worker;progress_now worker;
+            "the previous run never recorded an outcome - it was killed or crashed"]];
+    .qetl.status.write_status[worker;id;state;spec worker;progress_now worker;err]}
+
+/ Private: record a failure, never throwing - it runs on the error path, and
+/ a status write that fails there must not replace the error being reported.
+/ @param worker the worker's name
+/ @param e the error, as caught
+report_failure:{[worker;e]
+    msg:$[10h=type e; e; -11h=type e; string e; .Q.s1 e];
+    @[{[a] report . a};(worker;`failed;$[count msg; msg; "failed"]);
+      {[worker;e2] .qetl.log.err[worker;"could not record the failure in the status file";enlist[`error]!enlist e2]}[worker]]}
 
 / Private: every check that needs neither a ledger nor the source - the
 / run's spec, the worker's contract, the source's fixture, the conflict
@@ -496,6 +550,7 @@ init_body:{[worker;run_spec]
     / here, in a live path, rather than leaving a checker that never fires.
     .qetl.hb.attach[];
     .qetl.hb.beat[worker;`starting];
+    report[worker;`starting;""];
 
     .qetl.job.bounded.state.acquire_lock worker;
 
@@ -717,6 +772,7 @@ checkpoint:{[worker;cursor] .qetl.job.bounded.state.save_checkpoint[worker;spec 
 / @return the run's result dictionary
 run:{[worker]
     r:@[{[w] (1b; run_body w)};worker;{[e] (0b;e)}];
+    if[not first r; report_failure[worker;last r]];
     cleanup worker;
     if[not first r; 'last r];
     last r}
@@ -770,6 +826,7 @@ run_body:{[worker]
         .qetl.log.info[worker;"idle - every window in the range is already covered at this source_version";
             `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
         .qetl.hb.beat[worker;`idle];
+        report[worker;`idle;""];
         / Finish what recover_unfinished found, which is the only thing an
         / idle run has to do - and only then, so an idle run with nothing to
         / repair does not ask the HDB to reload for nothing.
@@ -788,6 +845,7 @@ run_body:{[worker]
     / recording it.
     write_state[worker;`progress;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np)];
     .qetl.hb.beat[worker;`running];
+    report[worker;`running;""];
     do_window[worker] each windows;
     / The io manager's end-of-run step, after the LAST window and whatever
     / its outcome: a window that failed wrote nothing, but the ones that
@@ -808,6 +866,11 @@ run_body:{[worker]
     / stuck mid-window, which is the case a status file cannot show - it
     / says `running` and keeps saying it.
     .qetl.hb.beat[worker;result`state];
+    / `partial is a failure to an orchestrator - exit_code says so too - and
+    / the status file has no state between completed and failed.
+    report[worker;$[`completed~result`state; `completed; `failed];
+        $[`completed~result`state; "";
+          string[p`windows_failed]," of ",string[count windows]," window(s) failed - they stay uncovered, so a re-run retries them"]];
     end_run[result`state;run_counts[count windows;p`windows_completed;p`windows_failed;p`rows_published]];
     / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
