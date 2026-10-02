@@ -126,14 +126,6 @@ jobs:
             echo "::warning::No KDB-X on this runner; the contract surface in docs/reference/surfaces/current/ was NOT checked. Run 'uv run python scripts/generate/contract_surface.py check' locally before merging."
             echo "The contract surface (docs/reference/surfaces/current/) was not checked: no KDB-X on this runner. The contract-surface pre-commit hook checks it locally." >> "$GITHUB_STEP_SUMMARY"
           fi
-      - name: Check docs/man.q matches the source qDoc comments
-        # WP8 (#146): the plan says keep source documentation authoritative
-        # and REGENERATE derived docs. man.q calls itself generated on line 1
-        # but had no generator, so it had fallen from covering the library to
-        # covering 78 of 348 public functions - and nobody noticed, because
-        # until recently it did not load at all.
-        if: ${{ !cancelled() }}
-        run: python3 scripts/generate/generate_man_registry.py --check
       - name: Check the ETL core does not depend on its declarations
         # The split makes core/ framework and sources//workers/ declarations; that
         # is the property that buys - a new source needs no core change.
@@ -143,8 +135,8 @@ jobs:
         run: python3 scripts/gates/check_etl_layering.py --check
       - name: Check the rendered diagrams match their d2 sources
         # An .svg committed beside its .d2 is a derived artefact, and this
-        # tree knows what happens to those without a gate - man.q called
-        # itself generated while covering 78 of 348 functions. Skips with a
+        # tree knows what happens to those without a gate - docs/man.q once
+        # called itself generated while covering 78 of 348 functions. Skips with a
         # notice when d2 is absent or is a different version, since the
         # bytes are only comparable for one renderer (see the script).
         if: ${{ !cancelled() }}

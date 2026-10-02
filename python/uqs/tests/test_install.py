@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs import paths as stack_paths
 from uqs.cli import install as cli_install
+from uqs.cli.regenerate import _DERIVED
 from uqs.paths import SOURCE_DIR, STREAM_DIR, TABLES_FILE, WORKER_DIR
 from uqs.stack import install
 from uqs.stack.install import Kind, Mode, Status
@@ -138,7 +139,8 @@ def cli_repo(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(
         cli_install,
         "_regenerate_derived",
-        lambda _root: [subprocess.CompletedProcess([], 0, "", "")] * 2,
+        # One result per derived script: the CLI pairs them strictly.
+        lambda _root: [subprocess.CompletedProcess([], 0, "", "")] * len(_DERIVED),
     )
     return repo
 

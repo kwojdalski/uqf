@@ -64,9 +64,6 @@ PROCESS_PORTS_FILE = PROCESS_SCRIPTS_DIR / "process_ports.csv"
 #: src/etl/generated/pipeline_dag.q). CI runs it with --check, so a registry
 #: edit that is not followed by this fails the build.
 OPERATIONAL_DOCS_SCRIPT = Path("scripts/generate/generate_operational_docs.py")
-#: Regenerates docs/man.q from the qDoc blocks under src/, which a scaffolded
-#: q file adds to. Also run by CI with --check.
-MAN_REGISTRY_SCRIPT = Path("scripts/generate/generate_man_registry.py")
 CONTRACT_SURFACE_SCRIPT = Path("scripts/generate/contract_surface.py")
 
 #: This package. Spelled here rather than as a string literal in the modules

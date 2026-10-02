@@ -207,7 +207,6 @@ removed or moved function breaks three generated artefacts:
 ```bash
 scripts/test.py q-unit
 scripts/test.py python
-uv run python scripts/generate/generate_man_registry.py     # man.q records every name
 uv run python scripts/generate/contract_surface.py export
 ```
 

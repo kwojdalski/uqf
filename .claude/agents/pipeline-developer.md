@@ -146,9 +146,8 @@ Two registry facts that changed under you, and that a job no longer states:
 
 - Every public function gets a qDoc block immediately above it --- no blank line
   between --- with `@param`, `@return`, `@throws` if it can throw, and `@eg`.
-  `docs/man.q` is **generated** from these by
-  `scripts/generate/generate_man_registry.py`; run it (without `--check`) after
-  adding or changing one, and commit the result.
+  `docs/man.q` reads these when it loads (`.man.scansrc`), so there is nothing
+  to regenerate or commit.
 - `lower_snake_case` throughout. Framework modules nest under `.qetl`;
   declarations live under `.qpipe.source`, `.qpipe.transform` and `.qpipe.job`.
   Both job modes share `.qpipe.job.<name>` and must have unique names. Shared
@@ -178,7 +177,7 @@ Two registry facts that changed under you, and that a job no longer states:
   visible --- **never through a pipe**, because `cmd | tail` reports `tail`'s
   status and a failing gate reads as a pass: `check_q_traps.py`,
   `check_etl_layering.py`, `contract_surface.py check`,
-  `generate_man_registry.py --check`, `generate_operational_docs.py --check`.
+  `generate_operational_docs.py --check`.
 
 ## Rules
 

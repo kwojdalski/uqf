@@ -2,8 +2,8 @@
 """Check that the q functions our prose cites actually exist, and are callable
 with the argument count shown.
 
-There were already gates keeping the GENERATED documentation honest -
-``generate_man_registry.py --check`` holds ``docs/man.q`` to the qDoc blocks,
+There were already gates keeping the DERIVED documentation honest -
+``docs/man.q`` reads the qDoc blocks when it loads, and
 ``check_env_reference.py`` holds the environment page to the code that reads
 each variable. Nothing held the *prose* to anything. A guide could name
 ``.qetl.coverage.stage_coverage``, a function that has never existed, and every gate

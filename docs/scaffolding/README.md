@@ -117,8 +117,7 @@ skill](../../.claude/skills/new-job/SKILL.md):
 
 1. the handler body
 2. the test, replacing the stub entirely
-3. the docstrings --- the `man-registry` pre-commit hook regenerates
-   `docs/man.q` from them
+3. the docstrings --- `docs/man.q` reads them when it loads
 
 Then `scripts/test.py q-unit`, and `scripts/test.py stack-smoke` against a real
 stack, which is the only thing that proves the wiring.

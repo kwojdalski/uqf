@@ -30,4 +30,4 @@ are a real export of a real contract and CI keeps them current, which is the
 cheap half of the bargain.
 
 Function-level documentation is not here: every `src/**/*.q` function carries a
-qDoc block, collected into [`../man.q`](../man.q) by `generate_man_registry.py`.
+qDoc block, which [`../man.q`](../man.q) reads into its registry when it loads.

@@ -44,9 +44,8 @@ or an architecture note, and only its purpose decides where it goes.
 - [`faq.md`](faq.md) --- short answers to the questions asked most, starting
   with how this differs from plain TorQ, each pointing to the page that has the
   long one.
-- [`man.q`](man.q) --- the function registry, generated from the qDoc comments
-  under `src/` by `scripts/generate/generate_man_registry.py`. CI fails when it
-  is out of date.
+- [`man.q`](man.q) --- the function registry. It reads the qDoc comments under
+  `src/` when it loads, so it cannot fall out of date.
 - [`presentation/`](presentation/uqf.qmd) --- a short Quarto deck, mostly these
   diagrams, on how uqf differs from running TorQ directly. Render it with
   `quarto render docs/presentation/uqf.qmd`; the HTML is not committed.
