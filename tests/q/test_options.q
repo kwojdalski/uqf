@@ -152,23 +152,23 @@ test_greek_dispatchers_are_exactly_their_pairs:{[t]
     .qunit.assertTrue[.qopt.gk_rho[s;k;rd;rf;sigma;tt;1b]~.qopt.gk_rho_call[s;k;rd;rf;sigma;tt];"gk_rho[...;1b] is gk_rho_call"];
     .qunit.assertTrue[.qopt.gk_rho[s;k;rd;rf;sigma;tt;0b]~.qopt.gk_rho_put[s;k;rd;rf;sigma;tt];"gk_rho[...;0b] is gk_rho_put"]};
 
-/ is_call is an ATOM in all four, and the rest of the row vectorises around
-/ it - `$` is q's scalar conditional, not the vector one. That is gk_price's
-/ behaviour and the dispatchers copy it deliberately, so the family stays one
-/ pattern. Worth pinning both halves: #419 was filed saying a book with an
-/ is_call COLUMN could already be priced in one call, and it cannot - not by
-/ gk_price either. Whoever lifts that limit should lift it for all four, and
-/ this test is what will tell them the second half exists.
-test_dispatchers_vectorise_every_argument_except_is_call:{[t]
+/ is_call vectorises with the rest of the row in all four dispatchers: `?`,
+/ q's vector conditional, where `$` (scalar only) threw 'type for a flag
+/ per row. #419 was filed assuming a book with an is_call COLUMN could be
+/ priced in one call; now it can, and all four moved together, as this
+/ test's earlier version asked of whoever lifted the limit.
+test_dispatchers_vectorise_every_argument_including_is_call:{[t]
     s:1.10 1.10 0.90;k:1.12 1.12 0.95;rd:0.045 0.045 0.02;rf:0.02 0.02 0.05;
-    sigma:0.10 0.10 0.15;tt:0.75 0.75 0.25;
+    sigma:0.10 0.10 0.15;tt:0.75 0.75 0.25;flags:101b;
     d:.qopt.gk_delta[s;k;rd;rf;sigma;tt;1b];
     .qunit.assertEquals[count d;3;"one delta per row, with a scalar is_call"];
     .testutil.assertApprox[d 2;.qopt.gk_delta_call[0.90;0.95;0.02;0.05;0.15;0.25];1e-12;"and each row is its own pair's answer"];
-    .qunit.assertThrows[{.qopt.gk_delta[1.10 1.10;1.12 1.12;0.045 0.045;0.02 0.02;0.10 0.10;0.75 0.75;x]};10b;
-        "type";"a vector is_call is a 'type error, exactly as it is for gk_price"];
-    .qunit.assertThrows[{.qopt.gk_price[1.10 1.10;1.12 1.12;0.045 0.045;0.02 0.02;0.10 0.10;0.75 0.75;x]};10b;
-        "type";"gk_price is the one being copied, and has the same limit"]};
+    expect:{[c;p;flags;args] ?[flags;c . args;p . args]};
+    args:(s;k;rd;rf;sigma;tt);
+    .qunit.assertEquals[.qopt.gk_price[s;k;rd;rf;sigma;tt;flags];expect[.qopt.gk_call;.qopt.gk_put;flags;args];"gk_price: a flag per row"];
+    .qunit.assertEquals[.qopt.gk_delta[s;k;rd;rf;sigma;tt;flags];expect[.qopt.gk_delta_call;.qopt.gk_delta_put;flags;args];"gk_delta: a flag per row"];
+    .qunit.assertEquals[.qopt.gk_theta[s;k;rd;rf;sigma;tt;flags];expect[.qopt.gk_theta_call;.qopt.gk_theta_put;flags;args];"gk_theta: a flag per row"];
+    .qunit.assertEquals[.qopt.gk_rho[s;k;rd;rf;sigma;tt;flags];expect[.qopt.gk_rho_call;.qopt.gk_rho_put;flags;args];"gk_rho: a flag per row"]};
 
 / Parity holds through the dispatcher, not just through the pair - the check
 / that would catch the branches being wired the wrong way round.
@@ -176,5 +176,11 @@ test_delta_dispatcher_respects_put_call_parity:{[t]
     s:1.10;k:1.12;rd:0.045;rf:0.02;sigma:0.10;tt:0.75;
     lhs:.qopt.gk_delta[s;k;rd;rf;sigma;tt;1b]-.qopt.gk_delta[s;k;rd;rf;sigma;tt;0b];
     .testutil.assertApprox[lhs;.qrates.df_cont[rf;tt];1e-9;"deltaCall-deltaPut=exp(-rf*T) through the dispatcher"]};
+
+
+test_implied_vol_of_an_impossible_price_is_null:{[t]
+    / Below what any volatility produces - here under the forward intrinsic -
+    / bisection used to return its lower bound (1e-05) as if it were an answer.
+    .qunit.assertTrue[null .qopt.implied_vol[0.0001;1.25;1.10;0.045;0.02;0.75;1b];"no vol, so null"]};
 
 \d .

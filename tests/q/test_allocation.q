@@ -350,7 +350,7 @@ test_summary_groups_the_ledger:{[t]
 test_unrealised_marks_what_is_still_open:{[t]
     left:.qalloc.residual[mk_two_lots[];`fifo];
     r:.qalloc.unrealised[left; enlist[`EURUSD]!enlist 5.0];
-    .qunit.assertEquals[exec unrealised_pnl from r; enlist 3000000f;
+    .qunit.assertEquals[exec unrealized_pnl from r; enlist 3000000f;
         "the open 1mm lot at 2.0, marked at 5.0"]};
 
 / ------------------------------------------------------- THE REGISTRY

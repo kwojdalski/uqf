@@ -77,7 +77,9 @@ var_parametric:{[notional;vol;t;confidence]
 var_historical:{[pnl_series;confidence]
     n:count pnl_series;
     sorted:asc pnl_series;
-    raw_idx:floor (1-confidence)*n;
+    / The epsilon is for floating point: (1-0.9)*10 is 0.9999999999999998,
+    / and floor of that picked the worst outcome instead of the next one.
+    raw_idx:floor 1e-9+(1-confidence)*n;
     clamped_low:0|raw_idx;
     idx:(n-1)&clamped_low;
     neg sorted idx};

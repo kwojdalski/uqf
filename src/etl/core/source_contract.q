@@ -765,6 +765,7 @@ local_decode:{[root;c;v]
     f:` sv root,dom;
     if[()~key f; '"local: column ",string[c]," is enumerated against `",string[dom],", but ",(1_string f)," does not exist"];
     vals:get f;
+    if[11h<>type vals; '"local: ",(1_string f)," is not a symbol list - not a domain file"];
     ix:"j"$v;
     if[(count ix) and (max ix)>=count vals;
         '"local: column ",string[c]," needs ",string[1+max ix]," entries of `",string[dom],", and ",(1_string f)," holds ",string count vals];
@@ -779,7 +780,11 @@ local_partition:{[root;table;d]
     if[()~key hsym `$base,"/.d"; :()];
     cs:get hsym `$base,"/.d";
     vals:{[root;base;c] v:get hsym `$base,"/",string c;
-        $[(type v) within 20 76h; local_decode[root;c;v]; v]}[root;base] each cs;
+        / 77h: a nested column of enumerations (a symbol list per row), each
+        / row decoded on its own.
+        $[(type v) within 20 76h; local_decode[root;c;v];
+          77h=type v; {[root;c;x] local_decode[root;c;x]}[root;c] each v;
+          v]}[root;base] each cs;
     `date xcols update date:d from flip cs!vals}
 
 / The rows of `table` from every date partition that [from_ts;to_ts) touches

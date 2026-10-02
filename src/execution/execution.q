@@ -55,9 +55,11 @@ markout_at_horizons:{[trades;quotes;horizons]
     sorted_quotes:`sym`time xasc quotes;
     num_trades:count trades;
     num_horizons:count horizon_list;
-    pairs:(til num_trades) cross til num_horizons;
-    trade_idx:pairs[;0];
-    horizon_idx:pairs[;1];
+    / Built from typed vectors, not `cross` - (til 0) cross ... is a general
+    / empty list, and indexing it threw on zero trades. Trade-major order,
+    / as cross gave: trade 0 at every horizon, then trade 1.
+    trade_idx:"j"$raze num_horizons#'til num_trades;
+    horizon_idx:(num_trades*num_horizons)#til num_horizons;
     exp_trades:trades trade_idx;
     exp_horizons:horizon_list horizon_idx;
     target_time:exp_trades[`time]+exp_horizons;

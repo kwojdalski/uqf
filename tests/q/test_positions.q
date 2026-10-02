@@ -220,6 +220,15 @@ mk_quotes_table:{[dummy]
     unsorted:([] time;sym:`AUDUSD`EURUSD`EURPLN),'(mk_book each 0.6550 1.0850 4.2500);
     `sym`time xasc unsorted};
 
+test_ccy_exposure_in_values_a_book_with_a_flat_position:{[t]
+    / Bought and sold back: the flat row stays in the book, and pricing it at
+    / size 0 threw 'sweep_price: size must be positive.
+    quotes:mk_quotes_table[::];
+    b:.qpos.apply_fill[.qpos.empty_book[];`AUDUSD;1000000;0.6550;1];
+    b:.qpos.apply_fill[b;`AUDUSD;1000000;0.6560;-1];
+    r:.qpos.ccy_exposure_in[b;quotes;`USD;2026.01.02D00:00:00.000000000];
+    .qunit.assertEquals[exec reporting_amount from r where ccy=`AUD;enlist 0f;"a flat currency reports zero, not an error"]};
+
 test_ccy_exposure_in_direct_pair_converts_at_the_chains_own_mid:{[t]
     quotes:mk_quotes_table[::];
     b:.qpos.apply_fill[.qpos.empty_book[];`AUDUSD;1000000;0.6550;1];

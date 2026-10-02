@@ -162,4 +162,22 @@ tree_namespaces:{[]
     ns:ns,`$".qpipe.job.",/:string .testutil.etl_declaration_names["src/etl/workers"];
     asc distinct ns}
 
+
+/ Every log line `f` writes, as (level;id;text;fields) with the scoped context
+/ merged in as the real .qetl.log.line merges it - with TRC switched on for
+/ the call when `trace` is 1b. The real line function and the trace switch
+/ are put back however `f` ends, thrown or not: a recorder left installed
+/ swallows every log line of every suite after it.
+/ @param trace 1b to switch TRC on for the call
+/ @param f a niladic function
+/ @return the lines, in order
+captured_log:{[trace;f]
+    keep:.qetl.log.line; was:.qetl.log.trace_enabled;
+    if[trace; .qetl.log.trace 1b];
+    `.testutil.lines set ();
+    .qetl.log.line:{[level;id;text;fields] .testutil.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
+    @[f;::;::];
+    .qetl.log.line:keep; .qetl.log.trace was;
+    .testutil.lines}
+
 \d .
