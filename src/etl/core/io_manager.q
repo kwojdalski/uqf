@@ -455,7 +455,10 @@ sweep_staging:{[root;target]
         $[()~key hsym `$live;
             [system"mkdir -p ",(neg 1+count string pr 1)_live; system"mv ",old," ",live; 1];
             [system"rm -rf ",old; 0]]}[root] each pairs;
-    sum restored}
+    / "j"$ before sum: with nothing to restore, `each` over no pairs gives a
+    / general empty list, `sum` leaves it `()`, and recover's `restored>0`
+    / threw 'type - every recover of a table with no old staging failed.
+    sum "j"$restored}
 
 / Private: trim a partition whose columns have different lengths back to the
 / shortest, the state a kill part way through an APPEND leaves (write_hdb

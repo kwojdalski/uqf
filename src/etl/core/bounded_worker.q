@@ -881,6 +881,13 @@ run_body:{[worker]
     / execution that dies mid-flight leaves a row reading `running` rather
     / than leaving no trace - see .qetl.run's header.
     begin_run[worker];
+    / Every run declares its own start. init writes `starting once, but a
+    / second run in the same process - a rerun that finds nothing to do, or
+    / an operator calling run[] again - otherwise went straight from the
+    / last run's `completed to `idle or `running, which .qetl.status rightly
+    / refuses: a finished run must not quietly read as one still going.
+    if[(.qetl.status.previous_state instance worker) in `idle`completed`failed;
+        report[worker;`starting;""]];
     recovered:recover_unfinished worker;
     replayed:replay_reactions worker;
     cursor:.qetl.job.bounded.state.load_checkpoint[worker;spec worker];
