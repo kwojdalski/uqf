@@ -10,10 +10,13 @@ every CI run has.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+from uqs.interpreter import q_impl, q_interpreter
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "dev" / "doc_examples.py"
 _spec = importlib.util.spec_from_file_location("uqf_doc_examples", SCRIPT)
@@ -64,10 +67,12 @@ def test_a_marker_that_says_nothing_runnable_is_refused(text, message):
         docex.blocks_in(text, DOC)
 
 
-def test_a_transcript_checks_single_line_output_and_only_runs_the_rest():
+def test_a_transcript_checks_a_literal_and_compares_a_display_as_text():
     body = "q)1+1\n2\nq)([] a:1 2)\na\n-\n1\n2\nq)`x set 3\n"
     assert docex.transcript_q(body) == (
-        '.docex.check["1+1";"2"];\n.docex.check["([] a:1 2)";""];\n.docex.check["`x set 3";""];\n'
+        '.docex.check["1+1";"2"];\n'
+        '.docex.display["([] a:1 2)";(enlist "a";enlist "-";enlist "1";enlist "2")];\n'
+        '.docex.check["`x set 3";""];\n'
     )
 
 
@@ -111,3 +116,72 @@ def test_a_session_loads_only_what_its_blocks_use(tmp_path, body, loads):
     text = docex.session_q([block], [tmp_path / "b.q"])
     loaded = [line.removeprefix("\\l ") for line in text.splitlines() if line.startswith("\\l ")]
     assert [p for p in loaded if p in ("src/init.q", "src/etl/init.q")] == loads
+
+
+# ------------------------------------------- a table's display, run in q (#515)
+#
+# The comparison itself is q (`.docex.display`), so these need an interpreter -
+# KDB-X, or PeachQ when UQF_Q_IMPL says so. Without one they skip; the q-docs
+# lane still runs the docs' own table transcripts every CI run.
+
+TABLE = """q)([] sym:`EURUSD`GBPUSD; px:1.1 1.27; n:1 2)
+sym    px   n
+-------------
+EURUSD 1.1  1
+GBPUSD 1.27 2
+"""
+
+
+def _run_transcript(tmp_path: Path, body: str) -> subprocess.CompletedProcess[str]:
+    q = q_interpreter()
+    if q is None:
+        pytest.skip("no q interpreter: set QCMD or put q on PATH")
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "t.md").write_text(f"<!-- q-example: transcript -->\n```q\n{body}```\n")
+    out = tmp_path / "out"
+    out.mkdir(exist_ok=True)
+    sessions, _ = docex.write_sessions(tmp_path, out, q_impl())
+    return subprocess.run(
+        [str(q), str(sessions[0]), "-q"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+
+
+def test_a_table_transcript_that_matches_passes(tmp_path):
+    result = _run_transcript(tmp_path, TABLE)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ok docs/t.md: 1 block(s)" in result.stdout
+
+
+def test_a_changed_cell_fails_naming_the_line(tmp_path):
+    result = _run_transcript(tmp_path, TABLE.replace("GBPUSD 1.27 2", "GBPUSD 1.28 2"))
+    assert result.returncode != 0
+    assert 'line 4 shows "GBPUSD 1.27 2", the doc shows "GBPUSD 1.28 2"' in result.stderr
+
+
+def test_a_missing_row_fails(tmp_path):
+    result = _run_transcript(tmp_path, TABLE.replace("GBPUSD 1.27 2\n", ""))
+    assert result.returncode != 0
+    assert 'line 4 shows "GBPUSD 1.27 2", the doc shows "(nothing)"' in result.stderr
+
+
+def test_an_elided_column_passes(tmp_path):
+    elided = TABLE.replace("EURUSD 1.1  1", "EURUSD ...").replace("GBPUSD 1.27 2", "GBPUSD 1...")
+    result = _run_transcript(tmp_path, elided)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_an_elision_still_checks_what_comes_before_it(tmp_path):
+    result = _run_transcript(tmp_path, TABLE.replace("GBPUSD 1.27 2", "USDJPY ..."))
+    assert result.returncode != 0
+    assert 'the doc shows "USDJPY ..."' in result.stderr
+
+
+def test_an_elision_longer_than_the_line_does_not_wrap_round(tmp_path):
+    # `#` past the end of a string pads with its start; `sublist` must be used.
+    result = _run_transcript(tmp_path, TABLE.replace("EURUSD 1.1  1", "EURUSD 1.1  1  EU..."))
+    assert result.returncode != 0

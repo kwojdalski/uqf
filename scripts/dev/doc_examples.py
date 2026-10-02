@@ -10,8 +10,12 @@ HTML comment above the fence, invisible when rendered:
     <!-- q-example: run -->          run the block; any error fails
     <!-- q-example: transcript -->   run each `q)` line; where one output line
                                      follows, it is a q literal the result must
-                                     match (`~`). Longer output is display
-                                     formatting and is not compared
+                                     match (`~`). Longer output - a table, a
+                                     dictionary - is the console display: the
+                                     result is rendered with `.Q.s` and compared
+                                     line by line, trailing spaces trimmed, and
+                                     `...` in a shown line matches the rest of
+                                     that line
     ... kdbx-only: REASON            appended to either: the block runs on
                                      KDB-X only, with the reason it cannot on
                                      PeachQ
@@ -122,20 +126,49 @@ def _q_string(text: str) -> str:
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def _q_strings(lines: list[str]) -> str:
+    """A q list of strings, each one a string even at one character."""
+    return "(" + ";".join(("enlist " if len(s) == 1 else "") + _q_string(s) for s in lines) + ")"
+
+
 def transcript_q(body: str) -> str:
-    """A transcript as q: each `q)` line checked against the one output line
-    that follows it, if exactly one does."""
+    """A transcript as q: each `q)` line checked against what follows it.
+
+    One output line is a q literal, compared with `~` - exact, and blind to
+    console formatting. Two or more are the console display of a table or
+    dictionary, compared as text by `.docex.display`.
+    """
     steps: list[tuple[str, list[str]]] = []
     for line in body.splitlines():
         if _PROMPT.match(line):
             steps.append((_PROMPT.sub("", line, count=1).strip(), []))
         elif steps and line.strip():
-            steps[-1][1].append(line.strip())
+            steps[-1][1].append(line.rstrip())
     out = []
     for expr, shown in steps:
-        expected = shown[0] if len(shown) == 1 else ""
-        out.append(f".docex.check[{_q_string(expr)};{_q_string(expected)}];")
+        if len(shown) > 1:
+            out.append(f".docex.display[{_q_string(expr)};{_q_strings(shown)}];")
+        else:
+            expected = shown[0].strip() if shown else ""
+            out.append(f".docex.check[{_q_string(expr)};{_q_string(expected)}];")
     return "\n".join(out) + "\n"
+
+
+#: The q side of a transcript check. `display` renders with `.Q.s`, drops blank
+#: lines (the shown output has none: Markdown would end the block's paragraph
+#: flow) and trims trailing spaces, then names the first line that differs. A
+#: shown line holding `...` must only match up to it - `sublist`, not `#`,
+#: because `#` past the end of a string wraps round and pads with its start.
+CHECK_Q = (
+    ".docex.check:{[e;x] r:value e; if[count x; if[not r~value x;",
+    '    \'"`",e,"` gave ",(-3!r),", the doc shows ",x]]};',
+    '.docex.same:{[s;l] $[count i:s ss "..."; (i0#s)~(i0:first i) sublist l; s~l]};',
+    '.docex.display:{[e;x] a:rtrim each "\\n" vs .Q.s value e; a:a where 0<count each a;',
+    '    n:count[a]|count x; d:where not .docex.same\'[n#x,n#enlist"";n#a,n#enlist""];',
+    '    if[count d; i:first d; \'"`",e,"` line ",string[1+i]," shows ",',
+    '        (-3!$[i<count a;a i;"(nothing)"]),", the doc shows ",',
+    '        -3!$[i<count x;x i;"(nothing)"]]};',
+)
 
 
 def session_q(blocks: list[Block], block_files: list[Path]) -> str:
@@ -149,8 +182,7 @@ def session_q(blocks: list[Block], block_files: list[Path]) -> str:
     head += [
         '.docex.where:"";',
         '.docex.fail:{-2 "FAIL ",.docex.where,": ",x; exit 1};',
-        ".docex.check:{[e;x] r:value e; if[count x; if[not r~value x;",
-        '    \'"`",e,"` gave ",(-3!r),", the doc shows ",x]]};',
+        *CHECK_Q,
     ]
     body = []
     for block, file in zip(blocks, block_files, strict=True):

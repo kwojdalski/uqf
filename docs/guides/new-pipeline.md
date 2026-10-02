@@ -427,6 +427,7 @@ the file loaded, its tests never ran, and the suite stayed green.
 
 The job graph adopts the worker from its own declaration:
 
+<!-- q-example: transcript kdbx-only: the ETL stack does not load on PeachQ v0.88 - it rejects the nested namespace `\d .qetl.status` (src/etl/core/status.q:34) -->
 ```q
 q).qetl.dag.adopt_workers[];
 q).qetl.dag.def `fx_rates_backfill
