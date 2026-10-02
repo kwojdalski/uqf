@@ -97,7 +97,42 @@ switched:{[level] $[level=`DBG; debug_enabled; level=`TRC; trace_enabled; 1b]}
 / always logs (worker;window;rows) produces columns a human can scan.
 render:{[fields]
     if[0=count fields; :""];
-    " " sv {[k;v] string[k],"=",.Q.s1 v}'[key fields;value fields]}
+    " " sv {[k;v] string[k],"=",value1 v}'[key fields;value fields]}
+
+/ Private: one field's value as q text, IN FULL.
+/ .
+/ Not bare .Q.s1: on KDB-X it stops at the console width (\c, 80 columns by
+/ default) and ends the text with "..", so a traced SQL statement or query
+/ lambda was logged cut off at 79 characters - the one place the whole
+/ query was meant to be visible. A string is escaped here, with no limit;
+/ anything else is rendered with the console widened to its 2000-column
+/ maximum for the one call, and put back even if rendering throws.
+/ @param v any value
+/ @return its q literal, as .Q.s1 spells it
+value1:{[v]
+    if[10h=type v; :quoted v];
+    c:@[system;"c";{[e] ()}];
+    if[2<>count c; :.Q.s1 v];
+    @[system;"c ",string[c 0]," 2000";::];
+    r:@[.Q.s1;v;{[e] "'",e}];
+    @[system;"c "," " sv string c;::];
+    r}
+
+/ Private: a string as a q string literal - quoted, with \ " newline,
+/ carriage return and tab escaped as q writes them, and every other byte
+/ outside printable ASCII as a three-digit octal escape - exactly as -3!
+/ spells it, without its console-width cut.
+/ @param s a string
+/ @return the literal, e.g. "\"a\\nb\""
+quoted:{[s]
+    esc:{[ch] i:`int$ch;
+        $[ch in "\\\""; "\\",ch;
+          ch="\n"; "\\n";
+          ch="\r"; "\\r";
+          ch="\t"; "\\t";
+          (i<32) or i>126; "\\",raze string 8 8 8 vs i;
+          enlist ch]};
+    "\"",(raze esc each s),"\""}
 
 / Private: is TorQ's logging loaded?
 / .

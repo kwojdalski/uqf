@@ -407,6 +407,7 @@ qetl.log,info,function,3,id text fields
 qetl.log,levels,value,,
 qetl.log,line,function,4,level id text fields
 qetl.log,quiet,value,,
+qetl.log,quoted,function,1,s
 qetl.log,register,function,1,
 qetl.log,render,function,1,fields
 qetl.log,switched,function,1,level
@@ -414,6 +415,7 @@ qetl.log,torq_loaded,function,1,
 qetl.log,trace,function,1,on
 qetl.log,trace_enabled,value,,
 qetl.log,trc,function,3,id text fields
+qetl.log,value1,function,1,v
 qetl.log,warn,function,3,id text fields
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
