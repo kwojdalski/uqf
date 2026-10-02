@@ -331,3 +331,32 @@ def test_the_cli_passes_the_mode_through(monkeypatch):
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert seen == {"mode": "plan"}
+
+
+def test_a_given_version_is_used_as_is():
+    assert backfill.resolve_version("demo_deals_backfill", "v9") == "v9"
+
+
+def test_a_worker_with_a_declared_default_needs_no_version():
+    """The event tape is append-only, so its worker declares v1."""
+    assert backfill.resolve_version("demo_events_backfill", None) == "v1"
+
+
+def test_a_worker_with_no_default_refuses_a_missing_version():
+    """Deals can be restated upstream, so the release must be named."""
+    with pytest.raises(UqsError, match="declares no default source_version - pass --version"):
+        backfill.resolve_version("demo_deals_backfill", None)
+
+
+def test_the_cli_runs_without_version_for_a_worker_with_a_default(monkeypatch):
+    seen = {}
+
+    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
+        seen["version"] = version
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr(backfill, "start", fake)
+    argv = ["backfill", "demo_events_backfill", "--from", "2026-09-13", "--to", "2026-09-15"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert seen == {"version": "v1"}

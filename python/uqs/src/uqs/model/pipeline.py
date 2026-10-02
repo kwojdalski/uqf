@@ -144,6 +144,9 @@ class Pipeline:
     # sit apart from subscribe_to/publishes and never reach database.q.
     source: str | None = None
     dataset: str | None = None
+    # The source_version a run uses when `uqs backfill` is given no --version;
+    # None when the worker declares none, and then a run must name one.
+    default_version: str | None = None
 
     @property
     def proctype(self) -> str:

@@ -181,8 +181,10 @@ optional_cfg:`check`io`facts`partition
 / @param worker the worker's name
 / @param decl dict of source, dataset, width, transform, and optionally
 /   check, facts, partition, io, procname (default `<worker>1), note,
-/   on_conflict (default `upsert - see .qetl.io's CONFLICTS) and target_key
-/   (default the source's row_key - see require_target_key)
+/   on_conflict (default `upsert - see .qetl.io's CONFLICTS), target_key
+/   (default the source's row_key - see require_target_key) and
+/   source_version (the default release a run records coverage under; none
+/   by default, so a run must name one)
 / @throws error naming every missing or malformed field at once
 define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -257,6 +259,15 @@ define:{[worker;decl]
     if[not -11h=type oc;
         '"define: ",string[worker],"'s on_conflict must be a symbol, e.g. `upsert"];
     decl[`on_conflict]:.qetl.io.require_strategy oc;
+    / The source_version a run uses when it names none - for a source that is
+    / never restated, where every run would otherwise be told `v1 forever.
+    / ` declares no default, and then a run must name one: for a source that
+    / CAN be restated, a default would file the restatement under the old
+    / version, and every window would read as already covered.
+    dv:$[`source_version in key decl; decl`source_version; `];
+    if[not -11h=type dv;
+        '"define: ",string[worker],"'s source_version must be a symbol, e.g. `v1 - the release a run records coverage under when it names none"];
+    decl[`source_version]:dv;
     decl[`target_key]:require_target_key[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
@@ -331,6 +342,13 @@ require_target_key:{[worker;decl]
          " does not output (",(", " sv string out),")",
          $[`target_key in key decl;"";" - declare target_key in the output's column names"]];
     k}
+
+/ The source_version a run of `worker` uses when it names none, or ` when the
+/ worker declares no default and a run must name one.
+/ @param worker the worker's name
+/ @return a symbol
+/ @eg .qetl.job.bounded.default_version `demo_deals_backfill  ->  `
+default_version:{[worker] (def worker)`source_version}
 
 / Private: a config carrying every optional key, absent ones as (::).
 normalised:{[cfg]

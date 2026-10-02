@@ -179,6 +179,23 @@ test_define_refuses_an_unknown_on_conflict:{[t]
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_oc_worker;x]};(`ns`procname`note) _ d;
         "on_conflict must be one of *";"a typo fails the declaration, not the first window"]};
 
+/ A worker over a source that can be restated declares no default, so a run
+/ must name its release.
+test_a_worker_declares_no_default_source_version_unless_it_says_so:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.default_version `demo_deals_backfill;`;
+        "deals can be corrected upstream, so a run names its version"]};
+
+test_a_declared_default_source_version_is_kept:{[t]
+    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_sv;`v7)];
+    .qetl.job.bounded.define[`ddbftest_sv_worker;(`ns`procname`note) _ d];
+    .qunit.assertEquals[.qetl.job.bounded.default_version `ddbftest_sv_worker;`v7;
+        "a run that names no version records coverage under v7"]};
+
+test_define_refuses_a_source_version_that_is_not_a_symbol:{[t]
+    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_sv2;"v1")];
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_sv2_worker;x]};(`ns`procname`note) _ d;
+        "*source_version must be a symbol*";"a string is refused at declaration"]};
+
 test_the_target_key_defaults_to_the_source_row_key:{[t]
     .qunit.assertEquals[(.qetl.job.bounded.def `demo_deals_backfill)`target_key;enlist `deal_id;
         "a passthrough transform keeps the source's names, so the source key is the target key"]};

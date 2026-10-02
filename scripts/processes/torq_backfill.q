@@ -30,7 +30,8 @@
 / start line through torq.sh's own `-extras`:
 / .
 /   -worker   the worker name, e.g. demo_deals_backfill
-/   -version  the source_version to record coverage under
+/   -version  the source_version to record coverage under; optional when the
+/             worker declares a default source_version
 /   -from     inclusive lower bound, a q timestamp
 /   -to       exclusive upper bound
 / .
@@ -48,7 +49,8 @@
 /             any source is opened or anything written; dry_run fetches and
 /             writes nothing. `uqs backfill --mode` passes it.
 / .
-/ The first four are required and refused when absent. A backfill that defaulted a
+/ -worker, -from and -to are required and refused when absent, and -version
+/ unless the worker declares a default. A backfill that defaulted a
 / range would publish the wrong window and record it as covered, which is the
 / failure coverage exists to make impossible.
 / .
@@ -63,7 +65,7 @@
 
 / The flags this process reads. Listed so the refusal below can report every
 / missing one at once rather than over four restarts.
-required_flags:`worker`version`from`to
+required_flags:`worker`from`to
 
 / Refuse unless every required flag has a value, naming all that do not.
 / .Q.opt keeps each flag's words as a list of strings, so the value is the
@@ -90,8 +92,24 @@ spec_from_flags:{[opts]
     to_ts:"P"$f`to;
     if[null from_ts; '"torq_backfill: -from is not a timestamp: ",f`from];
     if[null to_ts;   '"torq_backfill: -to is not a timestamp: ",f`to];
-    `worker`spec!(`$f`worker;
-        `source_version`range_from`range_to!(`$f`version;from_ts;to_ts))}
+    worker:`$f`worker;
+    `worker`spec!(worker;
+        `source_version`range_from`range_to!(version_from_flags[opts;worker];from_ts;to_ts))}
+
+/ The source_version this run records coverage under: -version when given,
+/ else the worker's declared default, else a refusal - a worker that declares
+/ none is one whose source can be restated, and guessing the release there
+/ files a restatement under the old one.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @param worker the worker's name
+/ @return the version, a symbol
+/ @throws error when neither is there
+version_from_flags:{[opts;worker]
+    if[(`version in key opts) and 0<count opts`version; :`$first opts`version];
+    dv:.qetl.job.bounded.default_version worker;
+    if[null dv;
+        '"torq_backfill: missing -version - ",string[worker]," declares no default source_version, so a run must say which release of the source it records coverage under"];
+    dv}
 
 / Milliseconds since `t0`, for the timing fields every stage logs.
 / @param t0 a timestamp, as .z.p returned it
