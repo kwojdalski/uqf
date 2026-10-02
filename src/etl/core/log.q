@@ -186,8 +186,58 @@ enabled:{[level]
 / nothing. Wrapping the emit has no such ambiguity.
 line:{[level;id;text;fields]
     if[enabled level;
-        emit[level;id;$[0=count fields; text; text," ",render fields]]];
+        f:with_scope fields;
+        emit[level;id;$[0=count f; text; text," ",render f]]];
     }
+
+/ ------------------------------------------------------- SCOPED CONTEXT
+/ .
+/ What a line is ABOUT - the run, worker, source, window and attempt it was
+/ logged inside - added to every line logged in that scope, so a request
+/ trace, the fetch that made it, the sidecar's own normalisation and the
+/ write after it can all be put side by side. A line's own field of the
+/ same name wins; context fields follow the line's own.
+/ .
+/ Set by with_context around a piece of work and restored when it ends,
+/ whether it returned or threw, so one worker's or window's context can
+/ never leak into the next.
+
+context:()!()
+
+/ Private: a line's fields, then whatever context it does not set itself.
+with_scope:{[fields]
+    if[0=count context; :fields];
+    f:$[0=count fields; ()!(); fields];
+    f,(key[context] except key f)#context}
+
+/ Run f[args] with `ctx` added to the context, and restore the context
+/ afterwards - on success or on error, which is rethrown.
+/ @param ctx a dict of fields, e.g. `worker`source!(`w;`s)
+/ @param f the function to run
+/ @param args its arguments, as a list; enlist(::) for a niladic f
+/ @return what f returns
+/ @eg .qetl.log.with_context[enlist[`worker]!enlist `w;{x+1};enlist 1] -> 2
+with_context:{[ctx;f;args]
+    / `outer`, not `prev`: prev is a q builtin, and assigning it throws
+    / 'assign when the file loads.
+    outer:context;
+    context::outer,ctx;
+    restore:{[outer;e] .qetl.log.context:outer; 'e}[outer];
+    / A niladic f through @, not `.`: on KDB-X `.[f;enlist ::;handler]` throws
+    / an UNCATCHABLE 'type - the handler never runs, and the context leaked
+    / into every line after it.
+    / Spotted by type: `enlist ::` is not a one-item list of :: but a bare
+    / 101h, so (::)~first args is false for it.
+    niladic:(101h=type args) or (1=count args) and 101h=type first args;
+    r:$[niladic; @[f;::;restore]; .[f;args;restore]];
+    context::outer;
+    r}
+
+/ Number one outgoing request, so its sent, returned and failed lines carry
+/ the same `request` and two requests in one window stay apart.
+/ @return the next request number in this process
+request_seq:0
+next_request:{[] request_seq::request_seq+1; request_seq}
 
 / The five levels. `id` is the worker or component name - it becomes
 / TorQ's `id` column, so `select from logmsg where id=`demo_deals_backfill`

@@ -205,12 +205,21 @@ with_connection:{[conn;f]
 / place a backfill's SQL is visible.
 run_sql:{[h;sql]
     require_available[];
+    if[not .qetl.log.enabled`TRC;
+        :.[{[hd;st] .odbc.eval[hd;st]};(h;sql);
+          {[sql;e] '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql]]];
     t0:.z.p;
-    .[{.qetl.log.trc[x;y;z]};(`odbc;"sql sent";enlist[`statement]!enlist sql);::];
+    / Numbered so sent, returned and failed share `request` - see
+    / .qetl.source.ipc, which this mirrors for SQL.
+    req:`transport`request!(`odbc;.qetl.log.next_request[]);
+    .[{.qetl.log.trc[x;y;z]};(`odbc;"sql sent";(enlist[`statement]!enlist sql),req);::];
     r:.[{[hd;st] .odbc.eval[hd;st]};(h;sql);
-      {[sql;e] '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql]];
+      {[sql;req;t0;e]
+        .[{.qetl.log.trc[x;y;z]};(`odbc;"sql failed";
+            req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
+        '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql;req;t0]];
     .[{.qetl.log.trc[x;y;z]};(`odbc;"sql returned";
-        `rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
+        req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
     r}
 
 / The tables visible on a connection.

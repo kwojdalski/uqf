@@ -176,9 +176,11 @@ test_run_sql_names_the_statement_on_failure:{[t]
 / .qetl.log.line, which every level calls - so this sees what is logged, ahead
 / of the TRC switch test_log.q covers - and the real one put back after.
 logged:{[f]
-    keep:.qetl.log.line; `.odbctest.lines set ();
-    .qetl.log.line:{[level;id;text;fields] .odbctest.lines,:enlist (level;id;text;fields)};
-    @[f;::;::]; .qetl.log.line:keep;
+    / TRC on for the call: with it off the request paths trace nothing at all.
+    keep:.qetl.log.line; was:.qetl.log.trace_enabled; .qetl.log.trace 1b; `.odbctest.lines set ();
+    / with_scope, as the real line does: the context is merged there.
+    .qetl.log.line:{[level;id;text;fields] .odbctest.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
+    @[f;::;::]; .qetl.log.line:keep; .qetl.log.trace was;
     .odbctest.lines}
 
 test_run_sql_traces_the_statement_and_what_came_back:{[t]
@@ -194,7 +196,8 @@ test_run_sql_traces_a_statement_that_fails:{[t]
     lines:.odbctest.logged {.odbctest.with_fake_driver[{
         `.odbc.eval set {[h;sql] '"syntax"};
         @[.qetl.io.odbc.run_sql[7;];"select nope";::]}]};
-    .qunit.assertEquals[lines[;2];enlist "sql sent";"the statement is logged, and nothing claims it returned"];
+    .qunit.assertEquals[lines[;2];("sql sent";"sql failed");"the statement is logged, then its failure - and nothing claims it returned"];
+    .qunit.assertEquals[(lines[0;3]`request)~lines[1;3]`request;1b;"sent and failed carry the same request number"];
     .qunit.assertEquals[(first lines)[3]`statement;"select nope";"the failing statement itself"]};
 
 / Build the statement without a connection, by calling the renderer the query

@@ -667,13 +667,25 @@ coerce:{[source;tbl]
 / @param range_to the exclusive upper bound
 / @return what `f` returns on the far side: the window's rows
 / @eg .qetl.source.ipc[{value x};{[a;b] ([] x:a,b)};1;2] -> ([] x:1 2)
+/ .
+/ Each request is numbered (.qetl.log.next_request), so its sent, returned
+/ and failed lines share `request`, and two requests in one window - a
+/ source that reads two tables - stay apart. The run, worker, source,
+/ window and attempt come from the scoped log context the bounded worker
+/ sets, so a sidecar sending through here is correlated without saying so.
+/ With TRC off nothing is numbered, timed or formatted: the query is sent.
 ipc:{[h;f;range_from;range_to]
+    if[not .qetl.log.enabled`TRC; :h(f;range_from;range_to)];
     t0:.z.p;
+    req:`transport`request!(`ipc;.qetl.log.next_request[]);
     .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";
-        `call`range_from`range_to!(-3!f;range_from;range_to));::];
-    r:h(f;range_from;range_to);
+        (enlist[`call]!enlist -3!f),req,`range_from`range_to!(range_from;range_to));::];
+    r:@[h;(f;range_from;range_to);{[req;t0;e]
+        .[{.qetl.log.trc[x;y;z]};(`ipc;"query failed";
+            req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
+        'e}[req;t0]];
     .[{.qetl.log.trc[x;y;z]};(`ipc;"query returned";
-        `rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
+        req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
     r}
 
 / Fetch one window, from the live source or from the fixture.

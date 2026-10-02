@@ -451,9 +451,11 @@ test_an_undeclared_example_is_not_an_empty_string:{[t]
 / Every log line `f` writes, as (level;id;text;fields): a recorder in place of
 / .qetl.log.line, ahead of the TRC switch test_log.q covers.
 logged:{[f]
-    keep:.qetl.log.line; `.srctest.lines set ();
-    .qetl.log.line:{[level;id;text;fields] .srctest.lines,:enlist (level;id;text;fields)};
-    @[f;::;::]; .qetl.log.line:keep;
+    / TRC on for the call: with it off the request paths trace nothing at all.
+    keep:.qetl.log.line; was:.qetl.log.trace_enabled; .qetl.log.trace 1b; `.srctest.lines set ();
+    / with_scope, as the real line does: the context is merged there.
+    .qetl.log.line:{[level;id;text;fields] .srctest.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
+    @[f;::;::]; .qetl.log.line:keep; .qetl.log.trace was;
     .srctest.lines}
 
 / A stand-in handle: evaluates the message as the far side would.
@@ -482,5 +484,60 @@ test_a_live_ipc_source_query_is_traced:{[t]
     .qunit.assertEquals[`ipc`ipc;2#lines[;1] where `TRC=lines[;0];"the live query is traced, sent and returned"];
     .qunit.assertEquals[(type first .srctest.sent;1_.srctest.sent);(100h;(.srctest.d 1;.srctest.d 2));
         "the handle is sent (lambda;from;to) - a UTC source's bounds unchanged"]};
+
+
+/ --- requests correlate with the work they belong to -------------------
+
+/ Two queries in one window, as a source that merges two tables sends them.
+two_tables:{[]
+    .qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2];
+    .qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] y:a+b)};1;2]}
+
+test_two_requests_in_one_window_share_its_context_and_not_their_number:{[t]
+    `.srctest.ctx set `worker`source`range_from`range_to!(`books;`merged;2026.09.10D00:00;2026.09.11D00:00);
+    lines:.srctest.logged {.qetl.log.with_context[.srctest.ctx;.srctest.two_tables;enlist(::)]};
+    sent:lines[;3] where lines[;2]~\:"query sent";
+    .qunit.assertEquals[count sent;2;"both requests traced"];
+    .qunit.assertEquals[(sent[;`worker];sent[;`source]);(`books`books;`merged`merged);
+        "each names the same worker and source"];
+    .qunit.assertEquals[(sent[;`transport];1=count distinct sent[;`request]);(`ipc`ipc;0b);
+        "both say they are remote requests, under different numbers"];
+    .qunit.assertEquals[sent[;`call];("{[a;b] ([] x:a,b)}";"{[a;b] ([] y:a+b)}");
+        "and each shows the lambda it actually sent"]};
+
+test_a_request_and_its_return_share_a_number:{[t]
+    lines:.srctest.logged {.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2]};
+    .qunit.assertEquals[lines[;2];("query sent";"query returned");"sent, then returned"];
+    .qunit.assertEquals[(lines[0;3]`request)~lines[1;3]`request;1b;"one request number for both"]};
+
+test_a_failed_request_is_traced_and_still_throws:{[t]
+    lines:.srctest.logged {@[.qetl.source.ipc[{'"refused"};{[a;b] a};1;];2;{`.srctest.err set x}]};
+    .qunit.assertEquals[(lines[;2];.srctest.err);(("query sent";"query failed");"refused");
+        "the failure is traced under its request, and the caller still gets the error"];
+    .qunit.assertEquals[(lines[0;3]`request)~lines[1;3]`request;1b;"sent and failed share a number"]};
+
+test_each_retry_is_traced_as_its_attempt:{[t]
+    / fails once, then answers - with_retry's own policy, no real sleep
+    / Globals, not arguments: `logged {..}[pol]` would run the retries
+    / BEFORE logged installs its recorder.
+    `.srctest.calls set 0;
+    `.srctest.h2 set {`.srctest.calls set 1+.srctest.calls; $[1=.srctest.calls; '"connection refused"; value x]};
+    `.srctest.pol set `max_attempts`base_delay_ms`max_delay_ms!(3;0;0);
+    lines:.srctest.logged {.qetl.job.bounded.runtime.with_retry[.srctest.pol;
+        {[u] .qetl.source.ipc[.srctest.h2;{[a;b] ([] x:a,b)};1;2]}]};
+    sent:lines[;3] where lines[;2]~\:"query sent";
+    .qunit.assertEquals[sent[;`attempt];1 2;"the first try and its retry, each labelled"]};
+
+test_with_trace_off_a_request_is_only_sent:{[t]
+    / no number minted, no lambda rendered, no line at all
+    .qetl.log.trace 0b;
+    before:.qetl.log.request_seq;
+    keep:.qetl.log.line; `.srctest.lines set ();
+    / with_scope, as the real line does: the context is merged there.
+    .qetl.log.line:{[level;id;text;fields] .srctest.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
+    r:.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2];
+    .qetl.log.line:keep;
+    .qunit.assertEquals[(r;.qetl.log.request_seq;count .srctest.lines);(([] x:1 2);before;0);
+        "the query runs, and nothing is numbered, formatted or logged"]};
 
 \d .
