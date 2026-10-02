@@ -139,7 +139,7 @@ test_a_dry_run_publishes_nothing_for_every_worker:{[t]
 / checkpoints), the in-memory ledgers by row count, and the worker's target.
 / Lock files and the per-run Airflow status files are left out - every mode
 / takes and releases the lock, and the status file is how a caller hears the
-/ dry run itself finished.
+/ dry run itself finished. That file is asserted on its own, below.
 durable:{[w]
     dir:.qetl.job.bounded.state.lock_dir[];
     fs:key hsym `$dir;
@@ -164,7 +164,8 @@ test_a_dry_run_leaves_everything_durable_as_it_was:{[t]
         .wruntest.call[w;`init][spec];
         r:.wruntest.call[w;`run][];
         after:.wruntest.durable w;
-        $[(before~after) and r[`windows_completed]>0; (); enlist (w;before;after)]
+        st:.wruntest.status w;
+        $[(before~after) and (r[`windows_completed]>0) and `completed~st`state; (); enlist (w;before;after;st`state)]
         } each .wruntest.workers[];
     setenv[`UQF_MODE;""];
     .qunit.assertEquals[count raze bad;0;
@@ -191,6 +192,59 @@ test_validate_and_plan_touch_nothing_and_plan_what_a_run_does:{[t]
         } each .wruntest.workers[];
     .qunit.assertEquals[count raze bad;0;
         "validate and plan write nothing, and plan names exactly the windows a run completes"]};
+
+/ The status file Airflow's sensor polls, as the run left it.
+status:{[w]
+    path:.qetl.status.status_dir[],"/airflow_status_",string[.qetl.job.bounded.instance w],".txt";
+    d:.j.k first read0 hsym `$path;
+    @[d;`state;`$]}
+
+/ A real run reports how it ended, in the file an orchestrator reads: the
+/ only writer used to be a failure path nothing on the live path called, so
+/ Airflow's sensor waited on a file no worker wrote.
+test_a_run_reports_completed_then_idle_in_the_status_file:{[t]
+    bad:{[w]
+        spec:.wruntest.prepare w;
+        .wruntest.call[w;`init][spec];
+        .wruntest.call[w;`run][];
+        first_run:.wruntest.status w;
+        .wruntest.call[w;`init][spec];
+        .wruntest.call[w;`run][];
+        second:.wruntest.status w;
+        ok:(`completed~first_run`state) and (0<first_run`rows_published) and `idle~second`state;
+        $[ok; (); enlist (w;first_run`state;second`state)]} each .wruntest.workers[];
+    .qunit.assertEquals[count raze bad;0;"each worker's status file reads completed, then idle for a covered range"]};
+
+/ A run killed mid-way leaves `running` in the file, and .qetl.status refuses
+/ running -> starting. The next run records the dead one as failed, then
+/ starts, rather than refusing to start at all.
+test_a_run_after_a_crash_records_the_crash_then_starts:{[t]
+    w:first .wruntest.workers[];
+    spec:.wruntest.prepare w;
+    / Whatever an earlier test left, `failed is always writable and may be
+    / followed by `starting - so this sets up the crash from any state.
+    .qetl.status.write_status[w;.qetl.job.bounded.instance w;`failed;spec;
+        `cursor`rows_published`windows_completed!(0Np;0;0);"earlier test"];
+    .qetl.status.write_status[w;.qetl.job.bounded.instance w;`starting;spec;
+        `cursor`rows_published`windows_completed!(0Np;0;0);""];
+    .qetl.status.write_status[w;.qetl.job.bounded.instance w;`running;spec;
+        `cursor`rows_published`windows_completed!(0Np;0;0);""];
+    .wruntest.call[w;`init][spec];
+    .qunit.assertEquals[(.wruntest.status w)`state;`starting;"the new run starts after the orphaned one is recorded as failed"]};
+
+/ A run that throws reports `failed` with the error, so the sensor fails the
+/ task instead of waiting for it.
+test_a_run_that_throws_reports_failed_with_its_error:{[t]
+    w:first .wruntest.workers[];
+    spec:.wruntest.prepare w;
+    .wruntest.call[w;`init][spec];
+    ns:.qetl.job.bounded.def[w]`ns;
+    saved:value ` sv ns,`plan;
+    (` sv ns,`plan) set {[cursor] '"boom in plan"};
+    r:@[{.wruntest.call[x;`run][]};w;{x}];
+    (` sv ns,`plan) set saved;
+    st:.wruntest.status w;
+    .qunit.assertEquals[(r;st`state;st`error);("boom in plan";`failed;"boom in plan");"the throw is re-raised and recorded"]};
 
 test_every_worker_checkpoints_through_its_own_delegator:{[t]
     / `run` reaches the shell's checkpoint directly, so the stamped

@@ -224,9 +224,14 @@ allows:{[effect]
 
 / Perform one named side effect, or record that dry-run withheld it.
 / .
-/ Every dry-run-suppressed effect goes through here rather than being guarded
-/ inline at its call site, so "what does dry-run skip" has one answer that a
-/ test can enumerate.
+/ One of the TWO ways an effect is gated, and both consult the same list,
+/ suppressed_in_dry_run. This one serves finish_window's three effects, whose
+/ order matters and whose outcomes are reported back. The other four are
+/ guarded at their call sites in bounded_worker.q through `allows`, because
+/ each is a single protected call with nothing to report. Neither is the
+/ guarantee: tests/q/test_every_worker_runs.q compares everything durable
+/ before and after a dry run of every worker, which catches an effect that
+/ reaches neither.
 / Takes the action and its arguments SEPARATELY, applying them with `.` only
 / on the non-dry branch. That is the whole point: a fully-applied projection
 / like f[a;b;c] is not a deferred call in q, it is a CALL - so writing

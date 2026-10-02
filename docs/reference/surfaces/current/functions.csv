@@ -251,6 +251,7 @@ qetl.job.bounded,inherited_methods,value,,
 qetl.job.bounded,init,function,2,worker run_spec
 qetl.job.bounded,init_body,function,2,worker run_spec
 qetl.job.bounded,initial_state,dict,,
+qetl.job.bounded,instance,function,1,worker
 qetl.job.bounded,namespace,function,1,worker
 qetl.job.bounded,no_failures,function,1,
 qetl.job.bounded,normalised,function,1,cfg
@@ -260,12 +261,15 @@ qetl.job.bounded,own,function,2,worker nm
 qetl.job.bounded,partition_of,function,1,worker
 qetl.job.bounded,plan,function,2,worker cursor
 qetl.job.bounded,plan_only,function,2,worker run_spec
+qetl.job.bounded,progress_now,function,1,worker
 qetl.job.bounded,publish,function,2,worker batch
 qetl.job.bounded,publish_last_batch,function,2,worker unused
 qetl.job.bounded,publish_pending,function,1,worker
 qetl.job.bounded,read_state,function,2,worker nm
 qetl.job.bounded,record_facts,function,5,worker cfg w batch r
 qetl.job.bounded,recover_unfinished,function,1,worker
+qetl.job.bounded,report,function,3,worker state err
+qetl.job.bounded,report_failure,function,2,worker e
 qetl.job.bounded,require_target_key,function,2,worker decl
 qetl.job.bounded,require_transform,function,2,worker cfg
 qetl.job.bounded,required_cfg,value,,
