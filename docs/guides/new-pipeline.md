@@ -336,9 +336,13 @@ query:{[h;range_from;range_to]
   touches, with `date` as the first column, as a select from a mapped HDB has
   it. The window's end is exclusive, so a window ending at midnight doesn't read
   the next day. The query filters the rows itself.
-- **Symbols are decoded against that HDB's own `sym` file.** A plain `get` would
-  decode them against whatever `sym` the backfill process has loaded, which is
-  the HDB it *writes*, and silently return the wrong symbols.
+- **Each symbol column is decoded against that HDB's own domain file:** the one
+  named after the column's domain, usually `sym`, but a column can be enumerated
+  against any domain. A plain `get` would decode it against whatever domain of
+  that name the backfill process has loaded (for `sym`, the HDB it *writes*) and
+  silently return the wrong symbols. A missing or too-short domain file is
+  refused rather than decoded to blanks, and partitions whose columns differ are
+  refused, naming the dates, as a mapped HDB would refuse them.
 - **Nothing is loaded globally.** `\l` would map the whole database at the root
   and change the working directory. Tables are read one partition at a time,
   column by column.

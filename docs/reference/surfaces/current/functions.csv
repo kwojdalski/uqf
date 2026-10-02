@@ -545,6 +545,7 @@ qetl.run,under_lock,function,2,f args
 qetl.run,unfinished,function,1,
 qetl.source,ambiguous_message,function,3,tz bad cs
 qetl.source,bound_padding,value,,
+qetl.source,call_text,function,1,f
 qetl.source,coerce,function,2,source tbl
 qetl.source,coercers,dict,,
 qetl.source,column_names,function,1,tbl
@@ -561,8 +562,9 @@ qetl.source,load_zone_table,function,1,path
 qetl.source,local,function,4,root f range_from range_to
 qetl.source,local_candidates,function,2,tz tsv
 qetl.source,local_dates,function,3,root d0 d1
+qetl.source,local_decode,function,3,root c v
 qetl.source,local_latest,function,2,root table
-qetl.source,local_partition,function,4,root syms table d
+qetl.source,local_partition,function,3,root table d
 qetl.source,local_read,function,4,root table from_ts to_ts
 qetl.source,local_root,function,1,path
 qetl.source,local_to_utc,function,2,tz ts
@@ -1178,6 +1180,7 @@ qpipe.source.duckdb_deals,types,value,,
 qpipe.source.duckdb_deals,tz,value,,
 qpipe.source.hdb_markouts,columns,value,,
 qpipe.source.hdb_markouts,fixture,function,1,
+qpipe.source.hdb_markouts,lookback,value,,
 qpipe.source.hdb_markouts,none,table,,
 qpipe.source.hdb_markouts,query,function,3,h range_from range_to
 qpipe.source.hdb_markouts,raw_fills,function,1,

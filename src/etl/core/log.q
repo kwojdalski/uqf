@@ -226,9 +226,10 @@ with_context:{[ctx;f;args]
     / A niladic f through @, not `.`: on KDB-X `.[f;enlist ::;handler]` throws
     / an UNCATCHABLE 'type - the handler never runs, and the context leaked
     / into every line after it.
-    / Spotted by type: `enlist ::` is not a one-item list of :: but a bare
-    / 101h, so (::)~first args is false for it.
-    niladic:(101h=type args) or (1=count args) and 101h=type first args;
+    / The generic null itself, not any 101h: a unary primitive (neg, til)
+    / is 101h too, and passing one as the argument is a real call. Spell the
+    / niladic case enlist(::) - `enlist ::` is a bare primitive, not a list.
+    niladic:(args~(::)) or (1=count args) and (::)~first args;
     r:$[niladic; @[f;::;restore]; .[f;args;restore]];
     context::outer;
     r}

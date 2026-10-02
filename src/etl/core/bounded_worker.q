@@ -595,14 +595,16 @@ init_body:{[worker;run_spec]
     / path, kept in the environment because an absolute local path is
     / machine-specific and this repository is public. Calling that a secret
     / teaches an operator that the rule is theatre.
-    / `odbc`, not `var`: var is a q builtin (variance).
+    / `transport`, not `var`: var is a q builtin (variance).
     live:.qetl.source.has_credentials cfg`source;
     if[not live;
-        odbc:`odbc~(.qetl.source.def cfg`source)`transport;
+        transport:(.qetl.source.def cfg`source)`transport;
         .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so a machine-specific path or a password stays out of this repository and off the command line";
             `variable`expects`example!(
                 .qetl.source.credential_var cfg`source;
-                $[odbc; "an ODBC connection string"; "host:port, or host:port:user:password"];
+                $[`odbc~transport; "an ODBC connection string";
+                  `local~transport; "the path of an HDB directory on this machine";
+                  "host:port, or host:port:user:password"];
                 .qetl.source.credential_example cfg`source)]];
     write_state[worker;`handle;$[live; connect worker; 0Ni]];
 

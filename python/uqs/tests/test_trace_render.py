@@ -42,7 +42,8 @@ def test_a_sql_trace_is_rendered_the_same_way():
         ('"a\\\\nb"', "a\\nb"),  # a literal backslash-n in the code stays two characters
         ('"x|y"', "x|y"),
         ('"tab\\there"', "tab\there"),
-        ('"\\001\\377"', "\x01\xff"),
+        # q writes BYTES; displayed as UTF-8, a lone 0xff is not a character
+        ('"\\001\\377"', "\x01\ufffd"),
     ],
 )
 def test_quotes_backslashes_literal_backslash_n_and_pipes_survive(literal, text):
@@ -102,4 +103,12 @@ def test_what_q_writes_decodes_back_to_the_original():
     code, everything = (decode_q_string(line, 0) for line in out[:2])
     want = '{[a;b]\n  select from t where s="x|y", p like "a\\\\nb"\n}'
     assert code is not None and code[0] == want
-    assert everything is not None and everything[0] == "".join(map(chr, range(256)))
+    # Every byte survives the escaping; shown as UTF-8, as text would be.
+    assert everything is not None
+    assert everything[0] == bytes(range(256)).decode("utf-8", "replace")
+
+
+def test_utf8_survives_q_s_per_byte_octal_escapes():
+    """q escapes each byte above 126 on its own; decoding them one by one gave
+    mojibake (café -> cafÃ©)."""
+    assert decode_q_string('"caf\\303\\251 \\342\\200\\224 ok"', 0) == ("café — ok", 29)

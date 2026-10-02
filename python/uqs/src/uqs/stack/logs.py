@@ -173,10 +173,29 @@ def _log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
     return [f for f in _expected_log_files(paths, procnames) if f.is_file()]
 
 
-def _passes_level(level: str, min_level: str | None) -> bool:
+def min_level_name(min_level: str | None) -> str | None:
+    """`--level` as a loguru level name, or None for no filter.
+
+    Takes the names the log lines print (WARN, ERR, INF, DBG, TRC) as well as
+    loguru's (WARNING, ERROR, ...), case-insensitively. Anything else is
+    refused: it used to rank as 0 and pass every line, so `--level WARN` -
+    the spelling a reader copies from the log itself - filtered nothing.
+    """
     if min_level is None:
+        return None
+    name = min_level.strip().upper()
+    name = _LOGURU_LEVEL.get(name, name)
+    if name not in _LEVEL_ORDER:
+        known = sorted(set(_LEVEL_ORDER) | set(_LOGURU_LEVEL), key=str)
+        raise UqsError(f"--level {min_level!r} is not a level: one of {', '.join(known)}")
+    return name
+
+
+def _passes_level(level: str, min_level: str | None) -> bool:
+    wanted = min_level_name(min_level)
+    if wanted is None:
         return True
-    return _LEVEL_ORDER.get(level, 0) >= _LEVEL_ORDER.get(min_level.upper(), 0)
+    return _LEVEL_ORDER.get(level, 0) >= _LEVEL_ORDER[wanted]
 
 
 def _emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
@@ -207,6 +226,7 @@ def get_recent_logs(
             "- has the demo been started at least once?"
         )
 
+    min_level_name(min_level)
     return _recent_records(files, lines, min_level)
 
 
@@ -262,6 +282,7 @@ def follow_logs(
             f"no log files found for {procnames} under {paths.torqdata / 'logs'} "
             "- has the demo been started at least once?"
         )
+    min_level_name(min_level)  # refuse a bad --level before following anything
     _follow(files, min_level, history=lambda: _recent_records(files, lines, min_level))
 
 
@@ -291,6 +312,7 @@ def follow_during(
     expected = _expected_log_files(paths, procnames)
     present = [f for f in expected if f.is_file()]
     awaited = [f for f in expected if not f.is_file()]
+    min_level_name(min_level)
     _follow(present, min_level, awaited=awaited, before=start)
 
 
