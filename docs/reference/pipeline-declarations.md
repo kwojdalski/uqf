@@ -194,6 +194,17 @@ refused together with an explicit `run`. `uqs backfill --on-conflict S` (or
 refuses --- fails on its own: nothing covered, planned again next run, and the
 run goes on.
 
+In the HDB, a keyed write (any `on_conflict` but `append`) writes each date's
+rewritten table whole into `<hdb>.staging/new/` first, and only once every date
+is staged renames them into their partitions. A failure before that leaves the
+HDB untouched, and a reload never maps a half-written table. A run killed
+mid-write is put right by the next run's recovery, which sweeps that table's
+staging: a table swapped out and never replaced is restored, and a staged one
+never swapped in is discarded. Recovery also trims a partition an interrupted
+`append` left with columns of different lengths back to its shortest column,
+then re-finishes it. The window was never covered, so the next run writes its
+rows again.
+
 ## Streaming job --- `.qetl.job.stream.define`
 
 `.qetl.job.stream.define[job;decl]`, at the bottom of the job file. A streaming

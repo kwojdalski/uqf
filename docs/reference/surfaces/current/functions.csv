@@ -201,15 +201,22 @@ qetl.io,last_seen,function,1,k
 qetl.io,memory,dict,,
 qetl.io,odbc,dict,,
 qetl.io,optional,value,,
+qetl.io,part_path,function,3,root d t
 qetl.io,plain,function,1,t
 qetl.io,ready,function,2,mgr status
 qetl.io,recover,function,4,mgr target range_from range_to
 qetl.io,recover_hdb,function,4,root target from_ts to_ts
+qetl.io,repair_torn,function,3,root d t
 qetl.io,require_manager,function,1,mgr
 qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
 qetl.io,resolve,function,4,strategy existing batch opts
+qetl.io,stage,function,4,root d t rows
+qetl.io,staged,function,4,root kind d t
+qetl.io,staging,function,1,root
 qetl.io,strategies,value,,
+qetl.io,swap,function,3,root d t
+qetl.io,sweep_staging,function,2,root target
 qetl.io,touched,table,,
 qetl.io,write,function,3,mgr target batch
 qetl.io,write_discard,function,2,target batch

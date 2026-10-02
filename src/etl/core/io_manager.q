@@ -367,8 +367,112 @@ write_hdb_keyed:{[root;partition_col;target;batch;opts]
         existing:$[()~key part; 0#rows; flip {x til count x} each flip select from get part];
         (part;d;plain resolve[strategy;existing;rows;o])
         }[root;target;data;days;strategy;o] each dates;
-    {[root;target;step] (step 0) set step 2; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
+    / STAGED, THEN SWAPPED. Writing `set` straight onto the live partition
+    / rewrote it column by column while the HDB had it mapped: a kill part way
+    / left columns of different lengths, and a reload in between mapped a
+    / half-written table. Every date is written whole into the staging area
+    / first - an error there leaves the HDB exactly as it was - and only then
+    / renamed into place, one directory at a time.
+    {[root;target;step] stage[root;step 1;target;step 2]}[root;target] each plan;
+    {[root;target;step] swap[root;step 1;target]; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
     count batch}
+
+/ ------------------------------------------------------------ STAGING
+/ .
+/ A sibling of the HDB root, so every rename is within one filesystem and so
+/ the HDB, which loads every directory under its root, never sees a staged or
+/ retired table. `new/<date>/<table>` holds what is about to be swapped in,
+/ `old/<date>/<table>` what was just swapped out. Both are empty between
+/ writes; whatever a killed run left there is put right by sweep_staging.
+/ .
+/ The swap is two renames, not one: rename(2) cannot replace a non-empty
+/ directory, and the call that exchanges two (renameat2) is Linux-only. So a
+/ reader can, for an instant, find the table absent from that date - never
+/ half-written - and a kill between the two renames leaves the old copy in
+/ `old`, which the next recover restores.
+
+/ Private: the staging area for `root`, as a path string.
+/ @param root the HDB root, a file symbol
+staging:{[root] (1_string root),".staging"}
+
+/ Private: one (date; table) under the staging area's `new or `old.
+staged:{[root;kind;d;t] (staging root),"/",string[kind],"/",string[d],"/",string t}
+
+/ Private: a partition's table directory, as a path string - through .Q.par,
+/ so a segmented HDB's par.txt is honoured.
+part_path:{[root;d;t] 1_string .Q.par[root;d;t]}
+
+/ Private: write one date's resolved table into the staging area.
+/ @return the staged path
+stage:{[root;d;t;rows]
+    p:staged[root;`new;d;t];
+    system"rm -rf ",p;
+    system"mkdir -p ",p;
+    (hsym `$p,"/") set rows;
+    p}
+
+/ Private: rename a staged table into its partition, retiring the old one.
+swap:{[root;d;t]
+    live:part_path[root;d;t];
+    old:staged[root;`old;d;t];
+    system"rm -rf ",old;
+    system"mkdir -p ",(staging root),"/old/",string d;
+    / The date directory, whatever its segment: the live path less its table.
+    system"mkdir -p ",(neg 1+count string t)_live;
+    if[not ()~key hsym `$live; system"mv ",live," ",old];
+    system"mv ",staged[root;`new;d;t]," ",live;
+    system"rm -rf ",old;
+    }
+
+/ Private: put right what a run killed mid-write left in the staging area,
+/ for one table.
+/ .
+/ An `old` table whose partition is missing was swapped out and its
+/ replacement never swapped in: it is put back, so the partition reads as it
+/ did before the write began - the window was never covered, so the next run
+/ writes it again. An `old` table whose partition is present was replaced
+/ and only its removal was lost. A `new` table is a write that never reached
+/ its swap, and goes.
+/ .
+/ ONE TABLE, because several backfills may write one HDB at once, each its
+/ own table: sweeping another process's staging would restore or delete a
+/ write it is in the middle of.
+/ @param root the HDB root
+/ @param target the table to sweep
+/ @return how many tables were restored
+sweep_staging:{[root;target]
+    s:staging root;
+    if[()~key hsym `$s; :0];
+    under:{[s;kind] $[()~key hsym `$s,"/",kind; `symbol$(); key hsym `$s,"/",kind]}[s];
+    {[s;target;d] system"rm -rf ",s,"/new/",string[d],"/",string target}[s;target] each under "new";
+    dates:under "old";
+    pairs:{[target;d] (d;target)}[target] each dates where
+        {[s;target;d] not ()~key hsym `$s,"/old/",string[d],"/",string target}[s;target] each dates;
+    restored:{[root;pr]
+        d:"D"$string pr 0;
+        live:part_path[root;d;pr 1];
+        old:staged[root;`old;d;pr 1];
+        $[()~key hsym `$live;
+            [system"mkdir -p ",(neg 1+count string pr 1)_live; system"mv ",old," ",live; 1];
+            [system"rm -rf ",old; 0]]}[root] each pairs;
+    sum restored}
+
+/ Private: trim a partition whose columns have different lengths back to the
+/ shortest, the state a kill part way through an APPEND leaves (write_hdb
+/ upserts column by column). Every column ends at the same row again, so the
+/ partition can be read; the rows dropped belonged to a window that was
+/ never covered, which the next run writes again. recover then queues it for
+/ finishing.
+/ @return 1b when it repaired something
+repair_torn:{[root;d;t]
+    base:part_path[root;d;t];
+    if[()~key hsym `$base,"/.d"; :0b];
+    c:get hsym `$base,"/.d";
+    n:{[base;c] count get hsym `$base,"/",string c}[base] each c;
+    if[1=count distinct n; :0b];
+    m:min n;
+    {[base;m;c] f:hsym `$base,"/",string c; f set m#get f}[base;m] each c where n>m;
+    1b}
 
 / Private: sort and attribute these partitions of `root`, fill every
 / partition with every table, and forget them.
@@ -407,8 +511,18 @@ is_finished:{[root;d;t]
 / were written and never finished, for the next finish.
 recover_hdb:{[root;target;from_ts;to_ts]
     if[not from_ts<to_ts; :0];
+    / First what a killed keyed write left in staging, so the partitions read
+    / below are the ones the HDB will map.
+    restored:sweep_staging[root;target];
     span:{[f;t] f+til 1+t-f}[`date$from_ts;`date$to_ts-1];
-    ds:span where not is_finished[root;;target] each span;
+    torn:span where repair_torn[root;;target] each span;
+    if[(restored>0) or count torn;
+        @[{.qetl.log.warn[`qetl.io;"repaired partitions a killed write left behind";x]};
+          `restored`trimmed!(restored;torn);{[e] (::)}]];
+    / A trimmed partition is queued whatever its attributes say: trimming
+    / rewrote only the long columns, so p#sym can survive on a partition that
+    / still needs re-sorting.
+    ds:distinct torn,span where not is_finished[root;;target] each span;
     `.qetl.io.touched upsert ([] hdb_root:count[ds]#root; dt:ds; tbl:count[ds]#target);
     count ds}
 
