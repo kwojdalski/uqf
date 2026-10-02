@@ -123,16 +123,20 @@ a parameter name, or a line holding only `/`.
 
 In the HDB, in the partition of each row's own date - not through the
 tickerplant. A backfill started by `uqs backfill` writes through `.qetl.io.hdb`:
-it refuses rows dated today or later (the tickerplant's and end-of-day's), gives
-each row a `time` from its own time column, and appends it to
-`<hdb>/<date>/<table>/`. As the run moves past each day, that day's partitions
-are sorted with `p#sym` and the running HDB is asked to reload - at most every
-`UQF_HDB_RELOAD_SECONDS` (default 30), never while a partition is still being
-appended to, and always once more at the end. The tickerplant would stamp old
-rows with today's time, file them under today's date, and hand them to every
-subscriber as if they had just happened. In plain q - a test, or a prompt - the
-same worker writes to an in-memory table instead. See
-[`io_manager.q`](../src/etl/core/io_manager.q).
+it refuses rows dated today or later (the tickerplant's and end-of-day's) and
+gives each row a `time` from its own time column. How a row meets one already
+there is the worker's `on_conflict` - `upsert` by default, which replaces a row
+with the same key. Every strategy but `append` rewrites that date's table whole,
+staged in `<hdb>.staging/` and renamed into place, so the HDB never maps a
+half-written table; `append` adds to `<hdb>/<date>/<table>/` directly. As the
+run moves past each day, that day's partitions are sorted with `p#sym` and the
+running HDB is asked to reload - at most every `UQF_HDB_RELOAD_SECONDS` (default
+30), never while a partition is still being written, and always once more at the
+end. The tickerplant would stamp old rows with today's time, file them under
+today's date, and hand them to every subscriber as if they had just happened. In
+plain q - a test, or a prompt - the same worker writes to an in-memory table
+instead. See [`io_manager.q`](../src/etl/core/io_manager.q) and
+[on_conflict](reference/pipeline-declarations.md).
 
 ## How is a backfill job different from TorQ's dataloader?
 

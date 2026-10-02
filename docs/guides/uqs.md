@@ -148,13 +148,20 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       Responds; --timeout defaults to 120s,
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
-backfill WORKER --version V --from T --to T [--on-conflict S] [--port N] [--debug]
+backfill WORKER --version V --from T --to T [--on-conflict S] [--mode M] [--port N] [--debug]
                                       run a bounded worker over [--from, --to); dates
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables. --debug
                                       starts it with -verbose: DBG lines in its log.
                                       --on-conflict (upsert, replace, ignore, append,
-                                      fail) overrides the worker's own for this run
+                                      fail) overrides the worker's own for this run.
+                                      --mode validate|plan|dry-run|run: validate and
+                                      plan open nothing and write nothing, dry-run
+                                      fetches and writes nothing
+run status|list|show RUN_ID|audit DATASET --from T --to T|migrate
+                                      the run ledger: unfinished runs, every run,
+                                      one run's facts, one window across runs, and
+                                      the one-off upgrade of an older ledger
 data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
             [--table T]... [--port N] [--dry-run]
                                       replay a tickerplant log into the HDB. With
@@ -176,14 +183,15 @@ job remove NAME [--dry-run] [--force] [-y]
 job install DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs
                                       in DIR into src/etl/ (see "Adding a process")
-query [EXPR] [--proc P|--port N] [--servers T] [--raw] [--export FILE]
+query [EXPR] [--proc P|--port N] [--servers T] [--raw] [--render q|kola] [--export FILE]
                                       run a q expression against a process - gateway1,
                                       which routes it to the RDB and HDB, unless
                                       --proc or --port says otherwise; with no EXPR,
                                       an interactive session on it (routed on the
                                       gateway, qcon elsewhere). --raw sends to the
                                       gateway as typed. --proc looks the port up, and
-                                      refuses a stopped process
+                                      refuses a stopped process. Results print as q
+                                      prints them; --render kola shows Python objects
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern
 list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse]  list every item of KIND

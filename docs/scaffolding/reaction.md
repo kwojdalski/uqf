@@ -79,9 +79,10 @@ handler:{[dataset;range_from;range_to]
 `src/etl/init.q` loads `src/etl/reactions/` after every worker and streaming
 job, and only when it holds a `.q` file, so a tree with no reactions loads as
 before. A throwing handler **never fails the publication**: the failure is
-recorded in `.qetl.reaction.history` and logged. So until the handler is
-written, each window of `demo_deals` records a failed reaction, and the
-scaffolded test fails.
+recorded in `.qetl.reaction.history`, written to the `etl_reactions` ledger and
+logged, and the next run of the worker fires it again for that window. So until
+the handler is written, each window of `demo_deals` records a failed reaction,
+and the scaffolded test fails.
 
 **What `--writes` claims is not checked.** A handler can write anywhere, so the
 graph edge is a promise (`derived` is `0b`, see `.qetl.reaction.on`). Where the
