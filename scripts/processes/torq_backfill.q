@@ -284,6 +284,26 @@ if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
 / backfill WHILE it runs rather than only after it finishes. .servers.startup
 / opens and registers the handle using this process's own accesslist
 / credentials, exactly as cross1 does.
+/ The identity this process connects to the fleet WITH. Its proctype,
+/ backfill, has no password file in TorQ or the starter pack, so TorQ fell
+/ back to default.txt - whose user is on no access list - and every
+/ connection to an HDB was refused: the rows landed on disk and no HDB
+/ reloaded them. The ETL processes' file (metrics.txt) carries the identity
+/ the access list already accepts for a process reading the fleet. A
+/ deployment that gives backfill, or this procname, a file of its own keeps
+/ it. Set before discovery, which is the first connection.
+{[]
+    specific:(raze {.proc.getconfig["passwords/",(string x),".txt";2]} each .proc.proctype,.proc.procname) except `;
+    fallback:hsym `$getenv[`KDBAPPCONFIG],"/passwords/metrics.txt";
+    c:.qtorq.credential_from[specific;fallback];
+    if[`adopted~c`source; .servers.USERPASS:c`userpass];
+    $[`missing~c`source;
+        .qetl.log.warn[`backfill;"no outbound credential for this process type, and none to adopt - connections to the fleet will use TorQ's default and be refused";
+            enlist[`looked_for]!enlist 1_string fallback];
+        .qetl.log.info[`backfill;"outbound credential";
+            `source`file!(c`source;$[`adopted~c`source; 1_string fallback; "this process type's own"])]];
+ }[];
+
 .qetl.log.dbg[`backfill;"registering with discovery";()!()];
 {[t0]
   .servers.startup[];
