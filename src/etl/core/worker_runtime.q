@@ -156,19 +156,71 @@ with_retry:{[pol;f]
         attempt+:1];
     `state`kind`attempts`result`error!(`failed;`transport;cap;::;last outcome)}
 
-/ ------------------------------------------------------------- DRY RUN
-
-/ The three side effects a dry run suppresses, named once so they cannot drift
-/ apart. Suppressing a subset is the dangerous case: rows withheld while
-/ coverage is still published leaves the ledger asserting a window is
-/ complete when nothing was written.
-suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint
-
-/ Is this run diagnostic-only?
+/ ------------------------------------------------------------- RUN MODES
 / .
-/ Opt-in via .qetl.cfg.get_flag, which defaults absent-to-false - so a
-/ misconfigured worker does real work rather than silently doing none.
-is_dry_run:{[] @[{.qetl.cfg.get_flag `dry_run};::;{0b}]}
+/ What a bounded run is asked to do, each mode defined by what it may TOUCH:
+/ .
+/   validate  configuration and code only: the declaration, the contract, the
+/             fixture, the range. Reads no ledger, opens no source.
+/   plan      validate, plus the local ledgers read-only: which windows a run
+/             would fetch, which are already covered. Opens no source.
+/   dry_run   plan, plus the source: fetch, transform, check, count. Writes
+/             nothing durable.
+/   run       all of it.
+/ .
+/ validate and plan never reach the window loop - .qetl.job.bounded.validate
+/ and .qetl.job.bounded.plan_only are separate entry points - so the gate
+/ below only has to hold the line between dry_run and run.
+modes:`validate`plan`dry_run`run
+
+/ EVERY durable effect a run makes, named once. A mode other than `run makes
+/ none of them, and an effect not on this list cannot be gated at all - so a
+/ new one must be added here, which is the point: dry runs used to leak
+/ because this list held three effects and the run ledger, the facts, the
+/ store's finish and the reactions simply never reached it.
+/ .
+/ Suppressing a SUBSET is the dangerous case: rows withheld while coverage is
+/ still published leaves the ledger asserting a window is complete when
+/ nothing was written.
+suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions
+
+/ This run's mode: `mode` (UQF_MODE, or `uqs backfill --mode`) when set, else
+/ `dry_run when the older dry_run flag is set, else `run.
+/ .
+/ An explicit `run with the dry_run flag also set is refused rather than
+/ resolved: one of the two settings is a mistake, and guessing which means
+/ either writing when someone asked not to or not writing when they asked to.
+/ @return one of .qetl.job.bounded.runtime.modes
+/ @throws a mode not in modes, or `run together with the dry_run flag
+/ @eg .qetl.job.bounded.runtime.mode[]  ->  `run
+mode:{[]
+    / Protected like the flag: a loader without .qetl.cfg has no mode set,
+    / which is not the same as a mode set wrongly.
+    m:@[{.qetl.cfg.raw `mode};::;{[e] ""}];
+    dry:@[{.qetl.cfg.get_flag `dry_run};::;{0b}];
+    if[0=count m; :$[dry; `dry_run; `run]];
+    m:`$lower m;
+    if[not m in .qetl.job.bounded.runtime.modes;
+        '"mode: ",string[m]," is not one of ",", " sv string .qetl.job.bounded.runtime.modes];
+    if[dry and m~`run; '"mode: run, but dry_run is also set - unset one of them"];
+    m}
+
+/ Is this run diagnostic-only - any mode but `run?
+/ .
+/ Not protected: a mode that cannot be read throws here, and the effect it
+/ was guarding fails with it. Defaulting a broken setting to "write" is how a
+/ rehearsal turns into a run.
+is_dry_run:{[] not `run~mode[]}
+
+/ May this run make `effect`?
+/ @param effect one of suppressed_in_dry_run
+/ @return 1b only in mode `run
+/ @throws an effect not on the list, so a new one cannot bypass the gate
+/ @eg .qetl.job.bounded.runtime.allows `record_run  ->  1b
+allows:{[effect]
+    if[not effect in .qetl.job.bounded.runtime.suppressed_in_dry_run;
+        '"allows: ",string[effect]," is not one of the effects a dry run suppresses - add it to suppressed_in_dry_run"];
+    not is_dry_run[]}
 
 / Perform one named side effect, or record that dry-run withheld it.
 / .

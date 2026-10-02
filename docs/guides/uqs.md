@@ -865,6 +865,7 @@ check it is running:
 uqs list processes                      # the registry sees the new processes
 uqs start --print <procname>                    # the exact start line
 uqs start <procname>                    # streaming jobs
+uqs backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
 uqs backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02
 uqs summary --columns status            # up, and Responds: yes
 uqs summary --debug                     # how long each took to load

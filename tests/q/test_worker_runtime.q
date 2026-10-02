@@ -28,6 +28,7 @@ setUp_fresh:{[]
     .qetl.cfg.reset[];
     .qetl.cfg.set_layers[()!();()!();()!()];
     setenv[`UQF_DRY_RUN;""];
+    setenv[`UQF_MODE;""];
     .qetl.job.bounded.runtime.connected_override:();
     .qetl.job.bounded.runtime.declared_dependencies:(`symbol$())!();
     }
@@ -141,11 +142,49 @@ test_the_gate_applies_arguments_only_on_a_real_run:{[t]
 test_an_unknown_effect_is_rejected:{[t]
     .qunit.assertError[{.qetl.job.bounded.runtime.commit[0b;x;{1};()]};`send_email;"the set of suppressed effects is closed, so nothing bypasses the gate by naming a new effect"]};
 
-/ The requirement is THREE suppressed effects. Suppressing only the row
-/ publication is the dangerous partial: coverage would still claim the window
-/ complete while nothing was written.
-test_dry_run_suppresses_three_effects_not_one:{[t]
-    .qunit.assertEquals[count .qetl.job.bounded.runtime.suppressed_in_dry_run;3;"rows, coverage and the checkpoint are all withheld"]};
+/ EVERY durable effect is on the list - the three a window makes, and the
+/ four that used to leak past it: the run ledger, the facts, the store's
+/ finish (which reloads the HDB) and the reactions. Suppressing only some is
+/ the dangerous partial: a dry run that still wrote etl_runs read as a run.
+test_dry_run_suppresses_every_durable_effect:{[t]
+    .qunit.assertEquals[asc .qetl.job.bounded.runtime.suppressed_in_dry_run;
+        asc `publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions;
+        "rows, coverage, checkpoint, run ledger, facts, store finish and reactions are all withheld"]};
+
+/ --- run modes ---------------------------------------------------
+
+test_the_mode_is_run_unless_something_says_otherwise:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.runtime.mode[];`run;"no setting means a real run"]};
+
+test_the_older_dry_run_flag_still_means_dry_run:{[t]
+    setenv[`UQF_DRY_RUN;"true"];
+    m:.qetl.job.bounded.runtime.mode[];
+    setenv[`UQF_DRY_RUN;""];
+    .qunit.assertEquals[m;`dry_run;"UQF_DRY_RUN=true is the dry_run mode"]};
+
+test_the_mode_setting_names_any_of_the_four:{[t]
+    seen:{[m] .qetl.cfg.set_override[`mode;m]; .qetl.job.bounded.runtime.mode[]} each ("validate";"plan";"DRY_RUN";"run");
+    .qunit.assertEquals[seen;`validate`plan`dry_run`run;"each mode reads back, case-insensitively"]};
+
+test_an_unknown_mode_is_refused_by_name:{[t]
+    .qetl.cfg.set_override[`mode;"rehearse"];
+    .qunit.assertThrows[{.qetl.job.bounded.runtime.mode[]};::;"mode: rehearse is not one of*";"a typo fails rather than running for real"]};
+
+/ One of the two is a mistake, and guessing which either writes when someone
+/ asked not to or does not write when they asked to.
+test_run_together_with_the_dry_run_flag_is_refused:{[t]
+    .qetl.cfg.set_override[`mode;"run"];
+    setenv[`UQF_DRY_RUN;"true"];
+    r:@[{.qetl.job.bounded.runtime.mode[]};::;{x}];
+    setenv[`UQF_DRY_RUN;""];
+    .qunit.assertEquals[r;"mode: run, but dry_run is also set - unset one of them";"the contradiction is named"]};
+
+test_only_a_real_run_is_allowed_an_effect:{[t]
+    seen:{[m] .qetl.cfg.set_override[`mode;m]; .qetl.job.bounded.runtime.allows`record_run} each ("validate";"plan";"dry_run";"run");
+    .qunit.assertEquals[seen;0001b;"validate, plan and dry_run make no durable effect"]};
+
+test_an_effect_off_the_list_cannot_be_asked_about:{[t]
+    .qunit.assertThrows[.qetl.job.bounded.runtime.allows;`send_email;"allows: send_email is not one of*";"a new effect has to be added to the list, not bypass it"]};
 
 test_a_dry_run_publishes_no_coverage_at_all:{[t]
     setenv[`UQF_DRY_RUN;"true"];

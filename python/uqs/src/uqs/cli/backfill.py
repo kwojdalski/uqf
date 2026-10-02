@@ -53,6 +53,16 @@ def backfill(
             autocompletion=completion.choices(*stack_backfill.ON_CONFLICT),
         ),
     ] = None,
+    mode: Annotated[
+        str | None,
+        typer.Option(
+            "--mode",
+            help="validate: check the worker and range, open nothing. plan: also list the "
+            "windows a run would fetch, from the ledgers, read-only. dry-run: also fetch and "
+            "transform, and write nothing. run (the default): all of it",
+            autocompletion=completion.choices(*stack_backfill.MODES),
+        ),
+    ] = None,
     port: PortOpt = DEFAULT_BASE_PORT,
     debug: Annotated[
         bool,
@@ -72,6 +82,10 @@ def backfill(
 
     e.g. `uqs backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15`
 
+    `--mode plan` lists the windows a run would fetch without opening the
+    source or writing anything; `--mode dry-run` fetches them and writes
+    nothing. Their output is in the process's log, like a run's.
+
     `--debug` (or `uqs --debug backfill ...`) starts the process with
     `-verbose`, so its log - `uqs logs <process>` - carries DBG lines.
     """
@@ -85,6 +99,7 @@ def backfill(
             base_port=port,
             verbose=_debug_requested(ctx, debug),
             on_conflict=on_conflict,
+            mode=mode,
         )
     except UqsError as exc:
         _die(exc)

@@ -69,6 +69,7 @@ setUp_fresh:{[]
     .qetl.cfg.reset[];
     .qetl.cfg.set_layers[()!();()!();()!()];
     setenv[`UQF_DRY_RUN;""];
+    setenv[`UQF_MODE;""];
     }
 
 tearDown_release:{[] {.wruntest.call[x;`cleanup][]} each .wruntest.workers[];}
@@ -132,6 +133,64 @@ test_a_dry_run_publishes_nothing_for_every_worker:{[t]
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[count raze bad;0;
         "a dry run leaves every worker's target empty"]};
+
+/ Everything durable a run can change, as one comparable value: each file
+/ under the status dir by size (the coverage ledger, etl_runs, etl_run_meta,
+/ checkpoints), the in-memory ledgers by row count, and the worker's target.
+/ Lock files and the per-run Airflow status files are left out - every mode
+/ takes and releases the lock, and the status file is how a caller hears the
+/ dry run itself finished.
+durable:{[w]
+    dir:.qetl.job.bounded.state.lock_dir[];
+    fs:key hsym `$dir;
+    fs:fs where not (fs like "*.lock") or fs like "airflow_status_*";
+    sizes:{[dir;f] hcount hsym `$dir,"/",string f}[dir] each fs;
+    tabs:`etl_coverage`etl_runs`etl_run_meta;
+    rows:{$[x in tables `.; count value x; -1]} each tabs;
+    (fs!sizes;tabs!rows;count value (.qetl.job.bounded.def w)`dataset)}
+
+/ THE GUARD AGAINST A DRY RUN THAT IS NOT DRY. Rather than listing what a dry
+/ run must not touch - the list that used to leak, because the run ledger,
+/ the facts and the store's finish never reached it - this compares
+/ everything durable before and after a full run, for every worker. A new
+/ write anywhere in the run path fails it, whoever adds it.
+test_a_dry_run_leaves_everything_durable_as_it_was:{[t]
+    / Attached first, so a run that wrote etl_runs would show up as rows.
+    .qetl.run.attach[];
+    setenv[`UQF_MODE;"dry_run"];
+    bad:{[w]
+        spec:.wruntest.prepare w;
+        before:.wruntest.durable w;
+        .wruntest.call[w;`init][spec];
+        r:.wruntest.call[w;`run][];
+        after:.wruntest.durable w;
+        $[(before~after) and r[`windows_completed]>0; (); enlist (w;before;after)]
+        } each .wruntest.workers[];
+    setenv[`UQF_MODE;""];
+    .qunit.assertEquals[count raze bad;0;
+        "a dry run of every worker fetches and transforms, and leaves every ledger, checkpoint and target as it found them"]};
+
+/ validate and plan never open the source or touch anything durable, and the
+/ plan is the run: the windows plan names are the windows a run then
+/ completes, and once they are covered the plan is empty.
+test_validate_and_plan_touch_nothing_and_plan_what_a_run_does:{[t]
+    .qetl.run.attach[];
+    bad:{[w]
+        spec:.wruntest.prepare w;
+        before:.wruntest.durable w;
+        v:.qetl.job.bounded.validate[w;spec];
+        p:.qetl.job.bounded.plan_only[w;spec];
+        after:.wruntest.durable w;
+        .wruntest.call[w;`init][spec];
+        r:.wruntest.call[w;`run][];
+        .wruntest.call[w;`cleanup][];
+        again:.qetl.job.bounded.plan_only[w;spec];
+        ok:(before~after) and (`validated~v`state) and (`planned~p`state) and
+            (p[`planned]=r`windows_completed) and (0<p`planned) and 0=again`planned;
+        $[ok; (); enlist (w;v`state;p`planned;r`windows_completed;again`planned)]
+        } each .wruntest.workers[];
+    .qunit.assertEquals[count raze bad;0;
+        "validate and plan write nothing, and plan names exactly the windows a run completes"]};
 
 test_every_worker_checkpoints_through_its_own_delegator:{[t]
     / `run` reaches the shell's checkpoint directly, so the stamped

@@ -168,11 +168,31 @@ or by `uqs backfill <worker> --version V --from F --to T`.
   | `range_from`     | timestamp | inclusive start                                                                                                                 | not before `range_to`         |
   | `range_to`       | timestamp | exclusive end                                                                                                                   | not after `range_from`        |
 
-Setting `UQF_DRY_RUN` makes a run publish no rows, record no coverage and write
-no checkpoint. `uqs backfill --on-conflict S` (or `UQF_ON_CONFLICT`) runs it
-under strategy `S` instead of the worker's `on_conflict`. A window whose write
-fails --- a `fail` clash, or rows the store refuses --- fails on its own:
-nothing covered, planned again next run, and the run goes on.
+A run has a mode, set by `uqs backfill --mode M` (or `UQF_MODE`). Each opens and
+writes strictly more than the one before:
+
+  | mode       | reads config & code | reads the local ledgers | queries the source | writes anything durable |
+  | ---        | ---                 | ---                     | ---                | ---                     |
+  | `validate` | yes                 | no                      | no                 | no                      |
+  | `plan`     | yes                 | read-only               | no                 | no                      |
+  | `dry_run`  | yes                 | yes                     | yes                | no                      |
+  | `run`      | yes                 | yes                     | yes                | yes                     |
+
+`validate` checks the declaration, contract, fixture, range and conflict
+strategy, and reports whether a credential is set without using it. `plan` lists
+the windows a run would fetch now, from coverage and the checkpoint. `dry_run`
+fetches, transforms and checks every window, and records nothing: no rows,
+coverage, checkpoint, `etl_runs` row or facts, no reactions, and no HDB finish
+or reload. Every one of those effects is named in
+`.qetl.job.bounded.runtime.suppressed_in_dry_run`, and a new effect must be
+added there to be gated at all; `tests/q/test_every_worker_runs.q` compares
+everything durable before and after a dry run of every worker, so a write that
+slips past the list fails it. `UQF_DRY_RUN=true` still means `dry_run`, and is
+refused together with an explicit `run`. `uqs backfill --on-conflict S` (or
+`UQF_ON_CONFLICT`) runs it under strategy `S` instead of the worker's
+`on_conflict`. A window whose write fails --- a `fail` clash, or rows the store
+refuses --- fails on its own: nothing covered, planned again next run, and the
+run goes on.
 
 ## Streaming job --- `.qetl.job.stream.define`
 

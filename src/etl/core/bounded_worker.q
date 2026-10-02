@@ -418,12 +418,14 @@ init:{[worker;run_spec]
     if[not first r; cleanup worker; 'last r];
     last r}
 
-/ The initialisation itself. Never call this directly - `init` is what
-/ releases the lock when this throws.
+/ Private: every check that needs neither a ledger nor the source - the
+/ run's spec, the worker's contract, the source's fixture, the conflict
+/ strategy. Shared by init and by the validate and plan modes, so the three
+/ cannot disagree about what a valid run is.
 / @param worker the worker's name
-/ @param run_spec the run specification - source_version, range_from, range_to
-/ @return the worker's name
-init_body:{[worker;run_spec]
+/ @param run_spec dict of source_version, range_from, range_to
+/ @return the run specification, as stored
+check_static:{[worker;run_spec]
     cfg:def worker;
     write_state[worker;`source_version;run_spec`source_version];
     write_state[worker;`range_from;run_spec`range_from];
@@ -439,6 +441,50 @@ init_body:{[worker;run_spec]
 
     .qetl.source.validate_fixture cfg`source;
     .qetl.log.dbg[worker;"init: source fixture satisfies the contract";enlist[`source]!enlist cfg`source];
+    on_conflict worker;
+    spec worker}
+
+/ The validate mode: is this a run that could start? Checks the declaration,
+/ the contract, the fixture, the range and the conflict strategy, and reports
+/ whether a credential is configured - without using it. Reads no ledger,
+/ takes no lock, opens no source and writes nothing, so it is safe anywhere,
+/ CI included.
+/ @param worker the worker's name
+/ @param run_spec dict of source_version, range_from, range_to
+/ @return dict describing the run that would start
+/ @throws whatever check_static throws - the first thing wrong with the run
+validate:{[worker;run_spec]
+    cfg:def worker;
+    s:check_static[worker;run_spec];
+    src:.qetl.source.def cfg`source;
+    s,`state`worker`source`target`dataset`width`windows`on_conflict`live!
+        (`validated;worker;cfg`source;src`target;cfg`dataset;cfg`width;
+         count .qetl.job.bounded.runtime.windows[s`range_from;s`range_to;cfg`width];
+         on_conflict worker;.qetl.source.has_credentials cfg`source)}
+
+/ The plan mode: what would a run fetch? Validates, then reads the coverage
+/ ledger and the checkpoint - read-only - and returns the windows a run would
+/ fetch now. Takes no lock and opens no source, so it cannot say how many
+/ rows those windows hold; a dry run can.
+/ @param worker the worker's name
+/ @param run_spec dict of source_version, range_from, range_to
+/ @return validate's report, with the planned windows, how many there are,
+/   and the checkpoint the run would resume from
+plan_only:{[worker;run_spec]
+    v:validate[worker;run_spec];
+    .qetl.coverage.attach[];
+    cursor:.qetl.job.bounded.state.load_checkpoint[worker;spec worker];
+    ws:own[worker;`plan][cursor];
+    v,`state`planned`cursor`plan!(`planned;count ws;cursor;ws)}
+
+/ The initialisation itself. Never call this directly - `init` is what
+/ releases the lock when this throws.
+/ @param worker the worker's name
+/ @param run_spec the run specification - source_version, range_from, range_to
+/ @return the worker's name
+init_body:{[worker;run_spec]
+    cfg:def worker;
+    check_static[worker;run_spec];
 
     / Validate the ledger's shape before trusting a read of it (#60). Only
     / bites when the ledger already existed, i.e. when another process
@@ -686,7 +732,7 @@ run:{[worker]
 / dry run, which changes nothing on disk.
 / @return how many partitions were queued
 recover_unfinished:{[worker]
-    if[.qetl.job.bounded.runtime.is_dry_run[]; :0];
+    if[not .qetl.job.bounded.runtime.allows`finish_store; :0];
     s:spec worker;
     n:.qetl.io.recover[.qetl.io.for_cfg def worker;(.qetl.source.def (def worker)`source)`target;
         s`range_from;s`range_to];
@@ -694,6 +740,13 @@ recover_unfinished:{[worker]
         .qetl.log.warn[worker;"found partitions an earlier run wrote and never finished - finishing them with this run";
             enlist[`partitions]!enlist n]];
     n}
+
+/ Private: the io manager's end-of-run step, behind the dry-run gate. A dry
+/ run wrote nothing, so a store has nothing to finish - and an HDB writer's
+/ finish asks the HDB to reload, which a rehearsal must not.
+/ @param worker the worker's name
+finish_store:{[worker]
+    if[.qetl.job.bounded.runtime.allows`finish_store; .qetl.io.finish .qetl.io.for_cfg def worker]}
 
 / The run itself. Never call this directly - `run` is what releases the lock.
 / @param worker the worker's name
@@ -720,7 +773,7 @@ run_body:{[worker]
         / Finish what recover_unfinished found, which is the only thing an
         / idle run has to do - and only then, so an idle run with nothing to
         / repair does not ask the HDB to reload for nothing.
-        if[recovered>0; .qetl.io.finish .qetl.io.for_cfg def worker];
+        if[recovered>0; finish_store worker];
         end_run[`idle;run_counts[0;0;0;0]];
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
@@ -742,7 +795,7 @@ run_body:{[worker]
     / runs (the HDB writer sorts and attributes its partitions here). A
     / manager with no finish - memory, discard - makes this a no-op, and a
     / dry run, which wrote nothing, gives it nothing to do.
-    .qetl.io.finish .qetl.io.for_cfg def worker;
+    finish_store worker;
     p:read_state[worker;`progress];
     result:`state`windows_completed`windows_failed`rows_published`cursor!
         ($[p[`windows_failed]>0;`partial;`completed];
@@ -794,7 +847,8 @@ run_body:{[worker]
 / @eg .qetl.job.bounded.exit_code `idle  ->  0i
 / @eg .qetl.job.bounded.exit_code `partial  ->  1i
 / @eg .qetl.job.bounded.exit_code `failed  ->  1i
-exit_code:{[state] $[state in `completed`idle; 0i; 1i]}
+/ @eg .qetl.job.bounded.exit_code `planned  ->  0i
+exit_code:{[state] $[state in `completed`idle`validated`planned; 0i; 1i]}
 
 / Private: open this execution's run, tolerating an absent .qetl.run.
 / .
@@ -807,6 +861,8 @@ exit_code:{[state] $[state in `completed`idle; 0i; 1i]}
 / and window width - the same columns for every worker, so etl_runs reads as
 / one table of every backfill.
 begin_run:{[worker]
+    / Not on a dry run: a rehearsal's row in etl_runs reads as a run.
+    if[not .qetl.job.bounded.runtime.allows`record_run; :(::)];
     @[{[w] cfg:def w; s:spec w;
         .qetl.run.begin[w;`dataset`source_version`range_from`range_to`width!
             (cfg`dataset;s`source_version;s`range_from;s`range_to;cfg`width)]};
@@ -820,7 +876,9 @@ begin_run:{[worker]
 / .
 / With the run's counts: windows planned, completed and failed, and rows
 / published.
-end_run:{[state;counts] .[{.qetl.run.finish[x;y]};(state;counts);{[e] (::)}]}
+end_run:{[state;counts]
+    if[not .qetl.job.bounded.runtime.allows`record_run; :(::)];
+    .[{.qetl.run.finish[x;y]};(state;counts);{[e] (::)}]}
 
 / Private: a run's counts, as end_run records them.
 run_counts:{[planned;completed;failed;rows]
@@ -975,7 +1033,7 @@ do_window:{[worker;w]
     / .
     / Protected like begin_run for the same reason - react.q is not a load
     / time dependency and a minimal loader must still run a worker.
-    if[not r`dry_run;
+    if[.qetl.job.bounded.runtime.allows`notify_reactions;
         / The batch and the IO manager go with it: a reaction reads what was
         / published rather than wherever it was written, and writes its own
         / output where this worker wrote - under .qetl.io.hdb there is no
@@ -994,7 +1052,7 @@ do_window:{[worker;w]
     / the cursor and coverage, so nothing is shown that the run has not
     / recorded. A no-op for a manager without flush, and on a dry run, which
     / wrote nothing.
-    .qetl.io.flush[.qetl.io.for_cfg cfg;w`range_to];
+    if[.qetl.job.bounded.runtime.allows`finish_store; .qetl.io.flush[.qetl.io.for_cfg cfg;w`range_to]];
     .qetl.hb.beat_window[worker];
     1b}
 
@@ -1033,6 +1091,11 @@ record_facts:{[worker;cfg;w;batch;r]
         .qetl.log.err[worker;"facts function returned a non-dictionary";
             `range_from`range_to!(w`range_from;w`range_to)];
         declared:()!()];
+    / A dry run computes the facts - "what would this window have recorded"
+    / is worth seeing - and records none of them.
+    if[not .qetl.job.bounded.runtime.allows`record_facts;
+        :.qetl.log.info[worker;"dry run - facts not recorded";
+            `range_from`range_to`facts!(w`range_from;w`range_to;framework,declared)]];
     @[{[a] .qetl.run.record . a};
       (cfg`dataset;w`range_from;w`range_to;framework,declared);
       {[e] (::)}]}
