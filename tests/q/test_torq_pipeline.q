@@ -204,6 +204,29 @@ test_a_reload_that_throws_counts_as_not_reloaded:{[t]
     .qetl.log.err:saved;
     .qunit.assertEquals[(n;.pipetest.errs_seen);(1;enlist "hdb reload failed");"one reloaded, one logged as failed"]};
 
+/ reload_hdb itself, not only reload_handles: the tests above never reached
+/ its own lookup, and that lookup is what failed - `where proctype=hdb_type`
+/ inside an exec does not find .qtorq.hdb_type from a .qtorq function, so
+/ every backfill's on_ready logged error="hdb_type" after writing its rows.
+/ TorQ's server registry and connection lookup are stood in for, and put
+/ back (or removed, when this process had none) whatever the call does.
+test_reload_hdb_asks_every_registered_hdb_and_nothing_else:{[t]
+    had:@[{key x};`.servers;{[e] `symbol$()}];
+    keep:{[had;n] $[n in had; (1b;.servers n); (0b;::)]}[had] each `SERVERS`getservers;
+    `.servers.SERVERS set ([] procname:`hdb1`hdb2`rdb1; proctype:`hdb`hdb`rdb; w:3#0Ni);
+    `.pipetest.asked set ();
+    / Parameter names that are not builtins: `by` (a qSQL keyword) and `attr`
+    / each throw 'match as a parameter name.
+    `.servers.getservers set {[field;wanted;attrs;autoopen;onlyone]
+        .pipetest.asked,:enlist (field;wanted);
+        ([] w:$[wanted~`hdb; (.pipetest.hdb_ok;.pipetest.hdb_ok); ()])};
+    .pipetest.reload_seen:();
+    n:@[.qtorq.reload_hdb;::;{[e] `threw,e}];
+    {[nm;k] $[first k; (` sv `.servers,nm) set last k; ![`.servers;();0b;enlist nm]]}'[`SERVERS`getservers;keep];
+    .qunit.assertEquals[n;2;"both registered HDBs are counted and reloaded - no hdb_type error"];
+    .qunit.assertEquals[.pipetest.asked;enlist (`proctype;`hdb);"and only HDBs are looked up, not the rdb"];
+    .qunit.assertEquals[.pipetest.reload_seen;2#enlist (`reload;.z.d);"each is sent today's reload"]};
+
 / Temp password files for the credential tests.
 pwfile:{[name;line] f:hsym `$(first system"mktemp -d"),"/",name; f 0: enlist line; f}
 
