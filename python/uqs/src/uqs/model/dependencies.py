@@ -135,6 +135,32 @@ def depends_on_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tup
     return out
 
 
+def worker_edges(
+    pipelines: Iterable[Any] = PIPELINES,
+) -> dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]]:
+    """{procname: (inputs, outputs, depends on)} for every backfill process,
+    from what its bounded worker declares.
+
+    Kept apart from `inputs_by_process` deliberately. A worker's source is a
+    system outside the stack - a DuckDB file, another q process, Databento -
+    not a plant table, so nothing in the process list publishes it. Folding it
+    in would have `starved_processes` report every running backfill as
+    unfed, the warning-that-is-usually-wrong EXTERNAL_PRODUCERS exists to
+    avoid. The source is labelled as one, so it does not read as a table.
+    """
+    out = {}
+    for pipeline in pipelines:
+        if pipeline.worker is None:
+            continue
+        source = pipeline.source
+        out[pipeline.procname] = (
+            (f"{source} (source)",) if source else (),
+            (pipeline.dataset,) if pipeline.dataset else (),
+            (f"({source}: external)",) if source else (),
+        )
+    return out
+
+
 def dependency_rows(pipelines: Iterable[Any] = PIPELINES) -> list[dict[str, str]]:
     """One row per (process, input table): who needs what, and who provides it.
 

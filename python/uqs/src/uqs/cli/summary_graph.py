@@ -44,6 +44,10 @@ def attach_graph_columns(rows: list[dict[str, str]]) -> None:
     checks and `database.q` is generated from, so a process's row here cannot
     claim an edge the build would reject.
 
+    A backfill has no tickerplant edges at all; its row shows what its
+    bounded worker declares instead - the source it reads, the dataset it
+    writes - so it is not mistaken for a process that touches nothing.
+
     A vendored TorQ process has no `Pipeline` entry and so no declared edges;
     it gets the same dash as a uqf process that genuinely has none, because
     this table is not the place to explain the difference.
@@ -51,6 +55,8 @@ def attach_graph_columns(rows: list[dict[str, str]]) -> None:
     inputs = dependencies.inputs_by_process()
     outputs = dependencies.outputs_by_process()
     depends = dependencies.depends_on_by_process()
+    for procname, (reads, writes, needs) in dependencies.worker_edges().items():
+        inputs[procname], outputs[procname], depends[procname] = reads, writes, needs
     for row in rows:
         name = row["Process"]
         row["Depends on"] = graph_cell(depends.get(name, ()))

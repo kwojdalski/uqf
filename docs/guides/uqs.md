@@ -508,6 +508,8 @@ uqs summary --columns "Process,Depends on,Inputs,Outputs"
 │ databento1   │ (databento_mbp10: external) │ databento_mbp10       │ databento_book │
 │ executions1  │ fxtradesfeed1, cryptomock1, │ trades, crypto_trades │ executions     │
 │              │ (crypto_trades: external)   │                       │                │
+│ upstream_    │ (upstream_trades: external) │ upstream_trades       │ imported_trades│
+│ backfill1    │                             │ (source)              │                │
 ```
 
 `Inputs` and `Outputs` are the tables a process subscribes to and publishes;
@@ -515,9 +517,13 @@ uqs summary --columns "Process,Depends on,Inputs,Outputs"
 is the question behind every `up, but idle` line above. A table produced from
 outside the process list is named as external rather than dropped - "nothing in
 this list provides it" and "nothing provides it" are different facts, and only
-one is a problem. Cells break at the commas once there are more than two
-entries, so a table name is never split across lines, and a process with no
-declared edges - every vendored TorQ one - shows a dash.
+one is a problem. A backfill subscribes and publishes nothing on the plant, so
+its row shows what its bounded worker declares instead: the `source` it reads,
+marked `(source)` and external, and the `dataset` it writes. That source never
+counts towards the `up, but idle` warning - nothing in the stack could publish
+it. Cells break at the commas once there are more than two entries, so a table
+name is never split across lines, and a process with no declared edges - every
+vendored TorQ one - shows a dash.
 
 Ten columns need a wide terminal; at eighty they squeeze and Rich elides the
 headers. `--columns status` gives the seven status columns back. They are shown

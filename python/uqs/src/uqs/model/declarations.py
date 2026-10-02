@@ -52,6 +52,11 @@ class Declaration:
     start_with_all: bool
     note: str
     path: Path
+    #: A bounded worker's `source` - where it reads, outside the stack - and
+    #: `dataset`, the table it writes. Empty for a streaming job, whose edges
+    #: are its tickerplant subscriptions and publishes instead.
+    source: str = ""
+    dataset: str = ""
 
     @property
     def worker(self) -> str | None:
@@ -175,7 +180,20 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
         if "start_with_all" in fields:
             raise UqsError(f"{where}: a bounded worker never starts with the stack")
         proc = symbols(fields["procname"]) if "procname" in fields else (f"{name}1",)
-        return Declaration(name, proc[0], PipelineKind.BACKFILL, (), (), False, note, path)
+        source = symbols(fields.get("source", ""))
+        dataset = symbols(fields.get("dataset", ""))
+        return Declaration(
+            name,
+            proc[0],
+            PipelineKind.BACKFILL,
+            (),
+            (),
+            False,
+            note,
+            path,
+            source=source[0] if source else "",
+            dataset=dataset[0] if dataset else "",
+        )
     proc = symbols(fields.get("procname", ""))
     if not proc:
         raise UqsError(f"{where}: declares no procname")
