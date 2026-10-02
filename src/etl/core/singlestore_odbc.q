@@ -198,10 +198,20 @@ with_connection:{[conn;f]
 / being 2-ary, returned a PROJECTION rather than a table. Nothing threw, the
 / handler never fired, and the first live caller found out when `meta` on
 / the "table" failed. Found the first time this file ran against a driver.
+/ .
+/ The statement is logged at TRC (.qetl.log.trace) before it is sent - so a
+/ query that hangs is in the log - and again with the rows and milliseconds
+/ when it returns. Every ODBC source sends through here, so this is the one
+/ place a backfill's SQL is visible.
 run_sql:{[h;sql]
     require_available[];
-    .[{[hd;st] .odbc.eval[hd;st]};(h;sql);
-      {[sql;e] '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql]]}
+    t0:.z.p;
+    .[{.qetl.log.trc[x;y;z]};(`odbc;"sql sent";enlist[`statement]!enlist sql);::];
+    r:.[{[hd;st] .odbc.eval[hd;st]};(h;sql);
+      {[sql;e] '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql]];
+    .[{.qetl.log.trc[x;y;z]};(`odbc;"sql returned";
+        `rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
+    r}
 
 / The tables visible on a connection.
 / .

@@ -249,10 +249,10 @@ row_key:`rate_time`sym         / what identifies a row uniquely
 tz:`UTC                        / what time_column is expressed in
 
 query:{[h;range_from;range_to]
-    h({[from_ts;to_ts]
+    .qetl.source.ipc[h;{[from_ts;to_ts]
         select rate_time, sym, mid from `fx_rates
             where rate_time>=from_ts, rate_time<to_ts
-      };range_from;range_to)}
+      };range_from;range_to]}
 
 fixture:{[]
     ([] rate_time:2026.09.11D09:00:00.000000000+1D*til 5;
@@ -284,7 +284,10 @@ value is ever spliced into query text.
 `"select ... where t>=",string range_from` is how a crafted value becomes an
 injection, and how a type coercion becomes a silently wrong window rather than
 an error. Where a driver cannot parameterise --- ODBC --- there is exactly one
-escape function, `.qetl.io.odbc.literal`, and everything goes through it.
+escape function, `.qetl.io.odbc.literal`, and everything goes through it. It is
+sent with `.qetl.source.ipc`, not `h(...)`: that is what logs the lambda and its
+bounds at TRACE, so `uqs backfill --trace` shows every query a run sends, as
+`.qetl.io.odbc.run_sql` does for SQL.
 
 **The window is half-open `[from;to)`** --- `>=` on the lower bound and `<` on
 the upper. One wrong operator double-publishes every boundary row, and the

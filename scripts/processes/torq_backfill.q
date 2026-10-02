@@ -40,6 +40,10 @@
 /             window as it starts and publishes, and each stage's timing.
 /             `uqs backfill --debug` passes it. Not TorQ's own -debug, which
 /             also stops the log going to its file.
+/   -trace    optional: switch the TRC level on - every query the source is
+/             sent, the SQL statement or the q lambda and its bounds, before
+/             it goes and again with the rows and milliseconds it took.
+/             Independent of -verbose. `uqs backfill --trace` passes it.
 /   -on_conflict  optional: upsert, replace, ignore, append or fail - what a
 /             write does with a row whose row_key is already there, for this
 /             run only, over the worker's declared strategy.
@@ -120,6 +124,11 @@ elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -verbose was given
 verbose:{[opts] `verbose in key opts}
+
+/ Whether this process was asked for TRC output.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return 1b when -trace was given
+trace:{[opts] `trace in key opts}
 
 / Apply -on_conflict, when given, as this run's strategy - set as the
 / on_conflict config override, which .qetl.job.bounded.on_conflict reads
@@ -295,6 +304,7 @@ run:{[]
 / DBG before anything else logs, so -verbose covers discovery too. .qetl.log is
 / only defined once the tree above has loaded.
 if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
+if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.trace 1b];
 .qetl.log.dbg[`backfill;"debug logging on";
     `procname`pid`port`cwd!(.proc.procname;.z.i;system"p";first system"pwd")];
 

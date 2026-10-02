@@ -652,6 +652,30 @@ coerce:{[source;tbl]
 
 / ------------------------------------------------------------- FETCHING
 
+/ Send an IPC source's query: call `f` on the handle with the window's bounds,
+/ logging the call at TRC (.qetl.log.trace) - the lambda's text and the bounds
+/ it runs with - before it is sent, and the rows and milliseconds when it
+/ returns.
+/ .
+/ The ipc counterpart of .qetl.io.odbc.run_sql, so one switch shows every
+/ query a backfill sends whichever transport it uses. A source's `query`
+/ calls this rather than `h(f;from;to)` itself - a direct call is invisible
+/ to tracing, which python/uqs/tests/test_source_queries.py refuses.
+/ @param h the handle to the source process
+/ @param f the function the source process runs, taking (from_ts;to_ts)
+/ @param range_from the inclusive lower bound, in the source's clock
+/ @param range_to the exclusive upper bound
+/ @return what `f` returns on the far side: the window's rows
+/ @eg .qetl.source.ipc[{value x};{[a;b] ([] x:a,b)};1;2] -> ([] x:1 2)
+ipc:{[h;f;range_from;range_to]
+    t0:.z.p;
+    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";
+        `call`range_from`range_to!(-3!f;range_from;range_to));::];
+    r:h(f;range_from;range_to);
+    .[{.qetl.log.trc[x;y;z]};(`ipc;"query returned";
+        `rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
+    r}
+
 / Fetch one window, from the live source or from the fixture.
 / .
 / The fixture is not a fallback for a FAILED connection - that would turn an

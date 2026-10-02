@@ -68,10 +68,10 @@ tz:`UTC
 / @param range_to exclusive upper bound
 / @return the upstream's rows in the window, in its own shape
 query:{[h;range_from;range_to]
-    h({[from_ts;to_ts]
+    .qetl.source.ipc[h;{[from_ts;to_ts]
         select time, sym, ex, price, size, side from `trade
             where date within `date$(from_ts;to_ts), time>=from_ts, time<to_ts
-      };range_from;range_to)}
+      };range_from;range_to]}
 
 / ------------------------------------------------------------ THE FIXTURE
 

@@ -445,4 +445,42 @@ test_an_undeclared_example_is_not_an_empty_string:{[t]
     .qunit.assertTrue[0<count .qetl.source.credential_example `demo_deals;
         "so the accessor must test the value, not the key"]};
 
+
+/ --- .qetl.source.ipc: an IPC query, traced ------------------------------
+
+/ Every log line `f` writes, as (level;id;text;fields): a recorder in place of
+/ .qetl.log.line, ahead of the TRC switch test_log.q covers.
+logged:{[f]
+    keep:.qetl.log.line; `.srctest.lines set ();
+    .qetl.log.line:{[level;id;text;fields] .srctest.lines,:enlist (level;id;text;fields)};
+    @[f;::;::]; .qetl.log.line:keep;
+    .srctest.lines}
+
+/ A stand-in handle: evaluates the message as the far side would.
+fake_handle:{value x}
+
+test_ipc_sends_the_call_and_returns_its_rows:{[t]
+    r:.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2];
+    .qunit.assertEquals[r;([] x:1 2);"the handle runs the lambda on the bounds, and its rows come back"]};
+
+test_ipc_traces_the_lambda_and_its_bounds:{[t]
+    lines:.srctest.logged {.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2]};
+    .qunit.assertEquals[lines[;0 1 2];((`TRC;`ipc;"query sent");(`TRC;`ipc;"query returned"));
+        "one TRC line before the call, one after"];
+    sent:(first lines)[3];
+    .qunit.assertEquals[(sent`call;sent`range_from;sent`range_to;(last lines)[3]`rows);
+        ("{[a;b] ([] x:a,b)}";1;2;2);"the lambda's own text and both bounds, then the row count"]};
+
+test_a_live_ipc_source_query_is_traced:{[t]
+    / Through demo_deals' real `query`, with a handle that only records what
+    / it is sent - so this proves the source is wired through the helper,
+    / not just that the helper works.
+    / The handle is a global, not an argument: `logged {[h] ...}[h]` would
+    / run the fetch BEFORE logged installs its recorder.
+    `.srctest.h set {`.srctest.sent set x; ([] deal_id:`long$())};
+    lines:.srctest.logged {.qetl.source.fetch_window[`demo_deals;.srctest.h;.srctest.d 1;.srctest.d 2]};
+    .qunit.assertEquals[`ipc`ipc;2#lines[;1] where `TRC=lines[;0];"the live query is traced, sent and returned"];
+    .qunit.assertEquals[(type first .srctest.sent;1_.srctest.sent);(100h;(.srctest.d 1;.srctest.d 2));
+        "the handle is sent (lambda;from;to) - a UTC source's bounds unchanged"]};
+
 \d .
