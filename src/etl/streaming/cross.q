@@ -71,12 +71,17 @@ quotes:update `g#sym from quotes_in;
 / The repriced crosses, appended to on every batch.
 crosses:cross_quotes;
 
+/ The pairs the last reprice could not price, so a WARN is logged when that
+/ set changes rather than on every batch.
+unpriced:`symbol$();
+
 / Take the batch into the mirror, then reprice every cross pair as of one
 / instant read here.
 / .
-/ A pair with no price is logged by name. The reason is not in the line -
-/ the transform has no logger - so check that pair's legs are quoted when one
-/ keeps appearing.
+/ A pair with no price is logged by name, as a WARN when the set of unpriced
+/ pairs changes and at DBG on every reprice after that - a pair whose leg is
+/ never quoted would otherwise warn on every batch. The reason is not in the
+/ line - the transform has no logger - so check that pair's legs are quoted.
 / @param t the table the batch arrived on
 / @param x the rows, as a table, already carrying `time`
 / @return nothing
@@ -96,7 +101,11 @@ reprice:{[now]
     out:.qetl.transform.apply_as_of[`cross_quotes;enlist[`quotes]!enlist .qpipe.job.cross.quotes;now];
     missing:.qpipe.job.cross.cross_pairs except out`sym;
     if[count missing;
-        .qetl.log.info[`cross;"pairs could not be priced";enlist[`pairs]!enlist missing]];
+        $[missing~.qpipe.job.cross.unpriced; .qetl.log.dbg; .qetl.log.warn][
+            `cross;"pairs could not be priced";enlist[`pairs]!enlist missing]];
+    if[count back:.qpipe.job.cross.unpriced except missing;
+        .qetl.log.info[`cross;"pairs priced again";enlist[`pairs]!enlist back]];
+    .qpipe.job.cross.unpriced:missing;
     if[count out; `.qpipe.job.cross.crosses insert out];
     out}
 

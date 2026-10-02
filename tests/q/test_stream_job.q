@@ -31,6 +31,7 @@ reset:{[]
     `.qpipe.job.markout.quote_hist set 0#.qpipe.job.markout.quote_hist;
     `.qpipe.job.cross.quotes set 0#.qpipe.job.cross.quotes;
     `.qpipe.job.cross.crosses set 0#.qpipe.job.cross.crosses;
+    `.qpipe.job.cross.unpriced set `symbol$();
     `.qpipe.job.superbook.books set `sym`source xkey .qpipe.job.market_data.market_data;
     `.qpipe.job.posbook.book set 1!0#.qpipe.job.posbook.position_book;
     `.qpipe.job.posbook.last_mid set (`symbol$())!`float$();
@@ -417,6 +418,36 @@ test_cross_reprices_a_pair_it_can_chain:{[t]
     out:.qpipe.job.cross.reprice[d 1];
     .qunit.assertEquals[out`sym;enlist `EURJPY;
         "only the cross whose legs are quoted comes out"]};
+
+/ Every log line `f` writes under `id`, as (level;text;fields), through a
+/ recorder put in place of .qetl.log.line - the one function warn/dbg/info
+/ all call - and the real one restored even when `f` throws. Filtered by id
+/ because the transform `f` calls logs lines of its own.
+logged:{[id;f]
+    keep:.qetl.log.line; `.sjtest.lines set ();
+    .qetl.log.line:{[level;who;text;fields] .sjtest.lines,:enlist (who;level;text;fields)};
+    r:@[f;::;{x}]; .qetl.log.line:keep;
+    if[10h=type r; 'r];
+    1_/:.sjtest.lines where id=first each .sjtest.lines}
+
+test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
+    / Only EURUSD is quoted, so every cross is unpriced. The first reprice
+    / warns; the same set again is DBG - at INF or WARN it repeated on every
+    / batch. Quoting USDJPY prices EURJPY, which is logged as priced again,
+    / and the smaller unpriced set warns afresh.
+    / The mirror is fed directly: on_batch reprices on its own, which would
+    / spend the first warning before it could be observed.
+    reset[];
+    `.qpipe.job.cross.quotes insert quote_row[d 0;`EURUSD;1.1;1.1002];
+    first_lines:logged[`cross;{.qpipe.job.cross.reprice d 1}];
+    again:logged[`cross;{.qpipe.job.cross.reprice d 1}];
+    `.qpipe.job.cross.quotes insert quote_row[d 0;`USDJPY;150f;150.02];
+    fixed:logged[`cross;{.qpipe.job.cross.reprice d 1}];
+    .qunit.assertEquals[first_lines[;0];enlist `WARN;"a newly unpriced set warns"];
+    .qunit.assertEquals[again[;0];enlist `DBG;"the same set again is only DBG"];
+    .qunit.assertEquals[fixed[;0 1];((`WARN;"pairs could not be priced");(`INF;"pairs priced again"));
+        "a smaller set warns, and the recovered pair is named"];
+    .qunit.assertEquals[(last fixed)[2]`pairs;enlist `EURJPY;"EURJPY is the pair priced again"]};
 
 test_cross_accumulates_rather_than_publishing:{[t]
     / cross1 declares no published table: its output is process-local, and

@@ -770,6 +770,7 @@ qpipe.job.cross,quotes,table,,
 qpipe.job.cross,quotes_in,table,,
 qpipe.job.cross,reprice,function,1,now
 qpipe.job.cross,reprice_crosses,function,2,quotes as_of
+qpipe.job.cross,unpriced,value,,
 qpipe.job.cross_arbitrage,books,dict,,
 qpipe.job.cross_arbitrage,cross_arbitrage,table,,
 qpipe.job.cross_arbitrage,direct_side,function,3,row side size
