@@ -1,0 +1,81 @@
+# markouts.d2 - how a fill gets marked out: live, or backfilled from the HDB.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/services/markouts.md.
+#
+# WHAT THIS DIAGRAM IS FOR. Two jobs write execution_quality, and the thing
+# worth seeing is what they SHARE: one scoring function and one set of
+# horizons, drawn once in the middle with both paths running through it.
+# That is why a fill scored by both comes out identical, and why the table's
+# key (sym, trade_time, horizon) can replace one with the other instead of
+# counting the fill twice. The live path is on the left, as it happens; the
+# backfill on the right, as it reads what the live path left on disk.
+
+direction: down
+
+vars: {
+  d2-config: {
+    pad: 40
+  }
+}
+
+classes: {
+  job: {
+    style: {
+      fill: "#eaf5ef"
+      stroke: "#3d7a5a"
+      font-color: "#1d4733"
+      border-radius: 6
+    }
+  }
+  table: {
+    shape: cylinder
+    style: {
+      fill: "#eef3fb"
+      stroke: "#4a6a9a"
+      font-color: "#1f3557"
+    }
+  }
+  shared: {
+    style: {
+      fill: "#fbf3df"
+      stroke: "#a8762f"
+      font-color: "#5c3f13"
+      border-radius: 6
+      stroke-width: 2
+    }
+  }
+  store: {
+    style: {
+      fill: "#f2f2f2"
+      stroke: "#5a6a78"
+      font-color: "#2b3640"
+      border-radius: 6
+    }
+  }
+}
+
+live: "LIVE: markout1" {
+  tp: "stp1 publishes\ntrades · quote" { class: store }
+  buffer: "buffers fills and quotes in its own process\n(lost if it restarts)\nevery 1s: picks the fills whose\nlongest horizon has passed" { class: job }
+  tp -> buffer: "subscribe"
+}
+
+backfill: "BACKFILL: hdb_markouts_backfill1" {
+  hdb: "hdb1 on disk\ntrades · quote" { class: store }
+  query: "source hdb_markouts, one window [from, to)\n1. fills with trade time in [from, to)\n2. quotes in [from, to + 10s)\nno fills: no quote query, empty result" { class: job }
+  hdb -> query: "two IPC queries,\nboth shown by --trace" { style.stroke-dash: 4 }
+}
+
+scoring: "SHARED by both - one function, one set of horizons\n.qexec.markout_at_horizons\n.qpipe.job.markout.horizons = 1s, 10s\nref = mid (bid + ask) / 2 at or before trade_time + horizon" { class: shared }
+
+eq: "execution_quality\ntime · sym · trade_time · horizon\ntrade_price · ref_price · markout_pips\n\nkeyed sym · trade_time · horizon\nsaved to hdb1 at end of day" { class: table }
+
+live.buffer -> scoring: "scores"
+backfill.query -> scoring: "scores"
+scoring -> eq: "live: publish via stp1" {
+  style.stroke: "#3d7a5a"
+}
+scoring -> eq: "backfill: write the window, record coverage,\nreload the HDB - a fill already scored live\nis replaced, not counted twice" {
+  style.stroke: "#a8762f"
+}

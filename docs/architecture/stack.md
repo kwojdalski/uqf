@@ -238,7 +238,8 @@ into the same `execution_quality` table. Rows are keyed on
 `sym, trade_time, horizon`, so a fill both jobs scored is replaced, not counted
 twice. Point it at the HDB with
 `UQF_SOURCE_CRED_HDB_MARKOUTS=localhost:<hdb1's port>`; without that, it runs on
-its fixture.
+its fixture. Both paths, and how they meet in one table, are drawn in
+[markouts](../services/markouts.md).
 
 `cross_quotes` is drawn dashed because it never becomes a real database table -
 it's `.qpipe.job.cross.crosses`, a plain in-memory table inside `cross1`'s own

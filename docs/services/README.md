@@ -15,6 +15,7 @@ adding a new service is [adding a pipeline](../guides/new-pipeline.md).
   | [`kafka.md`](kafka.md)                     | `kafka_flow1`                             | a Kafka topic deduplicated on (partition;offset) into client flow            |
   | [`crypto-recorder.md`](crypto-recorder.md) | `cryptomock1`, cryptorust's recorders     | venue books and fills from cryptorust, or a mock of them                     |
   | [`tap.md`](tap.md)                         | `tap1`                                    | a diagnostic subscriber that logs every batch                                |
+  | [`markouts.md`](markouts.md)               | `markout1`, `hdb_markouts_backfill1`      | each fill against the mid 1s and 10s later, live or backfilled from the HDB  |
 
 Every process, with its port, what it subscribes to and publishes, is in the
 generated [process table](../reference/processes.md).
