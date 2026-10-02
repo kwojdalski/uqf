@@ -82,6 +82,10 @@ init:{
 / shape x happens to arrive in (a table, or a list of columns) without
 / needing to know which.
 / .
+/ At INF on purpose, though it is one line per batch: printing the batches is
+/ this process's whole job, it runs only on demand and writes its own log, so
+/ at DBG `uqs logs -f tap1` would show nothing.
+/ .
 / At ROOT, where the tickerplant calls it (scripts/processes/torq_pipeline.q,
 / invariant 5). Everything else this process owns is in .qproc.tap.
 upd:{[t;x]

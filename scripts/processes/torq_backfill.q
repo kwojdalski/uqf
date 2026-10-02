@@ -270,5 +270,7 @@ result:.Q.trp[{.qproc.backfill.run[]};::;{[e;bt]
     .qetl.log.err[`backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
     `state`error!(`failed;e)}];
 code:.qetl.job.bounded.exit_code result`state;
-.qetl.log.info[`backfill;"exiting";`state`code!(result`state;code)];
+/ A non-zero exit is a run that did not do its job, so it is an ERR line - at
+/ INF, `state=failed` read as routine in a log filtered for problems.
+$[0=code; .qetl.log.info; .qetl.log.err][`backfill;"exiting";`state`code!(result`state;code)];
 exit code;
