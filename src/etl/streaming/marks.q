@@ -25,13 +25,12 @@
 publish:.qetl.job.stream.unwired `marks;
 
 / The canonical output. No `time`: the plant stamps it.
-marks:([] source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); mid:`float$())
+marks:.qetl.plant.published `marks
 
 / What each mapping reads. `quote` is the vendored schema's first four
 / columns - the rest (sizes, mode, exchange, source) are not a mid.
-quote:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$())
-crypto_book:([] time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); sym:`symbol$();
-    bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+quote:.qetl.plant.columns[`quote;`time`sym`bid`ask]
+crypto_book:.qetl.plant.shape `crypto_book
 
 / The venue an FX quote is attributed to - the same one fills.q gives an
 / FX fill, so the two join.

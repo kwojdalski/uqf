@@ -393,6 +393,7 @@ qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
 qetl.plant,ccy_exposure,table,,
 qetl.plant,client_flow,table,,
+qetl.plant,columns,function,2,t cs
 qetl.plant,config_change,table,,
 qetl.plant,connections,table,,
 qetl.plant,cross_arbitrage,table,,
@@ -426,6 +427,7 @@ qetl.plant,quote,table,,
 qetl.plant,quotes,table,,
 qetl.plant,reference_data,table,,
 qetl.plant,schema,function,1,t
+qetl.plant,shape,function,1,t
 qetl.plant,superbook,table,,
 qetl.plant,trade,table,,
 qetl.plant,trades,table,,

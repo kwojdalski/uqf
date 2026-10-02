@@ -83,11 +83,13 @@ def _kdbx() -> tuple[str, dict[str, str]]:
 
 
 def _copy_of_the_tree(root: Path) -> None:
-    """What loading and scaffolding touch: src/, the plant's q files, and the
+    """What loading and scaffolding touch: src/, the plant's q files, the
+    vendored database.q the plant registry reads quote and trade from, and the
     two test lists a scaffold appends to. Not the whole repository."""
     shutil.copytree(UQF_ROOT / "src", root / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", root / "scripts" / "processes")
-    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST):
+    vendored = Path("lib/torq-finance-starter-pack/database.q")
+    for rel in (RUN_TESTS_FILE, STACK_TABLES_TEST, vendored):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, root / rel)
 

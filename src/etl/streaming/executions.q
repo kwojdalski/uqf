@@ -43,15 +43,11 @@
 publish:.qetl.job.stream.unwired `executions;
 
 / The canonical output. No `time`: the plant stamps it.
-executions:([] source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); side:`long$();
-    size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$())
+executions:.qetl.plant.published `executions
 
 / What each mapping reads - the source table as the plant delivers it.
-trades:([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$();
-    size:`float$(); pip_factor:`long$())
-crypto_trades:([] time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); side:`long$();
-    trade_price:`float$(); size:`float$(); fee:`float$(); fee_currency:`symbol$();
-    exchange_fill_id:`symbol$())
+trades:.qetl.plant.shape `trades
+crypto_trades:.qetl.plant.shape `crypto_trades
 
 / The venue an FX fill is attributed to. The demo's FX feed is one venue,
 / and naming it is what lets a downstream group by venue without a null

@@ -8,7 +8,7 @@
 \d .qpipe.job.arbitrage
 
 publish:.qetl.job.stream.unwired `arbitrage;
-arbitrage:([] sym:`symbol$(); as_of:`timestamp$(); active:`boolean$(); buy_source:`symbol$(); sell_source:`symbol$(); ask:`float$(); bid:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$())
+arbitrage:.qetl.plant.published `arbitrage
 
 / Find the widest strictly positive bid-minus-ask across distinct sources.
 / A crossed single source is not a cross-source opportunity; still consider

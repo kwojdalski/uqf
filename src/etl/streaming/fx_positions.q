@@ -35,16 +35,11 @@
 
 / ------------------------------------------------------------- THE SHAPES
 
-orders:([] time:`timestamp$(); order_id:`long$(); sym:`symbol$(); book:`symbol$();
-    product:`symbol$(); side:`long$(); size:`float$(); price:`float$();
-    order_status:`symbol$())
+orders:.qetl.plant.shape `orders
 desk_book:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
     base_qty:`float$(); quote_qty:`float$(); fill_count:`long$())
-fx_position:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
-    base_qty:`float$(); quote_qty:`float$(); fill_count:`long$(); break_even:`float$())
-fx_limit_breach:([] sym:`symbol$(); book:`symbol$(); product:`symbol$();
-    metric:`symbol$(); observed:`float$(); cap:`float$(); severity:`symbol$();
-    utilisation:`float$())
+fx_position:.qetl.plant.published `fx_position
+fx_limit_breach:.qetl.plant.published `fx_limit_breach
 
 / The dimensions the book is keyed on - the blog's (currency_pair,
 / product, book), in this repository's own column names.

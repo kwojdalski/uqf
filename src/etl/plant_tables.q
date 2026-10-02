@@ -58,12 +58,35 @@ schema:{[t]
         '"plant: no table ",string[t]," - define it in src/etl/plant_tables.q, where every plant table's schema is written"];
     0#get ` sv `.qetl.plant,t}
 
-/ A plant table's schema without `time`: the shape a job publishes, since the
+/ A plant table's shape as a job holds it: the schema without its storage
+/ attributes. `g#sym` is the plant's and the RDB's business - how a column is
+/ indexed where it is stored - and a job's buffers and transform contracts
+/ carry plain columns.
+/ @param t the table's name, as a symbol
+/ @return the empty table, time first, no attributes
+/ @eg attr (.qetl.plant.shape `quote)`sym  ->  `
+shape:{[t] s:schema t; @[s;cols s;`#]}
+
+/ A plant table's shape without `time`: what a job publishes, since the
 / tickerplant stamps `time` itself (.u.upd, and .qetl.tick the same).
 / @param t the table's name, as a symbol
 / @return the empty table, without its time column
 / @eg `time in cols .qetl.plant.published `quote  ->  0b
-published:{[t] (cols[s] except `time)#s:schema t}
+published:{[t] (cols[s] except `time)#s:shape t}
+
+/ Some of a plant table's columns, in the order given: the shape of a job
+/ that reads only what it uses. A column the plant table does not carry is
+/ refused, so a projection cannot quietly invent one.
+/ @param t the table's name, as a symbol
+/ @param cs the columns, as a symbol list
+/ @return the empty table with those columns
+/ @throws error naming a column the table does not carry
+/ @eg cols .qetl.plant.columns[`quote;`time`sym`bid`ask]  ->  `time`sym`bid`ask
+columns:{[t;cs]
+    s:shape t;
+    if[count bad:cs where not cs in cols s;
+        '"plant: ",string[t]," carries no ",", " sv string bad];
+    cs#s}
 
 / The vendored starter pack's own plant tables - quote, trade, packets - read
 / from its database.q rather than copied here. uqs builds stp1's schema file

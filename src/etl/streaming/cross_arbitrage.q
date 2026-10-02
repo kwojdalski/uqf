@@ -46,10 +46,7 @@ max_skew:0D00:00:02
 / rather than accumulates - and never published directly (invariant 2).
 books:`sym xkey 0#.qpipe.job.superbook.superbook
 
-cross_arbitrage:([] sym:`symbol$(); as_of:`timestamp$(); active:`boolean$();
-    direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$();
-    size:`float$(); gross_edge:`float$(); gross_profit:`float$();
-    fully_filled:`boolean$(); skew:`timespan$())
+cross_arbitrage:.qetl.plant.published `cross_arbitrage
 
 / The four vectors forwards.q's sweep functions want, out of a superbook row.
 / @param row one superbook snapshot
