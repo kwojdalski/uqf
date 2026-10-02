@@ -172,7 +172,10 @@ renders as nothing:
 ```
 <!-- q-example: run -->          run the block; any error fails
 <!-- q-example: transcript -->   run each `q)` line; one output line after it
-                                 is a q literal the result must match
+                                 is a q literal the result must match (`~`);
+                                 more lines are a table or dictionary display,
+                                 compared as text against `.Q.s` - trailing
+                                 spaces trimmed, `...` matching the rest of a line
 <!-- q-example: run kdbx-only: REASON -->   KDB-X only, with why not PeachQ
 ```
 
