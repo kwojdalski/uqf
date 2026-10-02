@@ -26,6 +26,9 @@ setUp_reaction:{[]
     / Each test reads the history of ITS run: nothing else clears it.
     `.qetl.reaction.history set .qetl.reaction.empty_history[];
     .testutil.reset_coverage_ledger[];
+    / The durable outcome ledger outlives a process by design, so it would
+    / outlive a test too.
+    .qetl.reaction.reset_outcomes[];
     .qetl.job.bounded.state.release_lock `demo_deals_backfill;
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
     `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
@@ -142,6 +145,64 @@ test_a_dry_run_builds_nothing:{[t]
     run_worker `rp5;
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[count positions[];0;"a rehearsal publishes nothing, so nothing is rebuilt"]};
+
+/ --- a covered window whose reaction never succeeded ----------------------
+
+/ Every outcome is written to etl_reactions, beside the coverage ledger, so
+/ it outlives the process that ran it.
+test_each_outcome_is_recorded_durably:{[t]
+    run_worker `rp10;
+    o:select from .qetl.reaction.outcomes[] where name=`rebuild_positions;
+    .qunit.assertEquals[(count o;exec distinct outcome from o);(5;enlist `ok);
+        "one ok outcome per window, read back from disk"]};
+
+/ The loss this exists to stop: the reaction throws, the windows are covered
+/ anyway (a reaction never fails its publication), and a re-run used to find
+/ every window covered, report idle, and leave deal_positions unbuilt for
+/ good. Now the re-run fires the owed reactions again.
+test_a_reaction_that_failed_is_fired_again_by_the_next_run:{[t]
+    .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;enlist `deal_positions;{[ds;f;t] '"broken"}];
+    r1:run_worker `rp11;
+    owed:.qetl.reaction.pending[`demo_deals;`;`rp11;d 0;d 5];
+    system "l src/etl/reactions/rebuild_positions.q";
+    r2:run_worker `rp11;
+    .qunit.assertEquals[(r1`windows_completed;count owed;r2`state;positions[];
+        count .qetl.reaction.pending[`demo_deals;`;`rp11;d 0;d 5]);
+        (5;5;`idle;expected;0);
+        "the failed windows are owed, the idle re-run rebuilds them, and nothing is owed after"]};
+
+/ A process killed between recording coverage and running the reaction
+/ leaves exactly this: covered windows, no outcome. Simulated by running
+/ with the reaction switched off - which is also how a reaction added after
+/ its dataset was published gets its history filled.
+test_a_covered_window_with_no_outcome_is_owed_and_filled:{[t]
+    .qetl.reaction.off[`demo_deals;`rebuild_positions];
+    run_worker `rp12;
+    system "l src/etl/reactions/rebuild_positions.q";
+    owed:.qetl.reaction.pending[`demo_deals;`;`rp12;d 0;d 5];
+    r:run_worker `rp12;
+    .qunit.assertEquals[(count owed;r`state;positions[]);(5;`idle;expected);
+        "every window is owed, and the next run builds them"]};
+
+/ A window covered again after its reaction ran - a restatement - is owed
+/ again: the derived rows describe the release before it.
+test_a_window_covered_again_after_its_reaction_is_owed_again:{[t]
+    run_worker `rp13;
+    before:count .qetl.reaction.pending[`demo_deals;`;`rp13;d 0;d 5];
+    .qetl.coverage.stage_completion[`demo_deals;`;`rp13;d 0;d 1;1];
+    after:.qetl.reaction.pending[`demo_deals;`;`rp13;d 0;d 5];
+    .qunit.assertEquals[(before;count after;first after`range_from);(0;1;d 0);
+        "only the re-covered window is owed"]};
+
+test_a_dry_run_fires_no_owed_reaction:{[t]
+    .qetl.reaction.off[`demo_deals;`rebuild_positions];
+    run_worker `rp14;
+    system "l src/etl/reactions/rebuild_positions.q";
+    setenv[`UQF_DRY_RUN;"true"];
+    run_worker `rp14;
+    setenv[`UQF_DRY_RUN;""];
+    .qunit.assertEquals[(count positions[];count .qetl.reaction.pending[`demo_deals;`;`rp14;d 0;d 5]);(0;5);
+        "a rehearsal fires nothing, so the windows stay owed"]};
 
 test_it_is_the_graph_producer_of_deal_positions:{[t]
     .qetl.dag.adopt_reactions[];

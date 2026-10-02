@@ -266,6 +266,8 @@ qetl.job.bounded,publish_pending,function,1,worker
 qetl.job.bounded,read_state,function,2,worker nm
 qetl.job.bounded,record_facts,function,5,worker cfg w batch r
 qetl.job.bounded,recover_unfinished,function,1,worker
+qetl.job.bounded,replay_reactions,function,1,worker
+qetl.job.bounded,replay_window,function,2,worker w
 qetl.job.bounded,require_target_key,function,2,worker decl
 qetl.job.bounded,require_transform,function,2,worker cfg
 qetl.job.bounded,required_cfg,value,,
@@ -447,6 +449,7 @@ qetl.reaction,dispatch,function,1,item
 qetl.reaction,drain,function,1,
 qetl.reaction,draining,value,,
 qetl.reaction,empty_history,function,1,
+qetl.reaction,empty_outcomes,function,1,
 qetl.reaction,empty_queue,function,1,
 qetl.reaction,enqueue,function,6,dataset range_from range_to depth rows io
 qetl.reaction,fillable,function,1,
@@ -465,6 +468,10 @@ qetl.reaction,off,function,2,dataset nm
 qetl.reaction,on,function,3,dataset nm handler
 qetl.reaction,on_worker,function,3,dataset worker spec_fn
 qetl.reaction,on_writing,function,4,dataset nm outputs handler
+qetl.reaction,outcomes,function,1,
+qetl.reaction,outcomes_path,function,1,
+qetl.reaction,pending,function,5,ds part version from_ts to_ts
+qetl.reaction,persist_outcome,function,1,row
 qetl.reaction,published,function,1,
 qetl.reaction,queue,table,,
 qetl.reaction,reactions,dict,,
@@ -473,6 +480,7 @@ qetl.reaction,register,function,5,dataset nm handler outputs derived
 qetl.reaction,require_fillable,function,2,dataset nm
 qetl.reaction,require_handler,function,3,dataset nm handler
 qetl.reaction,reset,function,1,
+qetl.reaction,reset_outcomes,function,1,
 qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
 qetl.reaction,window_now,value,,
