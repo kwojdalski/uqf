@@ -145,3 +145,29 @@ def test_a_process_is_never_its_own_dependency():
     has to resolve, and there is nothing to resolve."""
     for procname, sources in dependencies.depends_on_by_process().items():
         assert procname not in sources
+
+
+def test_every_backfill_shows_what_it_reads_writes_and_needs():
+    """A backfill has no tickerplant edge, so before its worker's own
+    declaration was read its summary row was all dashes."""
+    edges = dependencies.worker_edges()
+    backfills = {p.procname for p in PIPELINES if p.worker is not None}
+    assert set(edges) == backfills
+    for procname, (reads, writes, needs) in edges.items():
+        assert reads and writes and needs, f"{procname} has an empty edge: {edges[procname]}"
+
+
+def test_a_backfill_names_its_source_as_external_and_its_dataset_as_output():
+    pipeline = BY_NAME["upstream_backfill1"]
+    reads, writes, needs = dependencies.worker_edges([pipeline])["upstream_backfill1"]
+    assert reads == ("upstream_trades (source)",)
+    assert writes == ("imported_trades",)
+    assert needs == ("(upstream_trades: external)",)
+
+
+def test_a_backfills_source_never_makes_it_look_starved():
+    """Its source is outside the stack - nothing in the process list could
+    publish it - so it is not a tickerplant input to warn about."""
+    backfills = [p.procname for p in PIPELINES if p.worker is not None]
+    assert not set(backfills) & set(dependencies.inputs_by_process())
+    assert dependencies.starved_processes(backfills) == {}

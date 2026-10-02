@@ -142,6 +142,8 @@ def _pipeline(d: Declaration, table: str | None, offset: int) -> Pipeline:
             # .qtorq.reload_hdb: a backfill writes into the HDB, then tells it.
             loads_qtorq=True,
             worker=d.name,
+            source=d.source or None,
+            dataset=d.dataset or None,
             startwithall="0",
             offset=offset,
             note=d.note,

@@ -77,6 +77,18 @@ def test_a_worker_with_no_procname_runs_as_its_name_and_1():
     assert (d.procname, d.worker, d.kind) == ("w1", "w", PipelineKind.BACKFILL)
 
 
+def test_a_worker_carries_the_source_it_reads_and_the_dataset_it_writes():
+    """What `uqs summary` shows for a backfill: without these its row was all
+    dashes, the same as a process that touches nothing."""
+    d = _one(".qetl.job.bounded.define[`w;`source`dataset`width`transform!(`s;`d;1D;`x)];")
+    assert (d.source, d.dataset) == ("s", "d")
+
+
+def test_a_streaming_job_has_no_worker_source_or_dataset():
+    d = _one(".qetl.job.stream.define[`j;`procname`subscribe_to`publishes!(`j1;`a;`b)];")
+    assert (d.source, d.dataset) == ("", "")
+
+
 def test_a_worker_may_not_ask_to_start_with_the_stack():
     with pytest.raises(UqsError, match="never starts with the stack"):
         _one(

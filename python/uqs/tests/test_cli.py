@@ -531,6 +531,15 @@ def test_the_graph_columns_come_from_the_declared_pipelines(monkeypatch):
     assert "executions1" in rows[0]["Depends on"]
 
 
+def test_a_backfill_row_shows_its_workers_source_and_dataset(monkeypatch):
+    """A backfill has no tickerplant edge, so its row used to be all dashes."""
+    rows = [_row(Process="upstream_backfill1")]
+    summary_graph.attach_graph_columns(rows)
+    assert rows[0]["Inputs"] == "upstream_trades (source)"
+    assert rows[0]["Outputs"] == "imported_trades"
+    assert rows[0]["Depends on"] == "(upstream_trades: external)"
+
+
 def test_a_process_with_no_declared_edges_gets_dashes(monkeypatch):
     """A vendored TorQ process has no Pipeline entry and so no declared
     edges. It must render, not raise."""

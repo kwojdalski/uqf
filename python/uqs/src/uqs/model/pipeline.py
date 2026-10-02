@@ -138,6 +138,12 @@ class Pipeline:
     # in an operator's head - which is how two declared workers ended up
     # with no process at all and nothing noticed (#283).
     worker: str | None = None
+    # For a backfill: what its worker declares it reads (`source`, a system
+    # outside the stack) and writes (`dataset`). Not tickerplant edges - a
+    # bounded worker neither subscribes nor publishes onto the plant - so they
+    # sit apart from subscribe_to/publishes and never reach database.q.
+    source: str | None = None
+    dataset: str | None = None
 
     @property
     def proctype(self) -> str:
