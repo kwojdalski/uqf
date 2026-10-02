@@ -37,7 +37,7 @@ def repo(tmp_path: Path) -> Path:
     (root / STREAM_DIR / "quotes.q").write_text(
         ".qetl.job.stream.define[`quotes;`procname`publishes!(`quotes1;enlist `quote)];\n"
     )
-    (root / TABLES_FILE).parent.mkdir(parents=True)
+    (root / TABLES_FILE).parent.mkdir(parents=True, exist_ok=True)
     (root / TABLES_FILE).write_text("quote:([]time:`timestamp$();sym:`symbol$())\n")
     return root
 

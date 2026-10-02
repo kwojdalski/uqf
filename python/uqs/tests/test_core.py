@@ -1032,7 +1032,7 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
     not what the name says, and the gap was not hypothetical: fxpositions1
     declares `fx_position` and `fx_limit_breach`, carries no `schema`, and
     so contributed nothing to check. Both tables were defined in
-    uqs_tables.q all along, `database.q` never mentioned them, and the
+    plant_tables.q all along, `database.q` never mentioned them, and the
     service published a correct book onto tables the plant had never heard
     of - silently, every five seconds, for as long as it had been running
     (#287).
@@ -1052,7 +1052,7 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
     for pipeline in PIPELINES:
         if pipeline.schema:
             assert pipeline.schema in generated, pipeline.procname
-    # and every table uqs_tables.q defines, including the ones only an
+    # and every table plant_tables.q defines, including the ones only an
     # outside producer writes (crypto_sim_fills from cryptorust's recorder,
     # databento_mbp10 from the live feed handler) - no list names them
     for definition in schemas._definitions().values():
@@ -1407,7 +1407,7 @@ def test_the_fx_positions_tables_reach_the_tickerplant(fake_paths: UqsPaths):
     """The regression itself, named so it cannot be quietly undone.
 
     fxpositions1 publishes two tables and owns neither `table` nor
-    `schema`. Both were defined in uqs_tables.q and neither reached
+    `schema`. Both were defined in plant_tables.q and neither reached
     `database.q`, so the whole FX positions service published into nothing.
     """
     generated = plant_schema._generated_schema_content(fake_paths)

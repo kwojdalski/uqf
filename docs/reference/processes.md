@@ -73,27 +73,27 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 
 | table | defined by | published by |
 |---|---|---|
-| `arbitrage` | `uqs_tables.q` | `arbitrage1` |
-| `client_flow` | `uqs_tables.q` | `kafka_flow1` |
-| `config_change` | `uqs_tables.q` | `crossarb1`, `superbook1` |
-| `cross_arbitrage` | `uqs_tables.q` | `crossarb1` |
-| `crypto_book` | `uqs_tables.q` | `cryptomock1` |
-| `crypto_trades` | `uqs_tables.q` | `cryptomock1` |
-| `databento_book` | `uqs_tables.q` | `databento1` |
-| `execution_quality` | `uqs_tables.q` | `markout1` |
-| `executions` | `uqs_tables.q` | `executions1` |
-| `fx_limit_breach` | `uqs_tables.q` | `fxpositions1` |
-| `fx_position` | `uqs_tables.q` | `fxpositions1` |
-| `market_data` | `uqs_tables.q` | `marketdata1` |
-| `marks` | `uqs_tables.q` | `marks1` |
-| `mkt_orderbook` | `uqs_tables.q` | `vectorize1` |
-| `orders` | `uqs_tables.q` | `fxordersfeed1` |
-| `position` | `uqs_tables.q` | `posbook1` |
+| `arbitrage` | `plant_tables.q` | `arbitrage1` |
+| `client_flow` | `plant_tables.q` | `kafka_flow1` |
+| `config_change` | `plant_tables.q` | `crossarb1`, `superbook1` |
+| `cross_arbitrage` | `plant_tables.q` | `crossarb1` |
+| `crypto_book` | `plant_tables.q` | `cryptomock1` |
+| `crypto_trades` | `plant_tables.q` | `cryptomock1` |
+| `databento_book` | `plant_tables.q` | `databento1` |
+| `execution_quality` | `plant_tables.q` | `markout1` |
+| `executions` | `plant_tables.q` | `executions1` |
+| `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |
+| `fx_position` | `plant_tables.q` | `fxpositions1` |
+| `market_data` | `plant_tables.q` | `marketdata1` |
+| `marks` | `plant_tables.q` | `marks1` |
+| `mkt_orderbook` | `plant_tables.q` | `vectorize1` |
+| `orders` | `plant_tables.q` | `fxordersfeed1` |
+| `position` | `plant_tables.q` | `posbook1` |
 | `quote` | _vendored_ | `fxfeed1` |
-| `quotes` | `uqs_tables.q` | `quotesfeed1` |
-| `superbook` | `uqs_tables.q` | `superbook1` |
-| `trades` | `uqs_tables.q` | `fxtradesfeed1` |
-| `wide_book` | `uqs_tables.q` | `widefeed1` |
+| `quotes` | `plant_tables.q` | `quotesfeed1` |
+| `superbook` | `plant_tables.q` | `superbook1` |
+| `trades` | `plant_tables.q` | `fxtradesfeed1` |
+| `wide_book` | `plant_tables.q` | `widefeed1` |
 
 ## Vendored stack
 

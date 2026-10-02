@@ -1,6 +1,6 @@
 """Tests for the reader in `uqs.model.schemas`.
 
-The tickerplant table definitions live in `scripts/processes/uqs_tables.q`, and
+The tickerplant table definitions live in `src/etl/plant_tables.q`, and
 this module reads them out by table name. Two things can go wrong with that
 arrangement, and neither announces itself:
 
@@ -76,7 +76,7 @@ def test_a_comment_line_is_never_read_as_a_definition():
     # line-anchored - but a regex that lost its anchor would start pulling
     # table names out of the commentary.
     text = schemas.TABLES_Q.read_text()
-    assert "/ uqs_tables.q" in text, "the file's header comment is missing"
+    assert "/ plant_tables.q" in text, "the file's header comment is missing"
     assert all(not name.startswith("/") for name in schemas._definitions())
 
 

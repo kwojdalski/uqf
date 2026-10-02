@@ -97,7 +97,7 @@ def test_the_field_order_comes_from_the_q_declaration():
 def test_the_fields_line_up_with_the_plant_table_column_for_column():
     """The test above checks the fields against numbers written in Python.
     This one checks them against what `.u.upd` writes into: the
-    `databento_mbp10` table in uqs_tables.q. The streamer derives its level
+    `databento_mbp10` table in plant_tables.q. The streamer derives its level
     columns rather than reading them (LEVELS and the four prefixes), so a q
     change to the level count or a level column would otherwise misalign
     every row after it with nothing raising.

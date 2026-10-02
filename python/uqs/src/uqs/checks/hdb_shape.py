@@ -83,7 +83,7 @@ def declared_tables(generated_schema: str) -> set[str]:
 
     The generated file, not the q source: it is what the tickerplant
     loads, so it is also what every process expects the HDB to hold. A
-    table defined in uqs_tables.q but never reaching database.q is
+    table defined in plant_tables.q but never reaching database.q is
     #287's bug, and a different check catches that one.
     """
     return set(_DEFINITION.findall(generated_schema))

@@ -1,5 +1,5 @@
 // test_demo_tables.q - the tickerplant table declarations in
-// scripts/processes/uqs_tables.q (.tabletest).
+// src/etl/plant_tables.q (.tabletest).
 //
 // These definitions used to be Python string literals. Nothing parsed them
 // as q until stp1 started, so a typo was a failed tickerplant rather than a
@@ -17,7 +17,8 @@
 / needs these tables in scope, and defining nine top-level tables for every
 / other suite would put names in the root namespace that nothing else wants.
 beforeNamespace_load:{[]
-    system"l scripts/processes/uqs_tables.q";
+    system"l src/etl/plant_tables.q";
+    .qetl.plant.materialise .qetl.plant.own[];
     }
 
 / Every table the orchestrator's generated database.q is expected to carry.
@@ -36,7 +37,7 @@ expected:`quotes`wide_book`mkt_orderbook`databento_mbp10`databento_book`kafka_cl
 / a CHARACTER CLASS, so the obvious "*:([]*" is an empty class and throws
 / rather than matching the literal text it looks like it matches.
 declared:{[]
-    ls:read0 `$":scripts/processes/uqs_tables.q";
+    ls:read0 `$":src/etl/plant_tables.q";
     ls:ls where (not ls like "/*") and ls like "*:(*";
     asc `$ {x til x?":"} each ls}
 
@@ -63,7 +64,7 @@ test_no_undeclared_table_appears:{[t]
     / adds its table to `expected` itself, and a table added by hand needs
     / the same one line once someone has decided it should ship.
     .qunit.assertEquals[.tabletest.declared[] except expected;`symbol$();
-        "a table in scripts/processes/uqs_tables.q that this test does not know - if it is meant to ship, add it to `expected` in tests/q/test_stack_tables.q; if not, remove it"]};
+        "a table in src/etl/plant_tables.q that this test does not know - if it is meant to ship, add it to `expected` in tests/q/test_stack_tables.q; if not, remove it"]};
 
 / --- shapes their consumers depend on ------------------------------------
 

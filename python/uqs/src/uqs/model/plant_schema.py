@@ -39,7 +39,7 @@ def _published_tables(pipelines: Iterable[Any]) -> set[str]:
 
 
 #: `name:([]...)` at the start of a line in a generated database.q. Same
-#: convention model/schemas.py reads uqs_tables.q by, applied to the merged
+#: convention model/schemas.py reads plant_tables.q by, applied to the merged
 #: file so vendored definitions count too.
 _GENERATED_DEFINITION = re.compile(r"^([a-z_0-9]+):\(\[\]", re.MULTILINE)
 
@@ -91,7 +91,7 @@ def _generated_schema_content(paths: UqsPaths) -> str:
     rather than the vendored file.
     """
     vendored = (paths.torqapphome / "database.q").read_text()
-    # EVERY table uqs_tables.q defines. That file is the list of the
+    # EVERY table plant_tables.q defines. That file is the list of the
     # tables this tree puts on the plant - what its jobs publish, and what
     # the producers outside it publish (the Databento feed handler into
     # databento_mbp10, cryptorust's recorder into crypto_sim_fills) - so it is

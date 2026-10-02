@@ -1,4 +1,4 @@
-"""Reads the tickerplant table definitions out of `scripts/processes/uqs_tables.q`.
+"""Reads the tickerplant table definitions out of `src/etl/plant_tables.q`.
 
 **The definitions themselves live in q, not here.** This module used to hold
 them as Python string literals, which meant q source that no q parser read

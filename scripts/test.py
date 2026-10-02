@@ -27,7 +27,7 @@ between them:
   q-scripts            every worked example under scripts/examples/, each
                        run as a script in its own process. Nothing ran these
                        before; the first commit to add one found a false
-                       claim in uqs_tables.q that had stood untested.
+                       claim in plant_tables.q that had stood untested.
   q-docs               the ```q blocks in docs/ marked `<!-- q-example: ... -->`,
                        one q process per document. The q lane CI runs on
                        PeachQ, which needs no licence.
@@ -242,7 +242,7 @@ def lane_q_scripts() -> None:
     a top-level narrative, not a documented function.
 
     That gap was not theoretical. The first commit to add a scenario here
-    found `uqs_tables.q` claiming its `quotes` table was usable by
+    found `plant_tables.q` claiming its `quotes` table was usable by
     `cross_book_at` "with no reshaping", when `cross_book_at` refuses it
     outright for a missing `ts`. A prose claim about two halves of this tree
     fitting together, false for as long as it stood, because nothing ever

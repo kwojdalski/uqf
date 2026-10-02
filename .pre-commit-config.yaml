@@ -205,7 +205,7 @@ repos:
             python3 scripts/test.py q-examples
             # The worked examples under scripts/examples/, run as scripts.
             # Nothing ran them until this lane existed, and the first
-            # scenario added there found a false claim in uqs_tables.q about
+            # scenario added there found a false claim in plant_tables.q about
             # `quotes` being usable by cross_book_at unreshaped.
             python3 scripts/test.py q-scripts
             # The ```q blocks in docs/ marked `<!-- q-example: ... -->`; CI

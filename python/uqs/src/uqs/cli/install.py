@@ -130,7 +130,7 @@ def _report_undefined_tables(items: list[Item], declarations: list[Declaration])
         if missing:
             console.print(
                 f"[yellow]![/] {name} {verb} {', '.join(missing)}, which the plant does not "
-                "define: add it to scripts/processes/uqs_tables.q"
+                "define: add it to src/etl/plant_tables.q"
             )
 
 

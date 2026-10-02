@@ -83,7 +83,7 @@ inputs: "Inputs — read, never written" {
   declarations: "src/etl/ job declarations\n.qetl.job.stream.define · .qetl.job.bounded.define,\nread into PIPELINES" { class: tracked }
   overrides: "process_overrides.csv\nwritten by `uqs config set`" { class: tracked }
   vendored_schema: "lib/torq-finance-starter-pack/\ndatabase.q" { class: vendored }
-  tables: "scripts/processes/uqs_tables.q\nevery table uqf puts\non the plant" { class: tracked }
+  tables: "src/etl/plant_tables.q\nevery table uqf puts\non the plant" { class: tracked }
 }
 
 bootstrap: "bootstrap() — every command, not once" {

@@ -102,7 +102,7 @@ materialise_tables:{[]
 
 / Private: define the tickerplant tables, so the surface carries them.
 / .
-/ They are top-level table declarations in scripts/processes/uqs_tables.q rather
+/ They are top-level table declarations in src/etl/plant_tables.q rather
 / than the lazily-created, namespace-owned kind materialise_tables above
 / reaches - nothing calls an `attach` for them, because the process that
 / creates them is stp1 loading a generated database.q.
@@ -114,8 +114,8 @@ materialise_tables:{[]
 / Loading is idempotent and safe here for the same reason calling `attach` is:
 / these are empty typed declarations with no side effect beyond existing.
 load_tickerplant_tables:{[]
-    f:"scripts/processes/uqs_tables.q";
-    @[{system"l ",x};f;{[e] -2 "could not load ",f,": ",e;}];
+    f:"src/etl/plant_tables.q";
+    @[{system"l ",x; .qetl.plant.materialise .qetl.plant.own[]};f;{[e] -2 "could not load ",f,": ",e;}];
     f}
 
 / Table schemas: column names and type characters, for every table this tree

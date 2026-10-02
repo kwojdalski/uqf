@@ -1,7 +1,7 @@
 """What a column type IS, decided once: the table every scaffold reads.
 
 A table shape is spelled two ways in this tree - as q, in
-scripts/processes/uqs_tables.q, and as the `--columns` mini-language
+src/etl/plant_tables.q, and as the `--columns` mini-language
 (`"sym:symbol, px:float"`) - and a scaffold also needs, per type, the `meta`
 character a source declares and one sample value for a fixture row. Those
 were three dicts kept in step by hand (#353). They are one table here, and
@@ -9,8 +9,8 @@ every conversion - spec to columns, q definition to columns, columns back to
 either - reads it, so a type added in one place is added everywhere.
 
 The COLUMN is the currency: `(name, literal)`, where `literal` is the empty
-column exactly as uqs_tables.q writes it - `` `float$() ``, `` `g#`symbol$() ``,
-`()` for a vector column. `test_columns.py` holds every table in uqs_tables.q
+column exactly as plant_tables.q writes it - `` `float$() ``, `` `g#`symbol$() ``,
+`()` for a vector column. `test_columns.py` holds every table in plant_tables.q
 and the vendored database.q to a round trip through these functions.
 """
 
@@ -26,7 +26,7 @@ from uqs.paths import UqsError
 TIME_COLUMN = "time"
 
 #: The grouped attribute, as a literal prefix. `sym` gets it without asking,
-#: because every table in uqs_tables.q groups sym and a missing `g#` is a
+#: because every table in plant_tables.q groups sym and a missing `g#` is a
 #: silent performance cliff rather than an error.
 GROUP = "`g#"
 GROUPED_BY_DEFAULT = {"sym"}
@@ -38,7 +38,7 @@ class ColumnType:
 
     #: How `--columns` spells it: `px:float`.
     name: str
-    #: The empty column, as uqs_tables.q writes it.
+    #: The empty column, as plant_tables.q writes it.
     literal: str
     #: The `meta` character a source's `types` string declares. Note `j` for a
     #: long, not `l`: the first draft of demo_events.q wrote "l" and was
@@ -171,7 +171,7 @@ def resolve_shape(
 def columns_spec(columns: list[tuple[str, str]]) -> str:
     """[(name, literal)] as the `--columns` string that parses back to it.
 
-    Exact for every shape uqs_tables.q uses. The one it cannot say is a `sym`
+    Exact for every shape plant_tables.q uses. The one it cannot say is a `sym`
     WITHOUT `g#`, since `sym` is grouped by default - the vendored `packets`
     table has one, which is why `--columns-from` passes columns rather than
     this string.
@@ -219,6 +219,6 @@ def table_columns(definition: str) -> list[tuple[str, str]]:
 
 
 def table_definition(table: str, columns: list[tuple[str, str]]) -> str:
-    """One `name:([]...)` line, in uqs_tables.q's own shape."""
+    """One `name:([]...)` line, in plant_tables.q's own shape."""
     body = "; ".join(f"{col}:{literal}" for col, literal in columns)
     return f"{table}:([]{body})"

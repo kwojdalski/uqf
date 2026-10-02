@@ -8,15 +8,15 @@ TorQ is not replaced. The tickerplant, the RDB/WDB/HDB, discovery and the
 gateway are TorQ's, vendored under `lib/torq` and never edited. uqf changes what
 sits *around* those processes:
 
-  | Question               | Plain TorQ                                                                    | uqf on TorQ                                                                                                                                                                     |
-  | ---                    | ---                                                                           | ---                                                                                                                                                                             |
-  | A unit of work         | a process: a `process.csv` row naming its own q script                        | a job: a declaration in `src/etl/` (`.qetl.job.stream.define`, `.qetl.job.bounded.define`), run by one generic runner script picked by process name                             |
-  | Configuration          | edit `process.csv` and the config directories                                 | `lib/torq` is never edited; `process.csv` and `database.q` are regenerated on every `uqs` command from the declarations and `uqs_tables.q`                                      |
-  | Who knows TorQ exists  | every process - code is written against `.servers`, `.u.upd`, `.lg`           | only `.qtorq`, in `scripts/`; a gate fails the build if anything under `src/` reaches for it                                                                                    |
-  | History and backfills  | replay a tickerplant log, or write your own loader                            | bounded workers (`.qetl.job.bounded`): a window range, written through `.qetl.io`, recorded in a coverage ledger (`.qetl.coverage`) so a re-run redoes only gaps                |
-  | A table on the plant   | define it in `database.q`; `.u.upd` onto an undefined one drops rows silently | defined from what jobs declare they publish; a job refuses to start when a table it publishes is missing                                                                        |
-  | Adding one             | write the script, add the row, pick a free port                               | `uqs job new` scaffolds it; no registration step - the port, the process row and the job graph are derived                                                                      |
-  | Operating it           | `torq.sh start`, `stop`, `summary`, per process                               | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `query --proc`, `summary`; `.qetl.log` adds DBG and key=value fields to `.lg`                      |
+  | Question               | Plain TorQ                                                                    | uqf on TorQ                                                                                                                                                                       |
+  | ---                    | ---                                                                           | ---                                                                                                                                                                               |
+  | A unit of work         | a process: a `process.csv` row naming its own q script                        | a job: a declaration in `src/etl/` (`.qetl.job.stream.define`, `.qetl.job.bounded.define`), run by one generic runner script picked by process name                               |
+  | Configuration          | edit `process.csv` and the config directories                                 | `lib/torq` is never edited; `process.csv` and `database.q` are regenerated on every `uqs` command from the declarations and `plant_tables.q`                                      |
+  | Who knows TorQ exists  | every process - code is written against `.servers`, `.u.upd`, `.lg`           | only `.qtorq`, in `scripts/`; a gate fails the build if anything under `src/` reaches for it                                                                                      |
+  | History and backfills  | replay a tickerplant log, or write your own loader                            | bounded workers (`.qetl.job.bounded`): a window range, written through `.qetl.io`, recorded in a coverage ledger (`.qetl.coverage`) so a re-run redoes only gaps                  |
+  | A table on the plant   | define it in `database.q`; `.u.upd` onto an undefined one drops rows silently | defined from what jobs declare they publish; a job refuses to start when a table it publishes is missing                                                                          |
+  | Adding one             | write the script, add the row, pick a free port                               | `uqs job new` scaffolds it; no registration step - the port, the process row and the job graph are derived                                                                        |
+  | Operating it           | `torq.sh start`, `stop`, `summary`, per process                               | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `query --proc`, `summary`; `.qetl.log` adds DBG and key=value fields to `.lg`                        |
 
 The slide version is [the deck](presentation/uqf.qmd); why the framework is
 shaped this way is [the pipeline
@@ -232,9 +232,9 @@ anyway; the budget is in [running the stack](guides/uqs.md).
 ## Can I edit `lib/torq`, `process.csv` or `database.q`?
 
 No. `lib/torq` is vendored and never edited. `process.csv` and `database.q` are
-generated from the job declarations and `scripts/processes/uqs_tables.q` on
-every `uqs` command, so an edit to either is overwritten. Change the declaration
-or `uqs_tables.q` instead.
+generated from the job declarations and `src/etl/plant_tables.q` on every `uqs`
+command, so an edit to either is overwritten. Change the declaration or
+`plant_tables.q` instead.
 
 ## Where do ports come from?
 

@@ -2,7 +2,7 @@
 
 The property that matters is the round trip: scaffold into a copy of the real
 tree, remove, and every file is BYTE-identical to before. A removal that left
-a blank line in uqs_tables.q or a stray backtick in nsList would pass a test
+a blank line in plant_tables.q or a stray backtick in nsList would pass a test
 that only checked the job file was gone.
 
 The other half is what it must not take: a table another job still reads, a

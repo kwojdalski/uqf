@@ -57,7 +57,7 @@ def test_the_output_has_no_time_and_the_plant_copy_does():
     """`.qetl.job.stream.normalize` refuses an output carrying `time`; the plant stamps it."""
     body = _file(_plan(), "ticks.q")
     assert "ticks:([] source_time:`timestamp$(); sym:`symbol$())" in body
-    assert "ticks:([]time:`timestamp$()" in _file(_plan(), "uqs_tables.q")
+    assert "ticks:([]time:`timestamp$()" in _file(_plan(), "plant_tables.q")
 
 
 def test_each_source_gets_its_schema_a_throwing_mapping_and_an_example():

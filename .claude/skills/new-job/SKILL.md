@@ -96,7 +96,7 @@ installed, re-exports the contract surface. Without q it says so, and the
 `contract-surface` hook fails until `contract_surface.py export` is run.
 
 **Always `--dry-run` first** and show the user what it would write. It appends
-to `uqs_tables.q` and two test lists, which are files they may have opinions
+to `plant_tables.q` and two test lists, which are files they may have opinions
 about.
 
 `kind` is derived for a streaming job --- no `--subscribe-to` means a feed ---
@@ -106,9 +106,9 @@ accepted - so `--columns` (or `--columns-from TABLE`, which copies an existing
 plant table's shape exactly; `venue:g#symbol` groups a column other than `sym`,
 `x:list` is a vector column) shapes the one NEW table, and two new tables in one
 scaffold are refused. `--subscribe-to` must name tables the plant defines
-(`uqs_tables.q` or the vendored `quote`/`trade`): a typo is refused rather than
-scaffolded into a job that never receives a row, so scaffold a producer before
-its consumer.
+(`plant_tables.q` or the vendored `quote`/`trade`): a typo is refused rather
+than scaffolded into a job that never receives a row, so scaffold a producer
+before its consumer.
 
 ## Step 2 --- what the scaffold deliberately leaves broken
 

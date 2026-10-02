@@ -30,7 +30,7 @@ on bad rows --- it throws until written.
 scaffold fxprobe_backfill:
   create src/etl/sources/fxprobe.q (56 lines)
   create src/etl/workers/fxprobe_backfill.q (28 lines)
-  append to scripts/processes/uqs_tables.q (3 lines)
+  append to src/etl/plant_tables.q (3 lines)
   append to tests/q/test_stack_tables.q (1 line)
   create tests/q/test_fxprobe_backfill.q (13 lines)
   append to tests/run_tests.q (1 line)

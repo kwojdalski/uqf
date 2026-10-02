@@ -92,13 +92,13 @@ should fail on the line that declares it, not halfway through a backfill
 The highest-value findings in a polyglot repo. Where is the same truth written
 twice? - The q declarations versus the Python pipeline registry (`pipelines.py`) ---
 kept in step by `pipeline_edges.py`; is anything else crossing that boundary
-unguarded? - Table schemas: `scripts/processes/uqs_tables.q`, a job's own
-declared input shape, the frontend catalog CSVs. Three copies exist on purpose;
-each pair must have a gate - A hand-maintained list that duplicates something
-derivable --- a test's hardcoded expectation of what the registry contains, a
-doc that re-states a schema - **Ask of every duplication: which copy is the
-authority, and what fails when they disagree?** If the answer is "nothing fails,
-it just goes wrong", that is the finding
+unguarded? - Table schemas: `src/etl/plant_tables.q`, a job's own declared input
+shape, the frontend catalog CSVs. Three copies exist on purpose; each pair must
+have a gate - A hand-maintained list that duplicates something derivable --- a
+test's hardcoded expectation of what the registry contains, a doc that re-states
+a schema - **Ask of every duplication: which copy is the authority, and what
+fails when they disagree?** If the answer is "nothing fails, it just goes
+wrong", that is the finding
 
 ### 4. Coupling and cohesion
 

@@ -71,6 +71,8 @@
 \l src/etl/core/config_audit.q
 \l src/etl/core/normalizer.q
 \l src/etl/core/tick.q
+/ Every plant table's schema, before any job that publishes or reads one.
+\l src/etl/plant_tables.q
 
 / The invented market the demo's feeds publish and its jobs consume. Before
 / the core declarations, because a job filters on .qsynth.pairs.

@@ -166,7 +166,7 @@ class Pipeline:
 
     @property
     def schema(self) -> str | None:
-        """The owned table's q definition, read from uqs_tables.q.
+        """The owned table's q definition, read from plant_tables.q.
 
         DERIVED, not declared: `table` is read from the job's declaration and
         its definition from the q table file.
@@ -183,7 +183,7 @@ class Pipeline:
         if self.table not in _DEFS:
             raise KeyError(
                 f"{self.procname}: declares table {self.table!r}, which "
-                "scripts/processes/uqs_tables.q does not define - the "
+                "src/etl/plant_tables.q does not define - the "
                 "plant would discard its rows without an error"
             )
         return _DEFS[self.table]

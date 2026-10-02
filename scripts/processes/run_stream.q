@@ -37,7 +37,6 @@
 
 \l src/init.q
 \l src/etl/init.q
-\l scripts/processes/uqs_tables.q
 
 \d .qproc.standalone
 
@@ -58,19 +57,20 @@ opt:{[nm;dflt]
         '"run_stream: -",string[nm]," was given ",string[count v]," times - which one binds would depend on argument order"];
     first v}
 
-/ Every table name declared in scripts/processes/uqs_tables.q.
+/ Every plant table: this tree's and the vendored quote/trade/packets
+/ (.qetl.plant, loaded by src/etl/init.q).
 / .
 / The plant learns its schemas from the SAME file the TorQ stack's
 / tickerplant does, so a job publishes identical rows either way. A plant
 / that invented its own schemas would be a second declaration of every
 / table, and the two would drift.
-stack_tables:{[] (tables `) where {[t] `time = first cols get t} each tables `}
+stack_tables:{[] .qetl.plant.names[]}
 
 / Declare every stack table to the plant.
 / @return the table names declared
 declare_schemas:{[]
     t:stack_tables[];
-    .qetl.tick.schema'[t;get each t];
+    .qetl.tick.schema'[t;.qetl.plant.schema each t];
     t}
 
 / Start a tickerplant in this process: schemas, a log for today, and a

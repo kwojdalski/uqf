@@ -8,7 +8,7 @@ matters is that what they produce is still READABLE BY THE TREE:
     `pipeline_edges` reads real jobs with, so a template that drifts out of
     what the tree can parse fails the build rather than rotting quietly;
   * the generated table definition parses with the same regex `model/schemas.py`
-    reads `uqs_tables.q` with;
+    reads `plant_tables.q` with;
   * the plan refuses rather than half-writing.
 
 WHAT THESE CANNOT CATCH. Whether the generated q LOADS. That needs a q
@@ -84,11 +84,11 @@ def test_a_scaffolded_worker_declares_its_process():
 
 
 def test_a_scaffolded_table_parses_as_a_definition():
-    """model/schemas.py reads uqs_tables.q with this regex, and Pipeline.schema
+    """model/schemas.py reads plant_tables.q with this regex, and Pipeline.schema
     resolves through it - a definition it cannot see is a table the plant
     never defines."""
     plan = jobs.streaming_job("j", [], "my_metric", "sym:symbol, value:float")
-    body = _body(plan, "uqs_tables.q")
+    body = _body(plan, "plant_tables.q")
     found = _DEFINITION.search(body)
     assert found and found.group(1) == "my_metric"
 
@@ -103,7 +103,7 @@ def test_time_is_added_when_the_caller_forgets_it():
 
 
 def test_sym_keeps_its_grouped_attribute():
-    """Every table in uqs_tables.q groups sym. A missing `g#` is a
+    """Every table in plant_tables.q groups sym. A missing `g#` is a
     performance cliff with no error attached."""
     cols = dict(parse_columns("sym:symbol"))
     assert cols["sym"] == "`g#`symbol$()"
@@ -420,7 +420,7 @@ def _writes_to(plan: jobs.ScaffoldPlan, path: Path) -> bool:
 @pytest.mark.parametrize("publishes", ["My_Table", "a b", "1st"])
 def test_a_published_table_name_is_checked_like_every_other_name(publishes):
     """It was not, and `--publishes a,b` wrote `enlist `a,b` into the job and
-    `a,b:([]...)` into uqs_tables.q - q that does not load."""
+    `a,b:([]...)` into plant_tables.q - q that does not load."""
     with pytest.raises(UqsError, match="published table"):
         jobs.streaming_job("j", ["quote"], publishes, "v:float", known_tables=_PLANT)
 
