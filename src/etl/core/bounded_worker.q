@@ -618,15 +618,17 @@ init_body:{[worker;run_spec]
 / attributable, and so a test can exercise init without one.
 / .
 / The source's transport picks the opener: an ipc credential is host:port,
-/ an odbc credential is a connection string.
+/ an odbc credential is a connection string, a local credential is an HDB
+/ directory's path - validated here, so a wrong path fails the run rather
+/ than quietly reading the fixture.
 connect:{[worker]
     source:(def worker)`source;
     cred:.qetl.source.require_credentials source;
     transport:(.qetl.source.def source)`transport;
     .qetl.log.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
-    opener:$[`odbc~transport;
-        {.qetl.io.odbc.open x};
-        {hopen (hsym `$":",x;5000j)}];
+    opener:$[`odbc~transport; {.qetl.io.odbc.open x};
+      `local~transport; .qetl.source.local_root;
+      {hopen (hsym `$":",x;5000j)}];
     @[opener;cred;{[source;e] '.qetl.job.bounded.connect_error[source;e]}[source]]}
 
 / The error connect throws when it cannot reach a source.
@@ -1300,9 +1302,11 @@ publish_last_batch:{[worker;unused] own[worker;`publish] read_state[worker;`last
 / release_lock is a no-op when not held.
 cleanup:{[worker]
     h:read_state[worker;`handle];
-    closer:$[`odbc~(.qetl.source.def (def worker)`source)`transport;
-        .qetl.io.odbc.close;
-        {[h] @[hclose;h;::]}];
+    transport:(.qetl.source.def (def worker)`source)`transport;
+    / A local source's "handle" is its directory: nothing to close.
+    closer:$[`odbc~transport; .qetl.io.odbc.close;
+      `local~transport; {[h] ::};
+      {[h] @[hclose;h;::]}];
     if[not null h; closer h; write_state[worker;`handle;0Ni]];
     .qetl.job.bounded.state.release_lock worker}
 

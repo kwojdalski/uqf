@@ -22,7 +22,6 @@
 # These reach a real database, a real ODBC driver or a real qls server. The
 # deterministic suite has no such thing by design, and the smoke
 # lanes that do exercise them are not part of this run.
-.qetl.job.bounded.connect
 .qetl.io.odbc.close
 .qetl.io.odbc.table_names
 .qetl.io.odbc.window_query

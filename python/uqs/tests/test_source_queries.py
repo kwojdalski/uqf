@@ -21,7 +21,12 @@ from uqs.paths import repo_root
 SOURCES = sorted((repo_root() / "src" / "etl" / "sources").glob("*.q"))
 
 #: The calls that log a query at TRC before sending it.
-TRACED = (".qetl.source.ipc[", ".qetl.io.odbc.run_sql[", ".qetl.io.odbc.window_query[")
+TRACED = (
+    ".qetl.source.ipc[",
+    ".qetl.source.local[",
+    ".qetl.io.odbc.run_sql[",
+    ".qetl.io.odbc.window_query[",
+)
 
 #: A handle applied directly: `h(` or `h@`, as a word - not `.qetl.source.ipc[h;`.
 DIRECT = re.compile(r"(?<![\w.])h\s*[(@]")
