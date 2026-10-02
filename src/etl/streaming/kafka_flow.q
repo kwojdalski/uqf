@@ -70,8 +70,7 @@ high_water:(`long$())!`long$();
 
 / Raw rows held during a replay, judged by on_replayed once the marks are
 / complete.
-held:([] broker_time:`timestamp$(); sym:`symbol$(); side:`symbol$(); qty:`float$(); price:`float$();
-    client:`symbol$(); trade_id:`long$(); partition:`long$(); offset:`long$())
+held:.qetl.plant.published `kafka_client_flow
 
 / ------------------------------------------------------------- THE DEDUPE
 

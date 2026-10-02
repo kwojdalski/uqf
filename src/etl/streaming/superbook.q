@@ -9,7 +9,7 @@
 
 publish:.qetl.job.stream.unwired `superbook;
 books:`sym`source xkey .qpipe.job.market_data.market_data
-superbook:([] sym:`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())
+superbook:.qetl.plant.published `superbook
 / The demo feeds tick every 500ms. Override for the actual feed SLA.
 max_age:0D00:00:05
 

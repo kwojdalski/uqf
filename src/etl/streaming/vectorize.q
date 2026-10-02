@@ -25,7 +25,7 @@ wide_book:flip (`time`sym,wide_level_names)!(`timestamp$();`symbol$()),(count[wi
 / written out: bids0..bids10 -> bid_prices, asks0..asks10 -> ask_prices.
 wide_level_groups:.qbook.derive_level_groups[cols wide_book;(("bids";`bid_prices);("asks";`ask_prices))]
 
-mkt_orderbook:([] sym:`symbol$(); bid_prices:(); ask_prices:())
+mkt_orderbook:.qetl.plant.published `mkt_orderbook
 
 / ---------------------------------------------------------- THE TRANSFORM
 

@@ -9,9 +9,9 @@
 \d .qpipe.job.market_data
 
 publish:.qetl.job.stream.unwired `market_data;
-market_data:([] sym:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-quote:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(); bsize:`long$(); asize:`long$(); src:`symbol$())
-quotes:([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+market_data:.qetl.plant.published `market_data
+quote:.qetl.plant.columns[`quote;`time`sym`bid`ask`bsize`asize`src]
+quotes:.qetl.plant.shape `quotes
 
 / Direct top-of-book quotes, with the feed's own source identifier.
 / The shared quote table also carries equities; only canonical FX pairs pass.

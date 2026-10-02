@@ -56,4 +56,18 @@ test_adopt_vendored_without_the_file_registers_nothing:{[t]
     .qunit.assertEquals[.qetl.plant.adopt_vendored "build/test-status/no_such_database.q";`symbol$();
         "a tree copied without the vendored pack"]};
 
+/ What stage 2 removed, kept removed: no job file writes a plant table's
+/ schema by hand. 22 such copies existed, in 12 files; any of them could
+/ disagree with the plant, and one hand-written buffer did. A job takes a
+/ plant table's shape from .qetl.plant (shape, published, columns).
+test_no_job_file_declares_a_plant_table_by_hand:{[t]
+    dirs:("src/etl/streaming";"src/etl/transforms";"src/etl/workers";"src/etl/sources";"src/etl/reactions");
+    files:raze {[d] f:key hsym `$d; (d,"/"),/:string f where f like "*.q"} each dirs;
+    bad:raze {[f]
+        ls:read0 hsym `$f;
+        defs:ls where {[l] (0<count l) and "([]"~3#(1+l?":")_l} each ls;
+        names:`${(x?":")#x} each defs;
+        (f,": "),/:string names where names in .qetl.plant.names[]} each files;
+    .qunit.assertEquals[bad;();"every plant table's shape comes from src/etl/plant_tables.q"]};
+
 \d .

@@ -29,7 +29,7 @@
 position_book:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$())
 position_trades:([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$())
 position_marks:([] sym:`symbol$(); mid:`float$())
-position:([] sym:`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); mark_price:`float$(); unrealized_pnl:`float$(); total_pnl:`float$())
+position:.qetl.plant.published `position
 
 / ---------------------------------------------------------- THE TRANSFORM
 
@@ -96,10 +96,8 @@ last_mid:(`symbol$())!`float$();
 / The canonical tables this job reads, as the plant delivers them - the
 / normalizers' outputs with `time` stamped in front. Declared so that
 / tests/q/test_stack_tables.q can hold them to the plant's own.
-executions:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$();
-    side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$();
-    fill_id:`symbol$())
-marks:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); mid:`float$())
+executions:.qetl.plant.shape `executions
+marks:.qetl.plant.shape `marks
 
 / Executions: apply every fill in the batch in arrival order - already time
 / order off the tickerplant - mark each to the current last_mid, and publish

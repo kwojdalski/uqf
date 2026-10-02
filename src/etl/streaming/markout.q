@@ -33,9 +33,11 @@
 horizons:0D00:00:01 0D00:00:10
 max_horizon:max horizons
 
-trades:([] time:`timestamp$(); sym:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$())
-quotes:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$())
-execution_quality:([] sym:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$())
+trades:.qetl.plant.shape `trades
+/ `quotes` is the transform's NAME for its quote input, not the plant table
+/ `quotes` (the vector book): its rows are plant `quote` ticks, these four columns.
+quotes:.qetl.plant.columns[`quote;`time`sym`bid`ask]
+execution_quality:.qetl.plant.published `execution_quality
 
 / ---------------------------------------------------------- THE TRANSFORM
 
