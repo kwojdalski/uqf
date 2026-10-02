@@ -148,6 +148,22 @@ def monitor_connection_plan(
     return kept, dropped
 
 
+#: monitor1 retries every dead connection on `.servers.RETRY` (5 minutes),
+#: and with TorQ's default `.servers.DEBUG:1b` logs "attempting to open handle"
+#: and "connection ... failed: Connection refused" at INF for each attempt.
+#: Every optional process left stopped (startwithall=0) is a dead row it
+#: retries for as long as it runs - thousands of INF lines making a job that
+#: was stopped on purpose read as a fault.
+#:
+#: The retries themselves stay: a process started by hand registers with
+#: discovery, which hands it to monitor1 WITHOUT connecting (procupdate,
+#: connect=0b), and the retry timer is what connects it. Only the per-attempt
+#: lines go. A process that should be up and is not still shows - as `down`
+#: and an ageing heartbeat in `uqs summary`, the signal that was always the
+#: real one.
+MONITOR_QUIET_EXTRAS = "-.servers.DEBUG 0"
+
+
 def monitor_connection_extras(paths: UqsPaths, rows: list[dict[str, str]]) -> str:
     """`.servers.CONNECTIONS` as a command-line override for monitor1.
 
