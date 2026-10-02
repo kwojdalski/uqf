@@ -450,13 +450,8 @@ test_an_undeclared_example_is_not_an_empty_string:{[t]
 
 / Every log line `f` writes, as (level;id;text;fields): a recorder in place of
 / .qetl.log.line, ahead of the TRC switch test_log.q covers.
-logged:{[f]
-    / TRC on for the call: with it off the request paths trace nothing at all.
-    keep:.qetl.log.line; was:.qetl.log.trace_enabled; .qetl.log.trace 1b; `.srctest.lines set ();
-    / with_scope, as the real line does: the context is merged there.
-    .qetl.log.line:{[level;id;text;fields] .srctest.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
-    @[f;::;::]; .qetl.log.line:keep; .qetl.log.trace was;
-    .srctest.lines}
+/ TRC on for the call: with it off the request paths trace nothing at all.
+logged:.testutil.captured_log[1b]
 
 / A stand-in handle: evaluates the message as the far side would.
 fake_handle:{value x}
@@ -530,14 +525,13 @@ test_each_retry_is_traced_as_its_attempt:{[t]
 
 test_with_trace_off_a_request_is_only_sent:{[t]
     / no number minted, no lambda rendered, no line at all
+    / Through the protected recorder: a throw here used to leave the recorder
+    / installed for every suite after this one.
     .qetl.log.trace 0b;
     before:.qetl.log.request_seq;
-    keep:.qetl.log.line; `.srctest.lines set ();
-    / with_scope, as the real line does: the context is merged there.
-    .qetl.log.line:{[level;id;text;fields] .srctest.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
-    r:.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2];
-    .qetl.log.line:keep;
-    .qunit.assertEquals[(r;.qetl.log.request_seq;count .srctest.lines);(([] x:1 2);before;0);
+    lines:.testutil.captured_log[0b;{`.srctest.r set .qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2]}];
+    r:.srctest.r;
+    .qunit.assertEquals[(r;.qetl.log.request_seq;count lines);(([] x:1 2);before;0);
         "the query runs, and nothing is numbered, formatted or logged"]};
 
 \d .

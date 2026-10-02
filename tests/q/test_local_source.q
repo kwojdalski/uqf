@@ -128,6 +128,28 @@ test_partitions_with_different_columns_are_refused_by_date:{[t]
         "local: t's columns differ between partitions 2026.09.18*";
         "named, not a list of dicts that fails in the query"]};
 
+test_a_nested_symbol_list_column_is_decoded_row_by_row:{[t]
+    / A list of symbols per row is stored as 77h - outside 20-76h, so it came
+    / back as raw enum positions.
+    d:"build/test-local-nested"; system"rm -rf ",d; system"mkdir -p ",d;
+    keep:@[get;`sym;{[e] `symbol$()}];
+    `sym set `x`y`z;
+    (hsym `$d,"/sym") set `x`y`z;
+    (hsym `$d,"/2026.09.17/t/") set ([] time:2026.09.17D10:00 2026.09.17D10:01; tags:(`sym$`x`y;`sym$enlist `z));
+    `sym set keep;
+    r:.qetl.source.local_read[hsym `$d;`t;2026.09.17D00:00;2026.09.18D00:00];
+    .qunit.assertEquals[r`tags;(`x`y;enlist `z);"each row's symbols, decoded"]};
+
+test_a_domain_file_that_is_not_symbols_is_refused:{[t]
+    d:"build/test-local-baddomain"; system"rm -rf ",d; system"mkdir -p ",d;
+    keep:@[get;`sym;{[e] `symbol$()}];
+    `sym set `a`b;
+    (hsym `$d,"/2026.09.17/t/") set ([] time:2026.09.17D10:00 2026.09.17D10:01; s:`sym$`a`b);
+    `sym set keep;
+    (hsym `$d,"/sym") set 1 2 3;
+    .qunit.assertThrows[{.qetl.source.local_read[hsym `$x;`t;2026.09.17D00:00;2026.09.18D00:00]};d;
+        "local: * is not a symbol list - not a domain file";"longs are not symbols"]};
+
 / --- the credential is a path, checked when the worker connects -------------
 
 test_a_path_that_does_not_exist_is_refused:{[t]
@@ -177,11 +199,7 @@ test_cleanup_does_not_try_to_close_a_directory:{[t]
 / --- tracing -----------------------------------------------------------------
 
 / Every line `f` logs, context merged; TRC on for the call.
-logged:{[f]
-    keep:.qetl.log.line; was:.qetl.log.trace_enabled; .qetl.log.trace 1b; `.loctest.lines set ();
-    .qetl.log.line:{[level;id;text;fields] .loctest.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
-    @[f;::;::]; .qetl.log.line:keep; .qetl.log.trace was;
-    .loctest.lines}
+logged:.testutil.captured_log[1b]
 
 test_a_local_query_is_traced_like_a_remote_one:{[t]
     lines:.loctest.logged {.qetl.source.local[.loctest.root;{[read;a;b] read[`trades;a;b]};2026.09.17D00:00;2026.09.18D00:00]};

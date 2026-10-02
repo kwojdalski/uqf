@@ -607,4 +607,12 @@ test_venue_quality_accepts_weights_with_normalise:{[t]
     .qunit.assertThrows[vq_call;@[vq_args[];4;{x,`weights`normalise!(`spread_bps`fill_rate!0.5 0.5;`zscore)}];
         "venue_quality: not implemented yet (#338)*";"a complete config gets as far as the computation"]};
 
+
+test_markout_at_horizons_on_no_trades_is_empty_not_an_error:{[t]
+    / (til 0) cross ... is a general empty list, and indexing it threw.
+    tr:([] sym:`symbol$(); time:`timestamp$(); side:`long$(); trade_price:`float$(); pip_factor:`long$());
+    qs:([] sym:enlist `EURUSD; time:enlist 2026.01.01D00:00:00.000000000; mid:enlist 1.1);
+    r:.qexec.markout_at_horizons[tr;qs;0D00:00:01 0D00:00:10];
+    .qunit.assertEquals[(count r;`markout_pips in cols r);(0;1b);"no rows, and the columns a caller selects"]};
+
 \d .

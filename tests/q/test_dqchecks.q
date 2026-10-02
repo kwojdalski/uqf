@@ -55,6 +55,13 @@ test_check_market_data_quality_rejects_missing_columns:{[t]
     wrapper:{[q] .qdqc.check_market_data_quality[q;5]};
     .qunit.assertError[wrapper;([] time:enlist 2026.01.01D00:00:00.000000000; sym:enlist `EURUSD);"missing bid_prices/ask_prices etc -> rejected, not silently misread"]};
 
+test_check_stale_quotes_lists_stale_before_ok:{[t]
+    / As documented: `stale` first. xasc sorted them alphabetically, ok first.
+    t0:2026.01.01D00:00:00.000000000;
+    quotes:`sym`time xasc (mk_quotes_row[t0;`EURUSD;1.0999;1.1001];mk_quotes_row[t0+0D00:00:09;`GBPUSD;1.2999;1.3001]);
+    r:.qdqc.check_stale_quotes[quotes;t0+0D00:00:10;0D00:00:05];
+    .qunit.assertEquals[r`status;`stale`ok;"the stale EURUSD before the fresh GBPUSD"]};
+
 test_check_stale_quotes_flags_a_gap_past_max_age:{[t]
     t0:2026.01.01D00:00:00.000000000;
     quotes:`sym`time xasc (enlist mk_quotes_row[t0;`EURUSD;1.0999;1.1001]);

@@ -98,7 +98,8 @@ check_stale_quotes:{[quotes;as_of;max_age]
     result:([] sym:exec sym from latest; last_ts:exec last_ts from latest);
     result:update age:cutoff-last_ts from result;
     result:update status:`ok`stale (age>max_age) from result;
-    `status xasc result};
+    / xdesc: `stale` before `ok`, as documented - xasc sorted them alphabetically.
+    `status xdesc result};
 
 / Flattens a list of already-run check tables (any of the above, or a
 / caller's own) into one "what needs attention" report - every row whose

@@ -55,6 +55,12 @@ test_var_historical95:{[t]
 / percentile outcome, so an all-profitable series yields a negative "loss"
 / (bugfinder, #182). The docstring was corrected rather than the arithmetic,
 / which makes this the test that holds the two together.
+test_var_historical_is_not_moved_by_floating_point_rounding:{[t]
+    / (1-0.9)*10 is 0.9999999999999998; floor gave rank 0, the single worst
+    / loss (10), where the 90% rank of ten outcomes is the next one (9).
+    .qunit.assertEquals[.qrisk.var_historical[neg 1+til 10;0.9];9;"90% of ten outcomes: the 9, not the 10"];
+    .qunit.assertEquals[.qrisk.var_historical[neg 1+til 20;0.95];19;"and the case rounding already got right still does"]};
+
 test_var_historical_is_negative_when_the_percentile_is_a_gain:{[t]
     pnl_series:100+til 200;
     .testutil.assertApprox[.qrisk.var_historical[pnl_series;0.95];-110f;1e-9;

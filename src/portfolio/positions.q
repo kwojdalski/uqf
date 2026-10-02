@@ -225,6 +225,9 @@ ccy_exposure_in:{[pos;quotes;reporting_ccy;as_of]
     exposure:ccy_exposure pos;
     convert_one:{[quotes;reporting_ccy;as_of;ccy;amount]
         if[ccy=reporting_ccy; :amount];
+        / Nothing to convert, and nothing to sweep: a book that closed a
+        / position keeps the flat row, and pricing it at size 0 threw.
+        if[0=amount; :0f];
         pair:.qccy.ccy_pair_symbol[ccy;reporting_ccy];
         mid:first exec mid from .qfwd.cross_book_at[quotes;pair;as_of;enlist abs amount;enlist `mid];
         amount*mid};

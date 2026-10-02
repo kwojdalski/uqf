@@ -503,10 +503,10 @@ summary:{[matches;group_cols]
 / one is only as good as the mark it was given.
 / @param lots a residual table from residual
 / @param marks a dictionary of sym -> current price
-/ @return lots plus mark_price and unrealised_pnl
-/ @eg exec first unrealised_pnl from .qalloc.unrealised[.qalloc.residual[([] time:enlist 2026.01.01D09:00:00; sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; trade_price:enlist 1.0);`fifo]; enlist[`EURUSD]!enlist 2.0] -> 1000000f
+/ @return lots plus mark_price and unrealized_pnl
+/ @eg exec first unrealized_pnl from .qalloc.unrealised[.qalloc.residual[([] time:enlist 2026.01.01D09:00:00; sym:enlist `EURUSD; side:enlist 1; size:enlist 1000000f; trade_price:enlist 1.0);`fifo]; enlist[`EURUSD]!enlist 2.0] -> 1000000f
 unrealised:{[lots;marks]
     r:update mark_price:marks sym from lots;
-    update unrealised_pnl:.qrisk.pnl[qty;price;mark_price;side] from r}
+    update unrealized_pnl:.qrisk.pnl[qty;price;mark_price;side] from r}
 
 \d .

@@ -605,7 +605,9 @@ undefined_if_zero:{[n] ?[0=n;0n;n]}
 
 cancel_to_trade_ratio_by:{[tape;bucket_size;group_cols]
     require_tape tape;
-    t:select time, sym, action from tape where action in `cancel`trade;
+    / The group columns are carried through: selecting time, sym and action
+    / alone made grouping by anything else (venue) throw.
+    t:(distinct `time`sym`action,(),group_cols)#select from tape where action in `cancel`trade;
     by_cols:$[null bucket_size;
         (),group_cols;
         (`time,(),group_cols)];
@@ -771,7 +773,7 @@ trade_arrival_rate:{[tape]
 / @eg .qmicro.trade_arrival_rate_by[tape;0D01:00:00;enlist `sym]
 trade_arrival_rate_by:{[tape;bucket_size;group_cols]
     require_tape tape;
-    t:select time, sym from tape where action=`trade;
+    t:(distinct `time`sym,(),group_cols)#select from tape where action=`trade;
     by_cols:$[null bucket_size; (),group_cols; (`time,(),group_cols)];
     t:$[null bucket_size; t; update time:bucket_size xbar time from t];
     if[0=count by_cols;

@@ -151,7 +151,10 @@ break_even:{[book]
 ccy_exposure:{[book;group_cols]
     g:(),group_cols;
     rows:0!book;
-    if[0=count rows; :?[([] ccy:`symbol$(); amount:`float$()); (); 0b; ()]];
+    / Empty, but the SAME shape as a non-empty result: keyed on the group
+    / columns (typed as the book has them) plus ccy, with amount - it used to
+    / come back unkeyed, without the group columns at all.
+    if[0=count rows; :(g,`ccy) xkey ?[rows;();0b;g!g] ,' ([] ccy:`symbol$(); amount:`float$())];
     legs:.qccy.ccy_pair_legs each rows`sym;
     / Two rows out of every one in - the base leg and the quote leg - so
     / the group columns are taken twice, in the same order the amounts are.
