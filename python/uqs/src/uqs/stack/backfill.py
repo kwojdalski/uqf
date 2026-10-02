@@ -160,12 +160,14 @@ def backfill_flags(
     range_to: datetime,
     *,
     verbose: bool = False,
+    trace: bool = False,
     on_conflict: str | None = None,
     mode: str | None = None,
 ) -> list[str]:
     """The flags torq_backfill.q reads, validated so torq.sh passes them intact.
 
-    `verbose` adds `-verbose`, which switches the process's DBG log level on.
+    `verbose` adds `-verbose`, which switches the process's DBG log level on;
+    `trace` adds `-trace`, its TRC level - every query the source is sent.
     `on_conflict` adds `-on_conflict`, this run's strategy for a row already
     there, over the worker's own. `mode` adds `-mode`, spelled as q spells it
     (dry-run becomes dry_run); left out, the process runs for real.
@@ -206,7 +208,7 @@ def backfill_flags(
         flags += ["-on_conflict", on_conflict]
     if mode is not None:
         flags += ["-mode", mode.replace("-", "_")]
-    return [*flags, "-verbose"] if verbose else flags
+    return [*flags, *(["-verbose"] if verbose else []), *(["-trace"] if trace else [])]
 
 
 def start(
@@ -218,6 +220,7 @@ def start(
     base_port: int = DEFAULT_BASE_PORT,
     *,
     verbose: bool = False,
+    trace: bool = False,
     on_conflict: str | None = None,
     mode: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
@@ -229,6 +232,7 @@ def start(
         range_from,
         range_to,
         verbose=verbose,
+        trace=trace,
         on_conflict=on_conflict,
         mode=mode,
     )

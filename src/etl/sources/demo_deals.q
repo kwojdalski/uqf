@@ -89,11 +89,11 @@ tz:`UTC
 / double-publishes every boundary row, which then appears as a duplicate
 / nobody can explain.
 query:{[h;range_from;range_to]
-    h({[from_ts;to_ts]
+    .qetl.source.ipc[h;{[from_ts;to_ts]
         select deal_id, deal_time, sym, side, notional, rate
             from `demo_deals
             where deal_time>=from_ts, deal_time<to_ts
-      };range_from;range_to)}
+      };range_from;range_to]}
 
 / ------------------------------------------------------------ THE FIXTURE
 

@@ -12,7 +12,7 @@
 / and this file does not reimplement any of it. Every message here ends up
 / in .lg.l, so `-jsonlogs`, log rolling and publication all keep working.
 / .
-/ THE TWO THINGS TORQ LACKS
+/ THE THINGS TORQ LACKS
 / .
 /   1. A DEBUG level. .lg.outmap knows ERROR/ERR/INF/WARN only, and
 /      `debug_level`, `verbose` and `log_verbose` in the requirements imply
@@ -21,7 +21,13 @@
 /      on (and a stuck worker gives you nothing). DBG is registered in
 /      outmap at 0 - off - and switched on per process with .qetl.log.debug[].
 / .
-/   2. Structure. A worker logging "window done" is useless in aggregate;
+/   2. A TRACE level, below DEBUG: the exact query a source sends - the SQL
+/      statement, or the q lambda and its arguments - logged before it goes
+/      out and again with what came back. One per window, and long, so it
+/      has its own switch, .qetl.log.trace[]: switching debug on to follow
+/      a run must not bury it under every statement.
+/ .
+/   3. Structure. A worker logging "window done" is useless in aggregate;
 /      a worker logging window=[from;to) rows=1234 is greppable across a
 /      fleet. Every function here takes a DICT of fields and renders it
 /      k=v, so the field names are the same in every worker and a log line
@@ -39,9 +45,13 @@
 
 \d .qetl.log
 
-/ Level names, in severity order. DBG is this file's addition; the other
-/ three are TorQ's own, kept identical so outmap and pubmap apply unchanged.
-levels:`DBG`INF`WARN`ERR
+/ Level names, in severity order. TRC and DBG are this file's additions; the
+/ other three are TorQ's own, kept identical so outmap and pubmap apply
+/ unchanged.
+levels:`TRC`DBG`INF`WARN`ERR
+
+/ The levels off unless a process switches them on, each with its own switch.
+quiet:`TRC`DBG
 
 / Register DBG with TorQ's routing tables if TorQ is loaded and has not
 / heard of it. Off by default (0): nothing changes for an existing process
@@ -49,8 +59,8 @@ levels:`DBG`INF`WARN`ERR
 / init rather than exactly once.
 register:{[]
     if[not torq_loaded[]; :0b];
-    if[not `DBG in key .lg.outmap; .lg.outmap[`DBG]:0];
-    if[not `DBG in key .lg.pubmap; .lg.pubmap[`DBG]:0];
+    {if[not x in key .lg.outmap; .lg.outmap[x]:0];
+     if[not x in key .lg.pubmap; .lg.pubmap[x]:0]} each quiet;
     1b}
 
 / Switch debug output on (or off) for THIS process.
@@ -66,6 +76,20 @@ debug:{[on]
     on}
 
 debug_enabled:0b
+
+/ Switch trace output - every query a source sends - on (or off) for THIS
+/ process. Independent of debug: either can be on without the other.
+/ @param on 1b to emit TRC lines, 0b to suppress them
+trace:{[on]
+    register[];
+    if[torq_loaded[]; .lg.outmap[`TRC]:$[on;1;0]];
+    trace_enabled::on;
+    on}
+
+trace_enabled:0b
+
+/ Private: is a quiet level switched on, outside TorQ?
+switched:{[level] $[level=`DBG; debug_enabled; level=`TRC; trace_enabled; 1b]}
 
 / Private: render a field dict as space-separated k=v, values via .Q.s1 so a
 / symbol, a timestamp and a string all render unambiguously and a list does
@@ -89,13 +113,13 @@ torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
 / Private: the transport. TorQ's .lg.l when loaded, stdout otherwise.
 / .
 / Level gating outside TorQ mirrors TorQ's own default: DBG is suppressed
-/ unless debug[] was called, everything else prints. That way a test that
-/ asserts "this DBG line was not emitted" gets the same answer whether or
-/ not torq.q happens to be loaded.
+/ unless debug[] was called, TRC unless trace[] was, everything else prints.
+/ That way a test that asserts "this DBG line was not emitted" gets the same
+/ answer whether or not torq.q happens to be loaded.
 emit:{[level;id;msg]
     $[torq_loaded[];
         .lg.l[level;`etl;id;id;msg;()!()];
-      (level=`DBG) and not debug_enabled;
+      not switched level;
         ::;
       -1 "|" sv string[(.z.p;level;id)],enlist msg]}
 
@@ -106,9 +130,7 @@ emit:{[level;id;msg]
 enabled:{[level]
     $[torq_loaded[];
         0<0^.lg.outmap level;
-      level=`DBG;
-        debug_enabled;
-      1b]}
+      switched level]}
 
 / Private: assemble and emit one line.
 / .
@@ -132,7 +154,7 @@ line:{[level;id;text;fields]
         emit[level;id;$[0=count fields; text; text," ",render fields]]];
     }
 
-/ The four levels. `id` is the worker or component name - it becomes
+/ The five levels. `id` is the worker or component name - it becomes
 / TorQ's `id` column, so `select from logmsg where id=`demo_deals_backfill`
 / works on a published log.
 / @param id the worker or component, as a symbol
@@ -140,6 +162,7 @@ line:{[level;id;text;fields]
 / @param fields a dict of the values, rendered k=v after the text
 / @eg .qetl.log.info[`demo_deals_backfill;"window published";
 /        `range_from`range_to`rows!(2026.09.11D00:00;2026.09.12D00:00;1234)]
+trc:{[id;text;fields]  line[`TRC;id;text;fields]}
 dbg:{[id;text;fields]  line[`DBG;id;text;fields]}
 info:{[id;text;fields] line[`INF;id;text;fields]}
 warn:{[id;text;fields] line[`WARN;id;text;fields]}

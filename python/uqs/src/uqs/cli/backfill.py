@@ -77,6 +77,15 @@ def backfill(
             "worker's declaration, every window, each stage's timing",
         ),
     ] = False,
+    trace: Annotated[
+        bool,
+        typer.Option(
+            "--trace",
+            help="Log at TRACE inside the backfill process: every query the source is "
+            "sent - the SQL, or the q lambda and its bounds - and the rows and time it "
+            "took. Independent of --debug",
+        ),
+    ] = False,
 ) -> None:
     """Run a bounded worker over [--from, --to), recording coverage under --version.
 
@@ -95,6 +104,7 @@ def backfill(
 
     `--debug` (or `uqs --debug backfill ...`) starts the process with
     `-verbose`, so its log - `uqs logs <process>` - carries DBG lines.
+    `--trace` starts it with `-trace`: every query sent to the source, at TRC.
     """
     try:
         result = stack_backfill.start(
@@ -105,6 +115,7 @@ def backfill(
             stack_backfill.parse_bound("--to", range_to),
             base_port=port,
             verbose=_debug_requested(ctx, debug),
+            trace=trace,
             on_conflict=on_conflict,
             mode=mode,
         )

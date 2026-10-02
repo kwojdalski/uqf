@@ -172,6 +172,31 @@ test_run_sql_names_the_statement_on_failure:{[t]
     / two likes: a pattern with more than one inner `*` throws 'nyi here
     .qunit.assertTrue[(err like "*syntax*") and err like "*select nope";"a failing statement is named in the error, with the driver's reason"]};
 
+/ Every log line `f` writes, as (level;id;text;fields): a recorder in place of
+/ .qetl.log.line, which every level calls - so this sees what is logged, ahead
+/ of the TRC switch test_log.q covers - and the real one put back after.
+logged:{[f]
+    keep:.qetl.log.line; `.odbctest.lines set ();
+    .qetl.log.line:{[level;id;text;fields] .odbctest.lines,:enlist (level;id;text;fields)};
+    @[f;::;::]; .qetl.log.line:keep;
+    .odbctest.lines}
+
+test_run_sql_traces_the_statement_and_what_came_back:{[t]
+    lines:.odbctest.logged {.odbctest.with_fake_driver[{.qetl.io.odbc.run_sql[7;"select 1"]}]};
+    .qunit.assertEquals[lines[;0 1 2];((`TRC;`odbc;"sql sent");(`TRC;`odbc;"sql returned"));
+        "one TRC line before the statement is sent, one after"];
+    .qunit.assertEquals[((lines 0)[3]`statement;(lines 1)[3]`rows);("select 1";1);
+        "the exact statement, then the row count"]};
+
+test_run_sql_traces_a_statement_that_fails:{[t]
+    / Logged BEFORE it is sent, so a statement that throws - or hangs - is
+    / still in the trace.
+    lines:.odbctest.logged {.odbctest.with_fake_driver[{
+        `.odbc.eval set {[h;sql] '"syntax"};
+        @[.qetl.io.odbc.run_sql[7;];"select nope";::]}]};
+    .qunit.assertEquals[lines[;2];enlist "sql sent";"the statement is logged, and nothing claims it returned"];
+    .qunit.assertEquals[(first lines)[3]`statement;"select nope";"the failing statement itself"]};
+
 / Build the statement without a connection, by calling the renderer the query
 / uses. Keeps every assertion above driver-free.
 built_sql:{[]

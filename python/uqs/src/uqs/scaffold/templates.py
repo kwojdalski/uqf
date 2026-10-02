@@ -82,7 +82,9 @@ test_{name}_is_implemented:{{[t]
 _QUERY_NOTES = {
     "ipc": """/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).
 / The bounds are arguments to a functional select evaluated on the remote
-/ side, so no caller value is ever spliced into query text.""",
+/ side, so no caller value is ever spliced into query text. Send it with
+/ .qetl.source.ipc[h;{[from_ts;to_ts] select ...};range_from;range_to], not
+/ h(...) directly, so `uqs backfill --trace` shows the query.""",
     "odbc": """/ `h` is an ODBC handle from .qetl.io.odbc.open. Build the SELECT with every
 / bound through .qetl.io.odbc.literal - never string concatenation of a raw
 / value - run it with .qetl.io.odbc.run_sql, and return the declared columns

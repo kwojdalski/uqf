@@ -406,9 +406,14 @@ qetl.log,err,function,3,id text fields
 qetl.log,info,function,3,id text fields
 qetl.log,levels,value,,
 qetl.log,line,function,4,level id text fields
+qetl.log,quiet,value,,
 qetl.log,register,function,1,
 qetl.log,render,function,1,fields
+qetl.log,switched,function,1,level
 qetl.log,torq_loaded,function,1,
+qetl.log,trace,function,1,on
+qetl.log,trace_enabled,value,,
+qetl.log,trc,function,3,id text fields
 qetl.log,warn,function,3,id text fields
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
@@ -543,6 +548,7 @@ qetl.source,define,function,2,source decl
 qetl.source,defined,function,1,
 qetl.source,fetch_window,function,4,source h range_from range_to
 qetl.source,has_credentials,function,1,source
+qetl.source,ipc,function,4,h f range_from range_to
 qetl.source,load_zone_table,function,1,path
 qetl.source,local_candidates,function,2,tz tsv
 qetl.source,local_to_utc,function,2,tz ts

@@ -123,9 +123,12 @@ def test_start_passes_the_flags_through_torq_sh_extras(monkeypatch):
 def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
+    def fake(
+        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+    ):
         seen.update(worker=worker, version=version, range=(range_from, range_to), port=base_port)
         seen["verbose"] = verbose
+        seen["trace"] = trace
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
@@ -139,6 +142,7 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
         "range": (FROM, TO),
         "port": 7000,
         "verbose": False,
+        "trace": False,
     }
 
 
@@ -147,7 +151,9 @@ def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
     """Both spellings: the command's own --debug, and the global one."""
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
+    def fake(
+        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+    ):
         seen["verbose"] = verbose
         return type("Completed", (), {"returncode": 0})()
 
@@ -180,7 +186,9 @@ def test_an_unknown_on_conflict_is_refused_naming_the_strategies():
 def test_the_cli_passes_on_conflict_through(monkeypatch):
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
+    def fake(
+        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+    ):
         seen["on_conflict"] = on_conflict
         return type("Completed", (), {"returncode": 0})()
 
@@ -196,6 +204,31 @@ def test_verbose_adds_the_flag_torq_backfill_reads():
     plain = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO)
     loud = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, verbose=True)
     assert loud == [*plain, "-verbose"]
+
+
+def test_trace_adds_its_own_flag_independent_of_verbose():
+    plain = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO)
+    traced = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, trace=True)
+    both = backfill.backfill_flags("demo_deals_backfill", "v1", FROM, TO, verbose=True, trace=True)
+    assert traced == [*plain, "-trace"]
+    assert both == [*plain, "-verbose", "-trace"]
+
+
+def test_trace_on_the_command_line_reaches_the_process(monkeypatch):
+    seen = {}
+
+    def fake(
+        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+    ):
+        seen.update(verbose=verbose, trace=trace)
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr(backfill, "start", fake)
+    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--trace"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert seen == {"verbose": False, "trace": True}
 
 
 @pytest.mark.parametrize("missing", ["--version", "--from", "--to"])
@@ -321,7 +354,9 @@ def test_an_unknown_mode_is_refused_naming_the_four():
 def test_the_cli_passes_the_mode_through(monkeypatch):
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
+    def fake(
+        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+    ):
         seen["mode"] = mode
         return type("Completed", (), {"returncode": 0})()
 
@@ -351,7 +386,9 @@ def test_a_worker_with_no_default_refuses_a_missing_version():
 def test_the_cli_runs_without_version_for_a_worker_with_a_default(monkeypatch):
     seen = {}
 
-    def fake(paths, worker, version, range_from, range_to, base_port, verbose, on_conflict, mode):
+    def fake(
+        paths, worker, version, range_from, range_to, base_port, verbose, trace, on_conflict, mode
+    ):
         seen["version"] = version
         return type("Completed", (), {"returncode": 0})()
 

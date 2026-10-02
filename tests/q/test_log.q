@@ -27,12 +27,13 @@ real_render:.qetl.log.render
 setUp_capture:{[]
     `.logtest.captured set ();
     .qetl.log.debug[0b];
+    .qetl.log.trace[0b];
     `.qetl.log.emit set {[level;id;msg]
-        $[(level=`DBG) and not .qetl.log.debug_enabled; ::;
+        $[not .qetl.log.switched level; ::;
           `.logtest.captured set .logtest.captured,enlist (level;id;msg)]};
     }
 
-tearDown_restore:{[] .qetl.log.debug[0b];}
+tearDown_restore:{[] .qetl.log.debug[0b]; .qetl.log.trace[0b];}
 
 last_msg:{[] last .logtest.captured[;2]}
 
@@ -106,6 +107,39 @@ test_other_levels_are_unaffected_by_debug:{[t]
     .qetl.log.debug[0b];
     .qetl.log.info[`w;"a";()!()]; .qetl.log.warn[`w;"b";()!()]; .qetl.log.err[`w;"c";()!()];
     .qunit.assertEquals[.logtest.captured[;0];`INF`WARN`ERR;"INF, WARN and ERR emit regardless of the debug switch"]};
+
+/ --- trace: below debug, with its own switch ----------------------------
+/ .
+/ TRC carries every query a source is sent - one long line per window - so
+/ it must stay off unless asked for, and switching debug on to follow a run
+/ must not switch it on too.
+
+test_trace_is_suppressed_by_default:{[t]
+    .qetl.log.trc[`odbc;"sql sent";enlist[`statement]!enlist "SELECT 1"];
+    .qunit.assertEquals[count .logtest.captured;0;"nothing emitted: trace is opt-in"]};
+
+test_trace_appears_once_enabled:{[t]
+    .qetl.log.trace[1b];
+    .qetl.log.trc[`odbc;"sql sent";enlist[`statement]!enlist "SELECT 1"];
+    .qunit.assertEquals[(.logtest.captured[;0];last_msg[]);(enlist `TRC;"sql sent statement=\"SELECT 1\"");
+        "after trace[1b] the statement is emitted, at TRC"]};
+
+test_debug_does_not_switch_trace_on:{[t]
+    .qetl.log.debug[1b];
+    .qetl.log.trc[`odbc;"sql sent";()!()];
+    .qetl.log.dbg[`w;"window start";()!()];
+    .qunit.assertEquals[.logtest.captured[;0];enlist `DBG;"debug alone shows DBG, not every query"]};
+
+test_trace_does_not_switch_debug_on:{[t]
+    .qetl.log.trace[1b];
+    .qetl.log.trc[`odbc;"sql sent";()!()];
+    .qetl.log.dbg[`w;"window start";()!()];
+    .qunit.assertEquals[.logtest.captured[;0];enlist `TRC;"trace alone shows queries, not DBG detail"]};
+
+test_enabled_reports_the_trace_gate:{[t]
+    off:.qetl.log.enabled `TRC;
+    .qetl.log.trace[1b];
+    .qunit.assertEquals[(off;.qetl.log.enabled `TRC);01b;"enabled follows the trace switch"]};
 
 / --- lazy rendering -----------------------------------------
 
@@ -181,14 +215,14 @@ test_register_adds_dbg_to_torqs_routing_tables_when_present:{[t]
     r:.qetl.log.register[];
     outm:.lg.outmap;
     ![`.lg;();0b;`l`outmap`pubmap];
-    .qunit.assertEquals[(r;outm`DBG);(1b;0);"DBG is registered, and OFF by default so nothing changes for an existing process"]};
+    .qunit.assertEquals[(r;outm`DBG`TRC);(1b;0 0);"DBG and TRC are registered, and OFF by default so nothing changes for an existing process"]};
 
 / --- without TorQ, register is a harmless no-op -------------------------
 
 test_register_without_torq_is_a_no_op:{[t]
     .qunit.assertEquals[.qetl.log.register[];0b;"no .lg to register with, and no error either - the core loads standalone"]};
 
-test_the_level_set_matches_torqs_plus_debug:{[t]
-    .qunit.assertEquals[.qetl.log.levels;`DBG`INF`WARN`ERR;"exactly TorQ's three plus DBG, so outmap and pubmap apply unchanged"]};
+test_the_level_set_matches_torqs_plus_trace_and_debug:{[t]
+    .qunit.assertEquals[.qetl.log.levels;`TRC`DBG`INF`WARN`ERR;"exactly TorQ's three plus TRC and DBG, so outmap and pubmap apply unchanged"]};
 
 \d .
