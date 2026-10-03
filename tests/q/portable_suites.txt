@@ -27,6 +27,7 @@ test_microstructure.q
 test_options.q
 test_positions.q
 test_rates.q
+test_render.q
 test_risk.q
 test_schema.q
 test_stats.q

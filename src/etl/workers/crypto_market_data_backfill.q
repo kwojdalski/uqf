@@ -71,7 +71,7 @@ quality_check:{[batch]
     bad_latency:select from batch where (latency_ms<0) | (latency_min_ms>latency_ms);
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
-        ([] check:count[t]#nm; status:count[t]#`breach; detail:.Q.s1 each t)
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each t)
       }'[`crossed_book`nonpositive_trade`negative_latency;
          (crossed;bad_trade;bad_latency)]}
 

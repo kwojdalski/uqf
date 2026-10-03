@@ -439,7 +439,10 @@ test_facts_reports_the_span_and_the_trade_count:{[t]
     tape:.qpipe.source.demo_events.fixture[];
     r:.qpipe.job.demo_events_backfill.facts[tape];
     .qunit.assertEquals[r`distinct_syms;count distinct tape`sym;"one count per distinct symbol"];
-    .qunit.assertEquals[r`trade_events;sum `trade=tape`action;"only trades are counted as trade events"];
+    .qunit.assertEquals[r`trade_events;sum "j"$`trade=tape`action;"only trades are counted as trade events"];
+    / A long, not an int: run facts are stored as text, and an int read "2i" (#606).
+    .qunit.assertEquals[type r`trade_events;-7h;"a long"];
+    .qunit.assertEquals[.qetl.run.as_text r`trade_events;string r`trade_events;"stored as a plain number"];
     .qunit.assertTrue[(r[`event_span]) like "*/*";"the span is from/to, not a single instant"]};
 
 

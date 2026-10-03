@@ -421,7 +421,9 @@ release:{[]
 / it does not acquire a layer of quotes on every round trip, and a symbol
 / atom is stringified plainly, because -3! would render `v1 as "`v1" and the
 / backtick is noise to every reader of this column.
-as_text:{[v] $[10h=type v; v; -11h=type v; string v; -3!v]}
+/ .qrender.full, not -3!: run facts are PERSISTED, and -3! cut them at the
+/ console width (#605).
+as_text:{[v] $[10h=type v; v; -11h=type v; string v; .qrender.full v]}
 
 / Attach metadata to one materialisation.
 / .

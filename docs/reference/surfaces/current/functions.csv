@@ -101,6 +101,7 @@ qetl.cfg.audit,poll,function,2,owner as_of
 qetl.cfg.audit,poll_and_publish,function,1,
 qetl.cfg.audit,render,function,1,name
 qetl.cfg.audit,seen,dict,,
+qetl.cfg.audit,shown,function,1,v
 qetl.cfg.audit,watch,function,2,owner names
 qetl.cfg.audit,watched,dict,,
 qetl.cfg.audit,watching,function,1,owner
@@ -1226,6 +1227,8 @@ qrates,df_simple,function,2,r t
 qrates,growth_cont,function,2,r t
 qrates,growth_simple,function,2,r t
 qrates,simple_to_cont,function,2,r t
+qrender,full,function,1,v
+qrender,quoted,function,1,s
 qrisk,carry_pnl,function,3,notional spot fwd
 qrisk,carry_return,function,2,spot fwd
 qrisk,pip_value,function,2,notional pip_factor

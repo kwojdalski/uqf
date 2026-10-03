@@ -30,7 +30,7 @@ quality_check:{[batch]
     bad_price:select from batch where not price>0;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
-        ([] check:count[t]#nm; status:count[t]#`breach; detail:.Q.s1 each select time, sym, sequence from t)
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each select time, sym, sequence from t)
       }'[`crossed_top_of_book`nonpositive_price;(crossed;bad_price)]}
 
 \d .

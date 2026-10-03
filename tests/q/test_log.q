@@ -284,4 +284,12 @@ test_register_without_torq_is_a_no_op:{[t]
 test_the_level_set_matches_torqs_plus_trace_and_debug:{[t]
     .qunit.assertEquals[.qetl.log.levels;`TRC`DBG`INF`WARN`ERR;"exactly TorQ's three plus TRC and DBG, so outmap and pubmap apply unchanged"]};
 
+
+/ log.q keeps its own copy of the renderer (processes load it without the
+/ library); it must not drift from .qrender's.
+test_the_log_renderer_matches_the_librarys:{[t]
+    / `samples`, not `vs`: vs is a q builtin.
+    samples:(300#"a";til 500;`a`b!1 2;"tab\there";([] x:til 50));
+    .qunit.assertEquals[.qetl.log.value1 each samples;.qrender.full each samples;"value1 and .qrender.full agree"]};
+
 \d .

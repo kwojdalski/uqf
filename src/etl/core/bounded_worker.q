@@ -1150,7 +1150,7 @@ window_body:{[worker;w]
     if[count bad;
         .qetl.log.err[worker;"window failed data quality";
             `range_from`range_to`failures`detail!
-            (w`range_from;w`range_to;count bad;.Q.s1 bad)];
+            (w`range_from;w`range_to;count bad;.qrender.full bad)];
         write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
         :0b];
     write_state[worker;`last_batch;out];

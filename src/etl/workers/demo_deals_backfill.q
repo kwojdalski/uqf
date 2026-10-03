@@ -49,7 +49,7 @@ quality_check:{[batch]
     bad_id:select from batch where null deal_id;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
-        ([] check:count[t]#nm; status:count[t]#`breach; detail:.Q.s1 each t)
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each t)
       }'[`nonpositive_rate`nonpositive_notional`null_deal_id;
          (bad_rate;bad_notional;bad_id)]}
 

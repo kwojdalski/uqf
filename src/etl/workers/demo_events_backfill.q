@@ -39,7 +39,9 @@ facts:{[batch]
     `event_span`distinct_syms`trade_events!
         ((string min batch`time),"/",string max batch`time;
          count distinct batch`sym;
-         sum `trade=batch`action)}
+         / "j"$: sum over booleans is an INT (2i), stored as "2i" in the run
+         / metadata where every other count is a plain number (#606).
+         sum "j"$`trade=batch`action)}
 
 \d .
 
