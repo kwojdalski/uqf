@@ -119,7 +119,7 @@ summarize_checks:{[named_checks]
         check_name:pair 0; t:pair 1;
         bad:select from t where status<>`ok;
         if[0=count bad; :0#([] check:`symbol$(); status:`symbol$(); detail:`char$())];
-        ([] check:count[bad]#check_name; status:bad`status; detail:.Q.s1 each bad)
+        ([] check:count[bad]#check_name; status:bad`status; detail:.qrender.full each bad)
     } each named_checks;
     rows};
 
