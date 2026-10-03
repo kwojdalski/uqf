@@ -24,7 +24,7 @@ from uqs.paths import UqsError, UqsPaths, check_prerequisites
 from uqs.stack import alive
 from uqs.stack import render as stack_render
 from uqs.stack.env import build_env
-from uqs.stack.procs import _base_process_rows, _read_overrides
+from uqs.stack.procs import effective_process_rows
 
 log = get_logger(__name__)
 
@@ -114,10 +114,7 @@ def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
     # Extend (never edit in place) the vendored process.csv with uqf's own
     # extra processes (fxfeed1) and any process_overrides.csv fields set via
     # set_process_config()/`config set`/uqs_set_config.
-    overrides = _read_overrides(paths)
-    rows = _base_process_rows(paths)
-    for row in rows:
-        row.update(overrides.get(row["procname"], {}))
+    rows = effective_process_rows(paths)
     with paths.generated_procs.open("w", newline="") as f:
         # torq.sh's own field lookups are a naive awk -F, parse expecting
         # plain \n line endings, like the vendored csv itself - csv module's
@@ -131,7 +128,7 @@ def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         writer.writerows(rows)
 
     # Same extend-never-edit approach as process.csv above, for stp1's
-    # -schemafile (see _generated_schema_content/_base_process_rows).
+    # -schemafile (see _generated_schema_content/_composed_rows).
     paths.generated_schema.write_text(_generated_schema_content(paths))
 
     # Make the HDB rectangular, now that database.q says what it should

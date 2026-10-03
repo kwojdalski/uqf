@@ -87,7 +87,7 @@ def _generated_schema_content(paths: UqsPaths) -> str:
     """The vendored database.q's tables, plus uqf's own `quotes`/`wide_book`/
     `mkt_orderbook`/`crypto_book` tables appended - never edited in place, always
     read fresh from the vendored file. stp1's process.csv row (see
-    _base_process_rows) is pointed at the generated copy this produces
+    _composed_rows) is pointed at the generated copy this produces
     rather than the vendored file.
     """
     vendored = (paths.torqapphome / "database.q").read_text()

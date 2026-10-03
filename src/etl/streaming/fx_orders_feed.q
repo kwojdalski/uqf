@@ -43,7 +43,7 @@ products:`spot`fwd
 statuses:`filled`filled`cancelled`rejected
 
 / Pips per unit, matching the trades schema's convention.
-pip_factor:"j"$1%.qsynth.pip
+pip_factor:.qccy.pip_factor .qsynth.pairs
 
 / The sizes an order is drawn from. Float, matching the schema.
 sizes:500000 1000000 2000000 5000000f

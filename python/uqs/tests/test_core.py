@@ -249,7 +249,7 @@ def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
 
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
-    base_rows = {r["procname"]: r for r in stack_procs._base_process_rows(fake_paths)}
+    base_rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
     assert base_rows["fxfeed1"]["startwithall"] == "1"  # unaffected by the override below
 
     stack_procs.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
@@ -1033,7 +1033,7 @@ def test_table_and_schema_are_declared_together():
 
 
 def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: UqsPaths):
-    rows = {r["procname"]: r for r in stack_procs._base_process_rows(fake_paths)}
+    rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
     for pipeline in PIPELINES:
         row = rows[pipeline.procname]
         assert row["port"] == f"{{KDBBASEPORT}}+{PIPELINE_OFFSETS[pipeline.procname]}"
@@ -1320,7 +1320,7 @@ def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
         "of VENDORED_STARTWITHALL_OVERLAY is now redundant and should be removed"
     )
 
-    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
     assert composed["monitor1"]["startwithall"] == "1"
     assert composed["feed1"]["startwithall"] == "0"
 
@@ -1641,7 +1641,7 @@ def test_gateway1_loads_the_desk_catalog_after_its_own_script():
     vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
     upstream = {row["procname"]: row["load"] for row in csv.DictReader(io.StringIO(vendored))}
 
-    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
     loaded = composed["gateway1"]["load"].split()
 
     assert loaded[0] == upstream["gateway1"], (
@@ -1664,7 +1664,7 @@ def test_the_load_overlay_touches_no_other_process():
             io.StringIO((real.torqapphome / "appconfig" / "process.csv").read_text())
         )
     }
-    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
     for procname, original in vendored.items():
         if procname == "gateway1":
             continue
@@ -1679,7 +1679,9 @@ def test_monitor1_starts_without_tracing_every_retry():
     with TorQ's default `.servers.DEBUG:1b` logs two INF lines per attempt.
     The override turns those lines off and leaves the retries alone. Read
     against the real vendored csv, as the overlay tests above are."""
-    rows = {r["procname"]: r for r in stack_procs._base_process_rows(stack_paths.default_paths())}
+    rows = {
+        r["procname"]: r for r in stack_procs.effective_process_rows(stack_paths.default_paths())
+    }
     extras = rows["monitor1"]["extras"].split()
     assert "-.servers.DEBUG" in extras
     assert extras[extras.index("-.servers.DEBUG") + 1] == "0"
@@ -1708,3 +1710,68 @@ def test_servers_debug_is_still_what_gates_the_retry_lines():
     settings = (torq / "config" / "settings" / "default.q").read_text()
     servers = settings.split("\\d .servers", 1)[1].split("\n\\d ", 1)[0]
     assert re.search(r"(?m)^DEBUG:1b", servers), ".servers.DEBUG is no longer set in the settings"
+
+
+# ------------------------------------- one composition of process.csv (#624)
+
+
+def test_monitor1_plans_its_connections_from_the_overridden_fleet(
+    fake_paths: UqsPaths, monkeypatch
+):
+    """The budget used to be decided before process_overrides.csv applied, so
+    `config set X startwithall ...` never reached it."""
+    seen: list[list[dict[str, str]]] = []
+
+    def plan(paths, rows):
+        seen.append([dict(r) for r in rows])
+        return ""
+
+    monkeypatch.setattr(stack_procs, "monitor_connection_extras", plan)
+    (fake_paths.torqapphome / "appconfig" / "process.csv").write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,{KDBBASEPORT}+9,monitor,monitor1,,1,0,,,${KDBCODE}/processes/monitor.q,1,,q\n"
+        "localhost,{KDBBASEPORT}+2,rdb,rdb1,,1,0,,,${KDBCODE}/processes/rdb.q,1,,q\n"
+    )
+    stack_procs.set_process_config(fake_paths, "rdb1", "startwithall", "0")
+    stack_procs.effective_process_rows(fake_paths)
+    planned = {r["procname"]: r for r in seen[-1]}
+    assert planned["rdb1"]["startwithall"] == "0", "the plan sees the operator's override"
+
+
+def test_an_override_of_monitor1s_own_extras_still_wins(fake_paths: UqsPaths):
+    (fake_paths.torqapphome / "appconfig" / "process.csv").write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,{KDBBASEPORT}+9,monitor,monitor1,,1,0,,,${KDBCODE}/processes/monitor.q,1,,q\n"
+    )
+    stack_procs.set_process_config(fake_paths, "monitor1", "extras", "-mine 1")
+    rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
+    assert rows["monitor1"]["extras"] == "-mine 1"
+
+
+def test_no_module_outside_procs_merges_the_overrides_itself():
+    """The re-merge idiom - overrides looked up per row - lives only in
+    procs.effective_process_rows, so no reader can forget it again. (Listing
+    the overrides themselves, as `uqs list overrides` does, is not a merge.)"""
+    src = Path(__file__).resolve().parents[1] / "src" / "uqs"
+    offenders = [
+        str(p.relative_to(src))
+        for p in src.rglob("*.py")
+        if p.name != "procs.py" and 'overrides.get(row["procname"]' in p.read_text()
+    ]
+    assert offenders == []
+
+
+# ---------------------------------------------- one pip rule (#623)
+
+
+def test_no_pip_factor_literal_is_left_in_src():
+    """`pip_factor:` followed by a number is a hand-typed factor; every one
+    now comes from .qccy.pip_factor."""
+    root = Path(__file__).resolve().parents[3] / "src"
+    hits = [
+        f"{p.relative_to(root)}:{n}"
+        for p in root.rglob("*.q")
+        for n, line in enumerate(p.read_text().splitlines(), 1)
+        if re.search(r"\bpip_factor:\s*[0-9]", line) and not line.lstrip().startswith("/")
+    ]
+    assert hits == []
