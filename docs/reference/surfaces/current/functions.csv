@@ -48,6 +48,9 @@ qccy,ccy_pair_symbol,function,2,base quote
 qccy,ccy_to_str,function,1,x
 qccy,is_ccy_pair,function,1,x
 qccy,normalize_ccy_pair,function,1,x
+qccy,pip_factor,function,1,pair
+qccy,pip_size,function,1,pair
+qccy,pip_size_by_quote,dict,,
 qdata,cfg,function,2,k dflt
 qdata,databentoDir,function,1,
 qdata,databentoFile,function,2,sym date

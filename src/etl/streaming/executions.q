@@ -79,7 +79,7 @@ from_crypto_trades:{[batch]
     enlist `inputs`expected!(
         (enlist `trades)!enlist ([] time:2026.09.17D10:00:00 2026.09.17D10:00:01;
             sym:`EURUSD`USDJPY; side:1 -1; trade_price:1.085 149.5; size:1e6 5e5;
-            pip_factor:10000 100);
+            pip_factor:.qccy.pip_factor `EURUSD`USDJPY);
         ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:01; sym:`EURUSD`USDJPY;
             venue:`fx`fx; side:1 -1; size:1e6 5e5; price:1.085 149.5; fee:0 0f;
             fee_ccy:``; fill_id:``)))];

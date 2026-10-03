@@ -82,7 +82,7 @@ def _vendored_procnames() -> list[str]:
     re-counts.
     """
     ours = {p.procname for p in PIPELINES}
-    rows = procs._base_process_rows(default_paths())
+    rows = procs._composed_rows(default_paths())
     return [r["procname"] for r in rows if r["procname"] not in ours]
 
 

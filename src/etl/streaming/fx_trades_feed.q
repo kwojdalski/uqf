@@ -28,7 +28,7 @@ spot:.qsynth.spot
 
 / Pips per unit, which is the form .qexec and the trades schema take - the
 / reciprocal of .qsynth.pip, which is the size of one pip.
-pip_factor:"j"$1%.qsynth.pip
+pip_factor:.qccy.pip_factor .qsynth.pairs
 
 / The sizes a fill is drawn from. Float, matching the trades table's
 / size:`float$() - a long here inserts as the wrong type rather than failing.
