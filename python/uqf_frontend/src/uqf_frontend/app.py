@@ -16,7 +16,18 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from uqf_frontend import authz, catalog, control, coverage, health, ops, procfile, queries, status
+from uqf_frontend import (
+    authz,
+    catalog,
+    control,
+    coverage,
+    health,
+    ops,
+    procfile,
+    queries,
+    status,
+    write_guard,
+)
 from uqf_frontend.authz import Policy, Request_, allow_all, enforce
 from uqf_frontend.capture import CaptureScheduler, JsonlSink, UsageCapture
 from uqf_frontend.config import Settings
@@ -58,6 +69,15 @@ from uqf_frontend.models import (
 )
 
 
+def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
+    """A refusal in the shape every FrontendError is rendered in."""
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": error, "detail": detail, "transient": False},
+        headers={"WWW-Authenticate": "Bearer"} if status_code == 401 else None,
+    )
+
+
 def create_app(
     gateway: Gateway | None = None,
     settings: Settings | None = None,
@@ -73,6 +93,7 @@ def create_app(
     auth system.
     """
     settings = settings or Settings.from_env()
+    write_guard.require_configured(settings)
     gateway = gateway or KolaGateway(settings)
     fleet = fleet or KolaFleet(settings)
     policy = policy or allow_all
@@ -132,6 +153,24 @@ def create_app(
                 table=table,
             ),
         )
+
+    @app.middleware("http")
+    async def guard_writes(request: Request, call_next):  # noqa: ANN001, ANN202
+        """write_guard's two checks, ahead of every route - including ones
+        added later, which cannot forget them. A middleware answers itself:
+        FastAPI's exception handlers do not see what is raised here."""
+        refusal = write_guard.host_refusal(settings, request.headers.get("host"))
+        if (
+            refusal is None
+            and settings.enable_writes
+            and write_guard.is_write(request.method, request.url.path)
+        ):
+            refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
+            if refusal is not None:
+                return _refused(401, "WriteTokenRequired", refusal)
+        if refusal is not None:
+            return _refused(403, "HostNotAllowed", refusal)
+        return await call_next(request)
 
     @app.exception_handler(FrontendError)
     async def _handle(_: Request, exc: FrontendError) -> JSONResponse:

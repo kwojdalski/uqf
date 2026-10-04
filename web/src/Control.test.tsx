@@ -246,3 +246,30 @@ it("describes the deployment honestly in the sidebar", async () => {
   render(<App />);
   expect(await screen.findByText(/Writes enabled/)).toBeInTheDocument();
 });
+
+it("sends the typed write token with an action, and keeps it out of reads", async () => {
+  // The built app at /ui/ has no proxy to add it (#631): the operator types
+  // it once, and every control action carries it as a bearer token.
+  sessionStorage.clear();
+  const fetcher = mockApi(true, () => command("start", "all"));
+  await openControl();
+  fireEvent.change(await screen.findByLabelText("Write token"), {
+    target: { value: "tok-123" },
+  });
+  expect(sessionStorage.getItem("uqf.writeToken")).toBe("tok-123");
+  fireEvent.click(screen.getByRole("button", { name: "start" }));
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.some(([path]) => path.startsWith("/control/process/")),
+    ).toBe(true),
+  );
+  const [, action] = fetcher.mock.calls.find(([path]) =>
+    path.startsWith("/control/process/"),
+  )!;
+  expect((action.headers as Record<string, string>).Authorization).toBe(
+    "Bearer tok-123",
+  );
+  const [, status] = fetcher.mock.calls.find(([path]) => path === "/control")!;
+  expect(status?.headers).toBeUndefined();
+  sessionStorage.clear();
+});

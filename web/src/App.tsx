@@ -18,6 +18,7 @@ import {
   type Row,
   filterValue,
   validateRange,
+  writeToken,
 } from "./api";
 import { useResource } from "./useResource";
 
@@ -936,6 +937,7 @@ function ControlView() {
     range_from: "",
     range_to: "",
   });
+  const [token, setToken] = useState(writeToken.get());
 
   async function run(label: string, fn: () => Promise<string>) {
     setBusy(label);
@@ -983,6 +985,26 @@ function ControlView() {
         </p>
       )}
       {result && <pre className="result">{result}</pre>}
+
+      <div className="panel">
+        <label>
+          Write token
+          <input
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(e) => {
+              setToken(e.target.value);
+              writeToken.set(e.target.value);
+            }}
+          />
+        </label>
+        <p className="sidebar-note">
+          The server&rsquo;s <code>UQF_FRONTEND_WRITE_TOKEN</code>, sent with
+          every action below. Kept in this tab only. Not needed under{" "}
+          <code>npm run dev</code>, whose proxy adds it.
+        </p>
+      </div>
 
       <form
         className="panel"
