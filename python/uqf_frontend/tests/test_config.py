@@ -177,3 +177,20 @@ def test_the_stack_root_is_a_path_or_none(monkeypatch, tmp_path):
     assert Settings.from_env().stack_root is None
     monkeypatch.setenv("UQF_FRONTEND_STACK_ROOT", str(tmp_path))
     assert Settings.from_env().stack_root == tmp_path
+
+
+def test_the_write_token_and_allowed_hosts_come_from_the_environment(monkeypatch):
+    monkeypatch.setenv("UQF_FRONTEND_WRITE_TOKEN", "tok")
+    monkeypatch.setenv("UQF_FRONTEND_ALLOWED_HOSTS", " Desk.Local , 10.0.0.5 ,")
+    s = Settings.from_env()
+    assert s.write_token == "tok"
+    assert s.allowed_hosts == ("desk.local", "10.0.0.5")
+
+
+def test_no_write_token_by_default_and_loopback_hosts(monkeypatch):
+    """No secret baked into the package, for the same reason as `user`."""
+    monkeypatch.delenv("UQF_FRONTEND_WRITE_TOKEN", raising=False)
+    monkeypatch.delenv("UQF_FRONTEND_ALLOWED_HOSTS", raising=False)
+    s = Settings.from_env()
+    assert s.write_token == ""
+    assert s.allowed_hosts == ("localhost", "127.0.0.1", "::1")

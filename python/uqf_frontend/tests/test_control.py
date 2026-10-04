@@ -37,10 +37,86 @@ class FakeCompleted:
     stdout: str = "done"
 
 
+#: The write token the writeable app is started with. TestClient sends
+#: `Host: testserver`, so the fixture allows that host too.
+TOKEN = "s3cret-write-token"
+
+
+def _writes_on(**kw) -> Settings:
+    return Settings(
+        max_rows=5000,
+        enable_writes=True,
+        write_token=TOKEN,
+        allowed_hosts=("localhost", "testserver"),
+        **kw,
+    )
+
+
 @pytest.fixture
 def writeable(gw: FakeGateway) -> TestClient:
-    """A client with writes switched ON, for the behaviour tests."""
-    return TestClient(create_app(gateway=gw, settings=Settings(max_rows=5000, enable_writes=True)))
+    """A client with writes switched ON and the token sent, for the behaviour tests."""
+    return TestClient(
+        create_app(gateway=gw, settings=_writes_on()),
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+
+
+# ------------------------------------------------- the write token and the host (#631)
+
+
+def test_writes_on_without_a_token_refuses_to_start(gw):
+    """Writes on and no token is writes open to anyone who reaches the port."""
+    with pytest.raises(ValueError, match="UQF_FRONTEND_WRITE_TOKEN is unset"):
+        create_app(gateway=gw, settings=Settings(enable_writes=True))
+
+
+@pytest.mark.parametrize(
+    "authorization",
+    [None, "Bearer", "Bearer wrong", f"Basic {TOKEN}", f"Bearer {TOKEN}x"],
+)
+def test_a_control_action_without_the_token_is_a_401(gw, authorization):
+    headers = {} if authorization is None else {"Authorization": authorization}
+    c = TestClient(create_app(gateway=gw, settings=_writes_on()), headers=headers)
+    r = c.post("/control/process/start", json={"procs": "rdb1"})
+    assert r.status_code == 401, r.text
+    assert r.headers["www-authenticate"] == "Bearer"
+    assert TOKEN not in r.text, "a refusal must never echo the secret"
+
+
+def test_reads_and_the_control_status_need_no_token(gw):
+    """The UI asks /control whether to draw controls at all, before it has
+    any token to send."""
+    c = TestClient(create_app(gateway=gw, settings=_writes_on()))
+    assert c.get("/health").status_code != 401
+    assert c.get("/control").status_code == 200
+
+
+def test_a_host_this_api_was_not_told_it_is_is_refused_while_writes_are_on(gw):
+    """DNS rebinding: evil.example resolved to 127.0.0.1 reaches this server
+    from a browser on the same machine, carrying `Host: evil.example`."""
+    c = TestClient(
+        create_app(gateway=gw, settings=_writes_on()),
+        headers={"Authorization": f"Bearer {TOKEN}", "Host": "evil.example"},
+    )
+    for r in (c.get("/control"), c.post("/control/process/start", json={"procs": "rdb1"})):
+        assert r.status_code == 403, r.text
+        assert "evil.example" in r.json()["detail"]
+
+
+def test_an_allowed_host_matches_with_or_without_its_port(gw):
+    settings = Settings(enable_writes=True, write_token=TOKEN, allowed_hosts=("localhost", "::1"))
+    app = create_app(gateway=gw, settings=settings)
+    for host in ("localhost", "localhost:8000", "LOCALHOST:8000", "[::1]:8000"):
+        r = TestClient(app, headers={"Host": host}).get("/control")
+        assert r.status_code == 200, (host, r.text)
+
+
+def test_with_writes_off_neither_check_applies(gw):
+    """A read-only deployment is exactly what it was: any Host, no token."""
+    c = TestClient(
+        create_app(gateway=gw, settings=Settings()), headers={"Host": "anything.example"}
+    )
+    assert c.get("/control").status_code == 200
 
 
 # ------------------------------------------------- off by default, loudly

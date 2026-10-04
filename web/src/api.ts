@@ -109,13 +109,17 @@ export async function request<T>(
   // POST with one cover every read in this app; the control routes need PUT,
   // and inferring that from anything would be guessing.
   method?: "GET" | "POST" | "PUT",
+  authorization?: string,
 ): Promise<T> {
   let response: Response;
+  const headers: Record<string, string> = {};
+  if (body) headers["Content-Type"] = "application/json";
+  if (authorization) headers.Authorization = authorization;
   try {
     response = await fetch(path, {
       signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]),
       method: method ?? (body ? "POST" : "GET"),
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body,
     });
   } catch (error) {
@@ -254,5 +258,41 @@ export async function mutate<T>(
   method: "POST" | "PUT" = "POST",
 ): Promise<T> {
   const controller = new AbortController();
-  return request<T>(path, controller.signal, JSON.stringify(body), method);
+  const token = writeToken.get();
+  return request<T>(
+    path,
+    controller.signal,
+    JSON.stringify(body),
+    method,
+    token ? `Bearer ${token}` : undefined,
+  );
 }
+
+/** The write token for the control routes (#631), when the operator typed it.
+ *
+ * Only the built app served at /ui/ needs it: under `npm run dev` the Vite
+ * proxy adds it from the server's environment. Kept in sessionStorage - this
+ * tab only, gone when it closes - and every access is guarded, since storage
+ * can be blocked outright. */
+const WRITE_TOKEN_KEY = "uqf.writeToken";
+let heldToken = "";
+export const writeToken = {
+  get(): string {
+    try {
+      return sessionStorage.getItem(WRITE_TOKEN_KEY) ?? heldToken;
+    } catch {
+      return heldToken;
+    }
+  },
+  set(value: string): void {
+    // Held in memory too, so a tab with storage blocked still sends it
+    // until the page is reloaded.
+    heldToken = value;
+    try {
+      if (value) sessionStorage.setItem(WRITE_TOKEN_KEY, value);
+      else sessionStorage.removeItem(WRITE_TOKEN_KEY);
+    } catch {
+      /* storage blocked: heldToken carries it */
+    }
+  },
+};

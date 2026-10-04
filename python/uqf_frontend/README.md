@@ -85,6 +85,26 @@ shared credential, and the caller's identity is *claimed* through a header
 anyone can set. That is defensible while every route is a read. Once a route can
 stop the fleet, "anyone who can reach the port" is the whole access control.
 
+**With writes on, two more checks apply** (`write_guard.py`):
+
+- **A token.** Every state-changing control request must carry
+  `Authorization: Bearer $UQF_FRONTEND_WRITE_TOKEN`; without it the answer is
+  401. The server refuses to start with writes on and no token. `GET /control`
+  stays open, since the UI asks it whether to draw controls at all.
+- **An allowed Host.** Every request's `Host` must be in
+  `UQF_FRONTEND_ALLOWED_HOSTS` (default `localhost,127.0.0.1,::1`), or it is
+  refused with 403. Binding to 127.0.0.1 does not stop DNS rebinding; this does.
+
+```sh
+export UQF_FRONTEND_ENABLE_WRITES=true
+export UQF_FRONTEND_WRITE_TOKEN=$(openssl rand -hex 32)
+```
+
+Under `npm run dev`, the Vite proxy adds the header from the same variable on
+the server side, so the browser never holds the token. The built app served at
+`/ui/` has no proxy in front of it, so the Control view asks for the token once
+and keeps it in the tab's `sessionStorage`.
+
 Removing output is deliberately **not** exposed. It deletes logs, tplogs, wdb
 and the copied sample data --- the one orchestrator verb whose blast radius is
 data rather than process state. `uqs remove output` remains, where the person
