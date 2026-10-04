@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from uqf_airflow_provider.status_reader import (
+    FIELDS,
     FILENAME_PREFIX,
     FILENAME_SUFFIX,
     STATES,
@@ -37,6 +38,9 @@ def write_status_file(directory: Path, instance: str, **overrides) -> Path:
         "windows_completed": 1,
         "error": "",
         "updated_at": "2026-09-15T18:41:14.475818000",
+        "pid": 4242,
+        "host": "qhost",
+        "run_id": "",
     }
     payload.update(overrides)
     directory.mkdir(parents=True, exist_ok=True)
@@ -52,6 +56,17 @@ def test_states_match_the_q_writer():
     src = STATUS_Q.read_text()
     line = next(ln for ln in src.splitlines() if ln.startswith("status_states:"))
     assert set(re.findall(r"`(\w+)", line)) == set(STATES)
+
+
+def test_every_field_this_reader_requires_is_one_q_writes():
+    """A subset, not equality: this reader is narrower than the file on
+    purpose. A required field q stopped writing would make every file
+    malformed, and the sensor fail every task."""
+    src = STATUS_Q.read_text()
+    block = src[src.index("write_status:{") :]
+    payload = block[block.index("payload:") : block.index("values_:")]
+    q_fields = set(re.findall(r"`(\w+)", payload))
+    assert set(FIELDS) <= q_fields, f"required here, never written: {set(FIELDS) - q_fields}"
 
 
 def test_status_file_name_matches_the_q_writer():

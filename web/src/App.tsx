@@ -347,8 +347,9 @@ function BackfillView() {
             <Table
               rows={resource.data.workers.map((worker) => ({
                 ...worker,
-                outcome:
-                  worker.state === "idle"
+                outcome: worker.abandoned
+                  ? "Abandoned · process gone, no outcome recorded"
+                  : worker.state === "idle"
                     ? "Success · no work"
                     : worker.state === "completed"
                       ? "Success · work completed"

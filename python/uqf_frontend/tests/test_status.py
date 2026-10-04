@@ -8,7 +8,11 @@ but a test keeps the two in step.
 from __future__ import annotations
 
 import json
+import os
 import re
+import socket
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -38,6 +42,10 @@ def write_status_file(directory: Path, instance: str, **overrides) -> Path:
         "windows_completed": 1,
         "error": "",
         "updated_at": "2026-09-15T18:41:14.475818000",
+        # this live process by default, so nothing reads as abandoned
+        "pid": os.getpid(),
+        "host": socket.gethostname().lower(),
+        "run_id": "",
     }
     payload.update(overrides)
     directory.mkdir(parents=True, exist_ok=True)
@@ -216,6 +224,7 @@ def test_summary_counts_failed_separately_from_running(tmp_path):
     assert status.summarise(statuses) == {
         "workers": 4,
         "running": 1,
+        "abandoned": 0,
         "completed": 1,
         "idle": 1,
         "failed": 1,
@@ -260,3 +269,42 @@ def test_endpoint_carries_no_airflow_owned_fields(tmp_path):
     row = client_for(tmp_path).get("/ops/backfill").json()["workers"][0]
     for forbidden in ("retries", "retry_count", "try_number", "timeout", "concurrency", "queue"):
         assert forbidden not in row
+
+
+# --- a run whose process is gone ------------------------------------------
+
+
+def _dead_pid() -> int:
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])  # noqa: S603
+    proc.wait()
+    return proc.pid
+
+
+def test_a_running_file_whose_process_is_gone_reads_as_abandoned(tmp_path):
+    """The heartbeat dies with its process, so a killed run read as running
+    forever - in this view, the headline count, and the Airflow sensor."""
+    write_status_file(tmp_path, "dead1", state="running", pid=_dead_pid())
+    write_status_file(tmp_path, "live1", state="running")
+    statuses, _ = status.read_dir(tmp_path)
+    by_id = {s.instance_id: s for s in statuses}
+    assert by_id["dead1"].abandoned is True
+    assert by_id["live1"].abandoned is False
+    counts = status.summarise(statuses)
+    assert (counts["running"], counts["abandoned"]) == (1, 1)
+
+
+def test_another_hosts_pid_and_a_finished_run_are_never_abandoned(tmp_path):
+    write_status_file(tmp_path, "far1", state="running", pid=_dead_pid(), host="elsewhere")
+    write_status_file(tmp_path, "done1", state="completed", pid=_dead_pid())
+    statuses, _ = status.read_dir(tmp_path)
+    assert not any(s.abandoned for s in statuses)
+
+
+def test_the_run_id_reaches_the_api_and_an_empty_one_is_none(tmp_path):
+    write_status_file(tmp_path, "r1", run_id="0f1e2d3c-0000-0000-0000-000000000001")
+    write_status_file(tmp_path, "r2")
+    statuses, _ = status.read_dir(tmp_path)
+    assert {s.instance_id: s.run_id for s in statuses} == {
+        "r1": "0f1e2d3c-0000-0000-0000-000000000001",
+        "r2": None,
+    }

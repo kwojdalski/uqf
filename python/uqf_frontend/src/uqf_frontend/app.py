@@ -491,6 +491,10 @@ def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:
         error=s.error,
         updated_at=s.updated_at,
         terminal=s.terminal,
+        pid=s.pid,
+        host=s.host,
+        run_id=s.run_id,
+        abandoned=s.abandoned,
         warnings=s.warnings,
     )
 

@@ -26,7 +26,9 @@ against the writer's.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+import os
+import socket
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +65,9 @@ FIELDS = (
     "windows_completed",
     "error",
     "updated_at",
+    "pid",
+    "host",
+    "run_id",
 )
 
 
@@ -81,6 +86,14 @@ class WorkerStatus:
     windows_completed: int
     error: str | None
     updated_at: str
+    #: The q process that wrote it, and its host - see `abandoned`.
+    pid: int
+    host: str
+    #: The .qetl.run execution; None before one opened, and on a rehearsal.
+    run_id: str | None
+    #: Not terminal, and its process is provably gone: it will never record
+    #: an outcome. Set by `read_dir`, which can check; see `_process_gone`.
+    abandoned: bool = False
     #: Set when the file was readable but its contents were not what the
     #: writer's contract promises. Surfaced rather than raised, so one
     #: damaged file cannot blank the view for every healthy worker — the
@@ -130,7 +143,7 @@ def read_dir(directory: Path | None) -> tuple[list[WorkerStatus], list[dict[str,
             # data problem to report against that file, not an outage.
             unreadable.append({"file": path.name, "error": f"{type(exc).__name__}: {exc}"})
             continue
-        statuses.append(parsed)
+        statuses.append(replace(parsed, abandoned=_process_gone(parsed)))
 
     statuses.sort(key=lambda s: s.updated_at, reverse=True)
     return statuses, unreadable
@@ -173,8 +186,32 @@ def _parse(text: str) -> WorkerStatus:
         windows_completed=int(raw["windows_completed"]),
         error=_or_none(raw["error"]),
         updated_at=str(raw["updated_at"]),
+        pid=int(raw["pid"]),
+        host=str(raw["host"]),
+        run_id=_or_none(raw["run_id"]),
         warnings=warnings,
     )
+
+
+def _process_gone(status: WorkerStatus) -> bool:
+    """A `starting`/`running` file whose process is provably dead.
+
+    The heartbeat dies with its process, so without this a killed run read
+    as running forever. Provable only on the host that ran it - another
+    host's pid says nothing here. q's `.z.h` lower-cases the host name
+    `socket.gethostname()` may not, hence the comparison without case. The
+    same rule as the Airflow sensor's `process_gone`, kept separately because
+    that package must not depend on this one.
+    """
+    if status.terminal or status.host.lower() != socket.gethostname().lower():
+        return False
+    try:
+        os.kill(status.pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    return False
 
 
 def _or_none(value: Any) -> str | None:
@@ -193,7 +230,8 @@ def summarise(statuses: list[WorkerStatus]) -> dict[str, int]:
     """
     return {
         "workers": len(statuses),
-        "running": sum(1 for s in statuses if not s.terminal),
+        "running": sum(1 for s in statuses if not s.terminal and not s.abandoned),
+        "abandoned": sum(1 for s in statuses if s.abandoned),
         "completed": sum(1 for s in statuses if s.state == "completed"),
         "idle": sum(1 for s in statuses if s.state == "idle"),
         "failed": sum(1 for s in statuses if s.state == "failed"),
