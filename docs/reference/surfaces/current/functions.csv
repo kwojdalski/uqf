@@ -95,6 +95,7 @@ qetl.cfg,set_override,function,2,k v
 qetl.cfg,sources,value,,
 qetl.cfg,truthy,value,,
 qetl.cfg,yaml_values,dict,,
+qetl.cfg.audit,UNDEF,dict,,
 qetl.cfg.audit,config_change,table,,
 qetl.cfg.audit,forget,function,1,
 qetl.cfg.audit,max_render,value,,
@@ -118,6 +119,7 @@ qetl.coerce,to_long,function,1,str
 qetl.coerce,to_symbol,function,1,str
 qetl.coerce,to_symbol_cased,function,1,str
 qetl.coerce,to_timestamp,function,1,str
+qetl.coerce,utc_offset,function,1,str
 qetl.coverage,attach,function,1,
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version

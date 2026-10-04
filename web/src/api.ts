@@ -54,7 +54,7 @@ export interface QueryResult extends Pollable {
 }
 export interface Health extends Pollable {
   ok: boolean;
-  gateway: "up" | "reloading" | "unreachable";
+  gateway: "up" | "reloading" | "unreachable" | "wrong_process";
   detail: string | null;
 }
 export interface Worker {
@@ -234,7 +234,7 @@ export interface BackfillStarted {
   source_version: string;
   range_from: string;
   range_to: string;
-  pid: number;
+  procname: string;
   status_path: string;
 }
 

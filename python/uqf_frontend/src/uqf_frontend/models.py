@@ -355,5 +355,6 @@ class BackfillStartedResponse(BaseModel):
     source_version: str
     range_from: str
     range_to: str
-    pid: int
+    #: The TorQ process running it - what `uqs logs` takes.
+    procname: str
     status_path: str

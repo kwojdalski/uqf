@@ -1132,7 +1132,7 @@ function ControlView() {
           e.preventDefault();
           run("backfill", async () => {
             const r = await mutate<BackfillStarted>("/control/backfill", bf);
-            return `started ${r.worker} (pid ${r.pid})\nwatch ${r.status_path}`;
+            return `started ${r.worker} as ${r.procname}\nwatch ${r.status_path}, or \`uqs logs ${r.procname}\``;
           });
         }}
       >
@@ -1180,7 +1180,9 @@ export default function App() {
         ? "Connected"
         : health.data?.gateway === "unreachable"
           ? "Unreachable"
-          : "Connecting";
+          : health.data?.gateway === "wrong_process"
+            ? "Wrong process"
+            : "Connecting";
   return (
     <div className="app">
       <header>
@@ -1189,6 +1191,11 @@ export default function App() {
         </a>
         <div className="gateway" role="status">
           Gateway <Badge value={gateway} />
+          {/* The server's own words on what is wrong and what to set - for
+              wrong_process, the port variable that points at the gateway. */}
+          {health.data?.detail ? (
+            <span className="gateway-detail">{health.data.detail}</span>
+          ) : null}
         </div>
       </header>
       <div className="workspace">

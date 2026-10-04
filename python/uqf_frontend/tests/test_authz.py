@@ -187,3 +187,43 @@ def test_health_and_catalog_are_not_behind_the_seam():
     c, _ = client(policy=deny_paths({"/health", "/catalog"}))
     assert c.get("/health").status_code == 200
     assert c.get("/catalog").status_code == 200
+
+
+# --- every route goes through the seam -------------------------------------
+
+#: Routes that answer without asking the policy, and why - the two
+#: test_health_and_catalog_are_not_behind_the_seam pins. Neither carries data.
+UNGUARDED = {
+    "/health": "liveness probe - no data, no identity",
+    "/catalog": "describes the queryable surface - a refused caller must be able to see why",
+}
+
+
+def test_every_route_but_the_exempt_ones_calls_authorise():
+    """authz.py promises every request passes through one place. /coverage
+    did not, so a deny_tables policy was bypassed through it.
+    A route added without `authorise(request...)` fails here, unless it is
+    listed in UNGUARDED with its reason."""
+    import inspect
+
+    from fastapi.routing import APIRoute
+
+    app_ = create_app(gateway=FakeGateway({}), settings=Settings(), fleet=FakeFleet())
+    missing = [
+        route.path
+        for route in app_.routes
+        if isinstance(route, APIRoute)
+        and route.path not in UNGUARDED
+        and "authorise(request" not in inspect.getsource(route.endpoint)
+    ]
+    assert missing == []
+
+
+def test_a_denied_table_is_refused_on_coverage_too():
+    c, _ = client(policy=deny_tables({"fx_quotes"}))
+    r = c.get(
+        "/coverage",
+        params={"dataset": "fx_quotes", "partition": "", "source_version": "v1"},
+    )
+    assert r.status_code == 403, r.text
+    assert "fx_quotes" in r.text

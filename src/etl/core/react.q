@@ -255,7 +255,10 @@ dag_consumers:{[dataset]
 audit:{[]
     reacting:key reactions;
     datasets:distinct reacting,$[`jobs in key @[value;`.qetl.dag;{()}]; raze {(.qetl.dag.def x)`outputs} each key .qetl.dag.jobs; `$()];
-    unwired:(!). flip {[d] (d;dag_consumers d)} each datasets where 0=count each for_dataset each datasets;
+    / Empty in the healthy case - every dataset has a reaction - where
+    / (!). flip () is a 'type; so the empty dict is built, not derived.
+    pairs:{[d] (d;dag_consumers d)} each datasets where 0=count each for_dataset each datasets;
+    unwired:$[count pairs; (!). flip pairs; (`symbol$())!()];
     undeclared:reacting where 0=count each dag_consumers each reacting;
     / `count each value unwired` on an EMPTY dict throws 'type - value of an
     / empty dict is a general empty list, not a list of lists - so the filter
@@ -291,13 +294,15 @@ empty_history:{[]
 
 history:empty_history[]
 
-/ How many history rows to keep. Bounded because a long-running process would
-/ otherwise grow it without limit, and the recent end is the useful one.
+/ How many history rows to keep - the most RECENT ones. Bounded because a
+/ long-running process would otherwise grow it without limit, and the recent
+/ end is the useful one: a positive sublist kept the first 1000 instead, so
+/ every outcome after them was silently dropped.
 history_limit:1000
 
 / Private: record one reaction's outcome - in `history`, and durably.
 record:{[dataset;name;depth;range_from;range_to;outcome;detail]
-    `.qetl.reaction.history set history_limit sublist history,
+    `.qetl.reaction.history set neg[history_limit] sublist history,
         ([] at:enlist .z.p; dataset:enlist dataset; name:enlist name; depth:enlist depth;
             range_from:enlist range_from; range_to:enlist range_to;
             outcome:enlist outcome; detail:enlist detail);

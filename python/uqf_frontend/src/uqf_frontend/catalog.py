@@ -249,7 +249,7 @@ class Catalog:
 
     def _build(self) -> dict[str, Table]:
         described = self._described()
-        columns = self._columns()
+        columns = self._columns(set(described))
         return {
             name: Table(
                 name=name,
@@ -266,12 +266,23 @@ class Catalog:
         rows = ops._as_rows(self._gateway.call(queries.CATALOG))
         return {str(r["table"]): _text(r["description"]) for r in rows}
 
-    def _columns(self) -> dict[str, dict[str, QType]]:
-        """`table -> {column: type}`, from `meta` on a data tier."""
+    def _columns(self, described: set[str]) -> dict[str, dict[str, QType]]:
+        """`table -> {column: type}`, from `meta` on a data tier - for the
+        DESCRIBED tables only.
+
+        `meta` covers every table on the rdb, the vendored `quote`/`trade`
+        included, whose char and int columns this layer has no coercion for.
+        Typing those first and raising made /catalog and every /query a 500
+        on any real stack; a table .qcat does not describe is never exposed,
+        so its columns are never looked at. A described table with an
+        uncoercible column still refuses, loudly.
+        """
         from uqf_frontend import ops, queries
 
         out: dict[str, dict[str, QType]] = {}
         for row in ops._as_rows(self._gateway.route(queries.SCHEMA, (), ["rdb"])):
+            if str(row["table"]) not in described:
+                continue
             char = _text(row["kind"])
             qtype = _qtype(char)
             if qtype is None:

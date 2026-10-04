@@ -275,6 +275,7 @@ select:focus {
 .badge.failed,
 .badge.down,
 .badge.unreachable,
+.badge.wrong-process,
 .badge.identity-mismatch {
   color: #9c2834;
   background: #fff0f0;
@@ -582,4 +583,10 @@ details.panel > summary {
 }
 details.panel[open] > summary {
   margin-bottom: 1rem;
+}
+
+.gateway-detail {
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  color: #9c2834;
 }

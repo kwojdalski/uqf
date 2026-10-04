@@ -31,6 +31,30 @@ def _catalog(described: list[dict], schema: list[dict]) -> Catalog:
 # ------------------------------------------------- the intersection, both ways
 
 
+def test_an_undescribed_table_with_columns_this_layer_cannot_type_is_ignored():
+    """The vendored `quote` has char columns (`mode`, `ex`) and `trade` an int
+    `size`. They are on every real rdb, never described, and typing them
+    first made /catalog and every /query a 500."""
+    cat = _catalog(
+        described=[{"table": "fx_quotes", "description": "FX quotes"}],
+        schema=[
+            {"table": "fx_quotes", "column": "sym", "kind": "s"},
+            {"table": "quote", "column": "mode", "kind": "c"},
+            {"table": "trade", "column": "size", "kind": "i"},
+        ],
+    )
+    assert set(cat.tables()) == {"fx_quotes"}
+
+
+def test_a_described_table_with_an_uncoercible_column_still_refuses():
+    cat = _catalog(
+        described=[{"table": "quote", "description": "vendored quotes"}],
+        schema=[{"table": "quote", "column": "mode", "kind": "c"}],
+    )
+    with pytest.raises(ValueError, match="quote.mode"):
+        cat.tables()
+
+
 def test_a_table_the_database_has_but_nobody_describes_is_not_browsable():
     """The direction that matters most. A table added to plant_tables.q is
     invisible until somebody says what it is for - so a new table cannot

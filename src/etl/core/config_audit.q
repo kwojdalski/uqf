@@ -93,14 +93,19 @@ watch:{[owner;names]
 / @param name a fully-qualified global
 / @return its rendering, or a marker when nothing is defined at that name
 / @eg .qetl.cfg.audit.render[`.qetl.cfg.audit.nothing.is.here] -> "(undefined)"
-render:{[name] shown @[get;name;`undefined]}
+render:{[name] shown @[get;name;{.qetl.cfg.audit.UNDEF}]}
+
+/ Private: what an undefined name reads as. Not the symbol `undefined, which
+/ a watched global may legitimately hold - a change to that value was not
+/ recorded, and a defined `undefined showed as "(undefined)".
+UNDEF:(enlist `.qetl.cfg.audit.UNDEF)!enlist (::)
 
 / Private: a value as the old/new columns show it - in full up to the widest
 / console (.qetl.log.value1, not -3!, which stops at 80 columns), then cut at
 / max_render. Display only: changes are detected on the values.
-/ @param v a value, or `undefined
+/ @param v a value, or UNDEF
 / @return its rendering
-shown:{[v] $[v~`undefined; "(undefined)"; max_render sublist .qetl.log.value1 v]}
+shown:{[v] $[v~UNDEF; "(undefined)"; max_render sublist .qetl.log.value1 v]}
 
 / The longest rendering recorded. A watched name is meant to be a scalar or
 / a short list; this bounds the damage when one is not.
@@ -123,7 +128,7 @@ poll:{[owner;as_of]
     i:0;
     while[i<count names;
         name:names i;
-        now:@[get;name;`undefined];
+        now:@[get;name;{.qetl.cfg.audit.UNDEF}];
         fresh:not name in key seen;
         if[fresh or not now~seen name;
             rows:rows upsert (owner;name;$[fresh; ""; shown seen name];shown now;as_of);
