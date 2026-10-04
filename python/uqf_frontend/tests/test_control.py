@@ -19,7 +19,6 @@ lazily-imported functions, and each test patches the one it exercises.
 from __future__ import annotations
 
 import subprocess
-import sys
 from dataclasses import dataclass
 from typing import Any
 
@@ -259,30 +258,23 @@ def _backfill_body(**over: Any) -> dict[str, Any]:
     return body
 
 
-def test_a_backfill_is_launched_detached_and_reports_where_to_watch(writeable, monkeypatch):
-    """Detached rather than awaited: a backfill runs for as long as its range
-    takes, and a request that blocked would time out mid-run and tell the
-    caller nothing about whether the work continued."""
-    seen: dict[str, Any] = {}
-
-    class FakeProc:
-        pid = 4242
-
-    def fake_popen(cmd, **kw):
-        seen.update(cmd=cmd, env=kw["env"], new_session=kw.get("start_new_session"))
-        return FakeProc()
-
-    monkeypatch.setattr(subprocess, "Popen", fake_popen)
-    _patch_bootstrap(monkeypatch)
+def test_a_backfill_is_started_through_torq_sh_as_uqs_backfill_starts_it(writeable, monkeypatch):
+    """Through TorQ's launcher, not `q torq_backfill.q` run bare: that died at
+    once on `.proc.procname`, with its output sent to /dev/null, while this
+    endpoint answered 200 with the pid of a process already gone. Patched at
+    the torq.sh boundary - the one `uqs backfill`'s own tests patch - so the
+    command asserted here is the command that runs."""
+    seen = _patch_torq_sh(monkeypatch)
     r = writeable.post("/control/backfill", json=_backfill_body())
 
-    # Status first, body second: a refusal here used to read `KeyError: 'pid'`
-    # and say nothing about what was refused.
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["pid"] == 4242
+    assert body["procname"] == "deals_backfill1", "the process to `uqs logs`"
     assert body["status_path"] == "/ops/backfill"
-    assert seen["new_session"] is True, "a restart of the API must not kill a running backfill"
+    args = seen["args"]
+    assert args[:3] == ["start", "deals_backfill1", "-extras"], (
+        "torq.sh start <procname> -extras ..."
+    )
 
 
 def test_the_range_reaches_the_process_as_flags_with_q_timestamps(writeable, monkeypatch):
@@ -290,33 +282,31 @@ def test_the_range_reaches_the_process_as_flags_with_q_timestamps(writeable, mon
     off its command line, and parses the bounds with "P"$, which wants
     2026.09.11D00:00:00 rather than ISO-8601. Converting here keeps the HTTP
     surface ISO like every other timestamp it takes."""
-    seen: dict[str, Any] = {}
-
-    class FakeProc:
-        pid = 1
-
-    monkeypatch.setattr(
-        subprocess,
-        "Popen",
-        lambda cmd, **kw: (seen.update(cmd=cmd, env=kw["env"]), FakeProc())[1],
-    )
-    _patch_bootstrap(monkeypatch)
+    seen = _patch_torq_sh(monkeypatch)
     r = writeable.post("/control/backfill", json=_backfill_body())
     assert r.status_code == 200, r.text
 
-    cmd = seen["cmd"]
-    flags = dict(zip(cmd[2::2], cmd[3::2], strict=True))
+    extras = seen["args"][3:]
+    flags = dict(zip(extras[0::2], extras[1::2], strict=True))
     assert flags["-worker"] == "demo_deals_backfill"
     assert flags["-version"] == "v1"
     assert flags["-from"].startswith("2026.09.11D00:00:00")
     assert flags["-to"].startswith("2026.09.12D00:00:00")
-    assert not any(k.startswith("UQF_BACKFILL") for k in seen["env"]), "flags, not env"
+
+
+def test_a_launcher_failure_is_a_502_naming_the_process(writeable, monkeypatch):
+    """torq.sh failing is not the caller's fault (422) and must not read as
+    started (200)."""
+    _patch_torq_sh(monkeypatch, returncode=1)
+    r = writeable.post("/control/backfill", json=_backfill_body())
+    assert r.status_code == 502, r.text
+    assert "uqs logs deals_backfill1" in r.text
 
 
 def test_a_backfill_value_a_shell_would_interpret_is_refused(writeable, monkeypatch):
     """The flags reach q on a start line, so a value like `v1;rm` is refused
     before any process starts - the same rule `uqs backfill` applies."""
-    _patch_bootstrap(monkeypatch)
+    _patch_torq_sh(monkeypatch)
     resp = writeable.post("/control/backfill", json=_backfill_body(source_version="v1;rm"))
     assert resp.status_code == 422
 
@@ -361,36 +351,20 @@ def _patch_core(monkeypatch, **fns: Any) -> None:
     monkeypatch.setattr(stack_paths, "default_paths", lambda: "PATHS")
 
 
-#: An absolute path that really exists and really is executable, standing in
-#: for the q interpreter.
-#:
-#: `sys.executable`, not a hardcoded path. This was "/bin/true", which exists
-#: on Linux and does NOT on macOS - `true` lives in /usr/bin there, and this
-#: machine's /bin has no `true` at all. `q_interpreter` resolves QCMD through
-#: `shutil.which`, which answers None for a path that is not there, so the
-#: endpoint refused with "no q interpreter to run the backfill" and the two
-#: launch tests failed on every Mac while passing in CI (#461).
-#:
-#: The process is never run - `subprocess.Popen` is monkeypatched in each
-#: test - so the only thing that matters is that it resolves.
-_FAKE_QCMD = sys.executable
-
-
-def _patch_bootstrap(monkeypatch) -> None:
+def _patch_torq_sh(monkeypatch, returncode: int = 0) -> dict[str, Any]:
+    """Record what torq.sh would be run with, and answer `returncode`."""
     from uqs import paths as stack_paths
-    from uqs.interpreter import q_interpreter
     from uqs.stack import runtime
 
-    # Assert the stand-in before handing it over. Without this the failure
-    # surfaces as `KeyError: 'pid'` on a body nobody printed, which is how
-    # #461 stayed open: the endpoint's actual complaint was in the response
-    # the test threw away.
-    assert q_interpreter({"QCMD": _FAKE_QCMD}) is not None, (
-        f"the stand-in q interpreter {_FAKE_QCMD} does not resolve, so the "
-        "endpoint will refuse before it reaches the mocked Popen"
-    )
+    seen: dict[str, Any] = {}
+
+    def run(paths, args, base_port=6050, capture=False, timeout=None):
+        seen.update(args=list(args), base_port=base_port)
+        return subprocess.CompletedProcess(args, returncode, "", "")
+
     monkeypatch.setattr(stack_paths, "default_paths", lambda: _FakePaths())
-    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port=6050: {"QCMD": _FAKE_QCMD})
+    monkeypatch.setattr(runtime, "run_torq_sh", run)
+    return seen
 
 
 @dataclass

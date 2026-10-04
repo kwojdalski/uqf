@@ -82,7 +82,7 @@ set_layers:{[overrides;yaml;defaults]
 / Private: the environment variable name for a config key. UQF_BACKFILL_FROM
 / for `backfill_from, so the mapping is mechanical and an operator can guess
 / it without reading this file.
-env_name:{[k] "UQF_",upper[ssr[string k;"_";"_"]]}
+env_name:{[k] "UQF_",upper string k}
 
 / Private: raw string value for a key from one named source, or "" when the
 / source does not carry it.

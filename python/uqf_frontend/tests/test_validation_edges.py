@@ -192,17 +192,21 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
         control.start_backfill(Settings(enable_writes=True), **_backfill_args())
 
 
-def test_a_missing_backfill_script_is_refused_before_spawning(monkeypatch, tmp_path):
-    """Popen on a missing script would start q with nothing to run and
-    report a pid - a backfill that looks launched and never ran."""
+def test_an_unknown_worker_is_refused_before_torq_sh_runs(monkeypatch, tmp_path):
+    """torq.sh asked to start a procname no process.csv row has would fail
+    after the fact; the worker is checked against the registry first, and the
+    refusal names the workers that exist."""
     from uqs import paths as stack_paths
     from uqs.stack import runtime
 
+    ran: list[object] = []
     fake = SimpleNamespace(repo_root=tmp_path, scripts_dir=tmp_path / "scripts")
     monkeypatch.setattr(stack_paths, "default_paths", lambda: fake)
-    monkeypatch.setattr(runtime, "bootstrap", lambda paths, base_port: {})
-    with pytest.raises(ValidationFailed, match="torq_backfill.q not found"):
-        control.start_backfill(Settings(enable_writes=True), **_backfill_args())
+    monkeypatch.setattr(runtime, "run_torq_sh", lambda *a, **k: ran.append(a))
+    args = {**_backfill_args(), "worker": "no_such_worker"}
+    with pytest.raises(ValidationFailed, match="no backfill process runs worker 'no_such_worker'"):
+        control.start_backfill(Settings(enable_writes=True), **args)
+    assert ran == [], "torq.sh must not be run for a worker nothing runs"
 
 
 @pytest.mark.parametrize(

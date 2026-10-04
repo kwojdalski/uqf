@@ -142,6 +142,17 @@ test_a_name_that_appears_later_is_reported_as_a_change:{[t]
     / char against the one-element string render actually returns.
     .qunit.assertEquals[r`new;enlist "7";"and then it was"]};
 
+test_a_value_spelled_like_the_undefined_marker_is_still_a_change:{[t]
+    / The marker was the symbol `undefined, so a name going from undefined to
+    / `undefined recorded nothing, and a defined `undefined rendered as absent.
+    reset[];
+    .qetl.cfg.audit.watch[`j;`.cfgatest.spelled_undefined];
+    .qetl.cfg.audit.poll[`j;t0];
+    `.cfgatest.spelled_undefined set `undefined;
+    r:.qetl.cfg.audit.poll[`j;t0+0D00:00:05];
+    .qunit.assertEquals[(count r;(first r)`old;(first r)`new);(1;"(undefined)";"`undefined");
+        "absent, then holding the symbol - one change, told apart"]};
+
 / --- the publisher seam ---------------------------------------------------
 
 / WHY THIS ASSERTS A TYPE. The first version of the timer target was

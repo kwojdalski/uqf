@@ -196,6 +196,8 @@ def create_app(
 
     @app.get("/catalog", response_model=CatalogResponse)
     def get_catalog() -> CatalogResponse:
+        # Not behind the seam, on purpose: it describes the queryable surface
+        # and carries no data, and a caller refused it could not find out why.
         return CatalogResponse(
             tables=[
                 TableInfo(
@@ -334,6 +336,7 @@ def create_app(
 
     @app.get("/coverage", response_model=CoverageResponse)
     def get_coverage(
+        request: Request,
         dataset: str,
         partition: str,
         source_version: str,
@@ -348,6 +351,9 @@ def create_app(
         than a plausible answer computed across every partition (#185). Pass
         `""` for a dataset with no partition dimension.
         """
+        # The dataset as the table: a policy refusing a table must refuse its
+        # coverage too, or /coverage reads round what /query refuses.
+        authorise(request, table=dataset)
         return _coverage(gateway, dataset, partition, source_version, range_from, range_to)
 
     @app.post("/query", response_model=QueryResponse)

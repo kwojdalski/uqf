@@ -110,18 +110,44 @@ to_long:{[str]
 / So a date-only value is REFUSED here rather than widened. A caller that
 / genuinely wants midnight can say so with `to_date_as_midnight`, which is
 / explicit and greppable.
-/ @return the timestamp, or 0Np when empty, malformed, or date-only
+/ .
+/ A ZONE SUFFIX - Z, or an offset +hh:mm / -hh:mm (+hhmm, +hh) - is applied,
+/ so the result is UTC. "P"$ alone reads the clock and ignores "+02:00",
+/ placing the row two hours off with nothing erroring, and the separator
+/ rewrite below turned the "-" of "-05:00" into a null. A suffix that is
+/ there but unreadable is a null, not a guess.
+/ @return the timestamp in UTC, or 0Np when empty, malformed, or date-only
 / @eg .qetl.coerce.to_timestamp["2026-09-15T09:30:00"]  ->  2026.09.15D09:30:00
+/ @eg .qetl.coerce.to_timestamp["2026-09-15T11:30:00+02:00"]  ->  2026.09.15D09:30:00
 / @eg .qetl.coerce.to_timestamp["2026-09-15"]           ->  0Np
 to_timestamp:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Np];
     if[is_date_only trimmed; :0Np];
+    zoned:utc_offset trimmed;
+    if[null last zoned; :0Np];
     / ISO uses "-" between date parts and "T" before the time; q uses "." and
     / "D". Normalise the separators rather than branching on format, so a
     / mixed source does not need two code paths.
-    normalised:ssr[ssr[trimmed;"T";"D"];"-";"."];
-    @[{"P"$x};normalised;{0Np}]}
+    normalised:ssr[ssr[first zoned;"T";"D"];"-";"."];
+    @[{"P"$x};normalised;{0Np}] - last zoned}
+
+/ Split a timestamp's zone suffix off: (the text without it; its offset east
+/ of UTC as a timespan). No suffix is an offset of 0D; one that is there and
+/ unreadable is 0Nn. Only the CLOCK is searched for a sign - the "-"s of an
+/ ISO date come before the T, D or space that starts it.
+/ @eg .qetl.coerce.utc_offset["2026-09-15T09:30:00-05:00"]  ->  ("2026-09-15T09:30:00";-0D05:00)
+utc_offset:{[str]
+    if[last[str] in "Zz"; :(-1_str;0D)];
+    clock:first where str in "TD ";
+    if[null clock; :(str;0D)];
+    at:clock+first where (clock _ str) in "+-";
+    if[null at; :(str;0D)];
+    digits:((at+1)_str) except ":";
+    if[not (count[digits] in 2 4) and all digits in .Q.n; :(str;0Nn)];
+    hm:"J"$(2#digits;2#2_digits,"00");
+    if[(23<hm 0) or 59<hm 1; :(str;0Nn)];
+    (at#str; $["-"=str at;-1;1]*(0D01*hm 0)+0D00:01*hm 1)}
 
 / Is this text a date with no time part?
 / .
@@ -141,11 +167,17 @@ is_date_only:{[str]
 / correct for it" is a statement in the source declaration rather than an
 / accident of q's casting rules. If intraday ordering matters for the
 / dataset, this is the wrong function and the source needs a real timestamp.
+/ Text with a time part is refused, not truncated: "D"$ of a full timestamp
+/ gave 0000.00.00, which is not null, and its cast -0Wp - a minus-infinity
+/ timestamp that every null check let through to publish.
+/ @eg .qetl.coerce.to_date_as_midnight["2026-09-15T12:00:00"]  ->  0Np
 to_date_as_midnight:{[str]
     trimmed:trim str;
-    if[0=count trimmed; :0Np];
+    if[not is_date_only trimmed; :0Np];
     d:@[{"D"$x};ssr[trimmed;"-";"."];{0Nd}];
-    $[null d; 0Np; `timestamp$d]}
+    if[null d; :0Np];
+    p:`timestamp$d;
+    $[p in -0W 0Wp; 0Np; p]}
 
 / ---------------------------------------------------------------- SYMBOL
 

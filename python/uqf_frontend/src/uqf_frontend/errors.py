@@ -77,6 +77,16 @@ class CoverageIncomplete(FrontendError):
     status_code = 409
 
 
+class BackfillNotStarted(FrontendError):
+    """TorQ's launcher (torq.sh start) did not start the backfill process.
+
+    502, not 422: the request was valid, the thing behind this API failed.
+    The message names the process, so `uqs logs <procname>` finds why.
+    """
+
+    status_code = 502
+
+
 class WritesDisabled(FrontendError):
     """A control route was called while writes are switched off.
 

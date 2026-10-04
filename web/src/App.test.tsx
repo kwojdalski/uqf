@@ -188,3 +188,25 @@ it("shows reloads as temporary status rather than a permanent failure", async ()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.getByText("Retrying automatically.")).toBeInTheDocument();
 });
+it("names a gateway port that reaches the wrong process, and shows the server's fix", async () => {
+  // The backend has always sent wrong_process; the UI did not know the word
+  // and showed "Connecting" forever, with the fix it was sent never drawn.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) =>
+      path === "/health"
+        ? ok({
+            ok: false,
+            gateway: "wrong_process",
+            detail: "Set UQF_FRONTEND_GATEWAY_PORT to the gateway's port",
+            poll_seconds: 5,
+          })
+        : ok({}),
+    ),
+  );
+  render(<App />);
+  expect(await screen.findByText("Wrong process")).toBeInTheDocument();
+  expect(
+    screen.getByText("Set UQF_FRONTEND_GATEWAY_PORT to the gateway's port"),
+  ).toBeInTheDocument();
+});
