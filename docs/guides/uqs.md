@@ -165,6 +165,9 @@ data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
                                       the running plant and hdb process - including
                                       the base port (see below)
 data hdb-check [--fix]                HDB partitions missing a declared table or column
+gaps JOB --from T --to T              where a streaming job was not up and subscribed,
+                                      and the backfill that refills each gap when a
+                                      worker fills what the job publishes
 run status                            runs that began and never finished, including
                                       runs whose process died
 run list                              every run in the ledger, newest first, with its

@@ -302,7 +302,9 @@ guarded:{[job;f;t;x]
 /      `replaying` set: a replay rebuilds state; it must not publish again
 /      what was published before the restart.
 /   4. on_replayed, with publish live again, for what the replay left owed.
-/   5. Timers: the job's, and the configuration audit's.
+/   5. Uptime: a session in .qetl.uptime, beaten on a timer - the record of
+/      when the job was up and subscribed, which `uqs gaps` reads (#630).
+/   6. Timers: the job's, and the configuration audit's.
 / .
 / Both runners used to do this themselves, differently (#data-platform
 / review): torq_stream.q subscribed with replay off and installed the job's
@@ -334,7 +336,13 @@ start:{[job;tr]
         pub set live;
         `.qetl.job.stream.replaying set 0b;
         if[not first r; 'last r];
-        if[`on_replayed in key d; (d`on_replayed)[]]];
+        if[`on_replayed in key d; (d`on_replayed)[]];
+        / Protected: a record that cannot be written must never stop the job
+        / it records. Logged, so a missing session is explained.
+        .[{[tr;job] .qetl.uptime.begin job;
+            tr[`timer][`$(string job),"_uptime";.qetl.uptime.period;{@[.qetl.uptime.beat;::;{[e] .qetl.log.warn[`uptime;"could not record a beat";enlist[`error]!enlist e];}]}]};
+          (tr;job);
+          {[job;e] .qetl.log.warn[job;"could not open an uptime session - its gaps will read as down";enlist[`error]!enlist e];}[job]]];
     if[`period in key d; tr[`timer][job;d`period;d`on_timer]];
     if[count .qetl.cfg.audit.watching job;
         `.qetl.cfg.audit.owner_here set job;

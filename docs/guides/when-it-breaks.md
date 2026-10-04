@@ -129,12 +129,29 @@ tickerplant log at start, but with its publish muted, because republishing a
 whole day would duplicate everything already sent. Only what the job's own
 `on_replayed` handler sends afterwards is published.
 
-Nothing records where the gap is
-([#630](https://github.com/kwojdalski/uqf/issues/630)). Work it out from the
-log: the gap runs from the job's last line before it died (the error, or simply
-the last line) to `streaming job wired - running` after the restart. With [the
-DBG level](uqs.md#where-a-process-stopped) on, every publish is logged, which
-narrows it to the batch. Then refill it with the job's bounded twin, if it has
-one. For markouts that is `hdb_markouts_backfill`, run over the outage window
-(see [markouts](../services/markouts.md)). A job without a twin cannot be
-refilled from here today.
+Every streaming job records the sessions it was up and subscribed, so the gap
+can be asked for directly:
+
+```
+uqs gaps <job> --from <start> --to <end>
+```
+
+It lists each stretch of the range when the job was not up. For a job with a
+bounded "twin" (a backfill worker filling the table the job publishes), it then
+prints the backfill command that refills each gap. For markouts the twin is
+`hdb_markouts_backfill` (see [markouts](../services/markouts.md)). A job with no
+twin cannot be refilled from here, and `uqs gaps` says so.
+
+Two things to know about the answer:
+
+- **It records uptime, not output.** A job that was up but received nothing, or
+  published nothing, shows no gap.
+- **A gap can be wider than the outage, never narrower.** A session's end is its
+  last beat, recorded once a minute (`.qetl.uptime.period`), so a gap can start
+  up to a minute before the job really stopped. Refilling a little extra costs
+  nothing: covered windows are skipped.
+
+Runs from before uptime was recorded have no sessions, and `uqs gaps` reports
+the whole range as down. For those, the log still tells you: the gap runs from
+the job's last line before it died to `streaming job wired - running` after the
+restart.

@@ -638,6 +638,18 @@ qetl.transform,type_ok,function,3,declared actual n
 qetl.transform,verify,function,1,name
 qetl.transform,verify_all,function,1,
 qetl.transform,verify_example,function,3,name d ex
+qetl.uptime,attach,function,1,
+qetl.uptime,beat,function,1,
+qetl.uptime,begin,function,1,job
+qetl.uptime,gaps,function,3,job range_from range_to
+qetl.uptime,init_table,function,1,
+qetl.uptime,mine,value,,
+qetl.uptime,path,function,1,
+qetl.uptime,period,value,,
+qetl.uptime,reload,function,1,
+qetl.uptime,sessions,function,1,
+qetl.uptime,twins,function,1,job
+qetl.uptime,update_shared,function,2,f args
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_order_time_cols,value,,
 qexec,fill_outcome,function,4,event_time cancel_time horizon_end known_by
