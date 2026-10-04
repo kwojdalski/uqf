@@ -36,6 +36,27 @@ test_a_plain_decimal_still_works:{[t]
 test_a_mixed_comma_and_dot_is_refused_rather_than_guessed:{[t]
     .qunit.assertEquals[null .qetl.coerce.to_float["1,234.56"];1b;"an ambiguous separator is nulled, not guessed at"]};
 
+test_a_comma_before_exactly_three_digits_is_refused:{[t]
+    / 1234 with a thousands separator, or 1.234 with a decimal comma: either
+    / reading is common, and the wrong one is 1000x off
+    r:.qetl.coerce.to_float each ("1,234";"12,345";"-1,000");
+    .qunit.assertEquals[all null r;1b;"ambiguous, so nulled - a counted coercion failure"]};
+
+test_a_comma_before_other_digit_counts_is_a_decimal:{[t]
+    .qunit.assertEquals[.qetl.coerce.to_float each ("1,5";"1,25";"1,0842");1.5 1.25 1.0842;"not three digits, so not a thousands group"]};
+
+test_a_misplaced_sign_is_not_a_number:{[t]
+    / "F"$"--1" is 1: every character is numeric, so the character test alone passed it
+    r:(.qetl.coerce.to_float each ("--1";"1-2";"+-3")),.qetl.coerce.to_long each ("--1";"5-");
+    .qunit.assertEquals[all null r;1b;"a sign only at the start or after an exponent"]};
+
+test_a_single_digit_is_a_number:{[t]
+    / "5" is a char atom, not a string - the sign check threw 'type on it
+    .qunit.assertEquals[(.qetl.coerce.to_float "5";.qetl.coerce.to_long "7");(5f;7);"one character is still text to coerce"]};
+
+test_a_sign_where_numbers_have_one_still_parses:{[t]
+    .qunit.assertEquals[(.qetl.coerce.to_float each ("-1.5";"+2";"1e-5";"1E+2")),`float$.qetl.coerce.to_long "-7";-1.5 2 1e-5 100 -7f;"leading and exponent signs"]};
+
 test_an_exponent_parses:{[t]
     .qunit.assertEquals[.qetl.coerce.to_float["1.0842e0"];1.0842;"exponent notation is a legitimate float form"]};
 

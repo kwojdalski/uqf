@@ -397,3 +397,102 @@ def test_the_cli_runs_without_version_for_a_worker_with_a_default(monkeypatch):
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert seen == {"version": "v1"}
+
+
+# --- --wait: exit with the run's outcome, not torq.sh's (#637) -------------
+
+_LAUNCH = datetime(2026, 10, 4, 12, 0, tzinfo=UTC)
+
+
+def _status(tmp_path, **over) -> None:
+    """A status file as .qetl.status.write_status writes it, for this run."""
+    body = {
+        "worker": "demo_deals_backfill",
+        "instance_id": "deals_backfill1",
+        "state": "completed",
+        "source_version": "v1",
+        "range_from": "2026-09-13T00:00:00.000000000",
+        "range_to": "2026-09-15T00:00:00.000000000",
+        "updated_at": "2026-10-04T12:00:05.000000000",
+        "pid": os.getpid(),
+        "host": socket.gethostname().lower(),
+        "error": "",
+    }
+    body.update(over)
+    (tmp_path / "airflow_status_deals_backfill1.txt").write_text(json.dumps(body))
+
+
+def _wait(tmp_path, monkeypatch, sleeps=None):
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    return backfill.wait_for_outcome(
+        stack_paths.default_paths(),
+        "deals_backfill1",
+        "v1",
+        FROM,
+        TO,
+        _LAUNCH,
+        sleep=sleeps if sleeps is not None else (lambda s: None),
+    )
+
+
+@pytest.mark.parametrize(("state", "code"), [("completed", 0), ("idle", 0), ("failed", 1)])
+def test_wait_returns_the_runs_own_outcome(tmp_path, monkeypatch, state, code):
+    _status(tmp_path, state=state)
+    assert _wait(tmp_path, monkeypatch) == (state, code)
+
+
+def test_wait_ignores_the_previous_runs_file_until_this_one_writes(tmp_path, monkeypatch):
+    """The file is rewritten by every run: one written before this launch,
+    or for another version, is not this run's outcome."""
+    _status(tmp_path, state="failed", updated_at="2026-10-04T11:00:00.000000000")
+    calls = []
+
+    def sleep(_):
+        calls.append(1)
+        if len(calls) == 1:
+            _status(tmp_path, state="completed", source_version="v0")
+        elif len(calls) == 2:
+            _status(tmp_path, state="completed")
+
+    assert _wait(tmp_path, monkeypatch, sleep) == ("completed", 0)
+    assert len(calls) == 2
+
+
+def test_wait_reports_a_run_whose_process_died_as_abandoned(tmp_path, monkeypatch):
+    proc = subprocess.Popen(["true"])  # noqa: S603, S607
+    proc.wait()
+    _status(tmp_path, state="running", pid=proc.pid)
+    assert _wait(tmp_path, monkeypatch) == ("abandoned", 1)
+
+
+def test_the_command_exits_with_the_runs_outcome_under_wait(monkeypatch):
+    monkeypatch.setattr(
+        backfill, "start", lambda *a, **k: type("Completed", (), {"returncode": 0})()
+    )
+    monkeypatch.setattr(backfill, "wait_for_outcome", lambda *a, **k: ("failed", 1))
+    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--wait"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 1, result.output
+    assert "failed" in result.output
+
+
+def test_wait_with_a_mode_that_writes_no_status_is_refused(monkeypatch):
+    import typer
+
+    from uqs.cli import backfill as cli_backfill
+
+    started, refused = [], []
+
+    def die(exc):
+        refused.append(str(exc))
+        raise typer.Exit(code=1)
+
+    monkeypatch.setattr(backfill, "start", lambda *a, **k: started.append(a))
+    monkeypatch.setattr(cli_backfill, "_die", die)
+    argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
+    argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--wait", "--mode", "plan"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 1
+    assert refused and "nothing to wait for" in refused[0]
+    assert started == []

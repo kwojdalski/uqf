@@ -20,6 +20,8 @@ import os
 import re
 import socket
 import subprocess
+import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -237,6 +239,79 @@ def start(
         mode=mode,
     )
     return runtime.run_torq_sh(paths, ["start", procname, "-extras", *flags], base_port=base_port)
+
+
+#: Modes that write no status file - `validate` and `plan` - so there is no
+#: outcome to wait for.
+NO_STATUS_MODES = ("validate", "plan")
+
+
+def _ns_stamp(value: str) -> datetime:
+    """A q timestamp from JSON (nanoseconds, no offset, UTC) as a datetime."""
+    stamp, _, fraction = value.partition(".")
+    return datetime.fromisoformat(f"{stamp}.{(fraction or '0')[:6].ljust(6, '0')}").replace(
+        tzinfo=UTC
+    )
+
+
+def wait_for_outcome(
+    paths: UqsPaths,
+    procname: str,
+    source_version: str,
+    range_from: datetime,
+    range_to: datetime,
+    launched_at: datetime,
+    *,
+    poll_seconds: float = 2.0,
+    sleep: Callable[[float], None] = time.sleep,
+) -> tuple[str, int]:
+    """Follow the process's status file to its outcome: (state, exit code).
+
+    `uqs backfill` returns once torq.sh has STARTED the process, so its own
+    exit code says only that. This waits for what the worker reports - the
+    same file the Airflow sensor reads, with the sensor's rules: a file for
+    another run (version, range, or written before this launch) is not this
+    one's; `idle`/`completed` exit 0, `failed` 1; and a `starting`/`running`
+    file whose process is gone on this host is `abandoned`, 1, because it
+    will never be written again.
+    """
+    path = runs.status_dir(paths) / f"airflow_status_{procname}.txt"
+    while True:
+        try:
+            status = json.loads(path.read_text())
+        except OSError, ValueError:
+            status = None
+        if status is not None and _is_this_run(
+            status, source_version, range_from, range_to, launched_at
+        ):
+            state = str(status["state"])
+            if state in ("idle", "completed"):
+                return state, 0
+            if state == "failed":
+                return state, 1
+            if str(status.get("host", "")).lower() == socket.gethostname().lower() and not (
+                _pid_alive(int(status["pid"]))
+            ):
+                return "abandoned", 1
+        sleep(poll_seconds)
+
+
+def _is_this_run(
+    status: dict,
+    source_version: str,
+    range_from: datetime,
+    range_to: datetime,
+    launched_at: datetime,
+) -> bool:
+    try:
+        return (
+            status["source_version"] == source_version
+            and _ns_stamp(status["range_from"]) == range_from.astimezone(UTC)
+            and _ns_stamp(status["range_to"]) == range_to.astimezone(UTC)
+            and _ns_stamp(status["updated_at"]) >= launched_at.astimezone(UTC)
+        )
+    except KeyError, ValueError:
+        return False
 
 
 def checkpoint_path(paths: UqsPaths, worker: str) -> Path:

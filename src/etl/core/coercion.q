@@ -69,31 +69,49 @@ numeric_chars:".-+eE0123456789"
 / than correcting it. It is stated explicitly here anyway, because a reader
 / should not have to know that to trust the function, and because a future
 / build changing it would otherwise change this function's meaning silently.
+/ .
+/ A comma followed by EXACTLY three digits is refused, not guessed: "1,234"
+/ is 1234 with a thousands separator as often as it is 1.234 with a decimal
+/ comma, and reading it as the latter is 1000x off with nothing erroring.
+/ A null is a coercion failure, which is counted and visible. "1,0842" and
+/ "1,5" are unambiguous and still read as decimals.
+/ .
+/ A sign is accepted only at the start or after an exponent: "F"$"--1" is 1,
+/ so the character test alone let a doubled sign through as a number.
 / @param str the text to coerce
-/ @return the float, or 0n when the text is empty or not numeric
+/ @return the float, or 0n when the text is empty, not numeric, or ambiguous
 / @eg .qetl.coerce.to_float["1.0842"]  ->  1.0842
 / @eg .qetl.coerce.to_float["1,0842"]  ->  1.0842
+/ @eg .qetl.coerce.to_float["1,234"]   ->  0n
 / @eg .qetl.coerce.to_float[""]        ->  0n
 to_float:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0n];
     / a decimal comma, only when there is no dot - "1,234.56" is a thousands
-    / separator and this layer deliberately does NOT guess at those, because
-    / "1,234" is ambiguous between 1234 and 1.234 and no rule is safe.
-    normalised:$[(any trimmed=",") and not any trimmed="."; ssr[trimmed;",";"."]; trimmed];
+    / separator and this layer deliberately does NOT guess at those
     if[any trimmed=","; if[any trimmed="."; :0n]];
+    if[1=sum trimmed=","; if[3=count (1+first where trimmed=",")_trimmed; :0n]];
+    normalised:$[any trimmed=","; ssr[trimmed;",";"."]; trimmed];
     if[not all normalised in numeric_chars; :0n];
+    if[not signs_placed normalised; :0n];
     v:"F"$normalised;
     / "F"$ on garbage also gives 0n, so this is belt-and-braces rather than
     / the primary check - but it costs nothing and covers a form the
     / character test admits, e.g. "1.2.3".
     v}
 
+/ Is every sign in this numeric text at the start, or right after an
+/ exponent? "--1", "1-2" and "+-3" are not numbers, though every character is.
+/ @eg .qetl.coerce.signs_placed each ("-1";"1e-5";"--1";"1-2")  ->  1100b
+/ (),s: one character is a char ATOM in q - "5" - and `where` of an atom is 'type.
+signs_placed:{[s] s:(),s; i:where s in "+-"; all (i=0) or (s i-1) in "eE"}
+
 / Coerce text to a long, mapping empty to null rather than zero.
 to_long:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Nj];
     if[not all trimmed in numeric_chars; :0Nj];
+    if[not signs_placed trimmed; :0Nj];
     "J"$trimmed}
 
 / ------------------------------------------------------------- TIMESTAMP

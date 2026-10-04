@@ -165,10 +165,16 @@ errors:();
 note:{[msg;null_value] errors,:enlist msg; null_value}
 
 / A required timestamp, e.g. a backfill window bound.
+/ .
+/ Read by .qetl.coerce.to_timestamp, so a zone suffix (Z, +02:00) is applied
+/ and the value is UTC - "P"$ alone ignored "+02:00", two hours off. A
+/ date-only value is midnight here, unlike in to_timestamp: a window bound
+/ legitimately is a day, where a row's event time never is.
 get_timestamp:{[k]
     v:raw k;
     $[0=count v; note["missing required setting ",string[k]," (",env_name[k]," or config)";0Np];
-      null p:"P"$v; note["setting ",string[k]," is not a timestamp: ",v;0Np];
+      null p:$[.qetl.coerce.is_date_only v; .qetl.coerce.to_date_as_midnight v; .qetl.coerce.to_timestamp v];
+        note["setting ",string[k]," is not a timestamp: ",v;0Np];
       p]}
 
 / A required positive long, e.g. a row cap.
