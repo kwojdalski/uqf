@@ -162,6 +162,15 @@ data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
                                       the running plant and hdb process - including
                                       the base port (see below)
 data hdb-check [--fix]                HDB partitions missing a declared table or column
+run status                            runs that began and never finished, including
+                                      runs whose process died
+run list                              every run in the ledger, newest first, with its
+                                      outcome
+run show RUN_ID                       one run and its facts, then its log files and
+                                      the command that re-runs (resumes) its range -
+                                      see guides/when-it-breaks.md
+run audit DATASET --from T --to T     every fact about one window, from every run
+                                      that published it
 remove output [--match REGEX] [--dry-run]
                                       wipe output/uqs/, or part of it
 remove checkpoint WORKER              delete a worker's checkpoint, so its next run

@@ -126,6 +126,30 @@ def show(run_id: Annotated[str, typer.Argument(help="A run id, from `uqs run lis
         return
     _print("run", run, _RUN_COLUMNS, "")
     _print("facts", facts, _FACT_COLUMNS, "this run recorded no facts")
+    _print_next_steps(run[0])
+
+
+def _print_next_steps(run: dict) -> None:
+    """Where to look, and what to type: the two things a reader of a failed
+    or interrupted run wants next, without a trip through the docs."""
+    paths = _paths()
+    logs = stack_runs.log_files(paths, run)
+    if logs:
+        console.print(f"\n[bold]logs[/]   uqs logs {run['process']} --level ERR")
+        for path in logs:
+            note = "" if path.is_file() else "  [dim](not found)[/]"
+            console.print(f"         {path}{note}", soft_wrap=True)
+    else:
+        console.print(
+            "\n[bold]logs[/]   this run recorded no TorQ process - plain q logs to its console"
+        )
+    command = stack_runs.rerun_command(run)
+    if command:
+        # Re-running IS the resume: coverage skips every window already covered.
+        console.print(f"[bold]re-run[/] {command}", soft_wrap=True)
+        console.print(
+            "         [dim]covered windows are skipped, so this resumes rather than repeats[/]"
+        )
 
 
 @run_app.command("audit")

@@ -139,6 +139,47 @@ def show(paths: UqsPaths, run_id: str, **kw) -> tuple[list[dict], list[dict]]:
     )
 
 
+def _as_bound(ledger_value: str) -> str:
+    """A ledger timestamp as `uqs backfill --from/--to` takes it.
+
+    The ledger's JSON spells nanoseconds - 2026-09-13T00:00:00.000000000 -
+    which `datetime.fromisoformat` refuses, so the command would not run as
+    printed. A zero fraction is dropped (ISO, the common case); anything finer
+    becomes the q literal `parse_bound` reads, which keeps every digit.
+    """
+    stamp, _, fraction = ledger_value.partition(".")
+    if not fraction.strip("0"):
+        return stamp
+    date, _, clock = stamp.partition("T")
+    return f"{date.replace('-', '.')}D{clock}.{fraction}"
+
+
+def rerun_command(run: dict) -> str | None:
+    """The command that re-runs `run`'s range - which, because coverage skips
+    what is already covered, is also how a failed or interrupted run resumes.
+
+    None when the row lacks what the command needs (a run begun before the
+    ledger recorded ranges; see `migrate`).
+    """
+    needed = ("worker", "range_from", "range_to", "source_version")
+    if any(not run.get(k) for k in needed):
+        return None
+    return (
+        f"uqs backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
+        f"--to {_as_bound(str(run['range_to']))} --version {run['source_version']}"
+    )
+
+
+def log_files(paths: UqsPaths, run: dict) -> list[Path]:
+    """Where the process that ran `run` logged - torq.sh's out and err files
+    for its procname, the ones `uqs logs <procname>` reads. Empty when the run
+    recorded no process (plain q, outside TorQ, logs to its own console)."""
+    from uqs.stack.logs import _expected_log_files
+
+    process = run.get("process")
+    return _expected_log_files(paths, [str(process)]) if process else []
+
+
 def audit(
     paths: UqsPaths, dataset: str, range_from: datetime, range_to: datetime, **kw
 ) -> list[dict]:
