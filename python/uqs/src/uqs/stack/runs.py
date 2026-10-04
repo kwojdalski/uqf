@@ -62,12 +62,19 @@ def _q_timestamp(moment: datetime) -> str:
 
 
 def query(
-    paths: UqsPaths, expr: str, *, directory: Path | None = None, attach: bool = True
+    paths: UqsPaths,
+    expr: str,
+    *,
+    directory: Path | None = None,
+    attach: bool = True,
+    loads: tuple[str, ...] = _LOADS,
 ) -> list[dict]:
     """The rows q expression `expr` returns, evaluated against the ledger.
 
-    `expr` is built by this module's own functions from validated parts,
-    never from caller text, so no argument reaches q unchecked.
+    `expr` is built by its callers' own functions from validated parts,
+    never from caller text, so no argument reaches q unchecked. `loads` is
+    the q files the short-lived process reads first - the ledger's subset by
+    default; a reader that needs the job declarations passes the tree.
     """
     q = q_interpreter()
     if q is None:
@@ -81,7 +88,7 @@ def query(
     # must not do first - it exists to fix a shape attach refuses.
     script = "\n".join(
         [
-            *(f"\\l {f}" for f in _LOADS),
+            *(f"\\l {f}" for f in loads),
             *([".qetl.run.attach[];"] if attach else []),
             f"-1 .j.j {_FOR_JSON} 0!{expr};",
             "exit 0",
