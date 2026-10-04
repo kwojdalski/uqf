@@ -113,6 +113,7 @@ qetl.coerce,coerce_column,function,2,f col
 qetl.coerce,is_date_only,function,1,str
 qetl.coerce,numeric_chars,value,,
 qetl.coerce,require_present,function,2,field v
+qetl.coerce,signs_placed,function,1,s
 qetl.coerce,to_date_as_midnight,function,1,str
 qetl.coerce,to_float,function,1,str
 qetl.coerce,to_long,function,1,str

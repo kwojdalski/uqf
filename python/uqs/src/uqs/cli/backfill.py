@@ -8,12 +8,13 @@ stack/backfill.py.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 import typer
 
 from uqs.cli import completion
-from uqs.cli.shared import PortOpt, _debug_requested, _die, _paths, app
+from uqs.cli.shared import PortOpt, _debug_requested, _die, _paths, app, console
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
@@ -86,6 +87,15 @@ def backfill(
             "took. Includes everything --debug shows",
         ),
     ] = False,
+    wait: Annotated[
+        bool,
+        typer.Option(
+            "--wait",
+            help="Wait for the run's outcome and exit with it: 0 for completed or idle, "
+            "1 for failed or a process that died. Without it, the exit code says only "
+            "whether torq.sh started the process",
+        ),
+    ] = False,
 ) -> None:
     """Run a bounded worker over [--from, --to), recording coverage under --version.
 
@@ -107,21 +117,44 @@ def backfill(
     `--trace` starts it with `-trace`: every query sent to the source, at TRC,
     and the DBG lines `--debug` would show, so each query sits beside its
     window.
+
+    The exit code is torq.sh's: whether the process STARTED, not how the run
+    ended. `--wait` follows the run to its outcome and exits with that - what
+    a script or a scheduler wants.
     """
+    if wait and mode in stack_backfill.NO_STATUS_MODES:
+        _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))
+        return
     try:
+        paths = _paths()
+        resolved = stack_backfill.resolve_version(worker, version)
+        bound_from = stack_backfill.parse_bound("--from", range_from)
+        bound_to = stack_backfill.parse_bound("--to", range_to)
+        launched_at = datetime.now(UTC)
         result = stack_backfill.start(
-            _paths(),
+            paths,
             worker,
-            stack_backfill.resolve_version(worker, version),
-            stack_backfill.parse_bound("--from", range_from),
-            stack_backfill.parse_bound("--to", range_to),
+            resolved,
+            bound_from,
+            bound_to,
             base_port=port,
             verbose=_debug_requested(ctx, debug),
             trace=trace,
             on_conflict=on_conflict,
             mode=mode,
         )
+        if result.returncode != 0 or not wait:
+            raise typer.Exit(code=result.returncode)
+        procname = stack_backfill.procname_for(worker)
+        console.print(
+            f"[dim]waiting for {procname}'s outcome (Ctrl-C stops waiting, not the run)[/]"
+        )
+        state, code = stack_backfill.wait_for_outcome(
+            paths, procname, resolved, bound_from, bound_to, launched_at
+        )
     except UqsError as exc:
         _die(exc)
         return
-    raise typer.Exit(code=result.returncode)
+    colour = "green" if code == 0 else "red"
+    console.print(f"[{colour}]{procname}: {state}[/] - `uqs logs {procname}` for its log")
+    raise typer.Exit(code=code)

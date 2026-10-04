@@ -93,6 +93,16 @@ test_a_timestamp_parses:{[t]
     .qetl.cfg.set_layers[()!();()!();(enlist `w)!enlist "2026.09.13D00:00:00.000000000"];
     .qunit.assertEquals[.qetl.cfg.get_timestamp `w;2026.09.13D00:00:00.000000000;"a configured timestamp round-trips"]};
 
+test_a_timestamp_setting_applies_its_zone_offset:{[t]
+    / "P"$ alone read the clock and ignored the +02:00 - a bound two hours off
+    .qetl.cfg.set_layers[()!();()!();(enlist `w)!enlist "2026-09-13T02:00:00+02:00"];
+    .qunit.assertEquals[.qetl.cfg.get_timestamp `w;2026.09.13D00:00:00.000000000;"the offset is applied, so the bound is UTC"]};
+
+test_a_date_setting_is_midnight:{[t]
+    / unlike a row's event time, a window bound legitimately is a day
+    .qetl.cfg.set_layers[()!();()!();(enlist `w)!enlist "2026.09.13"];
+    .qunit.assertEquals[.qetl.cfg.get_timestamp `w;2026.09.13D00:00:00.000000000;"a date bound means its midnight"]};
+
 test_a_positive_long_parses:{[t]
     .qetl.cfg.set_layers[()!();()!();(enlist `n)!enlist "500"];
     .qunit.assertEquals[.qetl.cfg.get_positive `n;500j;"a configured count round-trips"]};

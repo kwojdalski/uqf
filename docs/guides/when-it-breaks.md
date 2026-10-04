@@ -23,8 +23,10 @@ The process also told whoever started it:
 
 - the backfill process exits non-zero (`partial` and `failed` both count as
   failures). `uqs backfill` itself returns as soon as torq.sh has started the
-  process, so its own exit code says only whether the process started
-  ([#637](https://github.com/kwojdalski/uqf/issues/637));
+  process, so its exit code says only whether the process started. With `--wait`
+  it follows the run to its outcome and exits with that: 0 for `completed` or
+  `idle`, 1 for `failed` or a process that died. Use `--wait` in a script or a
+  scheduler;
 - the Airflow sensor fails the task with q's error;
 - the browser's **Backfills** view shows **Failure**.
 
