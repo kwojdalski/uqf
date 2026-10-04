@@ -9,11 +9,13 @@ against the same q source independently — see `tests/test_status_reader.py`
 and `python/uqf_frontend/tests/test_status.py`, which both parse
 `src/etl/core/status.q` rather than trusting each other.
 
-Only the fields a sensor actually needs are exposed here (state, error,
-worker, instance_id, updated_at) — this is a narrower reader than
-uqf_frontend's, on purpose: the authority split says q owns run/window counts and coverage
-too, but Airflow's poke contract has no use for them, and exposing fields
-nothing here reads is scope this increment did not need.
+Only the fields a sensor actually needs are exposed here — this is a
+narrower reader than uqf_frontend's, on purpose: the authority split says q
+owns run/window counts and coverage too, but Airflow's poke contract has no
+use for them. What it does need: the state and error; the run specification
+(source_version and range), to tell the run it is waiting for from the last
+one that wrote the same file; and the writer's pid and host, to tell a run
+that is slow from one whose process is gone.
 """
 
 from __future__ import annotations
@@ -32,6 +34,22 @@ FILENAME_SUFFIX = ".txt"
 #: process or a checked-out uqf tree to be importable — only the test suite
 #: (which has this whole repository checked out) verifies it still matches.
 STATES = ("starting", "running", "idle", "completed", "failed")
+
+#: The keys this reader requires - a subset of what status.q writes; the
+#: test suite checks each one is written.
+FIELDS = (
+    "worker",
+    "instance_id",
+    "state",
+    "error",
+    "updated_at",
+    "source_version",
+    "range_from",
+    "range_to",
+    "pid",
+    "host",
+    "run_id",
+)
 
 #: A run in one of these states will not change again.
 TERMINAL_STATES = ("idle", "completed", "failed")
@@ -57,6 +75,14 @@ class WorkerStatus:
     state: str
     error: str | None
     updated_at: str
+    source_version: str
+    range_from: str
+    range_to: str
+    #: The q process that wrote the file, and the host it ran on.
+    pid: int
+    host: str
+    #: The .qetl.run execution, or None before one opened (and on a rehearsal).
+    run_id: str | None
 
     @property
     def terminal(self) -> bool:
@@ -75,7 +101,7 @@ def read_status_file(path: Path) -> WorkerStatus:
     if not isinstance(raw, dict):
         raise MalformedStatusFile(f"{path}: expected a JSON object, got {type(raw).__name__}")
 
-    missing = [f for f in ("worker", "instance_id", "state", "error", "updated_at") if f not in raw]
+    missing = [f for f in FIELDS if f not in raw]
     if missing:
         raise MalformedStatusFile(f"{path}: missing field(s): {', '.join(missing)}")
 
@@ -103,6 +129,12 @@ def read_status_file(path: Path) -> WorkerStatus:
         state=state,
         error=error,
         updated_at=str(raw["updated_at"]),
+        source_version=str(raw["source_version"]),
+        range_from=str(raw["range_from"]),
+        range_to=str(raw["range_to"]),
+        pid=int(raw["pid"]),
+        host=str(raw["host"]),
+        run_id=str(raw["run_id"]) or None,
     )
 
 

@@ -70,6 +70,10 @@ export interface Worker {
   error: string | null;
   updated_at: string;
   terminal: boolean;
+  pid: number;
+  host: string;
+  run_id: string | null;
+  abandoned: boolean;
   warnings: string[];
 }
 export interface Backfill extends Pollable {

@@ -138,6 +138,20 @@ test_a_refused_write_leaves_the_recorded_status_alone:{[t]
     @[{.statustest.write[x;""]};`completed;{x}];
     .qunit.assertEquals[.qetl.status.previous_state `st1;`failed;"the failure survives an attempt to overwrite it with success"]};
 
+test_the_file_says_which_process_wrote_it:{[t]
+    / A reader on this host whose pid is gone knows a `running file is
+    / abandoned - the only way anything outside q can tell dead from slow.
+    j:.j.k raze read0 hsym `$.statustest.write[`starting;""];
+    .qunit.assertEquals[(`long$j`pid;j`host;j`run_id);(`long$.z.i;string .z.h;"");
+        "this process's pid and host; no run id before a run opens"]};
+
+test_the_file_carries_the_open_runs_id:{[t]
+    keep:.qetl.run.current_run;
+    .qetl.run.current_run:id:first 1?0Ng;
+    j:.j.k raze read0 hsym `$.statustest.write[`starting;""];
+    .qetl.run.current_run:keep;
+    .qunit.assertEquals[j`run_id;string id;"a reader can name the execution it is looking at"]};
+
 test_the_ordinary_lifecycle_writes_end_to_end:{[t]
     .statustest.write[`starting;""];
     .statustest.write[`running;""];

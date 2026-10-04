@@ -198,6 +198,12 @@ class WorkerStatusOut(BaseModel):
     error: str | None = None
     updated_at: str
     terminal: bool
+    pid: int
+    host: str
+    run_id: str | None = None
+    abandoned: bool = Field(
+        description="not terminal, and its process is gone - it will never record an outcome"
+    )
     warnings: list[str] = Field(default_factory=list)
 
 

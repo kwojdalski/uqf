@@ -18,6 +18,12 @@ def make_status(state: str, error: str | None = None) -> WorkerStatus:
         state=state,
         error=error,
         updated_at="2026-09-15T18:41:14.475818000",
+        source_version="v1",
+        range_from="2026-09-13T00:00:00.000000000",
+        range_to="2026-09-14T00:00:00.000000000",
+        pid=4242,
+        host="qhost",
+        run_id=None,
     )
 
 

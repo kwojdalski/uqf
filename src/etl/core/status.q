@@ -191,12 +191,18 @@ write_status:{[worker;instance_id;state;spec;progress;err]
     dir:status_dir[];
     / mkdir -p is idempotent, and cheaper than checking first.
     system"mkdir -p ",dir;
+    / pid and host say WHICH process wrote it: a reader on the same host whose
+    / pid is gone knows a `running file is abandoned rather than slow - the
+    / heartbeat dies with the process, and nothing else would ever say so.
+    / run_id is the .qetl.run execution, "" before it opens and on a rehearsal.
+    run:@[{.qetl.run.current[]};::;{0Ng}];
     payload:`worker`instance_id`state`source_version`range_from`range_to,
-            `cursor`rows_published`windows_completed`error`updated_at;
+            `cursor`rows_published`windows_completed`error`updated_at,
+            `pid`host`run_id;
     values_:(worker;instance_id;state;spec`source_version;
              spec`range_from;spec`range_to;
              progress`cursor;progress`rows_published;progress`windows_completed;
-             err;.z.p);
+             err;.z.p;.z.i;string .z.h;$[null run; ""; string run]);
     target:dir,"/airflow_status_",string[instance_id],".txt";
     tmp:target,".tmp";
     (hsym `$tmp) 0: enlist .j.j payload!values_;
