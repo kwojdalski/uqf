@@ -30,7 +30,7 @@ wait = QWorkerStatusSensor(
     source_version="v1",
     range_from="{{ data_interval_start }}",
     range_to="{{ data_interval_end }}",
-    not_before="{{ ti.start_date }}",   # only when retrying the same range
+    not_before="{{ ti.start_date }}",  # only when retrying the same range
 )
 ```
 

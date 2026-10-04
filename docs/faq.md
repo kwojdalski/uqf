@@ -104,11 +104,12 @@ you build - the pattern in [the etl scaffolding
 page](scaffolding/etl.md#testing-it-without-a-stack). To run it as a real
 process on stock kdb+, use `scripts/processes/run_stream.q`.
 
-**A backfill** has exited by the time you look, so read what it left on disk. In
-q, after loading the tree: `.qetl.coverage.attach[]` then
-`.qetl.coverage.ledger[]` for what was covered, `.qetl.run.attach[]` then
-`.qetl.run.history[]` for each run and its outcome, and `.qetl.hb.report[]` for
-heartbeats. All three live in the status directory, `$UQF_STATUS_DIR`.
+**A backfill** has exited by the time you look, so read what it left on disk:
+`uqs run status` for runs that never finished, `uqs run list` for every run and
+its outcome, and `uqs run show <run_id>` for one run's facts, its log files and
+the command that resumes it. [When it breaks](guides/when-it-breaks.md) walks
+the whole recovery. All of this lives in the status directory,
+`$UQF_STATUS_DIR`.
 
 **Query errors from the HDB** such as
 `./2026.01.07/arbitrage. OS reports: No such file or directory` mean a partition

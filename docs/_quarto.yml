@@ -82,6 +82,7 @@ website:
       - section: "Guides"
         contents:
           - guides/uqs.md
+          - guides/when-it-breaks.md
           - guides/new-pipeline.md
           - guides/ci.md
           - guides/config-audit.md
