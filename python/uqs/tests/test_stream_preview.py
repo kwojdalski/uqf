@@ -85,7 +85,9 @@ def test_no_q_is_said_plainly(monkeypatch):
 
 
 def invoke(monkeypatch, answer: dict):
-    monkeypatch.setattr(stream_preview, "preview", lambda paths, job, sample, trace=False: answer)
+    monkeypatch.setattr(
+        stream_preview, "preview", lambda paths, job, sample, trace=False, last_ns=None: answer
+    )
     return runner.invoke(cli.app, ["stream", "preview", "vectorize2"], env={"COLUMNS": "200"})
 
 
@@ -171,7 +173,9 @@ def test_a_fetch_that_hangs_shows_the_query_it_hung_on(monkeypatch):
 
 def test_the_command_prints_a_traced_query_as_a_block(monkeypatch):
     traced = {**PAGE, "trace": stream_preview.trace_lines(f"{SENT}\n{RETURNED}\n")}
-    monkeypatch.setattr(stream_preview, "preview", lambda paths, job, sample, trace=False: traced)
+    monkeypatch.setattr(
+        stream_preview, "preview", lambda paths, job, sample, trace=False, last_ns=None: traced
+    )
     result = runner.invoke(
         cli.app, ["stream", "preview", "vectorize2", "--trace"], env={"COLUMNS": "200"}
     )
@@ -181,7 +185,7 @@ def test_the_command_prints_a_traced_query_as_a_block(monkeypatch):
 
 
 def test_the_command_prints_the_trace_of_a_failed_preview(monkeypatch):
-    def fail(paths, job, sample, trace=False):
+    def fail(paths, job, sample, trace=False, last_ns=None):
         raise stream_preview.PreviewFailed(
             "preview vectorize2: source down", stream_preview.trace_lines(f"{SENT}\n{FAILED}\n")
         )
@@ -190,3 +194,109 @@ def test_the_command_prints_the_trace_of_a_failed_preview(monkeypatch):
     result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--trace"])
     assert result.exit_code == 1
     assert "query failed" in result.output and "source down" in result.output
+
+
+# --- a recent-data window (#681) ---------------------------------------------
+
+RECENT = {
+    **PAGE,
+    "mode": "recent",
+    "cursor": "2026-10-05T10:00:00.000000000",
+    "window": {
+        "from": "2026-10-05T10:00:00.000000001",
+        "to": "2026-10-05T10:00:30.000000001",
+        "start_cursor": "2026-10-05T10:00:00.000000000",
+        "end_cursor": "2026-10-05T10:00:30.000000000",
+    },
+    "kept": 3,
+    "page_limit": 10000,
+    "limited": False,
+}
+
+
+@pytest.mark.parametrize(
+    ("raw", "ns"),
+    [
+        ("30s", 30 * 10**9),
+        ("5m", 300 * 10**9),
+        ("2h", 7200 * 10**9),
+        ("1d", 86400 * 10**9),
+        ("500ms", 500 * 10**6),
+        (" 30s ", 30 * 10**9),
+    ],
+)
+def test_a_duration_is_read_as_nanoseconds(raw, ns):
+    assert stream_preview.duration_ns(raw) == ns
+
+
+@pytest.mark.parametrize("raw", ["0s", "-5s", "30", "s", "1.5m", "30sec", "3w", ""])
+def test_a_malformed_or_empty_duration_is_refused(raw):
+    with pytest.raises(UqsError, match="--last"):
+        stream_preview.duration_ns(raw)
+
+
+def test_without_last_the_script_previews_the_next_page(monkeypatch):
+    sent = fake_q(monkeypatch, PAGE)
+    stream_preview.preview(default_paths(), "vectorize2", 1)
+    assert ".qetl.job.stream.preview[`vectorize2;1]" in sent["script"]
+    assert "preview_recent" not in sent["script"]
+
+
+def test_last_asks_q_for_the_recent_window(monkeypatch):
+    sent = fake_q(monkeypatch, RECENT)
+    stream_preview.preview(default_paths(), "vectorize2", 1, last_ns=30 * 10**9)
+    assert ".qetl.job.stream.preview_recent[`vectorize2;1;`timespan$30000000000]" in sent["script"]
+
+
+def test_the_command_says_a_recent_sample_is_not_the_next_page(monkeypatch):
+    seen: dict = {}
+
+    def fake(paths, job, sample, trace=False, last_ns=None):
+        seen["last_ns"] = last_ns
+        return RECENT
+
+    monkeypatch.setattr(stream_preview, "preview", fake)
+    result = runner.invoke(
+        cli.app, ["stream", "preview", "vectorize2", "--last", "30s", "--sample", "1"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["last_ns"] == 30 * 10**9
+    out = " ".join(result.output.split())
+    assert "recent-data sample of vectorize2" in out
+    assert "not the running job's next page" in out
+    assert "saved cursor untouched" in out
+    assert "[2026-10-05T10:00:00.000000001, 2026-10-05T10:00:30.000000001) UTC" in out
+    assert "fetched 3 row(s), 3 in the window, page limit 10000" in out
+
+
+def test_a_full_page_is_flagged(monkeypatch):
+    monkeypatch.setattr(
+        stream_preview,
+        "preview",
+        lambda paths, job, sample, trace=False, last_ns=None: {**RECENT, "limited": True},
+    )
+    result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--last", "30s"])
+    assert "the page was full" in result.output
+
+
+def test_a_bad_last_is_refused_before_q(monkeypatch):
+    started: list = []
+    monkeypatch.setattr(stream_preview, "preview", lambda *a, **kw: started.append(1) or RECENT)
+    result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--last", "0s"])
+    assert result.exit_code == 1
+    assert started == []
+
+
+def test_an_empty_window_says_so(monkeypatch):
+    monkeypatch.setattr(
+        stream_preview,
+        "preview",
+        lambda paths, job, sample, trace=False, last_ns=None: {
+            **RECENT,
+            "state": "idle",
+            "kept": 0,
+        },
+    )
+    result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--last", "30s"])
+    assert result.exit_code == 0
+    assert "nothing in the window" in result.output

@@ -10,7 +10,10 @@ with nothing published or saved. So no timer is written here at all.
 `--cursor-fields a,b` makes the cursor the row's position rather than a
 timestamp, for a source that pages through rows sharing one: the load, save
 and advances trio is written whole, from the framework's stock helpers, and
-next_cursor takes those fields of the page's last row.
+next_cursor takes those fields of the page's last row. It also gets a
+start_cursor step, which `uqs stream preview --last` needs (#681): only the
+feed knows its tie-breakers' types, so that one is written to throw until
+filled in.
 
 The steps that read the source throw "not implemented" until written. A
 scaffold that fetched a fixture instead would preview, and run, as if it
@@ -44,11 +47,12 @@ def declaration(name: str, tick: str, fields: list[str]) -> tuple[str, str]:
     steps = ["fetch", "normalize", "next_cursor"]
     values = [f"{ns}.{step}" for step in steps]
     if fields:
-        steps += ["load", "save", "advances"]
+        steps += ["load", "save", "advances", "start_cursor"]
         values += [
             ".qetl.job.continuous.load_cursor_value",
             ".qetl.job.continuous.save_cursor_value",
             f".qetl.job.continuous.lexically_after[{_symbols(fields)}]",
+            f"{ns}.start_cursor",
         ]
     keys = "`period`poll"
     poll = "`" + "`".join(steps) + "!(\n        " + ";\n        ".join(values) + ")"
@@ -67,7 +71,17 @@ def steps(name: str, publishes: str, fields: list[str]) -> str:
         next_cursor = f"""/ [page] -> the cursor that acknowledges the page: the {named} of its
 / last row, in the order the source sorts by. Keep every field: dropping a
 / tie-breaker loses the rows that share the rest.
-next_cursor:{{[page] {_symbols(fields)}#last page}}"""
+next_cursor:{{[page] {_symbols(fields)}#last page}}
+
+/ [instant] -> the cursor just before `instant`, for `uqs stream preview
+/ {name} --last 30s`: fetching after it must return the rows at or after
+/ instant. Usually {fields[0]} set to the instant and each tie-breaker to
+/ its type's null, which sorts before every value - e.g.
+/ {_symbols(fields)}!(instant;...). Only the running feed's cursor is
+/ untouched by it: the preview never saves.
+start_cursor:{{[instant]
+    '"{name}.start_cursor: not implemented";
+    }}"""
     else:
         next_cursor = f"""/ [page] -> the cursor that acknowledges the page, e.g. the time of its
 / last row - strictly later than the cursor it was fetched after.

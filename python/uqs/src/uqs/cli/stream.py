@@ -67,6 +67,15 @@ def preview(
             "time or error - as `uqs backfill --trace` does. Off by default.",
         ),
     ] = False,
+    last: Annotated[
+        str | None,
+        typer.Option(
+            "--last",
+            help="Preview the recent data instead: the rows in [now - LAST, now), e.g. 30s, "
+            "5m, 2h. Fetched from a temporary cursor - the saved cursor and the live poll "
+            "are untouched, and this is not the running job's next page.",
+        ),
+    ] = None,
 ) -> None:
     """One page of a polling feed: what it would publish, and where its cursor
     would move - with nothing published and no cursor saved.
@@ -76,23 +85,47 @@ def preview(
     tables, or the cursor would not advance.
     """
     try:
-        r = stream_preview.preview(_paths(), job, sample, trace=trace)
+        last_ns = None if last is None else stream_preview.duration_ns(last)
+        r = stream_preview.preview(_paths(), job, sample, trace=trace, last_ns=last_ns)
     except UqsError as exc:
         _print_trace(getattr(exc, "trace", []))
         _die(exc)
         return
     _print_trace(r.get("trace", []))
     mode = "dry run" if dry_run else "preview"
-    console.print(f"[bold]{mode} of {job}[/] - nothing published, no cursor saved")
+    recent = r.get("mode") == "recent"
+    if recent:
+        console.print(
+            f"[bold]recent-data sample of {job}[/] - not the running job's next page; "
+            "nothing published, saved cursor untouched"
+        )
+    else:
+        console.print(f"[bold]{mode} of {job}[/] - nothing published, no cursor saved")
     console.print(f"source  {_LIVE.get(r.get('live', 'unknown'), r.get('live'))}")
-    cursor = _cursor(r.get("cursor")) or "none - a first run"
-    console.print(f"cursor  {cursor}")
+    if recent:
+        window = r.get("window", {})
+        console.print(f"window  [{window.get('from')}, {window.get('to')}) UTC")
+        console.print(f"start   {_cursor(window.get('start_cursor'))} (temporary)")
+        limit = r.get("page_limit")
+        cap = f", page limit {limit}" if limit is not None else ", page limit not declared"
+        console.print(f"fetched {r['fetched']} row(s), {r.get('kept', 0)} in the window{cap}")
+        if r.get("limited"):
+            console.print("[yellow]the page was full: the window may hold rows past these[/]")
+    else:
+        cursor = _cursor(r.get("cursor")) or "none - a first run"
+        console.print(f"cursor  {cursor}")
     if r["state"] == "idle":
-        console.print("[dim]nothing after the cursor: a run would publish nothing now[/]")
+        idle = (
+            "nothing in the window"
+            if recent
+            else "nothing after the cursor: a run would publish nothing now"
+        )
+        console.print(f"[dim]{idle}[/]")
         return
     move = "[green]advances[/]" if r.get("advances") else "[red]would not advance[/]"
     console.print(f"next    {_cursor(r.get('next_cursor')) or '-'}  ({move})")
-    console.print(f"fetched {r['fetched']} row(s)")
+    if not recent:
+        console.print(f"fetched {r['fetched']} row(s)")
     for table_name, count in r.get("rows", {}).items():
         rows = r.get("sample", {}).get(table_name, [])
         console.print(f"\n[bold]{table_name}[/]: {count} row(s), first {len(rows)}")

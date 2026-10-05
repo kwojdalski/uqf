@@ -147,10 +147,12 @@ data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
 data hdb-check [--fix]                HDB partitions missing a declared table or column
 graph [PROC] [--upstream] [--offline] [-i]  every process and who feeds whom, as a
                                       tree with the tables on each edge
-stream preview JOB [--sample N] [--dry-run]
+stream preview JOB [--sample N] [--dry-run] [--last D] [--trace]
                                       one page of a polling feed: what it would publish
                                       and where its cursor would move, with nothing
-                                      published or saved (see docs/scaffolding/feed.md)
+                                      published or saved; --last 30s samples the rows
+                                      in [now-30s, now) instead, from a temporary
+                                      cursor (see docs/scaffolding/feed.md)
 gaps JOB --from T --to T [-i]         where a streaming job was not up and subscribed,
                                       and the backfill that refills each gap when a
                                       worker fills what the job publishes
