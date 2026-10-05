@@ -22,8 +22,8 @@ closed:0b
 
 record:{[t;rows] `.streampolltest.sent upsert (t;count rows); count rows}
 
-feeds:`spt_feed`spt_quote`spt_broken
-procs:`spt_feed1`spt_quote1`spt_broken1
+feeds:`spt_feed`spt_quote`spt_broken`spt_compound
+procs:`spt_feed1`spt_quote1`spt_broken1`spt_compound1
 
 / A polling feed over `upstream`, publishing `out` through `normalize`.
 declare:{[job;out;normalize;fetch]
@@ -163,5 +163,80 @@ test_define_refuses_poll_on_a_subscriber:{[t]
     d[`subscribe_to]:enlist `quote;
     .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};d;"*declares poll and subscribes*";
         "a polling job fetches its own input"]};
+
+/ --- a compound cursor (#666) ----------------------------------------------
+
+/ Three rows share a timestamp: a page of two cannot be acknowledged by a
+/ time alone, so the cursor is the row's position.
+book:([] time:d 1 1 1 2; securityId:`a`b`c`a; priceBookType:`x`x`x`x; v:1 2 3 4f)
+fields:`time`securityId`priceBookType
+
+/ The page of two after `cursor`, in the source's sort order.
+page_of_two:{[cursor]
+    after:$[(::)~cursor; .streampolltest.book;
+        .streampolltest.book where .qetl.job.continuous.lexically_after[.streampolltest.fields;cursor] each .streampolltest.book];
+    2 sublist after}
+
+compound:{[advances]
+    .qetl.job.stream.define[`spt_compound;`procname`subscribe_to`publishes`period`poll!(
+        `spt_compound1;`symbol$();enlist `spt_out;0D00:00:01;
+        `fetch`normalize`next_cursor`load`save`advances!(
+            .streampolltest.page_of_two;
+            {[page] select time, securityId, v from page};
+            {[page] .streampolltest.fields#last page};
+            .qetl.job.continuous.load_cursor_value;
+            .qetl.job.continuous.save_cursor_value;
+            advances))];
+    (` sv .qetl.job.stream.namespace[`spt_compound],`publish) set .streampolltest.record;
+    `spt_compound}
+
+test_a_compound_cursor_pages_through_rows_sharing_a_timestamp:{[t]
+    .streampolltest.compound .qetl.job.continuous.lexically_after .streampolltest.fields;
+    .qetl.job.stream.tick `spt_compound;
+    mid:.qetl.job.continuous.load_cursor_value `spt_compound;
+    .qetl.job.stream.tick `spt_compound;
+    .qunit.assertEquals[(mid;exec sum n from .streampolltest.sent);
+        (.streampolltest.fields!(d 1;`b;`x);4);
+        "the first page stops at b inside one timestamp, the second takes c and the next day - every row once"]};
+
+test_a_compound_cursor_keeps_its_tie_breakers:{[t]
+    .streampolltest.compound .qetl.job.continuous.lexically_after .streampolltest.fields;
+    .qetl.job.stream.tick `spt_compound;
+    .qunit.assertEquals[key .qetl.job.continuous.load_cursor_value `spt_compound;.streampolltest.fields;
+        "securityId and priceBookType survive the file, not just the time"]};
+
+test_a_compound_preview_leaves_the_cursor_file_alone:{[t]
+    .streampolltest.compound .qetl.job.continuous.lexically_after .streampolltest.fields;
+    .qetl.job.stream.tick `spt_compound;
+    before:.qetl.job.continuous.load_cursor_value `spt_compound;
+    r:.qetl.job.stream.preview[`spt_compound;5];
+    .qunit.assertEquals[(r`state;r`fetched;r`next_cursor;.qetl.job.continuous.load_cursor_value `spt_compound);
+        (`previewed;2;.streampolltest.fields!(d 2;`a;`x);before);
+        "it proposes the next position and the saved one is untouched"]};
+
+test_a_failed_publish_saves_no_compound_cursor:{[t]
+    .streampolltest.compound .qetl.job.continuous.lexically_after .streampolltest.fields;
+    (` sv .qetl.job.stream.namespace[`spt_compound],`publish) set {[t;rows] '"plant refused"};
+    .qunit.assertThrows[{.qetl.job.stream.tick `spt_compound};::;"plant refused";"the publish error is the tick's"];
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor_value `spt_compound;(::);
+        "nothing published, so nothing acknowledged - the page is fetched again"]};
+
+test_a_compound_cursor_that_does_not_advance_is_refused_in_both_modes:{[t]
+    .streampolltest.compound {[current;proposed] 0b};
+    r:.qetl.job.stream.preview[`spt_compound;5];
+    .qunit.assertThrows[{.qetl.job.stream.tick `spt_compound};::;"*does not move past*";"the timer refuses"];
+    .qunit.assertEquals[(r`state;count .streampolltest.sent);(`invalid;0);
+        "the preview reports it, and the timer refused before publishing anything"]};
+
+test_define_refuses_half_a_custom_cursor:{[t]
+    d:.streampolltest.poll_decl ()!();
+    d[`poll]:d[`poll],enlist[`load]!enlist .qetl.job.continuous.load_cursor_value;
+    .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};d;"*load, save and advances together*";
+        "a cursor loaded one way and saved another drifts"]};
+
+test_lexically_after_compares_the_first_differing_field:{[t]
+    f:.qetl.job.continuous.lexically_after[`t`id];
+    .qunit.assertEquals[(f[`t`id!(1;`a);`t`id!(1;`b)];f[`t`id!(1;`b);`t`id!(2;`a)];f[`t`id!(1;`b);`t`id!(1;`b)];f[(::);`t`id!(0;`a)]);
+        1101b;"a tie on time goes to the next field; equal is not after; a first run is after nothing"]};
 
 \d .

@@ -31,6 +31,13 @@ _LIVE = {
 }
 
 
+def _cursor(value: object) -> str:
+    """A cursor as one line: a timestamp as it is, a compound one as its fields."""
+    if isinstance(value, dict):
+        return ", ".join(f"{k}={v}" for k, v in value.items())
+    return str(value) if value not in (None, "") else ""
+
+
 @stream_app.command("preview")
 def preview(
     job: Annotated[str, typer.Argument(help="A polling feed - a streaming job that declares poll")],
@@ -60,13 +67,13 @@ def preview(
     mode = "dry run" if dry_run else "preview"
     console.print(f"[bold]{mode} of {job}[/] - nothing published, no cursor saved")
     console.print(f"source  {_LIVE.get(r.get('live', 'unknown'), r.get('live'))}")
-    cursor = r.get("cursor") or "none - a first run"
+    cursor = _cursor(r.get("cursor")) or "none - a first run"
     console.print(f"cursor  {cursor}")
     if r["state"] == "idle":
         console.print("[dim]nothing after the cursor: a run would publish nothing now[/]")
         return
     move = "[green]advances[/]" if r.get("advances") else "[red]would not advance[/]"
-    console.print(f"next    {r.get('next_cursor') or '-'}  ({move})")
+    console.print(f"next    {_cursor(r.get('next_cursor')) or '-'}  ({move})")
     console.print(f"fetched {r['fetched']} row(s)")
     for table_name, count in r.get("rows", {}).items():
         rows = r.get("sample", {}).get(table_name, [])

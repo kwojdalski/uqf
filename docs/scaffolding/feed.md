@@ -113,6 +113,21 @@ it and then advances the cursor:
 of table -> rows. An optional `close` releases whatever `fetch` opened, and
 `cursor` names the cursor file when it is not the job's name.
 
+A cursor that is not a timestamp declares how it is kept: `load`, `save` and
+`advances`, all three or none. A source that pages through rows sharing a
+timestamp needs the row's position, and the stock answer keeps every field:
+
+```q
+`load`save`advances!(
+    .qetl.job.continuous.load_cursor_value;                     / a q value, types intact
+    .qetl.job.continuous.save_cursor_value;
+    .qetl.job.continuous.lexically_after[`time`securityId`priceBookType])
+```
+
+with `next_cursor` returning `` `time`securityId`priceBookType#last page``. The
+timer checks the cursor advances before it publishes, and saves it only after
+the publish succeeds; the preview runs the same check and saves nothing.
+
 Declaring the steps is what makes the feed previewable:
 
 ```
