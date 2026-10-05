@@ -71,6 +71,13 @@ test_the_trap_is_real_and_has_two_halves:{[t]
 / of DIFFERENT shape through the public API. Shape variation is the whole
 / point - registering twice with the same keys proves nothing, because that
 / is the case the collapse handles fine.
+/ Dicts of same-keyed dicts that are NOT registries, each with its reason.
+/ They have a registry's shape - so dict_registries[] finds them - but nothing
+/ registers into them, so there is no second declaration whose shape could
+/ collapse or be refused. An exemption is a claim; this keeps it argued.
+not_registries:(enlist `.qcal.mock_conventions)!enlist
+    "sample FX conventions, passed as an argument to .qcal.spot_date and friends; nothing registers into it"
+
 covered:`.qetl.job.stream.jobs`.qetl.transform.registry`.qalloc.methods`.qetl.job.stream.normalizer.registry`.qetl.source.sources`.qetl.job.bounded.worker_cfg`.qetl.dag.jobs
 
 empty_in:([] time:`timestamp$(); x:`long$())
@@ -178,7 +185,7 @@ test_every_dict_valued_registry_is_covered_here:{[t]
     / fixed key set. One that enlists (.qetl.job.stream, .qetl.job.stream.normalizer) keeps a general
     / list and is safe whatever shape arrives, so it does not appear here
     / and does not need to.
-    missing:.regtest.dict_registries[] except covered;
+    missing:.regtest.dict_registries[] except covered,key not_registries;
     .qunit.assertEquals[missing;`$();
         "every registry relying on normalisation is listed in `covered` and has a test above registering two declarations of different shape - copying another registry's guard is not evidence, because the guards are not interchangeable"]};
 

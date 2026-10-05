@@ -1081,10 +1081,15 @@ exit_code:{[state] $[state in `completed`idle`validated`planned; 0i; 1i]}
 begin_run:{[worker]
     / Not on a dry run: a rehearsal's row in etl_runs reads as a run.
     if[not .qetl.job.bounded.runtime.allows`record_run; :(::)];
+    / Attached HERE, as init attaches the coverage ledger: a runner that did not
+    / (scripts/dev/run_backfill.q, or any script driving a worker) got a begin
+    / that failed silently, then an end that could not record, and a run that
+    / did all its work reported `failed and exited 1.
     @[{[w] cfg:def w; s:spec w;
+        .qetl.run.attach[];
         .qetl.run.begin[w;`dataset`source_version`range_from`range_to`width!
             (cfg`dataset;s`source_version;s`range_from;s`range_to;cfg`width)]};
-      worker;{[e] (::)}]}
+      worker;{[w;e] .qetl.log.warn[w;"could not open a run in the run ledger";enlist[`error]!enlist e];}[worker]]}
 
 / Private: close this execution's run with its outcome.
 / .
