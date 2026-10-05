@@ -41,7 +41,7 @@ def preview(
         bool,
         typer.Option(
             "--dry-run",
-            help="State it explicitly: a preview is always dry - nothing published, no cursor saved.",
+            help="A preview is always dry: nothing published, no cursor saved.",
         ),
     ] = True,
 ) -> None:
