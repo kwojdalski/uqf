@@ -1,4 +1,4 @@
-# Databento: a live market-data feed
+# Databento market depth
 
 A live market-data feed: an external Python handler publishes raw MBP-10 rows,
 and `databento1` folds them into the book shape. Starting, stopping and

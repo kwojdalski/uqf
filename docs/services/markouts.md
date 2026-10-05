@@ -1,4 +1,4 @@
-# Markouts
+# Execution quality (markouts)
 
 How good was each fill? A markout compares a fill's price with the market mid a
 short time after it. If you bought and the mid then rose, the fill was good. Two

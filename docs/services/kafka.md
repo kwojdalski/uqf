@@ -1,4 +1,4 @@
-# Kafka: a topic into the tickerplant
+# Kafka client flow
 
 A worked example of consuming a Kafka topic: an external Python consumer
 publishes raw records, and `kafka_flow1` drops the ones the broker has already

@@ -786,10 +786,11 @@ It also prints each process's load time on its latest start:
 
 ## Services
 
-What each running service does, how it is built and why, is one page per service
-in [`docs/services/`](../services/README.md) - this guide covers operating the
-stack as a whole. `tap1`, the diagnostic subscriber that logs every batch, is
-[there too](../services/tap.md).
+What each process does, one short card each, is [Services -
+Showcase](../services/README.md); a card links to a full page on how the process
+is built and why where there is one. This guide covers operating the stack as a
+whole. `tap1`, the diagnostic subscriber that logs every batch, is [there
+too](../services/tap.md).
 
 ## Adding a process
 

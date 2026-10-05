@@ -1,4 +1,6 @@
-# Synthetic feeds: fxfeed1 and quotesfeed1
+# Synthetic FX feeds
+
+Processes: `fxfeed1` and `quotesfeed1`.
 
 The two feeds that invent market data for the demo, and how to add another.
 Starting, stopping and inspecting the stack as a whole is in [running the uqf
