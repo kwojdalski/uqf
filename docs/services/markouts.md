@@ -98,32 +98,3 @@ coverage ledger, so a rerun of the same range is idle; - asks the HDB to reload.
   (`duckdb_deals`, `demo_deals`) aren't marked out yet. They store sides as
   `buy`/`sell`, use `rate` rather than `trade_price`, and carry no `pip_factor`,
   so they'd need a mapping step first.
-- **It's named after its source**, like the other workers. `markout_backfill`
-  would make `uqs job remove markout` ambiguous, because that command reads
-  `<name>_backfill.q` as belonging to job `<name>`.
-
-### Limits
-
-- **No fill id.** Two fills of one pair at the same instant share a key, in the
-  live rows and the backfilled ones alike.
-- **Partitions around midnight.** The backfill partitions rows by `trade_time`'s
-  date, while the live job's rows land in the partition of the moment `stp1`
-  stamped them. For a fill in the last 10 seconds of a day, the two can sit in
-  different partitions. The key then can't replace the live row, and the fill
-  appears twice.
-
-## Tests
-
-- **`tests/q/test_hdb_markouts_backfill.q`:**
-  - every fill is scored at every live horizon, and the horizons follow the live
-    job's;
-  - a buy is marked against the later mid;
-  - a fill with no later quote keeps null markouts;
-  - a run writes all its rows, including a fill whose horizons cross midnight;
-  - a restatement replaces rather than duplicates;
-  - against a stand-in HDB, each window sends exactly two queries over the right
-    bounds;
-  - the live path scores exactly as the fixture does;
-  - an empty window doesn't query quotes.
-- **`tests/q/test_every_worker_runs.q`** runs this worker, with every other,
-  from init to completion; a second run is idle, and a dry run writes nothing.
