@@ -813,4 +813,277 @@ cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_fact
     baseline:cross_ref_price_at[quotes;impact_sym;trade_time;ref_size];
     cross_markout_at_horizons[quotes;impact_sym;trade_time;side;baseline;pip_factor;horizons_ms;ref_size]};
 
+/ ---------------------------------------------------- BROKEN-DATE FORWARDS
+/ .
+/ A value date between two quoted tenors is priced by interpolating forward
+/ POINTS linearly in actual days between the two bracketing curve nodes, then
+/ adding them to spot. The result names the nodes and their weights, so a
+/ dealer can see exactly what produced the price. Settlement-date adjustment
+/ is the caller's (.qcal.forward_date): an already valid value date prices
+/ with no calendar.
+
+/ The extrapolation policies forward_at_date accepts beyond the curve's ends.
+/ `none refuses; `flat holds the end node's points; `linear extends the
+/ end segment's slope.
+extrapolations:`none`flat`linear
+
+/ Private: refuse a curve that is not a table of strictly increasing
+/ value_date with forward_points.
+require_curve:{[curve]
+    if[not 98h=type curve; '"forward_at_date: curve must be a table of value_date and forward_points"];
+    if[count missing:(`value_date`forward_points) except cols curve;
+        '"forward_at_date: curve is missing ",", " sv string missing];
+    if[2>count curve; '"forward_at_date: curve needs at least two nodes"];
+    dates:curve`value_date;
+    if[(count dates)<>count distinct dates; '"forward_at_date: curve has duplicate value dates"];
+    if[not dates~asc dates; '"forward_at_date: curve must be sorted by value_date"];
+    }
+
+/ The forward for a value date between curve nodes, by linear interpolation
+/ of forward points in actual days.
+/ .
+/ A value date on a node reproduces that node exactly (weights 1 and 0). One
+/ outside the curve is refused unless opts`extrapolation names a policy.
+/ Points are in pips: outright = spot + points%pip_factor.
+/ @param spot the spot rate, BASE/QUOTE
+/ @param curve table value_date (sorted, distinct), forward_points (pips)
+/ @param value_date the date to price
+/ @param pip_factor 10000 for most pairs, 100 for JPY quotes
+/ @param opts (::) for the defaults, or a dict with `extrapolation, one of
+/   `none`flat`linear (default `none)
+/ @return dict value_date, points, outright, lower, upper (the bracketing
+/   node dates), lower_weight, upper_weight, extrapolated
+/ @throws error for a malformed curve, a duplicate date, or a date outside
+/   the curve under the `none policy
+/ @eg (.qfwd.forward_at_date[1.10;([] value_date:2026.10.01 2026.10.11; forward_points:10 30f);2026.10.06;10000;::])`outright  -> 1.102
+forward_at_date:{[spot;curve;value_date;pip_factor;opts]
+    require_curve curve;
+    policy:$[99h=type opts; $[`extrapolation in key opts; opts`extrapolation; `none]; `none];
+    if[not policy in extrapolations;
+        '"forward_at_date: extrapolation must be one of ",(", " sv string extrapolations),", got ",string policy];
+    dates:curve`value_date;
+    pts:`float$curve`forward_points;
+    outside:(value_date<first dates) or value_date>last dates;
+    if[outside and policy=`none;
+        '"forward_at_date: ",string[value_date]," is outside the curve [",string[first dates],"; ",
+         string[last dates],"] - pass opts`extrapolation (`flat or `linear) to price it"];
+    / the segment: the node at or before the date, and the one after it -
+    / clamped to the end segments, which is where extrapolation draws from
+    i:0|(count[dates]-2)&dates bin value_date;
+    lower_date:dates i;
+    upper_date:dates i+1;
+    span:`float$upper_date-lower_date;
+    raw_weight:(`float$value_date-lower_date)%span;
+    upper_weight:$[outside and policy=`flat; `float$value_date>last dates; raw_weight];
+    lower_weight:1-upper_weight;
+    lower_part:lower_weight*pts i;
+    upper_part:upper_weight*pts i+1;
+    points:lower_part+upper_part;
+    / on a node exactly, report that node alone
+    on_node:value_date in dates;
+    if[on_node;
+        j:dates?value_date;
+        lower_date:dates j; upper_date:dates j;
+        lower_weight:1f; upper_weight:0f;
+        points:pts j];
+    `value_date`points`outright`lower`upper`lower_weight`upper_weight`extrapolated!(
+        value_date;points;points_to_outright[spot;points;pip_factor];
+        lower_date;upper_date;lower_weight;upper_weight;outside)}
+
+/ ------------------------------------------------------------- FX SWAPS
+/ .
+/ A swap is two forwards in opposite directions on one notional of BASE:
+/ near_side buys (1) or sells (-1) base at near_rate on near_date, and the
+/ far leg does the opposite at far_rate on far_date.
+/ .
+/ SIGNS. A cash flow is positive when received. Base flows are side*notional;
+/ quote flows are neg side*notional*rate. PV is in the QUOTE currency.
+
+/ What a swap's terms must carry.
+swap_keys:`pair`notional`near_date`far_date`near_rate`far_rate`near_side
+
+/ Private: refuse malformed swap terms.
+require_swap:{[swap]
+    if[not 99h=type swap; '"swap: terms must be a dictionary of ",", " sv string swap_keys];
+    if[count missing:swap_keys where not swap_keys in key swap;
+        '"swap: terms are missing ",", " sv string missing];
+    if[not (swap`near_side) in -1 1; '"swap: near_side must be 1 (buy base) or -1 (sell base)"];
+    if[not (swap`far_date)>swap`near_date; '"swap: far_date must be after near_date"];
+    if[not 0<swap`notional; '"swap: notional must be positive - direction is near_side's"];
+    }
+
+/ The four dated cash flows of an FX swap, in both currencies.
+/ @param swap dict pair, notional (base units, positive), near_date,
+/   far_date, near_rate, far_rate, near_side (1 buys base on the near leg)
+/ @return table leg (`near`far), date, ccy, amount - received positive
+/ @throws error naming malformed terms
+/ @eg exec amount from .qfwd.swap_cashflows .qfwd.mock_swap  -> 1000000 -1100000 -1000000 1110000f
+swap_cashflows:{[swap]
+    require_swap swap;
+    legs:.qccy.ccy_pair_legs swap`pair;
+    sides:(swap`near_side;neg swap`near_side);
+    rates:swap`near_rate`far_rate;
+    base_amounts:sides*`float$swap`notional;
+    quote_amounts:neg base_amounts*rates;
+    ([] leg:`near`near`far`far;
+        date:(swap`near_date;swap`near_date;swap`far_date;swap`far_date);
+        ccy:(legs`base;legs`quote;legs`base;legs`quote);
+        amount:(base_amounts 0;quote_amounts 0;base_amounts 1;quote_amounts 1))}
+
+/ Private: one leg's PV in the quote currency: side*notional*(F-K)*DF, the
+/ quote-currency value of the forward at its mark. Under covered interest
+/ parity this is the base flow at the base discount factor plus the quote
+/ flow at the quote one; this is the one place either is computed.
+leg_pv:{[side;notional;mark;contracted;df]
+    edge:mark-contracted;
+    per_unit:side*edge;
+    undiscounted:per_unit*notional;
+    undiscounted*df}
+
+/ Value an FX swap: each leg's PV, the total, the market and contracted swap
+/ points, and each leg's sensitivity to its forward.
+/ .
+/ A leg whose date is before the valuation date has settled: it is worth 0
+/ and named in `settled. One settling ON the valuation date still counts.
+/ Sensitivities bump each leg's mark forward by opts`bump_pips through
+/ leg_pv, the same primitive the PV uses.
+/ @param swap the terms, as swap_cashflows takes them
+/ @param market dict near_fwd, far_fwd (mark outrights for the two dates)
+/   and near_df, far_df (quote-currency discount factors to them)
+/ @param valuation_date the date the swap is valued on
+/ @param opts dict pip_factor (required), bump_pips (default 1)
+/ @return dict near_pv, far_pv, pv (quote currency), market_points,
+/   contract_points (pips), settled (legs), near_pv01, far_pv01 (PV change
+/   for bump_pips on that leg's mark)
+/ @throws error naming malformed terms, market data or opts
+/ @eg (.qfwd.swap_value[.qfwd.mock_swap;.qfwd.mock_swap_market;2026.09.18;enlist[`pip_factor]!enlist 10000])`pv  -> -1976.08
+swap_value:{[swap;market;valuation_date;opts]
+    require_swap swap;
+    need:`near_fwd`far_fwd`near_df`far_df;
+    if[not 99h=type market; '"swap_value: market must be a dictionary of ",", " sv string need];
+    if[count missing:need where not need in key market;
+        '"swap_value: market is missing ",", " sv string missing];
+    if[not 99h=type opts; '"swap_value: opts must be a dictionary carrying pip_factor"];
+    if[not `pip_factor in key opts; '"swap_value: opts must carry pip_factor - 10000, or 100 for a JPY quote"];
+    pip_factor:opts`pip_factor;
+    bump:$[`bump_pips in key opts; opts`bump_pips; 1];
+    notional:`float$swap`notional;
+    near_side:swap`near_side;
+    far_side:neg near_side;
+    near_live:not (swap`near_date)<valuation_date;
+    far_live:not (swap`far_date)<valuation_date;
+    near_pv:$[near_live; leg_pv[near_side;notional;market`near_fwd;swap`near_rate;market`near_df]; 0f];
+    far_pv:$[far_live; leg_pv[far_side;notional;market`far_fwd;swap`far_rate;market`far_df]; 0f];
+    shift:bump%pip_factor;
+    near_bumped:$[near_live; leg_pv[near_side;notional;shift+market`near_fwd;swap`near_rate;market`near_df]; 0f];
+    far_bumped:$[far_live; leg_pv[far_side;notional;shift+market`far_fwd;swap`far_rate;market`far_df]; 0f];
+    market_gap:(market`far_fwd)-market`near_fwd;
+    contract_gap:(swap`far_rate)-swap`near_rate;
+    `near_pv`far_pv`pv`market_points`contract_points`settled`near_pv01`far_pv01!(
+        near_pv;far_pv;near_pv+far_pv;pip_factor*market_gap;pip_factor*contract_gap;
+        `near`far where not (near_live;far_live);near_bumped-near_pv;far_bumped-far_pv)}
+
+/ ---------------------------------------------- QUOTE CONVENTION CONVERSION
+/ .
+/ A batch of quotes moved from one pair convention to its inverse (EURUSD to
+/ USDEUR), composing the primitives above: invert_book's side swap for scalar
+/ bid/ask, invert_book_depth's size rescaling for ladders, and for forward
+/ points a trip through the OUTRIGHT - 1/F minus 1/S, in the target's pips -
+/ never a negation of the source points, which is wrong whenever F is not S.
+
+/ Convert a table of quotes to target pair conventions.
+/ .
+/ Columns converted when present: bid, ask (with bid_size, ask_size in the
+/ source base currency); bid_prices, bid_sizes, ask_prices, ask_sizes
+/ (ladders, best first); spot with fwd_points. A row whose sym's target is
+/ itself passes unchanged. Every row gains source_sym and inverted.
+/ @param quotes table with sym and the columns above
+/ @param target_conventions dict source pair -> target pair: itself, or its
+/   inverse (legs swapped)
+/ @param opts dict pip_factors (pair -> pip factor) - required when the table
+/   carries fwd_points, for every source and target pair; (::) otherwise
+/ @return the table in target conventions, with source_sym and inverted
+/ @throws error for a sym with no target, a target that is neither the pair
+/   nor its inverse, half a size pair, points without spot, or a missing
+/   pip factor
+/ @eg exec bid,ask from .qfwd.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::]  -> 0.4 0.5
+convert_quotes:{[quotes;target_conventions;opts]
+    if[not 98h=type quotes; '"convert_quotes: quotes must be an unkeyed table with a sym column"];
+    if[not `sym in cols quotes; '"convert_quotes: quotes must have a sym column"];
+    if[not 99h=type target_conventions; '"convert_quotes: target_conventions must be a dictionary of source pair -> target pair"];
+    c:cols quotes;
+    if[1=sum `bid_size`ask_size in c; '"convert_quotes: bid_size and ask_size come together - one alone is ambiguous"];
+    if[(`fwd_points in c) and not `spot in c; '"convert_quotes: fwd_points need a spot column - points convert through the outright"];
+    srcs:distinct quotes`sym;
+    if[count missing:srcs where not srcs in key target_conventions;
+        '"convert_quotes: no target convention for ",", " sv string missing];
+    targets:target_conventions srcs;
+    flips:{[s;t] $[s=t; 0b; t=.qfwd.inverse_pair s; 1b;
+        '"convert_quotes: ",string[t]," is neither ",string[s]," nor its inverse"]}'[srcs;targets];
+    if[`fwd_points in c;
+        if[not 99h=type opts; '"convert_quotes: fwd_points need opts`pip_factors - pip factor per pair"];
+        if[not `pip_factors in key opts; '"convert_quotes: fwd_points need opts`pip_factors - pip factor per pair"];
+        pf:opts`pip_factors;
+        if[count gone:(distinct srcs,targets) where not (distinct srcs,targets) in key pf;
+            '"convert_quotes: no pip factor for ",", " sv string gone]];
+    flip_of:srcs!flips;
+    target_of:srcs!targets;
+    out:update source_sym:sym, inverted:flip_of sym from quotes;
+    out:update sym:target_of sym from out;
+    if[not any flips; :out];
+    w:where out`inverted;
+    if[all `bid`ask in c;
+        old_bid:out[w;`bid]; old_ask:out[w;`ask];
+        out:.[out;(w;`bid);:;1%old_ask];
+        out:.[out;(w;`ask);:;1%old_bid];
+        if[`bid_size in c;
+            old_bid_size:out[w;`bid_size]; old_ask_size:out[w;`ask_size];
+            out:.[out;(w;`bid_size);:;old_ask_size*old_ask];
+            out:.[out;(w;`ask_size);:;old_bid_size*old_bid]]];
+    if[all `bid_prices`bid_sizes`ask_prices`ask_sizes in c;
+        new_bids:invert_book_depth'[out[w;`ask_prices];out[w;`ask_sizes]];
+        new_asks:invert_book_depth'[out[w;`bid_prices];out[w;`bid_sizes]];
+        out:.[out;(w;`bid_prices);:;new_bids[;0]];
+        out:.[out;(w;`bid_sizes);:;new_bids[;1]];
+        out:.[out;(w;`ask_prices);:;new_asks[;0]];
+        out:.[out;(w;`ask_sizes);:;new_asks[;1]]];
+    if[`fwd_points in c;
+        src_pf:pf out[w;`source_sym];
+        tgt_pf:pf out[w;`sym];
+        old_spot:out[w;`spot];
+        outright:points_to_outright'[old_spot;out[w;`fwd_points];src_pf];
+        new_spot:1%old_spot;
+        new_outright:1%outright;
+        out:.[out;(w;`spot);:;new_spot];
+        out:.[out;(w;`fwd_points);:;fwd_points'[new_outright;new_spot;tgt_pf]]];
+    out}
+
+/ The inverse of a pair: its legs swapped.
+/ @param pair a pair in any format .qccy.normalize_ccy_pair accepts
+/ @return the inverse pair symbol
+/ @eg .qfwd.inverse_pair `EURUSD  -> `USDEUR
+inverse_pair:{[pair] legs:.qccy.ccy_pair_legs pair; .qccy.ccy_pair_symbol[legs`quote;legs`base]}
+
+/ -------------------------------------------------------------- MOCK DATA
+/ .
+/ ILLUSTRATIVE ONLY - sample inputs for the broken-date, swap and conversion
+/ functions above, so they can be tried and their examples run. Not market
+/ data: a desk passes its own curve, marks and quotes.
+
+/ A sample EURUSD forward-points curve by value date. MOCK DATA.
+mock_fwd_curve:([] value_date:2026.09.29 2026.10.22 2026.11.23 2026.12.22 2027.03.22 2027.09.22;
+    forward_points:4.1 16.8 33.5 49.2 97.6 198.4)
+
+/ A sample EURUSD swap: buy EUR 1m at 1.10 on the near date, sell at 1.11 on
+/ the far date. MOCK DATA.
+mock_swap:`pair`notional`near_date`far_date`near_rate`far_rate`near_side!(
+    `EURUSD;1000000;2026.09.22;2026.12.22;1.10;1.11;1)
+
+/ Sample marks and quote-currency discount factors for mock_swap's dates. MOCK DATA.
+mock_swap_market:`near_fwd`far_fwd`near_df`far_df!(1.1004;1.1124;0.9998;0.99)
+
+/ A sample batch of quotes to convert: scalar top of book and a forward. MOCK DATA.
+mock_quotes:([] sym:`EURUSD`USDJPY; bid:1.0998 148.21; ask:1.1002 148.24;
+    bid_size:1000000 2000000f; ask_size:1500000 1000000f; spot:1.1 148.22; fwd_points:16.8 -45.3)
+
 \d .

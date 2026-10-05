@@ -43,6 +43,22 @@ qbook,is_string_column,function,2,tbl col
 qbook,sorted_source_cols_for_prefix,function,3,col_names col_strs prefix_target
 qbook,starts_with,function,2,prefix s
 qbook,symbolize_columns,function,2,tbl sym_cols
+qcal,add_business_days,function,5,d n ccys calendars weekend
+qcal,add_months,function,2,d n
+qcal,adjust,function,5,d roll ccys calendars weekend
+qcal,convention_keys,value,,
+qcal,forward_date,function,5,spot_date tenor pair calendars conventions
+qcal,holidays_of,function,2,ccys calendars
+qcal,is_business_day,function,4,d ccys calendars weekend
+qcal,mock_calendars,dict,,
+qcal,mock_conventions,dict,,
+qcal,month_end_business_day,function,4,d ccys calendars weekend
+qcal,pair_terms,function,2,pair conventions
+qcal,rolls,value,,
+qcal,spot_date,function,4,trade_date pair calendars conventions
+qcal,tenor_parts,function,1,tenor
+qcal,weekday,function,1,d
+qcal,weekdays,value,,
 qccy,ccy_pair_legs,function,1,pair
 qccy,ccy_pair_symbol,function,2,base quote
 qccy,ccy_to_str,function,1,x
@@ -729,6 +745,7 @@ qfwd,ccy_orient_cross,function,2,sym1 sym2
 qfwd,ccy_shortest_path,function,3,avail_syms start_ccy goal_ccy
 qfwd,col_precedence,value,,
 qfwd,combine_oriented_books,function,2,book_ab book_bc
+qfwd,convert_quotes,function,3,quotes target_conventions opts
 qfwd,cross_book,function,4,sym1 book1 sym2 book2
 qfwd,cross_book_at,function,5,quotes sym as_of sizes sides
 qfwd,cross_book_at_one_size,function,5,sym1 book1 sym2 book2 size
@@ -746,21 +763,34 @@ qfwd,cross_ref_price_at,function,4,quotes sym as_of ref_size
 qfwd,cross_size_at_price,function,5,quotes sym as_of side price_limit
 qfwd,cross_sweep_chain,function,4,books side size inverts
 qfwd,cross_sweep_side,function,6,book1 book2 side size invert1 invert2
+qfwd,extrapolations,value,,
+qfwd,forward_at_date,function,5,spot curve value_date pip_factor opts
 qfwd,fwd_cont,function,4,spot rd rf t
 qfwd,fwd_points,function,3,fwd spot pip_factor
 qfwd,fwd_simple,function,4,spot rd rf t
 qfwd,implied_domestic_rate,function,4,spot fwd rf t
 qfwd,implied_foreign_rate,function,4,spot fwd rd t
+qfwd,inverse_pair,function,1,pair
 qfwd,invert_book,function,1,book
 qfwd,invert_book_depth,function,2,prices sizes
 qfwd,invert_rate,function,1,rate
 qfwd,leg_book_as_of,function,3,quotes as_of target_sym
+qfwd,leg_pv,function,5,side notional mark contracted df
+qfwd,mock_fwd_curve,table,,
+qfwd,mock_quotes,table,,
+qfwd,mock_swap,dict,,
+qfwd,mock_swap_market,dict,,
 qfwd,oriented_levels,function,3,side book invert
 qfwd,points_to_outright,function,3,spot points pip_factor
+qfwd,require_curve,function,1,curve
 qfwd,require_quotes_cols,function,2,fn_name quotes
+qfwd,require_swap,function,1,swap
 qfwd,side_cols,function,1,s
 qfwd,single_leg_at_one_size,function,4,cross_sym leg_book invert size
 qfwd,single_leg_at_sizes,function,5,cross_sym leg_book invert sizes sides
+qfwd,swap_cashflows,function,1,swap
+qfwd,swap_keys,value,,
+qfwd,swap_value,function,4,swap market valuation_date opts
 qfwd,time_col,value,,
 qlimit,evaluate,function,2,measured limits
 qlimit,identity,function,1,scopes

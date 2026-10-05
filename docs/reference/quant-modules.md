@@ -6,8 +6,8 @@ conventions every one of them follows. The per-function reference is the
 [`man.q`](../man.q) --- this page is the inventory above that.
 
 Each module loads into its own flat namespace after `src/init.q` - `.qschema`,
-`.qstats`, `.qccy`, `.qdcf`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`, `.qpos`,
-`.qalloc`, `.qdesk`, `.qlimit`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
+`.qstats`, `.qccy`, `.qdcf`, `.qcal`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`,
+`.qpos`, `.qalloc`, `.qdesk`, `.qlimit`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
 `.qexdef`. Kept single-level throughout rather than nested under a shared parent
 (e.g. not `.q.options`). This began as a portability constraint and is now a
 convention the tree keeps: the filename-to-namespace tie is what the naming
@@ -36,8 +36,9 @@ module is *for*.
   | [`foundation/stats.q`](../../src/foundation/stats.q)                     | `.qstats`  | normal distribution helpers, shared polynomial evaluator                                                                                                | [tests](../../tests/q/test_stats.q)          |
   | [`foundation/ccy.q`](../../src/foundation/ccy.q)                         | `.qccy`    | CURCUR pair convention: validate, normalize, split, build                                                                                               | [tests](../../tests/q/test_ccy.q)            |
   | [`foundation/daycount.q`](../../src/foundation/daycount.q)               | `.qdcf`    | day count fractions — dates to the year fraction `t` pricing takes                                                                                      | [tests](../../tests/q/test_daycount.q)       |
+  | [`foundation/calendar.q`](../../src/foundation/calendar.q)               | `.qcal`    | FX settlement calendars: joint business days, rolls, spot dates, tenor value dates (caller-supplied holidays; mock data included)                       | [tests](../../tests/q/test_calendar.q)       |
   | [`foundation/rates.q`](../../src/foundation/rates.q)                     | `.qrates`  | discount/growth factors, simple↔continuous conversion                                                                                                   | [tests](../../tests/q/test_rates.q)          |
-  | [`pricing/forwards.q`](../../src/pricing/forwards.q)                     | `.qfwd`    | CIRP forwards and swap points, cross rates, synthetic cross books                                                                                       | [tests](../../tests/q/test_forwards.q)       |
+  | [`pricing/forwards.q`](../../src/pricing/forwards.q)                     | `.qfwd`    | CIRP forwards and swap points, broken dates, swap cash flows and PV, quote inversion, cross rates, synthetic cross books                                | [tests](../../tests/q/test_forwards.q)       |
   | [`pricing/options.q`](../../src/pricing/options.q)                       | `.qopt`    | Garman-Kohlhagen pricing, Greeks, implied vol                                                                                                           | [tests](../../tests/q/test_options.q)        |
   | [`portfolio/risk.q`](../../src/portfolio/risk.q)                         | `.qrisk`   | pip value, P&L, carry, parametric and historical VaR                                                                                                    | [tests](../../tests/q/test_risk.q)           |
   | [`portfolio/positions.q`](../../src/portfolio/positions.q)               | `.qpos`    | weighted-average-cost position tracking, currency exposure, reconciliation                                                                              | [tests](../../tests/q/test_positions.q)      |
@@ -96,9 +97,9 @@ sign or a horizon passed in the wrong unit fails it.
 
 ### Library, not wired
 
-No running job calls `.qstats`, `.qdcf`, `.qrates`, `.qopt`, `.qalloc` or
-`.qmicro`. They are called only by tests, doc examples and one another: `.qopt`
-uses `.qrates` and `.qstats`, and `.qexec` and `.qdqc` use `.qmicro`. Their
-results are therefore checked only by their own suites: no live output would
-look wrong if one of them were. A module leaves this list when a job under
+No running job calls `.qstats`, `.qdcf`, `.qcal`, `.qrates`, `.qopt`, `.qalloc`
+or `.qmicro`. They are called only by tests, doc examples and one another:
+`.qopt` uses `.qrates` and `.qstats`, and `.qexec` and `.qdqc` use `.qmicro`.
+Their results are therefore checked only by their own suites: no live output
+would look wrong if one of them were. A module leaves this list when a job under
 `src/etl/` or `scripts/processes/` calls it.
