@@ -54,15 +54,8 @@ h:hopen `::5011
 h"0!.qpipe.job.fx_positions.book"
 ```
 
-`lib/torq` is never loaded on any of these four invocations, and all four are
-exercised: the single-process one by `tests/q/test_fx_positions.q`, and the
-three-process one live --- it did not work until #266, because the runner handed
-`.qetl.job.stream.wire` a raw handle it refuses, and the subscribe call it sent
-the plant was malformed.
-
-Neither path is the "real" one. A job is TorQ-free code and the runner decides
-the transport, which is the whole point: being runnable without TorQ is no
-reason not to be startable with it.
+`lib/torq` is never loaded on any of these. Neither path is the "real" one: a
+job is TorQ-free code and the runner decides the transport.
 
 ## What it is made of
 
@@ -163,11 +156,6 @@ HDB writedown, no chained plants, no access control. It is the part a single
 service needs to stand on its own: subscribe, publish, log, replay. The TorQ
 path still exists and still works --- `scripts/processes/torq_stream.q` runs the
 same jobs, unchanged, and [the stack architecture](../architecture/stack.md)
-describes it.
-
-The three tickerplant invariants are TorQ's on purpose, so a job behaves
-identically whichever plant carries it:
-
-1. the **plant** stamps `time`, never the publisher;
-2. keyed tables are refused --- a plant appends;
-3. the row count comes from column length, so every column must be a list.
+describes it. Both plants keep the same [three
+invariants](../architecture/pipeline-architecture-example.md#2-the-tickerplant),
+so a job behaves identically on either.

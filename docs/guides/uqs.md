@@ -1,22 +1,9 @@
 # Running the uqf stack
 
-`lib/torq/` (the TorQ production framework) and `lib/torq-finance-starter-pack/`
-(a layered reference application built on top of it - feed handlers,
-tickerplant, RDB, an HDB seeded with two days of sample quote/trade data,
-gateway) are both vendored into this repo for reference (see the README's
-Licensing section) but neither is wired into `src/init.q` or anything else uqf
-itself runs - this library has no long-running processes for TorQ's machinery to
-manage.
-
-The `uqs` CLI (`python/uqs/`) bridges the two vendored trees so you can actually
-start the demo up and poke at it, without editing or writing into either `lib/`
-directory. The actual bootstrapping/config logic lives in
-`python/uqs/src/uqs/`'s `model/` and `stack/` modules, shared with `uqs.mcp`'s
-FastMCP server (see "MCP server" below) so the CLI and the MCP tools can't drift
-apart. It's a standalone package (`python/uqs/`).
-
-See [docs/architecture/stack.md](../architecture/stack.md) for diagrams of the
-current process topology, table-level data pipeline, and config-generation flow.
+`uqs` starts, inspects and stops the TorQ fleet this tree runs - the vendored
+`lib/torq/` and `lib/torq-finance-starter-pack/` plus uqf's own jobs - without
+writing into either `lib/` directory. [The stack page](../architecture/stack.md)
+draws the topology.
 
 ## Contents
 
@@ -30,8 +17,6 @@ current process topology, table-level data pipeline, and config-generation flow.
 - [Changing a process's config](#changing-a-processs-config)
 - [Logs](#logs)
 - [Connecting](#connecting)
-- [Verifying it's alive](#verifying-its-alive)
-- [What uqf leaves unused](#what-uqf-leaves-unused)
 - [Services](#services)
 - [Adding a process](#adding-a-process) --- including [installing jobs from
   elsewhere](#installing-jobs-from-elsewhere)
@@ -105,12 +90,7 @@ ship holding `quote` and `trade` alone. TorQ fills only the partition the wdb is
 currently writing (`lib/torq/code/processes/wdb.q`'s `filldb`), so nothing ever
 goes back (#348).
 
-**It reads the live process, not the declarations.** `src/etl/plant_tables.q`
-says what the tickerplant is *configured* to carry; that is not evidence a table
-exists in the process you are about to query. A tickerplant that failed to load
-its schema file, or an RDB that has not replayed, looks identical in every other
-view - so reporting the declarations here would be confidently wrong exactly
-when it mattered.
+It reads the live process, not `src/etl/plant_tables.q`'s declarations.
 
 Two things the output says that `meta` alone does not:
 
@@ -123,10 +103,6 @@ Two things the output says that `meta` alone does not:
   exists. The same table reads `general` before its first publish and
   `float vector` after. Not a bug, but worth knowing before treating one reading
   as the schema.
-
-Row counts are shown because "declared but empty" and "carrying data" is usually
-the thing being looked for, and empty tables are named explicitly rather than
-left to be spotted.
 
 The table argument is a shell-style pattern (`crypto*`, `*trade*`), matched
 case-sensitively against the names the process reported. An exact name is just a
@@ -231,9 +207,9 @@ raw -- ARGS...                        pass any other torq.sh verb straight throu
 quoted `"posbook1 markout1"` still works. `--port` sets `KDBBASEPORT` (default
 `6050`, see the port table below). `--export FILE` (on
 `summary`/`query`/`list`/`config get`) additionally writes the same rows to
-`FILE` as CSV or Parquet, format inferred from the extension - see
-`python/uqs/README.md`'s "Exporting output" section. Full `--help` is available
-on the command itself and on every subcommand.
+`FILE` as CSV or Parquet, format inferred from the extension; a result that is
+not a table, such as `count t`, is refused. Full `--help` is available on the
+command itself and on every subcommand.
 
 ### Cleaning up
 
@@ -273,15 +249,9 @@ not off the configuration that describes them:
   | the database      | the `-load` of the hdb process on the same stack               |
   | the base port     | the plant's `-stackid`                                         |
 
-The two can disagree, and silently. This tree's data directory moved from
-`scripts/output/uqf-stack` to `output/uqs`, so a plant started before the move
-still writes its log under the old path while every config-derived answer names
-the new one; a replay aimed at the configured path would have found *a* log,
-replayed it without complaint, and written down a day nobody asked for. A
-process's start line cannot drift from the process.
-
-That is also why `--port` is not needed here: the plant is running under a
-`-stackid`, and that is the stack. Pass one only to override it.
+A process's start line cannot drift from the process, which is why they are read
+rather than configured. `--port` is not needed either: the plant's `-stackid` is
+the stack.
 
 Every row in that table is an option (`--dir`, `--schema`, `--hdb`, `--port`),
 and an option that is given wins - supply all four and nothing is asked of the
@@ -325,9 +295,6 @@ uqs list processes
   whether it is still a `scaffolded` job `uqs job new` wrote or `written` work.
   `uqs list jobs --sort state` puts the unfinished scaffolds together
 
-New kinds are one function + one `LISTABLE_KINDS` entry, not a new CLI command
-each time - see `stack/listing.py`'s `_list_*` functions.
-
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 
 ```
@@ -336,6 +303,10 @@ uqs list processes --sort proctype
 uqs list processes --sort port --reverse
 uqs list env --sort name
 ```
+
+Numeric columns sort as numbers (`6100` after `659`) and empty cells go last. An
+unknown column is refused with the ones that listing has. The order reaches
+`--export` too.
 
 `--interactive` (`-i`) opens the table in a browser instead of printing it, and
 filters its rows as you type. On `list`, `summary`, `run list`, `run status`,
@@ -370,17 +341,6 @@ hide a subtree. Processes with no declared edges, most of the vendored TorQ
 fleet, are listed together at the end. `--offline` skips asking the fleet what
 is up. In the browser, a filter keeps every match and the path to it, the side
 panel describes the highlighted process, and Enter exits printing its name.
-
-Two things it gets right that a plain sort would not. **Numeric columns sort
-numerically**: `port` is a string, and as text `6100` comes before `659`, which
-looks like the sort silently did nothing on the one column most worth sorting.
-And **empty cells group at the end** rather than sorting as the empty string
-among real values - an unset override is absent, not "before aaa".
-
-The column name is matched case-insensitively, and because the columns differ
-per kind there is no fixed set to check against: an unknown name is refused with
-the columns that listing actually produced. The order reaches `--export` too, so
-an exported CSV matches what was on screen.
 
 ## What actually starts
 
@@ -425,12 +385,8 @@ UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows 
   | `essential` | none - the TorQ stack alone (see below)  | 2/14                            |
   | `all`       | every profile's leaves except `crypto`'s | 20/14 - refused on this licence |
 
-**A profile over the cap is refused, not warned.** That is the opposite of a
-positional `start`, deliberately: naming processes yourself is your call, and an
-ordering that briefly exceeds the cap is a legitimate thing to do. A profile is
-a set *this tree* named, so one that cannot run is its mistake to report rather
-than yours to discover when the plant resets a handle. `fx` and `arbitrage` each
-fit and together need seventeen:
+**A profile over the cap is refused**; a positional `start` over it is only
+warned about. `fx` and `arbitrage` each fit and together need seventeen:
 
 ```
 $ uqs start --profile fx,arbitrage
@@ -450,13 +406,10 @@ Requirements) there is no cap at all, so `all` starts as it is. `all` leaves out
 `crypto`, because the mock replaces cryptorust's recorders rather than joining
 them; ask for it with `--profile all,crypto`.
 
-Two things profiles deliberately do **not** do. They do not change
-`startwithall`, so `start all` is untouched - `default` describes that set so
-the two can be compared, and a test fails if they drift. And a closure stops at
-a table fed from outside the stack: `posbook1` needs `crypto_book`, which
-cryptorust's recorder publishes, so the `fx` profile does **not** drag in
-`cryptomock1` - that mock replaces the recorder rather than joining it, which is
-why it is a profile of its own.
+Profiles never change `startwithall`, so `start all` is untouched. A closure
+stops at a table fed from outside the stack: `fx` needs `crypto_book` but does
+not start `cryptomock1`, which replaces cryptorust's recorder rather than
+joining it.
 
 **`essential` is the TorQ stack with nothing on top**: `discovery1`, `stp1`,
 `rdb1`, `hdb1`, `hdb2`, `wdb1`, `gateway1`, `monitor1` and `housekeeping1` -
@@ -470,17 +423,8 @@ and `wdb1` busy while it sorts. Composing it with a job profile -
 `--profile essential,fx` - starts the full infrastructure that job profile
 needs, sort processes included.
 
-Profiles are declared in `python/uqs/src/uqs/model/profiles.py`. Each one names
-leaves, never members, so adding a process to a chain does not mean editing
-whatever profiles contain it.
-
-**The slot count has been checked against the wire**, not just computed. On a
-stack running the default set, `lsof -nP -iTCP:6050 -sTCP:ESTABLISHED` showed
-thirteen client connections --- exactly the thirteen this predicts, name for
-name --- plus `stp1` itself as the listener and one external process
-(cryptorust's recorder) that is in no `Pipeline` and so in no profile. The
-budget is blind to anything outside the registry that opens a handle, which is
-part of what the two reserved slots absorb.
+Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
+leaves.
 
 ### Idle subscribers
 
@@ -490,9 +434,8 @@ process comes up, heartbeats, reports `up`, and receives nothing for as long as
 you leave it. There is no error and no symptom except an output table that stays
 empty.
 
-That matters more than it used to: seven processes are on demand, and the
-direct-arbitrage chain is three of them deep. So `start` and `restart` say
-something when what you are starting has an input nothing running publishes:
+So `start` and `restart` warn when what you start has an input nothing running
+publishes:
 
 ```
 $ uqs start superbook1
@@ -528,11 +471,6 @@ exists for: it starts that set and is checked against the budget first, where a
 positional start is only warned about. See [the cross-arbitrage
 service](../services/cross-arbitrage.md).
 
-The graph behind all of this is the `subscribe_to`/`publishes` pair on each
-`Pipeline`, the same declaration the generated `database.q` and the `.qetl.dag`
-job graph are built from - so what you are warned about and what is running
-cannot describe different systems.
-
 `summary` opens with one line saying which q runs the fleet, and the connection
 budget that follows from it:
 
@@ -541,13 +479,8 @@ interpreter: kdbx (/Users/me/.kx/bin/q) - 16 connections
 interpreter: peachq (/opt/peachq/q) - no connection cap
 ```
 
-That is what decides whether a fleet past sixteen processes is fine (PeachQ) or
-wedged past the licence (KDB-X). The implementation is asked of the binary
-itself. When it disagrees with `UQF_Q_IMPL`, a warning follows, in the same
-words `scripts/test.py` refuses with. `summary` only reads, so it reports the
-mismatch rather than refusing. `uqs list env` carries the same two facts as
-rows: `UQF_Q_IMPL` (the declaration) and `q_impl (binary)` (what the binary
-says, or `not runnable`).
+The implementation is asked of the binary; when it disagrees with `UQF_Q_IMPL`,
+a warning follows. `uqs list env` carries both as rows.
 
 `summary` shows the whole graph, not just the unsatisfied part of it, in three
 columns derived from the same declarations:
@@ -560,10 +493,7 @@ uqs summary --sort Port         # by any column, numeric-aware; --reverse for de
 uqs summary --sort Status --columns status
 ```
 
-`--sort` takes any column, shown or not, case-insensitively. It sorts `Port` and
-`PID` as numbers, so 659 comes before 6052, and puts empty cells last, as
-`uqs list --sort` does; the two share one implementation. The order reaches
-`--export` too.
+`--sort` takes any column, shown or not, and sorts as `uqs list --sort` does.
 
 ```
 ┃ Process      ┃ Depends on                  ┃ Inputs                ┃ Outputs        ┃
@@ -578,21 +508,11 @@ uqs summary --sort Status --columns status
 `Inputs` and `Outputs` are the tables a process subscribes to and publishes;
 `Depends on` resolves those inputs to the **processes** that produce them, which
 is the question behind every `up, but idle` line above. A table produced from
-outside the process list is named as external rather than dropped - "nothing in
-this list provides it" and "nothing provides it" are different facts, and only
-one is a problem. A backfill subscribes and publishes nothing on the plant, so
-its row shows what its bounded worker declares instead: the `source` it reads,
-marked `(source)` and external, and the `dataset` it writes. That source never
-counts towards the `up, but idle` warning - nothing in the stack could publish
-it. Cells break at the commas once there are more than two entries, so a table
-name is never split across lines, and a process with no declared edges - every
-vendored TorQ one - shows a dash.
-
-Ten columns need a wide terminal; at eighty they squeeze and Rich elides the
-headers. `--columns status` gives the seven status columns back. They are shown
-by default anyway, because a column nobody knows about answers nothing: a reader
-on a narrow terminal can ask for fewer, while one who never learns the graph is
-there has no such move.
+outside the process list is named as external. A backfill subscribes and
+publishes nothing on the plant, so its row shows what its bounded worker
+declares instead: the `source` it reads, marked `(source)`, and the `dataset` it
+writes. A process with no declared edges - every vendored TorQ one - shows a
+dash. On a narrow terminal, `--columns status` drops the graph columns.
 
 ### Responds column
 
@@ -613,10 +533,8 @@ handshake within `--probe-timeout` (0.5s by default):
 Any `up` process that does not answer is also named in a red line under the
 table.
 
-The probe is the handshake, not a query, so no q code runs on the process; q
-answers the handshake from its main loop, which is exactly what is busy when a
-process is unresponsive. Each probe briefly holds one inbound connection, and
-TorQ logs it like any other. `--probe-timeout 0` skips it.
+The probe is the handshake, not a query, so no q code runs on the process.
+`--probe-timeout 0` skips it.
 
 ### summary --timeout
 
@@ -688,15 +606,10 @@ Base `6050`, override with `--port <n>`:
 
 ## Changing a process's config
 
-`config get`/`config set` read and write a *process.csv field override* - not
-the vendored `process.csv` (never edited) and not the *generated* one in
-`output/uqs/` either (regenerated from scratch on every `bootstrap()` call, i.e.
-every `start`/`stop`/`summary`/... - anything written directly there would just
-be clobbered on the next command). Overrides persist instead in
-`python/uqs/process_overrides.csv` (a small `procname,field,value` csv, created
-on first `config set` - tracked in git like any other config, not gitignored),
-and `bootstrap()` applies them on top of the vendored+fxfeed1 rows every time it
-(re)generates `process.csv`.
+`config set` writes an override to `python/uqs/process_overrides.csv` (tracked
+in git), applied every time `process.csv` is regenerated - which is every
+command, so the generated file itself is never the place to edit. The vendored
+`process.csv` is never touched.
 
 ```
 uqs config get fxfeed1
@@ -704,14 +617,9 @@ uqs config get fxfeed1 startwithall
 uqs config set fxfeed1 startwithall 0
 ```
 
-`config get` resolves `process.csv`'s two placeholder styles by default -
-`${VAR}`/`$VAR` (e.g. `load=${KDBHDB}` -> the real path,
-`U=${TORQAPPHOME}/appconfig/passwords/accesslist.txt` -> the real path) and the
-port column's own `{VAR}`/`{VAR}+N`/`{VAR}-N` arithmetic shorthand (e.g.
-`port={KDBBASEPORT}+3` -> `6053`) - the same values `torq.sh` itself substitutes
-at process-start time, evaluated against `build_env(paths, --port)`. Pass
-`--raw` to see the literal, unresolved value instead (e.g. to copy it into a
-`config set` call).
+`config get` resolves placeholders as `torq.sh` does at start time -
+`load=${KDBHDB}` to the real path, `port={KDBBASEPORT}+3` to `6053`; `--raw`
+shows the literal value.
 
 Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`, `extras`,
@@ -720,14 +628,9 @@ running process itself isn't touched).
 
 ## Logs
 
-Every process writes its own `out_<procname>.log`/`err_<procname>.log` in
-`output/uqs/logs/` (stable symlink aliases TorQ itself maintains onto the
-current run's timestamped file - see `torq.q`'s `createlog`/`fileredirect`), in
-a fixed pipe-delimited format:
-`time|host|proctype|procname|loglevel|id|message`. `logs` tails these through
-the same colorized logger the rest of the CLI uses, instead of `tail`-ing N raw
-files by hand - no TorQ-side config change needed (no `-jsonlogs`, nothing added
-to `extras`):
+Every process writes `out_<procname>.log` and `err_<procname>.log` in
+`output/uqs/logs/` - check these first when a process shows `down`. `logs` reads
+them through the CLI's own coloured logger:
 
 ```
 uqs logs                          # last 20 lines per process, all processes
@@ -736,14 +639,8 @@ uqs logs -f                       # the last 20 lines, then live, Ctrl-C to stop
 uqs logs quotesfeed1 -f --level WARNING   # live tail, warnings/errors only
 ```
 
-Either way the last `-n`/`--lines` lines of each file are read, parsed, and
-printed sorted by the log's own timestamp - not wall-clock arrival order. `-f`/
-`--follow` then keeps going: one follower per file (`uqs.stack.follow`, the one
-`--multitail` panes use), merged through a queue. It follows the
-`out_<procname>.log` alias by name, so when TorQ points it at a new file - every
-restart, and the daily roll - the stream moves with it; the system `tail -F`,
-which this used before, could stay on the old file and go quiet. `--level`
-filters to that level and above (`DEBUG`/`INFO`/`WARNING`/`ERROR`).
+Lines are sorted by the log's own timestamp. `-f` keeps following across
+restarts and the daily roll. `--level` filters to that level and above.
 
 `uqs logs --multitail` follows the same files in
 [multitail](https://www.vanheusden.com/multitail/), one pane per file, titled
@@ -760,13 +657,6 @@ uqs logs --multitail stp1 -n 100 --print        # show the multitail command, ru
 A process that has never started has no log and gets no pane; a name that is not
 a process is refused. Press `q` to leave multitail.
 
-Each pane runs uqs's own follower (`python -m uqs.stack.follow`) rather than
-multitail's `-f`. TorQ re-points `out_<procname>.log` at a new file on every
-start and at the daily roll, and multitail's `-f` hands following to the system
-`tail`, which can stay on the file the name used to point at - a pane that went
-quiet after the first restart. The follower checks what the name points at
-whenever it runs out of lines and moves to the new run's file.
-
 **`uqs up` is the foreground form of all this**: it starts what `start` would -
 the same names, `all`, or `--profile` - then streams those processes' logs to
 this console until Ctrl-C, which stops what it started, the way
@@ -778,13 +668,8 @@ uqs up rdb1 fxpositions1      # just these
 uqs up --profile fx --level WARNING
 ```
 
-It follows the log files from *before* the start runs, so what a process prints
-while it loads is shown - `fxpositions1` spends forty seconds there - and a log
-the start creates, on a first run or after `uqs remove output`, is read from its
-first line. Processes that were already running when it began are left running
-at Ctrl-C; if `summary` cannot say which those were, it stops everything it was
-asked to start. To start in the background and watch separately instead,
-`uqs start` and `uqs logs -f` are still there.
+What a process prints while it loads is shown too. Processes already running
+when it began are left running at Ctrl-C.
 
 ### Where a process stopped
 
@@ -843,16 +728,10 @@ query sent range_from=2026.09.10D00:00:00.000000000 range_to=2026.09.11D00:00:00
 
 `uqs logs --level DEBUG` hides these lines again.
 
-Every line logged while a window runs carries what it belongs to: `worker`,
-`run`, the window's `range_from`/`range_to`, and, around the fetch, `source` and
-`attempt`. Request traces add `transport` (`ipc`, `odbc` or `local`) and a
-`request` number shared by that request's `sent`, `returned` and `failed` lines.
-So two queries one window sends, such as a source that merges two tables, have
-the same worker, run and window but different request numbers, and the fetch,
-transform and write lines around them sort into the same window. A sidecar's own
-lines get these fields too, without logging them itself. The context is set by
-`.qetl.log.with_context` and removed when the window ends, whether it succeeded
-or failed. With trace off, no request is numbered or formatted.
+Every line logged while a window runs carries its `worker`, `run` and
+`range_from`/`range_to`, so one window's lines can be grepped together; request
+traces add a `request` number shared by that request's `sent`, `returned` and
+`failed` lines.
 
 ### CLI's own logging
 
@@ -865,13 +744,8 @@ uqs summary --debug        # the same, spelled on the command
 LOG_LEVEL=DEBUG uqs summary   # same, for a shell session
 ```
 
-`--debug` wins over `LOG_LEVEL`. `NO_COLOR=1` turns colour off and
-`FORCE_COLOR=1` keeps it through a pipe (e.g. `less -R`). Floats in these lines
-are cut to six decimal places (`LOG_FLOAT_DECIMALS` in `logger/floats.py`).
-
-It matters most on `summary`, where a port map that cannot be built or an
-unreachable `monitor1` leaves a column blank rather than failing. `--debug`
-prints why:
+`NO_COLOR=1` turns colour off; `FORCE_COLOR=1` keeps it through a pipe. On
+`summary`, `--debug` says why a column is blank:
 
 ```
 summary base_port=6050 torqdata=.../output/uqs
@@ -882,12 +756,7 @@ parsed 46 row(s): 23 up, 23 down
 starved process(es): executions1, marks1
 ```
 
-If the table looks short, compare `parsed N row(s)` with the listing's line
-count. `uqs raw -- summary` still runs torq.sh's own, slower check.
-
-With `--debug`, `summary` also prints each process's load time on its latest
-start, read from its own `out_` log rather than over IPC (see
-`stack/startup.py`):
+It also prints each process's load time on its latest start:
 
 ```
      Load time on each process's latest start, from its own log
@@ -1018,9 +887,8 @@ uqs query "select from trade" --proc rdb1      # rdb1 directly, as typed
 In the session, `\\` (q's own), `exit` or Ctrl-D leaves; Ctrl-C drops the line
 being typed. A line that fails is reported and the session goes on.
 
-It refuses a process that is not running - with the `uqs start` to fix it -
-rather than leaving qcon to report a refused connection, which reads the same as
-a wrong port. `qcon` ships with kdb+, not with this repository.
+It refuses a process that is not running, naming the `uqs start` to fix it.
+`qcon` ships with kdb+, not with this repository.
 
 Results print as q's own console prints them: the process formats its answer
 with `.Q.s`, laid out to this terminal's size (or in full when the output is
@@ -1037,74 +905,18 @@ export UQS_QUERY_RENDER=kola                  # every call, and the gateway sess
 writes the data itself, whichever is chosen. From a plain q session instead:
 `q)h:hopen \`:localhost:6052:admin:admin`, then `h "..."`, then `hclose h\`.
 
-The gateway (6057) is the intended single entry point for querying across the
-RDB and HDB together rather than connecting to each directly - see
-`lib/torq-finance-starter-pack/docs/gettingstarted.md` and
-`lib/torq/code/processes/gateway.q` for its `.gw.execute` API; this repo doesn't
-wrap or simplify it further (`query` above connects directly to whichever port
-you give it).
-
-## Verifying it's alive
-
-```
-uqs summary
-```
-
-prints a status table (`up`/`down`, pid, port, color-coded) for every process
-defined in `process.csv`, not just the ones `start all` brought up. Per-process
-stdout/stderr logs land in `output/uqs/logs/` (`out_<procname>.log` /
-`err_<procname>.log`) - check these first if a process shows `down`
-unexpectedly.
-
-## What uqf leaves unused
-
-Three access layers are vendored in `lib/torq` and wired into nothing:
-
-- the Grafana JSON datasource adapter
-- the generic `dataaccess.q` access layer
-- the `dqerest.q` REST bridge
-
-None is loaded by any process in the generated `process.csv`, and none is
-referenced under `src/`, `python/` or `docs/`. **This is a decision, not an
-oversight** (issue #89, 2026-09-16), recorded here so the next reader does not
-rediscover them and assume they are a shortcut.
-
-They look like free functionality and are not. Enabling any of them is backend
-work on the order of writing a small API layer, and none of them closes the two
-gaps that actually needed new work --- fleet health and backfill status ---
-which `python/uqf_frontend` was built for instead. With the frontend serving
-both the ops and desk audiences (#53), Grafana's fixed-panel model fits the desk
-side's user-driven filtering poorly, and the BFF authorises in Python under one
-service credential (#54), which the q-side access layers were designed to
-replace rather than sit beside.
-
-They stay in the vendored tree **untouched**, because the standing rule is that
-`lib/torq` is a pristine copy of upstream: removing files would turn the next
-TorQ upgrade from a copy into a three-way merge, and every overlay in `uqs`
-relies on that copy being exact. Unused files cost nothing. If a future audience
-genuinely wants Grafana, the adapter is there; the decision to be revisited then
-is #54's, not this one.
-
 ## MCP server
 
-`python/uqs/src/uqs/mcp.py` (the `uqs-mcp` command) exposes the same
-start/stop/restart/summary/print/clean/query/config get/config set/list/
-logs/crypto-lifecycle operations as MCP tools (`uqs_start`, `uqs_stop`,
-`uqs_get_config`, `uqs_set_config`, `uqs_logs`,
-`uqs_crypto_start`/`_stop`/`_status`,
-`uqs_crypto_fills_start`/`_stop`/`_status`, etc. - see the file itself for the
-full, current list), built with [FastMCP](https://gofastmcp.com/), for an MCP
-client (e.g. Claude) to drive the demo directly instead of shelling out to the
-CLI. Not exposed: `raw` (an arbitrary passthrough to `torq.sh`, deliberately
-left off as a scope boundary). Point an MCP client's server command at:
+`uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_summary`,
+`uqs_query`, ... - [`mcp.py`](../../python/uqs/src/uqs/mcp.py) has the list),
+for an MCP client to drive the stack. `raw` is not exposed. Point the client's
+server command at:
 
 ```
 uv run uqs-mcp
 ```
 
-(stdio transport, the default). `uqs_query` returns a list of row dicts for
-table results (via the same `kola`-backed `uqs.stack.runtime.query` the CLI's
-`query` command calls), or the raw scalar/dict result otherwise.
+(stdio transport). `uqs_query` returns row dicts for a table.
 
 ## Other commands
 
@@ -1112,20 +924,6 @@ Anything `torq.sh` itself supports but isn't wrapped as its own subcommand above
 `debug <processname>` to run one process in the foreground for troubleshooting,
 `top <processname>` - is available via `raw -- <args>`, which passes straight
 through to `lib/torq/torq.sh`.
-
-An interactive console is no longer among them: **`uqs query` with no
-expression** hands the connection to `qcon` instead of running one, and takes
-the same `--port`/`--host`/`--user`/`--passwd` a query does:
-
-```
-uqs query --port 6052                       # a session on rdb1
-uqs query --port 6052 "select from quote"   # one expression, as before
-```
-
-It requires `qcon` on `PATH`, which ships with kdb+ rather than with this
-repository; without it the command says so and points back at giving an
-expression, which works over IPC and needs nothing installed. `rlwrap` is used
-for line editing when present and skipped when not.
 
 ## Installing
 

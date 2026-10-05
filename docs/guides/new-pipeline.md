@@ -18,8 +18,7 @@ loop over days, you are rebuilding `.qetl.job.bounded`.
 
 [`src/etl/init.q`](../../src/etl/init.q) **globs** `sources/`, `transforms/`,
 `workers/` and `streaming/`, so there is no manual loader entry: a declaration
-loads because its file exists. It used to be a `\l` line per file --- twenty-six
-of them, a hand-kept copy of `ls` whose failure mode was a file nobody loaded.
+loads because its file exists.
 
 Everything else follows from those. Why it is shaped this way is [the pipeline
 philosophy](../architecture/pipeline-philosophy.md). Every key each declaration
@@ -36,15 +35,10 @@ There is no registry entry - the process is read from the job's own declaration.
 
 ![What uqs job new writes, in five bands: the plan, the files it creates, the three files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
-Read it top to bottom. The **appends** are the whole reason the middle band
-exists: everything else is picked up by a glob, and those files hold the facts
-the tree cannot derive from itself --- the table definition, `nsList`, the one
-hand-kept list of test namespaces, and `expected` in
-[`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q), the gate
-every new table passes through. After writing them, `uqs job new` reruns
-`scripts/generate/generate_operational_docs.py`, so `processes.md`,
-`src/etl/generated/pipeline_dag.q` and the port lock never lag the job it just
-declared.
+Everything but three files is picked up by a glob. Those three it appends to:
+the table definition, the test namespace list `nsList`, and `expected` in
+[`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q). It then
+regenerates `processes.md`, `pipeline_dag.q` and the port lock.
 
 ```
 uqs job new markout2 --subscribe-to trades,quote \
@@ -67,14 +61,10 @@ a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
 scaffold. Where q is installed, `uqs job new` also re-exports the contract
 surface; without it, it prints the command to run.
 
-The third is a second worker over the second's source: a source that already
-exists is reused rather than rewritten, and a table that already exists is not
-defined again. `--columns` is required whenever a new source or a new table is
-written, and refused when neither is. Its dataset is its own because
-`.qetl.job.bounded.define` refuses two workers on one dataset and partition -
-their coverage would compose, and a range full of gaps would read as complete -
-so `uqs job new` refuses a dataset another worker already fills without a
-partition.
+The third is a second worker over the second's source: an existing source or
+table is reused, not rewritten. `--columns` is required whenever a new source or
+table is written, and refused otherwise. Two workers cannot fill one dataset
+without a partition - see [below](#filling-one-dataset-with-several-workers).
 
 A streaming job follows the same rule for what it publishes: `--publishes` takes
 a comma list, a table the plant already defines is published onto without
@@ -107,16 +97,8 @@ q tests/run_tests.q
 reports `.dxprobetest.test_dxprobe_is_implemented`, and the `.jobouttest` tests
 that drive every publishing job fail on the throwing driver.
 
-Nothing else in the q suite needs an edit. `test_every_job_is_registered`
-derives its jobs from `src/etl/streaming/` (#352), and
-`test_every_registered_job_has_a_file` holds the other direction: a job that
-registers anywhere other than its own file in that directory fails it. The
-scaffold adds a new table to `expected` in `test_stack_tables.q`. That list
-stays a **deliberate gate** --- a new table is either a capability nobody wired
-up or a stray definition --- and the scaffold passes it by defining the table
-and naming its owner in the same plan. It also registers your test's NAMESPACE
-in `run_tests.q` (#350); without that the stub loaded and never ran, so the one
-red the scaffold exists to leave was the one you could not see.
+Nothing else in the q suite needs an edit: the scaffold adds the new table to
+`expected` and your test's namespace to `nsList` itself.
 
 `uv run pytest python/uqs` fails twice:
 
@@ -135,12 +117,7 @@ yours: it is read by someone deciding whether your table is the one they want,
 and the table's own name there would pass every test and tell them nothing. If
 the desk should not see the table, delete that line and add the table to
 `.qcat.hidden` with the reason --- `tests/q/test_catalog.q` refuses a published
-table that is in neither list, so "we forgot" cannot pass as "deliberately
-hidden".
-
-Only the prose is written. The columns and their types are `meta`'s answer on a
-running process, not a copy anybody maintains, so a column type with no
-equivalent in the front end no longer blocks the catalog step.
+table that is in neither list.
 
 Everything that IS derived - `processes.md`, `src/etl/generated/pipeline_dag.q`
 and `docs/man.q` - it regenerates before it returns.
@@ -160,12 +137,8 @@ what you need before writing into either.
 
 ![A decision tree: known range or not chooses the bounded worker or the streaming shell; whether it reads another table chooses a feed or an etl; whether it publishes a new table decides if columns must be declared; every path ends at the same uqs job new command and the same three remaining steps](../diagrams/pipeline-decision.svg)
 
-Three questions, and only the first is hard to change afterwards --- the other
-two are flags on one command, and the kinds below them are derived from the
-edges rather than asked for. What is **not** on the tree is the part this guide
-is about: the transform, the check, the io manager and the partition are
-declarations you write *inside* the file the scaffold gives you, not choices
-about which file to make.
+Only the first question is hard to change afterwards; the other two are flags on
+one command.
 
 **Bounded** --- you know the range before you start: a backfill, a nightly
 window, a restatement. It runs, it finishes, it exits. `.qetl.job.bounded`, and
@@ -192,17 +165,9 @@ runner wires to the tickerplant and a test wires to a recorder
 its transform --- be loaded and driven in a plain q process.
 
 **Every table you publish must exist on the plant.** `.u.upd` onto a table the
-tickerplant does not define discards the rows *silently* --- no error, no
-warning, just a table that stays empty while the job reports healthy. This is
-not hypothetical: `fxpositions1` published a correct sixteen-row book onto
-`fx_position` and `fx_limit_breach` every five seconds, and neither table
-existed. `database.q` is generated from each pipeline's `publishes` rather than
-from a single `schema` field, precisely because a job can publish two tables and
-own neither, and `.qtorq.assert_publishable` makes a process refuse to start
-when the plant has no table for something it declares. So the failure is now
-loud at startup instead of silent forever --- but only for what the job
-*declares*, which is one more reason the register call has to name every table
-the job actually publishes.
+tickerplant does not define discards the rows *silently*. A process refuses to
+start when the plant lacks a table it *declares* it publishes - so declare every
+table the job publishes.
 
 **Normalizer** --- a continuous job of one particular shape: several tables
 carrying the same fact in different spellings, one canonical table out.
@@ -274,7 +239,8 @@ formality.
 **The namespace is `.qpipe.source.<source name>`, and it is the same word
 twice.** Sources live under one `.qpipe.source` root and are named exactly as
 they register, so `\d .qpipe.source.fx_rates` goes with
-`source_name:`fx_rates` and nothing else — `test_source_contract.q` reads every file under `src/etl/sources/` and fails if the two disagree. Before the root, the namespace was an abbreviation (`.qsdemo` for `demo_deals`) that no check compared with anything. Workers do the same thing under `.qpipe.job\`.
+`source_name:`fx_rates` and nothing else; `test_source_contract.q\` fails if the
+two disagree.
 
 **`columns` is what you READ, not everything the source has.** Declaring a
 column the worker never touches means an upstream change to an unused column
@@ -407,19 +373,13 @@ q).qpipe.job.fx_rates_backfill.fetch
 {[from_ts;to_ts] .qetl.job.bounded.fetch[`fx_rates_backfill;from_ts;to_ts]}
 ```
 
-Until #227 every worker file carried that block by hand. The method list comes
-from `.qetl.job.bounded.state.bounded_worker_methods`, so a method added to the
-contract reaches every worker without any file being edited.
-
 **To override a method, define it before the `define` call.** `define` fills
 only the names the namespace does not already have, and `.qetl.job.bounded.run`
 reaches `plan`, `fetch` and `publish` through the worker's namespace rather than
 calling its own --- so a worker with a genuinely different publish path writes
 `publish:{[batch] ...}` above its `define` and the run loop uses it. An override
 that wants the default for part of its work calls the shell by its full name,
-`.qetl.job.bounded.publish[`fx_rates_backfill;batch\]`. Tests should call an override through `.qpipe.job.fx_rates_backfill.run\[\]\`,
-not only directly: the first version of the shell honoured overrides from the
-prompt and from nowhere else.
+`.qetl.job.bounded.publish[`fx_rates_backfill;batch\]\`.
 
 **`transform` is required, because it is the job.** It runs between fetch and
 the check, so the check and the target both see its output. Its one input must
@@ -442,22 +402,14 @@ manager](../../src/etl/core/io_manager.q) to write somewhere other than an
 in-memory table, and a function from the transformed batch to a dictionary of
 labels recorded as materialisation metadata.
 
-**Where a backfill's rows land when it runs in the stack.** Leave `io` out and
-the process decides. `uqs backfill` runs the worker in a backfill process, which
-writes through `.qetl.io.hdb`: each row goes straight into the HDB partition of
-its own date, taken from `time` or from the source's time column. Each day is
-sorted with `p#sym` as the run moves past it, and the HDB is told to reload, so
-a long backfill shows up day by day rather than at its end. It does not go
-through the tickerplant, which would stamp the rows with today's time and write
-them into today's partition. It refuses rows dated today or later, which belong
-to the tickerplant and end-of-day. In plain q, in a test or at a prompt, the
-same worker writes to an in-memory table.
+Leave `io` out and the process decides: under `uqs backfill`, rows go into the
+HDB partition of their own date, never through the tickerplant; in plain q, into
+an in-memory table. [The FAQ](../faq.md#where-do-a-backfills-rows-end-up) has
+the detail.
 
 ## 3. Register it
 
-**Nothing, for the load.** `src/etl/init.q` globs `sources/`, `workers/` and
-`streaming/`, so a declaration file is loaded the moment it exists. It used to
-list all twenty-six by hand, in the right place.
+**Nothing, for the load.** A declaration file is loaded the moment it exists.
 
 Two orderings still hold, and the file explains both: directories load sources
 before workers, because `.qetl.job.bounded.define` looks its source up at define
@@ -465,10 +417,8 @@ time; and within `streaming/` the two jobs that read another job's table at load
 time are named in a `lead` list. Add a file that does the same and you will get
 a bare `` `.qpipe.job.<name> `` on load --- put it in that list.
 
-A test file needs no registration either. `tests/run_tests.q` globs
-`tests/q/test_*.q` and derives its namespace list from what actually loaded. It
-used to keep two hand-written lists, and forgetting the second one was silent:
-the file loaded, its tests never ran, and the suite stayed green.
+A test file is loaded by glob too; only its namespace is listed, in
+`tests/run_tests.q`'s `nsList`, and a test fails if one that loaded is missing.
 
 The job graph adopts the worker from its own declaration:
 
@@ -487,10 +437,7 @@ There is no registration to add. The uqs process registry is READ from the q
 declarations - every `.qetl.job.stream.define`/`.qetl.job.stream.normalize`
 under `src/etl/streaming/` and every `.qetl.job.bounded.define` under
 `src/etl/workers/` - by
-[`model/declarations.py`](../../python/uqs/src/uqs/model/declarations.py). It
-used to be a hand-kept Python list restating each one, which made a new job two
-edits in two languages and let a fully declared worker sit with no process to
-run it, invisible to every grep.
+[`model/declarations.py`](../../python/uqs/src/uqs/model/declarations.py).
 
 A worker's declaration names its process, and may say why it exists:
 
@@ -515,15 +462,12 @@ and those are its process's edges. Two more keys are optional:
   | `note`           | why it is deployed as it is, shown in `processes.md` | no note   |
 
 Default on demand, because joining the default start spends one of the plant's
-sixteen licensed connections (#285) - a decision to make on purpose.
+licensed connections.
 
-**Ports** are the one fact no declaration can supply, because a port has to
-survive other processes being added around it. Each process's offset lives in
+**Ports** come from
 [`scripts/processes/process_ports.csv`](../../scripts/processes/process_ports.csv),
-a generated, append-only lock: a process not yet in it gets the next free
-offset, and `generate_operational_docs.py` (which `uqs job new` runs) writes it
-down. A retired process keeps its row, so its offset is never reused, and
-`--check` fails in CI on a process the lock lacks.
+a generated, append-only lock: a new process gets the next free offset, and a
+retired one keeps its row so no offset is reused.
 
 ## 4. Run it
 
@@ -622,23 +566,18 @@ apart retries a successful no-op forever.
 
 ## 6. Test it
 
-Add `tests/q/test_fx_rates_backfill.q`. The file itself needs no registration ---
-`tests/run_tests.q` globs `tests/q/test_*.q` --- but its NAMESPACE does: add
-`.<name>test` to that file's `nsList`. Forgetting it used to mean the suite
-loaded your tests and silently never ran them;
-`test_the_runner_runs_every_suite_it_loads` now fails instead, naming the
-namespace that is missing. Then:
+Add `tests/q/test_fx_rates_backfill.q`, and its namespace `.<name>test` to
+`nsList` in `tests/run_tests.q` (the scaffold does both). Then:
 
 ```
 scripts/test.py q-unit
 ```
 
-Worth covering beyond the happy path, because each has bitten this tree: a
-second run is idle; a version bump re-runs the whole range; a partial run is
-narrowed to the gap; a middle gap is not bridged by a window spanning it; a
-contract-breaking source records **no** coverage rather than publishing nulls; a
-dry run publishes nothing; and each of the five contract methods actually
-delegates.
+Worth covering beyond the happy path: a second run is idle; a version bump
+re-runs the whole range; a partial run is narrowed to the gap; a middle gap is
+not bridged by a window spanning it; a contract-breaking source records **no**
+coverage rather than publishing nulls; a dry run publishes nothing; and each of
+the five contract methods actually delegates.
 
 `scripts/test.py coverage` will tell you which of those you missed.
 
@@ -749,9 +688,7 @@ no worker owns --- worth having, because it puts the edge in the graph, but it
 is a claim about an opaque lambda rather than a checked fact, and
 `.qetl.reaction.audit[]` lists those separately so a drawing can mark them.
 
-**The payoff is that a reactive cycle is refused when you wire it**, not when it
-runs. Before reactions were in the graph, `a → b → a` survived until the
-per-drain guard and `max_depth` stopped it mid-cascade; now:
+**A reactive cycle is refused when you wire it**, not when it runs:
 
 ```
 q).qetl.dag.topological[]
@@ -782,11 +719,9 @@ workers can fill one dataset at once:
 
 Coverage is then recorded and read under that partition, and **no read unions
 across partitions** --- a range covered for `` `EURUSD `` says nothing about
-`` `USDJPY ``. Declaring nothing gets the `` ` `` sentinel, which behaves
-exactly as before the column existed.
+`` `USDJPY ``. Declaring nothing gets the `` ` `` sentinel: no partition.
 
-Two workers on the same dataset *and* partition are still refused, for the
-unchanged reason:
+Two workers on the same dataset *and* partition are refused:
 
 ```
 define: clash declares dataset fx_rates[EURUSD], already claimed by
