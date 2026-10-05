@@ -11,6 +11,7 @@ is what keeps `uqs start` spelled that way after the split.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Annotated
 
@@ -131,10 +132,16 @@ InteractiveOpt = Annotated[
 ]
 
 
-def _show(table: Table, interactive: bool) -> None:
-    """Print `table`, or browse it with --interactive (see table_browser.py)."""
+def _show(
+    table: Table,
+    interactive: bool,
+    actions: Sequence[table_browser.RowAction] = (),
+    refresh: Callable[[], Table] | None = None,
+) -> None:
+    """Print `table`, or browse it with --interactive (see table_browser.py),
+    with any row `actions` the command offers and the `refresh` that re-reads it."""
     try:
-        table_browser.show(table, interactive, console)
+        table_browser.show(table, interactive, console, actions, refresh)
     except UqsError as exc:
         _die(exc)
 
