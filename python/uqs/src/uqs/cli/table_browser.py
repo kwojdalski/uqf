@@ -10,6 +10,13 @@ Typing filters (see table_filter.py); up/down and page keys move through the
 rows; Enter exits and prints the highlighted row, tab-separated, so a run id
 or a process name can be picked and piped; Escape exits printing nothing.
 
+A command may also hand in ROW ACTIONS - `summary` gives s/x/r to start, stop
+and restart the highlighted process. Then a letter is a command, not a filter
+character, so the table holds focus and `/` opens the filter; Enter or Escape
+there returns to the table. Each action runs in a worker thread, so the screen
+stays live, and is followed by the command's `refresh`, which re-reads the
+table so the change shows.
+
 Textual is imported only when a browser actually opens, so the plain path -
 every command without the flag - starts no slower than before.
 """
@@ -17,6 +24,8 @@ every command without the flag - starts no slower than before.
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rich.console import Console, RenderableType
@@ -30,6 +39,19 @@ if TYPE_CHECKING:
     from textual.app import App
 
 MATCH_STYLE = "bold reverse"
+
+
+@dataclass(frozen=True)
+class RowAction:
+    """A key that acts on the highlighted row.
+
+    `run` takes the row as {header: plain text} and returns what to tell the
+    user; it raises UqsError to report a failure instead.
+    """
+
+    key: str
+    label: str
+    run: Callable[[dict[str, str]], str]
 
 
 def as_text(cell: RenderableType) -> Text:
@@ -62,30 +84,50 @@ def highlighted(cell: Text, positions: set[int] | None) -> Text:
     return shown
 
 
-def browser(title: str, headers: list[str], rows: list[list[Text]]) -> App[list[str] | None]:
+def browser(
+    title: str,
+    headers: list[str],
+    rows: list[list[Text]],
+    actions: Sequence[RowAction] = (),
+    refresh: Callable[[], Table] | None = None,
+) -> App[list[str] | None]:
     """The Textual app for one table. Its result is the chosen row's cells, or None."""
     from textual.app import App, ComposeResult
     from textual.binding import Binding
     from textual.widgets import DataTable, Footer, Input, Static
 
-    plain = [[cell.plain for cell in row] for row in rows]
+    by_key = {action.key: action for action in actions}
 
     class TableBrowser(App[list[str] | None]):
         TITLE = title
         CSS = "#count { height: 1; color: $text-muted; padding: 0 1; }"
-        # priority: the filter box keeps focus throughout, and would otherwise
-        # take Enter as its own submit and the arrows as nothing at all.
+        # priority: the filter box keeps focus throughout (or, with actions,
+        # whenever it is open), and would otherwise take Enter as its own
+        # submit and the arrows as nothing at all.
         BINDINGS = [
-            Binding("escape", "quit_browser", "Quit"),
+            Binding("escape", "leave", "Quit"),
             Binding("enter", "choose", "Print row", priority=True),
             Binding("down", "move(1)", "Down", show=False, priority=True),
             Binding("up", "move(-1)", "Up", show=False, priority=True),
             Binding("pagedown", "move(20)", show=False, priority=True),
             Binding("pageup", "move(-20)", show=False, priority=True),
+            *(
+                [Binding("slash", "open_filter", "Filter")]
+                + [Binding(a.key, f"act('{a.key}')", a.label) for a in actions]
+                if actions
+                else []
+            ),
         ]
 
+        def __init__(self) -> None:
+            super().__init__()
+            self.rows = rows
+            self.plain = [[cell.plain for cell in row] for row in rows]
+            self.busy = False
+
         def compose(self) -> ComposeResult:
-            yield Input(placeholder="filter: type to fuzzy-match any cell, space for AND")
+            hint = "filter: type to fuzzy-match any cell, space for AND"
+            yield Input(placeholder=hint + ("; Enter returns to the table" if actions else ""))
             yield Static(id="count")
             yield DataTable(zebra_stripes=True, cursor_type="row")
             yield Footer()
@@ -93,19 +135,34 @@ def browser(title: str, headers: list[str], rows: list[list[Text]]) -> App[list[
         def on_mount(self) -> None:
             self.query_one(DataTable).add_columns(*headers)
             self.refill("")
-            self.query_one(Input).focus()
+            (self.query_one(DataTable) if actions else self.query_one(Input)).focus()
 
         def on_input_changed(self, event: Input.Changed) -> None:
             self.refill(event.value)
 
         def refill(self, query: str) -> None:
             table = self.query_one(DataTable)
+            at = table.cursor_row
             table.clear()
-            kept: list[tuple[int, Hits]] = filter_rows(plain, query)
+            kept: list[tuple[int, Hits]] = filter_rows(self.plain, query)
             for index, hits in kept:
-                cells = [highlighted(cell, hits.get(col)) for col, cell in enumerate(rows[index])]
+                cells = [
+                    highlighted(cell, hits.get(col)) for col, cell in enumerate(self.rows[index])
+                ]
                 table.add_row(*cells, key=str(index), height=None)
-            self.query_one("#count", Static).update(f"{len(kept)} of {len(rows)} rows")
+            if table.row_count:
+                table.move_cursor(row=min(max(at, 0), table.row_count - 1))
+            self.query_one("#count", Static).update(f"{len(kept)} of {len(self.rows)} rows")
+
+        def filtering(self) -> bool:
+            return bool(actions) and self.query_one(Input).has_focus
+
+        def highlighted_index(self) -> int | None:
+            table = self.query_one(DataTable)
+            if not table.row_count:
+                return None
+            key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+            return int(key or 0)
 
         def action_move(self, delta: int) -> None:
             table = self.query_one(DataTable)
@@ -114,19 +171,68 @@ def browser(title: str, headers: list[str], rows: list[list[Text]]) -> App[list[
                 table.move_cursor(row=row)
 
         def action_choose(self) -> None:
-            table = self.query_one(DataTable)
-            if not table.row_count:
+            if self.filtering():
+                self.query_one(DataTable).focus()
                 return
-            key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
-            self.exit(plain[int(key or 0)])
+            index = self.highlighted_index()
+            if index is not None:
+                self.exit(self.plain[index])
 
-        def action_quit_browser(self) -> None:
-            self.exit(None)
+        def action_leave(self) -> None:
+            if self.filtering():
+                self.query_one(DataTable).focus()
+            else:
+                self.exit(None)
+
+        def action_open_filter(self) -> None:
+            self.query_one(Input).focus()
+
+        def action_act(self, key: str) -> None:
+            index = self.highlighted_index()
+            if index is None:
+                return
+            if self.busy:
+                self.notify("still running the last one", severity="warning")
+                return
+            action = by_key[key]
+            row = dict(zip(headers, self.plain[index], strict=False))
+            self.busy = True
+            self.notify(f"{action.label}...")
+            self.run_worker(lambda: self.perform(action, row), thread=True)
+
+        def perform(self, action: RowAction, row: dict[str, str]) -> None:
+            """In a worker thread: run the action, then re-read the table."""
+            try:
+                message = action.run(row)
+            except Exception as exc:  # noqa: BLE001 - shown, never crashes the app
+                self.call_from_thread(self.finish, None, str(exc), False)
+                return
+            fresh = None
+            if refresh is not None:
+                try:
+                    fresh = table_cells(refresh())[1]
+                except Exception as exc:  # noqa: BLE001
+                    message += f" - the table could not be re-read: {exc}"
+            self.call_from_thread(self.finish, fresh, message, True)
+
+        def finish(self, fresh: list[list[Text]] | None, message: str, ok: bool) -> None:
+            self.busy = False
+            if fresh is not None:
+                self.rows = fresh
+                self.plain = [[cell.plain for cell in row] for row in fresh]
+                self.refill(self.query_one(Input).value)
+            self.notify(message, severity="information" if ok else "error", timeout=8)
 
     return TableBrowser()
 
 
-def show(table: Table, interactive: bool, console: Console) -> None:
+def show(
+    table: Table,
+    interactive: bool,
+    console: Console,
+    actions: Sequence[RowAction] = (),
+    refresh: Callable[[], Table] | None = None,
+) -> None:
     """Print `table`, or with `interactive` browse it and print the row chosen.
 
     Refused off a terminal: a browser cannot draw into a pipe, and a script
@@ -138,6 +244,6 @@ def show(table: Table, interactive: bool, console: Console) -> None:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         raise UqsError("--interactive needs a terminal; drop it to print the table")
     headers, rows = table_cells(table)
-    chosen = browser(str(table.title or ""), headers, rows).run()
+    chosen = browser(str(table.title or ""), headers, rows, actions, refresh).run()
     if chosen is not None:
         console.print("\t".join(chosen), markup=False, highlight=False, soft_wrap=True)

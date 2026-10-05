@@ -44,7 +44,15 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
-from uqs.cli import create, lifecycle, shared, summary, summary_columns, summary_graph
+from uqs.cli import (
+    create,
+    lifecycle,
+    shared,
+    summary,
+    summary_columns,
+    summary_graph,
+    summary_table,
+)
 from uqs.cli import query as query_cli
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
@@ -578,7 +586,7 @@ def test_the_timeout_is_one_budget_not_one_per_call(monkeypatch):
     # A monotonic clock that jumps 4s per reading, so the budget visibly
     # drains between the two calls without the test sleeping.
     ticks = iter([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])
-    monkeypatch.setattr(summary.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(summary_table.time, "monotonic", lambda: next(ticks))
     runner.invoke(cli.app, ["summary", "--timeout", "10"])
     assert rec_hb.kwargs["timeout"] < 10, "the heartbeat query gets the remainder"
 
@@ -604,7 +612,7 @@ def test_an_exhausted_budget_never_hands_out_zero(monkeypatch):
     rec_hb = _patch(monkeypatch, listing, "heartbeat_states", result={})
     _patch(monkeypatch, listing, "summary_rows", result=[])
     ticks = iter([0.0, 99.0, 99.0, 99.0, 99.0, 99.0])
-    monkeypatch.setattr(summary.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(summary_table.time, "monotonic", lambda: next(ticks))
     runner.invoke(cli.app, ["summary", "--timeout", "10"])
     assert rec_hb.kwargs["timeout"] >= 1
 
@@ -1406,7 +1414,7 @@ def test_summary_says_at_debug_why_the_port_map_is_missing(monkeypatch):
     _patch(monkeypatch, listing, "configured_ports", raises=UqsError("no process.csv"))
     _patch(monkeypatch, listing, "heartbeat_states", result={})
     _patch(monkeypatch, listing, "summary_rows", result=[])
-    captured = _debug_log(monkeypatch)
+    captured = _debug_log(monkeypatch, summary_table)
     assert runner.invoke(cli.app, ["summary"]).exit_code == 0
     assert any("no process.csv" in m for m in captured.messages)
 
@@ -1420,7 +1428,7 @@ def test_summary_says_at_debug_why_heartbeats_are_missing(monkeypatch):
     _patch(monkeypatch, listing, "configured_ports", result={})
     _patch(monkeypatch, listing, "heartbeat_states", raises=UqsError("monitor1 is not declared"))
     _patch(monkeypatch, listing, "summary_rows", result=[])
-    captured = _debug_log(monkeypatch)
+    captured = _debug_log(monkeypatch, summary_table)
     assert runner.invoke(cli.app, ["summary"]).exit_code == 0
     assert any("monitor1 is not declared" in m for m in captured.messages)
 
@@ -1432,7 +1440,7 @@ def test_summary_distinguishes_unreachable_from_undeclared_at_debug(monkeypatch)
     _patch(monkeypatch, listing, "configured_ports", result={})
     _patch(monkeypatch, listing, "heartbeat_states", result=None)
     _patch(monkeypatch, listing, "summary_rows", result=[])
-    captured = _debug_log(monkeypatch)
+    captured = _debug_log(monkeypatch, summary_table)
     assert runner.invoke(cli.app, ["summary"]).exit_code == 0
     assert any("monitor1 not reached" in m for m in captured.messages)
 
@@ -1441,7 +1449,7 @@ def test_summary_counts_the_rows_it_parsed_at_debug(monkeypatch):
     """`torq.sh summary` emitting rows the parser then drops is silent
     otherwise: the table just looks short."""
     _summary_ok(monkeypatch, rows=[_row(), _row(Process="hdb1", Status="down")])
-    captured = _debug_log(monkeypatch)
+    captured = _debug_log(monkeypatch, summary_table)
     assert runner.invoke(cli.app, ["summary"]).exit_code == 0
     assert any("1 up, 1 down" in m for m in captured.messages)
 
@@ -2048,7 +2056,7 @@ def test_summary_sorts_by_a_column_it_does_not_show(monkeypatch):
         for row in rows:
             row["Inputs"] = inputs[row["Process"]]
 
-    monkeypatch.setattr(summary, "attach_graph_columns", attach)
+    monkeypatch.setattr(summary_table, "attach_graph_columns", attach)
     result = runner.invoke(cli.app, ["summary", "--columns", "Process,Port", "--sort", "inputs"])
     assert result.exit_code == 0, result.output
     assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["hdb1", "rdb1", "tap1"]
