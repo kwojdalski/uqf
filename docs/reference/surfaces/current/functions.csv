@@ -248,6 +248,7 @@ qetl.job.bounded,advanced_to,function,3,worker current next_cursor
 qetl.job.bounded,begin_run,function,1,worker
 qetl.job.bounded,check_static,function,2,worker run_spec
 qetl.job.bounded,checkpoint,function,2,worker cursor
+qetl.job.bounded,claim_process,function,2,procname worker
 qetl.job.bounded,cleanup,function,1,worker
 qetl.job.bounded,connect,function,1,worker
 qetl.job.bounded,connect_error,function,2,source e
@@ -277,6 +278,7 @@ qetl.job.bounded,own,function,2,worker nm
 qetl.job.bounded,partition_of,function,1,worker
 qetl.job.bounded,plan,function,2,worker cursor
 qetl.job.bounded,plan_only,function,2,worker run_spec
+qetl.job.bounded,process_worker,value,,
 qetl.job.bounded,progress_now,function,1,worker
 qetl.job.bounded,publish,function,2,worker batch
 qetl.job.bounded,publish_last_batch,function,2,worker unused
