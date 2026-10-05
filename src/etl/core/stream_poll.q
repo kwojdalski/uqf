@@ -38,6 +38,25 @@
 /                  compound cursor - (time, securityId, priceBookType) - the
 /                  stock answer is .qetl.job.continuous.load_cursor_value,
 /                  save_cursor_value and lexically_after[fields]
+/     start_cursor optional [instant] -> the cursor positioned just before
+/                  `instant`: fetching after it returns the rows at or after
+/                  it. What `uqs stream preview --last` starts from (#681).
+/                  A timestamp cursor needs none - it is instant minus 1ns -
+/                  but a feed with its own load/save/advances must declare
+/                  one, because only the feed knows its tie-breakers
+/     page_limit   optional positive long, the most rows fetch returns in one
+/                  page - reported by a recent-data preview, so a window
+/                  holding more than one page says it was cut short
+/ .
+/ RECENT-DATA PREVIEW (preview_recent, #681). The saved cursor can be far
+/ behind, and the feed's first-run lookback wider than a troubleshooter
+/ wants. preview_recent takes a duration instead: it captures one UTC
+/ instant `to`, asks the feed for the cursor before `to - duration` and
+/ fetches after it, and keeps the rows in [from, to) - judged row by row
+/ with the feed's own next_cursor and advances, so a compound cursor's
+/ tie-breakers decide the edges exactly as they decide a run's progress.
+/ The saved cursor is never read, let alone written, and the live poll is
+/ not changed: the window lives only in the preview.
 / .
 / Subscribers are not previewable here: their input arrives from the plant,
 / so there is no page to fetch. Previewing one would need a supplied batch or
@@ -62,7 +81,7 @@ poll_declared:{[job;decl]
         '"define: ",string[job],"'s poll is missing ",", " sv string missing];
     / `(enlist `close) inter`, never `` `close inter ``: inter indexes its left
     / argument, and an atom cannot be indexed - 'type at every define.
-    fns:poll_keys,(enlist `close) inter key p;
+    fns:poll_keys,`close`start_cursor inter key p;
     if[count bad:fns where not is_callable each p fns;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     custom:`load`save`advances inter key p;
@@ -73,6 +92,9 @@ poll_declared:{[job;decl]
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     if[count bad:(`source`cursor inter key p) where not -11h=type each p `source`cursor inter key p;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be symbols"];
+    if[`page_limit in key p;
+        if[not $[-7h=type p`page_limit; 0<p`page_limit; 0b];
+            '"define: ",string[job],"'s poll page_limit must be a positive long - the most rows one fetch returns"]];
     if[count decl`subscribe_to;
         '"define: ",string[job]," declares poll and subscribes to ",(", " sv string decl`subscribe_to),
          " - a polling job fetches its own input; a job fed by the plant declares on_batch"];
@@ -180,32 +202,99 @@ liveness:{[job]
 / either way.
 / @param job the job's name
 / @param n how many rows of each table to return as a sample
-/ @return dict of job, state (`previewed, `idle or `invalid), live, cursor,
-/   fetched, next_cursor, advances, rows and sample (each table -> ...),
-/   and failures (messages; empty unless state is `invalid)
+/ @return dict of job, mode (`next_page), state (`previewed, `idle or
+/   `invalid), live, cursor, fetched, next_cursor, advances, rows and sample
+/   (each table -> ...), and failures (messages; empty unless `invalid)
 / @throws error when the job is not a polling feed, or its fetch, normalize
 /   or next_cursor throws
-preview:{[job;n]
+preview:{[job;n] run_preview[job;n;::]}
+
+/ Preview the RECENT data of a polling job: the rows in [now - span, now),
+/ fetched from a temporary cursor, with nothing published and nothing saved.
+/ .
+/ For troubleshooting a feed whose saved cursor or first-run lookback covers
+/ more than is wanted. `now` is one UTC instant, captured once. The start
+/ comes from the feed's start_cursor (instant minus 1ns for a timestamp
+/ cursor); rows past the window's end are dropped by the feed's own
+/ next_cursor and advances. The saved cursor is not read and the live poll is
+/ not changed - this is a sample of recent data, not the job's next page.
+/ @param job the job's name
+/ @param n how many rows of each table to return as a sample
+/ @param span the window's length, a positive timespan
+/ @return preview's dict with mode `recent, cursor the temporary start
+/   cursor, and window (from, to, start_cursor, end_cursor), kept (rows in
+/   the window), page_limit and limited (the page was full, so the window
+/   may hold rows the sample did not reach)
+/ @throws error for a span that is not a positive timespan, a feed with its
+/   own cursor and no start_cursor, or anything preview throws
+preview_recent:{[job;n;span]
+    if[not -16h=type span;
+        '"preview_recent: span must be a timespan, e.g. 0D00:00:30 - got ",.Q.s1 span];
+    if[not span>0D; '"preview_recent: span must be positive - got ",string span];
+    run_preview[job;n;span]}
+
+/ Private: preview's guard, the page, and `close` either way.
+run_preview:{[job;n;span]
     d:def job;
     if[count d`subscribe_to;
         '"preview: ",string[job]," subscribes to ",(", " sv string d`subscribe_to),
          " - its input arrives from the plant, so there is no page to fetch. Preview supports polling feeds"];
     if[not `poll in key d;
         '"preview: ",string[job]," declares no poll - its on_timer is one function, and running it would publish and advance. Declare poll (fetch, normalize, next_cursor) to preview it"];
-    r:.[preview_page;(job;n);{[e] (`preview_failed;e)}];
+    r:.[preview_page;(job;n;span);{[e] (`preview_failed;e)}];
     if[`close in key d`poll; @[(d`poll)`close;::;{[e] ::}]];
     if[(0h=type r) and `preview_failed~first r; 'last r];
     r}
 
-/ Private: preview's body, between the guard and `close`.
-preview_page:{[job;n]
+/ Private: the [instant] -> cursor function a recent-data preview starts
+/ from: the feed's start_cursor, or instant minus 1ns for a timestamp cursor.
+/ @throws error for a feed with its own cursor and no start_cursor
+start_cursor_of:{[job]
+    p:(def job)`poll;
+    if[`start_cursor in key p; :p`start_cursor];
+    if[`load in key p;
+        '"preview: ",string[job]," keeps its own cursor (load, save, advances) and declares no start_cursor - ",
+         "declare poll`start_cursor [instant] -> the cursor just before instant"];
+    {[instant] instant-1}}
+
+/ Private: the window a recent-data preview covers, from one captured instant.
+recent_window:{[job;span]
+    / `from` is a qSQL keyword, so neither bound is named after its key
+    window_end:.z.p;
+    window_start:window_end-span;
+    start:start_cursor_of job;
+    `from`to`start_cursor`end_cursor!(window_start;window_end;start window_start;start window_end)}
+
+/ Private: which rows of `page` lie in the window: after its start cursor and
+/ not after its end cursor, each row's cursor being next_cursor of that row
+/ alone, compared with the feed's own advances.
+in_window:{[job;window;page]
     p:(def job)`poll;
     ops:cursor_ops job;
-    current:ops[`load] cursor_name job;
+    row_cursor:{[next_cursor;page;i] next_cursor enlist page i}[p`next_cursor;page;] each til count page;
+    after_start:ops[`advances][window`start_cursor;] each row_cursor;
+    after_end:ops[`advances][window`end_cursor;] each row_cursor;
+    after_start and not after_end}
+
+/ Private: preview's body, between the guard and `close`. `span` is (::)
+/ for the next page after the saved cursor, else the recent window's length.
+preview_page:{[job;n;span]
+    p:(def job)`poll;
+    ops:cursor_ops job;
+    recent:not span~(::);
+    window:$[recent; recent_window[job;span]; (::)];
+    current:$[recent; window`start_cursor; ops[`load] cursor_name job];
     / Every line the fetch logs - a traced query above all - carries the job
-    / and the cursor it fetched after.
-    page:.qetl.log.with_context[`job`cursor!(job;current);p`fetch;enlist current];
-    base:`job`live`cursor`fetched!(job;liveness job;current;count page);
+    / and the cursor it fetched after; a recent preview's, its window and
+    / page limit too.
+    limit:$[`page_limit in key p; p`page_limit; 0N];
+    context:`job`cursor!(job;current);
+    if[recent; context,:`window`page_limit!(window`from`to;limit)];
+    fetched:.qetl.log.with_context[context;p`fetch;enlist current];
+    page:$[recent; fetched where in_window[job;window;fetched]; fetched];
+    base:`job`mode`live`cursor`fetched!(job;$[recent; `recent; `next_page];liveness job;current;count fetched);
+    if[recent;
+        base,:`window`kept`page_limit`limited!(window;count page;limit;(not null limit) and limit<=count fetched)];
     if[0=count page;
         :base,`state`next_cursor`advances`rows`sample`failures!(`idle;(::);0b;()!();()!();())];
     out:outputs[job;p[`normalize] page];

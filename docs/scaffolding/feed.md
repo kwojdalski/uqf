@@ -178,6 +178,43 @@ A line that must stay direct says so with `/ untraced: <why>`.
 uqs stream preview vectorize2 --trace
 ```
 
+### Previewing recent data
+
+The saved cursor can be far behind, and a first run's lookback wider than you
+want while troubleshooting. `--last` previews a recent window instead of the
+next page:
+
+```
+uqs stream preview vectorize2 --last 30s --sample 1 --trace
+```
+
+The window is `[now - 30s, now)`, with `now` one UTC instant captured once.
+`--last` takes a positive whole number and `ms`, `s`, `m`, `h` or `d`. The
+preview builds a temporary starting cursor for the window's start, fetches after
+it, and keeps the rows inside the window. It judges each row with the feed's own
+`next_cursor` and `advances`, so a compound cursor's tie-breakers decide the
+edges the way they decide a run's progress. The saved cursor is not read or
+written, nothing is published, and the live poll's lookback and period are
+unchanged. The output says it is a recent-data sample, not the running job's
+next page. It shows the window, the temporary cursor, the rows fetched and kept,
+and the page limit; `--trace` puts the window and the limit on every query line.
+
+The starting cursor is the feed's own. A timestamp cursor needs nothing: it
+starts 1ns before the instant. A feed with its own `load`, `save` and `advances`
+must declare `start_cursor`, `[instant] -> the cursor just before instant`, in
+its `poll`. Without it, `--last` refuses the feed, because only the feed knows
+its tie-breakers' types. `uqs job new --poll --cursor-fields` writes the step
+for you to fill in:
+
+```q
+start_cursor:{[instant] `time`securityId`priceBookType!(instant;`;0N)}
+```
+
+A feed may also declare `page_limit`, the most rows one fetch returns. A recent
+preview reports it, and says so when the page was full: the window may then hold
+rows past the ones shown. `--last` narrows the data asked for. It does not make
+the query fast; filtering and partition pruning are the source adapter's.
+
 "Fits the plant" is `.qetl.plant.problems`, and the timer applies the same check
 before it publishes: a page that does not fit is refused whole, with nothing
 published and the cursor left where it was. Each table's columns, and their

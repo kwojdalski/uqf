@@ -428,6 +428,7 @@ qetl.job.stream,drain,function,2,table_name mask
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
 qetl.job.stream,guarded,function,4,job f t x
+qetl.job.stream,in_window,function,3,job window page
 qetl.job.stream,is_callable,function,1,v
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
@@ -439,11 +440,15 @@ qetl.job.stream,outputs,function,2,job out
 qetl.job.stream,poll_declared,function,2,job decl
 qetl.job.stream,poll_keys,value,,
 qetl.job.stream,preview,function,2,job n
-qetl.job.stream,preview_page,function,2,job n
+qetl.job.stream,preview_page,function,3,job n span
+qetl.job.stream,preview_recent,function,3,job n span
 qetl.job.stream,procnames,dict,,
+qetl.job.stream,recent_window,function,2,job span
 qetl.job.stream,replaying,value,,
 qetl.job.stream,required_declarations,value,,
+qetl.job.stream,run_preview,function,3,job n span
 qetl.job.stream,start,function,2,job tr
+qetl.job.stream,start_cursor_of,function,1,job
 qetl.job.stream,subscriptions,function,1,job
 qetl.job.stream,tick,function,1,job
 qetl.job.stream,transport_keys,value,,

@@ -70,11 +70,24 @@ def test_a_compound_cursor_writes_the_whole_trio():
         "bookfeed", [], "books", COLUMNS, poll=True, cursor="time,securityId,priceBookType"
     )
     poll = declared(plan)["poll"]
-    assert poll.startswith("`fetch`normalize`next_cursor`load`save`advances!(")
+    assert poll.startswith("`fetch`normalize`next_cursor`load`save`advances`start_cursor!(")
     assert ".qetl.job.continuous.load_cursor_value" in poll
     assert ".qetl.job.continuous.save_cursor_value" in poll
     assert ".qetl.job.continuous.lexically_after[`time`securityId`priceBookType]" in poll
     assert "next_cursor:{[page] `time`securityId`priceBookType#last page}" in job_file(plan)
+
+
+def test_a_compound_cursor_gets_a_start_cursor_to_write():
+    plan = jobs.streaming_job(
+        "bookfeed", [], "books", COLUMNS, poll=True, cursor="time,securityId,priceBookType"
+    )
+    assert ".qpipe.job.bookfeed.start_cursor" in declared(plan)["poll"]
+    assert "bookfeed.start_cursor: not implemented" in job_file(plan)
+
+
+def test_a_timestamp_cursor_needs_no_start_cursor():
+    poll = declared(jobs.streaming_job("ratefeed", [], "rates", COLUMNS, poll=True))["poll"]
+    assert "start_cursor" not in poll
 
 
 def test_a_one_field_cursor_is_still_a_list():
