@@ -12,7 +12,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli.shared import _die, _paths, app, console
+from uqs.cli.shared import InteractiveOpt, _die, _paths, _show, app, console
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs as stack_runs
@@ -52,7 +52,9 @@ def _cell(value: object) -> str:
     return str(value)
 
 
-def _print(title: str, rows: list[dict], columns: tuple[str, ...], empty: str) -> None:
+def _print(
+    title: str, rows: list[dict], columns: tuple[str, ...], empty: str, interactive: bool = False
+) -> None:
     if not rows:
         console.print(f"[dim]{empty}[/]")
         return
@@ -65,11 +67,11 @@ def _print(title: str, rows: list[dict], columns: tuple[str, ...], empty: str) -
             table.add_column(col)
     for row in rows:
         table.add_row(*(_cell(row.get(col)) for col in columns))
-    console.print(table)
+    _show(table, interactive)
 
 
 @run_app.command("status")
-def status() -> None:
+def status(interactive: InteractiveOpt = False) -> None:
     """Runs that began and never finished.
 
     Includes runs whose process has died: `running` on a run whose process is
@@ -80,18 +82,18 @@ def status() -> None:
     except UqsError as exc:
         _die(exc)
         return
-    _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs")
+    _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs", interactive)
 
 
 @run_app.command("list")
-def list_runs() -> None:
+def list_runs(interactive: InteractiveOpt = False) -> None:
     """Every run in the ledger, newest first."""
     try:
         rows = stack_runs.history(_paths())
     except UqsError as exc:
         _die(exc)
         return
-    _print("runs", rows, _RUN_COLUMNS, "no runs recorded")
+    _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
 
 
 @run_app.command("migrate")

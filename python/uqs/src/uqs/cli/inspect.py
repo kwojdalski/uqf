@@ -17,8 +17,10 @@ from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
+    InteractiveOpt,
     _export,
     _paths,
+    _show,
     app,
     console,
     data_app,
@@ -107,6 +109,7 @@ def schema(
     user: str = "admin",
     passwd: str = "admin",
     export: ExportOpt = None,
+    interactive: InteractiveOpt = False,
 ) -> None:
     """Show the tables in a running process, or one table's columns and types.
 
@@ -170,7 +173,7 @@ def schema(
                     row["q"],
                     f"[green]{row['attribute']}[/]" if row["attribute"] else "",
                 )
-            console.print(rendered)
+            _show(rendered, interactive)
         if len(matched) > 1:
             console.print(f"[dim]{len(matched)} tables matched {table!r}.[/]")
     else:
@@ -184,7 +187,7 @@ def schema(
             # reader is usually looking for, so it is not left to be counted.
             count = "[dim]0[/]" if row["rows"] == 0 else f"{row['rows']:,}"
             rendered.add_row(row["table"], count, str(row["columns"]))
-        console.print(rendered)
+        _show(rendered, interactive)
         empty = [r["table"] for r in rows if r["rows"] == 0]
         if empty:
             console.print(

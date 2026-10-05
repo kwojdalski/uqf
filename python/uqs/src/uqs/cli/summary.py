@@ -19,12 +19,14 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
+    InteractiveOpt,
     PortOpt,
     _debug_requested,
     _die,
     _export,
     _lines,
     _paths,
+    _show,
     _sorted_items,
     app,
     console,
@@ -158,6 +160,7 @@ def summary(
     reverse: Annotated[
         bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
     ] = False,
+    interactive: InteractiveOpt = False,
 ) -> None:
     """Status table for every process in process.csv, with its declared graph.
 
@@ -307,7 +310,7 @@ def summary(
             else f"[bold red]{responds}[/]",
         }
         table.add_row(*(rendered.get(col, "") for col in chosen))
-    console.print(table)
+    _show(table, interactive)
     if _debug_requested(ctx, debug):
         _print_startups(Path(paths.torqdata) / "logs", [row["Process"] for row in rows])
     if silent:

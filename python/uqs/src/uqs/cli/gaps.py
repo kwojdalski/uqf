@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli.shared import _die, _paths, app, console
+from uqs.cli.shared import InteractiveOpt, _die, _paths, _show, app, console
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs as stack_runs
@@ -19,6 +19,7 @@ def gaps(
     job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
     range_from: Annotated[str, typer.Option("--from", help="Start of the range to check")],
     range_to: Annotated[str, typer.Option("--to", help="End of the range, exclusive")],
+    interactive: InteractiveOpt = False,
 ) -> None:
     """Where in [--from, --to) a streaming job was not up and subscribed.
 
@@ -47,7 +48,7 @@ def gaps(
         table.add_column(col, no_wrap=True)
     for hole in holes:
         table.add_row(str(hole["range_from"]), str(hole["range_to"]))
-    console.print(table)
+    _show(table, interactive)
     if sessions == 0:
         console.print(
             f"[yellow]no uptime recorded for {job} at all[/] - it never ran here, or ran "

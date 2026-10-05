@@ -143,7 +143,7 @@ restart [PROCS] [--port N]            restart
 up [PROCS] [--profile P] [--level L]  start, then stream every started process's log to
                                       this console; Ctrl-C stops what it started
 summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
-        [--probe-timeout S] [--debug]  status table plus the declared graph
+        [--probe-timeout S] [--debug] [-i]  status table plus the declared graph
                                       (--columns status for just up/down/pid/port/
                                       Responds; --timeout defaults to 120s,
                                       --probe-timeout to 0.5s per process;
@@ -169,12 +169,12 @@ data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
                                       the running plant and hdb process - including
                                       the base port (see below)
 data hdb-check [--fix]                HDB partitions missing a declared table or column
-gaps JOB --from T --to T              where a streaming job was not up and subscribed,
+gaps JOB --from T --to T [-i]         where a streaming job was not up and subscribed,
                                       and the backfill that refills each gap when a
                                       worker fills what the job publishes
-run status                            runs that began and never finished, including
+run status [-i]                       runs that began and never finished, including
                                       runs whose process died
-run list                              every run in the ledger, newest first, with its
+run list [-i]                         every run in the ledger, newest first, with its
                                       outcome
 run show RUN_ID                       one run and its facts, then its log files and
                                       the command that re-runs (resumes) its range -
@@ -204,9 +204,9 @@ query [EXPR] [--proc P|--port N] [--servers T] [--raw] [--render q|kola] [--expo
                                       gateway as typed. --proc looks the port up, and
                                       refuses a stopped process. Results print as q
                                       prints them; --render kola shows Python objects
-schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
+schema [TABLE|PATTERN] [--proc P] [--export FILE] [-i]  tables in a running process, or the
                                       columns of every table matching a pattern
-list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse]  list every item of KIND
+list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse] [-i]  list every item of KIND
                                        ('processes', 'profiles', 'fields', 'overrides',
                                        'env', 'dependencies', 'jobs') - no argument shows
                                        the kinds
@@ -334,6 +334,24 @@ uqs list processes --sort proctype
 uqs list processes --sort port --reverse
 uqs list env --sort name
 ```
+
+`--interactive` (`-i`) opens the table in a browser instead of printing it, and
+filters its rows as you type. On `list`, `summary`, `run list`, `run status`,
+`gaps` and `schema`:
+
+```
+uqs list processes -i      # type "hdb" to keep the hdb rows
+uqs summary -i             # "down" for what is down, "up warn" for both at once
+uqs run list -i            # Enter prints the run you picked, for `uqs run show`
+```
+
+A term matches any one cell as a substring or, failing that, as a subsequence -
+`upq` finds `uqs_plant_q` - and a space between terms means every one must
+match. Matching is case-insensitive and ignores colour. Up, down and the page
+keys move through the rows; Enter exits printing the highlighted row,
+tab-separated; Escape exits printing nothing. It needs a terminal, and refuses
+in a pipe rather than hang. `--sort` still decides the order, and `--export`
+writes every row, not just the ones a filter left.
 
 Two things it gets right that a plain sort would not. **Numeric columns sort
 numerically**: `port` is a string, and as text `6100` comes before `659`, which
