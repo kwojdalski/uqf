@@ -915,4 +915,286 @@ odd_lot_imbalance:{[tape;threshold]
     if[0=total; :0n];
     (sum odd[`side]*odd`size)%total};
 
+/ =================================================== STREAMING ANALYTICS
+/ .
+/ Batch-at-a-time versions of ofi, rolling_ofi, rolling_return_variance and
+/ cumulative signed trade flow (issue #332). Each update carries only the
+/ bounded state the next one needs - the previous L0 snapshot, the last
+/ window-1 OFI values and returns, the running flow - so a feed can be
+/ processed in chunks of any size and still give the batch functions'
+/ answers, warm-up nulls included.
+/ .
+/ STATE is a plain dictionary with no hidden globals: it is returned by
+/ every call and passed into the next, and it survives -8!/-9! (or a save
+/ to disk) unchanged, which is what a checkpoint is. Its shape is
+/ versioned (stream_version); an update refuses a state of another
+/ version rather than misreading it.
+/ .
+/ PER SYM. Every quantity is kept per sym, exactly as the batch functions
+/ compute one sym's slice: interleaving syms in a batch cannot leak one
+/ sym's history into another's.
+/ .
+/ WINDOWS count rows (window_mode `count), as rolling_ofi's msum does.
+/ Irregular timestamps therefore do not change a window; a time-based
+/ window is a different metric and is refused until one is defined.
+/ .
+/ LATE EVENTS. Within a batch rows must be time-sorted (per sym). A row
+/ earlier than the last one already processed for its sym is LATE: config
+/ `late `reject (the default) refuses the whole batch, `drop skips the row
+/ and counts it in the state's `dropped. Equal timestamps are ordinary
+/ events, as they are to the batch functions - there is no event id to
+/ tell a duplicate from a second event at the same instant.
+/ .
+/ SESSION RESET is explicit: stream_reset clears chosen syms back to
+/ warm-up. Nothing resets on a date change by itself.
+
+/ The state shape version stream_update accepts.
+stream_version:1
+
+/ The metrics a stream can carry: three over quotes, one over the tape.
+stream_quote_metrics:`ofi`rolling_ofi`return_variance
+stream_tape_metrics:enlist `signed_trade_flow
+stream_metrics:stream_quote_metrics,stream_tape_metrics
+
+/ The configuration a stream runs with, and its defaults.
+stream_defaults:`window`window_mode`late!(20;`count;`reject)
+
+/ Private: the population variance of one window of returns. A window of
+/ identical returns is exactly 0 - a two-pass variance over floats that
+/ are all equal can otherwise come out at 1e-34 rather than 0.
+window_variance:{[w]
+    if[all w=first w; :0f];
+    centre:avg w;
+    gap:w-centre;
+    avg gap*gap}
+
+/ Rolling variance of L0 log-mid returns over the last `window` returns,
+/ per quote row for one sym - the batch reference for the streaming
+/ return_variance.
+/ .
+/ Row 0 has no return (no prior mid), so the first full window ends at
+/ row `window`: every row before it is null.
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
+/ @param target_sym the sym to compute for
+/ @param window the number of returns per window (positive)
+/ @return a vector, one variance per quote row for target_sym, in time order
+/ @throws error if quotes is missing a required column
+/ @eg .qmicro.rolling_return_variance[quotes;`EURUSD;3]
+rolling_return_variance:{[quotes;target_sym;window]
+    sub:quotes_for_sym[`rolling_return_variance;quotes;target_sym];
+    log_mid:log mid_price[sub`bid_prices;sub`ask_prices];
+    rets:@[deltas log_mid;0;:;0n];
+    n:count rets;
+    var_at:{[rets;window;i] $[i<window; 0n; window_variance rets (1+i-window)+til window]};
+    var_at[rets;window;] each til n}
+
+/ Private: a stream's configuration with defaults filled in, refused when
+/ malformed.
+stream_config:{[config]
+    c:stream_defaults,$[99h=type config; config; ()!()];
+    if[count extra:(key c) except key stream_defaults;
+        '"stream: unknown config key(s) ",", " sv string extra];
+    w:c`window;
+    if[not (type w) in -5 -6 -7h; '"stream: window must be a positive integer number of rows"];
+    if[w<1; '"stream: window must be a positive integer number of rows"];
+    if[not (c`window_mode)~`count;
+        '"stream: window_mode must be `count - a time window is a different metric and is not defined yet"];
+    if[not (c`late) in `reject`drop; '"stream: late must be `reject or `drop"];
+    @[c;`window;:;`long$w]}
+
+/ Private: a sym's quote state before its first row.
+quote_state0:{[]
+    `rows`time`bid_px`bid_sz`ask_px`ask_sz`mid`ofi_tail`ret_tail`rolling_ofi`return_variance!(
+        0;0Np;0n;0n;0n;0n;0n;`float$();`float$();0n;0n)}
+
+/ Private: a sym's trade state before its first trade.
+trade_state0:{[] `trades`time`cum_flow!(0;0Np;0f)}
+
+/ Private: the empty per-sym quote state, keyed by sym. A keyed table rather
+/ than a dict of dicts: q folds a dict of same-keyed dicts into a table on
+/ its own, so this is the shape it would take anyway - stated, and typed.
+quote_states0:{[]
+    ([sym:`symbol$()] rows:`long$(); time:`timestamp$(); bid_px:`float$(); bid_sz:`float$();
+        ask_px:`float$(); ask_sz:`float$(); mid:`float$(); ofi_tail:(); ret_tail:();
+        rolling_ofi:`float$(); return_variance:`float$())}
+
+/ Private: the empty per-sym trade state, keyed by sym.
+trade_states0:{[] ([sym:`symbol$()] trades:`long$(); time:`timestamp$(); cum_flow:`float$())}
+
+/ Start a stream: an empty, versioned state for the chosen metrics.
+/ @param metrics a subset of `ofi`rolling_ofi`return_variance`signed_trade_flow
+/ @param config (::) for the defaults, or a dict of window (rows, default
+/   20), window_mode (`count) and late (`reject or `drop)
+/ @return the state dict: version, metrics, config, quotes, trades (per-sym
+/   state, keyed tables, empty) and dropped (0)
+/ @throws error naming an unknown metric or a malformed config
+/ @eg (.qmicro.stream_init[`ofi`rolling_ofi;(::)])`version  -> 1
+stream_init:{[metrics;config]
+    m:(),metrics;
+    if[0=count m; '"stream_init: name at least one metric of ",", " sv string stream_metrics];
+    if[count bad:m except stream_metrics;
+        '"stream_init: unknown metric(s) ",(", " sv string bad)," - expected some of ",", " sv string stream_metrics];
+    `version`metrics`config`quotes`trades`dropped!(
+        stream_version;distinct m;stream_config config;quote_states0[];trade_states0[];0)}
+
+/ Private: the late rows of one sym's slice, by its last processed time.
+late_rows:{[last_time;times] $[null last_time; (count times)#0b; times<last_time]}
+
+/ Private: refuse a slice that is not sorted by time.
+require_sorted:{[what;times]
+    if[not times~asc times;
+        '"stream_update: ",what," rows are not sorted by time within a sym"]}
+
+/ Private: one sym's quote rows through its state. Returns (state; table of
+/ row, ofi, rolling_ofi, return_variance).
+stream_quotes_one:{[st;sub;window]
+    n:count sub;
+    bid_px:level_at[sub`bid_prices;0];
+    bid_sz:level_at[sub`bid_sizes;0];
+    ask_px:level_at[sub`ask_prices;0];
+    ask_sz:level_at[sub`ask_sizes;0];
+    prev_bid_px:(st`bid_px),-1_bid_px;
+    prev_bid_sz:(st`bid_sz),-1_bid_sz;
+    prev_ask_px:(st`ask_px),-1_ask_px;
+    prev_ask_sz:(st`ask_sz),-1_ask_sz;
+    e_bid:?[bid_px>prev_bid_px; bid_sz; ?[bid_px=prev_bid_px; bid_sz-prev_bid_sz; neg prev_bid_sz]];
+    e_ask:?[ask_px<prev_ask_px; ask_sz; ?[ask_px=prev_ask_px; ask_sz-prev_ask_sz; neg prev_ask_sz]];
+    flow:e_bid-e_ask;
+    / the sym's very first row has no prior snapshot - null, as ofi's is
+    if[0=st`rows; flow:@[flow;0;:;0n]];
+    ofi_hist:(st`ofi_tail),flow;
+    rolled:(neg n)#msum[window;ofi_hist];
+    mid:0.5*bid_px+ask_px;
+    log_mid:log mid;
+    prev_log_mid:(log st`mid),-1_log_mid;
+    rets:log_mid-prev_log_mid;
+    ret_hist:(st`ret_tail),rets;
+    offset:count st`ret_tail;
+    first_row:st`rows;
+    var_at:{[ret_hist;window;offset;first_row;k]
+        i:first_row+k;
+        if[i<window; :0n];
+        pos:offset+k;
+        window_variance ret_hist (1+pos-window)+til window};
+    variance:var_at[ret_hist;window;offset;first_row;] each til n;
+    keep:neg window-1;
+    new_st:`rows`time`bid_px`bid_sz`ask_px`ask_sz`mid`ofi_tail`ret_tail`rolling_ofi`return_variance!(
+        first_row+n;last sub`time;last bid_px;last bid_sz;last ask_px;last ask_sz;last mid;
+        keep sublist ofi_hist;keep sublist ret_hist;last rolled;last variance);
+    (new_st;([] row:sub`row; ofi:flow; rolling_ofi:rolled; return_variance:variance))}
+
+/ Private: one sym's trade rows through its state. Returns (state; table of
+/ row, signed_flow, cum_flow).
+stream_trades_one:{[st;sub]
+    signed:`float$sub[`side]*sub`size;
+    running:1_sums (st`cum_flow),signed;
+    new_st:`trades`time`cum_flow!((st`trades)+count sub;last sub`time;last running);
+    (new_st;([] row:sub`row; signed_flow:signed; cum_flow:running))}
+
+/ Private: split a batch table by sym, apply the late policy against the
+/ per-sym state, and run `step` on each sym's accepted rows. Returns
+/ (per-sym state; dropped count; output table with sym and time).
+stream_side:{[what;tbl;states;state0;config;step]
+    tbl:update row:i from tbl;
+    syms:distinct tbl`sym;
+    acc:(states;0;());
+    run_sym:{[what;tbl;state0;config;step;acc;s]
+        sub:select from tbl where sym=s;
+        require_sorted[what;sub`time];
+        known:select from acc 0 where sym=s;
+        st:$[count known; (first 0!known) _ `sym; state0[]];
+        late:late_rows[st`time;sub`time];
+        if[any late;
+            if[`reject=config`late;
+                '"stream_update: ",string[sum late]," late ",what," row(s) for ",string[s],
+                 " - earlier than ",string[st`time],", the last already processed. Pass config late:`drop to skip them"];
+            sub:sub where not late];
+        if[0=count sub; :(acc 0;(acc 1)+sum late;acc 2)];
+        r:step[st;sub];
+        out:([] sym:(count sub)#s; time:sub`time),'r 1;
+        row:enlist (enlist[`sym]!enlist s),r 0;
+        ((acc 0) upsert row;(acc 1)+sum late;(acc 2),enlist out)};
+    acc:run_sym[what;tbl;state0;config;step]/[acc;syms];
+    out:$[count acc 2; `row xasc raze acc 2; ()];
+    (acc 0;acc 1;out)}
+
+/ Update a stream with the next batch.
+/ .
+/ The batch is a dict with `quotes (a quotes table, for the quote metrics)
+/ and/or `tape (an event tape, for signed_trade_flow); either may be
+/ absent. Outputs are aligned to the ACCEPTED input rows, each carrying its
+/ `row` index in the batch, so a dropped late row is visibly missing.
+/ .
+/ ofi and rolling_ofi equal .qmicro.ofi and .qmicro.rolling_ofi over the
+/ whole history; return_variance equals rolling_return_variance; cum_flow
+/ equals .qmicro.cumulative_trade_flow over that sym's trades - at every
+/ prefix, however the history is chunked.
+/ @param state from stream_init or a previous stream_update
+/ @param batch dict of quotes and/or tape tables
+/ @param config the stream's config - must match the one it was started with
+/ @return dict state (the new state), quotes (row, sym, time and the chosen
+/   quote metrics) and trades (row, sym, time, signed_flow, cum_flow)
+/ @throws error for a state of another version, a changed config, a batch
+/   carrying a table no chosen metric reads, unsorted rows, or late rows
+/   under `reject
+/ @eg (.qmicro.stream_update[.qmicro.stream_init[`ofi;(::)];(enlist `quotes)!enlist ([] time:2026.01.02D10:00:00 2026.01.02D10:00:01; sym:`EURUSD`EURUSD; bid_prices:(enlist 1.1;enlist 1.1); bid_sizes:(enlist 5f;enlist 7f); ask_prices:(enlist 1.2;enlist 1.2); ask_sizes:(enlist 4f;enlist 4f));(::)])[`quotes;`ofi]  -> 0n 2
+stream_update:{[state;batch;config]
+    if[not 99h=type state; '"stream_update: state must come from stream_init or stream_update"];
+    if[not (state`version)~stream_version;
+        '"stream_update: state is version ",(.Q.s1 state`version),", this code reads version ",string stream_version];
+    cfg:stream_config config;
+    if[not cfg~state`config;
+        '"stream_update: config differs from the one this stream started with - a changed window would mix two metrics in one state"];
+    if[not 99h=type batch; '"stream_update: batch must be a dict of `quotes and/or `tape tables"];
+    if[count extra:(key batch) except `quotes`tape; '"stream_update: unknown batch key(s) ",", " sv string extra];
+    metrics:state`metrics;
+    quote_cols:metrics inter stream_quote_metrics;
+    q_out:();
+    t_out:();
+    if[`quotes in key batch;
+        if[0=count quote_cols; '"stream_update: batch carries quotes but no quote metric was chosen at stream_init"];
+        .qfwd.require_quotes_cols[`stream_update;batch`quotes];
+        r:stream_side["quote";batch`quotes;state`quotes;quote_state0;cfg;stream_quotes_one[;;cfg`window]];
+        state[`quotes]:r 0;
+        state[`dropped]+:r 1;
+        q_out:$[98h=type r 2; (`row`sym`time,quote_cols)#r 2; r 2]];
+    if[`tape in key batch;
+        if[not `signed_trade_flow in metrics; '"stream_update: batch carries a tape but signed_trade_flow was not chosen at stream_init"];
+        require_tape batch`tape;
+        trades:select from batch`tape where action=`trade;
+        r:stream_side["trade";trades;state`trades;trade_state0;cfg;stream_trades_one];
+        state[`trades]:r 0;
+        state[`dropped]+:r 1;
+        t_out:r 2];
+    `state`quotes`trades!(state;q_out;t_out)}
+
+/ Clear chosen syms back to warm-up - a session reset. Their next row is a
+/ first row again: ofi null, windows empty, flow from 0.
+/ @param state a stream state
+/ @param syms the syms to reset, or (::) for every sym
+/ @return the state with those syms' rows removed from its quote and trade state
+/ @eg (.qmicro.stream_reset[.qmicro.stream_init[`ofi;(::)];(::)])`version  -> 1
+stream_reset:{[state;syms]
+    drop:$[syms~(::); (exec sym from key state`quotes) union exec sym from key state`trades; (),syms];
+    state[`quotes]:select from state`quotes where not sym in drop;
+    state[`trades]:select from state`trades where not sym in drop;
+    state}
+
+/ The stream's current value per sym: what the last row of each metric
+/ was, and how much history the sym has.
+/ @param state a stream state
+/ @return table sym, quote_rows, last_quote_time, mid, rolling_ofi,
+/   return_variance, trades, last_trade_time, cum_flow - a sym seen on one
+/   side only has nulls on the other
+/ @eg .qmicro.stream_snapshot .qmicro.stream_init[`ofi;(::)]
+stream_snapshot:{[state]
+    qs:0!state`quotes;
+    ts:0!state`trades;
+    syms:asc distinct (qs`sym),ts`sym;
+    quote_part:select sym, quote_rows:rows, last_quote_time:time, mid, rolling_ofi, return_variance from qs;
+    trade_part:select sym, trades, last_trade_time:time, cum_flow from ts;
+    base:([] sym:syms);
+    base:base lj `sym xkey quote_part;
+    base lj `sym xkey trade_part}
+
 \d .
