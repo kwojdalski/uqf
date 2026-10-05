@@ -525,6 +525,8 @@ it was asked to do is written when it starts: `dataset`, `source_version`,
 `range_from`, `range_to` and the window `width`. What it did is written when it
 ends: `windows_planned`, `windows_completed`, `windows_failed` and
 `rows_published`. A run that never finished keeps `running` and blank counts. A
+run whose row could not be closed fails: its status file reads `failed`, names
+the open row's `run_id`, and says the run ledger could not record the outcome. A
 ledger written before these columns existed stops the next backfill with
 `etl_runs predates the run's range and counts`; run `uqs run migrate` once, and
 earlier runs keep blanks where nothing was recorded.
