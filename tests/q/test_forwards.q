@@ -743,4 +743,127 @@ test_a_pair_crossed_with_itself_is_refused:{[t]
     .qunit.assertThrows[{.qfwd.ccy_orient_cross[`EURUSD;`EURUSD]};::;"ccy_orient_cross: EURUSD crossed with itself";
         "no EUREUR"]};
 
+/ ------------------------------------------------ broken dates (#313)
+
+broken_curve:{[] ([] value_date:2026.10.01 2026.10.11; forward_points:10 30f)}
+
+test_broken_date_midway_interpolates_points_and_outright:{[t]
+    r:.qfwd.forward_at_date[1.10;broken_curve[];2026.10.06;10000;::];
+    .testutil.assertApprox[r`points;20f;1e-12;"halfway between 10 and 30"];
+    .testutil.assertApprox[r`outright;1.102;1e-12;"1.10 + 20 pips"];
+    .qunit.assertEquals[r`lower_weight`upper_weight;0.5 0.5;"equal weights"];
+    .qunit.assertEquals[r`lower`upper;2026.10.01 2026.10.11;"the bracketing nodes"]};
+
+test_broken_date_on_a_node_reproduces_it:{[t]
+    c:.qfwd.mock_fwd_curve;
+    r:.qfwd.forward_at_date[1.10;c;;10000;::] each c`value_date;
+    .qunit.assertEquals[r[;`points];c`forward_points;"every node exactly"];
+    .qunit.assertEquals[r[;`lower_weight];(count c)#1f;"weight 1 on the node"]};
+
+test_broken_date_points_and_outright_round_trip:{[t]
+    r:.qfwd.forward_at_date[1.10;.qfwd.mock_fwd_curve;2026.11.02;10000;::];
+    .testutil.assertApprox[.qfwd.fwd_points[r`outright;1.10;10000];r`points;1e-9;"outright back to points"]};
+
+test_broken_date_outside_the_curve_is_refused_by_default:{[t]
+    .qunit.assertThrows[.qfwd.forward_at_date[1.10;broken_curve[];;10000;::];2026.10.20;
+        "forward_at_date: 2026.10.20 is outside the curve*";"no silent extrapolation"]};
+
+test_broken_date_extrapolates_only_when_asked:{[t]
+    f:{[policy] .qfwd.forward_at_date[1.10;.forwardstest.broken_curve[];2026.10.21;10000;(enlist `extrapolation)!enlist policy]};
+    .testutil.assertApprox[(f `flat)`points;30f;1e-12;"flat holds the end node"];
+    .testutil.assertApprox[(f `linear)`points;50f;1e-12;"linear extends the end slope"];
+    .qunit.assertEquals[(f `flat)`extrapolated;1b;"and says it extrapolated"]};
+
+test_broken_date_duplicate_curve_dates_are_refused:{[t]
+    .qunit.assertThrows[.qfwd.forward_at_date[1.10;;2026.10.06;10000;::];
+        ([] value_date:2026.10.01 2026.10.01; forward_points:10 30f);
+        "forward_at_date: curve has duplicate value dates";"refused"]};
+
+/ ------------------------------------------------------- FX swaps (#314)
+
+test_swap_cashflows_both_currencies:{[t]
+    r:.qfwd.swap_cashflows .qfwd.mock_swap;
+    .qunit.assertEquals[r`ccy;`EUR`USD`EUR`USD;"base and quote per leg"];
+    .qunit.assertEquals[r`amount;1000000 -1100000 -1000000 1110000f;"buy EUR near at 1.10, sell far at 1.11"]};
+
+test_swap_struck_at_market_is_worth_nothing:{[t]
+    s:.qfwd.mock_swap;
+    m:.qfwd.mock_swap_market;
+    at_market:@[@[s;`near_rate;:;m`near_fwd];`far_rate;:;m`far_fwd];
+    r:.qfwd.swap_value[at_market;m;2026.09.18;(enlist `pip_factor)!enlist 10000];
+    .testutil.assertApprox[r`pv;0f;1e-9;"contracted at the marks"]};
+
+test_swap_pv_is_the_sum_of_its_legs:{[t]
+    r:.qfwd.swap_value[.qfwd.mock_swap;.qfwd.mock_swap_market;2026.09.18;(enlist `pip_factor)!enlist 10000];
+    .testutil.assertApprox[r`pv;(r`near_pv)+r`far_pv;1e-9;"net = near + far"];
+    .testutil.assertApprox[r`pv;-1976.08;1e-6;"(1.1004-1.10)*1m*0.9998 - (1.1124-1.11)*1m*0.99"];
+    .testutil.assertApprox[r`market_points`contract_points;120 100f;1e-6;"swap points in pips"]};
+
+test_swap_reversed_negates_and_doubled_doubles:{[t]
+    s:.qfwd.mock_swap;
+    m:.qfwd.mock_swap_market;
+    o:(enlist `pip_factor)!enlist 10000;
+    base:.qfwd.swap_value[s;m;2026.09.18;o];
+    rev:.qfwd.swap_value[@[s;`near_side;neg];m;2026.09.18;o];
+    dbl:.qfwd.swap_value[@[s;`notional;2*];m;2026.09.18;o];
+    .testutil.assertApprox[rev`near_pv`far_pv`pv`near_pv01`far_pv01;neg base`near_pv`far_pv`pv`near_pv01`far_pv01;1e-9;"reversed"];
+    .testutil.assertApprox[dbl`near_pv`far_pv`pv;2*base`near_pv`far_pv`pv;1e-9;"doubled"];
+    .qunit.assertEquals[(.qfwd.swap_cashflows @[s;`near_side;neg])`amount;neg (.qfwd.swap_cashflows s)`amount;"flows negate too"]};
+
+test_swap_settled_near_leg_is_worth_nothing:{[t]
+    r:.qfwd.swap_value[.qfwd.mock_swap;.qfwd.mock_swap_market;2026.10.01;(enlist `pip_factor)!enlist 10000];
+    .qunit.assertEquals[r`settled;enlist `near;"the near leg settled on 22 Sep"];
+    .testutil.assertApprox[r`pv;r`far_pv;1e-12;"only the far leg remains"]};
+
+test_swap_without_a_pip_factor_is_refused:{[t]
+    .qunit.assertThrows[.qfwd.swap_value[.qfwd.mock_swap;.qfwd.mock_swap_market;2026.09.18;];::;
+        "swap_value: opts must be a dictionary carrying pip_factor";"refused"]};
+
+/ ----------------------------------------- quote convention conversion (#315)
+
+test_convert_quotes_inverts_bid_and_ask:{[t]
+    r:.qfwd.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::];
+    .testutil.assertApprox[first each r`bid`ask;0.4 0.5;1e-12;"1/2.5 and 1/2"];
+    .qunit.assertEquals[first each r`sym`source_sym;`USDEUR`EURUSD;"target and source named"]};
+
+test_convert_quotes_rescales_sizes:{[t]
+    q:([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5; bid_size:enlist 10f; ask_size:enlist 10f);
+    r:.qfwd.convert_quotes[q;(enlist `EURUSD)!enlist `USDEUR;::];
+    .testutil.assertApprox[first r`ask_size;20f;1e-12;"10 base at 2 is 20 of the new base, now an offer at 0.5"]};
+
+test_convert_quotes_round_trips:{[t]
+    q:([] sym:`EURUSD`USDJPY; bid:1.0998 148.21; ask:1.1002 148.24; bid_size:1000000 2000000f; ask_size:1500000 1000000f);
+    there:`EURUSD`USDJPY!`USDEUR`JPYUSD;
+    back:`USDEUR`JPYUSD!`EURUSD`USDJPY;
+    r:.qfwd.convert_quotes[delete source_sym,inverted from .qfwd.convert_quotes[q;there;::];back;::];
+    .qunit.assertEquals[r`sym;q`sym;"symbols back"];
+    gap:max abs raze (r`bid`ask`bid_size`ask_size)-q`bid`ask`bid_size`ask_size;
+    .testutil.assertApprox[gap;0f;1e-6;"prices and sizes back"]};
+
+test_convert_quotes_points_go_through_the_outright:{[t]
+    q:([] sym:enlist `EURUSD; spot:enlist 2f; fwd_points:enlist 2000f);
+    pf:(enlist `pip_factors)!enlist `EURUSD`USDEUR!10000 10000f;
+    r:.qfwd.convert_quotes[q;(enlist `EURUSD)!enlist `USDEUR;pf];
+    .testutil.assertApprox[first r`fwd_points;10000*(1%2.2)-1%2;1e-9;"target_pf*(1/F - 1/S), not -2000"]};
+
+test_convert_quotes_same_pair_passes_unchanged:{[t]
+    q:([] sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.2);
+    r:.qfwd.convert_quotes[q;(enlist `EURUSD)!enlist `EURUSD;::];
+    .qunit.assertEquals[r`bid`ask;q`bid`ask;"untouched"];
+    .qunit.assertEquals[first r`inverted;0b;"and not inverted"]};
+
+test_convert_quotes_refusals:{[t]
+    q:([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);
+    .qunit.assertThrows[.qfwd.convert_quotes[q;;::];(enlist `EURUSD)!enlist `GBPUSD;
+        "convert_quotes: GBPUSD is neither EURUSD nor its inverse";"an unrelated target"];
+    .qunit.assertThrows[.qfwd.convert_quotes[q;;::];(enlist `GBPUSD)!enlist `USDGBP;
+        "convert_quotes: no target convention for EURUSD";"a sym with no target"];
+    .qunit.assertThrows[.qfwd.convert_quotes[;(enlist `EURUSD)!enlist `USDEUR;::];update bid_size:1f from q;
+        "convert_quotes: bid_size and ask_size come together*";"half a size pair"];
+    .qunit.assertThrows[.qfwd.convert_quotes[;(enlist `EURUSD)!enlist `USDEUR;::];update fwd_points:1f from q;
+        "convert_quotes: fwd_points need a spot column*";"points without spot"]};
+
+test_inverse_pair_swaps_legs:{[t]
+    .qunit.assertEquals[.qfwd.inverse_pair each `EURUSD`USDJPY;`USDEUR`JPYUSD;"legs swapped"]};
+
 \d .

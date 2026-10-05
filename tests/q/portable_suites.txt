@@ -15,6 +15,7 @@
 # regression on PeachQ to fix or, if it is PeachQ's, to take out with a reason.
 test_allocation.q
 test_book.q
+test_calendar.q
 test_catalog.q
 test_ccy.q
 test_daycount.q
