@@ -1,4 +1,4 @@
-# tap1
+# Tickerplant inspector
 
 A diagnostic subscriber, started on demand, that logs every batch the
 tickerplant publishes. Starting, stopping and inspecting the stack as a whole is

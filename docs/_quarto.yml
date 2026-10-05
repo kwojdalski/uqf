@@ -57,7 +57,7 @@ website:
         href: guides/README.md
       - text: "Scaffolding"
         href: scaffolding/README.md
-      - text: "Services"
+      - text: "Services - Showcase"
         href: services/README.md
       - text: "Architecture"
         href: architecture/README.md
@@ -96,8 +96,9 @@ website:
           - scaffolding/backfill.md
           - scaffolding/hdb-transfer.md
           - scaffolding/reaction.md
-      - section: "Services"
+      - section: "Services - Showcase"
         contents:
+          - services/README.md
           - services/synthetic-feeds.md
           - services/superbook.md
           - services/cross-arbitrage.md
@@ -106,6 +107,7 @@ website:
           - services/kafka.md
           - services/crypto-recorder.md
           - services/tap.md
+          - services/markouts.md
       - section: "Architecture"
         contents:
           - architecture/pipeline-philosophy.md

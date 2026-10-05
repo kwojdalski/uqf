@@ -1,4 +1,7 @@
-# FX positions service
+# FX positions and limits
+
+Processes: `fxordersfeed1` (synthetic order flow) and `fxpositions1` (positions
+and limit breaches).
 
 A running book of what the desk is holding, along the dimensions the desk
 reports on, with limits and breach alerts --- and it runs on stock kdb+ with no
