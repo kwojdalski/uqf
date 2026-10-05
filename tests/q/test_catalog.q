@@ -35,7 +35,9 @@ beforeNamespace_load:{[]
 / root namespace for every suite that runs after this.
 published:{[]
     ls:read0 `$":src/etl/plant_tables.q";
-    ls:ls where (not ls like "/*") and ls like "*:(*";
+    / `name:([]` exactly, as uqs and .qetl.plant.adopt_vendored read it: a
+    / looser "*:(*" also caught the keyed `elements:([table:...]...)` lookup.
+    ls:ls where (not ls like "/*") and {[l] (0<count l) and "([]"~3#(1+l?":")_l} each ls;
     asc `$ {x til x?":"} each ls}
 
 test_every_published_table_is_described_or_hidden:{[t]

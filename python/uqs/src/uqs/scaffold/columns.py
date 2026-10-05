@@ -222,3 +222,28 @@ def table_definition(table: str, columns: list[tuple[str, str]]) -> str:
     """One `name:([]...)` line, in plant_tables.q's own shape."""
     body = "; ".join(f"{col}:{literal}" for col, literal in columns)
     return f"{table}:([]{body})"
+
+
+def nested_declaration(table: str, columns: list[tuple[str, str]]) -> str:
+    """The `.qetl.plant.nested` line a table with list columns needs, or "".
+
+    An empty `()` column has no element type, so plant_tables.q declares what
+    each one holds beside the table - without it, a preview or poll of a page
+    for this table is refused, and test_plant_tables.q's gate fails. Each list
+    column is declared "F", float vectors - what the scaffold's own sample
+    (`1 2 3f`) holds - and marked SCAFFOLDED, since a column copied with
+    `--columns-from` may hold strings ("C") or symbols ("S") instead.
+    """
+    nested = [col for col, literal in columns if literal == _BY_NAME["list"].literal]
+    if not nested:
+        return ""
+    chars = "F" * len(nested)
+    pairs = (
+        f'(enlist `{nested[0]})!enlist "{chars}"'
+        if len(nested) == 1
+        else "`" + "`".join(nested) + f'!"{chars}"'
+    )
+    return (
+        f"nested[`{table};{pairs}];"
+        '  / SCAFFOLDED: what each list column holds - "F" floats, "C" strings, "S" symbols\n'
+    )

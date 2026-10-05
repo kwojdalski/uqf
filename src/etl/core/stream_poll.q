@@ -130,7 +130,8 @@ cursor_ops:{[job]
 / it was and the page is fetched again, rather than skipped.
 / @param job the job's name
 / @return dict of state (`idle or `published), rows and cursor
-/ @throws error when the proposed cursor does not advance, or a step throws
+/ @throws error when the page does not fit its plant tables (.qetl.plant.problems),
+/   the proposed cursor does not advance, or a step throws
 tick:{[job]
     d:def job;
     p:d`poll;
@@ -140,6 +141,11 @@ tick:{[job]
     page:p[`fetch] current;
     if[0=count page; :`state`rows`cursor!(`idle;0;current)];
     out:outputs[job;p[`normalize] page];
+    / Checked before anything is published or saved: a page the plant would
+    / mis-store is refused whole, so no table of it lands and the cursor stays
+    / where it was - the page is fetched again once the job is fixed.
+    if[count failures:raze contract_failures'[key out;value out];
+        '"tick: ",string[job]," would publish what the plant does not take - ","; " sv failures];
     proposed:p[`next_cursor] page;
     if[not ops[`advances][current;proposed];
         '"tick: ",string[job],"'s next cursor ",(-3!proposed)," does not move past ",(-3!current),
@@ -149,16 +155,12 @@ tick:{[job]
     ops[`save][name;proposed];
     `state`rows`cursor!(`published;sum count each value out;proposed)}
 
-/ Private: what is wrong with `rows` for plant table `t`, by name, order
-/ and type. A table the plant does not carry has nothing to compare against.
+/ Private: what is wrong with `rows` for plant table `t` - the plant's own
+/ contract, .qetl.plant.problems, so the preview and the timer hold a page to
+/ the same rules and the plant's nested element types are declared once. A
+/ table the plant does not carry has nothing to compare against.
 / @return a list of messages, empty when it matches
-contract_failures:{[t;rows]
-    if[not t in .qetl.plant.names[]; :()];
-    want:0!meta .qetl.plant.published t;
-    got:0!meta 0!rows;
-    if[(want[`c];want[`t])~(got[`c];got[`t]); :()];
-    enlist string[t]," has columns ",(" " sv string got`c)," typed \"",got[`t],
-        "\" - the plant takes ",(" " sv string want`c)," typed \"",want[`t],"\""}
+contract_failures:{[t;rows] $[t in .qetl.plant.names[]; .qetl.plant.problems[t;rows]; ()]}
 
 / Private: whether a polling job's page is live data, the fixture, or
 / unknown - known only when its poll names the source it reads.

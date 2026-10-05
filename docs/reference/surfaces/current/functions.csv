@@ -463,6 +463,7 @@ qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
 qetl.plant,ccy_exposure,table,,
 qetl.plant,client_flow,table,,
+qetl.plant,column_problems,function,7,table_name declared n c want got vals
 qetl.plant,columns,function,2,t cs
 qetl.plant,config_change,table,,
 qetl.plant,connections,table,,
@@ -476,6 +477,7 @@ qetl.plant,databento_mbp10,table,,
 qetl.plant,deal_positions,table,,
 qetl.plant,duckdb_deals,table,,
 qetl.plant,economic_calendar,table,,
+qetl.plant,elements,dict,,
 qetl.plant,execution_quality,table,,
 qetl.plant,executions,table,,
 qetl.plant,fx_limit_breach,table,,
@@ -486,12 +488,15 @@ qetl.plant,marks,table,,
 qetl.plant,materialise,function,1,ts
 qetl.plant,mkt_orderbook,table,,
 qetl.plant,names,function,1,
+qetl.plant,nested,function,2,table_name types
+qetl.plant,nested_columns,function,1,table_name
 qetl.plant,order_routing,table,,
 qetl.plant,orders,table,,
 qetl.plant,own,function,1,
 qetl.plant,packets,table,,
 qetl.plant,position,table,,
 qetl.plant,predictions,table,,
+qetl.plant,problems,function,2,table_name rows
 qetl.plant,published,function,1,t
 qetl.plant,quote,table,,
 qetl.plant,quotes,table,,
@@ -501,6 +506,7 @@ qetl.plant,shape,function,1,t
 qetl.plant,superbook,table,,
 qetl.plant,trade,table,,
 qetl.plant,trades,table,,
+qetl.plant,undeclared,function,1,
 qetl.plant,vendored,value,,
 qetl.plant,wide_book,table,,
 qetl.reaction,audit,function,1,
