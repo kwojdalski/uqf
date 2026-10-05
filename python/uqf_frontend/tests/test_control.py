@@ -298,11 +298,41 @@ def test_an_unknown_field_is_refused_by_the_orchestrator_whitelist(writeable, mo
 
 
 def test_setting_a_worker_config_key_goes_through_the_gateway(writeable, gw):
-    gw._responses[control.SET_WORKER_CONFIG] = {"source": "override", "value": "true"}
+    # `.qetl.cfg.explain`'s own shape: (`overrides;"true") arrives as a pair.
+    gw._responses[control.SET_WORKER_CONFIG] = ["overrides", b"true"]
     body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
     program, args, _tier = gw.routed[-1]
     assert args == ("dry_run", "true")
-    assert body["explain"]["source"] == "override"
+    assert body["explain"] == ["overrides", "true"]
+
+
+def test_an_override_in_effect_is_not_shadowed(writeable, gw):
+    gw._responses[control.SET_WORKER_CONFIG] = ["overrides", b"true"]
+    body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
+    assert (body["effective_layer"], body["shadowed"], body["env_var"]) == (
+        "overrides",
+        False,
+        None,
+    )
+
+
+def test_an_environment_variable_that_outranks_the_override_is_reported(writeable, gw):
+    """#634: UQF_DRY_RUN=false in the process's environment beats the override
+    just set, and the response used to read as a success regardless."""
+    gw._responses[control.SET_WORKER_CONFIG] = ["env", b"false"]
+    body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
+    assert body["shadowed"] is True
+    assert (body["effective_layer"], body["effective_value"], body["env_var"]) == (
+        "env",
+        "false",
+        "UQF_DRY_RUN",
+    )
+
+
+def test_an_answer_of_unknown_shape_claims_neither_saved_nor_shadowed(writeable, gw):
+    gw._responses[control.SET_WORKER_CONFIG] = {}
+    body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
+    assert (body["effective_layer"], body["shadowed"]) == (None, False)
 
 
 def test_the_response_says_the_override_is_not_durable(writeable, gw):

@@ -907,6 +907,28 @@ function ProcessPicker({
  * off - discovering that by pressing "Stop all" and reading a 403 would mean
  * having already tried to stop the fleet.
  */
+/**
+ * What setting a worker-config key achieved, in words. An override is not the
+ * top layer: an environment variable outranks it, and the response used to
+ * read as a success even then (#634). "Saved" is said only when the override
+ * is what the process now reads.
+ */
+export function workerConfigOutcome(r: WorkerConfigResult): string {
+  if (r.shadowed) {
+    return (
+      `Not in effect: ${r.key} was set, but ${r.env_var} in the environment wins ` +
+      `(${r.env_var}=${r.effective_value ?? ""}). The override applies only once that variable is unset.`
+    );
+  }
+  if (r.effective_layer === "overrides") {
+    return `Saved: ${r.key} = ${r.value}, and the process now reads it.`;
+  }
+  return (
+    `Set ${r.key}, but the process reports its value from ` +
+    `${r.effective_layer ?? "an answer this page does not recognise"}, not the override.`
+  );
+}
+
 function ControlView() {
   const status = useResource<ControlStatus>("/control");
   const [busy, setBusy] = useState("");
@@ -1119,7 +1141,7 @@ function ControlView() {
               wcfg,
               "PUT",
             );
-            return `${r.key} = ${r.value}\n${JSON.stringify(r.explain, null, 2)}\n\n${r.note}`;
+            return `${workerConfigOutcome(r)}\n\n${r.note}`;
           });
         }}
       >
