@@ -21,8 +21,10 @@ from uqf_airflow_provider.status_reader import (
     read_status_file,
     status_file_path,
 )
+from uqf_airflow_provider.translate import _SUCCESS_STATES
 
 STATUS_Q = Path(__file__).resolve().parents[3] / "src" / "etl" / "core" / "status.q"
+BOUNDED_WORKER_Q = STATUS_Q.with_name("bounded_worker.q")
 
 
 def write_status_file(directory: Path, instance: str, **overrides) -> Path:
@@ -130,3 +132,56 @@ def test_non_json_body_is_reported_not_raised_as_a_bare_jsondecodeerror(tmp_path
     path.write_text("{not json")
     with pytest.raises(MalformedStatusFile):
         read_status_file(path)
+
+
+# --- run outcomes: the exit code, the status file and Airflow agree (#609) --
+
+
+def q_exit_successes() -> set[str]:
+    """The states `.qetl.job.bounded.exit_code` exits 0 for."""
+    line = next(
+        ln for ln in BOUNDED_WORKER_Q.read_text().splitlines() if ln.startswith("exit_code:")
+    )
+    m = re.search(r"state in ((?:`\w+)+);\s*0i", line)
+    assert m, "bounded_worker.q's exit_code is no longer spelled the way this test reads it"
+    return set(re.findall(r"`(\w+)", m.group(1)))
+
+
+def q_phase_statuses() -> dict[str, str]:
+    """`.qetl.job.bounded.phases`: each worker phase -> the status file state it
+    writes (`partial`, which the file has no word for, writes `failed`)."""
+    src = BOUNDED_WORKER_Q.read_text()
+    block = src[src.index("phases:([phase:") :]
+    block = block[: block.index("run_ledger:")]
+    phase_m = re.search(r"\[phase:((?:`\w+)+)\]", block)
+    status_m = re.search(r"status:((?:`\w+)+);", block)
+    assert phase_m and status_m, "bounded_worker.q's phases table is no longer spelled as read here"
+    phases = re.findall(r"`(\w+)", phase_m.group(1))
+    statuses = re.findall(r"`(\w+)", status_m.group(1))
+    assert len(phases) == len(statuses), "phases and their statuses no longer line up"
+    return dict(zip(phases, statuses, strict=True))
+
+
+def test_the_sensors_success_states_are_qs_successful_exits():
+    """The sensor passes a task on these; the worker's process exits 0 on
+    these. A state added to one alone is a run Airflow and the exit code read
+    differently."""
+    assert set(_SUCCESS_STATES) == q_exit_successes() & set(STATES)
+
+
+def test_every_worker_phase_reads_the_same_to_the_exit_code_and_the_sensor():
+    """For each phase a run can END in, the process's exit code and the
+    sensor's verdict on the status the phase writes must agree - so a new
+    terminal phase, or a new mapping onto the file, cannot make Airflow green
+    a run whose process exited 1, or the reverse."""
+    exits_ok = q_exit_successes()
+    disagree = []
+    for phase, written in q_phase_statuses().items():
+        assert written in STATES, f"phase {phase} writes {written!r}, which is not a status"
+        if written in ("starting", "running"):
+            continue
+        if (phase in exits_ok) != (written in _SUCCESS_STATES):
+            disagree.append(
+                f"{phase} exits {0 if phase in exits_ok else 1}, sensor reads {written}"
+            )
+    assert not disagree, "; ".join(disagree)

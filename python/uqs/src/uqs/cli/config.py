@@ -166,8 +166,8 @@ def logs(
     level: Annotated[
         str | None,
         typer.Option(
-            help="Only show this level and above: TRACE/DEBUG/INFO/WARNING/ERROR",
-            autocompletion=completion.choices("TRACE", "DEBUG", "INFO", "WARNING", "ERROR"),
+            help=stack_logs.LEVEL_HELP,
+            autocompletion=completion.choices(*stack_logs.LEVEL_CHOICES),
         ),
     ] = None,
     multitail: Annotated[

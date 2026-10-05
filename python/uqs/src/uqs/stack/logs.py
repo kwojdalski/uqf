@@ -51,6 +51,12 @@ _LOGURU_LEVEL = {
 }
 _LEVEL_ORDER = {"TRACE": 5, "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
 
+#: `--level`'s choices, least to most severe - derived, so a level added to
+#: _LEVEL_ORDER reaches every command's completion and help without a third
+#: copy (#609).
+LEVEL_CHOICES = tuple(sorted(_LEVEL_ORDER, key=_LEVEL_ORDER.__getitem__))
+LEVEL_HELP = "Only show this level and above: " + "/".join(LEVEL_CHOICES)
+
 # Dedicated format for `logs` output - the record's own {time}/{function}/
 # {line} are Python's (always logger/core.py's _emit, useless here); the kdb
 # process's own timestamp/procname/proctype (bound as `extra` below) are
