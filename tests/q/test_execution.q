@@ -93,6 +93,29 @@ test_markout_at_horizons_works_with_unsorted_quotes:{[t]
     r:.qexec.markout_at_horizons[trades;shuffled_quotes;0D00:00:01];
     .testutil.assertApprox[first r`ref_price;1.1010;1e-9;"correct as-of match even though the input quotes weren't sorted"]};
 
+test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair:{[t]
+    / #625: the two horizon markouts spell their inputs differently - a trades
+    / table, `sym`time`mid quotes and timespan horizons here; scalars, depth
+    / quotes and horizons_ms in .qfwd.cross_markout_at_horizons. On a pair
+    / quoted directly they are one calculation, so a mix-up between them shows
+    / up here as a wrong number rather than nowhere. Both sides, so a flipped
+    / sign convention cannot agree by accident.
+    t0:2026.01.01D10:00:00.000000000;
+    times:t0+0D00:00:01*0 1 10;
+    bids:1.1000 1.1004 1.0990;
+    asks:1.1002 1.1006 1.0992;
+    depth:([] time:times; sym:3#`EURUSD; bid_prices:enlist each bids; bid_sizes:3#enlist enlist 1000000f;
+        ask_prices:enlist each asks; ask_sizes:3#enlist enlist 1000000f);
+    mids:([] sym:3#`EURUSD; time:times; mid:0.5*bids+asks);
+    {[t0;depth;mids;side]
+        trade:([] sym:enlist `EURUSD; time:enlist t0; side:enlist side; trade_price:enlist 1.1003; pip_factor:enlist 10000);
+        by_table:exec markout_pips from .qexec.markout_at_horizons[trade;mids;0D00:00:00 0D00:00:01 0D00:00:10];
+        by_scalars:exec markout_pips from .qfwd.cross_markout_at_horizons[depth;`EURUSD;t0;side;1.1003;10000;0 1000 10000;1];
+        .testutil.assertApprox[by_scalars;by_table;1e-9;
+            "timespan horizons over mids and the same horizons in ms over depth give the same pips"]
+        }[t0;depth;mids] each 1 -1;
+    }
+
 test_markout_at_horizons_rejects_trades_missing_a_required_column:{[t]
     trades:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; side:enlist 1; trade_price:enlist 1.1000);
     quotes:([] sym:enlist `EURUSD; time:enlist 2024.01.01D09:00:00.000000000; mid:enlist 1.1000);
