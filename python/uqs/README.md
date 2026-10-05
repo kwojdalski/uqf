@@ -1,242 +1,44 @@
 # uqs
 
-Bridges the two vendored TorQ trees at the repo root - `lib/torq/` (the
-production framework) and `lib/torq-finance-starter-pack/` (a layered reference
-app built on top of it) - into a runnable demo, without editing or writing into
-either. Full writeup: [docs/guides/uqs.md](../../docs/guides/uqs.md) at the repo
-root.
-
-Standalone package on purpose: this is process orchestration, not q pricing, and
-it carries its own dependencies (`typer`, `rich`, `loguru`, `fastmcp`, `kola`).
+The stack's operator CLI and MCP server: it starts, inspects and stops the TorQ
+fleet built from `lib/torq/` and `lib/torq-finance-starter-pack/`, without
+writing into either. **Using it:**
+[docs/guides/uqs.md](../../docs/guides/uqs.md). This page is for working on it.
 
 ## Layout
 
 ```
 src/uqs/
-  paths.py          where every file in the tree lives, and `repo_root()`,
-                     which searches upward for a marker rather than counting
-                     directory levels - which is what makes the folders safe
-  model/            what the stack DECLARES: the pipeline registry, the edges
-                     between pipelines, the plant's table schemas, the
-                     process dependency graph. Starts nothing, opens nothing
-  stack/            the RUNNING fleet: starting and stopping processes, the
-                     environment they inherit, querying them, reading their
-                     logs, and keeping the process count inside the licence's
-                     connection budget
-  cli/              the `uqs` command line, one module per command
-                     family, all registering onto one shared Typer `app` so
-                     `uqs start` stays spelled that way. `entry.py` is
-                     the `[project.scripts]` entry point
-  scaffold/         `uqs job new`: the plan, the file templates, and
-                     applying one to the tree
-  external/         processes this tree starts but does not own - the crypto
-                     recorder, the Databento feed and its streamer
-  checks/           read-only diagnostics: the smoke test over a running
-                     fleet, the HDB's on-disk shape, the plant schema as the
-                     live processes report it
-  logger/           small loguru-based logging package (ported from a
-                     sibling project's generic logger, see git history) -
-                     used for the CLI/MCP server's own status/error output
-  mcp.py            the `uqs-mcp` FastMCP server, exposing the same
-                     operations as MCP tools
-process_overrides.csv   created on first `config set` - per-process
-                         process.csv field overrides (see "Config setters"
-                         below); tracked in git like any other config
-tests/                  flat, one test module per source module, because
-                         pytest discovery and `-k` are easier to aim at a
-                         flat tree than the source is to read as one
+  paths.py     where every file in the tree lives; repo_root() searches upward
+  model/       what the stack DECLARES: pipelines, their edges, table schemas,
+               the process graph. Starts nothing, opens nothing
+  stack/       the RUNNING fleet: start/stop, environment, queries, logs, the
+               licence's connection budget
+  cli/         the `uqs` command, one module per command family on one Typer app;
+               entry.py is the entry point
+  scaffold/    `uqs job new`: the plan, the templates, applying them
+  external/    processes this tree starts but does not own (crypto recorder,
+               Databento feed)
+  checks/      read-only diagnostics: smoke test, HDB shape, live plant schema
+  logger/      the CLI's own loguru logging
+  mcp.py       the `uqs-mcp` server: the same operations as MCP tools
+tests/         flat, one module per source module
 ```
 
-The folders are layers, and the imports only ever point one way:
+The folders are layers, and imports only point down:
 
 ```
-logger/ paths.py          depend on nothing in this package
-model/           -> paths, logger
-stack/           -> model, paths, logger
+logger/ paths.py           depend on nothing in this package
+model/            -> paths, logger
+stack/            -> model, paths, logger
 external/ checks/ -> stack, model, paths, logger
-scaffold/ cli/   -> whatever they need below them, imported from the
-                    module that defines it (there is no facade)
+scaffold/ cli/    -> whatever they need below them
 ```
 
-`model/` importing from `stack/` would be the change that breaks this, and the
-reason to care is not tidiness: it would mean the declared shape of the stack
-could no longer be read without the code that starts processes. So it is checked
-rather than asserted - `test_module_split.py::test_the_folders_are_layers` fails
-on any import that points back up.
-
-## Quick start
-
-One-time, installs the `uqs` command onto your `PATH` as an editable link back
-to this source (edits picked up immediately, no reinstall):
-
-```
-scripts/dev/install.sh
-```
-
-(`uv tool install --force --editable python/uqs`, plus removing any install
-under a former distribution name and verifying the command runs.)
-
-The script handles the stale-install case for you: an entry in `uv tool list`
-under a former name (`uqf-stack`, `torq-orchestrator`) is an install from before
-this package was renamed, its script still imports the old module, and it owns
-`uqs` on your `PATH` until it is uninstalled. See
-[docs/guides/uqs.md](../../docs/guides/uqs.md) for why an editable install picks
-up source edits but not that.
-
-then, from anywhere:
-
-```
-uqs start all
-uqs summary
-uqs stop all
-```
-
-Without that step (e.g. CI, a fresh checkout), `uv run` works the same, just
-longer:
-
-```
-uv run --project python/uqs uqs start all
-```
-
-`uv run --project python/uqs` resolves this package's dependencies on demand, no
-separate `uv sync` needed - though `uv sync` here also works if you want the
-`.venv` up front.
-
-Requires KDB-X (`q` on `PATH` elsewhere in this repo) plus `envsubst` and
-`rlwrap` on `PATH` (`torq.sh`, which this drives under the hood, needs both -
-macOS: `brew install gettext rlwrap`).
-
-## Commands
-
-```
-start [PROCS] [--port N] [--print]    start (default: all startwithall=1 processes);
-                                      --print shows the startup command line(s) instead
-stop [PROCS] [--port N]               stop
-restart [PROCS] [--port N]            restart
-summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
-        [--probe-timeout S] [--debug]  status table: up/down, pid, port, heartbeat,
-                                      whether each process answers within 0.5s
-                                      (Responds), and its declared graph; --debug
-                                      adds each process's load time
-backfill WORKER --version V --from T --to T [--port N]
-                                      run a bounded worker over [--from, --to);
-                                      2026-09-13, 2026-09-13T06:00 or 2026.09.13D06:00,
-                                      no offset means UTC
-clean [--match REGEX] [--dry-run]     wipe ../../output/uqs/, or part of it
-query [EXPR] --proc P|--port N [--export FILE]
-                                      run a q expression; no EXPR opens a qcon session
-list [KIND] [--export FILE]           list every item of KIND - no argument shows the kinds
-config get PROCNAME [FIELD] [--raw] [--export FILE]   show a process's effective process.csv row, resolved
-config set PROCNAME FIELD VALUE       persist a process.csv field override
-logs [PROCS] [-f] [-n N] [--level L] [--multitail]
-                                      tail out_/err_*.log through the CLI's own logger
-data replay|hdb-check                 replay a tickerplant log into the HDB; check its shape
-feed start|stop|status NAME           an external publisher: databento, kafka, crypto,
-                                      crypto-fills
-job new|remove|install                write ETL jobs into the tree
-raw -- ARGS...                        anything else torq.sh supports
-```
-
-`--help` on the command itself or any subcommand has the full picture, and
-`uqs --install-completion` adds tab completion for process names, workers,
-profiles and option values.
-
-## Exporting output
-
-`summary`/`query`/`config get`/`list` all take `--export FILE`, writing the same
-rows shown on screen to `FILE` as CSV or Parquet (format inferred from the
-extension) via [polars](https://pola.rs/) - `query`'s table results are already
-a `polars.DataFrame` (that's what [kola](https://pypi.org/project/kola/) returns
-for a table-shaped q result), the other commands' row lists get wrapped into one
-the same way. Anything not tabular (e.g. `query`'s result for `count t`, a bare
-atom) is rejected with an error rather than silently exported as a bogus
-one-cell table.
-
-```
-uqs list processes --export processes.csv
-uqs query "select from quotes" --proc rdb1 --export quotes.parquet
-```
-
-## Listing things
-
-`list` isn't limited to processes - it dispatches on a small registry
-(`stack.listing.LISTABLE_KINDS`), currently `processes` (procname/proctype/port/
-startwithall, resolved and with overrides applied - the default), `fields`
-(`process.csv`'s valid `config set` columns), `overrides` (every `config set`
-override in effect), and `env` (`build_env()`'s resolved
-`KDBBASEPORT`/`KDBHDB`/... values). Adding a new kind is one function plus one
-registry entry - see `stack/listing.py`'s `_list_*` functions.
-
-## Config setters
-
-`config get`/`config set` read and write **`process_overrides.csv`** - not the
-vendored `process.csv` (never edited) and not the *generated* one under
-`output/uqs/` either, which `bootstrap()` rebuilds from scratch on every single
-command, so anything written there directly would just be overwritten by the
-next `start`/`stop`/`summary`/... call. `process_overrides.csv` is what survives
-instead: a small `procname,field,value` file, applied on top of the vendored +
-`fxfeed1` rows every time `bootstrap()` (re)generates `process.csv`.
-
-```
-uqs config set fxfeed1 startwithall 0
-```
-
-`config get` resolves both of `process.csv`'s placeholder styles by default -
-`${VAR}`/`$VAR` (`load=${KDBHDB}` -> the real path) and the port column's
-`{VAR}`/`{VAR}+N` arithmetic shorthand (`port={KDBBASEPORT}+3` -> `6053`),
-evaluated the same way `torq.sh` itself does at process-start time. Pass `--raw`
-to see the literal value instead.
-
-Valid fields are `process.csv`'s own columns: `host`, `port`, `proctype`,
-`procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`, `extras`,
-`qcmd`. Takes effect on that process's next `start`/`restart` - a
-currently-running instance of it is untouched.
-
-## Logs
-
-`logs` tails each process's `out_<procname>.log`/`err_<procname>.log` (stable
-aliases TorQ maintains onto the current run's timestamped file) through the same
-colorized loguru logger the rest of the CLI uses, parsing `.lg.format`'s
-pipe-delimited `time|host|proctype|procname|loglevel|id|message` line shape - no
-TorQ-side config change (no `-jsonlogs`). `-f`/`--follow` runs one `tail -F` per
-file (correctly follows TorQ's own log rolling) merged through a queue; without
-it, the last `-n` lines per file are parsed and printed sorted by the log's own
-timestamp. `--level` filters to that level and above.
-
-```
-uqs logs stp1 rdb1 -n 50
-uqs logs -f --level WARNING
-```
-
-`--multitail` follows the same files in multitail instead, one pane per file
-(`--stream out|err|both`, `-c N` columns, `--print` to show the command); it
-needs the `multitail` binary.
-
-```
-uqs logs --multitail rdb1 fxpositions1 -c 2
-```
-
-## crypto recorder (cryptorust) - a proof of concept
-
-`uqs feed start|stop|status crypto` build and launch a sibling
-`~/github_projects/cryptorust` checkout's own `kdb-market-data-recorder` Rust
-binary, pointed at this demo's `stp1` - proving the kdb+ infra here isn't
-TorQ/q-specific, any process that speaks kdb+ IPC can publish onto it. See
-`docs/guides/uqs.md`'s own section for the full picture (schema, credentials,
-`$CRYPTORUST_ROOT`).
-
-## MCP server
-
-```
-uv run uqs-mcp
-```
-
-Exposes `uqs_start`/`stop`/`restart`/`summary`/`print`/`clean`/`query`/
-`get_config`/`set_config`/`list`/`logs`, plus the crypto recorder lifecycle
-(`crypto_start`/`stop`/`status`, `crypto_fills_start`/`stop`/`status`), as MCP
-tools (stdio transport) for an MCP client to drive the demo directly. `raw` (an
-arbitrary passthrough to `torq.sh`) isn't exposed - see `src/uqs/mcp.py` for the
-exact, current tool list.
+`model/` importing from `stack/` would mean the stack's declared shape could not
+be read without the code that starts processes.
+`test_module_split.py::test_the_folders_are_layers` fails on any import that
+points back up.
 
 ## Testing
 
@@ -244,7 +46,4 @@ exact, current tool list.
 uv run --project python/uqs pytest
 ```
 
-`tests/test_core.py` builds a minimal fake `lib/torq` +
-`lib/torq-finance-starter-pack` tree under `tmp_path` so `core.py`'s pure logic
-(path resolution, process.csv generation/idempotency, config get/set) is tested
-without touching the real vendored trees or actually starting any q process.
+Most tests need no q; the ones that do skip without it.

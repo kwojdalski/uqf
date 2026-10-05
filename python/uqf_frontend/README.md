@@ -27,8 +27,7 @@ routed query with `value` (`gateway.q:253`), and `value` applied to a *list*
 lambda on the argument. The program travels as the head of that list, so the
 backend never parses caller input either.
 
-Three q details this rests on, all verified against a live KDB-X process rather
-than assumed:
+The q details this rests on, verified against a live KDB-X process:
 
 - A functional select accepts the table *name* as a symbol, so there is no `get`
   on caller-influenced input anywhere in the path.
@@ -41,18 +40,8 @@ than assumed:
   makes `value` try to resolve a variable named the entire lambda text.
 - A **niladic** `{[] ...}` sent with no arguments makes q return the *function
   itself*, which kola cannot deserialise. Such a program must be a plain
-  expression. This bit twice (`queries.PING`, `ops.IDENTITY`), so
-  `test_q_programs.py` now asserts no program is a bare niladic lambda.
-
-### A naming trap worth knowing
-
-**A q builtin cannot be used as a lambda parameter name.** It raises a bare
-`'nyi` when the lambda is *called* --- not when it is defined, and whether or
-not the body references it. `{[ds;sv] 1+1}` fails because `sv` is
-scalar-from-vector. This has cost this repository three debugging sessions
-(`desc` and `tables` in `scripts/processes/torq_pipeline.q`, `sv` here), so
-`test_q_programs.py` now checks every parameter against the 182 reserved and
-`.q` names.
+  expression; `test_q_programs.py` asserts none is a bare niladic lambda, and
+  that no lambda parameter is a q builtin.
 
 ## Endpoints
 
@@ -166,8 +155,13 @@ Configuration is environment-only, so credentials stay server-side:
   | `UQF_FRONTEND_BASE_PORT`                | `6050` — what `{KDBBASEPORT}` resolves to, and what the gateway port is derived from                                     |
   | `UQF_FRONTEND_STATUS_DIR`               | unset — where q writes status files (pairs with `UQF_STATUS_DIR`)                                                        |
 
-A malformed numeric value fails at startup rather than falling back to a default ---
-the same posture the q side takes.
+A malformed numeric value fails at startup rather than falling back to a
+default.
+
+The React application lives in [`web/`](../../web/README.md). Build it with
+`npm --prefix web ci && npm --prefix web run build`, then set
+`UQF_FRONTEND_WEB_DIST` to the absolute path of `web/dist`; it is served at
+`/ui/`.
 
 ## Tests
 
@@ -180,12 +174,9 @@ uv run ruff check .
 sent*: that the program text is one of this package's own constants, and that a
 hostile value appears only in the argument list. No q process required.
 
-`FakeGateway` also answers the catalog's two questions by default, so every test
-here runs with no stack: see `FAKE_CATALOG` and `FAKE_SCHEMA` in `gateway.py`.
-They are hand-written rather than read from the q tree --- a test double that
-loaded the real declarations would fail for reasons that have nothing to do with
-the test, and this package no longer depends on that tree at all.
-`tests/q/test_catalog.q`, in the q half, is what holds the real catalog honest.
+`FakeGateway` also answers the catalog's questions (`FAKE_CATALOG`,
+`FAKE_SCHEMA` in `gateway.py`), so no test here needs a stack;
+`tests/q/test_catalog.q` holds the real catalog honest.
 
 ## Tier routing and coverage
 
@@ -218,15 +209,11 @@ gap. That arithmetic is pure and unit-tested without a gateway.
 
 `etl_coverage` is defined in
 [`src/etl/core/materialisation.q`](../../src/etl/core/materialisation.q), and
-this tree is the authority for it (issue #60). The block there carries the full
-column list --- `dataset`, `partition`, `source_version`, `range_from`,
-`range_to`, `rows_published`, `recorded_at`, `superseded_at`, `run_id` --- and
+this tree is the authority for it. The block there carries the full column list ---
+`dataset`, `partition`, `source_version`, `range_from`, `range_to`,
+`rows_published`, `recorded_at`, `superseded_at`, `run_id` --- and
 `scripts/dev/verify_coverage_schema.q -local 1` confirms the code and the table
 agree. The `COVERAGE` program reads the first five.
-
-This block used to say the schema "could not be verified from this repo --- it
-exists only upstream", which stopped being true when canonical froze and this
-tree became the primary lineage.
 
 ## Ops views
 
@@ -261,10 +248,8 @@ configured rather than lying.
   (`Not supported nested list - k type 99`). The program unkeys the table and
   drops that one column; leaving it in fails the entire view for a field no
   dashboard shows.
-- **`.usage.flushtime` is one day, and the "three hours" once recorded here was
-  wrong.** `code/handlers/logusage.q` reads
-  `@[value;`flushtime;0D03\]`, but that is a fallback for a value already set — `config/settings/default.q` defines `1D00` first, so the fallback never fires. Measured on three live processes: one day. The requirements' "one day" was right all along. Read it with `ops.FLUSHTIME\`;
-  a deployment may override it again.
+- **`.usage.flushtime` is one day** (`config/settings/default.q`); a deployment
+  may override it. Read it with `ops.FLUSHTIME`.
 
 ## Fleet health
 
@@ -273,20 +258,9 @@ liveness. The declared set comes from the **generated** `process.csv` --- set
 `UQF_FRONTEND_PROCESS_CSV`, plus `UQF_FRONTEND_BASE_PORT` so `{KDBBASEPORT}+N`
 resolves to the ports the stack actually started on.
 
-### Why liveness is an IPC probe
-
-The obvious way to report liveness is to shell out to `torq.sh` and inspect
-**local OS processes** --- which only works on the same machine, and so would
-tie fleet health to one deployment shape (local demo or production-shaped).
-
-Liveness here comes from an **IPC probe** instead, which dissolves most of that
-tie: it doesn't shell out per request, and it works whether or not the process
-is on this machine. A process that answers IPC is up in the only sense a
-frontend cares about.
-
-What a probe *cannot* distinguish is a process that was never started from one
-that started and crashed --- both simply don't answer. That needs OS or
-supervisor knowledge, and is called out rather than guessed.
+Liveness is an **IPC probe**, so it works whether or not the process is on this
+machine. It cannot tell a process never started from one that crashed - both
+just don't answer.
 
 ### Three states, not two
 
@@ -319,10 +293,6 @@ the wrong process.
 therefore **not a query --- it is a capture pipeline**, and it has to run before
 the rows are pruned.
 
-This is why it was built with the ops views rather than deferred alongside the
-views that read it: get it wrong and the history in between is simply gone,
-which is not true of most bugs.
-
 ```python
 capture = UsageCapture(KolaFleet(settings), JsonlSink(Path("captured")))
 capture.capture_once()  # safe to call repeatedly, on any scheduler
@@ -335,6 +305,9 @@ keeps the old watermark so the next pass retries the same rows rather than
 losing them, and because the fetch filters strictly greater, a successful pass
 captures each row exactly once.
 
+It ships as a callable, not a daemon: what schedules it - a timer, cron, an
+Airflow task - is a deployment choice.
+
 ## Backfill status
 
 `GET /ops/backfill` reads the status files q writes, rather than calling
@@ -343,29 +316,17 @@ Airflow dependency to a frontend that should work without one. Set
 `UQF_FRONTEND_STATUS_DIR` to the directory `.qetl.status.status_dir` writes
 into.
 
-**The format is defined here, not inherited.** This tree has no Airflow provider
-to be compatible with, so `.qetl.status.write_status` in `src/etl/core/status.q`
-defines it and `status.py` consumes it. `test_status.py` parses the q source to
-assert the two field sets and state sets match --- without that, adding a field
-on one side would silently drop data on the other.
-
-### The boundary this deliberately does not cross
-
-Authority is split: q owns process startup, source reads, query failures,
-checkpoints, run and window counts, and coverage events; Airflow owns task
-ordering, scheduling, retries, timeouts, concurrency and alerting. These files
-carry only the first set, and a test asserts no Airflow-owned field (`retries`,
-`try_number`, `timeout`, `concurrency`, `queue`) appears in the response.
-Inferring one layer's facts from the other's output is exactly what the split
-forbids.
+`.qetl.status.write_status` in `src/etl/core/status.q` defines the format and
+`status.py` consumes it; `test_status.py` parses the q source to keep the two in
+step. The files carry only what q owns - [the authority
+split](../../docs/architecture/pipeline-philosophy.md#8-authority-is-split-and-written-down) -
+and a test asserts no Airflow-owned field (`retries`, `try_number`, ...)
+appears.
 
 ### Three outcomes, not two
 
-`idle` is a **success**, distinct from `completed`: "ran, found no work" is not
-"ran, did work", and neither is a failure. An orchestrator that cannot tell them
-apart retries a successful no-op forever. The summary counts `failed` separately
-from `running` for the same reason --- a worker still in flight is not a
-problem.
+`idle` is a **success**, distinct from `completed`: "ran, found no work". The
+summary counts `failed` separately from `running`.
 
 Writes are atomic (serialise, temp file, rename), because the frontend polls and
 would otherwise be able to read a half-written file. Files ending `.tmp` are
@@ -380,21 +341,9 @@ ignored by the reader, and a test covers that.
 liveness and the surface description would leave an unauthorised caller unable
 to discover why.
 
-### Why this is a seam and not an auth system
-
-The layer connects to q with one service credential, so q never sees a per-user
-identity. And it is a local demo on a single host, so there is no user directory
-and in practice one operator.
-
-Together those make #59's stated acceptance criterion --- "two users with
-different entitlements get different result sets" --- **unreachable**, not
-because it is hard but because there are no distinct users to distinguish. A
-login flow here would be inventing a requirement.
-
-What is useful now is one place every request passes through, defaulting to
-allow, exercised by tests, ready for a real policy the moment an identity
-exists. What actually carries the security weight is unchanged: credentials stay
-server-side and no client input reaches query text.
+It is a seam, not an auth system: the layer connects to q with one service
+credential, so there is no per-user identity to check yet. It is the one place a
+real policy plugs in once there is.
 
 ```python
 from uqf_frontend.authz import deny_tables
@@ -409,15 +358,3 @@ anyone can set it. It is a label for audit and for a policy to key on, and
 A refusal is **403, not 401**: there is no authentication to have failed. And a
 refused query never reaches q --- a test asserts the gateway saw nothing, since
 that is what makes this a gate rather than a filter on the way out.
-
-The capture pipeline ships as a callable, not a daemon. What schedules it --- a
-timer in this process, cron, or an Airflow task --- is a deployment question,
-and no hosting model is established yet.
-
-The React application lives in [`web/`](../../web/README.md), outside the Python
-packages. Build it with `npm --prefix web ci && npm --prefix web run build`,
-then set `UQF_FRONTEND_WEB_DIST` to the absolute path of `web/dist` when
-starting this API. The app is served at `/ui/`; all API paths remain unchanged.
-
-Health, coverage and query responses now also expose `poll_seconds`, using the
-same server-owned cadence map as the operations endpoints.

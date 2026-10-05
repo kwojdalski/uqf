@@ -161,6 +161,18 @@ implements it, which in this tree already holds it.
 > heading, and six claim-style headings became names
 > (`### Started is not the same as fed` -> `### Idle subscribers`).
 
+**A user guide says what is, not how it came to be.** "It used to...", "until
+#NNN", which bug a check was added for, and why an alternative was rejected
+belong in the code comment or the commit, not in the page a user reads to get
+something done. One rule stated once, linked from elsewhere.
+
+> *2026-10-05.* Asked: "update documentation but please be concise actually try
+> to remove some elements that may be duplicated or not essential from the
+> perspective of the user". `guides/uqs.md` 1156 -> ~950 lines and
+> `guides/new-pipeline.md` 804 -> ~740, mostly history and rationale;
+> `python/uqs/README.md` cut to layout and testing, since the guide covers use;
+> the authority split and the tickerplant invariants stated once and linked.
+
 **No prescriptive meta-rules about the documentation process itself.** Describe
 what is, not how future documents must be filed.
 
