@@ -304,6 +304,35 @@ test_an_illegal_phase_move_is_refused_naming_both_phases:{[t]
         "*cannot go from ready to completed";"a run must be running before it can complete"];
     .qunit.assertEquals[.qetl.job.bounded.read_state[`demo_deals_backfill;`phase];`ready;"and the phase is left where it was"]};
 
+/ #675. The status file is written before the ledger row is closed, so a
+/ close that failed used to leave the file `completed, the process exiting
+/ 0, and the row `running for good. Now the run fails, everywhere at once.
+test_a_run_whose_ledger_cannot_close_fails:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    saved:.qetl.run.finish;
+    .qetl.run.finish:{[state;counts] '"ledger disk full"};
+    r:@[.qpipe.job.demo_deals_backfill.run;::;{x}];
+    .qetl.run.finish:saved;
+    rec:.ddbftest.records[];
+    s:.j.k first read0 .ddbftest.status_path .qetl.job.bounded.instance `demo_deals_backfill;
+    .qunit.assertEquals[(r`state;.qetl.job.bounded.exit_code r`state;rec`status;rec`ledger);(`failed;1i;`failed;`running);
+        "the result, the exit code and the file say failed; the row it could not close is still open"];
+    .qunit.assertTrue[(s`error) like "the run ledger could not record this run's completed outcome (ledger disk full)*";
+        "the file says why, naming the ledger and its error"];
+    .qunit.assertEquals[s`run_id;string rec`run_id;"and names the open row's run"];
+    .qunit.assertEquals[rec`in_flight;0b;"released in memory, so this process can run again"]};
+
+/ An idle run's close failing fails it the same way.
+test_an_idle_run_whose_ledger_cannot_close_fails:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qpipe.job.demo_deals_backfill.run[];
+    saved:.qetl.run.finish;
+    .qetl.run.finish:{[state;counts] '"ledger disk full"};
+    r:@[.qpipe.job.demo_deals_backfill.run;::;{x}];
+    .qetl.run.finish:saved;
+    .qunit.assertEquals[(r`state;.qetl.job.bounded.read_state[`demo_deals_backfill;`phase]);(`failed;`failed);
+        "idle is not reported when its run was never recorded"]};
+
 / A rehearsal moves the status file and heartbeat like a run - an
 / orchestrator needs to know how it ended - but opens no ledger row.
 test_a_dry_run_moves_the_phase_and_opens_no_ledger_row:{[t]

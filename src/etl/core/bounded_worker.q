@@ -571,8 +571,23 @@ advance_phase:{[worker;to;err]
     if[`begin~row`run_ledger; call[begin_run;enlist worker]];
     call[.qetl.hb.beat;(worker;row`beat)];
     call[.qetl.status.write_status;(worker;instance worker;row`status;spec worker;progress_now worker;err)];
-    if[(`finish~row`run_ledger) and `running~was; call[end_run;(to;run_totals worker)]];
+    closed:$[(`finish~row`run_ledger) and `running~was; call[end_run;(to;run_totals worker)]; (1b;"")];
     write_state[worker;`phase;to];
+    / A run whose ledger row could not be closed did not end the way the file
+    / just said (#675): Airflow would pass it, the process exit 0, and its
+    / etl_runs row read `running forever. So it fails - the file then names
+    / the open row's run_id and why. Already failing, it is only logged.
+    if[not first closed;
+        .[{.qetl.log.err[x;y;z]};(worker;"the run ledger could not record this run's outcome";
+            `outcome`error!(to;last closed));::];
+        if[not `failed~to;
+            to:advance_phase[worker;`failed;
+                "the run ledger could not record this run's ",string[to]," outcome (",(last closed),
+                ") - its etl_runs row stays open"]];
+        / Release the run in memory, after the file has named it: the row
+        / stays open on disk, but this process must not refuse every later
+        / run as "already in flight".
+        @[{.qetl.run.release[]};::;{[e] (::)}]];
     to}
 
 / Private: record a run an earlier process never finished as failed.
@@ -975,8 +990,8 @@ run_body:{[worker]
         / is not idle: a derived dataset is stale (#632).
         owed:owed_reactions worker;
         write_state[worker;`progress;@[read_state[worker;`progress];`cursor`reactions_owed;:;(cursor;count owed)]];
-        ended:$[count owed; `partial; `idle];
-        advance_phase[worker;ended;$[count owed; owed_error owed; ""]];
+        / The phase REACHED, which is `failed if the run ledger refused it.
+        ended:advance_phase[worker;$[count owed; `partial; `idle];$[count owed; owed_error owed; ""]];
         :`state`windows_completed`windows_failed`rows_published`cursor`reactions_owed!
             (ended;0;0;0;cursor;count owed)];
     do_window[worker] each windows;
@@ -1009,7 +1024,9 @@ run_body:{[worker]
     if[p[`windows_failed]>0;
         why,:enlist string[p`windows_failed]," of ",string[count windows]," window(s) failed - they stay uncovered, so a re-run retries them"];
     if[count owed; why,:enlist owed_error owed];
-    advance_phase[worker;result`state;$[count why; "; " sv why; ""]];
+    / Report the phase reached, not the one asked for: a run whose ledger
+    / close failed ends `failed (#675), and its result and exit code say so.
+    result[`state]:advance_phase[worker;result`state;$[count why; "; " sv why; ""]];
     / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
     / The release used to live on this line, which made it the happy path's
@@ -1077,9 +1094,14 @@ begin_run:{[worker]
 / .
 / With the run's counts: windows planned, completed and failed, and rows
 / published.
+/ Never throws - it runs after the status file already says how the run
+/ ended - but no longer swallows: (1b;"") when the row is closed or there is
+/ none to close, (0b;error) when the close failed, for advance_phase to act
+/ on (#675). A close that failed silently left the file `completed and the
+/ row `running for good.
 end_run:{[state;counts]
-    if[not .qetl.job.bounded.runtime.allows`record_run; :(::)];
-    .[{.qetl.run.finish[x;y]};(state;counts);{[e] (::)}]}
+    if[not .qetl.job.bounded.runtime.allows`record_run; :(1b;"")];
+    .[{.qetl.run.finish[x;y]; (1b;"")};(state;counts);{[e] (0b;$[10h=type e; e; .Q.s1 e])}]}
 
 / Private: the counts the worker's progress holds, as end_run records them.
 run_totals:{[worker]
