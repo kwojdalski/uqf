@@ -144,6 +144,65 @@ test_a_second_run_publishes_nothing_further:{[t]
     .qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[count value `demo_deals;3;"a retry does not duplicate published rows"]};
 
+/ --- one bounded worker per TorQ process (#608) ---------------------------
+
+/ Run f with .proc.procname set to p, as TorQ would, then put .proc back as
+/ it was - absent included, which is what it is in plain q. Returns f's
+/ result, or (`threw;error).
+with_procname:{[p;f]
+    had:@[{`procname in key x};`.proc;0b];
+    old:$[had; .proc.procname; `];
+    `.proc.procname set p;
+    r:@[f;::;{(`threw;x)}];
+    $[had; `.proc.procname set old; ![`.proc;();0b;enlist `procname]];
+    r}
+
+status_path:{[instance] hsym `$(.qetl.status.status_dir[]),"/airflow_status_",string[instance],".txt"}
+
+/ The refusal must come before anything is written: the status file is the
+/ one the first worker owns, and init's own failure path would write
+/ `failed into it.
+test_a_second_worker_is_refused_in_one_torq_process:{[t]
+    saved:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:`another_backfill;
+    @[hdel;.ddbftest.status_path`ddbftest_proc;::];
+    r:.ddbftest.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
+    .qetl.job.bounded.process_worker:saved;
+    .qunit.assertEquals[first r;`threw;"a second worker's init is refused"];
+    .qunit.assertTrue[r[1] like "*demo_deals_backfill refused - process ddbftest_proc already runs another_backfill*";
+        "the refusal names the worker, the process and the worker that holds it"];
+    .qunit.assertEquals[()~key .ddbftest.status_path`ddbftest_proc;1b;
+        "the refusal writes nothing to the process's status file"]};
+
+test_a_worker_initialising_under_torq_claims_its_process:{[t]
+    saved:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:`;
+    r:.ddbftest.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
+    got:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:saved;
+    .qunit.assertEquals[(r;got);(.ddbftest.spec_for[`v1;1;4];`demo_deals_backfill);
+        "the first init succeeds, and the process is now that worker's"]};
+
+/ A rerun at a new source_version is the same worker initialising again.
+test_the_same_worker_may_claim_its_process_again:{[t]
+    saved:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:`;
+    a:.qetl.job.bounded.claim_process[`ddbftest_proc;`demo_deals_backfill];
+    b:@[.qetl.job.bounded.claim_process[`ddbftest_proc;];`demo_deals_backfill;{`threw}];
+    .qetl.job.bounded.process_worker:saved;
+    .qunit.assertEquals[(a;b);2#`demo_deals_backfill;"the worker that holds the process may init again"]};
+
+/ Plain q has no procname: the status file is named for the worker, and the
+/ test suite runs many workers in one process.
+test_plain_q_claims_and_refuses_nothing:{[t]
+    saved:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:`demo_deals_backfill;
+    r:@[.qetl.job.bounded.claim_process[`;];`another_backfill;{`threw}];
+    held:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:saved;
+    .qunit.assertEquals[(r;held);`another_backfill`demo_deals_backfill;
+        "with no procname any worker may init, and nothing is claimed"]};
+
 / --- every record of a run agrees, after every step (#610) ---------------
 
 / One run is written to several records, each by its own call: the status

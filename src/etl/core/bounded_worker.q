@@ -432,9 +432,45 @@ spec:{[worker] `source_version`range_from`range_to!read_state[worker] each `sour
 / @param run_spec the run specification - source_version, range_from, range_to
 / @return whatever init_body returns
 init:{[worker;run_spec]
+    / Before the guard below, not inside it: a refusal must write nothing,
+    / and the guard's failure path writes the status file - the file this
+    / refusal exists to keep the first worker's.
+    claim_process[@[value;`.proc.procname;`];worker];
     r:.[{[w;s] (1b; init_body[w;s])};(worker;run_spec);{[e] (0b;e)}];
     if[not first r; report_failure[worker;last r]; cleanup worker; 'last r];
     last r}
+
+/ The bounded worker this TorQ process belongs to, ` until one initialises.
+process_worker:`
+
+/ Private: refuse a second bounded worker in one TorQ process (#608).
+/ .
+/ Two pieces of a worker's state are really the PROCESS's under TorQ: the
+/ status file is named for the procname, not the worker, and the backfill
+/ process sets the process-wide .qetl.io.default to an HDB writer
+/ partitioned by ITS worker's time column. A second worker would have its
+/ transitions validated against the first's file, or overwrite it, and
+/ would partition by the first worker's column - silently. One worker per
+/ process was the convention (torq_backfill.q takes one -worker); this
+/ makes it the rule.
+/ .
+/ The same worker initialising again is allowed - a rerun at a new
+/ source_version is exactly that. Plain q, with no procname, is unaffected:
+/ there the status file is the worker's own, and the tests run many
+/ workers in one process.
+/ @param procname the process's TorQ name, ` in plain q
+/ @param worker the worker's name
+/ @return the worker's name
+/ @throws error naming both workers when the process already belongs to
+/   another one
+claim_process:{[procname;worker]
+    if[null procname; :worker];
+    held:.qetl.job.bounded.process_worker;
+    if[(not null held) and not worker~held;
+        '"init: ",string[worker]," refused - process ",string[procname]," already runs ",
+         string[held],". One bounded worker per process: they would share its status file and HDB writer"];
+    .qetl.job.bounded.process_worker:worker;
+    worker}
 
 / ---------------------------------------------------------------- STATUS
 / .
