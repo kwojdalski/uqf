@@ -32,3 +32,4 @@ duckdb_deals_backfill1,46
 kafka_flow1,47
 crypto_market_data_backfill1,48
 hdb_markouts_backfill1,49
+hdb_transfer_backfill1,50

@@ -168,3 +168,9 @@ Write `query`, then `fixture`, then the test --- and check what it claims with
 `.qetl.coverage` coverage reads rather than by trusting the row count.
 [new-pipeline.md](../guides/new-pipeline.md) walks the whole bounded lifecycle
 end to end with a real worked example.
+
+## Worked example
+
+[From one kdb+ database to another](hdb-transfer.md) takes a `--transport local`
+backfill from the scaffold to a filled database.
+`scripts/examples/hdb_transfer_example.q` runs it end to end.

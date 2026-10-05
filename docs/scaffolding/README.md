@@ -31,6 +31,11 @@ nothing *is* a feed, and the scaffold derives that rather than asking twice. A
 reaction is `--triggered-by DATASET`, and is the one shape with no process of
 its own: it runs inside the process that publishes `DATASET`.
 
+For a backfill taken all the way from scaffold to a filled database, see the
+worked example [from one kdb+ database to another](hdb-transfer.md). One script
+builds a source HDB, runs the scaffolded job into a second HDB and checks the
+result.
+
 ## What every shape has in common
 
 The four with a process write the same six changes, and the reason each exists

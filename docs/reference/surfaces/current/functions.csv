@@ -534,6 +534,7 @@ qetl.plant,shape,function,1,t
 qetl.plant,superbook,table,,
 qetl.plant,trade,table,,
 qetl.plant,trades,table,,
+qetl.plant,trades_copy,table,,
 qetl.plant,undeclared,function,1,
 qetl.plant,vendored,value,,
 qetl.plant,wide_book,table,,
@@ -1138,6 +1139,24 @@ qpipe.job.hdb_markouts_backfill,range_to,value,,
 qpipe.job.hdb_markouts_backfill,run,function,1,
 qpipe.job.hdb_markouts_backfill,source_version,value,,
 qpipe.job.hdb_markouts_backfill,spec,function,1,
+qpipe.job.hdb_transfer_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_transfer_backfill,cleanup,function,1,
+qpipe.job.hdb_transfer_backfill,facts,function,1,batch
+qpipe.job.hdb_transfer_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_transfer_backfill,handle,value,,
+qpipe.job.hdb_transfer_backfill,init,function,1,run_spec
+qpipe.job.hdb_transfer_backfill,last_batch,value,,
+qpipe.job.hdb_transfer_backfill,last_window,dict,,
+qpipe.job.hdb_transfer_backfill,phase,value,,
+qpipe.job.hdb_transfer_backfill,plan,function,1,cursor
+qpipe.job.hdb_transfer_backfill,progress,dict,,
+qpipe.job.hdb_transfer_backfill,publish,function,1,batch
+qpipe.job.hdb_transfer_backfill,range_from,value,,
+qpipe.job.hdb_transfer_backfill,range_to,value,,
+qpipe.job.hdb_transfer_backfill,run,function,1,
+qpipe.job.hdb_transfer_backfill,source_version,value,,
+qpipe.job.hdb_transfer_backfill,spec,function,1,
+qpipe.job.hdb_transfer_backfill,with_notional,function,1,batch
 qpipe.job.kafka_flow,above_high_water,function,1,rows
 qpipe.job.kafka_flow,advance,function,1,rows
 qpipe.job.kafka_flow,first_per_coordinate,function,1,rows
@@ -1318,6 +1337,17 @@ qpipe.source.hdb_markouts,target,value,,
 qpipe.source.hdb_markouts,time_column,value,,
 qpipe.source.hdb_markouts,types,value,,
 qpipe.source.hdb_markouts,tz,value,,
+qpipe.source.hdb_transfer,columns,value,,
+qpipe.source.hdb_transfer,credential_example,value,,
+qpipe.source.hdb_transfer,fixture,function,1,
+qpipe.source.hdb_transfer,query,function,3,h range_from range_to
+qpipe.source.hdb_transfer,row_key,value,,
+qpipe.source.hdb_transfer,source_name,value,,
+qpipe.source.hdb_transfer,target,value,,
+qpipe.source.hdb_transfer,time_column,value,,
+qpipe.source.hdb_transfer,transport,value,,
+qpipe.source.hdb_transfer,types,value,,
+qpipe.source.hdb_transfer,tz,value,,
 qpipe.source.upstream_trades,columns,value,,
 qpipe.source.upstream_trades,fixture,function,1,
 qpipe.source.upstream_trades,query,function,3,h range_from range_to
