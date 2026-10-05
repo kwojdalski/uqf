@@ -93,8 +93,8 @@ licensed. So the `q-docs-peachq` hook runs those blocks a second time on PeachQ,
 from the binary `UQF_PEACHQ` names, and fails when it is unset. This does not
 replace the KDB-X run. It is there as well, until the two interpreters are
 compatible enough for one to stand for both. A block that cannot run on PeachQ
-yet is marked `kdbx-only` with the reason (see
-[CI](docs/guides/ci.md#doc-examples)).
+yet is marked `kdbx-only` with the reason (the markers are defined in
+[`scripts/dev/doc_examples.py`](scripts/dev/doc_examples.py)).
 
 ```
 export UQF_PEACHQ=/path/to/peachq/q    # e.g. in your shell profile
