@@ -169,6 +169,8 @@ data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
                                       the running plant and hdb process - including
                                       the base port (see below)
 data hdb-check [--fix]                HDB partitions missing a declared table or column
+graph [PROC] [--upstream] [--offline] [-i]  every process and who feeds whom, as a
+                                      tree with the tables on each edge
 gaps JOB --from T --to T [-i]         where a streaming job was not up and subscribed,
                                       and the backfill that refills each gap when a
                                       worker fills what the job publishes
@@ -352,6 +354,22 @@ keys move through the rows; Enter exits printing the highlighted row,
 tab-separated; Escape exits printing nothing. It needs a terminal, and refuses
 in a pipe rather than hang. `--sort` still decides the order, and `--export`
 writes every row, not just the ones a filter left.
+
+`uqs graph` draws every process and who feeds whom, as trees, with each edge
+labelled by the tables it carries and each process coloured up or down:
+
+```
+uqs graph                      # from the feeds down: "if this stops, what starves"
+uqs graph posbook1 --upstream  # what must be up for posbook1 to work
+uqs graph -i                   # browse it: type to filter, ctrl+t to turn it over
+```
+
+The graph is not a tree - one feed reaches much of the fleet - so a process
+reached a second time is drawn once and marked `↺ shown above` where it would
+hide a subtree. Processes with no declared edges, most of the vendored TorQ
+fleet, are listed together at the end. `--offline` skips asking the fleet what
+is up. In the browser, a filter keeps every match and the path to it, the side
+panel describes the highlighted process, and Enter exits printing its name.
 
 Two things it gets right that a plain sort would not. **Numeric columns sort
 numerically**: `port` is a string, and as text `6100` comes before `659`, which
