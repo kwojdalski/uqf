@@ -473,4 +473,141 @@ test_book_slope_and_depth_ratio_are_unchanged_on_normal_books:{[t]
     .testutil.assertApprox[first .qmicro.depth_ratio[enlist 100 20 20 20 20f;enlist 100 20 20 20 20f];
         1.25;1e-12;"nor this one"]};
 
+/ ---- streaming analytics (#332) ----
+
+/ n quote rows for one sym, 1s apart from t0, with a random walk in the L0
+/ bid and random sizes - seeded, so the fixture is fixed.
+st_quotes_for:{[s;n;t0;seed]
+    system "S ",string seed;
+    bid:1.1+0.0001*sums -1+n?3;
+    ask:bid+0.0001*1+n?2;
+    ([] time:t0+1000000000*til n; sym:n#s;
+        bid_prices:enlist each bid; bid_sizes:enlist each `float$100*1+n?5;
+        ask_prices:enlist each ask; ask_sizes:enlist each `float$100*1+n?5)}
+
+/ Two syms interleaved, half a second apart.
+st_quotes:{[] `time xasc (st_quotes_for[`EURUSD;30;2026.01.02D10:00:00;7]),st_quotes_for[`GBPUSD;30;2026.01.02D10:00:00.5;11]}
+
+/ A tape of trades (and some adds) for two syms.
+st_tape:{[]
+    system "S 5";
+    n:40;
+    ([] time:2026.01.02D10:00:00+500000000*til n; sym:n?`EURUSD`GBPUSD; action:n?`trade`trade`add;
+        side:n?-1 1; size:`float$1000*1+n?9)}
+
+st_cfg:{[] (enlist `window)!enlist 4}
+
+st_quote_metrics:`ofi`rolling_ofi`return_variance
+
+/ Feed `chunks` (a list of batch dicts) through a fresh stream; return the
+/ final state and the concatenated outputs, batch-local `row` removed.
+st_run:{[metrics;chunks]
+    cfg:.microstructuretest.st_cfg[];
+    step:{[cfg;acc;b]
+        r:.qmicro.stream_update[acc 0;b;cfg];
+        q:$[98h=type r`quotes; delete row from r`quotes; ()];
+        t:$[98h=type r`trades; delete row from r`trades; ()];
+        (r`state;(acc 1),q;(acc 2),t)}[cfg];
+    step/[(.qmicro.stream_init[metrics;cfg];();());chunks]}
+
+test_stream_equals_batch_for_each_sym:{[t]
+    q:st_quotes[];
+    o:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
+    check:{[q;o;s]
+        e:select from o where sym=s;
+        flows:.qmicro.ofi[q;s];
+        (e[`ofi]~flows) and (e[`rolling_ofi]~.qmicro.rolling_ofi[flows;4]) and e[`return_variance]~.qmicro.rolling_return_variance[q;s;4]};
+    .qunit.assertEquals[check[q;o;] each `EURUSD`GBPUSD;11b;"ofi, rolling_ofi, return_variance equal the batch functions, warm-up nulls included"]};
+
+test_stream_equals_batch_at_every_prefix:{[t]
+    q:st_quotes[];
+    o:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
+    at_prefix:{[q;o;k]
+        p:k#q;
+        e:select from (k#o) where sym=`EURUSD;
+        (e[`ofi]~.qmicro.ofi[p;`EURUSD]) and e[`return_variance]~.qmicro.rolling_return_variance[p;`EURUSD;4]};
+    .qunit.assertEquals[all at_prefix[q;o;] each 1+til count q;1b;"each prefix of the stream is the batch answer on that prefix"]};
+
+test_stream_chunking_does_not_change_anything:{[t]
+    q:st_quotes[];
+    whole:st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q];
+    rows:st_run[st_quote_metrics;{(enlist `quotes)!enlist x} each 1 cut q];
+    ragged:st_run[st_quote_metrics;{(enlist `quotes)!enlist x} each (0 3 4 19 40) cut q];
+    .qunit.assertEquals[(rows 1;ragged 1);(whole 1;whole 1);"single rows and ragged chunks give the same outputs"];
+    .qunit.assertEquals[(rows 0;ragged 0);(whole 0;whole 0);"and the same final state"]};
+
+test_stream_resumes_from_a_checkpoint:{[t]
+    q:st_quotes[];
+    cfg:st_cfg[];
+    whole:st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q];
+    first_half:st_run[st_quote_metrics;enlist (enlist `quotes)!enlist 25#q];
+    saved:-8!first_half 0;
+    r:.qmicro.stream_update[-9!saved;(enlist `quotes)!enlist 25_q;cfg];
+    .qunit.assertEquals[r`state;whole 0;"serialised, restored and continued: the same state"];
+    .qunit.assertEquals[delete row from r`quotes;25_whole 1;"and the same outputs"]};
+
+test_stream_trade_flow_equals_batch_per_sym:{[t]
+    tape:st_tape[];
+    r:st_run[enlist `signed_trade_flow;{(enlist `tape)!enlist x} each (0 7 8 33) cut tape];
+    check:{[tape;o;s]
+        e:select from o where sym=s;
+        ref:.qmicro.cumulative_trade_flow select from tape where sym=s;
+        e[`cum_flow]~ref`cum_flow};
+    .qunit.assertEquals[check[tape;r 2;] each `EURUSD`GBPUSD;11b;"cumulative flow per sym, chunked, equals the batch"]};
+
+test_stream_constant_returns_have_zero_variance:{[t]
+    n:12;
+    flat:([] time:2026.01.02D10:00:00+1000000000*til n; sym:n#`EURUSD;
+        bid_prices:n#enlist enlist 1.1; bid_sizes:n#enlist enlist 1f; ask_prices:n#enlist enlist 1.1002; ask_sizes:n#enlist enlist 1f);
+    o:(st_run[enlist `return_variance;enlist (enlist `quotes)!enlist flat]) 1;
+    .qunit.assertEquals[o`return_variance;(4#0n),(n-4)#0f;"null through warm-up, then exactly 0"]};
+
+test_stream_syms_do_not_contaminate_each_other:{[t]
+    q:st_quotes[];
+    mixed:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
+    alone:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist select from q where sym=`EURUSD]) 1;
+    .qunit.assertEquals[select from mixed where sym=`EURUSD;alone;"EURUSD's stream is the same with GBPUSD interleaved"]};
+
+test_stream_late_rows_are_refused_by_default:{[t]
+    q:st_quotes[];
+    cfg:st_cfg[];
+    st:(.qmicro.stream_update[.qmicro.stream_init[`ofi;cfg];(enlist `quotes)!enlist 10#q;cfg])`state;
+    .qunit.assertThrows[.qmicro.stream_update[st;;cfg];(enlist `quotes)!enlist 2#q;
+        "stream_update: 1 late quote row(s) for EURUSD*";"an earlier row than already processed"]};
+
+test_stream_late_rows_can_be_dropped_and_counted:{[t]
+    q:st_quotes[];
+    cfg:(`window`late)!(4;`drop);
+    st:(.qmicro.stream_update[.qmicro.stream_init[`ofi;cfg];(enlist `quotes)!enlist 10#q;cfg])`state;
+    r:.qmicro.stream_update[st;(enlist `quotes)!enlist (2#q),10_q;cfg];
+    .qunit.assertEquals[r[`state;`dropped];2;"both late rows counted"];
+    .qunit.assertEquals[r[`quotes;`row];2+til 50;"and missing from the output"]};
+
+test_stream_reset_starts_a_sym_over:{[t]
+    q:select from st_quotes[] where sym=`EURUSD;
+    cfg:st_cfg[];
+    st:(.qmicro.stream_update[.qmicro.stream_init[`ofi;cfg];(enlist `quotes)!enlist 10#q;cfg])`state;
+    r:.qmicro.stream_update[.qmicro.stream_reset[st;`EURUSD];(enlist `quotes)!enlist 10_q;cfg];
+    .qunit.assertEquals[first r[`quotes;`ofi];0n;"the first row after a reset has no prior snapshot"];
+    .qunit.assertEquals[r[`quotes;`ofi];.qmicro.ofi[10_q;`EURUSD];"the stream restarts as the batch would on the new session"]};
+
+test_stream_refuses_a_changed_config_and_a_foreign_version:{[t]
+    cfg:st_cfg[];
+    st:.qmicro.stream_init[`ofi;cfg];
+    q:(enlist `quotes)!enlist 3#st_quotes[];
+    .qunit.assertThrows[.qmicro.stream_update[st;q;];(enlist `window)!enlist 9;"stream_update: config differs*";"a changed window"];
+    .qunit.assertThrows[.qmicro.stream_update[;q;cfg];@[st;`version;:;2];"stream_update: state is version 2*";"another version"]};
+
+test_stream_refuses_unknown_metrics_and_time_windows:{[t]
+    .qunit.assertThrows[.qmicro.stream_init[;::];`vpin;"stream_init: unknown metric(s) vpin*";"vpin is not streamed"];
+    .qunit.assertThrows[.qmicro.stream_init[`ofi;];(enlist `window_mode)!enlist `time;"stream: window_mode must be `count*";"no time window yet"]};
+
+test_stream_snapshot_reports_each_sym:{[t]
+    q:st_quotes[];
+    st:(st_run[st_quote_metrics;enlist (enlist `quotes)!enlist q]) 0;
+    snap:.qmicro.stream_snapshot st;
+    .qunit.assertEquals[snap`sym;`EURUSD`GBPUSD;"one row per sym"];
+    .qunit.assertEquals[snap`quote_rows;30 30;"rows seen"];
+    .qunit.assertEquals[first snap`rolling_ofi;last .qmicro.rolling_ofi[.qmicro.ofi[q;`EURUSD];4];"the last rolling value"]};
+
 \d .

@@ -800,6 +800,7 @@ qmicro,inter_event_time,function,2,quotes target_sym
 qmicro,large_trade_ratio,function,2,tape q
 qmicro,large_trade_threshold,function,2,tape q
 qmicro,large_trade_volume_share,function,2,tape q
+qmicro,late_rows,function,2,last_time times
 qmicro,level_at,function,2,levels level
 qmicro,microprice,function,4,bid_prices bid_sizes ask_prices ask_sizes
 qmicro,microprice_divergence,function,4,bid_prices bid_sizes ask_prices ask_sizes
@@ -814,18 +815,37 @@ qmicro,ofi_autocorrelation,function,2,ofi_series window
 qmicro,ofi_multilevel,function,3,quotes target_sym n_levels
 qmicro,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
 qmicro,queue_depletion_rate,function,3,quotes target_sym side
+qmicro,quote_state0,function,1,
+qmicro,quote_states0,function,1,
 qmicro,quotes_for_sym,function,3,fn_name quotes target_sym
 qmicro,require_odd_lot_threshold,function,2,fn_name threshold
+qmicro,require_sorted,function,2,what times
 qmicro,require_tape,function,1,tape
 qmicro,rolling_ofi,function,2,ofi_series window
+qmicro,rolling_return_variance,function,3,quotes target_sym window
 qmicro,signed_trade_flow,function,1,tape
 qmicro,spread_bps,function,2,bid_prices ask_prices
 qmicro,spread_ratio,function,3,quotes target_sym window
+qmicro,stream_config,function,1,config
+qmicro,stream_defaults,dict,,
+qmicro,stream_init,function,2,metrics config
+qmicro,stream_metrics,value,,
+qmicro,stream_quote_metrics,value,,
+qmicro,stream_quotes_one,function,3,st sub window
+qmicro,stream_reset,function,2,state syms
+qmicro,stream_side,function,6,what tbl states state0 config step
+qmicro,stream_snapshot,function,1,state
+qmicro,stream_tape_metrics,value,,
+qmicro,stream_trades_one,function,2,st sub
+qmicro,stream_update,function,3,state batch config
+qmicro,stream_version,value,,
 qmicro,sum_levels,function,2,sizes n_levels
 qmicro,tape_actions,value,,
 qmicro,tape_cols,value,,
 qmicro,trade_arrival_rate,function,1,tape
 qmicro,trade_arrival_rate_by,function,3,tape bucket_size group_cols
+qmicro,trade_state0,function,1,
+qmicro,trade_states0,function,1,
 qmicro,undefined_if_zero,function,1,n
 qmicro,vamp,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
 qmicro,vamp_one,function,5,bid_prices bid_sizes ask_prices ask_sizes notional
@@ -833,6 +853,7 @@ qmicro,volume_buckets,function,2,tape bucket_volume
 qmicro,vpin,function,3,tape bucket_volume n_buckets
 qmicro,vwmp_skew,function,5,bid_prices bid_sizes ask_prices ask_sizes n_levels
 qmicro,vwmp_skew_one,function,5,n_levels bid_prices bid_sizes ask_prices ask_sizes
+qmicro,window_variance,function,1,w
 qns,children,function,1,ns
 qns,descend,function,1,ns
 qns,functional,function,1,
