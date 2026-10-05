@@ -795,9 +795,16 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 /   col_precedence (`time`sym leading by default) when both are present:
 /   `time`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
 /   named per time_col, `time by default; sym here is impact_sym, not
-/   traded_sym) - impact_sym's own price drift, signed by traded_sym's side
+/   traded_sym) - impact_sym's own price drift, signed by traded_sym's side.
+/   When impact_sym has no quote for some leg at trade_time the baseline is
+/   null, and EVERY markout_pips is null with it - no error: the baseline
+/   comes from cross_ref_price_at, which returns 0n rather than throwing.
+/   ref_price is still filled for each horizon that has a quote
 / @throws error if impact_sym normalizes to the same pair as traded_sym
-/   (nothing to compare against), or anything cross_ref_price_at/cross_book_at themselves throw
+/   (nothing to compare against), or for cross_markout_at_horizons' own
+/   checks on impact_sym: quotes missing a required column, quotes not
+/   sorted `sym`time xasc, or no chain of pairs in quotes connecting
+/   impact_sym's two currencies
 / @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;-500 -300 0 100 300;1]
 / @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;-1;10000;enlist 300;1]  -> a sell reports the impact pair's own drift with the opposite sign
 cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons_ms;ref_size]

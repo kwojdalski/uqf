@@ -45,11 +45,13 @@ position:.qetl.plant.published `position
 / long-standing fallback.
 / .
 / The declared input is exactly what this reads: time, sym, side,
-/ trade_price, size. It used to carry pip_factor too, which nothing here
-/ touched - and a transform that demands a column it does not read cannot
-/ serve a fill table that lacks it. crypto_trades lacks it (a crypto price
-/ is in quote units, there is no pip), and .qpipe.job.crypto_posbook runs this
-/ same transform over those fills. Declare what you read.
+/ trade_price, size - the normalized `executions` table, renamed on the way
+/ in by on_batch (source_time to time, price to trade_price). It used to
+/ carry pip_factor too, which nothing here touched - and a transform that
+/ demands a column it does not read cannot serve a fill table that lacks
+/ it. A crypto fill has no pip (its price is in quote units), and crypto
+/ fills reach this transform through `executions` like any other. Declare
+/ what you read.
 / @param book the current positions, unkeyed
 / @param trades the batch of fills, in arrival order
 / @param marks the last mid per sym
