@@ -61,6 +61,36 @@ check["odbc worker registered"; registered[.qetl.job.bounded.def;`smokedb_backfi
 check["local source declares its transport"; `local~.qetl.source.def[`smokelocal]`transport]
 check["local worker registered"; registered[.qetl.job.bounded.def;`smokelocal_backfill]]
 check["feed on_timer throws not implemented"; unwritten {.qpipe.job.smokefeed.on_timer[]}]
+check["poll feed declares poll and gets a generated timer";
+    {d:.qetl.job.stream.def x; (`poll in key d) and `on_timer in key d}`smokepoll]
+check["poll fetch throws not implemented"; unwritten {.qpipe.job.smokepoll.fetch 0Np}]
+check["poll preview of an unwritten feed throws not implemented";
+    unwritten {.qetl.job.stream.preview[`smokepoll;5]}]
+check["compound poll declares the whole cursor trio";
+    all `load`save`advances in key .qetl.job.stream.def[`smokepollc]`poll]
+sent:([] t:`symbol$(); n:`long$())
+day2:2026.01.02D00:00:00.000000000
+implement:{[job]
+    d:.qetl.job.stream.def job;
+    page:([] ts:2026.01.01D00:00:00.000000000,day2; sym:`a`b; px:1 2f);
+    fetch:{[page;c] select from page where ts>c}[page];
+    d[`poll]:d[`poll],`fetch`normalize!(fetch;{[p] select sym, px from p});
+    if[not `load in key d`poll;
+        d[`poll]:d[`poll],enlist[`next_cursor]!enlist {[p] last p`ts}];
+    @[`.qetl.job.stream.jobs;job;:;enlist d];
+    (` sv d[`ns],`publish) set {[t;x] `sent upsert (t;count x); count x};
+    job}
+quiet:{[job] r:.qetl.job.stream.preview[job;5]; (`previewed~r`state) and 0=count sent}
+tick_now:{[job] (.qetl.job.stream.def[job]`on_timer)[]}
+saved_value:{[job] .qetl.job.continuous.load_cursor_value job}
+check["poll preview publishes nothing and saves no cursor";
+    {implement x; quiet[x] and null .qetl.job.continuous.load_cursor x}`smokepoll]
+check["poll timer publishes, then saves the cursor";
+    {tick_now x; (2=exec sum n from sent) and day2=.qetl.job.continuous.load_cursor x}`smokepoll]
+check["compound poll preview publishes nothing and saves no cursor";
+    {`sent set 0#sent; implement x; quiet[x] and (::)~saved_value x}`smokepollc]
+check["compound poll timer saves every cursor field";
+    {tick_now x; (`ts`sym!(day2;`b))~saved_value x}`smokepollc]
 check["etl on_batch throws not implemented"; unwritten {.qpipe.job.smokeetl.on_batch[`t;()]}]
 check["reaction registered on its dataset";
     `smokerx in exec name from .qetl.reaction.for_dataset `smoke_hist]
@@ -84,6 +114,11 @@ def _kdbx() -> tuple[str, dict[str, str]]:
     return str(q), env
 
 
+def _status_dir(env: dict[str, str], root: Path) -> dict[str, str]:
+    """Cursors land in the copy, not wherever the caller's stack keeps them."""
+    return {**env, "UQF_STATUS_DIR": str(root / "status")}
+
+
 def _copy_of_the_tree(root: Path) -> None:
     """What loading and scaffolding touch: src/, the plant's q files, the
     vendored database.q the plant registry reads quote and trade from, and the
@@ -100,6 +135,10 @@ def _scaffold_every_kind(root: Path) -> None:
     feed_table = table_definition("smoke_ticks", parse_columns(_FEED_COLUMNS))
     plans = [
         jobs.streaming_job("smokefeed", [], "smoke_ticks", _FEED_COLUMNS),
+        jobs.streaming_job("smokepoll", [], "smoke_poll_ticks", _FEED_COLUMNS, poll=True),
+        jobs.streaming_job(
+            "smokepollc", [], "smoke_pollc_ticks", _FEED_COLUMNS, poll=True, cursor="ts,sym"
+        ),
         jobs.streaming_job(
             "smokeetl",
             ["smoke_ticks"],
@@ -146,7 +185,7 @@ def test_every_scaffolded_kind_loads_and_registers(tmp_path):
     result = subprocess.run(
         [qbin, "smoke.q", "-q"],
         cwd=tmp_path,
-        env=env,
+        env=_status_dir(env, tmp_path),
         stdin=subprocess.DEVNULL,
         capture_output=True,
         timeout=TIMEOUT_SECONDS,

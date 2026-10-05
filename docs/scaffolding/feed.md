@@ -94,6 +94,21 @@ the plant can absorb is a decision to make deliberately rather than discover.
 
 ## Polling a source
 
+A feed that ticks makes rows up; a feed that polls fetches them from somewhere
+else. Scaffold the second with `--poll`:
+
+```
+uqs job new rates_feed --publishes rates --columns "sym:symbol, mid:float" --poll
+uqs job new book_feed --publishes books --columns "sym:symbol, px:float" \
+    --poll --cursor-fields time,securityId,priceBookType
+```
+
+Instead of `on_timer` it writes `fetch`, `normalize` and `next_cursor`, each
+throwing until written, and declares them as `poll`. `--cursor-fields` makes the
+cursor the row's position and writes the `load`, `save` and `advances` trio and
+`next_cursor` for it. `--poll` refuses a job that subscribes: the plant feeds
+that one, so there is nothing to fetch.
+
 A feed that fetches from outside the stack - a REST endpoint, another database -
 declares its steps as `poll` instead of writing `on_timer`, and gets a timer
 built from them that fetches the page after its cursor, normalizes it, publishes
