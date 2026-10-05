@@ -797,10 +797,24 @@ checkpoint:{[worker;cursor] .qetl.job.bounded.state.save_checkpoint[worker;spec 
 / @return the run's result dictionary
 run:{[worker]
     r:@[{[w] (1b; run_body w)};worker;{[e] (0b;e)}];
-    if[not first r; report_failure[worker;last r]];
+    if[not first r; report_failure[worker;last r]; end_failed_run worker];
     cleanup worker;
     if[not first r; 'last r];
     last r}
+
+/ Private: close a run that threw in the two records report_failure does not
+/ write: the heartbeat and the run ledger.
+/ .
+/ Without this a thrown run left the heartbeat on its last `running` and its
+/ etl_runs row open, with .qetl.run still holding it as current. The process's
+/ next run then had its begin refused - silently, begin_run swallows - and its
+/ end_run closed the THROWN run's row with the next run's outcome: a failure
+/ recorded as `idle or `completed, and the run that did the work with no row
+/ at all (#610). Never throws, for the reason report_failure never does.
+/ @param worker the worker's name
+end_failed_run:{[worker]
+    @[.qetl.hb.beat[;`failed];worker;{[e] (::)}];
+    end_run[`failed;()!()]}
 
 / Private: queue what an earlier, interrupted run of this worker wrote and
 / never finished, over this run's range.

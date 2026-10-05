@@ -257,6 +257,7 @@ qetl.job.bounded,define,function,2,worker decl
 qetl.job.bounded,delegate,function,2,worker nm
 qetl.job.bounded,do_window,function,2,worker w
 qetl.job.bounded,empty_windows,function,1,
+qetl.job.bounded,end_failed_run,function,1,worker
 qetl.job.bounded,end_run,function,2,state counts
 qetl.job.bounded,exit_code,function,1,state
 qetl.job.bounded,fetch,function,3,worker from_ts to_ts
