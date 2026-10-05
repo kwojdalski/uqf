@@ -273,6 +273,23 @@ test_a_malformed_opening_position_is_refused:{[t]
         `method`opening!(`fifo;([] sym:enlist `EURUSD; qty:enlist 1f; price:enlist 1f; side:enlist 0));
         "*must be 1 (long) or -1 (short)*"; "a lot with no side is not a position"]};
 
+test_an_opening_long_and_short_in_one_bucket_is_refused:{[t]
+    / #588: step checks only the FIRST lot's side before closing, then lets
+    / pick choose any lot - so a long and a short seeded in one bucket let
+    / a sell "close" the short under hifo and book a profit that cannot be.
+    mixed:([] sym:`EURUSD`EURUSD; qty:1 1f; price:1.10 1.20; side:1 -1);
+    .qunit.assertThrows[.qalloc.allocate[mk_today[];]; `method`opening!(`hifo;mixed);
+        "*long and short lots in one sym bucket*"; "a book is one side per bucket"];
+    .qunit.assertThrows[.qalloc.allocate[mk_today[];]; `method`by`opening!(`hifo;`symbol$();mixed);
+        "*long and short lots in one book*"; "and with no `by, the whole book is the one bucket"]};
+
+test_opposite_sides_in_different_buckets_are_accepted:{[t]
+    / Long EURUSD and short GBPUSD is an ordinary book, not a mixed one.
+    carried:([] sym:`EURUSD`GBPUSD; qty:1000000 1000000f; price:1.0 1.25; side:1 -1);
+    r:.qalloc.run[mk_today[];`method`opening!(`fifo;carried)];
+    .qunit.assertEquals[exec open_side from r`matches; enlist 1;
+        "the EURUSD sell closes the EURUSD long, the GBPUSD short is untouched"]};
+
 / ------------------------------------------------------------- AS OF
 
 test_asof_stops_the_clock:{[t]

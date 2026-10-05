@@ -274,6 +274,17 @@ prepared_opening:{[opening;bys]
     .qschema.require_cols[`allocate;`opening;opening;distinct required_lot_cols,bys];
     if[not all (exec side from opening) in -1 1;
         '"allocate: every opening lot's side must be 1 (long) or -1 (short)"];
+    / One side per bucket (#588). step checks only the FIRST lot's side
+    / before closing and lets the method's pick choose any lot, so a long
+    / and a short in one bucket let a sell "close" the short and book a
+    / profit that cannot exist. A real book never holds both - residual
+    / never produces it - so a carried-in position that does is refused.
+    / Bucketed as run buckets the trades, so an empty `by is one book.
+    ids:$[count bys; {(distinct x)?x} key_table[opening;bys]; (count opening)#0];
+    if[any 1<count each distinct each (opening`side) group ids;
+        '"allocate: opening holds long and short lots in one ",
+         $[count bys; (", " sv string bys)," bucket"; "book"],
+         " - a position is one side per bucket; net them first"];
     opening}
 
 / Private: an empty lot queue whose id/time/side types are the trades
