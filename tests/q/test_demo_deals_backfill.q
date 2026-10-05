@@ -350,6 +350,24 @@ test_an_on_conflict_override_fails_clashing_windows_not_the_run:{[t]
     .qunit.assertEquals[(r`state;r`windows_failed;count value `demo_deals);(`partial;3;3);
         "every window clashes and fails on its own; the run reports partial, and nothing doubled"]};
 
+test_window_stages_run_fetch_to_publish:{[t]
+    .qunit.assertEquals[key .qetl.job.bounded.window_stages;`fetch`transform`check`publish;
+        "a window is gated in this order, so the check judges the transformed rows"]};
+
+test_a_failed_stage_carries_its_message_and_fields:{[t]
+    s:.qetl.job.bounded.failed_with[(``window)!(::;`w);"window failed transform";enlist[`error]!enlist "boom"];
+    .qunit.assertEquals[(s`window;s[`failed]`message;s[`failed]`fields);
+        (`w;"window failed transform";enlist[`error]!enlist "boom");
+        "the state is kept and the failure added beside it"]};
+
+test_a_failed_window_is_counted_once_and_answers_false:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    before:.qetl.job.bounded.read_state[`demo_deals_backfill;`progress]`windows_failed;
+    w:`range_from`range_to!.ddbftest.d 1 2;
+    ok:.qetl.job.bounded.window_failed[`demo_deals_backfill;w;`message`fields!("window failed";()!())];
+    after:.qetl.job.bounded.read_state[`demo_deals_backfill;`progress]`windows_failed;
+    .qunit.assertEquals[(ok;after-before);(0b;1);"one failure path: logged, counted once, 0b to do_window"]};
+
 test_define_refuses_an_unknown_on_conflict:{[t]
     d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`on_conflict;:;(`ddbftest_oc;`merge)];
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_oc_worker;x]};(`ns`procname`note) _ d;

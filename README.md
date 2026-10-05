@@ -167,10 +167,12 @@ above has to be up:
 uv run uqs backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15
 ```
 
-`--version`, `--from` and `--to` are all required, and a date without an offset
-is UTC: a backfill that silently defaulted its range would publish the wrong
-window and record coverage for it. `uqs` finds the process that runs the worker
-and passes all four to it as flags on its start line.
+`--from` and `--to` are required, and a date without an offset is UTC: a
+backfill that silently defaulted its range would publish the wrong window and
+record coverage for it. `--version` may be left out only for a worker that
+declares a `source_version` - one whose source is never restated. `uqs` finds
+the process that runs the worker and passes all four to it as flags on its start
+line.
 
 **Add a pipeline.** `uqs job new` scaffolds one of three shapes, and `--dry-run`
 lists every file it would create or append to without writing any of them:
