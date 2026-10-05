@@ -284,6 +284,39 @@ test_a_thrown_run_then_a_clean_one_leave_every_record_agreeing:{[t]
     b:.ddbftest.agree[`idle;`idle;"the next run finds every window covered: all three say idle"];
     .qunit.assertEquals[a=b;0b;"the next run opens its own ledger row rather than closing the thrown run's"]};
 
+/ The phase every record above is derived from, held in memory - run_body
+/ decides from it rather than reading the status file back.
+test_the_phase_follows_init_and_each_run:{[t]
+    w:`demo_deals_backfill;
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    a:.qetl.job.bounded.read_state[w;`phase];
+    .qpipe.job.demo_deals_backfill.run[];
+    b:.qetl.job.bounded.read_state[w;`phase];
+    .qpipe.job.demo_deals_backfill.run[];
+    c:.qetl.job.bounded.read_state[w;`phase];
+    .qunit.assertEquals[(a;b;c);`ready`completed`idle;"ready after init, then each run's own outcome"]};
+
+/ A move the lifecycle does not have is refused where it is made, naming
+/ both ends, before any record is written.
+test_an_illegal_phase_move_is_refused_naming_both_phases:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qunit.assertThrows[.qetl.job.bounded.advance_phase[`demo_deals_backfill;;""];`completed;
+        "*cannot go from ready to completed";"a run must be running before it can complete"];
+    .qunit.assertEquals[.qetl.job.bounded.read_state[`demo_deals_backfill;`phase];`ready;"and the phase is left where it was"]};
+
+/ A rehearsal moves the status file and heartbeat like a run - an
+/ orchestrator needs to know how it ended - but opens no ledger row.
+test_a_dry_run_moves_the_phase_and_opens_no_ledger_row:{[t]
+    setenv[`UQF_DRY_RUN;"true"];
+    rows:{[] @[{count .qetl.run.runs[]};::;0]};
+    before:rows[];
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .qpipe.job.demo_deals_backfill.run[];
+    setenv[`UQF_DRY_RUN;""];
+    r:.ddbftest.records[];
+    .qunit.assertEquals[(r`status;r`heartbeat;count[.qetl.run.runs[]]-before);(`completed;`completed;0);
+        "status and heartbeat say completed; etl_runs has no new row"]};
+
 / No merging across versions, in the direction that matters: a version bump exists to force
 / re-extraction, so v1 coverage must not suppress a v2 run.
 test_a_version_bump_re_runs_the_whole_range:{[t]

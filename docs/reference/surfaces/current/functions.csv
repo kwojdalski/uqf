@@ -244,6 +244,7 @@ qetl.io.odbc,run_sql,function,2,h sql
 qetl.io.odbc,table_names,function,1,h
 qetl.io.odbc,window_query,function,6,h table_name time_column columns range_from range_to
 qetl.io.odbc,with_connection,function,2,conn f
+qetl.job.bounded,advance_phase,function,3,worker to err
 qetl.job.bounded,advanced_to,function,3,worker current next_cursor
 qetl.job.bounded,begin_run,function,1,worker
 qetl.job.bounded,check_static,function,2,worker run_spec
@@ -258,9 +259,9 @@ qetl.job.bounded,define,function,2,worker decl
 qetl.job.bounded,delegate,function,2,worker nm
 qetl.job.bounded,do_window,function,2,worker w
 qetl.job.bounded,empty_windows,function,1,
-qetl.job.bounded,end_failed_run,function,1,worker
 qetl.job.bounded,end_run,function,2,state counts
 qetl.job.bounded,exit_code,function,1,state
+qetl.job.bounded,fail_run,function,2,worker e
 qetl.job.bounded,failed_with,function,3,s message fields
 qetl.job.bounded,fetch,function,3,worker from_ts to_ts
 qetl.job.bounded,finish_store,function,1,worker
@@ -272,11 +273,14 @@ qetl.job.bounded,initial_state,dict,,
 qetl.job.bounded,instance,function,1,worker
 qetl.job.bounded,namespace,function,1,worker
 qetl.job.bounded,no_failures,function,1,
+qetl.job.bounded,no_progress,dict,,
 qetl.job.bounded,normalised,function,1,cfg
 qetl.job.bounded,on_conflict,function,1,worker
 qetl.job.bounded,optional_cfg,value,,
 qetl.job.bounded,own,function,2,worker nm
 qetl.job.bounded,partition_of,function,1,worker
+qetl.job.bounded,phase_edges,dict,,
+qetl.job.bounded,phases,dict,,
 qetl.job.bounded,plan,function,2,worker cursor
 qetl.job.bounded,plan_only,function,2,worker run_spec
 qetl.job.bounded,process_worker,value,,
@@ -286,11 +290,10 @@ qetl.job.bounded,publish_last_batch,function,2,worker unused
 qetl.job.bounded,publish_pending,function,1,worker
 qetl.job.bounded,read_state,function,2,worker nm
 qetl.job.bounded,record_facts,function,5,worker cfg w batch r
+qetl.job.bounded,record_orphan,function,1,worker
 qetl.job.bounded,recover_unfinished,function,1,worker
 qetl.job.bounded,replay_reactions,function,1,worker
 qetl.job.bounded,replay_window,function,2,worker w
-qetl.job.bounded,report,function,3,worker state err
-qetl.job.bounded,report_failure,function,2,worker e
 qetl.job.bounded,require_target_key,function,2,worker decl
 qetl.job.bounded,require_transform,function,2,worker cfg
 qetl.job.bounded,required_cfg,value,,
@@ -298,6 +301,7 @@ qetl.job.bounded,run,function,1,worker
 qetl.job.bounded,run_body,function,1,worker
 qetl.job.bounded,run_check,function,2,worker batch
 qetl.job.bounded,run_counts,function,4,planned completed failed rows
+qetl.job.bounded,run_totals,function,1,worker
 qetl.job.bounded,runtime,dict,,
 qetl.job.bounded,spec,function,1,worker
 qetl.job.bounded,stage_check,function,2,worker s

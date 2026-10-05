@@ -94,15 +94,18 @@ namespace:{[worker] ` sv worker_root,worker}
 
 / ------------------------------------------------------- INHERITANCE
 
+/ Private: a run's progress before it has made any.
+no_progress:`windows_planned`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0;0Np)
+
 / The globals every worker starts with. The first three are the contract's
 / contract; `handle` is the live connection or 0Ni on the fixture; `progress`
 / and `last_batch` are the run accumulators, one set PER WORKER because a q
 / lambda does not close over an enclosing local, so `each` over windows needs
 / a named place for the running totals - and two workers in one process must
-/ not share it.
-initial_state:`source_version`range_from`range_to`handle`progress`last_batch`last_window!
-    (`;0Np;0Np;0Ni;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np);();
-     `range_from`range_to!0N 0Np)
+/ not share it. `phase` is where the worker's run lifecycle stands - see
+/ advance_phase.
+initial_state:`source_version`range_from`range_to`handle`progress`last_batch`last_window`phase!
+    (`;0Np;0Np;0Ni;no_progress;();`range_from`range_to!0N 0Np;`)
 
 / The methods every worker gets: the contract's five, taken from the
 / contract itself so the two cannot drift, plus the three the launcher and
@@ -436,8 +439,11 @@ init:{[worker;run_spec]
     / and the guard's failure path writes the status file - the file this
     / refusal exists to keep the first worker's.
     claim_process[@[value;`.proc.procname;`];worker];
+    / Each init begins the lifecycle afresh, so its first transition checks the
+    / status file for a run an earlier process left unfinished.
+    write_state[worker;`phase;`];
     r:.[{[w;s] (1b; init_body[w;s])};(worker;run_spec);{[e] (0b;e)}];
-    if[not first r; report_failure[worker;last r]; cleanup worker; 'last r];
+    if[not first r; fail_run[worker;last r]; cleanup worker; 'last r];
     last r}
 
 / The bounded worker this TorQ process belongs to, ` until one initialises.
@@ -500,31 +506,90 @@ progress_now:{[worker]
     p:@[read_state[worker;];`progress;{[e] ()!()}];
     $[99h=type p; d,(key[d] inter key p)#p; d]}
 
-/ Private: write this run's status.
+/ ------------------------------------------------------------ RUN PHASE
 / .
-/ A new run's `starting` after one that never reached an outcome - killed,
-/ or crashed past every handler - records that run as failed first. The file
-/ still reads `starting or `running for it, and .qetl.status refuses either
-/ going straight to `starting, rightly: a run that died must not quietly read
-/ as one that is beginning. So the death is written down, and then the start.
-/ @param worker the worker's name
-/ @param state one of .qetl.status.status_states
-/ @param err the error, "" unless state is `failed
-report:{[worker;state;err]
-    id:instance worker;
-    if[(state~`starting) and (.qetl.status.previous_state id) in `starting`running;
-        .qetl.status.write_status[worker;id;`failed;spec worker;progress_now worker;
-            "the previous run never recorded an outcome - it was killed or crashed"]];
-    .qetl.status.write_status[worker;id;state;spec worker;progress_now worker;err]}
+/ One run is recorded in three places an outsider reads: the heartbeat, the
+/ status file Airflow polls, and the run ledger (etl_runs). Each used to be
+/ written by its own call at each step, in its own vocabulary, and run_body
+/ decided what to write next by reading the status file back off disk - so a
+/ lifecycle edge one record missed was found only at runtime (#600, #610).
+/ .
+/ Now the worker holds one phase in memory, advance_phase is the only thing
+/ that moves it, and the three records are derived from the move by this
+/ table. The status file has no `partial, so a partial run reads `failed
+/ there - one row here, not a conditional at a call site. .qetl.status still
+/ refuses an illegal transition in the file: that is the guard across
+/ processes, where memory does not reach.
+/ .
+/ The checkpoint, coverage and reaction ledgers are per window, not per run,
+/ and each already has one writer (finish_window, notify_published), so they
+/ are not derived from the phase.
+phases:([phase:`ready`running`idle`completed`partial`failed]
+    beat:`starting`running`idle`completed`partial`failed;
+    status:`starting`running`idle`completed`failed`failed;
+    run_ledger:`none`begin`finish`finish`finish`finish)
 
-/ Private: record a failure, never throwing - it runs on the error path, and
-/ a status write that fails there must not replace the error being reported.
+/ Private: where each phase may go next. ` is a worker before init. Any phase
+/ may fail; a finished run may only begin again, through `ready.
+phase_edges:(!). flip (
+    (`;          `ready`failed);
+    (`ready;     `running`failed);
+    (`running;   `idle`completed`partial`failed);
+    (`idle;      `ready`failed);
+    (`completed; `ready`failed);
+    (`partial;   `ready`failed);
+    (`failed;    `ready`failed))
+
+/ Private: move a worker's run to its next phase, and write every record the
+/ move implies.
+/ .
+/ In a fixed order: the ledger row opens before the status file is written,
+/ so the file names the run it describes, and closes after it, because
+/ closing clears the current run. Every write on the way to `failed is
+/ protected - that path runs while an error is being reported, and a write
+/ that fails there must not replace it. The run ledger is closed only for a
+/ run that opened a row, which an init failing never did.
+/ .
+/ The status file is read once per init, on the first move: a run an
+/ earlier process left `starting or `running died without an outcome, and
+/ .qetl.status rightly refuses either going straight to `starting. So the
+/ death is written down first, then the start.
+/ @param worker the worker's name
+/ @param to the next phase, a key of phases
+/ @param err the error, "" unless `to` is `partial or `failed
+/ @return the new phase
+/ @throws error naming both phases when the move is not in phase_edges
+advance_phase:{[worker;to;err]
+    was:read_state[worker;`phase];
+    if[not to in phase_edges was;
+        '"advance_phase: ",string[worker]," cannot go from ",$[null was; "before init"; string was]," to ",string to];
+    row:phases to;
+    call:$[`failed~to;
+        {[worker;f;a] .[f;a;{[worker;e] .qetl.log.err[worker;"could not record the failure";enlist[`error]!enlist e]}[worker]]}[worker];
+        {[f;a] f . a}];
+    if[(null was) and `ready~to; call[record_orphan;enlist worker]];
+    if[`begin~row`run_ledger; call[begin_run;enlist worker]];
+    call[.qetl.hb.beat;(worker;row`beat)];
+    call[.qetl.status.write_status;(worker;instance worker;row`status;spec worker;progress_now worker;err)];
+    if[(`finish~row`run_ledger) and `running~was; call[end_run;(to;run_totals worker)]];
+    write_state[worker;`phase;to];
+    to}
+
+/ Private: record a run an earlier process never finished as failed.
+/ @param worker the worker's name
+record_orphan:{[worker]
+    id:instance worker;
+    if[(.qetl.status.previous_state id) in `starting`running;
+        .qetl.status.write_status[worker;id;`failed;spec worker;progress_now worker;
+            "the previous run never recorded an outcome - it was killed or crashed"]]}
+
+/ Private: fail the worker's run, never throwing - it runs on the error path.
 / @param worker the worker's name
 / @param e the error, as caught
-report_failure:{[worker;e]
+fail_run:{[worker;e]
     msg:$[10h=type e; e; -11h=type e; string e; .Q.s1 e];
-    @[{[a] report . a};(worker;`failed;$[count msg; msg; "failed"]);
-      {[worker;e2] .qetl.log.err[worker;"could not record the failure in the status file";enlist[`error]!enlist e2]}[worker]]}
+    @[{[a] advance_phase . a};(worker;`failed;$[count msg; msg; "failed"]);
+      {[worker;e2] .qetl.log.err[worker;"could not record the failure";enlist[`error]!enlist e2]}[worker]]}
 
 / Private: every check that needs neither a ledger nor the source - the
 / run's spec, the worker's contract, the source's fixture, the conflict
@@ -603,8 +668,7 @@ init_body:{[worker;run_spec]
     / Same reasoning one table over: create it and verify its shape
     / here, in a live path, rather than leaving a checker that never fires.
     .qetl.hb.attach[];
-    .qetl.hb.beat[worker;`starting];
-    report[worker;`starting;""];
+    advance_phase[worker;`ready;""];
 
     .qetl.job.bounded.state.acquire_lock worker;
 
@@ -833,24 +897,10 @@ checkpoint:{[worker;cursor] .qetl.job.bounded.state.save_checkpoint[worker;spec 
 / @return the run's result dictionary
 run:{[worker]
     r:@[{[w] (1b; run_body w)};worker;{[e] (0b;e)}];
-    if[not first r; report_failure[worker;last r]; end_failed_run worker];
+    if[not first r; fail_run[worker;last r]];
     cleanup worker;
     if[not first r; 'last r];
     last r}
-
-/ Private: close a run that threw in the two records report_failure does not
-/ write: the heartbeat and the run ledger.
-/ .
-/ Without this a thrown run left the heartbeat on its last `running` and its
-/ etl_runs row open, with .qetl.run still holding it as current. The process's
-/ next run then had its begin refused - silently, begin_run swallows - and its
-/ end_run closed the THROWN run's row with the next run's outcome: a failure
-/ recorded as `idle or `completed, and the run that did the work with no row
-/ at all (#610). Never throws, for the reason report_failure never does.
-/ @param worker the worker's name
-end_failed_run:{[worker]
-    @[.qetl.hb.beat[;`failed];worker;{[e] (::)}];
-    end_run[`failed;()!()]}
 
 / Private: queue what an earlier, interrupted run of this worker wrote and
 / never finished, over this run's range.
@@ -883,23 +933,31 @@ finish_store:{[worker]
 / @param worker the worker's name
 / @return the run's result dictionary
 run_body:{[worker]
-    / One run identity for the whole execution, so every window
-    / this run materialises is attributable to it and to each other. Begun
-    / before the first window and closed with the run's own outcome, so an
-    / execution that dies mid-flight leaves a row reading `running` rather
-    / than leaving no trace - see .qetl.run's header.
-    begin_run[worker];
-    / Every run declares its own start. init writes `starting once, but a
-    / second run in the same process - a rerun that finds nothing to do, or
-    / an operator calling run[] again - otherwise went straight from the
-    / last run's `completed to `idle or `running, which .qetl.status rightly
-    / refuses: a finished run must not quietly read as one still going.
-    if[(.qetl.status.previous_state instance worker) in `idle`completed`failed;
-        report[worker;`starting;""]];
+    / Every run declares its own start. A second run in the same process - a
+    / rerun that finds nothing to do, or an operator calling run[] again -
+    / begins from the last run's outcome, and .qetl.status rightly refuses
+    / going from there to `idle or `running without a new `starting.
+    if[not `ready~read_state[worker;`phase]; advance_phase[worker;`ready;""]];
+    / The run's OWN cursor starts null, not at the loaded checkpoint. The
+    / checkpoint's job is to inform the plan; from there the cursor tracks
+    / what THIS run has published, in the order it publishes it. Seeding it
+    / from the checkpoint broke restatement: a finished run's checkpoint is
+    / range_to, so the first refilled window ended at or before it and
+    / advanced_to refused a cursor that "stood still" - the strict-forward
+    / rule, correct within a run, applied across two. The run then died after
+    / doing the work but before recording it.
+    write_state[worker;`progress;no_progress];
+    / `running from here, not from the first window: recovering what an
+    / interrupted run left and replaying failed reactions both write. Opens
+    / the run's ledger row too, so every window this run materialises is
+    / attributable to it, and an execution that dies mid-flight leaves a row
+    / reading `running rather than no trace - see .qetl.run's header.
+    advance_phase[worker;`running;""];
     recovered:recover_unfinished worker;
     replayed:replay_reactions worker;
     cursor:.qetl.job.bounded.state.load_checkpoint[worker;spec worker];
     windows:own[worker;`plan][cursor];
+    write_state[worker;`progress;@[read_state[worker;`progress];`windows_planned;:;count windows]];
     if[0=count windows;
         / "ran, found no work" is a SUCCESS, not a failure. An
         / orchestrator that cannot tell them apart retries a successful
@@ -908,27 +966,15 @@ run_body:{[worker]
         s:spec worker;
         .qetl.log.info[worker;"idle - every window in the range is already covered at this source_version";
             `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
-        .qetl.hb.beat[worker;`idle];
-        report[worker;`idle;""];
         / Finish what recover_unfinished found, which is the only thing an
         / idle run has to do - and only then, so an idle run with nothing to
         / repair does not ask the HDB to reload for nothing.
         if[(recovered>0) or replayed>0; finish_store worker];
-        end_run[`idle;run_counts[0;0;0;0]];
+        / Where coverage already stands, for the status file.
+        write_state[worker;`progress;@[read_state[worker;`progress];`cursor;:;cursor]];
+        advance_phase[worker;`idle;""];
         :`state`windows_completed`windows_failed`rows_published`cursor!
             (`idle;0;0;0;cursor)];
-    / The run's OWN cursor starts null, not at the loaded checkpoint. The
-    / checkpoint's job was to inform the plan, and the plan is made; from
-    / here the cursor tracks what THIS run has published, in the order it
-    / publishes it. Seeding it from the checkpoint broke restatement: a
-    / finished run's checkpoint is range_to, so the first refilled window
-    / ended at or before it and advanced_to refused a cursor that "stood
-    / still" - the strict-forward rule, correct within a run, applied
-    / across two. The run then died after doing the work but before
-    / recording it.
-    write_state[worker;`progress;`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0Np)];
-    .qetl.hb.beat[worker;`running];
-    report[worker;`running;""];
     do_window[worker] each windows;
     / The io manager's end-of-run step, after the LAST window and whatever
     / its outcome: a window that failed wrote nothing, but the ones that
@@ -944,17 +990,13 @@ run_body:{[worker]
     / one summary line per run at INF - the aggregate a fleet view wants,
     / without the per-window noise that stays at DBG.
     .qetl.log.info[worker;"run finished";result];
-    / The terminal beat, so a finished worker does not read as wedged. The
+    / The terminal move, so a finished worker does not read as wedged. The
     / per-window beat inside do_window is the one that catches a worker
     / stuck mid-window, which is the case a status file cannot show - it
     / says `running` and keeps saying it.
-    .qetl.hb.beat[worker;result`state];
-    / `partial is a failure to an orchestrator - exit_code says so too - and
-    / the status file has no state between completed and failed.
-    report[worker;$[`completed~result`state; `completed; `failed];
+    advance_phase[worker;result`state;
         $[`completed~result`state; "";
           string[p`windows_failed]," of ",string[count windows]," window(s) failed - they stay uncovered, so a re-run retries them"]];
-    end_run[result`state;run_counts[count windows;p`windows_completed;p`windows_failed;p`rows_published]];
     / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
     / The release used to live on this line, which made it the happy path's
@@ -1025,6 +1067,11 @@ begin_run:{[worker]
 end_run:{[state;counts]
     if[not .qetl.job.bounded.runtime.allows`record_run; :(::)];
     .[{.qetl.run.finish[x;y]};(state;counts);{[e] (::)}]}
+
+/ Private: the counts the worker's progress holds, as end_run records them.
+run_totals:{[worker]
+    p:read_state[worker;`progress];
+    run_counts[p`windows_planned;p`windows_completed;p`windows_failed;p`rows_published]}
 
 / Private: a run's counts, as end_run records them.
 run_counts:{[planned;completed;failed;rows]
