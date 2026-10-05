@@ -14,6 +14,12 @@
 # subscription), and databento1 / kafka_flow1 are ordinary subscribers to the
 # raw table it publishes. The drawing routes them through "from outside q"
 # and back into the subscriber questions for that reason.
+#
+# VENDORED vs OURS. Every process in the tree is uqf's own; the dashed box on
+# top is the TorQ Finance Starter Pack they run on (lib/, never edited) - its
+# 23 processes, as docs/reference/processes.md lists them, and its three
+# tables. A vendored table in a leaf is marked (TorQ): today that is `quote`,
+# which fxfeed1 writes beside TorQ's own feed1.
 
 direction: down
 
@@ -56,6 +62,15 @@ classes: {
       border-radius: 6
     }
   }
+  vendored: {
+    style: {
+      fill: "#e9e9ee"
+      stroke: "#55556a"
+      font-color: "#26263a"
+      border-radius: 6
+      stroke-dash: 3
+    }
+  }
   quiet: {
     style: {
       fill: "#eef1f4"
@@ -66,11 +81,15 @@ classes: {
   }
 }
 
-start: "A process in the stack" { class: quiet }
+vendored: "VENDORED - TorQ Finance Starter Pack (lib/), never edited\n\ntickerplant: stp1, sctp1, tpreplay1\nstorage: rdb1, wdb1, hdb1, hdb2, sort1, sortworker1, sortworker2\nqueries: gateway1\nfleet: discovery1, monitor1, housekeeping1, killtick,\nreporter1, filealerter1, metrics1\ndata quality: dqc1, dqcdb1, dqe1, dqedb1\nits own demo feed: feed1 -> quote, trade (equities)\n\nits tables: quote, trade, packets - marked (TorQ) below" { class: vendored }
+
+start: "A process in the stack -\nevery one below is uqf's own" { class: quiet }
+
+vendored -> start: "they all run on it" { style.stroke-dash: 4 }
 
 q_source: "Where do its rows\ncome from?" { class: question }
 
-feeds: "FEEDS - invent rows on a timer\n\nfxfeed1 -> quote\nquotesfeed1 -> quotes\nwidefeed1 -> wide_book\nfxtradesfeed1 -> trades\nfxordersfeed1 -> orders\ncryptomock1 -> crypto_book, crypto_trades" { class: group }
+feeds: "FEEDS - invent rows on a timer\n\nfxfeed1 -> quote (TorQ)\nquotesfeed1 -> quotes\nwidefeed1 -> wide_book\nfxtradesfeed1 -> trades\nfxordersfeed1 -> orders\ncryptomock1 -> crypto_book, crypto_trades" { class: group }
 
 external: "EXTERNAL PUBLISHERS - Python, outside q\n(q cannot hold these subscriptions)\n\ndatabento_feed.py -> databento_mbp10\nkafka_feed.py -> kafka_client_flow" { class: external }
 
@@ -82,11 +101,11 @@ quiet_leaves: "WATCHERS - publish nothing\n\ntap1: Tickerplant inspector,\nlogs 
 
 q_same: "Several tables that mean\nthe same thing, into\none shape?" { class: question }
 
-normalizers: "NORMALIZERS - many sources, one table\n\nexecutions1: trades + crypto_trades -> executions\nmarks1: quote + crypto_book -> marks\nmarketdata1: quote + quotes -> market_data" { class: group }
+normalizers: "NORMALIZERS - many sources, one table\n\nexecutions1: trades + crypto_trades -> executions\nmarks1: quote (TorQ) + crypto_book -> marks\nmarketdata1: quote (TorQ) + quotes -> market_data" { class: group }
 
 q_join: "Does it combine several\ntables row by row?" { class: question }
 
-joins: "JOINS - more than one input\n\nmarkout1: trades + quote -> execution_quality\nposbook1: executions + marks -> position" { class: group }
+joins: "JOINS - more than one input\n\nmarkout1: trades + quote (TorQ) -> execution_quality\nposbook1: executions + marks -> position" { class: group }
 
 single: "ONE INPUT, ONE JOB\n\ndatabento1: databento_mbp10 -> databento_book\nkafka_flow1: kafka_client_flow -> client_flow\nfxpositions1: orders -> fx_position, fx_limit_breach\nvectorize1: wide_book -> mkt_orderbook\nsuperbook1: market_data -> superbook\narbitrage1: superbook -> arbitrage\ncrossarb1: superbook -> cross_arbitrage" { class: group }
 
