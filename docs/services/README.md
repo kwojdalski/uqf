@@ -11,6 +11,14 @@ whole stack is `uqs start`. Starting and stopping, config and logs are covered
 in [running the uqf stack](../guides/uqs.md). Ports, subscriptions and the full
 table list are in the generated [process table](../reference/processes.md).
 
+![How the stack's processes differ: where their rows come from, then what they do with the tables they read](../diagrams/services-showcase.svg)
+
+The tree sorts every process by where its rows come from, then by what it does
+with the tables it reads. Databento and Kafka are worth a second look: the
+publisher is a Python handler outside q, because a q process can't hold either
+subscription, and `databento1` and `kafka_flow1` are ordinary subscribers to the
+raw table it publishes.
+
 ## Feeds: where rows are made
 
 These invent or replay data, so the rest of the stack has something to work on.
