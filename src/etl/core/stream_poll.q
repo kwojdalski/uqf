@@ -60,7 +60,10 @@ poll_declared:{[job;decl]
         '"define: ",string[job],"'s poll must be a dictionary of fetch, normalize and next_cursor"];
     if[count missing:poll_keys where not poll_keys in key p;
         '"define: ",string[job],"'s poll is missing ",", " sv string missing];
-    if[count bad:(poll_keys,`close inter key p) where not is_callable each p poll_keys,`close inter key p;
+    / `(enlist `close) inter`, never `` `close inter ``: inter indexes its left
+    / argument, and an atom cannot be indexed - 'type at every define.
+    fns:poll_keys,(enlist `close) inter key p;
+    if[count bad:fns where not is_callable each p fns;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     custom:`load`save`advances inter key p;
     if[(count custom) and 3<>count custom;

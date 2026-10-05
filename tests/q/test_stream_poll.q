@@ -72,7 +72,7 @@ test_preview_publishes_nothing:{[t]
 
 test_preview_writes_no_cursor:{[t]
     .qetl.job.stream.preview[`spt_feed;5];
-    .qunit.assertEquals[(.streampolltest.cursor_file_exists `spt_feed;null .qetl.job.continuous.load_cursor `spt_feed);11b;
+    .qunit.assertEquals[(.streampolltest.cursor_file_exists `spt_feed;null .qetl.job.continuous.load_cursor `spt_feed);01b;
         "no cursor file appears, so a run still starts where it would have"]};
 
 test_preview_leaves_a_saved_cursor_alone:{[t]
