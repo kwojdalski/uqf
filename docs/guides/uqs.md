@@ -611,8 +611,10 @@ collected" on a healthy stack.
   connections, and a monitor with none left cannot accept the query `summary`
   reads heartbeats with. So `stack/monitor_budget.py` stops monitoring
   `sortworker`, `reporter`, `housekeeping`, `feed`, then `metrics` processes
-  until the rest fit. Those show `-` in the Heartbeat column, and `summary`
-  names them. On a fully licensed kdb+/KDB-X nothing is dropped.
+  until the rest fit. Those show `-` in the Heartbeat column. `uqs start`,
+  `restart`, `up` and `summary` each print one line naming the proctypes given
+  up, counting only types something in the fleet runs as. On a fully licensed
+  kdb+/KDB-X, or on PeachQ, nothing is dropped.
 - **uqf's standing ETLs (`metrics`) are monitored too**; `backfill` workers are
   not, because a finished job's heartbeat would age into a false `error`.
 
