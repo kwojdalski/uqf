@@ -173,6 +173,24 @@ something done. One rule stated once, linked from elsewhere.
 > `python/uqs/README.md` cut to layout and testing, since the guide covers use;
 > the authority split and the tickerplant invariants stated once and linked.
 
+**Say how to do a thing, not what the reader can see for themselves.** No copy
+of a command's `--help` or output, no list of what a test file checks, no
+argument for why the tests are written as they are, no note about harmless
+console noise. Point at `uqs --help` and `uqs <command> --help`, and write only
+what running it cannot show: conventions shared across commands, and how
+commands combine into a task.
+
+> *2026-10-05.* `guides/uqs.md`'s `## Commands` was a ~100-line hand copy of
+> every command's synopsis and options. Asked: "dont you think its not really
+> needed in documentation? i mean i can always run it by myself". Replaced with
+> a pointer to `--help`; the paragraph on `PROCS`, `--port` and `--export`,
+> which no single command's help states, stayed. The same day, on request
+> ("remove this please"): `services/markouts.md`'s `## Tests` list,
+> `services/cross-arbitrage.md`'s "Why hand-computed test numbers" and
+> `guides/uqs.md`'s "Known harmless warnings". Then asked: "dont you think that
+> documentation is way too verbose? ... we can just mention ways of doing
+> things".
+
 **No prescriptive meta-rules about the documentation process itself.** Describe
 what is, not how future documents must be filed.
 

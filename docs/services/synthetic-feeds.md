@@ -59,7 +59,7 @@ the RDB has, so a brand new table only needs two things:
 1. **Schema** - `uqs.model.plant_schema._generated_schema_content()` appends the
    `quotes` table definition to a *copy* of the vendored `database.q` (written
    to `output/uqs/database.q` on every `bootstrap()`, same generate-never-edit
-   approach as `process.csv`), and `_base_process_rows()` repoints `stp1`'s
+   approach as `process.csv`), and `_composed_rows()` repoints `stp1`'s
    `-schemafile` extras arg at that copy instead of the vendored file.
 2. **Feed** - the `quotes_feed` job itself, wired in as a process.csv row
    exactly like `fxfeed1` (port offset `+24`), running under the shared

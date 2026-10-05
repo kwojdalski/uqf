@@ -54,9 +54,7 @@ synthetic EURJPY ask = 1.1002 * 150.02 = 165.052004
 
 A direct EURJPY ask of 164.90 is 0.10 cheap: buy 1mm EUR directly at 164.90,
 sell it through the route at 165.00, for 100,000 JPY of gross edge. That is the
-first test in `tests/q/test_cross_arbitrage.q`, and every expected number in
-that file is computed by hand on purpose --- see
-[why](#why-hand-computed-test-numbers).
+first test in `tests/q/test_cross_arbitrage.q`.
 
 ## Output
 
@@ -142,17 +140,3 @@ gives the detector something to report --- and it is also why those reports are
 an artefact of three unrelated random walks, not a market. On real feeds the
 same code answers a real question; on this one it is a demonstration that the
 pipeline works.
-
-## Why hand-computed test numbers
-
-A wrong inversion on one leg of a route does not throw. It produces a
-plausible-looking edge that is not there.
-
-A round-trip identity --- price it forwards, then backwards, check you get back
-where you started --- passes with **both** legs wrong, so it proves nothing
-about direction. The only check that catches an orientation bug is an
-independently known price, which is why every expected value in
-`tests/q/test_cross_arbitrage.q` is worked out by hand and written in the test
-beside the assertion. One test exists purely for this: a direct book set exactly
-equal to the synthetic must report **no** opportunity, because an inverted leg
-would put the synthetic orders of magnitude away and report a vast edge instead.

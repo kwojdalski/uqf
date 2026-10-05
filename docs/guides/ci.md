@@ -14,17 +14,19 @@ is supplied to the decision check through `GH_TOKEN`.
 
 ## Lanes
 
-One per layer. `all` is every lane except `coverage` and the two that reach
-outside the process, so it is what a release runs and not what an edit runs -
-run the lane matching the layer you changed.
+One per layer. `all` is every lane except the two coverage lanes and the two
+that reach outside the process, so it is what a release runs and not what an
+edit runs - run the lane matching the layer you changed.
 
 ````
 scripts/test.py q-unit              # deterministic qUnit suite
+scripts/test.py q-unit-portable     # the suites that pass on PeachQ as well as KDB-X
 scripts/test.py q-order             # the same suite, reversed and shuffled
 scripts/test.py q-metatables-hdb    # metatable queries against a temporary HDB
 scripts/test.py q-examples          # every documented @eg runs, in its own process
 scripts/test.py q-scripts           # every worked example under scripts/examples/
 scripts/test.py q-docs              # the ```q blocks in docs/ marked to run
+scripts/test.py q-docs-peachq       # the same blocks again, on PeachQ ($UQF_PEACHQ)
 scripts/test.py q-backfill-process  # bounded lifecycle, real filesystem, child processes
 scripts/test.py q-two-instances     # a second kdb+ process, data moved across the wire
 scripts/test.py python              # orchestrator and frontend
@@ -32,7 +34,7 @@ scripts/test.py q-coverage          # what the q suite executes
 scripts/test.py coverage            # the same, q and Python together
 scripts/test.py smoke --targets HOST:PORT --tables TABLE:COL,COL   # live external metadata check
 scripts/test.py stack-smoke         # restart the fleet, watch what it publishes
-scripts/test.py all                 # every lane except coverage, smoke and stack-smoke
+scripts/test.py all                 # every lane except q-coverage, coverage, smoke and stack-smoke
 ````
 
 They are separate because they prove different things, and five of them cannot

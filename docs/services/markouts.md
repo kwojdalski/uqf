@@ -111,19 +111,3 @@ coverage ledger, so a rerun of the same range is idle; - asks the HDB to reload.
   stamped them. For a fill in the last 10 seconds of a day, the two can sit in
   different partitions. The key then can't replace the live row, and the fill
   appears twice.
-
-## Tests
-
-- **`tests/q/test_hdb_markouts_backfill.q`:**
-  - every fill is scored at every live horizon, and the horizons follow the live
-    job's;
-  - a buy is marked against the later mid;
-  - a fill with no later quote keeps null markouts;
-  - a run writes all its rows, including a fill whose horizons cross midnight;
-  - a restatement replaces rather than duplicates;
-  - against a stand-in HDB, each window sends exactly two queries over the right
-    bounds;
-  - the live path scores exactly as the fixture does;
-  - an empty window doesn't query quotes.
-- **`tests/q/test_every_worker_runs.q`** runs this worker, with every other,
-  from init to completion; a second run is idle, and a dry run writes nothing.
