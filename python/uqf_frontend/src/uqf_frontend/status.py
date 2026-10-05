@@ -63,6 +63,7 @@ FIELDS = (
     "cursor",
     "rows_published",
     "windows_completed",
+    "reactions_owed",
     "error",
     "updated_at",
     "pid",
@@ -84,6 +85,9 @@ class WorkerStatus:
     cursor: str | None
     rows_published: int
     windows_completed: int
+    #: Reactions to this run's publications that have not succeeded: a dataset
+    #: derived from it is stale, and the run reads `failed` (q's `partial`).
+    reactions_owed: int
     error: str | None
     updated_at: str
     #: The q process that wrote it, and its host - see `abandoned`.
@@ -184,6 +188,7 @@ def _parse(text: str) -> WorkerStatus:
         cursor=_or_none(raw["cursor"]),
         rows_published=int(raw["rows_published"]),
         windows_completed=int(raw["windows_completed"]),
+        reactions_owed=int(raw["reactions_owed"]),
         error=_or_none(raw["error"]),
         updated_at=str(raw["updated_at"]),
         pid=int(raw["pid"]),

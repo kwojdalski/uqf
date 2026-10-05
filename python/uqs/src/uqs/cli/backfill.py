@@ -149,7 +149,7 @@ def backfill(
         console.print(
             f"[dim]waiting for {procname}'s outcome (Ctrl-C stops waiting, not the run)[/]"
         )
-        state, code = stack_backfill.wait_for_outcome(
+        state, code, error = stack_backfill.wait_for_outcome(
             paths, procname, resolved, bound_from, bound_to, launched_at
         )
     except UqsError as exc:
@@ -157,4 +157,6 @@ def backfill(
         return
     colour = "green" if code == 0 else "red"
     console.print(f"[{colour}]{procname}: {state}[/] - `uqs logs {procname}` for its log")
+    if error:
+        console.print(f"  {error}", markup=False)
     raise typer.Exit(code=code)

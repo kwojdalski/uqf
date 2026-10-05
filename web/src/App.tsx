@@ -355,7 +355,9 @@ function BackfillView() {
                     : worker.state === "completed"
                       ? "Success · work completed"
                       : worker.state === "failed"
-                        ? "Failure"
+                        ? worker.reactions_owed > 0
+                          ? `Failure · ${worker.reactions_owed} reaction(s) owed, a derived dataset is stale`
+                          : "Failure"
                         : "In progress",
               }))}
               empty="No worker status files found."

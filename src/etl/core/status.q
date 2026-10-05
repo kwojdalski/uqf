@@ -160,7 +160,9 @@ status_dir:{[]
 /   specification. range is half-open [range_from;range_to), and
 /   source_version is mandatory (coverage under one source release
 /   says nothing about another)
-/ @param progress dict with `cursor`rows_published`windows_completed
+/ @param progress dict with `cursor`rows_published`windows_completed, and
+/   optionally `reactions_owed - 0 when absent, as on a failure path that
+/   never got as far as counting them
 / @param err an error string, or "" when there is none
 / @return the path written
 / @throws error if state is unknown, if the range is empty or reversed, if
@@ -196,12 +198,15 @@ write_status:{[worker;instance_id;state;spec;progress;err]
     / heartbeat dies with the process, and nothing else would ever say so.
     / run_id is the .qetl.run execution, "" before it opens and on a rehearsal.
     run:@[{.qetl.run.current[]};::;{0Ng}];
+    / reactions_owed: what a derived dataset is still waiting for - a run
+    / that leaves any is `partial, so `failed here, and this says why (#632).
     payload:`worker`instance_id`state`source_version`range_from`range_to,
-            `cursor`rows_published`windows_completed`error`updated_at,
+            `cursor`rows_published`windows_completed`reactions_owed`error`updated_at,
             `pid`host`run_id;
     values_:(worker;instance_id;state;spec`source_version;
              spec`range_from;spec`range_to;
              progress`cursor;progress`rows_published;progress`windows_completed;
+             $[`reactions_owed in key progress; progress`reactions_owed; 0];
              err;.z.p;.z.i;string .z.h;$[null run; ""; string run]);
     target:dir,"/airflow_status_",string[instance_id],".txt";
     tmp:target,".tmp";

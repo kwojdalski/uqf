@@ -277,6 +277,8 @@ qetl.job.bounded,no_progress,dict,,
 qetl.job.bounded,normalised,function,1,cfg
 qetl.job.bounded,on_conflict,function,1,worker
 qetl.job.bounded,optional_cfg,value,,
+qetl.job.bounded,owed_error,function,1,owed
+qetl.job.bounded,owed_reactions,function,1,worker
 qetl.job.bounded,own,function,2,worker nm
 qetl.job.bounded,partition_of,function,1,worker
 qetl.job.bounded,phase_edges,dict,,

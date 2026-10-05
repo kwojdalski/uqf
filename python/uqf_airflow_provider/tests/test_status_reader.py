@@ -36,6 +36,7 @@ def write_status_file(directory: Path, instance: str, **overrides) -> Path:
         "cursor": "2026-09-14T00:00:00.000000000",
         "rows_published": 1234,
         "windows_completed": 1,
+        "reactions_owed": 0,
         "error": "",
         "updated_at": "2026-09-15T18:41:14.475818000",
         "pid": 4242,
