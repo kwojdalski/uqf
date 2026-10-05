@@ -19,6 +19,11 @@ publisher is a Python handler outside q, because a q process can't hold either
 subscription, and `databento1` and `kafka_flow1` are ordinary subscribers to the
 raw table it publishes.
 
+The dashed box on top is what's **vendored**: the TorQ Finance Starter Pack
+under `lib/`, which is never edited - the tickerplant, storage, gateway and
+fleet processes everything here runs on, and its own tables. Every process in
+the tree is uqf's own; a vendored table it reads or writes is marked **(TorQ)**.
+
 ## Feeds
 
 These invent or replay data, so the rest of the stack has something to work on.
