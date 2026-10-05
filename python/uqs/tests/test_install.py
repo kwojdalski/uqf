@@ -207,3 +207,45 @@ def test_cli_second_run_has_nothing_to_do(sidecar: Path, cli_repo: Path) -> None
     code, out = _run(str(sidecar), "--mode", "copy", "--yes")
     assert code == 0
     assert "Nothing to install" in out
+
+
+# --- queries `--trace` can see: a requirement for what is installed ----------
+
+DIRECT_SOURCE = (
+    "source_name:`acme\n"
+    "query:{[h;a;b] h({[x;y] select from t where time within (x;y)};a;b)}\n"
+    ".qetl.source.define[source_name;`columns`query!(enlist `time;query)];\n"
+)
+DIRECT_POLL = (
+    "fetch:{[c] h({[c] select from t where time>c};c)}\n"
+    ".qetl.job.stream.define[`acme_poll;`procname`publishes`period`poll!"
+    "(`acme_poll1;enlist `quote;1s;`fetch`normalize`next_cursor!(fetch;{x};{x}))];\n"
+)
+
+
+def test_cli_refuses_a_backfill_source_whose_query_trace_cannot_see(
+    sidecar: Path, cli_repo: Path
+) -> None:
+    (sidecar / "feeds" / "acme.q").write_text(DIRECT_SOURCE)
+    code, out = _run(str(sidecar), "--mode", "copy", "--yes")
+    assert code == 1, out
+    assert "refused" in out and "acme.q:2" in out and ".qetl.source.ipc[" in out
+    assert not (cli_repo / SOURCE_DIR / "acme.q").exists(), "nothing is installed"
+    assert not (cli_repo / STREAM_DIR / "acme_spread.q").exists(), "not even the clean files"
+
+
+def test_cli_refuses_a_polling_feed_whose_query_trace_cannot_see(
+    sidecar: Path, cli_repo: Path
+) -> None:
+    (sidecar / "acme_poll.q").write_text(DIRECT_POLL)
+    code, out = _run(str(sidecar), "--dry-run")
+    assert code == 1, "a dry run says it would be refused"
+    assert "acme_poll.q:1" in out and ".qetl.source.ipc_call" in out
+
+
+def test_cli_installs_a_direct_line_that_says_why(sidecar: Path, cli_repo: Path) -> None:
+    exempt = DIRECT_SOURCE.replace(";a;b)}", ";a;b)}  / untraced: the source logs its own")
+    (sidecar / "feeds" / "acme.q").write_text(exempt)
+    code, out = _run(str(sidecar), "--mode", "copy", "--yes")
+    assert code == 0, out
+    assert (cli_repo / SOURCE_DIR / "acme.q").exists()

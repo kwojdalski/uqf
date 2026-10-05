@@ -135,21 +135,15 @@ def _report_undefined_tables(items: list[Item], declarations: list[Declaration])
             )
 
 
-def _report_untraced_fetches(items: list[Item]) -> None:
-    """A polling feed that calls its handle directly runs, and `--trace` never
-    shows what it sends - say where, so it can go through
-    .qetl.source.ipc_call before anyone needs the trace."""
-    for item in items:
-        if item.destination is None or item.destination.suffix != ".q":
-            continue
-        for number, line in untraced_lines(item.destination.read_text()):
-            console.print("[yellow]![/] ", end="")
-            console.print(
-                f"{item.destination.name}:{number} sends a query `--trace` cannot see: {line}\n"
-                "  send it with .qetl.source.ipc_call[h;f;enlist cursor], or mark the line "
-                "`/ untraced: <why>`",
-                markup=False,
-            )
+def _untraced(items: list[Item]) -> list[str]:
+    """`file:line  the line` for every query a sidecar file would send that
+    `--trace` cannot see (uqs.checks.traced_queries)."""
+    return [
+        f"{item.source.name}:{number}  {line}"
+        for item in items
+        if item.source.suffix == ".q"
+        for number, line in untraced_lines(item.source.read_text(errors="replace"))
+    ]
 
 
 def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> Panel:
@@ -270,6 +264,24 @@ def install_jobs(
     if not todo:
         console.print("[green]Nothing to install:[/] every job file is already in place.")
         return
+    # Before anything is copied, and on a dry run too: a polling feed or a
+    # backfill source whose query `--trace` cannot see is refused, not warned
+    # about - the trace is needed exactly when it is too late to add it.
+    if untraced := _untraced(todo):
+        console.print(
+            f"[red]✗ refused:[/] {len(untraced)} query line(s) send through the handle "
+            "directly, where `--trace` cannot see them:"
+        )
+        for where in untraced:
+            console.print(f"  {where}", markup=False, highlight=False)
+        console.print(
+            "Send each through .qetl.source.ipc_call[h;f;enlist cursor] (a polling feed), "
+            ".qetl.source.ipc[h;f;from;to] (a backfill source), .qetl.source.local or "
+            ".qetl.io.odbc.run_sql - or, where it must stay direct, end the line with "
+            "`/ untraced: <why>`.",
+            markup=False,
+        )
+        raise typer.Exit(code=1)
     if dry_run:
         console.print("[dim]--dry-run: nothing installed[/]")
         return
@@ -318,5 +330,4 @@ def install_jobs(
     ]
     declarations = _declarations(in_place)
     _report_undefined_tables(in_place, declarations)
-    _report_untraced_fetches(in_place)
     console.print(_next_steps(declarations, tests))

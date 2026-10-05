@@ -170,8 +170,9 @@ and milliseconds or its error. That includes the fetch that hung, if the preview
 times out. Only a query sent through a traced path appears. For a polling feed
 that's `.qetl.source.ipc_call[h;{[c] select ... where time>c};enlist cursor]`,
 the cursor-shaped `.qetl.source.ipc`. A fetch that writes `h(...)` itself still
-works but stays invisible. `uqs install-jobs` names each line that does, and a
-line that must stay direct says so with `/ untraced: <why>`.
+works but stays invisible, so it isn't allowed: `uqs install-jobs` refuses a
+sidecar with such a line, naming it, and the tree's own feeds are tested for it.
+A line that must stay direct says so with `/ untraced: <why>`.
 
 ```
 uqs stream preview vectorize2 --trace

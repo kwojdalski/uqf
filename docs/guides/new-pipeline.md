@@ -255,7 +255,10 @@ an error. Where a driver cannot parameterise --- ODBC --- there is exactly one
 escape function, `.qetl.io.odbc.literal`, and everything goes through it. It is
 sent with `.qetl.source.ipc`, not `h(...)`: that is what logs the lambda and its
 bounds at TRACE, so `uqs backfill --trace` shows every query a run sends, as
-`.qetl.io.odbc.run_sql` does for SQL.
+`.qetl.io.odbc.run_sql` does for SQL. This is required, not advised. The test
+suite fails a source in the tree whose `query` does otherwise, and
+`uqs job install` refuses a sidecar source with a direct `h(...)` line, unless
+the line says `/ untraced: <why>`.
 
 **The window is half-open `[from;to)`** --- `>=` on the lower bound and `<` on
 the upper. One wrong operator double-publishes every boundary row, and the
