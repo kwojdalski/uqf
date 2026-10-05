@@ -120,6 +120,9 @@ def create_app(
         finally:
             if scheduler is not None:
                 scheduler.stop()
+            # The gateway's pooled connections, held between requests now.
+            if isinstance(gateway, KolaGateway):
+                gateway.close()
 
     app = FastAPI(
         title="uqf frontend API",
