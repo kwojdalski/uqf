@@ -156,6 +156,26 @@ cursor is read, never written - so it is safe beside the running feed. It exits
 feed written as one `on_timer` cannot be previewed: running it would publish.
 Nor can a job that subscribes, whose input comes from the plant.
 
+"Fits the plant" is `.qetl.plant.problems`, and the timer applies the same check
+before it publishes: a page that does not fit is refused whole, with nothing
+published and the cursor left where it was. Each table's columns, and their
+order, must match the plant's. Each plain column's type must match exactly. Each
+list column - one the schema declares as `()`, like a price ladder - has every
+row checked against the element type `src/etl/plant_tables.q` declares for it
+beside the table:
+
+```q
+mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); ask_prices:())
+nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"];
+```
+
+`"F"` is float vectors, `"C"` strings, `"S"` symbol lists, `"P"` timestamp
+lists, and `" "` a column that holds any value on purpose. A table with an
+undeclared list column fails `test_plant_tables.q`, and a page for it is
+refused, because an empty `()` has no type of its own to compare against. An
+empty page passes its list columns, since it has no rows to hold the wrong
+thing; its columns are still checked.
+
 ## Then
 
 Implement `on_timer`, replace `tests/q/test_pulsefeed.q` entirely, and add

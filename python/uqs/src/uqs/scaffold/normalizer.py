@@ -19,7 +19,13 @@ from collections.abc import Iterable
 
 from uqs.paths import STREAM_DIR, TABLES_FILE, TEST_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
-from uqs.scaffold.columns import TIME_COLUMN, is_known, sample_value, table_definition
+from uqs.scaffold.columns import (
+    TIME_COLUMN,
+    is_known,
+    nested_declaration,
+    sample_value,
+    table_definition,
+)
 from uqs.scaffold.jobs import (
     _STACK_PAGE_NOTE,
     _check_name,
@@ -155,7 +161,7 @@ publish:.qetl.job.stream.unwired `{name};
         FileAction(
             TABLES_FILE,
             f"\n/ {proc}'s canonical output. <one line: what a row means>\n"
-            f"{table_definition(name, columns)}\n",
+            f"{table_definition(name, columns)}\n{nested_declaration(name, columns)}",
             mode=WriteMode.APPEND,
         ),
         _expected_table_action(name),

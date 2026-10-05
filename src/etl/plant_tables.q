@@ -88,6 +88,103 @@ columns:{[t;cs]
         '"plant: ",string[t]," carries no ",", " sv string bad];
     cs#s}
 
+/ ------------------------------------------------------ NESTED COLUMNS
+/ .
+/ A column declared `()` holds a list per row - a ladder of prices, a route
+/ of symbols - and an empty `()` has no element type: meta reads it as " "
+/ whatever it will carry. So the empty schema alone cannot say whether a
+/ populated column is right. Compared against it exactly, every valid ladder
+/ failed ("F" is not " "); treated as a wildcard, a column of atoms where
+/ vectors belong would pass. Neither is a contract.
+/ .
+/ The rest of the contract is declared here, beside each table, with
+/ `nested`: the meta type a populated row carries - "F" float vectors, "C"
+/ strings, "S" symbol lists, "P" timestamp lists - or " " for a column that
+/ holds any value on purpose (config_change's old and new). Every nested
+/ column of this tree's own tables must be declared; `undeclared` lists the
+/ ones that are not, and a test holds it empty.
+
+/ Declared element types: (table; column) -> meta type character.
+elements:([table:`symbol$(); column:`symbol$()] element:`char$())
+
+/ A table's nested columns: the ones its schema declares as ().
+/ @param table_name the table, as a symbol
+/ @return the columns, as a symbol list
+/ @eg .qetl.plant.nested_columns `mkt_orderbook  ->  `bid_prices`ask_prices
+nested_columns:{[table_name] exec c from 0!meta schema table_name where t=" "}
+
+/ Declare what a table's nested columns hold. Call it after the table's line.
+/ @param table_name the table, as a symbol
+/ @param types column -> meta type character, e.g. `bid_prices`ask_prices!"FF";
+/   " " for a column that holds any value
+/ @return table_name
+/ @throws error naming a column that is not nested, or a type that is not one
+/ @eg .qetl.plant.nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"]
+nested:{[table_name;types]
+    / Two checks, not one `and`: q evaluates both sides, and `value` on a
+    / symbol looks up a variable of that name.
+    if[not 99h=type types;
+        '"nested: ",string[table_name],"'s element types must be a dictionary of column -> type character, e.g. `bid_prices`ask_prices!\"FF\""];
+    if[not 10h=type value types;
+        '"nested: ",string[table_name],"'s element types must be type characters, e.g. `bid_prices`ask_prices!\"FF\" - one column needs enlist: (enlist `route)!enlist \"S\""];
+    ok:nested_columns table_name;
+    if[count bad:(key types) except ok;
+        '"nested: ",string[table_name]," has no nested column ",(", " sv string bad),
+         " - nested columns are the ones declared as (): ",$[count ok; ", " sv string ok; "it has none"]];
+    if[count bad:(key types) where not (value types) in upper .Q.t;
+        '"nested: ",string[table_name],"'s ",(", " sv string bad)," must be a meta type character such as \"F\", \"C\" or \"S\", or \" \" for any value"];
+    `.qetl.plant.elements upsert ([] table:(count types)#table_name; column:key types; element:value types);
+    table_name}
+
+/ This tree's own nested columns with no declared element type.
+/ @return a symbol list of `table.column`, empty when every one is declared
+/ @eg .qetl.plant.undeclared[]  ->  `symbol$()
+undeclared:{[]
+    / Cast, so "none" is `symbol$() - raze over empty results need not be.
+    `symbol$raze {[t] cs:nested_columns[t] except exec column from elements where table=t;
+        `$(string[t],"."),/:string cs} each own[]}
+
+/ What is wrong with `rows` as a page for plant table `table_name`: its
+/ columns and their order against what a job publishes there, each column's
+/ type, and each nested column's every row against its declared element type
+/ - every row, not just the first, which is all meta looks at.
+/ .
+/ An empty table passes a nested column vacuously: there are no rows to hold
+/ the wrong thing, and an empty () column has no type to compare. Its column
+/ names and order are still checked.
+/ @param table_name the plant table, as a symbol
+/ @param rows the rows a job would publish onto it
+/ @return messages naming the table and column, empty when the page fits
+/ @throws error when the plant carries no such table
+/ @eg .qetl.plant.problems[`mkt_orderbook;.qetl.plant.published `mkt_orderbook]  ->  ()
+problems:{[table_name;rows]
+    want:published table_name;
+    rows:0!rows;
+    if[not (cols want)~cols rows;
+        :enlist string[table_name]," has columns ",(" " sv string cols rows),
+            " - the plant takes ",(" " sv string cols want)];
+    declared:exec column!element from elements where table=table_name;
+    wt:exec c!t from meta want;
+    gt:exec c!t from meta rows;
+    raze column_problems[table_name;declared;count rows]'[cols want;wt cols want;gt cols want;rows cols want]}
+
+/ Private: one column's problems, for `problems`.
+column_problems:{[table_name;declared;n;c;want;got;vals]
+    name:string[table_name],".",string c;
+    if[not want=" ";
+        :$[(got=want) or (n=0) and got=" "; ();
+            enlist name," is typed \"",got,"\" - the plant takes \"",want,"\""]];
+    if[not c in key declared;
+        :enlist name," is a nested column with no declared element type - declare it with .qetl.plant.nested in src/etl/plant_tables.q"];
+    e:declared c;
+    if[e=" "; :()];
+    bad:where not (.Q.t?lower e)=type each vals;
+    $[count bad;
+        enlist name," row ",string[first bad]," holds a value of type ",string[type vals first bad],
+            "h - each row must be a \"",e,"\" list (type ",string[.Q.t?lower e],"h)",
+            $[1<count bad; ", and ",string[count bad]," rows are wrong in all"; ""];
+        ()]}
+
 / The vendored starter pack's own plant tables - quote, trade, packets - read
 / from its database.q rather than copied here. uqs builds stp1's schema file
 / from that file plus this one, so both are the plant; a copy of the vendored
@@ -139,12 +236,15 @@ materialise:{[ts] {[t] t set schema t} each ts; ts}
 / function with a tickerplant table. scripts/examples/scenario_example.q
 / now does, on every commit, and the timestamp column is `time everywhere.
 quotes:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+nested[`quotes;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / Direct FX books retain their source and original timestamp across normalization.
 market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / Complete per-pair snapshots; level provenance stays aligned with prices and sizes.
 superbook:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())
+nested[`superbook;`bid_prices`bid_sizes`bid_sources`bid_times`ask_prices`ask_sizes`ask_sources`ask_times!"FFSPFFSP"];
 
 / Status snapshots, including active=0b to clear an earlier gross opportunity.
 arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); buy_source:`symbol$(); sell_source:`symbol$(); ask:`float$(); bid:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$())
@@ -156,6 +256,7 @@ arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:
 / `arbitrage`, an append-only status history: read the latest row per sym
 / BEFORE filtering on active.
 cross_arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); active:`boolean$(); direction:`symbol$(); route:(); direct_price:`float$(); synthetic_price:`float$(); size:`float$(); gross_edge:`float$(); gross_profit:`float$(); fully_filled:`boolean$(); skew:`timespan$())
+nested[`cross_arbitrage;(enlist `route)!enlist "S"];
 
 / An audit trail of runtime configuration changes (.qetl.cfg.audit). `old` is
 / empty on a name's first observation, which is the row that says what the
@@ -164,6 +265,7 @@ cross_arbitrage:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); a
 / join to TorQ's own usage log at the same timestamp, which records .z.u,
 / .z.a and the command text for every incoming query.
 config_change:([]time:`timestamp$(); owner:`g#`symbol$(); name:`symbol$(); old:(); new:(); as_of:`timestamp$())
+nested[`config_change;`old`new!"  "];
 
 / A deliberately "incorrectly-shaped" wide book: one scalar column per level
 / rather than vector columns, which is the shape real venue feeds arrive in
@@ -183,6 +285,7 @@ wide_book:([]time:`timestamp$(); sym:`g#`symbol$(); bids0:`float$();bids1:`float
 / ordinary database table flowing through rdb1/wdb1/hdb, not private state
 / on vectorize1's own process.
 mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); ask_prices:())
+nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"];
 
 / Databento MBP-10 as the live feed handler publishes it - the source
 / contract's own fields, so a live row and an ODBC-backfilled row are the
@@ -199,6 +302,7 @@ databento_mbp10:([]time:`timestamp$(); ts_event:`timestamp$(); sym:`g#`symbol$()
 / tickerplant stamps `time` on receipt, and a book that knew only when it
 / ARRIVED could not tell a stale feed from a fast one.
 databento_book:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+nested[`databento_book;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FJFJ"];
 
 / Client FX flow as the external Kafka consumer publishes it - one row per
 / consumed record, in the source contract's own field order. Written by
@@ -228,6 +332,7 @@ kafka_client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); partition:`l
 / venue's name, and no reader could tell them apart. cryptorust's BookUpdate
 / has carried the venue stamp all along - see kdb_market_data_recorder.rs.
 crypto_book:([]time:`timestamp$(); source_time:`timestamp$(); venue:`g#`symbol$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+nested[`crypto_book;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / Simulated fills from cryptorust's OMS. Distinct from crypto_trades below,
 / which carries real fills: conflating simulated and real execution in one
@@ -352,6 +457,7 @@ client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$();
 / `time` is the plant's - because the lag between them is what a recorded
 / capture exists to measure, and crypto_book above has room for none of it.
 crypto_market_data:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); is_snapshot:`boolean$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); latency_ms:`float$(); latency_min_ms:`float$(); latency_count:`long$(); trade_price:`float$(); trade_size:`float$(); trade_side:`symbol$())
+nested[`crypto_market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / rebuild_positions' output (a reaction on demo_deals): the net notional per
 / pair for each published window, written through demo_deals_backfill's own

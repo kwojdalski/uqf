@@ -70,4 +70,73 @@ test_no_job_file_declares_a_plant_table_by_hand:{[t]
         (f,": "),/:string names where names in .qetl.plant.names[]} each files;
     .qunit.assertEquals[bad;();"every plant table's shape comes from src/etl/plant_tables.q"]};
 
+/ --- nested columns: element types, declared once ------------------------
+
+/ The gate. An undeclared nested column has no contract - checked exactly it
+/ refused every valid ladder, as a wildcard it took atoms where vectors belong.
+test_every_nested_column_of_this_trees_tables_is_declared:{[t]
+    .qunit.assertEquals[.qetl.plant.undeclared[];`symbol$();
+        "declare it with .qetl.plant.nested beside the table in src/etl/plant_tables.q"]};
+
+/ A mkt_orderbook page in its published shape - sym, bid_prices, ask_prices.
+book:{[bids;asks] ([] sym:(count bids)#`EURUSD; bid_prices:bids; ask_prices:asks)}
+
+test_populated_float_ladders_fit_their_declared_type:{[t]
+    page:book[(1.1 1.09;1.2 1.19);(1.11 1.12;1.21 1.22)];
+    .qunit.assertEquals[.qetl.plant.problems[`mkt_orderbook;page];();
+        "float vectors where the plant declares \"F\": the case exact meta equality refused"]};
+
+test_an_atom_where_a_ladder_belongs_is_refused:{[t]
+    page:book[(1.1 1.09;1.2);(1.11 1.12;1.21 1.22)];
+    .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`mkt_orderbook;x]};page;"mkt_orderbook.bid_prices row 1 holds a value of type -9h*";
+        "a wildcard would have passed it; meta, reading only row 0, would too"]};
+
+test_a_vector_of_the_wrong_type_is_refused:{[t]
+    page:book[(1.1 1.09;1 2);(1.11 1.12;1.21 1.22)];
+    .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`mkt_orderbook;x]};page;"*row 1 holds a value of type 7h - each row must be a \"F\" list*";
+        "longs where the plant takes floats"]};
+
+test_string_columns_fit_a_declared_c:{[t]
+    `.qetl.plant.ptest_strings set ([] time:`timestamp$(); id:(); v:`float$());
+    .qetl.plant.nested[`ptest_strings;(enlist `id)!enlist "C"];
+    page:([] id:("deal-1";"deal-22"); v:1 2f);
+    r:.qetl.plant.problems[`ptest_strings;page];
+    delete ptest_strings from `.qetl.plant;
+    delete from `.qetl.plant.elements where table=`ptest_strings;
+    .qunit.assertEquals[r;();"string identifiers where the plant declares \"C\""]};
+
+test_an_empty_page_checks_columns_not_elements:{[t]
+    .qunit.assertEquals[.qetl.plant.problems[`mkt_orderbook;.qetl.plant.published `mkt_orderbook];();
+        "no rows, so no element can be wrong - an empty () has no type to compare"];
+    p:.qetl.plant.published `mkt_orderbook;
+    .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`mkt_orderbook;x]};(reverse cols p)#p;
+        "mkt_orderbook has columns*";"its column order still is"]};
+
+test_missing_extra_or_reordered_columns_are_refused:{[t]
+    p:.qetl.plant.published `mkt_orderbook;
+    .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`mkt_orderbook;x]};1_cols[p]#p;"mkt_orderbook has columns*";"one missing"];
+    .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`mkt_orderbook;x]};update extra:`float$() from p;"mkt_orderbook has columns*";"one extra"]};
+
+test_a_scalar_column_of_the_wrong_type_is_refused:{[t]
+    p:.qetl.plant.published `arbitrage;
+    .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`arbitrage;x]};update size:`long$() from p;"arbitrage.size is typed \"j\" - the plant takes \"f\"";
+        "scalar columns are compared exactly, as the plant stores them"]};
+
+test_a_column_declared_to_hold_anything_takes_anything:{[t]
+    page:([] owner:`a`b; name:`x`y; old:(1;"s"); new:(`v;2.5); as_of:2#.z.p);
+    .qunit.assertEquals[.qetl.plant.problems[`config_change;page];();
+        "config_change's old and new are declared \" \" on purpose: they hold any value"]};
+
+test_nested_refuses_a_column_that_is_not_nested:{[t]
+    .qunit.assertThrows[.qetl.plant.nested[`mkt_orderbook;];(enlist `sym)!enlist "F";
+        "nested: mkt_orderbook has no nested column sym*";"a scalar column's type is the schema's own"]};
+
+test_nested_refuses_a_character_that_is_not_a_type:{[t]
+    .qunit.assertThrows[.qetl.plant.nested[`mkt_orderbook;];(enlist `bid_prices)!enlist "?";
+        "nested: mkt_orderbook's bid_prices must be a meta type character*";"only meta's own characters, or \" \""]};
+
+test_nested_refuses_a_symbol_without_looking_it_up:{[t]
+    .qunit.assertThrows[.qetl.plant.nested[`mkt_orderbook;];`bid_prices;
+        "nested: mkt_orderbook's element types must be a dictionary*";"refused before `value` could read a variable"]};
+
 \d .

@@ -36,7 +36,7 @@ from uqs.paths import (
 )
 from uqs.scaffold import poll as poll_steps
 from uqs.scaffold.catalog import catalog_actions
-from uqs.scaffold.columns import Columns, as_columns, table_definition
+from uqs.scaffold.columns import Columns, as_columns, nested_declaration, table_definition
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
@@ -298,7 +298,8 @@ publish:.qetl.job.stream.unwired `{name};
         actions.append(
             FileAction(
                 TABLES_FILE,
-                f"\n/ {proc}'s output. <one line: what a row means>\n{definition}\n",
+                f"\n/ {proc}'s output. <one line: what a row means>\n{definition}\n"
+                f"{nested_declaration(new_tables[0], cols)}",
                 mode=WriteMode.APPEND,
             )
         )

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from uqs.scaffold.columns import (
     TYPES,
     columns_spec,
     definition_columns,
+    nested_declaration,
     parse_columns,
     resolve_shape,
     table_columns,
@@ -145,3 +147,34 @@ def test_every_type_agrees_with_q():
         assert reported.get(f"{t.name} literal") == t.char, (t.name, out)
         if t.literal != "()":
             assert reported.get(f"{t.name} sample") == t.char, (t.name, out)
+
+
+def test_a_table_without_list_columns_needs_no_nested_declaration():
+    assert nested_declaration("t", parse_columns("sym:symbol, px:float")) == ""
+
+
+def test_list_columns_are_declared_float_vectors_and_marked_for_review():
+    line = nested_declaration("book", parse_columns("sym:symbol, bids:list, asks:list"))
+    assert line.startswith('nested[`book;`bids`asks!"FF"];')
+    assert "SCAFFOLDED" in line
+    assert line.endswith("\n")
+
+
+def test_one_list_column_is_declared_with_enlist():
+    # `bids!"F"` would be an atom dictionary, which .qetl.plant.nested refuses.
+    line = nested_declaration("book", parse_columns("bids:list"))
+    assert line.startswith('nested[`book;(enlist `bids)!enlist "F"];')
+
+
+def test_every_plant_table_with_list_columns_is_declared_beside_it():
+    """The text side of test_plant_tables.q's gate: each of this tree's tables
+    with a () column has a nested[...] line, so the gate does not need q to
+    say which one is missing."""
+    text = (UQF_ROOT / TABLES_FILE).read_text()
+    declared = set(re.findall(r"^nested\[`([a-z_0-9]+);", text, re.MULTILINE))
+    with_lists = {
+        name
+        for name, line in _tables(UQF_ROOT / TABLES_FILE).items()
+        if any(lit == "()" for _, lit in definition_columns(line))
+    }
+    assert with_lists - declared == set()

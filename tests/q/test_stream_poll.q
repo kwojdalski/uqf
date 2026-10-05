@@ -107,6 +107,35 @@ test_output_that_fits_the_plant_is_previewed:{[t]
     r:.qetl.job.stream.preview[`spt_quote;5];
     .qunit.assertEquals[(r`state;r`failures);(`previewed;());"the plant's own published shape passes"]};
 
+/ The bug a polling sidecar hit: a populated ladder was compared with the
+/ empty schema's " ", and every valid book page was reported invalid.
+ladders:{[n;bids] ([] sym:n#`EURUSD; bid_prices:bids; ask_prices:n#enlist 1.11 1.12)}
+
+test_populated_ladders_preview_as_valid:{[t]
+    .streampolltest.declare[`spt_quote;`mkt_orderbook;{[page] .streampolltest.ladders[count page;(count page)#enlist 1.1 1.09]};.streampolltest.after];
+    r:.qetl.job.stream.preview[`spt_quote;5];
+    .qunit.assertEquals[(r`state;r`failures);(`previewed;());"float vectors are what mkt_orderbook declares its ladders hold"]};
+
+test_atoms_where_ladders_belong_are_invalid_in_preview:{[t]
+    .streampolltest.declare[`spt_quote;`mkt_orderbook;{[page] .streampolltest.ladders[count page;(count page)#1.1]};.streampolltest.after];
+    r:.qetl.job.stream.preview[`spt_quote;5];
+    .qunit.assertEquals[r`state;`invalid;"one price per row is not a ladder"];
+    .qunit.assertTrue[(first r`failures) like "mkt_orderbook.bid_prices row 0 holds*";"named by table, column and row"]};
+
+/ The timer holds a page to the same contract, and refuses it whole: nothing
+/ published, and the cursor where it was, so the page is fetched again.
+test_the_timer_refuses_a_page_the_plant_would_not_take:{[t]
+    .streampolltest.declare[`spt_quote;`mkt_orderbook;{[page] .streampolltest.ladders[count page;(count page)#1.1]};.streampolltest.after];
+    .qunit.assertThrows[{.qetl.job.stream.tick `spt_quote};::;"tick: spt_quote would publish what the plant does not take - mkt_orderbook.bid_prices*";
+        "the same failure the preview reports"];
+    .qunit.assertEquals[(count .streampolltest.sent;null .qetl.job.continuous.load_cursor `spt_quote);(0;1b);
+        "nothing published and no cursor saved"]};
+
+test_the_timer_publishes_a_page_that_fits:{[t]
+    .streampolltest.declare[`spt_quote;`mkt_orderbook;{[page] .streampolltest.ladders[count page;(count page)#enlist 1.1 1.09]};.streampolltest.after];
+    r:.qetl.job.stream.tick `spt_quote;
+    .qunit.assertEquals[(r`state;count .streampolltest.sent);(`published;1);"a valid page goes out"]};
+
 test_a_cursor_that_would_not_advance_is_invalid:{[t]
     .streampolltest.forget[];
     .qetl.job.stream.define[`spt_feed;`procname`subscribe_to`publishes`period`poll!(
