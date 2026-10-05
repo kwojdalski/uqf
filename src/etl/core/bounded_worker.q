@@ -1106,77 +1106,26 @@ do_window:{[worker;w]
 
 / Private: one window, fetch to publish - do_window's body, inside its log
 / context.
+/ .
+/ The stages that can fail a window run in order from window_stages, each
+/ taking and returning the window's state. The first to fail stops the rest,
+/ and window_failed is the one place a failure is logged and counted - so a
+/ new stage is a new row there, not a fifth copy of the failure path. What a
+/ published window does next stays inline below: it is a sequence, not a
+/ list of gates.
 / @param worker the worker's name
 / @param w the window, a dict of range_from and range_to
 / @return 1b when the window was published, 0b when it failed
 window_body:{[worker;w]
     cfg:def worker;
     .qetl.log.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
-    f:own[worker;`fetch][w`range_from;w`range_to];
-    if[`failed~f`state;
-        / ERR, not a throw: a failed window is terminal for that
-        / window and the run continues. Recording it with the window and the
-        / classified kind is what makes "which windows failed and why"
-        / answerable from the log rather than from a debugger.
-        .qetl.log.err[worker;"window failed";
-            `range_from`range_to`kind`attempts`error!
-            (w`range_from;w`range_to;f`kind;f`attempts;f`error)];
-        write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
-        :0b];
-    / TRANSFORM, between fetch and the quality gate, so the gate judges the
-    / rows that will actually be published. A throwing transform takes the
-    / same terminal-window path as a failed fetch: nothing published,
-    / no coverage staged, the window planned again next run.
-    out:@[transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
-    if[(0h=type out) and `transform_failed~first out;
-        .qetl.log.err[worker;"window failed transform";
-            `range_from`range_to`transform`error!
-            (w`range_from;w`range_to;cfg`transform;last out)];
-        write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
-        :0b];
-    / DATA QUALITY GATE, between transform and publish.
-    / .
-    / Before this existed the sequence was fetch, publish, record coverage as
-    / complete - so a window of nulls, or one with every price at zero, was
-    / recorded as covered and read as published forever. The ledger could
-    / record a lie, and nothing anywhere would say so.
-    / .
-    / A failed check takes the SAME terminal-window path as a failed fetch
-    /: the window is not published, no coverage is staged, the run
-    / continues, and the next run plans the window again because coverage
-    / never claimed it. That is the behaviour that makes a check safe to add
-    / to an existing worker - the worst case is work redone, never data lost
-    / and never a gap silently marked complete.
-    bad:run_check[worker;out];
-    if[count bad;
-        .qetl.log.err[worker;"window failed data quality";
-            `range_from`range_to`failures`detail!
-            (w`range_from;w`range_to;count bad;.qrender.full bad)];
-        write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
-        :0b];
-    write_state[worker;`last_batch;out];
-    / The publish function is NILADIC by finish_window's contract, and a
-    / fully-applied projection in q is a CALL rather than a deferred one -
-    / so the batch goes through the worker's own `last_batch` global and the
-    / niladic reads it. Building the argument any other way would publish
-    / before the dry-run gate could suppress it.
-    / The window publish writes into, for a strategy that acts on a range
-    / (`replace clears what the target held inside it).
-    write_state[worker;`last_window;`range_from`range_to!(w`range_from;w`range_to)];
-    / A publish that throws - an on_conflict `fail, a row the store refuses -
-    / fails THIS window, the same terminal path as a failed fetch or check:
-    / nothing covered, planned again next run, and the run goes on. It used to
-    / end the run. A write that got partway is safe to repeat under the
-    / default `upsert, which is what makes failing just the window sound.
-    r:@[{[a] (1b;.qetl.job.bounded.runtime.finish_window . a)};
-        (worker;cfg`dataset;cfg`partition;spec worker;w`range_from;w`range_to;publish_pending[worker]);
-        {[e] (0b;e)}];
-    if[not first r;
-        .qetl.log.err[worker;"window failed to publish";
-            `range_from`range_to`error!(w`range_from;w`range_to;last r)];
-        write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
-        :0b];
-    r:last r;
+    / The null key keeps the state a general dictionary whatever is added.
+    s:{[worker;s;stage] $[`failed in key s; s; stage[worker;s]]}[worker]/[
+        (``cfg`window)!(::;cfg;w);
+        value window_stages];
+    if[`failed in key s; :window_failed[worker;w;s`failed]];
+    out:s`batch;
+    r:s`result;
     .qetl.log.dbg[worker;"window published";
         `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
     / Materialisation metadata, recorded HERE rather than in
@@ -1215,6 +1164,91 @@ window_body:{[worker;w]
     if[.qetl.job.bounded.runtime.allows`finish_store; .qetl.io.flush[.qetl.io.for_cfg cfg;w`range_to]];
     .qetl.hb.beat_window[worker];
     1b}
+
+/ Private: a stage's failure - the message window_failed logs, and the fields
+/ it logs after the window's range.
+failed_with:{[s;message;fields] @[s;`failed;:;`message`fields!(message;fields)]}
+
+/ Private: the one failure path for a window.
+/ .
+/ ERR, not a throw: a failed window is terminal for that window and the run
+/ continues. Nothing is published, no coverage is staged, and the next run
+/ plans the window again because coverage never claimed it. Recording it with
+/ the window and the stage's own fields is what makes "which windows failed
+/ and why" answerable from the log rather than from a debugger.
+/ @return 0b, do_window's answer for a failed window
+window_failed:{[worker;w;f]
+    .qetl.log.err[worker;f`message;(`range_from`range_to!(w`range_from;w`range_to)),f`fields];
+    write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
+    0b}
+
+/ Private: FETCH the window from the source, through the worker's own fetch so
+/ an override still applies. A fetch that gave up carries its classified kind
+/ and the attempts it made.
+stage_fetch:{[worker;s]
+    w:s`window;
+    f:own[worker;`fetch][w`range_from;w`range_to];
+    if[`failed~f`state;
+        :failed_with[s;"window failed";`kind`attempts`error!(f`kind;f`attempts;f`error)]];
+    @[s;`batch;:;f`result]}
+
+/ Private: TRANSFORM, between fetch and the quality gate, so the gate judges
+/ the rows that will actually be published. A throwing transform fails the
+/ window like a failed fetch.
+stage_transform:{[worker;s]
+    out:@[transform_batch[worker;];s`batch;{[e] (`transform_failed;e)}];
+    if[(0h=type out) and `transform_failed~first out;
+        :failed_with[s;"window failed transform";`transform`error!((s`cfg)`transform;last out)]];
+    @[s;`batch;:;out]}
+
+/ Private: the DATA QUALITY GATE, between transform and publish.
+/ .
+/ Before this existed the sequence was fetch, publish, record coverage as
+/ complete - so a window of nulls, or one with every price at zero, was
+/ recorded as covered and read as published forever. The ledger could record
+/ a lie, and nothing anywhere would say so.
+/ .
+/ A failed check fails the window like a failed fetch. That is the behaviour
+/ that makes a check safe to add to an existing worker - the worst case is
+/ work redone, never data lost and never a gap silently marked complete. A
+/ check that is not a function, or returns no table, still throws: that is
+/ the worker's bug, not the window's data.
+stage_check:{[worker;s]
+    bad:run_check[worker;s`batch];
+    if[count bad;
+        :failed_with[s;"window failed data quality";`failures`detail!(count bad;.qrender.full bad)]];
+    s}
+
+/ Private: PUBLISH the batch through finish_window, which owns the dry-run
+/ gate and stages coverage.
+/ .
+/ The publish function is NILADIC by finish_window's contract, and a
+/ fully-applied projection in q is a CALL rather than a deferred one - so the
+/ batch goes through the worker's own `last_batch` global and the niladic
+/ reads it. Building the argument any other way would publish before the
+/ dry-run gate could suppress it. `last_window` is the window publish writes
+/ into, for a strategy that acts on a range (`replace clears what the target
+/ held inside it).
+/ .
+/ A publish that throws - an on_conflict `fail, a row the store refuses -
+/ fails THIS window and the run goes on. It used to end the run. A write that
+/ got partway is safe to repeat under the default `upsert, which is what
+/ makes failing just the window sound.
+stage_publish:{[worker;s]
+    cfg:s`cfg; w:s`window;
+    write_state[worker;`last_batch;s`batch];
+    write_state[worker;`last_window;`range_from`range_to!(w`range_from;w`range_to)];
+    r:@[{[a] (1b;.qetl.job.bounded.runtime.finish_window . a)};
+        (worker;cfg`dataset;cfg`partition;spec worker;w`range_from;w`range_to;publish_pending[worker]);
+        {[e] (0b;e)}];
+    if[not first r; :failed_with[s;"window failed to publish";enlist[`error]!enlist last r]];
+    @[s;`result;:;last r]}
+
+/ Private: the stages that can fail a window, in the order they run. Each is
+/ {[worker;s]} over the window's state - `cfg, `window, and what the stages
+/ before it added - and returns that state with its own result added, or
+/ failed_with's failure. Defined after them, because it holds their values.
+window_stages:`fetch`transform`check`publish!(stage_fetch;stage_transform;stage_check;stage_publish)
 
 / Private: attach this window's metadata to the materialisation.
 / .
