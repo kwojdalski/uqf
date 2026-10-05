@@ -464,3 +464,6 @@ nested[`crypto_market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 / IO manager - so into the HDB under `uqs backfill`. `time` is the window's
 / start, which is what the HDB writer partitions by.
 deal_positions:([]time:`timestamp$(); sym:`g#`symbol$(); window:`timestamp$(); net_notional:`float$(); deals:`long$())
+
+/ hdb_transfer_backfill1's target. <one line: what a row means>
+trades_copy:([]time:`timestamp$(); trade_id:`long$(); sym:`g#`symbol$(); price:`float$(); size:`long$(); side:`symbol$(); notional:`float$())

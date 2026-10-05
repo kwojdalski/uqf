@@ -139,3 +139,5 @@ surface:{[]
     "One client FX trade consumed off a Kafka topic, deduplicated by kafka_flow1 on the (partition;offset) the record carries - so a broker redelivery does not show the desk the same trade twice. Carries those coordinates, so any row can be traced back to the exact Kafka record";
 .qcat.describe[`crypto_market_data]:
     "One moment of a crypto pair on one venue, replayed out of cryptorust's own recorded DuckDB capture: five book levels a side as vectors, the trade printed alongside them, and both clocks - the venue's source_time and the recorder's local_time, whose difference is the wire lag. The repeatable counterpart to crypto_book, which the same recorder fills live and which carries source_time but not the recorder's local_time";
+.qcat.describe[`trades_copy]:
+    "One trade copied out of another kdb+ HDB on this machine by hdb_transfer_backfill, with its notional (price times size, in the quote currency) added on the way - the worked example of moving data from one kdb+ database into another; scripts/examples/hdb_transfer_example.q runs it end to end";

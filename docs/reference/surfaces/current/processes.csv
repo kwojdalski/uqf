@@ -15,6 +15,7 @@ fxordersfeed1,feed,38,,orders
 fxpositions1,metrics,39,orders,fx_limit_breach fx_position
 fxtradesfeed1,feed,29,,trades
 hdb_markouts_backfill1,backfill,49,,
+hdb_transfer_backfill1,backfill,50,,
 kafka_flow1,metrics,47,kafka_client_flow,client_flow
 marketdata1,metrics,42,quote quotes,market_data
 markout1,metrics,31,quote trades,execution_quality
