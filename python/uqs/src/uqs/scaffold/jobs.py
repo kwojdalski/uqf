@@ -34,6 +34,7 @@ from uqs.paths import (
     TEST_DIR,
     UqsError,
 )
+from uqs.scaffold import poll as poll_steps
 from uqs.scaffold.catalog import catalog_actions
 from uqs.scaffold.columns import Columns, as_columns, table_definition
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -142,6 +143,8 @@ def streaming_job(
     profile: str | None = None,
     unprofiled: str | None = None,
     known_profiles: Iterable[str] | None = None,
+    poll: bool = False,
+    cursor: str | None = None,
 ) -> ScaffoldPlan:
     """Plan a new streaming job: the q file, its table and its test.
 
@@ -169,6 +172,10 @@ def streaming_job(
 
     `profile`, `unprofiled` and `known_profiles` place the process in a start
     profile or exempt it - see scaffold/profile.py.
+
+    `poll` scaffolds a feed as polling steps instead of one on_timer, so it
+    can be previewed; `cursor` names the fields of a compound cursor - see
+    scaffold/poll.py.
     """
     _check_name(name, "job name")
     if period is not None:
@@ -190,6 +197,16 @@ def streaming_job(
             )
     new_tables = [t for t in pubs if known_tables is None or t not in known_tables]
     is_feed = not subscribe_to
+    fields = poll_steps.cursor_fields(cursor)
+    if fields and not poll:
+        raise UqsError("--cursor-fields shapes a polling feed's cursor - add --poll")
+    if poll and not is_feed:
+        raise UqsError(
+            f"--poll is for a feed, and {name} subscribes to {', '.join(subscribe_to)}: the plant "
+            "delivers its input, so there is no page to fetch - drop --poll or --subscribe-to"
+        )
+    if poll and not pubs:
+        raise UqsError("--poll needs --publishes: a polling feed publishes what it fetches")
     actions: list[FileAction] = []
     notes: list[str] = []
 
@@ -217,6 +234,17 @@ def streaming_job(
     }}"""
         for h, args in handlers
     )
+    scaffolded = """/ SCAFFOLDED. This throws until it is written - a job that silently did
+/ nothing would report `up`, heartbeat, and publish no rows, which is the
+/ one failure the stack smoke check exists to find.
+"""
+    if poll:
+        keys, values = poll_steps.declaration(name, tick or "0D00:00:01", fields)
+        stubs = poll_steps.steps(name, ", ".join(pubs), fields)
+        # A compound next_cursor is written whole; only the timestamp one is a stub.
+        written = ("fetch", "normalize") if fields else ("fetch", "normalize", "next_cursor")
+        handlers = [(h, "") for h in written]
+        scaffolded = ""
     swa_key, swa_value = start_with_all_field(start_with_all)
 
     reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribe_to)
@@ -235,10 +263,7 @@ def streaming_job(
 / (the runner) or at a recorder (a test). Never call .u.upd from here.
 publish:.qetl.job.stream.unwired `{name};
 
-/ SCAFFOLDED. This throws until it is written - a job that silently did
-/ nothing would report `up`, heartbeat, and publish no rows, which is the
-/ one failure the stack smoke check exists to find.
-{stubs}
+{scaffolded}{stubs}
 
 \\d .
 

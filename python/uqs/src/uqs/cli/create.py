@@ -16,6 +16,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
+from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.shared import (
     _die,
@@ -23,8 +24,7 @@ from uqs.cli.shared import (
     app,
     job_app,
 )
-from uqs.model.declarations import declaration_calls, read_declarations, symbols
-from uqs.model.jobs import bounded_producers, job_rows
+from uqs.model.declarations import declaration_calls, symbols
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import (
     SOURCE_DIR,
@@ -34,7 +34,7 @@ from uqs.paths import (
     UqsPaths,
 )
 from uqs.scaffold import columns as columns_mod
-from uqs.scaffold import jobs, normalizer, reaction, worker
+from uqs.scaffold import jobs, normalizer, worker
 
 
 def _workers_filling(repo_root: Path, dataset: str, partition: str | None = None) -> list[str]:
@@ -164,6 +164,14 @@ def new_job(
         str | None,
         typer.Option("--period", help="Timer period: a feed's tick, or an etl's added on_timer"),
     ] = None,
+    poll: Annotated[
+        bool,
+        typer.Option("--poll", help="A feed as previewable fetch/normalize steps"),
+    ] = False,
+    cursor_fields: Annotated[
+        str | None,
+        typer.Option("--cursor-fields", help="With --poll: a compound cursor's fields, e.g. ts,id"),
+    ] = None,
     profile: Annotated[
         str | None,
         typer.Option(
@@ -218,6 +226,10 @@ def new_job(
         uqs job new fx_rates --kind backfill --dataset fx_rates \\
             --columns "sym:symbol, mid:float" --width 1D
 
+    Polling feed, as steps `uqs stream preview` can run without publishing:
+
+        uqs job new rates_feed --publishes rates --columns "sym:symbol, mid:float" --poll
+
     Reaction, run each time a bounded worker publishes a window of demo_deals:
 
         uqs job new rebuild_positions --triggered-by demo_deals --writes positions
@@ -225,7 +237,7 @@ def new_job(
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root
     if triggered_by is not None or writes is not None:
-        _scaffold_reaction(
+        scaffold_reaction(
             name,
             triggered_by,
             writes,
@@ -241,6 +253,8 @@ def new_job(
                 "--start-with-all": start_with_all,
                 "--transport": transport != "ipc",
                 "--period": period is not None,
+                "--poll": poll,
+                "--cursor-fields": cursor_fields is not None,
                 "--profile": profile is not None,
                 "--unprofiled": unprofiled is not None,
                 "--partition": partition is not None,
@@ -259,7 +273,11 @@ def new_job(
             "--source": source is not None,
             "--width": width is not None,
         },
-        "streaming": {"--period": period is not None},
+        "streaming": {
+            "--period": period is not None,
+            "--poll": poll,
+            "--cursor-fields": cursor_fields is not None,
+        },
         "standing": {"--profile": profile is not None, "--unprofiled": unprofiled is not None},
     }
     for owner, given in only.items():
@@ -281,6 +299,8 @@ def new_job(
                 period=period,
                 profile=profile,
                 unprofiled=unprofiled,
+                poll=poll,
+                cursor=cursor_fields,
             )
         elif kind == "backfill":
             if start_with_all:
@@ -345,46 +365,6 @@ def new_job(
         else:
             _die(UqsError(f"--kind must be 'backfill', 'normalizer' or 'streaming', not {kind!r}"))
             return
-    except UqsError as exc:
-        _die(exc)
-        return
-    write_plan(plan, repo_root, dry_run=dry_run)
-
-
-def _scaffold_reaction(
-    name: str,
-    triggered_by: str | None,
-    writes: str | None,
-    others: dict[str, bool],
-    *,
-    dry_run: bool,
-) -> None:
-    """`uqs job new NAME --triggered-by DATASET [--writes T]`: a reaction.
-
-    Every option that shapes a process is refused rather than ignored, because
-    a reaction has no process: it runs inside the one that publishes DATASET.
-    """
-    if triggered_by is None:
-        _die(UqsError("--writes is for a reaction - give --triggered-by DATASET too"))
-        return
-    for option in (o for o, used in others.items() if used):
-        _die(
-            UqsError(
-                f"{option} does not apply to a reaction (--triggered-by): it has no process, "
-                "table or schedule of its own"
-            )
-        )
-        return
-    repo_root = _paths().repo_root
-    try:
-        plan = reaction.reaction(
-            name,
-            triggered_by.strip(),
-            [w.strip() for w in (writes or "").split(",") if w.strip()],
-            producers=bounded_producers(repo_root),
-            taken={row["job"] for row in job_rows(repo_root)},
-            streaming_tables={t for d in read_declarations(repo_root) for t in d.publishes},
-        )
     except UqsError as exc:
         _die(exc)
         return
