@@ -43,6 +43,7 @@ from uqs.cli import runs  # noqa: F401
 from uqs.cli import gaps  # noqa: F401
 from uqs.cli import replay  # noqa: F401
 from uqs.cli import summary  # noqa: F401
+from uqs.cli import graph  # noqa: F401
 from uqs.cli import query  # noqa: F401
 from uqs.cli import inspect  # noqa: F401
 from uqs.cli import config  # noqa: F401
