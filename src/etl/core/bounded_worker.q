@@ -527,7 +527,7 @@ progress_now:{[worker]
 phases:([phase:`ready`running`idle`completed`partial`failed]
     beat:`starting`running`idle`completed`partial`failed;
     status:`starting`running`idle`completed`failed`failed;
-    ledger:`none`begin`finish`finish`finish`finish)
+    run_ledger:`none`begin`finish`finish`finish`finish)
 
 / Private: where each phase may go next. ` is a worker before init. Any phase
 / may fail; a finished run may only begin again, through `ready.
@@ -568,10 +568,10 @@ advance_phase:{[worker;to;err]
         {[worker;f;a] .[f;a;{[worker;e] .qetl.log.err[worker;"could not record the failure";enlist[`error]!enlist e]}[worker]]}[worker];
         {[f;a] f . a}];
     if[(null was) and `ready~to; call[record_orphan;enlist worker]];
-    if[`begin~row`ledger; call[begin_run;enlist worker]];
+    if[`begin~row`run_ledger; call[begin_run;enlist worker]];
     call[.qetl.hb.beat;(worker;row`beat)];
     call[.qetl.status.write_status;(worker;instance worker;row`status;spec worker;progress_now worker;err)];
-    if[(`finish~row`ledger) and `running~was; call[end_run;(to;run_totals worker)]];
+    if[(`finish~row`run_ledger) and `running~was; call[end_run;(to;run_totals worker)]];
     write_state[worker;`phase;to];
     to}
 
