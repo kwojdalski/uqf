@@ -32,6 +32,9 @@ setUp_fresh:{[]
     .qetl.job.bounded.state.release_lock `demo_deals_backfill;
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
     `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
+    / A run an earlier test left open in .qetl.run would make this test's
+    / first begin refuse, and every record below would name the wrong run.
+    .qetl.run.release[];
     }
 
 tearDown_release:{[] .qpipe.job.demo_deals_backfill.cleanup[];}
@@ -140,6 +143,87 @@ test_a_second_run_publishes_nothing_further:{[t]
     .qpipe.job.demo_deals_backfill.run[];
     .qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[count value `demo_deals;3;"a retry does not duplicate published rows"]};
+
+/ --- every record of a run agrees, after every step (#610) ---------------
+
+/ One run is written to several records, each by its own call: the status
+/ file an orchestrator reads, the heartbeat, and the run ledger. Nothing tied
+/ them together, so a lifecycle edge one of them missed was found only at
+/ runtime - #600's second run, and the thrown run these tests found. Each step
+/ below asserts all three at once.
+
+/ What each record says about the worker's latest run, side by side. The
+/ status file names its run by id; the ledger row is the one that id names.
+records:{[]
+    w:`demo_deals_backfill;
+    path:(.qetl.status.status_dir[]),"/airflow_status_",string[.qetl.job.bounded.instance w],".txt";
+    s:.j.k first read0 hsym `$path;
+    id:"G"$s`run_id;
+    row:.qetl.run.of_run id;
+    `status`heartbeat`ledger`ended`in_flight`run_id!(
+        `$s`state;
+        exec first state from 0!.qetl.hb.ledger[] where worker=w;
+        first row`status;
+        $[count row; not .qetl.run.not_ended=first row`ended_at; 0b];
+        not null .qetl.run.current[];
+        id)}
+
+/ Assert the three records agree on a finished run, and return its id.
+/ status is what the status file should read, state what the heartbeat and
+/ the ledger should: they share the worker's own vocabulary, where the status
+/ file has no `partial.
+agree:{[status;state;msg]
+    r:.ddbftest.records[];
+    .qunit.assertEquals[r`status`heartbeat`ledger`ended`in_flight;(status;state;state;1b;0b);msg];
+    r`run_id}
+
+/ After init, before any run: both live records say starting, and no run is
+/ open yet.
+started:{[msg]
+    r:.ddbftest.records[];
+    .qunit.assertEquals[r`status`heartbeat`in_flight;(`starting;`starting;0b);msg]}
+
+test_three_runs_leave_every_record_agreeing_after_each:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .ddbftest.started["init: the status file and heartbeat both say starting"];
+    .qpipe.job.demo_deals_backfill.run[];
+    a:.ddbftest.agree[`completed;`completed;"run 1 does every window: all three records say completed"];
+    .qpipe.job.demo_deals_backfill.run[];
+    b:.ddbftest.agree[`idle;`idle;"run 2 finds every window covered: all three say idle"];
+    .qpipe.job.demo_deals_backfill.run[];
+    c:.ddbftest.agree[`idle;`idle;"run 3 likewise - idle after idle is a new run, not a repeat write"];
+    .qunit.assertEquals[count distinct (a;b;c);3;"each run has its own ledger row, and the status file names it"]};
+
+test_a_partial_run_then_a_clean_one_leave_every_record_agreeing:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .ddbftest.started["init: the status file and heartbeat both say starting"];
+    orig:.ddbftest.swap_fixture {[] '"type error on column px"};
+    r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`error!(`threw;x)}];
+    .ddbftest.swap_fixture orig;
+    .qunit.assertEquals[r`state;`partial;"setup: every window fails, and the run returns rather than throws"];
+    a:.ddbftest.agree[`failed;`partial;
+        "a partial run: the status file says failed, as an orchestrator must read it; heartbeat and ledger say partial"];
+    .qpipe.job.demo_deals_backfill.run[];
+    b:.ddbftest.agree[`completed;`completed;"the next run retries the uncovered windows and completes"];
+    .qunit.assertEquals[a=b;0b;"the retry has its own ledger row, not the partial run's"]};
+
+/ The case that failed before #610: a run that THROWS. report_failure wrote
+/ the status file and nothing else, so the heartbeat stayed `running`, the
+/ ledger row stayed open, and the next run closed that row with its own
+/ outcome. The throw comes from the store's end-of-run finish, after every
+/ window has published and been covered, so the next run is idle.
+test_a_thrown_run_then_a_clean_one_leave_every_record_agreeing:{[t]
+    saved:.qetl.io.default;
+    .qetl.io.default:.qetl.io.default,enlist[`finish]!enlist {[] '"disk full"};
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .ddbftest.started["init: the status file and heartbeat both say starting"];
+    r:@[{.qpipe.job.demo_deals_backfill.run[]; "returned"};::;{x}];
+    .qetl.io.default:saved;
+    .qunit.assertEquals[r;"disk full";"setup: the run throws the store's error out of run"];
+    a:.ddbftest.agree[`failed;`failed;"a thrown run: all three records say failed, and its ledger row is closed"];
+    .qpipe.job.demo_deals_backfill.run[];
+    b:.ddbftest.agree[`idle;`idle;"the next run finds every window covered: all three say idle"];
+    .qunit.assertEquals[a=b;0b;"the next run opens its own ledger row rather than closing the thrown run's"]};
 
 / No merging across versions, in the direction that matters: a version bump exists to force
 / re-extraction, so v1 coverage must not suppress a v2 run.
