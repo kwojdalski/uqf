@@ -10,6 +10,7 @@ Typing filters (see table_filter.py); up/down and page keys move through the
 rows; Enter exits and prints the highlighted row, tab-separated, so a run id
 or a process name can be picked and piped; Escape exits printing nothing.
 
+A command that hands in a `refresh` gets `R` to re-read the table on demand.
 A command may also hand in ROW ACTIONS - `summary` gives s/x/r to start, stop
 and restart the highlighted process. Then a letter is a command, not a filter
 character, so the table holds focus and `/` opens the filter; Enter or Escape
@@ -117,6 +118,7 @@ def browser(
                 if actions
                 else []
             ),
+            *([Binding("R", "reload", "Refresh")] if refresh is not None else []),
         ]
 
         def __init__(self) -> None:
@@ -199,6 +201,24 @@ def browser(
             self.busy = True
             self.notify(f"{action.label}...")
             self.run_worker(lambda: self.perform(action, row), thread=True)
+
+        def action_reload(self) -> None:
+            if self.busy:
+                self.notify("still running the last one", severity="warning")
+                return
+            self.busy = True
+            self.notify("Refreshing...")
+            self.run_worker(self.reread, thread=True)
+
+        def reread(self) -> None:
+            """In a worker thread: re-read the table, with no action first."""
+            assert refresh is not None  # bound only when there is one
+            try:
+                fresh = table_cells(refresh())[1]
+            except Exception as exc:  # noqa: BLE001 - shown, never crashes the app
+                self.call_from_thread(self.finish, None, f"could not refresh: {exc}", False)
+                return
+            self.call_from_thread(self.finish, fresh, "refreshed", True)
 
         def perform(self, action: RowAction, row: dict[str, str]) -> None:
             """In a worker thread: run the action, then re-read the table."""

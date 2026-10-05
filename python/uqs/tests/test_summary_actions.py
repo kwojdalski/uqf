@@ -147,3 +147,18 @@ def test_a_failing_action_leaves_the_app_running():
 def test_without_actions_letters_still_filter():
     _, shown, query, filtering = drive(["h", "d", "b"], [])
     assert (query, [r[0] for r in shown], filtering) == ("hdb", ["hdb1"], True)
+
+
+def test_capital_r_re_reads_the_table_without_acting():
+    seen, actions = recording()
+    _, shown, _, _ = drive(["R"], actions, refresh=lambda: sample("up"))
+    assert (shown[0], seen) == (["rdb1", "up"], [])
+
+
+def test_a_refresh_that_fails_leaves_the_rows():
+    def broken():
+        raise UqsError("summary timed out")
+
+    _, actions = recording()
+    _, shown, _, _ = drive(["R"], actions, refresh=broken)
+    assert shown[0] == ["rdb1", "down"]

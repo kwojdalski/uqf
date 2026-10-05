@@ -331,9 +331,9 @@ in a pipe rather than hang. `--sort` still decides the order, and `--export`
 writes every row, not just the ones a filter left.
 
 `uqs summary -i` also acts on the highlighted process: `s` starts it, `x` stops
-it, `r` restarts it, and the table re-reads itself when that finishes. There,
-letters are commands, so `/` opens the filter and Enter or Escape goes back to
-the table.
+it, `r` restarts it, and the table re-reads itself when that finishes; `R`
+re-reads it on demand. There, letters are commands, so `/` opens the filter and
+Enter or Escape goes back to the table.
 
 `uqs graph` draws every process and who feeds whom, as trees, with each edge
 labelled by the tables it carries and each process coloured up or down:
