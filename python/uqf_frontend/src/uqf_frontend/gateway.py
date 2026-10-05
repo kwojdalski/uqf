@@ -11,6 +11,8 @@ the edges, test the logic in the middle directly.
 from __future__ import annotations
 
 import socket
+import threading
+from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
 from uqf_frontend.config import Settings
@@ -77,16 +79,36 @@ class Gateway(Protocol):
 
 
 class KolaGateway:
-    """A :class:`Gateway` backed by a real kdb+ IPC connection.
+    """A :class:`Gateway` backed by real kdb+ IPC connections, kept and reused.
 
-    Connects per call rather than holding a long-lived handle. That costs a
-    round trip but means a gateway restart, or the EOD reload window, cannot
-    leave this process wedged behind a dead handle - which matters more for a
-    poll-only frontend where every view reconnects on a timer anyway.
+    It used to connect per call: a TCP and auth handshake against the
+    single-threaded gateway for every request, and the browser polls. Two tabs
+    on the Ops views opened 72-84 connections a minute (#635). Now a request
+    takes an idle handle from a small pool, or opens one, and gives it back.
+
+    A POOL, not one handle behind a lock. Requests run on FastAPI's thread
+    pool, and the TorQ gateway serves its clients concurrently; one shared
+    handle would queue every poll behind the slowest query in flight - a
+    /health check waiting out an HDB scan. Each handle is used by one request
+    at a time, which is all kola needs, and the pool only grows to the
+    concurrency the frontend actually sees.
+
+    A handle that fails in ANY way is discarded rather than returned, so a
+    gateway restart, the EOD reload window or a timed-out query with its
+    answer still in flight cannot leave a dead or desynchronised handle for
+    the next request: that one simply opens a fresh connection. Only a handle
+    whose query succeeded goes back.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    #: Idle handles kept for reuse. More can be open at once - one per
+    #: concurrent request - but only this many wait between requests.
+    MAX_IDLE = 4
+
+    def __init__(self, settings: Settings, connect: Callable[[], Any] | None = None) -> None:
         self._settings = settings
+        self._connect = connect or self._kola_connect
+        self._idle: list[Any] = []
+        self._lock = threading.Lock()
 
     def call(self, program: str, *args: Any) -> Any:
         return self._exec(program, args)
@@ -99,6 +121,38 @@ class KolaGateway:
         return self._exec(".gw.syncexec", (query, tiers))
 
     def _exec(self, program: str, args: tuple[Any, ...]) -> Any:
+        q = self._checkout()
+        try:
+            result = q.sync(program, *args)
+        except Exception as exc:
+            _close(q)
+            raise _classify(exc) from exc
+        self._checkin(q)
+        return result
+
+    def _checkout(self) -> Any:
+        with self._lock:
+            if self._idle:
+                return self._idle.pop()
+        # Outside the lock: a slow connect must not stall requests that have
+        # an idle handle waiting.
+        return self._connect()
+
+    def _checkin(self, q: Any) -> None:
+        with self._lock:
+            if len(self._idle) < self.MAX_IDLE:
+                self._idle.append(q)
+                return
+        _close(q)
+
+    def close(self) -> None:
+        """Disconnect every idle handle - for a shutdown."""
+        with self._lock:
+            idle, self._idle = self._idle, []
+        for q in idle:
+            _close(q)
+
+    def _kola_connect(self) -> Any:
         import kola
 
         s = self._settings
@@ -126,16 +180,14 @@ class KolaGateway:
                 f"(set UQF_FRONTEND_GATEWAY_PORT / _USER / _PASSWD; against the "
                 f"local demo stack that is the gateway's port and admin/admin)"
             ) from exc
+        return q
 
-        try:
-            return q.sync(program, *args)
-        except Exception as exc:
-            raise _classify(exc) from exc
-        finally:
-            try:
-                q.disconnect()
-            except Exception:  # pragma: no cover - disconnect failure is not actionable
-                pass
+
+def _close(q: Any) -> None:
+    try:
+        q.disconnect()
+    except Exception:  # pragma: no cover - disconnect failure is not actionable
+        pass
 
 
 def _classify(exc: Exception) -> Exception:
@@ -148,6 +200,15 @@ def _classify(exc: Exception) -> Exception:
     message = str(exc).lower()
     if any(m in message for m in _TIMEOUT_MARKERS):
         return QueryTimedOut(f"the gateway's own query timeout fired: {exc}")
+    # The connection itself failed: a pooled handle whose gateway restarted
+    # ("Broken pipe"), or one the far end closed. Nothing judged the query,
+    # and the next request opens a fresh connection, so this is transient -
+    # reported as a rejection it was a 400, and the browser stops polling a
+    # view on a non-transient error until the page is reloaded. Checked after
+    # the timeout: a read that timed out is a timeout, whatever class kola
+    # gives it.
+    if type(exc).__name__ == "KolaIOError":
+        return GatewayUnavailable(f"the gateway connection failed and will be reopened: {exc}")
     if any(m in message for m in _RELOADING_MARKERS):
         return GatewayReloading(f"the gateway is reloading and is refusing queries: {exc}")
     return QueryRejected(f"the gateway rejected the query: {exc}")

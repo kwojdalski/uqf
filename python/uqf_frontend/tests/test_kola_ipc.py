@@ -29,6 +29,11 @@ from uqf_frontend.gateway import KolaGateway, _classify
 SERVER_SCRIPT = """
 / Stands in for TorQ's gateway entry point: evaluate the query list as given.
 .gw.syncexec:{[query;tiers] value query};
+/ How many connections have been opened, and a gateway restart as one
+/ client sees it: every OTHER client's connection closed under it.
+opens:0;
+.z.po:{opens+:1};
+drop_others:{[unused] h:(key .z.W) except .z.w; hclose each h; count h};
 """
 
 
@@ -67,14 +72,36 @@ def test_a_q_error_is_a_rejection_that_carries_q_s_message(q_port):
 
 
 def test_a_failing_call_does_not_leak_its_connection(q_port):
-    """Connect-per-call only protects against a wedged handle if the handle
-    is released on failure too - otherwise the licence's connection cap is
-    reached one error at a time."""
+    """A failed call's handle is discarded, never returned to the pool - and
+    it must be disconnected too, or the licence's connection cap is reached
+    one error at a time."""
     gw = KolaGateway(Settings(port=q_port))
     for _ in range(20):
         with pytest.raises(QueryRejected):
             gw.call("{'`nope}", 1)
     assert gw.call("{x}", 1) == 1
+
+
+def test_requests_reuse_a_connection_rather_than_opening_one_each(q_port):
+    """#635: connect-per-call opened 72-84 connections a minute for two tabs
+    on the Ops views. Ten calls now open none beyond the first."""
+    gw = KolaGateway(Settings(port=q_port))
+    before = gw.call("{opens}", 0)
+    for i in range(10):
+        gw.call("{x}", i)
+    assert gw.call("{opens}", 0) == before
+
+
+def test_a_connection_the_gateway_drops_is_reopened_by_the_next_request(q_port):
+    """The acceptance case, against a real q: the server closes the pooled
+    connection. The request that finds it dead fails as transient - the
+    browser keeps polling - and the next one reconnects."""
+    gw = KolaGateway(Settings(port=q_port))
+    gw.call("{x}", 1)
+    KolaGateway(Settings(port=q_port)).call("{drop_others x}", 0)
+    with pytest.raises(GatewayUnavailable):
+        gw.call("{x}", 2)
+    assert gw.call("{x}", 3) == 3
 
 
 @pytest.mark.parametrize(
