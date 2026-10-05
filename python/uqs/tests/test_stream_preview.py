@@ -85,7 +85,7 @@ def test_no_q_is_said_plainly(monkeypatch):
 
 
 def invoke(monkeypatch, answer: dict):
-    monkeypatch.setattr(stream_preview, "preview", lambda paths, job, sample: answer)
+    monkeypatch.setattr(stream_preview, "preview", lambda paths, job, sample, trace=False: answer)
     return runner.invoke(cli.app, ["stream", "preview", "vectorize2"], env={"COLUMNS": "200"})
 
 
@@ -118,3 +118,75 @@ def test_a_compound_cursor_prints_as_its_fields(monkeypatch):
     result = invoke(monkeypatch, compound)
     assert "securityId=a" in result.output
     assert "securityId=b" in result.output
+
+
+# --- --trace --------------------------------------------------------------
+
+#: What .qetl.source.ipc_call logs outside TorQ, as log.q's emit writes it.
+SENT = (
+    '2026.10.05D12:00:00.000000000|TRC|ipc|query sent call="{[c] select from t where '
+    'time>c}" transport=`ipc request=1 args=,2026.09.13D00:00:00.000000000 job=`vectorize2'
+)
+RETURNED = "2026.10.05D12:00:00.100000000|TRC|ipc|query returned transport=`ipc request=1 rows=3"
+FAILED = '2026.10.05D12:00:00.100000000|TRC|ipc|query failed request=1 error="source down"'
+
+
+def test_tracing_is_switched_on_only_when_asked(monkeypatch):
+    sent = fake_q(monkeypatch, PAGE)
+    stream_preview.preview(default_paths(), "vectorize2")
+    assert ".qetl.log.trace" not in sent["script"], "a plain preview is unchanged"
+    stream_preview.preview(default_paths(), "vectorize2", trace=True)
+    assert ".qetl.log.trace 1b;" in sent["script"]
+    assert ".qetl.log.debug 1b;" in sent["script"], "DBG with it, as backfill --trace does"
+
+
+def test_the_traced_lines_come_back_with_the_answer(monkeypatch):
+    out = f"loading...\n{SENT}\n{RETURNED}\nUQS_PREVIEW {json.dumps(PAGE)}\n"
+    fake_q(monkeypatch, PAGE, stdout=out)
+    r = stream_preview.preview(default_paths(), "vectorize2", trace=True)
+    assert [(lv, src) for lv, src, _ in r["trace"]] == [("TRC", "ipc"), ("TRC", "ipc")]
+    assert r["trace"][0][2].startswith('query sent call="{[c] select')
+
+
+def test_a_failed_fetch_keeps_its_trace(monkeypatch):
+    """The query that failed is what someone turned --trace on to see."""
+    out = f"{SENT}\n{FAILED}\nUQS_PREVIEW {json.dumps({'error': 'source down'})}\n"
+    fake_q(monkeypatch, None, stdout=out)
+    with pytest.raises(stream_preview.PreviewFailed, match="source down") as raised:
+        stream_preview.preview(default_paths(), "vectorize2", trace=True)
+    assert [m.split(" ")[1] for _, _, m in raised.value.trace] == ["sent", "failed"]
+
+
+def test_a_fetch_that_hangs_shows_the_query_it_hung_on(monkeypatch):
+    monkeypatch.setattr(stream_preview, "q_interpreter", lambda: Path("/usr/bin/q"))
+
+    def run(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, kw["timeout"], output=f"loading...\n{SENT}\n")
+
+    monkeypatch.setattr(stream_preview.subprocess, "run", run)
+    with pytest.raises(stream_preview.PreviewFailed, match="never returned") as raised:
+        stream_preview.preview(default_paths(), "vectorize2", timeout=5, trace=True)
+    assert raised.value.trace[0][2].startswith("query sent")
+
+
+def test_the_command_prints_a_traced_query_as_a_block(monkeypatch):
+    traced = {**PAGE, "trace": stream_preview.trace_lines(f"{SENT}\n{RETURNED}\n")}
+    monkeypatch.setattr(stream_preview, "preview", lambda paths, job, sample, trace=False: traced)
+    result = runner.invoke(
+        cli.app, ["stream", "preview", "vectorize2", "--trace"], env={"COLUMNS": "200"}
+    )
+    assert result.exit_code == 0, result.output
+    assert "    {[c] select from t where time>c}" in result.output, "the query as a block"
+    assert "query returned" in result.output
+
+
+def test_the_command_prints_the_trace_of_a_failed_preview(monkeypatch):
+    def fail(paths, job, sample, trace=False):
+        raise stream_preview.PreviewFailed(
+            "preview vectorize2: source down", stream_preview.trace_lines(f"{SENT}\n{FAILED}\n")
+        )
+
+    monkeypatch.setattr(stream_preview, "preview", fail)
+    result = runner.invoke(cli.app, ["stream", "preview", "vectorize2", "--trace"])
+    assert result.exit_code == 1
+    assert "query failed" in result.output and "source down" in result.output

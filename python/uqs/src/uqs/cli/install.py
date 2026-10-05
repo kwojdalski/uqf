@@ -19,6 +19,7 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
 
+from uqs.checks.traced_queries import untraced_lines
 from uqs.cli import completion
 from uqs.cli.create import _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
@@ -131,6 +132,23 @@ def _report_undefined_tables(items: list[Item], declarations: list[Declaration])
             console.print(
                 f"[yellow]![/] {name} {verb} {', '.join(missing)}, which the plant does not "
                 "define: add it to src/etl/plant_tables.q"
+            )
+
+
+def _report_untraced_fetches(items: list[Item]) -> None:
+    """A polling feed that calls its handle directly runs, and `--trace` never
+    shows what it sends - say where, so it can go through
+    .qetl.source.ipc_call before anyone needs the trace."""
+    for item in items:
+        if item.destination is None or item.destination.suffix != ".q":
+            continue
+        for number, line in untraced_lines(item.destination.read_text()):
+            console.print("[yellow]![/] ", end="")
+            console.print(
+                f"{item.destination.name}:{number} sends a query `--trace` cannot see: {line}\n"
+                "  send it with .qetl.source.ipc_call[h;f;enlist cursor], or mark the line "
+                "`/ untraced: <why>`",
+                markup=False,
             )
 
 
@@ -300,4 +318,5 @@ def install_jobs(
     ]
     declarations = _declarations(in_place)
     _report_undefined_tables(in_place, declarations)
+    _report_untraced_fetches(in_place)
     console.print(_next_steps(declarations, tests))

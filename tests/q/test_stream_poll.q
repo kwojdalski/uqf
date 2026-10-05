@@ -136,6 +136,18 @@ test_the_timer_publishes_a_page_that_fits:{[t]
     r:.qetl.job.stream.tick `spt_quote;
     .qunit.assertEquals[(r`state;count .streampolltest.sent);(`published;1);"a valid page goes out"]};
 
+/ A fetch that sends through .qetl.source.ipc_call is traced, and every line
+/ it logs names the job and the cursor it fetched after - what `uqs stream
+/ preview --trace` shows.
+test_a_traced_fetch_names_its_job_and_cursor:{[t]
+    .streampolltest.declare[`spt_quote;`spt_out;{[page] select ts, v from page};
+        {[cursor] .qetl.source.ipc_call[{value x};.streampolltest.after;enlist cursor]}];
+    .qetl.job.continuous.save_cursor[`spt_quote;.streampolltest.d 1];
+    lines:.testutil.captured_log[1b] {.qetl.job.stream.preview[`spt_quote;5]};
+    sent:first lines[;3] where lines[;2]~\:"query sent";
+    .qunit.assertEquals[(sent`job;sent`cursor;sent`args);(`spt_quote;.streampolltest.d 1;enlist .streampolltest.d 1);
+        "the query, the job that sent it and the cursor it fetched after"]};
+
 test_a_cursor_that_would_not_advance_is_invalid:{[t]
     .streampolltest.forget[];
     .qetl.job.stream.define[`spt_feed;`procname`subscribe_to`publishes`period`poll!(

@@ -682,12 +682,33 @@ coerce:{[source;tbl]
 / sets, so a sidecar sending through here is correlated without saying so.
 / With TRC off nothing is numbered, timed or formatted: the query is sent.
 ipc:{[h;f;range_from;range_to]
-    if[not .qetl.log.enabled`TRC; :h(f;range_from;range_to)];
+    traced_ipc[h;f;(range_from;range_to);`range_from`range_to!(range_from;range_to)]}
+
+/ .qetl.source.ipc for any arguments: `h(f;a;b...)`, traced the same way.
+/ .
+/ What a POLLING feed's fetch sends through: its query takes a cursor, not a
+/ window, so `h({[c] select ... where time>c};cursor)` becomes
+/ .qetl.source.ipc_call[h;{[c] select ... where time>c};enlist cursor] - and
+/ `uqs stream preview --trace` shows it, as `uqs backfill --trace` shows a
+/ window's. The arguments are logged at TRC, so never pass a credential as
+/ one: credentials belong to the handle, which is not logged.
+/ @param h the handle to the source process
+/ @param f the function the source process runs
+/ @param args its arguments, as a list - enlist cursor for one
+/ @return what `f` returns on the far side
+/ @eg .qetl.source.ipc_call[{value x};{[c] c+1};enlist 41] -> 42
+ipc_call:{[h;f;args] traced_ipc[h;f;args;enlist[`args]!enlist args]}
+
+/ Private: send `f` with `args` over `h`, logging it at TRC with `shown`
+/ beside the call - before it is sent, and with the rows and milliseconds,
+/ or the error, when it comes back. With TRC off it is just sent.
+traced_ipc:{[h;f;args;shown]
+    msg:enlist[f],args;
+    if[not .qetl.log.enabled`TRC; :h msg];
     t0:.z.p;
     req:`transport`request!(`ipc;.qetl.log.next_request[]);
-    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";
-        (enlist[`call]!enlist call_text f),req,`range_from`range_to!(range_from;range_to));::];
-    r:@[h;(f;range_from;range_to);{[req;t0;e]
+    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";(enlist[`call]!enlist call_text f),req,shown);::];
+    r:@[h;msg;{[req;t0;e]
         .[{.qetl.log.trc[x;y;z]};(`ipc;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
         'e}[req;t0]];

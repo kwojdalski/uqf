@@ -81,6 +81,8 @@ next_cursor:{{[page]
 / written - a fetch that returned a fixture would preview as live data.
 
 / [cursor] -> the page after `cursor`, a table: {cursor}.
+/ Send the query through .qetl.source.ipc_call[h;{{[c] select ... }};enlist cursor],
+/ not h(...) directly, so `uqs stream preview {name} --trace` shows it.
 fetch:{{[cursor]
     '"{name}.fetch: not implemented";
     }}

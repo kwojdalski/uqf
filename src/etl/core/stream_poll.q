@@ -138,7 +138,9 @@ tick:{[job]
     ops:cursor_ops job;
     name:cursor_name job;
     current:ops[`load] name;
-    page:p[`fetch] current;
+    / Every line the fetch logs - a traced query above all - carries the job
+    / and the cursor it fetched after.
+    page:.qetl.log.with_context[`job`cursor!(job;current);p`fetch;enlist current];
     if[0=count page; :`state`rows`cursor!(`idle;0;current)];
     out:outputs[job;p[`normalize] page];
     / Checked before anything is published or saved: a page the plant would
@@ -200,7 +202,9 @@ preview_page:{[job;n]
     p:(def job)`poll;
     ops:cursor_ops job;
     current:ops[`load] cursor_name job;
-    page:p[`fetch] current;
+    / Every line the fetch logs - a traced query above all - carries the job
+    / and the cursor it fetched after.
+    page:.qetl.log.with_context[`job`cursor!(job;current);p`fetch;enlist current];
     base:`job`live`cursor`fetched!(job;liveness job;current;count page);
     if[0=count page;
         :base,`state`next_cursor`advances`rows`sample`failures!(`idle;(::);0b;()!();()!();())];

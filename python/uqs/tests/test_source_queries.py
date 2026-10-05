@@ -16,6 +16,7 @@ import re
 
 import pytest
 
+from uqs.checks.traced_queries import DIRECT
 from uqs.paths import repo_root
 
 SOURCES = sorted((repo_root() / "src" / "etl" / "sources").glob("*.q"))
@@ -27,9 +28,6 @@ TRACED = (
     ".qetl.io.odbc.run_sql[",
     ".qetl.io.odbc.window_query[",
 )
-
-#: A handle applied directly: `h(` or `h@`, as a word - not `.qetl.source.ipc[h;`.
-DIRECT = re.compile(r"(?<![\w.])h\s*[(@]")
 
 
 def query_body(text: str) -> str:
