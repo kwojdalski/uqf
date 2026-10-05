@@ -355,6 +355,10 @@ qetl.job.bounded.state,break_stale,function,1,path
 qetl.job.bounded.state,checkpoint_path,function,1,worker
 qetl.job.bounded.state,clear_checkpoint,function,1,worker
 qetl.job.bounded.state,durable_get,function,1,path
+qetl.job.bounded.state,durable_lines,function,2,path lines
+qetl.job.bounded.state,durable_read,function,3,who path reader
+qetl.job.bounded.state,durable_remove,function,1,path
+qetl.job.bounded.state,durable_replace,function,2,path write
 qetl.job.bounded.state,durable_set,function,2,path v
 qetl.job.bounded.state,fail,function,4,worker spec progress err
 qetl.job.bounded.state,file_lock_path,function,1,name
@@ -368,6 +372,7 @@ qetl.job.bounded.state,ns_names,function,1,ns
 qetl.job.bounded.state,owner_desc,function,1,path
 qetl.job.bounded.state,owner_file,function,1,path
 qetl.job.bounded.state,pid_alive,function,1,pid
+qetl.job.bounded.state,read_json_dict,function,1,path
 qetl.job.bounded.state,read_owner,function,1,path
 qetl.job.bounded.state,register,function,2,worker ns
 qetl.job.bounded.state,registered,function,1,

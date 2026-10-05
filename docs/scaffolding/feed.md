@@ -143,6 +143,14 @@ with `next_cursor` returning `` `time`securityId`priceBookType#last page``. The
 timer checks the cursor advances before it publishes, and saves it only after
 the publish succeeds; the preview runs the same check and saves nothing.
 
+Both stock cursors survive a crash mid-save. The new cursor is written beside
+the old one and renamed into place, and the old one is kept as `.bak`. A cursor
+file that will not parse falls back to `.bak` - one page fetched again - and is
+refused when that is unreadable too. It is never read as "no cursor", which a
+feed would take as its first run and republish everything. A feed with its own
+`load` and `save` should write through `.qetl.job.bounded.state.durable_lines`
+or `durable_set` to get the same.
+
 Declaring the steps is what makes the feed previewable:
 
 ```

@@ -283,6 +283,15 @@ def test_clearing_deletes_the_checkpoint_and_names_it(status):
     assert not path.exists()
 
 
+def test_clearing_also_deletes_the_previous_generation(status):
+    """q falls back to `.checkpoint.bak` when the checkpoint will not parse, so
+    a clear that left it would let the next run resume from before the clear."""
+    for suffix in ("", ".bak", ".tmp"):
+        (status / f"{WORKER}.checkpoint{suffix}").write_text("{}")
+    backfill.clear_checkpoint(stack_paths.default_paths(), WORKER)
+    assert not list(status.glob(f"{WORKER}.checkpoint*"))
+
+
 def test_clearing_a_worker_with_no_checkpoint_is_not_an_error(status):
     assert backfill.clear_checkpoint(stack_paths.default_paths(), WORKER) is None
 

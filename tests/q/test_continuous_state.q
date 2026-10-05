@@ -25,6 +25,50 @@ setUp_fresh:{[]
     .qetl.job.continuous.clear_cursor `tailer;
     }
 
+/ --- a crash mid-write (#633) --------------------------------------
+
+/ What 0: onto the cursor file used to leave after a kill mid-write: half a
+/ line, which load_cursor read as 0Np - "never ran" - so a polling feed
+/ restarted from its own beginning and republished everything.
+truncate:{[path] system"printf '{\"cursor\":\"2026-09' > ",path}
+
+test_a_truncated_cursor_falls_back_to_the_previous_one:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;d 1];
+    .qetl.job.continuous.save_cursor[`tailer;d 2];
+    truncate .qetl.job.continuous.cursor_path `tailer;
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;d 1;
+        "the generation before it: one page fetched again, never everything"]};
+
+test_an_unreadable_cursor_with_nothing_before_it_is_refused:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;d 1];
+    truncate .qetl.job.continuous.cursor_path `tailer;
+    .qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"load_cursor: *and so is its .bak*";
+        "refused, never a null a feed would read as its first run"]};
+
+/ Clearing only the cursor file would leave its .bak behind, and a later
+/ unreadable write would then fall back to the cursor from BEFORE the clear.
+test_a_cleared_cursor_does_not_come_back_through_its_previous_generation:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;d 1];
+    .qetl.job.continuous.save_cursor[`tailer;d 2];
+    .qetl.job.continuous.clear_cursor `tailer;
+    .qetl.job.continuous.save_cursor[`tailer;d 5];
+    truncate .qetl.job.continuous.cursor_path `tailer;
+    .qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"load_cursor: *";
+        "the cleared generation is gone, so there is nothing stale to resume from"]};
+
+test_a_truncated_compound_cursor_falls_back_to_the_previous_one:{[t]
+    .qetl.job.continuous.save_cursor_value[`tailer;`t`id!(1;`a)];
+    .qetl.job.continuous.save_cursor_value[`tailer;`t`id!(2;`b)];
+    system"printf 'garbage' > ",.qetl.job.continuous.cursor_value_path `tailer;
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor_value `tailer;`t`id!(1;`a);
+        "a compound cursor gets the same protection as a timestamp one"]};
+
+test_an_unreadable_compound_cursor_with_nothing_before_it_is_refused:{[t]
+    .qetl.job.continuous.save_cursor_value[`tailer;`t`id!(1;`a)];
+    system"printf 'garbage' > ",.qetl.job.continuous.cursor_value_path `tailer;
+    .qunit.assertThrows[.qetl.job.continuous.load_cursor_value;`tailer;"load_cursor_value: *";
+        "refused, never the (::) a feed reads as its first run"]};
+
 / --- cursor state -------------------------------------------------
 
 / A first run has no cursor. Treating that as an error would make every

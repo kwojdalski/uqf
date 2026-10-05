@@ -373,5 +373,9 @@ def clear_checkpoint(paths: UqsPaths, worker: str) -> Path | None:
     path = checkpoint_path(paths, worker)
     if not path.is_file():
         return None
-    path.unlink()
+    # The previous generation goes too (`durable_remove`): left behind, it is
+    # what the next unreadable checkpoint would fall back to - a cursor from
+    # before the clear.
+    for stale in (path, path.with_name(path.name + ".bak"), path.with_name(path.name + ".tmp")):
+        stale.unlink(missing_ok=True)
     return path

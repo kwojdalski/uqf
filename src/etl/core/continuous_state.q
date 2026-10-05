@@ -51,12 +51,20 @@ cursor_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".
 / continuous worker has no bounded run to compare against. That is the whole
 / structural difference between the two kinds of state, and it is why they
 / are separate functions rather than one with a flag.
+/ .
+/ A cursor file that will not parse is NOT "no cursor": read as one, a feed
+/ restarts from its own beginning and republishes everything, with nothing
+/ downstream to notice (#633). It falls back to the previous generation -
+/ an earlier cursor, so a page is fetched again rather than skipped - and is
+/ refused when that is unreadable too.
+/ @throws error when the cursor file and its .bak are both unreadable
 load_cursor:{[worker]
-    raw:@[{first read0 hsym `$x};cursor_path worker;{""}];
-    if[0=count raw; :0Np];
-    saved:@[{.j.k x};raw;{()!()}];
-    if[not `cursor in key saved; :0Np];
-    @[{"P"$x};saved`cursor;{0Np}]}
+    path:cursor_path worker;
+    if[()~key hsym `$path; :0Np];
+    saved:.qetl.job.bounded.state.durable_read["load_cursor";path;.qetl.job.bounded.state.read_json_dict];
+    if[not `cursor in key saved;
+        '"load_cursor: ",path," holds no cursor field - ",(-3!saved)];
+    "P"$saved`cursor}
 
 / Persist the cursor AFTER the page it acknowledges has been published
 /.
@@ -66,12 +74,12 @@ load_cursor:{[worker]
 / handled and nothing will ever fetch it again. Publishing first risks
 / re-publishing the page on restart, which retry-safe publication tolerates.
 / Under-claim over over-claim, exactly as bounded coverage does it.
+/ .
+/ Written through durable_lines, never 0: onto the file: 0: truncates first,
+/ so a kill mid-write left a file load_cursor could not read.
 save_cursor:{[worker;cursor]
-    dir:.qetl.job.bounded.state.lock_dir[];
-    system"mkdir -p ",dir;
-    path:cursor_path worker;
-    (hsym `$path) 0: enlist .j.j `cursor`saved_at!(cursor;.z.p);
-    path}
+    system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    .qetl.job.bounded.state.durable_lines[cursor_path worker;enlist .j.j `cursor`saved_at!(cursor;.z.p)]}
 
 / Forget a feeder's saved cursor, so its next run starts from the source's
 / own beginning.
@@ -84,7 +92,7 @@ save_cursor:{[worker;cursor]
 / @return the worker's name
 / @eg .qetl.job.continuous.clear_cursor `fx_feed_2
 clear_cursor:{[worker]
-    system"rm -f ",cursor_path[worker]," ",cursor_value_path worker;
+    .qetl.job.bounded.state.durable_remove each (cursor_path;cursor_value_path)@\:worker;
     cursor_path worker}
 
 / ------------------------------------------------------ COMPOUND CURSORS
@@ -99,10 +107,14 @@ clear_cursor:{[worker]
 cursor_value_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".cursorq"}
 
 / A compound cursor, or (::) when the worker has none yet - a first run.
+/ An unreadable file is not a first run: see load_cursor.
 / @param worker the worker's name
 / @return the saved cursor as it was saved, or (::)
+/ @throws error when the cursor file and its .bak are both unreadable
 / @eg .qetl.job.continuous.load_cursor_value `nosuchworker  ->  (::)
-load_cursor_value:{[worker] @[get;hsym `$cursor_value_path worker;{[e] (::)}]}
+load_cursor_value:{[worker]
+    path:cursor_value_path worker;
+    $[()~key hsym `$path; (::); .qetl.job.bounded.state.durable_read["load_cursor_value";path;{get hsym `$x}]]}
 
 / Save a compound cursor - any q value - after the page it acknowledges is
 / published, for the reason save_cursor gives.
@@ -111,8 +123,7 @@ load_cursor_value:{[worker] @[get;hsym `$cursor_value_path worker;{[e] (::)}]}
 / @return the path written
 save_cursor_value:{[worker;cursor]
     system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
-    (hsym `$cursor_value_path worker) set cursor;
-    cursor_value_path worker}
+    .qetl.job.bounded.state.durable_set[cursor_value_path worker;cursor]}
 
 / Is `proposed` strictly after `current`, comparing the fields `ks` in order?
 / .
