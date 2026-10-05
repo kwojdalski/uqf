@@ -87,6 +87,16 @@ test_check_stale_quotes_ignores_quotes_after_as_of:{[t]
     r:.qdqc.check_stale_quotes[quotes;at;0D00:00:05];
     .qunit.assertEquals[first r`status;`stale;"the only quote at/before as_of is 10s old, despite a fresher later row existing"]};
 
+test_check_stale_quotes_reads_the_latest_time_not_the_last_row:{[t]
+    / #589: a merged feed or an RDB+HDB union arrives out of order. With the
+    / fresh 10:00:00 row BEFORE the older 09:59:00 one, the last row is 63s
+    / old at 10:00:03 - stale - though a quote arrived 3s ago.
+    t0:2026.01.01D10:00:00.000000000;
+    quotes:(mk_quotes_row[t0;`EURUSD;1.0999;1.1001];mk_quotes_row[t0-0D00:01:00;`EURUSD;1.0998;1.1002]);
+    r:.qdqc.check_stale_quotes[quotes;t0+0D00:00:03;0D00:00:05];
+    .qunit.assertEquals[r`last_ts;enlist t0;"the latest quote time, wherever its row sits"];
+    .qunit.assertEquals[r`status;enlist `ok;"3s old is within a 5s max_age, so ok - not a false stale"]};
+
 test_summarize_checks_includes_only_non_ok_rows:{[t]
     t0:2026.01.01D00:00:00.000000000;
     quotes:(enlist mk_quotes_row[t0;`EURUSD;1.1005;1.1000]),(enlist mk_quotes_row[t0;`GBPUSD;1.2999;1.3001]);
