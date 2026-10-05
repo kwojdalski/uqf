@@ -29,9 +29,9 @@ the coverage ledger, though, and `reconcile` reports where they do (see
 
 A metatable's name starts with `meta_` (`.qmeta.prefix`), the way the pipeline's
 own bookkeeping starts with `etl_` (`etl_runs`, `etl_coverage`). In `tables[]`,
-an HDB directory or `uqs data schema`, either prefix marks a table as derived
-from the data beside it rather than being market data, and a tool can find them
-by pattern instead of by a list.
+an HDB directory or `uqs schema`, either prefix marks a table as derived from
+the data beside it rather than being market data, and a tool can find them by
+pattern instead of by a list.
 
 `.qmeta.require_name` checks a name and the DQE adapter applies it: a name
 without the prefix is refused, with the prefixed name it should have been, never

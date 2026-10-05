@@ -148,13 +148,17 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       Responds; --timeout defaults to 120s,
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
-backfill WORKER --version V --from T --to T [--on-conflict S] [--port N] [--debug] [--wait]
+backfill WORKER [--version V] --from T --to T [--on-conflict S] [--mode M] [--port N] [--debug] [--wait]
                                       run a bounded worker over [--from, --to); dates
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables. --debug
                                       starts it with -verbose: DBG lines in its log.
                                       --on-conflict (upsert, replace, ignore, append,
                                       fail) overrides the worker's own for this run.
+                                      --mode validate|plan|dry-run|run: validate and
+                                      plan open nothing and write nothing, dry-run
+                                      fetches and writes nothing. --version defaults
+                                      to the worker's declared source_version
                                       Exits once torq.sh has started the process;
                                       --wait follows the run and exits with its
                                       outcome (0 completed/idle, 1 failed or died)
@@ -191,14 +195,15 @@ job remove NAME [--dry-run] [--force] [-y]
 job install DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
                                       install the sources, workers and streaming jobs
                                       in DIR into src/etl/ (see "Adding a process")
-query [EXPR] [--proc P|--port N] [--servers T] [--raw] [--export FILE]
+query [EXPR] [--proc P|--port N] [--servers T] [--raw] [--render q|kola] [--export FILE]
                                       run a q expression against a process - gateway1,
                                       which routes it to the RDB and HDB, unless
                                       --proc or --port says otherwise; with no EXPR,
                                       an interactive session on it (routed on the
                                       gateway, qcon elsewhere). --raw sends to the
                                       gateway as typed. --proc looks the port up, and
-                                      refuses a stopped process
+                                      refuses a stopped process. Results print as q
+                                      prints them; --render kola shows Python objects
 schema [TABLE|PATTERN] [--proc P] [--export FILE]  tables in a running process, or the
                                       columns of every table matching a pattern
 list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse]  list every item of KIND
