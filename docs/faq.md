@@ -133,7 +133,7 @@ appended to, and always once more at the end. The tickerplant would stamp old
 rows with today's time, file them under today's date, and hand them to every
 subscriber as if they had just happened. In plain q - a test, or a prompt - the
 same worker writes to an in-memory table instead. See
-[`io_manager.q`](../src/etl/core/io_manager.q).
+[`io_hdb.q`](../src/etl/core/io_hdb.q).
 
 ## How is a backfill job different from TorQ's dataloader?
 

@@ -822,55 +822,6 @@ recover_unfinished:{[worker]
             enlist[`partitions]!enlist n]];
     n}
 
-/ Private: fire again the reactions an earlier run never completed.
-/ .
-/ A reaction runs after its window's coverage is recorded, so a run killed in
-/ between - or a reaction that threw - left a covered window with no derived
-/ output, and every later run found the window covered and did nothing about
-/ it. .qetl.reaction.pending finds those windows over this run's range, and
-/ each is fetched and transformed again and its publication announced again.
-/ Every reaction for the dataset runs, not only the one owed: a reaction
-/ replaces its own output per window (.qetl.reaction.write), so running one
-/ that already succeeded rewrites the same rows.
-/ .
-/ Before this run's own windows, which are not covered yet and notify as
-/ they publish. Not on a dry run, which fires no reaction at all.
-/ @param worker the worker's name
-/ @return how many windows were announced again
-replay_reactions:{[worker]
-    if[not .qetl.job.bounded.runtime.allows`notify_reactions; :0];
-    cfg:def worker;
-    s:spec worker;
-    owed:@[{[a] .qetl.reaction.pending . a};
-        (cfg`dataset;cfg`partition;s`source_version;s`range_from;s`range_to);
-        {[e] ([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$())}];
-    ws:distinct select range_from, range_to from owed;
-    if[0=count ws; :0];
-    .qetl.log.warn[worker;"re-firing reactions for windows covered without a successful reaction";
-        `windows`reactions!(count ws;distinct owed`name)];
-    sum replay_window[worker] each ws}
-
-/ Private: announce one covered window's publication again, from a fresh
-/ fetch and transform. A window that cannot be fetched or transformed is
-/ logged and left owed, for the next run.
-/ @return 1 when announced, else 0
-replay_window:{[worker;w]
-    cfg:def worker;
-    f:own[worker;`fetch][w`range_from;w`range_to];
-    if[`failed~f`state;
-        .qetl.log.err[worker;"could not re-fetch a window to re-fire its reactions";
-            `range_from`range_to`error!(w`range_from;w`range_to;f`error)];
-        :0];
-    out:@[transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
-    if[(0h=type out) and `transform_failed~first out;
-        .qetl.log.err[worker;"could not transform a window to re-fire its reactions";
-            `range_from`range_to`error!(w`range_from;w`range_to;last out)];
-        :0];
-    @[{[a] .qetl.reaction.notify_published . a};
-      (cfg`dataset;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
-      {[e] (::)}];
-    1}
-
 / Private: the io manager's end-of-run step, behind the dry-run gate. A dry
 / run wrote nothing, so a store has nothing to finish - and an HDB writer's
 / finish asks the HDB to reload, which a rehearsal must not.
