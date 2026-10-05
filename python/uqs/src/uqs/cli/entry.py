@@ -41,6 +41,7 @@ from uqs.cli import backfill  # noqa: F401
 from uqs.cli import cleanup  # noqa: F401
 from uqs.cli import runs  # noqa: F401
 from uqs.cli import gaps  # noqa: F401
+from uqs.cli import stream  # noqa: F401
 from uqs.cli import replay  # noqa: F401
 from uqs.cli import summary  # noqa: F401
 from uqs.cli import graph  # noqa: F401

@@ -85,7 +85,8 @@ namespace:{[job] ` sv job_root,job}
 / one without the other.
 / @param job the job's name, e.g. `markout
 / @param decl dict of procname, subscribe_to, publishes, and then on_batch
-/   (required when it subscribes), period and on_timer (a pair); optionally
+/   (required when it subscribes), period and on_timer (a pair) - or period
+/   and poll, for a polling feed (see stream_poll.q); optionally
 /   start_with_all (a boolean, default 0b) and note (a string)
 / @return the job name
 / @throws error naming every missing or malformed field at once
@@ -106,6 +107,10 @@ define:{[job;decl]
         '"define: ",string[job],"'s subscribe_to must be a symbol list of table names"];
     if[not 11h=abs type decl`publishes;
         '"define: ",string[job],"'s publishes must be a symbol list, empty for a job that keeps its output local"];
+    / A polling feed declares its steps rather than its timer, and gets the
+    / timer built from them (stream_poll.q) - before the checks below, which
+    / then see an ordinary feed.
+    if[`poll in key decl; decl:poll_declared[job;decl]];
     if[(`on_batch in key decl) and not is_callable decl`on_batch;
         '"define: ",string[job],"'s on_batch must be a function taking (table name; rows), [t;x] as in TorQ's upd"];
     / A subscriber with no handler receives every batch and drops it, and a
