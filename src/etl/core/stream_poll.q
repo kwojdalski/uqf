@@ -7,10 +7,11 @@
 / a feed would publish was to let it publish, and advance its cursor (#663).
 / .
 / So a feed may declare `poll` instead of `on_timer`: its steps as separate
-/ functions. `define` builds the timer from them - .qetl.job.continuous.poll_once,
-/ which publishes and THEN advances - and `preview` runs the same fetch and
-/ normalize with neither the publish nor the advance. They are not a muted
-/ copy of the timer: preview never calls publish, never calls save_cursor,
+/ functions. `define` builds the timer from them - `tick`, which checks the
+/ cursor advances, publishes, and THEN saves it - and `preview` runs the same
+/ fetch, normalize and advance check with neither the publish nor the save.
+/ They are not a muted copy of the timer: preview never calls publish, never
+/ saves a cursor,
 / and runs in a process (`uqs stream preview`) whose publish is the unwired
 / stub, so a publish reached any other way throws rather than lands.
 / .
@@ -27,6 +28,16 @@
 /     cursor       optional symbol naming the cursor file, default the job
 /     close        optional niladic, releasing whatever fetch opened; preview
 /                  calls it on success and on failure
+/     load, save, advances
+/                  optional, all three or none: the cursor's own handling,
+/                  for a cursor that is not a timestamp (#666). load[name]
+/                  -> the saved cursor; save[name;cursor] after a publish;
+/                  advances[current;proposed] -> 1b when proposed is
+/                  strictly ahead. Absent, the cursor is a timestamp, kept
+/                  by .qetl.job.continuous.load_cursor/save_cursor. For a
+/                  compound cursor - (time, securityId, priceBookType) - the
+/                  stock answer is .qetl.job.continuous.load_cursor_value,
+/                  save_cursor_value and lexically_after[fields]
 / .
 / Subscribers are not previewable here: their input arrives from the plant,
 / so there is no page to fetch. Previewing one would need a supplied batch or
@@ -50,6 +61,12 @@ poll_declared:{[job;decl]
     if[count missing:poll_keys where not poll_keys in key p;
         '"define: ",string[job],"'s poll is missing ",", " sv string missing];
     if[count bad:(poll_keys,`close inter key p) where not is_callable each p poll_keys,`close inter key p;
+        '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
+    custom:`load`save`advances inter key p;
+    if[(count custom) and 3<>count custom;
+        '"define: ",string[job],"'s poll declares ",(", " sv string custom),
+         " - a custom cursor needs load, save and advances together, or none of them for a timestamp"];
+    if[count bad:custom where not is_callable each p custom;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     if[count bad:(`source`cursor inter key p) where not -11h=type each p `source`cursor inter key p;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be symbols"];
@@ -86,20 +103,48 @@ outputs:{[job;out]
         '"normalize: ",string[job]," returned ",(", " sv string bad),", which it does not declare in publishes"];
     out}
 
-/ One poll: fetch a page, normalize it, publish every table, advance the
-/ cursor - publish first, as .qetl.job.continuous.poll_once orders it. What
-/ a polling job's generated on_timer calls.
+/ Private: the timestamp cursor's advance rule, .qetl.job.continuous.advance's.
+default_advances:{[current;proposed] (not null proposed) and (null current) or proposed>current}
+
+/ How a polling job keeps its cursor: its own load, save and advances, or the
+/ timestamp defaults. The one place both the timer and the preview get them,
+/ so the two cannot disagree about what counts as progress.
+/ @param job the job's name
+/ @return dict of load [name], save [name;cursor] and advances [current;proposed]
+cursor_ops:{[job]
+    p:(def job)`poll;
+    $[`load in key p;
+      `load`save`advances#p;
+      `load`save`advances!(.qetl.job.continuous.load_cursor;.qetl.job.continuous.save_cursor;default_advances)]}
+
+/ One poll: fetch the page after the cursor, normalize it, check the cursor
+/ it would move to, publish every table, then save that cursor. What a
+/ polling job's generated on_timer calls.
+/ .
+/ The advance is checked BEFORE publishing: a cursor that would not move is a
+/ page the next tick fetches again, so publishing it now would publish it
+/ twice. The save comes after: a publish that throws leaves the cursor where
+/ it was and the page is fetched again, rather than skipped.
 / @param job the job's name
 / @return dict of state (`idle or `published), rows and cursor
+/ @throws error when the proposed cursor does not advance, or a step throws
 tick:{[job]
     d:def job;
     p:d`poll;
+    ops:cursor_ops job;
+    name:cursor_name job;
+    current:ops[`load] name;
+    page:p[`fetch] current;
+    if[0=count page; :`state`rows`cursor!(`idle;0;current)];
+    out:outputs[job;p[`normalize] page];
+    proposed:p[`next_cursor] page;
+    if[not ops[`advances][current;proposed];
+        '"tick: ",string[job],"'s next cursor ",(-3!proposed)," does not move past ",(-3!current),
+         " - publishing it would publish the page again next tick"];
     pub:get ` sv (d`ns),`publish;
-    send:{[job;p;pub;page]
-        out:outputs[job;p[`normalize] page];
-        {[pub;t;rows] pub[t;rows]}[pub]'[key out;value out];
-        sum count each value out}[job;p;pub];
-    .qetl.job.continuous.poll_once[cursor_name job;p`fetch;send;p`next_cursor]}
+    {[pub;t;rows] pub[t;rows]}[pub]'[key out;value out];
+    ops[`save][name;proposed];
+    `state`rows`cursor!(`published;sum count each value out;proposed)}
 
 / Private: what is wrong with `rows` for plant table `t`, by name, order
 / and type. A table the plant does not carry has nothing to compare against.
@@ -148,17 +193,18 @@ preview:{[job;n]
 / Private: preview's body, between the guard and `close`.
 preview_page:{[job;n]
     p:(def job)`poll;
-    current:.qetl.job.continuous.load_cursor cursor_name job;
+    ops:cursor_ops job;
+    current:ops[`load] cursor_name job;
     page:p[`fetch] current;
     base:`job`live`cursor`fetched!(job;liveness job;current;count page);
     if[0=count page;
-        :base,`state`next_cursor`advances`rows`sample`failures!(`idle;0Np;0b;()!();()!();())];
+        :base,`state`next_cursor`advances`rows`sample`failures!(`idle;(::);0b;()!();()!();())];
     out:outputs[job;p[`normalize] page];
     failures:raze contract_failures'[key out;value out];
     next_cursor:p[`next_cursor] page;
-    advances:(not null next_cursor) and (null current) or next_cursor>current;
+    advances:ops[`advances][current;next_cursor];
     if[not advances;
-        failures,:enlist "next_cursor ",string[next_cursor]," does not move past ",string[current],
+        failures,:enlist "next_cursor ",(-3!next_cursor)," does not move past ",(-3!current),
             " - a run would refuse to advance"];
     base,`state`next_cursor`advances`rows`sample`failures!(
         $[count failures; `invalid; `previewed];next_cursor;advances;

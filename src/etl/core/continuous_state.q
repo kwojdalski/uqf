@@ -84,8 +84,54 @@ save_cursor:{[worker;cursor]
 / @return the worker's name
 / @eg .qetl.job.continuous.clear_cursor `fx_feed_2
 clear_cursor:{[worker]
-    system"rm -f ",cursor_path worker;
+    system"rm -f ",cursor_path[worker]," ",cursor_value_path worker;
     cursor_path worker}
+
+/ ------------------------------------------------------ COMPOUND CURSORS
+/ .
+/ A timestamp cannot page through rows that share one: three rows at 09:41
+/ and a page of two leave no timestamp that says "after the second" (#666).
+/ Such a feed's cursor is the row's position - (time, securityId,
+/ priceBookType) - and these keep it as a q value, so no field is dropped
+/ and none changes type on the way through a file.
+
+/ Where a compound cursor lives: beside the timestamp one, a different suffix.
+cursor_value_path:{[worker] (.qetl.job.bounded.state.lock_dir[]),"/",string[worker],".cursorq"}
+
+/ A compound cursor, or (::) when the worker has none yet - a first run.
+/ @param worker the worker's name
+/ @return the saved cursor as it was saved, or (::)
+/ @eg .qetl.job.continuous.load_cursor_value `nosuchworker  ->  (::)
+load_cursor_value:{[worker] @[get;hsym `$cursor_value_path worker;{[e] (::)}]}
+
+/ Save a compound cursor - any q value - after the page it acknowledges is
+/ published, for the reason save_cursor gives.
+/ @param worker the worker's name
+/ @param cursor the cursor, e.g. `time`securityId`priceBookType!(...)
+/ @return the path written
+save_cursor_value:{[worker;cursor]
+    system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    (hsym `$cursor_value_path worker) set cursor;
+    cursor_value_path worker}
+
+/ Is `proposed` strictly after `current`, comparing the fields `ks` in order?
+/ .
+/ The tuple order a paginated source sorts by: the first field that differs
+/ decides, so (09:41, B) is after (09:41, A) and before (09:42, A). Equal is
+/ not after - a page that does not move the cursor re-publishes - and a first
+/ run, with no cursor, is after nothing.
+/ @param ks the fields, in sort order
+/ @param current the saved cursor, a dictionary carrying ks, or (::)
+/ @param proposed the cursor a page would move to
+/ @return 1b when proposed is strictly after current
+/ @eg .qetl.job.continuous.lexically_after[`t`id;`t`id!(1;`a);`t`id!(1;`b)]  ->  1b
+/ @eg .qetl.job.continuous.lexically_after[`t`id;`t`id!(1;`b);`t`id!(1;`b)]  ->  0b
+lexically_after:{[ks;current;proposed]
+    if[(::)~current; :1b];
+    a:current ks;
+    b:proposed ks;
+    i:first where not a~'b;
+    $[null i; 0b; b[i]>a[i]]}
 
 / ---------------------------------------------------------------- ADVANCE
 

@@ -107,3 +107,14 @@ def test_invalid_output_fails_the_command_and_says_why(monkeypatch):
     result = invoke(monkeypatch, bad)
     assert result.exit_code == 1
     assert "wide_book has columns sym" in result.output
+
+
+def test_a_compound_cursor_prints_as_its_fields(monkeypatch):
+    compound = {
+        **PAGE,
+        "cursor": {"time": "2026-09-11T00:00:00.000000000", "securityId": "a"},
+        "next_cursor": {"time": "2026-09-11T00:00:00.000000000", "securityId": "b"},
+    }
+    result = invoke(monkeypatch, compound)
+    assert "securityId=a" in result.output
+    assert "securityId=b" in result.output

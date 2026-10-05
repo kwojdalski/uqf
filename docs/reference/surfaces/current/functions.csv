@@ -380,19 +380,25 @@ qetl.job.bounded.state,write_owner,function,1,path
 qetl.job.continuous,advance,function,3,worker current next_cursor
 qetl.job.continuous,clear_cursor,function,1,worker
 qetl.job.continuous,cursor_path,function,1,worker
+qetl.job.continuous,cursor_value_path,function,1,worker
 qetl.job.continuous,dataset_freshness,function,1,dataset
 qetl.job.continuous,dataset_is_fresh,function,2,dataset tolerance
 qetl.job.continuous,feeders_of,function,1,dataset
 qetl.job.continuous,feeds,dict,,
 qetl.job.continuous,freshness,function,1,worker
 qetl.job.continuous,is_fresh,function,2,worker tolerance
+qetl.job.continuous,lexically_after,function,3,ks current proposed
 qetl.job.continuous,load_cursor,function,1,worker
+qetl.job.continuous,load_cursor_value,function,1,worker
 qetl.job.continuous,poll_once,function,4,worker fetch_page publish_page next_cursor
 qetl.job.continuous,register_feeder,function,2,worker dataset
 qetl.job.continuous,save_cursor,function,2,worker cursor
+qetl.job.continuous,save_cursor_value,function,2,worker cursor
 qetl.job.stream,contract_failures,function,2,t rows
 qetl.job.stream,cursor_name,function,1,job
+qetl.job.stream,cursor_ops,function,1,job
 qetl.job.stream,def,function,1,job
+qetl.job.stream,default_advances,function,2,current proposed
 qetl.job.stream,define,function,2,job decl
 qetl.job.stream,defined,function,1,
 qetl.job.stream,drain,function,2,table_name mask
