@@ -221,7 +221,11 @@ it("tells the operator a worker-config override is not durable", async () => {
     ok({
       key: "dry_run",
       value: "true",
-      explain: { source: "override" },
+      explain: ["overrides", "true"],
+      effective_layer: "overrides",
+      effective_value: "true",
+      shadowed: false,
+      env_var: null,
       note: "this override lives in the process's memory and is lost when it restarts; a process.csv override survives",
     }),
   );
@@ -231,6 +235,55 @@ it("tells the operator a worker-config override is not durable", async () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "Set override" }));
   expect(await screen.findByText(/lost when it restarts/)).toBeInTheDocument();
+});
+
+it("warns when an environment variable outranks the override just set", async () => {
+  // #634: UQF_DRY_RUN in the process's environment beats a .qetl.cfg
+  // override, and the view used to report the PUT as a plain success.
+  mockApi(true, () =>
+    ok({
+      key: "dry_run",
+      value: "true",
+      explain: ["env", "false"],
+      effective_layer: "env",
+      effective_value: "false",
+      shadowed: true,
+      env_var: "UQF_DRY_RUN",
+      note: "this override lives in the process's memory and is lost when it restarts; a process.csv override survives",
+    }),
+  );
+  await openControl();
+  fireEvent.change(await screen.findByLabelText("Key"), {
+    target: { value: "dry_run" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Set override" }));
+  expect(
+    await screen.findByText(
+      /Not in effect: .*UQF_DRY_RUN in the environment wins/,
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/Saved:/)).not.toBeInTheDocument();
+});
+
+it("says saved only when the override is what the process reads", async () => {
+  mockApi(true, () =>
+    ok({
+      key: "dry_run",
+      value: "true",
+      explain: ["overrides", "true"],
+      effective_layer: "overrides",
+      effective_value: "true",
+      shadowed: false,
+      env_var: null,
+      note: "",
+    }),
+  );
+  await openControl();
+  fireEvent.change(await screen.findByLabelText("Key"), {
+    target: { value: "dry_run" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Set override" }));
+  expect(await screen.findByText(/Saved: dry_run = true/)).toBeInTheDocument();
 });
 
 it("describes the deployment honestly in the sidebar", async () => {

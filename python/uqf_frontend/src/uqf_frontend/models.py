@@ -329,6 +329,16 @@ class WorkerConfigResponse(BaseModel):
     key: str
     value: str
     explain: Any
+    #: The layer now answering for the key, from `explain`: `overrides` when
+    #: the value just set is in effect, None when the answer had an unknown shape.
+    effective_layer: str | None
+    #: The raw value that layer holds - the one the process now reads.
+    effective_value: str | None
+    #: True when an environment variable outranks the override just set, so
+    #: the override has no effect until that variable is unset (#634).
+    shadowed: bool
+    #: The variable that wins, e.g. UQF_DRY_RUN, when shadowed.
+    env_var: str | None
     note: str = (
         "this override lives in the process's memory and is lost when it restarts; "
         "a process.csv override survives"

@@ -482,7 +482,7 @@ def create_app(
         """Set a `.qetl.cfg` override in the live process the gateway addresses."""
         authorise(request)
         out = control.set_worker_config(gateway, settings, req.key, req.value)
-        return WorkerConfigResponse(key=out["key"], value=out["value"], explain=out["explain"])
+        return WorkerConfigResponse(**out)
 
     @app.post("/control/backfill", response_model=BackfillStartedResponse)
     def control_backfill(req: BackfillRequest, request: Request) -> BackfillStartedResponse:

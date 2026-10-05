@@ -210,7 +210,33 @@ def set_worker_config(gateway: Any, settings: Settings, key: str, value: str) ->
     from uqf_frontend.gateway import TIERS
 
     raw = gateway.route(SET_WORKER_CONFIG, (key, value), TIERS["rdb"])
-    return {"key": key, "value": value, "explain": _plain(raw)}
+    explain = _plain(raw)
+    layer, effective = _layer_of(explain)
+    # Only the environment outranks an override (`.qetl.cfg.sources` is
+    # env, overrides, yaml, default), so "shadowed" means exactly that.
+    shadowed = layer == "env"
+    return {
+        "key": key,
+        "value": value,
+        "explain": explain,
+        "effective_layer": layer,
+        "effective_value": effective,
+        "shadowed": shadowed,
+        "env_var": f"UQF_{key.upper()}" if shadowed else None,
+    }
+
+
+def _layer_of(explain: Any) -> tuple[str | None, str | None]:
+    """The (layer, raw value) pair `.qetl.cfg.explain` returns, or Nones.
+
+    A q `(`env;"true")` arrives as a two-item list. Anything else is reported
+    as unknown rather than guessed at: the caller then shows neither "saved"
+    nor "shadowed", because it cannot honestly say which.
+    """
+    if isinstance(explain, (list, tuple)) and len(explain) == 2 and isinstance(explain[0], str):
+        effective = explain[1]
+        return explain[0], effective if isinstance(effective, str) else None
+    return None, None
 
 
 def _plain(value: Any) -> Any:

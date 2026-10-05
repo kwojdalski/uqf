@@ -235,6 +235,12 @@ export interface WorkerConfigResult {
   key: string;
   value: string;
   explain: unknown;
+  /** The layer now answering for the key; "overrides" when the value just set is in effect. */
+  effective_layer: string | null;
+  effective_value: string | null;
+  /** An environment variable outranks the override, which has no effect until it is unset. */
+  shadowed: boolean;
+  env_var: string | null;
   note: string;
 }
 export interface BackfillStarted {
