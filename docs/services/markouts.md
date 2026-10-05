@@ -98,9 +98,6 @@ coverage ledger, so a rerun of the same range is idle; - asks the HDB to reload.
   (`duckdb_deals`, `demo_deals`) aren't marked out yet. They store sides as
   `buy`/`sell`, use `rate` rather than `trade_price`, and carry no `pip_factor`,
   so they'd need a mapping step first.
-- **It's named after its source**, like the other workers. `markout_backfill`
-  would make `uqs job remove markout` ambiguous, because that command reads
-  `<name>_backfill.q` as belonging to job `<name>`.
 
 ### Limits
 
