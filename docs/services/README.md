@@ -19,7 +19,7 @@ publisher is a Python handler outside q, because a q process can't hold either
 subscription, and `databento1` and `kafka_flow1` are ordinary subscribers to the
 raw table it publishes.
 
-## Feeds: where rows are made
+## Feeds
 
 These invent or replay data, so the rest of the stack has something to work on.
 
@@ -47,7 +47,7 @@ kdb recorders, for when they aren't running. Publishes `crypto_book` and
 `crypto_trades`. Profile `crypto`, run *instead of* the real recorders, never
 alongside them. [Details](crypto-recorder.md)
 
-## External sources: real data coming in
+## External sources
 
 Each of these needs a feed handler outside q, because a q process can't hold the
 subscription itself.
@@ -61,7 +61,7 @@ Kafka topic by `external/kafka_feed.py`, deduplicated on the record's
 (partition; offset) so a redelivery is never counted twice. Reads
 `kafka_client_flow`, publishes `client_flow`. [Details](kafka.md)
 
-## Normalisers: one table per question
+## Normalisers
 
 Several sources say the same thing in different shapes. A normaliser folds them
 into one table, so whatever reads it handles one market and one shape.
@@ -76,7 +76,7 @@ become `marks`, the price positions are valued at.
 `market_data`, each row keeping its source and its original receipt time. It
 heads the arbitrage chain. Profile `arbitrage`. [Details](superbook.md)
 
-## Analytics: what the desk looks at
+## Analytics
 
 **`posbook1` · positions and P&L** --- a running position per instrument from
 `executions`, valued at `marks`. One book carries FX and crypto, because it
@@ -112,7 +112,7 @@ Publishes `mkt_orderbook`. Profile `depth`.
 the process's own state and published nowhere. A leaf you can stop without
 anything downstream noticing. Profile `depth`.
 
-## Backfills: filling the past
+## Backfills
 
 A backfill takes a date range, fills it, records which windows are covered, and
 exits. Run one with `uqs backfill <worker> --from … --to … [--wait]`; running it
