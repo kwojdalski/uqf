@@ -5,7 +5,7 @@ Two writers produce the same HDB partitions:
 - **End of day** sorts and sets attributes through TorQ's `.sort.sorttab`,
   which reads `$KDBCONFIG/sort.csv`: `lib/torq/config/sort.csv`.
 - **A bounded worker** sorts on its own when it finishes a partition:
-  `.qetl.io.finish_parts` in `src/etl/core/io_manager.q`, sym then time with
+  `.qetl.io.finish_parts` in `src/etl/core/io_hdb.q`, sym then time with
   `p#sym`. Reactions write through the same IO manager.
 
 They agree today, but by coincidence: nothing tied them together. A per-table
@@ -32,7 +32,7 @@ from uqs.paths import repo_root
 
 ROOT = repo_root()
 SORT_CSV = ROOT / "lib" / "torq" / "config" / "sort.csv"
-IO_MANAGER = ROOT / "src" / "etl" / "core" / "io_manager.q"
+IO_MANAGER = ROOT / "src" / "etl" / "core" / "io_hdb.q"
 
 #: What `.qetl.io.finish_parts` applies, as sort.csv rows (att, column, sort):
 #: `p#` on sym, sorted by sym then time.
@@ -94,7 +94,7 @@ def test_the_io_manager_still_applies_the_spec_this_test_holds():
     source = IO_MANAGER.read_text()
     missing = [line for line in IO_MANAGER_CODE if line not in source]
     assert not missing, (
-        f"src/etl/core/io_manager.q no longer contains {missing}; update IO_MANAGER_SPEC "
+        f"src/etl/core/io_hdb.q no longer contains {missing}; update IO_MANAGER_SPEC "
         "to what finish_parts now applies"
     )
 

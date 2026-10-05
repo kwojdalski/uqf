@@ -585,4 +585,64 @@ write:{[target;row_key;rows]
     .qetl.io.write_keyed[mgr;target;rows;
         `on_conflict`row_key`time_column`range_from`range_to!(`replace;row_key;`time;w 0;w 1)]}
 
+/ ---------------------------------------- REPLAY, for a bounded worker
+
+/ A bounded worker's re-firing of reactions an earlier run never completed,
+/ moved here from bounded_worker.q (#618) unchanged and in the same
+/ namespace: it is reaction logic, and .qetl.reaction.pending and
+/ notify_published, which it drives, are above. It stays in
+/ .qetl.job.bounded because it reads a worker through that namespace's own
+/ def, spec, own and transform_batch, so run_body calls it as it always has.
+
+\d .qetl.job.bounded
+
+/ Private: fire again the reactions an earlier run never completed.
+/ .
+/ A reaction runs after its window's coverage is recorded, so a run killed in
+/ between - or a reaction that threw - left a covered window with no derived
+/ output, and every later run found the window covered and did nothing about
+/ it. .qetl.reaction.pending finds those windows over this run's range, and
+/ each is fetched and transformed again and its publication announced again.
+/ Every reaction for the dataset runs, not only the one owed: a reaction
+/ replaces its own output per window (.qetl.reaction.write), so running one
+/ that already succeeded rewrites the same rows.
+/ .
+/ Before this run's own windows, which are not covered yet and notify as
+/ they publish. Not on a dry run, which fires no reaction at all.
+/ @param worker the worker's name
+/ @return how many windows were announced again
+replay_reactions:{[worker]
+    if[not .qetl.job.bounded.runtime.allows`notify_reactions; :0];
+    cfg:def worker;
+    s:spec worker;
+    owed:@[{[a] .qetl.reaction.pending . a};
+        (cfg`dataset;cfg`partition;s`source_version;s`range_from;s`range_to);
+        {[e] ([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$())}];
+    ws:distinct select range_from, range_to from owed;
+    if[0=count ws; :0];
+    .qetl.log.warn[worker;"re-firing reactions for windows covered without a successful reaction";
+        `windows`reactions!(count ws;distinct owed`name)];
+    sum replay_window[worker] each ws}
+
+/ Private: announce one covered window's publication again, from a fresh
+/ fetch and transform. A window that cannot be fetched or transformed is
+/ logged and left owed, for the next run.
+/ @return 1 when announced, else 0
+replay_window:{[worker;w]
+    cfg:def worker;
+    f:own[worker;`fetch][w`range_from;w`range_to];
+    if[`failed~f`state;
+        .qetl.log.err[worker;"could not re-fetch a window to re-fire its reactions";
+            `range_from`range_to`error!(w`range_from;w`range_to;f`error)];
+        :0];
+    out:@[transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
+    if[(0h=type out) and `transform_failed~first out;
+        .qetl.log.err[worker;"could not transform a window to re-fire its reactions";
+            `range_from`range_to`error!(w`range_from;w`range_to;last out)];
+        :0];
+    @[{[a] .qetl.reaction.notify_published . a};
+      (cfg`dataset;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
+      {[e] (::)}];
+    1}
+
 \d .
