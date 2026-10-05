@@ -120,7 +120,7 @@ differences:{[expected;actual]
     row:first where not {[typ;e;a] col_equal[typ;enlist e;enlist a]}[t c]'[expected c;actual c];
     enlist "mismatched column(s) ",(", " sv string bad),
         " - first at row ",string[row]," of ",string[c],
-        ": expected ",(.Q.s1 expected[c] row),", got ",.Q.s1 actual[c] row}
+        ": expected ",(.qrender.full expected[c] row),", got ",.qrender.full actual[c] row}
 
 / Private: one column's values equal, with float tolerance.
 col_equal:{[typ;e;a]

@@ -117,11 +117,15 @@ required_declarations:`source`table_name`target`time_column`row_key`columns`type
 /   odbc  anything with an ODBC driver: the credential is the connection
 /         string, opened with .qetl.io.odbc.open, and the query callback builds SQL
 /         through .qetl.io.odbc's one escape function.
+/   local a kdb+ HDB directory on THIS machine, read from its files with no
+/         process in between: the credential is the directory's path, the
+/         "handle" is that directory as a file symbol, and the query callback
+/         reads through .qetl.source.local - see the LOCAL section below.
 / .
 / A source's transport decides how .qetl.job.bounded.connect opens a handle and how
 / cleanup closes one, so it belongs to the source rather than the worker: two
 / workers over one source cannot disagree about how to reach it.
-transports:`ipc`odbc
+transports:`ipc`odbc`local
 default_transport:`ipc
 
 / source -> its declaration dict.
@@ -148,7 +152,7 @@ sources:(`symbol$())!();
 /   tz - the zone the source's time_column is expressed in, as a
 /     symbol: `UTC, or a tz-database name such as `$"Europe/London"
 / and optionally:
-/   transport - `ipc (the default) or `odbc, see `transports`
+/   transport - `ipc (the default), `odbc or `local, see `transports`
 /   credential_example - what this source's credential LOOKS like, as a
 /     string, for the warning a worker logs when none is set. Optional
 /     because a generic one per transport is better than nothing; declared
@@ -350,7 +354,10 @@ validate_fixture:{[source] validate[source;(def[source]`fixture)[]]}
 / @param h an open handle to the external source
 validate_live:{[source;h]
     decl:def source;
-    m:@[{[handle;table_name] handle({0!meta x};table_name)}[h];decl`table_name;
+    reader:$[`local~decl`transport;
+        {[handle;table_name] 0!meta local_latest[handle;table_name]}[h];
+        {[handle;table_name] handle({0!meta x};table_name)}[h]];
+    m:@[reader;decl`table_name;
         {[table_name;err] '"validate_live: cannot read metadata for ",string[table_name]," (",err,")"}[decl`table_name;]];
     present:exec c from m;
     chars:exec t from m;
@@ -422,9 +429,9 @@ credential_example:{[source]
     d:def source;
     ex:$[`credential_example in key d; d`credential_example; ""];
     if[0<count ex; :ex];
-    $[`odbc~d`transport;
-        "DRIVER=<driver>;<driver-specific settings>";
-        "localhost:5010"]}
+    $[`odbc~d`transport; "DRIVER=<driver>;<driver-specific settings>";
+      `local~d`transport; "/path/to/hdb";
+      "localhost:5010"]}
 
 / ---------------------------------------------------------------- ZONES
 
@@ -651,6 +658,204 @@ coerce:{[source;tbl]
     `table`failures!(coerced;failures)}
 
 / ------------------------------------------------------------- FETCHING
+
+/ Send an IPC source's query: call `f` on the handle with the window's bounds,
+/ logging the call at TRC (.qetl.log.trace) - the lambda's text and the bounds
+/ it runs with - before it is sent, and the rows and milliseconds when it
+/ returns.
+/ .
+/ The ipc counterpart of .qetl.io.odbc.run_sql, so one switch shows every
+/ query a backfill sends whichever transport it uses. A source's `query`
+/ calls this rather than `h(f;from;to)` itself - a direct call is invisible
+/ to tracing, which python/uqs/tests/test_source_queries.py refuses.
+/ @param h the handle to the source process
+/ @param f the function the source process runs, taking (from_ts;to_ts)
+/ @param range_from the inclusive lower bound, in the source's clock
+/ @param range_to the exclusive upper bound
+/ @return what `f` returns on the far side: the window's rows
+/ @eg .qetl.source.ipc[{value x};{[a;b] ([] x:a,b)};1;2] -> ([] x:1 2)
+/ .
+/ Each request is numbered (.qetl.log.next_request), so its sent, returned
+/ and failed lines share `request`, and two requests in one window - a
+/ source that reads two tables - stay apart. The run, worker, source,
+/ window and attempt come from the scoped log context the bounded worker
+/ sets, so a sidecar sending through here is correlated without saying so.
+/ With TRC off nothing is numbered, timed or formatted: the query is sent.
+ipc:{[h;f;range_from;range_to]
+    if[not .qetl.log.enabled`TRC; :h(f;range_from;range_to)];
+    t0:.z.p;
+    req:`transport`request!(`ipc;.qetl.log.next_request[]);
+    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";
+        (enlist[`call]!enlist call_text f),req,`range_from`range_to!(range_from;range_to));::];
+    r:@[h;(f;range_from;range_to);{[req;t0;e]
+        .[{.qetl.log.trc[x;y;z]};(`ipc;"query failed";
+            req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
+        'e}[req;t0]];
+    .[{.qetl.log.trc[x;y;z]};(`ipc;"query returned";
+        req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
+    r}
+
+/ Private: a query lambda's text for a trace - IN FULL. `string` for a
+/ lambda: -3! stops at the console width (79 characters by default), and cut
+/ the traced query before log.q's full-width rendering ever saw it. A
+/ projection has no source text of its own, so it is rendered at the widest
+/ console .qetl.log.value1 allows.
+/ @param f the function sent
+/ @return its text
+/ @eg count .qetl.source.call_text {[a;b] a+b} -> 11
+call_text:{[f] $[100h=type f; string f; .qetl.log.value1 f]}
+
+/ ---------------------------------------------------------------- LOCAL
+/ .
+/ A `local source reads a kdb+ HDB directory on this machine straight from
+/ its files: no process serves it, so no IPC and no credential beyond the
+/ path. For an HDB that is not running, or one too large to be worth a
+/ process, or a deployment that ships the files alone.
+/ .
+/ NOTHING IS LOADED GLOBALLY. `\l` would map the whole database at this
+/ process's root and change its working directory, and a backfill writing
+/ its own HDB cannot afford either. Tables are read one date partition at a
+/ time, column by column.
+/ .
+/ EACH ENUMERATION IS DECODED AGAINST THE HDB'S OWN DOMAIN FILE. A plain
+/ `get` of an enumerated column resolves it against whatever domain of that
+/ name THIS process has loaded - for `sym`, the one .qetl.io.hdb keeps for
+/ the HDB it writes - so reading another HDB that way silently returns the
+/ wrong symbols. Each enumerated column is decoded by its positions against
+/ the file named after ITS domain (`key` of the column: usually `sym`, but
+/ a column can be enumerated against any domain), and a missing or too-short
+/ domain file is refused rather than decoded to blanks.
+
+/ The directory a `local credential names, validated: a directory, holding a
+/ sym file or at least one date partition. Called by .qetl.job.bounded.connect,
+/ so a configured path that is wrong FAILS - it never falls back to the
+/ fixture, which only an unset credential selects.
+/ @param path the credential: an absolute path, as a string
+/ @return the directory, as a file symbol - the source's "handle"
+/ @throws error naming the path and what is wrong with it
+/ @eg @[.qetl.source.local_root;"/no/such/hdb";{x}] like "*does not exist*"  ->  1b
+local_root:{[path]
+    if[0=count path; '"local: the credential is empty - set it to the HDB directory's path"];
+    root:hsym `$path;
+    k:key root;
+    if[()~k; '"local: ",path," does not exist"];
+    if[-11h=type k; '"local: ",path," is a file, not an HDB directory"];
+    if[not (`sym in k) or 0<count local_dates[root;-0Wd;0Wd];
+        '"local: ",path," holds no sym file and no date partition - is it an HDB root?"];
+    root}
+
+/ The date partitions present under `root`, within [d0;d1], in order.
+/ @param root the HDB directory, as a file symbol
+/ @param d0 first date, inclusive
+/ @param d1 last date, inclusive
+/ @return the dates, ascending
+local_dates:{[root;d0;d1]
+    ds:"D"$string key root;
+    asc ds where (not null ds) and ds within (d0;d1)}
+
+/ Private: an enumerated column, decoded against its own domain's file under
+/ `root`. Refuses a domain file that is missing, or too short for the
+/ positions the column holds - either would decode to blank symbols.
+/ @param root the HDB directory, as a file symbol
+/ @param c the column's name, for the error
+/ @param v the column as read: an enumeration
+/ @return the column as plain symbols
+local_decode:{[root;c;v]
+    dom:key v;
+    f:` sv root,dom;
+    if[()~key f; '"local: column ",string[c]," is enumerated against `",string[dom],", but ",(1_string f)," does not exist"];
+    vals:get f;
+    if[11h<>type vals; '"local: ",(1_string f)," is not a symbol list - not a domain file"];
+    ix:"j"$v;
+    if[(count ix) and (max ix)>=count vals;
+        '"local: column ",string[c]," needs ",string[1+max ix]," entries of `",string[dom],", and ",(1_string f)," holds ",string count vals];
+    vals ix}
+
+/ Private: one partition of one table, as a plain in-memory table with the
+/ partition's `date` first (as a select from a mapped HDB has it), every
+/ enumerated column decoded against its own domain's file. Empty list when
+/ that date has no such table.
+local_partition:{[root;table;d]
+    base:string .Q.par[root;d;table];
+    if[()~key hsym `$base,"/.d"; :()];
+    cs:get hsym `$base,"/.d";
+    vals:{[root;base;c] v:get hsym `$base,"/",string c;
+        / 77h: a nested column of enumerations (a symbol list per row), each
+        / row decoded on its own.
+        $[(type v) within 20 76h; local_decode[root;c;v];
+          77h=type v; {[root;c;x] local_decode[root;c;x]}[root;c] each v;
+          v]}[root;base] each cs;
+    `date xcols update date:d from flip cs!vals}
+
+/ The rows of `table` from every date partition that [from_ts;to_ts) touches
+/ - whole partitions, to be filtered by the caller - read as
+/ local_partition reads them.
+/ @param root the HDB directory, as a file symbol
+/ @param table the table's name
+/ @param from_ts inclusive lower bound
+/ @param to_ts exclusive upper bound
+/ @return a plain table; empty, in the table's shape, when no partition in
+/   range holds it
+/ @throws error when no partition anywhere in the HDB holds the table
+local_read:{[root;table;from_ts;to_ts]
+    / to_ts is EXCLUSIVE: a window ending at midnight touches no part of the
+    / next day, so its partition is not read.
+    ds:local_dates[root;`date$from_ts;`date$to_ts-1];
+    parts:local_partition[root;table] each ds;
+    keep:where 0<count each parts;
+    if[0=count keep; :0#local_latest[root;table]];
+    / Partitions with different columns cannot be one table - a mapped HDB
+    / refuses them too - and razing them would hand the query a list of
+    / dicts that fails somewhere far from here.
+    shapes:cols each parts keep;
+    if[1<count distinct shapes;
+        '"local: ",string[table],"'s columns differ between partitions ",
+         (", " sv string ds keep where not shapes~\:first shapes)," and ",string first ds keep];
+    raze parts keep}
+
+/ The most recent partition of `table`, read as local_read reads one. What
+/ validate_live checks a local source's declaration against, and the shape
+/ of an empty local_read.
+/ @param root the HDB directory, as a file symbol
+/ @param table the table's name
+/ @return that partition's rows
+/ @throws error when no partition holds the table
+local_latest:{[root;table]
+    ds:reverse local_dates[root;-0Wd;0Wd];
+    hit:ds where {[root;table;d] not ()~key hsym `$(string .Q.par[root;d;table]),"/.d"}[root;table] each ds;
+    if[0=count hit; '"local: no partition of ",string[table]," under ",1_string root];
+    local_partition[root;table;first hit]}
+
+/ Run a local source's query: call `f` with a table reader over the HDB and
+/ the window's bounds, traced as .qetl.source.ipc traces an IPC query - the
+/ lambda's text and bounds at TRC before, rows and ms after, a `failed line
+/ that shares the request number when it throws, and the error rethrown.
+/ With TRC off it only calls.
+/ .
+/ `f` takes (read;from_ts;to_ts), where read[table;from_ts;to_ts] is
+/ local_read over this HDB: so a query reads `read[`trades;from_ts;to_ts]`
+/ where an IPC one selects from `trades on the far side, and filters the
+/ rows itself, the partition being the unit read.
+/ @param root the HDB directory, as a file symbol - the source's handle
+/ @param f the query, taking (read;from_ts;to_ts)
+/ @param range_from inclusive lower bound
+/ @param range_to exclusive upper bound
+/ @return what `f` returns
+/ @eg count .qetl.source.local[`:/no/such/hdb;{[read;a;b] ([] x:a,b)};1;2]  ->  2
+local:{[root;f;range_from;range_to]
+    read:local_read[root];
+    if[not .qetl.log.enabled`TRC; :f[read;range_from;range_to]];
+    t0:.z.p;
+    req:`transport`request!(`local;.qetl.log.next_request[]);
+    .[{.qetl.log.trc[x;y;z]};(`local;"query sent";
+        (enlist[`call]!enlist call_text f),req,`range_from`range_to!(range_from;range_to));::];
+    r:.[f;(read;range_from;range_to);{[req;t0;e]
+        .[{.qetl.log.trc[x;y;z]};(`local;"query failed";
+            req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
+        'e}[req;t0]];
+    .[{.qetl.log.trc[x;y;z]};(`local;"query returned";
+        req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
+    r}
 
 / Fetch one window, from the live source or from the fixture.
 / .

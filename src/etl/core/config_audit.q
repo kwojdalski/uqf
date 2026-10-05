@@ -34,9 +34,15 @@
 / report on - the config of fourteen jobs it is not running.
 watched:(`symbol$())!()
 
-/ fully-qualified name -> its last observed rendering. The whole memory of
-/ this module: a change is a disagreement with this.
-seen:(`symbol$())!()
+/ fully-qualified name -> its last observed VALUE. The whole memory of this
+/ module: a change is a disagreement with this.
+/ .
+/ The value, not its rendering: renderings are cut (at the console width,
+/ then at max_render), so two values differing only past the cut compared
+/ equal, and an edit to a watched list or dictionary went unrecorded (#604).
+/ The null-symbol entry keeps the values a generic list - without it, the
+/ first atom stored would type them, and a later list would throw 'type.
+seen:(enlist `)!enlist (::)
 
 / A row per observed change, as its consumers see it. `old` is empty on the
 / FIRST observation of a name, which is deliberate - that row says what the
@@ -87,9 +93,19 @@ watch:{[owner;names]
 / @param name a fully-qualified global
 / @return its rendering, or a marker when nothing is defined at that name
 / @eg .qetl.cfg.audit.render[`.qetl.cfg.audit.nothing.is.here] -> "(undefined)"
-render:{[name]
-    v:@[get;name;`undefined];
-    $[v~`undefined; "(undefined)"; max_render sublist -3!v]}
+render:{[name] shown @[get;name;{.qetl.cfg.audit.UNDEF}]}
+
+/ Private: what an undefined name reads as. Not the symbol `undefined, which
+/ a watched global may legitimately hold - a change to that value was not
+/ recorded, and a defined `undefined showed as "(undefined)".
+UNDEF:(enlist `.qetl.cfg.audit.UNDEF)!enlist (::)
+
+/ Private: a value as the old/new columns show it - in full up to the widest
+/ console (.qetl.log.value1, not -3!, which stops at 80 columns), then cut at
+/ max_render. Display only: changes are detected on the values.
+/ @param v a value, or UNDEF
+/ @return its rendering
+shown:{[v] $[v~UNDEF; "(undefined)"; max_render sublist .qetl.log.value1 v]}
 
 / The longest rendering recorded. A watched name is meant to be a scalar or
 / a short list; this bounds the damage when one is not.
@@ -112,10 +128,10 @@ poll:{[owner;as_of]
     i:0;
     while[i<count names;
         name:names i;
-        now:render name;
-        was:$[name in key seen; seen name; ""];
-        if[not now~was;
-            rows:rows upsert (owner;name;was;now;as_of);
+        now:@[get;name;{.qetl.cfg.audit.UNDEF}];
+        fresh:not name in key seen;
+        if[fresh or not now~seen name;
+            rows:rows upsert (owner;name;$[fresh; ""; shown seen name];shown now;as_of);
             / fully qualified, for watch's reason
             .qetl.cfg.audit.seen[name]:now];
         i+:1];
@@ -160,6 +176,6 @@ poll_and_publish:{[]
 / running process calls it.
 / @return nothing
 / @eg .qetl.cfg.audit.forget[]
-forget:{[] seen::(`symbol$())!(); }
+forget:{[] seen::(enlist `)!enlist (::); }
 
 \d .

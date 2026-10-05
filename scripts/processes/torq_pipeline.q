@@ -444,7 +444,10 @@ reload_hdb:{[]
     / this process vanishes from its answer - which is how a refused reload
     / used to log as `hdbs=0`, word for word what "no HDB running" logs.
     / What discovery has registered is counted separately, so the two differ.
-    registered:exec count i from .servers.SERVERS where proctype=hdb_type;
+    / .qtorq.hdb_type in full: a bare `hdb_type` inside an exec is not looked
+    / up in this function's namespace, and threw 'hdb_type after every
+    / backfill's rows were written.
+    registered:exec count i from .servers.SERVERS where proctype=.qtorq.hdb_type;
     hs:exec w from .servers.getservers[`proctype;hdb_type;()!();1b;0b];
     reload_handles[registered;hs]}
 
@@ -466,7 +469,10 @@ reload_handles:{[registered;hs]
         .qetl.log.err[`qtorq;"hdb reload: could not open a handle to every registered hdb - refused (this process's outbound credential, TorQ's passwords/<proctype>.txt, is not on the hdb's access list) or unreachable; the rows are on disk, the hdb has not reloaded them";
             `registered`opened!(registered;count hs)]];
     ok:{[h] @[{[h] h(`reload;.z.d); 1b};h;{[e] .qetl.log.err[`qtorq;"hdb reload failed";enlist[`error]!enlist e]; 0b}]} each hs;
-    n:sum ok;
+    / "j"$ before sum: `sum` over booleans is an INT (2i, not the 2 this
+    / documents), and `each` over no handles gives a general empty list that
+    / `sum` leaves as () - not the 0 "nothing to reload" should read as.
+    n:sum "j"$ok;
     .qetl.log.info[`qtorq;"hdb reload requested";`registered`opened`reloaded!(registered;count hs;n)];
     n}
 

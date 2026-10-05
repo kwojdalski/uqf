@@ -58,7 +58,9 @@ uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
 ```
 
 `--transport odbc` scaffolds a backfill source read from a database instead of a
-q process, `--procname` names the process, and `--start-with-all` puts a
+q process, and `--transport local` one read from an HDB directory's files on
+this machine, with no process serving it (see "A source read from local HDB
+files" below), `--procname` names the process, and `--start-with-all` puts a
 streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
 a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
 `--partition`/`--check` shape a backfill. `uqs job remove NAME` undoes a
@@ -249,10 +251,10 @@ row_key:`rate_time`sym         / what identifies a row uniquely
 tz:`UTC                        / what time_column is expressed in
 
 query:{[h;range_from;range_to]
-    h({[from_ts;to_ts]
+    .qetl.source.ipc[h;{[from_ts;to_ts]
         select rate_time, sym, mid from `fx_rates
             where rate_time>=from_ts, rate_time<to_ts
-      };range_from;range_to)}
+      };range_from;range_to]}
 
 fixture:{[]
     ([] rate_time:2026.09.11D09:00:00.000000000+1D*til 5;
@@ -284,7 +286,10 @@ value is ever spliced into query text.
 `"select ... where t>=",string range_from` is how a crafted value becomes an
 injection, and how a type coercion becomes a silently wrong window rather than
 an error. Where a driver cannot parameterise --- ODBC --- there is exactly one
-escape function, `.qetl.io.odbc.literal`, and everything goes through it.
+escape function, `.qetl.io.odbc.literal`, and everything goes through it. It is
+sent with `.qetl.source.ipc`, not `h(...)`: that is what logs the lambda and its
+bounds at TRACE, so `uqs backfill --trace` shows every query a run sends, as
+`.qetl.io.odbc.run_sql` does for SQL.
 
 **The window is half-open `[from;to)`** --- `>=` on the lower bound and `<` on
 the upper. One wrong operator double-publishes every boundary row, and the
@@ -305,6 +310,46 @@ impossible to attribute. It is what the worker uses when no credential is
 configured, which is a stated demo path rather than a fallback for a failed
 connection --- an outage must never quietly become synthetic data recorded as
 covered.
+
+### A source read from local HDB files
+
+Not every kdb+ database has a process serving it. A source with
+`transport:`local\` reads an HDB directory on this machine directly, with no
+IPC:
+
+```q
+transport:`local
+
+query:{[h;range_from;range_to]
+    .qetl.source.local[h;{[read;from_ts;to_ts]
+        select time, sym, px from read[`trades;from_ts;to_ts]
+            where time>=from_ts, time<to_ts
+      };range_from;range_to]}
+```
+
+- **The credential is the directory.** Set `UQF_SOURCE_CRED_<SOURCE>` to the
+  HDB's path. `.qetl.source.local_root` checks it when the worker connects: it
+  must be a directory holding a `sym` file or a date partition. A wrong path
+  **fails the run**; it never falls back to the fixture. As with every
+  transport, only an *unset* variable selects the fixture.
+- **`read[table;from_ts;to_ts]`** returns the whole date partitions the window
+  touches, with `date` as the first column, as a select from a mapped HDB has
+  it. The window's end is exclusive, so a window ending at midnight doesn't read
+  the next day. The query filters the rows itself.
+- **Each symbol column is decoded against that HDB's own domain file:** the one
+  named after the column's domain, usually `sym`, but a column can be enumerated
+  against any domain. A plain `get` would decode it against whatever domain of
+  that name the backfill process has loaded (for `sym`, the HDB it *writes*) and
+  silently return the wrong symbols. A missing or too-short domain file is
+  refused rather than decoded to blanks, and partitions whose columns differ are
+  refused, naming the dates, as a mapped HDB would refuse them.
+- **Nothing is loaded globally.** `\l` would map the whole database at the root
+  and change the working directory. Tables are read one partition at a time,
+  column by column.
+- **Tracing and failures** work as for IPC: `--trace` logs each query with its
+  lambda and bounds, a `request` number and `transport=local`, and a query that
+  throws is traced as `failed` and rethrown.
+- **The handle is the directory itself**, so cleanup has nothing to close.
 
 ## 2. Write the worker
 
@@ -510,9 +555,10 @@ covered:           1
 
 Five daily windows over a five-day range, each published and recorded.
 
-As a process, which is what an orchestrator starts --- the worker, its source
-version and its range are all required flags, because a backfill that guessed a
-range would publish the wrong window and record it as covered:
+As a process, which is what an orchestrator starts --- the worker and its range
+are required flags, because a backfill that guessed a range would publish the
+wrong window and record it as covered. The source version is required too,
+unless the worker declares a default `source_version`:
 
 ```
 uqs backfill fx_rates_backfill --version v1 --from 2026-09-11 --to 2026-09-16

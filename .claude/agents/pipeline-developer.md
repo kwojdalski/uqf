@@ -40,6 +40,7 @@ asked to do, and it records what was decided against.
   | `core/coercion.q`          | `.qetl.coerce`                  | the shared type-coercion layer                        |
   | `core/coverage.q`          | `.qetl.coverage`                | the bitemporal coverage ledger (`etl_coverage`)       |
   | `core/io_manager.q`        | `.qetl.io`                      | where a pipeline's output goes (`memory`, `discard`)  |
+  | `core/io_hdb.q`            | `.qetl.io`                      | the HDB writer: staged partitions, swap, recovery     |
   | `core/singlestore_odbc.q`  | `.qetl.io.odbc`                 | the SingleStore ODBC adapter                          |
   | `core/heartbeat.q`         | `.qetl.hb`                      | worker liveness                                       |
   | `core/dag.q`               | `.qetl.dag`                     | the job graph, derived from declared inputs/outputs   |

@@ -148,6 +148,51 @@ def monitor_connection_plan(
     return kept, dropped
 
 
+#: monitor1 retries every dead connection on `.servers.RETRY` (5 minutes),
+#: and with TorQ's default `.servers.DEBUG:1b` logs "attempting to open handle"
+#: and "connection ... failed: Connection refused" at INF for each attempt.
+#: Every optional process left stopped (startwithall=0) is a dead row it
+#: retries for as long as it runs - thousands of INF lines making a job that
+#: was stopped on purpose read as a fault.
+#:
+#: The retries themselves stay: a process started by hand registers with
+#: discovery, which hands it to monitor1 WITHOUT connecting (procupdate,
+#: connect=0b), and the retry timer is what connects it. Only the per-attempt
+#: lines go. A process that should be up and is not still shows - as `down`
+#: and an ageing heartbeat in `uqs summary`, the signal that was always the
+#: real one.
+MONITOR_QUIET_EXTRAS = "-.servers.DEBUG 0"
+
+
+def _monitor_connections(paths: UqsPaths) -> list[str]:
+    """Every proctype monitor1 would subscribe to with no budget: the vendored
+    list plus this tree's extras. [] when the vendored list cannot be read."""
+    connections = _vendored_monitor_connections(paths)
+    if not connections:
+        return []
+    return connections + [p for p in MONITOR_EXTRA_CONNECTIONS if p not in connections]
+
+
+def monitor_dropped(paths: UqsPaths, rows: list[dict[str, str]]) -> list[str]:
+    """The proctypes monitor1 gives up for the fleet in `rows` - the same plan
+    monitor_connection_extras applies, so what is reported is what happens.
+
+    For `uqs start` and `uqs summary` to say out loud (#620): a dropped
+    proctype's processes have no heartbeat subscription, which `heartbeat.q`
+    cannot report because it never subscribed - the gap is otherwise invisible
+    exactly where it matters.
+    """
+    connections = _monitor_connections(paths)
+    if not connections:
+        return []
+    dropped = monitor_connection_plan(connections, rows, profiles.licence_limit())[1]
+    # Only proctypes something actually runs as. The plan gives up a type in
+    # sacrifice order whether or not any process has it - harmless there,
+    # but reported it would name a gap nothing falls into.
+    running = {r.get("proctype") for r in rows if r.get("startwithall") == "1"}
+    return [p for p in dropped if p in running]
+
+
 def monitor_connection_extras(paths: UqsPaths, rows: list[dict[str, str]]) -> str:
     """`.servers.CONNECTIONS` as a command-line override for monitor1.
 
@@ -156,12 +201,9 @@ def monitor_connection_extras(paths: UqsPaths, rows: list[dict[str, str]]) -> st
     . It REPLACES rather than appends, which is why the vendored list
      is read back above and passed through in full.
     """
-    connections = _vendored_monitor_connections(paths)
+    connections = _monitor_connections(paths)
     if not connections:
         return ""
-    for proctype in MONITOR_EXTRA_CONNECTIONS:
-        if proctype not in connections:
-            connections.append(proctype)
     kept, dropped = monitor_connection_plan(connections, rows, profiles.licence_limit())
     if dropped:
         # DEBUG, not INFO: process.csv is composed several times per command,

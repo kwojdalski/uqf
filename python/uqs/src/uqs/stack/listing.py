@@ -18,8 +18,8 @@ from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
 from uqs.stack.env import build_env
 from uqs.stack.procs import (
-    _base_process_rows,
     _read_overrides,
+    effective_process_rows,
     resolve_process_config,
 )
 from uqs.stack.runtime import query
@@ -70,15 +70,12 @@ def _list_processes(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     and gets empty cells; a bounded worker's output is the dataset it fills.
     """
     env = build_env(paths, base_port=base_port)
-    overrides = _read_overrides(paths)
     inputs = inputs_by_process()
     outputs = {**outputs_by_process(), **{p: (d,) for p, d in _worker_datasets(paths).items()}}
     dynamic = {p.procname for p in PIPELINES if p.subscribes_dynamic}
     items = []
-    for row in _base_process_rows(paths):
-        eff = dict(row)
-        eff.update(overrides.get(row["procname"], {}))
-        eff = resolve_process_config(eff, env)
+    for row in effective_process_rows(paths):
+        eff = resolve_process_config(row, env)
         items.append(
             {
                 "procname": eff["procname"],

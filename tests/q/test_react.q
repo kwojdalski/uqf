@@ -225,6 +225,25 @@ test_the_audit_reports_a_reaction_no_job_declares:{[t]
     .qunit.assertTrue[`invented_dataset in .qetl.reaction.audit[]`undeclared;
         "a reaction on a dataset the graph does not know is reported, not refused"]};
 
+test_the_audit_runs_when_every_dataset_is_wired:{[t]
+    / The healthy case threw 'type: (!). flip () over no unwired datasets.
+    / An empty graph and one reaction is the smallest tree with nothing
+    / unwired; tearDown_graph rebuilds the real graph after.
+    .qetl.dag.reset[];
+    .qetl.reaction.on[`demo_deals;`wired;.rxtest.recorder`wired];
+    a:.qetl.reaction.audit[];
+    .qunit.assertEquals[(count a`unwired;type key a`unwired);(0;11h);
+        "nothing unwired is an empty symbol-keyed dict, not an error"]};
+
+test_history_keeps_the_most_recent_outcomes:{[t]
+    keep:.qetl.reaction.history_limit;
+    .qetl.reaction.history_limit:3;
+    .qetl.reaction.history:.qetl.reaction.empty_history[];
+    {.qetl.reaction.record[`ds;`r;0;0Np;0Np;`ok;string x]} each til 5;
+    .qetl.reaction.history_limit:keep;
+    .qunit.assertEquals[exec detail from .qetl.reaction.history;string 2 3 4;
+        "the newest three survive - not the first three, with every later outcome dropped"]};
+
 / Rebuild the graph after tests that reset it, and clear the test reactions
 / they registered: the job graph is process-wide, so a namespace that left it
 / empty would take the next suite's ground out from under it.

@@ -139,7 +139,10 @@ with_retry:{[pol;f]
     attempt:1;
     outcome:(`err;"with_retry: attempt function never ran");
     while[attempt<=cap;
-        outcome:@[{(`ok;x[])};f;{(`err;x)}];
+        / The attempt joins the log context, so each retry's requests read
+        / as attempt 2, 3... of the same window.
+        outcome:.qetl.log.with_context[enlist[`attempt]!enlist attempt;
+            {@[{(`ok;x[])};x;{(`err;x)}]};enlist f];
         if[`ok~first outcome;
             :`state`kind`attempts`result`error!(`ok;`none;attempt;last outcome;"")];
         kind:classify last outcome;

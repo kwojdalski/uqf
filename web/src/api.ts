@@ -54,7 +54,7 @@ export interface QueryResult extends Pollable {
 }
 export interface Health extends Pollable {
   ok: boolean;
-  gateway: "up" | "reloading" | "unreachable";
+  gateway: "up" | "reloading" | "unreachable" | "wrong_process";
   detail: string | null;
 }
 export interface Worker {
@@ -70,6 +70,10 @@ export interface Worker {
   error: string | null;
   updated_at: string;
   terminal: boolean;
+  pid: number;
+  host: string;
+  run_id: string | null;
+  abandoned: boolean;
   warnings: string[];
 }
 export interface Backfill extends Pollable {
@@ -105,13 +109,17 @@ export async function request<T>(
   // POST with one cover every read in this app; the control routes need PUT,
   // and inferring that from anything would be guessing.
   method?: "GET" | "POST" | "PUT",
+  authorization?: string,
 ): Promise<T> {
   let response: Response;
+  const headers: Record<string, string> = {};
+  if (body) headers["Content-Type"] = "application/json";
+  if (authorization) headers.Authorization = authorization;
   try {
     response = await fetch(path, {
       signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]),
       method: method ?? (body ? "POST" : "GET"),
-      headers: body ? { "Content-Type": "application/json" } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body,
     });
   } catch (error) {
@@ -227,6 +235,12 @@ export interface WorkerConfigResult {
   key: string;
   value: string;
   explain: unknown;
+  /** The layer now answering for the key; "overrides" when the value just set is in effect. */
+  effective_layer: string | null;
+  effective_value: string | null;
+  /** An environment variable outranks the override, which has no effect until it is unset. */
+  shadowed: boolean;
+  env_var: string | null;
   note: string;
 }
 export interface BackfillStarted {
@@ -234,7 +248,7 @@ export interface BackfillStarted {
   source_version: string;
   range_from: string;
   range_to: string;
-  pid: number;
+  procname: string;
   status_path: string;
 }
 
@@ -250,5 +264,41 @@ export async function mutate<T>(
   method: "POST" | "PUT" = "POST",
 ): Promise<T> {
   const controller = new AbortController();
-  return request<T>(path, controller.signal, JSON.stringify(body), method);
+  const token = writeToken.get();
+  return request<T>(
+    path,
+    controller.signal,
+    JSON.stringify(body),
+    method,
+    token ? `Bearer ${token}` : undefined,
+  );
 }
+
+/** The write token for the control routes (#631), when the operator typed it.
+ *
+ * Only the built app served at /ui/ needs it: under `npm run dev` the Vite
+ * proxy adds it from the server's environment. Kept in sessionStorage - this
+ * tab only, gone when it closes - and every access is guarded, since storage
+ * can be blocked outright. */
+const WRITE_TOKEN_KEY = "uqf.writeToken";
+let heldToken = "";
+export const writeToken = {
+  get(): string {
+    try {
+      return sessionStorage.getItem(WRITE_TOKEN_KEY) ?? heldToken;
+    } catch {
+      return heldToken;
+    }
+  },
+  set(value: string): void {
+    // Held in memory too, so a tab with storage blocked still sends it
+    // until the page is reloaded.
+    heldToken = value;
+    try {
+      if (value) sessionStorage.setItem(WRITE_TOKEN_KEY, value);
+      else sessionStorage.removeItem(WRITE_TOKEN_KEY);
+    } catch {
+      /* storage blocked: heldToken carries it */
+    }
+  },
+};

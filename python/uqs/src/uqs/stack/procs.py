@@ -25,7 +25,9 @@ from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
+    MONITOR_QUIET_EXTRAS,
     monitor_connection_extras,
+    monitor_dropped,
 )
 
 log = get_logger(__name__)
@@ -75,7 +77,7 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 VENDORED_LOAD_OVERLAY = {"gateway1": "processes/uqs_catalog.q"}
 
 
-def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
+def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
     """The vendored process.csv rows, plus one row per PIPELINES entry
     appended (with stp1's -schemafile extras repointed and
     VENDORED_STARTWITHALL_OVERLAY applied) - the FILE is never mutated,
@@ -88,11 +90,6 @@ def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
     with vendored_procs.open(newline="") as f:
         rows = list(csv.DictReader(f))
     appended = _pipeline_rows()
-    # monitor1's budget is decided against the WHOLE fleet, not just the
-    # vendored half - the uqf pipelines are most of what it would dial out
-    # to. Built before the loop because the overlay below needs it, and the
-    # startwithall overlay has to be applied first or monitor1's own row
-    # would be counted as not starting.
     for row in rows:
         if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
             row["startwithall"] = VENDORED_STARTWITHALL_OVERLAY[row["procname"]]
@@ -108,12 +105,45 @@ def _base_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
             row["extras"] = row["extras"].replace(
                 "${TORQAPPHOME}/database.q", "${TORQDATA}/database.q"
             )
-        if row["procname"] == "monitor1":
-            extras = monitor_connection_extras(paths, rows + appended)
-            if extras:
-                row["extras"] = " ".join(x for x in (row["extras"], extras) if x)
     rows.extend(appended)
     return rows
+
+
+def effective_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
+    """process.csv as torq.sh starts from it - THE one place it is composed.
+
+    The vendored rows with their overlays, the pipelines appended, then the
+    operator's process_overrides.csv applied field by field, and only THEN
+    monitor1's connection budget, decided against that effective fleet.
+
+    It used to be decided before the overrides, inside the composition, and
+    five call sites re-merged the overrides themselves (#624): so `uqs config
+    set X startwithall 1` never reached the plan that decides which heartbeat
+    subscriptions monitor1 drops under the licence cap. An override of
+    monitor1's own `extras` still wins outright, as it always did.
+    """
+    overrides = _read_overrides(paths)
+    rows = [{**row, **overrides.get(row["procname"], {})} for row in _composed_rows(paths)]
+    for row in rows:
+        if row["procname"] == "monitor1" and "extras" not in overrides.get("monitor1", {}):
+            extras = monitor_connection_extras(paths, rows)
+            row["extras"] = " ".join(x for x in (row["extras"], extras, MONITOR_QUIET_EXTRAS) if x)
+    return rows
+
+
+def monitor_dropped_proctypes(paths: UqsPaths) -> list[str]:
+    """The proctypes monitor1 gives up under the connection budget, for this
+    fleet as torq.sh will start it - [] when nothing is dropped, when monitor1
+    does not start with the stack, or when an override of monitor1's own
+    `extras` replaces the plan (it wins outright, as in effective_process_rows).
+    """
+    overrides = _read_overrides(paths)
+    if "extras" in overrides.get("monitor1", {}):
+        return []
+    rows = [{**row, **overrides.get(row["procname"], {})} for row in _composed_rows(paths)]
+    if not any(r["procname"] == "monitor1" and r.get("startwithall") == "1" for r in rows):
+        return []
+    return monitor_dropped(paths, rows)
 
 
 def _read_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:
@@ -139,7 +169,7 @@ def _write_overrides(paths: UqsPaths, overrides: dict[str, dict[str, str]]) -> N
 
 
 def list_process_names(paths: UqsPaths) -> list[str]:
-    return [row["procname"] for row in _base_process_rows(paths)]
+    return [row["procname"] for row in effective_process_rows(paths)]
 
 
 def assert_known_procnames(paths: UqsPaths, procs: str) -> None:
@@ -184,10 +214,8 @@ def list_process_choices(paths: UqsPaths) -> list[dict[str, str]]:
     needs to know what CAN be started and which are started by "all", not
     what port each would take.
     """
-    overrides = _read_overrides(paths)
     out: list[dict[str, str]] = []
-    for row in _base_process_rows(paths):
-        merged = {**row, **overrides.get(row["procname"], {})}
+    for merged in effective_process_rows(paths):
         out.append(
             {
                 "procname": merged["procname"],
@@ -234,11 +262,10 @@ def get_process_config(
     against build_env(paths, base_port) - the same values torq.sh itself
     would substitute at process-start time.
     """
-    rows = {row["procname"]: row for row in _base_process_rows(paths)}
+    rows = {row["procname"]: row for row in effective_process_rows(paths)}
     if procname not in rows:
         raise UqsError(f"unknown process {procname!r} - {sorted(rows)}")
     row = dict(rows[procname])
-    row.update(_read_overrides(paths).get(procname, {}))
     if resolve:
         row = resolve_process_config(row, build_env(paths, base_port=base_port))
     return row

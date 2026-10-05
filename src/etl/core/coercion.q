@@ -69,31 +69,49 @@ numeric_chars:".-+eE0123456789"
 / than correcting it. It is stated explicitly here anyway, because a reader
 / should not have to know that to trust the function, and because a future
 / build changing it would otherwise change this function's meaning silently.
+/ .
+/ A comma followed by EXACTLY three digits is refused, not guessed: "1,234"
+/ is 1234 with a thousands separator as often as it is 1.234 with a decimal
+/ comma, and reading it as the latter is 1000x off with nothing erroring.
+/ A null is a coercion failure, which is counted and visible. "1,0842" and
+/ "1,5" are unambiguous and still read as decimals.
+/ .
+/ A sign is accepted only at the start or after an exponent: "F"$"--1" is 1,
+/ so the character test alone let a doubled sign through as a number.
 / @param str the text to coerce
-/ @return the float, or 0n when the text is empty or not numeric
+/ @return the float, or 0n when the text is empty, not numeric, or ambiguous
 / @eg .qetl.coerce.to_float["1.0842"]  ->  1.0842
 / @eg .qetl.coerce.to_float["1,0842"]  ->  1.0842
+/ @eg .qetl.coerce.to_float["1,234"]   ->  0n
 / @eg .qetl.coerce.to_float[""]        ->  0n
 to_float:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0n];
     / a decimal comma, only when there is no dot - "1,234.56" is a thousands
-    / separator and this layer deliberately does NOT guess at those, because
-    / "1,234" is ambiguous between 1234 and 1.234 and no rule is safe.
-    normalised:$[(any trimmed=",") and not any trimmed="."; ssr[trimmed;",";"."]; trimmed];
+    / separator and this layer deliberately does NOT guess at those
     if[any trimmed=","; if[any trimmed="."; :0n]];
+    if[1=sum trimmed=","; if[3=count (1+first where trimmed=",")_trimmed; :0n]];
+    normalised:$[any trimmed=","; ssr[trimmed;",";"."]; trimmed];
     if[not all normalised in numeric_chars; :0n];
+    if[not signs_placed normalised; :0n];
     v:"F"$normalised;
     / "F"$ on garbage also gives 0n, so this is belt-and-braces rather than
     / the primary check - but it costs nothing and covers a form the
     / character test admits, e.g. "1.2.3".
     v}
 
+/ Is every sign in this numeric text at the start, or right after an
+/ exponent? "--1", "1-2" and "+-3" are not numbers, though every character is.
+/ @eg .qetl.coerce.signs_placed each ("-1";"1e-5";"--1";"1-2")  ->  1100b
+/ (),s: one character is a char ATOM in q - "5" - and `where` of an atom is 'type.
+signs_placed:{[s] s:(),s; i:where s in "+-"; all (i=0) or (s i-1) in "eE"}
+
 / Coerce text to a long, mapping empty to null rather than zero.
 to_long:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Nj];
     if[not all trimmed in numeric_chars; :0Nj];
+    if[not signs_placed trimmed; :0Nj];
     "J"$trimmed}
 
 / ------------------------------------------------------------- TIMESTAMP
@@ -110,18 +128,44 @@ to_long:{[str]
 / So a date-only value is REFUSED here rather than widened. A caller that
 / genuinely wants midnight can say so with `to_date_as_midnight`, which is
 / explicit and greppable.
-/ @return the timestamp, or 0Np when empty, malformed, or date-only
+/ .
+/ A ZONE SUFFIX - Z, or an offset +hh:mm / -hh:mm (+hhmm, +hh) - is applied,
+/ so the result is UTC. "P"$ alone reads the clock and ignores "+02:00",
+/ placing the row two hours off with nothing erroring, and the separator
+/ rewrite below turned the "-" of "-05:00" into a null. A suffix that is
+/ there but unreadable is a null, not a guess.
+/ @return the timestamp in UTC, or 0Np when empty, malformed, or date-only
 / @eg .qetl.coerce.to_timestamp["2026-09-15T09:30:00"]  ->  2026.09.15D09:30:00
+/ @eg .qetl.coerce.to_timestamp["2026-09-15T11:30:00+02:00"]  ->  2026.09.15D09:30:00
 / @eg .qetl.coerce.to_timestamp["2026-09-15"]           ->  0Np
 to_timestamp:{[str]
     trimmed:trim str;
     if[0=count trimmed; :0Np];
     if[is_date_only trimmed; :0Np];
+    zoned:utc_offset trimmed;
+    if[null last zoned; :0Np];
     / ISO uses "-" between date parts and "T" before the time; q uses "." and
     / "D". Normalise the separators rather than branching on format, so a
     / mixed source does not need two code paths.
-    normalised:ssr[ssr[trimmed;"T";"D"];"-";"."];
-    @[{"P"$x};normalised;{0Np}]}
+    normalised:ssr[ssr[first zoned;"T";"D"];"-";"."];
+    @[{"P"$x};normalised;{0Np}] - last zoned}
+
+/ Split a timestamp's zone suffix off: (the text without it; its offset east
+/ of UTC as a timespan). No suffix is an offset of 0D; one that is there and
+/ unreadable is 0Nn. Only the CLOCK is searched for a sign - the "-"s of an
+/ ISO date come before the T, D or space that starts it.
+/ @eg .qetl.coerce.utc_offset["2026-09-15T09:30:00-05:00"]  ->  ("2026-09-15T09:30:00";-0D05:00)
+utc_offset:{[str]
+    if[last[str] in "Zz"; :(-1_str;0D)];
+    clock:first where str in "TD ";
+    if[null clock; :(str;0D)];
+    at:clock+first where (clock _ str) in "+-";
+    if[null at; :(str;0D)];
+    digits:((at+1)_str) except ":";
+    if[not (count[digits] in 2 4) and all digits in .Q.n; :(str;0Nn)];
+    hm:"J"$(2#digits;2#2_digits,"00");
+    if[(23<hm 0) or 59<hm 1; :(str;0Nn)];
+    (at#str; $["-"=str at;-1;1]*(0D01*hm 0)+0D00:01*hm 1)}
 
 / Is this text a date with no time part?
 / .
@@ -141,11 +185,17 @@ is_date_only:{[str]
 / correct for it" is a statement in the source declaration rather than an
 / accident of q's casting rules. If intraday ordering matters for the
 / dataset, this is the wrong function and the source needs a real timestamp.
+/ Text with a time part is refused, not truncated: "D"$ of a full timestamp
+/ gave 0000.00.00, which is not null, and its cast -0Wp - a minus-infinity
+/ timestamp that every null check let through to publish.
+/ @eg .qetl.coerce.to_date_as_midnight["2026-09-15T12:00:00"]  ->  0Np
 to_date_as_midnight:{[str]
     trimmed:trim str;
-    if[0=count trimmed; :0Np];
+    if[not is_date_only trimmed; :0Np];
     d:@[{"D"$x};ssr[trimmed;"-";"."];{0Nd}];
-    $[null d; 0Np; `timestamp$d]}
+    if[null d; :0Np];
+    p:`timestamp$d;
+    $[p in -0W 0Wp; 0Np; p]}
 
 / ---------------------------------------------------------------- SYMBOL
 

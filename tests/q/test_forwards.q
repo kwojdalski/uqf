@@ -724,4 +724,23 @@ test_apply_col_precedence_leaves_table_unchanged_when_precedence_not_fully_prese
     t:([] size:1 2; sym:`EURUSD`EURUSD; mid:1.1 1.2);
     .qunit.assertEquals[.qfwd.apply_col_precedence t;t;"a table with sym but no time column is left completely unchanged"]};
 
+
+/ A leg that joins the running chain at its START, not its end, would need
+/ the whole chain inverted - that flag was dropped, and JPYGBP priced at
+/ 140.25 instead of 0.85/(1.1*150) = 0.00515. It is refused, and the same
+/ legs in an order that does orient price correctly.
+test_a_leg_joining_the_chain_at_its_start_is_refused:{[t]
+    .qunit.assertThrows[.qfwd.ccy_orient_chain;`EURUSD`USDJPY`EURGBP;
+        "ccy_orient_chain: leg 2 (EURGBP) joins EURJPY at its start*";"refused, naming the leg"]};
+
+test_the_same_legs_reordered_price_the_cross_correctly:{[t]
+    bk:{[px] `bid_prices`bid_sizes`ask_prices`ask_sizes!(enlist px;enlist 1e12;enlist px;enlist 1e12)};
+    r:.qfwd.cross_book_chain_at_sizes[`EURGBP`EURUSD`USDJPY;(bk 0.85;bk 1.1;bk 150f);enlist 1f;enlist `mid];
+    .qunit.assertEquals[first r`sym;`GBPJPY;"EURGBP first: GBP->EUR->USD->JPY"];
+    .testutil.assertApprox[first r`mid;1.1*150%0.85;1e-9;"1.1*150/0.85 - the inverse of the JPYGBP the old code got wrong"]};
+
+test_a_pair_crossed_with_itself_is_refused:{[t]
+    .qunit.assertThrows[{.qfwd.ccy_orient_cross[`EURUSD;`EURUSD]};::;"ccy_orient_cross: EURUSD crossed with itself";
+        "no EUREUR"]};
+
 \d .

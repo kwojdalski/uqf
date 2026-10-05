@@ -27,12 +27,13 @@ real_render:.qetl.log.render
 setUp_capture:{[]
     `.logtest.captured set ();
     .qetl.log.debug[0b];
+    .qetl.log.trace[0b];
     `.qetl.log.emit set {[level;id;msg]
-        $[(level=`DBG) and not .qetl.log.debug_enabled; ::;
+        $[not .qetl.log.switched level; ::;
           `.logtest.captured set .logtest.captured,enlist (level;id;msg)]};
     }
 
-tearDown_restore:{[] .qetl.log.debug[0b];}
+tearDown_restore:{[] .qetl.log.debug[0b]; .qetl.log.trace[0b];}
 
 last_msg:{[] last .logtest.captured[;2]}
 
@@ -106,6 +107,98 @@ test_other_levels_are_unaffected_by_debug:{[t]
     .qetl.log.debug[0b];
     .qetl.log.info[`w;"a";()!()]; .qetl.log.warn[`w;"b";()!()]; .qetl.log.err[`w;"c";()!()];
     .qunit.assertEquals[.logtest.captured[;0];`INF`WARN`ERR;"INF, WARN and ERR emit regardless of the debug switch"]};
+
+/ --- trace: below debug, with its own switch ----------------------------
+/ .
+/ TRC carries every query a source is sent - one long line per window - so
+/ it must stay off unless asked for, and switching debug on to follow a run
+/ must not switch it on too.
+
+test_trace_is_suppressed_by_default:{[t]
+    .qetl.log.trc[`odbc;"sql sent";enlist[`statement]!enlist "SELECT 1"];
+    .qunit.assertEquals[count .logtest.captured;0;"nothing emitted: trace is opt-in"]};
+
+test_trace_appears_once_enabled:{[t]
+    .qetl.log.trace[1b];
+    .qetl.log.trc[`odbc;"sql sent";enlist[`statement]!enlist "SELECT 1"];
+    .qunit.assertEquals[(.logtest.captured[;0];last_msg[]);(enlist `TRC;"sql sent statement=\"SELECT 1\"");
+        "after trace[1b] the statement is emitted, at TRC"]};
+
+test_debug_does_not_switch_trace_on:{[t]
+    .qetl.log.debug[1b];
+    .qetl.log.trc[`odbc;"sql sent";()!()];
+    .qetl.log.dbg[`w;"window start";()!()];
+    .qunit.assertEquals[.logtest.captured[;0];enlist `DBG;"debug alone shows DBG, not every query"]};
+
+test_trace_does_not_switch_debug_on:{[t]
+    .qetl.log.trace[1b];
+    .qetl.log.trc[`odbc;"sql sent";()!()];
+    .qetl.log.dbg[`w;"window start";()!()];
+    .qunit.assertEquals[.logtest.captured[;0];enlist `TRC;"trace alone shows queries, not DBG detail"]};
+
+test_enabled_reports_the_trace_gate:{[t]
+    off:.qetl.log.enabled `TRC;
+    .qetl.log.trace[1b];
+    .qunit.assertEquals[(off;.qetl.log.enabled `TRC);01b;"enabled follows the trace switch"]};
+
+/ --- scoped context ----------------------------------------------------
+/ .
+/ What a line is about (run, worker, source, window, attempt), added to every
+/ line inside the scope, and gone when the scope ends - however it ends.
+
+test_a_line_inside_a_context_carries_it:{[t]
+    .qetl.log.with_context[`worker`source!(`w;`s);{.qetl.log.info[`x;"fetched";enlist[`rows]!enlist 3]};enlist(::)];
+    .qunit.assertEquals[last_msg[];"fetched rows=3 worker=`w source=`s";"own fields first, then the context"]};
+
+test_a_lines_own_field_wins_over_the_context:{[t]
+    .qetl.log.with_context[enlist[`range_from]!enlist 1;{.qetl.log.info[`x;"m";enlist[`range_from]!enlist 2]};enlist(::)];
+    .qunit.assertEquals[last_msg[];"m range_from=2";"a line's own value, not the context's"]};
+
+test_contexts_nest_and_unwind:{[t]
+    .qetl.log.with_context[enlist[`worker]!enlist `w;
+        {.qetl.log.with_context[enlist[`attempt]!enlist 2;{.qetl.log.info[`x;"in";()!()]};enlist(::)];
+         .qetl.log.info[`x;"out";()!()]};enlist(::)];
+    .qunit.assertEquals[.logtest.captured[;2];("in worker=`w attempt=2";"out worker=`w");
+        "the inner scope adds its field, and leaving it takes only that field away"]};
+
+test_the_context_is_restored_when_the_work_throws:{[t]
+    r:@[.qetl.log.with_context[enlist[`worker]!enlist `w;;enlist(::)];{'"boom"};{x}];
+    .qunit.assertEquals[(r;.qetl.log.context);("boom";()!());
+        "the error reaches the caller, and the context cannot leak into the next worker"]};
+
+test_a_unary_primitive_argument_is_passed_not_mistaken_for_no_arguments:{[t]
+    / neg is 101h, like ::; only :: itself means "call f with no arguments".
+    .qunit.assertEquals[.qetl.log.with_context[enlist[`worker]!enlist `w;{x 5};enlist neg];-5;
+        "f is applied to neg"]};
+
+test_with_context_returns_what_the_work_returns:{[t]
+    .qunit.assertEquals[.qetl.log.with_context[enlist[`worker]!enlist `w;{x+1};enlist 1];2;"a pass-through"]};
+
+/ --- values render IN FULL ---------------------------------------------
+/ .
+/ .Q.s1 stops at the console width on KDB-X - 79 characters and "..". A
+/ traced query is exactly the long field that was meant to be read whole.
+
+test_a_long_string_field_is_not_cut_at_the_console_width:{[t]
+    s:500#"select x from t where s=1 ";
+    r:.qetl.log.render enlist[`statement]!enlist s;
+    .qunit.assertEquals[(count r;r like "*..");(count["statement="]+502;0b);
+        "all 500 characters, quoted, and no trailing .."]};
+
+test_a_string_is_quoted_exactly_as_q_writes_it:{[t]
+    / every byte, short enough that -3! is not cut either
+    strs:{"a",x,"b"} each `char$til 256;
+    .qunit.assertEquals[.qetl.log.quoted each strs;-3!'strs;
+        "quotes, backslashes, newlines and every control or high byte escaped as -3! does"]};
+
+test_a_long_list_field_gets_the_widest_console:{[t]
+    / not unlimited - q's widest console is 2000 - but far past 80
+    .qunit.assertTrue[1000<count .qetl.log.value1 til 1000;"a 3,889-character list is not cut at 80"]};
+
+test_rendering_puts_the_console_width_back:{[t]
+    c:system"c";
+    .qetl.log.render `a`b!(til 1000;"x");
+    .qunit.assertEquals[system"c";c;"the widened console is restored after rendering"]};
 
 / --- lazy rendering -----------------------------------------
 
@@ -181,14 +274,22 @@ test_register_adds_dbg_to_torqs_routing_tables_when_present:{[t]
     r:.qetl.log.register[];
     outm:.lg.outmap;
     ![`.lg;();0b;`l`outmap`pubmap];
-    .qunit.assertEquals[(r;outm`DBG);(1b;0);"DBG is registered, and OFF by default so nothing changes for an existing process"]};
+    .qunit.assertEquals[(r;outm`DBG`TRC);(1b;0 0);"DBG and TRC are registered, and OFF by default so nothing changes for an existing process"]};
 
 / --- without TorQ, register is a harmless no-op -------------------------
 
 test_register_without_torq_is_a_no_op:{[t]
     .qunit.assertEquals[.qetl.log.register[];0b;"no .lg to register with, and no error either - the core loads standalone"]};
 
-test_the_level_set_matches_torqs_plus_debug:{[t]
-    .qunit.assertEquals[.qetl.log.levels;`DBG`INF`WARN`ERR;"exactly TorQ's three plus DBG, so outmap and pubmap apply unchanged"]};
+test_the_level_set_matches_torqs_plus_trace_and_debug:{[t]
+    .qunit.assertEquals[.qetl.log.levels;`TRC`DBG`INF`WARN`ERR;"exactly TorQ's three plus TRC and DBG, so outmap and pubmap apply unchanged"]};
+
+
+/ log.q keeps its own copy of the renderer (processes load it without the
+/ library); it must not drift from .qrender's.
+test_the_log_renderer_matches_the_librarys:{[t]
+    / `samples`, not `vs`: vs is a q builtin.
+    samples:(300#"a";til 500;`a`b!1 2;"tab\there";([] x:til 50));
+    .qunit.assertEquals[.qetl.log.value1 each samples;.qrender.full each samples;"value1 and .qrender.full agree"]};
 
 \d .

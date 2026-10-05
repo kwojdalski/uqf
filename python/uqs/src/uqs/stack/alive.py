@@ -32,7 +32,7 @@ from uqs.logger import get_logger
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
-from uqs.stack.procs import _base_process_rows, _read_overrides, resolve_process_config
+from uqs.stack.procs import effective_process_rows, resolve_process_config
 
 log = get_logger(__name__)
 
@@ -55,12 +55,7 @@ def _process_rows(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     """process.csv as the start line sees it - vendored rows, uqf's, the
     operator's overrides - resolved, without writing anything."""
     env = build_env(paths, base_port=base_port)
-    overrides = _read_overrides(paths)
-    rows = []
-    for row in _base_process_rows(paths):
-        eff = {**row, **overrides.get(row["procname"], {})}
-        rows.append(resolve_process_config(eff, env))
-    return rows
+    return [resolve_process_config(row, env) for row in effective_process_rows(paths)]
 
 
 def _command_lines(timeout: float | None) -> list[tuple[int, str]]:

@@ -182,4 +182,10 @@ test_rollup_refuses_a_column_that_is_not_a_dimension:{[t]
         "*is not a dimension of this book*";
         "rolling up onto a column the book is not keyed on cannot mean anything, and naming the mistake beats returning one row"]};
 
+
+test_ccy_exposure_of_an_empty_book_has_the_non_empty_shape:{[t]
+    / It came back unkeyed and without the group columns.
+    e:.qdesk.ccy_exposure[.qdesk.empty_book enlist `desk;`desk];
+    .qunit.assertEquals[(keys e;cols e);(`desk`ccy;`desk`ccy`amount);"keyed on the group columns plus ccy"]};
+
 \d .

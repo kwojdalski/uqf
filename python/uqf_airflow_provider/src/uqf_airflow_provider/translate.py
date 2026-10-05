@@ -51,8 +51,19 @@ def translate(status: WorkerStatus) -> PokeOutcome:
 
 def failure_reason(status: WorkerStatus) -> str:
     """The message to raise Airflow's task-fail exception with. Carries only
-    what q wrote (`error`, `worker`, `instance_id`) — never a task-ordering
-    or retry detail, since q's file has none to give.
+    what q wrote (`error`, `worker`, `instance_id`, `pid`, `host`) — never a
+    task-ordering or retry detail, since q's file has none to give.
+
+    A file that is not `failed` reaches here only when its process is gone
+    (see `sensor.process_gone`): q never got to record an outcome, so the
+    message says that, and where its log is, rather than inventing an error.
     """
+    who = f"{status.worker}/{status.instance_id}"
+    if status.state != "failed":
+        return (
+            f"{who} reported state={status.state}, but its process (pid {status.pid} on "
+            f"{status.host}) is gone - it was killed or crashed before recording an "
+            f"outcome; see `uqs logs {status.instance_id}`"
+        )
     detail = status.error or "no error string was recorded"
-    return f"{status.worker}/{status.instance_id} reported state=failed: {detail}"
+    return f"{who} reported state=failed: {detail}"

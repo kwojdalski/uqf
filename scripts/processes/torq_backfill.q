@@ -30,7 +30,8 @@
 / start line through torq.sh's own `-extras`:
 / .
 /   -worker   the worker name, e.g. demo_deals_backfill
-/   -version  the source_version to record coverage under
+/   -version  the source_version to record coverage under; optional when the
+/             worker declares a default source_version
 /   -from     inclusive lower bound, a q timestamp
 /   -to       exclusive upper bound
 / .
@@ -39,6 +40,11 @@
 /             window as it starts and publishes, and each stage's timing.
 /             `uqs backfill --debug` passes it. Not TorQ's own -debug, which
 /             also stops the log going to its file.
+/   -trace    optional: switch the TRC level on - every query the source is
+/             sent, the SQL statement or the q lambda and its bounds, before
+/             it goes and again with the rows and milliseconds it took - and
+/             DBG with it, as -verbose does: a query is read beside the window
+/             it was sent for. `uqs backfill --trace` passes it.
 /   -on_conflict  optional: upsert, replace, ignore, append or fail - what a
 /             write does with a row whose row_key is already there, for this
 /             run only, over the worker's declared strategy.
@@ -48,7 +54,8 @@
 /             any source is opened or anything written; dry_run fetches and
 /             writes nothing. `uqs backfill --mode` passes it.
 / .
-/ The first four are required and refused when absent. A backfill that defaulted a
+/ -worker, -from and -to are required and refused when absent, and -version
+/ unless the worker declares a default. A backfill that defaulted a
 / range would publish the wrong window and record it as covered, which is the
 / failure coverage exists to make impossible.
 / .
@@ -63,7 +70,7 @@
 
 / The flags this process reads. Listed so the refusal below can report every
 / missing one at once rather than over four restarts.
-required_flags:`worker`version`from`to
+required_flags:`worker`from`to
 
 / Refuse unless every required flag has a value, naming all that do not.
 / .Q.opt keeps each flag's words as a list of strings, so the value is the
@@ -90,8 +97,24 @@ spec_from_flags:{[opts]
     to_ts:"P"$f`to;
     if[null from_ts; '"torq_backfill: -from is not a timestamp: ",f`from];
     if[null to_ts;   '"torq_backfill: -to is not a timestamp: ",f`to];
-    `worker`spec!(`$f`worker;
-        `source_version`range_from`range_to!(`$f`version;from_ts;to_ts))}
+    worker:`$f`worker;
+    `worker`spec!(worker;
+        `source_version`range_from`range_to!(version_from_flags[opts;worker];from_ts;to_ts))}
+
+/ The source_version this run records coverage under: -version when given,
+/ else the worker's declared default, else a refusal - a worker that declares
+/ none is one whose source can be restated, and guessing the release there
+/ files a restatement under the old one.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @param worker the worker's name
+/ @return the version, a symbol
+/ @throws error when neither is there
+version_from_flags:{[opts;worker]
+    if[(`version in key opts) and 0<count opts`version; :`$first opts`version];
+    dv:.qetl.job.bounded.default_version worker;
+    if[null dv;
+        '"torq_backfill: missing -version - ",string[worker]," declares no default source_version, so a run must say which release of the source it records coverage under"];
+    dv}
 
 / Milliseconds since `t0`, for the timing fields every stage logs.
 / @param t0 a timestamp, as .z.p returned it
@@ -102,6 +125,11 @@ elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -verbose was given
 verbose:{[opts] `verbose in key opts}
+
+/ Whether this process was asked for TRC output.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return 1b when -trace was given
+trace:{[opts] `trace in key opts}
 
 / Apply -on_conflict, when given, as this run's strategy - set as the
 / on_conflict config override, which .qetl.job.bounded.on_conflict reads
@@ -277,6 +305,10 @@ run:{[]
 / DBG before anything else logs, so -verbose covers discovery too. .qetl.log is
 / only defined once the tree above has loaded.
 if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
+/ -trace is the most detail there is, so it includes DBG: a traced query is
+/ read beside the window it was sent for, which only DBG logs. The two stay
+/ separate switches in .qetl.log - only this flag ties them.
+if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
 .qetl.log.dbg[`backfill;"debug logging on";
     `procname`pid`port`cwd!(.proc.procname;.z.i;system"p";first system"pwd")];
 

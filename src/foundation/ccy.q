@@ -69,4 +69,32 @@ ccy_pair_legs:{[pair]
     s:string canonical;
     `base`quote!(`$3#s;`$-3#s)};
 
+
+/ ------------------------------------------------------------------ PIPS
+
+/ Pip size by QUOTE currency, where it is not the 0.0001 most pairs use.
+/ One entry per exception, so a new one is a line here, not a literal at
+/ every producer: a JPY slip moves a markout 100x and passes every check
+/ (#623).
+pip_size_by_quote:(enlist `JPY)!enlist 0.01
+
+/ The pip size of a pair: 0.01 for a JPY quote, 0.0001 otherwise.
+/ @param pair a pair, or a list of pairs, in any format normalize_ccy_pair accepts
+/ @return the pip size, as a float - one per pair for a list
+/ @eg .qccy.pip_size `EURUSD`USDJPY  -> 0.0001 0.01
+pip_size:{[pair]
+    / One pair is a symbol atom OR a string ("usd/jpy"): (),pair would have
+    / taken a string's characters for pairs.
+    one:(0>type pair) or 10h=type pair;
+    quotes:{(ccy_pair_legs x)`quote} each $[one; enlist pair; pair];
+    sz:0.0001^pip_size_by_quote quotes;
+    $[one; first sz; sz]}
+
+/ How many pips one unit of price is: 10000 for EURUSD, 100 for USDJPY.
+/ What .qexec.markout and every `pip_factor` column multiply by.
+/ @param pair a pair, or a list of pairs
+/ @return the factor, as a long - one per pair for a list
+/ @eg .qccy.pip_factor `EURUSD`USDJPY`EURJPY  -> 10000 100 100
+pip_factor:{[pair] "j"$1%pip_size pair}
+
 \d .

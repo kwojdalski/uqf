@@ -148,7 +148,7 @@ summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
                                       Responds; --timeout defaults to 120s,
                                       --probe-timeout to 0.5s per process;
                                       --debug adds each process's load time)
-backfill WORKER --version V --from T --to T [--on-conflict S] [--mode M] [--port N] [--debug]
+backfill WORKER [--version V] --from T --to T [--on-conflict S] [--mode M] [--port N] [--debug] [--wait]
                                       run a bounded worker over [--from, --to); dates
                                       without an offset are UTC. Passed to the process
                                       as flags, never environment variables. --debug
@@ -157,11 +157,11 @@ backfill WORKER --version V --from T --to T [--on-conflict S] [--mode M] [--port
                                       fail) overrides the worker's own for this run.
                                       --mode validate|plan|dry-run|run: validate and
                                       plan open nothing and write nothing, dry-run
-                                      fetches and writes nothing
-run status|list|show RUN_ID|audit DATASET --from T --to T|migrate
-                                      the run ledger: unfinished runs, every run,
-                                      one run's facts, one window across runs, and
-                                      the one-off upgrade of an older ledger
+                                      fetches and writes nothing. --version defaults
+                                      to the worker's declared source_version
+                                      Exits once torq.sh has started the process;
+                                      --wait follows the run and exits with its
+                                      outcome (0 completed/idle, 1 failed or died)
 data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
             [--table T]... [--port N] [--dry-run]
                                       replay a tickerplant log into the HDB. With
@@ -169,6 +169,18 @@ data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
                                       the running plant and hdb process - including
                                       the base port (see below)
 data hdb-check [--fix]                HDB partitions missing a declared table or column
+gaps JOB --from T --to T              where a streaming job was not up and subscribed,
+                                      and the backfill that refills each gap when a
+                                      worker fills what the job publishes
+run status                            runs that began and never finished, including
+                                      runs whose process died
+run list                              every run in the ledger, newest first, with its
+                                      outcome
+run show RUN_ID                       one run and its facts, then its log files and
+                                      the command that re-runs (resumes) its range -
+                                      see guides/when-it-breaks.md
+run audit DATASET --from T --to T     every fact about one window, from every run
+                                      that published it
 remove output [--match REGEX] [--dry-run]
                                       wipe output/uqs/, or part of it
 remove checkpoint WORKER              delete a worker's checkpoint, so its next run
@@ -508,7 +520,14 @@ columns derived from the same declarations:
 uqs summary                     # all ten columns
 uqs summary --columns status    # the seven status ones, for a narrow terminal
 uqs summary --columns "Process,Depends on,Inputs,Outputs"
+uqs summary --sort Port         # by any column, numeric-aware; --reverse for descending
+uqs summary --sort Status --columns status
 ```
+
+`--sort` takes any column, shown or not, case-insensitively. It sorts `Port` and
+`PID` as numbers, so 659 comes before 6052, and puts empty cells last, as
+`uqs list --sort` does; the two share one implementation. The order reaches
+`--export` too.
 
 ```
 ┃ Process      ┃ Depends on                  ┃ Inputs                ┃ Outputs        ┃
@@ -597,8 +616,10 @@ collected" on a healthy stack.
   connections, and a monitor with none left cannot accept the query `summary`
   reads heartbeats with. So `stack/monitor_budget.py` stops monitoring
   `sortworker`, `reporter`, `housekeeping`, `feed`, then `metrics` processes
-  until the rest fit. Those show `-` in the Heartbeat column, and `summary`
-  names them. On a fully licensed kdb+/KDB-X nothing is dropped.
+  until the rest fit. Those show `-` in the Heartbeat column. `uqs start`,
+  `restart`, `up` and `summary` each print one line naming the proctypes given
+  up, counting only types something in the fleet runs as. On a fully licensed
+  kdb+/KDB-X, or on PeachQ, nothing is dropped.
 - **uqf's standing ETLs (`metrics`) are monitored too**; `backfill` workers are
   not, because a finished job's heartbeat would age into a false `error`.
 
@@ -769,6 +790,33 @@ uqs query ".qetl.log.debug 1b" --port <port>              # a process already ru
 
 `-verbose` is uqf's own flag, taken by every process script. It is not TorQ's
 `-debug`, which also stops the log going to its file.
+
+One level below that, `uqs backfill <worker> ... --trace` logs every query the
+source is sent (the SQL statement, or the q lambda and its bounds) and includes
+everything `--debug` shows. The log record stays one line, so `-f` and `grep`
+keep working, with the query as a full-length q string. `uqs logs` prints it as
+a header and an indented block:
+
+```
+query sent range_from=2026.09.10D00:00:00.000000000 range_to=2026.09.11D00:00:00.000000000
+    {[from_ts;to_ts]
+            select deal_id from `demo_deals
+                where deal_time>=from_ts, deal_time<to_ts
+          }
+```
+
+`uqs logs --level DEBUG` hides these lines again.
+
+Every line logged while a window runs carries what it belongs to: `worker`,
+`run`, the window's `range_from`/`range_to`, and, around the fetch, `source` and
+`attempt`. Request traces add `transport` (`ipc`, `odbc` or `local`) and a
+`request` number shared by that request's `sent`, `returned` and `failed` lines.
+So two queries one window sends, such as a source that merges two tables, have
+the same worker, run and window but different request numbers, and the fetch,
+transform and write lines around them sort into the same window. A sidecar's own
+lines get these fields too, without logging them itself. The context is set by
+`.qetl.log.with_context` and removed when the window ends, whether it succeeded
+or failed. With trace off, no request is numbered or formatted.
 
 ### CLI's own logging
 

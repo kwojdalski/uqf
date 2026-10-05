@@ -439,7 +439,20 @@ test_facts_reports_the_span_and_the_trade_count:{[t]
     tape:.qpipe.source.demo_events.fixture[];
     r:.qpipe.job.demo_events_backfill.facts[tape];
     .qunit.assertEquals[r`distinct_syms;count distinct tape`sym;"one count per distinct symbol"];
-    .qunit.assertEquals[r`trade_events;sum `trade=tape`action;"only trades are counted as trade events"];
+    .qunit.assertEquals[r`trade_events;sum "j"$`trade=tape`action;"only trades are counted as trade events"];
+    / A long, not an int: run facts are stored as text, and an int read "2i" (#606).
+    .qunit.assertEquals[type r`trade_events;-7h;"a long"];
+    .qunit.assertEquals[.qetl.run.as_text r`trade_events;string r`trade_events;"stored as a plain number"];
     .qunit.assertTrue[(r[`event_span]) like "*/*";"the span is from/to, not a single instant"]};
+
+
+/ Grouping by a column other than sym: both functions pre-selected
+/ time/sym(/action) only, so `venue threw 'venue.
+test_ratios_and_rates_group_by_any_column:{[t]
+    tp:update venue:`LN`LN`NY`NY from .evttest.tape[`cancel`trade`cancel`trade;1 1 -1 -1;100 100 100 100];
+    r:.qmicro.cancel_to_trade_ratio_by[tp;0Nn;enlist `venue];
+    .qunit.assertEquals[exec ratio from 0!r;1 1f;"one cancel per trade at each venue"];
+    a:.qmicro.trade_arrival_rate_by[tp;0Nn;enlist `venue];
+    .qunit.assertEquals[exec trades from 0!a;1 1;"one trade at each venue"]};
 
 \d .

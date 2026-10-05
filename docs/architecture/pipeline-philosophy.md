@@ -61,6 +61,15 @@ system nobody has.
 Consequently the framework advertises what it enforces and stays quiet about
 what it merely usually does.
 
+The same rule decides where a weaker fact goes. A streaming job records when it
+was up and subscribed ([`.qetl.uptime`](../../src/etl/core/uptime.q)), so
+`uqs gaps` can name the holes in its output. That is weaker than coverage: a job
+can be subscribed and publish nothing. So it has a table of its own and never
+enters the coverage ledger, whose rows a backfill trusts enough to skip a
+window. A weak claim filed beside a strong one would borrow its strength. Each
+uptime session also ends at its last beat rather than at the moment the job
+stopped: it under-claims by up to one beat, never over-claims.
+
 ## 3. Nothing exists that does nothing.
 
 A capability that is defined, tested, and reached from no live path is worse
@@ -172,10 +181,29 @@ Current rows carry a far-future sentinel (`0Wp`) rather than a null, so an as-of
 comparison needs no special case. `.qetl.run` uses the same device for a run
 that has not ended.
 
-There is exactly one mutation in the ETL tree --- `.qetl.run.finish` updating
-the row `begin` wrote --- and it is argued for in place: a run's outcome is not
-known when it starts, and appending a second row would make "how many runs were
-there" ambiguous.
+There are exactly two mutations of a shared record in the ETL tree, each argued
+for in place:
+
+- `.qetl.run.finish` updates the row `begin` wrote. A run's outcome is not known
+  when it starts, and appending a second row would make "how many runs were
+  there" ambiguous.
+- `.qetl.uptime.beat` moves a session's `last_seen`. A session is one interval,
+  and a row per beat would turn "when was the job up" into an aggregation over a
+  table that grows every minute.
+
+**Nothing is ever deleted, and retention is not defined.** The ledgers, the
+uptime record and the HDB's partitions grow for as long as the stack runs; no
+process prunes them. At this tree's scale that is a choice, not an oversight.
+Removing data is an operator's act (`uqs remove output`, deleting a partition),
+and nothing in the framework assumes old rows are gone.
+
+**Schema change is half covered.** A column or table *added* to the schema
+reaches older partitions: `uqs data hdb-check` reports a partition missing one,
+and `--fix` fills it
+([`checks/hdb_shape.py`](../../python/uqs/src/uqs/checks/hdb_shape.py)). A
+column whose *type* changes, or that is *renamed*, has no path: older partitions
+keep the old shape, and a query across both fails. Today that means a new column
+or a new table rather than a change in place.
 
 ## 8. Authority is split, and written down
 

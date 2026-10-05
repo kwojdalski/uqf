@@ -17,6 +17,7 @@ from typing import Any
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.procs import list_process_names
+from uqs.stack.trace_render import render_query_trace
 
 log = get_logger(__name__)
 
@@ -36,10 +37,19 @@ log = get_logger(__name__)
 # contain "|", so split with maxsplit rather than a plain split.
 _LOG_FIELDS = ("time", "host", "proctype", "procname", "loglevel", "id", "message")
 
-# .lg.outmap's own level vocabulary (torq.q's ERROR/ERR/INF/WARN) mapped
-# onto loguru's level names.
-_LOGURU_LEVEL = {"ERROR": "ERROR", "ERR": "ERROR", "WARN": "WARNING", "INF": "INFO"}
-_LEVEL_ORDER = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
+# .lg.outmap's own level vocabulary (torq.q's ERROR/ERR/INF/WARN) plus the two
+# .qetl.log adds below it (DBG, TRC - src/etl/core/log.q), mapped onto
+# loguru's level names. DBG and TRC were missing, so every debug and trace
+# line fell through to INFO: labelled INFO, and kept by `--level INFO`.
+_LOGURU_LEVEL = {
+    "ERROR": "ERROR",
+    "ERR": "ERROR",
+    "WARN": "WARNING",
+    "INF": "INFO",
+    "DBG": "DEBUG",
+    "TRC": "TRACE",
+}
+_LEVEL_ORDER = {"TRACE": 5, "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
 
 # Dedicated format for `logs` output - the record's own {time}/{function}/
 # {line} are Python's (always logger/core.py's _emit, useless here); the kdb
@@ -101,7 +111,10 @@ def _configure_kdb_log_sink() -> Any:
     """
     from uqs.logger.core import setup_logging
 
-    return setup_logging(level="DEBUG", format_string=_kdb_or_uqs_format)
+    # TRACE, not DEBUG: a TRC line from a `--trace` backfill is a loguru TRACE
+    # record, and a DEBUG sink drops it. uqs logs nothing at TRACE itself, so
+    # this lets through the processes' trace lines and nothing else.
+    return setup_logging(level="TRACE", format_string=_kdb_or_uqs_format)
 
 
 def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:
@@ -160,19 +173,40 @@ def _log_files(paths: UqsPaths, procnames: list[str]) -> list[Path]:
     return [f for f in _expected_log_files(paths, procnames) if f.is_file()]
 
 
-def _passes_level(level: str, min_level: str | None) -> bool:
+def min_level_name(min_level: str | None) -> str | None:
+    """`--level` as a loguru level name, or None for no filter.
+
+    Takes the names the log lines print (WARN, ERR, INF, DBG, TRC) as well as
+    loguru's (WARNING, ERROR, ...), case-insensitively. Anything else is
+    refused: it used to rank as 0 and pass every line, so `--level WARN` -
+    the spelling a reader copies from the log itself - filtered nothing.
+    """
     if min_level is None:
+        return None
+    name = min_level.strip().upper()
+    name = _LOGURU_LEVEL.get(name, name)
+    if name not in _LEVEL_ORDER:
+        known = sorted(set(_LEVEL_ORDER) | set(_LOGURU_LEVEL), key=str)
+        raise UqsError(f"--level {min_level!r} is not a level: one of {', '.join(known)}")
+    return name
+
+
+def _passes_level(level: str, min_level: str | None) -> bool:
+    wanted = min_level_name(min_level)
+    if wanted is None:
         return True
-    return _LEVEL_ORDER.get(level, 0) >= _LEVEL_ORDER.get(min_level.upper(), 0)
+    return _LEVEL_ORDER.get(level, 0) >= _LEVEL_ORDER[wanted]
 
 
 def _emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
     level = _LOGURU_LEVEL.get(rec["loglevel"], "INFO")
     if not _passes_level(level, min_level):
         return
+    # A query trace's code is shown as a block; every other message as it is.
+    # Here, the one path both the recent and the follow modes print through.
     log.bind(
         kdb_time=_format_kdb_time(rec["time"]), procname=rec["procname"], proctype=rec["proctype"]
-    ).log(level, rec["message"])
+    ).log(level, render_query_trace(rec["message"]))
 
 
 def get_recent_logs(
@@ -192,6 +226,7 @@ def get_recent_logs(
             "- has the demo been started at least once?"
         )
 
+    min_level_name(min_level)
     return _recent_records(files, lines, min_level)
 
 
@@ -247,6 +282,7 @@ def follow_logs(
             f"no log files found for {procnames} under {paths.torqdata / 'logs'} "
             "- has the demo been started at least once?"
         )
+    min_level_name(min_level)  # refuse a bad --level before following anything
     _follow(files, min_level, history=lambda: _recent_records(files, lines, min_level))
 
 
@@ -276,6 +312,7 @@ def follow_during(
     expected = _expected_log_files(paths, procnames)
     present = [f for f in expected if f.is_file()]
     awaited = [f for f in expected if not f.is_file()]
+    min_level_name(min_level)
     _follow(present, min_level, awaited=awaited, before=start)
 
 

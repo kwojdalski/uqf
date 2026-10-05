@@ -76,9 +76,8 @@ check_market_data_quality:{[quotes;max_spread_bps]
 / quoting but never ticks at all needs live process/feed monitoring (see
 / lib/torq/code/dqc/tableticking.q for that different, complementary
 / concern), which this pure-function library has no way to observe.
-/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes,
-/   sorted `sym`time xasc (same as every other as-of lookup in this library
-/   - see forwards.q's cross_book_at)
+/ @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes -
+/   any row order, needn't be sorted
 / @param as_of only consider quotes at or before this time
 / @param max_age a gap at or below this is `ok; above it is `stale
 / @return a table sym/last_ts/age/status (`ok` or `stale`), sorted
@@ -94,11 +93,15 @@ check_stale_quotes:{[quotes;as_of;max_age]
     / inside a where clause the column shadows the parameter - every row
     / would be compared with its own as_of instead of the cutoff.
     cutoff:as_of;
-    latest:select last_ts:last time by sym from quotes where time<=cutoff;
+    / `max`, not `last`: the latest quote time whatever the row order. `last`
+    / read the time of the last ROW, so a merged feed or an RDB+HDB union
+    / out of order called a sym stale that had quoted seconds ago (#589).
+    latest:select last_ts:max time by sym from quotes where time<=cutoff;
     result:([] sym:exec sym from latest; last_ts:exec last_ts from latest);
     result:update age:cutoff-last_ts from result;
     result:update status:`ok`stale (age>max_age) from result;
-    `status xasc result};
+    / xdesc: `stale` before `ok`, as documented - xasc sorted them alphabetically.
+    `status xdesc result};
 
 / Flattens a list of already-run check tables (any of the above, or a
 / caller's own) into one "what needs attention" report - every row whose
@@ -118,7 +121,7 @@ summarize_checks:{[named_checks]
         check_name:pair 0; t:pair 1;
         bad:select from t where status<>`ok;
         if[0=count bad; :0#([] check:`symbol$(); status:`symbol$(); detail:`char$())];
-        ([] check:count[bad]#check_name; status:bad`status; detail:.Q.s1 each bad)
+        ([] check:count[bad]#check_name; status:bad`status; detail:.qrender.full each bad)
     } each named_checks;
     rows};
 

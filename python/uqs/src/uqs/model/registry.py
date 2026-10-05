@@ -144,6 +144,7 @@ def _pipeline(d: Declaration, table: str | None, offset: int) -> Pipeline:
             worker=d.name,
             source=d.source or None,
             dataset=d.dataset or None,
+            default_version=d.source_version or None,
             startwithall="0",
             offset=offset,
             note=d.note,

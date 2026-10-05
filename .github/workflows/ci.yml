@@ -21,6 +21,10 @@ jobs:
     env:
       # uv run inside the hooks must use the committed resolution.
       UV_LOCKED: "true"
+      # The PeachQ source CI builds and runs: a commit, because the release
+      # asset under one tag has been replaced more than once. Moving it is
+      # the deliberate act of taking a newer PeachQ.
+      PEACHQ_COMMIT: 1925d063ddd87195b366efee1b912b06623c6a2d
       # These govern local commits/branch names, not a detached PR merge ref.
       # q-docs-peachq needs UQF_PEACHQ, and PeachQ is installed only after the
       # hooks run; "Run the marked q blocks in docs/ on PeachQ" below covers it.
@@ -166,27 +170,58 @@ jobs:
         # in the declaring q files.
         if: ${{ !cancelled() }}
         run: python3 scripts/gates/check_declaration_reference.py
-      - name: Install PeachQ (pinned)
+      - name: Restore PeachQ built from its pinned commit
         # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can
         # have one - which makes it the only interpreter CI can run q with.
-        # Pinned by version AND by the sha256 the release publishes, and put
-        # beside the tree, NOT on PATH: every other step still finds no q, so
-        # nothing here can be mistaken for a KDB-X run. It is reached only by
-        # the steps below, which name it through QCMD with UQF_Q_IMPL=peachq,
-        # and scripts/test.py asks the binary which q it is before any lane.
+        #
+        # Built from a pinned COMMIT, not downloaded. The v0.88 release asset
+        # was rebuilt and re-uploaded under the same tag three times in five
+        # days (#578 and after), each turning every run red at the checksum
+        # until someone re-pinned to whatever upstream had published - which
+        # makes the pin a formality. A commit hash cannot change under us:
+        # what CI runs moves only when PEACHQ_COMMIT does. The binary is
+        # cached by that hash, so a run compiles it at most once per commit.
+        #
+        # Put beside the tree, NOT on PATH: every other step still finds no
+        # q, so nothing here can be mistaken for a KDB-X run. It is reached
+        # only by the steps below, which name it through QCMD with
+        # UQF_Q_IMPL=peachq, and scripts/test.py asks the binary which q it
+        # is before any lane.
+        id: peachq-cache
         if: ${{ !cancelled() }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/peachq-bin
+          key: peachq-${{ env.PEACHQ_COMMIT }}-ubuntu-24.04-x86-64-v2
+      - name: Build PeachQ from its pinned commit
+        # Their own release build is `make q`; this is it, with the portable
+        # x86-64-v2 floor their Linux archives use rather than -march=native,
+        # so a cached binary runs on whichever runner restores it. About 40s.
+        if: ${{ !cancelled() && steps.peachq-cache.outputs.cache-hit != 'true' }}
         shell: bash
-        env:
-          PEACHQ_VERSION: v0.88
-          PEACHQ_SHA256: 6bd4ba3840f721005c37cab99175e02b91ad4c7116a5eb1d6253086a13678bd6
         run: |
           set -euo pipefail
-          url="https://github.com/peachq-org/peachq/releases/download/${PEACHQ_VERSION}/peachq-linux-x86_64.tar.gz"
-          curl -sSfL "$url" -o "$RUNNER_TEMP/peachq.tar.gz"
-          echo "${PEACHQ_SHA256}  $RUNNER_TEMP/peachq.tar.gz" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/peachq"
-          tar -xzf "$RUNNER_TEMP/peachq.tar.gz" -C "$RUNNER_TEMP/peachq"
-          echo "PEACHQ_BIN=$RUNNER_TEMP/peachq/q" >> "$GITHUB_ENV"
+          src="$RUNNER_TEMP/peachq-src"
+          git init -q "$src"
+          git -C "$src" fetch -q --depth 1 https://github.com/peachq-org/peachq "$PEACHQ_COMMIT"
+          git -C "$src" checkout -q FETCH_HEAD
+          test "$(git -C "$src" rev-parse HEAD)" = "$PEACHQ_COMMIT"
+          make -C "$src" -j"$(nproc)" q RAY_MARCH=x86-64-v2 > "$RUNNER_TEMP/peachq-build.log" 2>&1 \
+            || { tail -40 "$RUNNER_TEMP/peachq-build.log"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/peachq-bin"
+          cp "$src/q" "$RUNNER_TEMP/peachq-bin/q"
+      - name: Install PeachQ beside the tree
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A cached or freshly built binary that will not even start fails
+          # here, by name, rather than as a confusing first lane.
+          test -x "$RUNNER_TEMP/peachq-bin/q"
+          printf 'exit 0\n' > "$RUNNER_TEMP/peachq-smoke.q"
+          "$RUNNER_TEMP/peachq-bin/q" "$RUNNER_TEMP/peachq-smoke.q" -q
+          echo "PEACHQ_BIN=$RUNNER_TEMP/peachq-bin/q" >> "$GITHUB_ENV"
+          echo "PeachQ: built from peachq-org/peachq@${PEACHQ_COMMIT}" >> "$GITHUB_STEP_SUMMARY"
       - name: Run the marked q blocks in docs/ on PeachQ
         # A block marked `<!-- q-example: ... -->` is a claim that it runs;
         # this holds every one to it. Blocking: a marked block that fails

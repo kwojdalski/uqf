@@ -18,6 +18,7 @@ import {
   type Row,
   filterValue,
   validateRange,
+  writeToken,
 } from "./api";
 import { useResource } from "./useResource";
 
@@ -347,8 +348,9 @@ function BackfillView() {
             <Table
               rows={resource.data.workers.map((worker) => ({
                 ...worker,
-                outcome:
-                  worker.state === "idle"
+                outcome: worker.abandoned
+                  ? "Abandoned · process gone, no outcome recorded"
+                  : worker.state === "idle"
                     ? "Success · no work"
                     : worker.state === "completed"
                       ? "Success · work completed"
@@ -905,6 +907,28 @@ function ProcessPicker({
  * off - discovering that by pressing "Stop all" and reading a 403 would mean
  * having already tried to stop the fleet.
  */
+/**
+ * What setting a worker-config key achieved, in words. An override is not the
+ * top layer: an environment variable outranks it, and the response used to
+ * read as a success even then (#634). "Saved" is said only when the override
+ * is what the process now reads.
+ */
+export function workerConfigOutcome(r: WorkerConfigResult): string {
+  if (r.shadowed) {
+    return (
+      `Not in effect: ${r.key} was set, but ${r.env_var} in the environment wins ` +
+      `(${r.env_var}=${r.effective_value ?? ""}). The override applies only once that variable is unset.`
+    );
+  }
+  if (r.effective_layer === "overrides") {
+    return `Saved: ${r.key} = ${r.value}, and the process now reads it.`;
+  }
+  return (
+    `Set ${r.key}, but the process reports its value from ` +
+    `${r.effective_layer ?? "an answer this page does not recognise"}, not the override.`
+  );
+}
+
 function ControlView() {
   const status = useResource<ControlStatus>("/control");
   const [busy, setBusy] = useState("");
@@ -935,6 +959,7 @@ function ControlView() {
     range_from: "",
     range_to: "",
   });
+  const [token, setToken] = useState(writeToken.get());
 
   async function run(label: string, fn: () => Promise<string>) {
     setBusy(label);
@@ -982,6 +1007,26 @@ function ControlView() {
         </p>
       )}
       {result && <pre className="result">{result}</pre>}
+
+      <div className="panel">
+        <label>
+          Write token
+          <input
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(e) => {
+              setToken(e.target.value);
+              writeToken.set(e.target.value);
+            }}
+          />
+        </label>
+        <p className="sidebar-note">
+          The server&rsquo;s <code>UQF_FRONTEND_WRITE_TOKEN</code>, sent with
+          every action below. Kept in this tab only. Not needed under{" "}
+          <code>npm run dev</code>, whose proxy adds it.
+        </p>
+      </div>
 
       <form
         className="panel"
@@ -1096,7 +1141,7 @@ function ControlView() {
               wcfg,
               "PUT",
             );
-            return `${r.key} = ${r.value}\n${JSON.stringify(r.explain, null, 2)}\n\n${r.note}`;
+            return `${workerConfigOutcome(r)}\n\n${r.note}`;
           });
         }}
       >
@@ -1132,7 +1177,7 @@ function ControlView() {
           e.preventDefault();
           run("backfill", async () => {
             const r = await mutate<BackfillStarted>("/control/backfill", bf);
-            return `started ${r.worker} (pid ${r.pid})\nwatch ${r.status_path}`;
+            return `started ${r.worker} as ${r.procname}\nwatch ${r.status_path}, or \`uqs logs ${r.procname}\``;
           });
         }}
       >
@@ -1180,7 +1225,9 @@ export default function App() {
         ? "Connected"
         : health.data?.gateway === "unreachable"
           ? "Unreachable"
-          : "Connecting";
+          : health.data?.gateway === "wrong_process"
+            ? "Wrong process"
+            : "Connecting";
   return (
     <div className="app">
       <header>
@@ -1189,6 +1236,11 @@ export default function App() {
         </a>
         <div className="gateway" role="status">
           Gateway <Badge value={gateway} />
+          {/* The server's own words on what is wrong and what to set - for
+              wrong_process, the port variable that points at the gateway. */}
+          {health.data?.detail ? (
+            <span className="gateway-detail">{health.data.detail}</span>
+          ) : null}
         </div>
       </header>
       <div className="workspace">

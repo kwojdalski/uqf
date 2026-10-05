@@ -12,7 +12,7 @@
 / and this file does not reimplement any of it. Every message here ends up
 / in .lg.l, so `-jsonlogs`, log rolling and publication all keep working.
 / .
-/ THE TWO THINGS TORQ LACKS
+/ THE THINGS TORQ LACKS
 / .
 /   1. A DEBUG level. .lg.outmap knows ERROR/ERR/INF/WARN only, and
 /      `debug_level`, `verbose` and `log_verbose` in the requirements imply
@@ -21,7 +21,13 @@
 /      on (and a stuck worker gives you nothing). DBG is registered in
 /      outmap at 0 - off - and switched on per process with .qetl.log.debug[].
 / .
-/   2. Structure. A worker logging "window done" is useless in aggregate;
+/   2. A TRACE level, below DEBUG: the exact query a source sends - the SQL
+/      statement, or the q lambda and its arguments - logged before it goes
+/      out and again with what came back. One per window, and long, so it
+/      has its own switch, .qetl.log.trace[]: switching debug on to follow
+/      a run must not bury it under every statement.
+/ .
+/   3. Structure. A worker logging "window done" is useless in aggregate;
 /      a worker logging window=[from;to) rows=1234 is greppable across a
 /      fleet. Every function here takes a DICT of fields and renders it
 /      k=v, so the field names are the same in every worker and a log line
@@ -39,9 +45,13 @@
 
 \d .qetl.log
 
-/ Level names, in severity order. DBG is this file's addition; the other
-/ three are TorQ's own, kept identical so outmap and pubmap apply unchanged.
-levels:`DBG`INF`WARN`ERR
+/ Level names, in severity order. TRC and DBG are this file's additions; the
+/ other three are TorQ's own, kept identical so outmap and pubmap apply
+/ unchanged.
+levels:`TRC`DBG`INF`WARN`ERR
+
+/ The levels off unless a process switches them on, each with its own switch.
+quiet:`TRC`DBG
 
 / Register DBG with TorQ's routing tables if TorQ is loaded and has not
 / heard of it. Off by default (0): nothing changes for an existing process
@@ -49,8 +59,8 @@ levels:`DBG`INF`WARN`ERR
 / init rather than exactly once.
 register:{[]
     if[not torq_loaded[]; :0b];
-    if[not `DBG in key .lg.outmap; .lg.outmap[`DBG]:0];
-    if[not `DBG in key .lg.pubmap; .lg.pubmap[`DBG]:0];
+    {if[not x in key .lg.outmap; .lg.outmap[x]:0];
+     if[not x in key .lg.pubmap; .lg.pubmap[x]:0]} each quiet;
     1b}
 
 / Switch debug output on (or off) for THIS process.
@@ -67,13 +77,62 @@ debug:{[on]
 
 debug_enabled:0b
 
+/ Switch trace output - every query a source sends - on (or off) for THIS
+/ process. Independent of debug: either can be on without the other.
+/ @param on 1b to emit TRC lines, 0b to suppress them
+trace:{[on]
+    register[];
+    if[torq_loaded[]; .lg.outmap[`TRC]:$[on;1;0]];
+    trace_enabled::on;
+    on}
+
+trace_enabled:0b
+
+/ Private: is a quiet level switched on, outside TorQ?
+switched:{[level] $[level=`DBG; debug_enabled; level=`TRC; trace_enabled; 1b]}
+
 / Private: render a field dict as space-separated k=v, values via .Q.s1 so a
 / symbol, a timestamp and a string all render unambiguously and a list does
 / not spread across the line. Field ORDER is preserved, so a worker that
 / always logs (worker;window;rows) produces columns a human can scan.
 render:{[fields]
     if[0=count fields; :""];
-    " " sv {[k;v] string[k],"=",.Q.s1 v}'[key fields;value fields]}
+    " " sv {[k;v] string[k],"=",value1 v}'[key fields;value fields]}
+
+/ Private: one field's value as q text, IN FULL.
+/ .
+/ Not bare .Q.s1: on KDB-X it stops at the console width (\c, 80 columns by
+/ default) and ends the text with "..", so a traced SQL statement or query
+/ lambda was logged cut off at 79 characters - the one place the whole
+/ query was meant to be visible. A string is escaped here, with no limit;
+/ anything else is rendered with the console widened to its 2000-column
+/ maximum for the one call, and put back even if rendering throws.
+/ @param v any value
+/ @return its q literal, as .Q.s1 spells it
+value1:{[v]
+    if[10h=type v; :quoted v];
+    c:@[system;"c";{[e] ()}];
+    if[2<>count c; :.Q.s1 v];
+    @[system;"c ",string[c 0]," 2000";::];
+    r:@[.Q.s1;v;{[e] "'",e}];
+    @[system;"c "," " sv string c;::];
+    r}
+
+/ Private: a string as a q string literal - quoted, with \ " newline,
+/ carriage return and tab escaped as q writes them, and every other byte
+/ outside printable ASCII as a three-digit octal escape - exactly as -3!
+/ spells it, without its console-width cut.
+/ @param s a string
+/ @return the literal, e.g. "\"a\\nb\""
+quoted:{[s]
+    esc:{[ch] i:`int$ch;
+        $[ch in "\\\""; "\\",ch;
+          ch="\n"; "\\n";
+          ch="\r"; "\\r";
+          ch="\t"; "\\t";
+          (i<32) or i>126; "\\",raze string 8 8 8 vs i;
+          enlist ch]};
+    "\"",(raze esc each s),"\""}
 
 / Private: is TorQ's logging loaded?
 / .
@@ -89,13 +148,13 @@ torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
 / Private: the transport. TorQ's .lg.l when loaded, stdout otherwise.
 / .
 / Level gating outside TorQ mirrors TorQ's own default: DBG is suppressed
-/ unless debug[] was called, everything else prints. That way a test that
-/ asserts "this DBG line was not emitted" gets the same answer whether or
-/ not torq.q happens to be loaded.
+/ unless debug[] was called, TRC unless trace[] was, everything else prints.
+/ That way a test that asserts "this DBG line was not emitted" gets the same
+/ answer whether or not torq.q happens to be loaded.
 emit:{[level;id;msg]
     $[torq_loaded[];
         .lg.l[level;`etl;id;id;msg;()!()];
-      (level=`DBG) and not debug_enabled;
+      not switched level;
         ::;
       -1 "|" sv string[(.z.p;level;id)],enlist msg]}
 
@@ -106,9 +165,7 @@ emit:{[level;id;msg]
 enabled:{[level]
     $[torq_loaded[];
         0<0^.lg.outmap level;
-      level=`DBG;
-        debug_enabled;
-      1b]}
+      switched level]}
 
 / Private: assemble and emit one line.
 / .
@@ -129,10 +186,61 @@ enabled:{[level]
 / nothing. Wrapping the emit has no such ambiguity.
 line:{[level;id;text;fields]
     if[enabled level;
-        emit[level;id;$[0=count fields; text; text," ",render fields]]];
+        f:with_scope fields;
+        emit[level;id;$[0=count f; text; text," ",render f]]];
     }
 
-/ The four levels. `id` is the worker or component name - it becomes
+/ ------------------------------------------------------- SCOPED CONTEXT
+/ .
+/ What a line is ABOUT - the run, worker, source, window and attempt it was
+/ logged inside - added to every line logged in that scope, so a request
+/ trace, the fetch that made it, the sidecar's own normalisation and the
+/ write after it can all be put side by side. A line's own field of the
+/ same name wins; context fields follow the line's own.
+/ .
+/ Set by with_context around a piece of work and restored when it ends,
+/ whether it returned or threw, so one worker's or window's context can
+/ never leak into the next.
+
+context:()!()
+
+/ Private: a line's fields, then whatever context it does not set itself.
+with_scope:{[fields]
+    if[0=count context; :fields];
+    f:$[0=count fields; ()!(); fields];
+    f,(key[context] except key f)#context}
+
+/ Run f[args] with `ctx` added to the context, and restore the context
+/ afterwards - on success or on error, which is rethrown.
+/ @param ctx a dict of fields, e.g. `worker`source!(`w;`s)
+/ @param f the function to run
+/ @param args its arguments, as a list; enlist(::) for a niladic f
+/ @return what f returns
+/ @eg .qetl.log.with_context[enlist[`worker]!enlist `w;{x+1};enlist 1] -> 2
+with_context:{[ctx;f;args]
+    / `outer`, not `prev`: prev is a q builtin, and assigning it throws
+    / 'assign when the file loads.
+    outer:context;
+    context::outer,ctx;
+    restore:{[outer;e] .qetl.log.context:outer; 'e}[outer];
+    / A niladic f through @, not `.`: on KDB-X `.[f;enlist ::;handler]` throws
+    / an UNCATCHABLE 'type - the handler never runs, and the context leaked
+    / into every line after it.
+    / The generic null itself, not any 101h: a unary primitive (neg, til)
+    / is 101h too, and passing one as the argument is a real call. Spell the
+    / niladic case enlist(::) - `enlist ::` is a bare primitive, not a list.
+    niladic:(args~(::)) or (1=count args) and (::)~first args;
+    r:$[niladic; @[f;::;restore]; .[f;args;restore]];
+    context::outer;
+    r}
+
+/ Number one outgoing request, so its sent, returned and failed lines carry
+/ the same `request` and two requests in one window stay apart.
+/ @return the next request number in this process
+request_seq:0
+next_request:{[] request_seq::request_seq+1; request_seq}
+
+/ The five levels. `id` is the worker or component name - it becomes
 / TorQ's `id` column, so `select from logmsg where id=`demo_deals_backfill`
 / works on a published log.
 / @param id the worker or component, as a symbol
@@ -140,6 +248,7 @@ line:{[level;id;text;fields]
 / @param fields a dict of the values, rendered k=v after the text
 / @eg .qetl.log.info[`demo_deals_backfill;"window published";
 /        `range_from`range_to`rows!(2026.09.11D00:00;2026.09.12D00:00;1234)]
+trc:{[id;text;fields]  line[`TRC;id;text;fields]}
 dbg:{[id;text;fields]  line[`DBG;id;text;fields]}
 info:{[id;text;fields] line[`INF;id;text;fields]}
 warn:{[id;text;fields] line[`WARN;id;text;fields]}

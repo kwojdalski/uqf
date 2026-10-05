@@ -94,7 +94,7 @@ class Pipeline:
     `{KDBBASEPORT}+N` port offset, its process.csv row, and its `database.q`
     table definition - is derived from this single entry, so adding a
     pipeline is one list entry rather than a port constant plus a schema
-    string plus a _base_process_rows() block (and remembering to chain the
+    string plus a _composed_rows() block (and remembering to chain the
     offset comment to the previous one).
 
     `kind` picks the two fields that always move together: a "feed" gets
@@ -144,6 +144,9 @@ class Pipeline:
     # sit apart from subscribe_to/publishes and never reach database.q.
     source: str | None = None
     dataset: str | None = None
+    # The source_version a run uses when `uqs backfill` is given no --version;
+    # None when the worker declares none, and then a run must name one.
+    default_version: str | None = None
 
     @property
     def proctype(self) -> str:

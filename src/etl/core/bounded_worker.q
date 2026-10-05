@@ -181,8 +181,10 @@ optional_cfg:`check`io`facts`partition
 / @param worker the worker's name
 / @param decl dict of source, dataset, width, transform, and optionally
 /   check, facts, partition, io, procname (default `<worker>1), note,
-/   on_conflict (default `upsert - see .qetl.io's CONFLICTS) and target_key
-/   (default the source's row_key - see require_target_key)
+/   on_conflict (default `upsert - see .qetl.io's CONFLICTS), target_key
+/   (default the source's row_key - see require_target_key) and
+/   source_version (the default release a run records coverage under; none
+/   by default, so a run must name one)
 / @throws error naming every missing or malformed field at once
 define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -257,6 +259,15 @@ define:{[worker;decl]
     if[not -11h=type oc;
         '"define: ",string[worker],"'s on_conflict must be a symbol, e.g. `upsert"];
     decl[`on_conflict]:.qetl.io.require_strategy oc;
+    / The source_version a run uses when it names none - for a source that is
+    / never restated, where every run would otherwise be told `v1 forever.
+    / ` declares no default, and then a run must name one: for a source that
+    / CAN be restated, a default would file the restatement under the old
+    / version, and every window would read as already covered.
+    dv:$[`source_version in key decl; decl`source_version; `];
+    if[not -11h=type dv;
+        '"define: ",string[worker],"'s source_version must be a symbol, e.g. `v1 - the release a run records coverage under when it names none"];
+    decl[`source_version]:dv;
     decl[`target_key]:require_target_key[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
@@ -331,6 +342,13 @@ require_target_key:{[worker;decl]
          " does not output (",(", " sv string out),")",
          $[`target_key in key decl;"";" - declare target_key in the output's column names"]];
     k}
+
+/ The source_version a run of `worker` uses when it names none, or ` when the
+/ worker declares no default and a run must name one.
+/ @param worker the worker's name
+/ @return a symbol
+/ @eg .qetl.job.bounded.default_version `demo_deals_backfill  ->  `
+default_version:{[worker] (def worker)`source_version}
 
 / Private: a config carrying every optional key, absent ones as (::).
 normalised:{[cfg]
@@ -414,9 +432,45 @@ spec:{[worker] `source_version`range_from`range_to!read_state[worker] each `sour
 / @param run_spec the run specification - source_version, range_from, range_to
 / @return whatever init_body returns
 init:{[worker;run_spec]
+    / Before the guard below, not inside it: a refusal must write nothing,
+    / and the guard's failure path writes the status file - the file this
+    / refusal exists to keep the first worker's.
+    claim_process[@[value;`.proc.procname;`];worker];
     r:.[{[w;s] (1b; init_body[w;s])};(worker;run_spec);{[e] (0b;e)}];
     if[not first r; report_failure[worker;last r]; cleanup worker; 'last r];
     last r}
+
+/ The bounded worker this TorQ process belongs to, ` until one initialises.
+process_worker:`
+
+/ Private: refuse a second bounded worker in one TorQ process (#608).
+/ .
+/ Two pieces of a worker's state are really the PROCESS's under TorQ: the
+/ status file is named for the procname, not the worker, and the backfill
+/ process sets the process-wide .qetl.io.default to an HDB writer
+/ partitioned by ITS worker's time column. A second worker would have its
+/ transitions validated against the first's file, or overwrite it, and
+/ would partition by the first worker's column - silently. One worker per
+/ process was the convention (torq_backfill.q takes one -worker); this
+/ makes it the rule.
+/ .
+/ The same worker initialising again is allowed - a rerun at a new
+/ source_version is exactly that. Plain q, with no procname, is unaffected:
+/ there the status file is the worker's own, and the tests run many
+/ workers in one process.
+/ @param procname the process's TorQ name, ` in plain q
+/ @param worker the worker's name
+/ @return the worker's name
+/ @throws error naming both workers when the process already belongs to
+/   another one
+claim_process:{[procname;worker]
+    if[null procname; :worker];
+    held:.qetl.job.bounded.process_worker;
+    if[(not null held) and not worker~held;
+        '"init: ",string[worker]," refused - process ",string[procname]," already runs ",
+         string[held],". One bounded worker per process: they would share its status file and HDB writer"];
+    .qetl.job.bounded.process_worker:worker;
+    worker}
 
 / ---------------------------------------------------------------- STATUS
 / .
@@ -577,14 +631,16 @@ init_body:{[worker;run_spec]
     / path, kept in the environment because an absolute local path is
     / machine-specific and this repository is public. Calling that a secret
     / teaches an operator that the rule is theatre.
-    / `odbc`, not `var`: var is a q builtin (variance).
+    / `transport`, not `var`: var is a q builtin (variance).
     live:.qetl.source.has_credentials cfg`source;
     if[not live;
-        odbc:`odbc~(.qetl.source.def cfg`source)`transport;
+        transport:(.qetl.source.def cfg`source)`transport;
         .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: export the variable below in the shell you run `uqs backfill` from, then run it again. It is read from the environment only - no flag, file or vault, so a machine-specific path or a password stays out of this repository and off the command line";
             `variable`expects`example!(
                 .qetl.source.credential_var cfg`source;
-                $[odbc; "an ODBC connection string"; "host:port, or host:port:user:password"];
+                $[`odbc~transport; "an ODBC connection string";
+                  `local~transport; "the path of an HDB directory on this machine";
+                  "host:port, or host:port:user:password"];
                 .qetl.source.credential_example cfg`source)]];
     write_state[worker;`handle;$[live; connect worker; 0Ni]];
 
@@ -600,15 +656,17 @@ init_body:{[worker;run_spec]
 / attributable, and so a test can exercise init without one.
 / .
 / The source's transport picks the opener: an ipc credential is host:port,
-/ an odbc credential is a connection string.
+/ an odbc credential is a connection string, a local credential is an HDB
+/ directory's path - validated here, so a wrong path fails the run rather
+/ than quietly reading the fixture.
 connect:{[worker]
     source:(def worker)`source;
     cred:.qetl.source.require_credentials source;
     transport:(.qetl.source.def source)`transport;
     .qetl.log.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
-    opener:$[`odbc~transport;
-        {.qetl.io.odbc.open x};
-        {hopen (hsym `$":",x;5000j)}];
+    opener:$[`odbc~transport; {.qetl.io.odbc.open x};
+      `local~transport; .qetl.source.local_root;
+      {hopen (hsym `$":",x;5000j)}];
     @[opener;cred;{[source;e] '.qetl.job.bounded.connect_error[source;e]}[source]]}
 
 / The error connect throws when it cannot reach a source.
@@ -709,8 +767,11 @@ fetch:{[worker;from_ts;to_ts]
     / failing query skipped the retries and the failed-window path and threw
     / out of the run, and a working one handed with_retry a table that `t[]`
     / happened to return unchanged.
-    r:.qetl.job.bounded.runtime.with_retry[.qetl.job.bounded.runtime.policy[];
-        {[source;h;from_ts;to_ts;unused] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts]];
+    / The source joins the window's log context for the fetch and its retries.
+    r:.qetl.log.with_context[enlist[`source]!enlist cfg`source;
+        .qetl.job.bounded.runtime.with_retry;
+        (.qetl.job.bounded.runtime.policy[];
+         {[source;h;from_ts;to_ts;unused] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts])];
     .qetl.log.dbg[worker;"fetch attempted";
         `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
             $[`ok~r`state; count r`result; 0N])];
@@ -772,10 +833,24 @@ checkpoint:{[worker;cursor] .qetl.job.bounded.state.save_checkpoint[worker;spec 
 / @return the run's result dictionary
 run:{[worker]
     r:@[{[w] (1b; run_body w)};worker;{[e] (0b;e)}];
-    if[not first r; report_failure[worker;last r]];
+    if[not first r; report_failure[worker;last r]; end_failed_run worker];
     cleanup worker;
     if[not first r; 'last r];
     last r}
+
+/ Private: close a run that threw in the two records report_failure does not
+/ write: the heartbeat and the run ledger.
+/ .
+/ Without this a thrown run left the heartbeat on its last `running` and its
+/ etl_runs row open, with .qetl.run still holding it as current. The process's
+/ next run then had its begin refused - silently, begin_run swallows - and its
+/ end_run closed the THROWN run's row with the next run's outcome: a failure
+/ recorded as `idle or `completed, and the run that did the work with no row
+/ at all (#610). Never throws, for the reason report_failure never does.
+/ @param worker the worker's name
+end_failed_run:{[worker]
+    @[.qetl.hb.beat[;`failed];worker;{[e] (::)}];
+    end_run[`failed;()!()]}
 
 / Private: queue what an earlier, interrupted run of this worker wrote and
 / never finished, over this run's range.
@@ -797,55 +872,6 @@ recover_unfinished:{[worker]
             enlist[`partitions]!enlist n]];
     n}
 
-/ Private: fire again the reactions an earlier run never completed.
-/ .
-/ A reaction runs after its window's coverage is recorded, so a run killed in
-/ between - or a reaction that threw - left a covered window with no derived
-/ output, and every later run found the window covered and did nothing about
-/ it. .qetl.reaction.pending finds those windows over this run's range, and
-/ each is fetched and transformed again and its publication announced again.
-/ Every reaction for the dataset runs, not only the one owed: a reaction
-/ replaces its own output per window (.qetl.reaction.write), so running one
-/ that already succeeded rewrites the same rows.
-/ .
-/ Before this run's own windows, which are not covered yet and notify as
-/ they publish. Not on a dry run, which fires no reaction at all.
-/ @param worker the worker's name
-/ @return how many windows were announced again
-replay_reactions:{[worker]
-    if[not .qetl.job.bounded.runtime.allows`notify_reactions; :0];
-    cfg:def worker;
-    s:spec worker;
-    owed:@[{[a] .qetl.reaction.pending . a};
-        (cfg`dataset;cfg`partition;s`source_version;s`range_from;s`range_to);
-        {[e] ([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$())}];
-    ws:distinct select range_from, range_to from owed;
-    if[0=count ws; :0];
-    .qetl.log.warn[worker;"re-firing reactions for windows covered without a successful reaction";
-        `windows`reactions!(count ws;distinct owed`name)];
-    sum replay_window[worker] each ws}
-
-/ Private: announce one covered window's publication again, from a fresh
-/ fetch and transform. A window that cannot be fetched or transformed is
-/ logged and left owed, for the next run.
-/ @return 1 when announced, else 0
-replay_window:{[worker;w]
-    cfg:def worker;
-    f:own[worker;`fetch][w`range_from;w`range_to];
-    if[`failed~f`state;
-        .qetl.log.err[worker;"could not re-fetch a window to re-fire its reactions";
-            `range_from`range_to`error!(w`range_from;w`range_to;f`error)];
-        :0];
-    out:@[transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
-    if[(0h=type out) and `transform_failed~first out;
-        .qetl.log.err[worker;"could not transform a window to re-fire its reactions";
-            `range_from`range_to`error!(w`range_from;w`range_to;last out)];
-        :0];
-    @[{[a] .qetl.reaction.notify_published . a};
-      (cfg`dataset;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
-      {[e] (::)}];
-    1}
-
 / Private: the io manager's end-of-run step, behind the dry-run gate. A dry
 / run wrote nothing, so a store has nothing to finish - and an HDB writer's
 / finish asks the HDB to reload, which a rehearsal must not.
@@ -863,6 +889,13 @@ run_body:{[worker]
     / execution that dies mid-flight leaves a row reading `running` rather
     / than leaving no trace - see .qetl.run's header.
     begin_run[worker];
+    / Every run declares its own start. init writes `starting once, but a
+    / second run in the same process - a rerun that finds nothing to do, or
+    / an operator calling run[] again - otherwise went straight from the
+    / last run's `completed to `idle or `running, which .qetl.status rightly
+    / refuses: a finished run must not quietly read as one still going.
+    if[(.qetl.status.previous_state instance worker) in `idle`completed`failed;
+        report[worker;`starting;""]];
     recovered:recover_unfinished worker;
     replayed:replay_reactions worker;
     cursor:.qetl.job.bounded.state.load_checkpoint[worker;spec worker];
@@ -1063,6 +1096,20 @@ transform_batch:{[worker;batch]
 / @return 1b when the window completed, 0b when it failed and the run
 /   should continue with the next one
 do_window:{[worker;w]
+    / Everything logged while this window runs - the fetch, its requests,
+    / the transform, a sidecar's own stages, the write - carries the run,
+    / worker and window, and the scope ends with the window, thrown or not.
+    run:.qetl.run.current[];
+    ctx:(`worker`range_from`range_to!(worker;w`range_from;w`range_to)),
+        $[null run; ()!(); enlist[`run]!enlist run];
+    .qetl.log.with_context[ctx;window_body;(worker;w)]}
+
+/ Private: one window, fetch to publish - do_window's body, inside its log
+/ context.
+/ @param worker the worker's name
+/ @param w the window, a dict of range_from and range_to
+/ @return 1b when the window was published, 0b when it failed
+window_body:{[worker;w]
     cfg:def worker;
     .qetl.log.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
     f:own[worker;`fetch][w`range_from;w`range_to];
@@ -1104,7 +1151,7 @@ do_window:{[worker;w]
     if[count bad;
         .qetl.log.err[worker;"window failed data quality";
             `range_from`range_to`failures`detail!
-            (w`range_from;w`range_to;count bad;.Q.s1 bad)];
+            (w`range_from;w`range_to;count bad;.qrender.full bad)];
         write_state[worker;`progress;@[read_state[worker;`progress];`windows_failed;+;1]];
         :0b];
     write_state[worker;`last_batch;out];
@@ -1258,9 +1305,11 @@ publish_last_batch:{[worker;unused] own[worker;`publish] read_state[worker;`last
 / release_lock is a no-op when not held.
 cleanup:{[worker]
     h:read_state[worker;`handle];
-    closer:$[`odbc~(.qetl.source.def (def worker)`source)`transport;
-        .qetl.io.odbc.close;
-        {[h] @[hclose;h;::]}];
+    transport:(.qetl.source.def (def worker)`source)`transport;
+    / A local source's "handle" is its directory: nothing to close.
+    closer:$[`odbc~transport; .qetl.io.odbc.close;
+      `local~transport; {[h] ::};
+      {[h] @[hclose;h;::]}];
     if[not null h; closer h; write_state[worker;`handle;0Ni]];
     .qetl.job.bounded.state.release_lock worker}
 

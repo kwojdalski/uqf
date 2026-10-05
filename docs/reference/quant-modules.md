@@ -58,8 +58,47 @@ positions `src/etl/` is built on.
 ## Conventions
 
 Currency pairs follow BASE/QUOTE quoting throughout (`rate` = 1 BASE in QUOTE
-units); `side` is `1` for long/buy, `-1` for short/sell; `pip_factor` is `10000`
-for most pairs and `100` for JPY crosses. All function names, parameters and
-locals use `lower_snake_case`. See the [`kdb-q-conventions`
-skill](../../.claude/skills/kdb-q-conventions/SKILL.md) for the full set of
-conventions and the q arithmetic gotcha that shaped how this code is written.
+units), and `pip_factor` is `10000` for most pairs and `100` for JPY crosses.
+All function names, parameters and locals use `lower_snake_case`. See the
+[`kdb-q-conventions` skill](../../.claude/skills/kdb-q-conventions/SKILL.md) for
+the q arithmetic gotcha that shaped how this code is written.
+
+The modules were written separately, and a mix-up between them is a wrong
+number, not an error. These are the conventions they converge on:
+
+- **`side` is `1` for long/buy and `-1` for short/sell.** A parameter that names
+  one side of a book, `` `bid `` or `` `ask ``, is `book_side`, never `side`.
+- **`side` comes first** in a function that takes a trade's direction.
+- **Time quantities are timespans** - a horizon is `0D00:00:01`, not `1000`.
+- **A fill's price column is `trade_price`.** `price` is a level or a lot's
+  price, not a fill's.
+- **Spellings are `-ize`**: `realized_pnl`, `unrealized_pnl`, `normalize`.
+
+### Where the code still differs
+
+Each function is aligned when it is next changed, not in one sweep. This
+repository keeps no backward compatibility, but a sweep risks a silent sign
+error in exactly the modules no running job exercises (below). Until then:
+
+  | Convention     | Follows it                                                                                                                                                             | Differs                                                                                                                                                                                   |
+  | ---            | ---                                                                                                                                                                    | ---                                                                                                                                                                                       |
+  | `side` first   | `.qexec.markout`, `eff_spread`, `slippage` (`execution.q:24,82,92`)                                                                                                    | `.qrisk.pnl` (`risk.q:22`) and `.qpos.apply_fill` (`positions.q:46`) take it last                                                                                                         |
+  | `side` is ±1   | `.qexec`, `.qrisk`, `.qpos`, `.qalloc`, `.qdesk`                                                                                                                       | `.qfwd`'s cross-book functions take `` `bid ``/`` `ask `` as `side` (`cross_sweep_side`, `forwards.q:208`) - `book_side` by the rule above                                                |
+  | timespans      | `.qexec.markout_at_horizons` (`execution.q:51`)                                                                                                                        | `.qfwd.cross_markout_at_horizons` and `cross_impact_at_horizons` take `horizons_ms` longs (`forwards.q:694,803`). Which of the two is right is #413's decision                            |
+  | argument order | `.qmicro.vwmp_skew` takes `n_levels` last (`microstructure.q:186`)                                                                                                     | `vwmp_skew_one` takes it first (`microstructure.q:169`)                                                                                                                                   |
+  | `trade_price`  | `.qpos.apply_fills`, `.qexec.markout_at_horizons`, `.qalloc`'s trades (`allocation.q:251`); `.qalloc`'s opening lots carry `price` (`allocation.q:267`), a lot's price | `.qdesk.apply_fills` reads a fill's price as `price` (`desk_positions.q:52`)                                                                                                              |
+
+The two horizon markouts are pinned to each other: on a directly quoted pair
+they are one calculation, and
+`test_markout_at_horizons_agrees_with_the_cross_markout_on_a_direct_pair`
+(`tests/q/test_execution.q`) feeds the same buy and sell through both. A flipped
+sign or a horizon passed in the wrong unit fails it.
+
+### Library, not wired
+
+No running job calls `.qstats`, `.qdcf`, `.qrates`, `.qopt`, `.qalloc` or
+`.qmicro`. They are called only by tests, doc examples and one another: `.qopt`
+uses `.qrates` and `.qstats`, and `.qexec` and `.qdqc` use `.qmicro`. Their
+results are therefore checked only by their own suites: no live output would
+look wrong if one of them were. A module leaves this list when a job under
+`src/etl/` or `scripts/processes/` calls it.

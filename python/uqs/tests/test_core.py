@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import re
 import shlex
 import shutil
 import sys
@@ -248,7 +249,7 @@ def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
 
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
-    base_rows = {r["procname"]: r for r in stack_procs._base_process_rows(fake_paths)}
+    base_rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
     assert base_rows["fxfeed1"]["startwithall"] == "1"  # unaffected by the override below
 
     stack_procs.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
@@ -729,6 +730,106 @@ def test_get_recent_logs_filters_by_min_level(fake_paths: UqsPaths):
     assert [r["message"] for r in records] == ["loud error"]
 
 
+_ALL_LEVELS = (
+    '2026.08.22D14:21:10.000000000|h|discovery|discovery1|TRC|odbc|sql sent statement="SELECT 1"\n'
+    "2026.08.22D14:21:11.000000000|h|discovery|discovery1|DBG|bf|window start\n"
+    "2026.08.22D14:21:12.000000000|h|discovery|discovery1|INF|bf|run finished\n"
+)
+
+
+def test_debug_and_trace_lines_are_labelled_as_what_they_are(fake_paths: UqsPaths, capsys):
+    """DBG and TRC are .qetl.log's levels below TorQ's own. They were missing
+    from the mapping, so both printed as INFO."""
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(_ALL_LEVELS)
+
+    stack_logs.print_recent_logs(fake_paths, "discovery1")
+
+    lines = capsys.readouterr().out.splitlines()
+    label = {
+        m: next(line for line in lines if m in line)
+        for m in ("sql sent", "window start", "run finished")
+    }
+    assert "| TRACE " in label["sql sent"]
+    assert "| DEBUG " in label["window start"]
+    assert "| INFO " in label["run finished"]
+
+
+@pytest.mark.parametrize(
+    ("min_level", "kept"),
+    [
+        (None, ["sql sent", "window start", "run finished"]),
+        ("TRACE", ["sql sent", "window start", "run finished"]),
+        ("DEBUG", ["window start", "run finished"]),
+        ("INFO", ["run finished"]),
+    ],
+)
+def test_the_level_filter_ranks_trace_below_debug(fake_paths: UqsPaths, min_level, kept):
+    """`--level INFO` used to keep DBG and TRC lines, since both read as INFO."""
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(_ALL_LEVELS)
+
+    records = stack_logs.get_recent_logs(fake_paths, "discovery1", min_level=min_level)
+
+    assert [r["message"].split(" statement")[0] for r in records] == kept
+
+
+def test_uqs_logs_shows_the_block_with_its_trace_label(fake_paths: UqsPaths, capsys):
+    """Through the real reader: the raw record is ONE line, pipes in the code
+    included, and is shown as a block under TRACE."""
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    msg = 'query sent call="{[a;b] select from t where s like \\"x|y\\"}" range_from=1 range_to=2'
+    (log_dir / "out_discovery1.log").write_text(
+        f"2026.08.22D14:21:10.000000000|h|discovery|discovery1|TRC|ipc|{msg}\n"
+    )
+
+    stack_logs.print_recent_logs(fake_paths, "discovery1")
+
+    out = capsys.readouterr().out
+    header = next(line for line in out.splitlines() if "query sent" in line)
+    assert "| TRACE " in header and header.endswith("query sent range_from=1 range_to=2")
+    assert '    {[a;b] select from t where s like "x|y"}' in out.splitlines()
+
+
+@pytest.mark.parametrize(
+    ("given", "means"),
+    [
+        ("WARN", "WARNING"),
+        ("err", "ERROR"),
+        ("INF", "INFO"),
+        ("DBG", "DEBUG"),
+        ("trc", "TRACE"),
+        ("warning", "WARNING"),
+        (None, None),
+    ],
+)
+def test_level_accepts_the_names_the_log_lines_print(given, means):
+    """`--level WARN` is what a reader copies from the log; it used to rank as
+    0 and pass every line."""
+    assert stack_logs.min_level_name(given) == means
+
+
+def test_an_unknown_level_is_refused_rather_than_showing_everything(fake_paths: UqsPaths):
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(_ALL_LEVELS)
+    with pytest.raises(UqsError, match="--level 'NOPE' is not a level"):
+        stack_logs.get_recent_logs(fake_paths, "discovery1", min_level="NOPE")
+
+
+def test_warn_filters_out_info(fake_paths: UqsPaths):
+    log_dir = fake_paths.torqdata / "logs"
+    log_dir.mkdir(parents=True)
+    (log_dir / "out_discovery1.log").write_text(
+        _ALL_LEVELS + "2026.08.22D14:21:13.000000000|h|discovery|discovery1|WARN|bf|slow\n"
+    )
+    records = stack_logs.get_recent_logs(fake_paths, "discovery1", min_level="WARN")
+    assert [r["message"] for r in records] == ["slow"]
+
+
 def test_get_recent_logs_raises_when_no_log_files(fake_paths: UqsPaths):
     with pytest.raises(UqsError):
         stack_logs.get_recent_logs(fake_paths, "discovery1")
@@ -932,7 +1033,7 @@ def test_table_and_schema_are_declared_together():
 
 
 def test_pipeline_rows_are_appended_to_the_base_rows(fake_paths: UqsPaths):
-    rows = {r["procname"]: r for r in stack_procs._base_process_rows(fake_paths)}
+    rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
     for pipeline in PIPELINES:
         row = rows[pipeline.procname]
         assert row["port"] == f"{{KDBBASEPORT}}+{PIPELINE_OFFSETS[pipeline.procname]}"
@@ -1219,7 +1320,7 @@ def test_monitor1_starts_with_the_stack_so_heartbeats_are_actually_collected():
         "of VENDORED_STARTWITHALL_OVERLAY is now redundant and should be removed"
     )
 
-    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
     assert composed["monitor1"]["startwithall"] == "1"
     assert composed["feed1"]["startwithall"] == "0"
 
@@ -1540,7 +1641,7 @@ def test_gateway1_loads_the_desk_catalog_after_its_own_script():
     vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
     upstream = {row["procname"]: row["load"] for row in csv.DictReader(io.StringIO(vendored))}
 
-    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
     loaded = composed["gateway1"]["load"].split()
 
     assert loaded[0] == upstream["gateway1"], (
@@ -1563,8 +1664,114 @@ def test_the_load_overlay_touches_no_other_process():
             io.StringIO((real.torqapphome / "appconfig" / "process.csv").read_text())
         )
     }
-    composed = {row["procname"]: row for row in stack_procs._base_process_rows(real)}
+    composed = {row["procname"]: row for row in stack_procs.effective_process_rows(real)}
     for procname, original in vendored.items():
         if procname == "gateway1":
             continue
         assert composed[procname]["load"] == original, f"{procname}'s load column was altered"
+
+
+# ------------------------------------- monitor1's per-retry log lines, off
+
+
+def test_monitor1_starts_without_tracing_every_retry():
+    """monitor1 retries each stopped optional process every five minutes, and
+    with TorQ's default `.servers.DEBUG:1b` logs two INF lines per attempt.
+    The override turns those lines off and leaves the retries alone. Read
+    against the real vendored csv, as the overlay tests above are."""
+    rows = {
+        r["procname"]: r for r in stack_procs.effective_process_rows(stack_paths.default_paths())
+    }
+    extras = rows["monitor1"]["extras"].split()
+    assert "-.servers.DEBUG" in extras
+    assert extras[extras.index("-.servers.DEBUG") + 1] == "0"
+    assert "-.servers.CONNECTIONS" in extras, "the connection budget is still passed beside it"
+    others = [
+        name
+        for name, row in rows.items()
+        if name != "monitor1" and "-.servers.DEBUG" in row["extras"]
+    ]
+    assert others == [], "only monitor1 retries the whole fleet; nothing else is quietened"
+
+
+def test_servers_debug_is_still_what_gates_the_retry_lines():
+    """The override works only while TorQ gates both lines on `.servers.DEBUG`
+    and defines it in its settings - which `.proc.override` requires, since it
+    only overrides a variable that already exists. If an upgrade moves either,
+    the override silently does nothing; fail here instead."""
+    torq = stack_paths.default_paths().torqhome
+    track = (torq / "code" / "handlers" / "trackservers.q").read_text()
+    assert 'if[DEBUG;.lg.o[`conn;"attempting to open handle to "' in track
+    assert 'if[DEBUG;.lg.o[`conn;"connection to "' in track
+    assert "procupdate:{[procs] addprocs[procs;exec distinct proctype from procs;0b];}" in track, (
+        "a process started by hand is no longer added unconnected - re-check whether "
+        "monitor1 still needs its retries, which is why only the lines were turned off"
+    )
+    settings = (torq / "config" / "settings" / "default.q").read_text()
+    servers = settings.split("\\d .servers", 1)[1].split("\n\\d ", 1)[0]
+    assert re.search(r"(?m)^DEBUG:1b", servers), ".servers.DEBUG is no longer set in the settings"
+
+
+# ------------------------------------- one composition of process.csv (#624)
+
+
+def test_monitor1_plans_its_connections_from_the_overridden_fleet(
+    fake_paths: UqsPaths, monkeypatch
+):
+    """The budget used to be decided before process_overrides.csv applied, so
+    `config set X startwithall ...` never reached it."""
+    seen: list[list[dict[str, str]]] = []
+
+    def plan(paths, rows):
+        seen.append([dict(r) for r in rows])
+        return ""
+
+    monkeypatch.setattr(stack_procs, "monitor_connection_extras", plan)
+    (fake_paths.torqapphome / "appconfig" / "process.csv").write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,{KDBBASEPORT}+9,monitor,monitor1,,1,0,,,${KDBCODE}/processes/monitor.q,1,,q\n"
+        "localhost,{KDBBASEPORT}+2,rdb,rdb1,,1,0,,,${KDBCODE}/processes/rdb.q,1,,q\n"
+    )
+    stack_procs.set_process_config(fake_paths, "rdb1", "startwithall", "0")
+    stack_procs.effective_process_rows(fake_paths)
+    planned = {r["procname"]: r for r in seen[-1]}
+    assert planned["rdb1"]["startwithall"] == "0", "the plan sees the operator's override"
+
+
+def test_an_override_of_monitor1s_own_extras_still_wins(fake_paths: UqsPaths):
+    (fake_paths.torqapphome / "appconfig" / "process.csv").write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,{KDBBASEPORT}+9,monitor,monitor1,,1,0,,,${KDBCODE}/processes/monitor.q,1,,q\n"
+    )
+    stack_procs.set_process_config(fake_paths, "monitor1", "extras", "-mine 1")
+    rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
+    assert rows["monitor1"]["extras"] == "-mine 1"
+
+
+def test_no_module_outside_procs_merges_the_overrides_itself():
+    """The re-merge idiom - overrides looked up per row - lives only in
+    procs.effective_process_rows, so no reader can forget it again. (Listing
+    the overrides themselves, as `uqs list overrides` does, is not a merge.)"""
+    src = Path(__file__).resolve().parents[1] / "src" / "uqs"
+    offenders = [
+        str(p.relative_to(src))
+        for p in src.rglob("*.py")
+        if p.name != "procs.py" and 'overrides.get(row["procname"]' in p.read_text()
+    ]
+    assert offenders == []
+
+
+# ---------------------------------------------- one pip rule (#623)
+
+
+def test_no_pip_factor_literal_is_left_in_src():
+    """`pip_factor:` followed by a number is a hand-typed factor; every one
+    now comes from .qccy.pip_factor."""
+    root = Path(__file__).resolve().parents[3] / "src"
+    hits = [
+        f"{p.relative_to(root)}:{n}"
+        for p in root.rglob("*.q")
+        for n, line in enumerate(p.read_text().splitlines(), 1)
+        if re.search(r"\bpip_factor:\s*[0-9]", line) and not line.lstrip().startswith("/")
+    ]
+    assert hits == []

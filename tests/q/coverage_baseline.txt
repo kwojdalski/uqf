@@ -22,7 +22,6 @@
 # These reach a real database, a real ODBC driver or a real qls server. The
 # deterministic suite has no such thing by design, and the smoke
 # lanes that do exercise them are not part of this run.
-.qetl.job.bounded.connect
 .qetl.io.odbc.close
 .qetl.io.odbc.table_names
 .qetl.io.odbc.window_query
@@ -32,7 +31,6 @@
 .qpipe.source.databento_mbp10.epoch_ns_literal
 .qpipe.source.databento_mbp10.query
 .qpipe.source.databento_mbp10.select_list
-.qpipe.source.demo_deals.query
 .qpipe.source.demo_events.query
 .qpipe.source.duckdb_deals.query
 .qpipe.source.upstream_trades.query
@@ -59,7 +57,6 @@
 .qtorq.connect_etl
 .qtorq.feed_handle
 .qtorq.load_uqf
-.qtorq.reload_hdb
 .qtorq.safe_timer
 .qtorq.subscribe_etl
 .qtorq.subscribe_tables
@@ -86,7 +83,6 @@
 # reduce coverage - reading a parse tree never enters the function - which is
 # why the lifecycle test above was still needed to take these names off.
 .qpipe.transform.databento_book.example_book
-.qetl.run.attach
 .qetl.run.history
 .qdata.getBySymbolDate
 .qdata.pqModule

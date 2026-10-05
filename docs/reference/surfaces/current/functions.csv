@@ -48,6 +48,9 @@ qccy,ccy_pair_symbol,function,2,base quote
 qccy,ccy_to_str,function,1,x
 qccy,is_ccy_pair,function,1,x
 qccy,normalize_ccy_pair,function,1,x
+qccy,pip_factor,function,1,pair
+qccy,pip_size,function,1,pair
+qccy,pip_size_by_quote,dict,,
 qdata,cfg,function,2,k dflt
 qdata,databentoDir,function,1,
 qdata,databentoFile,function,2,sym date
@@ -92,6 +95,7 @@ qetl.cfg,set_override,function,2,k v
 qetl.cfg,sources,value,,
 qetl.cfg,truthy,value,,
 qetl.cfg,yaml_values,dict,,
+qetl.cfg.audit,UNDEF,dict,,
 qetl.cfg.audit,config_change,table,,
 qetl.cfg.audit,forget,function,1,
 qetl.cfg.audit,max_render,value,,
@@ -101,6 +105,7 @@ qetl.cfg.audit,poll,function,2,owner as_of
 qetl.cfg.audit,poll_and_publish,function,1,
 qetl.cfg.audit,render,function,1,name
 qetl.cfg.audit,seen,dict,,
+qetl.cfg.audit,shown,function,1,v
 qetl.cfg.audit,watch,function,2,owner names
 qetl.cfg.audit,watched,dict,,
 qetl.cfg.audit,watching,function,1,owner
@@ -108,12 +113,14 @@ qetl.coerce,coerce_column,function,2,f col
 qetl.coerce,is_date_only,function,1,str
 qetl.coerce,numeric_chars,value,,
 qetl.coerce,require_present,function,2,field v
+qetl.coerce,signs_placed,function,1,s
 qetl.coerce,to_date_as_midnight,function,1,str
 qetl.coerce,to_float,function,1,str
 qetl.coerce,to_long,function,1,str
 qetl.coerce,to_symbol,function,1,str
 qetl.coerce,to_symbol_cased,function,1,str
 qetl.coerce,to_timestamp,function,1,str
+qetl.coerce,utc_offset,function,1,str
 qetl.coverage,attach,function,1,
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version
@@ -241,14 +248,17 @@ qetl.job.bounded,advanced_to,function,3,worker current next_cursor
 qetl.job.bounded,begin_run,function,1,worker
 qetl.job.bounded,check_static,function,2,worker run_spec
 qetl.job.bounded,checkpoint,function,2,worker cursor
+qetl.job.bounded,claim_process,function,2,procname worker
 qetl.job.bounded,cleanup,function,1,worker
 qetl.job.bounded,connect,function,1,worker
 qetl.job.bounded,connect_error,function,2,source e
 qetl.job.bounded,def,function,1,worker
+qetl.job.bounded,default_version,function,1,worker
 qetl.job.bounded,define,function,2,worker decl
 qetl.job.bounded,delegate,function,2,worker nm
 qetl.job.bounded,do_window,function,2,worker w
 qetl.job.bounded,empty_windows,function,1,
+qetl.job.bounded,end_failed_run,function,1,worker
 qetl.job.bounded,end_run,function,2,state counts
 qetl.job.bounded,exit_code,function,1,state
 qetl.job.bounded,fetch,function,3,worker from_ts to_ts
@@ -268,6 +278,7 @@ qetl.job.bounded,own,function,2,worker nm
 qetl.job.bounded,partition_of,function,1,worker
 qetl.job.bounded,plan,function,2,worker cursor
 qetl.job.bounded,plan_only,function,2,worker run_spec
+qetl.job.bounded,process_worker,value,,
 qetl.job.bounded,progress_now,function,1,worker
 qetl.job.bounded,publish,function,2,worker batch
 qetl.job.bounded,publish_last_batch,function,2,worker unused
@@ -292,6 +303,7 @@ qetl.job.bounded,state,dict,,
 qetl.job.bounded,transform_batch,function,2,worker batch
 qetl.job.bounded,unpartitioned,value,,
 qetl.job.bounded,validate,function,2,worker run_spec
+qetl.job.bounded,window_body,function,2,worker w
 qetl.job.bounded,worker_cfg,dict,,
 qetl.job.bounded,worker_root,value,,
 qetl.job.bounded,write_state,function,3,worker nm v
@@ -396,6 +408,7 @@ qetl.job.stream.normalizer,dispatch,function,3,name t x
 qetl.job.stream.normalizer,normalize,function,3,name src batch
 qetl.job.stream.normalizer,registry,dict,,
 qetl.job.stream.normalizer,required_keys,value,,
+qetl.log,context,dict,,
 qetl.log,dbg,function,3,id text fields
 qetl.log,debug,function,1,on
 qetl.log,debug_enabled,value,,
@@ -405,10 +418,21 @@ qetl.log,err,function,3,id text fields
 qetl.log,info,function,3,id text fields
 qetl.log,levels,value,,
 qetl.log,line,function,4,level id text fields
+qetl.log,next_request,function,1,
+qetl.log,quiet,value,,
+qetl.log,quoted,function,1,s
 qetl.log,register,function,1,
 qetl.log,render,function,1,fields
+qetl.log,request_seq,value,,
+qetl.log,switched,function,1,level
 qetl.log,torq_loaded,function,1,
+qetl.log,trace,function,1,on
+qetl.log,trace_enabled,value,,
+qetl.log,trc,function,3,id text fields
+qetl.log,value1,function,1,v
 qetl.log,warn,function,3,id text fields
+qetl.log,with_context,function,3,ctx f args
+qetl.log,with_scope,function,1,fields
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
 qetl.plant,ccy_exposure,table,,
@@ -531,6 +555,7 @@ qetl.run,under_lock,function,2,f args
 qetl.run,unfinished,function,1,
 qetl.source,ambiguous_message,function,3,tz bad cs
 qetl.source,bound_padding,value,,
+qetl.source,call_text,function,1,f
 qetl.source,coerce,function,2,source tbl
 qetl.source,coercers,dict,,
 qetl.source,column_names,function,1,tbl
@@ -542,8 +567,16 @@ qetl.source,define,function,2,source decl
 qetl.source,defined,function,1,
 qetl.source,fetch_window,function,4,source h range_from range_to
 qetl.source,has_credentials,function,1,source
+qetl.source,ipc,function,4,h f range_from range_to
 qetl.source,load_zone_table,function,1,path
+qetl.source,local,function,4,root f range_from range_to
 qetl.source,local_candidates,function,2,tz tsv
+qetl.source,local_dates,function,3,root d0 d1
+qetl.source,local_decode,function,3,root c v
+qetl.source,local_latest,function,2,root table
+qetl.source,local_partition,function,3,root table d
+qetl.source,local_read,function,4,root table from_ts to_ts
+qetl.source,local_root,function,1,path
 qetl.source,local_to_utc,function,2,tz ts
 qetl.source,narrow_to_utc,function,4,decl tbl range_from range_to
 qetl.source,nonexistent_message,function,2,tz bad
@@ -608,6 +641,18 @@ qetl.transform,type_ok,function,3,declared actual n
 qetl.transform,verify,function,1,name
 qetl.transform,verify_all,function,1,
 qetl.transform,verify_example,function,3,name d ex
+qetl.uptime,attach,function,1,
+qetl.uptime,beat,function,1,
+qetl.uptime,begin,function,1,job
+qetl.uptime,gaps,function,3,job range_from range_to
+qetl.uptime,init_table,function,1,
+qetl.uptime,mine,value,,
+qetl.uptime,path,function,1,
+qetl.uptime,period,value,,
+qetl.uptime,reload,function,1,
+qetl.uptime,sessions,function,1,
+qetl.uptime,twins,function,1,job
+qetl.uptime,update_shared,function,2,f args
 qexec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qexec,fill_order_time_cols,value,,
 qexec,fill_outcome,function,4,event_time cancel_time horizon_end known_by
@@ -973,6 +1018,23 @@ qpipe.job.fx_trades_feed,pip_factor,value,,
 qpipe.job.fx_trades_feed,publish,value,,
 qpipe.job.fx_trades_feed,sizes,value,,
 qpipe.job.fx_trades_feed,spot,value,,
+qpipe.job.hdb_markouts_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_markouts_backfill,cleanup,function,1,
+qpipe.job.hdb_markouts_backfill,facts,function,1,batch
+qpipe.job.hdb_markouts_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_markouts_backfill,handle,value,,
+qpipe.job.hdb_markouts_backfill,init,function,1,run_spec
+qpipe.job.hdb_markouts_backfill,last_batch,value,,
+qpipe.job.hdb_markouts_backfill,last_window,dict,,
+qpipe.job.hdb_markouts_backfill,plan,function,1,cursor
+qpipe.job.hdb_markouts_backfill,progress,dict,,
+qpipe.job.hdb_markouts_backfill,publish,function,1,batch
+qpipe.job.hdb_markouts_backfill,quality_check,function,1,batch
+qpipe.job.hdb_markouts_backfill,range_from,value,,
+qpipe.job.hdb_markouts_backfill,range_to,value,,
+qpipe.job.hdb_markouts_backfill,run,function,1,
+qpipe.job.hdb_markouts_backfill,source_version,value,,
+qpipe.job.hdb_markouts_backfill,spec,function,1,
 qpipe.job.kafka_flow,above_high_water,function,1,rows
 qpipe.job.kafka_flow,advance,function,1,rows
 qpipe.job.kafka_flow,first_per_coordinate,function,1,rows
@@ -1138,6 +1200,20 @@ qpipe.source.duckdb_deals,time_column,value,,
 qpipe.source.duckdb_deals,transport,value,,
 qpipe.source.duckdb_deals,types,value,,
 qpipe.source.duckdb_deals,tz,value,,
+qpipe.source.hdb_markouts,columns,value,,
+qpipe.source.hdb_markouts,fixture,function,1,
+qpipe.source.hdb_markouts,lookback,value,,
+qpipe.source.hdb_markouts,none,table,,
+qpipe.source.hdb_markouts,query,function,3,h range_from range_to
+qpipe.source.hdb_markouts,raw_fills,function,1,
+qpipe.source.hdb_markouts,raw_quotes,function,1,
+qpipe.source.hdb_markouts,row_key,value,,
+qpipe.source.hdb_markouts,score,function,2,deals quotes
+qpipe.source.hdb_markouts,source_name,value,,
+qpipe.source.hdb_markouts,target,value,,
+qpipe.source.hdb_markouts,time_column,value,,
+qpipe.source.hdb_markouts,types,value,,
+qpipe.source.hdb_markouts,tz,value,,
 qpipe.source.upstream_trades,columns,value,,
 qpipe.source.upstream_trades,fixture,function,1,
 qpipe.source.upstream_trades,query,function,3,h range_from range_to
@@ -1172,6 +1248,8 @@ qrates,df_simple,function,2,r t
 qrates,growth_cont,function,2,r t
 qrates,growth_simple,function,2,r t
 qrates,simple_to_cont,function,2,r t
+qrender,full,function,1,v
+qrender,quoted,function,1,s
 qrisk,carry_pnl,function,3,notional spot fwd
 qrisk,carry_return,function,2,spot fwd
 qrisk,pip_value,function,2,notional pip_factor

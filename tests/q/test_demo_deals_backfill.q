@@ -32,6 +32,9 @@ setUp_fresh:{[]
     .qetl.job.bounded.state.release_lock `demo_deals_backfill;
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
     `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
+    / A run an earlier test left open in .qetl.run would make this test's
+    / first begin refuse, and every record below would name the wrong run.
+    .qetl.run.release[];
     }
 
 tearDown_release:{[] .qpipe.job.demo_deals_backfill.cleanup[];}
@@ -141,6 +144,146 @@ test_a_second_run_publishes_nothing_further:{[t]
     .qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[count value `demo_deals;3;"a retry does not duplicate published rows"]};
 
+/ --- one bounded worker per TorQ process (#608) ---------------------------
+
+/ Run f with .proc.procname set to p, as TorQ would, then put .proc back as
+/ it was - absent included, which is what it is in plain q. Returns f's
+/ result, or (`threw;error).
+with_procname:{[p;f]
+    had:@[{`procname in key x};`.proc;0b];
+    old:$[had; .proc.procname; `];
+    `.proc.procname set p;
+    r:@[f;::;{(`threw;x)}];
+    $[had; `.proc.procname set old; ![`.proc;();0b;enlist `procname]];
+    r}
+
+status_path:{[instance] hsym `$(.qetl.status.status_dir[]),"/airflow_status_",string[instance],".txt"}
+
+/ The refusal must come before anything is written: the status file is the
+/ one the first worker owns, and init's own failure path would write
+/ `failed into it.
+test_a_second_worker_is_refused_in_one_torq_process:{[t]
+    saved:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:`another_backfill;
+    @[hdel;.ddbftest.status_path`ddbftest_proc;::];
+    r:.ddbftest.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
+    .qetl.job.bounded.process_worker:saved;
+    .qunit.assertEquals[first r;`threw;"a second worker's init is refused"];
+    .qunit.assertTrue[r[1] like "*demo_deals_backfill refused - process ddbftest_proc already runs another_backfill*";
+        "the refusal names the worker, the process and the worker that holds it"];
+    .qunit.assertEquals[()~key .ddbftest.status_path`ddbftest_proc;1b;
+        "the refusal writes nothing to the process's status file"]};
+
+test_a_worker_initialising_under_torq_claims_its_process:{[t]
+    saved:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:`;
+    r:.ddbftest.with_procname[`ddbftest_proc;{.qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]]}];
+    got:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:saved;
+    .qunit.assertEquals[(r;got);(.ddbftest.spec_for[`v1;1;4];`demo_deals_backfill);
+        "the first init succeeds, and the process is now that worker's"]};
+
+/ A rerun at a new source_version is the same worker initialising again.
+test_the_same_worker_may_claim_its_process_again:{[t]
+    saved:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:`;
+    a:.qetl.job.bounded.claim_process[`ddbftest_proc;`demo_deals_backfill];
+    b:@[.qetl.job.bounded.claim_process[`ddbftest_proc;];`demo_deals_backfill;{`threw}];
+    .qetl.job.bounded.process_worker:saved;
+    .qunit.assertEquals[(a;b);2#`demo_deals_backfill;"the worker that holds the process may init again"]};
+
+/ Plain q has no procname: the status file is named for the worker, and the
+/ test suite runs many workers in one process.
+test_plain_q_claims_and_refuses_nothing:{[t]
+    saved:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:`demo_deals_backfill;
+    r:@[.qetl.job.bounded.claim_process[`;];`another_backfill;{`threw}];
+    held:.qetl.job.bounded.process_worker;
+    .qetl.job.bounded.process_worker:saved;
+    .qunit.assertEquals[(r;held);`another_backfill`demo_deals_backfill;
+        "with no procname any worker may init, and nothing is claimed"]};
+
+/ --- every record of a run agrees, after every step (#610) ---------------
+
+/ One run is written to several records, each by its own call: the status
+/ file an orchestrator reads, the heartbeat, and the run ledger. Nothing tied
+/ them together, so a lifecycle edge one of them missed was found only at
+/ runtime - #600's second run, and the thrown run these tests found. Each step
+/ below asserts all three at once.
+
+/ What each record says about the worker's latest run, side by side. The
+/ status file names its run by id; the ledger row is the one that id names.
+records:{[]
+    w:`demo_deals_backfill;
+    path:(.qetl.status.status_dir[]),"/airflow_status_",string[.qetl.job.bounded.instance w],".txt";
+    s:.j.k first read0 hsym `$path;
+    id:"G"$s`run_id;
+    row:.qetl.run.of_run id;
+    `status`heartbeat`ledger`ended`in_flight`run_id!(
+        `$s`state;
+        exec first state from 0!.qetl.hb.ledger[] where worker=w;
+        first row`status;
+        $[count row; not .qetl.run.not_ended=first row`ended_at; 0b];
+        not null .qetl.run.current[];
+        id)}
+
+/ Assert the three records agree on a finished run, and return its id.
+/ status is what the status file should read, state what the heartbeat and
+/ the ledger should: they share the worker's own vocabulary, where the status
+/ file has no `partial.
+agree:{[status;state;msg]
+    r:.ddbftest.records[];
+    .qunit.assertEquals[r`status`heartbeat`ledger`ended`in_flight;(status;state;state;1b;0b);msg];
+    r`run_id}
+
+/ After init, before any run: both live records say starting, and no run is
+/ open yet.
+started:{[msg]
+    r:.ddbftest.records[];
+    .qunit.assertEquals[r`status`heartbeat`in_flight;(`starting;`starting;0b);msg]}
+
+test_three_runs_leave_every_record_agreeing_after_each:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .ddbftest.started["init: the status file and heartbeat both say starting"];
+    .qpipe.job.demo_deals_backfill.run[];
+    a:.ddbftest.agree[`completed;`completed;"run 1 does every window: all three records say completed"];
+    .qpipe.job.demo_deals_backfill.run[];
+    b:.ddbftest.agree[`idle;`idle;"run 2 finds every window covered: all three say idle"];
+    .qpipe.job.demo_deals_backfill.run[];
+    c:.ddbftest.agree[`idle;`idle;"run 3 likewise - idle after idle is a new run, not a repeat write"];
+    .qunit.assertEquals[count distinct (a;b;c);3;"each run has its own ledger row, and the status file names it"]};
+
+test_a_partial_run_then_a_clean_one_leave_every_record_agreeing:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .ddbftest.started["init: the status file and heartbeat both say starting"];
+    orig:.ddbftest.swap_fixture {[] '"type error on column px"};
+    r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`error!(`threw;x)}];
+    .ddbftest.swap_fixture orig;
+    .qunit.assertEquals[r`state;`partial;"setup: every window fails, and the run returns rather than throws"];
+    a:.ddbftest.agree[`failed;`partial;
+        "a partial run: the status file says failed, as an orchestrator must read it; heartbeat and ledger say partial"];
+    .qpipe.job.demo_deals_backfill.run[];
+    b:.ddbftest.agree[`completed;`completed;"the next run retries the uncovered windows and completes"];
+    .qunit.assertEquals[a=b;0b;"the retry has its own ledger row, not the partial run's"]};
+
+/ The case that failed before #610: a run that THROWS. report_failure wrote
+/ the status file and nothing else, so the heartbeat stayed `running`, the
+/ ledger row stayed open, and the next run closed that row with its own
+/ outcome. The throw comes from the store's end-of-run finish, after every
+/ window has published and been covered, so the next run is idle.
+test_a_thrown_run_then_a_clean_one_leave_every_record_agreeing:{[t]
+    saved:.qetl.io.default;
+    .qetl.io.default:.qetl.io.default,enlist[`finish]!enlist {[] '"disk full"};
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;4]];
+    .ddbftest.started["init: the status file and heartbeat both say starting"];
+    r:@[{.qpipe.job.demo_deals_backfill.run[]; "returned"};::;{x}];
+    .qetl.io.default:saved;
+    .qunit.assertEquals[r;"disk full";"setup: the run throws the store's error out of run"];
+    a:.ddbftest.agree[`failed;`failed;"a thrown run: all three records say failed, and its ledger row is closed"];
+    .qpipe.job.demo_deals_backfill.run[];
+    b:.ddbftest.agree[`idle;`idle;"the next run finds every window covered: all three say idle"];
+    .qunit.assertEquals[a=b;0b;"the next run opens its own ledger row rather than closing the thrown run's"]};
+
 / No merging across versions, in the direction that matters: a version bump exists to force
 / re-extraction, so v1 coverage must not suppress a v2 run.
 test_a_version_bump_re_runs_the_whole_range:{[t]
@@ -178,6 +321,23 @@ test_define_refuses_an_unknown_on_conflict:{[t]
     d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`on_conflict;:;(`ddbftest_oc;`merge)];
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_oc_worker;x]};(`ns`procname`note) _ d;
         "on_conflict must be one of *";"a typo fails the declaration, not the first window"]};
+
+/ A worker over a source that can be restated declares no default, so a run
+/ must name its release.
+test_a_worker_declares_no_default_source_version_unless_it_says_so:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.default_version `demo_deals_backfill;`;
+        "deals can be corrected upstream, so a run names its version"]};
+
+test_a_declared_default_source_version_is_kept:{[t]
+    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_sv;`v7)];
+    .qetl.job.bounded.define[`ddbftest_sv_worker;(`ns`procname`note) _ d];
+    .qunit.assertEquals[.qetl.job.bounded.default_version `ddbftest_sv_worker;`v7;
+        "a run that names no version records coverage under v7"]};
+
+test_define_refuses_a_source_version_that_is_not_a_symbol:{[t]
+    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_sv2;"v1")];
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_sv2_worker;x]};(`ns`procname`note) _ d;
+        "*source_version must be a symbol*";"a string is refused at declaration"]};
 
 test_the_target_key_defaults_to_the_source_row_key:{[t]
     .qunit.assertEquals[(.qetl.job.bounded.def `demo_deals_backfill)`target_key;enlist `deal_id;
@@ -882,5 +1042,27 @@ test_a_zero_width_is_refused:{[t]
     .qunit.assertError[{.qetl.job.bounded.define[`zero_width;x]};
         `source`dataset`width`transform!(`demo_deals;`something_else;0D00:00;`demo_deals_passthrough);
         "a zero width plans infinitely many empty windows"]};
+
+
+/ --- a window's log lines carry what they belong to ----------------------
+
+/ Every line `f` logs, as (level;id;text;fields) with its context merged -
+/ a recorder in place of .qetl.log.line, put back after.
+logged:{[f]
+    keep:.qetl.log.line; `.ddbftest.lines set ();
+    .qetl.log.line:{[level;id;text;fields] .ddbftest.lines,:enlist (level;id;text;.qetl.log.with_scope fields)};
+    @[f;::;::]; .qetl.log.line:keep;
+    .ddbftest.lines}
+
+test_a_windows_lines_carry_the_run_worker_and_window:{[t]
+    .qpipe.job.demo_deals_backfill.init[.ddbftest.spec_for[`v1;1;3]];
+    lines:.ddbftest.logged {.qpipe.job.demo_deals_backfill.run[]};
+    starts:lines[;3] where lines[;2]~\:"window start";
+    .qunit.assertEquals[count starts;2;"two windows"];
+    .qunit.assertEquals[distinct starts[;`worker];enlist `demo_deals_backfill;"every line names the worker"];
+    .qunit.assertTrue[(1=count distinct starts[;`run]) and not null first starts[;`run];
+        "and the one run both windows belong to"];
+    .qunit.assertEquals[count distinct starts[;`range_from];2;"and its own window"];
+    .qunit.assertEquals[.qetl.log.context;()!();"nothing is left behind for the next worker"]};
 
 \d .

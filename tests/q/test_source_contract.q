@@ -445,4 +445,93 @@ test_an_undeclared_example_is_not_an_empty_string:{[t]
     .qunit.assertTrue[0<count .qetl.source.credential_example `demo_deals;
         "so the accessor must test the value, not the key"]};
 
+
+/ --- .qetl.source.ipc: an IPC query, traced ------------------------------
+
+/ Every log line `f` writes, as (level;id;text;fields): a recorder in place of
+/ .qetl.log.line, ahead of the TRC switch test_log.q covers.
+/ TRC on for the call: with it off the request paths trace nothing at all.
+logged:.testutil.captured_log[1b]
+
+/ A stand-in handle: evaluates the message as the far side would.
+fake_handle:{value x}
+
+test_ipc_sends_the_call_and_returns_its_rows:{[t]
+    r:.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2];
+    .qunit.assertEquals[r;([] x:1 2);"the handle runs the lambda on the bounds, and its rows come back"]};
+
+test_ipc_traces_the_lambda_and_its_bounds:{[t]
+    lines:.srctest.logged {.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2]};
+    .qunit.assertEquals[lines[;0 1 2];((`TRC;`ipc;"query sent");(`TRC;`ipc;"query returned"));
+        "one TRC line before the call, one after"];
+    sent:(first lines)[3];
+    .qunit.assertEquals[(sent`call;sent`range_from;sent`range_to;(last lines)[3]`rows);
+        ("{[a;b] ([] x:a,b)}";1;2;2);"the lambda's own text and both bounds, then the row count"]};
+
+test_a_live_ipc_source_query_is_traced:{[t]
+    / Through demo_deals' real `query`, with a handle that only records what
+    / it is sent - so this proves the source is wired through the helper,
+    / not just that the helper works.
+    / The handle is a global, not an argument: `logged {[h] ...}[h]` would
+    / run the fetch BEFORE logged installs its recorder.
+    `.srctest.h set {`.srctest.sent set x; ([] deal_id:`long$())};
+    lines:.srctest.logged {.qetl.source.fetch_window[`demo_deals;.srctest.h;.srctest.d 1;.srctest.d 2]};
+    .qunit.assertEquals[`ipc`ipc;2#lines[;1] where `TRC=lines[;0];"the live query is traced, sent and returned"];
+    .qunit.assertEquals[(type first .srctest.sent;1_.srctest.sent);(100h;(.srctest.d 1;.srctest.d 2));
+        "the handle is sent (lambda;from;to) - a UTC source's bounds unchanged"]};
+
+
+/ --- requests correlate with the work they belong to -------------------
+
+/ Two queries in one window, as a source that merges two tables sends them.
+two_tables:{[]
+    .qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2];
+    .qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] y:a+b)};1;2]}
+
+test_two_requests_in_one_window_share_its_context_and_not_their_number:{[t]
+    `.srctest.ctx set `worker`source`range_from`range_to!(`books;`merged;2026.09.10D00:00;2026.09.11D00:00);
+    lines:.srctest.logged {.qetl.log.with_context[.srctest.ctx;.srctest.two_tables;enlist(::)]};
+    sent:lines[;3] where lines[;2]~\:"query sent";
+    .qunit.assertEquals[count sent;2;"both requests traced"];
+    .qunit.assertEquals[(sent[;`worker];sent[;`source]);(`books`books;`merged`merged);
+        "each names the same worker and source"];
+    .qunit.assertEquals[(sent[;`transport];1=count distinct sent[;`request]);(`ipc`ipc;0b);
+        "both say they are remote requests, under different numbers"];
+    .qunit.assertEquals[sent[;`call];("{[a;b] ([] x:a,b)}";"{[a;b] ([] y:a+b)}");
+        "and each shows the lambda it actually sent"]};
+
+test_a_request_and_its_return_share_a_number:{[t]
+    lines:.srctest.logged {.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2]};
+    .qunit.assertEquals[lines[;2];("query sent";"query returned");"sent, then returned"];
+    .qunit.assertEquals[(lines[0;3]`request)~lines[1;3]`request;1b;"one request number for both"]};
+
+test_a_failed_request_is_traced_and_still_throws:{[t]
+    lines:.srctest.logged {@[.qetl.source.ipc[{'"refused"};{[a;b] a};1;];2;{`.srctest.err set x}]};
+    .qunit.assertEquals[(lines[;2];.srctest.err);(("query sent";"query failed");"refused");
+        "the failure is traced under its request, and the caller still gets the error"];
+    .qunit.assertEquals[(lines[0;3]`request)~lines[1;3]`request;1b;"sent and failed share a number"]};
+
+test_each_retry_is_traced_as_its_attempt:{[t]
+    / fails once, then answers - with_retry's own policy, no real sleep
+    / Globals, not arguments: `logged {..}[pol]` would run the retries
+    / BEFORE logged installs its recorder.
+    `.srctest.calls set 0;
+    `.srctest.h2 set {`.srctest.calls set 1+.srctest.calls; $[1=.srctest.calls; '"connection refused"; value x]};
+    `.srctest.pol set `max_attempts`base_delay_ms`max_delay_ms!(3;0;0);
+    lines:.srctest.logged {.qetl.job.bounded.runtime.with_retry[.srctest.pol;
+        {[u] .qetl.source.ipc[.srctest.h2;{[a;b] ([] x:a,b)};1;2]}]};
+    sent:lines[;3] where lines[;2]~\:"query sent";
+    .qunit.assertEquals[sent[;`attempt];1 2;"the first try and its retry, each labelled"]};
+
+test_with_trace_off_a_request_is_only_sent:{[t]
+    / no number minted, no lambda rendered, no line at all
+    / Through the protected recorder: a throw here used to leave the recorder
+    / installed for every suite after this one.
+    .qetl.log.trace 0b;
+    before:.qetl.log.request_seq;
+    lines:.testutil.captured_log[0b;{`.srctest.r set .qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2]}];
+    r:.srctest.r;
+    .qunit.assertEquals[(r;.qetl.log.request_seq;count lines);(([] x:1 2);before;0);
+        "the query runs, and nothing is numbered, formatted or logged"]};
+
 \d .

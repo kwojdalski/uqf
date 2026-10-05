@@ -104,11 +104,12 @@ you build - the pattern in [the etl scaffolding
 page](scaffolding/etl.md#testing-it-without-a-stack). To run it as a real
 process on stock kdb+, use `scripts/processes/run_stream.q`.
 
-**A backfill** has exited by the time you look, so read what it left on disk. In
-q, after loading the tree: `.qetl.coverage.attach[]` then
-`.qetl.coverage.ledger[]` for what was covered, `.qetl.run.attach[]` then
-`.qetl.run.history[]` for each run and its outcome, and `.qetl.hb.report[]` for
-heartbeats. All three live in the status directory, `$UQF_STATUS_DIR`.
+**A backfill** has exited by the time you look, so read what it left on disk:
+`uqs run status` for runs that never finished, `uqs run list` for every run and
+its outcome, and `uqs run show <run_id>` for one run's facts, its log files and
+the command that resumes it. [When it breaks](guides/when-it-breaks.md) walks
+the whole recovery. All of this lives in the status directory,
+`$UQF_STATUS_DIR`.
 
 **Query errors from the HDB** such as
 `./2026.01.07/arbitrage. OS reports: No such file or directory` mean a partition
@@ -135,7 +136,7 @@ running HDB is asked to reload - at most every `UQF_HDB_RELOAD_SECONDS` (default
 end. The tickerplant would stamp old rows with today's time, file them under
 today's date, and hand them to every subscriber as if they had just happened. In
 plain q - a test, or a prompt - the same worker writes to an in-memory table
-instead. See [`io_manager.q`](../src/etl/core/io_manager.q) and
+instead. See [`io_hdb.q`](../src/etl/core/io_hdb.q) and
 [on_conflict](reference/pipeline-declarations.md).
 
 ## How is a backfill job different from TorQ's dataloader?

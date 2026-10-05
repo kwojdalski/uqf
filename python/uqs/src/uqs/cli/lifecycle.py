@@ -78,6 +78,27 @@ def _warn_about_unfed_inputs(procs: str, port: int) -> None:
         console.print(f"[yellow]warning[/] {line}")
 
 
+def _note_monitor_coverage() -> None:
+    """Name the proctypes monitor1 gives up under the connection budget (#620).
+
+    Their processes get no heartbeat subscription, and heartbeat.q cannot
+    report what it never subscribed to - so without this the gap shows only
+    as a `-` nobody can read. Advisory, and never blocks a start.
+    """
+    try:
+        dropped = procs_model.monitor_dropped_proctypes(_paths())
+        limit = profiles.licence_limit()
+    except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
+        log.debug("monitor coverage note skipped: {}", exc)
+        return
+    if dropped:
+        console.print(
+            f"[yellow]note[/] monitor1 cannot watch {', '.join(dropped)}: the "
+            f"{limit}-connection licence budget leaves no slot for them, so their "
+            "processes run with no heartbeat in `uqs summary`"
+        )
+
+
 def _warn_about_connection_cap(procs: str, port: int) -> None:
     """Say so when the fleet this start produces is bigger than the licence
     lets one process hold handles for.
@@ -192,6 +213,7 @@ def _start(names: str, port: int) -> None:
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
+    _note_monitor_coverage()
     _run_streaming(runtime.start, names, base_port=port)
 
 
@@ -201,6 +223,7 @@ def _start_in_foreground(names: str, port: int) -> None:
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
+    _note_monitor_coverage()
     result = runtime.start(_paths(), names, base_port=port, capture=False)
     if result.returncode != 0:
         raise typer.Exit(code=result.returncode)
@@ -231,8 +254,8 @@ def start(
 LevelOpt = Annotated[
     str | None,
     typer.Option(
-        help="Only show this level and above: DEBUG/INFO/WARNING/ERROR",
-        autocompletion=completion.choices("DEBUG", "INFO", "WARNING", "ERROR"),
+        help="Only show this level and above: TRACE/DEBUG/INFO/WARNING/ERROR",
+        autocompletion=completion.choices("TRACE", "DEBUG", "INFO", "WARNING", "ERROR"),
     ),
 ]
 
@@ -318,6 +341,7 @@ def restart(procs: ProcsArg = None, port: PortOpt = DEFAULT_BASE_PORT) -> None:
     _reject_unknown(names)
     _warn_about_unfed_inputs(names, port)
     _warn_about_connection_cap(names, port)
+    _note_monitor_coverage()
     _run_streaming(runtime.restart, names, base_port=port)
 
 

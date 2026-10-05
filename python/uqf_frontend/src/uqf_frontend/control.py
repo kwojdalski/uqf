@@ -210,7 +210,33 @@ def set_worker_config(gateway: Any, settings: Settings, key: str, value: str) ->
     from uqf_frontend.gateway import TIERS
 
     raw = gateway.route(SET_WORKER_CONFIG, (key, value), TIERS["rdb"])
-    return {"key": key, "value": value, "explain": _plain(raw)}
+    explain = _plain(raw)
+    layer, effective = _layer_of(explain)
+    # Only the environment outranks an override (`.qetl.cfg.sources` is
+    # env, overrides, yaml, default), so "shadowed" means exactly that.
+    shadowed = layer == "env"
+    return {
+        "key": key,
+        "value": value,
+        "explain": explain,
+        "effective_layer": layer,
+        "effective_value": effective,
+        "shadowed": shadowed,
+        "env_var": f"UQF_{key.upper()}" if shadowed else None,
+    }
+
+
+def _layer_of(explain: Any) -> tuple[str | None, str | None]:
+    """The (layer, raw value) pair `.qetl.cfg.explain` returns, or Nones.
+
+    A q `(`env;"true")` arrives as a two-item list. Anything else is reported
+    as unknown rather than guessed at: the caller then shows neither "saved"
+    nor "shadowed", because it cannot honestly say which.
+    """
+    if isinstance(explain, (list, tuple)) and len(explain) == 2 and isinstance(explain[0], str):
+        effective = explain[1]
+        return explain[0], effective if isinstance(effective, str) else None
+    return None, None
 
 
 def _plain(value: Any) -> Any:
@@ -261,53 +287,39 @@ def start_backfill(
             raise ValidationFailed(f"{name} is required - a backfill with no range is not a range")
         _require_utc(name, raw)
 
-    import os
-    import subprocess
-
-    from uqs.interpreter import q_interpreter
+    from uqf_frontend.errors import BackfillNotStarted
     from uqs.paths import UqsError
-    from uqs.stack.backfill import backfill_flags
-    from uqs.stack.runtime import bootstrap
+    from uqs.stack.backfill import procname_for
+    from uqs.stack.backfill import start as start_backfill
 
+    # Through torq.sh, exactly as `uqs backfill` starts it. Running the q
+    # script directly - as this did - skipped TorQ's launcher, so the process
+    # died at once on `.proc.procname` with its output sent to /dev/null,
+    # while this endpoint answered 200 with the pid of a process already gone.
     paths = _paths(settings)
     try:
-        overrides = bootstrap(paths, base_port=settings.base_port)
-    except UqsError as exc:
-        raise ValidationFailed(str(exc)) from None
-
-    try:
-        flags = backfill_flags(
+        procname = procname_for(worker)
+        result = start_backfill(
+            paths,
             worker,
             source_version,
             dt.datetime.fromisoformat(range_from),
             dt.datetime.fromisoformat(range_to),
+            base_port=settings.base_port,
         )
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
-    env = {**os.environ, **overrides}
-    script = paths.scripts_dir.parent / "scripts" / "processes" / "torq_backfill.q"
-    if not script.is_file():
-        raise ValidationFailed(f"{script} not found - is this the repository root?")
-    q = q_interpreter(env)
-    if q is None:
-        raise ValidationFailed("no q interpreter to run the backfill - set $QCMD, or put q on PATH")
-
-    # start_new_session detaches it from this server's process group, so a
-    # restart of the API does not take a running backfill down with it.
-    proc = subprocess.Popen(  # noqa: S603
-        [str(q), str(script), *flags],
-        cwd=paths.repo_root,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    if result.returncode != 0:
+        raise BackfillNotStarted(
+            f"torq.sh could not start {procname} (exit {result.returncode}) - "
+            f"see `uqs logs {procname}`"
+        )
     return {
         "worker": worker,
         "source_version": source_version,
         "range_from": range_from,
         "range_to": range_to,
-        "pid": proc.pid,
+        "procname": procname,
         "status_path": "/ops/backfill",
     }
 

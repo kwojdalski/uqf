@@ -138,6 +138,9 @@ book_crossed:{[book] book[`bid]>book[`ask]};
 ccy_orient_cross:{[sym1;sym2]
     legs1:.qccy.ccy_pair_legs sym1; base1:string legs1`base; quote1:string legs1`quote;
     legs2:.qccy.ccy_pair_legs sym2; base2:string legs2`base; quote2:string legs2`quote;
+    / The same pair twice shares BOTH currencies, and crossing it with itself
+    / made a pair of one currency (EUREUR).
+    if[(base1,quote1)~base2,quote2; '"ccy_orient_cross: ",base1,quote1," crossed with itself"];
     if[quote1~base2; :`cross_sym`invert1`invert2!(.qccy.ccy_pair_symbol[base1;quote2];0b;0b)];
     if[quote1~quote2; :`cross_sym`invert1`invert2!(.qccy.ccy_pair_symbol[base1;base2];0b;1b)];
     if[base1~base2; :`cross_sym`invert1`invert2!(.qccy.ccy_pair_symbol[quote1;quote2];1b;0b)];
@@ -263,10 +266,13 @@ cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
 / Private: like ccy_orient_cross, but resolves orientation across an
 / arbitrary chain of N>=2 currency pairs instead of just two - walks the
 / legs in order, threading the running cross symbol forward via repeated
-/ calls to ccy_orient_cross. A running cross symbol is always already
-/ correctly oriented forward (that's what ccy_orient_cross guarantees for
-/ its own cross_sym), so it never needs inverting against the next leg -
-/ only that next leg does.
+/ calls to ccy_orient_cross. Each leg after the first must join the chain
+/ at its END currency. A leg that joins at the START - EURGBP after
+/ EURUSD,USDJPY, which shares EUR, not JPY - would need the whole running
+/ chain inverted, and the hop-by-hop sweep cannot invert a chain it has
+/ already walked: that flag used to be dropped, pricing JPYGBP at 140.25
+/ instead of 0.00515. It is refused instead, naming the leg; put that leg
+/ first, and the chain orients.
 / @param syms list of currency pair syms, one per leg, in traversal
 /   order, any format ccy.q's normalize_ccy_pair accepts
 / @return dict `cross_sym`inverts - cross_sym is the resulting end-to-end
@@ -284,6 +290,9 @@ ccy_orient_chain:{[syms]
     i:2;
     while[i<count syms;
         orient_i:.[ccy_orient_cross;(running_sym;syms i);{[i;x] '"ccy_orient_chain: leg ",(string i),": ",x}[i]];
+        if[orient_i`invert1;
+            '"ccy_orient_chain: leg ",(string i)," (",(string syms i),") joins ",(string running_sym),
+             " at its start, not its end - put it first, or reverse the legs"];
         running_sym:orient_i`cross_sym;
         inverts,:orient_i`invert2;
         i+:1];
@@ -786,9 +795,16 @@ cross_markout_decomp:{[quotes;sym;t0;t1;pip_factor;ref_size]
 /   col_precedence (`time`sym leading by default) when both are present:
 /   `time`sym`horizon_ms`ref_price`markout_pips (the timestamp column is
 /   named per time_col, `time by default; sym here is impact_sym, not
-/   traded_sym) - impact_sym's own price drift, signed by traded_sym's side
+/   traded_sym) - impact_sym's own price drift, signed by traded_sym's side.
+/   When impact_sym has no quote for some leg at trade_time the baseline is
+/   null, and EVERY markout_pips is null with it - no error: the baseline
+/   comes from cross_ref_price_at, which returns 0n rather than throwing.
+/   ref_price is still filled for each horizon that has a quote
 / @throws error if impact_sym normalizes to the same pair as traded_sym
-/   (nothing to compare against), or anything cross_ref_price_at/cross_book_at themselves throw
+/   (nothing to compare against), or for cross_markout_at_horizons' own
+/   checks on impact_sym: quotes missing a required column, quotes not
+/   sorted `sym`time xasc, or no chain of pairs in quotes connecting
+/   impact_sym's two currencies
 / @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;1;10000;-500 -300 0 100 300;1]
 / @eg .qfwd.cross_impact_at_horizons[quotes;`EURPLN;`EURUSD;trade_time;-1;10000;enlist 300;1]  -> a sell reports the impact pair's own drift with the opposite sign
 cross_impact_at_horizons:{[quotes;traded_sym;impact_sym;trade_time;side;pip_factor;horizons_ms;ref_size]

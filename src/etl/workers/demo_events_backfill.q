@@ -39,7 +39,9 @@ facts:{[batch]
     `event_span`distinct_syms`trade_events!
         ((string min batch`time),"/",string max batch`time;
          count distinct batch`sym;
-         sum `trade=batch`action)}
+         / "j"$: sum over booleans is an INT (2i), stored as "2i" in the run
+         / metadata where every other count is a plain number (#606).
+         sum "j"$`trade=batch`action)}
 
 \d .
 
@@ -48,7 +50,9 @@ facts:{[batch]
 .qetl.transform.passthrough[`demo_events_passthrough;`batch;0#.qpipe.source.demo_events.fixture[];.qpipe.source.demo_events.fixture[]];
 
 .qetl.job.bounded.define[`demo_events_backfill;
-    `source`dataset`width`transform`facts`procname`note!
+    `source`dataset`width`transform`facts`procname`note`source_version!
         (`demo_events;`event_tape;0D01:00:00;`demo_events_passthrough;.qpipe.job.demo_events_backfill.facts;
          `events_backfill1;
-         "bounded: see deals_backfill1")];
+         "bounded: see deals_backfill1";
+         / An event tape is append-only, so a run needs no --version.
+         `v1)];

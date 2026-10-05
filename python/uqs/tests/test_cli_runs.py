@@ -65,3 +65,65 @@ def test_list_shows_each_runs_range_and_counts(monkeypatch):
     assert result.exit_code == 0, result.output
     assert "demo_deals_backfill" in result.output
     assert "42" in result.output and "42.0" not in result.output
+
+
+# --- what to do next, from `uqs run show` (#636) -----------------------------
+
+_FAILED_RUN = {
+    "run_id": "0a1b2c3d-0000-0000-0000-000000000000",
+    "worker": "demo_deals_backfill",
+    "process": "deals_backfill1",
+    "dataset": "demo_deals",
+    "source_version": "v1",
+    "status": "failed",
+    "range_from": "2026-09-13T00:00:00.000000000",
+    "range_to": "2026-09-15T00:00:00.000000000",
+}
+
+
+def test_the_rerun_command_is_one_the_cli_accepts():
+    """The ledger spells nanoseconds, which fromisoformat refuses: printed
+    as-is, the command would fail when pasted."""
+    from uqs.stack import backfill
+
+    command = stack_runs.rerun_command(_FAILED_RUN)
+    assert command == (
+        "uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00 "
+        "--to 2026-09-15T00:00:00 --version v1"
+    )
+    for bound in (command.split("--from ")[1].split()[0], command.split("--to ")[1].split()[0]):
+        backfill.parse_bound("--from", bound)
+
+
+def test_a_sub_second_bound_keeps_every_digit_as_a_q_literal():
+    from uqs.stack import backfill
+
+    run = {**_FAILED_RUN, "range_from": "2026-09-13T06:30:00.123456000"}
+    command = stack_runs.rerun_command(run)
+    assert command is not None
+    assert "--from 2026.09.13D06:30:00.123456000" in command
+    parsed = backfill.parse_bound("--from", "2026.09.13D06:30:00.123456000")
+    assert parsed.microsecond == 123456
+
+
+def test_no_rerun_command_without_a_recorded_range():
+    """A run begun before the ledger recorded ranges cannot be re-run from its row."""
+    assert stack_runs.rerun_command({**_FAILED_RUN, "range_from": None}) is None
+
+
+def test_show_prints_the_logs_and_the_command_that_resumes(monkeypatch):
+    monkeypatch.setattr(stack_runs, "show", lambda paths, run_id: ([_FAILED_RUN], []))
+    result = runner.invoke(cli.app, ["run", "show", _FAILED_RUN["run_id"]], env={"COLUMNS": "400"})
+    assert result.exit_code == 0, result.output
+    assert "uqs logs deals_backfill1 --level ERR" in result.output
+    assert "err_deals_backfill1.log" in result.output
+    assert "uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00" in result.output
+    assert "resumes rather than repeats" in result.output
+
+
+def test_show_says_so_when_the_run_had_no_torq_process(monkeypatch):
+    run = {**_FAILED_RUN, "process": ""}
+    monkeypatch.setattr(stack_runs, "show", lambda paths, run_id: ([run], []))
+    result = runner.invoke(cli.app, ["run", "show", run["run_id"]], env={"COLUMNS": "400"})
+    assert result.exit_code == 0, result.output
+    assert "recorded no TorQ process" in result.output

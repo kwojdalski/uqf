@@ -5,6 +5,26 @@
 // matters is "reports a change exactly once", and a single call cannot
 // show it.
 
+
+/ #604: a change past the rendering's cut was invisible, because renderings
+/ were compared. Values are compared now.
+test_a_change_to_a_long_dictionary_is_recorded:{[t]
+    `.cfgatest.limits set `EURUSD`GBPUSD`USDJPY`AUDUSD`USDCAD`USDCHF`NZDUSD!7#1e6;
+    .qetl.cfg.audit.watch[`cfgatest;`.cfgatest.limits];
+    .qetl.cfg.audit.poll[`cfgatest;2026.09.19D12:00:00.0];
+    .cfgatest.limits[`NZDUSD]:5e7;
+    r:.qetl.cfg.audit.poll[`cfgatest;2026.09.19D12:01:00.0];
+    .qunit.assertEquals[count r;1;"the NZDUSD edit is recorded"];
+    .qunit.assertTrue[(first r`new) like "*5e+07*";"and the new value shows it"]};
+
+test_an_atom_then_a_list_does_not_break_the_memory:{[t]
+    / seen keeps generic values: an atom first must not type it.
+    `.cfgatest.knob set 1f;
+    .qetl.cfg.audit.watch[`cfgatest;`.cfgatest.knob];
+    .qetl.cfg.audit.poll[`cfgatest;2026.09.19D12:00:00.0];
+    `.cfgatest.knob set 1 2 3f;
+    .qunit.assertEquals[count .qetl.cfg.audit.poll[`cfgatest;2026.09.19D12:01:00.0];1;"an atom changed to a list is recorded"]};
+
 \d .cfgatest
 
 / Two globals of this namespace's own to watch, so no test depends on a
@@ -121,6 +141,17 @@ test_a_name_that_appears_later_is_reported_as_a_change:{[t]
     / two-character one is a list, so the obvious literal here compares a
     / char against the one-element string render actually returns.
     .qunit.assertEquals[r`new;enlist "7";"and then it was"]};
+
+test_a_value_spelled_like_the_undefined_marker_is_still_a_change:{[t]
+    / The marker was the symbol `undefined, so a name going from undefined to
+    / `undefined recorded nothing, and a defined `undefined rendered as absent.
+    reset[];
+    .qetl.cfg.audit.watch[`j;`.cfgatest.spelled_undefined];
+    .qetl.cfg.audit.poll[`j;t0];
+    `.cfgatest.spelled_undefined set `undefined;
+    r:.qetl.cfg.audit.poll[`j;t0+0D00:00:05];
+    .qunit.assertEquals[(count r;(first r)`old;(first r)`new);(1;"(undefined)";"`undefined");
+        "absent, then holding the symbol - one change, told apart"]};
 
 / --- the publisher seam ---------------------------------------------------
 

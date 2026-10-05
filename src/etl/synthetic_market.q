@@ -42,9 +42,10 @@ pairs:`EURUSD`GBPUSD`USDJPY`AUDUSD`EURJPY
 / unrelated random walks rather than anything resembling a market.
 spot:1.0850 1.2650 149.50 0.6550 162.2075
 
-/ One pip for each pair, in pairs order - 0.01 for the JPY pairs, 0.0001
-/ for the rest. Also the half-spread each feed quotes around the mid.
-pip:0.0001 0.0001 0.01 0.0001 0.01
+/ One pip for each pair, in pairs order - from .qccy.pip_size, the one rule,
+/ rather than a list kept in step with `pairs` by hand. Also the half-spread
+/ each feed quotes around the mid.
+pip:.qccy.pip_size pairs
 
 / The size every quote is published at, and the size the cross job prices.
 size_unit:1000000

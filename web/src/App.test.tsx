@@ -188,3 +188,42 @@ it("shows reloads as temporary status rather than a permanent failure", async ()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.getByText("Retrying automatically.")).toBeInTheDocument();
 });
+it("names a gateway port that reaches the wrong process, and shows the server's fix", async () => {
+  // The backend has always sent wrong_process; the UI did not know the word
+  // and showed "Connecting" forever, with the fix it was sent never drawn.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) =>
+      path === "/health"
+        ? ok({
+            ok: false,
+            gateway: "wrong_process",
+            detail: "Set UQF_FRONTEND_GATEWAY_PORT to the gateway's port",
+            poll_seconds: 5,
+          })
+        : ok({}),
+    ),
+  );
+  render(<App />);
+  expect(await screen.findByText("Wrong process")).toBeInTheDocument();
+  expect(
+    screen.getByText("Set UQF_FRONTEND_GATEWAY_PORT to the gateway's port"),
+  ).toBeInTheDocument();
+});
+it("says a run whose process is gone is abandoned, not in progress", async () => {
+  mockApi(() =>
+    ok({
+      poll_seconds: 10,
+      source: "/status",
+      summary: { running: 0, abandoned: 1 },
+      workers: [{ worker: "killed-worker", state: "running", abandoned: true }],
+      unreadable: [],
+    }),
+  );
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Backfills/ }));
+  expect(
+    await screen.findByText("Abandoned · process gone, no outcome recorded"),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("In progress")).not.toBeInTheDocument();
+});

@@ -58,6 +58,8 @@ check["odbc source registered"; registered[.qetl.source.def;`smokedb]]
 check["odbc source declares its transport"; `odbc~.qetl.source.def[`smokedb]`transport]
 check["ipc worker registered"; registered[.qetl.job.bounded.def;`smokebf_backfill]]
 check["odbc worker registered"; registered[.qetl.job.bounded.def;`smokedb_backfill]]
+check["local source declares its transport"; `local~.qetl.source.def[`smokelocal]`transport]
+check["local worker registered"; registered[.qetl.job.bounded.def;`smokelocal_backfill]]
 check["feed on_timer throws not implemented"; unwritten {.qpipe.job.smokefeed.on_timer[]}]
 check["etl on_batch throws not implemented"; unwritten {.qpipe.job.smokeetl.on_batch[`t;()]}]
 check["reaction registered on its dataset";
@@ -114,6 +116,9 @@ def _scaffold_every_kind(root: Path) -> None:
         ),
         backfill.bounded_worker("smokebf", "smoke_hist", "sym:symbol, px:float"),
         backfill.bounded_worker("smokedb", "smoke_db", "sym:symbol, amt:float", transport="odbc"),
+        backfill.bounded_worker(
+            "smokelocal", "smoke_local", "sym:symbol, amt:float", transport="local"
+        ),
         # On a dataset the worker above fills, and writing, so the graph path runs.
         reaction(
             "smokerx",

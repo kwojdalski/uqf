@@ -71,7 +71,7 @@ quality_check:{[batch]
     bad_latency:select from batch where (latency_ms<0) | (latency_min_ms>latency_ms);
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
-        ([] check:count[t]#nm; status:count[t]#`breach; detail:.Q.s1 each t)
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each t)
       }'[`crossed_book`nonpositive_trade`negative_latency;
          (crossed;bad_trade;bad_latency)]}
 
@@ -93,8 +93,10 @@ facts:{[batch]
 \d .
 
 .qetl.job.bounded.define[`crypto_market_data_backfill;
-    `source`dataset`width`transform`check`facts`procname`note!
+    `source`dataset`width`transform`check`facts`procname`note`source_version!
         (`crypto_market_data;`crypto_market_data;0D01;`crypto_market_data;
          .qpipe.job.crypto_market_data_backfill.quality_check;.qpipe.job.crypto_market_data_backfill.facts;
          `crypto_market_data_backfill1;
-         "bounded: replays cryptorust's recorded crypto book and trade capture from a DuckDB file over ODBC, an hour at a time")];
+         "bounded: replays cryptorust's recorded crypto book and trade capture from a DuckDB file over ODBC, an hour at a time";
+         / A recording is never restated, so a run needs no --version.
+         `v1)];

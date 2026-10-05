@@ -56,6 +56,7 @@
 \l src/etl/core/materialisation.q
 \l src/etl/core/run.q
 \l src/etl/core/io_manager.q
+\l src/etl/core/io_hdb.q
 \l src/etl/core/singlestore_odbc.q
 \l src/etl/core/heartbeat.q
 \l src/etl/core/dag.q
@@ -67,6 +68,7 @@
 \l src/etl/core/transform.q
 \l src/etl/core/source_contract.q
 \l src/etl/core/bounded_worker.q
+\l src/etl/core/uptime.q
 \l src/etl/core/stream_job.q
 \l src/etl/core/config_audit.q
 \l src/etl/core/normalizer.q

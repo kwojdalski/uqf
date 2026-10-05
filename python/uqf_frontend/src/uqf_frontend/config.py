@@ -131,6 +131,14 @@ class Settings:
     #: can reach the port" is the whole access control - so turning that on
     #: is a deliberate act with a name, not a thing that happens by default.
     enable_writes: bool = False
+    #: The secret every control action must carry while writes are on - see
+    #: write_guard.py. Empty by default, and the server refuses to start with
+    #: writes on and this empty, for the same reason `user` has no default.
+    write_token: str = ""
+    #: Hosts a request's Host header may name while writes are on - the
+    #: DNS-rebinding check in write_guard.py. The loopback names by default:
+    #: the single-host deployment this tree runs.
+    allowed_hosts: tuple[str, ...] = ("localhost", "127.0.0.1", "::1")
     #: Where captured usage rows are written. None means capture does
     #: not run - and that is a real choice, not a safe one: `.usage.flushtime`
     #: is one day in a standard stack, so with this unset the usage view can
@@ -175,6 +183,8 @@ class Settings:
             web_dist=_path_env("UQF_FRONTEND_WEB_DIST"),
             base_port=base_port,
             enable_writes=_flag_env("UQF_FRONTEND_ENABLE_WRITES"),
+            write_token=os.environ.get("UQF_FRONTEND_WRITE_TOKEN", cls.write_token),
+            allowed_hosts=_hosts_env("UQF_FRONTEND_ALLOWED_HOSTS", cls.allowed_hosts),
             stack_root=_path_env("UQF_FRONTEND_STACK_ROOT"),
             capture_dir=_path_env("UQF_FRONTEND_CAPTURE_DIR"),
             capture_interval=_int_env("UQF_FRONTEND_CAPTURE_INTERVAL", cls.capture_interval),
@@ -208,6 +218,13 @@ def _flag_env(name: str) -> bool:
     if lowered in ("0", "false", "no", "off"):
         return False
     raise ValueError(f"{name} must be a boolean (true/false/1/0/yes/no/on/off), got {raw!r}")
+
+
+def _hosts_env(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    """A comma-separated host list, lower-cased; unset or empty keeps the default."""
+    raw = os.environ.get(name, "")
+    hosts = tuple(h.strip().lower() for h in raw.split(",") if h.strip())
+    return hosts or default
 
 
 def _path_env(name: str) -> Path | None:

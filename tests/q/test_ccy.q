@@ -59,4 +59,18 @@ test_normalize_ccy_pair_idempotent:{[t]
     twice:.qccy.normalize_ccy_pair once;
     .qunit.assertEquals[once;twice;"normalizing an already-normalized pair is a no-op"]};
 
+
+/ --- pips: one rule (#623) -------------------------------------------------
+
+test_pip_factor_by_quote_currency:{[t]
+    .qunit.assertEquals[.qccy.pip_factor `EURUSD`USDJPY`EURJPY`GBPUSD`AUDUSD;10000 100 100 10000 10000;
+        "100 for a JPY quote, 10000 otherwise"]};
+
+test_pip_factor_takes_an_atom_and_any_pair_spelling:{[t]
+    .qunit.assertEquals[(.qccy.pip_factor `USDJPY;.qccy.pip_factor "usd/jpy");100 100;
+        "an atom in, an atom out, however the pair is written"]};
+
+test_pip_size_is_the_factors_inverse:{[t]
+    .qunit.assertEquals[.qccy.pip_size `EURUSD`USDJPY;0.0001 0.01;"one pip, as a price"]};
+
 \d .

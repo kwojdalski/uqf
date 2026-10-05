@@ -155,8 +155,9 @@ def new_job(
         str,
         typer.Option(
             "--transport",
-            help="How a new backfill source is reached: 'ipc' (a q process) or 'odbc'",
-            autocompletion=completion.choices("ipc", "odbc"),
+            help="How a new backfill source is reached: 'ipc' (a q process), 'odbc', "
+            "or 'local' (an HDB directory on this machine, read from its files)",
+            autocompletion=completion.choices("ipc", "odbc", "local"),
         ),
     ] = "ipc",
     period: Annotated[

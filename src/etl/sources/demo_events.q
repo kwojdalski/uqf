@@ -53,11 +53,11 @@ tz:`UTC
 / [range_from;range_to) - >= on the lower bound and < on the
 / upper, so a boundary event is published exactly once.
 query:{[h;range_from;range_to]
-    h({[from_ts;to_ts]
+    .qetl.source.ipc[h;{[from_ts;to_ts]
         select time, sym, action, side, size, price, order_id, pip_factor
             from `event_tape
             where time>=from_ts, time<to_ts
-      };range_from;range_to)}
+      };range_from;range_to]}
 
 / ------------------------------------------------------------ THE FIXTURE
 
@@ -81,7 +81,7 @@ fixture:{[]
         size:1000000 2000000 1000000 2000000 500000 500000 1500000 1500000 750000 750000f;
         price:1.0842 1.0840 1.0842 1.0840 1.0843 1.0843 1.0839 1.0839 1.0844 1.0844;
         order_id:1 2 1 2 3 3 4 4 5 5j;
-        pip_factor:10#10000j)}
+        pip_factor:.qccy.pip_factor 10#`EURUSD)}
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qetl.source.define[source_name;

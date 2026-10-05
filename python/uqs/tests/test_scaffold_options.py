@@ -113,6 +113,15 @@ def test_an_odbc_source_declares_its_transport_and_a_credential_example():
     assert ".qetl.io.odbc.run_sql" in body, "the query comment is the ODBC one"
 
 
+def test_a_local_source_declares_its_transport_and_a_directory_example():
+    body = _body(
+        backfill.bounded_worker("fx", "fx_rates", "px:float", transport="local"), "sources/fx.q"
+    )
+    assert "transport:`local" in body
+    assert 'credential_example:"SCAFFOLDED: e.g. /data/hdb"' in body, "a path, not a DSN"
+    assert ".qetl.source.local[h;" in body, "the query comment is the local one"
+
+
 def test_an_unknown_transport_is_refused():
     with pytest.raises(UqsError, match="--transport must be one of"):
         backfill.bounded_worker("fx", "fx_rates", "px:float", transport="http")

@@ -30,15 +30,17 @@ quality_check:{[batch]
     bad_price:select from batch where not price>0;
     raze {[nm;t]
         if[0=count t; :.qetl.job.bounded.no_failures[]];
-        ([] check:count[t]#nm; status:count[t]#`breach; detail:.Q.s1 each select time, sym, sequence from t)
+        ([] check:count[t]#nm; status:count[t]#`breach; detail:.qrender.full each select time, sym, sequence from t)
       }'[`crossed_top_of_book`nonpositive_price;(crossed;bad_price)]}
 
 \d .
 
 .qetl.job.bounded.define[`databento_book_backfill;
-    `source`dataset`width`transform`check`procname`note`target_key!
+    `source`dataset`width`transform`check`procname`note`target_key`source_version!
     (`databento_mbp10;`databento_book;0D00:10:00;`databento_book;.qpipe.job.databento_book_backfill.quality_check;
      `databento_backfill1;
      "bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live";
      / The source's row_key, with symbol and ts_event under the transform's names.
-     `sym`time`sequence`action`side`price`size)];
+     `sym`time`sequence`action`side`price`size;
+     / Historical market data is not restated, so a run needs no --version.
+     `v1)];

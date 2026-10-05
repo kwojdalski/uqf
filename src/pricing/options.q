@@ -93,7 +93,8 @@ gk_put:{[s;k;rd;rf;sigma;t]
 / @param is_call 1b for a call, 0b for a put
 / @return the call or put premium
 / @eg .qopt.gk_price[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.03781082
-gk_price:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_call[s;k;rd;rf;sigma;t];gk_put[s;k;rd;rf;sigma;t]]};
+/ ? not $: a vector of is_call flags prices calls and puts element by element.
+gk_price:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_call[s;k;rd;rf;sigma;t];gk_put[s;k;rd;rf;sigma;t]]};
 
 / Call delta: sensitivity of the premium to a change in spot.
 / @param s spot rate
@@ -134,7 +135,7 @@ gk_delta_put:{[s;k;rd;rf;sigma;t]
 / @return the call or put delta
 / @eg .qopt.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.512884
 / @eg .qopt.gk_delta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4722279
-gk_delta:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_delta_call[s;k;rd;rf;sigma;t];gk_delta_put[s;k;rd;rf;sigma;t]]};
+gk_delta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_delta_call[s;k;rd;rf;sigma;t];gk_delta_put[s;k;rd;rf;sigma;t]]};
 
 / Gamma: sensitivity of delta to a change in spot. Identical for call and put.
 / @param s spot rate
@@ -259,7 +260,7 @@ gk_theta_put:{[s;k;rd;rf;sigma;t]
 / @return the call or put theta
 / @eg .qopt.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> -0.03732846
 / @eg .qopt.gk_theta[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.01027354
-gk_theta:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_theta_call[s;k;rd;rf;sigma;t];gk_theta_put[s;k;rd;rf;sigma;t]]};
+gk_theta:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_theta_call[s;k;rd;rf;sigma;t];gk_theta_put[s;k;rd;rf;sigma;t]]};
 
 / Call rho: sensitivity to the domestic rate rd.
 / @param s spot rate
@@ -300,7 +301,7 @@ gk_rho_put:{[s;k;rd;rf;sigma;t]
 / @return the call or put rho
 / @eg .qopt.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;1b]  -> 0.3947712
 / @eg .qopt.gk_rho[1.10;1.12;0.045;0.02;0.10;0.75;0b]  -> -0.4173519
-gk_rho:{[s;k;rd;rf;sigma;t;is_call] $[is_call;gk_rho_call[s;k;rd;rf;sigma;t];gk_rho_put[s;k;rd;rf;sigma;t]]};
+gk_rho:{[s;k;rd;rf;sigma;t;is_call] ?[is_call;gk_rho_call[s;k;rd;rf;sigma;t];gk_rho_put[s;k;rd;rf;sigma;t]]};
 
 / Configurable search bracket/iteration cap for bisect_vol's fallback
 / search - lo/hi should stay well outside any real-world vol (0.001% to
@@ -330,6 +331,9 @@ BISECT_VOL_MAX_ITER:200;
 /   exact digits are a property of BISECT_VOL_TOL rather than of the option)
 bisect_vol:{[price;s;k;rd;rf;t;is_call]
     lo:BISECT_VOL_LO; hi:BISECT_VOL_HI;
+    / A price no volatility in [lo;hi] produces - below intrinsic, or above
+    / the price at hi - has no implied vol: null, not the nearer bound.
+    if[(price<gk_price[s;k;rd;rf;lo;t;is_call]) or price>gk_price[s;k;rd;rf;hi;t;is_call]; :0n];
     i:0;
     while[i<BISECT_VOL_MAX_ITER;
         mid:0.5*(lo+hi);

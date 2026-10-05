@@ -159,7 +159,7 @@ now:{[] .z.p}
                 side:1 -1 1;
                 trade_price:1.1 150 1.27;
                 size:1e6 2e6 5e5;
-                pip_factor:10000 100 10000);
+                pip_factor:.qccy.pip_factor `EURUSD`USDJPY`GBPUSD);
             ([] time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00 2026.09.17D10:00:02.5;
                 sym:`EURUSD`EURUSD`EURUSD`USDJPY`USDJPY;
                 bid:1.0999 1.1004 1.1009 149.99 149.94;

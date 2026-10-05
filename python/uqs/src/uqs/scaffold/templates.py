@@ -18,13 +18,14 @@ from uqs.scaffold.columns import TIME_COLUMN, sample_value, type_char
 
 #: How a source is reached, as `.qetl.source.transports` lists them. Held to
 #: src/etl/core/source_contract.q by test_scaffold.py.
-TRANSPORTS = ("ipc", "odbc")
+TRANSPORTS = ("ipc", "odbc", "local")
 
 #: What a credential looks like per transport, for the scaffold's own note.
 #: A source that knows better declares its own `credential_example`.
 CREDENTIAL_SHAPES = {
     "ipc": "host:port of the q process to read from",
     "odbc": "an ODBC connection string",
+    "local": "the path of an HDB directory on this machine",
 }
 
 
@@ -82,12 +83,23 @@ test_{name}_is_implemented:{{[t]
 _QUERY_NOTES = {
     "ipc": """/ Parameterised, NEVER concatenated (src/etl/core/source_contract.q refuses a string).
 / The bounds are arguments to a functional select evaluated on the remote
-/ side, so no caller value is ever spliced into query text.""",
+/ side, so no caller value is ever spliced into query text. Send it with
+/ .qetl.source.ipc[h;{[from_ts;to_ts] select ...};range_from;range_to], not
+/ h(...) directly, so `uqs backfill --trace` shows the query.""",
     "odbc": """/ `h` is an ODBC handle from .qetl.io.odbc.open. Build the SELECT with every
 / bound through .qetl.io.odbc.literal - never string concatenation of a raw
 / value - run it with .qetl.io.odbc.run_sql, and return the declared columns
 / and types (src/etl/sources/duckdb_deals.q's sql_for and adapt).""",
+    "local": """/ `h` is the HDB directory, read from its files with no process in between.
+/ Send the query with .qetl.source.local[h;{[read;from_ts;to_ts] ...};range_from;range_to]:
+/ read[`table;from_ts;to_ts] returns the whole date partitions the window
+/ touches, symbols decoded against the HDB's own sym file - filter the rows
+/ to [from_ts;to_ts) yourself.""",
 }
+
+
+#: The scaffolded credential_example, per transport that declares one.
+_CREDENTIAL_EXAMPLES = {"odbc": "DRIVER=...;Database=...", "local": "/data/hdb"}
 
 
 def _transport_block(src: str, transport: str) -> tuple[str, str, str]:
@@ -102,8 +114,8 @@ transport:`{transport}
 
 / SCAFFOLDED. What {credential_var(src)} looks like, for the warning a worker
 / logs when none is set - a DuckDB file is a path and a mode, a server needs
-/ its host, user and password.
-credential_example:"SCAFFOLDED: e.g. DRIVER=...;Database=..."
+/ its host, user and password, a local HDB is a directory.
+credential_example:"SCAFFOLDED: e.g. {_CREDENTIAL_EXAMPLES[transport]}"
 """
     return decls, "`transport`credential_example", ";transport;credential_example"
 

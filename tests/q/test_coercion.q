@@ -36,6 +36,27 @@ test_a_plain_decimal_still_works:{[t]
 test_a_mixed_comma_and_dot_is_refused_rather_than_guessed:{[t]
     .qunit.assertEquals[null .qetl.coerce.to_float["1,234.56"];1b;"an ambiguous separator is nulled, not guessed at"]};
 
+test_a_comma_before_exactly_three_digits_is_refused:{[t]
+    / 1234 with a thousands separator, or 1.234 with a decimal comma: either
+    / reading is common, and the wrong one is 1000x off
+    r:.qetl.coerce.to_float each ("1,234";"12,345";"-1,000");
+    .qunit.assertEquals[all null r;1b;"ambiguous, so nulled - a counted coercion failure"]};
+
+test_a_comma_before_other_digit_counts_is_a_decimal:{[t]
+    .qunit.assertEquals[.qetl.coerce.to_float each ("1,5";"1,25";"1,0842");1.5 1.25 1.0842;"not three digits, so not a thousands group"]};
+
+test_a_misplaced_sign_is_not_a_number:{[t]
+    / "F"$"--1" is 1: every character is numeric, so the character test alone passed it
+    r:(.qetl.coerce.to_float each ("--1";"1-2";"+-3")),.qetl.coerce.to_long each ("--1";"5-");
+    .qunit.assertEquals[all null r;1b;"a sign only at the start or after an exponent"]};
+
+test_a_single_digit_is_a_number:{[t]
+    / "5" is a char atom, not a string - the sign check threw 'type on it
+    .qunit.assertEquals[(.qetl.coerce.to_float "5";.qetl.coerce.to_long "7");(5f;7);"one character is still text to coerce"]};
+
+test_a_sign_where_numbers_have_one_still_parses:{[t]
+    .qunit.assertEquals[(.qetl.coerce.to_float each ("-1.5";"+2";"1e-5";"1E+2")),`float$.qetl.coerce.to_long "-7";-1.5 2 1e-5 100 -7f;"leading and exponent signs"]};
+
 test_an_exponent_parses:{[t]
     .qunit.assertEquals[.qetl.coerce.to_float["1.0842e0"];1.0842;"exponent notation is a legitimate float form"]};
 
@@ -87,6 +108,26 @@ test_sub_second_precision_survives:{[t]
 
 test_midnight_can_be_asked_for_explicitly:{[t]
     .qunit.assertEquals[.qetl.coerce.to_date_as_midnight["2026-09-15"];2026.09.15D00:00:00.000000000;"a caller for whom midnight is correct says so, greppably"]};
+
+test_a_full_timestamp_is_not_a_date_at_midnight:{[t]
+    / "D"$ read it as 0000.00.00 and the cast made -0Wp, which no null check catches
+    r:.qetl.coerce.to_date_as_midnight each ("2026-09-15T12:00:00";"2026.09.15D12:00");
+    .qunit.assertEquals[r;0N 0Np;"refused as null, not published as minus infinity"]};
+
+test_a_zone_offset_is_applied_so_the_result_is_utc:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T11:30:00+02:00";"2026-09-15T04:30:00-05:00";"2026-09-15T15:00:00+0530";"2026-09-15T12:30:00+03");
+    .qunit.assertEquals[r;4#2026.09.15D09:30:00.000000000;"+02:00, -05:00, +0530 and +03 all land on the same UTC instant"]};
+
+test_z_and_a_zero_offset_are_utc:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T09:30:00Z";"2026-09-15T09:30:00+00:00";"2026-09-15T09:30:00.5-00:00");
+    .qunit.assertEquals[r;2026.09.15D09:30:00 2026.09.15D09:30:00 2026.09.15D09:30:00.5;"Z, +00:00 and -00:00 change nothing"]};
+
+test_an_offset_crosses_midnight:{[t]
+    .qunit.assertEquals[.qetl.coerce.to_timestamp["2026-09-15T01:00:00+02:00"];2026.09.14D23:00:00.000000000;"the UTC date is the day before - the row belongs in that window"]};
+
+test_an_unreadable_offset_is_null_not_ignored:{[t]
+    r:.qetl.coerce.to_timestamp each ("2026-09-15T09:30:00+2";"2026-09-15T09:30:00+25:00";"2026-09-15T09:30:00+02:75";"2026-09-15T09:30:00+ab:cd");
+    .qunit.assertEquals[all null r;1b;"a suffix that is there but cannot be read is a failure, not a clock read as UTC"]};
 
 test_date_only_detection_is_exported:{[t]
     .qunit.assertEquals[.qetl.coerce.is_date_only each ("2026-09-15";"2026-09-15T09:30:00");10b;"'did the source give me a date' is answerable directly"]};
