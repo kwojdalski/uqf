@@ -114,7 +114,7 @@ test_an_empty_page_checks_columns_not_elements:{[t]
 
 test_missing_extra_or_reordered_columns_are_refused:{[t]
     p:.qetl.plant.published `mkt_orderbook;
-    .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`mkt_orderbook;x]};1_cols[p]#p;"mkt_orderbook has columns*";"one missing"];
+    .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`mkt_orderbook;x]};(1_cols p)#p;"mkt_orderbook has columns*";"one missing"];
     .qunit.assertThrows[{'"; " sv .qetl.plant.problems[`mkt_orderbook;x]};update extra:`float$() from p;"mkt_orderbook has columns*";"one extra"]};
 
 test_a_scalar_column_of_the_wrong_type_is_refused:{[t]
