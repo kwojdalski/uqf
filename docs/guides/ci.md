@@ -140,11 +140,14 @@ a reason to skip it.
 
 ### What CI does run on q: PeachQ
 
-The one exception is PeachQ, an MIT-licensed q that a hosted runner can download
-where it cannot license KDB-X. CI installs a pinned release, checked against its
-published sha256, beside the tree and **not** on `PATH`. So every step above
-still finds no q, and nothing it does can pass for a KDB-X run. Three steps then
-name it explicitly, with `UQF_Q_IMPL=peachq` and `QCMD`:
+The one exception is PeachQ, an MIT-licensed q that a hosted runner can build
+where it cannot license KDB-X. CI builds it from a pinned commit, the
+`PEACHQ_COMMIT` in `ci.yml`, and caches the binary by that hash. It does not
+download a release, because the release asset under one tag has been replaced
+more than once, and a commit cannot change under us. Taking a newer PeachQ means
+moving that hash. The binary sits beside the tree and **not** on `PATH`. So
+every step above still finds no q, and nothing it does can pass for a KDB-X run.
+Three steps then name it explicitly, with `UQF_Q_IMPL=peachq` and `QCMD`:
 
 - **`q-docs` on PeachQ, blocking.** This runs every ```` ```q ```` block in the
   docs that is marked to run (see below).
