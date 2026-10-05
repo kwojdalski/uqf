@@ -142,16 +142,3 @@ these can be asked *as of* a past instant and get the answer that was true then.
   [`.qetl.status`](../../src/etl/core/status.q) writes.
 - The [`uqs` MCP server](../../python/uqs/src/uqs/mcp.py) --- the stack as tools
   an agent can call.
-
-## What a day looks like through it
-
-A fill on Binance reaches `crypto_trades` from the recorder; `executions` spells
-it the way an FX fill is spelled; `posbook` folds it into the same book the
-EURUSD position lives in and marks it to the mid `marks` last saw from the
-Binance ladder. The frontend's position view shows both, through the gateway. At
-the end of the day `.qalloc` says which of the morning's buys that afternoon's
-sell actually closed, under whichever convention the desk reports in --- and if
-a venue's history has to be re-run, the backfill writes the corrected window
-beside the old one, and the ledger says which is which.
-
-None of that required a producer to know about a consumer.
