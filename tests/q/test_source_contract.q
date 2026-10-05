@@ -481,6 +481,28 @@ test_a_live_ipc_source_query_is_traced:{[t]
         "the handle is sent (lambda;from;to) - a UTC source's bounds unchanged"]};
 
 
+/ --- .qetl.source.ipc_call: a cursor's query, traced the same way --------
+
+test_ipc_call_sends_its_arguments_and_returns_the_rows:{[t]
+    .qunit.assertEquals[.qetl.source.ipc_call[.srctest.fake_handle;{[c] ([] x:c+1 2)};enlist 10];([] x:11 12);
+        "one argument - a polling feed's cursor - sent as h(f;cursor)"];
+    .qunit.assertEquals[.qetl.source.ipc_call[.srctest.fake_handle;{[a;b] a*b};6 7];42;
+        "several, in order"]};
+
+test_ipc_call_traces_the_lambda_and_its_arguments:{[t]
+    lines:.srctest.logged {.qetl.source.ipc_call[.srctest.fake_handle;{[c] ([] x:enlist c)};enlist 5]};
+    .qunit.assertEquals[lines[;0 1 2];((`TRC;`ipc;"query sent");(`TRC;`ipc;"query returned"));
+        "the same two events .qetl.source.ipc logs, so --trace renders it the same"];
+    sent:(first lines)[3];
+    .qunit.assertEquals[(sent`call;sent`args;(last lines)[3]`rows);("{[c] ([] x:enlist c)}";enlist 5;1);
+        "the lambda's text and its arguments, then the row count"]};
+
+test_a_failed_ipc_call_is_traced_and_still_throws:{[t]
+    lines:.srctest.logged {@[.qetl.source.ipc_call[{'"source down"};{[c] c};];enlist 1;{`.srctest.err set x}]};
+    .qunit.assertEquals[(lines[;2];.srctest.err);(("query sent";"query failed");"source down");
+        "logged before it was sent, then its failure - and the caller gets the error"]};
+
+
 / --- requests correlate with the work they belong to -------------------
 
 / Two queries in one window, as a source that merges two tables sends them.

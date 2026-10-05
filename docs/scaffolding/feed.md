@@ -164,6 +164,19 @@ cursor is read, never written - so it is safe beside the running feed. It exits
 feed written as one `on_timer` cannot be previewed: running it would publish.
 Nor can a job that subscribes, whose input comes from the plant.
 
+`--trace` shows the queries the page's fetch sends: each one before it goes, as
+a block, with the job and the cursor it fetched after, and again with its rows
+and milliseconds or its error. That includes the fetch that hung, if the preview
+times out. Only a query sent through a traced path appears. For a polling feed
+that's `.qetl.source.ipc_call[h;{[c] select ... where time>c};enlist cursor]`,
+the cursor-shaped `.qetl.source.ipc`. A fetch that writes `h(...)` itself still
+works but stays invisible. `uqs install-jobs` names each line that does, and a
+line that must stay direct says so with `/ untraced: <why>`.
+
+```
+uqs stream preview vectorize2 --trace
+```
+
 "Fits the plant" is `.qetl.plant.problems`, and the timer applies the same check
 before it publishes: a page that does not fit is refused whole, with nothing
 published and the cursor left where it was. Each table's columns, and their

@@ -16,6 +16,7 @@ from rich.table import Table
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.paths import UqsError
 from uqs.stack import stream_preview
+from uqs.stack.trace_render import render_query_trace
 
 stream_app = typer.Typer(
     no_args_is_help=True,
@@ -38,6 +39,13 @@ def _cursor(value: object) -> str:
     return str(value) if value not in (None, "") else ""
 
 
+def _print_trace(lines: list) -> None:
+    """The child's traced lines, a query shown as a block as `uqs logs` shows it."""
+    for level, source, message in lines:
+        console.print(f"[dim]{level} {source}[/] ", end="")
+        console.print(render_query_trace(message), markup=False, highlight=False)
+
+
 @stream_app.command("preview")
 def preview(
     job: Annotated[str, typer.Argument(help="A polling feed - a streaming job that declares poll")],
@@ -51,6 +59,14 @@ def preview(
             help="A preview is always dry: nothing published, no cursor saved.",
         ),
     ] = True,
+    trace: Annotated[
+        bool,
+        typer.Option(
+            "--trace",
+            help="Show every query the fetch sends - before it goes, and with its rows, "
+            "time or error - as `uqs backfill --trace` does. Off by default.",
+        ),
+    ] = False,
 ) -> None:
     """One page of a polling feed: what it would publish, and where its cursor
     would move - with nothing published and no cursor saved.
@@ -60,10 +76,12 @@ def preview(
     tables, or the cursor would not advance.
     """
     try:
-        r = stream_preview.preview(_paths(), job, sample)
+        r = stream_preview.preview(_paths(), job, sample, trace=trace)
     except UqsError as exc:
+        _print_trace(getattr(exc, "trace", []))
         _die(exc)
         return
+    _print_trace(r.get("trace", []))
     mode = "dry run" if dry_run else "preview"
     console.print(f"[bold]{mode} of {job}[/] - nothing published, no cursor saved")
     console.print(f"source  {_LIVE.get(r.get('live', 'unknown'), r.get('live'))}")
