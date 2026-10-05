@@ -960,6 +960,7 @@ qpipe.job.crypto_market_data_backfill,handle,value,,
 qpipe.job.crypto_market_data_backfill,init,function,1,run_spec
 qpipe.job.crypto_market_data_backfill,last_batch,value,,
 qpipe.job.crypto_market_data_backfill,last_window,dict,,
+qpipe.job.crypto_market_data_backfill,phase,value,,
 qpipe.job.crypto_market_data_backfill,plan,function,1,cursor
 qpipe.job.crypto_market_data_backfill,progress,dict,,
 qpipe.job.crypto_market_data_backfill,publish,function,1,batch
@@ -1013,6 +1014,7 @@ qpipe.job.databento_book_backfill,handle,value,,
 qpipe.job.databento_book_backfill,init,function,1,run_spec
 qpipe.job.databento_book_backfill,last_batch,value,,
 qpipe.job.databento_book_backfill,last_window,dict,,
+qpipe.job.databento_book_backfill,phase,value,,
 qpipe.job.databento_book_backfill,plan,function,1,cursor
 qpipe.job.databento_book_backfill,progress,dict,,
 qpipe.job.databento_book_backfill,publish,function,1,batch
@@ -1029,6 +1031,7 @@ qpipe.job.demo_deals_backfill,handle,value,,
 qpipe.job.demo_deals_backfill,init,function,1,run_spec
 qpipe.job.demo_deals_backfill,last_batch,value,,
 qpipe.job.demo_deals_backfill,last_window,dict,,
+qpipe.job.demo_deals_backfill,phase,value,,
 qpipe.job.demo_deals_backfill,plan,function,1,cursor
 qpipe.job.demo_deals_backfill,progress,dict,,
 qpipe.job.demo_deals_backfill,publish,function,1,batch
@@ -1046,6 +1049,7 @@ qpipe.job.demo_events_backfill,handle,value,,
 qpipe.job.demo_events_backfill,init,function,1,run_spec
 qpipe.job.demo_events_backfill,last_batch,value,,
 qpipe.job.demo_events_backfill,last_window,dict,,
+qpipe.job.demo_events_backfill,phase,value,,
 qpipe.job.demo_events_backfill,plan,function,1,cursor
 qpipe.job.demo_events_backfill,progress,dict,,
 qpipe.job.demo_events_backfill,publish,function,1,batch
@@ -1062,6 +1066,7 @@ qpipe.job.duckdb_deals_backfill,handle,value,,
 qpipe.job.duckdb_deals_backfill,init,function,1,run_spec
 qpipe.job.duckdb_deals_backfill,last_batch,value,,
 qpipe.job.duckdb_deals_backfill,last_window,dict,,
+qpipe.job.duckdb_deals_backfill,phase,value,,
 qpipe.job.duckdb_deals_backfill,plan,function,1,cursor
 qpipe.job.duckdb_deals_backfill,progress,dict,,
 qpipe.job.duckdb_deals_backfill,publish,function,1,batch
@@ -1123,6 +1128,7 @@ qpipe.job.hdb_markouts_backfill,handle,value,,
 qpipe.job.hdb_markouts_backfill,init,function,1,run_spec
 qpipe.job.hdb_markouts_backfill,last_batch,value,,
 qpipe.job.hdb_markouts_backfill,last_window,dict,,
+qpipe.job.hdb_markouts_backfill,phase,value,,
 qpipe.job.hdb_markouts_backfill,plan,function,1,cursor
 qpipe.job.hdb_markouts_backfill,progress,dict,,
 qpipe.job.hdb_markouts_backfill,publish,function,1,batch
@@ -1206,6 +1212,7 @@ qpipe.job.upstream_trades_backfill,handle,value,,
 qpipe.job.upstream_trades_backfill,init,function,1,run_spec
 qpipe.job.upstream_trades_backfill,last_batch,value,,
 qpipe.job.upstream_trades_backfill,last_window,dict,,
+qpipe.job.upstream_trades_backfill,phase,value,,
 qpipe.job.upstream_trades_backfill,plan,function,1,cursor
 qpipe.job.upstream_trades_backfill,progress,dict,,
 qpipe.job.upstream_trades_backfill,publish,function,1,batch

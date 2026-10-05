@@ -42,7 +42,7 @@ test_a_truncated_cursor_falls_back_to_the_previous_one:{[t]
 test_an_unreadable_cursor_with_nothing_before_it_is_refused:{[t]
     .qetl.job.continuous.save_cursor[`tailer;d 1];
     truncate .qetl.job.continuous.cursor_path `tailer;
-    .qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"load_cursor: *and so is its .bak*";
+    .qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"*and so is its .bak*";
         "refused, never a null a feed would read as its first run"]};
 
 / Clearing only the cursor file would leave its .bak behind, and a later

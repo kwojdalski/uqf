@@ -342,7 +342,8 @@ test_a_full_page_says_the_window_may_hold_more:{[t]
 test_an_undeclared_page_limit_is_null:{[t]
     recent_feed ()!();
     r:.qetl.job.stream.preview_recent[`spt_quote;5;0D00:00:07];
-    .qunit.assertEquals[(null r`page_limit;r`limited);11b;"not declared, so not claimed"]};
+    / limited means "the declared page was full"; with no limit declared it is never claimed
+    .qunit.assertEquals[(null r`page_limit;r`limited);10b;"not declared, so not claimed"]};
 
 test_a_recent_preview_traces_its_bounds_and_limit:{[t]
     .streampolltest.fresh_rows[];
@@ -393,11 +394,11 @@ test_a_compound_feed_with_start_cursor_previews_recent_data:{[t]
 test_define_refuses_a_bad_page_limit:{[t]
     decl:.streampolltest.poll_decl ()!();
     decl[`poll;`page_limit]:0;
-    .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};d;"*page_limit must be a positive long*";"zero is no limit"]};
+    .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};decl;"*page_limit must be a positive long*";"zero is no limit"]};
 
 test_define_refuses_a_start_cursor_that_is_not_a_function:{[t]
     decl:.streampolltest.poll_decl ()!();
     decl[`poll;`start_cursor]:`now;
-    .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};d;"*start_cursor must be functions";"a step, like the others"]};
+    .qunit.assertThrows[{.qetl.job.stream.define[`spt_broken;x]};decl;"*start_cursor must be functions";"a step, like the others"]};
 
 \d .

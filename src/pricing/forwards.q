@@ -1006,7 +1006,7 @@ swap_value:{[swap;market;valuation_date;opts]
 / @throws error for a sym with no target, a target that is neither the pair
 /   nor its inverse, half a size pair, points without spot, or a missing
 /   pip factor
-/ @eg exec bid,ask from .qfwd.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::]  -> 0.4 0.5
+/ @eg raze value exec bid,ask from .qfwd.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::]  -> 0.4 0.5
 convert_quotes:{[quotes;target_conventions;opts]
     if[not 98h=type quotes; '"convert_quotes: quotes must be an unkeyed table with a sym column"];
     if[not `sym in cols quotes; '"convert_quotes: quotes must have a sym column"];
