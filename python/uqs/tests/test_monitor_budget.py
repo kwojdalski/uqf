@@ -14,7 +14,11 @@ the part that has to stay right when the fleet grows again.
 
 from __future__ import annotations
 
+from typing import cast
+
 from uqs.model.pipeline_edges import INBOUND_RESERVE, LICENCE_CONNECTION_LIMIT
+from uqs.paths import UqsPaths
+from uqs.stack import monitor_budget, procs
 from uqs.stack.monitor_budget import (
     MONITOR_CONNECTION_SACRIFICE_ORDER,
     monitor_connection_plan,
@@ -103,3 +107,69 @@ def test_no_cap_keeps_every_subscription():
     """On PeachQ (licence_limit() None) monitor1 watches the whole fleet."""
     connections = ["rdb", "metrics", "sortworker", "reporter"]
     assert monitor_connection_plan(connections, _rows(rdb=40), None) == (connections, [])
+
+
+# ------------------------------------------------- reporting what is dropped (#620)
+
+
+def _fleet(monkeypatch, rows, overrides=None, connections=("rdb", "metrics", "sortworker", "feed")):
+    """procs.monitor_dropped_proctypes over a fleet of our choosing - the
+    composed process.csv, the operator's overrides and monitor1's vendored list."""
+    monkeypatch.setattr(procs, "_composed_rows", lambda paths: rows)
+    monkeypatch.setattr(procs, "_read_overrides", lambda paths: overrides or {})
+    monkeypatch.setattr(
+        monitor_budget, "_vendored_monitor_connections", lambda paths: list(connections)
+    )
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    monkeypatch.delenv("UQS_LICENCE_CONNECTIONS", raising=False)
+
+
+_MONITOR = {"procname": "monitor1", "proctype": "monitor", "startwithall": "1"}
+#: `_fleet` stubs every reader of paths, so none is needed.
+_NO_PATHS = cast("UqsPaths", None)
+
+
+def test_an_over_budget_fleet_names_what_monitor1_gives_up(monkeypatch):
+    """The acceptance of #620: what the plan drops is what gets reported."""
+    rows = [_MONITOR, *_rows(rdb=ALLOWANCE - 1, sortworker=2, feed=2)]
+    _fleet(monkeypatch, rows)
+    reported = procs.monitor_dropped_proctypes(_NO_PATHS)
+    kept, dropped = monitor_connection_plan(["rdb", "metrics", "sortworker", "feed"], rows)
+    assert reported == dropped == ["sortworker", "feed"]
+
+
+def test_a_proctype_nothing_runs_as_is_not_reported(monkeypatch):
+    """The plan gives sortworker up first whether or not one runs; reporting
+    it would name a monitoring gap nothing falls into."""
+    _fleet(monkeypatch, [_MONITOR, *_rows(rdb=ALLOWANCE - 1, feed=4)])
+    assert procs.monitor_dropped_proctypes(_NO_PATHS) == ["feed"]
+
+
+def test_a_fleet_that_fits_reports_nothing(monkeypatch):
+    _fleet(monkeypatch, [_MONITOR, *_rows(rdb=2, feed=1)])
+    assert procs.monitor_dropped_proctypes(_NO_PATHS) == []
+
+
+def test_an_operator_override_of_monitor1s_extras_replaces_the_plan(monkeypatch):
+    """It wins outright in effective_process_rows, so nothing of ours is dropped."""
+    rows = [_MONITOR, *_rows(rdb=ALLOWANCE, feed=4)]
+    _fleet(monkeypatch, rows, overrides={"monitor1": {"extras": "-.servers.CONNECTIONS rdb"}})
+    assert procs.monitor_dropped_proctypes(_NO_PATHS) == []
+
+
+def test_a_monitor1_that_does_not_start_reports_nothing(monkeypatch):
+    rows = [{**_MONITOR, "startwithall": "0"}, *_rows(rdb=ALLOWANCE, feed=4)]
+    _fleet(monkeypatch, rows)
+    assert procs.monitor_dropped_proctypes(_NO_PATHS) == []
+
+
+def test_a_config_set_override_reaches_the_report(monkeypatch):
+    """`uqs config set X startwithall 0` changes the fleet monitor1 is planned
+    against, so the report is planned against the overridden rows too."""
+    feeds = _rows(feed=4)
+    rows = [_MONITOR, *_rows(rdb=ALLOWANCE - 1), *feeds]
+    off = {r["procname"]: {"startwithall": "0"} for r in feeds}
+    _fleet(monkeypatch, rows)
+    assert procs.monitor_dropped_proctypes(_NO_PATHS) == ["feed"]
+    _fleet(monkeypatch, rows, overrides=off)
+    assert procs.monitor_dropped_proctypes(_NO_PATHS) == []

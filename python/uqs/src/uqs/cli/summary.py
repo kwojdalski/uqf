@@ -38,6 +38,7 @@ from uqs.model import dependencies, profiles
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import listing, probe, runtime, startup
+from uqs.stack import procs as stack_procs
 from uqs.stack.listing import (
     MONITOR_PROCNAME,
     SUMMARY_GRAPH_COLUMNS,
@@ -78,6 +79,22 @@ def _print_startups(log_dir: Path, procnames: list[str]) -> None:
         took = f"{s.seconds:.2f}s" if s.seconds is not None else ""
         table.add_row(s.procname, started, took, f"[dim]{s.note}[/]" if s.note else "")
     console.print(table)
+
+
+def _note_monitor_coverage() -> None:
+    """One dim line naming what monitor1 gives up under the budget (#620): a
+    `-` in the Heartbeat column for those processes is that, not a fault."""
+    try:
+        dropped = stack_procs.monitor_dropped_proctypes(_paths())
+    except Exception as exc:  # noqa: BLE001 - advisory; never fail the table
+        log.debug("monitor coverage note skipped: {}", exc)
+        return
+    if dropped:
+        console.print(
+            f"[dim]monitor1 cannot watch {', '.join(dropped)}: the connection "
+            f"budget ({profiles.licence_limit()} on this licence) has no slot left "
+            "for them, so their processes show no heartbeat.[/]"
+        )
 
 
 @app.command()
@@ -364,6 +381,7 @@ def summary(
                 "whole fleet. This is a monitoring gap, not a fault in those "
                 "processes.[/]"
             )
+    _note_monitor_coverage()
     if any(r["PortSource"] == "configured" for r in rows):
         console.print(
             "[dim]Dimmed ports come from process.csv: that is where the process "

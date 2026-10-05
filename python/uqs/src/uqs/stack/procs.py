@@ -27,6 +27,7 @@ from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
     MONITOR_QUIET_EXTRAS,
     monitor_connection_extras,
+    monitor_dropped,
 )
 
 log = get_logger(__name__)
@@ -128,6 +129,21 @@ def effective_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
             extras = monitor_connection_extras(paths, rows)
             row["extras"] = " ".join(x for x in (row["extras"], extras, MONITOR_QUIET_EXTRAS) if x)
     return rows
+
+
+def monitor_dropped_proctypes(paths: UqsPaths) -> list[str]:
+    """The proctypes monitor1 gives up under the connection budget, for this
+    fleet as torq.sh will start it - [] when nothing is dropped, when monitor1
+    does not start with the stack, or when an override of monitor1's own
+    `extras` replaces the plan (it wins outright, as in effective_process_rows).
+    """
+    overrides = _read_overrides(paths)
+    if "extras" in overrides.get("monitor1", {}):
+        return []
+    rows = [{**row, **overrides.get(row["procname"], {})} for row in _composed_rows(paths)]
+    if not any(r["procname"] == "monitor1" and r.get("startwithall") == "1" for r in rows):
+        return []
+    return monitor_dropped(paths, rows)
 
 
 def _read_overrides(paths: UqsPaths) -> dict[str, dict[str, str]]:

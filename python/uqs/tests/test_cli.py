@@ -641,6 +641,39 @@ def test_a_start_inside_the_cap_is_silent(monkeypatch):
     assert "concurrent connections" not in result.stdout
 
 
+def test_start_names_what_monitor1_cannot_watch(monkeypatch):
+    """#620: a dropped proctype's processes get no heartbeat subscription, and
+    heartbeat.q cannot report what it never subscribed to - so the start says."""
+    _patch(monkeypatch, alive, "running", result={"rdb1"})
+    _patch(monkeypatch, runtime, "start", result=Completed())
+    _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", result=["sortworker", "feed"])
+    result = runner.invoke(cli.app, ["start", "rdb1"])
+    assert result.exit_code == 0
+    assert "monitor1 cannot watch sortworker, feed" in result.stdout
+
+
+def test_start_says_nothing_when_monitor1_watches_everything(monkeypatch):
+    _patch(monkeypatch, alive, "running", result={"rdb1"})
+    _patch(monkeypatch, runtime, "start", result=Completed())
+    _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", result=[])
+    assert "monitor1 cannot watch" not in runner.invoke(cli.app, ["start", "rdb1"]).stdout
+
+
+def test_the_monitor_note_never_blocks_a_start(monkeypatch):
+    _patch(monkeypatch, alive, "running", result={"rdb1"})
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", raises=UqsError("no settings"))
+    assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
+    assert rec.calls, "started anyway"
+
+
+def test_summary_names_what_monitor1_cannot_watch(monkeypatch):
+    _summary_ok(monkeypatch)
+    _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", result=["reporter"])
+    result = runner.invoke(cli.app, ["summary"])
+    assert "monitor1 cannot watch reporter" in result.stdout
+
+
 def test_the_cap_warning_never_blocks_a_start(monkeypatch):
     """Advisory only. A warning that cannot be produced - the fleet is
     unreachable, the registry cannot be read - must not stop a start."""
