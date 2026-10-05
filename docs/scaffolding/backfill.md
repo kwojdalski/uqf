@@ -144,9 +144,12 @@ has to be up:
 uqs backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15
 ```
 
-All three are required: `uqs` refuses without them, and the process itself
-refuses and names every missing flag at once, because a backfill that silently
-defaulted its range would publish the wrong window and record coverage for it.
+`--from` and `--to` are required: `uqs` refuses without them, and the process
+itself refuses and names every missing flag at once, because a backfill that
+silently defaulted its range would publish the wrong window and record coverage
+for it. `--version` is required too unless the worker declares a
+`source_version` --- see
+[`pipeline-declarations.md`](../reference/pipeline-declarations.md).
 
 Its log (`uqs logs <procname> -f`) says at INF what it is running and how it
 ended: the parsed range, the window count at the worker's width, the result with
