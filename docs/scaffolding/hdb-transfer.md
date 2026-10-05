@@ -12,9 +12,10 @@ q scripts/examples/hdb_transfer_example.q -keep    # keep both databases to look
 
 ## What it does
 
-1. **Builds a source database.** Three days of trades go into a temporary
-   directory. The table is date-partitioned and splayed, and its symbols are
-   enumerated against the database's own `sym` file, like any kdb+ HDB.
+1. **Builds a source database.** Three days of trades go into a directory under
+   `build/`, which is gitignored and removed afterwards unless you pass `-keep`.
+   The table is date-partitioned and splayed, and its symbols are enumerated
+   against the database's own `sym` file, like any kdb+ HDB.
 2. **Points the job at it.** For a `local` source, the credential *is* the HDB's
    directory, so the script sets `UQF_SOURCE_CRED_HDB_TRANSFER` to the source
    database's path. Where rows go is the runner's choice: the script installs

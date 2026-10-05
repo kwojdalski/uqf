@@ -2,9 +2,9 @@
 // trades into a second kdb+ database with a scaffolded ETL job.
 //
 //   q scripts/examples/hdb_transfer_example.q            (from the repository root)
-//   q scripts/examples/hdb_transfer_example.q -keep      keep both databases afterwards
+//   q scripts/examples/hdb_transfer_example.q -keep      keep both databases afterwards (under build/)
 //
-// No TorQ, no running stack, nothing outside one temporary directory:
+// No TorQ, no running stack, nothing written outside one directory under build/:
 //
 //   1. builds a SOURCE HDB on disk - three days of trades, date-partitioned and
 //      splayed, symbols enumerated against its own sym file, like any HDB;
@@ -29,8 +29,10 @@
 \d .qhdbtx
 
 / Everything this run writes lives under one directory.
-/ TMPDIR usually ends in "/"; trimmed so the paths print cleanly.
-dir:({$["/"=last x;-1_x;x]} $[count getenv`TMPDIR;getenv`TMPDIR;"/tmp"]),"/uqf_hdb_transfer_",string .z.i
+/ Under build/ (gitignored), one directory per process, as the tests write
+/ theirs - removed at the end unless -keep. Absolute, so the paths printed
+/ and the credential set below are usable from anywhere.
+dir:(first system"pwd"),"/build/hdb_transfer_example_",string .z.i
 src:hsym `$dir,"/source_hdb"
 dst:hsym `$dir,"/destination_hdb"
 days:2026.01.05 2026.01.06 2026.01.07
