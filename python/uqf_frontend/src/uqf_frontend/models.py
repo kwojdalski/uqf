@@ -195,6 +195,10 @@ class WorkerStatusOut(BaseModel):
     cursor: str | None = None
     rows_published: int
     windows_completed: int
+    reactions_owed: int = Field(
+        description="reactions to this run's publications that have not succeeded"
+        " - a derived dataset is stale"
+    )
     error: str | None = None
     updated_at: str
     terminal: bool

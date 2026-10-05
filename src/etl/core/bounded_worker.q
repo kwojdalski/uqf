@@ -95,7 +95,7 @@ namespace:{[worker] ` sv worker_root,worker}
 / ------------------------------------------------------- INHERITANCE
 
 / Private: a run's progress before it has made any.
-no_progress:`windows_planned`windows_completed`windows_failed`rows_published`cursor!(0;0;0;0;0Np)
+no_progress:`windows_planned`windows_completed`windows_failed`rows_published`cursor`reactions_owed!(0;0;0;0;0Np;0)
 
 / The globals every worker starts with. The first three are the contract's
 / contract; `handle` is the live connection or 0Ni on the fixture; `progress`
@@ -500,9 +500,9 @@ instance:{[worker] p:@[value;`.proc.procname;`]; $[null p; worker; p]}
 / Private: the progress fields the status file carries, zero before the run
 / has made any.
 / @param worker the worker's name
-/ @return dict of cursor, rows_published and windows_completed
+/ @return dict of cursor, rows_published, windows_completed and reactions_owed
 progress_now:{[worker]
-    d:`cursor`rows_published`windows_completed!(0Np;0;0);
+    d:`cursor`rows_published`windows_completed`reactions_owed!(0Np;0;0;0);
     p:@[read_state[worker;];`progress;{[e] ()!()}];
     $[99h=type p; d,(key[d] inter key p)#p; d]}
 
@@ -970,11 +970,15 @@ run_body:{[worker]
         / idle run has to do - and only then, so an idle run with nothing to
         / repair does not ask the HDB to reload for nothing.
         if[(recovered>0) or replayed>0; finish_store worker];
-        / Where coverage already stands, for the status file.
-        write_state[worker;`progress;@[read_state[worker;`progress];`cursor;:;cursor]];
-        advance_phase[worker;`idle;""];
-        :`state`windows_completed`windows_failed`rows_published`cursor!
-            (`idle;0;0;0;cursor)];
+        / Where coverage already stands, and what it still owes, for the
+        / status file. An idle run that could not replay an owed reaction
+        / is not idle: a derived dataset is stale (#632).
+        owed:owed_reactions worker;
+        write_state[worker;`progress;@[read_state[worker;`progress];`cursor`reactions_owed;:;(cursor;count owed)]];
+        ended:$[count owed; `partial; `idle];
+        advance_phase[worker;ended;$[count owed; owed_error owed; ""]];
+        :`state`windows_completed`windows_failed`rows_published`cursor`reactions_owed!
+            (ended;0;0;0;cursor;count owed)];
     do_window[worker] each windows;
     / The io manager's end-of-run step, after the LAST window and whatever
     / its outcome: a window that failed wrote nothing, but the ones that
@@ -983,10 +987,17 @@ run_body:{[worker]
     / manager with no finish - memory, discard - makes this a no-op, and a
     / dry run, which wrote nothing, gives it nothing to do.
     finish_store worker;
+    / A run whose windows all landed but whose reactions did not is
+    / `partial, not `completed (#632): the worker's own data is complete, a
+    / dataset derived from it is stale, and green would say otherwise to
+    / Airflow and the browser. The coverage stays recorded either way, and
+    / the next run re-fires what is owed before anything else.
+    owed:owed_reactions worker;
+    write_state[worker;`progress;@[read_state[worker;`progress];`reactions_owed;:;count owed]];
     p:read_state[worker;`progress];
-    result:`state`windows_completed`windows_failed`rows_published`cursor!
-        ($[p[`windows_failed]>0;`partial;`completed];
-         p`windows_completed;p`windows_failed;p`rows_published;p`cursor);
+    result:`state`windows_completed`windows_failed`rows_published`cursor`reactions_owed!
+        ($[(p[`windows_failed]>0) or 0<count owed;`partial;`completed];
+         p`windows_completed;p`windows_failed;p`rows_published;p`cursor;count owed);
     / one summary line per run at INF - the aggregate a fleet view wants,
     / without the per-window noise that stays at DBG.
     .qetl.log.info[worker;"run finished";result];
@@ -994,9 +1005,11 @@ run_body:{[worker]
     / per-window beat inside do_window is the one that catches a worker
     / stuck mid-window, which is the case a status file cannot show - it
     / says `running` and keeps saying it.
-    advance_phase[worker;result`state;
-        $[`completed~result`state; "";
-          string[p`windows_failed]," of ",string[count windows]," window(s) failed - they stay uncovered, so a re-run retries them"]];
+    why:();
+    if[p[`windows_failed]>0;
+        why,:enlist string[p`windows_failed]," of ",string[count windows]," window(s) failed - they stay uncovered, so a re-run retries them"];
+    if[count owed; why,:enlist owed_error owed];
+    advance_phase[worker;result`state;$[count why; "; " sv why; ""]];
     / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
     / The release used to live on this line, which made it the happy path's

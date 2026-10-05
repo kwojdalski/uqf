@@ -46,7 +46,19 @@
 /   written and the coverage already staged when a reaction runs. Throwing
 /   here would turn a successful materialisation into a failed one over a
 /   downstream bug - exactly backwards, and the same reasoning record_facts
-/   already follows. Failures are recorded in `history` and logged.
+/   already follows. Failures are recorded in `history` and logged. The RUN
+/   is another matter: one that leaves a reaction owed ends `partial
+/   (.qetl.job.bounded.owed_reactions, #632), so the stale derived dataset
+/   is red to Airflow and the browser, and the next run repays it.
+/ .
+/   HANDLERS RUN AT LEAST ONCE, so they must be idempotent. "Nothing can be
+/   missed" is bought with repetition: a process killed between a handler's
+/   writes and its `ok` record fires it again on the next run, and a replay
+/   fires every reaction for the dataset, not only the owed one. A handler
+/   writes its window's output so that writing it twice leaves what writing
+/   it once did - .qetl.reaction.write replaces a window for exactly this.
+/   A replay also RE-FETCHES the window from the source, so a source that
+/   changed since shows the handler its rows now, not the first attempt's.
 / .
 /   A CASCADE TERMINATES. The same (dataset; range) is not dispatched twice
 /   within one drain, and `max_depth` bounds how far a chain may travel. A
@@ -612,17 +624,37 @@ write:{[target;row_key;rows]
 / @param worker the worker's name
 / @return how many windows were announced again
 replay_reactions:{[worker]
-    if[not .qetl.job.bounded.runtime.allows`notify_reactions; :0];
-    cfg:def worker;
-    s:spec worker;
-    owed:@[{[a] .qetl.reaction.pending . a};
-        (cfg`dataset;cfg`partition;s`source_version;s`range_from;s`range_to);
-        {[e] ([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$())}];
+    owed:owed_reactions worker;
     ws:distinct select range_from, range_to from owed;
     if[0=count ws; :0];
     .qetl.log.warn[worker;"re-firing reactions for windows covered without a successful reaction";
         `windows`reactions!(count ws;distinct owed`name)];
     sum replay_window[worker] each ws}
+
+/ The reactions this run's range still owes: (name; range_from; range_to) for
+/ every covered window whose reaction has no successful outcome since it was
+/ covered - .qetl.reaction.pending over the run's dataset, partition, version
+/ and range. Shared by replay_reactions, which re-fires them at the start of
+/ a run, and run_body, which ends a run `partial while any remain (#632).
+/ None on a dry run, which fires no reaction at all.
+/ @param worker the worker's name
+/ @return a table of name, range_from, range_to; empty when nothing is owed
+owed_reactions:{[worker]
+    none:([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$());
+    if[not .qetl.job.bounded.runtime.allows`notify_reactions; :none];
+    cfg:def worker;
+    s:spec worker;
+    @[{[a] .qetl.reaction.pending . a};
+        (cfg`dataset;cfg`partition;s`source_version;s`range_from;s`range_to);
+        {[none;e] none}[none]]}
+
+/ Private: the error a run that leaves reactions owed ends `partial with.
+/ @param owed owed_reactions' table, not empty
+/ @return the message, naming the reactions and how many windows they owe
+owed_error:{[owed]
+    string[count owed]," reaction(s) owed over ",string[count distinct select range_from, range_to from owed],
+    " window(s) (",(", " sv string distinct owed`name),
+    ") - a dataset derived from this one is stale; the next run re-fires them first"}
 
 / Private: announce one covered window's publication again, from a fresh
 / fetch and transform. A window that cannot be fetched or transformed is

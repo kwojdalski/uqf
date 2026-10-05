@@ -40,6 +40,7 @@ def write_status_file(directory: Path, instance: str, **overrides) -> Path:
         "cursor": "2026-09-14T00:00:00.000000000",
         "rows_published": 1234,
         "windows_completed": 1,
+        "reactions_owed": 0,
         "error": "",
         "updated_at": "2026-09-15T18:41:14.475818000",
         # this live process by default, so nothing reads as abandoned
@@ -252,6 +253,23 @@ def test_endpoint_returns_workers_and_a_poll_cadence(tmp_path):
     assert body["workers"][0]["instance_id"] == "markout1"
     assert body["poll_seconds"] > 0
     assert body["source"] == str(tmp_path)
+
+
+def test_owed_reactions_reach_the_api_with_the_failure_they_explain(tmp_path):
+    """#632: a run whose windows landed but whose reactions did not ends q's
+    `partial`, which the file records as `failed`. The count says why - a
+    derived dataset is stale - where the bare state could not."""
+    write_status_file(
+        tmp_path,
+        "deals1",
+        state="failed",
+        reactions_owed=2,
+        error="2 reaction(s) owed over 1 window(s) (rebuild_positions) - a dataset "
+        "derived from this one is stale; the next run re-fires them first",
+    )
+    row = client_for(tmp_path).get("/ops/backfill").json()["workers"][0]
+    assert row["reactions_owed"] == 2
+    assert "rebuild_positions" in row["error"]
 
 
 def test_endpoint_reports_unconfigured_as_422(tmp_path):

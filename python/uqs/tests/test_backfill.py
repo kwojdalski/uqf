@@ -438,7 +438,7 @@ def _wait(tmp_path, monkeypatch, sleeps=None):
 @pytest.mark.parametrize(("state", "code"), [("completed", 0), ("idle", 0), ("failed", 1)])
 def test_wait_returns_the_runs_own_outcome(tmp_path, monkeypatch, state, code):
     _status(tmp_path, state=state)
-    assert _wait(tmp_path, monkeypatch) == (state, code)
+    assert _wait(tmp_path, monkeypatch)[:2] == (state, code)
 
 
 def test_wait_ignores_the_previous_runs_file_until_this_one_writes(tmp_path, monkeypatch):
@@ -454,7 +454,7 @@ def test_wait_ignores_the_previous_runs_file_until_this_one_writes(tmp_path, mon
         elif len(calls) == 2:
             _status(tmp_path, state="completed")
 
-    assert _wait(tmp_path, monkeypatch, sleep) == ("completed", 0)
+    assert _wait(tmp_path, monkeypatch, sleep)[:2] == ("completed", 0)
     assert len(calls) == 2
 
 
@@ -462,19 +462,35 @@ def test_wait_reports_a_run_whose_process_died_as_abandoned(tmp_path, monkeypatc
     proc = subprocess.Popen(["true"])  # noqa: S603, S607
     proc.wait()
     _status(tmp_path, state="running", pid=proc.pid)
-    assert _wait(tmp_path, monkeypatch) == ("abandoned", 1)
+    assert _wait(tmp_path, monkeypatch)[:2] == ("abandoned", 1)
 
 
 def test_the_command_exits_with_the_runs_outcome_under_wait(monkeypatch):
     monkeypatch.setattr(
         backfill, "start", lambda *a, **k: type("Completed", (), {"returncode": 0})()
     )
-    monkeypatch.setattr(backfill, "wait_for_outcome", lambda *a, **k: ("failed", 1))
+    owed = "1 reaction(s) owed over 1 window(s) (rebuild_positions)"
+    monkeypatch.setattr(backfill, "wait_for_outcome", lambda *a, **k: ("failed", 1, owed))
     argv = ["backfill", "demo_deals_backfill", "--version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--wait"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 1, result.output
     assert "failed" in result.output
+    assert "rebuild_positions" in result.output, "why it failed is printed, not just that it did"
+
+
+def test_wait_returns_why_a_failed_run_failed(tmp_path, monkeypatch):
+    """#632: a run whose reactions are owed reads `failed`; the error names them."""
+    owed = "1 reaction(s) owed over 1 window(s) (rebuild_positions)"
+    _status(tmp_path, state="failed", error=owed)
+    state, code, error = _wait(tmp_path, monkeypatch)
+    assert (state, code) == ("failed", 1)
+    assert "rebuild_positions" in error
+
+
+def test_a_successful_run_returns_no_error(tmp_path, monkeypatch):
+    _status(tmp_path, state="completed")
+    assert _wait(tmp_path, monkeypatch)[2] == ""
 
 
 def test_wait_with_a_mode_that_writes_no_status_is_refused(monkeypatch):

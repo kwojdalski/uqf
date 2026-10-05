@@ -530,6 +530,7 @@ def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:
         cursor=s.cursor,
         rows_published=s.rows_published,
         windows_completed=s.windows_completed,
+        reactions_owed=s.reactions_owed,
         error=s.error,
         updated_at=s.updated_at,
         terminal=s.terminal,

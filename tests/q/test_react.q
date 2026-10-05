@@ -370,17 +370,57 @@ test_a_dry_run_publishes_nothing_and_fires_nothing:{[t]
 
 / A reaction that throws must not turn a successful materialisation into a
 / failed one: the rows are already written and the coverage already staged.
+/ But the run is not `completed either (#632): a dataset derived from it is
+/ stale, and green would tell Airflow and the browser otherwise. It ends
+/ `partial, with the reactions it owes counted.
 test_a_failing_reaction_leaves_the_window_published_and_covered:{[t]
-    .testutil.reset_coverage_ledger[];
+    .rxtest.fresh_deals[];
+    r:.rxtest.run_deals[`rx3;{[ds;f;t] '"downstream is broken"}];
+    .qunit.assertEquals[(r`state;r`windows_failed;r`reactions_owed;.qetl.coverage.is_covered[`demo_deals;`;`rx3;.z.p;.rxtest.d 1;.rxtest.d 4]);
+        (`partial;0;3;1b);
+        "the coverage stands, and the run is partial: three windows' reactions are owed"]};
+
+/ One demo_deals_backfill run over d1..d4 (three 1D windows), with one
+/ reaction, `bad`, registered as `handler` - re-registering replaces it.
+run_deals:{[version;handler]
     .qetl.job.bounded.state.release_lock `demo_deals_backfill;
     .qetl.job.bounded.state.clear_checkpoint `demo_deals_backfill;
-    `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
-    .qetl.reaction.on[`demo_deals;`bad;{[ds;f;t] '"downstream is broken"}];
-    .qpipe.job.demo_deals_backfill.init[`source_version`range_from`range_to!(`rx3;.rxtest.d 1;.rxtest.d 4)];
+    .qetl.reaction.on[`demo_deals;`bad;handler];
+    .qpipe.job.demo_deals_backfill.init[`source_version`range_from`range_to!(version;.rxtest.d 1;.rxtest.d 4)];
     r:.qpipe.job.demo_deals_backfill.run[];
     .qpipe.job.demo_deals_backfill.cleanup[];
-    .qunit.assertEquals[(r`state;r`windows_failed;.qetl.coverage.is_covered[`demo_deals;`;`rx3;.z.p;.rxtest.d 1;.rxtest.d 4]);
-        (`completed;0;1b);
-        "the upstream run completes and its coverage stands, whatever the downstream did"]};
+    r}
+
+fresh_deals:{[] .testutil.reset_coverage_ledger[]; `demo_deals set 0#.qpipe.source.demo_deals.fixture[];}
+
+/ What an orchestrator reads: the status file. `partial is `failed there,
+/ and the count and the error say why.
+test_owed_reactions_reach_the_status_file:{[t]
+    .rxtest.fresh_deals[];
+    .rxtest.run_deals[`rx5;{[ds;f;t] '"downstream is broken"}];
+    w:`demo_deals_backfill;
+    s:.j.k first read0 hsym `$(.qetl.status.status_dir[]),"/airflow_status_",string[.qetl.job.bounded.instance w],".txt";
+    .qunit.assertEquals[(s`state;s`reactions_owed);("failed";3f);"the file reads failed, and says three reactions are owed"];
+    .qunit.assertTrue[(s`error) like "3 reaction(s) owed over 3 window(s) (bad)*";"the error names the reaction and the windows"]};
+
+/ Every run re-fires what is owed first, so the retry heals it: with the
+/ handler fixed, the next run finds its windows covered, replays the owed
+/ reactions, and ends idle with nothing owed.
+test_the_next_run_repays_what_was_owed:{[t]
+    .rxtest.fresh_deals[];
+    .rxtest.run_deals[`rx6;{[ds;f;t] '"downstream is broken"}];
+    r:.rxtest.run_deals[`rx6;.rxtest.recorder`bad];
+    .qunit.assertEquals[(r`state;r`reactions_owed;count .rxtest.fired);(`idle;0;3);
+        "three owed reactions re-fired and succeeded, so the rerun is idle and clean"]};
+
+/ An idle run is idle only when it owes nothing: one that still cannot
+/ repay is partial, or a broken handler would read green from the second
+/ run on.
+test_an_idle_run_that_still_owes_is_partial:{[t]
+    .rxtest.fresh_deals[];
+    .rxtest.run_deals[`rx7;{[ds;f;t] '"downstream is broken"}];
+    r:.rxtest.run_deals[`rx7;{[ds;f;t] '"still broken"}];
+    .qunit.assertEquals[(r`state;r`windows_completed;r`reactions_owed);(`partial;0;3);
+        "no window to run, three reactions still owed"]};
 
 \d .

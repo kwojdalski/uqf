@@ -171,6 +171,20 @@ test_a_reaction_that_failed_is_fired_again_by_the_next_run:{[t]
         (5;5;`idle;expected;0);
         "the failed windows are owed, the idle re-run rebuilds them, and nothing is owed after"]};
 
+/ Handlers run AT LEAST once (#632): a process killed after a handler wrote
+/ its rows but before its `ok` was recorded fires it again over the same
+/ windows on the next run. Simulated exactly - the run completes, then its
+/ outcomes are lost - so this proves rebuild_positions is idempotent, which
+/ every handler must be: running it twice over a window leaves one table.
+test_running_the_handler_twice_over_its_windows_leaves_the_same_table:{[t]
+    run_worker `rp20;
+    once:positions[];
+    .qetl.reaction.reset_outcomes[];
+    r:run_worker `rp20;
+    h:select from .qetl.reaction.history where name=`rebuild_positions;
+    .qunit.assertEquals[(r`state;r`reactions_owed;count h;positions[]~once;once);(`idle;0;10;1b;expected);
+        "every window's reaction fired a second time, and the table is what one firing left"]};
+
 / A process killed between recording coverage and running the reaction
 / leaves exactly this: covered windows, no outcome. Simulated by running
 / with the reaction switched off - which is also how a reaction added after

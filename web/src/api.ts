@@ -67,6 +67,8 @@ export interface Worker {
   cursor: string | null;
   rows_published: number;
   windows_completed: number;
+  /** reactions to this run's publications that have not succeeded: a derived dataset is stale (#632) */
+  reactions_owed: number;
   error: string | null;
   updated_at: string;
   terminal: boolean;

@@ -649,20 +649,36 @@ quietly rather than loudly:
 - **A cascade is a loop, not recursion.** A handler that publishes notifies from
   inside the first notification; that work is queued and drained by the call
   already draining. A chain cannot grow the stack.
-- **A failing reaction never fails the publication.** The rows are written and
-  the coverage staged before any handler runs, so a downstream bug cannot turn a
-  successful materialisation into a failed one. Failures land in
-  `.qetl.reaction.history` and the log.
+- **A failing reaction never fails the publication, but it does fail the run.**
+  The rows are written and the coverage staged before any handler runs, so a
+  downstream bug cannot turn a successful materialisation into a failed one: the
+  coverage stands. The run, though, ends `partial` while any reaction over its
+  range is owed, because a dataset derived from it is stale. The status file
+  reads `failed` with `reactions_owed` and an error naming the reactions;
+  `/ops/backfill` shows both, `uqs backfill --wait` prints the error, and the
+  exit code is 1. Failures also land in `.qetl.reaction.history` and the log.
+- **Handlers must be idempotent.** A handler runs *at least* once per window,
+  not exactly once. A process killed after a handler wrote its rows but before
+  its success was recorded fires it again over the same window, and so does
+  every replay below. Write the window's output so that writing it twice leaves
+  what writing it once did; `.qetl.reaction.write` replaces a window rather than
+  appending to it for this reason. `test_rebuild_positions.q` proves it for the
+  shipped handler by running every window's reaction twice.
+- **A replay re-fetches from the source.** An owed window is fetched and
+  transformed again, not read back from what was published. If the source has
+  changed since, the handler sees the source's rows now, not the ones the first
+  attempt published. Pin the source's release with `source_version` if that
+  matters.
 - **A reaction that never succeeded is fired again.** Every outcome is also
   written to `etl_reactions` beside the coverage ledger. A window covered with
   no successful reaction since --- the reaction threw, or the process died
   between recording coverage and reacting --- is owed
   (`.qetl.reaction.pending`), and the next real run of the worker over that
   range fetches it again and re-announces it before its own windows, even when
-  it otherwise finds nothing to do. Every reaction for the dataset runs again,
-  which is safe because `.qetl.reaction.write` replaces its window. A reaction
-  added after its dataset was published is filled the same way, over whatever
-  range the next run covers.
+  it otherwise finds nothing to do, so a retry repays it and ends green. Every
+  reaction for the dataset runs again, which is safe only because handlers are
+  idempotent (above). A reaction added after its dataset was published is filled
+  the same way, over whatever range the next run covers.
 - **A cascade terminates.** The same `(dataset, range)` is dispatched at most
   once per drain, so `a -> b -> a` settles; `.qetl.reaction.max_depth` bounds a
   chain that keeps inventing new ranges.

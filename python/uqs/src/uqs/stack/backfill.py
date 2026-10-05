@@ -264,8 +264,8 @@ def wait_for_outcome(
     *,
     poll_seconds: float = 2.0,
     sleep: Callable[[float], None] = time.sleep,
-) -> tuple[str, int]:
-    """Follow the process's status file to its outcome: (state, exit code).
+) -> tuple[str, int, str]:
+    """Follow the process's status file to its outcome: (state, exit code, error).
 
     `uqs backfill` returns once torq.sh has STARTED the process, so its own
     exit code says only that. This waits for what the worker reports - the
@@ -273,7 +273,8 @@ def wait_for_outcome(
     another run (version, range, or written before this launch) is not this
     one's; `idle`/`completed` exit 0, `failed` 1; and a `starting`/`running`
     file whose process is gone on this host is `abandoned`, 1, because it
-    will never be written again.
+    will never be written again. The error is the file's own - why a `failed`
+    run failed, e.g. which reactions it left owed (#632) - and "" otherwise.
     """
     path = runs.status_dir(paths) / f"airflow_status_{procname}.txt"
     while True:
@@ -286,13 +287,13 @@ def wait_for_outcome(
         ):
             state = str(status["state"])
             if state in ("idle", "completed"):
-                return state, 0
+                return state, 0, ""
             if state == "failed":
-                return state, 1
+                return state, 1, str(status.get("error") or "")
             if str(status.get("host", "")).lower() == socket.gethostname().lower() and not (
                 _pid_alive(int(status["pid"]))
             ):
-                return "abandoned", 1
+                return "abandoned", 1, "its process is gone and it never recorded an outcome"
         sleep(poll_seconds)
 
 
