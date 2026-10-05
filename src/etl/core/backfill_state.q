@@ -352,7 +352,7 @@ with_file_lock:{[name;f;args]
     if[not first r; 'last r];
     last r}
 
-/ ------------------------------------------------- DURABLE LEDGER FILES
+/ -------------------------------------------------- DURABLE STATE FILES
 
 / Write `v` to `path` so that a crash at any moment leaves a readable file.
 / .
@@ -369,12 +369,36 @@ with_file_lock:{[name;f;args]
 / @param v the value to write
 / @return path
 / @eg .qetl.job.bounded.state.durable_set["/tmp/durable_eg";([] a:1 2)]
-durable_set:{[path;v]
+durable_set:{[path;v] durable_replace[path;{[v;tmp] (hsym `$tmp) set v}[v]]}
+
+/ durable_set for a text file: `lines` written with 0:, through the same
+/ rename. For state kept as JSON - cursors, checkpoints - so a crash mid-write
+/ cannot leave half a line that reads back as "never ran".
+/ @param path the file, as a string
+/ @param lines the file's lines, a list of strings
+/ @return path
+/ @eg .qetl.job.bounded.state.durable_lines["/tmp/durable_lines_eg";enlist "{}"]
+durable_lines:{[path;lines] durable_replace[path;{[lines;tmp] (hsym `$tmp) 0: lines}[lines]]}
+
+/ Private: write through `write[tmp]` beside `path`, keep the current file as
+/ `<path>.bak`, then rename the new one into place - durable_set's protocol,
+/ whatever the file format.
+durable_replace:{[path;write]
     tmp:path,".tmp";
-    (hsym `$tmp) set v;
+    write tmp;
     if[not ()~key hsym `$path; system"ln -f ",path," ",path,".bak"];
     system"mv -f ",tmp," ",path;
     path}
+
+/ Delete a durably written file AND its previous generation.
+/ .
+/ Removing only `path` is not a reset: the next write finds no file, so it
+/ does not refresh `.bak`, and if that write is then lost the reader falls
+/ back to the generation from before the reset.
+/ @param path the file, as a string
+/ @return path
+/ @eg .qetl.job.bounded.state.durable_remove "/tmp/durable_remove_eg"
+durable_remove:{[path] system"rm -f ",path," ",path,".bak ",path,".tmp"; path}
 
 / Read a file durable_set wrote, falling back to the previous generation.
 / .
@@ -387,16 +411,41 @@ durable_set:{[path;v]
 / @return the value
 / @throws error when neither the file nor its .bak can be read
 / @eg .qetl.job.bounded.state.durable_get "/tmp/durable_eg"
-durable_get:{[path]
-    r:@[{(1b;get hsym `$x)};path;{(0b;x)}];
+durable_get:{[path] durable_read["durable_get";path;{get hsym `$x}]}
+
+/ durable_get for any format: `reader[path]` reads one generation, and throws
+/ when it cannot - a reader that returns a default instead hides exactly the
+/ crash this exists to survive.
+/ .
+/ Callers check for an absent `path` first and decide what "no file" means;
+/ here a missing file is just one more unreadable one.
+/ @param who the caller, prefixed to the refusal
+/ @param path the file, as a string
+/ @param reader [path] -> the value, throwing when the file is not readable
+/ @return the value, from `path` or else from `<path>.bak`
+/ @throws error naming both when neither the file nor its .bak can be read
+/ @eg .qetl.job.bounded.state.durable_read["eg";"/tmp/durable_eg";{get hsym `$x}]
+durable_read:{[who;path;reader]
+    r:@[{(1b;x y)}[reader];path;{(0b;x)}];
     if[first r; :last r];
     bak:path,".bak";
-    b:@[{(1b;get hsym `$x)};bak;{(0b;x)}];
+    b:@[{(1b;x y)}[reader];bak;{(0b;x)}];
     if[not first b;
-        '"durable_get: ",path," is unreadable (",(last r),") and so is its .bak (",(last b),")"];
-    .[{.qetl.log.warn[x;y;z]};(`qetl.state;"ledger file unreadable - using the previous generation";
+        'who,": ",path," is unreadable (",(last r),") and so is its .bak (",(last b),")"];
+    .[{.qetl.log.warn[x;y;z]};(`qetl.state;"state file unreadable - using the previous generation";
         `path`error!(path;last r));::];
     last b}
+
+/ Private: a JSON object file as a dictionary, throwing on anything else -
+/ an empty file, half an object, or valid JSON that is not an object. A
+/ durable_read reader: the old readers returned ()!() here, which every
+/ caller then read as "nothing saved".
+read_json_dict:{[path]
+    raw:raze read0 hsym `$path;
+    if[0=count raw; '"empty file"];
+    d:.j.k raw;
+    if[not 99h=type d; '"not a JSON object"];
+    d}
 
 / -------------------------------------------------------- CHECKPOINT
 
@@ -426,7 +475,7 @@ save_checkpoint:{[worker;spec;cursor]
     path:checkpoint_path worker;
     payload:`source_version`range_from`range_to`cursor`saved_at!
             (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);
-    (hsym `$path) 0: enlist .j.j payload;
+    durable_lines[path;enlist .j.j payload];
     .[{.qetl.log.dbg[x;y;z]};(worker;"checkpoint saved";enlist[`cursor]!enlist cursor);::];
     path}
 
@@ -443,14 +492,15 @@ save_checkpoint:{[worker;spec;cursor]
 / @return the cursor to resume from, or 0Np to start from range_from
 load_checkpoint:{[worker;spec]
     path:checkpoint_path worker;
-    raw:@[{first read0 hsym `$x};path;{""}];
-    if[0=count raw;
+    if[()~key hsym `$path;
         .[{.qetl.log.dbg[x;y;z]};(worker;"no checkpoint - starting from the beginning";enlist[`path]!enlist path);::];
         :0Np];
-    saved:@[{.j.k x};raw;{()!()}];
-    if[0=count saved;
-        .[{.qetl.log.warn[x;y;z]};(worker;"checkpoint unreadable - starting from the beginning";enlist[`path]!enlist path);::];
-        :0Np];
+    / An unreadable checkpoint is NOT "no checkpoint". It falls back to the
+    / previous generation - an earlier cursor of the same run, so a window is
+    / redone rather than skipped - and is refused when that fails too, naming
+    / how to start over, rather than quietly restarting from the beginning.
+    saved:@[durable_read["load_checkpoint";path;];read_json_dict;
+        {[w;e] 'e," - `uqs remove checkpoint ",string[w],"` starts the run over"}[worker]];
     / Compare PARSED values, not strings. .j.j writes a timestamp as ISO
     / ("2026-09-13T00:00:00.000000000") while `string` on a q timestamp
     / gives "2026.09.13D00:00:00.000000000" - so a string comparison fails
@@ -473,9 +523,7 @@ load_checkpoint:{[worker;spec]
     cursor}
 
 / Remove a worker's checkpoint, for a deliberate restart from the beginning.
-clear_checkpoint:{[worker]
-    system"rm -f ",checkpoint_path worker;
-    checkpoint_path worker}
+clear_checkpoint:{[worker] durable_remove checkpoint_path worker}
 
 / ------------------------------------------------------------------- SHELL
 

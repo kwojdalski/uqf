@@ -240,6 +240,56 @@ test_neither_readable_is_refused_naming_both:{[t]
     e:.qunit.assertThrows[.qetl.job.bounded.state.durable_get;p;"durable_get: *";"no silent empty ledger"];
     .qunit.assertTrue[e like "*and so is its .bak*";"and it says the fallback failed too"]};
 
+test_durable_lines_keeps_text_and_the_previous_generation:{[t]
+    p:durable_path "dur_lines";
+    .qetl.job.bounded.state.durable_remove p;
+    .qetl.job.bounded.state.durable_lines[p;enlist "first"];
+    .qetl.job.bounded.state.durable_lines[p;("second";"line")];
+    .qunit.assertEquals[(read0 hsym `$p;read0 hsym `$p,".bak");(("second";"line");enlist "first");
+        "the file holds the new lines and .bak the old ones"];
+    .qunit.assertTrue[()~key hsym `$p,".tmp";"no temporary file is left behind"]};
+
+test_durable_remove_takes_the_previous_generation_with_it:{[t]
+    p:durable_path "dur_remove";
+    .qetl.job.bounded.state.durable_set[p;1];
+    .qetl.job.bounded.state.durable_set[p;2];
+    .qetl.job.bounded.state.durable_remove p;
+    .qunit.assertEquals[{()~key hsym `$x} each p,/:("";".bak";".tmp");111b;
+        "nothing is left for a later reader to fall back to"]};
+
+/ --- checkpoints survive a crash mid-write (#633) -----------------------
+
+ckpt_spec:`source_version`range_from`range_to!(`v1;2026.09.01D00:00:00.000000000;2026.09.05D00:00:00.000000000)
+
+/ What 0: onto the checkpoint used to leave after a kill mid-write.
+truncate_checkpoint:{[w] system"printf '{\"source_version\":\"v1\",\"ra' > ",.qetl.job.bounded.state.checkpoint_path w}
+
+test_a_truncated_checkpoint_resumes_from_the_previous_one:{[t]
+    w:`ckpt_truncated;
+    .qetl.job.bounded.state.clear_checkpoint w;
+    .qetl.job.bounded.state.save_checkpoint[w;ckpt_spec;2026.09.02D00:00:00.000000000];
+    .qetl.job.bounded.state.save_checkpoint[w;ckpt_spec;2026.09.03D00:00:00.000000000];
+    truncate_checkpoint w;
+    .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[w;ckpt_spec];2026.09.02D00:00:00.000000000;
+        "an earlier cursor of the same run: one window done again, not the whole run"]};
+
+test_an_unreadable_checkpoint_with_nothing_before_it_is_refused:{[t]
+    w:`ckpt_unreadable;
+    .qetl.job.bounded.state.clear_checkpoint w;
+    .qetl.job.bounded.state.save_checkpoint[w;ckpt_spec;2026.09.02D00:00:00.000000000];
+    truncate_checkpoint w;
+    e:.qunit.assertThrows[.qetl.job.bounded.state.load_checkpoint[w;];ckpt_spec;"load_checkpoint: *";
+        "refused, never a quiet restart from the beginning"];
+    .qunit.assertTrue[e like "*uqs remove checkpoint ckpt_unreadable*";"and it says how to start over"]};
+
+test_clearing_a_checkpoint_removes_its_previous_generation:{[t]
+    w:`ckpt_cleared;
+    .qetl.job.bounded.state.save_checkpoint[w;ckpt_spec;2026.09.02D00:00:00.000000000];
+    .qetl.job.bounded.state.save_checkpoint[w;ckpt_spec;2026.09.03D00:00:00.000000000];
+    p:.qetl.job.bounded.state.clear_checkpoint w;
+    .qunit.assertEquals[{()~key hsym `$x} each p,/:("";".bak";".tmp");111b;
+        "a cleared checkpoint cannot come back through its .bak"]};
+
 test_a_lock_still_being_acquired_is_never_broken:{[t]
     / mkdir and the owner write are two steps. A competitor looking in
     / between sees no owner file, and that lock is live, not stale.
