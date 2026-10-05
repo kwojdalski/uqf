@@ -2,6 +2,55 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-10-05
+
+This snapshot covers 147 commits since `stable/2026-10-02`. Four review rounds
+drove most of it: bug fixes, operability (run identity, uptime, runbooks,
+write-API protection), and backfills that can be traced and interrupted safely.
+Streaming gained polling feeds, and the quant library FX settlement calendars.
+
+### ETL framework (`src/etl/`)
+
+- **Backfills:**
+  - run modes (validate, plan, dry-run, run), and TRACE logging of every query,
+    correlated by worker, run and window;
+  - staged keyed HDB writes, recovered after a kill, and durable cursors and
+    checkpoints (#633);
+  - one run phase (#610), split window stages (#618), and one bounded worker per
+    process.
+- **Reactions:** outcomes are recorded durably, and owed reactions are re-fired;
+  a run that leaves some owed ends `partial` (#632).
+- **Status and streaming:** the status file carries `pid`, `host` and `run_id`,
+  and the Airflow sensor matches its own run. Streaming uptime feeds `uqs gaps`.
+  Polling feeds come with `uqs stream preview`, and microstructure analytics are
+  checkpointed (#332).
+- **Other:** the `local` HDB transport, the HDB markouts backfill, UTC zone
+  offsets, and refusing ambiguous numbers.
+
+### Quant library (`src/`)
+
+- **FX:** settlement calendars, broken dates, swap valuation and quote
+  conversion; one pip rule (`.qccy.pip_factor`).
+- **Fixes:** cross prices, flat books, VaR rounding, stale quotes and opposing
+  lots.
+
+### CLI, frontend and Airflow (`python/`, `web/`)
+
+- **`uqs`:** `summary --sort` and `-i`, `graph`, `run show` with the resume
+  command, and `backfill --wait`.
+- **Frontend:** the catalog error and Start Backfill are fixed; the write API
+  needs a token and an allowed host; connections are reused; API types are
+  checked against the models.
+
+### Docs, CI and tooling
+
+- **Docs:** a "when it breaks" runbook, a markouts page, and quant conventions.
+- **CI:** PeachQ is built from a pinned commit. New
+  `production-readiness-critic` agent. Master's KDB-X suite is green again
+  (#683).
+
+247 files changed, 15098 insertions(+), 2026 deletions(-)
+
 ## stable/2026-10-02
 
 This snapshot covers 13 commits in 13 merged PRs (#563, #569--#580) since
