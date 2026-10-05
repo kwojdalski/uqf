@@ -81,6 +81,23 @@ def test_reader_states_match_the_q_writer():
     assert set(re.findall(r"`(\w+)", line)) == set(status.STATES)
 
 
+def q_terminal_states() -> set[str]:
+    """States `legal_transitions` lets go only to `starting` (begin again) or
+    `failed` - the q definition of a run that has ended."""
+    src = STATUS_Q.read_text()
+    block = src[src.index("legal_transitions:") :]
+    rows = re.findall(r"\(`(\w+);\s*((?:`\w+)+)\)", block[: block.index("))") + 2])
+    assert rows, "status.q no longer spells legal_transitions the way this test reads it"
+    return {s for s, nexts in rows if set(re.findall(r"`(\w+)", nexts)) <= {"starting", "failed"}}
+
+
+def test_terminal_states_match_the_q_transitions():
+    """#609: TERMINAL_STATES is a copy of what q's transitions imply. A state
+    q makes terminal that this reader thinks is still running is a run the
+    browser shows in progress forever."""
+    assert set(status.TERMINAL_STATES) == q_terminal_states()
+
+
 def test_status_file_name_matches_the_q_writer():
     """The file name is how a reader finds a status file at all. `status.q`
     builds it in place (`"/airflow_status_",string[instance_id],".txt"`), so a
