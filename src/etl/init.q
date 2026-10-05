@@ -70,6 +70,7 @@
 \l src/etl/core/bounded_worker.q
 \l src/etl/core/uptime.q
 \l src/etl/core/stream_job.q
+\l src/etl/core/stream_poll.q
 \l src/etl/core/config_audit.q
 \l src/etl/core/normalizer.q
 \l src/etl/core/tick.q

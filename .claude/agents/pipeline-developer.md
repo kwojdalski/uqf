@@ -33,23 +33,24 @@ asked to do, and it records what was decided against.
 
 ## The namespaces, in `src/etl/init.q`'s load order
 
-  | File                       | Namespace                       | Owns                                                  |
-  | ---                        | ---                             | ---                                                   |
-  | `core/backfill_state.q`    | `.qetl.job.bounded.state`       | the bounded-worker registry and checkpoints           |
-  | `core/log.q`               | `.qetl.log`                     | structured log events — never log text                |
-  | `core/coercion.q`          | `.qetl.coerce`                  | the shared type-coercion layer                        |
-  | `core/coverage.q`          | `.qetl.coverage`                | the bitemporal coverage ledger (`etl_coverage`)       |
-  | `core/io_manager.q`        | `.qetl.io`                      | where a pipeline's output goes (`memory`, `discard`)  |
-  | `core/io_hdb.q`            | `.qetl.io`                      | the HDB writer: staged partitions, swap, recovery     |
-  | `core/singlestore_odbc.q`  | `.qetl.io.odbc`                 | the SingleStore ODBC adapter                          |
-  | `core/heartbeat.q`         | `.qetl.hb`                      | worker liveness                                       |
-  | `core/dag.q`               | `.qetl.dag`                     | the job graph, derived from declared inputs/outputs   |
-  | `generated/pipeline_dag.q` | —                               | generated bridge; **never hand-edit**                 |
-  | `core/worker_config.q`     | `.qetl.cfg`                     | layered config with typed getters                     |
-  | `core/worker_runtime.q`    | `.qetl.job.bounded.runtime`     | windowing, coverage skipping, `finish_window`         |
-  | `core/continuous_state.q`  | `.qetl.job.continuous`          | the continuous poll-and-cursor pattern                |
-  | `core/source_contract.q`   | `.qetl.source`                  | external source declarations (resources)              |
-  | `core/bounded_worker.q`    | `.qetl.job.bounded`             | the bounded-worker lifecycle and `run`                |
+  | File                       | Namespace                       | Owns                                                    |
+  | ---                        | ---                             | ---                                                     |
+  | `core/backfill_state.q`    | `.qetl.job.bounded.state`       | the bounded-worker registry and checkpoints             |
+  | `core/log.q`               | `.qetl.log`                     | structured log events — never log text                  |
+  | `core/coercion.q`          | `.qetl.coerce`                  | the shared type-coercion layer                          |
+  | `core/coverage.q`          | `.qetl.coverage`                | the bitemporal coverage ledger (`etl_coverage`)         |
+  | `core/io_manager.q`        | `.qetl.io`                      | where a pipeline's output goes (`memory`, `discard`)    |
+  | `core/io_hdb.q`            | `.qetl.io`                      | the HDB writer: staged partitions, swap, recovery       |
+  | `core/singlestore_odbc.q`  | `.qetl.io.odbc`                 | the SingleStore ODBC adapter                            |
+  | `core/heartbeat.q`         | `.qetl.hb`                      | worker liveness                                         |
+  | `core/dag.q`               | `.qetl.dag`                     | the job graph, derived from declared inputs/outputs     |
+  | `generated/pipeline_dag.q` | —                               | generated bridge; **never hand-edit**                   |
+  | `core/worker_config.q`     | `.qetl.cfg`                     | layered config with typed getters                       |
+  | `core/worker_runtime.q`    | `.qetl.job.bounded.runtime`     | windowing, coverage skipping, `finish_window`           |
+  | `core/continuous_state.q`  | `.qetl.job.continuous`          | the continuous poll-and-cursor pattern                  |
+  | `core/stream_poll.q`       | `.qetl.job.stream`              | polling feeds' `poll` steps, and their one-page preview |
+  | `core/source_contract.q`   | `.qetl.source`                  | external source declarations (resources)                |
+  | `core/bounded_worker.q`    | `.qetl.job.bounded`             | the bounded-worker lifecycle and `run`                  |
 
 Sources (`sources/*.q`) and workers (`workers/*.q`) load **last**, because a
 declaration registers itself on load --- there is no way to have a declaration

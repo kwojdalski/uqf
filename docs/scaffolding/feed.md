@@ -92,6 +92,40 @@ checked for shape.
 so changing it later is a one-line edit, and a feed that should tick faster than
 the plant can absorb is a decision to make deliberately rather than discover.
 
+## Polling a source
+
+A feed that fetches from outside the stack - a REST endpoint, another database -
+declares its steps as `poll` instead of writing `on_timer`, and gets a timer
+built from them that fetches the page after its cursor, normalizes it, publishes
+it and then advances the cursor:
+
+```q
+.qetl.job.stream.define[`vectorize2;`procname`subscribe_to`publishes`period`poll!(
+    `vectorize2_1;`symbol$();enlist `wide_book;0D00:00:05;
+    `fetch`normalize`next_cursor`source!(
+        fetch;                         / [cursor] -> the page after it
+        normalize;                     / [page] -> what is published
+        {[page] last page`ts};         / [page] -> the cursor that acknowledges it
+        `vectorize_source))];          / optional: lets a preview say live or fixture
+```
+
+`normalize` returns a table when the feed publishes one table, else a dictionary
+of table -> rows. An optional `close` releases whatever `fetch` opened, and
+`cursor` names the cursor file when it is not the job's name.
+
+Declaring the steps is what makes the feed previewable:
+
+```
+uqs stream preview vectorize2 --sample 10
+```
+
+fetches one real page and shows what it would publish and where the cursor would
+move, holding each table against the plant's. Nothing is published, and the
+cursor is read, never written - so it is safe beside the running feed. It exits
+1 when the output would not fit the plant or the cursor would not advance. A
+feed written as one `on_timer` cannot be previewed: running it would publish.
+Nor can a job that subscribes, whose input comes from the plant.
+
 ## Then
 
 Implement `on_timer`, replace `tests/q/test_pulsefeed.q` entirely, and add

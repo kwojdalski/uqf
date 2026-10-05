@@ -390,6 +390,8 @@ qetl.job.continuous,load_cursor,function,1,worker
 qetl.job.continuous,poll_once,function,4,worker fetch_page publish_page next_cursor
 qetl.job.continuous,register_feeder,function,2,worker dataset
 qetl.job.continuous,save_cursor,function,2,worker cursor
+qetl.job.stream,contract_failures,function,2,t rows
+qetl.job.stream,cursor_name,function,1,job
 qetl.job.stream,def,function,1,job
 qetl.job.stream,define,function,2,job decl
 qetl.job.stream,defined,function,1,
@@ -400,14 +402,21 @@ qetl.job.stream,guarded,function,4,job f t x
 qetl.job.stream,is_callable,function,1,v
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
+qetl.job.stream,liveness,function,1,job
 qetl.job.stream,namespace,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
+qetl.job.stream,outputs,function,2,job out
+qetl.job.stream,poll_declared,function,2,job decl
+qetl.job.stream,poll_keys,value,,
+qetl.job.stream,preview,function,2,job n
+qetl.job.stream,preview_page,function,2,job n
 qetl.job.stream,procnames,dict,,
 qetl.job.stream,replaying,value,,
 qetl.job.stream,required_declarations,value,,
 qetl.job.stream,start,function,2,job tr
 qetl.job.stream,subscriptions,function,1,job
+qetl.job.stream,tick,function,1,job
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,wire,function,2,job publisher
