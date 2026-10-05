@@ -22,12 +22,14 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.shared import (
     ExportOpt,
+    InteractiveOpt,
     PortOpt,
     ProcsArg,
     _die,
     _export,
     _paths,
     _procs,
+    _show,
     _sorted_items,
     app,
     console,
@@ -105,6 +107,7 @@ def list_items(
     reverse: Annotated[
         bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
     ] = False,
+    interactive: InteractiveOpt = False,
 ) -> None:
     """List every item of KIND - run with no argument to see the available
     kinds. Not just processes: 'fields' lists process.csv's valid config set
@@ -130,7 +133,7 @@ def list_items(
             table.add_column(col)
         for item in items:
             table.add_row(*item.values())
-    console.print(table)
+    _show(table, interactive)
     _export(items, export)
 
 

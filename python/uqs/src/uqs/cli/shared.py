@@ -16,9 +16,10 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from uqs import paths as stack_paths
-from uqs.cli import completion
+from uqs.cli import completion, table_browser
 from uqs.logger import configure_logging, get_logger
 from uqs.paths import UqsError
 from uqs.stack import runtime
@@ -118,6 +119,24 @@ ExportOpt = Annotated[
     Path | None,
     typer.Option("--export", help="Also write output to FILE as .csv or .parquet"),
 ]
+
+
+InteractiveOpt = Annotated[
+    bool,
+    typer.Option(
+        "--interactive",
+        "-i",
+        help="Browse the table, fuzzy-filtering rows as you type; Enter prints the row picked.",
+    ),
+]
+
+
+def _show(table: Table, interactive: bool) -> None:
+    """Print `table`, or browse it with --interactive (see table_browser.py)."""
+    try:
+        table_browser.show(table, interactive, console)
+    except UqsError as exc:
+        _die(exc)
 
 
 def _export(rows, export: Path | None) -> None:
