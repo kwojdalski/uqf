@@ -30,6 +30,11 @@ from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 from uqs.stack import runtime
 
+#: How often `schema -i` re-reads the process: often enough to watch a table
+#: fill as a feed publishes, rarely enough that a few IPC queries a tick stay
+#: invisible to the process being read.
+SCHEMA_REFRESH_SECONDS = 5.0
+
 
 @data_app.command("hdb-check")
 def hdb_check(
@@ -110,13 +115,21 @@ def schema(
     passwd: str = "admin",
     export: ExportOpt = None,
     interactive: InteractiveOpt = False,
+    every: Annotated[
+        float,
+        typer.Option(
+            min=0,
+            help="with -i, re-read the process every this many seconds; 0 turns it off",
+        ),
+    ] = SCHEMA_REFRESH_SECONDS,
 ) -> None:
     """Show the tables in a running process, or one table's columns and types.
 
     Reads the LIVE database over IPC, not the declarations in
     src/etl/plant_tables.q - a table can be declared and still absent
     from a process that failed to load its schema file, and that is exactly
-    when someone runs this.
+    when someone runs this. With -i it keeps reading: the browser re-reads
+    the process every `--every` seconds, so row counts can be watched grow.
     """
     paths = stack_paths.default_paths()
     try:
@@ -156,27 +169,25 @@ def schema(
         log.error("could not read the schema from {} ({}): {}", where, target, exc)
         raise typer.Exit(code=1) from exc
 
-    if table:
-        for name in matched:
-            rendered = Table(title=f"{name} on {where}")
-            rendered.add_column("column")
-            rendered.add_column("type")
-            rendered.add_column("q", justify="center")
-            rendered.add_column("attribute")
-            for row in schema_view.columns(name, target, host=host, **creds):
-                # A general column carries no type information at all, so it
-                # is dimmed rather than presented alongside the ones that do.
-                style = "dim" if row["type"] == "general" else ""
-                rendered.add_row(
-                    row["column"],
-                    f"[{style}]{row['type']}[/]" if style else row["type"],
-                    row["q"],
-                    f"[green]{row['attribute']}[/]" if row["attribute"] else "",
-                )
-            _show(rendered, interactive)
-        if len(matched) > 1:
-            console.print(f"[dim]{len(matched)} tables matched {table!r}.[/]")
-    else:
+    def column_table(name: str) -> Table:
+        rendered = Table(title=f"{name} on {where}")
+        rendered.add_column("column")
+        rendered.add_column("type")
+        rendered.add_column("q", justify="center")
+        rendered.add_column("attribute")
+        for row in schema_view.columns(name, target, host=host, **creds):
+            # A general column carries no type information at all, so it
+            # is dimmed rather than presented alongside the ones that do.
+            style = "dim" if row["type"] == "general" else ""
+            rendered.add_row(
+                row["column"],
+                f"[{style}]{row['type']}[/]" if style else row["type"],
+                row["q"],
+                f"[green]{row['attribute']}[/]" if row["attribute"] else "",
+            )
+        return rendered
+
+    def overview_table(rows: list[dict]) -> Table:
         rendered = Table(title=f"tables on {where} (port {target})")
         rendered.add_column("table")
         rendered.add_column("rows", justify="right")
@@ -187,7 +198,28 @@ def schema(
             # reader is usually looking for, so it is not left to be counted.
             count = "[dim]0[/]" if row["rows"] == 0 else f"{row['rows']:,}"
             rendered.add_row(row["table"], count, str(row["columns"]))
-        _show(rendered, interactive)
+        return rendered
+
+    # The browser's re-read (R, and the --every timer) asks the process again
+    # rather than replaying `rows`, which is what makes it worth watching.
+    every_s = every or None
+    if table:
+        for name in matched:
+            _show(
+                column_table(name),
+                interactive,
+                refresh=lambda name=name: column_table(name),
+                every=every_s,
+            )
+        if len(matched) > 1:
+            console.print(f"[dim]{len(matched)} tables matched {table!r}.[/]")
+    else:
+        _show(
+            overview_table(rows),
+            interactive,
+            refresh=lambda: overview_table(schema_view.overview(target, host=host, **creds)),
+            every=every_s,
+        )
         empty = [r["table"] for r in rows if r["rows"] == 0]
         if empty:
             console.print(

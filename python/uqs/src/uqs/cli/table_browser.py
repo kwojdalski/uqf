@@ -10,7 +10,12 @@ Typing filters (see table_filter.py); up/down and page keys move through the
 rows; Enter exits and prints the highlighted row, tab-separated, so a run id
 or a process name can be picked and piped; Escape exits printing nothing.
 
-A command that hands in a `refresh` gets `R` to re-read the table on demand.
+A command that hands in a `refresh` gets `R` to re-read the table on demand,
+and with `every` it also re-reads it on a timer - `schema -i` does, every five
+seconds, so a table filling up can be watched. A timed re-read is quiet: it
+keeps the filter and the highlighted row, notes the time under the filter box,
+and says something only when the read fails. A tick that lands while an
+action or another read is still running is skipped rather than queued.
 A command may also hand in ROW ACTIONS - `summary` gives s/x/r to start, stop
 and restart the highlighted process. Then a letter is a command, not a filter
 character, so the table holds focus and `/` opens the filter; Enter or Escape
@@ -25,6 +30,7 @@ every command without the flag - starts no slower than before.
 from __future__ import annotations
 
 import sys
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -91,6 +97,7 @@ def browser(
     rows: list[list[Text]],
     actions: Sequence[RowAction] = (),
     refresh: Callable[[], Table] | None = None,
+    every: float | None = None,
 ) -> App[list[str] | None]:
     """The Textual app for one table. Its result is the chosen row's cells, or None."""
     from textual.app import App, ComposeResult
@@ -126,6 +133,7 @@ def browser(
             self.rows = rows
             self.plain = [[cell.plain for cell in row] for row in rows]
             self.busy = False
+            self.refreshed: str | None = None
 
         def compose(self) -> ComposeResult:
             hint = "filter: type to fuzzy-match any cell, space for AND"
@@ -138,6 +146,8 @@ def browser(
             self.query_one(DataTable).add_columns(*headers)
             self.refill("")
             (self.query_one(DataTable) if actions else self.query_one(Input)).focus()
+            if refresh is not None and every:
+                self.set_interval(every, self.tick)
 
         def on_input_changed(self, event: Input.Changed) -> None:
             self.refill(event.value)
@@ -154,7 +164,11 @@ def browser(
                 table.add_row(*cells, key=str(index), height=None)
             if table.row_count:
                 table.move_cursor(row=min(max(at, 0), table.row_count - 1))
-            self.query_one("#count", Static).update(f"{len(kept)} of {len(self.rows)} rows")
+            count = f"{len(kept)} of {len(self.rows)} rows"
+            if every and refresh is not None:
+                when = f"refreshed {self.refreshed}" if self.refreshed else "not refreshed yet"
+                count += f" - {when}, every {every:g}s"
+            self.query_one("#count", Static).update(count)
 
         def filtering(self) -> bool:
             return bool(actions) and self.query_one(Input).has_focus
@@ -210,7 +224,14 @@ def browser(
             self.notify("Refreshing...")
             self.run_worker(self.reread, thread=True)
 
-        def reread(self) -> None:
+        def tick(self) -> None:
+            """The timer: re-read quietly, unless something is still running."""
+            if self.busy:
+                return
+            self.busy = True
+            self.run_worker(lambda: self.reread(quiet=True), thread=True)
+
+        def reread(self, quiet: bool = False) -> None:
             """In a worker thread: re-read the table, with no action first."""
             assert refresh is not None  # bound only when there is one
             try:
@@ -218,7 +239,7 @@ def browser(
             except Exception as exc:  # noqa: BLE001 - shown, never crashes the app
                 self.call_from_thread(self.finish, None, f"could not refresh: {exc}", False)
                 return
-            self.call_from_thread(self.finish, fresh, "refreshed", True)
+            self.call_from_thread(self.finish, fresh, "" if quiet else "refreshed", True)
 
         def perform(self, action: RowAction, row: dict[str, str]) -> None:
             """In a worker thread: run the action, then re-read the table."""
@@ -238,10 +259,12 @@ def browser(
         def finish(self, fresh: list[list[Text]] | None, message: str, ok: bool) -> None:
             self.busy = False
             if fresh is not None:
+                self.refreshed = time.strftime("%H:%M:%S")
                 self.rows = fresh
                 self.plain = [[cell.plain for cell in row] for row in fresh]
                 self.refill(self.query_one(Input).value)
-            self.notify(message, severity="information" if ok else "error", timeout=8)
+            if message:
+                self.notify(message, severity="information" if ok else "error", timeout=8)
 
     return TableBrowser()
 
@@ -252,6 +275,7 @@ def show(
     console: Console,
     actions: Sequence[RowAction] = (),
     refresh: Callable[[], Table] | None = None,
+    every: float | None = None,
 ) -> None:
     """Print `table`, or with `interactive` browse it and print the row chosen.
 
@@ -264,6 +288,6 @@ def show(
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         raise UqsError("--interactive needs a terminal; drop it to print the table")
     headers, rows = table_cells(table)
-    chosen = browser(str(table.title or ""), headers, rows, actions, refresh).run()
+    chosen = browser(str(table.title or ""), headers, rows, actions, refresh, every).run()
     if chosen is not None:
         console.print("\t".join(chosen), markup=False, highlight=False, soft_wrap=True)

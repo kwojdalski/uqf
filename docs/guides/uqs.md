@@ -57,7 +57,15 @@ uqs schema fx_orderbook         # one table's columns, types and attributes
 uqs schema 'crypto*'        # every table matching a pattern, one block each
 uqs schema --proc hdb1      # the history instead of today
 uqs schema --port 6052      # a port directly, skipping --proc resolution
+uqs schema -i               # browse it, re-read every 5 seconds
+uqs schema -i --every 1     # faster; --every 0 re-reads only on R
 ```
+
+With `-i` the browser keeps asking the process: row counts climb as a feed
+publishes, and a table that turns up after the browser opened appears in the
+list. The filter and the highlighted row survive each re-read. The line under
+the filter box gives the time of the last one. A failed read is reported and the
+next tick tries again. `R` re-reads at once.
 
 ### Missing partitions
 

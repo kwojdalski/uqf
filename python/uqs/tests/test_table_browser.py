@@ -93,3 +93,53 @@ def test_without_the_flag_the_table_is_printed():
     console = Console(record=True, width=80)
     table_browser.show(sample(), False, console)
     assert "uqs_plant_q" in console.export_text()
+
+
+def test_every_re_reads_the_table_on_a_timer_keeping_the_filter():
+    reads = []
+
+    def refresh() -> Table:
+        reads.append(1)
+        table = sample()
+        table.add_row("rdb2", "[green]up[/]")
+        return table
+
+    headers, rows = table_browser.table_cells(sample())
+    app = table_browser.browser("processes", headers, rows, refresh=refresh, every=0.05)
+
+    async def run() -> tuple[int, str]:
+        async with app.run_test() as pilot:
+            await pilot.press("r", "d", "b")
+            count = ""
+            for _ in range(50):
+                await pilot.pause(0.05)
+                count = str(app.query_one("#count").render())
+                if "refreshed " in count:
+                    break
+            shown = app.query_one(DataTable).row_count
+            await pilot.press("escape")
+            return shown, count
+
+    shown, count = asyncio.run(run())
+    assert reads, "the timer never re-read the table"
+    assert shown == 2  # rdb1 and the new rdb2, still filtered by "rdb"
+    assert "refreshed" in count and "every 0.05s" in count
+
+
+def test_without_every_nothing_re_reads_on_its_own():
+    reads = []
+
+    def refresh() -> Table:
+        reads.append(1)
+        return sample()
+
+    headers, rows = table_browser.table_cells(sample())
+    app = table_browser.browser("processes", headers, rows, refresh=refresh)
+
+    async def run() -> None:
+        async with app.run_test() as pilot:
+            await pilot.pause(0.3)
+            await pilot.press("escape")
+
+    asyncio.run(run())
+    assert reads == []
