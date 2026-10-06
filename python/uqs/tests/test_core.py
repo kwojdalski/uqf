@@ -869,6 +869,21 @@ def test_list_env_includes_kdbbaseport(fake_paths: UqsPaths):
     assert by_name["KDBHDB"] == str(fake_paths.torqdata / "hdb")
 
 
+def test_the_service_code_layer_carries_the_fixed_password_loader():
+    """KDBSERVCONFIG adds a third config layer, and TorQ's own
+    .servers.loadpassword then never reads the base passwords/ files - so
+    every process came up with no credential. KDBSERVCODE is how the fixed
+    loader gets in; without it set, or with no handler there, the bug is back.
+    """
+    from uqs.stack.env import build_env
+
+    env = build_env(stack_paths.default_paths())
+    assert "KDBSERVCONFIG" in env, "the layer that triggers the bug is still set"
+    handler = Path(env["KDBSERVCODE"]) / "handlers" / "loadpassword.q"
+    assert handler.is_file(), f"{handler} is what torq.q loads after trackservers.q"
+    assert "reverse each" in handler.read_text(), "and it reads base first, every layer"
+
+
 def test_cryptorust_root_defaults_to_sibling_dir(fake_paths: UqsPaths, monkeypatch):
     monkeypatch.delenv(CRYPTORUST_ROOT_ENV, raising=False)
     assert crypto.cryptorust_root(fake_paths) == fake_paths.repo_root.parent / "cryptorust"
