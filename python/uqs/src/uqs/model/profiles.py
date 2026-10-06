@@ -102,20 +102,22 @@ CORE_INFRA: tuple[str, ...] = (
 )
 
 #: The TorQ stack with nothing on top: capture (discovery, the plant), store
-#: (rdb, the intraday writedown, sort1, the hdbs), query (the gateway) and
-#: keep an eye on it (monitor, housekeeping). No uqf job, and none of the rest
-#: of CORE_INFRA - the chained plant, metrics, and the two sort workers.
+#: (rdb, the intraday writedown, the sort and its workers, the hdbs), query
+#: (the gateway) and keep an eye on it (monitor, metrics, housekeeping). No
+#: uqf job, and of the rest of CORE_INFRA only the chained plant is left out.
 #:
-#: sort1 IS IN, ITS WORKERS ARE NOT. At end of day wdb1 hands its intraday
-#: writedown to a sort process to sort and move into the HDB. With none
-#: running, TorQ's wdb logs "no sortandreload process detected" as an ERROR
-#: and sorts locally instead (informsortandreload in
-#: lib/torq/code/processes/wdb.q) - the day lands, but on wdb1, busy while it
-#: does, and an error line every evening. sort1 takes that job and holds no
-#: plant slot. The workers only parallelise it: with none running, .z.pd
-#: finds no handles and sort1 sorts serially, which is fine at this scale.
-#: Composing with a job profile (`--profile essential,fx`) starts the full
-#: CORE_INFRA, workers included.
+#: THE SORT PROCESSES ARE IN. At end of day wdb1 hands its intraday writedown
+#: to sort1, which sorts it into the HDB across the workers. With no sort
+#: process, TorQ's wdb logs "no sortandreload process detected" as an ERROR
+#: every evening and sorts on wdb1 itself (informsortandreload in
+#: lib/torq/code/processes/wdb.q). None of the three holds a plant slot.
+#: metrics1 does - it subscribes - so essential holds three.
+#:
+#: tpreplay1 IS NOT, and cannot be: it is a one-shot replay that `uqs data
+#: replay` starts with the log, schema and HDB to replay into. Started bare it
+#: exits at startup for want of them (tickerlogreplay.q's exitifnull), and
+#: started with them it EMPTIES the tables of every partition it writes - not
+#: a thing a routine start may do.
 ESSENTIAL_INFRA: tuple[str, ...] = (
     "discovery1",
     "stp1",
@@ -124,9 +126,12 @@ ESSENTIAL_INFRA: tuple[str, ...] = (
     "hdb2",
     "wdb1",
     "sort1",
+    "sortworker1",
+    "sortworker2",
     "gateway1",
     "monitor1",
     "housekeeping1",
+    "metrics1",
 )
 
 #: Profiles that start a smaller infrastructure set than CORE_INFRA, and
