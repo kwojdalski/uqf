@@ -6,12 +6,13 @@ conventions every one of them follows. The per-function reference is the
 [`man.q`](../man.q) --- this page is the inventory above that.
 
 Each module loads into its own flat namespace after `src/init.q` - `.qschema`,
-`.qstats`, `.qccy`, `.qdcf`, `.qcal`, `.qrates`, `.qfwd`, `.qopt`, `.qrisk`,
-`.qpos`, `.qalloc`, `.qdesk`, `.qlimit`, `.qexec`, `.qbook`, `.qmicro`, `.qdqc`,
-`.qexdef`. Kept single-level throughout rather than nested under a shared parent
-(e.g. not `.q.options`). This began as a portability constraint and is now a
-convention the tree keeps: the filename-to-namespace tie is what the naming
-auditor checks and what `docs/man.q`'s registry is generated against.
+`.qrender`, `.qstats`, `.qccy`, `.qdcf`, `.qcal`, `.qrates`, `.qfwd`, `.qopt`,
+`.qrisk`, `.qpos`, `.qalloc`, `.qdesk`, `.qlimit`, `.qexec`, `.qbook`,
+`.qmicro`, `.qdqc`, `.qdata`, `.qexdef`. Kept single-level throughout rather
+than nested under a shared parent (e.g. not `.q.options`). This began as a
+portability constraint and is now a convention the tree keeps: the
+filename-to-namespace tie is what the naming auditor checks and what
+`docs/man.q`'s registry is generated against.
 
 The ETL framework uses nested modules under `.qetl`, such as `.qetl.source` and
 `.qetl.job.bounded`. Concrete sources, shared transforms and jobs live under
@@ -33,6 +34,7 @@ module is *for*.
   | Module                                                                   | Namespace  | For                                                                                                                                                     | Tests                                        |
   | ---                                                                      | ---        | ---                                                                                                                                                     | ---                                          |
   | [`foundation/schema.q`](../../src/foundation/schema.q)                   | `.qschema` | one refusal for a table that lacks the columns a function reads                                                                                         | [tests](../../tests/q/test_schema.q)         |
+  | [`foundation/render.q`](../../src/foundation/render.q)                   | `.qrender` | a value as q text in full, without the console-width cut, for anything that records a rendering                                                         | [tests](../../tests/q/test_render.q)         |
   | [`foundation/stats.q`](../../src/foundation/stats.q)                     | `.qstats`  | normal distribution helpers, shared polynomial evaluator                                                                                                | [tests](../../tests/q/test_stats.q)          |
   | [`foundation/ccy.q`](../../src/foundation/ccy.q)                         | `.qccy`    | CURCUR pair convention: validate, normalize, split, build                                                                                               | [tests](../../tests/q/test_ccy.q)            |
   | [`foundation/daycount.q`](../../src/foundation/daycount.q)               | `.qdcf`    | day count fractions — dates to the year fraction `t` pricing takes                                                                                      | [tests](../../tests/q/test_daycount.q)       |
@@ -59,10 +61,11 @@ positions `src/etl/` is built on.
 ## Conventions
 
 Currency pairs follow BASE/QUOTE quoting throughout (`rate` = 1 BASE in QUOTE
-units), and `pip_factor` is `10000` for most pairs and `100` for JPY crosses.
-All function names, parameters and locals use `lower_snake_case`. See the
-[`kdb-q-conventions` skill](../../.claude/skills/kdb-q-conventions/SKILL.md) for
-the q arithmetic gotcha that shaped how this code is written.
+units), and `.qccy.pip_factor` is the one pip rule: `10000` for most pairs and
+`100` for a JPY quote. All function names, parameters and locals use
+`lower_snake_case`. See the [`kdb-q-conventions`
+skill](../../.claude/skills/kdb-q-conventions/SKILL.md) for the q arithmetic
+gotcha that shaped how this code is written.
 
 The modules were written separately, and a mix-up between them is a wrong
 number, not an error. These are the conventions they converge on:

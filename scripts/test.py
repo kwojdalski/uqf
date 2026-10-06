@@ -436,7 +436,7 @@ LANES: dict[str, Callable[[], None]] = {
     "stack-smoke": lane_stack_smoke,
 }
 
-#: `all` is every lane except smoke, stack-smoke and coverage.
+#: `all` is every lane except smoke, stack-smoke, q-coverage and coverage.
 #: coverage runs the q suite a second time under instrumentation;
 #: stack-smoke needs a licence, free ports and a couple of minutes because
 #: it starts the actual stack. Both are worth asking for and neither is
@@ -478,7 +478,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "lane",
         choices=[*LANES, "all"],
-        help="which suite to run; 'all' is every lane except smoke and coverage",
+        help=(
+            "which suite to run; 'all' is every lane except smoke, stack-smoke, "
+            "q-coverage and coverage"
+        ),
     )
     smoke = parser.add_argument_group("smoke lane only")
     smoke.add_argument(
