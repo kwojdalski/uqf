@@ -7,7 +7,7 @@
      .svg. Its --check only compares where the pinned d2 is installed, which CI
      is not. -->
 
-![The q pipeline, top to bottom: declarations, the framework in src/etl/core, the TorQ adapter in scripts, and the running stack - with the outside world and the Python and web surfaces alongside it](diagrams/repo-overview.svg)
+![uqf on one page, top to bottom: the outside world (live feeds, batch sources, Airflow, the browser); src/, plain q that never loads TorQ; the TorQ runners in scripts/processes; and the running stack - with the Python and web surfaces alongside](diagrams/repo-overview.svg)
 
 Read it in two columns. The left is the pipeline, top to bottom: a declaration
 in `src/etl/` names a source, a worker or a streaming job; the framework in
