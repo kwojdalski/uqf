@@ -117,6 +117,7 @@ def test_essential_is_the_torq_stack_and_nothing_else():
         "hdb1",
         "hdb2",
         "wdb1",
+        "sort1",
         "gateway1",
         "monitor1",
         "housekeeping1",
@@ -125,7 +126,8 @@ def test_essential_is_the_torq_stack_and_nothing_else():
 
 
 def test_essential_holds_only_the_slots_of_what_it_starts():
-    """rdb1 and wdb1 subscribe; sctp1 and metrics1 are not started by it."""
+    """rdb1 and wdb1 subscribe; sort1 does not, and sctp1 and metrics1 are
+    not started by it."""
     assert profiles.plant_slots(profiles.resolve(["essential"])) == 2
 
 

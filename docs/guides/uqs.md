@@ -423,16 +423,14 @@ not start `cryptomock1`, which replaces cryptorust's recorder rather than
 joining it.
 
 **`essential` is the TorQ stack with nothing on top**: `discovery1`, `stp1`,
-`rdb1`, `hdb1`, `hdb2`, `wdb1`, `gateway1`, `monitor1` and `housekeeping1` -
-nine processes, two plant slots. It is the one profile that starts less than the
-full infrastructure: no chained plant (`sctp1`), no `metrics1`, and no sort
-processes (`sort1`, `sortworker1`, `sortworker2`). The day still rolls over
-without them: at end of day `wdb1` looks for a sort process, logs
-`can't connect to the sortandreload - no sortandreload process detected` as an
-error, and sorts the writedown into the HDB itself - so expect that error line,
-and `wdb1` busy while it sorts. Composing it with a job profile -
-`--profile essential,fx` - starts the full infrastructure that job profile
-needs, sort processes included.
+`rdb1`, `hdb1`, `hdb2`, `wdb1`, `sort1`, `gateway1`, `monitor1` and
+`housekeeping1` - ten processes, two plant slots. It is the one profile that
+starts less than the full infrastructure: no chained plant (`sctp1`), no
+`metrics1`, and no sort workers (`sortworker1`, `sortworker2`). At end of day
+`wdb1` hands its writedown to `sort1`, which sorts it into the HDB on its own -
+serially, since the workers that would parallelise it are not running - so
+`wdb1` stays free. Composing it with a job profile - `--profile essential,fx` -
+starts the full infrastructure that job profile needs, workers included.
 
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.

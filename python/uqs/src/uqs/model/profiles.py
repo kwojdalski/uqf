@@ -102,18 +102,20 @@ CORE_INFRA: tuple[str, ...] = (
 )
 
 #: The TorQ stack with nothing on top: capture (discovery, the plant), store
-#: (rdb, the intraday writedown, the hdbs), query (the gateway) and keep an
-#: eye on it (monitor, housekeeping). No uqf job, and none of the rest of
-#: CORE_INFRA - the chained plant, metrics, and the sort processes.
+#: (rdb, the intraday writedown, sort1, the hdbs), query (the gateway) and
+#: keep an eye on it (monitor, housekeeping). No uqf job, and none of the rest
+#: of CORE_INFRA - the chained plant, metrics, and the two sort workers.
 #:
-#: LEAVING OUT sort1 AND ITS WORKERS is safe but not free: at end of day wdb1
-#: hands its intraday writedown to them to sort and move into the HDB. With
-#: none running, TorQ's wdb logs "no sortandreload process detected" as an
-#: ERROR and sorts locally instead (informsortandreload in
-#: lib/torq/code/processes/wdb.q), so the day still lands - on wdb1 itself,
-#: which is busy while it does. Composing with a job profile
-#: (`--profile essential,fx`) starts the full CORE_INFRA, sort processes
-#: included.
+#: sort1 IS IN, ITS WORKERS ARE NOT. At end of day wdb1 hands its intraday
+#: writedown to a sort process to sort and move into the HDB. With none
+#: running, TorQ's wdb logs "no sortandreload process detected" as an ERROR
+#: and sorts locally instead (informsortandreload in
+#: lib/torq/code/processes/wdb.q) - the day lands, but on wdb1, busy while it
+#: does, and an error line every evening. sort1 takes that job and holds no
+#: plant slot. The workers only parallelise it: with none running, .z.pd
+#: finds no handles and sort1 sorts serially, which is fine at this scale.
+#: Composing with a job profile (`--profile essential,fx`) starts the full
+#: CORE_INFRA, workers included.
 ESSENTIAL_INFRA: tuple[str, ...] = (
     "discovery1",
     "stp1",
@@ -121,6 +123,7 @@ ESSENTIAL_INFRA: tuple[str, ...] = (
     "hdb1",
     "hdb2",
     "wdb1",
+    "sort1",
     "gateway1",
     "monitor1",
     "housekeeping1",
