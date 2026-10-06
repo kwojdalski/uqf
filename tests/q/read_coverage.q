@@ -10,6 +10,7 @@
 
 system"l src/init.q";
 system"l src/etl/core/backfill_state.q";
+system"l src/etl/core/intervals.q";
 system"l src/etl/core/materialisation.q";
 system"l src/etl/core/status.q";
 

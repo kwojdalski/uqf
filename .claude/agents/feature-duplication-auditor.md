@@ -156,25 +156,29 @@ These are real, measured in this tree. Use them to calibrate severity --- the
 first is the kind of finding worth reporting, the second is the kind worth *not*
 reporting.
 
-**Report this one.** Interval algebra exists twice:
+**Report this one.** The DuckDB timestamp literal exists twice, byte for byte:
 
 ```
-  q       .qetl.coverage.compose / .qetl.coverage.gaps    src/etl/core/materialisation.q:243, :278
-  python  Interval.touches / merge      python/uqf_frontend/src/uqf_frontend/coverage.py:39
+  q       .qpipe.source.databento_mbp10.epoch_ns_literal   src/etl/sources/databento_mbp10.q:79
+  q       .qpipe.source.duckdb_deals.epoch_ns_literal      src/etl/sources/duckdb_deals.q:70
 
-  Shared behaviour: merging adjacent half-open [from,to) intervals, which
-    compose ONLY at a common boundary, never across source versions.
-  Drift scenario: q treats [Mon,Tue) + [Tue,Wed) as covered; if Python's
-    `touches` ever loosens to >= , the gateway reports a range covered that
-    the ledger says has a gap, and a caller reads a bounded dataset that was
-    never published.
-  Guarded by: nothing. tests/q/ exercises the q side, the Python suite the
-    Python side. No fixture is shared.
-  Authority: q. The ledger is the record; the gateway is a reader.
-  Recommendation: KEEP BOTH - the gateway genuinely cannot call into q per
-    request. Add a shared fixture (a JSON case list both suites read) so the
-    two implementations are held to one set of boundary cases.
+  Shared behaviour: a q timestamp as DuckDB's make_timestamp_ns(<epoch ns>),
+    the bound every window's SQL is cut on.
+  Drift scenario: one copy is fixed for a timezone or epoch bug and the other
+    is not; that source's windows then fetch rows a window early or late,
+    and coverage records the window as published regardless.
+  Guarded by: nothing that compares them. Each source's tests exercise its
+    own copy.
+  Authority: neither - both wrap .qetl.io.odbc.literal, so the helper belongs
+    beside it in .qetl.io.odbc.
+  Recommendation: UNIFY into .qetl.io.odbc.
 ```
+
+Calibrate the other way too: the interval algebra (compose/gaps) once had a
+Python copy in the frontend, justified by "the gateway cannot call into q per
+request". It could - the frontend already ran the catalog there - so the copy
+was removed and the gateway now loads `src/etl/core/intervals.q`. A stated
+reason for a duplicate is a claim to check, not a verdict.
 
 **Do not report this one.** `forwards.q` calls `.qexec.sweep_price`
 (`src/pricing/forwards.q:207`, `:310`, `:478`) rather than re-walking depth

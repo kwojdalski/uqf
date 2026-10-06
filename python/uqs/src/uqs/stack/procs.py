@@ -77,13 +77,22 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: rather than replacing it, because the `load` column takes a
 #: space-separated list and TorQ loads it in order.
 #:
+#: gateway1 also loads src/etl/core/intervals.q - the coverage ledger's
+#: interval arithmetic and nothing else. The frontend's /coverage reads
+#: etl_coverage from both tiers, and only the gateway holds both halves, so
+#: it asks the gateway to compose them and find the gaps rather than keeping
+#: a second implementation of that rule in Python.
+#:
 #: hdb1 and dqe1 - the metatables (docs/guides/metatables.md). DQE sends
 #: `.dqe.uqf_metatable` to hdb1 by value and it runs there, so `.qmeta` must be
 #: loaded on hdb1, after its database; dqe1 loads the adapter and `.qmeta`
 #: after its own script, and uqs_dqe_config.q BEFORE it, because dqe.q reads
 #: `.dqe.configcsv` once as it loads (stack/dqe.py). hdb2 is not a DQE target.
 VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
-    "gateway1": ((), ("${UQF_SCRIPTS}/processes/uqs_catalog.q",)),
+    "gateway1": (
+        (),
+        ("${UQF_ROOT}/src/etl/core/intervals.q", "${UQF_SCRIPTS}/processes/uqs_catalog.q"),
+    ),
     "hdb1": ((), ("${UQF_ROOT}/src/metadata/metatables.q",)),
     "dqe1": (
         ("${UQF_SCRIPTS}/processes/uqs_dqe_config.q",),

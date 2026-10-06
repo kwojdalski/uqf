@@ -37,6 +37,7 @@
 
 \c 400 2000
 
+\l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
 
 args:.Q.opt .z.x;

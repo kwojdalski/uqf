@@ -38,7 +38,8 @@ asked to do, and it records what was decided against.
   | `core/backfill_state.q`    | `.qetl.job.bounded.state`       | the bounded-worker registry and checkpoints             |
   | `core/log.q`               | `.qetl.log`                     | structured log events — never log text                  |
   | `core/coercion.q`          | `.qetl.coerce`                  | the shared type-coercion layer                          |
-  | `core/coverage.q`          | `.qetl.coverage`                | the bitemporal coverage ledger (`etl_coverage`)         |
+  | `core/intervals.q`         | `.qetl.coverage`                | half-open interval arithmetic; also loaded on gateway1  |
+  | `core/materialisation.q`   | `.qetl.coverage`                | the bitemporal coverage ledger (`etl_coverage`)         |
   | `core/io_manager.q`        | `.qetl.io`                      | where a pipeline's output goes (`memory`, `discard`)    |
   | `core/io_hdb.q`            | `.qetl.io`                      | the HDB writer: staged partitions, swap, recovery       |
   | `core/singlestore_odbc.q`  | `.qetl.io.odbc`                 | the SingleStore ODBC adapter                            |

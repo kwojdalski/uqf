@@ -22,6 +22,7 @@
 \l src/init.q
 \l src/etl/core/status.q
 \l src/etl/core/backfill_state.q
+\l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
 \l src/etl/core/run.q
 \l src/etl/core/worker_config.q

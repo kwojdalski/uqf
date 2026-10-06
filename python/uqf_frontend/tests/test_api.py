@@ -171,33 +171,61 @@ def test_response_echoes_the_tier_that_served_it(client):
     assert body["tier"] == "hdb"
 
 
-def _cov(rows):
+def _iv(start_day, end_day):
+    import datetime as dt
+
+    return {
+        "range_from": dt.datetime(2026, 9, start_day),
+        "range_to": dt.datetime(2026, 9, end_day),
+    }
+
+
+def _cov(rows, covered=None, gaps=()):
+    """A gateway whose tiers hold `rows`, and whose .qetl.coverage answers
+    `covered` (default: the rows as they are) and `gaps`.
+
+    The arithmetic is q's - src/etl/core/intervals.q, tested in
+    tests/q/test_materialisation.q - so these tests stage its answers and
+    check the frontend asks for them and reports them, nothing more.
+    """
     from uqf_frontend import queries
     from uqf_frontend.gateway import FakeGateway
 
-    return FakeGateway({queries.COVERAGE: rows})
-
-
-def test_coverage_composes_adjacent_intervals(client_for):
-    import datetime as dt
-
-    gw = _cov(
-        [
-            {"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 14)},
-            {"range_from": dt.datetime(2026, 9, 14), "range_to": dt.datetime(2026, 9, 15)},
-        ]
+    return FakeGateway(
+        {
+            queries.COVERAGE: rows,
+            queries.COMPOSE: rows if covered is None else covered,
+            queries.GAPS: list(gaps),
+        }
     )
-    resp = client_for(gw).get(
-        "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v1"}
+
+
+def test_coverage_reports_what_q_composed(client_for):
+    """The routed rows go to .qetl.coverage.compose on the gateway, and what
+    it answers is what /coverage reports - no second merge in Python."""
+    from uqf_frontend import queries
+
+    rows = [_iv(13, 14), _iv(14, 15)]
+    gw = _cov(rows, covered=[_iv(13, 15)])
+    body = (
+        client_for(gw)
+        .get("/coverage", params={"dataset": "trades", "partition": "", "source_version": "v1"})
+        .json()
     )
-    body = resp.json()
-    assert len(body["covered"]) == 1, "boundary-adjacent intervals must compose"
+    assert gw.calls == [(queries.COMPOSE, (rows,))]
+    assert body["covered"] == [
+        {"range_from": "2026-09-13T00:00:00+00:00", "range_to": "2026-09-15T00:00:00+00:00"}
+    ]
+    assert body["complete"] is False, "no range was requested, so nothing is complete"
 
 
 def test_coverage_reports_gaps_for_a_requested_range(client_for):
     import datetime as dt
 
-    gw = _cov([{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 14)}])
+    from uqf_frontend import queries
+
+    rows = [_iv(13, 14)]
+    gw = _cov(rows, gaps=[_iv(14, 15)])
     body = (
         client_for(gw)
         .get(
@@ -215,6 +243,30 @@ def test_coverage_reports_gaps_for_a_requested_range(client_for):
     assert body["complete"] is False
     assert len(body["gaps"]) == 1
     assert body["gaps"][0]["range_from"].startswith("2026-09-14")
+    program, args = gw.calls[-1]
+    start, end = dt.datetime(2026, 9, 13, tzinfo=dt.UTC), dt.datetime(2026, 9, 15, tzinfo=dt.UTC)
+    assert (program, args) == (queries.GAPS, (start, end, rows))
+
+
+def test_an_empty_requested_range_is_refused_before_q(client_for):
+    """q's require_interval would refuse it too, but as a gateway error; the
+    caller's mistake is a 422 naming it."""
+    from uqf_frontend import queries
+
+    gw = _cov([])
+    resp = client_for(gw).get(
+        "/coverage",
+        params={
+            "dataset": "trades",
+            "partition": "",
+            "source_version": "v1",
+            "range_from": "2026-09-14T00:00:00Z",
+            "range_to": "2026-09-14T00:00:00Z",
+        },
+    )
+    assert resp.status_code == 422
+    assert "forward-going" in resp.json()["detail"]
+    assert queries.GAPS not in [program for program, _ in gw.calls]
 
 
 def test_coverage_filters_on_source_version(client_for):
@@ -249,9 +301,7 @@ def test_coverage_passes_an_as_of_to_q(client_for):
 
 
 def test_query_is_refused_when_required_coverage_has_gaps(client_for):
-    import datetime as dt
-
-    gw = _cov([{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 14)}])
+    gw = _cov([_iv(13, 14)], gaps=[_iv(14, 16)])
     resp = client_for(gw).post(
         "/query",
         json={
@@ -272,11 +322,9 @@ def test_query_is_refused_when_required_coverage_has_gaps(client_for):
 
 
 def test_query_proceeds_when_required_coverage_is_complete(client_for):
-    import datetime as dt
-
     from uqf_frontend import queries
 
-    gw = _cov([{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 16)}])
+    gw = _cov([_iv(13, 16)])
     gw._responses[queries.SELECT] = [{"sym": "EURUSD"}]
     resp = client_for(gw).post(
         "/query",
@@ -298,7 +346,7 @@ def test_query_proceeds_when_required_coverage_is_complete(client_for):
 
 def test_coverage_precheck_runs_before_the_select(client_for):
     """Order matters: a refused query must not have touched the table."""
-    gw = _cov([])
+    gw = _cov([], gaps=[_iv(13, 14)])
     client_for(gw).post(
         "/query",
         json={
@@ -360,11 +408,9 @@ def test_the_coverage_precheck_carries_its_partition(client_for):
     """The /query pre-check reads coverage too, so it needs the dimension for
     the same reason - otherwise a query could be admitted on the strength of
     a different partition's coverage."""
-    import datetime as dt
-
     from uqf_frontend import queries
 
-    gw = _cov([{"range_from": dt.datetime(2026, 9, 13), "range_to": dt.datetime(2026, 9, 16)}])
+    gw = _cov([_iv(13, 16)])
     gw._responses[queries.SELECT] = [{"sym": "EURUSD"}]
     client_for(gw).post(
         "/query",

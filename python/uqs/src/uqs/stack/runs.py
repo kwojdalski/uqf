@@ -32,6 +32,7 @@ from uqs.paths import UqsError, UqsPaths
 _LOADS = (
     "src/init.q",
     "src/etl/core/backfill_state.q",
+    "src/etl/core/intervals.q",
     "src/etl/core/materialisation.q",
     "src/etl/core/run.q",
     "src/etl/core/status.q",
