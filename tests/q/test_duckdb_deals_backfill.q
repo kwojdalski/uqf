@@ -47,7 +47,7 @@ tearDown_release:{[] .qpipe.job.duckdb_deals_backfill.cleanup[];}
 / --- the SQL a window sends ----------------------------------------------
 
 test_a_bound_keeps_its_nanoseconds:{[t]
-    .qunit.assertEquals[.qpipe.source.duckdb_deals.epoch_ns_literal[2026.09.11D09:00:00.000000001];
+    .qunit.assertEquals[.qetl.io.odbc.duckdb_timestamp[2026.09.11D09:00:00.000000001];
         "make_timestamp_ns(1789117200000000001)";
         "a long through .qetl.io.odbc.literal, because its timestamp form drops the sub-second part"]};
 

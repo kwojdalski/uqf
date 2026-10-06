@@ -63,7 +63,7 @@ check["no failed window";0=r`windows_failed;string r`windows_failed];
 / --- reconcile against DuckDB -------------------------------------------------
 
 h:.qetl.io.odbc.open .qetl.source.require_credentials `databento_mbp10;
-between_sql:" WHERE ts_event >= ",.qpipe.source.databento_mbp10.epoch_ns_literal[range_from]," AND ts_event < ",.qpipe.source.databento_mbp10.epoch_ns_literal[range_to];
+between_sql:" WHERE ts_event >= ",.qetl.io.odbc.duckdb_timestamp[range_from]," AND ts_event < ",.qetl.io.odbc.duckdb_timestamp[range_to];
 
 source_rows:first exec n from .qetl.io.odbc.run_sql[h;"SELECT count(*) AS n FROM mbp10",between_sql];
 check["every source row published";source_rows=r`rows_published;
@@ -90,7 +90,7 @@ sample:select from eq_orderbook where i=(last;i) fby sym;
 level_sql:{[h;row]
     sql:"SELECT ",(", " sv string .qpipe.source.databento_mbp10.level_fields)," FROM mbp10",
         " WHERE symbol = ",.qetl.io.odbc.literal[string row`sym],
-        " AND ts_event = ",.qpipe.source.databento_mbp10.epoch_ns_literal[row`time],
+        " AND ts_event = ",.qetl.io.odbc.duckdb_timestamp[row`time],
         " AND sequence = ",.qetl.io.odbc.literal[row`sequence],
         " AND action = ",.qetl.io.odbc.literal[string row`action],
         " AND side = ",.qetl.io.odbc.literal[string row`side],

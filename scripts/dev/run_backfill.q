@@ -41,25 +41,9 @@ if[not `worker in key .Q.opt .z.x;
 
 \d .qdev.runbackfill
 
-/ The flags this script reads, refusing rather than defaulting. A backfill
-/ that guessed a range would publish the wrong window and record it covered -
-/ the same argument uqs backfill makes for requiring all three.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @return a dict of worker and the run specification
-/ @throws error when a flag is missing or a bound is not a timestamp
-spec_from_flags:{[opts]
-    need:`worker`version`from`to;
-    missing:need where not need in key opts;
-    if[count missing;
-        '"run_backfill: missing flag(s): ",", " sv "-",/:string missing];
-    f:need!first each opts need;
-    from_ts:"P"$f`from;
-    to_ts:"P"$f`to;
-    if[null from_ts; '"run_backfill: -from is not a timestamp: ",f`from];
-    if[null to_ts;   '"run_backfill: -to is not a timestamp: ",f`to];
-    if[to_ts<=from_ts; '"run_backfill: -from is not before -to"];
-    `worker`spec!(`$f`worker;
-        `source_version`range_from`range_to!(`$f`version;from_ts;to_ts))}
+/ The flags are torq_backfill.q's, parsed by the same function:
+/ .qetl.job.bounded.spec_from_flags. -version may be left out for a worker
+/ that declares a default source_version, exactly as on the fleet path.
 
 / Where rows go: the HDB named by -hdb, or this process's memory.
 / .
@@ -92,7 +76,7 @@ system "mkdir -p ",getenv `UQF_STATUS_DIR;
 / Caught rather than thrown: a bad flag reaching q's own handler prints a
 / trace and exits 0, which is the worst of both - it looks like a clean run
 / to a shell and like a crash to a reader.
-s:@[.qdev.runbackfill.spec_from_flags;.Q.opt .z.x;{[e] -1 e; exit 2}];
+s:@[.qetl.job.bounded.spec_from_flags;.Q.opt .z.x;{[e] -1 e; exit 2}];
 worker:s`worker;
 ns:(.qetl.job.bounded.def worker)`ns;
 

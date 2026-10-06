@@ -251,6 +251,7 @@ qetl.io,write_memory_keyed,function,3,target batch opts
 qetl.io.odbc,available,function,1,
 qetl.io.odbc,build_connection_string,function,5,host port database user password
 qetl.io.odbc,close,function,1,h
+qetl.io.odbc,duckdb_timestamp,function,1,ts
 qetl.io.odbc,escape_text,function,1,s
 qetl.io.odbc,literal,function,1,v
 qetl.io.odbc,loaded,function,1,
@@ -312,9 +313,11 @@ qetl.job.bounded,record_orphan,function,1,worker
 qetl.job.bounded,recover_unfinished,function,1,worker
 qetl.job.bounded,replay_reactions,function,1,worker
 qetl.job.bounded,replay_window,function,2,worker w
+qetl.job.bounded,require_flags,function,1,opts
 qetl.job.bounded,require_target_key,function,2,worker decl
 qetl.job.bounded,require_transform,function,2,worker cfg
 qetl.job.bounded,required_cfg,value,,
+qetl.job.bounded,required_flags,value,,
 qetl.job.bounded,run,function,1,worker
 qetl.job.bounded,run_body,function,1,worker
 qetl.job.bounded,run_check,function,2,worker batch
@@ -322,6 +325,7 @@ qetl.job.bounded,run_counts,function,4,planned completed failed rows
 qetl.job.bounded,run_totals,function,1,worker
 qetl.job.bounded,runtime,dict,,
 qetl.job.bounded,spec,function,1,worker
+qetl.job.bounded,spec_from_flags,function,1,opts
 qetl.job.bounded,stage_check,function,2,worker s
 qetl.job.bounded,stage_fetch,function,2,worker s
 qetl.job.bounded,stage_publish,function,2,worker s
@@ -330,6 +334,7 @@ qetl.job.bounded,state,dict,,
 qetl.job.bounded,transform_batch,function,2,worker batch
 qetl.job.bounded,unpartitioned,value,,
 qetl.job.bounded,validate,function,2,worker run_spec
+qetl.job.bounded,version_from_flags,function,2,opts worker
 qetl.job.bounded,window_body,function,2,worker w
 qetl.job.bounded,window_failed,function,3,worker w f
 qetl.job.bounded,window_stages,dict,,
@@ -1271,7 +1276,6 @@ qpipe.source.crypto_market_data,tz,value,,
 qpipe.source.databento_mbp10,adapt,function,1,raw
 qpipe.source.databento_mbp10,columns,value,,
 qpipe.source.databento_mbp10,credential_example,value,,
-qpipe.source.databento_mbp10,epoch_ns_literal,function,1,ts
 qpipe.source.databento_mbp10,fixture,function,1,
 qpipe.source.databento_mbp10,fixture_levels,function,3,bid ask sz
 qpipe.source.databento_mbp10,level_fields,value,,
@@ -1307,7 +1311,6 @@ qpipe.source.demo_events,tz,value,,
 qpipe.source.duckdb_deals,adapt,function,1,raw
 qpipe.source.duckdb_deals,columns,value,,
 qpipe.source.duckdb_deals,credential_example,value,,
-qpipe.source.duckdb_deals,epoch_ns_literal,function,1,ts
 qpipe.source.duckdb_deals,fixture,function,1,
 qpipe.source.duckdb_deals,query,function,3,h range_from range_to
 qpipe.source.duckdb_deals,row_key,value,,

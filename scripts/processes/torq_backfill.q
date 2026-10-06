@@ -68,53 +68,9 @@
 
 \d .qproc.backfill
 
-/ The flags this process reads. Listed so the refusal below can report every
-/ missing one at once rather than over four restarts.
-required_flags:`worker`from`to
-
-/ Refuse unless every required flag has a value, naming all that do not.
-/ .Q.opt keeps each flag's words as a list of strings, so the value is the
-/ first of them. Missing is either not given at all, or given with nothing
-/ after it - which .Q.opt maps to an empty list - so `-from` with no value is
-/ refused here by name rather than failing later as a type error. Presence is
-/ tested with `in key` rather than by indexing, because what a dictionary
-/ returns for an absent key depends on its value list's prototype.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @return flag -> its value, as a string
-require_flags:{[opts]
-    missing:required_flags where not (required_flags in key opts) and 0<count each opts required_flags;
-    if[count missing;
-        '"torq_backfill: missing ",(", " sv "-",/:string missing),
-         " - a backfill with no range would publish the wrong window and record it as covered"];
-    required_flags!first each opts required_flags}
-
-/ The run specification, parsed and typed.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @throws error when a bound is not a q timestamp
-spec_from_flags:{[opts]
-    f:require_flags opts;
-    from_ts:"P"$f`from;
-    to_ts:"P"$f`to;
-    if[null from_ts; '"torq_backfill: -from is not a timestamp: ",f`from];
-    if[null to_ts;   '"torq_backfill: -to is not a timestamp: ",f`to];
-    worker:`$f`worker;
-    `worker`spec!(worker;
-        `source_version`range_from`range_to!(version_from_flags[opts;worker];from_ts;to_ts))}
-
-/ The source_version this run records coverage under: -version when given,
-/ else the worker's declared default, else a refusal - a worker that declares
-/ none is one whose source can be restated, and guessing the release there
-/ files a restatement under the old one.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @param worker the worker's name
-/ @return the version, a symbol
-/ @throws error when neither is there
-version_from_flags:{[opts;worker]
-    if[(`version in key opts) and 0<count opts`version; :`$first opts`version];
-    dv:.qetl.job.bounded.default_version worker;
-    if[null dv;
-        '"torq_backfill: missing -version - ",string[worker]," declares no default source_version, so a run must say which release of the source it records coverage under"];
-    dv}
+/ The flags this process reads are parsed by .qetl.job.bounded.spec_from_flags
+/ in src/etl/core/bounded_worker.q - the one parser scripts/dev/run_backfill.q
+/ uses too, so a command line means the same thing to both.
 
 / Whether this process was asked for DEBUG output.
 / @param opts the parsed command line, as .Q.opt returns it
@@ -240,7 +196,7 @@ use_hdb:{[decl]
 run:{[]
     t0:.z.p;
     .qetl.log.dbg[`backfill;"command line";enlist[`args]!enlist .z.x];
-    s:spec_from_flags .Q.opt .z.x;
+    s:.qetl.job.bounded.spec_from_flags .Q.opt .z.x;
     worker:s`worker;
     spec:s`spec;
     .qetl.log.info[worker;"backfill process starting";spec];

@@ -156,22 +156,23 @@ These are real, measured in this tree. Use them to calibrate severity --- the
 first is the kind of finding worth reporting, the second is the kind worth *not*
 reporting.
 
-**Report this one.** The DuckDB timestamp literal exists twice, byte for byte:
+**Report this one.** A real finding, since fixed - so the shape to look for, not
+a live duplicate. The DuckDB timestamp literal existed twice, byte for byte:
 
 ```
-  q       .qpipe.source.databento_mbp10.epoch_ns_literal   src/etl/sources/databento_mbp10.q:79
-  q       .qpipe.source.duckdb_deals.epoch_ns_literal      src/etl/sources/duckdb_deals.q:70
+  q       .qpipe.source.databento_mbp10.epoch_ns_literal   src/etl/sources/databento_mbp10.q
+  q       .qpipe.source.duckdb_deals.epoch_ns_literal      src/etl/sources/duckdb_deals.q
 
   Shared behaviour: a q timestamp as DuckDB's make_timestamp_ns(<epoch ns>),
     the bound every window's SQL is cut on.
   Drift scenario: one copy is fixed for a timezone or epoch bug and the other
     is not; that source's windows then fetch rows a window early or late,
     and coverage records the window as published regardless.
-  Guarded by: nothing that compares them. Each source's tests exercise its
+  Guarded by: nothing that compared them. Each source's tests exercised its
     own copy.
-  Authority: neither - both wrap .qetl.io.odbc.literal, so the helper belongs
-    beside it in .qetl.io.odbc.
-  Recommendation: UNIFY into .qetl.io.odbc.
+  Authority: neither - both wrapped .qetl.io.odbc.literal, so the helper
+    belonged beside it.
+  Recommendation: UNIFY into .qetl.io.odbc - now .qetl.io.odbc.duckdb_timestamp.
 ```
 
 Calibrate the other way too: the interval algebra (compose/gaps) once had a
