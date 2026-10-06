@@ -150,5 +150,5 @@ def stop_databento_feed(paths: UqsPaths) -> None:
 def databento_feed_status(paths: UqsPaths) -> dict[str, str]:
     """What the CLI renders. Strings, because it is a display table."""
     return _process(paths).status(
-        publishes=DATABENTO_RAW_TABLE, **{"folded by": "databento1 -> databento_book"}
+        publishes=DATABENTO_RAW_TABLE, **{"folded by": "databento1 -> eq_orderbook"}
     )
