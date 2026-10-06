@@ -158,6 +158,10 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
     vendored_procs = paths.torqapphome / "appconfig" / "process.csv"
     with vendored_procs.open(newline="") as f:
         rows = list(csv.DictReader(f))
+    # The torq runtime is the starter pack as it ships: its rows, unchanged -
+    # feed1 on, monitor1 off, stp1 on the vendored database.q, no pipelines.
+    if paths.pure_torq:
+        return rows
     appended = _pipeline_rows()
     for row in rows:
         if row["procname"] in VENDORED_STARTWITHALL_OVERLAY:
@@ -197,6 +201,10 @@ def effective_process_rows(paths: UqsPaths) -> list[dict[str, str]]:
     """
     overrides = _read_overrides(paths)
     rows = [{**row, **overrides.get(row["procname"], {})} for row in _composed_rows(paths)]
+    if paths.pure_torq:
+        # monitor1 subscribes to the vendored list, as the starter pack ships
+        # it: the budget below exists for this tree's extra subscriptions.
+        return rows
     for row in rows:
         if row["procname"] == "monitor1" and "extras" not in overrides.get("monitor1", {}):
             extras = monitor_connection_extras(paths, rows)

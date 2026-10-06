@@ -13,7 +13,7 @@ draws the topology.
 - [Replaying a tickerplant log](#replaying-a-tickerplant-log)
 - [Listing things](#listing-things)
 - [What actually starts](#what-actually-starts) --- including
-  [profiles](#profiles)
+  [runtimes](#runtimes) and [profiles](#profiles)
 - [Changing a process's config](#changing-a-processs-config)
 - [Logs](#logs)
 - [Connecting](#connecting)
@@ -281,6 +281,43 @@ kdb+/KDB-X. `killtick` and `tpreplay1` are on-demand utility processes, not part
 of the standing stack, so they also don't auto-start - `tpreplay1` is what
 [`data replay`](#replaying-a-tickerplant-log) starts, for one replay, and it
 exits when the replay is done.
+
+### Runtimes
+
+All of the above is the `uqf` runtime, the default. The `torq` runtime is the
+starter pack as it ships, with nothing of this tree's added:
+
+```
+uqs --runtime torq start      # or UQS_RUNTIME=torq uqs start
+uqs --runtime torq stop
+```
+
+  |                | `uqf` (default)                                                         | `torq`                                                            |
+  | ---            | ---                                                                     | ---                                                               |
+  | processes      | the vendored rows, with overlays, plus every pipeline                   | the vendored `process.csv`, unchanged: `feed1` on, `monitor1` off |
+  | tables         | `database.q` plus this tree's (`fx_orderbook`, the crypto mocks, ...)   | the starter pack's `database.q`: `trade`, `quote`, `packets`      |
+  | config layers  | TorQ's, `scripts/torqconfig` and `scripts/torqcode`, the starter pack's | TorQ's and the starter pack's                                     |
+  | data directory | `output/uqs`                                                            | `output/uqs-torq`                                                 |
+
+Without the service layer, `torq` has none of the [query
+policies](../architecture/query-policies.md): no data-access API, no `.pm` on
+the gateway, and the starter pack's access list everywhere.
+
+Each runtime keeps its own data directory, because an HDB one runtime wrote
+holds tables the other does not declare. They share ports, so run one at a time,
+or give the second its own with `--port`.
+
+On `torq`, `list processes` shows the 23 starter-pack processes and
+`list profiles` shows only `essential`, the one profile whose processes all ship
+with the starter pack. `essential` leaves out `feed1`, so it runs with no data
+coming in; plain `start` includes it. Commands that work only on this tree's
+pipelines refuse, with the reason: `graph`, `backfill`, `gaps`, `run`, `stream`
+and `feed`. So does any profile that needs a uqf process:
+
+```
+$ uqs --runtime torq start --profile fx
+ERROR    | profile(s) fx needs executions1, fxfeed1, ..., which the torq runtime does not have: it runs the starter pack alone. Use --profile essential, or --runtime uqf for this tree's processes
+```
 
 ### Profiles
 

@@ -29,6 +29,7 @@ opens a socket or touches output/.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -117,6 +118,8 @@ class _Paths:
     made `summary`'s debug line an AttributeError in tests only."""
 
     torqdata: str = "TORQDATA"
+    runtime: str = "uqf"
+    pure_torq: bool = False
 
 
 @pytest.fixture(autouse=True)
@@ -2007,6 +2010,59 @@ def test_list_profiles_shows_the_slot_count(monkeypatch):
     assert result.exit_code == 0
     assert "arbitrage" in result.output
     assert "/14" in result.output, "the budget is the column that matters"
+
+
+# ---------------------------------------------------------------- runtimes
+
+
+def _refusals(monkeypatch, module: ModuleType) -> list[str]:
+    """Record what `module`'s _die is handed, and exit as it would."""
+    said: list[str] = []
+
+    def die(exc):
+        said.append(str(exc))
+        raise typer.Exit(code=1)
+
+    monkeypatch.setattr(module, "_die", die)
+    return said
+
+
+@pytest.mark.parametrize("command", ["graph", "backfill", "gaps", "run", "stream", "feed"])
+def test_the_torq_runtime_refuses_the_commands_only_uqf_has(monkeypatch, command):
+    monkeypatch.setenv("UQS_RUNTIME", "uqf")  # restored afterwards: --runtime sets it
+    said = _refusals(monkeypatch, shared)
+    result = runner.invoke(cli.app, ["--runtime", "torq", command])
+    assert result.exit_code == 1
+    assert said[0].startswith(f"`uqs {command}` ") and said[0].endswith("Use --runtime uqf")
+
+
+def test_runtime_is_set_for_everything_the_command_then_builds(monkeypatch):
+    monkeypatch.setenv("UQS_RUNTIME", "uqf")
+    runner.invoke(cli.app, ["--runtime", "torq", "list", "fields"])
+    assert os.environ["UQS_RUNTIME"] == "torq"
+
+
+def test_an_unknown_runtime_is_refused(monkeypatch):
+    monkeypatch.setenv("UQS_RUNTIME", "uqf")
+    said = _refusals(monkeypatch, shared)
+    assert runner.invoke(cli.app, ["--runtime", "pure", "list", "fields"]).exit_code == 1
+    assert said == ["--runtime 'pure' is not a runtime - choose one of: uqf, torq"]
+
+
+def test_a_profile_the_torq_runtime_cannot_start_is_refused_naming_what_is_missing(monkeypatch):
+    @dataclass
+    class _TorqPaths(_Paths):
+        runtime: str = "torq"
+        pure_torq: bool = True
+
+    monkeypatch.setattr(lifecycle, "_paths", _TorqPaths)
+    monkeypatch.setattr(
+        lifecycle.procs_model, "list_process_names", lambda _p: ["discovery1", "stp1"]
+    )
+    said = _refusals(monkeypatch, lifecycle)
+    assert runner.invoke(cli.app, ["start", "--profile", "fx"]).exit_code == 1
+    assert "which the torq runtime does not have" in said[0]
+    assert said[0].endswith("Use --profile essential, or --runtime uqf for this tree's processes")
 
 
 @pytest.mark.parametrize("gone", ["clean", "clear-checkpoint"])

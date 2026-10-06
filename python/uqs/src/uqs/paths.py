@@ -6,12 +6,14 @@ rather than recomputing paths, so a relocated demo is one change here."""
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.logger import get_logger
+from uqs.runtimes import DEFAULT_RUNTIME, RUNTIME_ENV, RUNTIMES
 
 log = get_logger(__name__)
 
@@ -75,6 +77,16 @@ class UqsError(RuntimeError):
     """Raised for anything that stops the demo from being runnable as-is."""
 
 
+def runtime_from_env() -> str:
+    """The runtime UQS_RUNTIME names, or the default; an unknown one is refused."""
+    name = os.environ.get(RUNTIME_ENV, "").strip() or DEFAULT_RUNTIME
+    if name not in RUNTIMES:
+        raise UqsError(
+            f"{RUNTIME_ENV}={name!r} is not a runtime - choose one of: {', '.join(RUNTIMES)}"
+        )
+    return name
+
+
 @dataclass(frozen=True)
 class UqsPaths:
     repo_root: Path
@@ -83,6 +95,11 @@ class UqsPaths:
     torqdata: Path
     scripts_dir: Path
     orchestrator_dir: Path
+    runtime: str = DEFAULT_RUNTIME  #: which of RUNTIMES bootstrap composes
+
+    @property
+    def pure_torq(self) -> bool:  # the starter pack alone, nothing of uqf's
+        return self.runtime == "torq"
 
     @property
     def generated_procs(self) -> Path:
@@ -178,22 +195,30 @@ def repo_root() -> Path:
     )
 
 
-def paths_for_root(root: Path) -> UqsPaths:
+def paths_for_root(root: Path, runtime: str | None = None) -> UqsPaths:
     """Every path the stack uses, for a repository checked out at `root`.
 
     The one place the layout is spelled. uqf_frontend used to build its own
     copy for a configured root, which is how a move of the data directory
     would have left the frontend starting and stopping a stack in the old one.
+
+    `runtime` defaults to UQS_RUNTIME's. Any other than the default gets its
+    own output/uqs-<runtime>: one runtime's HDB holds tables another lacks.
     """
+    runtime = runtime or runtime_from_env()
+    if runtime not in RUNTIMES:
+        raise UqsError(f"{runtime!r} is not a runtime - choose one of: {', '.join(RUNTIMES)}")
+    data = "uqs" if runtime == DEFAULT_RUNTIME else f"uqs-{runtime}"
     return UqsPaths(
         repo_root=root,
         torqhome=root / "lib" / "torq",
         torqapphome=root / "lib" / "torq-finance-starter-pack",
         # output/, with everything else the repository generates at runtime -
         # not scripts/output/, where it used to live beside the source.
-        torqdata=root / "output" / "uqs",
+        torqdata=root / "output" / data,
         scripts_dir=root / "scripts",
         orchestrator_dir=root / PACKAGE_DIR,
+        runtime=runtime,
     )
 
 
@@ -242,7 +267,7 @@ def check_data_dir_was_migrated(paths: UqsPaths) -> None:
     - inodes are unchanged and every open file descriptor follows - and a
     restart afterwards is for reopening at the new path, not for safety.
     """
-    if paths.torqdata.exists():
+    if paths.torqdata.exists() or paths.runtime != DEFAULT_RUNTIME:  # former: default's only
         return
     for relative in _FORMER_DATA_DIRS:
         former = paths.repo_root / relative

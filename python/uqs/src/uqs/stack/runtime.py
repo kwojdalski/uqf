@@ -128,17 +128,23 @@ def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         writer.writeheader()
         writer.writerows(rows)
 
-    # gateway1's access list: the vendored one plus the ordinary users the
-    # query policy applies to (procs.GATEWAY_ACCESS_OVERLAY points it here).
-    paths.generated_gateway_access.write_text("\n".join(gateway_access_lines(paths)) + "\n")
+    # The torq runtime's schema is the starter pack's own, copied so the HDB
+    # filler below and `uqs` read it from the one place either runtime keeps
+    # it. Its gateway1 keeps the vendored access list, so there is none to write.
+    if paths.pure_torq:
+        shutil.copyfile(paths.torqapphome / "database.q", paths.generated_schema)
+    else:
+        # gateway1's access list: the vendored one plus the ordinary users the
+        # query policy applies to (procs.GATEWAY_ACCESS_OVERLAY points it here).
+        paths.generated_gateway_access.write_text("\n".join(gateway_access_lines(paths)) + "\n")
 
-    # Same extend-never-edit approach as process.csv above, for stp1's
-    # -schemafile (see _generated_schema_content/_composed_rows).
-    paths.generated_schema.write_text(_generated_schema_content(paths))
+        # Same extend-never-edit approach as process.csv above, for stp1's
+        # -schemafile (see _generated_schema_content/_composed_rows).
+        paths.generated_schema.write_text(_generated_schema_content(paths))
 
-    # Same again for DQE's query list: the vendored rows plus this tree's
-    # metatables, which dqe1 is pointed at (stack/dqe.py).
-    write_dqe_config(paths)
+        # Same again for DQE's query list: the vendored rows plus this tree's
+        # metatables, which dqe1 is pointed at (stack/dqe.py).
+        write_dqe_config(paths)
 
     # Make the HDB rectangular, now that database.q says what it should
     # hold. A partitioned kdb+ database needs every table in every

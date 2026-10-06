@@ -24,6 +24,7 @@ MODULES = (
     "model.pipeline",
     "model.pipelines",
     "paths",
+    "runtimes",
     "interpreter",
     "stack.env",
     "stack.procs",
@@ -112,8 +113,9 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: `paths` and `logger` are omitted from every list because everything may
 #: import them: they are leaves that import nothing from this package, so they
 #: cannot take part in a cycle. `interpreter` is too - it imports `paths` and
-#: nothing else, which test_the_leaves_stay_leaves holds it to.
-LEAVES = {"paths", "logger", "interpreter"}
+#: nothing else, which test_the_leaves_stay_leaves holds it to - and so is
+#: `runtimes`, which imports nothing at all.
+LEAVES = {"paths", "logger", "interpreter", "runtimes"}
 ALLOWED_IMPORTS = {
     "model": set(),
     "stack": {"model"},
@@ -146,6 +148,8 @@ def test_the_leaves_stay_leaves():
     source = (PKG / "src" / "uqs" / "interpreter.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
     assert reached <= {"paths"}, reached
+    source = (PKG / "src" / "uqs" / "runtimes.py").read_text()
+    assert not {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
 
 
 @pytest.mark.parametrize("folder", sorted(ALLOWED_IMPORTS))
