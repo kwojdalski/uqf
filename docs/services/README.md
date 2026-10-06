@@ -75,19 +75,18 @@ into one table, so whatever reads it handles one market and one shape.
 **`executions1` · every fill as one table** --- FX `trades` and `crypto_trades`
 become `executions`.
 
-**`marks1` · a mid for every instrument** --- FX `quote` and `crypto_book`
-become `marks`, the price positions are valued at.
-
-**`marketdata1` · direct FX snapshots** --- `quote` and `fx_orderbook` as
-`market_data`, each row keeping its source and its original receipt time. It
-heads the arbitrage chain. Profile `arbitrage`. [Details](superbook.md)
+**`marketdata1` · every venue's book** --- FX `quote` and `fx_orderbook`, and
+`crypto_book`, as `market_data`, each row keeping its source and the source's
+own time. `posbook1` values positions at its level-0 mids, and it heads the
+arbitrage chain, which takes the FX books only. Profile `fx`.
+[Details](superbook.md)
 
 ## Analytics
 
 **`posbook1` · positions and P&L** --- a running position per instrument from
-`executions`, valued at `marks`. One book carries FX and crypto, because it
-reads the normalisers rather than each market. Publishes `position`. Profile
-`fx`.
+`executions`, valued at the level-0 mid of `market_data`. One book carries FX
+and crypto, because it reads the normalisers rather than each market. Publishes
+`position`. Profile `fx`.
 
 **`markout1` · execution quality** --- each fill against the mid one and ten
 seconds later: did the price move for or against the trade? Reads `trades` and

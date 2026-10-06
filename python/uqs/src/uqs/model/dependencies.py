@@ -43,7 +43,7 @@ log = get_logger(__name__)
 #: recorder, which the mock exists to stand in for), and the recorder is
 #: the normal case - cryptomock1 is off by default precisely so the two do
 #: not interleave. Treating the declared producer as the only one would
-#: make `marks1` and `executions1` warn on every healthy stack, and a
+#: make `marketdata1` and `executions1` warn on every healthy stack, and a
 #: warning that is usually wrong is one an operator learns to scroll past,
 #: which costs more than it saves.
 #:

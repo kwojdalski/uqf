@@ -63,11 +63,10 @@ whose instances take several tables carrying the same fact in different shapes
 and publish one canonical table, with one declared `.qetl.transform` transform
 per source --- refused at load if its output drifts from the canonical schema.
 
-  | Normalizer                                             | Sources                         | Output                                                                                      |
-  | ---                                                    | ---                             | ---                                                                                         |
-  | [`executions`](../../src/etl/streaming/executions.q)   | `trades`, `crypto_trades`       | one fill table: source_time, sym, venue, side, size, price, fee, fee_ccy, fill_id           |
-  | [`marks`](../../src/etl/streaming/marks.q)             | `quote`, `crypto_book`          | one mid per instrument: source_time, sym, venue, mid                                        |
-  | [`market_data`](../../src/etl/streaming/market_data.q) | `quote`, `fx_orderbook`         | one book shape: source and source_time preserved, so a merge can tell whose liquidity it is |
+  | Normalizer                                             | Sources                                | Output                                                                                      |
+  | ---                                                    | ---                                    | ---                                                                                         |
+  | [`executions`](../../src/etl/streaming/executions.q)   | `trades`, `crypto_trades`              | one fill table: source_time, sym, venue, side, size, price, fee, fee_ccy, fill_id           |
+  | [`market_data`](../../src/etl/streaming/market_data.q) | `quote`, `fx_orderbook`, `crypto_book` | one book shape: source and source_time preserved, so a merge can tell whose liquidity it is |
 
 A third market --- a new venue, a futures feed --- is a mapping in one of these,
 not a change to anything downstream.
@@ -80,7 +79,7 @@ runner.
 
   | Engine                                                                                                      | Reads                            | Holds                                                                                              | Publishes                                                                        |
   | ---                                                                                                         | ---                              | ---                                                                                                | ---                                                                              |
-  | [`posbook`](../../src/etl/streaming/posbook.q)                                                              | `executions`, `marks`            | a [`.qpos`](../../src/portfolio/positions.q) book: position and P&L per sym, weighted-average cost | `position` — FX and crypto in one book                                           |
+  | [`posbook`](../../src/etl/streaming/posbook.q)                                                              | `executions`, `market_data`      | a [`.qpos`](../../src/portfolio/positions.q) book: position and P&L per sym, weighted-average cost | `position` — FX and crypto in one book                                           |
   | [`fx_positions`](../../src/etl/streaming/fx_positions.q)                                                    | `orders`                         | a `.qdesk` book: net exposure by (sym, book, product); `.qlimit` caps                              | `fx_position` snapshots, `fx_limit_breach` throttled alerts                      |
   | [`markout`](../../src/etl/streaming/markout.q)                                                              | `trades`, `quote`                | buffered fills awaiting their horizons                                                             | `execution_quality`                                                              |
   | [`cross`](../../src/etl/streaming/cross.q), [`vectorize`](../../src/etl/streaming/vectorize.q)              | `fx_orderbook`, `wide_orderbook` | mirrors                                                                                            | synthetic crosses; a reshaped book                                               |

@@ -5,20 +5,22 @@ Diagrams for the running state of the uqf stack (see
 Reflects what `uqs list processes` shows today: the vendored 23-process stack
 plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `markout1`, `databento1`,
-`kafka_flow1`, `cryptomock1`, `executions1`, `marks1`, `fxordersfeed1`,
-`fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`), and
-eight bounded backfill processes (`deals_backfill1`, `events_backfill1`,
+`kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`, `fxpositions1`,
+`marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`), and eight bounded
+backfill processes (`deals_backfill1`, `events_backfill1`,
 `databento_backfill1`, `upstream_backfill1`, `duckdb_deals_backfill1`,
 `crypto_market_data_backfill1`, `hdb_markouts_backfill1`,
 `hdb_transfer_backfill1`). Declared is not the same as running here - see [what
 starts with the stack](#what-starts-and-why-not-all-of-it).
 
-Direct FX arbitrage flows through `marketdata1` (`quote` and `fx_orderbook` into
-`market_data`), `superbook1` (fresh source books merged into `superbook`), and
-`arbitrage1` (gross cross-source price opportunities into `arbitrage`). The
-three are on demand rather than part of `uqs start` - see the connection budget
-below. See [the superbook guide](../services/superbook.md) for source identity,
-expiry and the query for currently active opportunities.
+Direct FX arbitrage flows through `marketdata1` (`quote`, `fx_orderbook` and
+`crypto_book` into `market_data`), `superbook1` (the FX source books merged into
+`superbook`), and `arbitrage1` (gross cross-source price opportunities into
+`arbitrage`). `marketdata1` starts with the stack, because `posbook1` values
+positions at its mids; `superbook1` and `arbitrage1` are on demand rather than
+part of `uqs start` - see the connection budget below. See [the superbook
+guide](../services/superbook.md) for source identity, expiry and the query for
+currently active opportunities.
 
 `crossarb1` reads the same `superbook` and asks the other arbitrage question:
 not "are two sources crossed on one pair" but "is the direct market out of line
@@ -128,18 +130,18 @@ beside them - two publishers onto one table would interleave invented rows with
 real ones. Neither it nor anything downstream reads `crypto_sim_fills`; those
 are the paper strategy's own fills and are not a position.
 
-`executions1` and `marks1` are **normalizers** - a job kind of their own
+`executions1` and `marketdata1` are **normalizers** - a job kind of their own
 (`.qetl.job.stream.normalizer`, `src/etl/core/normalizer.q`). A normalizer
 subscribes to several tables that carry the same fact in different shapes and
 publishes one canonical table, with one declared `.qetl.transform` transform per
 source; `define` refuses a mapping whose output drifts from the canonical
 schema. `executions1` maps `trades` and `crypto_trades` onto `executions`;
-`marks1` maps `quote` and `crypto_book` onto `marks`. `posbook1` reads those two
-and nothing else, so one position book carries FX and crypto from one
-subscription each, and a new market is a mapping in a normalizer rather than a
-branch in the position job. (Note `executions`, not `fills`: `fills` is a q
-builtin, and a table by that name would shadow the verb in every process holding
-it.)
+`marketdata1` maps `quote`, `fx_orderbook` and `crypto_book` onto `market_data`.
+`posbook1` reads those two and nothing else, marking to each book's level-0 mid,
+so one position book carries FX and crypto from one subscription each, and a new
+market is a mapping in a normalizer rather than a branch in the position job.
+(Note `executions`, not `fills`: `fills` is a q builtin, and a table by that
+name would shadow the verb in every process holding it.)
 
 `fxordersfeed1` and `fxpositions1` are the FX positions service: synthetic order
 flow in, net exposure by (sym, book, product) out, with limit breaches throttled
@@ -191,7 +193,7 @@ their schema row and their place in the DAG, and are one command away:
   | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                         |
   | `kafka_flow1`                             | subscribes to `kafka_client_flow`, which only the external Kafka consumer publishes, so on a default start it consumes nothing                                                             |
   | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                                      |
-  | `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together        |
+  | `superbook1`, `arbitrage1`                | the direct-arbitrage chain off `market_data`: `superbook` is read only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together                          |
   | `crossarb1`                               | the synthetic-versus-direct detector, a second consumer of that chain, so it runs with it                                                                                                  |
   | `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in [`processes.md`](../reference/processes.md)                                                                                             |
 

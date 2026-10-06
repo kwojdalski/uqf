@@ -963,7 +963,8 @@ def test_pipeline_offsets_are_stable():
         "databento1": 34,
         "cryptomock1": 35,
         "executions1": 36,
-        "marks1": 37,
+        # 37 was marks1, retired: its row stays in process_ports.csv so the
+        # offset is never handed to anything else.
         "fxordersfeed1": 38,
         "fxpositions1": 39,
         "databento_backfill1": 40,
@@ -1124,7 +1125,6 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
         "widefeed1",
         "vectorize1",
         "databento1",
-        "marketdata1",
         "superbook1",
         "arbitrage1",
         "crossarb1",
@@ -1140,7 +1140,7 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
         "posbook1",
         "markout1",
         "executions1",
-        "marks1",
+        "marketdata1",
         "fxordersfeed1",
         "fxpositions1",
     }

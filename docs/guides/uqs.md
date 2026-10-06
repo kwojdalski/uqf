@@ -508,7 +508,8 @@ uqs summary --sort Status --columns status
 
 ```
 ┃ Process      ┃ Depends on                  ┃ Inputs                ┃ Outputs        ┃
-│ posbook1     │ executions1, marks1         │ executions, marks     │ position       │
+│ posbook1     │ executions1, marketdata1    │ executions,           │ position       │
+│              │                             │ market_data           │                │
 │ databento1   │ (databento_mbp10: external) │ databento_mbp10       │ eq_orderbook │
 │ executions1  │ fxtradesfeed1, cryptomock1, │ trades, crypto_trades │ executions     │
 │              │ (crypto_trades: external)   │                       │                │
@@ -766,7 +767,7 @@ process listing: 47 line(s)
 configured ports for 46 process(es)
 monitor1 not reached; Heartbeat column is a monitoring gap, not a verdict
 parsed 46 row(s): 23 up, 23 down
-starved process(es): executions1, marks1
+starved process(es): executions1, marketdata1
 ```
 
 It also prints each process's load time on its latest start:

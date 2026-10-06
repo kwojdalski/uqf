@@ -132,12 +132,11 @@ plant: "2 · the tickerplant — TorQ's stp1, or .qetl.tick on stock kdb+" {
 
 normalize: "3 · normalizers — the first waist: one shape from many (.qetl.job.stream.normalizer)" {
   class: band
-  grid-columns: 3
+  grid-columns: 2
   grid-gap: 20
 
   executions: "executions\ntrades + crypto_trades\n→ one fill table" { class: job }
-  marks: "marks\nquote + crypto_book\n→ one mid per instrument" { class: job }
-  marketdata: "market_data\nquote + fx_orderbook\n→ one book shape" { class: job }
+  marketdata: "market_data\nquote + fx_orderbook + crypto_book\n→ one book shape" { class: job }
 }
 
 engines: "4 · engines — subscribe, hold state, republish" {
@@ -145,7 +144,7 @@ engines: "4 · engines — subscribe, hold state, republish" {
   grid-columns: 3
   grid-gap: 20
 
-  posbook: "posbook\nexecutions + marks → position\n.qpos, FX and crypto in one book" { class: job }
+  posbook: "posbook\nexecutions + market_data → position\n.qpos, FX and crypto in one book" { class: job }
   fxpos: "fx_positions\norders → fx_position · fx_limit_breach\n.qdesk exposure, .qlimit caps" { class: job }
   markout: "markout\ntrades + quote → execution_quality\n.qexec, at horizons on a timer" { class: job }
   superbook: "superbook\nmarket_data → superbook\n.qpipe.job.superbook merges\nacross sources" { class: job }

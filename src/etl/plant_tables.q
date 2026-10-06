@@ -238,7 +238,9 @@ materialise:{[ts] {[t] t set schema t} each ts; ts}
 fx_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 nested[`fx_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
-/ Direct FX books retain their source and original timestamp across normalization.
+/ Every venue's book, FX and crypto, with its source and original timestamp
+/ kept across normalization. posbook1 marks to its level-0 mids; superbook1
+/ merges the FX ones.
 market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
@@ -363,9 +365,6 @@ execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestam
 / normalized row. Named `executions` because `fills` is a q builtin.
 executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$())
 
-/ marks1's output: a mid per instrument from every book the stack carries.
-/ The `marks` normalizer maps `quote` and `crypto_book` onto this.
-marks:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); mid:`float$())
 / fx_orders_feed's output: order flow, most of which never becomes a fill.
 / Wider than `trades` because a position keyed on more than sym needs the
 / dimensions to arrive with the order, and order_status is what
