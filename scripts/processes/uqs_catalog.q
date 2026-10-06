@@ -61,9 +61,7 @@ describe[`fx_limit_breach]:
 describe[`fx_position]:
     "fxpositions1's snapshot: net exposure per (sym, book, product), republished whole on every timer tick rather than only what moved. base_qty and quote_qty are both carried because an FX position is two currencies and reporting one hides a cross; break_even is the rate at which closing out leaves the desk flat";
 describe[`market_data]:
-    "Direct FX full snapshots per pair and source, normalized from quote and fx_orderbook. source_time preserves original receipt time; zero size or empty sides withdraw liquidity";
-describe[`marks]:
-    "A mid per instrument from every book the stack carries, spelled one way by the marks normalizer: the vendored quote and crypto_book. This is what posbook1 marks positions against";
+    "Full book snapshots per sym and source, normalized from quote and fx_orderbook (FX) and crypto_book (one source per venue). source_time is the source's own time where it has one, else the original receipt time; zero size or empty sides withdraw liquidity. posbook1 marks positions to the level-0 mid";
 describe[`mkt_orderbook]:
     "vectorize1's output: wide_orderbook folded into the vector-column shape every pricing and execution function in src/ expects, one row per (time, sym)";
 describe[`orders]:

@@ -100,7 +100,6 @@ fx_orderbook: "fx_orderbook\ntime · sym · bid/ask_prices · bid/ask_sizes" { c
 wide_orderbook: "wide_orderbook\ntime · sym · bids0..10 · asks0..10" { class: table }
 trades: "trades\ntime · sym · side · trade_price · size · pip_factor" { class: table }
 executions: "executions\nsource_time · sym · venue · side · size · price\nfee · fee_ccy · fill_id" { class: table }
-marks: "marks\nsource_time · sym · venue · mid" { class: table }
 crypto_book: "crypto_book\ntime · venue · sym · bid/ask_prices · bid/ask_sizes" { class: table }
 crypto_trades: "crypto_trades\ntime · sym · venue · side · trade_price · size\nfee · fee_currency · exchange_fill_id" { class: table }
 
@@ -114,7 +113,7 @@ eq_orderbook: "eq_orderbook\ntime · sym · bid/ask prices+sizes" { class: table
 orders: "orders\ntime · sym · book · product\nside · qty · price · status" { class: table }
 fx_position: "fx_position\nthe whole book each snapshot" { class: table }
 fx_limit_breach: "fx_limit_breach\none row per NEW breach" { class: table }
-market_data: "market_data\none shape from two quote tables" { class: table }
+market_data: "market_data\none book shape from\nevery venue's book" { class: table }
 superbook: "superbook\nliquidity merged across sources" { class: table }
 arbitrage: "arbitrage\nbid over ask in the merged book" { class: table }
 cross_arbitrage: "cross_arbitrage\ndirect vs a synthetic route" { class: table }
@@ -126,7 +125,6 @@ cross1: "cross1\n.qfwd.cross_book_at" { class: job }
 vectorize1: "vectorize1\n.qbook.book_from_wide_levels" { class: job }
 posbook1: "posbook1\n.qpos.apply_fill + .qrisk.pnl" { class: job }
 executions1: "executions1\nnormalizer: every fill\ntable as one" { class: job }
-marks1: "marks1\nnormalizer: a mid from\nevery book" { class: job }
 markout1: "markout1\n.qexec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
 fxpositions1: "fxpositions1\n.qdesk + .qlimit\nnets FILLED orders, on a timer" { class: job }
 marketdata1: "marketdata1\nnormalizer" { class: job }
@@ -162,14 +160,11 @@ trades -> executions1: "one shape in"
 crypto_trades -> executions1: "another"
 executions1 -> executions: "one shape out"
 
-quote -> marks1: "one shape in"
-crypto_book -> marks1: "another"
-marks1 -> marks: "one shape out"
 databento_mbp10 -> databento1: "subscribe"
 databento1 -> eq_orderbook: "republish"
 
 executions -> posbook1: "subscribe"
-marks -> posbook1: "mark to mid"
+market_data -> posbook1: "mark to level-0 mid"
 posbook1 -> position: "republish"
 
 trades -> markout1: "subscribe, buffered"
@@ -182,9 +177,10 @@ fxpositions1 -> fx_limit_breach: "new breaches only"
 
 quote -> marketdata1: "one shape in"
 fx_orderbook -> marketdata1: "another"
+crypto_book -> marketdata1: "and crypto"
 marketdata1 -> market_data: "one shape out"
 
-market_data -> superbook1: "subscribe"
+market_data -> superbook1: "subscribe, FX only"
 superbook1 -> superbook: "republish"
 superbook1 -> config_change { style.stroke-dash: 4 }
 
@@ -205,7 +201,6 @@ trades -> storage
 crypto_book -> storage
 crypto_trades -> storage
 executions -> storage
-marks -> storage
 mkt_orderbook -> storage
 position -> storage
 execution_quality -> storage

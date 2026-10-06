@@ -62,17 +62,21 @@ def test_starting_a_whole_chain_at_once_is_silent():
     chain = {"marketdata1", "superbook1", "arbitrage1"}
     running = chain | {"fxfeed1", "fxorderbookfeed1"}
     for procname in sorted(chain):
-        assert dependencies.unfed_inputs(procname, running) == []
+        # marketdata1 also reads crypto_book, whose normal source is outside
+        # the stack: that note is context (see the test below), not a fault.
+        faults = [w for w in dependencies.unfed_inputs(procname, running) if "unless" not in w]
+        assert faults == [], faults
 
 
 def test_an_external_source_is_context_not_a_fault():
     """crypto_book has a declared producer AND an external one.
 
     cryptomock1 is off by default precisely so it does not interleave with
-    cryptorust's recorder, which is the normal source. Reporting marks1 as
-    broken on every healthy stack would be a warning that is usually wrong.
+    cryptorust's recorder, which is the normal source. Reporting marketdata1
+    as broken on every healthy stack would be a warning that is usually wrong.
     """
-    (warning,) = dependencies.unfed_inputs("marks1", running={"fxfeed1", "marks1"})
+    running = {"fxfeed1", "fxorderbookfeed1", "marketdata1"}
+    (warning,) = dependencies.unfed_inputs("marketdata1", running=running)
     assert "crypto_book" in warning
     assert "cryptorust" in warning
     assert "unless" in warning
@@ -127,7 +131,7 @@ def test_depends_on_names_processes_not_tables():
     `up, but idle` process."""
     depends = dependencies.depends_on_by_process()
     assert "executions1" in depends["posbook1"]
-    assert "marks1" in depends["posbook1"]
+    assert "marketdata1" in depends["posbook1"]
     assert "executions" not in depends["posbook1"], "processes, not tables"
 
 

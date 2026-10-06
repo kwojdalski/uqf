@@ -117,6 +117,17 @@ refresh:{[as_of]
     if[count rows; .qpipe.job.superbook.publish[`superbook;rows]];
     }
 
+/ The FX rows of a market_data batch: those whose sym is a currency pair.
+/ .
+/ market_data also carries crypto venues' books (crypto_book), for posbook's
+/ marks. Merging those by sym across venues is a different product - crypto
+/ cross-venue arbitrage - and a decision of its own, so for now this book
+/ stays the FX one it always was.
+/ @param x market_data rows
+/ @return the rows whose sym is a currency pair
+/ @eg count .qpipe.job.superbook.fx_only ([] sym:`EURUSD,`$"BTC-USDT")  ->  1
+fx_only:{[x] x where .qccy.is_ccy_pair each x`sym}
+
 / Consume a canonical market_data batch and publish the recomputed books.
 / @param t incoming table name
 / @param x full source snapshots
@@ -124,6 +135,8 @@ refresh:{[as_of]
 / @eg .qpipe.job.superbook.on_batch[`unrelated;()]
 on_batch:{[t;x]
     if[not t=`market_data; :()];
+    x:fx_only x;
+    if[0=count x; :()];
     now:.z.p;
     `.qpipe.job.superbook.books set replace_books[books;x;now];
     refresh now;

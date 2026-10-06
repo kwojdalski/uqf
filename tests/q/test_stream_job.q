@@ -467,16 +467,20 @@ test_cross_ignores_a_table_it_did_not_subscribe_to:{[t]
 / --- posbook --------------------------------------------------------------
 
 / posbook reads the two normalizers' outputs, as the plant delivers them:
-/ an executions row and a marks row, `time` stamped in front.
+/ an executions row and a market_data row, `time` stamped in front.
 an_execution:{[ts;s;side;price;size]
     ([] time:enlist ts; source_time:enlist ts; sym:enlist s; venue:enlist `fx; side:enlist side;
         size:enlist size; price:enlist price; fee:enlist 0f; fee_ccy:enlist `; fill_id:enlist `)}
 
-a_mark:{[s;mid] ([] time:enlist d 0; source_time:enlist d 0; sym:enlist s; venue:enlist `fx; mid:enlist mid)}
+/ A one-level book whose touch IS `mid` on both sides, so its level-0 mid is
+/ exactly `mid` rather than a float sum's nearest neighbour.
+a_book:{[s;mid] ([] time:enlist d 0; sym:enlist s; source:enlist `UQFFX; source_time:enlist d 0;
+    bid_prices:enlist enlist mid; bid_sizes:enlist enlist 1e6;
+    ask_prices:enlist enlist mid; ask_sizes:enlist enlist 1e6)}
 
-test_posbook_marks_a_fill_against_the_last_mark:{[t]
+test_posbook_marks_a_fill_against_the_last_mid:{[t]
     reset[];
-    .qpipe.job.posbook.on_batch[`marks;a_mark[`EURUSD;1.104]];
+    .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.104]];
     .qpipe.job.posbook.on_batch[`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]];
     out:last_rows[];
     .qunit.assertEquals[out[`mark_price];enlist 1.104;
@@ -497,11 +501,20 @@ test_posbook_publishes_one_row_per_fill:{[t]
     .qunit.assertEquals[count last_rows[];2;
         "every fill in the batch produces a position row"]};
 
-test_posbook_publishes_nothing_for_a_mark:{[t]
+test_posbook_publishes_nothing_for_a_book:{[t]
     reset[];
-    .qpipe.job.posbook.on_batch[`marks;a_mark[`EURUSD;1.1001]];
+    .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.1001]];
     .qunit.assertEquals[count .sjtest.published;0;
-        "a mark only refreshes the cache, it is not a publication"]};
+        "a book only refreshes the mid cache, it is not a publication"]};
+
+test_posbook_keeps_its_mid_when_a_source_withdraws_its_book:{[t]
+    / An empty side is market_data's withdrawal. It has no mid, and marking
+    / at 0n would turn every later position's P&L null.
+    reset[];
+    .qpipe.job.posbook.on_batch[`market_data;a_book[`EURUSD;1.104]];
+    .qpipe.job.posbook.on_batch[`market_data;update bid_prices:enlist `float$(), bid_sizes:enlist `float$() from a_book[`EURUSD;1.2]];
+    .qunit.assertEquals[.qpipe.job.posbook.last_mid`EURUSD;1.104;
+        "the withdrawn book leaves the last real mid in place"]};
 
 / --- vectorize ------------------------------------------------------------
 
@@ -734,8 +747,8 @@ fx_fill:{[s;side;price;size]
 
 / source_time deliberately EARLIER than time: the venue stamped it before
 / this stack received it, which is the whole reason crypto_book carries both.
-/ A marks normalizer that went back to reading `time` would produce a mark
-/ dated d 0 instead of d[0]-0D00:00:02, and say so here.
+/ A market_data mapping that went back to reading `time` would produce a
+/ book dated d 0 instead of d[0]-0D00:00:02, and say so here.
 crypto_book_row:{[s;bid;ask]
     ([] time:enlist d 0; source_time:enlist (d 0)-0D00:00:02; venue:enlist `binance_spot; sym:enlist s;
         bid_prices:enlist bid; bid_sizes:enlist 3#0.5; ask_prices:enlist ask; ask_sizes:enlist 3#0.5)}
@@ -769,10 +782,11 @@ test_posbook_folds_an_fx_and_a_crypto_fill_into_one_book:{[t]
     .testutil.assertApprox[(.qpipe.job.posbook.book`$"BTC-USDT")`qty;0.5;1e-12;"long half a bitcoin"];
     .testutil.assertApprox[(.qpipe.job.posbook.book`EURUSD)`qty;1e6;1e-9;"and a million euros"]};
 
-test_posbook_marks_to_whichever_book_the_marks_normalizer_saw:{[t]
+test_posbook_marks_to_whichever_book_market_data_saw:{[t]
     reset[];
-    to_posbook[`marks;.qetl.job.stream.normalizer.normalize[`marks;`crypto_book;crypto_book_row[`$"BTC-USDT";61999 61998 61997f;62001 62002 62003f]]];
-    to_posbook[`marks;.qetl.job.stream.normalizer.normalize[`marks;`quote;([] time:enlist d 0; sym:enlist `EURUSD; bid:enlist 1.0849; ask:enlist 1.0851)]];
+    to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;crypto_book_row[`$"BTC-USDT";61999 61998 61997f;62001 62002 62003f]]];
+    to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`quote;([] time:enlist d 0; sym:enlist `EURUSD; bid:enlist 1.0849; ask:enlist 1.0851;
+        bsize:enlist 1000000; asize:enlist 1000000; src:enlist `UQFFX)]];
     to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
     row:last_rows[];
     .testutil.assertApprox[first row`mark_price;62000f;1e-9;"the crypto mid, off the ladder's first level"];
@@ -780,7 +794,7 @@ test_posbook_marks_to_whichever_book_the_marks_normalizer_saw:{[t]
     .testutil.assertApprox[.qpipe.job.posbook.last_mid`EURUSD;1.085;1e-9;"and the FX mid is cached alongside it"]};
 
 test_posbook_no_longer_reads_the_raw_tables:{[t]
-    .qunit.assertEquals[.qetl.job.stream.def[`posbook]`subscribe_to;`executions`marks;
+    .qunit.assertEquals[.qetl.job.stream.def[`posbook]`subscribe_to;`executions`market_data;
         "posbook subscribes to the two normalizers and nothing else"];
     reset[];
     .qpipe.job.posbook.on_batch[`trades;fx_fill[`EURUSD;1;1.085;1e6]];
@@ -788,11 +802,11 @@ test_posbook_no_longer_reads_the_raw_tables:{[t]
 
 test_the_mock_reaches_posbook_through_both_normalizers:{[t]
     / The mock's rows, delivered the way the plant would deliver them, run
-    / through executions and marks and land in the one book.
+    / through executions and market_data and land in the one book.
     reset[];
     as_table:{[cols_after_time;r] update time:.sjtest.d 0 from flip cols_after_time!r};
     .qetl.job.stream.wire[`crypto_mock;{[as_table;tbl;r]
-        norm:$[tbl=`crypto_book;`marks;`executions];
+        norm:$[tbl=`crypto_book;`market_data;`executions];
         .sjtest.to_posbook[norm;.qetl.job.stream.normalizer.normalize[norm;tbl;`time xcols as_table[
             $[tbl=`crypto_book;`source_time`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
               `sym`venue`side`trade_price`size`fee`fee_currency`exchange_fill_id];r]]];
@@ -803,7 +817,7 @@ test_the_mock_reaches_posbook_through_both_normalizers:{[t]
     .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in .qpipe.job.crypto_mock.syms;
         "and every position is in a symbol the mock trades"];
     .qunit.assertTrue[all (exec sym from .qpipe.job.posbook.book) in key .qpipe.job.posbook.last_mid;
-        "each marked to a mid the marks normalizer produced from the mock's own book"]};
+        "each marked to a mid from the mock's own book, through market_data"]};
 / --- fx orders feed -------------------------------------------------------
 
 test_the_orders_feed_publishes_one_order_a_tick:{[t]

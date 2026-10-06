@@ -110,8 +110,7 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   cryptomock1: "cryptomock1 :6085\nstands in for cryptorust\npublishes only, on demand" { class: feed }
   databento1: "databento1 :6084\nlive MBP-10 → book\nsame fold as the backfill" { class: job }
   executions1: "executions1 :6086\nnormalizer: fills as one\nsubscribes + publishes" { class: job }
-  marks1: "marks1 :6087\nnormalizer: mids as one\nsubscribes + publishes" { class: job }
-  marketdata1: "marketdata1 :6092\nnormalizer: one book shape\nfrom quote and fx_orderbook" { class: job }
+  marketdata1: "marketdata1 :6092\nnormalizer: one book shape\nFX and crypto books" { class: job }
 
   cross1: "cross1 :6075\nquotes → cross rates\noutput stays private" { class: job }
   vectorize1: "vectorize1 :6077\nwide → level vectors\nsubscribes + publishes" { class: job }

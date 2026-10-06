@@ -19,7 +19,7 @@ runner = CliRunner()
 EDGES = [
     Edge("feed", "a", ("quotes",)),
     Edge("feed", "b", ("trades",)),
-    Edge("a", "c", ("marks",)),
+    Edge("a", "c", ("mids",)),
     Edge("b", "c", ("fills",)),
 ]
 PROCS = ["feed", "a", "b", "c", "lonely"]
@@ -94,7 +94,7 @@ def test_a_filter_keeps_matches_and_the_path_to_them():
 
 def test_a_filter_matches_the_tables_on_an_edge():
     trees = forest(PROCS, EDGES, "downstream", collapse=False)
-    (feed,) = cli_graph.prune(trees, "marks")
+    (feed,) = cli_graph.prune(trees, "mids")
     assert [n.name for n in feed.children] == ["a"]
 
 

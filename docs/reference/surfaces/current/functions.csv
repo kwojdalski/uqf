@@ -514,7 +514,6 @@ qetl.plant,fx_orderbook,table,,
 qetl.plant,fx_position,table,,
 qetl.plant,kafka_client_flow,table,,
 qetl.plant,market_data,table,,
-qetl.plant,marks,table,,
 qetl.plant,materialise,function,1,ts
 qetl.plant,mkt_orderbook,table,,
 qetl.plant,names,function,1,
@@ -1172,6 +1171,8 @@ qpipe.job.kafka_flow,on_batch,function,2,t x
 qpipe.job.kafka_flow,on_replayed,function,1,
 qpipe.job.kafka_flow,publish,value,,
 qpipe.job.kafka_flow,publish_fresh,function,1,rows
+qpipe.job.market_data,crypto_book,table,,
+qpipe.job.market_data,from_crypto_book,function,1,batch
 qpipe.job.market_data,from_fx_orderbook,function,1,batch
 qpipe.job.market_data,from_quote,function,1,batch
 qpipe.job.market_data,fx_orderbook,table,,
@@ -1192,28 +1193,22 @@ qpipe.job.markout,quotes,table,,
 qpipe.job.markout,score_markouts,function,2,trades quotes
 qpipe.job.markout,score_ready,function,1,now
 qpipe.job.markout,trades,table,,
-qpipe.job.marks,crypto_book,table,,
-qpipe.job.marks,from_crypto_book,function,1,batch
-qpipe.job.marks,from_quote,function,1,batch
-qpipe.job.marks,fx_venue,value,,
-qpipe.job.marks,marks,table,,
-qpipe.job.marks,on_batch,value,,
-qpipe.job.marks,publish,value,,
-qpipe.job.marks,quote,table,,
 qpipe.job.posbook,book,dict,,
+qpipe.job.posbook,book_mids,function,1,x
 qpipe.job.posbook,executions,table,,
 qpipe.job.posbook,last_mid,dict,,
-qpipe.job.posbook,mark_positions,function,3,book trades marks
-qpipe.job.posbook,marks,table,,
+qpipe.job.posbook,mark_positions,function,3,book trades mids
+qpipe.job.posbook,market_data,table,,
 qpipe.job.posbook,next_book,function,2,book positions
 qpipe.job.posbook,on_batch,function,2,t x
 qpipe.job.posbook,position,table,,
 qpipe.job.posbook,position_book,table,,
-qpipe.job.posbook,position_marks,table,,
+qpipe.job.posbook,position_mids,table,,
 qpipe.job.posbook,position_trades,table,,
 qpipe.job.posbook,publish,value,,
 qpipe.job.rebuild_positions,handler,function,3,dataset range_from range_to
 qpipe.job.superbook,books,dict,,
+qpipe.job.superbook,fx_only,function,1,x
 qpipe.job.superbook,levels,function,2,prices sizes
 qpipe.job.superbook,max_age,value,,
 qpipe.job.superbook,on_batch,function,2,t x

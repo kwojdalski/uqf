@@ -50,7 +50,7 @@ def test_every_profile_is_closed_over_its_inputs(name):
 
     Externally-fed tables are exempt and that is the point of the exemption:
     `crypto_book` comes from cryptorust's recorder in the normal case, so
-    `marks1` is fed without `cryptomock1` - which must NOT be started
+    `marketdata1` is fed without `cryptomock1` - which must NOT be started
     alongside the real thing.
     """
     members = set(profiles.resolve([name])) & PROCNAMES
@@ -148,7 +148,7 @@ def test_a_closure_stops_at_an_externally_fed_table():
     and its own declaration says to start it INSTEAD, never as well. A
     mechanical walk over posbook1's inputs reaches it; this one must not."""
     assert "cryptomock1" not in profiles.closure(["posbook1"])
-    assert "marks1" in profiles.closure(["posbook1"])
+    assert "marketdata1" in profiles.closure(["posbook1"])
 
 
 def test_the_mock_is_reachable_by_naming_it():
@@ -182,19 +182,20 @@ def test_only_the_listed_vendored_processes_hold_a_slot():
 
 
 def test_two_profiles_that_each_fit_can_together_not_fit():
-    """The case the refusal exists for, and it is not hypothetical: fx is 12
+    """The case the refusal exists for, and it is not hypothetical: fx is 13
     of 14 and arbitrage is 10, so either runs and neither runs with the
     other."""
     assert profiles.over_budget(["fx"]) is None
     assert profiles.over_budget(["arbitrage"]) is None
     message = profiles.over_budget(["fx", "arbitrage"])
     assert message is not None
-    assert "17" in message and "14" in message
+    assert "16" in message and "14" in message
 
 
 def test_composing_counts_the_union_not_the_sum():
-    """fx and arbitrage share fxfeed1, so 12 + 10 is not 22."""
-    assert profiles.plant_slots(profiles.resolve(["fx", "arbitrage"])) < 12 + 10
+    """fx and arbitrage share fxfeed1, fxorderbookfeed1 and marketdata1, so
+    13 + 10 is not 23."""
+    assert profiles.plant_slots(profiles.resolve(["fx", "arbitrage"])) < 13 + 10
 
 
 def test_all_is_every_other_profiles_leaves_but_the_exempt():
@@ -218,7 +219,7 @@ def test_all_leaves_the_crypto_mock_to_be_asked_for():
 def test_a_profile_needing_a_larger_licence_is_refused_on_this_one_and_says_how():
     message = profiles.over_budget(["all"])
     assert message is not None
-    assert "20" in message and "14" in message
+    assert "19" in message and "14" in message
     assert profiles.LICENCE_CONNECTIONS_ENV in message, "the refusal names the way out"
 
 

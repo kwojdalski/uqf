@@ -179,10 +179,10 @@ the batch onto the columns that source's transform declares, applies it, and
 publishes. It also performs the `.qetl.job.stream.define` itself, so the job's
 edges cannot disagree with its mappings, and it refuses at `define` any mapping
 whose declared output drifts from the canonical table, column, type and order.
-Two ship: `executions` (`trades` + `crypto_trades`) and `marks` (`quote` +
-`crypto_book`), which is how `posbook1` holds FX and crypto positions in one
-book without knowing either market's tape format. A third market is a mapping in
-a normalizer, not a branch in a consumer.
+Two ship: `executions` (`trades` + `crypto_trades`) and `market_data` (`quote` +
+`fx_orderbook` + `crypto_book`), which is how `posbook1` holds FX and crypto
+positions in one book without knowing either market's tape format. A third
+market is a mapping in a normalizer, not a branch in a consumer.
 `uqs job new NAME --kind normalizer --subscribe-to a,b --columns ...` scaffolds
 one: the canonical table NAME, and per source its schema, a throwing mapping and
 a typed example row, so the file loads while each mapping stays red.
