@@ -3,10 +3,10 @@
 / .
 / uqs points KDBSERVCONFIG at scripts/torqconfig (uqs.stack.env.build_env),
 / and torq.q loads <that>/settings/default.q into EVERY process it starts,
-/ vendored ones included, after its logging functions are defined. Nothing
-/ else lives in this directory: TorQ looks a config FILE up in KDBAPPCONFIG
-/ first, so this one adds settings without shadowing any of the starter
-/ pack's files.
+/ vendored ones included, after its logging functions are defined. Beside
+/ it, gateway.q holds the query policy's settings for every gateway. TorQ
+/ looks a config FILE up in KDBAPPCONFIG first, so these add settings
+/ without shadowing any of the starter pack's files.
 / .
 / WHAT IT CHANGES. TorQ's logger writes INF, WARN and ERR; .qetl.log writes
 / INFO, WARNING, ERROR, DEBUG and TRACE. A log read across both - and every

@@ -25,7 +25,7 @@ from uqs.stack import alive
 from uqs.stack import render as stack_render
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env
-from uqs.stack.procs import effective_process_rows
+from uqs.stack.procs import effective_process_rows, gateway_access_lines
 
 log = get_logger(__name__)
 
@@ -127,6 +127,10 @@ def bootstrap(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         writer = csv.DictWriter(f, fieldnames=PROCESS_CSV_FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
+
+    # gateway1's access list: the vendored one plus the ordinary users the
+    # query policy applies to (procs.GATEWAY_ACCESS_OVERLAY points it here).
+    paths.generated_gateway_access.write_text("\n".join(gateway_access_lines(paths)) + "\n")
 
     # Same extend-never-edit approach as process.csv above, for stp1's
     # -schemafile (see _generated_schema_content/_composed_rows).

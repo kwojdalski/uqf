@@ -32,3 +32,4 @@ test_render.q
 test_risk.q
 test_schema.q
 test_stats.q
+test_torq_querypolicy.q

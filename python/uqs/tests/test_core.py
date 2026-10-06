@@ -56,6 +56,10 @@ def fake_paths(tmp_path: Path) -> UqsPaths:
     )
     (torqapphome / "hdb").mkdir()
     (torqapphome / "dqe").mkdir()
+    (torqapphome / "appconfig" / "passwords").mkdir()
+    (torqapphome / "appconfig" / "passwords" / "accesslist.txt").write_text(
+        "rdb:pass\nadmin:admin\n"
+    )
 
     return UqsPaths(
         repo_root=tmp_path,
@@ -282,6 +286,57 @@ def test_bootstrap_generates_schema_with_the_fx_orderbook_table(fake_paths: UqsP
     assert schemas.definition("trades") in generated
     assert schemas.definition("position") in generated
     assert schemas.definition("execution_quality") in generated
+
+
+def test_bootstrap_writes_gateway1_an_access_list_with_the_ordinary_users(
+    fake_paths: UqsPaths, monkeypatch
+):
+    """The vendored logins, then each ordinary user - who can log in at the
+    gateway and nowhere else, so .pm can hold them to getdata."""
+    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    users = fake_paths.scripts_dir / "torqconfig" / "permissions" / "gateway_users.csv"
+    users.parent.mkdir(parents=True)
+    users.write_text("user,password,role\nanalyst,secret,analyst\nadmin,other,analyst\n")
+    runtime.bootstrap(fake_paths)
+    lines = fake_paths.generated_gateway_access.read_text().splitlines()
+    assert lines == ["rdb:pass", "admin:admin", "analyst:secret"], (
+        "admin is not given a second password"
+    )
+
+
+def test_dataaccess_is_on_for_every_gateway_rdb_and_hdb_and_only_gateway1_takes_the_new_list(
+    fake_paths: UqsPaths,
+):
+    vendored = fake_paths.torqapphome / "appconfig" / "process.csv"
+    vendored.write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,1,rdb,rdb1,${A}/accesslist.txt,1,1,,,${KDBCODE}/processes/rdb.q,1,,q\n"
+        "localhost,2,hdb,hdb2,${A}/accesslist.txt,1,1,,,${KDBHDB},1,-x 1,q\n"
+        "localhost,3,gateway,gateway1,${A}/accesslist.txt,1,1,,,${KDBCODE}/processes/gateway.q,1,,q\n"
+        "localhost,4,discovery,discovery1,${A}/accesslist.txt,1,0,,,${KDBCODE}/processes/discovery.q,1,,q\n"
+    )
+    rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
+    tables = "-dataaccess ${UQF_SCRIPTS}/torqconfig/dataaccess/tableproperties.csv"
+    assert rows["rdb1"]["extras"] == tables
+    assert rows["hdb2"]["extras"] == f"-x 1 {tables}", "appended to what the row already passes"
+    assert rows["gateway1"]["extras"] == tables
+    assert "-dataaccess" not in rows["discovery1"]["extras"]
+    assert rows["gateway1"]["U"] == "${TORQDATA}/gateway_accesslist.txt"
+    assert rows["rdb1"]["U"] == "${A}/accesslist.txt", "no ordinary login reaches a backend"
+
+
+def test_the_shipped_query_policy_files_exist_where_the_gateway_looks():
+    """querypolicy.q reads them from KDBSERVCONFIG, which env.py points at
+    scripts/torqconfig - and getdata is only ever on with them."""
+    root = Path(__file__).resolve().parents[3] / "scripts" / "torqconfig"
+    for name in (
+        "dataaccess/tableproperties.csv",
+        "dataaccess/querypolicy.csv",
+        "permissions/gateway.q",
+        "permissions/gateway_users.csv",
+        "settings/gateway.q",
+    ):
+        assert (root / name).is_file(), name
 
 
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(fake_paths: UqsPaths, monkeypatch):
