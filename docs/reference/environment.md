@@ -110,6 +110,7 @@ about where data lives, which is a confusing way to spend an afternoon.
   | `KDBAPPCONFIG`  | `$TORQAPPHOME/appconfig`                                          |
   | `KDBAPPCODE`    | `$TORQAPPHOME/code`                                               |
   | `KDBSERVCONFIG` | `scripts/torqconfig`: names TorQ's log levels as `.qetl.log` does |
+  | `KDBSERVCODE`   | `scripts/torqcode`: TorQ's password loader, fixed for that layer  |
   | `KDBLIB`        | `$TORQHOME/lib`                                                   |
   | `KDBTESTS`      | `$TORQHOME/tests`                                                 |
   | `KDBLOG`        | `$TORQDATA/logs`                                                  |

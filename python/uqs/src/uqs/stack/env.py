@@ -39,6 +39,10 @@ def build_env(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         # One file: settings/default.q, which every TorQ process loads and
         # which names TorQ's log levels the way .qetl.log does (see it).
         "KDBSERVCONFIG": str(paths.scripts_dir / "torqconfig"),
+        # handlers/loadpassword.q: TorQ's credential loader drops the base
+        # passwords/ files once KDBSERVCONFIG adds a third config layer, so
+        # this replaces it, loaded straight after trackservers.q (see it).
+        "KDBSERVCODE": str(paths.scripts_dir / "torqcode"),
         "KDBAPPCODE": str(paths.torqapphome / "code"),
         "KDBLIB": str(paths.torqhome / "lib"),
         "KDBTESTS": str(paths.torqhome / "tests"),
