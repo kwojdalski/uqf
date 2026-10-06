@@ -12,6 +12,9 @@ definition, its `expected` entry and its catalog line - but only when nothing
 else in the tree mentions it, so a table another job reads is never taken.
 A reaction is only its file, its test and the test's nsList entry: it has no
 process, so no table, profile or port.
+An external feed (#715) also loses its Python publisher, its feed module and
+their test, and the raw table the publisher writes - on the same rule as any
+table: only when nothing else mentions it.
 
 WHAT IT REFUSES. A job whose file carries no SCAFFOLDED marker any more: it
 has been written, and deleting written work is not undoing a scaffold.
@@ -37,6 +40,7 @@ from uqs.paths import (
     WORKER_DIR,
     UqsError,
 )
+from uqs.scaffold.external import external_files
 from uqs.scaffold.profile import PROFILES_FILE
 
 MARKER = "SCAFFOLDED"
@@ -104,6 +108,14 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
         tables = [job]
     else:
         tables = list(symbols(fields.get("publishes", "")))
+        # An external feed (#715): its Python publisher, the feed module the CLI
+        # discovers, their test - and the raw table the publisher writes, which
+        # is the job's subscription.
+        py_files = [Path(f) for f in external_files(job) if (repo_root / f).is_file()]
+        if py_files:
+            removal.deletes += py_files
+            gone |= set(py_files)
+            tables = list(symbols(fields.get("subscribe_to", ""))) + tables
 
     gone |= _remove_test(removal, repo_root, job)
 

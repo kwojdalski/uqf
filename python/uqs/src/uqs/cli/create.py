@@ -34,7 +34,7 @@ from uqs.paths import (
     UqsPaths,
 )
 from uqs.scaffold import columns as columns_mod
-from uqs.scaffold import jobs, normalizer, worker
+from uqs.scaffold import external, jobs, normalizer, worker
 
 
 def _workers_filling(repo_root: Path, dataset: str, partition: str | None = None) -> list[str]:
@@ -96,8 +96,9 @@ def new_job(
         str,
         typer.Option(
             "--kind",
-            help="'streaming' (default), 'backfill' or 'normalizer'",
-            autocompletion=completion.choices("streaming", "backfill", "normalizer"),
+            help="'streaming' (default), 'backfill', 'normalizer' or 'external' "
+            "(a Python publisher outside q, plus the q job reshaping what it publishes)",
+            autocompletion=completion.choices("streaming", "backfill", "normalizer", "external"),
         ),
     ] = "streaming",
     subscribe_to: Annotated[
@@ -118,6 +119,10 @@ def new_job(
     ] = None,
     dataset: Annotated[
         str | None, typer.Option("--dataset", help="The table it fills (backfill)")
+    ] = None,
+    raw_table: Annotated[
+        str | None,
+        typer.Option("--raw-table", help="The table the Python publisher writes (external)"),
     ] = None,
     columns: Annotated[
         str | None,
@@ -246,6 +251,7 @@ def new_job(
                 "--subscribe-to": subscribe_to is not None,
                 "--publishes": publishes is not None,
                 "--dataset": dataset is not None,
+                "--raw-table": raw_table is not None,
                 "--columns": columns is not None,
                 "--source": source is not None,
                 "--width": width is not None,
@@ -278,10 +284,13 @@ def new_job(
             "--poll": poll,
             "--cursor-fields": cursor_fields is not None,
         },
+        "external": {"--raw-table": raw_table is not None},
         "standing": {"--profile": profile is not None, "--unprofiled": unprofiled is not None},
     }
     for owner, given in only.items():
-        fits = kind in (("streaming", "normalizer") if owner == "standing" else (owner,))
+        fits = kind in (
+            ("streaming", "normalizer", "external") if owner == "standing" else (owner,)
+        )
         for option in (o for o, used in given.items() if used and not fits):
             _die(UqsError(f"{option} does not apply to --kind {kind}"))
             return
@@ -362,8 +371,28 @@ def new_job(
                 profile=profile,
                 unprofiled=unprofiled,
             )
+        elif kind == "external":
+            if not (raw_table and publishes and shape):
+                _die(UqsError("--kind external needs --raw-table, --publishes and --columns"))
+                return
+            plan = external.external_feed(
+                name,
+                raw_table,
+                publishes,
+                shape,
+                known_tables=_plant_tables(_paths()),
+                procname=procname,
+                start_with_all=start_with_all,
+                profile=profile,
+                unprofiled=unprofiled,
+            )
         else:
-            _die(UqsError(f"--kind must be 'backfill', 'normalizer' or 'streaming', not {kind!r}"))
+            _die(
+                UqsError(
+                    "--kind must be 'backfill', 'normalizer', 'streaming' or 'external', "
+                    f"not {kind!r}"
+                )
+            )
             return
     except UqsError as exc:
         _die(exc)

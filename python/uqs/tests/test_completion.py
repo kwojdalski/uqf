@@ -110,7 +110,7 @@ def test_fixed_choices_complete():
     assert complete("uqs logs --level W") == ["WARNING"]
     assert complete("uqs logs --multitail --stream ") == ["out", "err", "both"]
     assert complete("uqs feed start ") == ["databento", "kafka", "crypto", "crypto-fills"]
-    assert complete("uqs job new x --kind ") == ["streaming", "backfill", "normalizer"]
+    assert complete("uqs job new x --kind ") == ["streaming", "backfill", "normalizer", "external"]
 
 
 def test_plant_tables_complete_for_a_job_s_inputs():
