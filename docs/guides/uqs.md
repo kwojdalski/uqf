@@ -23,7 +23,6 @@ draws the topology.
 - [MCP server](#mcp-server)
 - [Other commands](#other-commands)
 - [Installing](#installing)
-- [Known harmless warnings](#known-harmless-warnings)
 
 ## Quick start
 
@@ -111,102 +110,8 @@ the pattern, or the shell will try to expand it against your filenames first.
 
 ## Commands
 
-```
-start [PROCS] [--port N] [--print]    start (default: all startwithall=1 processes);
-                                      --print shows the startup command line(s) instead
-stop [PROCS] [--port N]               stop
-restart [PROCS] [--port N]            restart
-up [PROCS] [--profile P] [--level L]  start, then stream every started process's log to
-                                      this console; Ctrl-C stops what it started
-summary [--port N] [--export FILE] [--columns all|status|C,...] [--timeout S]
-        [--probe-timeout S] [--debug] [-i]  status table plus the declared graph
-                                      (--columns status for just up/down/pid/port/
-                                      Responds; --timeout defaults to 120s,
-                                      --probe-timeout to 0.5s per process;
-                                      --debug adds each process's load time)
-backfill WORKER [--version V] --from T --to T [--on-conflict S] [--mode M] [--port N] [--debug] [--wait]
-                                      run a bounded worker over [--from, --to); dates
-                                      without an offset are UTC. Passed to the process
-                                      as flags, never environment variables. --debug
-                                      starts it with -verbose: DEBUG lines in its log.
-                                      --on-conflict (upsert, replace, ignore, append,
-                                      fail) overrides the worker's own for this run.
-                                      --mode validate|plan|dry-run|run: validate and
-                                      plan open nothing and write nothing, dry-run
-                                      fetches and writes nothing. --version defaults
-                                      to the worker's declared source_version
-                                      Exits once torq.sh has started the process;
-                                      --wait follows the run and exits with its
-                                      outcome (0 completed/idle, 1 failed or died)
-data replay [--proc P] [--date D] [--dir PATH] [--hdb PATH] [--schema PATH]
-            [--table T]... [--port N] [--dry-run]
-                                      replay a tickerplant log into the HDB. With
-                                      nothing passed, every one of those comes off
-                                      the running plant and hdb process - including
-                                      the base port (see below)
-data hdb-check [--fix]                HDB partitions missing a declared table or column
-graph [PROC] [--upstream] [--offline] [-i]  every process and who feeds whom, as a
-                                      tree with the tables on each edge
-stream preview JOB [--sample N] [--dry-run] [--last D] [--trace]
-                                      one page of a polling feed: what it would publish
-                                      and where its cursor would move, with nothing
-                                      published or saved; --last 30s samples the rows
-                                      in [now-30s, now) instead, from a temporary
-                                      cursor (see docs/scaffolding/feed.md)
-gaps JOB --from T --to T [-i]         where a streaming job was not up and subscribed,
-                                      and the backfill that refills each gap when a
-                                      worker fills what the job publishes
-run status [-i]                       runs that began and never finished, including
-                                      runs whose process died
-run list [-i]                         every run in the ledger, newest first, with its
-                                      outcome
-run show RUN_ID                       one run and its facts, then its log files and
-                                      the command that re-runs (resumes) its range -
-                                      see guides/when-it-breaks.md
-run audit DATASET --from T --to T     every fact about one window, from every run
-                                      that published it
-remove output [--match REGEX] [--dry-run]
-                                      wipe output/uqs/, or part of it
-remove checkpoint WORKER              delete a worker's checkpoint, so its next run
-                                      starts at --from. Refused while a run of it may
-                                      be live. Covered windows are still skipped:
-                                      re-fetch those under a new --version
-job new NAME [--kind K] [--dry-run] ...
-                                      scaffold an ETL job: its q files, table and
-                                      test (see docs/scaffolding/)
-job remove NAME [--dry-run] [--force] [-y]
-                                      undo a scaffold, keeping anything still in use
-job install DIR [--mode copy|symlink] [--overwrite] [--dry-run] [-y]
-                                      install the sources, workers and streaming jobs
-                                      in DIR into src/etl/ (see "Adding a process")
-query [EXPR] [--proc P|--port N] [--servers T] [--raw] [--render q|kola] [--export FILE]
-                                      run a q expression against a process - gateway1,
-                                      which routes it to the RDB and HDB, unless
-                                      --proc or --port says otherwise; with no EXPR,
-                                      an interactive session on it (routed on the
-                                      gateway, qcon elsewhere). --raw sends to the
-                                      gateway as typed. --proc looks the port up, and
-                                      refuses a stopped process. Results print as q
-                                      prints them; --render kola shows Python objects
-schema [TABLE|PATTERN] [--proc P] [--export FILE] [-i]  tables in a running process, or the
-                                      columns of every table matching a pattern
-list [KIND] [--port N] [--export FILE] [--sort COL] [--reverse] [-i]  list every item of KIND
-                                       ('processes', 'profiles', 'fields', 'overrides',
-                                       'env', 'dependencies', 'jobs') - no argument shows
-                                       the kinds
-config get PROCNAME [FIELD] [--port N] [--raw] [--export FILE]  show a process's effective
-                                                 process.csv row (or one field), with
-                                                 placeholders resolved unless --raw
-config set PROCNAME FIELD VALUE       persist a process.csv field override for a process
-logs [PROCS] [-f] [-n N] [--level L] [--multitail]
-                                       tail out_/err_*.log through the CLI's own colorized
-                                       logger instead of raw files (see "Logs" below)
-feed start|stop|status NAME           an external publisher into the tickerplant: databento,
-                                       kafka, crypto or crypto-fills (see docs/services/);
-                                       `feed status` alone shows every feed
-raw -- ARGS...                        pass any other torq.sh verb straight through
-                                       (e.g. `raw -- debug rdb1`, `raw -- top feed1`)
-```
+`uqs --help` lists every command, and `uqs <command> --help` gives its arguments
+and options. The sections below cover what `--help` cannot.
 
 `PROCS` is `all` (the default) or one or more process names, each its own word -
 `uqs start posbook1 markout1` - which is what lets TAB complete them. A single
@@ -214,8 +119,7 @@ quoted `"posbook1 markout1"` still works. `--port` sets `KDBBASEPORT` (default
 `6050`, see the port table below). `--export FILE` (on
 `summary`/`query`/`list`/`config get`) additionally writes the same rows to
 `FILE` as CSV or Parquet, format inferred from the extension; a result that is
-not a table, such as `count t`, is refused. Full `--help` is available on the
-command itself and on every subcommand.
+not a table, such as `count t`, is refused.
 
 ### Cleaning up
 
@@ -609,24 +513,26 @@ uqs config set monitor1 startwithall 0
 
 ### Default ports
 
-Base `6050`, override with `--port <n>`:
+Base `6050`, override with `--port <n>`. The vendored infrastructure:
 
-  | Port        | Process            | Role                                                                             |
-  | ---         | ---                | ---                                                                              |
-  | 6050        | stp1               | segmented tickerplant                                                            |
-  | 6051        | discovery1         | service discovery                                                                |
-  | 6052        | rdb1               | real-time DB (today's ticks)                                                     |
-  | 6053 / 6054 | hdb1 / hdb2        | historical DB (the vendored sample data)                                         |
-  | 6055        | wdb1               | writedown process (rolls RDB -> HDB)                                             |
-  | 6056        | sort1              | sorts data before writedown                                                      |
-  | 6057        | gateway1           | single query entry point across hdb/rdb                                          |
-  | 6061        | housekeeping1      | log/process housekeeping                                                         |
-  | 6064        | feed1              | the vendored dummy feed - simulated equity quotes/trades                         |
-  | 6065        | sctp1              | segmented chained tickerplant                                                    |
-  | 6066 / 6067 | sortworker1/2      | sort worker pool                                                                 |
-  | 6068        | metrics1           | metrics collector                                                                |
-  | 6069        | fxfeed1            | uqf's own feed - simulated FX quotes (see below)                                 |
-  | 6074        | fxorderbookfeed1   | uqf's own feed - simulated depth-aware FX quotes into `fx_orderbook` (see below) |
+  | Port        | Process       | Role                                                     |
+  | ---         | ---           | ---                                                      |
+  | 6050        | stp1          | segmented tickerplant                                    |
+  | 6051        | discovery1    | service discovery                                        |
+  | 6052        | rdb1          | real-time DB (today's ticks)                             |
+  | 6053 / 6054 | hdb1 / hdb2   | historical DB (the vendored sample data)                 |
+  | 6055        | wdb1          | writedown process (rolls RDB -> HDB)                     |
+  | 6056        | sort1         | sorts data before writedown                              |
+  | 6057        | gateway1      | single query entry point across hdb/rdb                  |
+  | 6059        | monitor1      | process monitor ([above](#monitor1))                     |
+  | 6061        | housekeeping1 | log/process housekeeping                                 |
+  | 6064        | feed1         | the vendored dummy feed - simulated equity quotes/trades |
+  | 6065        | sctp1         | segmented chained tickerplant                            |
+  | 6066 / 6067 | sortworker1/2 | sort worker pool                                         |
+  | 6068        | metrics1      | metrics collector                                        |
+
+uqf's own processes start at `6069` (`fxfeed1`); every one, with its port, is in
+the generated [process table](../reference/processes.md).
 
 ## Changing a process's config
 
@@ -982,9 +888,3 @@ columns, `config get`/`config set` fields and the plant's tables, all read from
 the same registry the commands resolve against. `uqs --show-completion` prints
 the script instead. From a script or CI there is no tty to detect the shell
 from, and the install fails with `Shell None is not supported.`
-
-## Known harmless warnings
-
-`hostname -I`/`hostname -A` (Linux-only flags `torq.sh` calls unconditionally at
-startup) print `illegal option` warnings on macOS's BSD `hostname` - safe to
-ignore, they don't affect anything the demo actually uses.
