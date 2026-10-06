@@ -2151,6 +2151,20 @@ def test_summary_sorts_by_a_column_it_does_not_show(monkeypatch):
     assert "Inputs" not in result.output, "sorted on, not displayed"
 
 
+@pytest.mark.parametrize(
+    ("argv", "every"), [([], 2.0), (["--every", "5"], 5.0), (["--every", "0"], None)]
+)
+def test_summary_interactive_re_reads_the_fleet_on_a_timer(monkeypatch, argv, every):
+    """-i re-reads every 2s by default; --every changes it and 0 turns it off."""
+    _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
+    shown = _browsed(monkeypatch)
+    result = runner.invoke(cli.app, ["summary", "-i", *argv])
+    assert result.exit_code == 0, result.output
+    (browsed,) = shown
+    assert browsed["every"] == every
+    assert "Process" in [str(c.header) for c in browsed["refresh"]().columns]
+
+
 def test_summary_refuses_an_unknown_sort_column_before_doing_any_work(monkeypatch):
     _patch(monkeypatch, runtime, "summary", raises=AssertionError("must not run"))
     said = []
