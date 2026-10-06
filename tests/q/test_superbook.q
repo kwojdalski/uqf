@@ -185,7 +185,8 @@ test_a_crypto_venues_book_never_enters_the_fx_superbook:{[t]
     .qpipe.job.superbook.on_batch[`market_data;crypto,update source_time:.z.p from fixtures[]];
     .qunit.assertEquals[exec distinct sym from 0!.qpipe.job.superbook.books;enlist `EURUSD;
         "only the currency pair's books are kept"];
-    .qunit.assertEquals[exec distinct sym from raze published`rows;enlist `EURUSD;
+    / each recorded cell is enlist table (record stores `enlist x`) - unwrap, then join
+    .qunit.assertEquals[exec distinct sym from raze first each published`rows;enlist `EURUSD;
         "and only it is published"]};
 
 test_malformed_batch_does_not_partly_update_live_state:{[t]
@@ -202,6 +203,8 @@ test_tickerplant_routes_all_three_processes_using_the_real_schemas:{[t]
     `.sbtest.published set 0#published;
     .qetl.tick.schema[`quote;.qpipe.job.market_data.quote];
     .qetl.tick.schema[`fx_orderbook;.qpipe.job.market_data.fx_orderbook];
+    / market_data reads crypto_book too since #703 - every input needs a schema
+    .qetl.tick.schema[`crypto_book;.qpipe.job.market_data.crypto_book];
     {[job]
         output:get ` sv `.qpipe.job,job,job;
         .qetl.tick.schema[job;([] time:`timestamp$()),'output];

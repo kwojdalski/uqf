@@ -436,9 +436,9 @@ test_a_command_line_without_version_takes_the_declared_default:{[t]
         "the declared default, on either launcher - the dev one used to refuse here"]};
 
 test_a_command_line_without_version_is_refused_when_there_is_no_default:{[t]
-    .qunit.assertThrows[.qetl.job.bounded.spec_from_flags;
-        flags[`demo_deals_backfill;"";"2026.09.13";"2026.09.14"];
-        "*missing -version*declares no default source_version*";
+    / Two checks, not one "*a*b*" pattern: KDB-X's `like` is 'nyi on three wildcards.
+    e:@[.qetl.job.bounded.spec_from_flags;flags[`demo_deals_backfill;"";"2026.09.13";"2026.09.14"];{x}];
+    .qunit.assertTrue[(e like "*missing -version*") and e like "*declares no default source_version*";
         "a restatable source's release is never guessed"]};
 
 test_a_command_line_missing_flags_names_every_one:{[t]
