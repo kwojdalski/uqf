@@ -37,7 +37,7 @@
 / This script holds the tables itself, so it wants them at the root.
 .qetl.plant.materialise .qetl.plant.own[];
 
-/ .qetl.log suppresses DBG lines by default; this scenario's narration uses them.
+/ .qetl.log suppresses DEBUG lines by default; this scenario's narration uses them.
 .qetl.log.debug 1b;
 
 t0:2026.08.21D09:00:00.000000000;

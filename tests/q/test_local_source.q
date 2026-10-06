@@ -198,7 +198,7 @@ test_cleanup_does_not_try_to_close_a_directory:{[t]
 
 / --- tracing -----------------------------------------------------------------
 
-/ Every line `f` logs, context merged; TRC on for the call.
+/ Every line `f` logs, context merged; TRACE on for the call.
 logged:.testutil.captured_log[1b]
 
 test_a_local_query_is_traced_like_a_remote_one:{[t]

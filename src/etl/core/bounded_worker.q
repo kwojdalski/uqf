@@ -691,7 +691,7 @@ init_body:{[worker;run_spec]
     / explicit statement that this is a demo, NOT a fallback for a failed
     / connection - falling back on failure would turn an outage into
     / silently synthetic data that coverage then records as complete.
-    / A WARN that says how to fix it, not just that it happened: the variable
+    / A WARNING that says how to fix it, not just that it happened: the variable
     / to set, what its value looks like for this source's transport (an ODBC
     / connection string, or host:port for kdb+ IPC), an example, and where it
     / has to be exported - the shell `uqs backfill` runs in, whose environment
@@ -977,7 +977,7 @@ run_body:{[worker]
         / "ran, found no work" is a SUCCESS, not a failure. An
         / orchestrator that cannot tell them apart retries a successful
         / no-op forever.
-        / INF, not DBG: "the run did nothing" is the question this answers.
+        / INFO, not DEBUG: "the run did nothing" is the question this answers.
         s:spec worker;
         .qetl.log.info[worker;"idle - every window in the range is already covered at this source_version";
             `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
@@ -1013,8 +1013,8 @@ run_body:{[worker]
     result:`state`windows_completed`windows_failed`rows_published`cursor`reactions_owed!
         ($[(p[`windows_failed]>0) or 0<count owed;`partial;`completed];
          p`windows_completed;p`windows_failed;p`rows_published;p`cursor;count owed);
-    / one summary line per run at INF - the aggregate a fleet view wants,
-    / without the per-window noise that stays at DBG.
+    / one summary line per run at INFO - the aggregate a fleet view wants,
+    / without the per-window noise that stays at DEBUG.
     .qetl.log.info[worker;"run finished";result];
     / The terminal move, so a finished worker does not read as wedged. The
     / per-window beat inside do_window is the one that catches a worker
@@ -1258,7 +1258,7 @@ failed_with:{[s;message;fields] @[s;`failed;:;`message`fields!(message;fields)]}
 
 / Private: the one failure path for a window.
 / .
-/ ERR, not a throw: a failed window is terminal for that window and the run
+/ ERROR, not a throw: a failed window is terminal for that window and the run
 / continues. Nothing is published, no coverage is staged, and the next run
 / plans the window again because coverage never claimed it. Recording it with
 / the window and the stage's own fields is what makes "which windows failed

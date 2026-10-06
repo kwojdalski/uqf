@@ -168,8 +168,8 @@ def backfill_flags(
 ) -> list[str]:
     """The flags torq_backfill.q reads, validated so torq.sh passes them intact.
 
-    `verbose` adds `-verbose`, which switches the process's DBG log level on;
-    `trace` adds `-trace`, its TRC level - every query the source is sent.
+    `verbose` adds `-verbose`, which switches the process's DEBUG log level on;
+    `trace` adds `-trace`, its TRACE level - every query the source is sent.
     `on_conflict` adds `-on_conflict`, this run's strategy for a row already
     there, over the worker's own. `mode` adds `-mode`, spelled as q spells it
     (dry-run becomes dry_run); left out, the process runs for real.

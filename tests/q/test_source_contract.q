@@ -449,8 +449,8 @@ test_an_undeclared_example_is_not_an_empty_string:{[t]
 / --- .qetl.source.ipc: an IPC query, traced ------------------------------
 
 / Every log line `f` writes, as (level;id;text;fields): a recorder in place of
-/ .qetl.log.line, ahead of the TRC switch test_log.q covers.
-/ TRC on for the call: with it off the request paths trace nothing at all.
+/ .qetl.log.line, ahead of the TRACE switch test_log.q covers.
+/ TRACE on for the call: with it off the request paths trace nothing at all.
 logged:.testutil.captured_log[1b]
 
 / A stand-in handle: evaluates the message as the far side would.
@@ -462,8 +462,8 @@ test_ipc_sends_the_call_and_returns_its_rows:{[t]
 
 test_ipc_traces_the_lambda_and_its_bounds:{[t]
     lines:.srctest.logged {.qetl.source.ipc[.srctest.fake_handle;{[a;b] ([] x:a,b)};1;2]};
-    .qunit.assertEquals[lines[;0 1 2];((`TRC;`ipc;"query sent");(`TRC;`ipc;"query returned"));
-        "one TRC line before the call, one after"];
+    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`ipc;"query sent");(`TRACE;`ipc;"query returned"));
+        "one TRACE line before the call, one after"];
     sent:(first lines)[3];
     .qunit.assertEquals[(sent`call;sent`range_from;sent`range_to;(last lines)[3]`rows);
         ("{[a;b] ([] x:a,b)}";1;2;2);"the lambda's own text and both bounds, then the row count"]};
@@ -476,7 +476,7 @@ test_a_live_ipc_source_query_is_traced:{[t]
     / run the fetch BEFORE logged installs its recorder.
     `.srctest.h set {`.srctest.sent set x; ([] deal_id:`long$())};
     lines:.srctest.logged {.qetl.source.fetch_window[`demo_deals;.srctest.h;.srctest.d 1;.srctest.d 2]};
-    .qunit.assertEquals[`ipc`ipc;2#lines[;1] where `TRC=lines[;0];"the live query is traced, sent and returned"];
+    .qunit.assertEquals[`ipc`ipc;2#lines[;1] where `TRACE=lines[;0];"the live query is traced, sent and returned"];
     .qunit.assertEquals[(type first .srctest.sent;1_.srctest.sent);(100h;(.srctest.d 1;.srctest.d 2));
         "the handle is sent (lambda;from;to) - a UTC source's bounds unchanged"]};
 
@@ -491,7 +491,7 @@ test_ipc_call_sends_its_arguments_and_returns_the_rows:{[t]
 
 test_ipc_call_traces_the_lambda_and_its_arguments:{[t]
     lines:.srctest.logged {.qetl.source.ipc_call[.srctest.fake_handle;{[c] ([] x:enlist c)};enlist 5]};
-    .qunit.assertEquals[lines[;0 1 2];((`TRC;`ipc;"query sent");(`TRC;`ipc;"query returned"));
+    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`ipc;"query sent");(`TRACE;`ipc;"query returned"));
         "the same two events .qetl.source.ipc logs, so --trace renders it the same"];
     sent:(first lines)[3];
     .qunit.assertEquals[(sent`call;sent`args;(last lines)[3]`rows);("{[c] ([] x:enlist c)}";enlist 5;1);

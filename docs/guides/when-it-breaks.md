@@ -44,7 +44,7 @@ prints the run: its range, how many windows were planned, completed and failed,
 and the facts it recorded. It then prints the two things to do next:
 
 ```
-logs   uqs logs deals_backfill1 --level ERR
+logs   uqs logs deals_backfill1 --level ERROR
          .../torqdata/logs/out_deals_backfill1.log
          .../torqdata/logs/err_deals_backfill1.log
 re-run uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00 --to 2026-09-15T00:00:00 --version v1
@@ -62,7 +62,7 @@ If the error alone doesn't explain it, re-run with more detail:
   retries, locks and checkpoints;
 - `--trace` adds every query the source was sent.
 
-See [the DBG level](uqs.md#where-a-process-stopped).
+See [the DEBUG level](uqs.md#where-a-process-stopped).
 
 ### 3. Fix the cause, then re-run the same command
 
@@ -72,7 +72,7 @@ publish is fetched again.
 
 - A **wrong credential** is reported by name. The log names the
   `UQF_SOURCE_CRED_<SOURCE>` variable, and a source with no credential runs on
-  its fixture, with a WARN saying so.
+  its fixture, with a WARNING saying so.
 - A **lock left by a killed run** is broken by the next run when its pid is gone
   on the same host. A lock held by a live process, or by another host, is
   refused with the holder's name.
@@ -105,10 +105,10 @@ FAQ](../faq.md#my-process-is-up-but-its-table-stays-empty-why) covers it.
 ### 2. Find the cause
 
 ```
-uqs logs <procname> --level ERR
+uqs logs <procname> --level ERROR
 ```
 
-`on_batch failed` names the table and the error. If there is no ERR line, read
+`on_batch failed` names the table and the error. If there is no ERROR line, read
 the last few lines without `--level`: [where a process
 stopped](uqs.md#where-a-process-stopped) says what each one means, from a q file
 that failed to load to a tickerplant that was never up.

@@ -71,15 +71,15 @@ fx_orderbook:update `g#sym from fx_orderbook_in;
 / The repriced crosses, appended to on every batch.
 crosses:cross_quotes;
 
-/ The pairs the last reprice could not price, so a WARN is logged when that
+/ The pairs the last reprice could not price, so a WARNING is logged when that
 / set changes rather than on every batch.
 unpriced:`symbol$();
 
 / Take the batch into the mirror, then reprice every cross pair as of one
 / instant read here.
 / .
-/ A pair with no price is logged by name, as a WARN when the set of unpriced
-/ pairs changes and at DBG on every reprice after that - a pair whose leg is
+/ A pair with no price is logged by name, as a WARNING when the set of unpriced
+/ pairs changes and at DEBUG on every reprice after that - a pair whose leg is
 / never quoted would otherwise warn on every batch. The reason is not in the
 / line - the transform has no logger - so check that pair's legs are quoted.
 / @param t the table the batch arrived on

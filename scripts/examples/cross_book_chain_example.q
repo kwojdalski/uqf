@@ -23,7 +23,7 @@
 \l src/init.q
 \l src/etl/core/log.q
 
-/ .qetl.log suppresses DBG lines by default; this example's narration uses them.
+/ .qetl.log suppresses DEBUG lines by default; this example's narration uses them.
 .qetl.log.debug 1b;
 
 / Illustrative, approximately realistic spot rates (not live market data) -
