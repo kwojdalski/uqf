@@ -95,13 +95,10 @@ class UqsPaths:
     torqdata: Path
     scripts_dir: Path
     orchestrator_dir: Path
-    #: Which of RUNTIMES these paths build: what bootstrap composes, and
-    #: (through torqdata) where its data lives.
-    runtime: str = DEFAULT_RUNTIME
+    runtime: str = DEFAULT_RUNTIME  #: which of RUNTIMES bootstrap composes
 
     @property
-    def pure_torq(self) -> bool:
-        """Whether this is the starter pack alone, with nothing of uqf's."""
+    def pure_torq(self) -> bool:  # the starter pack alone, nothing of uqf's
         return self.runtime == "torq"
 
     @property
@@ -111,6 +108,10 @@ class UqsPaths:
     @property
     def generated_schema(self) -> Path:
         return self.torqdata / "database.q"
+
+    @property
+    def generated_gateway_access(self) -> Path:
+        return self.torqdata / "gateway_accesslist.txt"
 
     @property
     def generated_dqe_config(self) -> Path:

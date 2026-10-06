@@ -101,6 +101,51 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 }
 
 
+#: The data-access API (TorQ's .dataaccess.getdata) on the gateway and the
+#: tiers it routes to. TorQ turns it on for a process given `-dataaccess` and
+#: a table-properties file; without it getdata does not exist on the
+#: backends, so the gateway's routed calls fail. Every rdb and hdb, not just
+#: rdb1 and hdb1, because the gateway may route to any server of a type.
+#:
+#: The file is the tree's own, under KDBSERVCONFIG, listing the tables the
+#: gateway exposes - the query policy for each is querypolicy.csv beside it
+#: (scripts/torqcode/gateway/querypolicy.q).
+DATAACCESS_PROCTYPES = frozenset({"gateway", "rdb", "hdb"})
+DATAACCESS_EXTRAS = "-dataaccess ${UQF_SCRIPTS}/torqconfig/dataaccess/tableproperties.csv"
+
+#: gateway1's access list (the `U` column, q's `-U`): the vendored one plus
+#: the ordinary users of scripts/torqconfig/permissions/gateway_users.csv,
+#: written by bootstrap (gateway_access_lines). Only gateway1's: an ordinary
+#: user can log in at the gateway, where .pm holds them to getdata and its
+#: policies, and nowhere else - rdb1 and hdb1 still take the vendored list,
+#: so going round the gateway is refused at login.
+GATEWAY_ACCESS_OVERLAY = {"gateway1": "${TORQDATA}/gateway_accesslist.txt"}
+
+
+def gateway_users(paths: UqsPaths) -> list[dict[str, str]]:
+    """The ordinary gateway users, with their passwords and roles."""
+    users = paths.scripts_dir / "torqconfig" / "permissions" / "gateway_users.csv"
+    if not users.is_file():
+        return []
+    with users.open(newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def gateway_access_lines(paths: UqsPaths) -> list[str]:
+    """gateway1's access list: every vendored login, then each ordinary user.
+
+    An ordinary user already in the vendored list is not repeated - and is
+    still held to their role, which handlers/pmusers.q checks by name.
+    """
+    vendored = paths.torqapphome / "appconfig" / "passwords" / "accesslist.txt"
+    lines = [line.strip() for line in vendored.read_text().splitlines() if line.strip()]
+    known = {line.split(":", 1)[0] for line in lines}
+    lines += [
+        f"{u['user']}:{u['password']}" for u in gateway_users(paths) if u["user"] not in known
+    ]
+    return lines
+
+
 def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
     """The vendored process.csv rows, plus one row per PIPELINES entry
     appended (with stp1's -schemafile extras repointed and
@@ -124,6 +169,10 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
         if row["procname"] in VENDORED_LOAD_OVERLAY:
             before, after = VENDORED_LOAD_OVERLAY[row["procname"]]
             row["load"] = " ".join(x for x in (*before, row["load"], *after) if x)
+        if row["proctype"] in DATAACCESS_PROCTYPES:
+            row["extras"] = " ".join(x for x in (row["extras"], DATAACCESS_EXTRAS) if x)
+        if row["procname"] in GATEWAY_ACCESS_OVERLAY:
+            row["U"] = GATEWAY_ACCESS_OVERLAY[row["procname"]]
     for row in rows:
         # stp1 loads its schema via -schemafile in `extras`; point it at the
         # generated copy (vendored database.q + uqf's own `fx_orderbook` table -

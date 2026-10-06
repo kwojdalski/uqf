@@ -1,0 +1,5 @@
+tablename,role,maxrange,requiredfilters,operations,functions,maxrows,maxbytes,timeout,basis
+mkt_orderbook,,0D01:00:00,sym,raw,,50000,16000000,0D00:00:30,"10 rows/s: widefeed1 ticks twice a second for 5 pairs; ~220 bytes a row with two 11-level vectors. One pair for an hour is 7200 rows (~1.6MB); the sym filter keeps a request to one pair's rows"
+mkt_orderbook,quant,1D00:00:00,sym,raw,,1000000,128000000,0D00:02:00,"A day of one pair is 172800 rows (~38MB): enough to rebuild a session's book offline"
+execution_quality,,7D00:00:00,,raw|aggregate,,250000,32000000,0D00:00:30,"2 rows/s: one fill a second scored at 2 horizons; ~56 bytes a row. A day raw is 172800 rows; a week is 1.2M; so a raw week stops at the row limit and is for aggregates"
+duckdb_deals,,31D00:00:00,,raw|aggregate,,100000,16000000,0D00:00:30,"200 to 1000 deals a day (scripts/dev/make_fx_deals_duckdb.py): a month is at most 31000 rows"

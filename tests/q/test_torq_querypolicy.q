@@ -1,0 +1,159 @@
+// test_torq_querypolicy.q - per-table query policies on the gateway's
+// data-access API (.qpoltest), scripts/torqcode/gateway/querypolicy.q, and
+// the access-list reader in scripts/torqcode/handlers/pmusers.q.
+//
+// TorQ is not loaded here, so the two steps the policy wraps are stood in
+// for before the file loads: checkinputs passes a request through, and
+// autojoin razes. That is enough to see the wrapping take effect - the
+// checks themselves are pure functions of a policy and a request.
+
+.checkinputs.checkinputs:{[dict] dict}
+.dataaccess.autojoin:{[options] raze}
+\l scripts/torqcode/gateway/querypolicy.q
+\l scripts/torqcode/handlers/pmusers.q
+
+\d .qpoltest
+
+shipped:.checkinputs.readquerypolicy `:scripts/torqconfig/dataaccess/querypolicy.csv
+caps:.checkinputs.policyceiling
+none:`symbol$()
+
+/ The shipped policy for a table, as an ordinary caller gets it.
+policy:{[t] .checkinputs.resolvepolicy[shipped;caps;t;none]}
+
+/ A request for the last half hour of EURUSD's book: within every policy.
+book:`tablename`starttime`endtime`instruments!(`mkt_orderbook;2026.01.01D00:00;2026.01.01D00:30;`EURUSD)
+
+/ checkrequest's refusal for a request, or `passed.
+refusal:{[p;d] @[{.checkinputs.checkrequest[x;`sym;y];`passed}[p];d;{x}]}
+
+test_every_exposed_table_has_a_policy_for_ordinary_callers:{[t]
+    .qunit.assertEquals[asc exec tablename from shipped where null role;`duckdb_deals`execution_quality`mkt_orderbook;
+        "the three tables the gateway exposes, each with a default row"]};
+
+test_a_table_without_a_policy_is_refused_with_how_to_get_one:{[t]
+    .qunit.assertThrows[.checkinputs.resolvepolicy[shipped;caps;;none];`trades;
+        "querypolicy: trades has no query policy - it cannot be read through getdata*";
+        "no row, no access"]};
+
+test_a_role_exception_widens_the_range_and_the_result:{[t]
+    p:.checkinputs.resolvepolicy[shipped;caps;`mkt_orderbook;enlist`quant];
+    .qunit.assertEquals[p`maxrange`maxrows;(1D;1000000);"quant's row, not the default's"]};
+
+test_a_role_exception_never_exceeds_the_ceiling:{[t]
+    small:`maxrange`maxrows`maxbytes`timeout!(0D02;1000;1000000;0D00:01);
+    p:.checkinputs.resolvepolicy[shipped;small;`mkt_orderbook;enlist`quant];
+    .qunit.assertEquals[p`maxrange`maxrows`maxbytes`timeout;value small;"each field capped"]};
+
+test_a_role_without_an_exception_gets_the_default_row:{[t]
+    .qunit.assertEquals[.checkinputs.resolvepolicy[shipped;caps;`mkt_orderbook;enlist`analyst]`maxrange;0D01;
+        "analyst has no mkt_orderbook row of its own"]};
+
+test_a_request_within_the_policy_passes_with_its_timeout_capped:{[t]
+    d:.checkinputs.checkrequest[policy`mkt_orderbook;`sym;book,enlist[`timeout]!enlist 0D01];
+    .qunit.assertEquals[d`timeout;0D00:00:30;"the policy's timeout, not the caller's hour"];
+    .qunit.assertEquals[d`querypolicy;`tablename`maxrows`maxbytes!(`mkt_orderbook;50000;16000000);
+        "the limits the merge is checked against"]};
+
+test_a_range_past_the_policy_is_refused_with_how_far:{[t]
+    .qunit.assertThrows[.checkinputs.checkrequest[policy`mkt_orderbook;`sym;];@[book;`endtime;:;2026.01.01D02:00];
+        "querypolicy: mkt_orderbook allows at most 0D01:00:00.000000000 per request and this one covers 0D02:00:00.000000000*";
+        "two hours against one"]};
+
+test_a_date_end_counts_the_whole_day:{[t]
+    .qunit.assertEquals[.checkinputs.requestspan[2026.01.01;2026.01.01];1D;"one date is one day, not none"];
+    .qunit.assertThrows[.checkinputs.checkrequest[policy`mkt_orderbook;`sym;];book,`starttime`endtime!2#2026.01.01;
+        "querypolicy: mkt_orderbook allows at most 0D01:00:00.000000000 per request and this one covers 1D00:00:00.000000000*";
+        "a day of book is past the hour"]};
+
+test_a_missing_required_filter_is_refused_naming_it:{[t]
+    .qunit.assertThrows[.checkinputs.checkrequest[policy`mkt_orderbook;`sym;];`instruments _ book;
+        "querypolicy: mkt_orderbook needs a filter on sym - pass instruments*";"no sym, no rows"]};
+
+test_instruments_or_a_filter_satisfies_the_required_filter:{[t]
+    viafilter:(`instruments _ book),enlist[`filters]!enlist enlist[`sym]!enlist(=;`EURUSD);
+    .qunit.assertEquals[refusal[policy`mkt_orderbook] each (book;viafilter);`passed`passed;"either names sym"]};
+
+test_an_empty_instruments_list_does_not_count_as_a_filter:{[t]
+    .qunit.assertThrows[.checkinputs.checkrequest[policy`mkt_orderbook;`sym;];@[book;`instruments;:;none];
+        "querypolicy: mkt_orderbook needs a filter on sym*";"an empty list filters nothing"]};
+
+test_an_aggregate_on_a_raw_only_table_is_refused:{[t]
+    agg:book,enlist[`aggregations]!enlist enlist[`count]!enlist`sym;
+    .qunit.assertThrows[.checkinputs.checkrequest[policy`mkt_orderbook;`sym;];agg;
+        "querypolicy: mkt_orderbook allows raw and this request is aggregate - drop aggregations*";"raw only"]};
+
+test_a_raw_read_on_an_aggregate_only_table_is_refused:{[t]
+    p:@[policy`execution_quality;`operations;:;enlist`aggregate];
+    d:`tablename`starttime`endtime!(`execution_quality;2026.01.01D00:00;2026.01.01D01:00);
+    .qunit.assertThrows[.checkinputs.checkrequest[p;`sym;];d;
+        "querypolicy: execution_quality allows aggregate and this request is raw - send aggregations*";"aggregates only"]};
+
+test_only_approved_aggregation_functions_pass_where_a_policy_lists_them:{[t]
+    p:@[policy`execution_quality;`functions;:;`avg`count];
+    d:`tablename`starttime`endtime`aggregations!(`execution_quality;2026.01.01D00:00;2026.01.01D01:00;`avg`max!`markout_pips`markout_pips);
+    .qunit.assertThrows[.checkinputs.checkrequest[p;`sym;];d;
+        "querypolicy: execution_quality allows the aggregations avg, count - not max";"max is not on the list"];
+    .qunit.assertEquals[refusal[p;@[d;`aggregations;:;enlist[`avg]!enlist`markout_pips]];`passed;"avg is"]};
+
+test_a_parameter_the_policy_cannot_see_into_is_refused:{[t]
+    .qunit.assertThrows[.checkinputs.checkprohibited;book,enlist[`postprocessing]!enlist{x};
+        "querypolicy: postprocessing not allowed for your role - a postprocessing lambda runs arbitrary q*";"a lambda"];
+    .qunit.assertThrows[.checkinputs.checkprohibited;enlist[`sqlquery]!enlist"select from trade";
+        "querypolicy: sqlquery not allowed for your role*";"SQL skips the checks"]};
+
+test_a_result_over_the_row_limit_is_refused:{[t]
+    .qunit.assertThrows[.dataaccess.checkresponsesize[`tablename`maxrows`maxbytes!(`mkt_orderbook;2;1000000)];([]a:til 3);
+        "querypolicy: mkt_orderbook returns at most 2 rows and this result has 3*";"three rows against two"]};
+
+test_a_result_over_the_byte_limit_is_refused:{[t]
+    .qunit.assertThrows[.dataaccess.checkresponsesize[`tablename`maxrows`maxbytes!(`mkt_orderbook;1000;100)];([]a:til 100);
+        "querypolicy: mkt_orderbook returns at most 100 bytes and this result is*";"800 bytes of longs"]};
+
+test_a_result_within_the_limits_is_returned_unchanged:{[t]
+    r:([]a:til 3);
+    .qunit.assertEquals[.dataaccess.checkresponsesize[`tablename`maxrows`maxbytes!(`x;3;1000000);r];r;"as merged"]};
+
+test_a_policy_file_allowing_an_unknown_operation_is_refused:{[t]
+    f:`:/tmp/qpoltest_policy.csv;
+    f 0:("tablename,role,maxrange,requiredfilters,operations,functions,maxrows,maxbytes,timeout,basis";
+        "trades,,0D01:00:00,,raw|everything,,10,10,0D00:00:30,x");
+    .qunit.assertThrows[.checkinputs.readquerypolicy;f;
+        "querypolicy: trades - operations must be one or more of raw|aggregate";"a typo must not widen access"]};
+
+test_a_policy_file_with_a_missing_limit_is_refused:{[t]
+    f:`:/tmp/qpoltest_policy.csv;
+    f 0:("tablename,role,maxrange,requiredfilters,operations,functions,maxrows,maxbytes,timeout,basis";
+        "trades,,0D01:00:00,,raw,,,10,0D00:00:30,x");
+    .qunit.assertThrows[.checkinputs.readquerypolicy;f;
+        "querypolicy: trades - maxrange, maxrows, maxbytes and timeout must all be set and positive";
+        "a blank limit is not an unlimited one"]};
+
+test_the_wrapped_checkinputs_holds_an_ordinary_caller_to_the_policy:{[t]
+    was:.checkinputs.callerroles;held:.checkinputs.querypolicies;
+    .checkinputs.callerroles:{[] `symbol$()};.checkinputs.querypolicies:shipped;
+    got:@[.checkinputs.checkinputs;@[book;`endtime;:;2026.01.01D02:00];{x}];
+    .checkinputs.callerroles:was;.checkinputs.querypolicies:held;
+    .qunit.assertTrue[got like "querypolicy: mkt_orderbook allows at most*";"refused through TorQ's own entry point"]};
+
+test_the_wrapped_checkinputs_lets_a_trusted_role_through:{[t]
+    was:.checkinputs.callerroles;held:.checkinputs.querypolicies;
+    .checkinputs.callerroles:{[] enlist`admin};.checkinputs.querypolicies:shipped;
+    got:.checkinputs.checkinputs @[book;`endtime;:;2026.01.01D02:00];
+    .checkinputs.callerroles:was;.checkinputs.querypolicies:held;
+    .qunit.assertEquals[got`endtime;2026.01.01D02:00;"admin can run raw q anyway"]};
+
+test_the_wrapped_autojoin_checks_the_merged_result:{[t]
+    j:.dataaccess.autojoin enlist[`querypolicy]!enlist`tablename`maxrows`maxbytes!(`x;2;1000000);
+    .qunit.assertThrows[j;(([]a:til 2);([]a:til 2));"querypolicy: x returns at most 2 rows and this result has 4*";
+        "two backends' rows, merged, then counted"]};
+
+test_access_list_logins_are_read_as_user_and_password:{[t]
+    logins:.pm.accesslogins hsym`$"lib/torq-finance-starter-pack/appconfig/passwords/accesslist.txt";
+    .qunit.assertTrue[any logins~\:(`admin;"admin");"admin's own password, which .pm checks against"]};
+
+test_the_ordinary_users_hold_only_ordinary_roles:{[t]
+    u:.pm.policylogins `:scripts/torqconfig/permissions/gateway_users.csv;
+    .qunit.assertEquals[exec role from u;`analyst`quant;"never admin or administrator"]};
+
+\d .

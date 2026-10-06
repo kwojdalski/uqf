@@ -299,6 +299,10 @@ uqs --runtime torq stop
   | config layers  | TorQ's, `scripts/torqconfig` and `scripts/torqcode`, the starter pack's | TorQ's and the starter pack's                                     |
   | data directory | `output/uqs`                                                            | `output/uqs-torq`                                                 |
 
+Without the service layer, `torq` has none of the [query
+policies](../architecture/query-policies.md): no data-access API, no `.pm` on
+the gateway, and the starter pack's access list everywhere.
+
 Each runtime keeps its own data directory, because an HDB one runtime wrote
 holds tables the other does not declare. They share ports, so run one at a time,
 or give the second its own with `--port`.
