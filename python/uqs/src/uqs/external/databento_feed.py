@@ -38,10 +38,9 @@ is the transport:
 from __future__ import annotations
 
 import os
-import signal
-import subprocess
 from pathlib import Path
 
+from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
@@ -65,30 +64,17 @@ DEFAULT_DATASET = "XNAS.ITCH"
 DEFAULT_SYMBOLS = ("AAPL", "MSFT")
 
 
-def _read_pid(paths: UqsPaths) -> int | None:
-    path = paths.databento_feed_pid_path
-    if not path.is_file():
-        return None
-    try:
-        return int(path.read_text().strip())
-    except ValueError:
-        return None
+def _process(paths: UqsPaths) -> DetachedProcess:
+    return DetachedProcess(
+        "the databento feed",
+        paths.databento_feed_pid_path,
+        paths.torqdata / "logs" / "databento_feed.log",
+    )
 
 
 def is_databento_feed_running(paths: UqsPaths) -> bool:
-    """Whether the handler this repository started is still alive.
-
-    Signal 0 asks the kernel about the process without touching it, which
-    is how the crypto recorders answer the same question.
-    """
-    pid = _read_pid(paths)
-    if pid is None:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError, PermissionError:
-        return False
-    return True
+    """Whether the handler this repository started is still alive."""
+    return _process(paths).running()
 
 
 def start_databento_feed(
@@ -106,6 +92,7 @@ def start_databento_feed(
     ``.qetl.job.bounded.init`` follows.
     """
     if is_databento_feed_running(paths):
+        # Before the API-key check, so a second start says why it is refused.
         raise UqsError("the databento feed is already running - stop it first")
 
     key = api_key or os.environ.get(DATABENTO_API_KEY_ENV)
@@ -141,50 +128,27 @@ def start_databento_feed(
         DATABENTO_RAW_TABLE,
     ]
 
-    log_path = paths.torqdata / "logs" / "databento_feed.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    proc = _process(paths)
     env = dict(os.environ, **{DATABENTO_API_KEY_ENV: key})
-    with log_path.open("w") as log_file:
-        process = subprocess.Popen(  # noqa: S603
-            cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            cwd=paths.repo_root,
-            env=env,
-            start_new_session=True,
-        )
-    paths.databento_feed_pid_path.parent.mkdir(parents=True, exist_ok=True)
-    paths.databento_feed_pid_path.write_text(str(process.pid))
+    pid = proc.start(cmd, cwd=paths.repo_root, env=env)
     log.info(
-        f"started the databento feed (pid {process.pid}), {dataset} "
+        f"started the databento feed (pid {pid}), {dataset} "
         f"{','.join(symbols)} -> stp1:{port} {DATABENTO_RAW_TABLE} - "
-        f"logging to {log_path}"
+        f"logging to {proc.log_path}"
     )
-    return process.pid
+    return pid
 
 
 def stop_databento_feed(paths: UqsPaths) -> None:
     """Stop it, and say so when there was nothing to stop."""
-    pid = _read_pid(paths)
-    if pid is None or not is_databento_feed_running(paths):
-        paths.databento_feed_pid_path.unlink(missing_ok=True)
-        log.info("no databento feed running")
-        return
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    paths.databento_feed_pid_path.unlink(missing_ok=True)
-    log.info(f"stopped the databento feed (pid {pid})")
+    pid = _process(paths).stop()
+    log.info(
+        "no databento feed running" if pid is None else f"stopped the databento feed (pid {pid})"
+    )
 
 
 def databento_feed_status(paths: UqsPaths) -> dict[str, str]:
     """What the CLI renders. Strings, because it is a display table."""
-    pid = _read_pid(paths)
-    return {
-        "running": str(is_databento_feed_running(paths)),
-        "pid": str(pid) if pid is not None else "",
-        "publishes": DATABENTO_RAW_TABLE,
-        "folded by": "databento1 -> eq_orderbook",
-        "log": str(paths.torqdata / "logs" / "databento_feed.log"),
-    }
+    return _process(paths).status(
+        publishes=DATABENTO_RAW_TABLE, **{"folded by": "databento1 -> databento_book"}
+    )

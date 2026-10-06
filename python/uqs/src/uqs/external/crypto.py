@@ -8,10 +8,10 @@ here rather than by torq.sh."""
 from __future__ import annotations
 
 import os
-import signal
 import subprocess
 from pathlib import Path
 
+from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError, UqsPaths
@@ -87,24 +87,16 @@ def _crypto_recorder_config_yaml(
     )
 
 
-def _read_crypto_recorder_pid(paths: UqsPaths) -> int | None:
-    if not paths.crypto_recorder_pid_path.is_file():
-        return None
-    try:
-        return int(paths.crypto_recorder_pid_path.read_text().strip())
-    except ValueError:
-        return None
+def _recorder(paths: UqsPaths) -> DetachedProcess:
+    return DetachedProcess(
+        "crypto recorder",
+        paths.crypto_recorder_pid_path,
+        paths.torqdata / "logs" / "crypto_recorder.log",
+    )
 
 
 def is_crypto_recorder_running(paths: UqsPaths) -> bool:
-    pid = _read_crypto_recorder_pid(paths)
-    if pid is None:
-        return False
-    try:
-        os.kill(pid, 0)  # signal 0: existence check only, doesn't actually signal
-    except OSError:
-        return False
-    return True
+    return _recorder(paths).running()
 
 
 def start_crypto_recorder(
@@ -169,54 +161,36 @@ def start_crypto_recorder(
         raise UqsError(f"cargo build failed:\n{build.stderr}")
 
     binary = root / "target" / "debug" / "kdb-market-data-recorder"
-    (paths.torqdata / "logs").mkdir(parents=True, exist_ok=True)
-    log_path = paths.torqdata / "logs" / "crypto_recorder.log"
-    with log_path.open("w") as log_file:
-        process = subprocess.Popen(
-            [str(binary), "--config", str(paths.crypto_recorder_config_path)],
-            cwd=root,
-            env=env,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-        )
-
-    paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
-    paths.crypto_recorder_pid_path.write_text(str(process.pid))
+    proc = _recorder(paths)
+    pid = proc.start(
+        [str(binary), "--config", str(paths.crypto_recorder_config_path)],
+        cwd=root,
+        env=env,
+        new_session=False,
+    )
     log.info(
         "started cryptorust kdb-market-data-recorder (pid {}), publishing {} to {} - logging to {}",
-        process.pid,
+        pid,
         ",".join(venues),
         CRYPTO_RECORDER_TABLE,
-        log_path,
+        proc.log_path,
     )
-    return process.pid
+    return pid
 
 
 def stop_crypto_recorder(paths: UqsPaths) -> None:
-    pid = _read_crypto_recorder_pid(paths)
-    if pid is None:
-        raise UqsError("crypto recorder is not running (no pid file)")
-    try:
-        # SIGTERM, not the ManagedService graceful-shutdown path (that only
-        # fires on SIGINT/ctrl_c) - fine here: on_stop is a no-op, and an
-        # unhandled SIGTERM just terminates the process, dropping its kdb+
-        # IPC socket, which stp1 sees as an ordinary disconnect.
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    paths.crypto_recorder_pid_path.unlink(missing_ok=True)
+    # SIGTERM, not the ManagedService graceful-shutdown path (that only fires
+    # on SIGINT/ctrl_c) - fine here: on_stop is a no-op, and an unhandled
+    # SIGTERM just terminates the process, dropping its kdb+ IPC socket,
+    # which stp1 sees as an ordinary disconnect. No pid file is an error here.
+    pid = _recorder(paths).stop(missing_ok=False)
     log.info("stopped cryptorust kdb-market-data-recorder (pid {})", pid)
 
 
 def crypto_recorder_status(paths: UqsPaths) -> dict[str, str]:
-    pid = _read_crypto_recorder_pid(paths)
-    return {
-        "running": str(is_crypto_recorder_running(paths)),
-        "pid": str(pid) if pid is not None else "",
-        "table": CRYPTO_RECORDER_TABLE,
-        "config": str(paths.crypto_recorder_config_path),
-        "log": str(paths.torqdata / "logs" / "crypto_recorder.log"),
-    }
+    return _recorder(paths).status(
+        table=CRYPTO_RECORDER_TABLE, config=str(paths.crypto_recorder_config_path)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -238,24 +212,16 @@ CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL = "BTC-USDT"
 CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS = 1000
 
 
-def _read_crypto_fills_recorder_pid(paths: UqsPaths) -> int | None:
-    if not paths.crypto_fills_recorder_pid_path.is_file():
-        return None
-    try:
-        return int(paths.crypto_fills_recorder_pid_path.read_text().strip())
-    except ValueError:
-        return None
+def _fills_recorder(paths: UqsPaths) -> DetachedProcess:
+    return DetachedProcess(
+        "crypto fills recorder",
+        paths.crypto_fills_recorder_pid_path,
+        paths.torqdata / "logs" / "crypto_fills_recorder.log",
+    )
 
 
 def is_crypto_fills_recorder_running(paths: UqsPaths) -> bool:
-    pid = _read_crypto_fills_recorder_pid(paths)
-    if pid is None:
-        return False
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
+    return _fills_recorder(paths).running()
 
 
 def start_crypto_fills_recorder(
@@ -301,67 +267,49 @@ def start_crypto_fills_recorder(
         raise UqsError(f"cargo build failed:\n{build.stderr}")
 
     binary = root / "target" / "debug" / "kdb-fills-recorder"
-    (paths.torqdata / "logs").mkdir(parents=True, exist_ok=True)
-    log_path = paths.torqdata / "logs" / "crypto_fills_recorder.log"
-    with log_path.open("w") as log_file:
-        process = subprocess.Popen(
-            [
-                str(binary),
-                "--oms-socket-path",
-                oms_socket_path,
-                "--kdb-host",
-                "localhost",
-                "--kdb-port",
-                str(stp1["port"]),
-                "--kdb-credential",
-                CRYPTO_RECORDER_CREDENTIAL,
-                "--kdb-table",
-                CRYPTO_FILLS_RECORDER_TABLE,
-                "--real-kdb-table",
-                CRYPTO_REAL_FILLS_RECORDER_TABLE,
-                "--poll-interval-ms",
-                str(poll_interval_ms),
-                "--symbol",
-                symbol,
-            ],
-            cwd=root,
-            env=env,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-        )
-
-    paths.orchestrator_dir.mkdir(parents=True, exist_ok=True)
-    paths.crypto_fills_recorder_pid_path.write_text(str(process.pid))
+    proc = _fills_recorder(paths)
+    pid = proc.start(
+        [
+            str(binary),
+            "--oms-socket-path",
+            oms_socket_path,
+            "--kdb-host",
+            "localhost",
+            "--kdb-port",
+            str(stp1["port"]),
+            "--kdb-credential",
+            CRYPTO_RECORDER_CREDENTIAL,
+            "--kdb-table",
+            CRYPTO_FILLS_RECORDER_TABLE,
+            "--real-kdb-table",
+            CRYPTO_REAL_FILLS_RECORDER_TABLE,
+            "--poll-interval-ms",
+            str(poll_interval_ms),
+            "--symbol",
+            symbol,
+        ],
+        cwd=root,
+        env=env,
+        new_session=False,
+    )
     log.info(
         "started cryptorust kdb-fills-recorder (pid {}), polling {} - "
         "SIMULATED fills -> {}, real fills -> {} - logging to {}",
-        process.pid,
+        pid,
         oms_socket_path,
         CRYPTO_FILLS_RECORDER_TABLE,
         CRYPTO_REAL_FILLS_RECORDER_TABLE,
-        log_path,
+        proc.log_path,
     )
-    return process.pid
+    return pid
 
 
 def stop_crypto_fills_recorder(paths: UqsPaths) -> None:
-    pid = _read_crypto_fills_recorder_pid(paths)
-    if pid is None:
-        raise UqsError("crypto fills recorder is not running (no pid file)")
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    paths.crypto_fills_recorder_pid_path.unlink(missing_ok=True)
+    pid = _fills_recorder(paths).stop(missing_ok=False)
     log.info("stopped cryptorust kdb-fills-recorder (pid {})", pid)
 
 
 def crypto_fills_recorder_status(paths: UqsPaths) -> dict[str, str]:
-    pid = _read_crypto_fills_recorder_pid(paths)
-    return {
-        "running": str(is_crypto_fills_recorder_running(paths)),
-        "pid": str(pid) if pid is not None else "",
-        "sim_table": CRYPTO_FILLS_RECORDER_TABLE,
-        "real_table": CRYPTO_REAL_FILLS_RECORDER_TABLE,
-        "log": str(paths.torqdata / "logs" / "crypto_fills_recorder.log"),
-    }
+    return _fills_recorder(paths).status(
+        sim_table=CRYPTO_FILLS_RECORDER_TABLE, real_table=CRYPTO_REAL_FILLS_RECORDER_TABLE
+    )

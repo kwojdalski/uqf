@@ -28,15 +28,13 @@ network and no Python. This file is what you add when you have a real topic.
 
 from __future__ import annotations
 
-import os
-import signal
-import subprocess
 from pathlib import Path
 
 from uqs.external.kafka_streamer import KAFKA_RAW_TABLE
+from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.model.registry import DEFAULT_BASE_PORT
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsPaths
 from uqs.stack.procs import get_process_config
 
 log = get_logger(__name__)
@@ -57,31 +55,15 @@ DEFAULT_TOPIC = "uqf.client.flow"
 DEFAULT_GROUP = "uqf-kafka-flow"
 
 
-def _read_pid(paths: UqsPaths) -> int | None:
-    path = paths.kafka_feed_pid_path
-    if not path.is_file():
-        return None
-    try:
-        return int(path.read_text().strip())
-    except ValueError:
-        return None
+def _process(paths: UqsPaths) -> DetachedProcess:
+    return DetachedProcess(
+        "the kafka feed", paths.kafka_feed_pid_path, paths.torqdata / "logs" / "kafka_feed.log"
+    )
 
 
 def is_kafka_feed_running(paths: UqsPaths) -> bool:
-    """Whether the consumer this repository started is still alive.
-
-    Signal 0 asks the kernel about the process without touching it, which is
-    how the crypto recorders and the Databento handler answer the same
-    question.
-    """
-    pid = _read_pid(paths)
-    if pid is None:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError, PermissionError:
-        return False
-    return True
+    """Whether the consumer this repository started is still alive."""
+    return _process(paths).running()
 
 
 def start_kafka_feed(
@@ -97,9 +79,6 @@ def start_kafka_feed(
     group would split the partitions between them, so the second would look
     like it worked while each received half the topic.
     """
-    if is_kafka_feed_running(paths):
-        raise UqsError("the kafka feed is already running - stop it first")
-
     stp1 = get_process_config(paths, "stp1")
     port = stp1.get("port") or DEFAULT_BASE_PORT
 
@@ -127,23 +106,13 @@ def start_kafka_feed(
         KAFKA_RAW_TABLE,
     ]
 
-    log_path = paths.torqdata / "logs" / "kafka_feed.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("w") as log_file:
-        process = subprocess.Popen(  # noqa: S603
-            cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            cwd=paths.repo_root,
-            start_new_session=True,
-        )
-    paths.kafka_feed_pid_path.parent.mkdir(parents=True, exist_ok=True)
-    paths.kafka_feed_pid_path.write_text(str(process.pid))
+    proc = _process(paths)
+    pid = proc.start(cmd, cwd=paths.repo_root)
     log.info(
-        f"started the kafka feed (pid {process.pid}), {topic} on {brokers} "
-        f"-> stp1:{port} {KAFKA_RAW_TABLE} - logging to {log_path}"
+        f"started the kafka feed (pid {pid}), {topic} on {brokers} "
+        f"-> stp1:{port} {KAFKA_RAW_TABLE} - logging to {proc.log_path}"
     )
-    return process.pid
+    return pid
 
 
 def stop_kafka_feed(paths: UqsPaths) -> None:
@@ -154,26 +123,12 @@ def stop_kafka_feed(paths: UqsPaths) -> None:
     cleanly - a killed member holds its partitions until the broker's session
     timeout, and a restart inside that window gets none of them.
     """
-    pid = _read_pid(paths)
-    if pid is None or not is_kafka_feed_running(paths):
-        paths.kafka_feed_pid_path.unlink(missing_ok=True)
-        log.info("no kafka feed running")
-        return
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    paths.kafka_feed_pid_path.unlink(missing_ok=True)
-    log.info(f"stopped the kafka feed (pid {pid})")
+    pid = _process(paths).stop()
+    log.info("no kafka feed running" if pid is None else f"stopped the kafka feed (pid {pid})")
 
 
 def kafka_feed_status(paths: UqsPaths) -> dict[str, str]:
     """What the CLI renders. Strings, because it is a display table."""
-    pid = _read_pid(paths)
-    return {
-        "running": str(is_kafka_feed_running(paths)),
-        "pid": str(pid) if pid is not None else "",
-        "publishes": KAFKA_RAW_TABLE,
-        "deduplicated by": "kafka_flow1 -> client_flow",
-        "log": str(paths.torqdata / "logs" / "kafka_feed.log"),
-    }
+    return _process(paths).status(
+        publishes=KAFKA_RAW_TABLE, **{"deduplicated by": "kafka_flow1 -> client_flow"}
+    )
