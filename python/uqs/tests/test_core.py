@@ -1678,6 +1678,9 @@ def test_gateway1_loads_the_desk_catalog_after_its_own_script():
     assert "${UQF_SCRIPTS}" in loaded[-1], (
         "pathed through the env var the pipeline rows use, not a literal path"
     )
+    # The frontend's /coverage calls .qetl.coverage.compose and gaps on the
+    # gateway; without this they are undefined names there.
+    assert "${UQF_ROOT}/src/etl/core/intervals.q" in loaded[1:]
 
 
 def test_hdb1_loads_the_metatables_after_its_database():

@@ -25,6 +25,7 @@ UQF_ROOT = Path(__file__).resolve().parents[3]
 _WRITE = """
 \\l src/init.q
 \\l src/etl/core/backfill_state.q
+\\l src/etl/core/intervals.q
 \\l src/etl/core/materialisation.q
 \\l src/etl/core/run.q
 \\l src/etl/core/status.q
@@ -133,6 +134,7 @@ def test_a_run_that_never_finished_has_no_counts(ledger, paths):
 _OLD_LEDGER = """
 \\l src/init.q
 \\l src/etl/core/backfill_state.q
+\\l src/etl/core/intervals.q
 \\l src/etl/core/materialisation.q
 \\l src/etl/core/run.q
 \\l src/etl/core/status.q

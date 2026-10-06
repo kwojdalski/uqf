@@ -20,7 +20,6 @@ from uqf_frontend import (
     authz,
     catalog,
     control,
-    coverage,
     health,
     ops,
     procfile,
@@ -542,8 +541,19 @@ def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:
     )
 
 
-def _iso(interval: coverage.Interval) -> IntervalOut:
-    return IntervalOut(range_from=interval.start.isoformat(), range_to=interval.end.isoformat())
+def _iso(row: dict[str, Any]) -> IntervalOut:
+    return IntervalOut(
+        range_from=_utc(row["range_from"]).isoformat(), range_to=_utc(row["range_to"]).isoformat()
+    )
+
+
+def _utc(value: dt.datetime) -> dt.datetime:
+    """A naive timestamp from q, labelled UTC - everything is UTC internally.
+
+    kola hands back naive datetimes for a timestamp column and q stores UTC,
+    so this is a re-labelling rather than a conversion.
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=dt.UTC)
 
 
 def _coverage(
@@ -563,28 +573,32 @@ def _coverage(
     raw = gateway.route(
         queries.COVERAGE, (dataset, partition, source_version, as_of), TIERS["both"]
     )
-    covered = coverage.compose(coverage.from_rows(_rows(raw)))
+    # Composed and gapped by .qetl.coverage on the gateway, not here: the
+    # rule a backfill trusts when it skips a covered window has one
+    # implementation, and this reports what it says.
+    covered = _rows(gateway.call(queries.COMPOSE, raw))
 
     requested = None
-    missing: list[coverage.Interval] = []
+    missing: list[dict[str, Any]] = []
     if range_from is not None and range_to is not None:
         start = queries.coerce(range_from, catalog.QType.TIMESTAMP, "range_from", as_list=False)
         end = queries.coerce(range_to, catalog.QType.TIMESTAMP, "range_to", as_list=False)
-        try:
-            requested = coverage.Interval(start, end)
-        except ValueError as exc:
+        if not end > start:
             from uqf_frontend.errors import ValidationFailed
 
-            raise ValidationFailed(str(exc)) from None
-        missing = coverage.gaps(requested, covered)
+            raise ValidationFailed(
+                f"an interval must be non-empty and forward-going, got [{start}, {end})"
+            )
+        requested = {"range_from": start, "range_to": end}
+        missing = _rows(gateway.call(queries.GAPS, start, end, raw))
 
     return CoverageResponse(
         poll_seconds=ops.POLL_SECONDS["coverage"],
         dataset=dataset,
         source_version=source_version,
-        covered=[_iso(i) for i in covered],
+        covered=[_iso(r) for r in covered],
         requested=_iso(requested) if requested else None,
-        gaps=[_iso(i) for i in missing],
+        gaps=[_iso(r) for r in missing],
         complete=requested is not None and not missing,
     )
 

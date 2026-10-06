@@ -203,7 +203,12 @@ a caller cannot omit it.
 Interval composition: `[range_from, range_to)` is half-open and adjacent
 intervals compose **only at their common boundary**, so `[Mon,Tue)` and
 `[Tue,Wed)` merge while `[Mon,Tue)` and `[Wed,Thu)` leave Tuesday as a reported
-gap. That arithmetic is pure and unit-tested without a gateway.
+gap. That arithmetic is not done here: the rows come back from both tiers, and
+the frontend sends them to `.qetl.coverage.compose` and `.qetl.coverage.gaps` on
+the gateway, which loads
+[`src/etl/core/intervals.q`](../../src/etl/core/intervals.q) for that. It is the
+same code a backfill uses to skip a covered window, so `/coverage` cannot
+disagree with what a backfill would do.
 
 ### The schema it reads
 
