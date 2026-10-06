@@ -93,6 +93,10 @@ class UqsPaths:
         return self.torqdata / "database.q"
 
     @property
+    def generated_gateway_access(self) -> Path:
+        return self.torqdata / "gateway_accesslist.txt"
+
+    @property
     def generated_dqe_config(self) -> Path:
         return self.torqdata / "dqengineconfig.csv"
 
