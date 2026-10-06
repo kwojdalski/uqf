@@ -20,6 +20,7 @@ from rich.console import Console
 from rich.table import Table
 
 from uqs import paths as stack_paths
+from uqs import runtimes
 from uqs.cli import completion, table_browser
 from uqs.logger import configure_logging, get_logger
 from uqs.paths import UqsError
@@ -79,6 +80,19 @@ def _env_log_level() -> str:
     return DEFAULT_LOG_LEVEL
 
 
+#: Commands that work only on this tree's own pipelines, and what each needs
+#: that the torq runtime does not have. Refused there with the reason, rather
+#: than left to fail against processes and tables that do not exist.
+UQF_ONLY_COMMANDS: dict[str, str] = {
+    "backfill": "runs this tree's bounded workers",
+    "gaps": "reads this tree's streaming jobs' coverage",
+    "graph": "draws this tree's pipeline declarations",
+    "run": "reads this tree's run ledger",
+    "stream": "previews this tree's streaming jobs",
+    "feed": "publishes this tree's tables into the plant",
+}
+
+
 @app.callback()
 def _configure(
     ctx: typer.Context,
@@ -86,8 +100,43 @@ def _configure(
         bool,
         typer.Option("--debug", help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it."),
     ] = False,
+    runtime_name: Annotated[
+        str | None,
+        typer.Option(
+            "--runtime",
+            help=(
+                "Which stack to build and run: "
+                + "; ".join(f"{k} - {v}" for k, v in runtimes.RUNTIMES.items())
+                + f". Same as {runtimes.RUNTIME_ENV}=<name>, and wins over it."
+            ),
+            autocompletion=lambda: list(runtimes.RUNTIMES),
+        ),
+    ] = None,
 ) -> None:
     """Global options, applied before any subcommand runs."""
+    # Through the environment rather than an argument, so every path this
+    # command builds - and every uqs a child process runs - agrees on it.
+    if runtime_name is not None:
+        if runtime_name not in runtimes.RUNTIMES:
+            _die(
+                UqsError(
+                    f"--runtime {runtime_name!r} is not a runtime - choose one of: "
+                    + ", ".join(runtimes.RUNTIMES)
+                )
+            )
+        os.environ[runtimes.RUNTIME_ENV] = runtime_name
+    try:
+        pure_torq = stack_paths.runtime_from_env() != runtimes.DEFAULT_RUNTIME
+    except UqsError as exc:
+        _die(exc)
+        return
+    if pure_torq and ctx.invoked_subcommand in UQF_ONLY_COMMANDS:
+        _die(
+            UqsError(
+                f"`uqs {ctx.invoked_subcommand}` {UQF_ONLY_COMMANDS[ctx.invoked_subcommand]}; "
+                "the torq runtime runs the starter pack alone. Use --runtime uqf"
+            )
+        )
     # main() has already configured logging from the environment so that
     # anything logged during Typer's own startup lands somewhere. Re-running
     # it here is what makes --debug take effect, and the flag wins over the

@@ -17,6 +17,7 @@ from uqs.interpreter import q_command
 from uqs.logger import get_logger
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsPaths
+from uqs.runtimes import RUNTIME_ENV
 
 log = get_logger(__name__)
 
@@ -26,8 +27,12 @@ def build_env(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
     resolve against - pure, no filesystem writes. bootstrap() calls this and
     also writes it out as setenv.sh; get_process_config() calls this to
     resolve a row's placeholders without needing to bootstrap first.
+
+    The torq runtime leaves out KDBSERVCONFIG and KDBSERVCODE: the service
+    layer is this tree's, and without it TorQ loads its own config and the
+    starter pack's, as shipped.
     """
-    return {
+    env = {
         "TORQHOME": str(paths.torqhome),
         "TORQAPPHOME": str(paths.torqapphome),
         "TORQDATA": str(paths.torqdata),
@@ -61,3 +66,9 @@ def build_env(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         # whatever PATH found while its HDB filler ran another binary (#414).
         "QCMD": q_command(),
     }
+    if paths.pure_torq:
+        del env["KDBSERVCONFIG"], env["KDBSERVCODE"]
+    # Child processes - torq.sh, the frontend's and the MCP server's calls
+    # back into uqs - see the same runtime this one was built for.
+    env[RUNTIME_ENV] = paths.runtime
+    return env

@@ -77,6 +77,7 @@ without it:
   | `LOG_LEVEL`                       | `uqs.cli.entry` (`_env_log_level`), `uqs.logger.decorators`                             | no                                    | `INFO`. Sets the level every `uqs` command logs at, and turns on the `logged_function` call trace at `DEBUG`. An unrecognised value falls back to `INFO` rather than aborting — a typo in a log level must not stop the fleet being started or inspected. `uqs --debug` is the same thing per-invocation, and wins over this                                                                                                                                                                                                        |
   | `LOG_REGEX`                       | `uqs.logger.core`                                                                       | no                                    | no name filtering                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
   | `UQS_LICENCE_CONNECTIONS`         | `uqs.model.profiles` (`licence_limit`)                                                  | no                                    | `16`, the community licence; no cap on PeachQ (`UQF_Q_IMPL=peachq`). The concurrent connections your q licence allows one process. It sets the budget a start is held to - `--profile`, `uqs list profiles`' `fits` column and the warning on a positional `uqs start` - and nothing else: the committed default start is held to 16 in CI whatever this is. A value that is not a whole number, or leaves no slot once 2 are held back, is refused rather than ignored                                                             |
+  | `UQS_RUNTIME`                     | `uqs.runtimes` (`runtime_from_env`)                                                     | no                                    | `uqf`. Which stack uqs builds and runs: `uqf`, the starter pack plus this tree, or `torq`, the starter pack as it ships, in its own `output/uqs-torq`. `uqs --runtime` sets it, and bootstrap writes it into `setenv.sh`, so child processes agree. An unknown name is refused - see [runtimes](../guides/uqs.md#runtimes)                                                                                                                                                                                                          |
   | `UQS_QUERY_RENDER`                | `uqs.stack.render` (`renderer`)                                                         | no                                    | `q`: `uqs query` and its gateway session print results as q's console does. `kola` prints the Python objects kola makes of them - a Polars DataFrame for a table. `--render` wins over it; `--export` always writes the data whichever is set. Any other value is refused rather than ignored                                                                                                                                                                                                                                       |
   | `NO_COLOR`                        | `uqs.logger.core` (`_colorize`)                                                         | no                                    | colour on a terminal, plain in a pipe or a file. Set to anything non-empty and `uqs`'s own log lines are never coloured; wins over `FORCE_COLOR` ([no-color.org](https://no-color.org))                                                                                                                                                                                                                                                                                                                                             |
   | `FORCE_COLOR`                     | as above                                                                                | no                                    | as above. Set to anything non-empty and `uqs`'s log lines are coloured even when piped - for a pager that renders colour, e.g. `FORCE_COLOR=1 uqs logs \| less -R`                                                                                                                                                                                                                                                                                                                                                                  |
@@ -98,31 +99,31 @@ the same dict. Setting one in your shell does not override anything ---
 `build_env` wins --- but it will make `uqs list` and the running stack disagree
 about where data lives, which is a confusing way to spend an afternoon.
 
-  | Variable        | Value                                                             |
-  | --------------- | ------------------------------------------------                  |
-  | `TORQHOME`      | the vendored TorQ tree                                            |
-  | `TORQAPPHOME`   | the starter-pack app tree                                         |
-  | `TORQDATA`      | data root; `UQF_STATUS_DIR` falls back inside it                  |
-  | `TORQPROCESSES` | the generated `process.csv`                                       |
-  | `UQF_SCRIPTS`   | `scripts/`                                                        |
-  | `KDBCONFIG`     | `$TORQHOME/config`                                                |
-  | `KDBCODE`       | `$TORQHOME/code`                                                  |
-  | `KDBAPPCONFIG`  | `$TORQAPPHOME/appconfig`                                          |
-  | `KDBAPPCODE`    | `$TORQAPPHOME/code`                                               |
-  | `KDBSERVCONFIG` | `scripts/torqconfig`: names TorQ's log levels as `.qetl.log` does |
-  | `KDBSERVCODE`   | `scripts/torqcode`: TorQ's password loader, fixed for that layer  |
-  | `KDBLIB`        | `$TORQHOME/lib`                                                   |
-  | `KDBTESTS`      | `$TORQHOME/tests`                                                 |
-  | `KDBLOG`        | `$TORQDATA/logs`                                                  |
-  | `KDBHDB`        | `$TORQDATA/hdb`                                                   |
-  | `KDBWDB`        | `$TORQDATA/wdbhdb`                                                |
-  | `KDBTPLOG`      | `$TORQDATA/tplogs`                                                |
-  | `KDBDQCDB`      | the DQC database                                                  |
-  | `KDBDQEDB`      | the DQE database                                                  |
-  | `KDBBASEPORT`   | the port block base                                               |
-  | `RLWRAP`        | `rlwrap`                                                          |
-  | `QCON`          | `qcon`                                                            |
-  | `QCMD`          | `$QCMD`, else `q` --- see above                                   |
+  | Variable        | Value                                                                                            |
+  | --------------- | ------------------------------------------------                                                 |
+  | `TORQHOME`      | the vendored TorQ tree                                                                           |
+  | `TORQAPPHOME`   | the starter-pack app tree                                                                        |
+  | `TORQDATA`      | data root; `UQF_STATUS_DIR` falls back inside it                                                 |
+  | `TORQPROCESSES` | the generated `process.csv`                                                                      |
+  | `UQF_SCRIPTS`   | `scripts/`                                                                                       |
+  | `KDBCONFIG`     | `$TORQHOME/config`                                                                               |
+  | `KDBCODE`       | `$TORQHOME/code`                                                                                 |
+  | `KDBAPPCONFIG`  | `$TORQAPPHOME/appconfig`                                                                         |
+  | `KDBAPPCODE`    | `$TORQAPPHOME/code`                                                                              |
+  | `KDBSERVCONFIG` | `scripts/torqconfig`: names TorQ's log levels as `.qetl.log` does. Not set in the `torq` runtime |
+  | `KDBSERVCODE`   | `scripts/torqcode`: TorQ's password loader, fixed for that layer; not set in the `torq` runtime  |
+  | `KDBLIB`        | `$TORQHOME/lib`                                                                                  |
+  | `KDBTESTS`      | `$TORQHOME/tests`                                                                                |
+  | `KDBLOG`        | `$TORQDATA/logs`                                                                                 |
+  | `KDBHDB`        | `$TORQDATA/hdb`                                                                                  |
+  | `KDBWDB`        | `$TORQDATA/wdbhdb`                                                                               |
+  | `KDBTPLOG`      | `$TORQDATA/tplogs`                                                                               |
+  | `KDBDQCDB`      | the DQC database                                                                                 |
+  | `KDBDQEDB`      | the DQE database                                                                                 |
+  | `KDBBASEPORT`   | the port block base                                                                              |
+  | `RLWRAP`        | `rlwrap`                                                                                         |
+  | `QCON`          | `qcon`                                                                                           |
+  | `QCMD`          | `$QCMD`, else `q` --- see above                                                                  |
 
 ## Where to put them
 

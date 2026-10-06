@@ -284,6 +284,87 @@ def test_bootstrap_generates_schema_with_the_fx_orderbook_table(fake_paths: UqsP
     assert schemas.definition("execution_quality") in generated
 
 
+def _torq(paths: UqsPaths) -> UqsPaths:
+    """The same fixture, as the torq runtime builds it."""
+    return replace(paths, runtime="torq", torqdata=paths.torqdata.parent / "uqs-torq")
+
+
+def test_each_runtime_has_its_own_data_directory(monkeypatch):
+    monkeypatch.delenv("UQS_RUNTIME", raising=False)
+    root = Path("/repo")
+    assert stack_paths.paths_for_root(root).torqdata == root / "output" / "uqs"
+    monkeypatch.setenv("UQS_RUNTIME", "torq")
+    torq = stack_paths.paths_for_root(root)
+    assert (torq.torqdata, torq.runtime, torq.pure_torq) == (
+        root / "output" / "uqs-torq",
+        "torq",
+        True,
+    )
+
+
+def test_an_unknown_runtime_is_refused_naming_the_real_ones(monkeypatch):
+    monkeypatch.setenv("UQS_RUNTIME", "pure")
+    with pytest.raises(
+        UqsError, match="UQS_RUNTIME='pure' is not a runtime - choose one of: uqf, torq"
+    ):
+        stack_paths.paths_for_root(Path("/repo"))
+
+
+def test_a_fresh_torq_data_directory_is_not_a_missed_migration(tmp_path):
+    """The former data directories only ever held the default runtime's."""
+    (tmp_path / "scripts" / "output" / "uqs").mkdir(parents=True)
+    stack_paths.check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "torq"))
+    with pytest.raises(UqsError, match="the data directory has moved"):
+        stack_paths.check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "uqf"))
+
+
+def test_the_torq_runtime_has_no_service_layer_and_says_which_it_is(fake_paths: UqsPaths):
+    from uqs.stack.env import build_env
+
+    uqf, torq = build_env(fake_paths), build_env(_torq(fake_paths))
+    assert {"KDBSERVCONFIG", "KDBSERVCODE"} <= set(uqf)
+    assert not {"KDBSERVCONFIG", "KDBSERVCODE"} & set(torq)
+    assert (uqf["UQS_RUNTIME"], torq["UQS_RUNTIME"]) == ("uqf", "torq")
+
+
+def test_the_torq_runtime_runs_the_vendored_process_csv_unchanged(fake_paths: UqsPaths):
+    """No pipelines, no overlays: feed1 and monitor1 as shipped, stp1 on the
+    vendored schema."""
+    vendored = fake_paths.torqapphome / "appconfig" / "process.csv"
+    vendored.write_text(
+        vendored.read_text()
+        + "localhost,{KDBBASEPORT}+2,monitor,monitor1,,1,0,,,${KDBCODE}/processes/monitor.q,0,,q\n"
+        + "localhost,{KDBBASEPORT}+3,feed,feed1,,1,0,,,${KDBCODE}/processes/feed.q,1,,q\n"
+    )
+    with vendored.open(newline="") as f:
+        shipped = list(csv.DictReader(f))
+    assert stack_procs.effective_process_rows(_torq(fake_paths)) == shipped
+    uqf = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
+    assert (uqf["feed1"]["startwithall"], uqf["monitor1"]["startwithall"]) == ("0", "1")
+
+
+def test_the_torq_runtime_bootstraps_on_the_vendored_schema(fake_paths: UqsPaths, monkeypatch):
+    # The tools torq.sh needs are found; q is not, so the HDB filler skips.
+    monkeypatch.setattr(shutil, "which", lambda t, path=None: None if t == "q" else "/usr/bin/true")
+    torq = _torq(fake_paths)
+    runtime.bootstrap(torq)
+    assert torq.generated_schema.read_text() == (fake_paths.torqapphome / "database.q").read_text()
+    assert not torq.generated_dqe_config.exists(), "dqe1 is not pointed at it here"
+    assert not fake_paths.torqdata.exists(), "the default runtime's data is untouched"
+
+
+def test_the_torq_runtime_lists_only_the_profiles_it_can_start(fake_paths: UqsPaths):
+    from uqs.model.profiles import ESSENTIAL_INFRA
+
+    vendored = fake_paths.torqapphome / "appconfig" / "process.csv"
+    vendored.write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        + "".join(f"localhost,1,x,{name},,1,0,,,x.q,1,,q\n" for name in ESSENTIAL_INFRA)
+    )
+    listed = [row["profile"] for row in listing.LISTABLE_KINDS["profiles"](_torq(fake_paths), 6050)]
+    assert listed == ["essential"], "every other profile needs a uqf process"
+
+
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(fake_paths: UqsPaths, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 

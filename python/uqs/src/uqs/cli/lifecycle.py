@@ -194,6 +194,15 @@ def _resolve_profiles(names: str, extra: list[str] | None = None) -> str:
             f" with {', '.join(added)}" if added else ""
         )
         problem = profiles.over_budget_procs(members, what)
+        paths = _paths()
+        if paths.pure_torq:
+            known = set(procs_model.list_process_names(paths))
+            if missing := [name for name in members if name not in known]:
+                raise UqsError(
+                    f"{what} needs {', '.join(missing)}, which the torq runtime does not "
+                    "have: it runs the starter pack alone. Use --profile essential, or "
+                    "--runtime uqf for this tree's processes"
+                )
     except UqsError as exc:
         _die(exc)
         raise  # unreachable: _die exits. Keeps the type checker honest.
