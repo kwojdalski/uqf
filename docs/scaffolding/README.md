@@ -16,6 +16,7 @@ them:
   | several tables that mean the same thing | a subscription each | **normalizer** | [normalizer.md](normalizer.md) |
   | outside the stack, for a past window    | a query you write   | **backfill**   | [backfill.md](backfill.md)     |
   | a window a backfill just published      | its publication     | **reaction**   | [reaction.md](reaction.md)     |
+  | outside q: a broker, a vendor's stream  | a Python publisher  | **external**   | [external.md](external.md)     |
 
 The first three are **streaming**: long-running processes that subscribe,
 compute and republish forever. The fourth is **bounded**: it takes a window from

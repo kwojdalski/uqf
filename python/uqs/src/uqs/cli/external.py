@@ -33,6 +33,7 @@ from uqs.external.crypto import (
     CRYPTO_RECORDER_DEFAULT_VENUES,
     DEFAULT_OMS_SOCKET_PATH,
 )
+from uqs.external.feeds import ExternalFeed, discover
 from uqs.model.registry import DEFAULT_BASE_PORT
 from uqs.paths import UqsError
 
@@ -153,6 +154,30 @@ FEEDS: dict[str, _Feed] = {
         "crypto fills recorder status (sim_table = paper fills, real_table = confirmed executions)",
     ),
 }
+
+
+def _stop_quietly(feed: ExternalFeed, paths: Any) -> None:
+    feed.stop(paths)
+
+
+def _from_discovered(feed: ExternalFeed) -> _Feed:
+    """A self-declaring feed (external/NAME_feed.py's FEED) in this table's shape.
+    It takes no start options: its settings live in its own module."""
+    return _Feed(
+        (),
+        lambda o: f"{feed.name} feed started (pid {feed.start(_paths())})",
+        lambda paths: _stop_quietly(feed, paths),
+        lambda paths: feed.status(paths),
+        f"{feed.name} feed status",
+    )
+
+
+# Feeds scaffolded with `uqs job new NAME --kind external` declare themselves
+# (#715); a name already listed above is a collision, not an override.
+for _name, _feed_decl in discover().items():
+    if _name in FEEDS:
+        raise UqsError(f"external feed {_name!r} is declared twice - rename one")
+    FEEDS[_name] = _from_discovered(_feed_decl)
 
 FeedArg = Annotated[
     str,

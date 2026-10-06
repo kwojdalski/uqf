@@ -7,6 +7,7 @@ that defines what it needs, so there is one path to each name.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -128,18 +129,34 @@ ALLOWED_IMPORTS = {
 _IMPORT = re.compile(r"^\s*(?:from|import) uqs(?:\.(\w+))?(?: import ([\w, ]+))?", re.M)
 
 
+def _uqs_targets(source: str) -> set[str]:
+    """The uqs folders and modules `source` imports - read from its syntax tree,
+    not its text, so a scaffold template that WRITES `from uqs.external ...`
+    into a generated file is not mistaken for an import of its own (#715).
+    Imports inside functions count, as the lazy ones in cli/ must."""
+    out: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            parts = node.module.split(".")
+            if parts[0] != "uqs":
+                continue
+            # `from uqs import paths as stack_paths`: the target is the name.
+            out.update([parts[1]] if len(parts) > 1 else [a.name for a in node.names])
+        elif isinstance(node, ast.Import):
+            out.update(
+                a.name.split(".")[1]
+                for a in node.names
+                if a.name.startswith("uqs.") and len(a.name.split(".")) > 1
+            )
+    return out
+
+
 def _folder_imports(folder: str) -> set[str]:
     """Which other folders the modules in `folder` reach into."""
     out: set[str] = set()
     for path in sorted((PKG / "src" / "uqs" / folder).glob("*.py")):
-        for match in _IMPORT.finditer(path.read_text()):
-            head, names = match.group(1), match.group(2)
-            # `from uqs import paths as stack_paths` - the target is in
-            # the name list, not the dotted head, and may carry an alias.
-            targets = (
-                [head] if head else [n.split(" as ")[0].strip() for n in (names or "").split(",")]
-            )
-            out.update(t for t in targets if t and t != folder)
+        out |= _uqs_targets(path.read_text())
+    out.discard(folder)
     return out - LEAVES
 
 

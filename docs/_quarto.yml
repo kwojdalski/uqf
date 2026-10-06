@@ -95,6 +95,7 @@ website:
           - scaffolding/backfill.md
           - scaffolding/hdb-transfer.md
           - scaffolding/reaction.md
+          - scaffolding/external.md
       - section: "Services - Showcase"
         contents:
           - services/README.md
