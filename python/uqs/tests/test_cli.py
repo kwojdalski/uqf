@@ -52,6 +52,7 @@ from uqs.cli import (
     summary_columns,
     summary_graph,
     summary_table,
+    table_browser,
 )
 from uqs.cli import query as query_cli
 from uqs.external import crypto, databento_feed, kafka_feed
@@ -844,6 +845,42 @@ def test_a_pattern_matching_nothing_exits_one_and_names_what_exists(monkeypatch)
 def test_an_unknown_process_exits_one(monkeypatch):
     _patch(monkeypatch, schema_view, "resolve_port", raises=UqsError("rbd1 is not declared"))
     assert runner.invoke(cli.app, ["schema", "--proc", "rbd1"]).exit_code == 1
+
+
+def _browsed(monkeypatch) -> list[dict]:
+    """Stand in for the browser: record what each `show` was handed."""
+    shown: list[dict] = []
+
+    def show(table, interactive, console, actions, refresh, every):
+        shown.append({"interactive": interactive, "refresh": refresh, "every": every})
+
+    monkeypatch.setattr(table_browser, "show", show)
+    return shown
+
+
+def test_schema_interactive_re_reads_the_process_every_five_seconds(monkeypatch):
+    """-i hands the browser a refresh that asks the process AGAIN - replaying
+    the rows already read would make the timer show nothing changing."""
+    _patch(monkeypatch, schema_view, "resolve_port", result=6052)
+    overview = _patch(
+        monkeypatch, schema_view, "overview", result=[{"table": "quotes", "rows": 0, "columns": 4}]
+    )
+    shown = _browsed(monkeypatch)
+    assert runner.invoke(cli.app, ["schema", "-i"]).exit_code == 0
+    (browsed,) = shown
+    assert browsed["interactive"] and browsed["every"] == 5.0
+    reads = len(overview.calls)
+    browsed["refresh"]()
+    assert len(overview.calls) == reads + 1
+
+
+def test_schema_every_zero_turns_the_timer_off(monkeypatch):
+    _patch(monkeypatch, schema_view, "resolve_port", result=6052)
+    _patch(monkeypatch, schema_view, "match_tables", result=["quotes"])
+    _patch(monkeypatch, schema_view, "columns", result=[])
+    shown = _browsed(monkeypatch)
+    assert runner.invoke(cli.app, ["schema", "quotes", "-i", "--every", "0"]).exit_code == 0
+    assert [b["every"] for b in shown] == [None]
 
 
 def test_schema_turns_a_driver_error_into_an_exit_code(monkeypatch):

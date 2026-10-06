@@ -137,11 +137,13 @@ def _show(
     interactive: bool,
     actions: Sequence[table_browser.RowAction] = (),
     refresh: Callable[[], Table] | None = None,
+    every: float | None = None,
 ) -> None:
     """Print `table`, or browse it with --interactive (see table_browser.py),
-    with any row `actions` the command offers and the `refresh` that re-reads it."""
+    with any row `actions` the command offers, the `refresh` that re-reads it
+    and, if `every` is given, how many seconds apart it re-reads on its own."""
     try:
-        table_browser.show(table, interactive, console, actions, refresh)
+        table_browser.show(table, interactive, console, actions, refresh, every)
     except UqsError as exc:
         _die(exc)
 
