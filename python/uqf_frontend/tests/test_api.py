@@ -67,13 +67,13 @@ def test_health_reports_unreachable_as_not_ok(gw):
 def test_catalog_lists_tables_and_marks_vector_columns_unfilterable(client):
     body = client.get("/catalog").json()
     tables = {t["name"]: t for t in body["tables"]}
-    assert "trades" in tables and "quotes" in tables
+    assert "trades" in tables and "fx_orderbook" in tables
     assert "in" in body["operators"]
 
-    quotes = {c["name"]: c for c in tables["quotes"]["columns"]}
-    assert quotes["sym"]["filterable"] is True
-    assert quotes["bid_prices"]["filterable"] is False
-    assert quotes["bid_prices"]["type"] == "list"
+    fx_orderbook = {c["name"]: c for c in tables["fx_orderbook"]["columns"]}
+    assert fx_orderbook["sym"]["filterable"] is True
+    assert fx_orderbook["bid_prices"]["filterable"] is False
+    assert fx_orderbook["bid_prices"]["type"] == "list"
 
 
 def test_catalog_publishes_the_decimal_places_each_column_is_shown_with(client):
@@ -88,8 +88,8 @@ def test_catalog_publishes_the_decimal_places_each_column_is_shown_with(client):
     # A symbol and a vector get nothing rather than zero: there is no
     # decimal point to place in either.
     assert trades["sym"]["decimals"] is None
-    quotes = {c["name"]: c for c in tables["quotes"]["columns"]}
-    assert quotes["bid_prices"]["decimals"] is None
+    fx_orderbook = {c["name"]: c for c in tables["fx_orderbook"]["columns"]}
+    assert fx_orderbook["bid_prices"]["decimals"] is None
 
 
 def test_query_returns_rows_from_the_gateway(gw):

@@ -500,15 +500,16 @@ qetl.plant,crypto_book,table,,
 qetl.plant,crypto_market_data,table,,
 qetl.plant,crypto_sim_fills,table,,
 qetl.plant,crypto_trades,table,,
-qetl.plant,databento_book,table,,
 qetl.plant,databento_mbp10,table,,
 qetl.plant,deal_positions,table,,
 qetl.plant,duckdb_deals,table,,
 qetl.plant,economic_calendar,table,,
 qetl.plant,elements,dict,,
+qetl.plant,eq_orderbook,table,,
 qetl.plant,execution_quality,table,,
 qetl.plant,executions,table,,
 qetl.plant,fx_limit_breach,table,,
+qetl.plant,fx_orderbook,table,,
 qetl.plant,fx_position,table,,
 qetl.plant,kafka_client_flow,table,,
 qetl.plant,market_data,table,,
@@ -527,7 +528,6 @@ qetl.plant,predictions,table,,
 qetl.plant,problems,function,2,table_name rows
 qetl.plant,published,function,1,t
 qetl.plant,quote,table,,
-qetl.plant,quotes,table,,
 qetl.plant,reference_data,table,,
 qetl.plant,schema,function,1,t
 qetl.plant,shape,function,1,t
@@ -537,7 +537,7 @@ qetl.plant,trades,table,,
 qetl.plant,trades_copy,table,,
 qetl.plant,undeclared,function,1,
 qetl.plant,vendored,value,,
-qetl.plant,wide_book,table,,
+qetl.plant,wide_orderbook,table,,
 qetl.reaction,audit,function,1,
 qetl.reaction,dag_consumers,function,1,dataset
 qetl.reaction,depth_now,value,,
@@ -932,11 +932,11 @@ qpipe.job.arbitrage,publish,value,,
 qpipe.job.cross,cross_pairs,value,,
 qpipe.job.cross,cross_quotes,table,,
 qpipe.job.cross,crosses,table,,
+qpipe.job.cross,fx_orderbook,table,,
+qpipe.job.cross,fx_orderbook_in,table,,
 qpipe.job.cross,now,function,1,
 qpipe.job.cross,on_batch,function,2,t x
 qpipe.job.cross,publish,value,,
-qpipe.job.cross,quotes,table,,
-qpipe.job.cross,quotes_in,table,,
 qpipe.job.cross,reprice,function,1,now
 qpipe.job.cross,reprice_crosses,function,2,quotes as_of
 qpipe.job.cross,unpriced,value,,
@@ -1004,27 +1004,6 @@ qpipe.job.crypto_mock,touch,function,1,mid
 qpipe.job.crypto_mock,toxicity_factor,value,,
 qpipe.job.crypto_mock,venues,value,,
 qpipe.job.crypto_mock,walk,function,1,m
-qpipe.job.databento_book,book,table,,
-qpipe.job.databento_book,on_batch,function,2,t x
-qpipe.job.databento_book,publish,value,,
-qpipe.job.databento_book,raw,table,,
-qpipe.job.databento_book_backfill,checkpoint,function,1,cursor
-qpipe.job.databento_book_backfill,cleanup,function,1,
-qpipe.job.databento_book_backfill,fetch,function,2,from_ts to_ts
-qpipe.job.databento_book_backfill,handle,value,,
-qpipe.job.databento_book_backfill,init,function,1,run_spec
-qpipe.job.databento_book_backfill,last_batch,value,,
-qpipe.job.databento_book_backfill,last_window,dict,,
-qpipe.job.databento_book_backfill,phase,value,,
-qpipe.job.databento_book_backfill,plan,function,1,cursor
-qpipe.job.databento_book_backfill,progress,dict,,
-qpipe.job.databento_book_backfill,publish,function,1,batch
-qpipe.job.databento_book_backfill,quality_check,function,1,batch
-qpipe.job.databento_book_backfill,range_from,value,,
-qpipe.job.databento_book_backfill,range_to,value,,
-qpipe.job.databento_book_backfill,run,function,1,
-qpipe.job.databento_book_backfill,source_version,value,,
-qpipe.job.databento_book_backfill,spec,function,1,
 qpipe.job.demo_deals_backfill,checkpoint,function,1,cursor
 qpipe.job.demo_deals_backfill,cleanup,function,1,
 qpipe.job.demo_deals_backfill,fetch,function,2,from_ts to_ts
@@ -1077,6 +1056,27 @@ qpipe.job.duckdb_deals_backfill,range_to,value,,
 qpipe.job.duckdb_deals_backfill,run,function,1,
 qpipe.job.duckdb_deals_backfill,source_version,value,,
 qpipe.job.duckdb_deals_backfill,spec,function,1,
+qpipe.job.eq_orderbook,book,table,,
+qpipe.job.eq_orderbook,on_batch,function,2,t x
+qpipe.job.eq_orderbook,publish,value,,
+qpipe.job.eq_orderbook,raw,table,,
+qpipe.job.eq_orderbook_backfill,checkpoint,function,1,cursor
+qpipe.job.eq_orderbook_backfill,cleanup,function,1,
+qpipe.job.eq_orderbook_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.eq_orderbook_backfill,handle,value,,
+qpipe.job.eq_orderbook_backfill,init,function,1,run_spec
+qpipe.job.eq_orderbook_backfill,last_batch,value,,
+qpipe.job.eq_orderbook_backfill,last_window,dict,,
+qpipe.job.eq_orderbook_backfill,phase,value,,
+qpipe.job.eq_orderbook_backfill,plan,function,1,cursor
+qpipe.job.eq_orderbook_backfill,progress,dict,,
+qpipe.job.eq_orderbook_backfill,publish,function,1,batch
+qpipe.job.eq_orderbook_backfill,quality_check,function,1,batch
+qpipe.job.eq_orderbook_backfill,range_from,value,,
+qpipe.job.eq_orderbook_backfill,range_to,value,,
+qpipe.job.eq_orderbook_backfill,run,function,1,
+qpipe.job.eq_orderbook_backfill,source_version,value,,
+qpipe.job.eq_orderbook_backfill,spec,function,1,
 qpipe.job.executions,crypto_trades,table,,
 qpipe.job.executions,executions,table,,
 qpipe.job.executions,from_crypto_trades,function,1,batch
@@ -1089,6 +1089,11 @@ qpipe.job.fx_feed,on_timer,function,1,
 qpipe.job.fx_feed,publish,value,,
 qpipe.job.fx_feed,spot,value,,
 qpipe.job.fx_feed,tick_rows,function,1,levels
+qpipe.job.fx_orderbook_feed,n_levels,value,,
+qpipe.job.fx_orderbook_feed,on_timer,function,1,
+qpipe.job.fx_orderbook_feed,publish,value,,
+qpipe.job.fx_orderbook_feed,spot,value,,
+qpipe.job.fx_orderbook_feed,tick_rows,function,1,mids
 qpipe.job.fx_orders_feed,books,value,,
 qpipe.job.fx_orders_feed,last_id,value,,
 qpipe.job.fx_orders_feed,on_timer,function,1,
@@ -1166,13 +1171,13 @@ qpipe.job.kafka_flow,on_batch,function,2,t x
 qpipe.job.kafka_flow,on_replayed,function,1,
 qpipe.job.kafka_flow,publish,value,,
 qpipe.job.kafka_flow,publish_fresh,function,1,rows
+qpipe.job.market_data,from_fx_orderbook,function,1,batch
 qpipe.job.market_data,from_quote,function,1,batch
-qpipe.job.market_data,from_quotes,function,1,batch
+qpipe.job.market_data,fx_orderbook,table,,
 qpipe.job.market_data,market_data,table,,
 qpipe.job.market_data,on_batch,value,,
 qpipe.job.market_data,publish,value,,
 qpipe.job.market_data,quote,table,,
-qpipe.job.market_data,quotes,table,,
 qpipe.job.markout,execution_quality,table,,
 qpipe.job.markout,horizons,value,,
 qpipe.job.markout,max_horizon,value,,
@@ -1206,11 +1211,6 @@ qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_marks,table,,
 qpipe.job.posbook,position_trades,table,,
 qpipe.job.posbook,publish,value,,
-qpipe.job.quotes_feed,n_levels,value,,
-qpipe.job.quotes_feed,on_timer,function,1,
-qpipe.job.quotes_feed,publish,value,,
-qpipe.job.quotes_feed,spot,value,,
-qpipe.job.quotes_feed,tick_rows,function,1,mids
 qpipe.job.rebuild_positions,handler,function,3,dataset range_from range_to
 qpipe.job.superbook,books,dict,,
 qpipe.job.superbook,levels,function,2,prices sizes
@@ -1241,18 +1241,18 @@ qpipe.job.upstream_trades_backfill,range_to,value,,
 qpipe.job.upstream_trades_backfill,run,function,1,
 qpipe.job.upstream_trades_backfill,source_version,value,,
 qpipe.job.upstream_trades_backfill,spec,function,1,
-qpipe.job.vectorize,fold_wide_book,function,1,book
+qpipe.job.vectorize,fold_wide_orderbook,function,1,book
 qpipe.job.vectorize,mkt_orderbook,table,,
 qpipe.job.vectorize,on_batch,function,2,t x
 qpipe.job.vectorize,publish,value,,
-qpipe.job.vectorize,wide_book,table,,
 qpipe.job.vectorize,wide_level_groups,dict,,
 qpipe.job.vectorize,wide_level_names,value,,
-qpipe.job.wide_book_feed,n_levels,value,,
-qpipe.job.wide_book_feed,on_timer,function,1,
-qpipe.job.wide_book_feed,publish,value,,
-qpipe.job.wide_book_feed,spot,value,,
-qpipe.job.wide_book_feed,tick_rows,function,1,mids
+qpipe.job.vectorize,wide_orderbook,table,,
+qpipe.job.wide_orderbook_feed,n_levels,value,,
+qpipe.job.wide_orderbook_feed,on_timer,function,1,
+qpipe.job.wide_orderbook_feed,publish,value,,
+qpipe.job.wide_orderbook_feed,spot,value,,
+qpipe.job.wide_orderbook_feed,tick_rows,function,1,mids
 qpipe.source.crypto_market_data,adapt,function,1,raw
 qpipe.source.crypto_market_data,columns,value,,
 qpipe.source.crypto_market_data,credential_example,value,,
@@ -1362,11 +1362,11 @@ qpipe.transform.crypto_market_data,contract,table,,
 qpipe.transform.crypto_market_data,example_book,function,1,
 qpipe.transform.crypto_market_data,fold,function,2,batch prefix
 qpipe.transform.crypto_market_data,to_book,function,1,batch
-qpipe.transform.databento_book,book,table,,
-qpipe.transform.databento_book,contract,table,,
-qpipe.transform.databento_book,example_book,function,1,
-qpipe.transform.databento_book,fold,function,2,batch prefix
-qpipe.transform.databento_book,to_book,function,1,batch
+qpipe.transform.eq_orderbook,book,table,,
+qpipe.transform.eq_orderbook,contract,table,,
+qpipe.transform.eq_orderbook,example_book,function,1,
+qpipe.transform.eq_orderbook,fold,function,2,batch prefix
+qpipe.transform.eq_orderbook,to_book,function,1,batch
 qpos,apply_fill,function,5,pos sym qty price side
 qpos,apply_fills,function,2,pos trades
 qpos,ccy_exposure,function,1,pos

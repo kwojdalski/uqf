@@ -29,7 +29,7 @@ reset:{[]
     `.sjtest.published set 0#.sjtest.published;
     `.qpipe.job.markout.pending set 0#.qpipe.job.markout.pending;
     `.qpipe.job.markout.quote_hist set 0#.qpipe.job.markout.quote_hist;
-    `.qpipe.job.cross.quotes set 0#.qpipe.job.cross.quotes;
+    `.qpipe.job.cross.fx_orderbook set 0#.qpipe.job.cross.fx_orderbook;
     `.qpipe.job.cross.crosses set 0#.qpipe.job.cross.crosses;
     `.qpipe.job.cross.unpriced set `symbol$();
     `.qpipe.job.superbook.books set `sym`source xkey .qpipe.job.market_data.market_data;
@@ -188,27 +188,27 @@ test_the_fx_feed_walks_its_level:{[t]
         "each tick moves the level rather than republishing the same one"]};
 
 test_the_depth_feed_quotes_three_levels_a_side:{[t]
-    rows:.qpipe.job.quotes_feed.tick_rows .qsynth.spot;
-    .qunit.assertEquals[distinct count each raze rows 1 3;enlist .qpipe.job.quotes_feed.n_levels;
+    rows:.qpipe.job.fx_orderbook_feed.tick_rows .qsynth.spot;
+    .qunit.assertEquals[distinct count each raze rows 1 3;enlist .qpipe.job.fx_orderbook_feed.n_levels;
         "every pair's bid and ask ladder is n_levels deep"]};
 
 test_the_depth_feeds_ladders_are_level_zero_first:{[t]
     / .qbook and .qfwd.cross_book_at both read level 0 as the touch, so a
     / ladder built outwards-in prices every cross off the wrong level.
-    rows:.qpipe.job.quotes_feed.tick_rows .qsynth.spot;
+    rows:.qpipe.job.fx_orderbook_feed.tick_rows .qsynth.spot;
     bids:first rows 1;
     .qunit.assertEquals[bids~desc bids;1b;"the bid ladder descends from the touch"]};
 
 test_the_wide_feed_publishes_one_column_per_level:{[t]
     / 1 sym + 11 bids + 11 asks. The vectorize job derives its groups from
     / its own schema, so a mismatch here is a column-count error on insert.
-    rows:.qpipe.job.wide_book_feed.tick_rows .qsynth.spot;
-    .qunit.assertEquals[count rows;1+2*.qpipe.job.wide_book_feed.n_levels;
+    rows:.qpipe.job.wide_orderbook_feed.tick_rows .qsynth.spot;
+    .qunit.assertEquals[count rows;1+2*.qpipe.job.wide_orderbook_feed.n_levels;
         "the wide book is published as one column per level per side"]};
 
 test_the_wide_feed_column_is_as_long_as_the_pair_list:{[t]
     / The transpose that makes this a wide table rather than a nested one.
-    rows:.qpipe.job.wide_book_feed.tick_rows .qsynth.spot;
+    rows:.qpipe.job.wide_orderbook_feed.tick_rows .qsynth.spot;
     .qunit.assertEquals[distinct count each rows;enlist count .qsynth.pairs;
         "every column carries one value per pair"]};
 
@@ -406,15 +406,15 @@ quote_row:{[ts;sym;bid;ask]
 
 test_cross_mirrors_its_quotes:{[t]
     reset[];
-    .qpipe.job.cross.on_batch[`quotes;quote_row[d 0;`EURUSD;1.1;1.1002]];
-    .qunit.assertEquals[count .qpipe.job.cross.quotes;1;"the batch lands in the mirror"]};
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`EURUSD;1.1;1.1002]];
+    .qunit.assertEquals[count .qpipe.job.cross.fx_orderbook;1;"the batch lands in the mirror"]};
 
 test_cross_reprices_a_pair_it_can_chain:{[t]
     / EURUSD and USDJPY quoted -> EURJPY is buildable; the other three
     / declared crosses are not, and are left out rather than published null.
     reset[];
-    .qpipe.job.cross.on_batch[`quotes;quote_row[d 0;`EURUSD;1.1;1.1002]];
-    .qpipe.job.cross.on_batch[`quotes;quote_row[d 0;`USDJPY;150f;150.02]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`EURUSD;1.1;1.1002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`USDJPY;150f;150.02]];
     out:.qpipe.job.cross.reprice[d 1];
     .qunit.assertEquals[out`sym;enlist `EURJPY;
         "only the cross whose legs are quoted comes out"]};
@@ -438,10 +438,10 @@ test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
     / The mirror is fed directly: on_batch reprices on its own, which would
     / spend the first warning before it could be observed.
     reset[];
-    `.qpipe.job.cross.quotes insert quote_row[d 0;`EURUSD;1.1;1.1002];
+    `.qpipe.job.cross.fx_orderbook insert quote_row[d 0;`EURUSD;1.1;1.1002];
     first_lines:logged[`cross;{.qpipe.job.cross.reprice d 1}];
     again:logged[`cross;{.qpipe.job.cross.reprice d 1}];
-    `.qpipe.job.cross.quotes insert quote_row[d 0;`USDJPY;150f;150.02];
+    `.qpipe.job.cross.fx_orderbook insert quote_row[d 0;`USDJPY;150f;150.02];
     fixed:logged[`cross;{.qpipe.job.cross.reprice d 1}];
     .qunit.assertEquals[first_lines[;0];enlist `WARN;"a newly unpriced set warns"];
     .qunit.assertEquals[again[;0];enlist `DBG;"the same set again is only DBG"];
@@ -454,15 +454,15 @@ test_cross_accumulates_rather_than_publishing:{[t]
     / a test that saw rows on the recorder would mean the job had started
     / publishing without declaring it.
     reset[];
-    .qpipe.job.cross.on_batch[`quotes;quote_row[d 0;`EURUSD;1.1;1.1002]];
-    .qpipe.job.cross.on_batch[`quotes;quote_row[d 0;`USDJPY;150f;150.02]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`EURUSD;1.1;1.1002]];
+    .qpipe.job.cross.on_batch[`fx_orderbook;quote_row[d 0;`USDJPY;150f;150.02]];
     .qunit.assertEquals[(0<count .qpipe.job.cross.crosses;count .sjtest.published);(1b;0);
         "the crosses stay in the process and nothing is published"]};
 
 test_cross_ignores_a_table_it_did_not_subscribe_to:{[t]
     reset[];
     .qpipe.job.cross.on_batch[`trades;([] time:enlist d 0; sym:enlist `EURUSD)];
-    .qunit.assertEquals[count .qpipe.job.cross.quotes;0;"a batch from another table is ignored"]};
+    .qunit.assertEquals[count .qpipe.job.cross.fx_orderbook;0;"a batch from another table is ignored"]};
 
 / --- posbook --------------------------------------------------------------
 
@@ -512,7 +512,7 @@ wide_row:{[]
 
 test_vectorize_folds_and_republishes_each_batch:{[t]
     reset[];
-    .qpipe.job.vectorize.on_batch[`wide_book;wide_row[]];
+    .qpipe.job.vectorize.on_batch[`wide_orderbook;wide_row[]];
     out:last_rows[];
     .qunit.assertEquals[(first exec tbl from .sjtest.published;count out[0;`bid_prices]);
         (`mkt_orderbook;11);
@@ -522,16 +522,16 @@ test_vectorize_keeps_no_state:{[t]
     / Two identical batches produce two identical publications: nothing
     / accumulates, which is why this job has no buffer to evict.
     reset[];
-    .qpipe.job.vectorize.on_batch[`wide_book;wide_row[]];
-    .qpipe.job.vectorize.on_batch[`wide_book;wide_row[]];
+    .qpipe.job.vectorize.on_batch[`wide_orderbook;wide_row[]];
+    .qpipe.job.vectorize.on_batch[`wide_orderbook;wide_row[]];
     .qunit.assertEquals[count .sjtest.published;2;"each batch stands alone"]};
 
 test_vectorize_ignores_another_table:{[t]
     reset[];
-    .qpipe.job.vectorize.on_batch[`quotes;wide_row[]];
+    .qpipe.job.vectorize.on_batch[`fx_orderbook;wide_row[]];
     .qunit.assertEquals[count .sjtest.published;0;"a batch from another table is ignored"]};
 
-/ --- databento_book: the live fold ----------------------------------------
+/ --- eq_orderbook: the live fold ----------------------------------------
 
 / The job under test republishes rows folded by the SAME .qetl.transform transform the
 / ODBC backfill applies. That sharing is the point of the job existing, so
@@ -547,11 +547,11 @@ mbp10_batch:{[] update time:.z.p from .qpipe.source.databento_mbp10.fixture[]}
 
 test_databento_folds_a_live_batch_and_republishes_it:{[t]
     reset[];
-    .qpipe.job.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
     out:last_rows[];
     .qunit.assertEquals[
         (first exec tbl from .sjtest.published;count out;count out[0;`bid_prices]);
-        (`databento_book;4;10);
+        (`eq_orderbook;4;10);
         "four MBP-10 records fold into four book rows of ten levels a side"]};
 
 test_databento_keeps_the_venue_clock_as_its_own_column:{[t]
@@ -562,7 +562,7 @@ test_databento_keeps_the_venue_clock_as_its_own_column:{[t]
     / because the only clock came from the venue and nothing could
     / cross-check it.
     reset[];
-    .qpipe.job.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
     out:last_rows[];
     .qunit.assertEquals[`ts_event in cols out;1b;"the venue clock is carried through"];
     .qunit.assertEquals[out[0;`ts_event];(.qpipe.source.databento_mbp10.fixture[])[0;`ts_event];
@@ -573,26 +573,26 @@ test_databento_does_not_republish_the_tickerplants_time:{[t]
     / warning - .qtorq.publish drops `time`, and this job must not hand it
     / one to drop in the first place.
     reset[];
-    .qpipe.job.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
     .qunit.assertEquals[`time in cols last_rows[];0b;
         "the receipt stamp is the tickerplant's to add, not this job's to send"]};
 
 test_databento_ignores_a_table_it_did_not_subscribe_to:{[t]
     reset[];
-    .qpipe.job.databento_book.on_batch[`quotes;mbp10_batch[]];
+    .qpipe.job.eq_orderbook.on_batch[`fx_orderbook;mbp10_batch[]];
     .qunit.assertEquals[count .sjtest.published;0;"a batch from another table is ignored"]};
 
 test_databento_publishes_nothing_for_an_empty_batch:{[t]
     / An empty batch is ordinary on a quiet symbol. Publishing a zero-row
     / message would put an empty write on the tickerplant every tick.
     reset[];
-    .qpipe.job.databento_book.on_batch[`databento_mbp10;0#mbp10_batch[]];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;0#mbp10_batch[]];
     .qunit.assertEquals[count .sjtest.published;0;"an empty batch publishes nothing"]};
 
 test_databento_keeps_no_state:{[t]
     reset[];
-    .qpipe.job.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
-    .qpipe.job.databento_book.on_batch[`databento_mbp10;mbp10_batch[]];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;mbp10_batch[]];
     .qunit.assertEquals[count .sjtest.published;2;"each batch stands alone"]};
 
 / --- the adapter's publish, over what the feeds actually send ------------
@@ -608,7 +608,7 @@ test_the_adapter_recognises_the_list_of_columns_form:{[t]
     / the runner, because the old per-feed scripts sent to .u.upd directly.
     .qunit.assertTrue[.qtorq.is_columns .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0];
         "a fill's rows are the list-of-columns form"];
-    .qunit.assertTrue[.qtorq.is_columns .qpipe.job.quotes_feed.tick_rows .qsynth.spot;
+    .qunit.assertTrue[.qtorq.is_columns .qpipe.job.fx_orderbook_feed.tick_rows .qsynth.spot;
         "and so is a depth tick, whose ladder columns are lists of vectors"];
     .qunit.assertTrue[.qtorq.is_columns .qpipe.job.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`x];
         "and a mock crypto fill"]};

@@ -45,7 +45,7 @@ columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
 types:"psssfjj",raze 10#enlist "fjfj"
 
 table_name:`mbp10
-target:`databento_book
+target:`eq_orderbook
 time_column:`ts_event
 
 / NOT Databento's documented key, and deliberately said so. (symbol,

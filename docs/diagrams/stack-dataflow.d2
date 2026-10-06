@@ -85,7 +85,7 @@ classes: {
 
 feed1: "feed1\nvendored" { class: producer }
 fxfeed1: "fxfeed1" { class: producer }
-quotesfeed1: "quotesfeed1" { class: producer }
+fxorderbookfeed1: "fxorderbookfeed1" { class: producer }
 widefeed1: "widefeed1" { class: producer }
 fxtradesfeed1: "fxtradesfeed1" { class: producer }
 cryptomock1: "cryptomock1\nstands in for cryptorust's\ntwo recorders" { class: producer }
@@ -96,8 +96,8 @@ databento_py: "databento_feed.py\nexternal Python handler" { class: producer }
 
 quote: "quote\nvendored schema" { class: table }
 trade: "trade\nvendored schema" { class: table }
-quotes: "quotes\ntime · sym · bid/ask_prices · bid/ask_sizes" { class: table }
-wide_book: "wide_book\ntime · sym · bids0..10 · asks0..10" { class: table }
+fx_orderbook: "fx_orderbook\ntime · sym · bid/ask_prices · bid/ask_sizes" { class: table }
+wide_orderbook: "wide_orderbook\ntime · sym · bids0..10 · asks0..10" { class: table }
 trades: "trades\ntime · sym · side · trade_price · size · pip_factor" { class: table }
 executions: "executions\nsource_time · sym · venue · side · size · price\nfee · fee_ccy · fill_id" { class: table }
 marks: "marks\nsource_time · sym · venue · mid" { class: table }
@@ -110,7 +110,7 @@ execution_quality: "execution_quality\ntrade_time · horizon\ntrade_price · ref
 cross_quotes: "cross_quotes\nnever written to stp1 —\nlives in cross1's memory" { class: private }
 
 databento_mbp10: "databento_mbp10\nDatabento's own columns,\nten levels each side" { class: table }
-databento_book: "databento_book\ntime · sym · bid/ask prices+sizes" { class: table }
+eq_orderbook: "eq_orderbook\ntime · sym · bid/ask prices+sizes" { class: table }
 orders: "orders\ntime · sym · book · product\nside · qty · price · status" { class: table }
 fx_position: "fx_position\nthe whole book each snapshot" { class: table }
 fx_limit_breach: "fx_limit_breach\none row per NEW breach" { class: table }
@@ -142,8 +142,8 @@ storage: "rdb1 — today's ticks\n↓ EOD writedown\nhdb1 / hdb2 — on disk" { 
 feed1 -> quote
 feed1 -> trade
 fxfeed1 -> quote
-quotesfeed1 -> quotes
-widefeed1 -> wide_book
+fxorderbookfeed1 -> fx_orderbook
+widefeed1 -> wide_orderbook
 fxtradesfeed1 -> trades
 cryptomock1 -> crypto_book
 cryptomock1 -> crypto_trades: "one message per fill,\nthe recorder's wire shape"
@@ -152,10 +152,10 @@ databento_py -> databento_mbp10
 
 # ------------------------------------------------- subscribe, then publish
 
-quotes -> cross1: "subscribe"
+fx_orderbook -> cross1: "subscribe"
 cross1 -> cross_quotes: "in-process only" { style.stroke-dash: 4 }
 
-wide_book -> vectorize1: "subscribe"
+wide_orderbook -> vectorize1: "subscribe"
 vectorize1 -> mkt_orderbook: "republish"
 
 trades -> executions1: "one shape in"
@@ -166,7 +166,7 @@ quote -> marks1: "one shape in"
 crypto_book -> marks1: "another"
 marks1 -> marks: "one shape out"
 databento_mbp10 -> databento1: "subscribe"
-databento1 -> databento_book: "republish"
+databento1 -> eq_orderbook: "republish"
 
 executions -> posbook1: "subscribe"
 marks -> posbook1: "mark to mid"
@@ -181,7 +181,7 @@ fxpositions1 -> fx_position: "republish"
 fxpositions1 -> fx_limit_breach: "new breaches only"
 
 quote -> marketdata1: "one shape in"
-quotes -> marketdata1: "another"
+fx_orderbook -> marketdata1: "another"
 marketdata1 -> market_data: "one shape out"
 
 market_data -> superbook1: "subscribe"
@@ -199,8 +199,8 @@ crossarb1 -> config_change: "a knob change, either side" { style.stroke-dash: 4 
 
 quote -> storage
 trade -> storage
-quotes -> storage
-wide_book -> storage
+fx_orderbook -> storage
+wide_orderbook -> storage
 trades -> storage
 crypto_book -> storage
 crypto_trades -> storage
@@ -210,7 +210,7 @@ mkt_orderbook -> storage
 position -> storage
 execution_quality -> storage
 databento_mbp10 -> storage
-databento_book -> storage
+eq_orderbook -> storage
 orders -> storage
 fx_position -> storage
 fx_limit_breach -> storage

@@ -4,7 +4,7 @@
 / filter comes from process.csv's `extras` field (-tables t1 t2 ...), the
 / same convention other processes here already use for CLI flags (e.g.
 / sctp1's -parentproctype); blank/unset means every table. Change it live
-/ with `uqs config set tap1 extras "-tables quote wide_book"` then
+/ with `uqs config set tap1 extras "-tables quote wide_orderbook"` then
 / restart tap1 - no orchestrator-side code needed for the filtering.
 / .
 / Not loaded by src/init.q or anything else uqf itself runs - registered

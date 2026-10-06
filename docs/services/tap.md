@@ -22,7 +22,7 @@ Restrict it to specific tables via the same `extras`-as-CLI-flags mechanism
 itself:
 
 ```
-uqs config set -- tap1 extras "-tables quote wide_book"
+uqs config set -- tap1 extras "-tables quote wide_orderbook"
 uqs restart tap1
 ```
 

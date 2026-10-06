@@ -24,7 +24,7 @@ works). It refuses to start without one rather than failing on its first call.
 **Two halves, and the split is the point.** A Python handler holds the
 subscription and publishes raw MBP-10 onto `databento_mbp10` - forty per-level
 columns, exactly as Databento sends them. `databento1`, an ordinary streaming
-job, subscribes to that and republishes `databento_book`, folding the forty
+job, subscribes to that and republishes `eq_orderbook`, folding the forty
 columns into four level-0-first vectors with **the same `.qetl.transform`
 transform the backfill uses**. The fold exists once, in q, with its own worked
 examples; the Python side decides nothing about what a book is.
@@ -35,8 +35,8 @@ subprocess rather than a `torq.sh` entry. `databento1` *is* a normal row and
 starts with the stack.
 
 ```
-uqs query "select from databento_book" --port 6052   # rdb1
-uqs query "select time, ts_event, sym, price from databento_book" --port 6052
+uqs query "select from eq_orderbook" --port 6052   # rdb1
+uqs query "select time, ts_event, sym, price from eq_orderbook" --port 6052
 ```
 
 Rows carry **both** clocks: `time` is stamped by the tickerplant on receipt,

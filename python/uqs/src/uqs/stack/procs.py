@@ -98,7 +98,7 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
             row["load"] = f"{row['load']} ${{UQF_SCRIPTS}}/{extra}".strip()
     for row in rows:
         # stp1 loads its schema via -schemafile in `extras`; point it at the
-        # generated copy (vendored database.q + uqf's own `quotes` table -
+        # generated copy (vendored database.q + uqf's own `fx_orderbook` table -
         # see _generated_schema_content()) instead of the vendored file
         # itself, same never-edit-the-vendored-tree approach as process.csv.
         if row["procname"] == "stp1":

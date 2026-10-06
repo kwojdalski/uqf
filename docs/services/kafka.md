@@ -61,7 +61,7 @@ uqs query "select from client_flow" --port 6052      # rdb1
 uqs query "select sym, price, partition, offset from client_flow" --port 6052
 ```
 
-Rows carry **both** clocks, for the reason `databento_book` does: `time` is
+Rows carry **both** clocks, for the reason `eq_orderbook` does: `time` is
 stamped by the tickerplant on receipt, `broker_time` is the broker's own, and
 their difference is the consumer's lag.
 

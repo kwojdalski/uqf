@@ -84,17 +84,17 @@ in `UNPROFILED` with a reason. Backfills are exempt --- see
 
 `sym` is grouped (`` `g#`symbol$() ``) without asking. Any other column is
 grouped with `g#` before its type, and `list` is a general column, the
-vector-valued kind `quotes` uses. The types are `timestamp`, `symbol`, `float`,
-`long`, `int`, `short`, `boolean`, `char`, `date`, `time`, `timespan` and
-`list`, and `time` is added first when you leave it out. What each one means,
-its `meta` character and the sample value a fixture gets, is decided in one
-place, `python/uqs/src/uqs/scaffold/columns.py`. A test holds it to the `meta` q
-itself reports.
+vector-valued kind `fx_orderbook` uses. The types are `timestamp`, `symbol`,
+`float`, `long`, `int`, `short`, `boolean`, `char`, `date`, `time`, `timespan`
+and `list`, and `time` is added first when you leave it out. What each one
+means, its `meta` character and the sample value a fixture gets, is decided in
+one place, `python/uqs/src/uqs/scaffold/columns.py`. A test holds it to the
+`meta` q itself reports.
 
 When the new table is shaped like one the plant already has, copy it instead:
 
 ```bash
-uqs job new spread2 --subscribe-to quote --publishes spread2 --columns-from quotes
+uqs job new spread2 --subscribe-to quote --publishes spread2 --columns-from fx_orderbook
 ```
 
 `--columns-from TABLE` takes that table's columns exactly, attributes included,

@@ -54,7 +54,7 @@ typing `meta` at a q prompt:
 
 ```
 uqs schema                  # every table on rdb1, with row and column counts
-uqs schema quotes           # one table's columns, types and attributes
+uqs schema fx_orderbook         # one table's columns, types and attributes
 uqs schema 'crypto*'        # every table matching a pattern, one block each
 uqs schema --proc hdb1      # the history instead of today
 uqs schema --port 6052      # a port directly, skipping --proc resolution
@@ -95,9 +95,9 @@ It reads the live process, not `src/etl/plant_tables.q`'s declarations.
 Two things the output says that `meta` alone does not:
 
 - **Case is the vector/atom distinction.** `f` is a float column; `F` is a float
-  *vector* column, one list per row - the shape `quotes` and `mkt_orderbook` are
-  built around and that every pricing function in `src/` expects. They render as
-  `float` and `float vector`.
+  *vector* column, one list per row - the shape `fx_orderbook` and
+  `mkt_orderbook` are built around and that every pricing function in `src/`
+  expects. They render as `float` and `float vector`.
 - **A column's type can change with its contents.** An empty vector column
   reports as `general`, because q cannot know the element type until a row
   exists. The same table reads `general` before its first publish and
@@ -509,7 +509,7 @@ uqs summary --sort Status --columns status
 ```
 ┃ Process      ┃ Depends on                  ┃ Inputs                ┃ Outputs        ┃
 │ posbook1     │ executions1, marks1         │ executions, marks     │ position       │
-│ databento1   │ (databento_mbp10: external) │ databento_mbp10       │ databento_book │
+│ databento1   │ (databento_mbp10: external) │ databento_mbp10       │ eq_orderbook │
 │ executions1  │ fxtradesfeed1, cryptomock1, │ trades, crypto_trades │ executions     │
 │              │ (crypto_trades: external)   │                       │                │
 │ upstream_    │ (upstream_trades: external) │ upstream_trades       │ imported_trades│
@@ -598,22 +598,22 @@ uqs config set monitor1 startwithall 0
 
 Base `6050`, override with `--port <n>`:
 
-  | Port        | Process       | Role                                                                       |
-  | ---         | ---           | ---                                                                        |
-  | 6050        | stp1          | segmented tickerplant                                                      |
-  | 6051        | discovery1    | service discovery                                                          |
-  | 6052        | rdb1          | real-time DB (today's ticks)                                               |
-  | 6053 / 6054 | hdb1 / hdb2   | historical DB (the vendored sample data)                                   |
-  | 6055        | wdb1          | writedown process (rolls RDB -> HDB)                                       |
-  | 6056        | sort1         | sorts data before writedown                                                |
-  | 6057        | gateway1      | single query entry point across hdb/rdb                                    |
-  | 6061        | housekeeping1 | log/process housekeeping                                                   |
-  | 6064        | feed1         | the vendored dummy feed - simulated equity quotes/trades                   |
-  | 6065        | sctp1         | segmented chained tickerplant                                              |
-  | 6066 / 6067 | sortworker1/2 | sort worker pool                                                           |
-  | 6068        | metrics1      | metrics collector                                                          |
-  | 6069        | fxfeed1       | uqf's own feed - simulated FX quotes (see below)                           |
-  | 6074        | quotesfeed1   | uqf's own feed - simulated depth-aware FX quotes into `quotes` (see below) |
+  | Port        | Process            | Role                                                                             |
+  | ---         | ---                | ---                                                                              |
+  | 6050        | stp1               | segmented tickerplant                                                            |
+  | 6051        | discovery1         | service discovery                                                                |
+  | 6052        | rdb1               | real-time DB (today's ticks)                                                     |
+  | 6053 / 6054 | hdb1 / hdb2        | historical DB (the vendored sample data)                                         |
+  | 6055        | wdb1               | writedown process (rolls RDB -> HDB)                                             |
+  | 6056        | sort1              | sorts data before writedown                                                      |
+  | 6057        | gateway1           | single query entry point across hdb/rdb                                          |
+  | 6061        | housekeeping1      | log/process housekeeping                                                         |
+  | 6064        | feed1              | the vendored dummy feed - simulated equity quotes/trades                         |
+  | 6065        | sctp1              | segmented chained tickerplant                                                    |
+  | 6066 / 6067 | sortworker1/2      | sort worker pool                                                                 |
+  | 6068        | metrics1           | metrics collector                                                                |
+  | 6069        | fxfeed1            | uqf's own feed - simulated FX quotes (see below)                                 |
+  | 6074        | fxorderbookfeed1   | uqf's own feed - simulated depth-aware FX quotes into `fx_orderbook` (see below) |
 
 ## Changing a process's config
 
@@ -647,7 +647,7 @@ them through the CLI's own coloured logger:
 uqs logs                          # last 20 lines per process, all processes
 uqs logs stp1 rdb1 -n 50          # last 50 lines each, merged and time-sorted
 uqs logs -f                       # the last 20 lines, then live, Ctrl-C to stop
-uqs logs quotesfeed1 -f --level WARNING   # live tail, warnings/errors only
+uqs logs fxorderbookfeed1 -f --level WARNING   # live tail, warnings/errors only
 ```
 
 Lines are sorted by the log's own timestamp. `-f` keeps following across

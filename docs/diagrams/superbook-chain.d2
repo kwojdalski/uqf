@@ -54,7 +54,7 @@ classes: {
 }
 
 quote: "quote\ntop of book" { class: table }
-quotes: "quotes\ndepth feed" { class: table }
+fx_orderbook: "fx_orderbook\ndepth feed" { class: table }
 
 marketdata1: "marketdata1\nnormalises both feeds\ninto one book shape" { class: job }
 market_data: "market_data" { class: table }
@@ -69,7 +69,7 @@ crossarb1: "crossarb1\nthe direct market against a\nroute through other pairs" {
 cross_arbitrage: "cross_arbitrage" { class: table }
 
 quote -> marketdata1
-quotes -> marketdata1
+fx_orderbook -> marketdata1
 marketdata1 -> market_data: "publishes"
 market_data -> superbook1: "subscribes"
 superbook1 -> superbook: "publishes"

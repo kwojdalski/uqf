@@ -9,7 +9,7 @@
 // handle reads the fixture. Both workers run to `completed` on it.
 //
 // So the gap was never external. demo_deals_backfill and demo_events_backfill
-// each had a hand-written lifecycle test; databento_book_backfill and
+// each had a hand-written lifecycle test; eq_orderbook_backfill and
 // upstream_trades_backfill had none, and the baseline recorded a reason that
 // was not the real one.
 //

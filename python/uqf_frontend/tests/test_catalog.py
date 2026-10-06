@@ -88,9 +88,9 @@ def test_a_hidden_table_is_simply_absent_from_the_described_answer():
     """`.qcat.surface[]` does the hiding, so the frontend never sees a
     hidden table at all - there is no flag here to get wrong."""
     cat = _catalog(
-        described=[{"table": "databento_book", "description": "folded"}],
+        described=[{"table": "eq_orderbook", "description": "folded"}],
         schema=[
-            {"table": "databento_book", "column": "sym", "kind": "s"},
+            {"table": "eq_orderbook", "column": "sym", "kind": "s"},
             {"table": "databento_mbp10", "column": "sym", "kind": "s"},
         ],
     )
@@ -120,37 +120,37 @@ def test_a_blank_meta_type_is_a_vector_column_and_is_not_filterable():
     """q reports an untyped column - a list per row - with a blank type
     character. It has no scalar comparison, so it must not be filterable."""
     cat = _catalog(
-        described=[{"table": "quotes", "description": "depth"}],
+        described=[{"table": "fx_orderbook", "description": "depth"}],
         schema=[
-            {"table": "quotes", "column": "sym", "kind": "s"},
-            {"table": "quotes", "column": "bid_prices", "kind": " "},
+            {"table": "fx_orderbook", "column": "sym", "kind": "s"},
+            {"table": "fx_orderbook", "column": "bid_prices", "kind": " "},
         ],
     )
-    tbl = cat.table("quotes")
+    tbl = cat.table("fx_orderbook")
     assert tbl.columns["bid_prices"] is QType.LIST
     assert tbl.filterable == frozenset({"sym"})
 
 
 def test_a_populated_vector_column_is_a_list_not_an_error():
     """q reports a nested column as UPPERCASE once the table has rows -
-    `quotes.bid_prices` is "F", not a blank. The blank is only what an EMPTY
+    `fx_orderbook.bid_prices` is "F", not a blank. The blank is only what an EMPTY
     table reports.
 
     This is the case that matters, and the one an earlier version of this map
     got wrong: it knew the blank and no uppercase, so it worked against the
-    table declarations and would have raised on the first populated quotes -
+    table declarations and would have raised on the first populated fx_orderbook -
     taking every table down with it, since one unmappable column makes the
     whole catalog unbuildable.
     """
     cat = _catalog(
-        described=[{"table": "quotes", "description": "depth"}],
+        described=[{"table": "fx_orderbook", "description": "depth"}],
         schema=[
-            {"table": "quotes", "column": "sym", "kind": "s"},
-            {"table": "quotes", "column": "bid_prices", "kind": "F"},
-            {"table": "quotes", "column": "notes", "kind": "C"},
+            {"table": "fx_orderbook", "column": "sym", "kind": "s"},
+            {"table": "fx_orderbook", "column": "bid_prices", "kind": "F"},
+            {"table": "fx_orderbook", "column": "notes", "kind": "C"},
         ],
     )
-    tbl = cat.table("quotes")
+    tbl = cat.table("fx_orderbook")
     assert tbl.columns["bid_prices"] is QType.LIST
     assert tbl.columns["notes"] is QType.LIST
     assert tbl.filterable == frozenset({"sym"})
@@ -162,14 +162,14 @@ def test_one_unmappable_column_does_not_take_the_whole_catalog_down_silently():
     cat = _catalog(
         described=[
             {"table": "trades", "description": "Client fills"},
-            {"table": "quotes", "description": "depth"},
+            {"table": "fx_orderbook", "description": "depth"},
         ],
         schema=[
             {"table": "trades", "column": "sym", "kind": "s"},
-            {"table": "quotes", "column": "weird", "kind": "x"},
+            {"table": "fx_orderbook", "column": "weird", "kind": "x"},
         ],
     )
-    with pytest.raises(ValueError, match="quotes.weird"):
+    with pytest.raises(ValueError, match="fx_orderbook.weird"):
         cat.tables()
 
 

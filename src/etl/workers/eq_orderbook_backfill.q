@@ -1,5 +1,5 @@
-/ databento_book_backfill.q - Databento MBP-10 into an order-book table
-/ (.qpipe.job.databento_book_backfill).
+/ eq_orderbook_backfill.q - Databento MBP-10 into an order-book table
+/ (.qpipe.job.eq_orderbook_backfill).
 / .
 / A declaration over the generic shell (#124), over the first ODBC source.
 / Its transform is the first in this tree that changes the shape of what it
@@ -11,7 +11,7 @@
 / under Rosetta; a wider window makes a failed window expensive to redo and
 / holds more of the book in memory at once.
 
-\d .qpipe.job.databento_book_backfill
+\d .qpipe.job.eq_orderbook_backfill
 
 / --- the data-quality gate ------------------------------------------------
 
@@ -35,9 +35,9 @@ quality_check:{[batch]
 
 \d .
 
-.qetl.job.bounded.define[`databento_book_backfill;
+.qetl.job.bounded.define[`eq_orderbook_backfill;
     `source`dataset`width`transform`check`procname`note`target_key`source_version!
-    (`databento_mbp10;`databento_book;0D00:10:00;`databento_book;.qpipe.job.databento_book_backfill.quality_check;
+    (`databento_mbp10;`eq_orderbook;0D00:10:00;`eq_orderbook;.qpipe.job.eq_orderbook_backfill.quality_check;
      `databento_backfill1;
      "bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live";
      / The source's row_key, with symbol and ts_event under the transform's names.

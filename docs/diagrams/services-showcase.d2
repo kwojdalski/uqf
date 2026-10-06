@@ -89,7 +89,7 @@ vendored -> start: "they all run on it" { style.stroke-dash: 4 }
 
 q_source: "Where do its rows\ncome from?" { class: question }
 
-feeds: "FEEDS - invent rows on a timer\n\nfxfeed1 -> quote (TorQ)\nquotesfeed1 -> quotes\nwidefeed1 -> wide_book\nfxtradesfeed1 -> trades\nfxordersfeed1 -> orders\ncryptomock1 -> crypto_book, crypto_trades" { class: group }
+feeds: "FEEDS - invent rows on a timer\n\nfxfeed1 -> quote (TorQ)\nfxorderbookfeed1 -> fx_orderbook\nwidefeed1 -> wide_orderbook\nfxtradesfeed1 -> trades\nfxordersfeed1 -> orders\ncryptomock1 -> crypto_book, crypto_trades" { class: group }
 
 external: "EXTERNAL PUBLISHERS - Python, outside q\n(q cannot hold these subscriptions)\n\ndatabento_feed.py -> databento_mbp10\nkafka_feed.py -> kafka_client_flow" { class: external }
 
@@ -97,17 +97,17 @@ backfills: "BACKFILLS - a past range, then exit\nrun on demand: uqs backfill ...
 
 q_publish: "Does it publish\nanything?" { class: question }
 
-quiet_leaves: "WATCHERS - publish nothing\n\ntap1: Tickerplant inspector,\nlogs every batch it sees\ncross1: keeps cross rates from quotes\nas its own state" { class: quiet }
+quiet_leaves: "WATCHERS - publish nothing\n\ntap1: Tickerplant inspector,\nlogs every batch it sees\ncross1: keeps cross rates from fx_orderbook\nas its own state" { class: quiet }
 
 q_same: "Several tables that mean\nthe same thing, into\none shape?" { class: question }
 
-normalizers: "NORMALIZERS - many sources, one table\n\nexecutions1: trades + crypto_trades -> executions\nmarks1: quote (TorQ) + crypto_book -> marks\nmarketdata1: quote (TorQ) + quotes -> market_data" { class: group }
+normalizers: "NORMALIZERS - many sources, one table\n\nexecutions1: trades + crypto_trades -> executions\nmarks1: quote (TorQ) + crypto_book -> marks\nmarketdata1: quote (TorQ) + fx_orderbook -> market_data" { class: group }
 
 q_join: "Does it combine several\ntables row by row?" { class: question }
 
 joins: "JOINS - more than one input\n\nmarkout1: trades + quote (TorQ) -> execution_quality\nposbook1: executions + marks -> position" { class: group }
 
-single: "ONE INPUT, ONE JOB\n\ndatabento1: databento_mbp10 -> databento_book\nkafka_flow1: kafka_client_flow -> client_flow\nfxpositions1: orders -> fx_position, fx_limit_breach\nvectorize1: wide_book -> mkt_orderbook\nsuperbook1: market_data -> superbook\narbitrage1: superbook -> arbitrage\ncrossarb1: superbook -> cross_arbitrage" { class: group }
+single: "ONE INPUT, ONE JOB\n\ndatabento1: databento_mbp10 -> eq_orderbook\nkafka_flow1: kafka_client_flow -> client_flow\nfxpositions1: orders -> fx_position, fx_limit_breach\nvectorize1: wide_orderbook -> mkt_orderbook\nsuperbook1: market_data -> superbook\narbitrage1: superbook -> arbitrage\ncrossarb1: superbook -> cross_arbitrage" { class: group }
 
 start -> q_source
 q_source -> feeds: "it makes them"

@@ -3,7 +3,7 @@
 Diagrams for the running state of the uqf stack (see
 [docs/guides/uqs.md](../guides/uqs.md) for how to actually start/stop/query it).
 Reflects what `uqs list processes` shows today: the vendored 23-process stack
-plus uqf's own additions (`fxfeed1`, `quotesfeed1`, `widefeed1`, `cross1`,
+plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `markout1`, `databento1`,
 `kafka_flow1`, `cryptomock1`, `executions1`, `marks1`, `fxordersfeed1`,
 `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`), and
@@ -13,7 +13,7 @@ eight bounded backfill processes (`deals_backfill1`, `events_backfill1`,
 `hdb_transfer_backfill1`). Declared is not the same as running here - see [what
 starts with the stack](#what-starts-and-why-not-all-of-it).
 
-Direct FX arbitrage flows through `marketdata1` (`quote` and `quotes` into
+Direct FX arbitrage flows through `marketdata1` (`quote` and `fx_orderbook` into
 `market_data`), `superbook1` (fresh source books merged into `superbook`), and
 `arbitrage1` (gross cross-source price opportunities into `arbitrage`). The
 three are on demand rather than part of `uqs start` - see the connection budget
@@ -30,10 +30,10 @@ guide](../services/cross-arbitrage.md).
 Each backfill process now NAMES the `.qetl.job.bounded` worker it runs. One
 script serves all four and its `-worker` flag picks which at runtime, so until
 that field existed nothing statically joined a process to its worker --- and two
-workers (`databento_book_backfill`, `upstream_trades_backfill`) sat fully
-declared with no process able to start them. `verify_pipeline_edges` now refuses
-a worker with no process, a process with no worker, and a process naming a
-worker that does not exist.
+workers (`eq_orderbook_backfill`, `upstream_trades_backfill`) sat fully declared
+with no process able to start them. `verify_pipeline_edges` now refuses a worker
+with no process, a process with no worker, and a process naming a worker that
+does not exist.
 
 **The backfills are on the topology diagram but have no edge to the tickerplant,
 and that is the point.** They were left off entirely at first, on the reasoning
@@ -78,8 +78,8 @@ job performs either one itself**. A streaming job declares `subscribe_to` and
 are still worth knowing, because they are why some processes need a credential
 and some do not:
 
-- **Publish only** (`fxfeed1`/`quotesfeed1`/`widefeed1`/`fxtradesfeed1`, and the
-  vendored `feed1`) needs no credential: `.qtorq.feed_handle` finds the
+- **Publish only** (`fxfeed1`/`fxorderbookfeed1`/`widefeed1`/`fxtradesfeed1`,
+  and the vendored `feed1`) needs no credential: `.qtorq.feed_handle` finds the
   tickerplant with
   `.servers.gethandlebytype[\`segmentedtickerplant;\`any\]` and that is a self-managed handle, no `.servers.startup\[\]\`.
 - **Subscribing** (`cross1`/`vectorize1`/`posbook1`/`markout1`) needs a real
@@ -96,7 +96,7 @@ near-copies.
 `databento1` is the newest subscriber and the only one whose input comes from
 outside q entirely: an external Python handler (`external/databento_feed.py`)
 holds a live Databento subscription and publishes raw MBP-10 onto
-`databento_mbp10`, and `databento1` folds it into `databento_book` with the same
+`databento_mbp10`, and `databento1` folds it into `eq_orderbook` with the same
 `.qetl.transform` transform the ODBC backfill applies. The handler is not a
 process here, for the reason cryptorust is not: a q process cannot hold that
 subscription, so it is started by `uqs feed start databento` rather than by
@@ -184,16 +184,16 @@ quietly costing someone else their slot.
 Declaring a job and running it are separate decisions. These stay declared, keep
 their schema row and their place in the DAG, and are one command away:
 
-  | process                                   | why it is not in the default start                                                                                                                                                   |
-  | ---                                       | ---                                                                                                                                                                                  |
-  | `cross1`                                  | a leaf: it subscribes to `quotes` and publishes no table, so nothing stalls while it is stopped                                                                                      |
-  | `widefeed1`, `vectorize1`                 | a closed pair - the only producer of `wide_book` and its only consumer - so they start and stop together                                                                             |
-  | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                   |
-  | `kafka_flow1`                             | subscribes to `kafka_client_flow`, which only the external Kafka consumer publishes, so on a default start it consumes nothing                                                       |
-  | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                                |
-  | `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together  |
-  | `crossarb1`                               | the synthetic-versus-direct detector, a second consumer of that chain, so it runs with it                                                                                            |
-  | `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in [`processes.md`](../reference/processes.md)                                                                                       |
+  | process                                   | why it is not in the default start                                                                                                                                                         |
+  | ---                                       | ---                                                                                                                                                                                        |
+  | `cross1`                                  | a leaf: it subscribes to `fx_orderbook` and publishes no table, so nothing stalls while it is stopped                                                                                      |
+  | `widefeed1`, `vectorize1`                 | a closed pair - the only producer of `wide_orderbook` and its only consumer - so they start and stop together                                                                              |
+  | `databento1`                              | subscribes to `databento_mbp10`, which only the external feed handler and `databento_backfill1` publish, so on a default start it consumes nothing                                         |
+  | `kafka_flow1`                             | subscribes to `kafka_client_flow`, which only the external Kafka consumer publishes, so on a default start it consumes nothing                                                             |
+  | `feed1`                                   | the starter pack's random demo feed; `fxfeed1` already publishes `quote` from the FX curve, and running both interleaved two producers into one table                                      |
+  | `marketdata1`, `superbook1`, `arbitrage1` | the direct-arbitrage chain: `market_data` is read only by `superbook1`, `superbook` only by `arbitrage1` and `crossarb1`, and their outputs by nothing, so the chain moves together        |
+  | `crossarb1`                               | the synthetic-versus-direct detector, a second consumer of that chain, so it runs with it                                                                                                  |
+  | `cryptomock1`, `tap1`, the four backfills | on-demand for their own reasons - see the notes in [`processes.md`](../reference/processes.md)                                                                                             |
 
 To run them, start a profile - a named set that pulls in what it reads - rather
 than adding processes to the default start:
@@ -216,10 +216,10 @@ table), the other keeps it private to the process.
 actual eFX business logic (position/PnL and execution quality, not just
 market-data reshaping) against live data. `posbook1`'s `.qpipe.job.posbook.book`
 (a private, in-process `.qpos`-shaped keyed table, same "wrap a pure function
-with local mutable state" pattern `cross1`'s `.qpipe.job.cross.quotes` mirror
-uses) accumulates fills via `.qpos.apply_fill`, marked to a live mid tracked off
-its own `quote` subscription; `position` is a snapshot republished per fill.
-`markout1` can't score a fill the instant it arrives -
+with local mutable state" pattern `cross1`'s `.qpipe.job.cross.fx_orderbook`
+mirror uses) accumulates fills via `.qpos.apply_fill`, marked to a live mid
+tracked off its own `quote` subscription; `position` is a snapshot republished
+per fill. `markout1` can't score a fill the instant it arrives -
 `.qexec.markout_at_horizons` needs a reference quote at trade_time+horizon,
 which by definition hasn't happened yet - so it buffers trades/quotes in
 `.qpipe.job.markout.pending`/`.qpipe.job.markout.quote_hist` and scores+drains
@@ -246,9 +246,9 @@ its fixture. Both paths, and how they meet in one table, are drawn in
 it's `.qpipe.job.cross.crosses`, a plain in-memory table inside `cross1`'s own
 process, queryable only by connecting to `cross1` directly
 (`uqs query "select from cross_quotes" --port 6075`). `mkt_orderbook` is a full
-round trip instead: `vectorize1` folds `wide_book` and republishes onto `stp1`,
-so it flows through `rdb1`/`wdb1`/`hdb` exactly like any vendored table and
-survives past `vectorize1` restarting.
+round trip instead: `vectorize1` folds `wide_orderbook` and republishes onto
+`stp1`, so it flows through `rdb1`/`wdb1`/`hdb` exactly like any vendored table
+and survives past `vectorize1` restarting.
 
 ### A published table is a defined table
 

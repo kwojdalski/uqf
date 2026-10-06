@@ -32,8 +32,8 @@ uqs feed stop crypto
 
 Rows land in `crypto_book` (`time`/`venue`/`sym`/`bid_prices`/`bid_sizes`/
 `ask_prices`/`ask_sizes` - see its definition in `src/etl/plant_tables.q`),
-flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`quotes`/
-`wide_book`:
+flowing through `rdb1`/`wdb1`/`hdb` exactly like `quote`/`trade`/`fx_orderbook`/
+`wide_orderbook`:
 
 ```
 uqs query "select from crypto_book" --port <rdb1's port>

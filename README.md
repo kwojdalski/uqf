@@ -155,7 +155,7 @@ and the ETL processes - with generated configuration:
 uv sync
 uv run uqs start all
 uv run uqs summary            # up/down, pid, port and heartbeat per process
-uv run uqs query "count quotes" --port 6052   # 6052 = base port + 2 = rdb1
+uv run uqs query "count fx_orderbook" --port 6052   # 6052 = base port + 2 = rdb1
 ```
 
 **Run a backfill.** A bounded worker runs over a range and exits once the window

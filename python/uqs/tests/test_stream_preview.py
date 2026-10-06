@@ -28,8 +28,8 @@ PAGE = {
     "fetched": 3,
     "next_cursor": "2026-09-14T00:00:00.000000000",
     "advances": True,
-    "rows": {"wide_book": 3},
-    "sample": {"wide_book": [{"sym": "EURUSD", "mid": 1.08}]},
+    "rows": {"wide_orderbook": 3},
+    "sample": {"wide_orderbook": [{"sym": "EURUSD", "mid": 1.08}]},
     "failures": [],
 }
 
@@ -94,7 +94,7 @@ def invoke(monkeypatch, answer: dict):
 def test_the_command_prints_the_page(monkeypatch):
     result = invoke(monkeypatch, PAGE)
     assert result.exit_code == 0, result.output
-    for said in ("nothing published", "fixture", "advances", "wide_book: 3 row(s)", "EURUSD"):
+    for said in ("nothing published", "fixture", "advances", "wide_orderbook: 3 row(s)", "EURUSD"):
         assert said in result.output
 
 
@@ -105,10 +105,10 @@ def test_an_idle_feed_says_so_and_succeeds(monkeypatch):
 
 
 def test_invalid_output_fails_the_command_and_says_why(monkeypatch):
-    bad = {**PAGE, "state": "invalid", "failures": ['wide_book has columns sym typed "s"']}
+    bad = {**PAGE, "state": "invalid", "failures": ['wide_orderbook has columns sym typed "s"']}
     result = invoke(monkeypatch, bad)
     assert result.exit_code == 1
-    assert "wide_book has columns sym" in result.output
+    assert "wide_orderbook has columns sym" in result.output
 
 
 def test_a_compound_cursor_prints_as_its_fields(monkeypatch):
