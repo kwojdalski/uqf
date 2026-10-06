@@ -35,15 +35,15 @@
 /   -from     inclusive lower bound, a q timestamp
 /   -to       exclusive upper bound
 / .
-/   -verbose  optional: switch the DBG level on for this process - the parsed
+/   -verbose  optional: switch the DEBUG level on for this process - the parsed
 /             flags, the worker's declaration, the windows it will cut, every
 /             window as it starts and publishes, and each stage's timing.
 /             `uqs backfill --debug` passes it. Not TorQ's own -debug, which
 /             also stops the log going to its file.
-/   -trace    optional: switch the TRC level on - every query the source is
+/   -trace    optional: switch the TRACE level on - every query the source is
 /             sent, the SQL statement or the q lambda and its bounds, before
 /             it goes and again with the rows and milliseconds it took - and
-/             DBG with it, as -verbose does: a query is read beside the window
+/             DEBUG with it, as -verbose does: a query is read beside the window
 /             it was sent for. `uqs backfill --trace` passes it.
 /   -on_conflict  optional: upsert, replace, ignore, append or fail - what a
 /             write does with a row whose row_key is already there, for this
@@ -121,12 +121,12 @@ version_from_flags:{[opts;worker]
 / @return elapsed milliseconds as a long
 elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 
-/ Whether this process was asked for DBG output.
+/ Whether this process was asked for DEBUG output.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -verbose was given
 verbose:{[opts] `verbose in key opts}
 
-/ Whether this process was asked for TRC output.
+/ Whether this process was asked for TRACE output.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -trace was given
 trace:{[opts] `trace in key opts}
@@ -302,11 +302,11 @@ run:{[]
   -1 string[.z.p]," | torq_backfill: uqf tree loaded in ",string[`long$(.z.p-t0)%1000000],"ms";
  }[getenv[`UQF_ROOT]];
 
-/ DBG before anything else logs, so -verbose covers discovery too. .qetl.log is
+/ DEBUG before anything else logs, so -verbose covers discovery too. .qetl.log is
 / only defined once the tree above has loaded.
 if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
-/ -trace is the most detail there is, so it includes DBG: a traced query is
-/ read beside the window it was sent for, which only DBG logs. The two stay
+/ -trace is the most detail there is, so it includes DEBUG: a traced query is
+/ read beside the window it was sent for, which only DEBUG logs. The two stay
 / separate switches in .qetl.log - only this flag ties them.
 if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
 .qetl.log.dbg[`backfill;"debug logging on";
@@ -355,7 +355,7 @@ result:.Q.trp[{.qproc.backfill.run[]};::;{[e;bt]
     .qetl.log.err[`backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
     `state`error!(`failed;e)}];
 code:.qetl.job.bounded.exit_code result`state;
-/ A non-zero exit is a run that did not do its job, so it is an ERR line - at
-/ INF, `state=failed` read as routine in a log filtered for problems.
+/ A non-zero exit is a run that did not do its job, so it is an ERROR line - at
+/ INFO, `state=failed` read as routine in a log filtered for problems.
 $[0=code; .qetl.log.info; .qetl.log.err][`backfill;"exiting";`state`code!(result`state;code)];
 exit code;

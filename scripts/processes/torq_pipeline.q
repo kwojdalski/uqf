@@ -140,7 +140,7 @@ load_uqf:{[]
 / @return elapsed milliseconds as a long
 elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 
-/ Switch DBG logging on when this process was started with -verbose, and
+/ Switch DEBUG logging on when this process was started with -verbose, and
 / say who this process is. Every uqf process script takes the same flag, so
 / `-extras -verbose` on a start line, or `uqs backfill --debug`, is one
 / spelling for all of them. A process already running can be switched too,
@@ -169,14 +169,14 @@ wait_for_tickerplant:{[nm]
     ms}
 
 / Rows published so far, per table, and batches received, per table - so
-/ the FIRST of each is logged at INF and every one at DBG. A job whose output
+/ the FIRST of each is logged at INFO and every one at DEBUG. A job whose output
 / stays empty is then either missing its "first batch received" line (no
 / input arrives) or its "first rows published" one (input arrives and the
 / job publishes nothing), which are different problems.
 published:(`symbol$())!`long$()
 received:(`symbol$())!`long$()
 
-/ Record one publish, logging the first per table at INF and every one at DBG.
+/ Record one publish, logging the first per table at INFO and every one at DEBUG.
 / @param table_name the table published onto
 / @param n rows published
 / @return n
@@ -453,7 +453,7 @@ reload_hdb:{[]
 
 / Ask each handle to reload, and report how many were registered, opened
 / and reloaded - so "none running", "running but refused us" and "reloaded"
-/ read differently. A shortfall is an ERR naming the likely cause: TorQ
+/ read differently. A shortfall is an ERROR naming the likely cause: TorQ
 / logs the refusal itself as `connection to ... failed: access`, and the
 / cause is nearly always this process's outbound credential. Never fails
 / the caller: the rows are on disk and the coverage recorded whatever the

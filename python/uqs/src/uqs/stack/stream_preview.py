@@ -34,7 +34,7 @@ _DURATION = re.compile(r"([0-9]+)(ms|s|m|h|d)")
 _UNIT_NS = {"ms": 10**6, "s": 10**9, "m": 60 * 10**9, "h": 3600 * 10**9, "d": 86400 * 10**9}
 
 #: A line .qetl.log writes outside TorQ: time|level|id|message (log.q's emit).
-_LOG_LINE = re.compile(r"^[^|]+\|(TRC|DBG|INF|WARN|ERR)\|([^|]*)\|(.*)$")
+_LOG_LINE = re.compile(r"^[^|]+\|(TRACE|DEBUG|INFO|WARNING|ERROR)\|([^|]*)\|(.*)$")
 
 
 def _call(job: str, sample: int, last_ns: int | None) -> str:
@@ -88,7 +88,7 @@ def preview(
 ) -> dict:
     """What `job`'s next page would publish: `.qetl.job.stream.preview`'s result.
 
-    With `trace`, the child runs with TRC and DBG on - every query a fetch
+    With `trace`, the child runs with TRACE and DEBUG on - every query a fetch
     sends through .qetl.source.ipc_call/ipc/local or .qetl.io.odbc.run_sql,
     before it goes and again when it returns or fails - and the result's
     `trace` holds those lines as (level, id, message). A preview that fails

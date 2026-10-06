@@ -164,11 +164,11 @@ tree_namespaces:{[]
 
 
 / Every log line `f` writes, as (level;id;text;fields) with the scoped context
-/ merged in as the real .qetl.log.line merges it - with TRC switched on for
+/ merged in as the real .qetl.log.line merges it - with TRACE switched on for
 / the call when `trace` is 1b. The real line function and the trace switch
 / are put back however `f` ends, thrown or not: a recorder left installed
 / swallows every log line of every suite after it.
-/ @param trace 1b to switch TRC on for the call
+/ @param trace 1b to switch TRACE on for the call
 / @param f a niladic function
 / @return the lines, in order
 captured_log:{[trace;f]

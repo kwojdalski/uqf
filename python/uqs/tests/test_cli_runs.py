@@ -115,7 +115,7 @@ def test_show_prints_the_logs_and_the_command_that_resumes(monkeypatch):
     monkeypatch.setattr(stack_runs, "show", lambda paths, run_id: ([_FAILED_RUN], []))
     result = runner.invoke(cli.app, ["run", "show", _FAILED_RUN["run_id"]], env={"COLUMNS": "400"})
     assert result.exit_code == 0, result.output
-    assert "uqs logs deals_backfill1 --level ERR" in result.output
+    assert "uqs logs deals_backfill1 --level ERROR" in result.output
     assert "err_deals_backfill1.log" in result.output
     assert "uqs backfill demo_deals_backfill --from 2026-09-13T00:00:00" in result.output
     assert "resumes rather than repeats" in result.output

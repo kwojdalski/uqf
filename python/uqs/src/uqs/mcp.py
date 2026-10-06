@@ -185,7 +185,7 @@ def uqs_logs(
 ) -> list[dict[str, str]]:
     """The last *lines* lines of each matching process's out_/err_ log,
     merged and sorted by timestamp, each as a field dict (time, procname,
-    proctype, loglevel, message, ...). Pass min_level (e.g. "WARN") to
+    proctype, loglevel, message, ...). Pass min_level (e.g. "WARNING") to
     only see that level and above. This is a snapshot, not a live stream -
     call again for newer lines.
     """

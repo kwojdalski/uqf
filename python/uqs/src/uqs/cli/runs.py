@@ -137,7 +137,7 @@ def _print_next_steps(run: dict) -> None:
     paths = _paths()
     logs = stack_runs.log_files(paths, run)
     if logs:
-        console.print(f"\n[bold]logs[/]   uqs logs {run['process']} --level ERR")
+        console.print(f"\n[bold]logs[/]   uqs logs {run['process']} --level ERROR")
         for path in logs:
             note = "" if path.is_file() else "  [dim](not found)[/]"
             console.print(f"         {path}{note}", soft_wrap=True)

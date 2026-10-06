@@ -384,7 +384,7 @@ def test_list_overrides_empty_then_populated(fake_paths: UqsPaths):
 def test_parse_log_line_splits_seven_fields():
     line = (
         "2026.08.22D14:21:10.644413000|mac.lan|segmentedtickerplant|stp1|"
-        "INF|fileload|loading /some/path with | a pipe in it"
+        "INFO|fileload|loading /some/path with | a pipe in it"
     )
     rec = stack_logs.parse_log_line(line)
     assert rec == {
@@ -392,7 +392,7 @@ def test_parse_log_line_splits_seven_fields():
         "host": "mac.lan",
         "proctype": "segmentedtickerplant",
         "procname": "stp1",
-        "loglevel": "INF",
+        "loglevel": "INFO",
         "id": "fileload",
         "message": "loading /some/path with | a pipe in it",
     }
@@ -681,8 +681,8 @@ def test_print_recent_logs_emits_sorted_by_time(fake_paths: UqsPaths, capsys):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
-        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|INF|x|second\n"
-        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INF|x|first\n"
+        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|INFO|x|second\n"
+        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INFO|x|first\n"
     )
 
     stack_logs.print_recent_logs(fake_paths, "discovery1")
@@ -699,8 +699,8 @@ def test_print_recent_logs_filters_by_min_level(fake_paths: UqsPaths, capsys):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
-        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INF|x|quiet info\n"
-        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|ERR|x|loud error\n"
+        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INFO|x|quiet info\n"
+        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|ERROR|x|loud error\n"
     )
 
     stack_logs.print_recent_logs(fake_paths, "discovery1", min_level="ERROR")
@@ -716,8 +716,8 @@ def test_get_recent_logs_returns_sorted_field_dicts(fake_paths: UqsPaths):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
-        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|INF|x|second\n"
-        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INF|x|first\n"
+        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|INFO|x|second\n"
+        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INFO|x|first\n"
     )
 
     records = stack_logs.get_recent_logs(fake_paths, "discovery1")
@@ -729,8 +729,8 @@ def test_get_recent_logs_filters_by_min_level(fake_paths: UqsPaths):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
-        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INF|x|quiet info\n"
-        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|ERR|x|loud error\n"
+        "2026.08.22D14:21:10.000000000|h|discovery|discovery1|INFO|x|quiet info\n"
+        "2026.08.22D14:21:11.000000000|h|discovery|discovery1|ERROR|x|loud error\n"
     )
 
     records = stack_logs.get_recent_logs(fake_paths, "discovery1", min_level="ERROR")
@@ -739,14 +739,15 @@ def test_get_recent_logs_filters_by_min_level(fake_paths: UqsPaths):
 
 
 _ALL_LEVELS = (
-    '2026.08.22D14:21:10.000000000|h|discovery|discovery1|TRC|odbc|sql sent statement="SELECT 1"\n'
-    "2026.08.22D14:21:11.000000000|h|discovery|discovery1|DBG|bf|window start\n"
-    "2026.08.22D14:21:12.000000000|h|discovery|discovery1|INF|bf|run finished\n"
+    "2026.08.22D14:21:10.000000000|h|discovery|discovery1|TRACE|odbc|"
+    'sql sent statement="SELECT 1"\n'
+    "2026.08.22D14:21:11.000000000|h|discovery|discovery1|DEBUG|bf|window start\n"
+    "2026.08.22D14:21:12.000000000|h|discovery|discovery1|INFO|bf|run finished\n"
 )
 
 
 def test_debug_and_trace_lines_are_labelled_as_what_they_are(fake_paths: UqsPaths, capsys):
-    """DBG and TRC are .qetl.log's levels below TorQ's own. They were missing
+    """DEBUG and TRACE are .qetl.log's levels below TorQ's own. They were missing
     from the mapping, so both printed as INFO."""
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
@@ -774,7 +775,7 @@ def test_debug_and_trace_lines_are_labelled_as_what_they_are(fake_paths: UqsPath
     ],
 )
 def test_the_level_filter_ranks_trace_below_debug(fake_paths: UqsPaths, min_level, kept):
-    """`--level INFO` used to keep DBG and TRC lines, since both read as INFO."""
+    """`--level INFO` used to keep DEBUG and TRACE lines, since both read as INFO."""
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(_ALL_LEVELS)
@@ -791,7 +792,7 @@ def test_uqs_logs_shows_the_block_with_its_trace_label(fake_paths: UqsPaths, cap
     log_dir.mkdir(parents=True)
     msg = 'query sent call="{[a;b] select from t where s like \\"x|y\\"}" range_from=1 range_to=2'
     (log_dir / "out_discovery1.log").write_text(
-        f"2026.08.22D14:21:10.000000000|h|discovery|discovery1|TRC|ipc|{msg}\n"
+        f"2026.08.22D14:21:10.000000000|h|discovery|discovery1|TRACE|ipc|{msg}\n"
     )
 
     stack_logs.print_recent_logs(fake_paths, "discovery1")
@@ -805,19 +806,37 @@ def test_uqs_logs_shows_the_block_with_its_trace_label(fake_paths: UqsPaths, cap
 @pytest.mark.parametrize(
     ("given", "means"),
     [
-        ("WARN", "WARNING"),
-        ("err", "ERROR"),
-        ("INF", "INFO"),
-        ("DBG", "DEBUG"),
-        ("trc", "TRACE"),
-        ("warning", "WARNING"),
+        ("WARNING", "WARNING"),
+        ("error", "ERROR"),
+        ("INFO", "INFO"),
+        ("Debug", "DEBUG"),
+        ("trace", "TRACE"),
         (None, None),
     ],
 )
 def test_level_accepts_the_names_the_log_lines_print(given, means):
-    """`--level WARN` is what a reader copies from the log; it used to rank as
-    0 and pass every line."""
+    """The five names a log line carries, in any case."""
     assert stack_logs.min_level_name(given) == means
+
+
+@pytest.mark.parametrize("short", ["WARN", "ERR", "INF", "DBG", "TRC"])
+def test_the_short_names_are_not_levels(short):
+    """One vocabulary: the short names are read from an old file, never chosen."""
+    with pytest.raises(UqsError, match="TRACE, DEBUG, INFO, WARNING, ERROR"):
+        stack_logs.min_level_name(short)
+
+
+def test_a_line_written_with_a_short_name_reads_as_the_full_one():
+    """A log from before the rename still parses, in the one vocabulary."""
+    for short, full in [
+        ("INF", "INFO"),
+        ("WARN", "WARNING"),
+        ("ERR", "ERROR"),
+        ("DBG", "DEBUG"),
+        ("TRC", "TRACE"),
+    ]:
+        rec = stack_logs.parse_log_line(f"2026.08.22D14:21:10.000000000|h|p|p1|{short}|x|m")
+        assert rec is not None and rec["loglevel"] == full
 
 
 def test_an_unknown_level_is_refused_rather_than_showing_everything(fake_paths: UqsPaths):
@@ -832,9 +851,9 @@ def test_warn_filters_out_info(fake_paths: UqsPaths):
     log_dir = fake_paths.torqdata / "logs"
     log_dir.mkdir(parents=True)
     (log_dir / "out_discovery1.log").write_text(
-        _ALL_LEVELS + "2026.08.22D14:21:13.000000000|h|discovery|discovery1|WARN|bf|slow\n"
+        _ALL_LEVELS + "2026.08.22D14:21:13.000000000|h|discovery|discovery1|WARNING|bf|slow\n"
     )
-    records = stack_logs.get_recent_logs(fake_paths, "discovery1", min_level="WARN")
+    records = stack_logs.get_recent_logs(fake_paths, "discovery1", min_level="WARNING")
     assert [r["message"] for r in records] == ["slow"]
 
 
@@ -1736,7 +1755,7 @@ def test_the_load_overlay_touches_no_other_process():
 
 def test_monitor1_starts_without_tracing_every_retry():
     """monitor1 retries each stopped optional process every five minutes, and
-    with TorQ's default `.servers.DEBUG:1b` logs two INF lines per attempt.
+    with TorQ's default `.servers.DEBUG:1b` logs two INFO lines per attempt.
     The override turns those lines off and leaves the retries alone. Read
     against the real vendored csv, as the overlay tests above are."""
     rows = {

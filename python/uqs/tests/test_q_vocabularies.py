@@ -3,7 +3,7 @@
 The copies stay: uqs must work without starting q. What these tests hold is
 that they agree - changing a level or a trace field in q alone fails here,
 naming the Python copy that would now mislabel or drop it. That happened once
-already: `uqs logs` did not know DBG/TRC and showed them as INFO (#598).
+already: `uqs logs` did not know two of q's levels and showed them as INFO (#598).
 """
 
 from __future__ import annotations
@@ -30,6 +30,21 @@ def test_every_level_q_logs_is_one_uqs_logs_maps():
     assert levels, "log.q's `levels:` is no longer spelled the way this test reads it"
     unmapped = [lv for lv in levels if lv not in logs._LOGURU_LEVEL]
     assert not unmapped, f"stack/logs.py _LOGURU_LEVEL has no entry for q's {unmapped}"
+
+
+def test_q_writes_exactly_the_five_names_uqs_accepts():
+    """One vocabulary: what log.q writes is what `--level` takes, in order."""
+    assert q_levels() == list(logs.LEVEL_CHOICES)
+
+
+def test_torqs_renamed_levels_are_among_the_five():
+    """scripts/torqconfig/settings/default.q renames TorQ's INF, WARN and ERR
+    in every TorQ process; each must land on a name `--level` takes."""
+    settings = UQF_ROOT / "scripts" / "torqconfig" / "settings" / "default.q"
+    line = next(ln for ln in settings.read_text().splitlines() if ln.startswith("uqf_names:"))
+    torq, ours = line.split(":", 1)[1].split("!")
+    assert re.findall(r"`(\w+)", torq) == ["INF", "WARN", "ERR"]
+    assert set(re.findall(r"`(\w+)", ours)) <= set(logs.LEVEL_CHOICES)
 
 
 def test_every_mapped_level_has_a_place_in_the_order():

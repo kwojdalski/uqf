@@ -36,6 +36,9 @@ def build_env(paths: UqsPaths, base_port: int = DEFAULT_BASE_PORT) -> dict[str, 
         "KDBCONFIG": str(paths.torqhome / "config"),
         "KDBCODE": str(paths.torqhome / "code"),
         "KDBAPPCONFIG": str(paths.torqapphome / "appconfig"),
+        # One file: settings/default.q, which every TorQ process loads and
+        # which names TorQ's log levels the way .qetl.log does (see it).
+        "KDBSERVCONFIG": str(paths.scripts_dir / "torqconfig"),
         "KDBAPPCODE": str(paths.torqapphome / "code"),
         "KDBLIB": str(paths.torqhome / "lib"),
         "KDBTESTS": str(paths.torqhome / "tests"),

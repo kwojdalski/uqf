@@ -62,7 +62,7 @@ test_field_order_is_preserved:{[t]
 
 test_the_level_is_carried:{[t]
     .qetl.log.warn[`w;"careful";()!()];
-    .qunit.assertEquals[first last .logtest.captured;`WARN;"warn emits at WARN"]};
+    .qunit.assertEquals[first last .logtest.captured;`WARNING;"warn emits at WARNING"]};
 
 test_the_id_is_carried:{[t]
     .qetl.log.info[`demo_deals_backfill;"x";()!()];
@@ -84,7 +84,7 @@ test_err_does_not_throw:{[t]
 
 / --- debug: off by default, on per process ------------------------------
 
-/ The property that matters. A DBG line must NOT appear unless asked for,
+/ The property that matters. A DEBUG line must NOT appear unless asked for,
 / or a million-row backfill floods its log with per-window detail.
 test_debug_is_suppressed_by_default:{[t]
     .qetl.log.dbg[`w;"per-window detail";()!()];
@@ -93,7 +93,7 @@ test_debug_is_suppressed_by_default:{[t]
 test_debug_appears_once_enabled:{[t]
     .qetl.log.debug[1b];
     .qetl.log.dbg[`w;"per-window detail";()!()];
-    .qunit.assertEquals[(count .logtest.captured;first last .logtest.captured);(1;`DBG);"after debug[1b] the same call emits"]};
+    .qunit.assertEquals[(count .logtest.captured;first last .logtest.captured);(1;`DEBUG);"after debug[1b] the same call emits"]};
 
 test_debug_can_be_switched_off_again:{[t]
     .qetl.log.debug[1b];
@@ -101,16 +101,16 @@ test_debug_can_be_switched_off_again:{[t]
     .qetl.log.dbg[`w;"x";()!()];
     .qunit.assertEquals[count .logtest.captured;0;"debug[0b] restores suppression"]};
 
-/ Suppression is DBG-specific: enabling or disabling debug must not affect
+/ Suppression is DEBUG-specific: enabling or disabling debug must not affect
 / the other three levels, or turning debug off would silence errors.
 test_other_levels_are_unaffected_by_debug:{[t]
     .qetl.log.debug[0b];
     .qetl.log.info[`w;"a";()!()]; .qetl.log.warn[`w;"b";()!()]; .qetl.log.err[`w;"c";()!()];
-    .qunit.assertEquals[.logtest.captured[;0];`INF`WARN`ERR;"INF, WARN and ERR emit regardless of the debug switch"]};
+    .qunit.assertEquals[.logtest.captured[;0];`INFO`WARNING`ERROR;"INFO, WARNING and ERROR emit regardless of the debug switch"]};
 
 / --- trace: below debug, with its own switch ----------------------------
 / .
-/ TRC carries every query a source is sent - one long line per window - so
+/ TRACE carries every query a source is sent - one long line per window - so
 / it must stay off unless asked for, and switching debug on to follow a run
 / must not switch it on too.
 
@@ -121,25 +121,25 @@ test_trace_is_suppressed_by_default:{[t]
 test_trace_appears_once_enabled:{[t]
     .qetl.log.trace[1b];
     .qetl.log.trc[`odbc;"sql sent";enlist[`statement]!enlist "SELECT 1"];
-    .qunit.assertEquals[(.logtest.captured[;0];last_msg[]);(enlist `TRC;"sql sent statement=\"SELECT 1\"");
-        "after trace[1b] the statement is emitted, at TRC"]};
+    .qunit.assertEquals[(.logtest.captured[;0];last_msg[]);(enlist `TRACE;"sql sent statement=\"SELECT 1\"");
+        "after trace[1b] the statement is emitted, at TRACE"]};
 
 test_debug_does_not_switch_trace_on:{[t]
     .qetl.log.debug[1b];
     .qetl.log.trc[`odbc;"sql sent";()!()];
     .qetl.log.dbg[`w;"window start";()!()];
-    .qunit.assertEquals[.logtest.captured[;0];enlist `DBG;"debug alone shows DBG, not every query"]};
+    .qunit.assertEquals[.logtest.captured[;0];enlist `DEBUG;"debug alone shows DEBUG, not every query"]};
 
 test_trace_does_not_switch_debug_on:{[t]
     .qetl.log.trace[1b];
     .qetl.log.trc[`odbc;"sql sent";()!()];
     .qetl.log.dbg[`w;"window start";()!()];
-    .qunit.assertEquals[.logtest.captured[;0];enlist `TRC;"trace alone shows queries, not DBG detail"]};
+    .qunit.assertEquals[.logtest.captured[;0];enlist `TRACE;"trace alone shows queries, not DEBUG detail"]};
 
 test_enabled_reports_the_trace_gate:{[t]
-    off:.qetl.log.enabled `TRC;
+    off:.qetl.log.enabled `TRACE;
     .qetl.log.trace[1b];
-    .qunit.assertEquals[(off;.qetl.log.enabled `TRC);01b;"enabled follows the trace switch"]};
+    .qunit.assertEquals[(off;.qetl.log.enabled `TRACE);01b;"enabled follows the trace switch"]};
 
 / --- scoped context ----------------------------------------------------
 / .
@@ -202,7 +202,7 @@ test_rendering_puts_the_console_width_back:{[t]
 
 / --- lazy rendering -----------------------------------------
 
-/ The suppression check must precede rendering, because DBG is off by
+/ The suppression check must precede rendering, because DEBUG is off by
 / default and is the level a worker emits per WINDOW - a million-row
 / backfill with debug off would otherwise render and discard one message
 / per window.
@@ -223,15 +223,15 @@ test_an_emitted_message_is_rendered:{[t]
     .qetl.log.info[`w;"wanted";(enlist `k)!enlist 1];
     r:.logtest.rendered;
     `.qetl.log.render set .logtest.real_render;
-    .qunit.assertEquals[r;1b;"an INF message is rendered, or the gate is refusing everything"]};
+    .qunit.assertEquals[r;1b;"an INFO message is rendered, or the gate is refusing everything"]};
 
 test_enabled_reports_the_gate:{[t]
     .qetl.log.debug[0b];
-    off:.qetl.log.enabled `DBG;
+    off:.qetl.log.enabled `DEBUG;
     .qetl.log.debug[1b];
-    on:.qetl.log.enabled `DBG;
+    on:.qetl.log.enabled `DEBUG;
     .qetl.log.debug[0b];
-    .qunit.assertEquals[(off;on;.qetl.log.enabled `ERR);(0b;1b;1b);"exported so a caller can skip building an expensive field value itself"]};
+    .qunit.assertEquals[(off;on;.qetl.log.enabled `ERROR);(0b;1b;1b);"exported so a caller can skip building an expensive field value itself"]};
 
 / --- transport detection: the bug that made every process use the fallback --
 
@@ -244,8 +244,8 @@ test_enabled_reports_the_gate:{[t]
 / removing it and requiring it not to be.
 test_torq_is_detected_when_its_logging_namespace_exists:{[t]
     `.lg.l set {[a;b;c;d;e;f] `.logtest.torq_got set (a;d;e)};
-    `.lg.outmap set `ERR`INF`WARN!2 1 1;
-    `.lg.pubmap set `ERR`INF`WARN!1 0 1;
+    `.lg.outmap set `ERR`INFO`WARN!2 1 1;
+    `.lg.pubmap set `ERR`INFO`WARN!1 0 1;
     detected:.qetl.log.torq_loaded[];
     ![`.lg;();0b;`l`outmap`pubmap];
     .qunit.assertEquals[detected;1b;"a populated .lg is detected, so TorQ's transport is used rather than the fallback"]};
@@ -259,22 +259,39 @@ test_torq_is_not_detected_when_absent:{[t]
 test_a_message_reaches_torqs_lg_when_present:{[t]
     `.qetl.log.emit set .logtest.real_emit;
     `.lg.l set {[level;proctype;proc;id;message;dict] `.logtest.torq_got set (level;id;message)};
-    `.lg.outmap set `ERR`INF`WARN!2 1 1;
-    `.lg.pubmap set `ERR`INF`WARN!1 0 1;
+    `.lg.outmap set `ERR`INFO`WARN!2 1 1;
+    `.lg.pubmap set `ERR`INFO`WARN!1 0 1;
     `.logtest.torq_got set ();
     .qetl.log.info[`w;"routed";(enlist `k)!enlist 1];
     got:.logtest.torq_got;
     ![`.lg;();0b;`l`outmap`pubmap];
-    .qunit.assertEquals[got;(`INF;`w;"routed k=1");"level, id and rendered message arrive at .lg.l"]};
+    .qunit.assertEquals[got;(`INFO;`w;"routed k=1");"level, id and rendered message arrive at .lg.l"]};
 
-test_register_adds_dbg_to_torqs_routing_tables_when_present:{[t]
+test_register_adds_this_files_levels_to_torqs_routing_tables_when_present:{[t]
     `.lg.l set {[a;b;c;d;e;f] ::};
-    `.lg.outmap set `ERR`INF`WARN!2 1 1;
-    `.lg.pubmap set `ERR`INF`WARN!1 0 1;
+    `.lg.outmap set `ERR`INFO`WARN!2 1 1;
+    `.lg.pubmap set `ERR`INFO`WARN!1 0 1;
     r:.qetl.log.register[];
     outm:.lg.outmap;
+    pubm:.lg.pubmap;
     ![`.lg;();0b;`l`outmap`pubmap];
-    .qunit.assertEquals[(r;outm`DBG`TRC);(1b;0 0);"DBG and TRC are registered, and OFF by default so nothing changes for an existing process"]};
+    .qunit.assertEquals[(r;outm`DEBUG`TRACE);(1b;0 0);"DEBUG and TRACE are registered, and OFF by default so nothing changes for an existing process"];
+    .qunit.assertEquals[(outm`INFO`WARNING`ERROR;pubm`INFO`WARNING`ERROR);(1 1 2;0 1 1);
+        "INFO, WARNING and ERROR route as TorQ routes INF, WARN and ERR - unregistered, INFO would print nothing"]};
+
+/ The bug the registration exists for: TorQ's outmap knows INF, not INFO,
+/ and a level it does not hold is never printed. The first line logged must
+/ register the names, with no init call anyone could forget.
+test_the_first_line_logged_under_torq_is_printed:{[t]
+    `.qetl.log.emit set .logtest.real_emit;
+    `.lg.l set {[level;proctype;proc;id;message;dict] `.logtest.torq_got set (level;id;message)};
+    `.lg.outmap set `ERR`INFO`WARN!2 1 1;
+    `.lg.pubmap set `ERR`INFO`WARN!1 0 1;
+    `.logtest.torq_got set ();
+    .qetl.log.warn[`w;"first";()!()];
+    got:.logtest.torq_got;
+    ![`.lg;();0b;`l`outmap`pubmap];
+    .qunit.assertEquals[got;(`WARNING;`w;"first");"a WARNING reaches TorQ's logger before anything registered it"]};
 
 / --- without TorQ, register is a harmless no-op -------------------------
 
@@ -282,7 +299,7 @@ test_register_without_torq_is_a_no_op:{[t]
     .qunit.assertEquals[.qetl.log.register[];0b;"no .lg to register with, and no error either - the core loads standalone"]};
 
 test_the_level_set_matches_torqs_plus_trace_and_debug:{[t]
-    .qunit.assertEquals[.qetl.log.levels;`TRC`DBG`INF`WARN`ERR;"exactly TorQ's three plus TRC and DBG, so outmap and pubmap apply unchanged"]};
+    .qunit.assertEquals[.qetl.log.levels;`TRACE`DEBUG`INFO`WARNING`ERROR;"the five full names, and nothing else"]};
 
 
 / log.q keeps its own copy of the renderer (processes load it without the

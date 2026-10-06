@@ -150,9 +150,9 @@ def monitor_connection_plan(
 
 #: monitor1 retries every dead connection on `.servers.RETRY` (5 minutes),
 #: and with TorQ's default `.servers.DEBUG:1b` logs "attempting to open handle"
-#: and "connection ... failed: Connection refused" at INF for each attempt.
+#: and "connection ... failed: Connection refused" at INFO for each attempt.
 #: Every optional process left stopped (startwithall=0) is a dead row it
-#: retries for as long as it runs - thousands of INF lines making a job that
+#: retries for as long as it runs - thousands of INFO lines making a job that
 #: was stopped on purpose read as a fault.
 #:
 #: The retries themselves stay: a process started by hand registers with

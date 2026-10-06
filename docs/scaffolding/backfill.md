@@ -151,10 +151,10 @@ for it. `--version` is required too unless the worker declares a
 `source_version` --- see
 [`pipeline-declarations.md`](../reference/pipeline-declarations.md).
 
-Its log (`uqs logs <procname> -f`) says at INF what it is running and how it
+Its log (`uqs logs <procname> -f`) says at INFO what it is running and how it
 ended: the parsed range, the window count at the worker's width, the result with
 its run and total time, the exit code, and on failure the error with its
-backtrace. Add `--debug` for the DBG level too - the raw command line, the
+backtrace. Add `--debug` for the DEBUG level too - the raw command line, the
 worker's declaration, each stage's timing and every window as it starts and
 publishes:
 
