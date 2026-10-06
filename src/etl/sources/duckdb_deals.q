@@ -63,12 +63,6 @@ transport:`odbc
 / or password to supply.
 credential_example:"DRIVER=DuckDB;Database=/path/fx_deals.duckdb;access_mode=READ_ONLY"
 
-/ A timestamp as DuckDB epoch nanoseconds, through .qetl.io.odbc.literal.
-/ @param ts a timestamp
-/ @return SQL text for the same instant, to the nanosecond
-/ @eg .qpipe.source.duckdb_deals.epoch_ns_literal[2026.09.11D09:00:00.000000001]  ->  "make_timestamp_ns(1789117200000000001)"
-epoch_ns_literal:{[ts] "make_timestamp_ns(",.qetl.io.odbc.literal["j"$ts-1970.01.01D00:00],")"}
-
 / The SQL for one window: half-open [range_from;range_to) on deal_time,
 / ordered so a window is the same table on every fetch.
 / @param range_from inclusive lower bound
@@ -78,8 +72,8 @@ epoch_ns_literal:{[ts] "make_timestamp_ns(",.qetl.io.odbc.literal["j"$ts-1970.01
 sql_for:{[range_from;range_to]
     "SELECT epoch_ns(deal_time) AS deal_time, deal_id, sym, side, notional, rate",
     " FROM deals",
-    " WHERE deal_time >= ",epoch_ns_literal[range_from],
-    " AND deal_time < ",epoch_ns_literal[range_to],
+    " WHERE deal_time >= ",.qetl.io.odbc.duckdb_timestamp[range_from],
+    " AND deal_time < ",.qetl.io.odbc.duckdb_timestamp[range_to],
     " ORDER BY deal_time, deal_id"}
 
 / The driver's table in the declared types and column order.

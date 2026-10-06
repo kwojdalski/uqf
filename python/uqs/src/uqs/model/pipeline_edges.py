@@ -18,6 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from uqs.model.declarations import strip_q_comments, symbols
 from uqs.model.pipeline import FROM_DECLARATION, STREAM_RUNNER_SCRIPT, PipelineKind
 
 # `repo_root` is aliased because several functions here take a repo root as
@@ -160,27 +161,6 @@ def resolve_edges(
     return tuple(subscribe_to), tuple(publishes)
 
 
-def _symbol_list(match_text: str) -> tuple[str, ...]:
-    """A q symbol vector, e.g. trades+quote, split into ("trades", "quote")."""
-    return tuple(part for part in match_text.split("`") if part)
-
-
-def _strip_q_comments(source: str) -> str:
-    """Drop q line comments so a `.u.upd` inside prose is not read as code.
-
-    q treats `/` as a comment only at line start or after whitespace, which
-    is exactly the distinction needed here - the publish calls all sit
-    inside expressions where no bare `/` precedes them.
-    """
-    out = []
-    for line in source.splitlines():
-        stripped = line.lstrip()
-        if stripped.startswith("/"):
-            continue
-        out.append(line)
-    return "\n".join(out)
-
-
 def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[str]:
     """Check every pipeline's declared edges against its own q script.
 
@@ -237,14 +217,14 @@ def verify_pipeline_edges(scripts_dir: Path, pipelines: Sequence[Any]) -> list[s
                 )
             continue
 
-        source = _strip_q_comments(script.read_text())
+        source = strip_q_comments(script.read_text())
 
         if not pipeline.subscribes_dynamic:
             found: list[str] = []
             for match in _SUB_DIRECT_RE.finditer(source):
-                found.extend(_symbol_list(match.group(1)))
+                found.extend(symbols(match.group(1)))
             for match in _SUB_QPIPE_RE.finditer(source):
-                found.extend(_symbol_list(match.group(1)))
+                found.extend(symbols(match.group(1)))
             if tuple(found) != tuple(pipeline.subscribe_to):
                 problems.append(
                     f"{pipeline.procname}: declares subscribe_to={pipeline.subscribe_to!r} "

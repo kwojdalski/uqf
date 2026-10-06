@@ -22,7 +22,7 @@ import os
 import re
 import subprocess
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from uqs.interpreter import q_interpreter
@@ -57,9 +57,19 @@ def status_dir(paths: UqsPaths, env: dict[str, str] | None = None) -> Path:
     return Path(given) if given else paths.torqdata / "status"
 
 
-def _q_timestamp(moment: datetime) -> str:
-    """A UTC datetime as a q timestamp literal."""
-    return moment.strftime("%Y.%m.%dD%H:%M:%S.%f")
+def to_q_timestamp(moment: datetime) -> str:
+    """A datetime as the q timestamp literal for the same instant, in UTC:
+    2026.09.13D00:00:00.000000000, not 2026-09-13T00:00:00Z.
+
+    The one formatter: `uqs backfill` writes its -from/-to with it, and the
+    ledger reads here splice their bounds with it. There were two, and this
+    one formatted the wall time it was given - a +02:00 bound reached q two
+    hours off - while backfill.py's converted to UTC first. A naive datetime
+    is taken to be UTC already, everything here being UTC, rather than this
+    machine's local time, which is what `astimezone` would assume.
+    """
+    utc = moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment.astimezone(UTC)
+    return utc.strftime("%Y.%m.%dD%H:%M:%S.%f000")
 
 
 def query(
@@ -195,5 +205,7 @@ def audit(
     cross-run view that says whether two materialisations of it agree."""
     if not _NAME.match(dataset):
         raise UqsError(f"{dataset!r} is not a dataset name")
-    expr = f".qetl.run.facts_about[`{dataset};{_q_timestamp(range_from)};{_q_timestamp(range_to)}]"
+    expr = (
+        f".qetl.run.facts_about[`{dataset};{to_q_timestamp(range_from)};{to_q_timestamp(range_to)}]"
+    )
     return query(paths, expr, **kw)

@@ -126,6 +126,19 @@ literal:{[v]
       '"literal: no SQL rendering for type ",string[t],
        " - refusing rather than guessing, because a wrong rendering is usually still valid SQL"]}
 
+/ A timestamp as DuckDB SQL for the same instant, to the nanosecond:
+/ make_timestamp_ns over epoch nanoseconds, the long going through `literal`.
+/ .
+/ Not `literal` on the timestamp itself: that is SingleStore's DATETIME(6)
+/ form, which drops the sub-second part, and a window bound that loses its
+/ nanoseconds fetches rows either side of the window. Every DuckDB source
+/ cuts its windows with this - databento_mbp10 and duckdb_deals each had
+/ their own copy, byte for byte.
+/ @param ts a timestamp
+/ @return SQL text for the same instant
+/ @eg .qetl.io.odbc.duckdb_timestamp[2026.09.11D09:00:00.000000001]  ->  "make_timestamp_ns(1789117200000000001)"
+duckdb_timestamp:{[ts] "make_timestamp_ns(",literal["j"$ts-1970.01.01D00:00],")"}
+
 / ------------------------------------------------------- CONNECTING
 
 / Build a SingleStore connection string from its parts.

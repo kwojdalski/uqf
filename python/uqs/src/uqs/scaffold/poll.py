@@ -51,7 +51,7 @@ def declaration(name: str, tick: str, fields: list[str]) -> tuple[str, str]:
         values += [
             ".qetl.job.continuous.load_cursor_value",
             ".qetl.job.continuous.save_cursor_value",
-            f".qetl.job.continuous.lexically_after[{_symbols(fields)}]",
+            f".qetl.job.continuous.lexically_after[{symbol_list(fields)}]",
             f"{ns}.start_cursor",
         ]
     keys = "`period`poll"
@@ -71,13 +71,13 @@ def steps(name: str, publishes: str, fields: list[str]) -> str:
         next_cursor = f"""/ [page] -> the cursor that acknowledges the page: the {named} of its
 / last row, in the order the source sorts by. Keep every field: dropping a
 / tie-breaker loses the rows that share the rest.
-next_cursor:{{[page] {_symbols(fields)}#last page}}
+next_cursor:{{[page] {symbol_list(fields)}#last page}}
 
 / [instant] -> the cursor just before `instant`, for `uqs stream preview
 / {name} --last 30s`: fetching after it must return the rows at or after
 / instant. Usually {fields[0]} set to the instant and each tie-breaker to
 / its type's null, which sorts before every value - e.g.
-/ {_symbols(fields)}!(instant;...). Only the running feed's cursor is
+/ {symbol_list(fields)}!(instant;...). Only the running feed's cursor is
 / untouched by it: the preview never saves.
 start_cursor:{{[instant]
     '"{name}.start_cursor: not implemented";
@@ -110,6 +110,7 @@ normalize:{{[page]
 {next_cursor}"""
 
 
-def _symbols(names: list[str]) -> str:
-    """A q symbol list literal: `a`b, or enlist `a for one."""
+def symbol_list(names: list[str]) -> str:
+    """A q symbol-list literal: `a`b, or `enlist` for one, since a bare `` `a ``
+    is an atom. The one writer the scaffolds share - jobs.py had its own."""
     return f"enlist `{names[0]}" if len(names) == 1 else "`" + "`".join(names)

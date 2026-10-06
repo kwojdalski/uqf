@@ -40,7 +40,7 @@ def gaps(
             f"the range is empty: from {range_from.isoformat()} "
             f"is not before {range_to.isoformat()}"
         )
-    bounds = f"{runs._q_timestamp(range_from)};{runs._q_timestamp(range_to)}"
+    bounds = f"{runs.to_q_timestamp(range_from)};{runs.to_q_timestamp(range_to)}"
     attach = ".qetl.uptime.attach[];"
     holes = runs.query(
         paths, f"{{{attach} .qetl.uptime.gaps[`{job};{bounds}]}}[]", attach=False, loads=_TREE
