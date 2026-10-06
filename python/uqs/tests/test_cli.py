@@ -1883,11 +1883,62 @@ def test_an_unknown_profile_starts_nothing(monkeypatch):
     assert not rec.calls
 
 
-def test_a_profile_and_positional_names_together_are_refused(monkeypatch):
+def test_names_given_with_a_profile_are_added_to_it(monkeypatch):
+    """`--profile essential vectorize1`: the profile's members, infrastructure
+    first, then the names - one of which the profile already starts, so it is
+    not started twice."""
+    from uqs.model import profiles
+
     rec = _patch(monkeypatch, runtime, "start", result=Completed())
-    result = runner.invoke(cli.app, ["start", "posbook1", "--profile", "fx"])
+    result = runner.invoke(
+        cli.app, ["start", "--profile", "essential", "vectorize1", "rdb1", "vectorize1"]
+    )
+    assert result.exit_code == 0, result.output
+    passed = rec.args[1].split()
+    assert passed == [*profiles.resolve(["essential"]), "vectorize1"]
+
+
+def test_an_unknown_name_beside_a_profile_starts_nothing(monkeypatch, _known_procs):
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "--profile", "essential", "no_such_proc1"])
     assert result.exit_code != 0
     assert not rec.calls
+
+
+def test_all_beside_a_profile_is_refused(monkeypatch):
+    """`all` is torq.sh's selector for every startwithall=1 row, not a process
+    a profile can be widened by."""
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "--profile", "essential", "all"])
+    assert result.exit_code != 0
+    assert not rec.calls
+
+
+def test_a_profile_that_fits_plus_names_that_do_not_is_refused(monkeypatch):
+    """The budget is the combined set's: fx fits on its own, and the arbitrage
+    chain's subscribers named beside it take it past the cap."""
+    from uqs.model import profiles
+
+    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    assert profiles.over_budget(["fx"]) is None, "the premise: fx alone fits"
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(
+        cli.app, ["start", "--profile", "fx", "superbook1", "arbitrage1", "crossarb1"]
+    )
+    assert result.exit_code != 0
+    assert not rec.calls, "nothing may be started when the combined set cannot run"
+
+
+def test_up_takes_a_profile_and_names_too(monkeypatch):
+    from uqs.model import profiles
+
+    result, start, _, follow = _up(
+        monkeypatch, ["--profile", "essential", "vectorize1"], already=set()
+    )
+    assert result.exit_code == 0, result.output
+    wanted = [*profiles.resolve(["essential"]), "vectorize1"]
+    assert start.args[1].split() == wanted
+    assert follow["procnames"] == wanted, "it follows the names it added as well"
 
 
 def test_a_positional_start_over_the_cap_still_only_warns(monkeypatch):

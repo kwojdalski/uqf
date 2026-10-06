@@ -147,17 +147,18 @@ ProfileOpt = Annotated[
     typer.Option(
         "--profile",
         help=(
-            "Comma-separated named start set(s) instead of process names - "
-            "see `uqs list profiles`. Refused if the total is past the "
-            "licence's connection cap."
+            "Comma-separated named start set(s) - see `uqs list profiles`. "
+            "Process names given as well are added to the set. Refused if the "
+            "total is past the licence's connection cap."
         ),
         autocompletion=completion.profiles,
     ),
 ]
 
 
-def _resolve_profiles(names: str) -> str:
-    """The space-separated process list `names` stands for, or exit.
+def _resolve_profiles(names: str, extra: list[str] | None = None) -> str:
+    """The space-separated process list `names` stands for, plus `extra`
+    process names, or exit.
 
     A REFUSAL where a positional start only warns, and the asymmetry is
     deliberate. A positional start is an operator naming processes they chose;
@@ -166,34 +167,51 @@ def _resolve_profiles(names: str) -> str:
     that cannot run is this tree's mistake to report - not theirs to discover
     when the plant resets a handle and the process wedges while reporting
     `up`.
+
+    `extra` is processes named beside the profile (`--profile essential
+    vectorize1`). They join the set as named - no closure over their inputs,
+    which `_warn_about_unfed_inputs` reports instead - after the profile's own
+    members, without duplicates. The budget is checked on the whole set: a
+    profile that fits plus names that do not is still a start that wedges.
     """
     wanted = [name.strip() for name in names.split(",") if name.strip()]
     if not wanted:
         _die(UqsError("--profile needs at least one name"))
+    added = list(dict.fromkeys(extra or []))
+    if "all" in added:
+        _die(
+            UqsError(
+                "--profile cannot be combined with `all` - `all` is every "
+                "startwithall=1 process already; name the processes to add instead"
+            )
+        )
     try:
+        if added:
+            procs_model.assert_known_procnames(_paths(), " ".join(added))
         resolved = profiles.resolve(wanted)
-        problem = profiles.over_budget(wanted)
+        members = resolved + tuple(name for name in added if name not in resolved)
+        what = f"profile(s) {', '.join(sorted(wanted))}" + (
+            f" with {', '.join(added)}" if added else ""
+        )
+        problem = profiles.over_budget_procs(members, what)
     except UqsError as exc:
         _die(exc)
         raise  # unreachable: _die exits. Keeps the type checker honest.
     if problem:
         _die(UqsError(problem))
     console.print(
-        f"[dim]profile {', '.join(wanted)}: {len(resolved)} process(es), "
-        f"{profiles.plant_slots(resolved)}/{profiles.allowance() or 'no cap'} plant slots[/]"
+        f"[dim]{what}: {len(members)} process(es), "
+        f"{profiles.plant_slots(members)}/{profiles.allowance() or 'no cap'} plant slots[/]"
     )
-    return " ".join(resolved)
+    return " ".join(members)
 
 
 def _names_to_start(procs: list[str] | None, profile: str | None) -> str:
-    """What torq.sh is asked to start: the names given, `all`, or a profile."""
-    names = _procs(procs)
+    """What torq.sh is asked to start: the names given, `all`, a profile, or a
+    profile with names added to it."""
     if profile is not None:
-        if procs:
-            _die(UqsError("--profile and explicit process names are mutually exclusive"))
-            return names
-        names = _resolve_profiles(profile)
-    return names
+        return _resolve_profiles(profile, procs)
+    return _procs(procs)
 
 
 def _reject_unknown(names: str) -> None:
@@ -243,6 +261,7 @@ def start(
 
     `--profile fx` starts a named set instead: its leaves and everything they
     read, resolved from the dependency graph rather than listed by hand.
+    `--profile essential vectorize1` starts the set plus the names given.
     """
     names = _names_to_start(procs, profile)
     if print_only:
@@ -282,7 +301,7 @@ def up(
 ) -> None:
     """Start, and stream every started process's log to this console until
     Ctrl-C - which stops what this started. `up`, `up rdb1 fxpositions1`,
-    `up --profile fx`, `up --level WARNING`.
+    `up --profile fx`, `up --profile essential vectorize1`, `up --level WARNING`.
 
     The foreground form of `start` + `logs -f`, the way `docker compose up`
     is: the console is the run. Processes that were already running when it

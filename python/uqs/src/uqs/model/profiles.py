@@ -355,12 +355,23 @@ def over_budget(names: Iterable[str]) -> str | None:
     handle is reset.
     """
     wanted = sorted(names)
-    held = plant_slots(resolve(wanted))
+    return over_budget_procs(resolve(wanted), f"profile(s) {', '.join(wanted)}")
+
+
+def over_budget_procs(procnames: Iterable[str], what: str) -> str | None:
+    """Why the processes `procnames` cannot be started together, or None.
+
+    over_budget's check on a resolved set, for a start that is not only
+    profiles: `--profile essential vectorize1` is held to the budget of what it
+    actually starts, the profile's members AND the names added to it. `what`
+    is how the refusal names the request, e.g. "profile(s) fx".
+    """
+    held = plant_slots(procnames)
     slots = allowance()
     if slots is None or held <= slots:
         return None
     return (
-        f"profile(s) {', '.join(wanted)} need {held} tickerplant connections, "
+        f"{what} need {held} tickerplant connections, "
         f"and only {slots} are available ({licence_limit()} on this "
         f"licence, {INBOUND_RESERVE} held back for ad-hoc handles). The plant "
         f"resets the extras rather than refusing them, so the processes past the "
