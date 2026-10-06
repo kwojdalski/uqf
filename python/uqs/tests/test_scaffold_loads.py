@@ -73,7 +73,10 @@ day2:2026.01.02D00:00:00.000000000
 implement:{[job]
     d:.qetl.job.stream.def job;
     page:([] ts:2026.01.01D00:00:00.000000000,day2; sym:`a`b; px:1 2f);
-    fetch:{[page;c] select from page where ts>c}[page];
+    / c is (::) on a first run with nothing saved - "from the beginning" -
+    / and, for a compound cursor, a dictionary whose ts is the comparison.
+    after:{[c] $[99h=type c; c`ts; c]};
+    fetch:{[after;page;c] $[(::)~c; page; select from page where ts>after c]}[after;page];
     d[`poll]:d[`poll],`fetch`normalize!(fetch;{[p] select sym, px from p});
     if[not `load in key d`poll;
         d[`poll]:d[`poll],enlist[`next_cursor]!enlist {[p] last p`ts}];
