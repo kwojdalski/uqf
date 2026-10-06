@@ -342,13 +342,12 @@ That is the infrastructure every other profile starts less its second HDB
 (`hdb2`) and second sort worker (`sortworker2`), plus `reporter1` and
 `tpreplay1`, which only `essential` starts. At end of day `wdb1` hands its
 writedown to `sort1`, which sorts it into the HDB with `sortworker1`, so `wdb1`
-stays free. `reporter1` holds no plant slot, but it
-does open handles to `gateway1`, `rdb1` and `hdb1`. `tpreplay1` starts and
-exits: it is the one-shot replay [`data replay`](#replaying-a-tickerplant-log)
-aims with a log, a schema and an HDB, and started without them it exits at
-startup, before it reads or empties anything - so expect it shown down.
-Composing `essential` with a job profile - `--profile essential,fx` - starts
-both sets.
+stays free. `reporter1` holds no plant slot, but it does open handles to
+`gateway1`, `rdb1` and `hdb1`. `tpreplay1` starts and exits: it is the one-shot
+replay [`data replay`](#replaying-a-tickerplant-log) aims with a log, a schema
+and an HDB, and started without them it exits at startup, before it reads or
+empties anything - so expect it shown down. Composing `essential` with a job
+profile - `--profile essential,fx` - starts both sets.
 
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.
