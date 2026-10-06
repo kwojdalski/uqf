@@ -431,13 +431,14 @@ not start `cryptomock1`, which replaces cryptorust's recorder rather than
 joining it.
 
 **`essential` is the TorQ stack with nothing on top**: `discovery1`, `stp1`,
-`rdb1`, `hdb1`, `hdb2`, `wdb1`, `sort1`, `sortworker1`, `sortworker2`,
-`gateway1`, `monitor1`, `housekeeping1`, `sctp1`, `metrics1`, `reporter1` and
-`tpreplay1` - sixteen processes, four plant slots (`rdb1`, `wdb1`, `sctp1` and
-`metrics1` subscribe). That is the full infrastructure every other profile
-starts, plus `reporter1` and `tpreplay1`, which only `essential` starts. At end
-of day `wdb1` hands its writedown to `sort1`, which sorts it into the HDB across
-the two workers, so `wdb1` stays free. `reporter1` holds no plant slot, but it
+`rdb1`, `hdb1`, `wdb1`, `sort1`, `sortworker1`, `gateway1`, `monitor1`,
+`housekeeping1`, `sctp1`, `metrics1`, `reporter1` and `tpreplay1` - fourteen
+processes, four plant slots (`rdb1`, `wdb1`, `sctp1` and `metrics1` subscribe).
+That is the infrastructure every other profile starts less its second HDB
+(`hdb2`) and second sort worker (`sortworker2`), plus `reporter1` and
+`tpreplay1`, which only `essential` starts. At end of day `wdb1` hands its
+writedown to `sort1`, which sorts it into the HDB with `sortworker1`, so `wdb1`
+stays free. `reporter1` holds no plant slot, but it
 does open handles to `gateway1`, `rdb1` and `hdb1`. `tpreplay1` starts and
 exits: it is the one-shot replay [`data replay`](#replaying-a-tickerplant-log)
 aims with a log, a schema and an HDB, and started without them it exits at

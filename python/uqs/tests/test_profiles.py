@@ -123,11 +123,9 @@ def test_essential_is_the_torq_stack_and_nothing_else():
         "stp1",
         "rdb1",
         "hdb1",
-        "hdb2",
         "wdb1",
         "sort1",
         "sortworker1",
-        "sortworker2",
         "gateway1",
         "monitor1",
         "housekeeping1",
@@ -146,8 +144,8 @@ def test_essential_holds_only_the_slots_of_what_it_starts():
 
 
 def test_composing_essential_with_a_job_profile_is_the_union():
-    """`fx` needs CORE_INFRA and essential has all of it, so `essential,fx` is
-    fx's set plus what essential adds beyond the core."""
+    """`fx` needs all of CORE_INFRA, so `essential,fx` is fx's set plus what
+    essential adds beyond the core - hdb2 and sortworker2 come back with fx."""
     combined = profiles.resolve(["essential", "fx"])
     assert set(combined) == set(profiles.resolve(["fx"])) | {"reporter1", "tpreplay1"}
 

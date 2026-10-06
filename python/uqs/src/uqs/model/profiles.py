@@ -101,20 +101,21 @@ CORE_INFRA: tuple[str, ...] = (
     "metrics1",
 )
 
-#: The whole TorQ stack with nothing of uqf's on top: capture (discovery,
-#: the plant and the chained plant), store (rdb, the intraday writedown, the
-#: sort and its workers, the hdbs), query (the gateway), keep an eye on it
-#: (monitor, metrics, housekeeping, reporter) and replay (tpreplay1). Every
-#: process in CORE_INFRA, plus the two below that no other profile starts.
+#: The TorQ stack with nothing of uqf's on top: capture (discovery, the plant
+#: and the chained plant), store (rdb, the intraday writedown, the sort and
+#: one worker, hdb1), query (the gateway), keep an eye on it (monitor,
+#: metrics, housekeeping, reporter) and replay (tpreplay1). CORE_INFRA less
+#: its second hdb and second sort worker - one of each is enough for a stack
+#: nothing of uqf's runs on - plus the two below that no other profile starts.
 #:
 #: THE SORT PROCESSES. At end of day wdb1 hands its intraday writedown to
-#: sort1, which sorts it into the HDB across the workers. With no sort
+#: sort1, which sorts it into the HDB with sortworker1. With no sort
 #: process, TorQ's wdb logs "no sortandreload process detected" as an ERROR
 #: every evening and sorts on wdb1 itself (informsortandreload in
 #: lib/torq/code/processes/wdb.q).
 #:
 #: PLANT SLOTS: four. rdb1, wdb1, sctp1 and metrics1 subscribe. reporter1
-#: holds handles to the gateway, the rdbs and the hdbs (CONNECTIONS in
+#: holds handles to the gateway, the rdb and the hdb (CONNECTIONS in
 #: lib/torq/config/settings/reporter.q), not to the plant - but those count
 #: against each of THEIR licence caps, which is why the starter pack ships it
 #: off on the community licence.
@@ -129,11 +130,9 @@ ESSENTIAL_INFRA: tuple[str, ...] = (
     "stp1",
     "rdb1",
     "hdb1",
-    "hdb2",
     "wdb1",
     "sort1",
     "sortworker1",
-    "sortworker2",
     "gateway1",
     "monitor1",
     "housekeeping1",
