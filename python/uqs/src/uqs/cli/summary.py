@@ -57,6 +57,13 @@ from uqs.stack.listing import (
 #: anyone means by a ten-second timeout.
 SUMMARY_TIMEOUT_SECONDS = 120.0
 
+#: How often `summary -i` re-reads the fleet: often enough that a process
+#: going down shows within a glance, without anyone pressing R. A re-read
+#: that takes longer than this - a wedged process holding a probe up to
+#: --probe-timeout - just skips the ticks it overlaps, so a slow fleet is
+#: read back to back rather than piled up.
+SUMMARY_REFRESH_SECONDS = 2.0
+
 
 def _print_startups(log_dir: Path, procnames: list[str]) -> None:
     """How long each process took to load on its latest start, slowest first.
@@ -155,6 +162,13 @@ def summary(
         bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
     ] = False,
     interactive: InteractiveOpt = False,
+    every: Annotated[
+        float,
+        typer.Option(
+            min=0,
+            help="with -i, re-read the fleet every this many seconds; 0 turns it off",
+        ),
+    ] = SUMMARY_REFRESH_SECONDS,
 ) -> None:
     """Status table for every process in process.csv, with its declared graph.
 
@@ -208,6 +222,7 @@ def summary(
             chosen,
             port,
         ),
+        every=every or None,
     )
     if _debug_requested(ctx, debug):
         _print_startups(Path(paths.torqdata) / "logs", [row["Process"] for row in rows])

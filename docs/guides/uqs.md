@@ -246,8 +246,11 @@ writes every row, not just the ones a filter left.
 
 `uqs summary -i` also acts on the highlighted process: `s` starts it, `x` stops
 it, `r` restarts it, and the table re-reads itself when that finishes; `R`
-re-reads it on demand. There, letters are commands, so `/` opens the filter and
-Enter or Escape goes back to the table.
+re-reads it on demand. It also re-reads the fleet every 2 seconds on its own,
+keeping the filter and the highlighted row; `--every 10` slows that down and
+`--every 0` leaves only `R`. A re-read slower than the interval skips the ticks
+it overlaps rather than piling them up. There, letters are commands, so `/`
+opens the filter and Enter or Escape goes back to the table.
 
 `uqs graph` draws every process and who feeds whom, as trees, with each edge
 labelled by the tables it carries and each process coloured up or down:
