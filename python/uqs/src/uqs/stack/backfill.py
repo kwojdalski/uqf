@@ -333,7 +333,10 @@ def _live_holder(lock: Path) -> str | None:
 
     The same rule as `.qetl.job.bounded.state.lock_is_stale`, and in the same
     direction: anything it cannot prove dead - no owner file yet, an owner
-    with no pid or host, another host's pid - counts as live.
+    with no pid or host, another host's pid - counts as live. Host names are
+    compared without case: q records `.z.h`, which is lower-case where
+    `socket.gethostname()` may not be, and comparing them with case made
+    every local lock look like another host's - live forever.
     """
     if not lock.is_dir():
         return None
@@ -344,7 +347,7 @@ def _live_holder(lock: Path) -> str | None:
     pid, host = owner.get("pid"), owner.get("host")
     if pid is None or host is None:
         return "a holder that recorded no pid or host"
-    if host != socket.gethostname():
+    if str(host).lower() != socket.gethostname().lower():
         return f"pid {pid} on {host}"
     return f"pid {pid}" if _pid_alive(int(pid)) else None
 
