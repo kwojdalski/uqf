@@ -383,8 +383,16 @@ uqs list profiles
 uqs start --profile arbitrage
 uqs start --profile depth,crypto
 uqs start --profile essential      # the TorQ stack alone, no uqf jobs
+uqs start --profile essential vectorize1 cross1   # a profile plus named processes
 UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows it
 ```
+
+Process names given beside `--profile` are added to the set: the profile's
+members, infrastructure first, then the names, each started once. They are not
+widened to what they read - a name whose producer is missing is warned about, as
+on a plain start - and `all` cannot be added. The budget below is checked on the
+whole combined set, so a profile that fits plus names that take it past the cap
+is refused before anything starts. `uqs up` takes the same combination.
 
   | profile     | leaves                                   | slots                           |
   | ---         | ---                                      | ---                             |
