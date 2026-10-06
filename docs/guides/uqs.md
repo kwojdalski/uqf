@@ -389,27 +389,27 @@ UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows 
   | profile     | leaves                                   | slots                           |
   | ---         | ---                                      | ---                             |
   | `default`   | what `start all` runs today              | 13/14                           |
-  | `fx`        | `posbook1`, `markout1`, `fxpositions1`   | 12/14                           |
+  | `fx`        | `posbook1`, `markout1`, `fxpositions1`   | 13/14                           |
   | `arbitrage` | `arbitrage1`, `crossarb1`                | 10/14                           |
   | `depth`     | `vectorize1`, `cross1`                   | 8/14                            |
   | `crypto`    | `cryptomock1`                            | 5/14                            |
-  | `essential` | none - the TorQ stack alone (see below)  | 2/14                            |
-  | `all`       | every profile's leaves except `crypto`'s | 20/14 - refused on this licence |
+  | `essential` | none - the TorQ stack alone (see below)  | 3/14                            |
+  | `all`       | every profile's leaves except `crypto`'s | 19/14 - refused on this licence |
 
 **A profile over the cap is refused**; a positional `start` over it is only
-warned about. `fx` and `arbitrage` each fit and together need seventeen:
+warned about. `fx` and `arbitrage` each fit and together need sixteen:
 
 ```
 $ uqs start --profile fx,arbitrage
-profile(s) arbitrage, fx need 17 tickerplant connections, and only 14 are
+profile(s) arbitrage, fx need 16 tickerplant connections, and only 14 are
 available (16 on this licence, 2 held back for ad-hoc handles). ...
 ```
 
 **`all` needs a larger licence, and says so.** It is every standing set at once -
 the union of the other profiles' leaves, derived so a new leaf joins it
-automatically - and that holds twenty plant connections, more than the community
-licence has. On that licence it is refused like any profile over the cap. On a q
-licence that allows more concurrent connections, say how many with
+automatically - and that holds nineteen plant connections, more than the
+community licence has. On that licence it is refused like any profile over the
+cap. On a q licence that allows more concurrent connections, say how many with
 `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every start
 is held to - `--profile`, `uqs list profiles`' `fits` column and the
 positional-start warning. On PeachQ (`UQF_Q_IMPL=peachq`, see the README's
@@ -423,16 +423,17 @@ not start `cryptomock1`, which replaces cryptorust's recorder rather than
 joining it.
 
 **`essential` is the TorQ stack with nothing on top**: `discovery1`, `stp1`,
-`rdb1`, `hdb1`, `hdb2`, `wdb1`, `gateway1`, `monitor1` and `housekeeping1` -
-nine processes, two plant slots. It is the one profile that starts less than the
-full infrastructure: no chained plant (`sctp1`), no `metrics1`, and no sort
-processes (`sort1`, `sortworker1`, `sortworker2`). The day still rolls over
-without them: at end of day `wdb1` looks for a sort process, logs
-`can't connect to the sortandreload - no sortandreload process detected` as an
-error, and sorts the writedown into the HDB itself - so expect that error line,
-and `wdb1` busy while it sorts. Composing it with a job profile -
+`rdb1`, `hdb1`, `hdb2`, `wdb1`, `sort1`, `sortworker1`, `sortworker2`,
+`gateway1`, `monitor1`, `housekeeping1` and `metrics1` - thirteen processes,
+three plant slots (`rdb1`, `wdb1` and `metrics1` subscribe). It is the one
+profile that starts less than the full infrastructure: only the chained plant
+(`sctp1`) is left out. At end of day `wdb1` hands its writedown to `sort1`,
+which sorts it into the HDB across the two workers, so `wdb1` stays free.
+`tpreplay1` is never in a profile: it is the one-shot replay
+[`data replay`](#replaying-a-tickerplant-log) starts with a log to replay, and
+started without one it exits at once. Composing `essential` with a job profile -
 `--profile essential,fx` - starts the full infrastructure that job profile
-needs, sort processes included.
+needs.
 
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.

@@ -117,16 +117,21 @@ def test_essential_is_the_torq_stack_and_nothing_else():
         "hdb1",
         "hdb2",
         "wdb1",
+        "sort1",
+        "sortworker1",
+        "sortworker2",
         "gateway1",
         "monitor1",
         "housekeeping1",
+        "metrics1",
     }
     assert not set(resolved) & PROCNAMES, "no uqf job"
 
 
 def test_essential_holds_only_the_slots_of_what_it_starts():
-    """rdb1 and wdb1 subscribe; sctp1 and metrics1 are not started by it."""
-    assert profiles.plant_slots(profiles.resolve(["essential"])) == 2
+    """rdb1, wdb1 and metrics1 subscribe; the sort processes do not, and sctp1
+    is not started by it."""
+    assert profiles.plant_slots(profiles.resolve(["essential"])) == 3
 
 
 def test_composing_essential_with_a_job_profile_gets_the_full_core():
