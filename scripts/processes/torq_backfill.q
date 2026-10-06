@@ -116,11 +116,6 @@ version_from_flags:{[opts;worker]
         '"torq_backfill: missing -version - ",string[worker]," declares no default source_version, so a run must say which release of the source it records coverage under"];
     dv}
 
-/ Milliseconds since `t0`, for the timing fields every stage logs.
-/ @param t0 a timestamp, as .z.p returned it
-/ @return elapsed milliseconds as a long
-elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
-
 / Whether this process was asked for DEBUG output.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when -verbose was given
@@ -275,11 +270,11 @@ run:{[]
     if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
     t1:.z.p;
     (` sv ns,`init)[spec];
-    .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist elapsed_ms t1];
+    .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist .qtorq.elapsed_ms t1];
     t2:.z.p;
     r:(` sv ns,`run)[];
     .qetl.log.info[worker;"backfill process finished";
-        r,`run_ms`total_ms!(elapsed_ms t2;elapsed_ms t0)];
+        r,`run_ms`total_ms!(.qtorq.elapsed_ms t2;.qtorq.elapsed_ms t0)];
     / No reload here: the run's finish step called on_hdb_ready with final
     / set, which reloads if anything finished since the last one.
     r}
@@ -340,7 +335,7 @@ if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
 {[t0]
   .servers.startup[];
   .qetl.log.dbg[`backfill;"registered with discovery";
-      `ms`servers!(.qproc.backfill.elapsed_ms t0;count .servers.SERVERS)];
+      `ms`servers!(.qtorq.elapsed_ms t0;count .servers.SERVERS)];
  }[.z.p];
 
 / Run, then leave. Which terminal states count as success is
