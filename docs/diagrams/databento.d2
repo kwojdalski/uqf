@@ -1,0 +1,50 @@
+# databento.d2 - live Databento MBP-10: a Python handler and databento1.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/services/databento.md.
+#
+# WHAT THIS DIAGRAM IS FOR. The split: Python holds the subscription and
+# publishes the vendor's raw rows, deciding nothing; q folds them. And the
+# fold exists once - the live job and the ODBC backfill apply the same
+# .qetl.transform, so a live book and a backfilled one cannot disagree on
+# what a book is.
+
+direction: down
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    pad: 40
+  }
+}
+
+# The service diagrams' palette (fx-positions-service.d2, markouts.d2), so
+# the set reads as one system: light fills with dark text in both themes.
+classes: {
+  ext: {style: {fill: "#f4f1ea"; stroke: "#8a7f6a"; font-color: "#3d3527"; border-radius: 14}}
+  py: {style: {fill: "#f3eefb"; stroke: "#6f4aa5"; font-color: "#3a1e5f"; border-radius: 6}}
+  feed: {style: {fill: "#f6f0e6"; stroke: "#a8762f"; font-color: "#5c3f13"; border-radius: 6}}
+  job: {style: {fill: "#eaf5ef"; stroke: "#3d7a5a"; font-color: "#1d4733"; border-radius: 6}}
+  plant: {style: {fill: "#fbeef0"; stroke: "#a54a5c"; font-color: "#5f1f2c"; border-radius: 6}}
+  table: {style: {fill: "#eef3fb"; stroke: "#4a6fa5"; font-color: "#1e3a5f"; border-radius: 6}}
+  store: {style: {fill: "#eef1f4"; stroke: "#5a6a78"; font-color: "#25323d"; border-radius: 6}}
+  band: {label.near: top-left; style: {fill: "#fbfcfd"; stroke: "#c3c9cf"; font-color: "#25323d"; stroke-width: 2; border-radius: 10; font-size: 18}}
+}
+
+vendor: "Databento\nMBP-10 subscription" { class: ext }
+handler: "databento_feed.py - uqs feed start databento\nholds the subscription, decides nothing" { class: py }
+stp1: "stp1 - tickerplant" { class: plant }
+
+fold: "the fold - written once" {
+  class: band
+  live: "databento1 - eq_orderbook.q\nsubscribes to databento_mbp10" { class: job }
+  transform: ".qetl.transform eq_orderbook\n40 per-level columns ->\n4 level-0-first vectors\napplied by both, unchanged" { class: feed }
+  backfill: "eq_orderbook_backfill\nthe same data, over ODBC" { class: job }
+  live -> transform: { style.stroke: "#3d7a5a" }
+  backfill -> transform: { style.stroke: "#3d7a5a"; style.stroke-dash: 4 }
+}
+
+vendor -> handler: "MBP-10" { style.stroke: "#8a7f6a" }
+handler -> stp1: ".u.upd databento_mbp10\n40 columns, as sent" { style.stroke: "#6f4aa5" }
+stp1 -> fold.live: "subscribe" { style.stroke: "#a54a5c" }
+stp1 <- fold.live: "publish eq_orderbook\ntime (receipt) + ts_event (venue)" { style.stroke: "#3d7a5a" }

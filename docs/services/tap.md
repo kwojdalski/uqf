@@ -4,13 +4,15 @@ A diagnostic subscriber, started on demand, that logs every batch the
 tickerplant publishes. Starting, stopping and inspecting the stack as a whole is
 in [running the uqf stack](../guides/uqs.md).
 
+![tap1 subscribes to stp1 and logs every batch unmodified, publishing nothing; uqs logs reads the log, and uqs config sets which tables it taps, read once at start](../diagrams/tap.svg)
+
 `tap1` (`torq_tap.q`) is a generic debug tap: it subscribes to some (or, by
 default, every) table on the tickerplant and logs each incoming batch unmodified
 through the stack's `logs` command - the table name lands in the log line's `id`
 field, so `uqs logs -f tap1` shows you literally everything being written to
-kdb+, and `uqs logs -f tap1 | grep quotes`-style filtering works even without
-narrowing the subscription itself. `startwithall=0` (debug utility, not part of
-the standing stack):
+kdb+, and `uqs logs -f tap1 | grep fx_orderbook`-style filtering works even
+without narrowing the subscription itself. `startwithall=0` (debug utility, not
+part of the standing stack):
 
 ```
 uqs start tap1
