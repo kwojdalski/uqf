@@ -62,8 +62,11 @@ policylist:{[s] {x where not null x}`$"|"vs s}
 / @eg .checkinputs.readquerypolicy `:scripts/torqconfig/dataaccess/querypolicy.csv
 readquerypolicy:{[path]
     t:("SSN***JJN*";enlist",")0:path;
-    t:update requiredfilters:policylist each requiredfilters,operations:policylist each operations,
-        functions:policylist each functions from t;
+    / Qualified: inside qSQL a bare name resolves at the root, not in this
+    / namespace, so `policylist` alone was 'policylist at load.
+    t:update requiredfilters:.checkinputs.policylist each requiredfilters,
+        operations:.checkinputs.policylist each operations,
+        functions:.checkinputs.policylist each functions from t;
     bad:{[t;c;f] exec tablename from t where not f each t c};
     if[count b:bad[t;`operations;{(count x)&all x in .checkinputs.policyoperations}];
         '"querypolicy: ",(", "sv string b)," - operations must be one or more of ","|"sv string policyoperations];

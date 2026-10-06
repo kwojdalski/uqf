@@ -166,7 +166,11 @@ outside_the_prefix[`.surface]:"the contract-surface exporter, which enumerates t
 
 / Private: every namespace declared by a file under src/ or scripts/.
 declared_namespaces:{[]
-    files:system"find src scripts -name '*.q'";
+    / scripts/torqcode/ and scripts/torqconfig/ are TorQ's OWN code (#711, #712):
+    / they override TorQ's handlers and settings in TorQ's namespaces (.servers,
+    / .lg, .checkinputs ...) where TorQ reads them, so they cannot carry uqf's
+    / prefix and are not this rule's to judge.
+    files:system"find src scripts -name '*.q' -not -path 'scripts/torqcode/*' -not -path 'scripts/torqconfig/*'";
     raze {[f]
         lines:read0 hsym `$f;
         decls:lines where lines like "\\d .*";

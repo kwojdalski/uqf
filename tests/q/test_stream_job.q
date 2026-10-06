@@ -1037,7 +1037,8 @@ fake_transport:{[job;replayed]
 / fill published a position as if it were the first of the day.
 test_a_replaying_job_rebuilds_its_state_without_publishing_it_again:{[t]
     reset[];
-    replayed:((`marks;a_mark[`EURUSD;1.104]);
+    / posbook marks to market_data's level-0 mid since #703 (no marks normalizer)
+    replayed:((`market_data;a_book[`EURUSD;1.104]);
          (`executions;an_execution[d 0;`EURUSD;1;1.1;1e6]);
          (`executions;an_execution[d 1;`EURUSD;1;1.11;1e6]));
     .qetl.job.stream.start[`posbook;fake_transport[`posbook;replayed]];
