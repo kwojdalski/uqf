@@ -432,7 +432,7 @@ logged:{[id;f]
 
 test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
     / Only EURUSD is quoted, so every cross is unpriced. The first reprice
-    / warns; the same set again is DBG - at INF or WARN it repeated on every
+    / warns; the same set again is DEBUG - at INFO or WARNING it repeated on every
     / batch. Quoting USDJPY prices EURJPY, which is logged as priced again,
     / and the smaller unpriced set warns afresh.
     / The mirror is fed directly: on_batch reprices on its own, which would
@@ -443,9 +443,9 @@ test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
     again:logged[`cross;{.qpipe.job.cross.reprice d 1}];
     `.qpipe.job.cross.quotes insert quote_row[d 0;`USDJPY;150f;150.02];
     fixed:logged[`cross;{.qpipe.job.cross.reprice d 1}];
-    .qunit.assertEquals[first_lines[;0];enlist `WARN;"a newly unpriced set warns"];
-    .qunit.assertEquals[again[;0];enlist `DBG;"the same set again is only DBG"];
-    .qunit.assertEquals[fixed[;0 1];((`WARN;"pairs could not be priced");(`INF;"pairs priced again"));
+    .qunit.assertEquals[first_lines[;0];enlist `WARNING;"a newly unpriced set warns"];
+    .qunit.assertEquals[again[;0];enlist `DEBUG;"the same set again is only DEBUG"];
+    .qunit.assertEquals[fixed[;0 1];((`WARNING;"pairs could not be priced");(`INFO;"pairs priced again"));
         "a smaller set warns, and the recovered pair is named"];
     .qunit.assertEquals[(last fixed)[2]`pairs;enlist `EURJPY;"EURJPY is the pair priced again"]};
 

@@ -512,7 +512,7 @@ load_checkpoint:{[worker;spec]
         ("P"$saved`range_to)     ~ spec`range_to);
     / every element must match, not just the version: a narrowed or widened
     / range is a different run, and resuming across one skips data.
-    / Said at INF: a run that silently restarted from the beginning, because
+    / Said at INFO: a run that silently restarted from the beginning, because
     / its range or version changed, looks exactly like one that lost its state.
     if[not matches;
         .[{.qetl.log.info[x;y;z]};(worker;"checkpoint is for another run - starting from the beginning";

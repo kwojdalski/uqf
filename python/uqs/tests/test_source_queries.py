@@ -1,6 +1,6 @@
 """Every source sends its query through a path `--trace` can see.
 
-`uqs backfill --trace` logs each query a source is sent, at TRC, from two
+`uqs backfill --trace` logs each query a source is sent, at TRACE, from two
 places: `.qetl.source.ipc` for a q lambda over IPC, and `.qetl.io.odbc.run_sql`
 for SQL (`window_query` sends through it too). A source whose `query` calls
 the handle itself - `h({...};from;to)` - still works, and its queries are
@@ -21,7 +21,7 @@ from uqs.paths import repo_root
 
 SOURCES = sorted((repo_root() / "src" / "etl" / "sources").glob("*.q"))
 
-#: The calls that log a query at TRC before sending it.
+#: The calls that log a query at TRACE before sending it.
 TRACED = (
     ".qetl.source.ipc[",
     ".qetl.source.local[",

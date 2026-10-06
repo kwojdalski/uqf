@@ -23,7 +23,7 @@
 if[0=count getenv`UQF_ROOT; '"torq_tap: UQF_ROOT is not set"];
 system"l ",getenv[`UQF_ROOT],"/src/etl/core/log.q";
 
-/ -verbose switches DBG on, the same flag every uqf process script takes.
+/ -verbose switches DEBUG on, the same flag every uqf process script takes.
 if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];
 
 \d .qproc.tap
@@ -82,9 +82,9 @@ init:{
 / shape x happens to arrive in (a table, or a list of columns) without
 / needing to know which.
 / .
-/ At INF on purpose, though it is one line per batch: printing the batches is
+/ At INFO on purpose, though it is one line per batch: printing the batches is
 / this process's whole job, it runs only on demand and writes its own log, so
-/ at DBG `uqs logs -f tap1` would show nothing.
+/ at DEBUG `uqs logs -f tap1` would show nothing.
 / .
 / At ROOT, where the tickerplant calls it (scripts/processes/torq_pipeline.q,
 / invariant 5). Everything else this process owns is in .qproc.tap.

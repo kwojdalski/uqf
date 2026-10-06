@@ -340,8 +340,8 @@ def _paths_with_logs(tmp_path: Path, monkeypatch, lines: dict[str, list[str]]):
     return SimpleNamespace(torqdata=tmp_path)
 
 
-LINE_INF = "2026.08.22D14:21:10.644413000|host|rdb|rdb1|INF|init|started"
-LINE_ERR = "2026.08.22D14:21:11.000000000|host|rdb|rdb1|ERR|conn|lost the tickerplant"
+LINE_INF = "2026.08.22D14:21:10.644413000|host|rdb|rdb1|INFO|init|started"
+LINE_ERR = "2026.08.22D14:21:11.000000000|host|rdb|rdb1|ERROR|conn|lost the tickerplant"
 
 
 def test_print_recent_logs_emits_through_the_kdb_format(tmp_path, monkeypatch, capsys):

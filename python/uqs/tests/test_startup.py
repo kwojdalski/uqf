@@ -21,7 +21,7 @@ runner = CliRunner()
 
 
 def _line(clock: str, ident: str, message: str, proc: str = "rdb1") -> str:
-    return f"2026.09.24D{clock}|host|rdb|{proc}|INF|{ident}|{message}"
+    return f"2026.09.24D{clock}|host|rdb|{proc}|INFO|{ident}|{message}"
 
 
 def _banner() -> list[str]:
