@@ -1,0 +1,51 @@
+# synthetic-feeds.d2 - fxfeed1 and fxorderbookfeed1, the two feeds that
+# invent the demo's FX market.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/services/synthetic-feeds.md.
+#
+# WHAT THIS DIAGRAM IS FOR. Two things the page argues: a feed is a
+# DECLARATION run by one generic runner, not a script of its own; and a new
+# table reached the HDB with no change to rdb.q, wdb.q or hdb.q - only a
+# schema line in the generated database.q. Both feeds walk the same .qsynth
+# spot, so the top of book and the depth agree on the mid.
+
+direction: down
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    pad: 40
+  }
+}
+
+# The service diagrams' palette (fx-positions-service.d2, markouts.d2), so
+# the set reads as one system: light fills with dark text in both themes.
+classes: {
+  ext: {style: {fill: "#f4f1ea"; stroke: "#8a7f6a"; font-color: "#3d3527"; border-radius: 14}}
+  py: {style: {fill: "#f3eefb"; stroke: "#6f4aa5"; font-color: "#3a1e5f"; border-radius: 6}}
+  feed: {style: {fill: "#f6f0e6"; stroke: "#a8762f"; font-color: "#5c3f13"; border-radius: 6}}
+  job: {style: {fill: "#eaf5ef"; stroke: "#3d7a5a"; font-color: "#1d4733"; border-radius: 6}}
+  plant: {style: {fill: "#fbeef0"; stroke: "#a54a5c"; font-color: "#5f1f2c"; border-radius: 6}}
+  table: {style: {fill: "#eef3fb"; stroke: "#4a6fa5"; font-color: "#1e3a5f"; border-radius: 6}}
+  store: {style: {fill: "#eef1f4"; stroke: "#5a6a78"; font-color: "#25323d"; border-radius: 6}}
+  band: {label.near: top-left; style: {fill: "#fbfcfd"; stroke: "#c3c9cf"; font-color: "#25323d"; stroke-width: 2; border-radius: 10; font-size: 18}}
+}
+
+decl: "the feeds - a declaration each, run by torq_stream.q" {
+  class: band
+  synth: ".qsynth\none random walk per pair\nEURUSD GBPUSD USDJPY AUDUSD EURJPY" { class: feed }
+  fx: "fxfeed1 - fx_feed.q\ntop of book, 1 pip each side\nevery 0.5s" { class: job }
+  depth: "fxorderbookfeed1 - fx_orderbook_feed.q\n3 levels a side, level 0 first\nevery 0.5s" { class: job }
+  synth -> fx: "spot" { style.stroke: "#a8762f" }
+  synth -> depth: "the same spot" { style.stroke: "#a8762f" }
+}
+
+schema: "bootstrap - database.q (vendored)\n+ fx_orderbook, and every uqf table" { class: store }
+stp1: "stp1 - tickerplant" { class: plant }
+storage: "rdb1 · wdb1 · hdb\nevery table in the schema,\nunchanged vendored code" { class: store }
+
+decl.fx -> stp1: "publish quote (TorQ's table)" { style.stroke: "#3d7a5a" }
+decl.depth -> stp1: "publish fx_orderbook" { style.stroke: "#3d7a5a" }
+schema -> stp1: "-schemafile" { style.stroke: "#5a6a78"; style.stroke-dash: 4 }
+stp1 -> storage: "every table" { style.stroke: "#a54a5c" }

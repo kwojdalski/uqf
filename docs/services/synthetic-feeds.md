@@ -6,14 +6,16 @@ The two feeds that invent market data for the demo, and how to add another.
 Starting, stopping and inspecting the stack as a whole is in [running the uqf
 stack](../guides/uqs.md).
 
+![The two feed declarations, both walking the same .qsynth spot, publish quote and fx_orderbook to stp1; the schema file from bootstrap is what lets the unchanged rdb1, wdb1 and hdb store the new table](../diagrams/synthetic-feeds.svg)
+
 ## fxfeed1
 
 `src/etl/streaming/fx_feed.q` is a second, independent feed process publishing
-synthetic top-of-book quotes for `EURUSD`/`GBPUSD`/`USDJPY`/`AUDUSD` (a small
-random walk around a fixed spot, `+/-` 1 pip wide) into the same `quote` table
-the vendored `feed1` already writes equity quotes into - `sym` is just a symbol
-column, so FX pairs and equity tickers coexist in one table with no schema
-change. It's the concrete worked example for "how do I add a process that
+synthetic top-of-book quotes for `EURUSD`/`GBPUSD`/`USDJPY`/`AUDUSD`/`EURJPY` (a
+small random walk around a fixed spot, `+/-` 1 pip wide) into the same `quote`
+table the vendored `feed1` already writes equity quotes into - `sym` is just a
+symbol column, so FX pairs and equity tickers coexist in one table with no
+schema change. It's the concrete worked example for "how do I add a process that
 publishes rows".
 
 **It is a declaration, not a process script.** Since #204 a feed says what it is
@@ -60,9 +62,9 @@ the RDB has, so a brand new table only needs two things:
 1. **Schema** - `uqs.model.plant_schema._generated_schema_content()` appends the
    `fx_orderbook` table definition to a *copy* of the vendored `database.q`
    (written to `output/uqs/database.q` on every `bootstrap()`, same
-   generate-never-edit approach as `process.csv`), and `_base_process_rows()`
-   repoints `stp1`'s `-schemafile` extras arg at that copy instead of the
-   vendored file.
+   generate-never-edit approach as `process.csv`), and
+   `uqs.stack.procs._composed_rows()` repoints `stp1`'s `-schemafile` extras arg
+   at that copy instead of the vendored file.
 2. **Feed** - the `fx_orderbook_feed` job itself, wired in as a process.csv row
    exactly like `fxfeed1` (port offset `+24`), running under the shared
    `torq_stream.q` runner.

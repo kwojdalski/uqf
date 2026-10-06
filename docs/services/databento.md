@@ -4,6 +4,8 @@ A live market-data feed: an external Python handler publishes raw MBP-10 rows,
 and `databento1` folds them into the book shape. Starting, stopping and
 inspecting the stack as a whole is in [running the uqf stack](../guides/uqs.md).
 
+![The Databento handler publishes raw MBP-10 rows to stp1; databento1 subscribes, folds them with the same .qetl.transform the ODBC backfill applies, and publishes eq_orderbook](../diagrams/databento.svg)
+
 `uqs feed start databento`/`stop`/`status` subscribe to
 [Databento](https://databento.com) and stream MBP-10 into this stack. It is the
 live counterpart to the ODBC backfill in
@@ -31,8 +33,10 @@ examples; the Python side decides nothing about what a book is.
 
 The handler is not a process.csv row, for the same reason cryptorust is not: a q
 process cannot hold a Databento subscription, so it gets a pidfile and a
-subprocess rather than a `torq.sh` entry. `databento1` *is* a normal row and
-starts with the stack.
+subprocess rather than a `torq.sh` entry. `databento1` *is* a normal row, but
+`startwithall=0`: with no handler running nothing publishes the table it
+subscribes to, so it starts with the handler (`uqs start databento1`) or not at
+all.
 
 ```
 uqs query "select from eq_orderbook" --port 6052   # rdb1

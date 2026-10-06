@@ -1,0 +1,57 @@
+# crypto-recorder.d2 - cryptorust's two kdb recorders, and the in-tree mock
+# that stands in for them.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/services/crypto-recorder.md.
+#
+# WHAT THIS DIAGRAM IS FOR. The publishers here are not q and not process.csv
+# rows: two Rust binaries from a sibling checkout, started by `uqs feed`,
+# each calling .u.upd on stp1 over raw IPC. The book recorder talks to the
+# venues; the fills recorder talks to an already-running cryptorust OMS. The
+# mock publishes onto the same two tables, which is why it runs INSTEAD of
+# them, never alongside - drawn dashed for that reason.
+
+direction: down
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    pad: 40
+  }
+}
+
+# The service diagrams' palette (fx-positions-service.d2, markouts.d2), so
+# the set reads as one system: light fills with dark text in both themes.
+classes: {
+  ext: {style: {fill: "#f4f1ea"; stroke: "#8a7f6a"; font-color: "#3d3527"; border-radius: 14}}
+  py: {style: {fill: "#f3eefb"; stroke: "#6f4aa5"; font-color: "#3a1e5f"; border-radius: 6}}
+  feed: {style: {fill: "#f6f0e6"; stroke: "#a8762f"; font-color: "#5c3f13"; border-radius: 6}}
+  job: {style: {fill: "#eaf5ef"; stroke: "#3d7a5a"; font-color: "#1d4733"; border-radius: 6}}
+  plant: {style: {fill: "#fbeef0"; stroke: "#a54a5c"; font-color: "#5f1f2c"; border-radius: 6}}
+  table: {style: {fill: "#eef3fb"; stroke: "#4a6fa5"; font-color: "#1e3a5f"; border-radius: 6}}
+  store: {style: {fill: "#eef1f4"; stroke: "#5a6a78"; font-color: "#25323d"; border-radius: 6}}
+  band: {label.near: top-left; style: {fill: "#fbfcfd"; stroke: "#c3c9cf"; font-color: "#25323d"; stroke-width: 2; border-radius: 10; font-size: 18}}
+}
+
+outside: "outside the repository" {
+  class: band
+  venues: "venues\nBinance · Bybit" { class: ext }
+  oms: "a running cryptorust service\nits OMS on /tmp/beacon.sock" { class: ext }
+}
+
+rust: "cryptorust - sibling checkout, Rust, started by uqs feed" {
+  class: band
+  books: "kdb-market-data-recorder\nuqs feed start crypto\nreconnects on drop" { class: py }
+  fills: "kdb-fills-recorder\nuqs feed start crypto-fills\npolls every tick" { class: py }
+}
+
+mock: "cryptomock1 - crypto_mock.q\ninvented ladders and fills\nINSTEAD of the recorders" { class: job }
+stp1: "stp1 - tickerplant" { class: plant }
+storage: "rdb1 · wdb1 · hdb" { class: store }
+
+outside.venues -> rust.books: "live order books" { style.stroke: "#8a7f6a" }
+outside.oms -> rust.fills: "get_recent_fills ·\nget_recent_real_fills" { style.stroke: "#8a7f6a" }
+rust.books -> stp1: ".u.upd crypto_book" { style.stroke: "#6f4aa5" }
+rust.fills -> stp1: ".u.upd crypto_sim_fills\n· crypto_trades" { style.stroke: "#6f4aa5" }
+mock -> stp1: "crypto_book · crypto_trades" { style.stroke: "#3d7a5a"; style.stroke-dash: 4 }
+stp1 -> storage: "every table" { style.stroke: "#a54a5c" }

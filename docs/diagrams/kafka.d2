@@ -1,0 +1,47 @@
+# kafka.d2 - client flow off a Kafka topic: a Python consumer and kafka_flow1.
+#
+# Rendered by scripts/generate/render_diagrams.py, which CI runs with
+# --check. Embedded from docs/services/kafka.md.
+#
+# WHAT THIS DIAGRAM IS FOR. The ORDER of two steps, and why neither half is
+# correct alone: the consumer publishes and only then commits the offset, so a
+# crash in between redelivers rather than loses; kafka_flow1 then drops what
+# was redelivered by comparing (partition;offset) with a per-partition
+# high-water mark. The numbered labels carry the ordering. The mark is the
+# job's own process state, which is why a restart forgets it - drawn as its
+# own box so that limit is visible.
+
+direction: down
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    pad: 40
+  }
+}
+
+# The service diagrams' palette (fx-positions-service.d2, markouts.d2), so
+# the set reads as one system: light fills with dark text in both themes.
+classes: {
+  ext: {style: {fill: "#f4f1ea"; stroke: "#8a7f6a"; font-color: "#3d3527"; border-radius: 14}}
+  py: {style: {fill: "#f3eefb"; stroke: "#6f4aa5"; font-color: "#3a1e5f"; border-radius: 6}}
+  feed: {style: {fill: "#f6f0e6"; stroke: "#a8762f"; font-color: "#5c3f13"; border-radius: 6}}
+  job: {style: {fill: "#eaf5ef"; stroke: "#3d7a5a"; font-color: "#1d4733"; border-radius: 6}}
+  plant: {style: {fill: "#fbeef0"; stroke: "#a54a5c"; font-color: "#5f1f2c"; border-radius: 6}}
+  table: {style: {fill: "#eef3fb"; stroke: "#4a6fa5"; font-color: "#1e3a5f"; border-radius: 6}}
+  store: {style: {fill: "#eef1f4"; stroke: "#5a6a78"; font-color: "#25323d"; border-radius: 6}}
+  band: {label.near: top-left; style: {fill: "#fbfcfd"; stroke: "#c3c9cf"; font-color: "#25323d"; stroke-width: 2; border-radius: 10; font-size: 18}}
+}
+
+broker: "Kafka topic\nuqf.client.flow" { class: ext }
+consumer: "kafka_feed.py - uqs feed start kafka\nauto-commit off" { class: py }
+stp1: "stp1 - tickerplant" { class: plant }
+flow: "kafka_flow1 - kafka_flow.q\nkeeps rows above the mark" { class: job }
+mark: "high-water mark per partition\nprocess state - empty after a restart" { class: table }
+
+broker -> consumer: "poll" { style.stroke: "#8a7f6a" }
+consumer -> stp1: "1. .u.upd kafka_client_flow\n(partition and offset as columns)" { style.stroke: "#6f4aa5" }
+broker <- consumer: "2. commit the offset,\nonly after the publish returned" { style.stroke: "#6f4aa5"; style.stroke-dash: 4 }
+stp1 -> flow: "subscribe" { style.stroke: "#a54a5c" }
+flow -> mark: "compare, then advance" { style.stroke: "#3d7a5a" }
+stp1 <- flow: "publish client_flow\nnew records only" { style.stroke: "#3d7a5a" }
