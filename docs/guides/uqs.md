@@ -401,7 +401,7 @@ is refused before anything starts. `uqs up` takes the same combination.
   | `arbitrage` | `arbitrage1`, `crossarb1`                | 10/14                           |
   | `depth`     | `vectorize1`, `cross1`                   | 8/14                            |
   | `crypto`    | `cryptomock1`                            | 5/14                            |
-  | `essential` | none - the TorQ stack alone (see below)  | 3/14                            |
+  | `essential` | none - the TorQ stack alone (see below)  | 4/14                            |
   | `all`       | every profile's leaves except `crypto`'s | 19/14 - refused on this licence |
 
 **A profile over the cap is refused**; a positional `start` over it is only
@@ -432,16 +432,18 @@ joining it.
 
 **`essential` is the TorQ stack with nothing on top**: `discovery1`, `stp1`,
 `rdb1`, `hdb1`, `hdb2`, `wdb1`, `sort1`, `sortworker1`, `sortworker2`,
-`gateway1`, `monitor1`, `housekeeping1` and `metrics1` - thirteen processes,
-three plant slots (`rdb1`, `wdb1` and `metrics1` subscribe). It is the one
-profile that starts less than the full infrastructure: only the chained plant
-(`sctp1`) is left out. At end of day `wdb1` hands its writedown to `sort1`,
-which sorts it into the HDB across the two workers, so `wdb1` stays free.
-`tpreplay1` is never in a profile: it is the one-shot replay
-[`data replay`](#replaying-a-tickerplant-log) starts with a log to replay, and
-started without one it exits at once. Composing `essential` with a job profile -
-`--profile essential,fx` - starts the full infrastructure that job profile
-needs.
+`gateway1`, `monitor1`, `housekeeping1`, `sctp1`, `metrics1`, `reporter1` and
+`tpreplay1` - sixteen processes, four plant slots (`rdb1`, `wdb1`, `sctp1` and
+`metrics1` subscribe). That is the full infrastructure every other profile
+starts, plus `reporter1` and `tpreplay1`, which only `essential` starts. At end
+of day `wdb1` hands its writedown to `sort1`, which sorts it into the HDB across
+the two workers, so `wdb1` stays free. `reporter1` holds no plant slot, but it
+does open handles to `gateway1`, `rdb1` and `hdb1`. `tpreplay1` starts and
+exits: it is the one-shot replay [`data replay`](#replaying-a-tickerplant-log)
+aims with a log, a schema and an HDB, and started without them it exits at
+startup, before it reads or empties anything - so expect it shown down.
+Composing `essential` with a job profile - `--profile essential,fx` - starts
+both sets.
 
 Profiles are declared in `python/uqs/src/uqs/model/profiles.py`, by their
 leaves.

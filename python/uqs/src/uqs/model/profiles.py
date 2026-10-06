@@ -101,23 +101,29 @@ CORE_INFRA: tuple[str, ...] = (
     "metrics1",
 )
 
-#: The TorQ stack with nothing on top: capture (discovery, the plant), store
-#: (rdb, the intraday writedown, the sort and its workers, the hdbs), query
-#: (the gateway) and keep an eye on it (monitor, metrics, housekeeping). No
-#: uqf job, and of the rest of CORE_INFRA only the chained plant is left out.
+#: The whole TorQ stack with nothing of uqf's on top: capture (discovery,
+#: the plant and the chained plant), store (rdb, the intraday writedown, the
+#: sort and its workers, the hdbs), query (the gateway), keep an eye on it
+#: (monitor, metrics, housekeeping, reporter) and replay (tpreplay1). Every
+#: process in CORE_INFRA, plus the two below that no other profile starts.
 #:
-#: THE SORT PROCESSES ARE IN. At end of day wdb1 hands its intraday writedown
-#: to sort1, which sorts it into the HDB across the workers. With no sort
+#: THE SORT PROCESSES. At end of day wdb1 hands its intraday writedown to
+#: sort1, which sorts it into the HDB across the workers. With no sort
 #: process, TorQ's wdb logs "no sortandreload process detected" as an ERROR
 #: every evening and sorts on wdb1 itself (informsortandreload in
-#: lib/torq/code/processes/wdb.q). None of the three holds a plant slot.
-#: metrics1 does - it subscribes - so essential holds three.
+#: lib/torq/code/processes/wdb.q).
 #:
-#: tpreplay1 IS NOT, and cannot be: it is a one-shot replay that `uqs data
-#: replay` starts with the log, schema and HDB to replay into. Started bare it
-#: exits at startup for want of them (tickerlogreplay.q's exitifnull), and
-#: started with them it EMPTIES the tables of every partition it writes - not
-#: a thing a routine start may do.
+#: PLANT SLOTS: four. rdb1, wdb1, sctp1 and metrics1 subscribe. reporter1
+#: holds handles to the gateway, the rdbs and the hdbs (CONNECTIONS in
+#: lib/torq/config/settings/reporter.q), not to the plant - but those count
+#: against each of THEIR licence caps, which is why the starter pack ships it
+#: off on the community licence.
+#:
+#: tpreplay1 STARTS AND EXITS. It is the one-shot replay `uqs data replay`
+#: aims with a log, a schema and an HDB on its start line. Started from a
+#: profile it has none of them, and tickerlogreplay.q exits at startup
+#: (.err.exitifnull on schemafile and hdbdir) - before it reads or empties
+#: anything. So it shows as down once started, and that is it working.
 ESSENTIAL_INFRA: tuple[str, ...] = (
     "discovery1",
     "stp1",
@@ -131,10 +137,13 @@ ESSENTIAL_INFRA: tuple[str, ...] = (
     "gateway1",
     "monitor1",
     "housekeeping1",
+    "sctp1",
     "metrics1",
+    "reporter1",
+    "tpreplay1",
 )
 
-#: Profiles that start a smaller infrastructure set than CORE_INFRA, and
+#: Profiles that start an infrastructure set other than CORE_INFRA, and
 #: which. Every other profile starts all of CORE_INFRA. Composed profiles take
 #: the union, so `essential,fx` is the full infrastructure `fx` needs.
 PROFILE_INFRA: dict[str, tuple[str, ...]] = {
@@ -271,7 +280,7 @@ def closure(leaves: Iterable[str]) -> set[str]:
     merely being tidy.
 
     Vendored infrastructure is not here: it is `CORE_INFRA` (or a profile's
-    smaller PROFILE_INFRA set), not derivable from a graph that only knows
+    own PROFILE_INFRA set), not derivable from a graph that only knows
     uqf's own jobs.
     """
     inputs = inputs_by_process()
@@ -340,10 +349,15 @@ def resolve(names: Iterable[str]) -> tuple[str, ...]:
 
 def infrastructure(names: Iterable[str]) -> tuple[str, ...]:
     """The vendored processes `names` start: the union of each profile's
-    PROFILE_INFRA set, or CORE_INFRA for a profile without one. Kept in
-    CORE_INFRA's order, so every profile's list reads the same way."""
-    wanted = {proc for name in names for proc in PROFILE_INFRA.get(name, CORE_INFRA)}
-    return tuple(proc for proc in CORE_INFRA if proc in wanted)
+    PROFILE_INFRA set, or CORE_INFRA for a profile without one. CORE_INFRA's
+    own in its order, so every profile's list reads the same way, then any a
+    profile adds beyond it (essential's reporter1 and tpreplay1) in the order
+    that profile declares them."""
+    sets = [PROFILE_INFRA.get(name, CORE_INFRA) for name in names]
+    wanted = {proc for infra in sets for proc in infra}
+    core = tuple(proc for proc in CORE_INFRA if proc in wanted)
+    extra = tuple(dict.fromkeys(p for infra in sets for p in infra if p not in CORE_INFRA))
+    return core + extra
 
 
 def over_budget(names: Iterable[str]) -> str | None:

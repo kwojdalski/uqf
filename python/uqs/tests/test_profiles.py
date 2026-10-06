@@ -101,11 +101,19 @@ def test_the_core_infrastructure_is_in_every_profile():
         assert "stp1" in resolved, "the tickerplant is not optional"
 
 
-def test_every_smaller_infrastructure_set_is_part_of_the_core():
-    """A process outside CORE_INFRA would be started by no other profile and
-    dropped by `infrastructure`, which orders by CORE_INFRA."""
+def test_a_profile_s_own_infrastructure_reaches_the_start_list():
+    """essential adds reporter1 and tpreplay1, which CORE_INFRA does not have.
+    `infrastructure` used to keep only CORE_INFRA's names, so a process a
+    profile added beyond it was dropped without a word."""
     for name, infra in profiles.PROFILE_INFRA.items():
-        assert set(infra) <= set(profiles.CORE_INFRA), name
+        assert set(infra) <= set(profiles.infrastructure([name])), name
+
+
+def test_core_processes_come_first_and_a_profile_s_extras_after():
+    started = profiles.infrastructure(["essential"])
+    core = tuple(p for p in started if p in profiles.CORE_INFRA)
+    assert started[: len(core)] == core
+    assert started[len(core) :] == ("reporter1", "tpreplay1")
 
 
 def test_essential_is_the_torq_stack_and_nothing_else():
@@ -123,20 +131,25 @@ def test_essential_is_the_torq_stack_and_nothing_else():
         "gateway1",
         "monitor1",
         "housekeeping1",
+        "sctp1",
         "metrics1",
+        "reporter1",
+        "tpreplay1",
     }
     assert not set(resolved) & PROCNAMES, "no uqf job"
 
 
 def test_essential_holds_only_the_slots_of_what_it_starts():
-    """rdb1, wdb1 and metrics1 subscribe; the sort processes do not, and sctp1
-    is not started by it."""
-    assert profiles.plant_slots(profiles.resolve(["essential"])) == 3
+    """rdb1, wdb1, sctp1 and metrics1 subscribe; the sort processes, reporter1
+    and tpreplay1 do not."""
+    assert profiles.plant_slots(profiles.resolve(["essential"])) == 4
 
 
-def test_composing_essential_with_a_job_profile_gets_the_full_core():
-    """The union: `fx` needs CORE_INFRA, so `essential,fx` starts all of it."""
-    assert profiles.resolve(["essential", "fx"]) == profiles.resolve(["fx"])
+def test_composing_essential_with_a_job_profile_is_the_union():
+    """`fx` needs CORE_INFRA and essential has all of it, so `essential,fx` is
+    fx's set plus what essential adds beyond the core."""
+    combined = profiles.resolve(["essential", "fx"])
+    assert set(combined) == set(profiles.resolve(["fx"])) | {"reporter1", "tpreplay1"}
 
 
 def test_core_infrastructure_leads_the_resolved_list():
