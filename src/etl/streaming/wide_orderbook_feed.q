@@ -1,7 +1,7 @@
-/ wide_book_feed.q - the whole of the wide order-book feed
-/ (.qpipe.job.wide_book_feed).
+/ wide_orderbook_feed.q - the whole of the wide order-book feed
+/ (.qpipe.job.wide_orderbook_feed).
 / .
-/ Subscribes to nothing and publishes `wide_book` twice a second: eleven
+/ Subscribes to nothing and publishes `wide_orderbook` twice a second: eleven
 / levels a side as TWENTY-TWO separate columns, which is how a venue that
 / has never heard of nested vectors publishes depth. The vectorize job folds
 / it back into two vectors per row; this feed exists to give that job
@@ -15,16 +15,16 @@
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
 
-\d .qpipe.job.wide_book_feed
+\d .qpipe.job.wide_orderbook_feed
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `wide_book_feed;
+publish:.qetl.job.stream.unwired `wide_orderbook_feed;
 
 / This process's own moving mid per pair, aligned with .qsynth.pairs.
 spot:.qsynth.spot
 
-/ Eleven levels a side, which is what wide_book's bids0..bids10 and
+/ Eleven levels a side, which is what wide_orderbook's bids0..bids10 and
 / asks0..asks10 columns hold. The consuming job derives its column groups
 / from its own schema rather than from this number, so the two cannot drift
 / silently - a mismatch is a column count error on insert.
@@ -38,25 +38,25 @@ n_levels:11
 / the shape is checkable without a tickerplant.
 / @param mids one mid per pair, in .qsynth.pairs order
 / @return 1 + 11 + 11 columns: sym, then the bid levels, then the ask levels
-/ @eg count .qpipe.job.wide_book_feed.tick_rows .qsynth.spot  ->  23
+/ @eg count .qpipe.job.wide_orderbook_feed.tick_rows .qsynth.spot  ->  23
 tick_rows:{[mids]
-    levels:.qpipe.job.wide_book_feed.n_levels;
+    levels:.qpipe.job.wide_orderbook_feed.n_levels;
     bid_cols:flip .qsynth.levels_one[;;-1;levels] .' flip (mids;.qsynth.pip);
     ask_cols:flip .qsynth.levels_one[;;1;levels] .' flip (mids;.qsynth.pip);
     (enlist .qsynth.pairs),bid_cols,ask_cols}
 
 / Walk every pair's mid, then publish the tick built from it.
 on_timer:{[]
-    `.qpipe.job.wide_book_feed.spot set .qsynth.drift_one each .qpipe.job.wide_book_feed.spot;
-    .qpipe.job.wide_book_feed.publish[`wide_book;.qpipe.job.wide_book_feed.tick_rows .qpipe.job.wide_book_feed.spot];
+    `.qpipe.job.wide_orderbook_feed.spot set .qsynth.drift_one each .qpipe.job.wide_orderbook_feed.spot;
+    .qpipe.job.wide_orderbook_feed.publish[`wide_orderbook;.qpipe.job.wide_orderbook_feed.tick_rows .qpipe.job.wide_orderbook_feed.spot];
     }
 
 \d .
 
-.qetl.job.stream.define[`wide_book_feed;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`wide_orderbook_feed;`procname`subscribe_to`publishes`period`on_timer`note!(
     `widefeed1;
     `symbol$();
-    enlist `wide_book;
+    enlist `wide_orderbook;
     0D00:00:00.500;
-    .qpipe.job.wide_book_feed.on_timer;
-    "half of a closed pair with vectorize1: it is the only producer of wide_book and vectorize1 the only consumer, so the two start and stop together and no other job notices. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285) - `uqs start widefeed1 vectorize1`")];
+    .qpipe.job.wide_orderbook_feed.on_timer;
+    "half of a closed pair with vectorize1: it is the only producer of wide_orderbook and vectorize1 the only consumer, so the two start and stop together and no other job notices. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285) - `uqs start widefeed1 vectorize1`")];

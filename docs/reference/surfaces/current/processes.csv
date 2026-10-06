@@ -4,13 +4,14 @@ cross1,metrics,25,quotes,
 crossarb1,metrics,45,superbook,config_change cross_arbitrage
 crypto_market_data_backfill1,backfill,48,,
 cryptomock1,feed,35,,crypto_book crypto_trades
-databento1,metrics,34,databento_mbp10,databento_book
+databento1,metrics,34,databento_mbp10,eq_orderbook
 databento_backfill1,backfill,40,,
 deals_backfill1,backfill,32,,
 duckdb_deals_backfill1,backfill,46,,
 events_backfill1,backfill,33,,
 executions1,metrics,36,crypto_trades trades,executions
 fxfeed1,feed,19,,quote
+fxorderbookfeed1,feed,24,,quotes
 fxordersfeed1,feed,38,,orders
 fxpositions1,metrics,39,orders,fx_limit_breach fx_position
 fxtradesfeed1,feed,29,,trades
@@ -21,9 +22,8 @@ marketdata1,metrics,42,quote quotes,market_data
 markout1,metrics,31,quote trades,execution_quality
 marks1,metrics,37,crypto_book quote,marks
 posbook1,metrics,30,executions marks,position
-quotesfeed1,feed,24,,quotes
 superbook1,metrics,43,market_data,config_change superbook
 tap1,metrics,28,,
 upstream_backfill1,backfill,41,,
-vectorize1,metrics,27,wide_book,mkt_orderbook
-widefeed1,feed,26,,wide_book
+vectorize1,metrics,27,wide_orderbook,mkt_orderbook
+widefeed1,feed,26,,wide_orderbook

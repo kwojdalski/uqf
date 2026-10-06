@@ -1,6 +1,6 @@
 / cross.q - the whole of the cross-rate reprice job (.qpipe.job.cross).
 / .
-/ Subscribes to `quotes`, mirrors it, and after every batch reprices four
+/ Subscribes to `fx_orderbook`, mirrors it, and after every batch reprices four
 / synthetic cross pairs through USD, keeping the result as private process
 / state. It publishes nothing: the crosses are there to be queried on the
 / process itself.
@@ -24,9 +24,9 @@
 / quoted pairs, so every one has to chain through USD.
 cross_pairs:`EURJPY`GBPJPY`EURGBP`AUDJPY
 
-/ Mirror of the quotes feed's own schema - what this process receives via
+/ Mirror of the fx_orderbook table's own schema - what this process receives via
 / its subscription, and exactly what the transform reads.
-quotes_in:([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+fx_orderbook_in:([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
 
 / This job's output: one row per (pair, reprice).
 cross_quotes:([] time:`timestamp$(); sym:`symbol$(); bid:`float$(); ask:`float$(); mid:`float$())
@@ -66,7 +66,7 @@ reprice_crosses:{[quotes;as_of]
 publish:.qetl.job.stream.unwired `cross;
 
 / The quote mirror, grouped on sym for the as-of lookups the chain does.
-quotes:update `g#sym from quotes_in;
+fx_orderbook:update `g#sym from fx_orderbook_in;
 
 / The repriced crosses, appended to on every batch.
 crosses:cross_quotes;
@@ -86,8 +86,8 @@ unpriced:`symbol$();
 / @param x the rows, as a table, already carrying `time`
 / @return nothing
 on_batch:{[t;x]
-    if[not t=`quotes; :()];
-    `.qpipe.job.cross.quotes insert x;
+    if[not t=`fx_orderbook; :()];
+    `.qpipe.job.cross.fx_orderbook insert x;
     .qpipe.job.cross.reprice .qpipe.job.cross.now[];
     }
 
@@ -97,8 +97,8 @@ on_batch:{[t;x]
 / @param now the instant to price as of
 / @return the rows appended
 reprice:{[now]
-    if[0=count .qpipe.job.cross.quotes; :.qpipe.job.cross.cross_quotes];
-    out:.qetl.transform.apply_as_of[`cross_quotes;enlist[`quotes]!enlist .qpipe.job.cross.quotes;now];
+    if[0=count .qpipe.job.cross.fx_orderbook; :.qpipe.job.cross.cross_quotes];
+    out:.qetl.transform.apply_as_of[`cross_quotes;enlist[`fx_orderbook]!enlist .qpipe.job.cross.fx_orderbook;now];
     missing:.qpipe.job.cross.cross_pairs except out`sym;
     if[count missing;
         $[missing~.qpipe.job.cross.unpriced; .qetl.log.dbg; .qetl.log.warn][
@@ -130,7 +130,7 @@ now:{[] .z.p}
 \d .
 
 .qetl.transform.define[`cross_quotes;`inputs`output`fn`examples`as_of!(
-    enlist[`quotes]!enlist .qpipe.job.cross.quotes_in;
+    enlist[`fx_orderbook]!enlist .qpipe.job.cross.fx_orderbook_in;
     .qpipe.job.cross.cross_quotes;
     .qpipe.job.cross.reprice_crosses;
     / EURUSD and USDJPY are quoted, so only EURJPY can be built:
@@ -138,7 +138,7 @@ now:{[] .z.p}
     / The EURUSD quote AFTER as_of must not move the price - that is the
     / whole reason as_of is an argument.
     enlist `inputs`expected`as_of!(
-        enlist[`quotes]!enlist ([] time:2026.09.17D10:00:00 2026.09.17D10:00:00 2026.09.17D10:00:05;
+        enlist[`fx_orderbook]!enlist ([] time:2026.09.17D10:00:00 2026.09.17D10:00:00 2026.09.17D10:00:05;
             sym:`EURUSD`USDJPY`EURUSD;
             bid_prices:(enlist 1.1;enlist 150f;enlist 1.2);
             bid_sizes:(enlist 5e6;enlist 5e6;enlist 5e6);
@@ -150,7 +150,7 @@ now:{[] .z.p}
 
 .qetl.job.stream.define[`cross;`procname`subscribe_to`publishes`on_batch`note!(
     `cross1;
-    enlist `quotes;
+    enlist `fx_orderbook;
     `symbol$();
     .qpipe.job.cross.on_batch;
-    "keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); quotesfeed1 runs by default, so `uqs start cross1` is enough")];
+    "keeps cross_quotes as private process state, publishes no table - so it is a leaf, and nothing downstream stalls while it is stopped. startwithall:0 to stay inside LICENCE_CONNECTION_LIMIT (#285); fxorderbookfeed1 runs by default, so `uqs start cross1` is enough")];

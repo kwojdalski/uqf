@@ -226,7 +226,7 @@ def test_stopping_when_nothing_runs_is_quiet_and_clears_the_pid(tmp_path):
 
 def test_status_names_what_folds_the_rows(tmp_path):
     """The handler publishes raw MBP-10; someone reading `status` should
-    not have to guess where databento_book comes from."""
+    not have to guess where eq_orderbook comes from."""
     status = databento_feed.databento_feed_status(_paths(tmp_path))
     assert status["publishes"] == "databento_mbp10"
     assert "databento1" in status["folded by"]

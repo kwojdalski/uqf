@@ -32,7 +32,7 @@
 / tickerplant's: .qtorq.publish drops any `time` a publisher sends and the
 / plant stamps its receipt time, so a deal time carried in `time` would be
 / overwritten the day these rows are published. plant_tables.q defines the
-/ plant table as time plus deal_time, as databento_book keeps ts_event.
+/ plant table as time plus deal_time, as eq_orderbook keeps ts_event.
 
 \d .qpipe.source.duckdb_deals
 

@@ -28,7 +28,7 @@ a third lifecycle. Its dispatcher and mapping registry live under
 A private transform may stay beside its job. A shared transform belongs in
 `src/etl/transforms/<name>.q`, under `.qpipe.transform.<name>`; the loader reads
 sources, shared transforms, bounded workers and streaming jobs in that order.
-For example, both Databento jobs use the `databento_book` transform without
+For example, both Databento jobs use the `eq_orderbook` transform without
 requiring either job to own the other's computation.
 
 Framework services use the same root: `.qetl.io`, `.qetl.dag`, `.qetl.reaction`,

@@ -39,12 +39,12 @@ describe[`config_change]:
 describe[`cross_arbitrage]:
     "Synthetic-versus-direct cross-currency opportunities: one pair priced against a route through others (EURJPY against EURUSD x USDJPY). route carries the legs, skew how far apart they were quoted, fully_filled whether the notional can be worked through every leg. Like arbitrage, select the latest row per pair before filtering active";
 describe[`crypto_book]:
-    "Live venue order books published by cryptorust's kdb-market-data-recorder (uqs feed start crypto): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as quotes. Two clocks: source_time is the venue's own stamp and time is the tickerplant's, stamped on receipt. Read source_time for when the market was in this state, and their difference for how long it took to get here";
+    "Live venue order books published by cryptorust's kdb-market-data-recorder (uqs feed start crypto): top-of-book and depth per venue and symbol as per-row level vectors, the same shape as fx_orderbook. Two clocks: source_time is the venue's own stamp and time is the tickerplant's, stamped on receipt. Read source_time for when the market was in this state, and their difference for how long it took to get here";
 describe[`crypto_sim_fills]:
     "Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from";
 describe[`crypto_trades]:
     "Real confirmed exchange executions recorded from the OMS";
-describe[`databento_book]:
+describe[`eq_orderbook]:
     "Live Databento MBP-10 folded into the book shape by databento1, using the same .qetl.transform transform the ODBC backfill applies - so a live row and a backfilled one are the same shape";
 describe[`demo_deals]:
     "Generic analogue of an external relational deal source, landed by the demo_deals_backfill bounded worker. Synthetic by design - the real source is bank-internal and out of scope for this repository";
@@ -61,22 +61,22 @@ describe[`fx_limit_breach]:
 describe[`fx_position]:
     "fxpositions1's snapshot: net exposure per (sym, book, product), republished whole on every timer tick rather than only what moved. base_qty and quote_qty are both carried because an FX position is two currencies and reporting one hides a cross; break_even is the rate at which closing out leaves the desk flat";
 describe[`market_data]:
-    "Direct FX full snapshots per pair and source, normalized from quote and quotes. source_time preserves original receipt time; zero size or empty sides withdraw liquidity";
+    "Direct FX full snapshots per pair and source, normalized from quote and fx_orderbook. source_time preserves original receipt time; zero size or empty sides withdraw liquidity";
 describe[`marks]:
     "A mid per instrument from every book the stack carries, spelled one way by the marks normalizer: the vendored quote and crypto_book. This is what posbook1 marks positions against";
 describe[`mkt_orderbook]:
-    "vectorize1's output: wide_book folded into the vector-column shape every pricing and execution function in src/ expects, one row per (time, sym)";
+    "vectorize1's output: wide_orderbook folded into the vector-column shape every pricing and execution function in src/ expects, one row per (time, sym)";
 describe[`orders]:
     "Order flow from fx_orders_feed: every order, most of which never becomes a fill. order_status is what fxpositions1 filters on; book and product are the dimensions a position is keyed on beyond sym. For the fills these became, see executions";
 describe[`position]:
     "Running position book marked to the prevailing mid, with realised and unrealised P&L";
-describe[`quotes]:
+describe[`fx_orderbook]:
     "FX top-of-book and depth as per-row level vectors";
 describe[`superbook]:
     "Latest fresh direct FX liquidity merged across sources, bids descending and asks ascending, with aligned source and original timestamp vectors. Empty snapshots clear expired books";
 describe[`trades]:
     "Client fills, shaped to match .qpos.apply_fill and .qexec.markout_at_horizons exactly";
-describe[`wide_book]:
+describe[`wide_orderbook]:
     "The unfolded book widefeed1 publishes: one column per level per side, bids0..bids10 and asks0..asks10. vectorize1 folds it into mkt_orderbook; a reader wanting a book usually wants that one instead";
 
 / The six declared-but-not-yet-produced tables (see plant_tables.q's block on
@@ -103,7 +103,7 @@ describe[`economic_calendar]:
 / hidden table with no reason is how "we forgot" gets recorded as a decision.
 hidden:(`symbol$())!();
 hidden[`databento_mbp10]:
-    "the RAW Databento feed, published by an external Python handler and consumed only by databento1, which folds it into databento_book. A desk browsing a book wants the folded one; this is the input to that fold";
+    "the RAW Databento feed, published by an external Python handler and consumed only by databento1, which folds it into eq_orderbook. A desk browsing a book wants the folded one; this is the input to that fold";
 hidden[`kafka_client_flow]:
     "the RAW Kafka consumer output, published by an external Python consumer and read only by kafka_flow1, which deduplicates it into client_flow. It holds every redelivery the broker sent, so a desk reading it would see replayed trades twice - client_flow is the one to browse";
 

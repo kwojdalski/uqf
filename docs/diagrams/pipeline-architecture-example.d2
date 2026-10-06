@@ -117,7 +117,7 @@ sources: "1 · sources — each arrives in its own market's shape" {
   grid-columns: 4
   grid-gap: 20
 
-  fx: "FX venues\nfx_feed · quotes_feed\nfx_trades_feed · fx_orders_feed\nsynthetic here, an adapter in production" { class: source }
+  fx: "FX venues\nfx_feed · fx_orderbook_feed\nfx_trades_feed · fx_orders_feed\nsynthetic here, an adapter in production" { class: source }
   crypto: "crypto venues\ncryptorust's two kdb recorders,\nor crypto_mock standing in" { class: source }
   databento: "Databento MBP-10\ndatabento_feed.py, in Python\noutside q entirely" { class: source }
   history: "history\nbounded workers, .qetl.job.bounded\nODBC or an upstream q" { class: source }
@@ -137,7 +137,7 @@ normalize: "3 · normalizers — the first waist: one shape from many (.qetl.job
 
   executions: "executions\ntrades + crypto_trades\n→ one fill table" { class: job }
   marks: "marks\nquote + crypto_book\n→ one mid per instrument" { class: job }
-  marketdata: "market_data\nquote + quotes\n→ one book shape" { class: job }
+  marketdata: "market_data\nquote + fx_orderbook\n→ one book shape" { class: job }
 }
 
 engines: "4 · engines — subscribe, hold state, republish" {
@@ -150,7 +150,7 @@ engines: "4 · engines — subscribe, hold state, republish" {
   markout: "markout\ntrades + quote → execution_quality\n.qexec, at horizons on a timer" { class: job }
   superbook: "superbook\nmarket_data → superbook\n.qpipe.job.superbook merges\nacross sources" { class: job }
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
-  reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_book → mkt_orderbook" { class: job }
+  reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_orderbook → mkt_orderbook" { class: job }
 }
 
 store: "5 · storage" {

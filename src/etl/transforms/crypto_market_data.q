@@ -2,7 +2,7 @@
 / through on their way into crypto_market_data
 / (.qpipe.transform.crypto_market_data).
 / .
-/ The same shape as transforms/databento_book.q, and for the same reason: a
+/ The same shape as transforms/eq_orderbook.q, and for the same reason: a
 / relational source spreads a book across one column per level per side, and
 / every consumer in this tree reads a book as four vectors. Doing the fold in
 / a transform rather than in the source keeps the source a faithful picture of

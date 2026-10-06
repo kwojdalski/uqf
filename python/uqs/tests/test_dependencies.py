@@ -60,7 +60,7 @@ def test_starting_a_whole_chain_at_once_is_silent():
     warning that fires on correct usage trains the reader to ignore it.
     """
     chain = {"marketdata1", "superbook1", "arbitrage1"}
-    running = chain | {"fxfeed1", "quotesfeed1"}
+    running = chain | {"fxfeed1", "fxorderbookfeed1"}
     for procname in sorted(chain):
         assert dependencies.unfed_inputs(procname, running) == []
 

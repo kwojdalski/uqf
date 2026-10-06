@@ -187,7 +187,7 @@ test_tickerplant_routes_all_three_processes_using_the_real_schemas:{[t]
     `.qpipe.job.superbook.books set empty[];
     `.sbtest.published set 0#published;
     .qetl.tick.schema[`quote;.qpipe.job.market_data.quote];
-    .qetl.tick.schema[`quotes;.qpipe.job.market_data.quotes];
+    .qetl.tick.schema[`fx_orderbook;.qpipe.job.market_data.fx_orderbook];
     {[job]
         output:get ` sv `.qpipe.job,job,job;
         .qetl.tick.schema[job;([] time:`timestamp$()),'output];

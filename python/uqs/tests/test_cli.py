@@ -1507,7 +1507,7 @@ def test_every_real_worker_is_read():
         "demo_deals": "demo_deals_backfill",
         "event_tape": "demo_events_backfill",
         "imported_trades": "upstream_trades_backfill",
-        "databento_book": "databento_book_backfill",
+        "eq_orderbook": "eq_orderbook_backfill",
     }.items():
         assert create._workers_filling(root, dataset) == [worker]
 

@@ -1,12 +1,12 @@
-/ databento_book.q - the live Databento fold job (.qpipe.job.databento_book).
+/ eq_orderbook.q - the live Databento fold job (.qpipe.job.eq_orderbook).
 / .
 / Subscribes to `databento_mbp10` - Databento's forty per-level columns as
 / the feed handler publishes them - folds each row into four level-0-first
-/ vectors, and publishes `databento_book`, the shape .qbook and
+/ vectors, and publishes `eq_orderbook`, the shape .qbook and
 / .qfwd.cross_book_at read.
 / .
-/ IT DOES NOT DEFINE THE FOLD. `.qetl.transform.define[`databento_book;...]` already
-/ exists, declared by src/etl/transforms/databento_book.q with its own
+/ IT DOES NOT DEFINE THE FOLD. `.qetl.transform.define[`eq_orderbook;...]` already
+/ exists, declared by src/etl/transforms/eq_orderbook.q with its own
 / worked examples, because both jobs need exactly this transformation
 / over exactly this contract. A live path that re-implemented it - here, or
 / worse in the Python feed handler - would be a second place for the same
@@ -45,7 +45,7 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
-\d .qpipe.job.databento_book
+\d .qpipe.job.eq_orderbook
 
 / ------------------------------------------------------------- THE SHAPES
 
@@ -66,7 +66,7 @@ book:([] sym:`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol
 
 / Where rows go. A stub until .qetl.job.stream.wire points it at the tickerplant
 / (the runner) or at a recorder (a test).
-publish:.qetl.job.stream.unwired `databento_book;
+publish:.qetl.job.stream.unwired `eq_orderbook;
 
 / Fold one batch and republish it.
 / .
@@ -84,21 +84,21 @@ on_batch:{[t;x]
     if[not t=`databento_mbp10; :()];
     if[0=count x; :()];
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
-    folded:.qetl.transform.apply[`databento_book;enlist[`batch]!enlist rows];
+    folded:.qetl.transform.apply[`eq_orderbook;enlist[`batch]!enlist rows];
     / The transform names the venue clock `time`; rename it rather than
     / leave two columns meaning different instants, and let .u.upd stamp
     / the receipt time on the way in.
     out:select sym, ts_event:time, action, side, price, size, sequence,
         bid_prices, bid_sizes, ask_prices, ask_sizes from folded;
-    .qpipe.job.databento_book.publish[`databento_book;out];
+    .qpipe.job.eq_orderbook.publish[`eq_orderbook;out];
     }
 
 \d .
 
-.qetl.job.stream.define[`databento_book;
+.qetl.job.stream.define[`eq_orderbook;
     `procname`subscribe_to`publishes`on_batch`note!(
         `databento1;
         enlist `databento_mbp10;
-        enlist `databento_book;
-        .qpipe.job.databento_book.on_batch;
+        enlist `eq_orderbook;
+        .qpipe.job.eq_orderbook.on_batch;
         "folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (external/databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler")];

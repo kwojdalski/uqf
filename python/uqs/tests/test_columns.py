@@ -92,13 +92,13 @@ def test_an_ungrouped_sym_has_no_spelling_and_says_so():
 
 def test_columns_from_copies_a_table_exactly_even_one_the_spec_cannot_say():
     assert resolve_shape(None, "packets", EVERY) == table_columns(EVERY["packets"])
-    assert resolve_shape(None, "quotes", EVERY) == table_columns(EVERY["quotes"])
+    assert resolve_shape(None, "fx_orderbook", EVERY) == table_columns(EVERY["fx_orderbook"])
 
 
 @pytest.mark.parametrize(
     ("columns", "columns_from", "message"),
     [
-        ("px:float", "quotes", "pick one"),
+        ("px:float", "fx_orderbook", "pick one"),
         (None, "nope", "not a plant table"),
     ],
 )

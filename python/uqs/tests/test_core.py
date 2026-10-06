@@ -98,7 +98,7 @@ def test_bootstrap_writes_dqe_its_query_list(fake_paths: UqsPaths, monkeypatch):
     process.csv and database.q on every bootstrap."""
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
     runtime.bootstrap(fake_paths, base_port=7000)
-    assert "meta_quotes_by_sym" in fake_paths.generated_dqe_config.read_text()
+    assert "meta_fx_orderbook_by_sym" in fake_paths.generated_dqe_config.read_text()
 
 
 def test_bootstrap_is_idempotent(fake_paths: UqsPaths, monkeypatch):
@@ -268,17 +268,17 @@ def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
     assert generated_rows["fxfeed1"]["startwithall"] == "0"
 
 
-def test_bootstrap_generates_schema_with_quotes_table(fake_paths: UqsPaths, monkeypatch):
+def test_bootstrap_generates_schema_with_the_fx_orderbook_table(fake_paths: UqsPaths, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
 
     runtime.bootstrap(fake_paths, base_port=7000)
 
     vendored = (fake_paths.torqapphome / "database.q").read_text()
-    assert "quotes:" not in vendored  # vendored file itself is never touched
+    assert "fx_orderbook:" not in vendored  # vendored file itself is never touched
 
     generated = fake_paths.generated_schema.read_text()
     assert "quote:" in generated  # vendored table still present
-    assert schemas.definition("quotes") in generated
+    assert schemas.definition("fx_orderbook") in generated
     assert schemas.definition("trades") in generated
     assert schemas.definition("position") in generated
     assert schemas.definition("execution_quality") in generated
@@ -305,7 +305,7 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: UqsPa
     assert set(by_name) == _FIXTURE_VENDORED | {p.procname for p in PIPELINES}
     assert by_name["discovery1"]["port"] == "7000"
     assert by_name["fxfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxfeed1"])
-    assert by_name["quotesfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["quotesfeed1"])
+    assert by_name["fxorderbookfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxorderbookfeed1"])
     assert by_name["cross1"]["port"] == str(7000 + PIPELINE_OFFSETS["cross1"])
     assert by_name["widefeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["widefeed1"])
     assert by_name["vectorize1"]["port"] == str(7000 + PIPELINE_OFFSETS["vectorize1"])
@@ -948,7 +948,7 @@ def test_pipeline_offsets_are_stable():
     """
     pinned = {
         "fxfeed1": 19,
-        "quotesfeed1": 24,
+        "fxorderbookfeed1": 24,
         "cross1": 25,
         "widefeed1": 26,
         "vectorize1": 27,
@@ -1135,7 +1135,7 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
     # decision someone makes on purpose, and this is where it gets recorded.
     always_on = {
         "fxfeed1",
-        "quotesfeed1",
+        "fxorderbookfeed1",
         "fxtradesfeed1",
         "posbook1",
         "markout1",

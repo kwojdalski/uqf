@@ -222,9 +222,9 @@ From then on DQE builds every metatable in its query list at 04:30 UTC, each
 from the previous day's partition on `hdb1`, and stores it in DQEDB's
 `advancedres`. One is defined:
 
-  | Metatable            | From     | Grouped by | Measurements                      |
-  | ---                  | ---      | ---        | ---                               |
-  | `meta_quotes_by_sym` | `quotes` | `sym`      | `rows`, `first_time`, `last_time` |
+  | Metatable                  | From           | Grouped by | Measurements                      |
+  | ---                        | ---            | ---        | ---                               |
+  | `meta_fx_orderbook_by_sym` | `fx_orderbook` | `sym`      | `rows`, `first_time`, `last_time` |
 
 What uqs sets up for it, on every command:
 

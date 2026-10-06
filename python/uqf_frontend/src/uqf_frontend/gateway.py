@@ -221,25 +221,25 @@ def _classify(exc: Exception) -> Exception:
 #: the test, and this package no longer depends on that tree at all - which
 #: was the point of moving the catalog to the stack. The shapes here only
 #: have to be REALISTIC, and the properties tests actually lean on are that
-#: `trades` and `quotes` exist, that `quotes` has vector columns (a blank
+#: `trades` and `fx_orderbook` exist, that `fx_orderbook` has vector columns (a blank
 #: `meta` type, which becomes QType.LIST and is unfilterable), and that
 #: `etl_coverage` carries a guid `run_id`.
 #:
 #: tests/q/test_catalog.q is what holds the REAL catalog honest.
 FAKE_CATALOG: list[dict[str, str]] = [
     {"table": "trades", "description": "Client fills"},
-    {"table": "quotes", "description": "FX top-of-book and depth as per-row level vectors"},
+    {"table": "fx_orderbook", "description": "FX top-of-book and depth as per-row level vectors"},
     {"table": "position", "description": "Running position book marked to the prevailing mid"},
     {"table": "etl_coverage", "description": "Append-only completeness ledger"},
 ]
 
 #: `meta`, as a data tier would report it for FAKE_CATALOG's tables.
 #:
-#: `quotes.bid_prices` is "F", not a blank, and that is deliberate: q reports
+#: `fx_orderbook.bid_prices` is "F", not a blank, and that is deliberate: q reports
 #: a nested column with an UPPERCASE character once the table has rows, and a
 #: blank only while it is still empty. A fixture carrying the blank tests the
 #: state no live stack is ever in, and hid a bug that made the whole catalog
-#: unbuildable against a populated quotes. `ask_sizes` keeps the blank so both
+#: unbuildable against a populated fx_orderbook. `ask_sizes` keeps the blank so both
 #: spellings stay covered.
 FAKE_SCHEMA: list[dict[str, str]] = [
     {"table": "trades", "column": "time", "kind": "p"},
@@ -248,12 +248,12 @@ FAKE_SCHEMA: list[dict[str, str]] = [
     {"table": "trades", "column": "trade_price", "kind": "f"},
     {"table": "trades", "column": "size", "kind": "f"},
     {"table": "trades", "column": "pip_factor", "kind": "f"},
-    {"table": "quotes", "column": "time", "kind": "p"},
-    {"table": "quotes", "column": "sym", "kind": "s"},
-    {"table": "quotes", "column": "bid_prices", "kind": "F"},
-    {"table": "quotes", "column": "bid_sizes", "kind": "F"},
-    {"table": "quotes", "column": "ask_prices", "kind": "F"},
-    {"table": "quotes", "column": "ask_sizes", "kind": " "},
+    {"table": "fx_orderbook", "column": "time", "kind": "p"},
+    {"table": "fx_orderbook", "column": "sym", "kind": "s"},
+    {"table": "fx_orderbook", "column": "bid_prices", "kind": "F"},
+    {"table": "fx_orderbook", "column": "bid_sizes", "kind": "F"},
+    {"table": "fx_orderbook", "column": "ask_prices", "kind": "F"},
+    {"table": "fx_orderbook", "column": "ask_sizes", "kind": " "},
     {"table": "position", "column": "time", "kind": "p"},
     {"table": "position", "column": "sym", "kind": "s"},
     {"table": "position", "column": "qty", "kind": "f"},

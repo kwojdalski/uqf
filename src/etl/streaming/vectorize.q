@@ -1,6 +1,6 @@
 / vectorize.q - the whole of the wide-book fold job (.qpipe.job.vectorize).
 / .
-/ Subscribes to `wide_book` - twenty-two per-level columns, as a venue
+/ Subscribes to `wide_orderbook` - twenty-two per-level columns, as a venue
 / publishes them - folds each row into one price vector per side, and
 / publishes `mkt_orderbook`, the book shape .qbook and .qfwd.cross_book_at
 / read. It keeps no state: every batch is republished as it arrives.
@@ -19,20 +19,20 @@
 
 / Eleven levels a side, level 0 first, named as the feed publishes them.
 wide_level_names:(`$("bids",/:string til 11)),`$("asks",/:string til 11)
-wide_book:flip (`time`sym,wide_level_names)!(`timestamp$();`symbol$()),(count[wide_level_names]#enlist `float$())
+wide_orderbook:flip (`time`sym,wide_level_names)!(`timestamp$();`symbol$()),(count[wide_level_names]#enlist `float$())
 
 / The column groups the fold reads, derived from the schema rather than
 / written out: bids0..bids10 -> bid_prices, asks0..asks10 -> ask_prices.
-wide_level_groups:.qbook.derive_level_groups[cols wide_book;(("bids";`bid_prices);("asks";`ask_prices))]
+wide_level_groups:.qbook.derive_level_groups[cols wide_orderbook;(("bids";`bid_prices);("asks";`ask_prices))]
 
 mkt_orderbook:.qetl.plant.published `mkt_orderbook
 
 / ---------------------------------------------------------- THE TRANSFORM
 
 / Fold a wide book's per-level columns into one price vector per side.
-/ @param book wide_book rows
+/ @param book wide_orderbook rows
 / @return one row per input row: sym, bid_prices, ask_prices
-fold_wide_book:{[book]
+fold_wide_orderbook:{[book]
     folded:.qbook.book_from_wide_levels[book;.qpipe.job.vectorize.wide_level_groups;`sym];
     select sym, bid_prices, ask_prices from folded}
 
@@ -48,16 +48,16 @@ publish:.qetl.job.stream.unwired `vectorize;
 / @param x the rows, as a table
 / @return nothing
 on_batch:{[t;x]
-    if[not t=`wide_book; :()];
+    if[not t=`wide_orderbook; :()];
     .qpipe.job.vectorize.publish[`mkt_orderbook;.qetl.transform.apply[`mkt_orderbook;enlist[`book]!enlist x]];
     }
 
 \d .
 
 .qetl.transform.define[`mkt_orderbook;`inputs`output`fn`examples!(
-    enlist[`book]!enlist .qpipe.job.vectorize.wide_book;
+    enlist[`book]!enlist .qpipe.job.vectorize.wide_orderbook;
     .qpipe.job.vectorize.mkt_orderbook;
-    .qpipe.job.vectorize.fold_wide_book;
+    .qpipe.job.vectorize.fold_wide_orderbook;
     / Level 0 first on both sides, so the fold must keep bids0..bids10 in
     / numeric order - not bids0, bids1, bids10, bids2, as a sort on the
     / column NAMES would give.
@@ -72,7 +72,7 @@ on_batch:{[t;x]
 
 .qetl.job.stream.define[`vectorize;`procname`subscribe_to`publishes`on_batch`note!(
     `vectorize1;
-    enlist `wide_book;
+    enlist `wide_orderbook;
     enlist `mkt_orderbook;
     .qpipe.job.vectorize.on_batch;
     "the other half of the widefeed1 pair: nothing subscribes to mkt_orderbook, so this branch of the graph is self-contained. See widefeed1")];

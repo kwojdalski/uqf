@@ -118,7 +118,7 @@ schema:`dataset`partition`source_version`range_from`range_to`rows_published`reco
 / row", which supersede made false the moment it landed here.
 / .
 / The table lives at the ROOT, not in .qetl.coverage, because it is a published
-/ database table like quotes/trades/position - it flows through the
+/ database table like fx_orderbook/trades/position - it flows through the
 / tickerplant to rdb/hdb and is read by processes that know nothing about
 / this namespace.
 / .

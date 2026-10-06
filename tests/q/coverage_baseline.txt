@@ -82,7 +82,7 @@
 # shell's own function, so a swap cannot happen per worker. That check does not
 # reduce coverage - reading a parse tree never enters the function - which is
 # why the lifecycle test above was still needed to take these names off.
-.qpipe.transform.databento_book.example_book
+.qpipe.transform.eq_orderbook.example_book
 .qetl.run.history
 .qdata.getBySymbolDate
 .qdata.pqModule

@@ -3,7 +3,7 @@
 / A row replaces the whole book for (sym, source); empty ladders withdraw it.
 / source identifies independent liquidity, not a transport connection. Two
 / adapters carrying the same liquidity must use the same source identifier.
-/ The existing quote and quotes feeds carry no exchange event timestamp, so
+/ The existing quote and fx_orderbook feeds carry no exchange event timestamp, so
 / source_time preserves their ORIGINAL plant timestamp, before normalization.
 
 \d .qpipe.job.market_data
@@ -11,7 +11,7 @@
 publish:.qetl.job.stream.unwired `market_data;
 market_data:.qetl.plant.published `market_data
 quote:.qetl.plant.columns[`quote;`time`sym`bid`ask`bsize`asize`src]
-quotes:.qetl.plant.shape `quotes
+fx_orderbook:.qetl.plant.shape `fx_orderbook
 
 / Direct top-of-book quotes, with the feed's own source identifier.
 / The shared quote table also carries equities; only canonical FX pairs pass.
@@ -25,12 +25,12 @@ from_quote:{[batch]
         ask_prices:enlist each ask, ask_sizes:enlist each `float$asize from fx}
 
 / The single synthetic depth feed, identified separately from UQFFX.
-/ quotes has no source column: another publisher must use market_data or
+/ fx_orderbook has no source column: another publisher must use market_data or
 / add its own declared mapping, rather than interleave unidentified books.
-/ @param batch quotes rows
+/ @param batch fx_orderbook rows
 / @return complete market_data snapshots with the original receipt time
-/ @eg count .qpipe.job.market_data.from_quotes[.qpipe.job.market_data.quotes] -> 0
-from_quotes:{[batch]
+/ @eg count .qpipe.job.market_data.from_fx_orderbook[.qpipe.job.market_data.fx_orderbook] -> 0
+from_fx_orderbook:{[batch]
     fx:batch where .qccy.is_ccy_pair each batch`sym;
     select sym, source:`UQFDEPTH, source_time:time,
         bid_prices, bid_sizes, ask_prices, ask_sizes from fx}
@@ -50,12 +50,12 @@ from_quotes:{[batch]
             bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1000f;
             ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 2000f)))];
 
-.qetl.transform.define[`market_data_from_quotes;`inputs`output`fn`examples!(
-    (enlist `quotes)!enlist .qpipe.job.market_data.quotes;
+.qetl.transform.define[`market_data_from_fx_orderbook;`inputs`output`fn`examples!(
+    (enlist `fx_orderbook)!enlist .qpipe.job.market_data.fx_orderbook;
     .qpipe.job.market_data.market_data;
-    .qpipe.job.market_data.from_quotes;
+    .qpipe.job.market_data.from_fx_orderbook;
     enlist `inputs`expected!(
-        (enlist `quotes)!enlist ([] time:enlist 2026.09.19D10:00:00.000000000;
+        (enlist `fx_orderbook)!enlist ([] time:enlist 2026.09.19D10:00:00.000000000;
             sym:enlist `EURUSD; bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1000 2000f;
             ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f);
         ([] sym:enlist `EURUSD; source:enlist `UQFDEPTH;
@@ -66,5 +66,5 @@ from_quotes:{[batch]
 .qetl.job.stream.normalize[`market_data;`procname`output`input`note!(
     `marketdata1;
     .qpipe.job.market_data.market_data;
-    `quote`quotes!`market_data_from_quote`market_data_from_quotes;
+    `quote`fx_orderbook!`market_data_from_quote`market_data_from_fx_orderbook;
     "direct FX snapshots with source identity and original receipt time. Head of a closed three-process chain - market_data is read only by superbook1, superbook only by arbitrage1, and arbitrage by nothing - so the whole chain is on demand together and no default-start job notices. startwithall:0 because this chain is three more plant connections than the default start holds, and the licence budget has no room for them (#285): `uqs start --profile arbitrage` is the supported route - it starts the chain and both its detectors as a set that fits")];

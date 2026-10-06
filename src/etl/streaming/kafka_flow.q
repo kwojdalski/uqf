@@ -5,7 +5,7 @@
 / .
 / WHY THIS EXISTS, given the stack already has feeds
 / .
-/ fx_feed, crypto_mock and databento_book already demonstrate a subscriber,
+/ fx_feed, crypto_mock and eq_orderbook already demonstrate a subscriber,
 / so a fourth would earn little. What Kafka brings that none of them face is
 / that a topic and a tickerplant log are THE SAME IDEA - two ordered,
 / replayable logs - and joining one to the other forces a question this tree
@@ -121,7 +121,7 @@ advance:{[rows]
 / The batch arrives with the tickerplant's own `time` prepended, which the
 / output shape does not carry; it is dropped so .u.upd can stamp a fresh one
 / on the way back in. The broker's clock travels as `broker_time`, for the
-/ reason databento_book keeps ts_event: `time` says when we HEARD about the
+/ reason eq_orderbook keeps ts_event: `time` says when we HEARD about the
 / record, and their difference is the feed's lag.
 / .
 / Publishing nothing is a normal outcome, not a failure - a batch that is

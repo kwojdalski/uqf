@@ -116,7 +116,7 @@ it and then advances the cursor:
 
 ```q
 .qetl.job.stream.define[`vectorize2;`procname`subscribe_to`publishes`period`poll!(
-    `vectorize2_1;`symbol$();enlist `wide_book;0D00:00:05;
+    `vectorize2_1;`symbol$();enlist `wide_orderbook;0D00:00:05;
     `fetch`normalize`next_cursor`source!(
         fetch;                         / [cursor] -> the page after it
         normalize;                     / [page] -> what is published
