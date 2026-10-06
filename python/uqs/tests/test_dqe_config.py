@@ -44,7 +44,7 @@ def test_the_vendored_rows_are_kept_and_the_metatables_appended(paths: UqsPaths)
     rows = _rows(paths)
     assert rows[0]["query"] == "datecheck", "the vendored row comes through first, unchanged"
     assert [r["query"] for r in rows[1:]] == [r["query"] for r in dqe.UQF_DQE_ROWS]
-    assert "meta_quotes_by_sym" in rows[1]["params"]
+    assert "meta_fx_orderbook_by_sym" in rows[1]["params"]
     assert vendored.read_text().count("\n") == 2, "the vendored file is never edited"
 
 
@@ -63,7 +63,7 @@ def test_the_generated_rows_run_as_dqe_runs_them(paths: UqsPaths, q_binary, repo
     """Read the generated file the way dqe.q does (`readdqeconfig`, "S**SN"),
     `value` each appended row's params as `loadtimer` does, and apply
     `.dqe.uqf_metatable` to them as `runquery` does on the target - against an
-    in-memory `quotes` with yesterday's and today's rows. Only yesterday's are
+    in-memory `fx_orderbook` with yesterday's and today's rows. Only yesterday's are
     counted, one row per sym."""
     dqe.write_dqe_config(paths)
     q, env = q_binary
@@ -71,7 +71,7 @@ def test_the_generated_rows_run_as_dqe_runs_them(paths: UqsPaths, q_binary, repo
 \\l {repo_root}/src/metadata/metatables.q
 \\l {repo_root}/scripts/processes/torq_metatables.q
 t:("S**SN";enlist ",") 0: hsym `$"{paths.generated_dqe_config}";
-quotes:([] date:(.z.d-1),(.z.d-1),(.z.d-1),.z.d; sym:`EURUSD`EURUSD`GBPUSD`EURUSD;
+fx_orderbook:([] date:(.z.d-1),(.z.d-1),(.z.d-1),.z.d; sym:`EURUSD`EURUSD`GBPUSD`EURUSD;
     time:0D01 0D02 0D03 0D04+(.z.d-1),(.z.d-1),(.z.d-1),.z.d);
 r:.dqe.uqf_metatable . value first exec params from t where query=`uqf_metatable;
 m:first value r;
@@ -87,6 +87,6 @@ exit 0
         [q, str(path)], capture_output=True, text=True, env=env, cwd=repo_root, timeout=60
     )
     lines = [line for line in out.stdout.splitlines() if line.strip()]
-    assert lines[-4:] == ["meta_quotes_by_sym", "EURUSD,GBPUSD", "2,1", "`hdb1"], (
+    assert lines[-4:] == ["meta_fx_orderbook_by_sym", "EURUSD,GBPUSD", "2,1", "`hdb1"], (
         out.stdout + out.stderr
     )

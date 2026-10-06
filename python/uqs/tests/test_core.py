@@ -98,7 +98,7 @@ def test_bootstrap_writes_dqe_its_query_list(fake_paths: UqsPaths, monkeypatch):
     process.csv and database.q on every bootstrap."""
     monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
     runtime.bootstrap(fake_paths, base_port=7000)
-    assert "meta_quotes_by_sym" in fake_paths.generated_dqe_config.read_text()
+    assert "meta_fx_orderbook_by_sym" in fake_paths.generated_dqe_config.read_text()
 
 
 def test_bootstrap_is_idempotent(fake_paths: UqsPaths, monkeypatch):

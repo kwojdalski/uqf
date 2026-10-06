@@ -38,13 +38,13 @@ DQE_CONFIG_FIELDS = ("query", "params", "proc", "querytype", "starttime")
 #: name, table, partition column, partitions, group columns, aggregates.
 #:
 #: 04:30 UTC, as the vendored rows: after the end-of-day write and the HDB's
-#: reload. `quotes` holds its prices as vectors, so counts and time bounds are
+#: reload. `fx_orderbook` holds its prices as vectors, so counts and time bounds are
 #: the measurements that mean something per row.
 UQF_DQE_ROWS: tuple[dict[str, str], ...] = (
     {
         "query": "uqf_metatable",
         "params": (
-            "(`meta_quotes_by_sym;`quotes;`date;enlist .z.d-1;enlist`sym;"
+            "(`meta_fx_orderbook_by_sym;`fx_orderbook;`date;enlist .z.d-1;enlist`sym;"
             "`rows`first_time`last_time!((count;`i);(min;`time);(max;`time)))"
         ),
         "proc": "`hdb1",
