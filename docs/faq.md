@@ -234,6 +234,43 @@ because every started process spends one of the licence's sixteen concurrent
 connections (two held back for ad-hoc handles). `uqs start <name>` starts it
 anyway; the budget is in [running the stack](guides/uqs.md).
 
+## How is a runtime different from a profile?
+
+They answer two different questions:
+
+- **A runtime is which stack exists**: which processes and tables are defined at
+  all. You choose it with `uqs --runtime NAME` or `UQS_RUNTIME`.
+- **A profile is which part of that stack to start.** You name the processes you
+  came for, and `uqs` adds what they depend on and the infrastructure they need.
+  You choose it with `uqs start --profile NAME`.
+
+The runtime defines the menu; a profile is one order from it.
+
+There are two runtimes:
+
+  | Runtime             | What exists                                                                                                                              |
+  | ---                 | ---                                                                                                                                      |
+  | `uqf` (the default) | the TorQ starter pack plus everything this repository adds: its pipelines and tables, and its overlays and config layers                 |
+  | `torq`              | the starter pack exactly as it ships, with nothing of uqf's. Use it to see TorQ itself, or to tell whether a problem is TorQ's or uqf's. |
+
+Each runtime keeps its own data directory, so switching between them never mixes
+their HDBs.
+
+**Profiles are defined once, for the `uqf` runtime.** Every profile except
+`essential` names uqf's own processes (`fx` means `posbook1`, `markout1` and
+`fxpositions1`), which the `torq` runtime doesn't have. So under `torq`:
+
+- `uqs list profiles` shows only the profiles it can start, which today is
+  `essential`;
+- `uqs start --profile fx` is refused, naming the processes the runtime lacks,
+  rather than starting part of the set.
+
+`uqs list profiles` also shows each profile's connection cost against your
+licence's cap: a profile can fit on its own and not fit combined with another.
+
+More detail: [runtimes](guides/uqs.md#runtimes) and
+[profiles](guides/uqs.md#profiles) in the `uqs` guide.
+
 ## Can I edit `lib/torq`, `process.csv` or `database.q`?
 
 No. `lib/torq` is vendored and never edited. `process.csv` and `database.q` are
